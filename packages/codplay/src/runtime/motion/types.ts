@@ -32,7 +32,7 @@ export type LayoutItemSnapshot = Readonly<{
   motionRootPose?: HtmlPose
 }>
 
-/** Complete layout state measured without transient movement presentations. */
+/** Complete layout state, including an explicit transient live FIRST when needed. */
 export type LayoutSnapshot = Readonly<{
   timeMs: number
   revision: string

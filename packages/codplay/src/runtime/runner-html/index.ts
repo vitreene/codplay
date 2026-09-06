@@ -33,6 +33,7 @@ export type {
 export { isMeasurableHtmlElement } from './element-guards'
 export type {
   HtmlListDndNodeResolver,
+  HtmlListDndOriginResolver,
   HtmlListDndListItemResolver,
   HtmlListDndPreviewOptions,
 } from './list-dnd-preview'

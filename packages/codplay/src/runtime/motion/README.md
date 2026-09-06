@@ -91,6 +91,14 @@ planning contient alors un nouvel intent issu de `move`, la géométrie naturell
 est recapturée aux frontières FIRST/LAST correspondantes et conservée comme
 donnée. Un append sans `move` ne reconstruit pas le graphe.
 
+Si ce nouvel intent arrive alors que l’item est déjà présenté dans un segment
+actif, le runner copie la pose numérique de la `PresentationFrame` courante
+dans le FIRST transitoire de cette nouvelle frontière. Cela évite de repartir
+de la pose naturelle du nœud auteur lorsque l’item visible est encore dans un
+overlay. Cette copie n’est pas un fait du journal : seules les positions et
+états issus des événements sont rejoués ; la trajectoire intermédiaire reste
+une donnée de présentation.
+
 Pour chaque frontière, la capture présente successivement les scènes résolues
 par le player aux points `before`, `afterStart`, aux fins intermédiaires de
 propriétés et à `after`, sur le même DOM auteur. Elle mesure alors ces états et
@@ -104,11 +112,11 @@ transporte aucune référence DOM dans le graphe de mouvement et n'ajoute aucun
 contrat auteur.
 
 Chaque `LayoutItemSnapshot` et chaque attachement conservent, lorsque le runner
-le fournit, la clé et la pose du conteneur local de l'item. Cette donnée ne
-change ni le calcul FIRST/LAST ni le ciblage des events : elle empêche seulement
-le présentateur HTML de projeter deux items actifs dans le même overlay lorsque
-leurs conteneurs sont distincts. Le graphe reste unique et la frame reste
-résolue sans lecture du DOM.
+le fournit, la clé et la pose du conteneur de la story de l'item. Cette donnée
+ne change ni le calcul FIRST/LAST ni le ciblage des events : elle permet au
+présentateur HTML de conserver un overlay par story lorsque plusieurs stories
+sont actives au même instant. Le graphe reste unique et la frame reste résolue
+sans lecture du DOM.
 
 La préparation du graphe est terminée avant la première présentation. Elle
 enregistre d'abord tous les propriétaires de trajectoire, y compris ceux qui

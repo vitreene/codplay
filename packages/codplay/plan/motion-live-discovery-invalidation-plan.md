@@ -2,7 +2,7 @@
 
 ## Statut
 
-> Status: En cours — implémentation terminée ; validation navigateur et build global restants
+> Status: En cours — raccord de pose live implémenté ; validation navigateur restante
 > CodPlay version: V2 foundation
 > Plan validé pour implémentation le 2026-09-05.
 
@@ -10,7 +10,8 @@
 
 1. Découvrir un eventime ajouté pendant la lecture lorsqu’il porte `move`, puis
    recalculer les frontières HTML avec l’état matérialisé par cet event.
-2. Limiter l’overlay au conteneur local qui présente les items en mouvement.
+2. Limiter chaque overlay au conteneur de la story qui présente les items en
+   mouvement.
 
 Le plan ne modifie aucun contrat auteur existant et ne traite pas le cycle de
 vie du conteneur appelant. Si ce conteneur est masqué, l’overlay, qui en est un
@@ -43,50 +44,59 @@ faut pas observer séparément `target`, `className` ou `style`, ni étendre
 
 La validation de la démo `position` établit aussi une contrainte du
 présentateur HTML : plusieurs frontières de `move` peuvent être actives au
-même instant tout en appartenant à des conteneurs locaux différents. Les
-FIRST/LAST restent propres à chaque item, mais le host ne doit pas réduire ces
-conteneurs à une seule racine courante. Sinon la couche d’un item actif est
-déplacée dans le dernier conteneur capturé et pollue la présentation d’une
-autre story.
+même instant tout en appartenant à des stories différentes. Les FIRST/LAST
+restent propres à chaque item, mais le host ne doit pas réduire ces stories à
+une seule racine courante. Sinon la couche d’un item actif est déplacée dans le
+dernier conteneur capturé et pollue la présentation d’une autre story.
+
+La partition est logique : les intents sont regroupés par `storyId`, puis par
+bornes temporelles et nature structurelle. Elle n’est pas déduite de
+l’ascendance DOM courante. Le runner connaît déjà le `storyId` de chaque perso
+et les racines logiques de la story dans le graphe résolu.
 
 ## Placement de l’overlay
 
-La racine de scène et les conteneurs de mouvement sont deux repères différents :
+La racine de scène et les conteneurs de story sont deux repères différents :
 
 ```text
 racine de scène (cycle de vie du runner)
-├── conteneur local de mouvement A (items source/cible)
+├── conteneur de la story A
 │   ├── items auteur
 │   └── [data-codplay-motion-overlay]
-└── conteneur local de mouvement B (items source/cible)
+└── conteneur de la story B
     ├── items auteur
     └── [data-codplay-motion-overlay]
 ```
 
-Le host doit conserver une couche par conteneur local actif. Dans le chemin V2,
-la couche n’est pas enfant du `sceneSlot`, mais enfant direct du conteneur local
-de mouvement correspondant à l’item présenté.
+Le host doit conserver une couche par story active. Dans le chemin V2, la couche
+n’est pas enfant du `sceneSlot` lorsque la story possède une racine visuelle
+unique : elle est enfant direct de cette racine de story. Si une story possède
+plusieurs racines visuelles indépendantes, aucune racine de story unique
+n’existe ; le runner conserve alors une couche identifiée par cette story sous
+la racine de scène. Ce cas est celui de `flip-stress` et ne doit pas modifier
+son ordre d’empilement.
 
 Le runner doit conserver la racine de scène pour son cycle de vie, mais fournir
-au `HtmlMotionPresentationHost` le conteneur local de mouvement de chaque
-snapshot. Le host conserve les couches locales nécessaires, chacune au-dessus
-de ses items et dans son propre repère géométrique. Aucune ne doit être enfant
-du layout général ni couvrir les contrôles voisins.
+au `HtmlMotionPresentationHost` le conteneur de story de chaque snapshot. Le
+host conserve une couche par story, chacune au-dessus de ses items et dans son
+propre repère géométrique. Aucune couche d’une story à racine unique ne doit
+être enfant du layout général ni couvrir les contrôles voisins.
 
 Cette modification implique de vérifier :
 
-- la résolution du conteneur local sans introduire de notion de vue ou de
-  carousel dans CodPlay ;
-- la conversion des poses lorsque le conteneur local n’est pas la racine de
+- la résolution du conteneur de story à partir du graphe, sans introduire de
+  notion de vue ou de carousel dans CodPlay ;
+- la conversion des poses lorsque le conteneur de story n’est pas la racine de
   scène ;
 - le masquage automatique de l’overlay avec son conteneur ;
 - la suppression de chaque couche au teardown général du runner ;
-- la coexistence de couches locales lorsque deux stories ont un `move` actif.
+- la coexistence de couches de stories différentes lorsqu’elles ont un `move`
+  actif.
 
 L’implémentation associe à chaque item de snapshot l’identifiant runner-local et
-la pose de son conteneur capturé. Le host retrouve chaque conteneur à la
-présentation, maintient les couches locales nécessaires et ne libère une couche
-que lorsqu’elle ne contient plus de ressource active.
+la pose du conteneur de sa story. Le host retrouve chaque conteneur à la
+présentation, maintient une couche par story et ne libère une couche que
+lorsqu’elle ne contient plus de ressource active.
 
 ## Mise en œuvre
 
@@ -129,23 +139,38 @@ Réalisé : le rebuild est déclenché après matérialisation normale ; le prem
 eventime live est capturé avant la présentation suivante et la frame courante
 est présentée avec les nouvelles frontières.
 
-### 3. Adaptation de l’overlay
+Lorsqu’un `move` live est ajouté alors que l’item est déjà en mouvement, le
+runner prend la pose numérique de sa `PresentationFrame` au temps de
+l’événement comme FIRST transitoire. Cette pose sert uniquement au raccord
+visuel entre l’ancienne présentation et la nouvelle cible ; elle n’est ni
+ajoutée au journal ni transformée en trajectoire rejouable. Le replay conserve
+uniquement les positions et états produits par les événements journalisés.
 
-Modifier le host et son initialisation pour séparer :
+### 3. Partitionnement et adaptation de l’overlay
+
+Le host et son initialisation séparent :
 
 - `sceneRoot` : racine conservée par le runner pour le cycle de vie ;
-- `motionContainer` : parent DOM direct de la couche overlay et repère local
-  des poses présentées.
+- `storyContainer` : parent DOM direct de la couche overlay et repère local
+  des poses présentées pour une story.
 
-Chaque couche reste unique pour son conteneur de mouvement, est insérée après
-les items auteur et reste au-dessus d’eux. Les couches de conteneurs différents
-coexistent sans se remplacer.
+Avant la capture, partitionner les intents par `storyId`, puis résoudre la
+racine visuelle logique de cette story. Chaque couche reste unique pour cette
+story, est insérée après les items auteur et reste au-dessus d’eux. Les couches
+de stories différentes coexistent sans se remplacer.
 
-Réalisé pour le host HTML : les frontières capturent le plus petit ancêtre
-commun des nœuds d’item et de leurs cibles, stockent sa clé runner-local et
-insèrent l’overlay directement dans ce conteneur. La correction complète ce
-raccord en conservant la clé et la pose du conteneur par item afin que deux
-racines locales actives restent isolées.
+Le resolver n’utilise pas le plus petit ancêtre DOM commun pour choisir la
+story. Il utilise les `storyId`, `parentByPerso` et les nœuds persistants déjà
+enregistrés par le runner. Le chemin V2 réel fournit toujours la story ; aucun
+carousel ou concept de vue n’entre dans CodPlay.
+
+L’attribut d’overlay porte aussi l’identité runner-locale de la story lorsque
+plusieurs stories doivent exceptionnellement partager la racine de scène. Cela
+évite que `ensureHtmlOverlayLayer` réutilise la couche d’une autre story.
+
+Implémenté pour le host HTML : les frontières stockent la clé et la pose du
+conteneur de story par item ; le host crée ou retrouve la couche correspondante
+sans modifier `orderOverlayStack`, qui reste la référence de `flip-stress`.
 
 ## Critères d’acceptation
 
@@ -155,10 +180,15 @@ racines locales actives restent isolées.
 - une classe + `move` dans le même event est mesurée après matérialisation de la
   classe ;
 - le retarget conserve les temps et les invariants du contrat `move` ;
-- l’overlay est enfant du conteneur local de mouvement, pas du `sceneSlot` ;
-- l’overlay est au-dessus des items du conteneur, mais pas du reste de la scène ;
-- deux mouvements actifs dans deux conteneurs locaux conservent chacun leur
-  couche et leur repère FIRST/LAST ;
+- un `move` live qui recalcule sa cible repart de la pose visuelle courante,
+  sans saut, sans journaliser cette pose intermédiaire ni sa trajectoire ;
+- l’overlay est enfant du conteneur de sa story, pas du `sceneSlot`, lorsque la
+  story possède une racine visuelle unique ;
+- l’overlay est au-dessus des items de la story, mais pas du reste de la scène ;
+- deux mouvements actifs dans deux stories conservent chacun leur couche et
+  leur repère FIRST/LAST ;
+- `flip-stress` conserve une couche pour sa story `main`, son parentage et son
+  ordre d’empilement à FIRST, MIDDLE et LAST ;
 - le masquage du conteneur masque aussi l’overlay ;
 - le teardown retire l’overlay temporaire sans détruire les nœuds auteur ;
 - Play, Seek, resize, replay et persistence n’utilisent pas d’histoire parallèle.
@@ -170,18 +200,26 @@ du runner réel. Ils vérifient le DOM et le parentage ; la suite ciblée couvre
 non-régression parent/enfant et reparent, Play, Seek, resize, persistence et
 lifecycle.
 
-État : tests facade live/overlay et capture ciblée passants (110 tests) ; le
-typecheck isolé du package `codplay` est bloqué par des imports `codplay-v1` dans
-`packages/authoring/scene-factory`, le typecheck global conserve ses erreurs V1
-préexistantes, et `@codplay/demos` n'expose pas de script `typecheck`. Le build
-global et le contrôle navigateur Safari restent à exécuter.
+État : la suite ciblée runner HTML/motion et les façades `position` et
+`flip-stress` passent (16 fichiers, 115 tests). Elle couvre maintenant le
+handoff de la pose présentée vers le FIRST live sans ajout au journal. Le
+contrôle Safari Technology Preview précédent couvre le parentage des overlays,
+mais pas encore ce saut après recalcul. Le typecheck du package `codplay` reste
+bloqué par les imports `codplay-v1` préexistants dans
+`packages/authoring/scene-factory`. Le build `@codplay/demos` reste bloqué par
+l'import V1 `@codplay/editor/builder/build-scene`.
 
-## Décision appliquée
+## Décision retenue
 
-Le `motionContainer` est résolu côté runner comme le plus petit ancêtre DOM
-commun des items concernés et de leurs cibles. L'overlay est créé comme enfant
-direct de ce conteneur ; la racine de scène ne sert qu'au cycle de vie du
-runner. Le raccord live reste interne : `RuntimePlayer` signale l'ajout au
-journal, puis le runner réutilise le chemin de capture de `resize()` uniquement
-si un nouvel intent `move` est présent. Aucun contrat `move`, observateur de
-`target` ou circuit propre à la démo n'a été ajouté.
+Le runner partitionne les moves par story avant toute capture. Chaque story
+possède une identité de couche et, lorsqu’elle a une racine visuelle unique,
+son overlay est créé comme enfant direct de cette racine. Une story à plusieurs
+racines, comme `flip-stress`, conserve une couche identifiée par story sous la
+racine de scène, sans changement de son graphe d’empilement. La racine de scène
+reste uniquement le repère de cycle de vie et le repli nécessaire à ce cas
+multi-racines.
+
+Le raccord live reste interne : `RuntimePlayer` signale l’ajout au journal,
+puis le runner réutilise le chemin de capture de `resize()` uniquement si un
+nouvel intent `move` est présent. Aucun contrat `move`, observateur de `target`
+ou circuit propre à la démo n’est ajouté.

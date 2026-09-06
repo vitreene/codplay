@@ -98,6 +98,7 @@ export function createPositionMoveData(
   target: string,
   path?: string | Path,
   presentation: 'local' | 'overlay' = 'local',
+  ease: string = 'inOutCubic',
 ): CompiledRecord {
   if (path === undefined) {
     return {
@@ -106,7 +107,7 @@ export function createPositionMoveData(
         ...(presentation === 'overlay' ? { flipMode: 'overlay-world' } : {}),
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
-          ease: 'inOutCubic',
+          ease,
         },
       },
     }
@@ -118,7 +119,7 @@ export function createPositionMoveData(
       ...(presentation === 'overlay' ? { flipMode: 'overlay-world' } : {}),
       transition: {
         duration: POSITION_MOVE_DURATION_MS,
-        ease: 'inOutCubic',
+        ease,
         path: typeof path === 'string' ? prepareAuthoredPositionPath(path) : path,
         ...(presentation === 'local' ? { pathAnchor: 'center' } : {}),
       },

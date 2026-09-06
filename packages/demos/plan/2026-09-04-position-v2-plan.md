@@ -48,6 +48,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   un `move` explicite. Les mouvements des vues activées ensuite sont ajoutés
   par le strap de navigation sur le track de la story. La lecture temporelle
   ne change jamais de vue.
+- Chaque plan de story se termine par un eventime ordinaire
+  `position:demo:story:end`, positionné à la fin de sa dernière transition.
+  Il fixe l'horizon observable utilisé par le seek sans déclencher la borne
+  terminale `sequence:end` et sans arrêter la lecture.
 - Une occurrence ajoutée par un strap porte son `move` complet dans
   `event.data`. Le listen n'est pas réévalué lorsque l'horloge atteint un
   eventime planifié ; un simple nom d'event ne peut donc pas suffire à lancer
@@ -95,6 +99,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Les six vues montrent réellement les mouvements/reparentings via les
 - actions `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
   eventimes ajoutés à la volée contiennent leur payload `move` complet.
+- Après un seek arrière, le curseur peut revenir à l'eventime
+  `position:demo:story:end` de la story activée ; cet eventime ne met pas le
+  player en état terminal.
 - La troisième vue produit un événement de mouvement dont le chemin vient de
   `event.data` après une capture, sans écriture DOM dans une fonction auteur.
 - La quatrième vue applique le déplacement souris en pixels, recalcule
@@ -155,7 +162,13 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   et `shared.ts` portent les responsabilités transverses.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,
   premier move à `1 000 ms`, capture de la vue 3, quatre rebonds de la vue 4,
-  reparenting imbriqué de la vue 5 et huit transferts de la conclusion.
+  reparenting imbriqué de la vue 5 et la conclusion `flip-stress` avec quatre
+  conteneurs, deux cadres en transfert, deux listes et douze échanges d'items.
+- La conclusion reprend les constantes de mouvement de `flip-stress` :
+  conteneurs à `9 350 ms` / `8 150 ms`, cadres à `7 275 ms`, échanges à
+  `875 ms` espacés de `500 ms`, chemins courbes déterministes et easing
+  `inOutQuad`. Les trajectoires sont produites uniquement par les `move` du
+  runtime ; aucun SVG décoratif n'est utilisé.
 - Validé par la non-régression ciblée façade/capture/motion : 5 fichiers et
   21 tests passent.
 - Le serveur de développement V2 démarre sur `127.0.0.1:4173` sans retrouver
@@ -165,3 +178,17 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   pas contourné dans la démo `position`.
 - La validation navigateur visuelle, ainsi que la correction des dessins de
   trajectoire, restent à faire au volet suivant.
+- La conclusion n'affiche pas les rôles `source` / `cible` : A–D sont les
+  seuls repères des conteneurs. Les cadres Q/K ont chacun leur fond, leurs
+  outlets restent sans clipping et les deux lignes de chaque liste gardent la
+  taille intrinsèque des items. Le frame de transfert est dimensionné pour
+  absorber l'item transitoire présent pendant un move, sans décaler les six
+  items visibles de la liste source.
+- Contrôle Safari Technology Preview ciblé à `t=2 640 ms` : le frame K issu de
+  D conserve ses six items visibles dans leurs deux rangées ; le septième item
+  transitoire reste masqué dans l'overlay. Le replay ciblé ne produit aucune
+  nouvelle erreur console.
+- Contrôle Safari Technology Preview du cycle seek : après lecture de la
+  conclusion au-delà de `9 650 ms`, un seek à `3 000 ms` conserve `max=9 650`,
+  puis un seek à `9 650 ms` revient à `100 %`. Aucun warning ni error n'est
+  produit dans la console.

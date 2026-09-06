@@ -11,13 +11,14 @@ export type HtmlMotionContainerSceneInput = Readonly<{
   root: Element
   scenes: readonly SolvedScene[]
   itemIds: readonly string[]
+  /** Logical story whose items are being captured. */
+  storyId?: string
 }>
 
 /** Resolves local motion containers without adding an author-facing contract. */
 export class HtmlMotionContainerResolver {
   private readonly root: Element
   private readonly persoNodes: ReadonlyMap<string, unknown>
-  private readonly targetNodes: ReadonlyMap<string, unknown>
   private readonly keys = new WeakMap<Element, string>()
   private nextKey = 1
 
@@ -25,28 +26,26 @@ export class HtmlMotionContainerResolver {
   constructor(
     root: Element,
     persoNodes: ReadonlyMap<string, unknown>,
-    targetNodes: ReadonlyMap<string, unknown>,
   ) {
     this.root = root
     this.persoNodes = persoNodes
-    this.targetNodes = targetNodes
   }
 
-  /** Finds the nearest common DOM ancestor of the endpoints of one boundary. */
+  /** Resolves the persistent presentation container owned by one story. */
   resolve(input: HtmlMotionContainerSceneInput): HtmlMotionContainerResolution {
-    const candidates: Element[] = []
-    for (const itemId of input.itemIds) {
-      addElement(candidates, this.persoNodes.get(itemId))
-      for (const scene of input.scenes) {
-        const targetId = scene.graph.targetByPerso[itemId]
-        addElement(candidates, this.targetNodes.get(targetId ?? '') ?? this.persoNodes.get(targetId ?? ''))
-        const parentId = scene.graph.parentByPerso[itemId]
-        addElement(candidates, this.persoNodes.get(parentId ?? ''))
-      }
+    if (input.storyId === undefined) {
+      return Object.freeze({ element: input.root, key: this.keyFor(input.root) })
     }
 
-    const element = findCommonAncestor(candidates, input.root) ?? input.root
-    return Object.freeze({ element, key: this.keyFor(element) })
+    const key = this.storyKey(input.storyId)
+    const storyContainer = resolveStoryContainerElement(
+      input.scenes,
+      input.storyId,
+      this.persoNodes,
+    )
+    const element = storyContainer ?? input.root
+    this.elementsByKey.set(key, element)
+    return Object.freeze({ element, key })
   }
 
   /** Resolves a captured container identity during the later presentation pass. */
@@ -75,12 +74,11 @@ export class HtmlMotionContainerResolver {
     this.elementsByKey.set(key, element)
     return key
   }
-}
 
-/** Adds an HTML element once while ignoring non-DOM materializer handles. */
-function addElement(target: Element[], value: unknown): void {
-  if (!isElement(value) || target.includes(value)) return
-  target.push(value)
+  /** Registers the stable runner-local identity of one story container. */
+  private storyKey(storyId: string): string {
+    return `motion-story-${storyId}`
+  }
 }
 
 /** Narrows one materializer value to a DOM element across browser realms. */
@@ -92,32 +90,25 @@ function isElement(value: unknown): value is Element {
     && 'parentElement' in value
 }
 
-/** Finds the nearest common ancestor that remains inside the runner root. */
-function findCommonAncestor(candidates: readonly Element[], root: Element): Element | undefined {
-  const first = candidates[0]
-  if (first === undefined || !root.contains(first)) return undefined
-  const ancestors = new Set<Element>()
-  let current: Element | null = first
-  while (current !== null && root.contains(current)) {
-    ancestors.add(current)
-    if (current === root) break
-    current = current.parentElement
+/** Resolves one story's unique logical root without inspecting DOM ancestry. */
+function resolveStoryContainerElement(
+  scenes: readonly SolvedScene[],
+  storyId: string,
+  persoNodes: ReadonlyMap<string, unknown>,
+): Element | undefined {
+  const mountedRootKeys = new Set<string>()
+  for (const scene of scenes) {
+    for (const perso of Object.values(scene.persos)) {
+      if (perso.storyId !== storyId) continue
+      const parentKey = scene.graph.parentByPerso[perso.key]
+      const parent = parentKey === undefined ? undefined : scene.persos[parentKey]
+      if (parent?.storyId === storyId || perso.placement.mounted !== true) continue
+      mountedRootKeys.add(perso.key)
+    }
   }
 
-  for (const candidate of candidates.slice(1)) {
-    if (!root.contains(candidate)) return undefined
-    const candidateAncestors = new Set<Element>()
-    current = candidate
-    while (current !== null && root.contains(current)) {
-      candidateAncestors.add(current)
-      if (current === root) break
-      current = current.parentElement
-    }
-    for (const ancestor of [...ancestors]) {
-      if (!candidateAncestors.has(ancestor)) ancestors.delete(ancestor)
-    }
-    if (ancestors.size === 0) return undefined
-  }
-
-  return [...ancestors][0]
+  const roots = [...mountedRootKeys]
+    .map((persoKey) => persoNodes.get(persoKey))
+    .filter(isElement)
+  return roots.length === 1 ? roots[0] : undefined
 }

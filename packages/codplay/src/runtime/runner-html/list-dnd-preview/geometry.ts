@@ -78,28 +78,16 @@ export function readCandidateListIds(captureState: RuntimeCaptureState): readonl
     : []
 }
 
-/** Reads the list perso ID attached to a materialized list root. */
-export function readItemId(node: Element): string | undefined {
-  const itemId = node.getAttribute('data-item-id')
-  if (itemId === null || !itemId.includes(':')) return undefined
-  return itemId.slice(itemId.indexOf(':') + 1)
-}
-
-/** Reads direct author item keys while excluding the currently floating item. */
-export function readDirectItemIds(list: Element, excludedPersoKey?: string): readonly string[] {
-  return readDirectItemElements(list, excludedPersoKey).map((element) => element.getAttribute('data-item-id') ?? '')
-}
-
 /** Reads direct materialized item roots, excluding ghosts and one dragged root. */
 export function readDirectItemElements(
   list: Element,
-  excludedPersoKey?: string,
+  excludedNode?: HTMLElement,
   excludedGhost?: HTMLElement,
 ): readonly HTMLElement[] {
   return Array.from(list.children).filter((child): child is HTMLElement => {
-    if (!(child instanceof HTMLElement) || child === excludedGhost) return false
+    if (!(child instanceof HTMLElement) || child === excludedNode || child === excludedGhost) return false
     if (child.hasAttribute('data-codplay-dnd-ghost')) return false
-    return child.getAttribute('data-item-id') !== excludedPersoKey
+    return true
   })
 }
 

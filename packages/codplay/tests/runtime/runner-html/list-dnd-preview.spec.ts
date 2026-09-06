@@ -216,10 +216,9 @@ describe('HtmlListDndPreview', () => {
     const item2 = item(document, 'main:item-2')
     listA.appendChild(item1)
     listA.appendChild(item2)
-    mark(listA, 'main:list-a')
-    mark(listB, 'main:list-b')
     const preview = new HtmlListDndPreview({
       resolveNode: () => item1,
+      resolveOrigin: () => ({ listId: 'list-a', index: 0 }),
       resolveListNode: (_storyId, listId) => listId === 'list-a' ? listA : listB,
     })
 
@@ -239,9 +238,9 @@ describe('HtmlListDndPreview', () => {
     const item2 = item(document, 'main:item-2')
     listA.appendChild(item1)
     listA.appendChild(item2)
-    mark(listA, 'main:list-a')
     const preview = new HtmlListDndPreview({
       resolveNode: () => item1,
+      resolveOrigin: () => ({ listId: 'list-a', index: 0 }),
       resolveListNode: () => listA,
     })
 
@@ -264,10 +263,9 @@ describe('HtmlListDndPreview', () => {
     listA.appendChild(item1)
     listA.appendChild(item2)
     listA.appendChild(item3)
-    mark(listA, 'main:list-a')
-    mark(listB, 'main:list-b')
     const preview = new HtmlListDndPreview({
       resolveNode: () => item1,
+      resolveOrigin: () => ({ listId: 'list-a', index: 0 }),
       resolveListNode: (_storyId, listId) => listId === 'list-a' ? listA : listB,
     })
     const state = captureState()
@@ -292,9 +290,9 @@ describe('HtmlListDndPreview', () => {
     listA.appendChild(item1)
     listA.appendChild(item2)
     listA.appendChild(item3)
-    mark(listA, 'main:list-a')
     const preview = new HtmlListDndPreview({
       resolveNode: () => item1,
+      resolveOrigin: () => ({ listId: 'list-a', index: 0 }),
       resolveListNode: () => listA,
       resolveListItemNodes: (_storyId, listId) => listId === 'list-a'
         ? [item1, item2, item3]
@@ -305,13 +303,9 @@ describe('HtmlListDndPreview', () => {
     expect(item1.parentElement).toBe(document.body)
     preview.track({ persoKey: 'main:item-1', sample: sample(20, 110), captureState: captureState() })
 
-    expect(listA.children
-      .filter((child) => child !== item1)
-      .map((child) => child.getAttribute('data-item-id') ?? 'ghost')).toEqual([
-      'main:item-2',
-      'ghost',
-      'main:item-3',
-    ])
+    expect(listA.children[0]).toBe(item2)
+    expect(listA.children[1]?.hasAttribute('data-codplay-dnd-ghost')).toBe(true)
+    expect(listA.children[2]).toBe(item3)
     preview.destroy()
     expect(listA.children).toEqual([item1, item2, item3])
   })
@@ -327,9 +321,9 @@ describe('HtmlListDndPreview', () => {
     listA.appendChild(item1)
     listA.appendChild(item2)
     listA.appendChild(item3)
-    mark(listA, 'main:list-a')
     const preview = new HtmlListDndPreview({
       resolveNode: () => item2,
+      resolveOrigin: () => ({ listId: 'list-a', index: 1 }),
       resolveListNode: () => listA,
       resolveListItemNodes: () => [item1, item2, item3],
     })
@@ -341,13 +335,9 @@ describe('HtmlListDndPreview', () => {
     preview.track({ persoKey: 'main:item-2', sample: sample(20, 83), captureState: state })
     preview.track({ persoKey: 'main:item-2', sample: sample(20, 85), captureState: state })
 
-    expect(listA.children
-      .filter((child) => child !== item2)
-      .map((child) => child.getAttribute('data-item-id') ?? 'ghost')).toEqual([
-      'main:item-1',
-      'ghost',
-      'main:item-3',
-    ])
+    expect(listA.children[0]).toBe(item1)
+    expect(listA.children[1]?.hasAttribute('data-codplay-dnd-ghost')).toBe(true)
+    expect(listA.children[2]).toBe(item3)
     preview.destroy()
   })
 
@@ -359,10 +349,12 @@ describe('HtmlListDndPreview', () => {
     const listB = new FakeElement(document, 'section', { left: 240, top: 0, width: 180, height: 180 })
     const item1 = item(document, 'main:item-1')
     listA.appendChild(item1)
-    mark(listA, 'main:list-a')
-    mark(listB, 'main:list-b')
     const preview = new HtmlListDndPreview({
       resolveNode: () => item1,
+      resolveOrigin: (persoKey) => ({
+        listId: persoKey === 'main:item-1' && item1.parentElement === listB ? 'list-b' : 'list-a',
+        index: 0,
+      }),
       resolveListNode: (_storyId, listId) => listId === 'list-a' ? listA : listB,
     })
     const state = captureState()
@@ -386,14 +378,8 @@ describe('HtmlListDndPreview', () => {
   })
 })
 
-/** Creates one ordinary item root with the stable V2 identity attribute. */
-function item(document: FakeDocument, itemId: string): FakeElement {
+/** Creates one ordinary item root for the HTML preview fixture. */
+function item(document: FakeDocument, _itemId: string): FakeElement {
   const node = document.createElement('article')
-  mark(node, itemId)
   return node
-}
-
-/** Adds one materialized perso identity to a fake node. */
-function mark(node: FakeElement, itemId: string): void {
-  node.setAttribute('data-item-id', itemId)
 }

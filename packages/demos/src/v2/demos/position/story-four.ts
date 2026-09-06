@@ -3,7 +3,7 @@ import type {
   AuthorCaptureInitFunction,
   AuthorCaptureTrackFunction,
 } from 'codplay/scene/capture/authoring-types'
-import type { StrapFunction } from 'codplay/runtime/player'
+import type { PlannedStrapHelpers, PlannedStrapOccurrence, StrapFunction } from 'codplay/runtime/player'
 import {
   POSITION_LIVE_ITEM_MOVE_EVENT,
   POSITION_LIVE_SOURCE_DRAG_EVENT,
@@ -12,9 +12,10 @@ import {
   POSITION_LIVE_TARGET_DRAG_EVENT,
   POSITION_LIVE_TARGET_RELEASED_EVENT,
   POSITION_LIVE_TARGET_SETTLED_EVENT,
-  POSITION_LIVE_BOUNCE_STRAP,
   POSITION_LIVE_SOURCE_COMMIT_STRAP,
   POSITION_LIVE_TARGET_COMMIT_STRAP,
+  POSITION_MOVE_DURATION_MS,
+  POSITION_STORY_END_EVENT,
   POSITION_STORY_FOUR_ID,
   POSITION_NAMESPACE,
 } from './constants'
@@ -27,30 +28,29 @@ import {
   readFinite,
   readRecord,
 } from './shared'
-import type { AnchorRole, PositionPoint, StoryAnimationOccurrence } from './types'
+import type { AnchorRole, PositionPoint } from './types'
 
 const STAGE_TARGET = 'position:view-four:stage'
 const SOURCE_CONTAINER = 'position:view-four:source'
 const TARGET_CONTAINER = 'position:view-four:target'
 
-const LIVE_BOUNCES: readonly Readonly<{ offsetMs: number; target: AnchorRole }>[] = [
-  { offsetMs: 650, target: 'target' },
-  { offsetMs: 1_800, target: 'source' },
-  { offsetMs: 2_950, target: 'target' },
-  { offsetMs: 4_100, target: 'source' },
-]
+const LIVE_BOUNCE_START_OFFSET_MS = 650
+const LIVE_BOUNCE_TARGETS: readonly AnchorRole[] = ['target', 'source']
+const LIVE_BOUNCE_REPEAT_COUNT = 20
+const LIVE_BOUNCE_EASE = 'linear'
+const LIVE_BOUNCE_END_OFFSET_MS = LIVE_BOUNCE_START_OFFSET_MS + POSITION_MOVE_DURATION_MS * LIVE_BOUNCE_REPEAT_COUNT
 
 /** Creates story 4 with draggable anchors and live-calculated moves. */
 export function createStoryFour(): StoryDoc {
   const view = createViewRoot(3, `
     <section class="position-view__frame position-view__frame--lesson">
-      <div class="position-live-stage" data-part="${STAGE_TARGET}">
+      <div class="position-moving-stage position-two-node-stage" data-part="${STAGE_TARGET}">
         <div class="position-route position-route--stage" aria-hidden="true"><span class="position-route__line"></span></div>
-        <div class="position-live-stage__beam" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="position-stage-axis" aria-hidden="true"><span></span><span></span></div>
       </div>
       <div class="position-story-caption">
         <span class="position-story-caption__number">04</span>
-        <p>Faites glisser source ou cible pendant la boucle. Les rebonds reprennent les ancres courantes ; un relâchement émet aussitôt un move recalculé.</p>
+        <p>Faites glisser source ou cible pendant la série de rebonds. Au relâchement, la trajectoire courante est recalculée.</p>
       </div>
     </section>
   `)
@@ -65,13 +65,10 @@ export function createStoryFour(): StoryDoc {
     straps: {
       [POSITION_LIVE_SOURCE_COMMIT_STRAP]: createAnchorCommitStrap('source'),
       [POSITION_LIVE_TARGET_COMMIT_STRAP]: createAnchorCommitStrap('target'),
-      [POSITION_LIVE_BOUNCE_STRAP]: createLiveBounceStrap(),
     },
     listen: [
       { on: POSITION_LIVE_SOURCE_RELEASED_EVENT, straps: [POSITION_LIVE_SOURCE_COMMIT_STRAP] },
       { on: POSITION_LIVE_TARGET_RELEASED_EVENT, straps: [POSITION_LIVE_TARGET_COMMIT_STRAP] },
-      { on: POSITION_LIVE_SOURCE_SETTLED_EVENT, straps: [POSITION_LIVE_BOUNCE_STRAP] },
-      { on: POSITION_LIVE_TARGET_SETTLED_EVENT, straps: [POSITION_LIVE_BOUNCE_STRAP] },
     ],
     persos: [
       view,
@@ -106,10 +103,10 @@ function createStoryFourAnchor(role: AnchorRole): PersoDoc {
     type: 'layout',
     initial: {
       move: { target: STAGE_TARGET },
-      className: `position-live-anchor position-live-anchor--${role}`,
+      className: `position-anchor position-anchor--${role} position-node position-node--${role} position-live-anchor`,
       style: { x: '0px', y: '0px' },
       markup: `
-        <article class="position-node position-node--${role}">
+        <article>
           <strong>${role}</strong>
           <div class="position-node__outlet" data-part="${outlet}"></div>
         </article>
@@ -173,13 +170,14 @@ function createLiveBounceMoveData(
   const bend = clamp(0.34 + distance / 520, 0.32, 0.78)
   const controlY = targetRole === 'target' ? -bend : bend
   const target = targetRole === 'target' ? TARGET_CONTAINER : SOURCE_CONTAINER
-  return createPositionMoveData(target, createCircularArcPath(0.5, controlY))
+  return createPositionMoveData(target, createCircularArcPath(0.5, controlY), 'overlay', LIVE_BOUNCE_EASE)
 }
 
-/** Schedules four two-second reparenting moves for the live lesson. */
-export function createStoryFourAnimationPlan(
+/** Schedules twenty sequential two-second moves with the V2 planned repeat helper. */
+export function planStoryFourAnimation(
   state: Readonly<Record<string, unknown>> = {},
-): readonly StoryAnimationOccurrence[] {
+  planned: Pick<PlannedStrapHelpers, 'repeat' | 'wait'>,
+): readonly PlannedStrapOccurrence[] {
   const sourcePoint = {
     x: readFinite(state.liveSourceX, 0),
     y: readFinite(state.liveSourceY, 0),
@@ -188,11 +186,29 @@ export function createStoryFourAnimationPlan(
     x: readFinite(state.liveTargetX, 0),
     y: readFinite(state.liveTargetY, 0),
   }
-  return LIVE_BOUNCES.map((bounce) => ({
-    name: POSITION_LIVE_ITEM_MOVE_EVENT,
-    offsetMs: bounce.offsetMs,
-    data: createLiveBounceMoveData(bounce.target, sourcePoint, targetPoint),
+  const moves = planned.repeat(
+    { eachMs: POSITION_MOVE_DURATION_MS, times: LIVE_BOUNCE_REPEAT_COUNT },
+    ({ index }) => {
+      const targetRole = LIVE_BOUNCE_TARGETS[index % LIVE_BOUNCE_TARGETS.length]
+      if (targetRole === undefined) return undefined
+      return {
+        event: {
+          name: POSITION_LIVE_ITEM_MOVE_EVENT,
+          cascade: true,
+          data: createLiveBounceMoveData(targetRole, sourcePoint, targetPoint),
+        },
+      }
+    },
+  ).map((occurrence) => ({
+    ...occurrence,
+    offsetMs: LIVE_BOUNCE_START_OFFSET_MS + occurrence.offsetMs,
   }))
+  return [
+    ...moves,
+    ...planned.wait(LIVE_BOUNCE_END_OFFSET_MS, {
+      event: { name: POSITION_STORY_END_EVENT, cascade: true },
+    }),
+  ]
 }
 
 /** Commits one released anchor and emits its settled position through the event circuit. */
@@ -209,34 +225,6 @@ export function createAnchorCommitStrap(role: AnchorRole): StrapFunction {
     return {
       update: { [xKey]: x, [yKey]: y },
       events: [{ name: settledEvent, data: { anchorRole: role, style: createPixelPositionStyle(x, y) } }],
-    }
-  }
-}
-
-/** Calculates one immediate two-second rebound after a live anchor release. */
-export function createLiveBounceStrap(): StrapFunction {
-  return ({ event, state }) => {
-    const data = readRecord(event.data)
-    const targetRole: AnchorRole = data?.anchorRole === 'source'
-      ? 'target'
-      : data?.anchorRole === 'target'
-        ? 'source'
-        : data?.target === 'source'
-          ? 'source'
-          : 'target'
-    const sourcePoint = {
-      x: readFinite(state.liveSourceX, 0),
-      y: readFinite(state.liveSourceY, 0),
-    }
-    const targetPoint = {
-      x: readFinite(state.liveTargetX, 0),
-      y: readFinite(state.liveTargetY, 0),
-    }
-    return {
-      events: [{
-        name: POSITION_LIVE_ITEM_MOVE_EVENT,
-        data: createLiveBounceMoveData(targetRole, sourcePoint, targetPoint),
-      }],
     }
   }
 }

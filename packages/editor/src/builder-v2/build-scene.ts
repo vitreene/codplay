@@ -512,6 +512,7 @@ function buildNestedCapsulePerso(
       initial: {
         move: { target: parentPersoId },
         tag: 'div',
+        attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
         ...(className === undefined ? {} : { className }),
       },
       actions: transition.actions,
@@ -564,6 +565,7 @@ function buildLeafPerso(
   const eventimes = [...transition.eventimes, ...decorActions.map((action) => ({ name: action.name, startAt: action.startAt }))]
   const common = {
     move: { target: parentPersoId },
+    attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
     ...(childArtifact.className === '' && initialClassName === undefined
       ? {}
       : { className: [childArtifact.className, initialClassName].filter(Boolean).join(' ') }),

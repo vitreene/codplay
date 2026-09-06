@@ -29,7 +29,7 @@ dependance implicite au rythme d'affichage et contredirait `f(t)`.
 | chronometre ou progression temporelle | Behavior/tween evaluable par `f(t)` |
 | compteur d'occurrences | etat de scope mis a jour par events rejouables |
 | suite finie d'emissions | `context.planned.wait/repeat/stagger/sequence` |
-| repetition bornee | `context.planned.loop({ times })` ou `loop({ durationMs })` |
+| repetition bornee | `context.planned.repeat({ eachMs, times })` |
 | repetition arretee par un event futur | non portee automatiquement; necessite une spec V2 |
 | callback a chaque frame | non porte |
 
@@ -56,7 +56,8 @@ deviennent des faits temporels avant leur lecture normale.
 
 - le Plan Temporel Declaratif ne depend pas du nombre de frames affichees;
 - chaque repetition est finie et bornee par une donnee inspectable;
-- `loop` exige exactement une borne `times` ou `durationMs`;
+- `context.planned` n'expose pas de `loop` en V2; une répétition doit fournir
+  explicitement son nombre fini d'occurrences avec `repeat`;
 - aucun `context.live` n'est introduit par compatibilite V1;
 - aucun event futur implicite n'arrete un plan sans contrat V2 explicite;
 - le seek relit le journal et ne reexecute pas le strap;

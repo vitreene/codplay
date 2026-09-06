@@ -70,7 +70,6 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
 
     this.nodes.persoNodes.set(identity.componentId, rootNode)
     this.nodes.persoParts?.set(identity.componentId, materialization.parts)
-    markHtmlItem(rootNode, identity.componentId)
     try {
       const cleanupMarkup = markup === undefined
         ? undefined
@@ -314,22 +313,6 @@ function isObjectNode(value: unknown): value is {
   removeChild?: (child: unknown) => void
 } {
   return typeof value === 'object' && value !== null
-}
-
-/** Adds the stable runtime identity required by local HTML pose restoration. */
-function markHtmlItem(root: HtmlMaterializedRoot, itemId: string): void {
-  for (const node of materializedRootNodes(root)) {
-    if (isAttributeNode(node)) node.setAttribute('data-item-id', itemId)
-  }
-}
-
-/** Narrows one retained DOM root to the identity attribute surface. */
-function isAttributeNode(value: unknown): value is {
-  setAttribute: (name: string, value: string) => void
-} {
-  return typeof value === 'object' && value !== null
-    && 'setAttribute' in value
-    && typeof (value as { setAttribute?: unknown }).setAttribute === 'function'
 }
 
 /** Narrows a DOM-like node to the teardown operations used by this host. */

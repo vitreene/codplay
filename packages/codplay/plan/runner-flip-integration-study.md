@@ -900,10 +900,10 @@ Les contrôles suivants ont été réalisés :
   positions pendant les reparentages.
 
 Pendant un reparentage actif, le DOM contient le nœud source masqué et un
-clone de présentation dans l'overlay ; le comptage brut de `data-item-id` peut
-donc être supérieur à un. L'observation visuelle et le comptage des nœuds
-visibles montrent au plus une représentation visible par item. Aucun arbre de
-mesure n'a été créé.
+clone de présentation dans l'overlay ; le comptage brut des nœuds de
+présentation peut donc être supérieur à un. L'observation visuelle et le
+comptage des nœuds visibles montrent au plus une représentation visible par
+item. Aucun arbre de mesure n'a été créé.
 
 Le buffer de console ne contenait aucune erreur après cette passe. Cette
 vérification est une preuve navigateur ponctuelle ; elle ne clôt pas encore

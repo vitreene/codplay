@@ -48,10 +48,11 @@ declaree, une track par strap et par scope. Les `update` sont materialises comme
 `runtime:state:update` portant leur scope `story` ou `scene`. Ils sont rejouables
 par `materialize` et ne sont jamais appliques directement par le renderer.
 
-Les helpers finis `context.planned` V2 sont `wait`, `delay`, `repeat`, `stagger`,
-`sequence` et les `loop` bornes par `times` ou `durationMs`. Ils produisent
-uniquement des occurrences declaratives et ne lancent aucun scheduler. Ce modele
-est nomme **Plan Temporel Declaratif**; voir
+Les helpers finis `context.planned` V2 sont `wait`, `delay`, `repeat`, `stagger`
+et `sequence`. V2 n'expose pas de helper `loop` ; une répétition finie est
+déclarée explicitement par `repeat({ eachMs, times }, input)`. Ces helpers
+produisent uniquement des occurrences declaratives et ne lancent aucun scheduler.
+Ce modele est nomme **Plan Temporel Declaratif**; voir
 `2026-08-01-context-live-evolution.md`.
 
 `RuntimeStateStore` fournit les snapshots scene/story en lecture seule aux straps.
@@ -90,7 +91,8 @@ future doit etre specifiquement decidee avant implementation.
 
 ## Limites V2
 
-- definir les cas de loop bornes compatibles avec `f(t)`;
+- aucune répétition conditionnelle ou interrompable n'est définie par les helpers
+  `planned` V2;
 - ne jamais creer de track pendant la lecture.
 
 ## V3

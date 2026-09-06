@@ -1,9 +1,9 @@
-import { prepareSvgPath } from 'ace';
 import type { StoryDoc } from 'codplay';
 import {
 	CAROUSEL_SLIDE_DURATION_MS,
 	CAROUSEL_SLIDE_OFFSET_PX,
 	POSITION_MOVE_DURATION_MS,
+	POSITION_STORY_END_EVENT,
 	POSITION_STORY_TWO_ID,
 	POSITION_VIEW_TWO_ITEM_MOVE_EVENT,
 	POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT,
@@ -18,7 +18,7 @@ const STAGE_TARGET = 'position:view-two:stage';
 const SOURCE_CONTAINER = 'position:view-two:source';
 const TARGET_CONTAINER = 'position:view-two:target';
 const STORY_TWO_ANCHOR_SHIFT = 15;
-const STORY_TWO_PATH = prepareSvgPath('M 0 0 A 0.51 0.51 0 0 1 1 0', { precision: 2 });
+const STORY_TWO_END_OFFSET_MS = 4_100;
 
 /** Story 2: the visible source and target move while the item changes outlet. */
 export const POSITION_STORY_TWO: StoryDoc = {
@@ -139,10 +139,13 @@ export const POSITION_STORY_TWO_ANIMATION_PLAN: readonly StoryAnimationOccurrenc
 				flipMode: 'overlay-world',
 				transition: {
 					duration: POSITION_MOVE_DURATION_MS,
-					ease: 'inOutCubic',
-					path: STORY_TWO_PATH,
+					ease: 'inOutQuint',
 				},
 			},
 		},
+	},
+	{
+		name: POSITION_STORY_END_EVENT,
+		offsetMs: STORY_TWO_END_OFFSET_MS,
 	},
 ];

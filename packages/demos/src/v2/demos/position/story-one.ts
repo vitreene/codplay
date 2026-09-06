@@ -4,6 +4,7 @@ import {
   CAROUSEL_SLIDE_OFFSET_PX,
   FIRST_VIEW_MOVE_OFFSET_MS,
   POSITION_MOVE_DURATION_MS,
+  POSITION_STORY_END_EVENT,
   POSITION_STORY_ONE_ID,
   POSITION_VIEW_ONE_ITEM_MOVE_EVENT,
   POSITION_VIEWPORT_TARGET,
@@ -14,6 +15,7 @@ import type { StoryAnimationOccurrence } from './types'
 
 const SOURCE_CONTAINER = 'position:view-one:source'
 const TARGET_CONTAINER = 'position:view-one:target'
+const STORY_ONE_END_OFFSET_MS = FIRST_VIEW_MOVE_OFFSET_MS + POSITION_MOVE_DURATION_MS
 
 /** Story 1: a stable source and target, with one item reparented between them. */
 export const POSITION_STORY_ONE: StoryDoc = {
@@ -31,6 +33,9 @@ export const POSITION_STORY_ONE: StoryDoc = {
         },
       },
     },
+  }, {
+    name: POSITION_STORY_END_EVENT,
+    startAt: STORY_ONE_END_OFFSET_MS,
   }],
   persos: [
     {
@@ -115,4 +120,7 @@ export const POSITION_STORY_ONE_ANIMATION_PLAN: readonly StoryAnimationOccurrenc
       },
     },
   },
+}, {
+  name: POSITION_STORY_END_EVENT,
+  offsetMs: STORY_ONE_END_OFFSET_MS,
 }]

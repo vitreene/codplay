@@ -2,11 +2,19 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   captureHtmlMotionBoundaries,
+  mergeCurrentPresentationPoses,
   resolveHtmlMotionActionTransition,
 } from '../../../src/runtime/runner-html/motion-capture'
-import type { ScheduledMotionIntent } from '../../../src/runtime/motion'
+import type {
+  ItemPresentation,
+  LayoutSnapshot,
+  PresentationFrame,
+  RelativeMotionPose,
+  ScheduledMotionIntent,
+} from '../../../src/runtime/motion'
 import type { RuntimePlayer, SolvedScene } from '../../../src/runtime/player'
 import type { CompiledRecord } from '../../../src/scene/compiled'
+import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 
 describe('HTML motion boundary capture', () => {
   it('retains every canonical style endpoint instead of collapsing them to the longest duration', () => {
@@ -64,6 +72,32 @@ describe('HTML motion boundary capture', () => {
     expect(presentSceneForGeometryCapture.mock.calls.map(([scene]) => (scene as SolvedScene).timeMs))
       .toEqual([1_200, 1_200, 1_600, 2_200, 1_200])
   })
+
+  it('uses the latest presented item pose as transient live FIRST without journaling it', () => {
+    const captured = createLayoutSnapshot(10)
+    const frame: PresentationFrame = {
+      timeMs: 500,
+      graphRevision: 'graph:500',
+      layoutRevision: 'layout:500',
+      items: new Map<string, ItemPresentation>([
+        ['main:item', {
+          itemId: 'main:item',
+          targetId: 'main:source',
+          targetOrder: 0,
+          pose: createPose(60),
+          representation: 'reparent',
+          progress: 0.6,
+        }],
+      ]),
+    }
+
+    const merged = mergeCurrentPresentationPoses(captured, frame, new Set(['main:item']))
+
+    expect(captured.items.get('main:item')?.rootPose.origin.x).toBe(10)
+    expect(merged.items.get('main:item')?.rootPose.origin.x).toBe(60)
+    expect(merged.items.get('main:item')?.localPose.origin[0]).toBe(60)
+    expect(merged.revision).toContain('current-presentation:500:graph:500')
+  })
 })
 
 /** Creates the smallest solved scene needed to describe target availability. */
@@ -102,5 +136,49 @@ function createIntent(): ScheduledMotionIntent {
     ease: 'linear',
     presentationMode: 'reparent',
     targetReflow: true,
+  }
+}
+
+/** Creates one root-local item snapshot for the transient live handoff test. */
+function createLayoutSnapshot(x: number): LayoutSnapshot {
+  const localPose: RelativeMotionPose = {
+    origin: [x, 0],
+    layoutOrigin: [x, 0],
+    matrix: IDENTITY_MATRIX,
+    width: 20,
+    height: 20,
+  }
+  return {
+    timeMs: 500,
+    revision: `snapshot:${x}`,
+    items: new Map([[
+      'main:item',
+      {
+        itemId: 'main:item',
+        targetId: 'main:source',
+        targetOrder: 0,
+        localPose,
+        rootPose: createPose(x),
+      },
+    ]]),
+  }
+}
+
+const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+
+/** Creates one unrotated root-local pose for capture assertions. */
+function createPose(x: number): HtmlPose {
+  return {
+    rect: { left: x, top: 0, width: 20, height: 20 },
+    origin: { x, y: 0 },
+    matrix: IDENTITY_MATRIX,
+    parentMatrix: IDENTITY_MATRIX,
+    rotationMatrix: IDENTITY_MATRIX,
+    scaleX: 1,
+    scaleY: 1,
+    localWidth: 20,
+    localHeight: 20,
+    frameWidth: 20,
+    frameHeight: 20,
   }
 }

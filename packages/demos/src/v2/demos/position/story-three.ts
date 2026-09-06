@@ -9,6 +9,7 @@ import {
   POSITION_PATH_CONTROL_LIVE_EVENT,
   POSITION_PATH_CONTROL_SETTLED_EVENT,
   POSITION_PATH_ITEM_MOVE_EVENT,
+  POSITION_STORY_END_EVENT,
   POSITION_STORY_THREE_ID,
   POSITION_VIEWPORT_TARGET,
   VIEW_IDS,
@@ -21,6 +22,7 @@ const SOURCE_CONTAINER = 'position:view-three:source'
 const TARGET_CONTAINER = 'position:view-three:target'
 const CONTROL_TARGET = 'position:view-three:control'
 const STORY_THREE_PATH = prepareSvgPath('M 0 0 A 0.5 0.5 0 0 1 1 0', { precision: 2 })
+const STORY_THREE_END_OFFSET_MS = 1_050 + POSITION_MOVE_DURATION_MS
 
 /** Story 3: the captured midpoint is sent as a prepared path in the item move. */
 export const POSITION_STORY_THREE: StoryDoc = {
@@ -218,4 +220,7 @@ export const POSITION_STORY_THREE_ANIMATION_PLAN: readonly StoryAnimationOccurre
       },
     },
   },
+}, {
+  name: POSITION_STORY_END_EVENT,
+  offsetMs: STORY_THREE_END_OFFSET_MS,
 }]

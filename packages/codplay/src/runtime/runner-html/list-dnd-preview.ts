@@ -21,9 +21,7 @@ import {
   defaultAuthorId,
   readCandidateListIds,
   readDirectItemElements,
-  readDirectItemIds,
   readFiniteNumber,
-  readItemId,
   readPointerSample,
   readTransitionDuration,
   resolveInsertionIndex,
@@ -38,6 +36,7 @@ import {
 import type {
   ActivePreview,
   DropTarget,
+  HtmlListDndOriginResolver,
   HtmlListDndNodeResolver,
   HtmlListDndPreviewOptions,
   ResolvedDropTarget,
@@ -45,6 +44,7 @@ import type {
 
 export type {
   HtmlListDndListItemResolver,
+  HtmlListDndOriginResolver,
   HtmlListDndPreviewOptions,
   HtmlListDndNodeResolver,
 } from './list-dnd-preview/index'
@@ -55,6 +55,7 @@ export type {
  */
 export class HtmlListDndPreview {
   private readonly resolveNode: HtmlListDndNodeResolver
+  private readonly resolveOriginFromState: HtmlListDndOriginResolver
   private readonly resolveListNode: HtmlListDndPreviewOptions['resolveListNode']
   private readonly resolveListItemNodes: HtmlListDndPreviewOptions['resolveListItemNodes']
   private readonly resolveAuthorId: (persoKey: string) => string
@@ -64,6 +65,7 @@ export class HtmlListDndPreview {
   /** Creates one preview controller bound to one HTML materializer registry. */
   constructor(options: HtmlListDndPreviewOptions) {
     this.resolveNode = options.resolveNode
+    this.resolveOriginFromState = options.resolveOrigin
     this.resolveListNode = options.resolveListNode
     this.resolveListItemNodes = options.resolveListItemNodes
     this.resolveAuthorId = options.resolveAuthorId ?? defaultAuthorId
@@ -91,11 +93,12 @@ export class HtmlListDndPreview {
       const captureContext = createHtmlPoseCaptureContext()
       const rect = captureHtmlPose(node, captureContext).rect
       preview.sourceList = node.parentElement instanceof HTMLElement ? node.parentElement : undefined
+      preview.origin = this.resolveOriginFromState(input.persoKey)
       preview.sourceRectsBeforeFloat = preview.sourceList === undefined
         ? new Map()
         : this.captureNeighborRects(
           input.persoKey.slice(0, input.persoKey.indexOf(':')),
-          readItemId(preview.sourceList),
+          preview.origin?.listId,
           preview.sourceList,
           input.persoKey,
           undefined,
@@ -105,7 +108,6 @@ export class HtmlListDndPreview {
       preview.offsetY = clientY - rect.top
       preview.width = rect.width
       preview.height = rect.height
-      preview.origin = this.resolveOrigin(input.persoKey)
       preview.sourceIndex = preview.origin?.index
       // V1 removes the dragged root from the source list before resolving the
       // first target. The V2 logical placement is untouched; this is only the
@@ -179,29 +181,6 @@ export class HtmlListDndPreview {
     for (const persoKey of this.active.keys()) this.close(persoKey, undefined, false)
   }
 
-  /** Resolves the original list and index from the current persistent DOM order. */
-  private resolveOrigin(persoKey: string): DropTarget | undefined {
-    const node = asElement(this.resolveNode(persoKey))
-    const parent = node?.parentElement
-    if (node === undefined || parent === null || parent === undefined) return undefined
-    const listId = readItemId(parent)
-    if (listId === undefined) return undefined
-    // The dragged item must stay in this list's order while the origin is
-    // recorded. Excluding it here made `indexOf(persoKey)` impossible and
-    // silently changed every fallback origin to the end of the list.
-    const storyId = persoKey.slice(0, persoKey.indexOf(':'))
-    const canonicalNodes = this.resolveListItemNodes?.(storyId, listId)
-    const itemIds = canonicalNodes === undefined
-      ? readDirectItemIds(parent)
-      : canonicalNodes
-        .map(asElement)
-        .filter((item): item is HTMLElement => item !== undefined)
-        .filter((item) => !item.hasAttribute('data-codplay-dnd-ghost'))
-        .map((item) => item.getAttribute('data-item-id') ?? '')
-    const index = itemIds.indexOf(persoKey)
-    return { listId, index: index < 0 ? itemIds.length : index }
-  }
-
   /** Starts a fresh preview when a delayed close belongs to an older capture. */
   private resolvePreview(
     captureId: string | undefined,
@@ -246,7 +225,7 @@ export class HtmlListDndPreview {
     const list = preview.sourceList
     if (node === undefined || list === undefined) return
     clearFloatingStyle(node)
-    const children = readDirectItemElements(list, persoKey, preview.ghost)
+    const children = readDirectItemElements(list, asElement(this.resolveNode(persoKey)), preview.ghost)
     const reference = preview.sourceIndex === undefined ? undefined : children[preview.sourceIndex]
     if (reference === undefined) list.appendChild(node)
     else list.insertBefore(node, reference)
@@ -326,8 +305,8 @@ export class HtmlListDndPreview {
     excludedGhost?: HTMLElement,
     captureContext: HtmlPoseCaptureContext = createHtmlPoseCaptureContext(),
   ): ReadonlyMap<HTMLElement, HtmlTransientRect> {
-    const children = listId === undefined
-      ? readDirectItemElements(list, excludedPersoKey, excludedGhost)
+      const children = listId === undefined
+      ? readDirectItemElements(list, asElement(this.resolveNode(excludedPersoKey)), excludedGhost)
       : this.readListItemElements(storyId, listId, list, excludedPersoKey, excludedGhost)
     return captureHtmlTransientRects(children, captureContext)
   }
@@ -341,14 +320,17 @@ export class HtmlListDndPreview {
     excludedGhost?: HTMLElement,
   ): readonly HTMLElement[] {
     const resolved = this.resolveListItemNodes?.(storyId, listId)
-    if (resolved === undefined) return readDirectItemElements(list, excludedPersoKey, excludedGhost)
+    if (resolved === undefined) {
+      return readDirectItemElements(list, asElement(this.resolveNode(excludedPersoKey)), excludedGhost)
+    }
+    const excludedNode = asElement(this.resolveNode(excludedPersoKey))
     return resolved
       .map(asElement)
       .filter((node): node is HTMLElement => node !== undefined)
       .filter((node) => node.parentElement === list)
+      .filter((node) => node !== excludedNode)
       .filter((node) => node !== excludedGhost)
       .filter((node) => !node.hasAttribute('data-codplay-dnd-ghost'))
-      .filter((node) => node.getAttribute('data-item-id') !== excludedPersoKey)
   }
 
   /** Repositions one ghost and animates every affected sibling with one FLIP pair. */
@@ -373,7 +355,7 @@ export class HtmlListDndPreview {
         previousList,
         this.captureNeighborRects(
           persoKey.slice(0, persoKey.indexOf(':')),
-          readItemId(previousList),
+          preview.target?.listId ?? preview.origin?.listId,
           previousList,
           persoKey,
           preview.ghost,

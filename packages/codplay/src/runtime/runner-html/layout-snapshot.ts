@@ -98,6 +98,11 @@ function resolveSelection(scene: SolvedScene, selection: ReadonlySet<string> | u
       .filter((perso) => perso.placement.mounted)
       .map((perso) => perso.key))
   }
+  const selectedStoryIds = new Set(
+    [...selection]
+      .map((itemId) => scene.persos[itemId]?.storyId)
+      .filter((storyId): storyId is string => storyId !== undefined),
+  )
   const selected = new Set<string>()
   for (const itemId of selection) {
     const perso = scene.persos[itemId]
@@ -105,6 +110,8 @@ function resolveSelection(scene: SolvedScene, selection: ReadonlySet<string> | u
     let parentItemId = scene.graph.parentByPerso[itemId]
     while (parentItemId !== undefined && !selected.has(parentItemId)) {
       const parent = scene.persos[parentItemId]
+      if (selectedStoryIds.size > 0
+        && (parent === undefined || !selectedStoryIds.has(parent.storyId))) break
       if (parent?.placement.mounted) selected.add(parentItemId)
       parentItemId = scene.graph.parentByPerso[parentItemId]
     }

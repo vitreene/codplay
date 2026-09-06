@@ -11,7 +11,12 @@ import type {
   MotionBoundary,
   MotionIntent,
   MotionScheduleTransition,
+  PresentationFrame,
   ScheduledMotionIntent,
+} from '../motion'
+import {
+  decomposeRootMotionPose,
+  deriveRelativeMotionPose,
 } from '../motion'
 import { buildSolvedGraph, type SolvedPerso, type SolvedScene } from '../player'
 import { resolveStyleTweenTiming, type StyleTweenTiming } from '../player/pipeline'
@@ -74,6 +79,46 @@ export function captureCurrentHtmlMotionLayout(
   return captureHtmlLayoutSnapshot(root, nodes, scene, itemIds, rootKey)
 }
 
+/** Replaces selected live FIRST poses with the latest transient presentation frame. */
+export function mergeCurrentPresentationPoses(
+  snapshot: LayoutSnapshot,
+  frame: PresentationFrame | undefined,
+  itemIds: ReadonlySet<string>,
+): LayoutSnapshot {
+  if (frame === undefined || itemIds.size === 0) return snapshot
+
+  const items = new Map(snapshot.items)
+  let changed = false
+  for (const itemId of itemIds) {
+    const captured = items.get(itemId)
+    const presented = frame.items.get(itemId)
+    if (captured === undefined || presented === undefined) continue
+
+    const parentPose = captured.parentItemId === undefined
+      ? undefined
+      : frame.items.get(captured.parentItemId)?.pose
+        ?? items.get(captured.parentItemId)?.rootPose
+    const localPose = parentPose === undefined
+      ? decomposeRootMotionPose(presented.pose)
+      : deriveRelativeMotionPose(parentPose, presented.pose)
+    items.set(itemId, Object.freeze({
+      ...captured,
+      localPose,
+      rootPose: presented.pose,
+      ...(presented.motionRootKey === undefined ? {} : { motionRootKey: presented.motionRootKey }),
+      ...(presented.motionRootPose === undefined ? {} : { motionRootPose: presented.motionRootPose }),
+    }))
+    changed = true
+  }
+
+  if (!changed) return snapshot
+  return Object.freeze({
+    ...snapshot,
+    revision: `${snapshot.revision}:current-presentation:${frame.timeMs}:${frame.graphRevision}`,
+    items,
+  })
+}
+
 /** Resolves one HTML action transition that contributes to a geometric pose. */
 export function resolveHtmlMotionActionTransition(
   action: CompiledRecord | undefined,
@@ -117,7 +162,7 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
 
   const boundaries: MotionBoundary[] = []
   try {
-    for (const group of groupMotionIntents(input.intents)) {
+    for (const group of groupMotionIntents(input.intents, currentScene)) {
       // FIRST is the logical state immediately before the event. For a
       // structural move, the destination may be mounted only after that
       // boundary, so it is deliberately not required to exist here.
@@ -140,16 +185,17 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
         scene: input.player.resolveSceneBeforeBoundary(timeMs, input.includePersistOnly),
       }))
       const selection = mergeSelections(
-        collectBoundarySelection(beforeScene, afterScene, group.intents),
+        collectBoundarySelection(beforeScene, afterScene, group.intents, group.storyId),
         afterStartScene === undefined
           ? []
-          : collectBoundarySelection(beforeScene, afterStartScene, group.intents),
-        ...keyScenes.map(({ scene }) => collectBoundarySelection(beforeScene, scene, group.intents)),
+          : collectBoundarySelection(beforeScene, afterStartScene, group.intents, group.storyId),
+        ...keyScenes.map(({ scene }) => collectBoundarySelection(beforeScene, scene, group.intents, group.storyId)),
       )
       const motionContainer = input.resolveMotionContainer?.({
         root: input.root,
         scenes: [beforeScene, ...(afterStartScene === undefined ? [] : [afterStartScene]), afterScene],
         itemIds: [...new Set(group.intents.map((intent) => intent.itemId))],
+        storyId: group.storyId,
       })
       const captureRoot = motionContainer?.element ?? input.root
       const rootKey = motionContainer?.key
@@ -247,12 +293,13 @@ export function captureHtmlLiveMotionBoundary(input: Readonly<{
   const afterScene = input.player.getSolvedScene()
   if (afterScene === undefined || input.intents.length === 0) return []
   const boundaries: MotionBoundary[] = []
-  for (const group of groupMotionIntents(input.intents)) {
+  for (const group of groupMotionIntents(input.intents, afterScene)) {
     const beforeScene = input.player.resolveSceneBeforeBoundary(group.startAt, false)
     const motionContainer = input.resolveMotionContainer?.({
       root: input.root,
       scenes: [beforeScene, afterScene],
       itemIds: [...new Set(group.intents.map((intent) => intent.itemId))],
+      storyId: group.storyId,
     })
     const captureRoot = motionContainer?.element ?? input.root
     const rootKey = motionContainer?.key ?? input.first.rootKey
@@ -260,6 +307,7 @@ export function captureHtmlLiveMotionBoundary(input: Readonly<{
       beforeScene,
       afterScene,
       group.intents,
+      group.storyId,
     )
     const after = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, afterScene, selection, rootKey)
     const intents = group.intents.map(toMotionIntent)
@@ -293,13 +341,16 @@ function toMotionIntent(intent: ScheduledMotionIntent): MotionIntent {
 /** Groups simultaneous direct moves into one browser capture transaction. */
 function groupMotionIntents(
   intents: readonly ScheduledMotionIntent[],
+  scene: SolvedScene,
 ): readonly Readonly<{
+  storyId?: string
   startAt: number
   endAt: number
   structural: boolean
   intents: readonly ScheduledMotionIntent[]
 }>[] {
   const grouped = new Map<string, {
+    storyId?: string
     startAt: number
     endAt: number
     structural: boolean
@@ -310,9 +361,11 @@ function groupMotionIntents(
     // duration and therefore an anchor below the playable timeline. Such a
     // fact is journaled, but it has no materializable motion boundary.
     if (intent.startAt < 0) continue
+    const storyId = scene.persos[intent.itemId]?.storyId
     const structural = intent.targetReflow
-    const key = `${intent.startAt}:${intent.endAt}:${structural ? 'structural' : 'pose'}`
+    const key = `${storyId ?? '<unknown>'}:${intent.startAt}:${intent.endAt}:${structural ? 'structural' : 'pose'}`
     const group = grouped.get(key) ?? {
+      ...(storyId === undefined ? {} : { storyId }),
       startAt: intent.startAt,
       endAt: intent.endAt,
       structural,
@@ -324,6 +377,7 @@ function groupMotionIntents(
   return Object.freeze([...grouped.values()]
     .sort((left, right) => left.startAt - right.startAt || left.endAt - right.endAt)
     .map((group) => Object.freeze({
+      ...(group.storyId === undefined ? {} : { storyId: group.storyId }),
       startAt: group.startAt,
       endAt: group.endAt,
       structural: group.structural,
@@ -339,6 +393,7 @@ function collectBoundarySelection(
   before: SolvedScene,
   after: SolvedScene,
   intents: readonly ScheduledMotionIntent[],
+  storyId?: string,
 ): ReadonlySet<string> {
   const selected = new Set<string>()
   for (const intent of intents) {
@@ -350,8 +405,8 @@ function collectBoundarySelection(
       addTargetChildren(after, after.graph.targetByPerso[intent.itemId], selected)
     }
   }
-  addAncestorClosure(before, selected)
-  addAncestorClosure(after, selected)
+  addAncestorClosure(before, selected, storyId)
+  addAncestorClosure(after, selected, storyId)
   return selected
 }
 
@@ -377,10 +432,11 @@ function addTargetChildren(
 }
 
 /** Adds logical parent chains required to derive FIRST/LAST context. */
-function addAncestorClosure(scene: SolvedScene, selected: Set<string>): void {
+function addAncestorClosure(scene: SolvedScene, selected: Set<string>, storyId?: string): void {
   for (const itemId of [...selected]) {
     let parentItemId = scene.graph.parentByPerso[itemId]
     while (parentItemId !== undefined) {
+      if (storyId !== undefined && scene.persos[parentItemId]?.storyId !== storyId) break
       selected.add(parentItemId)
       parentItemId = scene.graph.parentByPerso[parentItemId]
     }

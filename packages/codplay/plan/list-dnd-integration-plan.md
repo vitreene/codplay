@@ -80,10 +80,12 @@ persistante.
 
 La démo possède la partie dépendante du substrat : écoute pointer, hit-test
 HTML, preview et ghost. La preview ne réordonne jamais les nodes auteur et ne
-produit jamais d’event. Elle reçoit l’ordre courant depuis le graphe résolu de
-`list` ; sa lecture directe des enfants DOM reste uniquement le repli pour un
-hôte qui ne fournit pas cet ordre. À la fermeture, elle fournit seulement le
-dernier résultat abstrait au hook générique de fin.
+produit jamais d’event. L’hôte lui fournit l’origine logique du perso saisi via
+`resolveOrigin`, puis peut fournir l’ordre courant des nodes montés via
+`resolveListItemNodes`. À défaut de cet ordre, la preview ne lit que l’ordre des
+enfants déjà montés pour sa géométrie ; elle ne déduit jamais une identité
+logique depuis le DOM. À la fermeture, elle fournit seulement le dernier
+résultat abstrait au hook générique de fin.
 
 Pendant cette preview, les nodes HTML temporaires portent l'attribut réservé
 `data-codplay-transient`. Le materializer structurel les exclut de son ordre
@@ -207,6 +209,8 @@ persistante.
 
 - la capture classique reste inchangée pour les sources qui n'utilisent pas les
   hooks ;
+- l'origine logique du perso saisi est fournie par `resolveOrigin` ; aucune
+  identité de perso ou de liste n'est déduite d'un attribut DOM ;
 - le résultat final de liste est résolu une seule fois, depuis le cache de
   preview ;
 - au début d'un drag source, le ghost occupe le slot d'origine ; après un

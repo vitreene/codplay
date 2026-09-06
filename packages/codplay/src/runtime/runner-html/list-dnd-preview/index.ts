@@ -3,6 +3,7 @@ export type {
   DropTarget,
   HtmlListDndListItemResolver,
   HtmlListDndNodeResolver,
+  HtmlListDndOriginResolver,
   HtmlListDndPreviewOptions,
   LocalBox,
   ResolvedDropTarget,

@@ -23,6 +23,7 @@ export const POSITION_KEYBOARD_NAVIGATION_EVENT = `${POSITION_NAMESPACE}:keyboar
 export const POSITION_KEYBOARD_TOGGLE_EVENT = `${POSITION_NAMESPACE}:keyboard:toggle`
 export const POSITION_STORY_PAUSED_EVENT = `${POSITION_NAMESPACE}:story:paused`
 export const POSITION_STORY_RESUMED_EVENT = `${POSITION_NAMESPACE}:story:resumed`
+export const POSITION_STORY_END_EVENT = `${POSITION_NAMESPACE}:story:end`
 export const POSITION_TWEEN_STOP_EVENT = 'tween:stop'
 
 /** Story-three capture and move events. */
@@ -55,7 +56,6 @@ export const POSITION_KEYBOARD_TOGGLE_STRAP = `${POSITION_NAMESPACE}:keyboard:to
 export const POSITION_PATH_COMMIT_STRAP = `${POSITION_NAMESPACE}:path:commit`
 export const POSITION_LIVE_SOURCE_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:source:commit`
 export const POSITION_LIVE_TARGET_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:target:commit`
-export const POSITION_LIVE_BOUNCE_STRAP = `${POSITION_NAMESPACE}:live:bounce:calculate`
 
 /** Number and timing of the authored carousel views. */
 export const VIEW_IDS = [

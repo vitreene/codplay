@@ -19,7 +19,7 @@ import type { RuntimeCaptureState } from '../capture'
 import { HtmlPersoEmitSourceAdapter } from './perso-emit-source-adapter'
 import type { Diagnostic } from '../../diagnostics'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
-import type { LayoutSnapshot, MotionBoundary } from '../motion'
+import type { LayoutSnapshot, MotionBoundary, PresentationFrame } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import type { RuntimeTrackEvent } from '../player/pipeline'
 import {
@@ -32,6 +32,7 @@ import {
   captureCurrentHtmlMotionLayout,
   captureHtmlLiveMotionBoundary,
   captureHtmlMotionBoundaries,
+  mergeCurrentPresentationPoses,
   resolveHtmlMotionActionTransition,
 } from './motion-capture'
 import { HtmlMotionContainerResolver } from './motion-container'
@@ -143,6 +144,7 @@ export class HtmlPlayerRunner {
     timeMs: number
     snapshot: LayoutSnapshot
     before: SolvedScene
+    presentationFrame: PresentationFrame | undefined
   }>()
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
   private readonly emitSourceAdapter: HtmlPersoEmitSourceAdapter
@@ -164,7 +166,6 @@ export class HtmlPlayerRunner {
     this.motionContainerResolver = new HtmlMotionContainerResolver(
       options.root,
       this.nodes.persoNodes,
-      this.nodes.targetNodes,
     )
     this.interactionLockEnabled = options.enableInteractionLock === true
     this.initialPointerEvents = options.root.style.pointerEvents
@@ -423,13 +424,18 @@ export class HtmlPlayerRunner {
     // incorrectly include the earlier persist-only event and label the live
     // node with its destination instead of its source.
     const before = this.player.getSolvedScene() ?? this.player.resolveSceneBeforeBoundary(timeMs)
+    // Refresh the numeric presentation before reading the author nodes. A
+    // reparented item may be visible only in its overlay, so its source node
+    // is not a trustworthy FIRST measurement while the capture is open.
+    this.motionSystem?.present(timeMs)
+    const presentationFrame = this.motionSystem?.getFrame()
     const snapshot = captureCurrentHtmlMotionLayout(
       this.interactionRoot,
       this.nodes.persoNodes,
       before,
       new Set(Object.keys(before.persos)),
     )
-    this.liveFirstLayouts.set(captureId, { timeMs, snapshot, before })
+    this.liveFirstLayouts.set(captureId, { timeMs, snapshot, before, presentationFrame })
   }
 
   /** Rebuilds geometry only after the journal exposes a new effective move. */
@@ -532,18 +538,27 @@ export class HtmlPlayerRunner {
     let firstSnapshot = first.snapshot
     const currentScene = this.player.getSolvedScene()
     if (currentScene !== undefined && liveIntents.length > 0) {
+      const liveStoryId = currentScene.persos[liveIntents[0]!.itemId]?.storyId
       const liveContainer = this.motionContainerResolver.resolve({
         root: this.interactionRoot,
         scenes: [first.before, currentScene],
         itemIds: [...new Set(liveIntents.map((intent) => intent.itemId))],
+        storyId: liveStoryId,
       })
       this.player.presentSceneForGeometryCapture(first.before)
       firstSnapshot = captureCurrentHtmlMotionLayout(
         liveContainer.element,
         this.nodes.persoNodes,
         first.before,
-        new Set(Object.keys(first.before.persos)),
+        new Set(liveIntents.map((intent) => intent.itemId)),
         liveContainer.key,
+      )
+      // This is a transient handoff from the current presentation only. It is
+      // not appended to the journal and is not used by the replay graph.
+      firstSnapshot = mergeCurrentPresentationPoses(
+        firstSnapshot,
+        first.presentationFrame,
+        new Set(liveIntents.map((intent) => intent.itemId)),
       )
     }
 

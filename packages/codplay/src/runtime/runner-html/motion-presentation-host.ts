@@ -118,7 +118,7 @@ export class HtmlMotionPresentationHost {
     this.clearHiddenDescendantClones()
     this.hiddenDescendantKey = ''
     for (const state of this.motionRoots.values()) {
-      removeElement(state.overlayLayer ?? findOverlayLayer(state.root))
+      removeElement(state.overlayLayer ?? findOverlayLayer(state.root, state.key))
       state.overlayLayer = undefined
       state.overlayOrder = []
     }
@@ -174,7 +174,7 @@ export class HtmlMotionPresentationHost {
     for (const [token, state] of this.motionRoots) {
       const itemIds = activeByRoot.get(token) ?? []
       if (itemIds.length === 0) {
-        removeElement(state.overlayLayer ?? findOverlayLayer(state.root))
+        removeElement(state.overlayLayer ?? findOverlayLayer(state.root, state.key))
         state.overlayLayer = undefined
         state.overlayOrder = []
         continue
@@ -463,7 +463,7 @@ export class HtmlMotionPresentationHost {
   /** Returns the overlay layer owned by one local motion root. */
   private getOverlayLayer(rootState: MotionRootState): HTMLElement {
     if (rootState.overlayLayer !== undefined) return rootState.overlayLayer
-    rootState.overlayLayer = ensureHtmlOverlayLayer(rootState.root)
+    rootState.overlayLayer = ensureHtmlOverlayLayer(rootState.root, rootState.key)
     return rootState.overlayLayer
   }
 

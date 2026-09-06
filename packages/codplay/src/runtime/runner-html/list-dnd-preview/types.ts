@@ -10,9 +10,13 @@ export type HtmlListDndListItemResolver = (
   listId: string,
 ) => readonly unknown[] | undefined
 
+/** Resolves the logical source slot without inspecting the HTML parent tree. */
+export type HtmlListDndOriginResolver = (persoKey: string) => DropTarget | undefined
+
 /** Dependencies needed by the HTML list preview, without exposing runner internals. */
 export type HtmlListDndPreviewOptions = Readonly<{
   resolveNode: HtmlListDndNodeResolver
+  resolveOrigin: HtmlListDndOriginResolver
   resolveListNode: (storyId: string, listId: string) => unknown
   resolveListItemNodes?: HtmlListDndListItemResolver
   resolveAuthorId?: (persoKey: string) => string

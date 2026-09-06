@@ -17,9 +17,10 @@ export interface AppLayoutProps {
 
 /**
  * Résout l'item cliqué, s'il y en a un — le materializer HTML V2 pose l'identité publique sous
- * `data-item-id="storyId:persoId"` sur la racine rendue de chaque composant. Le filtre par
- * `scene.items` exclut la capsule racine implicite (`story-main__root`) et conserve l'identité
- * documentaire attendue par le contrôleur.
+ * `data-item-id="storyId:persoId"` déclaré par le builder sur la racine rendue de chaque item.
+ * Le filtre par `scene.items` exclut la capsule racine implicite (`story-main__root`) et conserve
+ * l'identité documentaire attendue par le contrôleur. Le materializer générique ne pose plus cet
+ * attribut sur les composants qui n'en ont pas besoin.
  */
 function resolveClickedItemId(target: Element, scene: EditorScene): string | null {
   const runtimeId = target.closest('[data-item-id]')?.getAttribute('data-item-id')

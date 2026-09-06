@@ -58,6 +58,15 @@ résout alors le graphe conservé et l'état de présentation du materializer ; 
 ne relit pas la géométrie du DOM et ne reconstruit pas le planning à chaque
 frame.
 
+À la fermeture d’une capture live, si l’item possède déjà une présentation
+active, le runner conserve sa pose numérique courante comme FIRST transitoire
+avant de capturer la nouvelle cible. Le nœud auteur peut en effet être revenu à
+sa pose naturelle tandis que l’item visible est encore porté par l’overlay.
+Cette pose de raccord n’est pas journalisée et ne remplace pas l’état logique :
+elle sert uniquement à éviter un saut visuel pendant le nouveau `move`. La
+trajectoire n’est pas enregistrée ; le journal conserve les positions et états
+des événements.
+
 ## Organisation interne
 
 Les deux présentateurs HTML qui concentrent le plus de responsabilités sont
@@ -89,13 +98,14 @@ Le runner ne construit pas un second arbre HTML pour le FLIP. Lorsqu'un
 4. conserve uniquement les instantanés numériques immuables.
 
 Les overlays existants restent en dehors de la mise en page normale et sont
-réutilisés. Pour une frontière HTML, le runner résout le plus petit ancêtre DOM
-commun aux éléments source/cible et capture ce conteneur comme repère local ; la
-couche `[data-codplay-motion-overlay]` est son enfant direct. Elle reste donc
-au-dessus des items de ce conteneur et est masquée avec lui, sans devenir un
-enfant du `sceneSlot` ou des contrôles voisins. Si plusieurs conteneurs locaux
-ont un `move` actif, chaque conteneur conserve sa propre couche et sa propre
-pose de projection. Les overlays ne servent pas d'arbre de mesure. « Jouer » un point de capture
+réutilisés. Pour une frontière HTML, le runner partitionne d'abord les intents
+par story, puis résout sa racine visuelle à partir du graphe logique et des
+nœuds persistants. La couche `[data-codplay-motion-overlay]` est l'enfant direct
+de cette racine lorsque la story possède une racine unique ; elle reste donc
+au-dessus de ses items et est masquée avec elle, sans devenir un enfant du
+`sceneSlot` ou des contrôles voisins. Une story à plusieurs racines conserve
+une couche identifiée par story sous le `sceneSlot`, cas nécessaire à
+`flip-stress`. Les overlays ne servent pas d'arbre de mesure. « Jouer » un point de capture
 signifie ici résoudre et matérialiser l'état de la scène ; cela n'appelle pas
 `play()`, ne joue pas les médias, ne recharge pas les sources et ne détruit pas
 les composants. Le reset est synchrone : aucun frame du navigateur ne
@@ -237,7 +247,7 @@ ancêtre overlay reçoit ses slots dans le ghost de cet ancêtre et ne possède 
 de ressource indépendante. Seul un descendant ayant lui-même une représentation
 `reparent` reçoit un ghost séparé.
 
-La matrice inverse du conteneur local est calculée une fois par frame de
+La matrice inverse du conteneur de story est calculée une fois par frame de
 présentation et réutilisée. Les dimensions d'un ghost stable ne sont écrites que
 lorsqu'elles changent ; la matrice de pose reste la seule écriture par frame.
 
@@ -280,9 +290,11 @@ Le runner n'embarque pas la sémantique `list` ni le DnD. Une démo peut branche
 le journal ni l'ordre logique. Le commit final passe par `RuntimePlayer`,
 `move` et la capacité `list`.
 
-L'hôte peut fournir à la preview l'ordre des enfants résolu par `list` avec
-`resolveListItemNodes`; à défaut, les racines DOM directes marquées par le
-materializer sont utilisées. Le perso saisi est toujours exclu de cet ordre
+L'hôte fournit à la preview l'origine logique du perso avec `resolveOrigin` et
+peut fournir l'ordre des enfants résolu par `list` avec
+`resolveListItemNodes`; à défaut, les racines DOM directes déjà montées sont
+utilisées uniquement pour la géométrie. La preview ne lit aucun identifiant
+logique dans les attributs DOM. Le perso saisi est toujours exclu de cet ordre
 transitoire. Pour chaque cible, la preview capture une seule fois les rectangles
 stabilisés des enfants de la liste candidate ; le FLIP des voisins réutilise cette
 capture après l'insertion du ghost.

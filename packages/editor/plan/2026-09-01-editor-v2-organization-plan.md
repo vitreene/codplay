@@ -273,7 +273,7 @@ plus `durationMs` ni `mountTargets`.
 Le serveur Vite de l'éditeur et l'outil ont été utilisés dans Firefox headless.
 Le parcours réel a établi les rendez-vous suivants :
 
-- sélection par l'identité `data-item-id` rendue par le materializer V2 ;
+- sélection par l'identité `data-item-id` déclarée par le builder V2 sur les items ;
 - cadre et item avec le même rectangle px local à la sélection ;
 - déplacement de `24px`, puis commit et rebuild ;
 - resize de `40px × 20px`, puis commit et rebuild ;
