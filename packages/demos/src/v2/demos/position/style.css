@@ -133,7 +133,6 @@
 .position-moving-stage,
 .position-path-stage,
 .position-live-stage,
-.position-nested-stage,
 .position-story-caption,
 .position-conclusion-network,
 .position-route--stage {
@@ -599,95 +598,66 @@
 	border-color: color-mix(in srgb, var(--position-cyan) 63%, var(--position-line));
 }
 
-.position-nested-stage {
+.position-story-five-frame .position-node {
 	display: grid;
-	width: 100%;
-	min-height: 0;
-	align-items: center;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	gap: 8rem;
+	grid-template: 1fr / 1fr;
 }
 
-.position-nested-rail {
-	min-width: 0;
-	min-height: 0;
-}
-
-.position-story-five-frame .position-nested-rail--source {
+.position-story-five-frame .position-two-node-stage > .position-node--source {
 	grid-column: 1;
 	grid-row: 1;
 }
 
-.position-story-five-frame .position-nested-rail--target {
+.position-story-five-frame .position-two-node-stage > .position-route {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.position-story-five-frame .position-two-node-stage > .position-node--target {
 	grid-column: 3;
 	grid-row: 1;
 }
 
-.position-nested-parent {
-	display: flex;
-	width: min(100%, 15rem);
-	min-width: 0;
-	justify-content: flex-start;
-}
-
-.position-nested-parent--flex-start {
+.position-story-five-frame .position-node > strong {
+	grid-area: 1 / 1;
+	z-index: 1;
+	align-self: start;
 	justify-self: start;
-	justify-content: flex-start;
+	pointer-events: none;
 }
 
-.position-nested-parent--flex-end {
-	justify-self: end;
-	justify-content: flex-end;
+.position-story-five-frame .position-node > .position-nested-container {
+	grid-area: 1 / 1;
+	align-self: stretch;
 }
 
-.position-nested-parent__surface {
-	position: relative;
-	display: grid;
-	width: 100%;
-	flex: 1 1 auto;
-	min-height: min(19rem, 42cqh);
-	padding: clamp(0.75rem, 2cqw, 1.2rem);
+.position-nested-container {
+	display: flex;
+	width: 50%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
 	box-sizing: border-box;
-	align-content: space-between;
-	gap: 1rem;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
 	border: 1px solid var(--position-violet);
 	border-radius: 1.1rem;
-	background: linear-gradient(145deg, rgb(115 87 214 / 13%), rgb(255 255 255 / 75%));
+	background: linear-gradient(145deg, rgb(115 87 214 / 22%), rgb(255 255 255 / 75%));
 	box-shadow: 0 1rem 2rem rgb(21 34 56 / 8%);
 }
 
-.position-nested-parent--k .position-nested-parent__surface {
+.position-nested-container--k {
 	border-color: var(--position-rose);
-	background: linear-gradient(145deg, rgb(199 94 133 / 13%), rgb(255 255 255 / 75%));
+	background: linear-gradient(145deg, rgb(199 94 133 / 22%), rgb(255 255 255 / 75%));
 }
 
-.position-nested-parent__item-mount {
-	display: grid;
-	min-height: 5rem;
-	align-items: center;
-	justify-items: center;
-	border: 1px dashed rgb(21 34 56 / 20%);
-	border-radius: 0.75rem;
-	background: rgb(255 255 255 / 55%);
+.position-nested-container--flex-start {
+	justify-self: start;
 }
 
-.position-story-five-frame .position-nested-parent__surface {
-	height: 100%;
-	min-height: 0;
-}
-
-.position-story-five-frame .position-nested-rail {
-	align-self: center;
-	width: 100%;
-	height: 25cqh;
-	min-height: 0;
-	overflow: hidden;
-}
-
-.position-story-five-frame .position-nested-parent {
-	height: 100%;
-	min-height: 0;
-	overflow: hidden;
+.position-nested-container--flex-end {
+	justify-self: end;
 }
 
 .position-conclusion-network {
@@ -936,8 +906,7 @@
 
 @media (max-width: 760px) {
 	.position-two-node-stage,
-	.position-path-stage,
-	.position-nested-stage {
+	.position-path-stage {
 		grid-template-columns: minmax(6.5rem, 1fr) minmax(3rem, 0.45fr) minmax(6.5rem, 1fr);
 		gap: 0.5rem;
 	}
@@ -963,8 +932,7 @@
 		gap: 0.6rem;
 	}
 	.position-two-node-stage,
-	.position-path-stage,
-	.position-nested-stage {
+	.position-path-stage {
 		grid-template-columns: minmax(5.2rem, 1fr) minmax(2rem, 0.25fr) minmax(5.2rem, 1fr);
 	}
 	.position-node {
@@ -995,12 +963,7 @@
 	.position-live-anchor--target {
 		right: 1%;
 	}
-	.position-nested-stage {
-		gap: 0.45rem;
-	}
-	.position-nested-parent__surface {
-		height: 11.5rem;
-		min-height: 0;
+	.position-story-five-frame .position-nested-container {
 		padding: 0.55rem;
 	}
 	.position-conclusion-node {
@@ -1047,10 +1010,6 @@
 	.position-anchor,
 	.position-live-anchor {
 		height: 6.5rem;
-	}
-	.position-nested-parent__surface {
-		height: 9rem;
-		min-height: 0;
 	}
 	.position-conclusion-node {
 		--position-conclusion-node-size: 5.8rem;

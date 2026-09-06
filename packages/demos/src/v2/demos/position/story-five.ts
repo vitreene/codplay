@@ -8,64 +8,69 @@ import {
   POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
 } from './constants'
 import { createViewRoot } from './carousel'
-import { createCircularArcPath, createPositionMoveData } from './shared'
 
-const SOURCE_MOUNT_TARGET = 'position:view-five:source:mount'
-const TARGET_MOUNT_TARGET = 'position:view-five:target:mount'
-const Q_ITEM_CONTAINER = 'position:view-five:q:item'
-const K_ITEM_CONTAINER = 'position:view-five:k:item'
+const SOURCE_CONTAINER = 'position:view-five:source'
+const TARGET_CONTAINER = 'position:view-five:target'
 const STAGE_TARGET = 'position:view-five:stage'
-const SOURCE_RAIL_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:source:shift`
-const TARGET_RAIL_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:target:shift`
+const Q_CONTAINER = 'position:view-five:q'
+const K_CONTAINER = 'position:view-five:k'
+const SOURCE_VERTICAL_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:source:shift`
+const TARGET_VERTICAL_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:target:shift`
 const Q_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:q:shift`
 const Q_RETURN_EVENT = `${POSITION_NAMESPACE}:view:5:q:return`
 const K_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:k:shift`
 const K_RETURN_EVENT = `${POSITION_NAMESPACE}:view:5:k:return`
-const STORY_FIVE_SHIFT_OFFSET_MS = 450
-const STORY_FIVE_SHIFT_DURATION_MS = 3_650
+const STORY_FIVE_ANIMATION_START_OFFSET_MS = 450
+const STORY_FIVE_PHASE_STEP_MS = 500
+const STORY_FIVE_SOURCE_VERTICAL_SHIFT_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS
+const STORY_FIVE_TARGET_VERTICAL_SHIFT_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS + STORY_FIVE_PHASE_STEP_MS
+const STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS + STORY_FIVE_PHASE_STEP_MS * 2
+const STORY_FIVE_K_OSCILLATION_START_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS + STORY_FIVE_PHASE_STEP_MS * 3
+const STORY_FIVE_VERTICAL_SHIFT = 15
+const STORY_FIVE_VERTICAL_SHIFT_DURATION_MS = 3_650
 const STORY_FIVE_OSCILLATION_DURATION_MS = 4_000
+const STORY_FIVE_OSCILLATION_LEG_DURATION_MS = STORY_FIVE_OSCILLATION_DURATION_MS / 2
 const STORY_FIVE_OSCILLATION_REPEAT_COUNT = 20
-const STORY_FIVE_PARENT_RETURN_OFFSET_MS = STORY_FIVE_SHIFT_OFFSET_MS + POSITION_MOVE_DURATION_MS
-const STORY_FIVE_RAIL_SHIFT = 15
-const STORY_FIVE_END_OFFSET_MS = STORY_FIVE_SHIFT_OFFSET_MS
+const STORY_FIVE_ITEM_MOVE_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS + STORY_FIVE_PHASE_STEP_MS * 4
+const STORY_FIVE_ITEM_MOVE_INTERVAL_MS = POSITION_MOVE_DURATION_MS
+const STORY_FIVE_END_OFFSET_MS = STORY_FIVE_K_OSCILLATION_START_OFFSET_MS
   + STORY_FIVE_OSCILLATION_DURATION_MS * STORY_FIVE_OSCILLATION_REPEAT_COUNT
 
-/** Creates story 5 with one item crossing nested Q/K containers. */
+/** Creates story 5 with one Q/K container in each visible position card. */
 export function createStoryFive(): StoryDoc {
   const view = createViewRoot(4, `
     <section class="position-view__frame position-view__frame--lesson position-story-five-frame">
-      <div class="position-nested-stage" data-part="${STAGE_TARGET}">
+      <div class="position-two-node-stage" data-part="${STAGE_TARGET}">
+        <div class="position-route position-route--straight" aria-hidden="true">
+          <span class="position-route__line"></span>
+        </div>
       </div>
       <div class="position-story-caption">
         <span class="position-story-caption__number">05</span>
-        <p>Les rails se déplacent verticalement en sens opposés ; les conteneurs intérieurs oscillent horizontalement dans leur rail avant le reparenting de l’item.</p>
+        <p>Q et K glissent dans leur conteneur ; l’item passe de l’un à l’autre par reparenting.</p>
       </div>
     </section>
-  `)
+  `, 'position-story-five-frame')
   return {
     id: POSITION_STORY_FIVE_ID,
     persos: [
       view,
       {
-        id: 'position-view-five-source-rail',
+        id: 'position-view-five-source',
         type: 'layout',
         initial: {
           move: { target: STAGE_TARGET },
-          className: 'position-node position-node--source position-nested-rail position-nested-rail--source',
+          className: 'position-node position-node--source',
           style: { translateY: 0 },
-          markup: `
-            <article>
-              <div class="position-node__outlet" data-part="${SOURCE_MOUNT_TARGET}"></div>
-            </article>
-          `,
+          markup: `<article data-part="${SOURCE_CONTAINER}"><strong>source</strong></article>`,
         },
         actions: {
-          [SOURCE_RAIL_SHIFT_EVENT]: {
+          [SOURCE_VERTICAL_SHIFT_EVENT]: {
             style: {
               translateY: {
                 from: 0,
-                to: STORY_FIVE_RAIL_SHIFT,
-                duration: STORY_FIVE_SHIFT_DURATION_MS,
+                to: STORY_FIVE_VERTICAL_SHIFT,
+                duration: STORY_FIVE_VERTICAL_SHIFT_DURATION_MS,
                 ease: 'inOutSine',
               },
             },
@@ -73,25 +78,21 @@ export function createStoryFive(): StoryDoc {
         },
       },
       {
-        id: 'position-view-five-target-rail',
+        id: 'position-view-five-target',
         type: 'layout',
         initial: {
           move: { target: STAGE_TARGET },
-          className: 'position-node position-node--target position-nested-rail position-nested-rail--target',
+          className: 'position-node position-node--target',
           style: { translateY: 0 },
-          markup: `
-            <article>
-              <div class="position-node__outlet" data-part="${TARGET_MOUNT_TARGET}"></div>
-            </article>
-          `,
+          markup: `<article data-part="${TARGET_CONTAINER}"><strong>cible</strong></article>`,
         },
         actions: {
-          [TARGET_RAIL_SHIFT_EVENT]: {
+          [TARGET_VERTICAL_SHIFT_EVENT]: {
             style: {
               translateY: {
                 from: 0,
-                to: -STORY_FIVE_RAIL_SHIFT,
-                duration: STORY_FIVE_SHIFT_DURATION_MS,
+                to: -STORY_FIVE_VERTICAL_SHIFT,
+                duration: STORY_FIVE_VERTICAL_SHIFT_DURATION_MS,
                 ease: 'inOutSine',
               },
             },
@@ -99,71 +100,63 @@ export function createStoryFive(): StoryDoc {
         },
       },
       {
-        id: 'position-view-five-source-parent',
+        id: 'position-view-five-source-container',
         type: 'layout',
         initial: {
-          move: { target: SOURCE_MOUNT_TARGET },
-          className: 'position-nested-parent position-nested-parent--q position-nested-parent--flex-start',
-          markup: `
-            <div class="position-nested-parent__surface">
-              <div class="position-nested-parent__item-mount" data-part="${Q_ITEM_CONTAINER}"></div>
-            </div>
-          `,
+          move: { target: SOURCE_CONTAINER },
+          className: 'position-nested-container position-nested-container--q position-nested-container--flex-start',
+          markup: `<div data-part="${Q_CONTAINER}"></div>`,
         },
         actions: {
           [Q_SHIFT_EVENT]: {
             move: {
-              target: SOURCE_MOUNT_TARGET,
+              target: SOURCE_CONTAINER,
               transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
             },
             className: {
-              add: 'position-nested-parent--flex-end',
-              remove: 'position-nested-parent--flex-start',
+              add: 'position-nested-container--flex-end',
+              remove: 'position-nested-container--flex-start',
             },
           },
           [Q_RETURN_EVENT]: {
             move: {
-              target: SOURCE_MOUNT_TARGET,
+              target: SOURCE_CONTAINER,
               transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
             },
             className: {
-              add: 'position-nested-parent--flex-start',
-              remove: 'position-nested-parent--flex-end',
+              add: 'position-nested-container--flex-start',
+              remove: 'position-nested-container--flex-end',
             },
           },
         },
       },
       {
-        id: 'position-view-five-target-parent',
+        id: 'position-view-five-target-container',
         type: 'layout',
         initial: {
-          move: { target: TARGET_MOUNT_TARGET },
-          className: 'position-nested-parent position-nested-parent--k position-nested-parent--flex-end',
-          markup: `
-            <div class="position-nested-parent__surface">
-              <div class="position-nested-parent__item-mount" data-part="${K_ITEM_CONTAINER}"></div>
-            </div>
-          `,
+          move: { target: TARGET_CONTAINER },
+          className: 'position-nested-container position-nested-container--k position-nested-container--flex-end',
+          markup: `<div data-part="${K_CONTAINER}"></div>`,
         },
         actions: {
           [K_SHIFT_EVENT]: {
             move: {
-              target: TARGET_MOUNT_TARGET,
+              target: TARGET_CONTAINER,
               transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
             },
             className: {
-              add: 'position-nested-parent--flex-start',
-              remove: 'position-nested-parent--flex-end',
+              add: 'position-nested-container--flex-start',
+              remove: 'position-nested-container--flex-end',
             },
           },
           [K_RETURN_EVENT]: {
             move: {
-              target: TARGET_MOUNT_TARGET,
+              target: TARGET_CONTAINER,
               transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
             },
             className: {
-              add: 'position-nested-parent--flex-end',
-              remove: 'position-nested-parent--flex-start',
+              add: 'position-nested-container--flex-end',
+              remove: 'position-nested-container--flex-start',
             },
           },
         },
@@ -175,53 +168,123 @@ export function createStoryFive(): StoryDoc {
           tag: 'span',
           content: 'item',
           className: 'position-item position-item--rose',
-          move: { target: Q_ITEM_CONTAINER },
+          move: { target: Q_CONTAINER },
         },
-        // Nested source-to-target reparent; the event data carries the move.
         actions: { [POSITION_VIEW_FIVE_ITEM_MOVE_EVENT]: true },
       },
     ],
   }
 }
 
-/** Schedules the vertical rails, repeated inner oscillations and item reparent. */
+/** Schedules twenty four-second Q/K oscillations and two item round trips. */
 export function planStoryFiveAnimation(
   planned: Pick<PlannedStrapHelpers, 'repeat' | 'wait'>,
 ): readonly PlannedStrapOccurrence[] {
-  const shifts = planned.repeat(
+  const qShifts = planned.repeat(
     { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [
-      { event: { name: Q_SHIFT_EVENT, cascade: true } },
-      { event: { name: K_SHIFT_EVENT, cascade: true } },
-    ],
+    [{ event: { name: Q_SHIFT_EVENT, cascade: true } }],
   ).map((occurrence) => ({
     ...occurrence,
-    offsetMs: STORY_FIVE_SHIFT_OFFSET_MS + occurrence.offsetMs,
+    offsetMs: STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS + occurrence.offsetMs,
   }))
-  const returns = planned.repeat(
+  const kShifts = planned.repeat(
     { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [
-      { event: { name: Q_RETURN_EVENT, cascade: true } },
-      { event: { name: K_RETURN_EVENT, cascade: true } },
-    ],
+    [{ event: { name: K_SHIFT_EVENT, cascade: true } }],
   ).map((occurrence) => ({
     ...occurrence,
-    offsetMs: STORY_FIVE_PARENT_RETURN_OFFSET_MS + occurrence.offsetMs,
+    offsetMs: STORY_FIVE_K_OSCILLATION_START_OFFSET_MS + occurrence.offsetMs,
+  }))
+  const qReturns = planned.repeat(
+    { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
+    [{ event: { name: Q_RETURN_EVENT, cascade: true } }],
+  ).map((occurrence) => ({
+    ...occurrence,
+    offsetMs: STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS
+      + STORY_FIVE_OSCILLATION_LEG_DURATION_MS
+      + occurrence.offsetMs,
+  }))
+  const kReturns = planned.repeat(
+    { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
+    [{ event: { name: K_RETURN_EVENT, cascade: true } }],
+  ).map((occurrence) => ({
+    ...occurrence,
+    offsetMs: STORY_FIVE_K_OSCILLATION_START_OFFSET_MS
+      + STORY_FIVE_OSCILLATION_LEG_DURATION_MS
+      + occurrence.offsetMs,
   }))
   return [
-    ...planned.wait(STORY_FIVE_SHIFT_OFFSET_MS, {
-      event: { name: SOURCE_RAIL_SHIFT_EVENT, cascade: true },
+    ...planned.wait(STORY_FIVE_SOURCE_VERTICAL_SHIFT_OFFSET_MS, {
+      event: { name: SOURCE_VERTICAL_SHIFT_EVENT, cascade: true },
     }),
-    ...planned.wait(STORY_FIVE_SHIFT_OFFSET_MS, {
-      event: { name: TARGET_RAIL_SHIFT_EVENT, cascade: true },
+    ...planned.wait(STORY_FIVE_TARGET_VERTICAL_SHIFT_OFFSET_MS, {
+      event: { name: TARGET_VERTICAL_SHIFT_EVENT, cascade: true },
     }),
-    ...shifts,
-    ...returns,
-    ...planned.wait(1_200, {
+    ...qShifts,
+    ...kShifts,
+    ...qReturns,
+    ...kReturns,
+    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
         cascade: true,
-        data: createPositionMoveData(K_ITEM_CONTAINER, createCircularArcPath(0.5, 0.44)),
+        data: {
+          move: {
+            target: K_CONTAINER,
+            flipMode: 'overlay-world',
+            transition: {
+              duration: POSITION_MOVE_DURATION_MS,
+              ease: 'inOutCubic',
+            },
+          },
+        },
+      },
+    }),
+    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS, {
+      event: {
+        name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
+        cascade: true,
+        data: {
+          move: {
+            target: Q_CONTAINER,
+            flipMode: 'overlay-world',
+            transition: {
+              duration: POSITION_MOVE_DURATION_MS,
+              ease: 'inOutCubic',
+            },
+          },
+        },
+      },
+    }),
+    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 2, {
+      event: {
+        name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
+        cascade: true,
+        data: {
+          move: {
+            target: K_CONTAINER,
+            flipMode: 'overlay-world',
+            transition: {
+              duration: POSITION_MOVE_DURATION_MS,
+              ease: 'inOutCubic',
+            },
+          },
+        },
+      },
+    }),
+    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 3, {
+      event: {
+        name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
+        cascade: true,
+        data: {
+          move: {
+            target: Q_CONTAINER,
+            flipMode: 'overlay-world',
+            transition: {
+              duration: POSITION_MOVE_DURATION_MS,
+              ease: 'inOutCubic',
+            },
+          },
+        },
       },
     }),
     ...planned.wait(STORY_FIVE_END_OFFSET_MS, {

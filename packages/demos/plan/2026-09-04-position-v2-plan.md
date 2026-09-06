@@ -66,16 +66,19 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `move` complet. Lorsqu'une ancre est relâchée, le circuit
   capture → listen → strap émet en plus un rebond immédiat avec un path
   recalculé dans `event.data`.
-- La cinquième vue conserve les parents Q et K montés dans les rails source et
-  cible. Leurs actions appliquent les classes `flex-start` et `flex-end` du
-  conteneur flex et portent un `move` vers leur propre outlet pour que CodPlay
-  anime chaque changement de placement. Le perso déplacé porte la largeur de la
-  carte et sa classe `flex-start` ou `flex-end` déplace directement sa propre
-  boîte dans l'outlet ; la sous-structure ne sert pas de cible de mesure. Les
-  bascules sont produites par
-  `planned.repeat({ eachMs: 4000, times: 20 })` : chaque cycle complet dure
-  `4 000 ms`, et seul l'item rond est reparenté de Q vers K par un `move` de
-  `2 000 ms`.
+- La cinquième vue reprend exactement les deux cartes source/cible des vues
+  précédentes et les déplace verticalement en sens opposés par un tween
+  `translateY` de `3 650 ms`. Chaque carte contient directement un seul
+  sous-conteneur, Q ou K, large de `50 %` et haut de `100 %`. Les classes
+  `flex-start` et `flex-end`, appuyées par un `move` local de `2 000 ms`,
+  déplacent ce sous-conteneur d'un bord à l'autre ;
+  `planned.repeat({ eachMs: 4000, times: 20 })` produit les vingt
+  aller-retours. Les départs des éléments sont décalés par pas de `500 ms`,
+  du premier départ à `+2 000 ms`, afin que source, cible, Q, K et l'item ne
+  se déplacent pas ensemble. L'item est monté directement dans Q puis
+  reparenté quatre fois par des `move` overlay de `2 000 ms`, soit deux
+  aller-retours Q→K→Q. Aucun rail, outlet intermédiaire ou path décoratif
+  n'est utilisé.
 - La représentation graphique des trajectoires reste une étape séparée. Le
   présent volet valide seulement les destinations, durées, reparentings et
   payloads de `move`.
