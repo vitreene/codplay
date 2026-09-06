@@ -57,6 +57,31 @@ describe('V2 HTML pose host math', () => {
     expect(pose.layoutOrigin).toEqual({ x: 12, y: 8 })
     expect(pose.origin).toEqual({ x: 92, y: 48 })
   })
+
+  it('does not measure ancestors above an explicit local capture root', () => {
+    const outer = document.createElement('section')
+    const root = document.createElement('main')
+    const item = document.createElement('article')
+    outer.append(root)
+    root.append(item)
+    document.body.append(outer)
+    Object.defineProperty(outer, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => { throw new Error('outside capture root must not be measured') },
+    })
+    root.style.width = '200px'
+    root.style.height = '200px'
+    item.style.width = '20px'
+    item.style.height = '20px'
+    defineRect(root, { left: 100, top: 50, width: 200, height: 200 })
+    defineRect(item, { left: 120, top: 70, width: 20, height: 20 })
+
+    const context = createHtmlPoseCaptureContext(root)
+    captureHtmlPose(root, context)
+    const pose = captureHtmlPose(item, context)
+
+    expect(pose.origin).toEqual({ x: 120, y: 70 })
+  })
 })
 
 /** Installs the measured rectangle used by the explicit geometry transaction. */

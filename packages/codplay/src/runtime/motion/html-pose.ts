@@ -20,6 +20,8 @@ type HtmlMeasuredRect = Readonly<{
 
 /** Shared read context for one explicit HTML geometry transaction. */
 export type HtmlPoseCaptureContext = Readonly<{
+  /** Stops world-geometry traversal at the local motion container. */
+  boundaryRoot?: Element
   geometries: Map<Element, HtmlWorldGeometry>
   poses: Map<Element, HtmlPose>
   localBoxes: Map<Element, HtmlLocalBox>
@@ -28,8 +30,9 @@ export type HtmlPoseCaptureContext = Readonly<{
 }>
 
 /** Creates one cache shared by all poses captured in one boundary transaction. */
-export function createHtmlPoseCaptureContext(): HtmlPoseCaptureContext {
+export function createHtmlPoseCaptureContext(boundaryRoot?: Element): HtmlPoseCaptureContext {
   return {
+    ...(boundaryRoot === undefined ? {} : { boundaryRoot }),
     geometries: new Map(),
     poses: new Map(),
     localBoxes: new Map(),
@@ -232,7 +235,7 @@ function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): H
   const existing = context.geometries.get(node)
   if (existing !== undefined) return existing
 
-  const parent = node.parentElement
+  const parent = resolveCaptureParent(node, context)
   const parentGeometry: HtmlWorldGeometry = parent === null
     ? { origin: { x: 0, y: 0 }, layoutOrigin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX } }
     : captureWorldGeometry(parent, context)
@@ -313,9 +316,10 @@ export function captureHtmlPose(node: Element, context = createHtmlPoseCaptureCo
   const existing = context.poses.get(node)
   if (existing !== undefined) return existing
   const geometry = captureWorldGeometry(node, context)
-  const parentMatrix = node.parentElement === null
+  const parent = resolveCaptureParent(node, context)
+  const parentMatrix = parent === null
     ? { ...IDENTITY_MATRIX }
-    : captureWorldGeometry(node.parentElement, context).matrix
+    : captureWorldGeometry(parent, context).matrix
   const scaleX = Math.max(1e-6, Math.hypot(geometry.matrix.a, geometry.matrix.b))
   const scaleY = Math.max(1e-6, Math.hypot(geometry.matrix.c, geometry.matrix.d))
   const localBox = measureLocalBox(node, context)
@@ -347,6 +351,12 @@ export function captureHtmlPose(node: Element, context = createHtmlPoseCaptureCo
   }
   context.poses.set(node, pose)
   return pose
+}
+
+/** Resolves one pose parent without crossing an explicit local capture root. */
+function resolveCaptureParent(node: Element, context: HtmlPoseCaptureContext): Element | null {
+  if (context.boundaryRoot === node) return null
+  return node.parentElement
 }
 
 /** Reads one computed style at most once during an explicit geometry transaction. */

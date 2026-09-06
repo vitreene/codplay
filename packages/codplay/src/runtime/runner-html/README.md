@@ -58,6 +58,14 @@ résout alors le graphe conservé et l'état de présentation du materializer ; 
 ne relit pas la géométrie du DOM et ne reconstruit pas le planning à chaque
 frame.
 
+Un reset événementiel de story ne constitue pas une demande de recapture. Le
+runner retire les ressources transitoires de la story interceptante, met à jour
+les barrières de reset du graphe et conserve les frontières historiques pour le
+seek. Les autres stories préconstruites ne sont pas visitées. Une capture ne
+reprend que lorsqu'un nouvel intent `move` est effectivement apparu dans le
+journal ; elle est alors limitée au groupe de frontières concerné. `resize()`
+reste le cas distinct qui recapture explicitement le repère géométrique global.
+
 À la fermeture d’une capture live, si l’item possède déjà une présentation
 active, le runner conserve sa pose numérique courante comme FIRST transitoire
 avant de capturer la nouvelle cible. Le nœud auteur peut en effet être revenu à

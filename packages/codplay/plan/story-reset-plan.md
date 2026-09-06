@@ -2,7 +2,7 @@
 
 ## Statut
 
-> Status: En cours — implémentation autorisée le 2026-09-06
+> Status: En cours — reset story-local, capture motion lazy et limite de capture par story implémentés ; coût résiduel du journal runtime à traiter
 > CodPlay version: V2 foundation
 
 Ce plan est séparé de
@@ -94,11 +94,17 @@ créent ni méthode de façade, ni cycle de vie de story, ni nouveau circuit
 
 - transmettre au runner la portée sémantique du reset après l’interception et
   la reconstruction ;
-- invalider le graphe et les frontières motion dépendant de cette story ;
+- retirer uniquement les ressources motion temporaires de cette story et
+  mettre à jour ses barrières de reset ; conserver les frontières géométriques
+  historiques nécessaires au seek ;
 - supprimer les ressources overlay et styles temporaires de cette story dans
   leur conteneur local actuel ;
 - laisser les éléments auteur montés et restaurer leur présentation naturelle ;
 - présenter l’état initial sans transition ;
+- si un nouveau `move` est ajouté après le reset, compiler le journal pour le
+  découvrir mais ne capturer que le groupe de frontières de cette nouvelle
+  story ; ne jamais recapturer les groupes historiques des autres stories
+  lazy ;
 - vérifier qu’un `move` ajouté après le reset suit le chemin normal de
   découverte/capture.
 
@@ -155,8 +161,13 @@ Le cœur CodPlay V2 est implémenté :
   postérieurs à sa dernière frontière ;
 - `RuntimePlayer.emit()` et `RuntimePlayer.emitEventime()` transmettent la
   frontière à la présentation courante ;
-- le runner HTML invalide le graphe et les ressources motion de la story
-  concernée, sans remount ni modification de l’horloge.
+- le runner HTML retire les ressources transitoires de la story concernée et
+  met à jour ses barrières de reset sans remount ni modification de l’horloge ;
+- un reset seul ne relance aucune capture géométrique ; les frontières
+  historiques restent disponibles pour `seek`, et seul un groupe portant un
+  nouvel intent `move` est capturé puis fusionné dans le graphe existant ;
+- `resize()` conserve son contrat explicite de recapture globale, car il
+  modifie le repère géométrique de toute la scène.
 
 La navigation du carousel `position` est maintenant raccordée :
 
@@ -179,11 +190,12 @@ faire sur le chemin navigateur complet. Le plan reste donc `En cours`.
 
 ### Validation de la tranche — 2026-09-06
 
-- `position-demo.spec.ts` : **6 tests passants** ; les assertions vérifient le
+- `position-demo.spec.ts` : **7 tests passants** ; les assertions vérifient le
   carousel manuel, les six resets de sortie, l’overlay local et la
-  reconstruction après seek ;
-- suite ciblée runtime/facade/scene : **8 fichiers, 134 tests passants** ;
-- suite complète du package CodPlay : **89 fichiers, 565 tests passants** ;
+  reconstruction après seek ; un reset seul est aussi vérifié sans nouvelle
+  lecture de `getBoundingClientRect` ;
+- suite ciblée runner/facade : **2 fichiers, 22 tests passants** ;
+- suite complète du package CodPlay : **89 fichiers, 566 tests passants** ;
 - build `@codplay/demos` : passant ;
 - audit de la source V2 `position` et de ses assertions : aucune occurrence de
   `cascade`, aucune trace de debug et aucun ancien symbole `viewFiveMove` ; les
@@ -193,9 +205,72 @@ faire sur le chemin navigateur complet. Le plan reste donc `En cours`.
   `packages/authoring/scene-factory` ; le typecheck des démos remonte en plus
   des erreurs déjà présentes dans `packages/codplay-v1` et `packages/demos/src/v1` ;
 - Safari Technology Preview : la page V2 charge, le bouton `Lire` puis
-  `ArrowRight` font passer le carousel à `02 / 06`, sans erreur console ni
-  requête HTTP en échec ; l’exercice détaillé du reset dans le journal
-  navigateur reste à faire, donc le plan reste `En cours`.
+  plusieurs navigations gauche/droite restent sans erreur console ; la mesure
+  détaillée est consignée ci-dessous. Le plan reste `En cours` car le coût du
+  journal runtime n'est pas encore optimisé.
+
+### Mesure de la lenteur — Safari Technology Preview — 2026-09-06
+
+La mesure a été réalisée après un rechargement complet de la page, avec un
+compteur temporaire sur `Element.prototype.getBoundingClientRect` et un
+chronomètre entre l'événement clavier et la mise à jour du statut du carousel.
+Le compteur n'est pas une modification du runtime.
+
+| Transition | Appels géométriques | Temps jusqu'au statut |
+| --- | ---: | ---: |
+| 1 → 2 | 168 | 34 ms |
+| 2 → 3 | 114 | 25 ms |
+| 3 → 4 | 1 716 | 104 ms |
+| 4 → 5 | 6 244 | 531 ms |
+
+Les cycles supplémentaires 4 ↔ 5 donnent toujours 1 710–1 716 appels pour
+la story 4 et 6 244 appels pour la story 5 : la capture motion ne recapture
+donc pas les anciennes stories et ne présente pas de croissance géométrique
+à chaque clic. En revanche, le temps de réponse du passage 4 → 5 a mesuré
+1 018 ms puis 1 905 ms lors de réactivations successives, tandis que le
+volume de `getBoundingClientRect` restait à 6 244. La lenteur résiduelle ne
+vient donc pas du seul appel géométrique.
+
+La cause à traiter est l'accumulation des faits runtime : chaque navigation
+ajoute les occurrences `planned` de la story dans le journal append-only.
+La story 5 ajoute 80 oscillations Q/K, quatre moves de l'item et les deux
+déplacements verticaux et événements de fin. À chaque révision, la
+reconstruction logique relit le journal ; `getAllEvents()` est rescanné par
+la matérialisation, les barrières et la timeline structurelle. Le reset
+n'efface pas ces faits, conformément au contrat, mais aucune compaction ou
+réutilisation de projection n'est encore en place.
+
+Cette mesure ne justifie pas une modification de la démo ni une nouvelle
+capture globale. La prochaine correction doit viser le coût de projection du
+journal (ou une représentation persistante équivalente), avec des tests de
+non-régression `play`, `seek`, reset et persistence ; elle reste à planifier
+et à autoriser séparément.
+
+### Limite de capture au conteneur de story — Safari Technology Preview — 2026-09-06
+
+La capture HTML reçoit maintenant la racine locale de la story comme frontière.
+Le calcul conserve les mesures de la racine, de ses descendants et de leurs
+parents internes, mais ne remonte plus vers les ancêtres fixes du layout
+général (`html`, `body`, `app`, scène et `sceneSlot`). Cette limite est une
+optimisation de la capture ; elle ne crée pas l’élément inerte du layout, qui
+reste une réflexion ultérieure.
+
+Sur le même parcours Safari Technology Preview, après rechargement complet :
+
+| Transition | Avant la limite | Après la limite | Écart |
+| --- | ---: | ---: | ---: |
+| 4 → 5 | 6 244 | 2 116 | −4 128 (−66 %) |
+| 5 → 4 | 1 716 | 724 | −992 (−58 %) |
+
+Pour la story 5, les 2 116 appels restants correspondent à sa propre racine,
+son stage, ses deux repères, ses quatre conteneurs imbriqués et l’item. Aucun
+appel n’est effectué sur les ancêtres situés au-dessus du conteneur de story.
+La page V2 ne produit aucune erreur ni alerte console pendant ces transitions.
+
+La limite est couverte par un test de pose qui interdit explicitement la
+mesure d’un ancêtre extérieur à la racine fournie. Le coût de projection du
+journal runtime reste indépendant de cette réduction géométrique et demeure
+la prochaine optimisation à traiter.
 
 ### 6. Application au carousel de la démo `position`
 
@@ -216,6 +291,9 @@ faire sur le chemin navigateur complet. Le plan reste donc `En cours`.
   sans le raccorder à la capacité `story.reset()` ;
 - ne pas rediriger cet événement vers une story globale `main` : la portée est
   déterminée par l’interception dans l’instance de démo courante.
+- lors du reset, ne toucher qu’à la story qui intercepte l’événement et qui est
+  présentée ; les autres stories préconstruites restent lazy et leurs
+  frontières ne sont pas recapturées.
 
 ## Critères de sortie
 

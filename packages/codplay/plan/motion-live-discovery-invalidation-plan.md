@@ -2,7 +2,7 @@
 
 ## Statut
 
-> Status: En cours — raccord de pose live implémenté ; validation navigateur restante
+> Status: En cours — raccord de pose live et limite de capture par story implémentés ; projection du journal et validation intégration complète restantes
 > CodPlay version: V2 foundation
 > Plan validé pour implémentation le 2026-09-05.
 
@@ -137,7 +137,12 @@ introduit.
 
 Réalisé : le rebuild est déclenché après matérialisation normale ; le premier
 eventime live est capturé avant la présentation suivante et la frame courante
-est présentée avec les nouvelles frontières.
+est présentée avec les nouvelles frontières. Une révision qui ajoute seulement
+un reset ou un événement sans `move` met à jour les barrières logiques sans
+relire la géométrie. Lorsqu’un nouveau `move` apparaît, le runner conserve les
+frontières déjà capturées et ne mesure que le groupe temporel et la story de ce
+nouvel intent ; les autres stories restent lazy. `resize()` garde son chemin
+explicite de recapture globale.
 
 Lorsqu’un `move` live est ajouté alors que l’item est déjà en mouvement, le
 runner prend la pose numérique de sa `PresentationFrame` au temps de
@@ -200,14 +205,14 @@ du runner réel. Ils vérifient le DOM et le parentage ; la suite ciblée couvre
 non-régression parent/enfant et reparent, Play, Seek, resize, persistence et
 lifecycle.
 
-État : la suite ciblée runner HTML/motion et les façades `position` et
-`flip-stress` passent (16 fichiers, 115 tests). Elle couvre maintenant le
-handoff de la pose présentée vers le FIRST live sans ajout au journal. Le
-contrôle Safari Technology Preview précédent couvre le parentage des overlays,
-mais pas encore ce saut après recalcul. Le typecheck du package `codplay` reste
-bloqué par les imports `codplay-v1` préexistants dans
-`packages/authoring/scene-factory`. Le build `@codplay/demos` reste bloqué par
-l'import V1 `@codplay/editor/builder/build-scene`.
+État : la suite ciblée runner/motion et les façades `position` et
+`flip-stress` passent (3 fichiers, 12 tests) ; la suite complète CodPlay passe
+(89 fichiers, 567 tests). Elle couvre le handoff de la pose présentée vers le
+FIRST live sans ajout au journal et la limite de capture au conteneur local.
+Le contrôle Safari Technology Preview mesure cette limite sans erreur console.
+Le typecheck du package `codplay` reste bloqué par les imports `codplay-v1`
+préexistants dans `packages/authoring/scene-factory`. Le build
+`@codplay/demos` passe ; le coût de projection du journal reste à traiter.
 
 ## Décision retenue
 
@@ -223,3 +228,9 @@ Le raccord live reste interne : `RuntimePlayer` signale l’ajout au journal,
 puis le runner réutilise le chemin de capture de `resize()` uniquement si un
 nouvel intent `move` est présent. Aucun contrat `move`, observateur de `target`
 ou circuit propre à la démo n’est ajouté.
+
+La capture HTML reçoit la racine visuelle locale de chaque story comme limite
+de parcours. Elle mesure la racine et ses descendants nécessaires, puis arrête
+la remontée des ancêtres au-dessus de cette story. Cette limite réduit le coût
+de géométrie sans introduire l’élément inerte du layout, qui reste hors de cette
+tranche.

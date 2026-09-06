@@ -24,7 +24,7 @@ export function captureHtmlLayoutSnapshot(
   rootKey?: string,
 ): LayoutSnapshot {
   if (!isMeasurableHtmlElement(root)) return emptySnapshot(scene)
-  const captureContext = createHtmlPoseCaptureContext()
+  const captureContext = createHtmlPoseCaptureContext(root)
   const hostRootPose = captureHtmlPose(root, captureContext)
   const rootCoordinatePose = createMotionRootPose()
   const selectedItemIds = resolveSelection(scene, selection)

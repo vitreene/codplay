@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodPlay, type CodPlayFrameScheduler } from '../../src'
 import {
   FIRST_VIEW_MOVE_OFFSET_MS,
@@ -55,6 +55,7 @@ describe('position V2 demo', () => {
   let codplay: CodPlay | undefined
 
   afterEach(() => {
+    vi.restoreAllMocks()
     codplay?.destroy()
     codplay = undefined
     document.body.replaceChildren()
@@ -490,6 +491,36 @@ describe('position V2 demo', () => {
     }
     expect(build.compiledScene.scene.stories.main?.listen).toEqual([])
     stopTrace()
+  }, 15_000)
+
+  it('does not recapture historical geometry for a reset-only story event', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'position-story-reset-geometry-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    const geometryReads = vi.spyOn(Element.prototype, 'getBoundingClientRect')
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    const readsAfterInit = geometryReads.mock.calls.length
+
+    await instance.events.emit(
+      { name: CAROUSEL_EVENTS[0]!.reset, visibility: 'scene' },
+      { scope: 'scene' },
+    )
+
+    expect(geometryReads).toHaveBeenCalledTimes(readsAfterInit)
   }, 15_000)
 
   it('keeps story five to two cards, two moving containers and one reparented item', async () => {
