@@ -100,16 +100,26 @@ Le runner ne construit pas un second arbre HTML pour le FLIP. Lorsqu'un
 Les overlays existants restent en dehors de la mise en page normale et sont
 réutilisés. Pour une frontière HTML, le runner partitionne d'abord les intents
 par story, puis résout sa racine visuelle à partir du graphe logique et des
-nœuds persistants. La couche `[data-codplay-motion-overlay]` est l'enfant direct
-de cette racine lorsque la story possède une racine unique ; elle reste donc
-au-dessus de ses items et est masquée avec elle, sans devenir un enfant du
-`sceneSlot` ou des contrôles voisins. Une story à plusieurs racines conserve
-une couche identifiée par story sous le `sceneSlot`, cas nécessaire à
-`flip-stress`. Les overlays ne servent pas d'arbre de mesure. « Jouer » un point de capture
+nœuds persistants. La couche d'overlay est l'enfant direct de cette racine
+lorsque la story possède une racine unique ; elle reste donc au-dessus de ses
+items et est masquée avec elle, sans devenir un enfant du `sceneSlot` ou des
+contrôles voisins. Une story à plusieurs racines conserve une couche distincte
+sous le `sceneSlot`, cas nécessaire à `flip-stress`. La référence de cette
+couche et l'association item/ghost restent dans les structures privées du
+runner ; aucun attribut DOM ne sert de registre d'overlay ou d'identité.
+Les overlays ne servent pas d'arbre de mesure. « Jouer » un point de capture
 signifie ici résoudre et matérialiser l'état de la scène ; cela n'appelle pas
 `play()`, ne joue pas les médias, ne recharge pas les sources et ne détruit pas
 les composants. Le reset est synchrone : aucun frame du navigateur ne
 s'intercale entre la présentation de l'état et la lecture de sa géométrie.
+
+Les tailles, matrices et masques transitoires des nœuds sont écrits directement
+dans leurs styles inline puis suivis dans des `WeakMap` privées afin de restaurer
+les déclarations auteur. Le runner ne publie donc pas de
+`data-codplay-motion-size`, `data-codplay-motion-transform` ou
+`data-codplay-motion-hidden`. Pendant un seek, la racine porte uniquement le
+verrou temporaire `data-codplay-motion-seek`, consommé par la feuille de style
+interne pour neutraliser les transitions de ses descendants.
 
 Pour un `move` structurel, la capture inclut les enfants actuels des cibles
 source et destination. Un enfant qui possède aussi un mouvement direct ultérieur

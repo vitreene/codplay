@@ -10,7 +10,7 @@ Cette scène présente une story `main` qui porte le shell du carousel et six
 2. déplacement indépendant de la source et de la cible ;
 3. capture d’un point médian, puis transport du path préparé dans `event.data` du move ;
 4. ancres déplaçables et trajectoires recalculées pendant les rebonds ;
-5. sources imbriquées avec un seul item, rails verticaux et conteneurs intérieurs qui glissent sans reparenting ;
+5. sources imbriquées avec un seul item, rails verticaux et conteneurs intérieurs qui oscillent horizontalement pendant 20 cycles de 4 s, par classes flex appuyées par un `move` local, sans reparenting des conteneurs ;
 6. conclusion qui reprend fidèlement la mécanique `flip-stress` : quatre
    conteneurs A–D à fonds distincts, deux cadres Q/K colorés, deux listes sans
    clipping et douze échanges sans chevauchement d’items.

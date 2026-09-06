@@ -30,17 +30,6 @@ export function resolveElementPath(root: HTMLElement, path: readonly number[]): 
   return current
 }
 
-/** Finds the overlay layer owned by one motion root and optional story key. */
-export function findOverlayLayer(root: Element, ownerKey?: string): HTMLElement | undefined {
-  const children = (root as Element & { children?: HTMLCollection }).children
-  if (children === undefined) return undefined
-  const layer = Array.from(children).find((child) => (
-    child.hasAttribute('data-codplay-motion-overlay')
-      && child.getAttribute('data-codplay-motion-overlay-key') === (ownerKey ?? null)
-  ))
-  return layer instanceof HTMLElement ? layer : undefined
-}
-
 /** Finds the nearest direct overlay ancestor that owns one local descendant's presentation. */
 export function findNearestOverlayAncestor(
   frame: PresentationFrame,

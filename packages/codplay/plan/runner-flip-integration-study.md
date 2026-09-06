@@ -1119,3 +1119,40 @@ propre de chaque parent à l'instant demandé. Un enfant dont le LAST tombe
 pendant le move de son parent reçoit donc la pose intermédiaire du parent à ce
 LAST, jamais sa pose finale. Cette donnée reste interne au graphe : elle ne
 crée ni segment pour un ancêtre sans intention, ni lecture DOM par frame.
+
+### Correction — état de présentation conservé hors du DOM — 2026-09-06
+
+Les marqueurs `data-codplay-motion-overlay`,
+`data-codplay-motion-overlay-key`, `data-codplay-motion-item`,
+`data-codplay-motion-size`, `data-codplay-motion-transform` et
+`data-codplay-motion-hidden` ne font pas partie de l'état d'une scène contrôlée.
+Ils ont été retirés du runner HTML :
+
+- `HtmlMotionPresentationHost.motionRoots` conserve directement la couche
+  d'overlay créée pour chaque racine de présentation ; sa suppression dépend de
+  cette référence privée et ne relit plus le DOM pour retrouver une couche ;
+- `resources` conserve l'association logique `itemId -> ghost`, donc le ghost
+  n'a plus besoin d'un attribut d'identité ;
+- les contributions locales de taille, de matrice et de visibilité sont
+  appliquées inline avec une priorité temporaire, suivies par des `WeakMap`, puis
+  restaurées à leur valeur auteur lors du clear ou de la capture d'un template ;
+- le seul marqueur restant est `data-codplay-motion-seek` sur la racine de
+  présentation. Il ne décrit pas l'état d'un item : il active pendant un seek
+  le verrou CSS qui neutralise les transitions et animations de ses descendants.
+
+Cette correction ne change ni le graphe, ni le calendrier, ni le contrat de
+`move`. Elle corrige uniquement la frontière de présentation HTML et conserve
+les invariants d'exclusivité source/ghost, de réutilisation des templates et de
+séparation entre racines d'overlay. Les tests du host, de la façade et de
+`flip-stress` vérifient désormais ces comportements par la structure et les
+styles effectifs, sans interroger les anciens marqueurs.
+
+Validation du correctif le 2026-09-06 : les tests ciblés du host HTML, de la
+façade et de `flip-stress` passent (41/41), le build des démos V2 passe et
+`git diff --check` ne signale rien. La suite CodPlay reste à 553/555 : les deux
+échecs sont les attentes déjà divergentes de `position-demo.spec.ts` sur les
+eventimes et la durée de cette démo, sans rapport avec les marqueurs retirés.
+Le contrôle navigateur effectué dans Safari Technology Preview confirme une
+seule story visible, l'absence de marqueurs `data-codplay-motion-*` sur les
+nœuds et l'absence d'erreur de console ; la matrice complète Play/Seek/replay,
+resize et lifecycle reste à compléter avant de passer le plan à `Fini`.

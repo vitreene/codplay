@@ -66,6 +66,16 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `move` complet. Lorsqu'une ancre est relâchée, le circuit
   capture → listen → strap émet en plus un rebond immédiat avec un path
   recalculé dans `event.data`.
+- La cinquième vue conserve les parents Q et K montés dans les rails source et
+  cible. Leurs actions appliquent les classes `flex-start` et `flex-end` du
+  conteneur flex et portent un `move` vers leur propre outlet pour que CodPlay
+  anime chaque changement de placement. Le perso déplacé porte la largeur de la
+  carte et sa classe `flex-start` ou `flex-end` déplace directement sa propre
+  boîte dans l'outlet ; la sous-structure ne sert pas de cible de mesure. Les
+  bascules sont produites par
+  `planned.repeat({ eachMs: 4000, times: 20 })` : chaque cycle complet dure
+  `4 000 ms`, et seul l'item rond est reparenté de Q vers K par un `move` de
+  `2 000 ms`.
 - La représentation graphique des trajectoires reste une étape séparée. Le
   présent volet valide seulement les destinations, durées, reparentings et
   payloads de `move`.

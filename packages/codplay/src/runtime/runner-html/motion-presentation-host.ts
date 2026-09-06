@@ -1,6 +1,5 @@
 import { invertMatrix } from 'ace'
 import { isMeasurableHtmlElement } from './element-guards'
-import { ensureHtmlOverlayLayer } from '../motion/html-pose'
 import {
   composeMotionPose,
   createMotionRootPose,
@@ -16,7 +15,6 @@ import {
   applyGhostPose,
   findElementPath,
   findNearestOverlayAncestor,
-  findOverlayLayer,
   isDefaultTransformPropertyValue,
   orderOverlayStack,
   orderParentFirst,
@@ -82,7 +80,7 @@ export class HtmlMotionPresentationHost {
   prepareNaturalCapture(): void {
     this.clearHiddenDescendantClones()
     // The next commit must recompute descendant masking. The capture phase
-    // deliberately removes those markers from reused ancestor ghosts.
+    // deliberately clears the masks from reused ancestor ghosts.
     this.hiddenDescendantKey = ''
     // Hide every projection before revealing any source. This keeps a source
     // and its projection from being visible at the same time at the boundary.
@@ -118,7 +116,7 @@ export class HtmlMotionPresentationHost {
     this.clearHiddenDescendantClones()
     this.hiddenDescendantKey = ''
     for (const state of this.motionRoots.values()) {
-      removeElement(state.overlayLayer ?? findOverlayLayer(state.root, state.key))
+      removeElement(state.overlayLayer)
       state.overlayLayer = undefined
       state.overlayOrder = []
     }
@@ -174,7 +172,7 @@ export class HtmlMotionPresentationHost {
     for (const [token, state] of this.motionRoots) {
       const itemIds = activeByRoot.get(token) ?? []
       if (itemIds.length === 0) {
-        removeElement(state.overlayLayer ?? findOverlayLayer(state.root, state.key))
+        removeElement(state.overlayLayer)
         state.overlayLayer = undefined
         state.overlayOrder = []
         continue
@@ -287,7 +285,7 @@ export class HtmlMotionPresentationHost {
       parentInverses.set(parentCacheKey, resolvedParentInverse)
     }
     const naturalItem = naturalLayout?.items.get(itemId)
-    // The projection stylesheet replaces the authored transform entirely.
+    // The host-owned inline contribution replaces the authored transform entirely.
     // Subtract only the untransformed layout slot captured for this item;
     // subtracting localPose.origin would apply the authored transform twice.
     const naturalLayoutOrigin: readonly [number, number] = naturalItem?.localPose.layoutOrigin ?? [0, 0]
@@ -406,20 +404,20 @@ export class HtmlMotionPresentationHost {
       this.ensurePresentationHidden(previous)
       const synchronized = this.transientStyles.syncTemplate(source, previous.ghost)
       if (synchronized) {
-        // syncTemplate deliberately removes transient attributes before
-        // copying authored content, so restore the hidden phase after it.
+        // syncTemplate copies authored content, so restore the hidden phase
+        // after the template has been synchronized.
         this.transientStyles.applyHidden(previous.ghost)
         previous.revision = revision
         if (!unchanged) {
-          // syncTemplate removes the ghost's inline style attribute before
-          // copying the authored template. The presentation dimensions are
-          // host-owned and therefore have to be written again even when the
-          // pose width/height did not change.
+          // Template synchronization replaces the ghost's inline style with
+          // the source template. The presentation dimensions are host-owned
+          // and therefore have to be written again even when the pose
+          // width/height did not change.
           previous.lastWidth = undefined
           previous.lastHeight = undefined
           previous.lastMatrix = undefined
           this.hiddenDescendantKey = ''
-          this.configureOverlayGhost(previous.ghost, itemId)
+          this.configureOverlayGhost(previous.ghost)
           // The transform-longhand decision was made when this representation
           // was created. Reusing it must not turn a state/template revision
           // into a computed-style read on the presentation path.
@@ -439,7 +437,7 @@ export class HtmlMotionPresentationHost {
     // representations mutually exclusive even at the insertion boundary.
     this.transientStyles.applyHidden(source)
     const ghost = this.transientStyles.captureTemplate(source)
-    this.configureOverlayGhost(ghost, itemId)
+    this.configureOverlayGhost(ghost)
     // The new projection is hidden before insertion. The source is already
     // hidden, so the first painted state cannot contain both representations.
     this.transientStyles.applyHidden(ghost)
@@ -463,7 +461,16 @@ export class HtmlMotionPresentationHost {
   /** Returns the overlay layer owned by one local motion root. */
   private getOverlayLayer(rootState: MotionRootState): HTMLElement {
     if (rootState.overlayLayer !== undefined) return rootState.overlayLayer
-    rootState.overlayLayer = ensureHtmlOverlayLayer(rootState.root, rootState.key)
+    const layer = rootState.root.ownerDocument.createElement('div')
+    layer.style.position = 'absolute'
+    layer.style.left = '0'
+    layer.style.top = '0'
+    layer.style.width = '100%'
+    layer.style.height = '100%'
+    layer.style.pointerEvents = 'none'
+    layer.style.zIndex = '20'
+    rootState.root.appendChild(layer)
+    rootState.overlayLayer = layer
     return rootState.overlayLayer
   }
 
@@ -556,8 +563,7 @@ export class HtmlMotionPresentationHost {
   }
 
   /** Restores the fixed overlay properties after an in-place template sync. */
-  private configureOverlayGhost(ghost: HTMLElement, itemId: string): void {
-    ghost.setAttribute('data-codplay-motion-item', itemId)
+  private configureOverlayGhost(ghost: HTMLElement): void {
     ghost.style.position = 'absolute'
     ghost.style.left = '0px'
     ghost.style.top = '0px'

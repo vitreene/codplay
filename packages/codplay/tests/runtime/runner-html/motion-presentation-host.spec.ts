@@ -8,6 +8,23 @@ import type { ItemPresentation, PresentationFrame } from '../../../src/runtime/m
 
 const IDENTITY: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
+/** Finds the unmarked overlay layer by its presentation contract. */
+function findTestOverlayLayer(root: Element): HTMLElement | undefined {
+  const candidates = root.querySelectorAll<HTMLElement>('*')
+  return Array.from(candidates).find((candidate) => (
+    candidate.style.position === 'absolute'
+      && candidate.style.width === '100%'
+      && candidate.style.height === '100%'
+      && candidate.style.pointerEvents === 'none'
+      && candidate.style.zIndex === '20'
+  ))
+}
+
+/** Returns one direct ghost from an unmarked overlay layer. */
+function findTestGhost(root: Element, index = 0): HTMLElement | undefined {
+  return findTestOverlayLayer(root)?.children[index] as HTMLElement | undefined
+}
+
 describe('HtmlMotionPresentationHost overlay resources', () => {
   it('reuses a stable overlay node across presentation frames', () => {
     const root = document.createElement('main')
@@ -20,21 +37,23 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const frame = createReparentFrame(createPose(0))
 
     host.commit(frame, () => 'revision-1')
-    const firstGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const firstGhost = findTestGhost(root)
     expect(firstGhost).not.toBeNull()
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
-    expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(firstGhost?.hasAttribute('data-codplay-motion-item')).toBe(false)
+    expect(findTestOverlayLayer(root)?.hasAttribute('data-codplay-motion-overlay')).toBe(false)
+    expect(source.style.visibility).toBe('hidden')
+    expect(firstGhost?.style.visibility).toBe('')
 
     host.prepareNaturalCapture()
-    expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(firstGhost?.style.visibility).toBe('hidden')
+    expect(source.style.visibility).toBe('')
     host.commit(frame, () => 'revision-1')
-    const secondGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const secondGhost = findTestGhost(root)
 
     expect(secondGhost).toBe(firstGhost)
-    expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
-    expect(root.querySelectorAll('[data-codplay-motion-item="item"]')).toHaveLength(1)
+    expect(firstGhost?.style.visibility).toBe('')
+    expect(source.style.visibility).toBe('hidden')
+    expect(findTestOverlayLayer(root)?.children).toHaveLength(1)
     host.destroy()
     root.remove()
   })
@@ -48,13 +67,13 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const host = new HtmlMotionPresentationHost(root, () => source)
     const frame = createReparentFrame(createPose(0))
     host.commit(frame, () => 'revision-1')
-    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const ghost = findTestGhost(root)
     expect(ghost).not.toBeNull()
 
-    const sourceSetAttribute = vi.spyOn(source, 'setAttribute')
-    const sourceRemoveAttribute = vi.spyOn(source, 'removeAttribute')
-    const ghostSetAttribute = vi.spyOn(ghost!, 'setAttribute')
-    const ghostRemoveAttribute = vi.spyOn(ghost!, 'removeAttribute')
+    const sourceSetProperty = vi.spyOn(source.style, 'setProperty')
+    const sourceRemoveProperty = vi.spyOn(source.style, 'removeProperty')
+    const ghostSetProperty = vi.spyOn(ghost!.style, 'setProperty')
+    const ghostRemoveProperty = vi.spyOn(ghost!.style, 'removeProperty')
 
     host.commit(frame, () => 'revision-1')
     host.commit({ ...frame, timeMs: 1, items: new Map([[
@@ -62,16 +81,16 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       { ...frame.items.get('item')!, pose: createPose(1) },
     ]]) }, () => 'revision-1')
 
-    expect(sourceSetAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
-    expect(sourceRemoveAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
-    expect(ghostSetAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
-    expect(ghostRemoveAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
+    expect(sourceSetProperty.mock.calls.filter(([name]) => name === 'visibility')).toHaveLength(0)
+    expect(sourceRemoveProperty.mock.calls.filter(([name]) => name === 'visibility')).toHaveLength(0)
+    expect(ghostSetProperty.mock.calls.filter(([name]) => name === 'visibility')).toHaveLength(0)
+    expect(ghostRemoveProperty.mock.calls.filter(([name]) => name === 'visibility')).toHaveLength(0)
 
     host.destroy()
-    sourceSetAttribute.mockRestore()
-    sourceRemoveAttribute.mockRestore()
-    ghostSetAttribute.mockRestore()
-    ghostRemoveAttribute.mockRestore()
+    sourceSetProperty.mockRestore()
+    sourceRemoveProperty.mockRestore()
+    ghostSetProperty.mockRestore()
+    ghostRemoveProperty.mockRestore()
     root.remove()
   })
 
@@ -104,19 +123,18 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       { ...createItem('second'), motionRootKey: 'second-root', motionRootPose: createPose(100) },
     ]))
 
-    const firstLayer = firstRoot.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
-    const secondLayer = secondRoot.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
-    expect(firstLayer?.querySelector('[data-codplay-motion-item="first"]')).not.toBeNull()
-    expect(firstLayer?.querySelector('[data-codplay-motion-item="second"]')).toBeNull()
-    expect(secondLayer?.querySelector('[data-codplay-motion-item="second"]')).not.toBeNull()
-    expect(secondLayer?.querySelector('[data-codplay-motion-item="first"]')).toBeNull()
+    const firstLayer = findTestOverlayLayer(firstRoot)
+    const secondLayer = findTestOverlayLayer(secondRoot)
+    expect(firstLayer?.children).toHaveLength(1)
+    expect(secondLayer?.children).toHaveLength(1)
+    expect(firstLayer?.children[0]).not.toBe(secondLayer?.children[0])
 
     host.commit(createFrame([
       { ...createItem('second'), motionRootKey: 'second-root', motionRootPose: createPose(100) },
     ]))
-    expect(firstRoot.querySelector('[data-codplay-motion-overlay]')).toBeNull()
-    expect(firstSource.hasAttribute('data-codplay-motion-hidden')).toBe(false)
-    expect(secondRoot.querySelector('[data-codplay-motion-item="second"]')).not.toBeNull()
+    expect(findTestOverlayLayer(firstRoot)).toBeUndefined()
+    expect(firstSource.style.visibility).toBe('')
+    expect(findTestOverlayLayer(secondRoot)?.children).toHaveLength(1)
 
     host.destroy()
     root.remove()
@@ -132,13 +150,13 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const host = new HtmlMotionPresentationHost(root, () => source)
     const frame = createReparentFrame(createPose(0))
     host.commit(frame, () => 'revision-1')
-    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const ghost = findTestGhost(root)
 
     source.textContent = 'after'
     host.prepareNaturalCapture()
     host.commit(frame, () => 'revision-2')
 
-    expect(root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')).toBe(ghost)
+    expect(findTestGhost(root)).toBe(ghost)
     expect(ghost?.textContent).toBe('after')
     host.destroy()
     root.remove()
@@ -154,7 +172,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const host = new HtmlMotionPresentationHost(root, () => source)
     const frame = createReparentFrame(createPose(0))
     host.commit(frame, () => 'revision-1')
-    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const ghost = findTestGhost(root)
 
     expect(ghost?.style.width).toBe('20px')
     expect(ghost?.style.height).toBe('20px')
@@ -163,7 +181,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     host.prepareNaturalCapture()
     host.commit(frame, () => 'revision-2')
 
-    expect(root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')).toBe(ghost)
+    expect(findTestGhost(root)).toBe(ghost)
     expect(ghost?.style.width).toBe('20px')
     expect(ghost?.style.height).toBe('20px')
     host.destroy()
@@ -179,22 +197,22 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const host = new HtmlMotionPresentationHost(root, () => source)
     const frame = createReparentFrame(createPose(0))
     host.commit(frame)
-    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const ghost = findTestGhost(root)
 
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
-    expect(ghost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(source.style.visibility).toBe('hidden')
+    expect(ghost?.style.visibility).toBe('')
 
     host.prepareNaturalCapture()
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(false)
-    expect(ghost?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    expect(source.style.visibility).toBe('')
+    expect(ghost?.style.visibility).toBe('hidden')
 
     host.commit(frame)
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
-    expect(ghost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(source.style.visibility).toBe('hidden')
+    expect(ghost?.style.visibility).toBe('')
 
     host.commit({ ...frame, items: new Map() })
-    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(false)
-    expect(root.querySelector('[data-codplay-motion-item="item"]')).toBeNull()
+    expect(source.style.visibility).toBe('')
+    expect(findTestOverlayLayer(root)).toBeUndefined()
 
     host.destroy()
     root.remove()
@@ -208,7 +226,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
 
     const host = new HtmlMotionPresentationHost(root, () => source)
     host.commit(createReparentFrame(createPose(0)))
-    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const ghost = findTestGhost(root)
 
     expect(ghost?.style.getPropertyValue('translate')).toBe('')
     expect(ghost?.style.getPropertyValue('rotate')).toBe('')
@@ -243,7 +261,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
 
     const host = new HtmlMotionPresentationHost(root, () => source)
     host.commit(createReparentFrame(createPose(0)))
-    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const ghost = findTestGhost(root)
 
     expect(ghost?.style.getPropertyValue('rotate')).toBe('none')
     host.destroy()
@@ -260,15 +278,15 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const host = new HtmlMotionPresentationHost(root, () => source)
     const frame = createReparentFrame(createPose(0))
     host.commit(frame, () => 'revision-1')
-    const firstGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const firstGhost = findTestGhost(root)
 
     source.replaceChildren(document.createElement('span'))
     host.prepareNaturalCapture()
     host.commit(frame, () => 'revision-2')
-    const secondGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    const secondGhost = findTestGhost(root)
 
     expect(secondGhost).not.toBe(firstGhost)
-    expect(root.querySelectorAll('[data-codplay-motion-item="item"]')).toHaveLength(1)
+    expect(findTestOverlayLayer(root)?.children).toHaveLength(1)
     host.destroy()
     root.remove()
   })
@@ -297,18 +315,18 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       createItem('parent'),
     ]))
 
-    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    const layer = findTestOverlayLayer(root)
     expect(layer).not.toBeNull()
-    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
-      .toEqual(['parent', 'child'])
-    const parentGhost = layer!.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
-    expect(parentGhost?.querySelector('[data-codplay-motion-hidden]')).not.toBeNull()
+    expect(layer!.children).toHaveLength(2)
+    const parentGhost = layer!.children[0] as HTMLElement
+    expect(parentGhost.querySelector<HTMLElement>('[data-item-id="child"]')?.parentElement).toBe(parentGhost)
+    expect(parentGhost.querySelector<HTMLElement>('[data-item-id="child"]')?.style.visibility).toBe('hidden')
 
     host.prepareNaturalCapture()
     host.commit(createFrame([createItem('parent')]))
 
-    expect(root.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
-      ?.querySelector('[data-codplay-motion-hidden]')).toBeNull()
+    expect((findTestOverlayLayer(root)?.children[0] as HTMLElement | undefined)
+      ?.querySelector<HTMLElement>('[data-item-id="child"]')?.style.visibility).toBe('')
     host.destroy()
     root.remove()
   })
@@ -366,9 +384,10 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       },
     )
 
-    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
-    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
-      .toEqual(['parent', 'child'])
+    const layer = findTestOverlayLayer(root)
+    expect(layer?.children).toHaveLength(2)
+    expect((layer?.children[0] as HTMLElement | undefined)?.tagName).toBe('SECTION')
+    expect((layer?.children[1] as HTMLElement | undefined)?.tagName).toBe('ARTICLE')
 
     host.destroy()
     root.remove()
@@ -396,15 +415,15 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     ])
 
     host.commit(frame)
-    const parentGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
+    const parentGhost = findTestGhost(root)
     expect(parentGhost?.querySelector('[data-item-id="child"]')
-      ?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+      ?.getAttribute('style')).toContain('visibility: hidden')
 
     host.prepareNaturalCapture()
     host.commit(frame)
 
     expect(parentGhost?.querySelector('[data-item-id="child"]')
-      ?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+      ?.getAttribute('style')).toContain('visibility: hidden')
     host.destroy()
     root.remove()
   })
@@ -414,6 +433,9 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const parent = document.createElement('section')
     const first = document.createElement('article')
     const second = document.createElement('article')
+    parent.id = 'parent'
+    first.id = 'first'
+    second.id = 'second'
     parent.append(first, second)
     root.appendChild(parent)
     document.body.appendChild(root)
@@ -463,8 +485,8 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       },
     )
 
-    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
-    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
+    const layer = findTestOverlayLayer(root)
+    expect([...layer!.children].map((node) => node.id))
       .toEqual(['parent', 'first', 'second'])
 
     host.destroy()
@@ -477,6 +499,10 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     const targetParent = document.createElement('section')
     const aboveTarget = document.createElement('section')
     const moving = document.createElement('article')
+    sourceParent.id = 'source-parent'
+    targetParent.id = 'target-parent'
+    aboveTarget.id = 'above-target'
+    moving.id = 'moving'
     sourceParent.appendChild(moving)
     root.append(sourceParent, targetParent, aboveTarget)
     document.body.appendChild(root)
@@ -544,8 +570,8 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       },
     )
 
-    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
-    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
+    const layer = findTestOverlayLayer(root)
+    expect([...layer!.children].map((node) => node.id))
       .toEqual(['source-parent', 'target-parent', 'moving', 'above-target'])
 
     host.destroy()
@@ -570,11 +596,11 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       { ...createItem('child', 'parent'), representation: 'local' },
     ]))
 
-    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
-    const parentGhost = layer?.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
-    expect(layer?.querySelectorAll(':scope > [data-codplay-motion-item]')).toHaveLength(1)
-    expect(parentGhost?.querySelector('[data-codplay-motion-transform]')).not.toBeNull()
-    expect(child.hasAttribute('data-codplay-motion-transform')).toBe(false)
+    const layer = findTestOverlayLayer(root)
+    const parentGhost = layer?.children[0] as HTMLElement | undefined
+    expect(layer?.children).toHaveLength(1)
+    expect(parentGhost?.querySelector('article')?.style.transform).toBe('matrix(1, 0, 0, 1, 0, 0)')
+    expect(child.style.transform).toBe('')
 
     host.destroy()
     root.remove()
@@ -651,9 +677,9 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       },
     )
 
-    const parentGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
+    const parentGhost = findTestGhost(root)
     const childGhost = parentGhost?.querySelector<HTMLElement>('article')
-    expect(childGhost?.style.getPropertyValue('--codplay-motion-transform'))
+    expect(childGhost?.style.getPropertyValue('transform'))
       .toBe('matrix(1, 0, 0, 1, 0, 0)')
     host.destroy()
     root.remove()
@@ -687,7 +713,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       },
     )
 
-    expect(source.style.getPropertyValue('--codplay-motion-transform'))
+    expect(source.style.getPropertyValue('transform'))
       .toBe('matrix(1, 0, 0, 1, 0, 0)')
     host.destroy()
     root.remove()
@@ -727,7 +753,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
       },
     )
 
-    expect(source.style.getPropertyValue('--codplay-motion-transform'))
+    expect(source.style.getPropertyValue('transform'))
       .toBe('matrix(1, 0, 0, 1, 40, 0)')
     host.destroy()
     root.remove()

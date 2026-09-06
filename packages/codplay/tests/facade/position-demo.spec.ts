@@ -17,6 +17,17 @@ function createManualScheduler(): CodPlayFrameScheduler {
   }
 }
 
+/** Finds the unmarked overlay layer by its presentation contract. */
+function findTestOverlayLayer(root: Element): HTMLElement | undefined {
+  return Array.from(root.querySelectorAll<HTMLElement>('*')).find((candidate) => (
+    candidate.style.position === 'absolute'
+      && candidate.style.width === '100%'
+      && candidate.style.height === '100%'
+      && candidate.style.pointerEvents === 'none'
+      && candidate.style.zIndex === '20'
+  ))
+}
+
 /** Lets the queued DOM event source and listen straps finish their dispatch. */
 async function flushDomEvent(): Promise<void> {
   await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
@@ -92,11 +103,45 @@ describe('position V2 demo', () => {
     expect(storyFiveTargetRail?.actions['position:demo:view:5:target:shift']).toMatchObject({
       style: { translateY: { from: 0, to: -15, duration: 3_650, ease: 'inOutSine' } },
     })
-    expect(storyFiveSourceParent?.actions['position:demo:view:5:source:parent:shift']).toMatchObject({
-      style: { translateX: { from: 0, to: 48, duration: 3_650, ease: 'inOutSine' } },
+    expect(storyFiveSourceParent?.actions['position:demo:view:5:q:shift']).toMatchObject({
+      move: {
+        target: 'position:view-five:source:mount',
+        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
+      },
+      className: {
+        add: 'position-nested-parent--flex-end',
+        remove: 'position-nested-parent--flex-start',
+      },
     })
-    expect(storyFiveTargetParent?.actions['position:demo:view:5:target:parent:shift']).toMatchObject({
-      style: { translateX: { from: 0, to: -48, duration: 3_650, ease: 'inOutSine' } },
+    expect(storyFiveSourceParent?.actions['position:demo:view:5:q:return']).toMatchObject({
+      move: {
+        target: 'position:view-five:source:mount',
+        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
+      },
+      className: {
+        add: 'position-nested-parent--flex-start',
+        remove: 'position-nested-parent--flex-end',
+      },
+    })
+    expect(storyFiveTargetParent?.actions['position:demo:view:5:k:shift']).toMatchObject({
+      move: {
+        target: 'position:view-five:target:mount',
+        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
+      },
+      className: {
+        add: 'position-nested-parent--flex-start',
+        remove: 'position-nested-parent--flex-end',
+      },
+    })
+    expect(storyFiveTargetParent?.actions['position:demo:view:5:k:return']).toMatchObject({
+      move: {
+        target: 'position:view-five:target:mount',
+        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
+      },
+      className: {
+        add: 'position-nested-parent--flex-end',
+        remove: 'position-nested-parent--flex-start',
+      },
     })
     expect(storySix?.persos).toHaveLength(21)
     expect(storySix?.persos.filter((perso) => perso.type === 'layout')).toHaveLength(7)
@@ -302,25 +347,25 @@ describe('position V2 demo', () => {
     codplay.engine.advance(16_000)
     const viewFiveSourceRail = root.querySelector<HTMLElement>('.position-view--visible .position-nested-rail--source')
     const viewFiveTargetRail = root.querySelector<HTMLElement>('.position-view--visible .position-nested-rail--target')
-    const viewFiveSourceParent = root.querySelector<HTMLElement>('.position-view--visible .position-nested-parent--source')
-    const viewFiveTargetParent = root.querySelector<HTMLElement>('.position-view--visible .position-nested-parent--target')
+    const viewFiveSourceParent = root.querySelector<HTMLElement>('.position-view--visible .position-nested-parent--q')
+    const viewFiveTargetParent = root.querySelector<HTMLElement>('.position-view--visible .position-nested-parent--k')
     expect(viewFiveSourceRail?.style.transform).toMatch(/^translateY\(\d+(?:\.\d+)?px\)$/)
     expect(viewFiveTargetRail?.style.transform).toMatch(/^translateY\(-\d+(?:\.\d+)?px\)$/)
-    expect(viewFiveSourceParent?.style.transform).toMatch(/^translateX\(\d+(?:\.\d+)?px\)$/)
-    expect(viewFiveTargetParent?.style.transform).toMatch(/^translateX\(-\d+(?:\.\d+)?px\)$/)
+    expect(viewFiveSourceParent?.classList.contains('position-nested-parent--flex-start')).toBe(true)
+    expect(viewFiveTargetParent?.classList.contains('position-nested-parent--flex-end')).toBe(true)
     expect(viewFiveSourceParent?.parentElement?.classList.contains('position-nested-rail__mount')).toBe(true)
     expect(viewFiveTargetParent?.parentElement?.classList.contains('position-nested-rail__mount')).toBe(true)
     const viewFiveMove = trace.filter((event) => event.name === 'position:demo:view:5:move').at(-1)
     expect(viewFiveMove?.data).toMatchObject({
       move: {
-        target: 'position:view-five:target:item',
+        target: 'position:view-five:k:item',
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
           path: { kind: 'segments' },
         },
       },
     })
-    const nestedTarget = root.querySelector<HTMLElement>('.position-nested-parent--target .position-nested-parent__item-mount')
+    const nestedTarget = root.querySelector<HTMLElement>('.position-nested-parent--k .position-nested-parent__item-mount')
     expect(nestedTarget?.querySelector<HTMLElement>('.position-item')).not.toBeNull()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
@@ -450,10 +495,10 @@ describe('position V2 demo', () => {
     codplay.engine.advance(FIRST_VIEW_MOVE_OFFSET_MS + 500)
 
     const storyRoot = root.querySelector<HTMLElement>('.position-view--visible')
-    const overlay = storyRoot?.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    const overlay = storyRoot === null ? undefined : findTestOverlayLayer(storyRoot)
     expect(storyRoot).not.toBeNull()
     expect(overlay).not.toBeNull()
     expect(overlay?.parentElement).toBe(storyRoot)
-    expect(overlay?.getAttribute('data-codplay-motion-overlay-key')).toBe('motion-story-position-story-one')
+    expect(overlay?.children.length).toBeGreaterThan(0)
   })
 })

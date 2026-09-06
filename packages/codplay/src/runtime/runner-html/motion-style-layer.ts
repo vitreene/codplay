@@ -20,44 +20,19 @@ type StyleDeclarationLike = {
   removeProperty?: (property: string) => string
 }
 
-/** The transient presentation slots consumed by the stylesheet-backed HTML layer. */
-const LOCAL_SIZE_SLOTS = ['--codplay-motion-width', '--codplay-motion-height'] as const
-const LOCAL_TRANSFORM_SLOTS = ['--codplay-motion-transform'] as const
-const LOCAL_ATTRIBUTES = ['data-codplay-motion-size', 'data-codplay-motion-transform'] as const
-const HIDDEN_ATTRIBUTE = 'data-codplay-motion-hidden'
-const PROJECTION_STYLE_ATTRIBUTE = 'data-codplay-motion-style'
-const TRANSIENT_STYLE_SLOTS = ['--codplay-motion-width', '--codplay-motion-height', '--codplay-motion-transform'] as const
-const TRANSIENT_ATTRIBUTES = [...LOCAL_ATTRIBUTES, HIDDEN_ATTRIBUTE] as const
-
+/** The authored properties temporarily replaced by a local motion pose. */
 const LOCAL_SIZE_PROPERTIES = ['width', 'height'] as const
 const LOCAL_TRANSFORM_PROPERTIES = ['transition', 'transform-origin', 'translate', 'rotate', 'scale', 'transform'] as const
+const HIDDEN_PROPERTIES = ['visibility'] as const
 
-const PROJECTION_STYLE_TEXT = `
-[data-codplay-motion-size] {
-  width: var(--codplay-motion-width) !important;
-  height: var(--codplay-motion-height) !important;
-}
-
-[data-codplay-motion-transform] {
-  transition: none !important;
-  transform-origin: 0 0 !important;
-  translate: none !important;
-  rotate: none !important;
-  scale: none !important;
-  transform: var(--codplay-motion-transform) !important;
-}
-
-[data-codplay-motion-hidden] {
-  visibility: hidden !important;
-}
-
+const SEEK_STYLE_TEXT = `
 [data-codplay-motion-seek] * {
   transition: none !important;
   animation: none !important;
 }
 `
 
-const installedPresentationStyles = new WeakSet<Document>()
+const installedSeekStyles = new WeakSet<Document>()
 
 /** Host-owned transient contribution layer for local poses and overlay visibility. */
 export type HtmlMotionStyleLayer = Readonly<{
@@ -74,36 +49,12 @@ export type HtmlMotionStyleLayer = Readonly<{
 
 /** Creates a transient presentation layer without taking ownership of authored CSS declarations. */
 export function createHtmlMotionStyleLayer(root: Element): HtmlMotionStyleLayer {
-  const stylesheetBacked = installPresentationStyles(root)
-  if (stylesheetBacked) return createStylesheetLayer()
-  return createInlineFallbackLayer()
+  installSeekStyles(root)
+  return createInlineLayer()
 }
 
-/** Creates the stylesheet-backed layer used by real browser hosts. */
-function createStylesheetLayer(): HtmlMotionStyleLayer {
-  const styleAttributePresence = new WeakMap<HTMLElement, boolean>()
-  return {
-    applyLocalSize: (node, width, height) => {
-      rememberStyleAttributePresence(node, styleAttributePresence)
-      setStyleSlot(node, '--codplay-motion-width', `${width}px`)
-      setStyleSlot(node, '--codplay-motion-height', `${height}px`)
-      node.setAttribute(LOCAL_ATTRIBUTES[0], '')
-    },
-    applyLocalTransform: (node, matrix) => {
-      rememberStyleAttributePresence(node, styleAttributePresence)
-      setStyleSlot(node, '--codplay-motion-transform', matrixCssValue(matrix))
-      node.setAttribute(LOCAL_ATTRIBUTES[1], '')
-    },
-    clearLocal: (node) => clearStylesheetLocal(node, styleAttributePresence),
-    applyHidden: (node) => node.setAttribute(HIDDEN_ATTRIBUTE, ''),
-    clearHidden: (node) => node.removeAttribute(HIDDEN_ATTRIBUTE),
-    captureTemplate: (node) => captureCleanTemplate(node),
-    syncTemplate: (source, target) => syncCleanTemplate(source, target, () => undefined),
-  }
-}
-
-/** Creates a deterministic inline fallback for lightweight DOM doubles. */
-function createInlineFallbackLayer(): HtmlMotionStyleLayer {
+/** Creates the inline layer used by browser hosts and lightweight DOM doubles alike. */
+function createInlineLayer(): HtmlMotionStyleLayer {
   const localContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   const hiddenContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   return {
@@ -124,21 +75,14 @@ function createInlineFallbackLayer(): HtmlMotionStyleLayer {
       clearInlineContributions(node, LOCAL_TRANSFORM_PROPERTIES, localContributions)
     },
     applyHidden: (node) => applyInlineContribution(node, 'visibility', 'hidden', hiddenContributions),
-    clearHidden: (node) => clearInlineContributions(node, ['visibility'], hiddenContributions),
+    clearHidden: (node) => clearInlineContributions(node, HIDDEN_PROPERTIES, hiddenContributions),
     captureTemplate: (node) => captureInlineTemplate(node, localContributions, hiddenContributions),
-    syncTemplate: (source, target) => syncCleanTemplate(source, target, (sourceNode, targetNode) => {
+    syncTemplate: (source, target) => syncInlineTemplate(source, target, (sourceNode, targetNode) => {
       if (!(sourceNode instanceof HTMLElement) || !(targetNode instanceof HTMLElement)) return
       restoreTemplateContributions(sourceNode, targetNode, localContributions)
       restoreTemplateContributions(sourceNode, targetNode, hiddenContributions)
     }),
   }
-}
-
-/** Clones one subtree after removing stylesheet-backed transient attributes. */
-function captureCleanTemplate(node: HTMLElement): HTMLElement {
-  const clone = node.cloneNode(true) as HTMLElement
-  sanitizeTemplateTree(clone, () => undefined, node)
-  return clone
 }
 
 /** Clones one subtree and restores the authored inline values behind transients. */
@@ -148,15 +92,15 @@ function captureInlineTemplate(
   hiddenContributions: WeakMap<HTMLElement, InlineContributionMap>,
 ): HTMLElement {
   const clone = node.cloneNode(true) as HTMLElement
-  sanitizeTemplateTree(clone, (source, target) => {
+  restoreTemplateTree(node, clone, (source, target) => {
     restoreTemplateContributions(source, target, localContributions)
     restoreTemplateContributions(source, target, hiddenContributions)
-  }, node)
+  })
   return clone
 }
 
 /** Synchronizes one existing source/template pair without creating stable child nodes. */
-function syncCleanTemplate(
+function syncInlineTemplate(
   source: HTMLElement,
   target: HTMLElement,
   restore: (source: Element, target: Element) => void,
@@ -174,17 +118,11 @@ function syncTemplateTree(
 
   const sourceAttributes = new Map(Array.from(source.attributes).map((attribute) => [attribute.name, attribute.value]))
   for (const attribute of Array.from(target.attributes)) {
-    if (isTransientAttribute(attribute.name)) {
-      target.removeAttribute(attribute.name)
-      continue
-    }
     if (!sourceAttributes.has(attribute.name)) target.removeAttribute(attribute.name)
   }
   for (const [name, value] of sourceAttributes) {
-    if (isTransientAttribute(name)) continue
     if (target.getAttribute(name) !== value) target.setAttribute(name, value)
   }
-  for (const slot of TRANSIENT_STYLE_SLOTS) removeStyleSlot(target as HTMLElement, slot)
   restore(source, target)
 
   const sourceChildren = Array.from(source.childNodes)
@@ -203,37 +141,30 @@ function syncTemplateTree(
   return true
 }
 
-/** Tests whether one attribute is owned by the transient motion layer. */
-function isTransientAttribute(name: string): boolean {
-  return (TRANSIENT_ATTRIBUTES as readonly string[]).includes(name)
-}
-
 /** Narrows one node to an element without relying on a specific browser class. */
 function isElementNode(value: Node): value is Element {
   return value.nodeType === 1
 }
 
-/** Walks a source/clone pair and removes every host-owned transient marker. */
-function sanitizeTemplateTree(
+/** Walks a source/clone pair and restores host-owned properties to authored values. */
+function restoreTemplateTree(
+  source: HTMLElement,
   clone: HTMLElement,
   restore: (source: HTMLElement, target: HTMLElement) => void,
-  source?: HTMLElement,
 ): void {
-  for (const attribute of TRANSIENT_ATTRIBUTES) clone.removeAttribute(attribute)
-  for (const slot of TRANSIENT_STYLE_SLOTS) removeStyleSlot(clone, slot)
-  if (source !== undefined) restore(source, clone)
+  restore(source, clone)
 
-  const sourceChildren = source === undefined ? [] : Array.from(source.children)
+  const sourceChildren = Array.from(source.children)
   const cloneChildren = Array.from(clone.children)
   for (let index = 0; index < cloneChildren.length; index += 1) {
     const target = cloneChildren[index]
     const original = sourceChildren[index]
     if (!(target instanceof HTMLElement) || !(original instanceof HTMLElement)) continue
-    sanitizeTemplateTree(target, restore, original)
+    restoreTemplateTree(original, target, restore)
   }
 }
 
-/** Restores the authored value when a live node still carries a transient slot. */
+/** Restores the authored value represented by one host-owned contribution. */
 function restoreTemplateContributions(
   source: HTMLElement,
   target: HTMLElement,
@@ -248,46 +179,21 @@ function restoreTemplateContributions(
   }
 }
 
-/** Installs the host stylesheet once per document, or selects the test fallback. */
-function installPresentationStyles(root: Element): boolean {
+/** Installs the root-scoped seek lock once per document. */
+function installSeekStyles(root: Element): void {
   const document = (root as Element & { ownerDocument?: Document }).ownerDocument
-  if (document === undefined) return false
-  if (installedPresentationStyles.has(document)) return true
-
-  const documentWithQueries = document as Document & {
-    querySelector?: (selectors: string) => Element | null
-  }
-  const existing = documentWithQueries.querySelector?.(`style[${PROJECTION_STYLE_ATTRIBUTE}]`)
-  if (existing !== null && existing !== undefined) {
-    installedPresentationStyles.add(document)
-    return true
-  }
+  if (document === undefined || installedSeekStyles.has(document)) return
 
   const documentWithFactory = document as Document & {
     createElement?: (tagName: string) => HTMLElement
   }
-  if (typeof documentWithFactory.createElement !== 'function') return false
+  if (typeof documentWithFactory.createElement !== 'function') return
   const style = documentWithFactory.createElement('style')
-  style.setAttribute(PROJECTION_STYLE_ATTRIBUTE, '')
-  style.textContent = PROJECTION_STYLE_TEXT
+  style.textContent = SEEK_STYLE_TEXT
   const parent = document.head ?? document.documentElement ?? root
-  if (typeof parent.appendChild !== 'function') return false
+  if (typeof parent.appendChild !== 'function') return
   parent.appendChild(style)
-  installedPresentationStyles.add(document)
-  return true
-}
-
-/** Clears all stylesheet-backed local slots while preserving authored properties. */
-function clearStylesheetLocal(node: HTMLElement, styleAttributePresence: WeakMap<HTMLElement, boolean>): void {
-  for (const attribute of LOCAL_ATTRIBUTES) node.removeAttribute(attribute)
-  for (const slot of [...LOCAL_SIZE_SLOTS, ...LOCAL_TRANSFORM_SLOTS]) removeStyleSlot(node, slot)
-  if (styleAttributePresence.get(node) === false && node.getAttribute('style') === '') node.removeAttribute('style')
-  styleAttributePresence.delete(node)
-}
-
-/** Records whether a node had an authored style attribute before a local pose. */
-function rememberStyleAttributePresence(node: HTMLElement, styleAttributePresence: WeakMap<HTMLElement, boolean>): void {
-  if (!styleAttributePresence.has(node)) styleAttributePresence.set(node, node.getAttribute('style') !== null)
+  installedSeekStyles.add(document)
 }
 
 /** Applies one inline transient property while tracking concurrent author writes. */
@@ -311,7 +217,9 @@ function applyInlineContribution(
     else authored = current
   }
 
-  writeStyleProperty(node, property, value, authored.priority === 'important' ? 'important' : '')
+  // The host must win over authored styles while the transient pose is active.
+  // The authored priority is retained in the snapshot and restored on clear.
+  writeStyleProperty(node, property, value, 'important')
   nodeContributions.set(property, { authored, transient: readStyleProperty(node, property) })
 }
 
@@ -333,23 +241,6 @@ function clearInlineContributions(
   if (nodeContributions.size === 0) contributions.delete(node)
 }
 
-/** Writes one reserved CSS slot without touching an authored declaration. */
-function setStyleSlot(node: HTMLElement, property: string, value: string): void {
-  const style = node.style as unknown as StyleDeclarationLike
-  if (typeof style.setProperty === 'function') style.setProperty(property, value)
-  else style[property] = value
-}
-
-/** Removes one reserved CSS slot without restoring or replacing authored style text. */
-function removeStyleSlot(node: HTMLElement, property: string): void {
-  const style = node.style as unknown as StyleDeclarationLike
-  if (typeof style.removeProperty === 'function') {
-    style.removeProperty(property)
-    return
-  }
-  delete style[property]
-}
-
 /** Reads one CSS declaration in both browser styles and minimal test doubles. */
 function readStyleProperty(node: HTMLElement, property: string): StyleSnapshot {
   const style = node.style as unknown as StyleDeclarationLike
@@ -369,10 +260,10 @@ function readFallbackStyleValue(style: StyleDeclarationLike, property: string): 
   return typeof value === 'string' ? value : ''
 }
 
-/** Writes one declaration while preserving an existing important author priority. */
+/** Writes one declaration with the requested cascade priority. */
 function writeStyleProperty(node: HTMLElement, property: string, value: string, priority: string): void {
   const style = node.style as unknown as StyleDeclarationLike
-  if (priority !== '' && typeof style.setProperty === 'function') {
+  if (typeof style.setProperty === 'function') {
     style.setProperty(property, value, priority)
     return
   }

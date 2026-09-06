@@ -31,6 +31,17 @@ const emptyRequirements: CompiledScene['requirements'] = {
   resources: [],
 }
 
+/** Finds the unmarked overlay layer by its presentation contract. */
+function findTestOverlayLayer(root: Element): HTMLElement | undefined {
+  return Array.from(root.querySelectorAll<HTMLElement>('*')).find((candidate) => (
+    candidate.style.position === 'absolute'
+      && candidate.style.width === '100%'
+      && candidate.style.height === '100%'
+      && candidate.style.pointerEvents === 'none'
+      && candidate.style.zIndex === '20'
+  ))
+}
+
 /** Creates the smallest immutable compiled scene accepted by the public API. */
 function scene(requirements = emptyRequirements): CompiledScene {
   return {
@@ -387,9 +398,9 @@ describe('CodPlay facade', () => {
 
     await instance.telco.seek(150)
 
-    const overlay = root.querySelector('[data-codplay-motion-overlay]')
+    const overlay = findTestOverlayLayer(root)
     expect(overlay).not.toBeNull()
-    expect(root.querySelector('[data-codplay-motion-item="main:item"]')).not.toBeNull()
+    expect(overlay?.children).toHaveLength(1)
     expect(overlay?.parentElement).toBe(root.querySelector('section'))
     const presentation = instance.presentation.get()
     expect(presentation?.timeMs).toBe(150)
@@ -411,12 +422,12 @@ describe('CodPlay facade', () => {
       root,
     })
 
-    expect(root.querySelector('[data-codplay-motion-overlay]')).toBeNull()
+    expect(findTestOverlayLayer(root)).toBeUndefined()
     await instance.events.emit(
       { name: 'unrelated:event', visibility: 'public' },
       { scope: 'story', storyId: 'main' },
     )
-    expect(root.querySelector('[data-codplay-motion-overlay]')).toBeNull()
+    expect(findTestOverlayLayer(root)).toBeUndefined()
     await instance.events.emit(
       { name: 'transfer', visibility: 'public' },
       { scope: 'story', storyId: 'main' },
@@ -425,9 +436,9 @@ describe('CodPlay facade', () => {
     await instance.telco.play()
     codplay.engine.advance(1)
 
-    const overlay = root.querySelector('[data-codplay-motion-overlay]')
+    const overlay = findTestOverlayLayer(root)
     expect(overlay).not.toBeNull()
-    expect(root.querySelector('[data-codplay-motion-item="main:item"]')).not.toBeNull()
+    expect(overlay?.children).toHaveLength(1)
     expect(overlay?.parentElement).toBe(root.querySelector('section'))
     codplay.destroy()
   })

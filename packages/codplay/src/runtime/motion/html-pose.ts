@@ -356,24 +356,3 @@ function readComputedStyle(node: Element, context: HtmlPoseCaptureContext): CSSS
   context.computedStyles.set(node, computed)
   return computed
 }
-
-/** Creates the overlay layer scoped to one motion presentation root and owner. */
-export function ensureHtmlOverlayLayer(motionRoot: Element, ownerKey?: string): HTMLElement {
-  const existing = Array.from(motionRoot.children).find((child) => (
-    child.getAttribute('data-codplay-motion-overlay') !== null
-      && child.getAttribute('data-codplay-motion-overlay-key') === (ownerKey ?? null)
-  ))
-  if (existing instanceof HTMLElement) return existing
-  const layer = motionRoot.ownerDocument.createElement('div')
-  layer.setAttribute('data-codplay-motion-overlay', '')
-  if (ownerKey !== undefined) layer.setAttribute('data-codplay-motion-overlay-key', ownerKey)
-  layer.style.position = 'absolute'
-  layer.style.left = '0'
-  layer.style.top = '0'
-  layer.style.width = '100%'
-  layer.style.height = '100%'
-  layer.style.pointerEvents = 'none'
-  layer.style.zIndex = '20'
-  motionRoot.appendChild(layer)
-  return layer
-}
