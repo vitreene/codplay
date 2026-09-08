@@ -38,7 +38,7 @@ Les briques internes existent. L’assemblage public est engagé dans
 | `RuntimeEngine` | ressources, horloge et ordre des instances ; transaction interne des seeks | est adapté par `EngineFacadeImpl` |
 | `RuntimePlayer` | une scène compilée, lifecycle, events, capture et reconstruction | est adapté par `InstanceFacadeImpl` |
 | `RuntimeMaterializer` | frontière interne de materialisation consommée par le runner HTML | n'est pas exposé dans les options d'instance et n'est pas sélectionnable par l'hôte |
-| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur, mesure interne des mouvements et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; ses captures de mouvement ne sont pas un contrat d'authoring ; son `init()` est l'unique initialisation d'une instance |
+| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur, mesure interne des mouvements et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; ses captures de mouvement ne sont pas un contrat d'authoring ; son `init()` initialise l'instance sans préparer un catalogue motion |
 | `RuntimeTelco` | adaptateur de pilotage local | branché sur les notifications du player, sans boucle propre |
 
 `packages/demos/src/v2/layout/layout.ts` passe maintenant par la façade publique.
@@ -58,6 +58,8 @@ Il ne construit plus de catalogue et n'accède plus au runner.
   materializer et séparation logique/substrat ;
 - [`capture-authoring-plan.md`](./capture-authoring-plan.md) : injection
   source-agnostique et sorties de capture ;
+- [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md) :
+  occurrence `move`, transaction de préparation, portée d’overlay et reset chaud ;
 - [`media-preload-plan.md`](./media-preload-plan.md) : preload externalisé,
   cache partagé et façade `run` autonome.
 
@@ -284,9 +286,11 @@ aucun chemin de materialisation étranger.
 L'initialisation publique délègue au runner complet : `createInstanceHost()` appelle
 `HtmlPlayerRunner.init()` et transmet son rapport à la façade. La façade ne doit
 jamais rappeler `RuntimePlayer.init()` sur `host.player` ; cet appel direct
-initialiserait seulement la logique de scène et laisserait le graphe FLIP, la
-présentation du mouvement et l'attachement de capture non préparés. Le player
-logique reste l'objet piloté par `InstanceFacadeImpl`, mais son cycle
+initialiserait seulement la logique de scène et laisserait le raccordement HTML,
+la présentation du mouvement et l'attachement de capture hors du cycle du runner.
+Le runner n'a toutefois pas à construire un graphe motion à cette étape : la
+préparation est déclenchée ensuite par l'occurrence `move` selon le plan central.
+Le player logique reste l'objet piloté par `InstanceFacadeImpl`, mais son cycle
 d'initialisation appartient au runner HTML.
 
 ## 2. Compilation et instanciation
@@ -517,7 +521,7 @@ minimum :
 ### Progress comme capacité de la telco
 
 La référence V1 vérifiée dans
-[`TelcoApi`](../../codplay/src/telco/types.ts) et la spécification
+[`TelcoApi`](../../codplay-v1/src/telco/types.ts) et la spécification
 [`Player API V1`](../../../docs/evolution/formalisation-archive/formalisation-modele-2026-05-06/45-player-api-v1.md)
 ne définit pas de setter de progress distinct : `seek` écrit
 la position, tandis que `onProgress` la publie. Le plan V2 conserve cette

@@ -2,9 +2,12 @@
 
 ## Statut
 
-> Status: Fixe
+> Status: A relire — extension transactionnelle de Seek pour la préparation
+> motion
 > CodPlay version: V2 foundation
-> Review: frontière Engine/Player et seek groupé validés le 2026-08-20; le renderer de production reste une tranche suivante
+> Review: frontière Engine/Player et seek groupé validés le 2026-08-20 ; la
+> préparation géométrique attendable est définie dans
+> [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
 ## Frontiere
 
@@ -96,20 +99,28 @@ a `1000`, sa cible locale est `2000`. Une scene non selectionnee reste inchangee
 « toutes les scenes a 3000 local » est possible, mais doit etre declaree explicitement par Sighty ;
 elle n'est pas une consequence du nom `seek(3000)`.
 
-Le seek V2 reste synchrone. Une future disponibilite asynchrone devra bloquer ou mettre en attente
-la portee entiere, jamais presenter un sous-ensemble reconstruit.
+La sémantique de Seek reste atomique pour toute la portée : aucune instance ne
+publie une reconstruction partielle. La transaction interne peut être
+attendable lorsqu’une préparation motion doit répartir son travail ; elle met
+alors en attente la portée concernée jusqu’au commit et à la présentation
+cohérente. La façade publique `instance.telco.seek()` conserve sa promesse
+existante.
 
 `RuntimeEngine.seek()` collecte les diagnostics par instance après la validation
 du groupe et le commit de présentation, puis les publie par la sortie de
 diagnostics prévue. Sighty peut donc agréger ou router ces diagnostics sans que
 CodPlay interprète sa portée ni sa timeline globale.
 
-La premiere frontiere engine est en place : `RuntimeEngine.seek()` orchestre les cibles locales par
-phases `validateSeek`, `prepareSeek`, `commitSeek` puis `presentSeek`. Le player individuel utilise
-ce chemin commun. Le player reconstruit `materialize -> resolve -> solve` pendant la validation,
-met le resultat en attente, puis le committe avant presentation. Le solve structurel et le graphe
-parent/enfant sont ouverts pour les moves compilés; les transforms d'ancêtres, les mesures et la
-materializer de production reste une capacité de sa tranche respective.
+La première frontière engine est en place : `RuntimeEngine.seek()` orchestre les
+cibles locales par phases `validateSeek`, `prepareSeek`, `commitSeek` puis
+`presentSeek`. `prepareSeek` devient attendable lorsqu’un groupe motion doit
+être capturé ; les phases de commit et de présentation restent uniques pour la
+portée. Le player individuel utilise ce chemin commun. Il reconstruit
+`materialize -> resolve -> solve` pendant la validation, met le résultat en
+attente, puis le committe avant présentation. Le solve structurel et le graphe
+parent/enfant restent ouverts pour les moves compilés ; les transforms
+d’ancêtres, les mesures et le materializer de production relèvent de leur
+tranche respective.
 
 Cette hierarchie, les composants, les transforms et le renderer ne sont pas des manques du seek.
 Ce sont des producteurs ou consommateurs d'etat situes de part et d'autre de sa frontiere. Le seek

@@ -1,8 +1,16 @@
 # Intégration V2 de la capture DnD et de la capacité `list`
 
-> Status: En cours — placement validé, seek de la démo encore ouvert
+> Status: En cours — placement validé, seek de la démo encore ouvert ; migration
+> `move` et préparation motion alignées sur le plan central
 > CodPlay version: V2 foundation
 > Périmètre: validation HTML de la capacité `list`
+
+La préparation du graphe de positions de lecture n’est déclenchée que par
+l’occurrence `move` résolue au commit. Un `track`, un `end` sans `move` ou une
+action de liste structurelle sans présentation animée n’ouvre pas ce graphe ;
+la preview DnD peut toutefois conserver ses mesures transitoires propres au
+geste. Les garanties de transaction, de capture cohérente et de reset chaud sont
+définies dans [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md).
 
 Ce document complète le contrat de capture V2 pour son usage avec la capacité
 `list`. Il ne crée pas un canal DnD concurrent : le DnD reste une capture
@@ -48,7 +56,7 @@ représenté par :
   move: {
     target: 'list-b',
     mode: 1,
-    flipMode: 'overlay-world',
+    reparent: true,
     transition: { duration: 400, ease: 'out(2)' }
   }
 }
@@ -99,8 +107,10 @@ Le ghost est une représentation technique transitoire. Les nodes auteur restent
 persistants et leur destruction est réservée au teardown final.
 
 La preview peut recevoir dans le `captureState` un `ghost` (`className` et
-`style`) et un `move.transition` (`duration`, `ease`, `path`, `traversal`). Ces
-données servent respectivement à la représentation HTML et au `move` final ;
+`style`) et un `move.transition` (`duration`, `ease`, `path`). Le pipeline fixe
+les conventions de parcours et d’ancrage du path ; ces détails ne transitent
+plus dans le payload auteur. Ces données servent respectivement à la
+représentation HTML et au `move` final ;
 elles ne créent ni action ni event runtime supplémentaire. L'index applique une
 hystérésis de midpoint et un même point ne relance pas le hit-test.
 
@@ -151,8 +161,9 @@ inclut la pose fixe au drop et les reflows FLIP encore visibles des voisins ;
 le `LAST` de cette remise live reste mesuré depuis le player visible après le
 `move`. Elle sert au handoff immédiat de la fermeture, puis est supprimée au
 prochain seek. Pour `endCapture`, le `FIRST` de relecture est au contraire
-mesuré par le player isolé juste avant la frontière persist-only et le runner
-HTML capture le LAST géométrique à `startAt + delay + duration`. Le snapshot
+mesuré après la reconstruction logique du même player, juste avant la
+frontière persist-only ; le runner HTML capture le LAST géométrique à
+`startAt + delay + duration`. Le snapshot
 live est une donnée de présentation du runner, pas un nouvel état de capture et
 pas une entrée du journal.
 
@@ -228,7 +239,7 @@ persistante.
   modifier `CompiledScene` ni créer d'action runtime ;
 - le S6 DnD list remplace l'entrée de démo courante et utilise la telco existante.
 
-## Vérification d'implémentation — 2026-08-22
+## Vérification historique — 2026-08-22, à rejouer après migration
 
 - [x] `endCapture` S6 produit une sortie `persist-only` ancrée avant
   `endEmit`, avec le `move` source → cible ;
@@ -249,7 +260,7 @@ persistante.
   conservent le node flottant hors de la liste et le ghost dans son slot ;
 - [x] typecheck, test ciblé, suite V2 complète et builds player/runner passent.
 
-## Validation navigateur via MCP Safari — 2026-08-22
+## Validation navigateur historique via MCP Safari — 2026-08-22
 
 Le MCP Safari connecté est le canal de validation navigateur de cette tranche.
 Les contrôles ont été effectués sur la démo V2 `CodPlay V2 — Drag & Capture`,

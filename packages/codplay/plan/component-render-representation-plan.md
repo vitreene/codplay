@@ -6,6 +6,12 @@ Status: Fixe pour la materialisation HTML/DOM V2
 CodPlay version: V2 foundation  
 Review: frontière HTML/DOM et composants à contexte interne relus le 2026-08-26
 
+La frontière composant/materializer reste fixe. La préparation géométrique
+conditionnelle d'un groupe `move`/`reparent` pendant Play ou Seek relève de
+l'extension actuellement `A relire` dans
+[`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md) ;
+elle ne change ni le writer unique ni la persistance des materialisations auteur.
+
 ## Contrat auteur
 
 Le contrat de `BaseHTMLComponent.render()` est deja fixe dans
@@ -133,8 +139,8 @@ Cette regle reprend la decision V1 documentee dans
 [`2026-06-25-image-node-per-src-plan.md`](../../../docs/plans/2026-06-25-image-node-per-src-plan.md) :
 les nodes media sont conservees, detachees et rattachees selon l'etat cible ; la
 source n'est assignee qu'a la creation de la node correspondante. Les tests V1
-[`seek-media-src.spec.ts`](../../codplay/tests/v1/seek-media-src.spec.ts) et
-[`seek-no-detach.spec.ts`](../../codplay/tests/v1/seek-no-detach.spec.ts) couvrent
+[`seek-media-src.spec.ts`](../../codplay-v1/tests/v1/seek-media-src.spec.ts) et
+[`seek-no-detach.spec.ts`](../../codplay-v1/tests/v1/seek-no-detach.spec.ts) couvrent
 respectivement la conservation par source et l'absence de churn DOM au seek.
 
 ## Mise a jour du rendu
@@ -191,8 +197,13 @@ alors :
 4. mesurer le nouvel emplacement ;
 5. appliquer FLIP.
 
-Au seek, les memes operations de materialisation sont effectuees sans capture
-FLIP ni animation.
+Au seek, les memes operations de materialisation structurelle sont effectuees
+sans rejouer une animation passée. Si la frame cible dépend d'un groupe
+`move`/`reparent` absent, le runner peut préparer et capturer ce groupe dans la
+transaction attendable définie par
+[`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md),
+puis committer directement la frame demandée. Cette capture n'ajoute pas une
+animation visible au seek.
 
 ## Exemple layout
 
@@ -266,8 +277,12 @@ nœuds HTML reels que FLIP mesure et anime ensuite selon
 
 ## Seek
 
-Au seek, le resultat de `render()` est materialise directement vers l'etat cible. Le materializer
-nettoie ses transitions et materialise l'etat cible sans rejouer une animation FLIP.
+Au seek, le resultat de `render()` est materialise directement vers l'etat cible.
+Le materializer nettoie ses transitions et materialise l'etat cible sans
+rejouer une animation FLIP passée. Lorsque la cible traverse une frontière
+`move`/`reparent` dont le groupe n'est pas encore préparé, le runner effectue la
+capture nécessaire avant la publication de la frame, puis réutilise ses poses
+pour la résolution absolue.
 
 ## Composant hybride et substrat interne
 
@@ -358,13 +373,16 @@ Pour Play, Seek et `resize()`, l'ordre est le même :
 1. résoudre l'état logique à `t` ;
 2. synchroniser les composants et leurs services ;
 3. appliquer le parentage et l'ordre structurels ;
-4. mesurer ou réutiliser la géométrie isolée ;
+4. préparer ou réutiliser la géométrie du seul groupe `move`/`reparent` requis,
+   ou le traitement propre d'une action de pose reconnue ;
 5. résoudre la `PresentationFrame` à `t` ;
 6. committer la présentation locale ou overlay.
 
 Au seek, l'étape de présentation transitoire est committée directement à `t` sans
-animation ni rejeu d'une transition passée. À `LAST`, les slots et ressources
-transitoires sont retirés ; la materialisation auteur reste la seule représentation.
+animation ni rejeu d'une transition passée. Si une capture est requise, la
+préparation peut être attendue avant ce commit ; elle ne relit pas le DOM dans la
+boucle de frame. À `LAST`, les slots et ressources transitoires sont retirés ; la
+materialisation auteur reste la seule représentation.
 
 Ce contrat est limité à la materialisation HTML/DOM et aux moves HTML compilés.
 Canvas et Three.js peuvent exister comme contexte interne d'un composant attaché

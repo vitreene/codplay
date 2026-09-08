@@ -8,7 +8,9 @@
 
 Cette note conserve l’examen de la lenteur observée dans la scène `position`
 et les pistes évoquées. Elle ne constitue pas une autorisation de modifier le
-journal, le player ou le contrat d’événement.
+journal, le player ou le contrat d’événement. Ses décisions du 2026-09-06 sont
+remplacées par la note du 2026-09-07 et par le plan central de préparation
+motion ; elle reste utile pour les mesures de référence.
 
 ## Constat mesuré
 
@@ -61,7 +63,8 @@ le confondre avec une modification du journal.
 Un événement de présentation pourrait indiquer qu’un conteneur est présenté
 et permettre de différer une capture motion. Ce signal ne devrait ni filtrer
 les événements, ni créer un cycle de vie `active/inactive`, ni être déduit par
-inspection du DOM. Cette piste reste ouverte, sans contrat ni implémentation.
+inspection du DOM. Cette piste est écartée pour cette tranche : l’occurrence
+`move` fournit déjà le déclencheur précis, sans évaluation de présentation.
 
 ### 5. Représentation compacte des répétitions
 
@@ -70,16 +73,20 @@ immédiatement toutes les occurrences. La sémantique et le nombre d’occurrenc
 doivent rester identiques. Cette piste est indépendante de la limite story et
 ne justifie aucune modification de la démo.
 
-## Décision actuelle
+## Décision au 2026-09-06 — remplacée
 
 - conserver la limite de capture au conteneur de story ;
-- ne pas modifier `TrackJournal`, `RuntimePlayer` ou le contrat d’événement
-  pour ce cas isolé ;
 - ne pas ajouter de détection automatique de visibilité par le DOM ;
 - ne pas introduire de cycle de vie `active/inactive` ;
-- traiter les optimisations du journal et des graphes dans une étude globale
-  ultérieure, avec un corpus de mesures plus large.
+- traiter la préparation motion dans le plan global suivant, sans modifier la
+  démo pour masquer la limite.
 
-La scène `position` reste une validation du comportement existant. Elle ne doit
+Le plan désormais applicable est
+[`../motion-live-discovery-invalidation-plan.md`](../motion-live-discovery-invalidation-plan.md).
+Il autorise une modification coordonnée du player et du runner afin de
+transporter l’occurrence `move`, tout en conservant le journal comme histoire
+logique et la limite de capture story-local.
+
+La scène `position` reste une validation du comportement du core. Elle ne doit
 pas devenir le support d’une architecture spéciale destinée à masquer cette
 limite de performance.

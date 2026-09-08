@@ -11,8 +11,9 @@ detaille l'execution d'un domaine sans redefinir l'architecture generale, les de
 Les contrats V2 sont l'autorité active du chantier. Les plans de partie sont
 colocalisés dans `packages/codplay/plan/` et les notes de `plan/notes/`
 expliquent les décisions; ils ne doivent pas contredire ce plan général. Les
-démos existantes sont un corpus non normatif, destiné à une adaptation
-ultérieure, et ne constituent pas une dépendance du runtime V2.
+démos V2 sont des fixtures de validation : elles révèlent des défauts et des
+cas limites, mais ne définissent ni les conditions du core ni un circuit
+runtime parallèle.
 
 ## Invariants de construction
 
@@ -114,7 +115,7 @@ des services courants sont la premiere couverture commune.
 | Utilitaires partagés | Sous-dossiers spécialisés en cours | `shared/values`, `shared/ordering` et `shared/numbers` centralisent le clonage structuré, la comparaison de chemins et la garde numérique ; `runtime/runner-html/element-guards.ts` centralise la garde de mesurabilité DOM ; les différences de contrat des pointeurs et des matrices HTML restent locales. |
 | Découpage des points chauds | Fini pour la tranche interne du 2026-08-24 | `runtime/player`, `runtime/runner-html` et `runtime/capabilities/media-sync` sont découpés par responsabilités dans des dossiers spécialisés ; les façades publiques, le circuit runtime et les contrats V2 restent inchangés. |
 | ACE | Contrat de valeurs, couleurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes, la normalisation sRGB/OKLCH et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
-| Mouvement HTML | Correction de frontière FLIP en cours | Le runner conserve FIRST avant `startAt` et capture le LAST d'un move à `startAt + delay + duration`; les tests ciblés couvrent la cible disponible seulement au LAST. La validation visuelle de `flip-stress` reste à reprendre ; le mouvement SVG suit le même circuit HTML/DOM lorsqu'un composant en produit. |
+| Mouvement HTML | Migration événementielle à relire | Le runner doit préparer un groupe seulement lorsqu'une occurrence `move` le nécessite, conserver FIRST avant `startAt` et capturer LAST à `startAt + delay + duration`; la préparation topologique peut être coopérative mais la capture publiée reste cohérente. La validation visuelle de `position` et `flip-stress` reste à exécuter sur ce circuit. |
 | Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence ; `components`, `runner` et `flip-nested` passent par le layout et le registre V2. La démo `player` n'est pas retenue ; les fixtures de test sont hors du registre. Les modules de scène ne possèdent ni runtime ni page parallèle. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
@@ -138,11 +139,13 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Partie | Plan detaille | Etat |
 |---|---|---|
 | Revue priorité 0 des contrats | [`2026-08-20-priority-0-contract-review.md`](./2026-08-20-priority-0-contract-review.md) | Fixe |
+| Contrats Engine / Player | [`player-engine-plan.md`](./player-engine-plan.md) | A relire : préparation motion attendable dans une transaction de Seek, sémantique logique inchangée |
 | Façade engine, instances et pilotage | [`facade-engine-instance-plan.md`](./facade-engine-instance-plan.md) | En cours : contrat validé le 2026-08-26, implémentation engagée |
 | Inactivité du player | [`idle-inactivity-plan.md`](./idle-inactivity-plan.md) | Fini pour le monitor core V2 ; l’adaptateur d’inactivité de fenêtre reste hors cœur |
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
-| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fixe |
-| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fini pour la tranche HTML V2; autres materializers reportés |
+| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | A relire : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
+| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | A relire : préparation par occurrence, capture finale cohérente et commit atomique |
+| Découverte motion et reset chaud | [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md), [`story-reset-plan.md`](./story-reset-plan.md) | A relire : suppression de la découverte globale et retrait réel des groupes reset |
 | Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
 | Démo standard runner | [`../../demos/src/v2/README.md`](../../demos/src/v2/README.md) | Fixe comme gabarit de validation |
 | Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |
@@ -158,7 +161,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Etat discret | FRP Event puis behavior en escalier | Un fait date ouvre une plage de validite interrogeable a `t`. |
 | Placement | Scene graph, tri topologique, dirty flags | Le graphe se resout parent avant enfant; les optimisations ne changent pas sa semantique. |
 | Etat applique | Reconciler | Le composant applique les deltas et reste le seul ecrivain. |
-| Mouvement visuel HTML | Graphe temporel par item et mesure d'endpoints isolée | Play et Seek évaluent la même frame à `t`; la mesure est une entrée versionnée et ne relit jamais le modèle depuis le DOM visible. |
+| Mouvement visuel HTML | Graphe temporel par item, préparation par occurrence et capture finale cohérente | Play et Seek évaluent la même frame à `t`; une occurrence `move` prépare uniquement son groupe, puis la présentation réutilise les poses committées sans lecture DOM dans la boucle de frame. |
 
 Ces modeles commandent les types, signatures, classes et tests. Ils ne justifient aucun framework importe.
 
@@ -181,12 +184,12 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Familles de composants | Composants core et composants externes déclarés | Chaque composant ajouté reçoit son profil de données, son validateur, sa classe runtime avec sa déclaration de services, et les fixtures nécessaires ; aucune capacité ne devient un patch générique de `style`. |
 | Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
 | Move / List | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach, diagnostics de seek et politiques `reorderOnMove/Add/Remove` fournies par la capacite list en place; le move core reste independant de la capacite. |
-| Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Contrat fixe sur les moves compilés; le mode local est inféré pour une target inchangée et un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
+| Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Migration à relire : le mode local est inféré pour une target inchangée, un changement de target/parent impose l'overlay reparent, et `reparent: true` le force ; `mode` reste l'ordre de placement. La préparation est déclenchée par l'occurrence nécessaire. |
 | Replace | Module de remplacement, clones transitoires et remplacement de scènes foreign | [`replace-foreign-plan.md`](./replace-foreign-plan.md) fixe la direction Sighty/layout/event et la variante HTML `replace-foreign`; l'implémentation du module classique et la validation runtime restent à construire. |
 | ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Expansion pure dans materialize, fonctions compilées dans resolve et frontière `tween:stop` en place; renderer continu, composition additive et live restent hors tranche. |
 | Capture continue core | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Plan V2 `Fini` : contrat source-agnostique, session, sorties de fin, application live, journal et seek ; aucune source HTML ni démo dans ce périmètre. |
 | Validation capture S5 | [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md) | Plan V2 `Fini` : fixture HTML classique, adaptateur pointer, telco et tests d’intégration ; aucune nouvelle sémantique core. |
-| Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, diagnostics par instance, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontière engine et les rapports structurés par instance sont en place; l’horizon ouvert transposé du concept V1 est raccordé à la telco et reste à valider dans la tranche façade; conversion globale Sighty, horizon master, rate et straps live demandent encore leurs tranches dédiées. |
+| Seek, horizon, rate | Evaluation logique synchrone, cibles locales par membre, préparation éventuellement attendable et commit de présentation unique, diagnostics par instance, segments, fenêtres, policies seek-back, rate et lecture arrière éventuelle | La frontière engine et les rapports structurés par instance sont en place; l’horizon ouvert transposé du concept V1 est raccordé à la telco et reste à valider dans la tranche façade; la préparation motion attendable est suivie par le plan central, tandis que conversion globale Sighty, horizon master, rate et straps live demandent encore leurs tranches dédiées. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | `sequence:end` est terminal en play dans `RuntimePlayer` : nettoyage des captures, pause des modules, hook de scène après nettoyage et replay par `play()` ; le cleanup média complet dépend encore de sa capacité dédiée. |
 | Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Preload externalisé et façade autonome `run` validés. Socle `media-sync` player-scoped, option `initial.master`, fallback ticker, seek persistant et `node-per-src` en cours de validation ; la correction de dérive reste une optimisation finale ; bindings tiers et renderer de production restent hors tranche. |
 | Tiers, modules et services | Déclarations `foreign` du catalogue, stratégies preload et ModuleServices player-scoped | `RuntimeCapabilityCatalog`, dérivation des requirements depuis les composants, surfaces typées, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place. Une extension `foreign` n'est ajoutée qu'avec une capacité concrète ; aucun binding tiers générique ni adapter hub n'est défini. |

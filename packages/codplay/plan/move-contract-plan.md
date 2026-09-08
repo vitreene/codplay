@@ -1,30 +1,23 @@
-# CodPlay V2 - contrat auteur de `move`
+# CodPlay V2 — contrat auteur de `move`
 
 ## Statut
 
-Status: Fixe
-CodPlay version: V2 foundation
-Review: validé le 2026-08-20 pour les moves compilés; extension V2 `pathAnchor`
-validée le 2026-09-02 pour l'éditeur ed2, sans réintroduire de circuit V1
+> Status: A relire — forme auteur cible de la migration motion déclenchée par
+> occurrence.
+> CodPlay version: V2 foundation
+> Référence d’exécution :
+> [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
-La porte d'implémentation de cette extension est limitée à la propagation de la
-donnée dans le schedule, le graphe et la capture HTML, puis à la reconstruction
-de l'origine affine depuis le centre. L'acceptation repose sur
-`tests/runtime/motion/motion-pose.spec.ts`, la non-régression du graphe et le
-test builder/runtime de l'éditeur ; aucun changement du sequence-editor ou du
-parentage n'est requis.
-
-La présentation HTML distingue l'origine affine capturée de l'origine de la
-boîte avant transform (`layoutOrigin`). La feuille de projection remplaçant le
-`transform` auteur, le host soustrait cette seconde valeur dans le repère du
-parent ; cela conserve le centre affine sur le path sans réappliquer le
-`translate` auteur. Cette donnée reste une couture de capture et ne fait pas
-partie du document ou du path sérialisé.
+Les règles de destination, d’ordre, de placement et de transition déjà validées
+restent inchangées. Le code publié porte encore `flipMode` et accepte encore les
+deux paramètres de chemin historiques ; le présent document décrit la forme
+cible qui les retire de la surface auteur lors de la migration atomique des
+types, du compilateur, du runtime, des démos et des tests.
 
 ## Rôle
 
 `move` décrit une destination structurelle et, facultativement, la transition
-visuelle qui y conduit. La structure résolue ne dépend jamais du mode de
+visuelle qui y conduit. La structure résolue ne dépend jamais de son régime de
 présentation HTML.
 
 ```ts
@@ -33,7 +26,7 @@ type Move = string | MoveObject
 type MoveObject = {
   target: string
   mode?: MoveOrderMode
-  flipMode?: 'local' | 'overlay-world'
+  reparent?: boolean
   reorder?: boolean
   transition?: MoveTransition
 }
@@ -42,25 +35,24 @@ type MoveTransition = {
   duration?: number
   ease?: TransitionEase
   path?: string
-  traversal?: 'parameter' | 'arc-length'
-  /** Point mapped by the prepared path during HTML presentation. */
-  pathAnchor?: 'aabb' | 'center'
 }
 ```
 
-La forme courte est équivalente à `{ target }`. `@root` et `@off` sont des
-valeurs réservées de `target`. Aucun montage implicite n'est déduit de l'absence
-de `move`.
+La forme courte est équivalente à `{ target }`. `@root` et `@off` restent des
+valeurs réservées de `target`. L’absence de `move` ne déduit aucun montage.
 
-## Destination et ordre
+## Destination, ordre et présentation
 
 - `target` désigne la destination structurelle, jamais une borne
-  d'interpolation ;
-- `mode` choisit l'ordre dans cette destination : `auto`, `first`, `last`,
+  d’interpolation ;
+- `mode` choisit l’ordre dans cette destination : `auto`, `first`, `last`,
   `append`, `prepend` ou une position numérique ;
-- `reorder` indique si le déplacement peut modifier l'ordre du container ;
-- `transition` décrit le trajet visuel après que l'événement a produit le nouvel
-  état structurel.
+- `reorder` indique si l’opération peut réordonner les enfants du conteneur de
+  destination ; lors d’un changement de conteneur, le retrait de la source suit
+  en plus la policy `reorderOnRemove` de cette source ;
+- `reparent` exprime une demande de présentation par overlay ;
+- `transition` décrit le trajet visuel après la production de l’état
+  structurel.
 
 La déclaration auteur est résolue ainsi :
 
@@ -71,66 +63,75 @@ MoveObject.target
   -> target logique résolu
 ```
 
-`targetId` et `parentKey` restent internes. La policy ne connaît ni le DOM ni la
-présentation visuelle.
+`targetId` et `parentKey` restent internes. La policy ne connaît ni le DOM ni
+la présentation visuelle.
 
-## `flipMode` facultatif
+Il n’y a pas de migration de `mode` : cette propriété existe déjà pour l’ordre
+de placement et conserve son nom, ses valeurs et sa sémantique. `reparent` est
+un axe distinct de présentation.
 
-Le régime visuel est inféré à partir des états structurels avant et après
-l'événement :
+## `reparent` facultatif
+
+Le régime effectif est déduit des états structurels avant et après l’événement,
+puis de la demande explicite de l’auteur.
 
 | Situation | Régime effectif | Présentation HTML |
 |---|---|---|
-| target et parent logique inchangés | `local` | élément DOM dans son parent |
-| target ou parent logique changé | `reparent` | représentation dans l'overlay |
-| `flipMode: 'overlay-world'` explicite | `reparent` | overlay forcé |
+| target et parent logique inchangés, `reparent` absent ou `false` | `local` | élément DOM dans son parent |
+| target ou parent logique changé | `reparent` | représentation dans l’overlay |
+| `reparent: true` explicite | `reparent` | overlay forcé |
 
-Ainsi, une liste utilise naturellement le mode local. Passer d'une liste à une
-autre est automatiquement un reparent. L'auteur n'a rien à préciser dans ces
-deux cas usuels.
+Une liste reste donc locale lorsqu’elle conserve sa target. Le passage entre
+deux targets ou deux parents devient automatiquement un reparent. Un auteur peut
+forcer l’overlay dans une structure inchangée avec `reparent: true`.
 
-`flipMode: 'local'` peut documenter une intention locale, mais ne peut jamais
-forcer un déplacement inter-parent à rester local : le changement structurel
-impose `reparent`. `flipMode: 'overlay-world'` reste utile pour forcer l'overlay
-alors que la target ne change pas.
+`reparent: false` et l’absence de la propriété ne peuvent jamais annuler un
+reparent structurel. La propriété ne modifie ni destination, ni ordre, ni
+parentage logique.
 
-Le mode ne change jamais la destination, l'ordre ou le parentage logique.
+Le contrat existant dissocie `reparent` de la capture géométrique. Un `move`
+local qui porte une transition temporisée (`duration > 0`) vérifie FIRST/LAST et
+les keyframes éventuels, puis reste présenté sur le nœud auteur sans overlay. Les
+`className` et `style` de cette même action sont matérialisés avant les mesures ;
+un tween de style reconnu engage également FIRST/LAST selon ses bornes. Le but
+d’interpoler une position doit être porté par l’un de ces timings ; une
+attribution directe sans timing reste immédiate et ne suffit pas à définir une
+interpolation. La migration conserve ces règles.
 
 ## Transition et path
 
-Les propriétés de `transition` sont facultatives. Les conventions auteur sont :
+Les propriétés de `transition` sont facultatives :
 
 - `duration`, en millisecondes ;
-- `ease`, identifiant ou descripteur d'easing ;
-- `path`, chaîne SVG `d` ;
-- `traversal`, avec `arc-length` par défaut et `parameter` en alternative ;
-- `pathAnchor`, qui vaut `center` pour une trajectoire calée sur le centre
-  visuel affine et `aabb` (ou l'absence du champ) pour les transitions V2 qui
-  ne déclarent pas cette extension.
+- `ease`, identifiant ou descripteur d’easing ;
+- `path`, chaîne SVG `d`.
 
-`pathAnchor` ne change ni le parentage ni la structure du `move`. Lorsque sa
-valeur est `center`, le runner calcule les deux extrémités depuis
-`origin + matrix × (localWidth / 2, localHeight / 2)`, résout le path entre ces
-centres, puis reconstruit l'origine affine de la pose à chaque frame. Aucune
-mesure de bounding box ni coordonnée de viewport n'est persistée. Le mode
-`aabb` conserve le comportement AABB des paths compilés qui ne déclarent pas
-l'extension.
+Lorsqu’un `path` est présent, le compilateur et le graphe appliquent toujours
+les mêmes conventions internes :
+
+- progression selon la longueur cumulée du chemin (`arc-length`), pour conserver
+  une vitesse spatiale régulière ;
+- suivi du centre visuel affine de l’élément (`center`), y compris pendant une
+  rotation ou un redimensionnement.
+
+Ces conventions ne sont plus des propriétés auteur. Elles ne modifient ni la
+durée, ni l’easing, ni FIRST/LAST, ni la structure ou le parentage du `move`.
+Un `path` sans option explicite garde donc le même comportement dans toutes les
+démos ; aucun payload ne répète ces détails d’intégration.
 
 Le path accepte `M`, `L` et `A`. Le compilateur normalise son départ en `[0, 0]`,
 son arrivée en `[1, 0]`, quantifie les coordonnées au centième et prépare les
-longueurs cumulées. La résolution corrige l'écart géométrique résiduel des arcs
-quantifiés afin que les deux extrémités restent exactement `[0, 0]` et `[1, 0]`
-à toute progression proche de `0` ou `1`. Cette préparation ne dépend pas du
-renderer HTML.
+longueurs cumulées. La résolution corrige l’écart géométrique résiduel des arcs
+quantifiés afin que les deux extrémités restent exactes.
 
-La fonction publique `prepareSvgPath` (`src/ace/index.ts`) réalise cette
-transformation d'une chaîne auteur vers l'objet `Path` intelligible par CodPlay.
-`compileMovePath` l'emploie pour transformer une déclaration `move` complète.
-Un strap qui produit plus tard un déplacement dynamique doit réutiliser
-`prepareSvgPath` et remettre l'objet préparé au pipeline; il ne doit pas
-réintroduire une chaîne SVG dans le runtime.
+`prepareSvgPath` (`src/ace/index.ts`) transforme une chaîne auteur en objet
+`Path`. `compileMovePath` l’emploie dans le pipeline normal. Un strap qui crée
+plus tard un déplacement dynamique réutilise `prepareSvgPath` et remet l’objet
+préparé au pipeline ; il ne réintroduit pas une chaîne SVG dans le runtime. Le
+compilateur fixe `arc-length` lors de cette préparation ; aucun appel de
+`Move` ne peut sélectionner `parameter`.
 
-Exemple où aucune indication de mode n'est nécessaire :
+Exemple local :
 
 ```ts
 move: {
@@ -145,62 +146,99 @@ move: {
 }
 ```
 
-## Flux V2
+Exemple qui force l’overlay sans modifier la destination :
+
+```ts
+move: {
+  target: 'page-layout:content',
+  reparent: true,
+  transition: { duration: 320, ease: 'easeOutCubic' }
+}
+```
+
+## Flux de présentation cible
 
 ```text
 move auteur
   -> normalisation et compilation
-  -> matérialisation de l'état avant la frontière
-  -> application de l'événement
-  -> résolution de l'état après la frontière
-  -> mesure HTML FIRST / LAST aux bornes de présentation
-  -> compilation du graphe de mouvement
-  -> évaluation de la même frame à t pour Play et Seek
+  -> événement traité, action et structure before / after résolues
+  -> occurrence interne du move
+  -> décision local / reparent
+  -> préparation ciblée de la géométrie nécessaire
+  -> commit atomique du groupe de mouvement
+  -> même frame absolue à t pour Play et Seek
 ```
 
-La transition est compilée dans le `MotionSchedule`. Le `MotionGraph` compare les
-attachements et poses avant/après, infère `local` ou `reparent`, puis construit
-une trajectoire possédée par l'item. `MoveStateDelta` n'est pas une source de
-géométrie et aucun cache de captures ne constitue un second historique.
+La résolution logique `after` demeure immédiate à `startAt`. La préparation de
+la présentation ne constitue ni un délai ajouté au fait logique, ni un nouvel
+événement journalisé. Pour un `move`, FIRST est la pose juste avant la frontière
+logique et LAST est la pose naturelle à l’endpoint
+`startAt + delay + duration`.
 
-La résolution logique `after` reste immédiate à la frontière `startAt`. Pour la
-présentation HTML, le snapshot géométrique LAST d'un move est toutefois capturé
-à son endpoint `startAt + delay + duration`. Cette distinction permet d'utiliser
-le contexte réel de destination lorsqu'une cible ou un ancêtre n'est monté
-qu'après `startAt`; elle ne décale ni l'événement ni l'état logique.
+Pour `endEmit`, FIRST est la pose visible prise avant le commit live. Pour
+`endCapture` `persist-only`, FIRST appartient à la frontière rejouable et le
+LAST est capturé à l’endpoint du move. Le FIRST live est retiré avant un Seek ;
+il ne remplace jamais la trajectoire persistante source → cible.
 
-Pour un `move` produit par la fermeture live d'une capture HTML (`endEmit`), le
-FIRST géométrique est la photographie visible prise à la fin de la capture,
-juste avant le commit de l'événement. Il peut donc différer de la position
-logique initiale : le perso peut être en pose fixe au point du drop et ses
-voisins peuvent être encore en reflow FLIP. Pour cette remise live, le LAST
-reste la conséquence immédiate du `move` résolu par le player visible ; le
-runner ne remplace pas cette pose par l'endpoint de la trajectoire persistante.
+La préparation détaillée, la transaction coopérative et le choix du conteneur
+d’overlay appartiennent au plan motion. `MoveStateDelta` ne devient pas une
+source de géométrie et les captures ne créent pas une seconde histoire.
 
-Lorsqu'une même capture fournit aussi une sortie `endCapture`, celle-ci est
-une frontière `persist-only` distincte. À la relecture, son FIRST est l'état
-logique mesuré juste avant `end - durée`, et son LAST géométrique est capturé
-par le runner à l'endpoint du `move`.
-Le FIRST live de `endEmit` est supprimé avant un seek ; il ne peut donc pas
-remplacer la trajectoire source → cible persistante. Cette distinction ne
-modifie ni la destination, ni le journal, ni la règle de reconstruction ; elle
-sépare la remise visuelle au relâchement de la trajectoire historique.
+## Migration de `flipMode`
+
+La migration conserve les capacités de `move` (destination, ordre, reflow,
+transition et path). Elle remplace `flipMode` par `reparent` et retire de la
+surface auteur les deux paramètres d’intégration du path ; leurs valeurs sont
+fixées en interne à `arc-length` et `center`.
+
+| Forme actuelle | Forme cible | Sémantique conservée |
+|---|---|---|
+| `mode: 'append'`, `mode: 'first'`, position numérique, etc. | propriété inchangée | placement et ordre |
+| `flipMode: 'local'` | `reparent: false` ou propriété absente | intention locale, sans annuler un reparent structurel |
+| `flipMode: 'overlay-world'` | `reparent: true` | présentation par overlay |
+| `reorder`, `transition`, `path` | propriétés inchangées | même transition et même calcul de trajectoire, avec les defaults internes |
+
+La migration doit modifier ensemble les types source, validation, compilation,
+résolution, données dynamiques, scènes, fixtures et assertions. Aucune méthode
+ni capacité de déplacement n’est supprimée ; `flipMode` est migrée vers
+`reparent`, tandis que `traversal` et `pathAnchor` sont retirées de la surface
+auteur au profit des defaults internes. Il n’y a pas d’alias permanent entre les
+syntaxes retirées et la forme cible.
 
 ## Invariants
 
 - `target` est obligatoire dans la forme objet ;
 - une chaîne `move` se normalise en `{ target }` ;
-- `flipMode` est facultatif et ne modifie jamais la structure ;
+- `mode` est réservé à l’ordre de placement ;
+- `reparent` ne modifie jamais la structure ;
 - un changement de target ou de parent impose `reparent` ;
 - un parent inchangé choisit `local` par défaut ;
-- pour `endEmit`, FIRST est l'état exact visible avant l'événement (la pose live
-  de fin pour une capture continue) et LAST sa conséquence immédiate ;
-- pour `endCapture` persist-only, FIRST est l'état logique avant la frontière
-  ancrée et le runner HTML capture le LAST géométrique à l'endpoint du move ;
-- Play et Seek évaluent le même graphe absolu au même temps ;
+- un `move` local transitionnel (`duration > 0`) capture FIRST/LAST, y compris lorsqu'il porte
+  `className` ou `style`, sans créer d'overlay ;
+- un `move` local ne crée pas de ressource overlay ;
+- pour `endEmit`, FIRST est la pose visible exacte avant l’événement et LAST sa
+  conséquence immédiate ;
+- pour `endCapture` `persist-only`, FIRST est l’état logique de sa frontière et
+  le runner HTML capture LAST à l’endpoint ;
+- Play et Seek évaluent la même présentation absolue au même temps ;
 - une target invalide produit un diagnostic sans placement implicite ;
-- la policy de placement ne connaît ni le DOM ni la materialisation ;
-- `pathAnchor: 'center'` est accepté uniquement avec un `path` préparé et
-  garantit que le centre affine de la pose présentée suit les extrémités et la
-  courbure de ce path ; une valeur inconnue est rejetée comme transition
-  invalide.
+- la policy de placement ne connaît ni le DOM ni la matérialisation ;
+- un path préparé est parcouru selon `arc-length` et son centre visuel affine
+  suit le chemin ; ces valeurs sont internes et ne sont pas configurables par
+  l’auteur.
+
+## Validation de la migration
+
+- compilation et validation de tous les ordres `mode` existants ;
+- `reparent: true` dans une structure inchangée ;
+- reparent structurel avec propriété absente ou `false` ;
+- conservation de `reorder`, de tous les champs `transition` et des payloads
+  live ;
+- application implicite des defaults `arc-length` et `center`, sans présence de
+  `traversal` ni `pathAnchor` dans les payloads auteur ;
+- capture FIRST/LAST d’un `move` local avec `className`/`style`, sans overlay ;
+- absence de capture pour une attribution directe sans timing d’interpolation ;
+- non-régression local, parent/enfant, retarget, `endEmit`, `persist-only`,
+  Play, Seek et resize ;
+- recherche finale : aucun appel auteur, test ou démo ne conserve `flipMode`
+  après le commit de migration.

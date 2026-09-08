@@ -1,6 +1,6 @@
 # Plan V2 — éditeur de mouvement
 
-**Statut : En cours — P0, P1, P3-C, P4 et P5 implémentés, P2 mouvement/ghosts avancé, P2-D et P2-E en cours, P6 en validation partielle**
+**Statut : En cours — P0, P1, P3-C, P4 et P5 implémentés ; P4 doit encore être réaligné sur la forme auteur `move` relue ; P2 mouvement/ghosts avancé, P2-D et P2-E en cours, P6 en validation partielle**
 **Cible :** `ed2` avec la façade CodPlay V2
 **Périmètre :** déplacement d’un item à l’intérieur de sa capsule parente, sans
 reparentage ; cette tranche ouvre aussi la mise en cohérence ciblée du
@@ -181,6 +181,11 @@ par un adaptateur pur de l'éditeur ; le core CodPlay et la carte ouverte de
 
 - `Decor.path` est optionnel et segment-local au décor du KF `pose` cible. Son
   absence signifie une droite ; un KF `decor` ne peut pas en porter.
+- L'éditeur calcule les extrémités avec `frameVisualCenter` et prépare les
+  chemins selon `arc-length`. `traversal` et `pathAnchor` sont des détails de
+  raccord runtime : ils ne font pas partie du document ed2 ni du payload cible
+  de `move`. Le builder conserve le `path` et laisse CodPlay appliquer les
+  valeurs internes `arc-length` et `center`.
 - Le path, les ghosts et le CS sont des artefacts d’authoring hors scène ; ils
   ne sont ni des items ni des enfants de capsule.
 - Le runtime CodPlay V2 reste l’unique résolveur de trajectoire. Le CS lit la
@@ -495,11 +500,12 @@ Ordre d'exécution de la tranche P2-D :
   déplacement conserve les deux KFs, ne modifie pas le décor du KF amont et crée le décor cible
   isolé par copy-on-write. La même vérification confirme qu’une seule surface de déplacement est
   montée et qu’aucune zone bord distincte n’est exposée.
-- P4 est fixé côté builder/runtime : `buildSceneDocV2` produit le graphe V2 sans forme V1, le
-  décor du KF cible porte le path préparé et `pathAnchor: 'center'`, tandis que la façade player
-  adapte une `PresentationFrame` numérique commune à Play et Seek. Les tests builder, compilateur,
-  player, bridge et rebuild couvrent aussi les tweens sans source et l’absence de déplacement
-  structurel ; la preuve native reste la porte P6.
+- P4 est fixé sur le chemin de trajectoire côté éditeur, mais doit être réaligné sur la forme auteur
+  `move` relue : `buildSceneDocV2` conserve le `path` du décor cible sans sérialiser `traversal` ni
+  `pathAnchor`, et CodPlay applique ses valeurs internes `arc-length` et `center`. Le builder et
+  l'overlay ont déjà le calcul `arc-length`/centre visuel ; le runtime doit encore faire de `center`
+  son défaut effectif avant la clôture. Les tests builder, compilateur, player, bridge et rebuild
+  devront vérifier la parité visuelle sans lire ces deux champs ; la preuve native reste la porte P6.
 - P5 est fixé côté persistance : les suppressions de KF, d’item et de capsule ne retirent un décor
   ou un contenu que s’il n’existe plus aucune référence restante (`initialDecorId`, `rootDecorId`,
   KF ou item). Le round-trip contrôleur conserve le `Decor.path` segment-local, et le réordonnancement

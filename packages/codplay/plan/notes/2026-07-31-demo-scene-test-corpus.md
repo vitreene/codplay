@@ -19,6 +19,13 @@ pas introduire de dependance runtime vers V1 ou vers le package demos. Elles ser
 actuellement a verifier la normalisation, les guards et le premier build. Elles ne
 constituent pas encore une comparaison d'execution player V1/V2.
 
+### Mise à jour du 2026-09-08 — migration `move`
+
+La mention `flipMode` de S3 décrit la provenance V1 du corpus. Dans la forme
+V2 cible, cette propriété devient `reparent`; `mode`, `reorder` et les champs de
+`transition` restent inchangés. Le corpus reste une fixture de test et ne crée
+aucun contrat runtime supplémentaire.
+
 ## Invariants de test
 
 - Toute nouvelle forme ajoutee aux demos doit etre classee avant d'entrer dans une

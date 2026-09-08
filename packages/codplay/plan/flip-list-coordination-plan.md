@@ -1,12 +1,14 @@
 # Coordination mouvement / listes V2
 
-> Status: Fixe
+> Status: A relire — coordination logique conservée ; syntaxe `move` et
+> préparation motion alignées sur la migration en attente.
 > CodPlay version: V2 foundation
-> Review: validé le 2026-08-20 pour la coordination structurelle et le mouvement compilé
+> Référence : [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
 Ce document conserve uniquement le contrat de coordination résolu. La
-description capture-centrique précédente est remplacée par
-[`runner-flip-integration-study.md`](./runner-flip-integration-study.md).
+préparation par occurrence est définie dans
+[`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md) ;
+le présent plan ne crée ni calendrier motion global, ni circuit de liste parallèle.
 
 ## Contrat
 
@@ -27,16 +29,23 @@ description capture-centrique précédente est remplacée par
 
 ## Modes
 
-`flipMode` est facultatif :
+`reparent` est facultatif :
 
-- absent ou `local` dans la même target : présentation locale ;
+- absent ou `false` dans la même target : présentation locale ;
 - target/parent différent : reparent forcé par overlay ;
-- `overlay-world` : reparent explicite même dans une target inchangée.
+- `reparent: true` : overlay explicite même dans une target inchangée.
 
-Le mode ne modifie jamais la destination ou l'ordre logique.
+`mode` reste la propriété d’ordre. `reparent` ne modifie jamais la destination
+ou l’ordre logique.
 
-## Concepts supprimés
+## Circuits internes écartés
 
-La coordination ne repose plus sur `touchedItemIds`, captures groupées, aliases,
-cache historique, replay d'un module list, handoff de ghost ou transaction
-FIRST/LAST sur le DOM visible.
+Ces éléments sont des circuits internes qui ne doivent pas être recréés ; cette
+liste ne retire aucune API auteur. La seule évolution de forme auteur est le
+remplacement de `flipMode` par `reparent` dans le plan de migration.
+
+La coordination ne repose plus sur `touchedItemIds`, l'identification de
+captures par un cache historique, des aliases, le replay d'un module list, un
+handoff de ghost ou une transaction FIRST/LAST construite sur le DOM visible.
+Les groupes de capture par occurrence restent nécessaires ; le plan motion les
+ferme sur les materialisations auteur et les publie par un commit unique.

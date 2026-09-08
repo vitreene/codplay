@@ -17,13 +17,14 @@ de mouvement : `500 ms` par défaut, bornée à l'intervalle source → cible et
 positionnable juste avant le KF cible. Cette fenêtre ne détermine jamais le temps
 d'un KF créé ; son raccord au builder/runtime est réservé à P4.
 
-Les extrémités du path sont les centres visuels affines des poses. Le builder
-marque cette convention par `move.transition.pathAnchor: 'center'`; CodPlay V2
-reconstruit l'origine affine à partir du même centre pendant l'interpolation.
-Le module ne persiste donc aucun rectangle AABB ni pixel de viewport.
+Les extrémités du path sont les centres visuels affines des poses. Le calcul de
+l'éditeur fixe cette convention ; `pathAnchor` n'est pas une donnée de
+`EditorScene` et ne doit pas être sérialisé dans `move`. CodPlay V2 doit appliquer
+le même centre par défaut lors de l'interpolation. Le module ne persiste donc
+aucun rectangle AABB ni pixel de viewport.
 
 Le path affiché est préparé par les primitives ACE du runtime (`prepareSvgPath`,
-`resolvePath`) avec les paramètres du builder (`arc-length`, précision 2). Le CS
+`resolvePath`) avec la convention interne `arc-length` et la précision 2. Le CS
 ne lit ni le DOM de l'item ni un second état de trajectoire : le bridge consomme
 `instance.presentation`, c'est-à-dire la pose affine numérique déjà résolue et
 commitée par CodPlay pour l'item visible. Pendant un seek, si une sélection

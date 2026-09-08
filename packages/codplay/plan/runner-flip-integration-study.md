@@ -1,8 +1,16 @@
 # CodPlay V2 — architecture du mouvement hiérarchique HTML
 
-> Status: En cours — correction de la frontière géométrique FLIP
+> Status: A relire — migration vers une préparation motion déclenchée par
+> occurrence `move`
 > CodPlay version: V2 foundation
-> Review: le contrat du graphe reste conservé ; endpoint de move, source pré-frontière et chaîne d'ancêtres overlay couverts par tests et Firefox headless ciblé ; matrice Safari complète encore à exécuter
+> Référence de migration :
+> [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
+
+Les sections historiques de ce document conservent le contrat géométrique du
+graphe hiérarchique. Elles ne valident pas le déclenchement actuel du runner :
+les passages qui prescrivaient un catalogue à `init()`, un rebuild dans la
+présentation normale, `flipMode` ou des barrières de reset sont remplacés par la
+révision ci-dessous.
 
 ## Objet unique
 
@@ -28,6 +36,29 @@ paire et Play comme Seek la résolvent de la même manière. Aucun état absent
 n'est forcé au FIRST.
 
 Play et Seek évaluent un circuit unique à un temps absolu `t`.
+
+## Révision de pilotage — 2026-09-07
+
+Le player transmet au runner une occurrence interne du `move` qu’il vient de
+résoudre. Le runner prépare alors le seul groupe de présentation nécessaire. Il
+ne découvre plus des moves en parcourant la scène ou le journal depuis
+`init()` ou une présentation ordinaire.
+
+La préparation peut répartir sélection, dépendances et topologie sur plusieurs
+frames. Ses FIRST, LAST et keyframes publiés sont toutefois mesurés dans une
+unique fenêtre finale sans yield, puis ajoutés au graphe par un commit atomique.
+L’instance reste à la frontière logique pendant cette transaction ; le move ne
+progresse pas pendant le calcul.
+
+Un reset chaud retire réellement les groupes qui touchent la story réinitialisée
+et leurs ressources de présentation. Il ne les masque plus par une barrière
+temporelle. Un resize invalide la géométrie et attend la prochaine présentation
+nécessaire au lieu de lancer une recapture globale.
+
+L’overlay est story-local lorsque la source et la destination résolues
+appartiennent à la même story. Le repli multi-racines de `flip-stress` reste
+conservé sous la racine de scène. Une transition entre deux stories est seule
+placée à la racine de scène, avec un scope de transaction propre.
 
 ## Décisions fixées
 
@@ -74,11 +105,11 @@ Les modes ont des usages distincts :
 |---|---|---|
 | réordonnancement dans la même target/list | `local` | nœud source réel |
 | changement de target ou de parent logique | `reparent` | overlay indépendant |
-| `flipMode: 'overlay-world'` explicite | `reparent` | overlay indépendant |
+| `reparent: true` explicite | `reparent` | overlay indépendant |
 
-`flipMode` est facultatif. L'absence de mode choisit `local` si la target reste
-identique et `reparent` si elle change. Un `local` explicite ne peut pas dégrader
-un vrai reparentage en présentation locale.
+`reparent` est facultatif. Son absence, ou `false`, choisit `local` si la target
+reste identique et ne peut pas dégrader un vrai reparentage en présentation
+locale. `mode` reste exclusivement la propriété d’ordre.
 
 L'overlay est le procédé de présentation du mode reparent. Ce n'est ni un second
 graphe ni un second algorithme temporel.
@@ -91,28 +122,24 @@ sous-système de mouvement du runner ; elle n'expose aucun runtime de capture
 concurrent au runner. La modularisation de FLIP/motion en capacité runtime est
 une dette d'architecture explicitement reportée à V2.5 dans le plan général.
 
-## Architecture appliquée
+## Architecture cible
 
 ```text
-                         +----------------------+
-CompiledScene ---------->| StructuralTimeline   |
-       |                 | parent/target/order  |
-       |                 +----------+-----------+
-       |                            |
-       +-> compileMotionSchedule    |
-                    |               |
-                    v               v
-             event boundaries -> key-point capture on visible author nodes
-                                      | before / after / intermediate snapshots
-                                      v
-                                buildMotionGraph
-                                      |
-                             MotionGraph by item
-                                      |
-                current natural layout + absolute t
+CompiledScene -> StructuralTimeline -> événement traité par le player
                                       |
                                       v
-                          resolvePresentationFrame
+                         occurrence `move` résolue
+                                      |
+                          groupe local ou reparent nécessaire
+                                      |
+                    préparation topologique coopérative
+                                      |
+                         fenêtre de capture cohérente
+                                      |
+                                      v
+                           commit atomique MotionGraph
+                                      |
+                         resolvePresentationFrame(t)
                                       |
                            +----------+----------+
                            |                     |
@@ -130,13 +157,16 @@ Elle expose `resolveAt(t)` et `resolveBefore(t)`.
 La capacité list n'est plus un reducer mutable. Son service runtime est un
 marqueur ; la sémantique ordonnée appartient au graphe structurel commun.
 
-### 2. `compileMotionSchedule`
+### 2. Occurrence motion résolue
 
-Fichier : `src/runtime/motion/motion-schedule.ts`.
+Fichier concerné : `src/runtime/motion/motion-schedule.ts`.
 
-Le compilateur pur aplatit les eventimes, sélectionne la dernière commande d'un
-item à une même frontière et produit les intentions directes. Il accepte aussi
-un résolveur fourni par le materializer pour les actions qui animent une pose :
+Le code qui prépare les timings d’un move reste pur, mais il ne produit plus un
+catalogue global à l’initialisation. À la frontière réellement traitée, le
+player transmet l’action résolue, ses items, son instant, les structures
+`before` / `after` et les stories concernées. Le runner dérive alors les
+intentions directes du seul groupe à préparer. Il accepte aussi un résolveur
+fourni par le materializer pour les actions qui animent une pose :
 
 ```ts
 type ScheduledMotionIntent = {
@@ -152,9 +182,11 @@ type ScheduledMotionIntent = {
 }
 ```
 
-Le player logique ne connaît ni ce calendrier, ni les overlays, ni leurs
-ressources HTML. Le résolveur HTML ne lit pas le DOM : il reconnaît les
-propriétés de layout/transform et transmet uniquement leur timing au schedule.
+Le player logique ne connaît ni l’overlay, ni ses ressources HTML.
+L’occurrence reste une donnée de passage interne, non un calendrier parallèle ou
+une nouvelle entrée de journal. Le résolveur HTML ne lit pas le DOM à cette
+étape : il reconnaît les propriétés de layout/transform et transmet seulement
+leur timing au groupe.
 
 ### 3. Capture géométrique sur les materialisations auteur
 
@@ -163,15 +195,15 @@ Fichiers :
 - `src/runtime/runner-html/layout-snapshot.ts` ;
 - `src/runtime/runner-html/player-runner.ts`.
 
-La capture géométrique lit les nodes auteur persistants du root visible. Elle ne
-crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
-`RuntimeComponentMaterializer` auxiliaire. Pour chaque frontière, le player
+La capture géométrique lit les nodes auteur persistants du scope du groupe. Elle
+ne crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
+`RuntimeComponentMaterializer` auxiliaire. Quand le groupe est prêt, le player
 résout et présente successivement les états `before`, `afterStart`, les points
-de fin intermédiaires nécessaires et `after` sur les mêmes materialisations ; la
-capture ne conserve ensuite que leurs données géométriques. Pour un `move`,
-FIRST est pris au temps logique `startAt` avant le commit et LAST à
-`startAt + delay + duration`. Pour une action de pose, les mêmes bornes sont
-utilisées selon le délai et la durée compilés.
+de fin intermédiaires nécessaires et `after` sur les mêmes materialisations,
+dans une fenêtre finale cohérente. La capture ne conserve ensuite que leurs
+données géométriques. Pour un `move`, FIRST est pris au temps logique `startAt`
+avant le commit et LAST à `startAt + delay + duration`. Pour une action de pose,
+les mêmes bornes sont utilisées selon le délai et la durée compilés.
 
 Cette phase est une transaction interne au runner : elle suspend les effets de
 lecture, retire d'abord les contributions transitoires de la présentation
@@ -219,19 +251,31 @@ de `captureHtmlPose()` et retire uniquement la transformation transitoire déjà
 écrite par la preview DND. Elle ne recalcule ni les ancêtres ni une géométrie
 concurrente.
 
-### 3 bis. Activation conditionnelle
+### 3 bis. Déclenchement par occurrence
 
-Le runner compile d'abord le calendrier des transitions `move` et des actions de
-pose reconnues par le materializer. S'il ne contient aucune transition, il
-n'instancie ni système motion, ni capture géométrique, ni overlay FLIP. Un
-`move` purement structurel sans transition ne demande pas de graphe motion.
+Le runner n’instancie ni système de positions `move`/`reparent`, ni capture
+géométrique, ni overlay à partir d’un calendrier global. Une occurrence résolue
+de `move` est son seul déclencheur pour cette préparation. Si elle ne requiert
+aucune présentation animée, elle conserve sa mutation structurelle immédiate
+sans graphe. Un événement sans `move` n’ouvre pas ce chemin ; une action de pose
+relevant d’un autre contrat conserve son traitement propre.
 
-Un move live ajouté par un événement runtime active le même circuit avant sa
-mutation : la position FIRST est capturée au point pré-commit, puis la position
-LAST après la mutation. Ce cas fournit la remise immédiate `endEmit`. Lorsqu'un
-move est conservé pour la relecture, sa frontière persistante applique la règle
-de l'endpoint géométrique définie plus haut. Il ne peut pas être découvert
-après coup sans perdre la source du mouvement.
+Le régime `local` ou `reparent` ne filtre pas cette capture. Un `move` local
+muni d’une transition temporisée (`duration > 0`) engage FIRST/LAST et les
+keyframes éventuels sur les materialisations auteur persistantes ; seul le host
+reste local. Les `className` et `style` de la même action sont donc présents dans
+les états mesurés. Un tween de style reconnu suit le même bornage sans devenir
+un reflow structurel.
+Une classe ou un style direct sans timing reste une mutation immédiate ; le but
+d’interpoler une position doit être porté par la transition du `move` ou par un
+tween de style reconnu.
+
+Pour une occurrence live, la fenêtre finale prend FIRST dans la pose réellement
+visible avant le commit structurel, puis prend LAST après la matérialisation de
+la destination. `endEmit` conserve ainsi sa remise immédiate. Une frontière
+`persist-only` conserve de son côté son endpoint géométrique pour la relecture.
+Ces deux formes sont préparées depuis l’occurrence traitée, jamais découvertes
+après coup dans le journal.
 
 ### 4. Graphe temporel par item
 
@@ -354,13 +398,14 @@ avant toute capture ponctuelle afin que le layout lu soit naturel. Le graphe
 apporte ensuite les segments structurels à partir de ces snapshots. Les parents
 sont résolus récursivement avant leurs descendants.
 
-`MotionMaterializer` appelle ce même resolver après chaque materialisation
-structurelle. Le runner assemble une timeline de layouts naturels à partir des
-snapshots déjà capturés aux frontières. Play et Seek ne sélectionnent aucune
-stratégie différente. `present()` ne déclenche aucune capture géométrique et ne
-crée aucun nœud DOM ; les lectures de géométrie restent bornées à
-l'initialisation, aux fins d'action, aux FIRST/LAST de move, au resize et aux
-invalidations explicites.
+`MotionMaterializer` appelle ce même resolver après chaque matérialisation
+structurelle, mais `present()` ne déclenche ni découverte, ni capture
+supplémentaire et ne crée aucun nœud DOM. Le runner assemble une timeline de
+layouts naturels à partir des snapshots déjà committés. Play et Seek ne
+sélectionnent aucune stratégie différente. Les lectures de géométrie sont
+bornées à la fenêtre finale d’une occurrence nécessaire et à sa recapture après
+une invalidation qui doit réellement être présentée ; elles ne sont jamais
+réalisées à l’initialisation ni à chaque matérialisation.
 
 Lors d'un seek, le runner neutralise temporairement les transitions CSS auteur
 sur le root visible pendant la transaction de materialisation. L'état cible est
@@ -419,11 +464,17 @@ le host retrouve le descendant correspondant et lui applique ses slots locaux
 dans ce sous-arbre. Il ne reçoit donc pas de ghost indépendant et ne change pas
 de représentation pour des raisons techniques.
 
-## Code retiré
+## Responsabilités internes à rationaliser
 
-La restructuration supprime les concepts suivants :
+Cette liste concerne l’organisation interne du runner. Elle ne supprime aucune
+méthode ni capacité publique : la seule évolution de forme auteur reste
+`flipMode` remplacé par `reparent`. Les responsabilités suivantes ne doivent
+plus constituer des circuits concurrents de la préparation par occurrence.
+La notion de groupe de capture est conservée ; seules ses anciennes sources
+globales, ses caches historiques et ses circuits parallèles sont fusionnés dans
+la préparation ciblée.
 
-- `FlipCapture` et groupes de captures ;
+- `FlipCapture` et groupes de capture globaux hérités ;
 - `captureId`, aliases et cache canonique ;
 - replay historique de modules/list ;
 - `HtmlPresentationTransaction` sur le DOM visible ;
@@ -435,7 +486,8 @@ La restructuration supprime les concepts suivants :
 - second `measurementPlayer`, `measurementEngine` et `measurementRoot` ;
 - matérialisations auteur auxiliaires destinées à produire des snapshots.
 
-Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dans
+Le dossier `src/runtime/flip` n’est pas une surface auteur. La géométrie retenue
+vit dans
 `src/runtime/motion/html-pose.ts` et `html-types.ts`.
 
 ## Invariants normatifs
@@ -451,27 +503,30 @@ Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dan
    phase du segment ; il n'est jamais réécrit rétroactivement avant sa frontière.
 8. Une target différente force le mode reparent et donc l'overlay.
 9. Une target identique choisit local par défaut.
-10. Play et Seek appellent le même résolveur absolu et le même commit.
-11. Une pose affine utilise origine et matrice ; `rect` n'est qu'une AABB dérivée.
-12. Le DOM visible n'est jamais une source de structure ; il peut seulement être
+10. Un `move` local transitionnel capture FIRST/LAST et reste sans overlay ; une
+    classe ou un style de la même action est appliqué avant les mesures.
+11. Play et Seek appellent le même résolveur absolu et le même commit.
+12. Une pose affine utilise origine et matrice ; `rect` n'est qu'une AABB dérivée.
+13. Le DOM visible n'est jamais une source de structure ; il peut seulement être
     lu pendant une phase explicite de capture géométrique.
-13. Un graphe motion ne contient aucune référence DOM ni materialisation auteur.
-14. Sans transition `move` ni action de pose reconnue, aucune capture géométrique
-    FLIP n'est initialisée.
-15. Toute matrice locale est calculée dans le repère du parent CodPlay et
+14. Un graphe motion ne contient aucune référence DOM ni materialisation auteur.
+15. Sans occurrence `move` nécessitant une présentation animée ni action de pose
+    reconnue, aucune capture géométrique FLIP n’est initialisée ; `init()` ne
+    construit pas de catalogue motion.
+16. Toute matrice locale est calculée dans le repère du parent CodPlay et
     soustrait l'origine de `localPose` dans ce même repère ; aucun offset du
     parent DOM intermédiaire n'entre dans le contrat motion.
-16. Un descendant local d'un ancêtre overlay reste présenté dans le clone de
+17. Un descendant local d'un ancêtre overlay reste présenté dans le clone de
     cet ancêtre ; seuls les descendants `reparent` indépendants sont détachés.
-17. Pour chaque item reparenté, la source et le clone sont mutuellement exclusifs
+18. Pour chaque item reparenté, la source et le clone sont mutuellement exclusifs
     à l'écran : source masquée avant l'insertion/révélation du clone, clone
     masqué avant toute révélation de source, et clone retiré avant la révélation
     finale de la source.
-18. Chaque point clé géométrique est produit par une résolution du player
+19. Chaque point clé géométrique est produit par une résolution du player
     canonique présentée sur les nœuds auteur persistants ; le graphe ne contient
     ensuite que les poses mesurées et la RAF ne mesure jamais le DOM.
 
-## Validation appliquée
+## Validation géométrique existante — à rejouer après migration
 
 Les tests à conserver et à rejouer après la refonte couvrent notamment :
 
@@ -483,7 +538,11 @@ Les tests à conserver et à rejouer après la refonte couvrent notamment :
 - cible ou ancêtre absent au FIRST et disponible au LAST ;
 - exclusivité de visibilité entre chaque source et son clone d'overlay ;
 - indépendance à l'historique d'évaluation ;
-- inférence local/reparent et override `overlay-world` ;
+- inférence local/reparent et forçage `reparent: true` ;
+- move local avec transition et attribution `className`/`style`, avec FIRST/LAST
+  mesurés sans création d’overlay ;
+- attribution directe `className`/`style` sans timing, vérifiée comme mutation
+  immédiate sans capture motion ;
 - frontière exclusive à `0 ms` ;
 - ordre list reconstruit par la timeline structurelle.
 
@@ -699,8 +758,8 @@ ne se reproduit donc pas sur Firefox 154.0.1 headless ; aucun correctif remote
 n'est ajouté sans reproduction.
 
 La fixture décorrèle désormais aussi ses durées : containers `9350 ms`,
-introductions C/D `8150 ms`, frames Q/K `7275 ms`, échanges de contenu
-`875 ms` et opacité d'introduction `360 ms`. Les fins ne se confondent plus à
+durées de C/D `8150 ms`, frames Q/K `7275 ms`, échanges de contenu
+`875 ms` et opacité d'apparition `360 ms`. Les fins ne se confondent plus à
 `10000 ms`. Firefox a rejoué les bornes non alignées `1360`, `2075`, `2575`,
 `3075`, `9275`, `9350` et `9650 ms` sans erreur ni overlay résiduel ; Play
 traverse également l'endpoint `2075 ms` sans saut (`2077 ms` observé).
@@ -740,7 +799,8 @@ pas de `1 ms` à `1700 ms`, compatible avec la vitesse de la trajectoire ; le
 résidu de `Qc` à `3700 ms` est `1.710 px`, contre une rupture précédente de plus
 de `40 px`. Play a aussi traversé `3700 ms` (`3698 -> 3715 ms`) sans saut
 supplémentaire. La validation Safari de ce nouveau graphe et la matrice
-complète resize/persistance restent ouvertes ; le statut demeure `En cours`.
+complète resize/persistance restent ouvertes ; cette validation historique reste
+à rejouer après la migration événementielle, dont le statut est `A relire`.
 
 ### Pose naturelle des ancêtres HTML
 
@@ -912,6 +972,11 @@ indépendants.
 
 ## Repasse de cohérence et optimisation — 2026-08-23
 
+Les règles géométriques ci-dessous restent utiles pour la réutilisation des
+ghosts et la composition parent/enfant. Leur ancienne orchestration par
+initialisation ou rebuild global est remplacée par la préparation par occurrence
+décrite en tête de document.
+
 ### Représentation `reparent`
 
 Le clonage d'un sous-arbre dans l'overlay n'est pas une capture géométrique. Il
@@ -960,8 +1025,9 @@ La capture naturelle n'est pas une opération de frame dans le contrat cible.
 `present()` consomme les snapshots de frontière et l'état de présentation
 conservé par le materializer ; il ne relit pas le DOM, ne recalcule pas les
 ancêtres et ne reconstruit pas les sources. Une nouvelle capture reste demandée
-seulement à une frontière ou après une invalidation explicite (initialisation,
-resize, changement structurel ou clôture d'une capture live).
+seulement lorsqu'une occurrence l'exige ou après une invalidation explicite
+(resize, changement structurel ou clôture d'une capture live). `init()` ne
+déclenche aucune capture.
 
 Pendant cette phase de capture, les sources overlay sont restaurées dans leur
 état auteur et les ghosts conservés sont masqués. Ils restent réutilisables,
@@ -1025,21 +1091,23 @@ parent puis enfant et le retrait du masque après disparition de l'enfant
 indépendant. Safari a été vérifié sur les passages `1930 ms`, `7200 ms`,
 `9000 ms`, puis retour à `7200 ms`.
 
-### Rebuild des frontières
+### Préparation des frontières par occurrence
 
-`init()`, `resize()` et la fermeture d'une capture reconstruisent plusieurs fois
-les frontières parce que deux vues sémantiques doivent rester distinctes :
+La distinction entre frontière `persist-only` de relecture et remise live
+`endEmit` demeure nécessaire, mais elle n’autorise pas deux rebuilds globaux du
+graphe. Le groupe issu de l’occurrence prépare les deux données dont sa forme a
+besoin, puis les publie par un commit unique.
 
-- `replayMotionBoundaries` inclut les faits `persist-only` pour le seek ;
-- `presentationMotionBoundaries` décrit la tête de lecture courante et peut
-  inclure la remise live `endEmit`.
+`init()` ne prépare aucune frontière. `resize()` invalide les poses déjà
+capturées ; il ne reconstruit pas toutes les frontières. Une future occurrence
+requise par Play ou Seek recapture son groupe dans le nouveau repère. Le FIRST
+live reste une lecture distincte parce qu’il provient de la pose visible avant le
+commit, mais il est intégré au même groupe atomique que son LAST.
 
-Ces tableaux ne doivent pas être fusionnés. En revanche, la compilation du
-schedule, la capture des frontières et l'affectation au système de mouvement
-peuvent être regroupées dans une orchestration commune, avec un paramètre
-explicite pour la vue demandée. La capture live FIRST reste un chemin distinct,
-car elle provient de la pose visible avant le commit et non de
-`resolveSceneBeforeBoundary()`.
+Les anciennes collections `replayMotionBoundaries`,
+`presentationMotionBoundaries` et les barrières de reset ne doivent pas rester
+comme sources parallèles de reconstruction. Le graphe cible est partitionné par
+groupe et stories touchées ; le reset en retire les partitions invalides.
 
 ### Documentation historique
 
@@ -1152,7 +1220,8 @@ façade et de `flip-stress` passent (41/41), le build des démos V2 passe et
 `git diff --check` ne signale rien. La suite CodPlay reste à 553/555 : les deux
 échecs sont les attentes déjà divergentes de `position-demo.spec.ts` sur les
 eventimes et la durée de cette démo, sans rapport avec les marqueurs retirés.
-Le contrôle navigateur effectué dans Safari Technology Preview confirme une
-seule story visible, l'absence de marqueurs `data-codplay-motion-*` sur les
-nœuds et l'absence d'erreur de console ; la matrice complète Play/Seek/replay,
+Le contrôle navigateur effectué dans Safari Technology Preview confirme, pour
+la fixture testée, une seule story affichée, l'absence de marqueurs
+`data-codplay-motion-*` sur les nœuds et l'absence d'erreur de console ; la
+matrice complète Play/Seek/replay,
 resize et lifecycle reste à compléter avant de passer le plan à `Fini`.

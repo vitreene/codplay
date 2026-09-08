@@ -1,236 +1,387 @@
-# Plan — découverte live de `move` et portée de l’overlay
+# Plan — préparation motion déclenchée par occurrence `move`
 
 ## Statut
 
-> Status: En cours — raccord de pose live et limite de capture par story implémentés ; projection du journal et validation intégration complète restantes
+> Status: A relire — migration de l’architecture de découverte motion ; aucun
+> changement du core ne commence avant validation de ce plan.
 > CodPlay version: V2 foundation
-> Plan validé pour implémentation le 2026-09-05.
 
-## Objectifs
+Ce plan remplace la stratégie de découverte globale précédemment décrite dans
+ce fichier. La note de cadrage
+[`2026-09-07-motion-reparent-event-driven-preparation.md`](./notes/2026-09-07-motion-reparent-event-driven-preparation.md)
+en conserve les constats et le raisonnement. Les contrats actuellement publiés
+restent ceux du code tant que cette migration n’est pas réalisée.
 
-1. Découvrir un eventime ajouté pendant la lecture lorsqu’il porte `move`, puis
-   recalculer les frontières HTML avec l’état matérialisé par cet event.
-2. Limiter chaque overlay au conteneur de la story qui présente les items en
-   mouvement.
+## But et limites
 
-Le plan ne modifie aucun contrat auteur existant et ne traite pas le cycle de
-vie du conteneur appelant. Si ce conteneur est masqué, l’overlay, qui en est un
-descendant, est masqué avec lui. Aucun `unmount` ou nettoyage anticipé n’est
-ajouté.
+Le runner ne doit préparer des positions et un graphe motion que lorsqu’il
+matérialise une occurrence résolue de `move` qui nécessite une présentation
+visuelle. Il ne doit ni anticiper les moves futurs, ni rescanner le journal à
+chaque présentation normale.
 
-## Références
+Cette migration conserve le contrat structurel de `move` et ses capacités
+existantes : destination, ordre, `reorder`, montage, démontage, transition,
+easing, path, retarget et sorties de capture. Aucune méthode ni capacité de
+déplacement n’est supprimée. La forme auteur remplace `flipMode` par `reparent`
+et retire les deux paramètres d’intégration du path ; le compilateur fixe leurs
+valeurs internes à `arc-length` et `center`. La forme cible est définie dans
+[`move-contract-plan.md`](./move-contract-plan.md).
 
-- [`move-contract-plan.md`](./move-contract-plan.md) : contrat de `move` et
-  frontières de présentation ;
-- [`runtime/motion/README.md`](../src/runtime/motion/README.md) : graphe et
-  retarget ;
-- [`runtime/runner-html/README.md`](../src/runtime/runner-html/README.md) :
-  capture HTML et cycle du runner ;
-- [`runtime/player/README.md`](../src/runtime/player/README.md) : journal,
-  reconstruction et dispatch ;
-- [`runtime/materializer/README.md`](../src/runtime/materializer/README.md) :
-  materialisation et nœuds auteur persistants.
+Le plan ne crée ni second player, ni second journal, ni API de visibilité de
+story. Les démos restent des fixtures de validation : elles révèlent les cas que
+le core doit traiter, mais ne fournissent aucune condition de runtime.
 
-## Cause établie
+## Invariants à préserver
 
-Le runner prépare le planning et le système de mouvement avec les eventimes
-connus à `init()`. Un eventime live portant `move` peut ensuite être journalisé
-et matérialisé sans que ses frontières soient ajoutées au graphe HTML.
+- `SolvedGraph` et le journal restent les seules sources de structure et de
+  faits logiques ; la géométrie capturée est une donnée de présentation.
+- Un événement sans action `move` ne déclenche pas la découverte, la capture ou
+  l’overlay du graphe de positions traité par ce plan. Une action de pose qui
+  relève d’un autre contrat conserve son traitement propre.
+- Un `move` local conserve son host local. Lorsqu’il porte une transition
+  temporisée (`duration > 0`), il engage néanmoins la capture FIRST/LAST et les
+  keyframes requis ;
+  il ne passe pas par le host d’overlay `reparent`.
+- Un `move` structurel sans présentation animée reste immédiat et ne lit pas la
+  géométrie.
+- Les événements compilés, live, issus d’une cascade et reconstruits par Seek
+  empruntent le même circuit interne.
+- `play(t)` et `seek(t)` publient la même frame pour le même journal, viewport
+  et état auteur.
+- Les nœuds auteur, composants, services, player et runner survivent à un Seek
+  et à un reset ; seules les ressources de présentation sont temporaires.
 
-La classe éventuelle de la même action est appliquée avant la capture. Elle peut
-donc modifier la position mesurée. `move` est le déclencheur du recalcul ; il ne
-faut pas observer séparément `target`, `className` ou `style`, ni étendre
-`diffSolvedScenes` pour cela.
+## Architecture cible
 
-La validation de la démo `position` établit aussi une contrainte du
-présentateur HTML : plusieurs frontières de `move` peuvent être actives au
-même instant tout en appartenant à des stories différentes. Les FIRST/LAST
-restent propres à chaque item, mais le host ne doit pas réduire ces stories à
-une seule racine courante. Sinon la couche d’un item actif est déplacée dans le
-dernier conteneur capturé et pollue la présentation d’une autre story.
+### Occurrence résolue, non catalogue global
 
-La partition est logique : les intents sont regroupés par `storyId`, puis par
-bornes temporelles et nature structurelle. Elle n’est pas déduite de
-l’ascendance DOM courante. Le runner connaît déjà le `storyId` de chaque perso
-et les racines logiques de la story dans le graphe résolu.
+Lorsque le player traite un événement, il résout déjà l’action, les items
+concernés, les états structurels avant et après, ainsi que les stories de ces
+états. À ce point, il transporte au runner une occurrence interne et éphémère
+si l’action contient un `move`.
 
-## Placement de l’overlay
-
-La racine de scène et les conteneurs de story sont deux repères différents :
+L’occurrence porte au minimum l’identité du fait ou de l’événement compilé,
+l’instant absolu, le `move` résolu, les items concernés et l’appartenance de
+story avant/après. Ses noms de champs restent internes au circuit player/runner.
+Elle n’est ni exposée au public, ni stockée dans un second journal, ni
+reconstruite par un scan du journal.
 
 ```text
-racine de scène (cycle de vie du runner)
-├── conteneur de la story A
-│   ├── items auteur
-│   └── [data-codplay-motion-overlay]
-└── conteneur de la story B
-    ├── items auteur
-    └── [data-codplay-motion-overlay]
+événement traité
+  -> action résolue et structure before / after
+  -> occurrence interne de move
+  -> décision local / reparent et besoin de présentation
+  -> préparation du seul groupe nécessaire
+  -> commit atomique du delta de graphe
+  -> présentation de la frame demandée
 ```
 
-Le host doit conserver une couche par story active. Dans le chemin V2, la couche
-n’est pas enfant du `sceneSlot` lorsque la story possède une racine visuelle
-unique : elle est enfant direct de cette racine de story. Si une story possède
-plusieurs racines visuelles indépendantes, aucune racine de story unique
-n’existe ; le runner conserve alors une couche identifiée par cette story sous
-la racine de scène. Ce cas est celui de `flip-stress` et ne doit pas modifier
-son ordre d’empilement.
+Les trois origines doivent produire la même occurrence : franchissement d’un
+événement compilé pendant Play, append live ou cascade, et reconstruction lors
+d’un Seek. Un Seek ne prépare que les groupes nécessaires à sa frame cible ou à
+la fermeture dont dépend cette frame ; un groupe déjà terminé et sans dépendance
+de présentation n’est pas préparé par anticipation.
 
-Le runner doit conserver la racine de scène pour son cycle de vie, mais fournir
-au `HtmlMotionPresentationHost` le conteneur de story de chaque snapshot. Le
-host conserve une couche par story, chacune au-dessus de ses items et dans son
-propre repère géométrique. Aucune couche d’une story à racine unique ne doit
-être enfant du layout général ni couvrir les contrôles voisins.
+### Aucun travail motion à `init()` ni dans une présentation ordinaire
 
-Cette modification implique de vérifier :
+`HtmlPlayerRunner.init()` initialise le runner et les nœuds auteur, sans
+compiler un catalogue de moves et sans appeler de capture générale pour ce
+graphe.
+`present()` et son équivalent appelé après une matérialisation normale se
+contentent de résoudre et d’appliquer des données déjà préparées. Ils ne lisent
+ni le journal pour retrouver un move, ni la géométrie DOM, ni une frontière de
+reset pour la branche `move`/`reparent`. Une action de pose qui relève d’un
+contrat distinct conserve son propre cycle de préparation et de présentation.
 
-- la résolution du conteneur de story à partir du graphe, sans introduire de
-  notion de vue ou de carousel dans CodPlay ;
-- la conversion des poses lorsque le conteneur de story n’est pas la racine de
-  scène ;
-- le masquage automatique de l’overlay avec son conteneur ;
-- la suppression de chaque couche au teardown général du runner ;
-- la coexistence de couches de stories différentes lorsqu’elles ont un `move`
-  actif.
+Le mécanisme actuel de `rebuildMotionBoundaries()` est donc remplacé par deux
+responsabilités distinctes :
 
-L’implémentation associe à chaque item de snapshot l’identifiant runner-local et
-la pose du conteneur de sa story. Le host retrouve chaque conteneur à la
-présentation, maintient une couche par story et ne libère une couche que
-lorsqu’elle ne contient plus de ressource active.
+1. la préparation ciblée d’un groupe à partir de l’occurrence qui vient d’être
+   résolue ;
+2. la présentation d’un graphe déjà committé.
 
-## Mise en œuvre
+Il n’existe plus de rebuild général à l’initialisation ou à chaque frame. Une
+révision du journal n’est pas un signal suffisant pour déclencher une découverte
+motion.
 
-### 1. Raccord de découverte live
+### Rappel du contrat de capture locale et des états `className`/`style`
 
-Dans la transaction commune du `RuntimePlayer`, trouver le point après :
+Le contrat existant dissocie le choix `local`/`reparent` de la capture des
+positions. Une occurrence `move` munie d’une transition temporisée (`duration >
+0`) capture FIRST avant `startAt`, puis LAST à son endpoint, même lorsque la
+target et le parent restent identiques. Dans ce cas, le host reste local et
+aucune ressource d’overlay n’est créée. La migration doit conserver cette règle.
 
-1. dispatch de l’event et de ses cascades ;
-2. reconstruction de la scène ;
-3. matérialisation de l’action, y compris sa classe.
+Les propriétés `className` et `style` de la même action sont appliquées lors des
+matérialisations `before`, `afterStart`, keyframes et `after`. Leur effet de
+layout ou de transform entre donc dans les positions mesurées. Un tween de style
+reconnu par le materializer conserve aussi son chemin de capture FIRST/LAST,
+sans reflow structurel ni overlay par défaut.
 
-À ce point, signaler au runner qu’un append au journal a eu lieu. Le runner
-recompile alors le planning et ne reconstruit que si un `move` est effectivement
-actif. Le raccord doit couvrir les emits publics, les adapters, les straps et
-les cascades. `subscribeTransport()` ne doit pas servir de détecteur et aucune
-API publique ne doit être créée.
+Le but d’interpoler une position doit donc être exprimé par une transition
+temporisée du `move` ou par un tween de style reconnu. Une attribution directe de
+classe ou de style sans cette durée ne donne pas de borne d’interpolation : elle
+reste une mutation immédiate et ne crée pas à elle seule une frontière motion.
+Le runner ne déduit pas une transition CSS calculée.
 
-Réalisé : le `RuntimePlayer` signale aussi l’ajout direct d’un eventime
-journalisé, car ce chemin ne matérialise pas nécessairement la scène au moment
-de l’append. Le runner filtre les révisions sans nouvel intent `move` et
-réutilise le même cœur de capture pour les autres chemins.
+### Groupe de capture et commit unique
 
-### 2. Rebuild des frontières
+Les moves qui partagent une même frontière et une même fermeture de composition
+sont préparés comme un groupe. Le regroupement emploie les données structurelles
+déjà résolues, jamais une convention de démo. Les segments locaux et reparent
+restent séparés selon leur régime de présentation.
 
-Réutiliser le cœur de capture déjà exécuté par `init()` et `resize()` :
+La préparation produit un delta immuable : snapshots nécessaires, segments,
+ressources de présentation et ensemble des stories touchées. Le système motion
+ajoute ou remplace ce delta en une seule opération. Frontières, partitions de
+reset et graphe ne sont donc plus affectés par plusieurs appels qui reconstruisent
+successivement le même graphe.
 
-1. compiler le planning à partir du journal courant ;
-2. créer le système HTML s’il n’existe pas ;
-3. capturer les états sur les nœuds auteur persistants ;
-4. mesurer après l’application de l’event portant `move` ;
-5. remplacer les frontières du graphe ;
-6. retargeter depuis la pose visuelle courante ;
-7. présenter immédiatement le temps courant.
+La sortie de capture live `endEmit`, la frontière `persist-only`, les retargets
+et les événements simultanés utilisent ce même regroupement ordonné. Le FIRST
+live garde sa sémantique particulière de pose visible avant le commit ; il ne
+devient pas un fait logique ni une trajectoire de relecture distincte.
 
-Conserver les contrats existants de Play, Seek, replay, resize et
-`persist-only`. Aucun second player, journal, scheduler ou graphe ne doit être
-introduit.
+## Transaction de préparation coopérative
 
-Réalisé : le rebuild est déclenché après matérialisation normale ; le premier
-eventime live est capturé avant la présentation suivante et la frame courante
-est présentée avec les nouvelles frontières. Une révision qui ajoute seulement
-un reset ou un événement sans `move` met à jour les barrières logiques sans
-relire la géométrie. Lorsqu’un nouveau `move` apparaît, le runner conserve les
-frontières déjà capturées et ne mesure que le groupe temporel et la story de ce
-nouvel intent ; les autres stories restent lazy. `resize()` garde son chemin
-explicite de recapture globale.
+Le move visuel commence seulement après que ses positions ont été préparées. La
+préparation peut étaler son travail topologique sur plusieurs frames, mais les
+mesures numériques engagées ne peuvent pas être étalées : une position lue avant
+un resize ou un changement de layout ne peut pas être combinée avec une position
+lue plus tard.
 
-Lorsqu’un `move` live est ajouté alors que l’item est déjà en mouvement, le
-runner prend la pose numérique de sa `PresentationFrame` au temps de
-l’événement comme FIRST transitoire. Cette pose sert uniquement au raccord
-visuel entre l’ancienne présentation et la nouvelle cible ; elle n’est ni
-ajoutée au journal ni transformée en trajectoire rejouable. Le replay conserve
-uniquement les positions et états produits par les événements journalisés.
+```text
+frontière b atteinte
+  -> conserver la dernière présentation engagée de cette instance
+  -> préparer sélection, dépendances, timings et delta topologique par tranches
+  -> fenêtre finale sans yield : FIRST, états nécessaires, LAST et restauration
+  -> commit atomique du groupe et de sa présentation
+  -> reprendre l’horloge de l’instance à b
+```
 
-### 3. Partitionnement et adaptation de l’overlay
+Le temps logique est tenu à `b` pour l’instance concernée pendant cette
+préparation. Les autres instances continuent. Les événements adressés à
+l’instance retenue restent ordonnés après la transaction. Cette attente est
+coopérative : aucune boucle synchrone ne monopolise le thread et la boucle de
+rendu peut traiter les autres instances. Le temps écoulé durant la préparation
+ne devient jamais une progression cachée du segment.
 
-Le host et son initialisation séparent :
+La phase répartissable peut résoudre la fermeture minimale, les dépendances
+parent/enfant, les timings, le régime de présentation et le conteneur d’overlay.
+Ses mesures éventuelles ne servent qu’à estimer le travail. La fenêtre finale,
+elle, lit le FIRST réellement affiché, matérialise les états `before`,
+`afterStart`, keyframes nécessaires et `after`, lit leurs poses, puis restaure
+la présentation retenue avant de rendre la main. Toutes les poses publiées
+proviennent de cette unique fenêtre cohérente.
 
-- `sceneRoot` : racine conservée par le runner pour le cycle de vie ;
-- `storyContainer` : parent DOM direct de la couche overlay et repère local
-  des poses présentées pour une story.
+La capture finale reste obligatoire même si la topologie a été préparée sans
+changement apparent : les positions peuvent avoir évolué entre deux frames. Si
+sa fermeture dépasse le budget accepté, la première réponse est de réduire le
+scope de capture. Une présentation explicitement figée pendant une capture
+longue demanderait un contrat propre ; elle ne fait pas partie de cette tranche.
 
-Avant la capture, partitionner les intents par `storyId`, puis résoudre la
-racine visuelle logique de cette story. Chaque couche reste unique pour cette
-story, est insérée après les items auteur et reste au-dessus d’eux. Les couches
-de stories différentes coexistent sans se remplacer.
+`telco.seek()` retourne déjà une promesse. La migration rend attendables les
+transactions internes de Seek, du moteur au runner, et conserve leurs garanties
+de rollback. La promesse publique ne se résout qu’après préparation, commit et
+présentation cohérente de la cible.
 
-Le resolver n’utilise pas le plus petit ancêtre DOM commun pour choisir la
-story. Il utilise les `storyId`, `parentByPerso` et les nœuds persistants déjà
-enregistrés par le runner. Le chemin V2 réel fournit toujours la story ; aucun
-carousel ou concept de vue n’entre dans CodPlay.
+## Portée de l’overlay
 
-L’attribut d’overlay porte aussi l’identité runner-locale de la story lorsque
-plusieurs stories doivent exceptionnellement partager la racine de scène. Cela
-évite que `ensureHtmlOverlayLayer` réutilise la couche d’une autre story.
+Le conteneur est choisi à partir des stories logiques résolues avant et après la
+frontière, jamais à partir de l’ascendance DOM ni d’un état de présentation.
 
-Implémenté pour le host HTML : les frontières stockent la clé et la pose du
-conteneur de story par item ; le host crée ou retrouve la couche correspondante
-sans modifier `orderOverlayStack`, qui reste la référence de `flip-stress`.
+| Situation résolue | Conteneur d’overlay | Règle de coût |
+|---|---|---|
+| Même story, racine visuelle unique | conteneur de cette story | chemin normal et fermeture locale |
+| Même story, plusieurs racines visuelles | repli existant sous la racine de scène, identifié par story | conserve le parentage et l’ordre de `flip-stress` |
+| Stories différentes | racine de scène, identifiée par transaction | exception de dernier ressort, fermeture élargie |
 
-## Critères d’acceptation
+Un `reparent: true` interne à une story ne monte jamais à la racine par
+commodité. Un reparent structurel inter-story est le seul cas courant qui exige
+un repère commun. L’identité de groupe doit donc porter les stories touchées et
+une clé de scope ; `motion-container.ts` ne peut plus décider avec un seul
+`storyId` lorsqu’une occurrence traverse deux stories.
 
-- un event sans `move` ne déclenche pas ce rebuild ;
-- le premier `move` ajouté après `init()` crée le système et capture ses
-  frontières ;
-- une classe + `move` dans le même event est mesurée après matérialisation de la
-  classe ;
-- le retarget conserve les temps et les invariants du contrat `move` ;
-- un `move` live qui recalcule sa cible repart de la pose visuelle courante,
-  sans saut, sans journaliser cette pose intermédiaire ni sa trajectoire ;
-- l’overlay est enfant du conteneur de sa story, pas du `sceneSlot`, lorsque la
-  story possède une racine visuelle unique ;
-- l’overlay est au-dessus des items de la story, mais pas du reste de la scène ;
-- deux mouvements actifs dans deux stories conservent chacun leur couche et
-  leur repère FIRST/LAST ;
-- `flip-stress` conserve une couche pour sa story `main`, son parentage et son
-  ordre d’empilement à FIRST, MIDDLE et LAST ;
-- le masquage du conteneur masque aussi l’overlay ;
-- le teardown retire l’overlay temporaire sans détruire les nœuds auteur ;
-- Play, Seek, resize, replay et persistence n’utilisent pas d’histoire parallèle.
+## Reset chaud
 
-## Validation
+Le reset restaure les valeurs initiales compilées de sa story dans l’instance
+existante. Il ne recrée ni player, ni runner, ni composant, ni service, et ne
+déclenche aucune découverte ou capture motion.
 
-Les tests du raccord live et du placement de l’overlay sont ajoutés au niveau
-du runner réel. Ils vérifient le DOM et le parentage ; la suite ciblée couvre la
-non-régression parent/enfant et reparent, Play, Seek, resize, persistence et
-lifecycle.
+Le journal conserve le fait de reset. Le graphe de présentation, lui, doit être
+partitionné par groupe et stories touchées : le reset libère les ressources
+overlay et retire tout groupe qui touche la story réinitialisée, y compris un
+groupe inter-story. Il ne masque pas des segments historiques à l’aide d’une
+barrière temporelle. Les données de position retirées ne sont plus retenues par
+le graphe.
 
-État : la suite ciblée runner/motion et les façades `position` et
-`flip-stress` passent (3 fichiers, 12 tests) ; la suite complète CodPlay passe
-(89 fichiers, 567 tests). Elle couvre le handoff de la pose présentée vers le
-FIRST live sans ajout au journal et la limite de capture au conteneur local.
-Le contrôle Safari Technology Preview mesure cette limite sans erreur console.
-Le typecheck du package `codplay` reste bloqué par les imports `codplay-v1`
-préexistants dans `packages/authoring/scene-factory`. Le build
-`@codplay/demos` passe ; le coût de projection du journal reste à traiter.
+Un Seek avant le reset reconstruit l’état logique sur la même instance et prépare
+à nouveau seulement un move qui doit être présenté. Ce comportement remplace la
+conservation de graphes précédents sous `resetTimesByItem`.
 
-## Décision retenue
+## Invalidation géométrique
 
-Le runner partitionne les moves par story avant toute capture. Chaque story
-possède une identité de couche et, lorsqu’elle a une racine visuelle unique,
-son overlay est créé comme enfant direct de cette racine. Une story à plusieurs
-racines, comme `flip-stress`, conserve une couche identifiée par story sous la
-racine de scène, sans changement de son graphe d’empilement. La racine de scène
-reste uniquement le repère de cycle de vie et le repli nécessaire à ce cas
-multi-racines.
+Un resize invalide les poses capturées, sans réintroduire un catalogue global ni
+une recapture immédiate de tous les moves. Les groupes devenus invalides sont
+recapturés lorsqu’ils doivent à nouveau être présentés par Play ou Seek. Une
+destruction finale libère leurs ressources comme aujourd’hui.
 
-Le raccord live reste interne : `RuntimePlayer` signale l’ajout au journal,
-puis le runner réutilise le chemin de capture de `resize()` uniquement si un
-nouvel intent `move` est présent. Aucun contrat `move`, observateur de `target`
-ou circuit propre à la démo n’est ajouté.
+## Migration de la propriété auteur
 
-La capture HTML reçoit la racine visuelle locale de chaque story comme limite
-de parcours. Elle mesure la racine et ses descendants nécessaires, puis arrête
-la remontée des ancêtres au-dessus de cette story. Cette limite réduit le coût
-de géométrie sans introduire l’élément inerte du layout, qui reste hors de cette
-tranche.
+La migration de `move` est atomique à l’échelle des types, compilation,
+résolution, payloads runtime, démos et tests :
+
+```ts
+type MoveObject = {
+  target: string
+  mode?: MoveOrderMode
+  reparent?: boolean
+  reorder?: boolean
+  transition?: MoveTransition
+}
+```
+
+`mode` conserve exclusivement l’ordre de placement. `reparent: true` force la
+présentation overlay ; un changement structurel de parent ou de cible impose
+toujours ce régime. L’absence de `reparent`, ou `false`, ne peut pas annuler un
+reparent structurel. `flipMode` est remplacé par cette propriété ;
+`traversal` et `pathAnchor` ne sont plus acceptés dans le payload auteur et sont
+fixés respectivement à `arc-length` et `center` dans le pipeline interne. Aucune
+autre capacité de `move` n’est retirée et aucun alias ambigu ne subsiste après la
+migration. `mode` ne change donc ni de nom ni de domaine pendant cette migration.
+
+## Mise en œuvre ordonnée
+
+### 1. Stabiliser le contrat et les interfaces internes
+
+- Mettre à jour le type auteur, les validateurs, le compilateur, les résolveurs
+  et les payloads de tests pour `reparent?: boolean`.
+- Définir le transport runner-local de l’occurrence résolue, sans l’exposer dans
+  les façades ou le journal.
+- Définir la clé de groupe, les stories touchées et le choix de scope avant de
+  modifier la capture.
+
+**Gate :** aucun appel d’auteur ne perd `target`, `mode`, `reorder` ou les
+propriétés de `transition`.
+
+### 2. Émettre l’occurrence depuis le circuit player réel
+
+- Raccorder la même émission aux événements compilés, live, cascades et à la
+  reconstruction de Seek.
+- Grouper les occurrences à une frontière sans modifier leur ordre logique.
+- Ne préparer à froid que les groupes nécessaires à la frame demandée.
+
+**Gate :** le runner ne lit pas le journal pour redécouvrir une occurrence déjà
+résolue par le player.
+
+### 3. Remplacer la découverte générale par une préparation ciblée
+
+- Retirer la construction motion forcée de `HtmlPlayerRunner.init()`.
+- Retirer l’appel de découverte `move`/`reparent` de `presentMotion()` et de
+  toute présentation normale ; conserver le traitement propre des actions de
+  pose explicitement reconnues par un autre contrat.
+- Extraire du code actuel la sélection, la capture et la construction du delta
+  d’un seul groupe, en conservant les contrats de FIRST, LAST, keyframes et
+  retarget.
+- Réunir l’affectation des frontières et du graphe dans un seul commit du
+  système HTML.
+
+**Gate :** un événement sans `move` ne provoque aucune lecture géométrique ni
+construction du graphe de positions `move`/`reparent`.
+
+### 4. Rendre la préparation et Seek transactionnels
+
+- Découper uniquement le travail topologique ; capturer les positions publiées
+  dans une fenêtre finale cohérente.
+- Tenir l’horloge de l’instance à la frontière pendant la transaction.
+- Rendre attendables `RuntimeEngine.seek()`, les participants de groupe et le
+  runner, avec rollback identique en cas d’échec.
+
+**Gate :** aucune frame partielle, aucun saut à l’entrée du move, aucune
+progression accumulée pendant le calcul.
+
+### 5. Partitionner les ressources de présentation et traiter le reset
+
+- Indexer les graphes et ressources par groupe et stories touchées.
+- Appliquer les trois scopes d’overlay définis plus haut, sans modifier le repli
+  multi-racines de `flip-stress`.
+- Remplacer les barrières `resetTimesByItem` par la suppression des groupes
+  concernés et la libération de leurs ressources.
+- Rendre le resize invalide sans recapture anticipée.
+
+**Gate :** un reset ne lance pas de capture et un groupe inter-story est retiré
+en entier lorsque l’une de ses stories est réinitialisée.
+
+### 6. Migrer les fixtures, spécifications et validation
+
+- Remplacer la propriété auteur dans les scènes, les payloads live et les tests.
+- Mettre à jour les contrats et README une fois le circuit exécuté et vérifié.
+- Garder `position` et `flip-stress` sur le chemin runtime réel, sans
+  contournement spécifique.
+
+**Gate :** aucun document de contrat ne mélange `flipMode` et `reparent` comme
+deux options auteur permanentes.
+
+## Validation requise
+
+La validation doit traverser le player, le materializer, le runner HTML et le
+navigateur réel. Une suite isolée n’est pas suffisante.
+
+- **Absence de travail inutile :** init puis événements sans `move`, statiques ou
+  live, n’exécutent ni découverte du journal, ni mesure, ni création d’overlay
+  pour le graphe `move`/`reparent`.
+- **Moves :** local transitionnel avec `className`/`style` (FIRST/LAST sans
+  overlay), tween de style, reparent structurel, `reparent: true`,
+  montage/démontage, parent/enfant, reflow, retarget, événements simultanés,
+  `endEmit` et `persist-only` conservent leur comportement.
+- **Scopes :** overlay story-local, reparent inter-story à la racine, et repli
+  multi-racines de `flip-stress` avec son ordre d’empilement à FIRST, MIDDLE et
+  LAST.
+- **Temps :** Play et Seek froid/chaud aux frontières et au milieu du segment,
+  avec transaction longue simulée, rollback, plusieurs instances et événements
+  en attente.
+- **Cycle :** resize, reset avant/pendant/après move, persistence, replay,
+  lifecycle et destruction.
+- **Navigateurs :** parcours réel de `position` et de `flip-stress`, incluant
+  Safari, sans erreur console ni circuit parallèle de démo.
+
+## Observation de performance
+
+L’instrumentation distingue au minimum la résolution d’occurrence, la
+préparation topologique, la fenêtre finale de capture, le commit de graphe et
+les lectures de journal. Elle ne mesure pas seulement `getBoundingClientRect`.
+
+Sur le relevé actuel de `position`, 928 entrées dans
+`rebuildMotionBoundaries()` n’ont produit que 8 constructions de graphe. Le
+parcours équivalent doit supprimer les 920 entrées sans groupe à préparer ; ce
+chiffre est une cible d’observation, pas une promesse de temps de rendu. La
+validation décidera ensuite si la fermeture de certains groupes exige un travail
+supplémentaire.
+
+## Relecture de cohérence — 2026-09-08
+
+Les plans dépendants ont été relus contre cette cible :
+
+- `mode` reste l’ordre de placement ; `flipMode` est remplacé par `reparent` et
+  `traversal`/`pathAnchor` sortent de la surface auteur, avec les defaults
+  internes `arc-length`/`center` ; les capacités de `move` sont conservées ;
+- une occurrence résolue de `move` déclenche la préparation du groupe concerné ;
+  un événement sans `move` ne fournit aucune condition de visibilité et n’ouvre
+  pas ce chemin ; les actions de pose relevant d’un autre contrat gardent leur
+  traitement ; un `move` local transitionnel (`duration > 0`) capture FIRST/LAST,
+  et les `className`/`style` de la même action sont appliqués avant les mesures ;
+- la sélection et la topologie peuvent être préparées sur plusieurs frames,
+  mais les poses publiées sont capturées dans une fenêtre finale cohérente ; la
+  dernière présentation engagée reste affichée pendant l’attente ;
+- l’overlay reste dans le conteneur de story par défaut, utilise le repli racine
+  déjà requis par `flip-stress` pour les stories multi-racines et ne monte à la
+  racine que pour un reparent inter-story ;
+- un reset est chaud, conserve le journal et retire les groupes et ressources
+  qui touchent sa story ; un Seek antérieur les reconstruit seulement s’il doit
+  présenter le move correspondant.
+
+Les plans `player-engine`, `move-contract`, `runner-flip-integration-study` et
+`story-reset` restent `A relire` avec ce plan. Les README du runtime et le code
+conservent volontairement la forme publiée actuelle (`flipMode` et la
+découverte existante) jusqu’à la validation puis l’implémentation de cette
+migration ; ils ne sont pas des oublis documentaires.

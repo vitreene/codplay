@@ -488,11 +488,10 @@ Sighty de conversion globale et le solve reste sans hierarchie ; elle garantit l
 de reconstruction visible apres un echec de validation.
 
 Ce mecanisme vaut la complexite parce qu'il garantit une frontiere visible coherente entre scenes
-qui peuvent avoir des cibles locales differentes. Il ne justifie pas, a ce stade, une invalidation
-asynchrone complexe ou une course de generations : le seek V2 reste synchrone et la reconstruction
-ne doit pas rendre la main. Si des chargements ou ressources rendent un jour cette operation
-asynchrone, ils devront s'ajouter comme disponibilite/queue de portee, sans modifier la semantique
-des cibles.
+qui peuvent avoir des cibles locales differentes. La reconstruction logique reste déterministe ;
+la préparation de géométrie peut toutefois être attendable lorsque le runner doit capturer un
+groupe `move`, conformément au plan motion du 2026-09-07. La portée entière attend alors son
+commit et sa présentation, sans modifier la sémantique des cibles ni publier un sous-ensemble.
 
 ## 7. Points risqués — à ne pas reprendre tels quels
 

@@ -1,7 +1,13 @@
 # Démo position — plan V2
 
-> Statut : En cours
+> Statut : En cours — dépend de la migration `move` et de la préparation
+> événementielle du core
 > Version CodPlay : V2 foundation
+
+La démo reste une fixture de validation. Elle doit exercer le circuit réel du
+player et du runner ; elle ne doit pas fournir de condition de présentation ni
+de contournement pour compenser une lacune du core. La migration de référence
+est [`motion-live-discovery-invalidation-plan.md`](../../codplay/plan/motion-live-discovery-invalidation-plan.md).
 
 ## Objet
 
@@ -15,13 +21,13 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   du carousel et six `StoryDoc` qui portent chacun une étape. Le carousel est
   un `AutoCapsule` de type `carousel`, et ses intervalles sont calculés par
   `CapsulePreset` puis `CapsuleDistribution`.
-- Le carousel utilise les événements `intro` et `outro` produits par
-  `AutoCapsule`, mais ne les inscrit pas comme changements temporels
-  automatiques. Le strap de navigation les émet uniquement après une flèche
-  (ou Entrée). La sortie est une coupure (`cut`) : la vue précédente est
-  masquée à la frontière, puis la vue entrante glisse horizontalement avec
-  l'intro `swipe-left`. Une seule vue peut donc être visible, sans fondu
-  croisé.
+- Le carousel utilise les noms d'événements `intro` et `outro` produits par
+  `AutoCapsule`. Ces noms sont propres à cette démo et n'ont aucune sémantique
+  dans CodPlay. Le strap de navigation les émet uniquement après une flèche
+  (ou Entrée) et ne les inscrit pas comme changements temporels automatiques.
+  La sortie est une coupure (`cut`) : la vue précédente est masquée à la
+  frontière, puis la vue entrante glisse horizontalement avec l'événement
+  `swipe-left`. Une seule vue peut donc être visible, sans fondu croisé.
 - Les cinq premières vues conservent la présentation source / cible / item.
   La sixième est une conclusion visuelle : une constellation de trajectoires
   multiples qui reprend le principe de `flip-stress` avec une direction
@@ -45,7 +51,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
 - Le premier `move` est un eventime initial de la story, à `1 000 ms`, avec une
   durée de `2 000 ms`. Chaque reparenting d'item utilise cette même durée et
-  un `move` explicite. Les mouvements des vues activées ensuite sont ajoutés
+  un `move` explicite. Les mouvements des vues parcourues ensuite sont ajoutés
   par le strap de navigation sur le track de la story. La lecture temporelle
   ne change jamais de vue.
 - Chaque plan de story se termine par un eventime ordinaire
@@ -62,8 +68,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   par `prepareSvgPath`, selon la géométrie circulaire propre à la scène.
 - La quatrième vue utilise des captures de déplacement sur la source et la
   cible. Les déplacements issus de `movementX/Y` sont conservés en pixels
-  dans `event.data.style`, puis les rebonds ajoutés à l'activation portent un
-  `move` complet. Lorsqu'une ancre est relâchée, le circuit
+  dans `event.data.style`, puis les rebonds ajoutés à la réception de
+  l'événement de navigation portent un `move` complet. Lorsqu'une ancre est
+  relâchée, le circuit
   capture → listen → strap émet en plus un rebond immédiat avec un path
   recalculé dans `event.data`.
 - La cinquième vue reprend exactement les deux cartes source/cible des vues
@@ -82,7 +89,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - La représentation graphique des trajectoires reste une étape séparée. Le
   présent volet valide seulement les destinations, durées, reparentings et
   payloads de `move`.
-- Aucun changement de `packages/codplay` n'est prévu pour cette démo.
+- La démo ne définit pas l'architecture du core. Elle adopte la forme
+  `reparent: true` lorsque l'overlay est explicitement demandé et attend le
+  circuit événementiel du plan CodPlay pour les captures ; aucun eventime
+  statique ni chemin de secours n'est ajouté pour masquer un défaut du runner.
 
 ## Travaux
 
@@ -109,11 +119,11 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   vient d'une interaction de navigation, et n'expose jamais deux vues du
   carousel simultanément.
 - La première vue lance son `move` à `1 000 ms` et le termine à `3 000 ms`.
-- Les six vues montrent réellement les mouvements/reparentings via les
-- actions `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
+- Les six vues montrent réellement les mouvements/reparentings via les actions
+  `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
   eventimes ajoutés à la volée contiennent leur payload `move` complet.
 - Après un seek arrière, le curseur peut revenir à l'eventime
-  `position:demo:story:end` de la story activée ; cet eventime ne met pas le
+  `position:demo:story:end` de la story parcourue ; cet eventime ne met pas le
   player en état terminal.
 - La troisième vue produit un événement de mouvement dont le chemin vient de
   `event.data` après une capture, sans écriture DOM dans une fonction auteur.
@@ -134,7 +144,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 
 - Story 2 : les deux conteneurs sont montés dans la même grille que la story 1
   et conservent ses dimensions de carte. Le `move` de l'item change bien
-  d'outlet et porte `flipMode: 'overlay-world'` pour demander à CodPlay une
+  d'outlet et porte `reparent: true` pour demander à CodPlay une
   présentation par overlay pendant les `2 000 ms` de transition. Le mouvement
   vertical des ancres utilise le canal `translateY`, comme les tweens ordinaires
   des autres démos V2, avec une amplitude de `50` unités numériques CodPlay.
@@ -143,20 +153,34 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   grille de la story 2. La vérification visuelle de l'overlay reste à faire
   dans Safari.
 - Défaut d'intégration identifié : lors d'un eventime ajouté live par la
-  navigation, `RuntimePlayer` rematérialise bien le nouvel outlet, mais
-  `HtmlPlayerRunner` ne recapture ses frontières de motion qu'à `init()` ou
-  `resize()`. Le payload `flipMode` reste donc sans représentation overlay
-  pour cette occurrence. Ce point appartient à une correction CodPlay dédiée ;
-  aucun eventime statique ni contournement n'est ajouté à la démo.
+  navigation, `RuntimePlayer` rematérialise bien le nouvel outlet, mais le
+  runner reconstruit encore ses frontières motion hors de l'occurrence qui les
+  nécessite. Le payload `reparent: true` reste donc sans représentation overlay
+  au moment attendu. Ce point appartient à la migration CodPlay dédiée ; aucun
+  eventime statique ni contournement n'est ajouté à la démo.
 
-## Reprise CodPlay à planifier
+## Dépendance au plan CodPlay
 
-- La story 2 n'envoie pas les détails techniques `traversal` et `pathAnchor`
-  dans son payload de `move`. Son mode de path est choisi par le helper de la
-  démo ; les autres stories conservent l'ancrage centré nécessaire à leurs
-  trajectoires. Une évolution ultérieure de CodPlay devra fournir une surface
-  auteur explicite pour choisir ce comportement, sans exposer ces noms
-  internes au code auteur.
+- La story 2 n'envoie aucun détail de parcours ou d'ancrage dans son payload de
+  `move`. Le pipeline applique toujours `arc-length` et `center`; la démo ne
+  choisit pas ces conventions et ne les compense pas par une lecture DOM
+  supplémentaire du runner.
+
+- Les payloads qui demandent explicitement l'overlay utilisent
+  `reparent: true`. `mode` conserve son rôle d'ordre et toutes les propriétés
+  de `transition` restent disponibles.
+- La migration CodPlay doit faire parvenir au runner l'occurrence `move`
+  résolue au moment où l'événement est matérialisé. La démo ne fournit aucune
+  information de présentation pour décider d'une capture : la présence d'un
+  `move` dans l'occurrence résolue suffit.
+- Un événement de navigation sans `move`, et un `move` local de la vue 5, ne
+  doivent pas entrer dans le chemin overlay. La démo vérifie leur traitement
+  existant en parallèle des reparentings.
+- La démo `flip-stress` reste une non-régression obligatoire : son unique story
+  possède plusieurs racines visuelles et conserve donc le repli de couche sous
+  la racine de scène.
+
+### Éléments déjà validés à conserver
 
 - Défaut corrigé : un eventime ajouté par un strap était bien journalisé, mais
   son event n'était pas réévalué par `listen` à l'échéance. Avec une action

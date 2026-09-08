@@ -23,7 +23,14 @@ verticale de test ne l'ont pas ouverte.
 | Pipeline runtime | `emit → journal → materialize → resolve → solve`, ordre déterministe, straps séquentiels, sorties planifiées bornées et relecture sans réexécution | tests `listen`, `runtime-event-dispatcher`, `strap-*`, `pipeline` |
 | Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre, politiques V1 `reorderOnMove/Add/Remove` et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline`, `runtime-player` |
 | Motion | graphe temporel par item, FIRST/LAST exacts, modes `local` et `reparent`, retargeting continu au chevauchement, résolution absolue sans historique de DOM | tests `tests/runtime/motion/` |
-| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize ; persistance des materialisations auteur jusqu'au teardown final | `tests/runtime/runner-html/player-runner.spec.ts` et démo runner |
+| Runner HTML | même circuit pour Play et Seek, capture géométrique transactionnelle dans le runner, materialisation locale/reparent, overlays hiérarchiques, resize ; persistance des materialisations auteur jusqu'au teardown final | `tests/runtime/runner-html/player-runner.spec.ts` et démo runner |
+
+La revue reste fixe pour ces invariants de graphe et de player. Leur
+orchestration de préparation n’est pas une décision gelée : la découverte par
+occurrence `move`, la capture finale cohérente, le reset chaud avec retrait des
+groupes et l’attente interne de Seek sont suivis dans les plans marqués
+`A relire`. Cette extension ne rouvre ni la sémantique logique du journal ni la
+façade publique de commande.
 
 ## Limites volontairement ouvertes
 

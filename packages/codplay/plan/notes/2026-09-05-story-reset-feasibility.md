@@ -6,6 +6,16 @@
 > Date : 2026-09-05
 > Version CodPlay : V2 foundation
 
+### Mise à jour du 2026-09-08
+
+La faisabilité décrite ici est maintenant précisée par le plan de préparation
+motion déclenchée par occurrence
+[`move`](../motion-live-discovery-invalidation-plan.md). Un `move` postérieur au
+reset ne passe pas par une découverte globale : son groupe est préparé au moment
+où l’événement est résolu et présenté. La suppression des ressources reste
+indexée par groupe et stories touchées ; cette note conserve seulement l’analyse
+initiale qui a conduit à ce choix.
+
 ## Définition retenue pour l’étude
 
 La notation `story.reset()` désigne une capacité de scène, déclenchée par un
@@ -55,9 +65,9 @@ mais une extension coordonnée du contrat journal → projection → présentati
 Il ne faut pas ajouter pour cela un cycle de vie `active/inactive` ou une
 génération de story. Cette piste confondrait le rôle de CodPlay avec celui de
 la couche de présentation ; Sighty est le niveau adapté pour orchestrer la
-présentation et le cycle de vie d’une démo. Un guard `active/inactive` peut
-être étudié séparément, mais il n’est pas retenu ici car il risquerait de
-filtrer des événements attendus par une story ou un perso.
+présentation et le cycle de vie d’une démo. Un guard `active/inactive` n’est pas
+retenu pour cette feature : il risquerait de filtrer des événements attendus
+par une story ou un perso.
 
 ## Projection attendue
 
@@ -101,8 +111,8 @@ projection :
    sont invalidés ;
 4. l’état initial matérialisé est présenté immédiatement, sans trajet entre
    l’ancienne pose et la nouvelle ;
-5. un `move` ultérieur peut être découvert et capturé par le chemin normal
-   déjà prévu pour les moves live.
+5. un `move` ultérieur est préparé et capturé par son occurrence résolue, selon
+   le chemin commun aux événements compilés, live et reconstruits par Seek.
 
 Cette invalidation doit être signalée par le runtime avec la portée logique de
 la story qui a intercepté l’événement. Elle ne doit pas parcourir le DOM pour

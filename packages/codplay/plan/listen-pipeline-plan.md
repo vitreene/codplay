@@ -28,6 +28,8 @@ RuntimePlayer.emit(event)
 RuntimePlayer.seek(t)
     -> materializeScene(journal, t)
     -> resolve -> solve
+    -> occurrence `move` éventuelle vers le runner
+    -> prepare -> commit -> present (attendable si une capture est nécessaire)
 ```
 
 ## Invariants
@@ -67,6 +69,13 @@ RuntimePlayer.seek(t)
   le `RuntimeStateStore` est reconcilie depuis la materialisation;
 - Play et Seek consomment le meme `RuntimeTrackJournal`.
 
+Le pipeline logique ne dépend pas de la capture motion : lorsqu’une action
+résolue porte un `move`, le player remet au runner l’occurrence déjà traitée.
+Une préparation attendable retarde localement la publication de la frame
+concernée, sans bloquer la boucle par une attente synchrone, sans réexécuter
+`listen`, sans modifier le fait journalisé et sans créer un circuit de dispatch
+parallèle.
+
 ## Reset événementiel d’une story
 
 Une règle `listen` portée par une story peut déclarer `reset: true` pour un
@@ -85,8 +94,9 @@ L’événement ne contient aucune cible. L’adresse éventuelle de la story re
 dans l’argument séparé de l’injection `events.emit()`. Le reset ne rembobine
 pas l’horloge, ne modifie pas `playing`/`paused`, n’efface aucun fait et ne
 touche ni l’état de scène ni les autres stories. Le runner HTML reçoit la
-portée de la frontière pour libérer les ressources motion temporaires de cette
-story sans remonter ses nœuds auteur.
+portée de la frontière pour libérer les ressources motion temporaires et
+retirer les groupes capturés qui touchent cette story, sans remonter ses nœuds
+auteur.
 
 ## Limite du contrat live
 
@@ -113,7 +123,9 @@ La forme future devra etre specifiee en V2 avant toute implementation.
   émissions déclarées bornées, ainsi que l'append journal;
 - `src/runtime/player/runtime-player.ts` expose `emit()` et reconcilie l'etat
   depuis le journal;
-- `HtmlPlayerRunner` partage le journal entre l'hote visible et l'hote de mesure.
+- `HtmlPlayerRunner` reçoit les occurrences motion et capture sur les mêmes
+  materialisations auteur persistantes ; aucun player ni arbre DOM de mesure
+  séparé n'est créé.
 
 La tranche est couverte par les tests du dispatcher, du player, du journal, de
 `listen` et des straps. La demo reste un banc visible et ne constitue pas une
