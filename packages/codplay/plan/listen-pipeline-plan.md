@@ -4,14 +4,14 @@
 
 > Status: Fixe
 > CodPlay version: V2 foundation
-> Review: pipeline borné validé le 2026-08-20; extension V1 multi-événements acceptée le 2026-08-29; l'invalidation des résultats asynchrones est reportée à V3, live et effets restent des extensions
+> Review: pipeline borné validé le 2026-08-20; l'invalidation des résultats asynchrones est reportée à V3; les effets restent des extensions
 
 ## Frontiere
 
 Cette tranche distingue une primitive pure et son orchestration runtime. Les
 primitives `propagateListenEvent` et `executeListenPipeline` ne connaissent ni le
 DOM ni le journal. `RuntimeEventDispatcher` est le seul point qui transforme un
-event live en faits journalises; `RuntimePlayer.emit()` l'utilise et `seek()` ne
+event entrant en faits journalises; `RuntimePlayer.emit()` l'utilise et `seek()` ne
 fait ensuite que relire ce journal.
 
 ```text
@@ -29,7 +29,7 @@ RuntimePlayer.seek(t)
     -> materializeScene(journal, t)
     -> resolve -> solve
     -> occurrence `move` éventuelle vers le runner
-    -> prepare -> commit -> present (attendable si une capture est nécessaire)
+    -> prepare -> commit -> present (synchrone si une capture est nécessaire)
 ```
 
 ## Invariants
@@ -71,10 +71,9 @@ RuntimePlayer.seek(t)
 
 Le pipeline logique ne dépend pas de la capture motion : lorsqu’une action
 résolue porte un `move`, le player remet au runner l’occurrence déjà traitée.
-Une préparation attendable retarde localement la publication de la frame
-concernée, sans bloquer la boucle par une attente synchrone, sans réexécuter
-`listen`, sans modifier le fait journalisé et sans créer un circuit de dispatch
-parallèle.
+Une préparation de capture Seek retarde localement la publication de la frame
+concernée jusqu’à la fin de la tâche synchrone, sans réexécuter `listen`, sans
+modifier le fait journalisé et sans créer un circuit de dispatch parallèle.
 
 ## Reset événementiel d’une story
 
@@ -98,19 +97,119 @@ portée de la frontière pour libérer les ressources motion temporaires et
 retirer les groupes capturés qui touchent cette story, sans remonter ses nœuds
 auteur.
 
-## Limite du contrat live
+## Isolation exclusive déclarative
 
-Le contrat `live` a evolue pour rester compatible avec `f(t)`. Il ne doit pas etre
-porte depuis la spec V1 ni etre implemente comme une suite d'emissions liees au
-rythme des frames. Les compteurs temporels relevent d'un behavior/tween evaluable;
-les compteurs d'occurrences relevent d'un etat mis a jour par events.
+Le contrat validé est défini dans
+[`../specs/story-isolation-spec.md`](../specs/story-isolation-spec.md) et sa
+implémentation est suivie dans
+[`story-isolation-plan.md`](./story-isolation-plan.md). Il répond au cas où
+une instance CodPlay enchaîne plusieurs stories dans le même espace
+d'exécution : une seule zone d'isolation est active à la fois, afin que les
+plans futurs de la story quittée ne puissent pas perturber la story suivante.
 
-La tranche actuelle ne definit donc ni `context.live`, ni `onUpdate`, ni helper live.
-La forme future devra etre specifiee en V2 avant toute implementation.
+L'isolation est une capacité déclarative de la story, au même niveau que
+`reset`. Elle ne crée pas de manager parallèle et ne change pas le nom des
+événements. Les noms d'événements restent des noms d'auteur ; la règle
+`listen` leur donne leur effet pour la story qui reçoit l'événement.
+
+### Exemple complet du `listen`
+
+La notation ci-dessous est la forme contractuelle. `active` est une propriété
+booléenne unique : `true` ouvre
+l'isolation et `false` la ferme. Son absence ne demande aucune transition.
+Cette propriété porte les deux transitions de la story.
+
+```ts
+const POSITION_STORY_FIVE_ENTER = 'position:story-five:enter'
+const POSITION_STORY_FIVE_LEAVE = 'position:story-five:leave'
+
+const positionStoryFiveListen = [
+  // L'événement est adressé à position-story-five : la story est réinitialisée
+  // et une nouvelle zone d'isolation est ouverte pour elle.
+  {
+    on: POSITION_STORY_FIVE_ENTER,
+    active: true,
+    reset: true,
+  },
+
+  // L'événement est adressé à position-story-five : sa zone est fermée.
+  {
+    on: POSITION_STORY_FIVE_LEAVE,
+    active: false,
+  },
+]
+```
+
+L'adresse de `POSITION_STORY_FIVE_ENTER` et de
+`POSITION_STORY_FIVE_LEAVE` reste portée par la cible séparée de l'injection
+(`scope: 'story'`, `storyId: 'position-story-five'`) ; elle n'est pas ajoutée
+au contenu de l'événement. Une règle `active` ne doit donc pas
+être déclenchée par la seule présence d'un même nom dans une autre story.
+
+### Routage d'une story inactive
+
+La compilation construit un index exact des règles `active: true`, par story
+et par nom d'événement. Lorsqu'une story est inactive, le dispatcher consulte
+cet index avant d'exécuter le pipeline. Il ne sonde pas `event.data` et ne
+parcourt pas toutes les règles.
+
+L'événement source reste ajouté une seule fois au journal. Sans règle de
+réveil correspondante, il ne déclenche ni transform, ni strap, ni emit, ni
+reset pour la story inactive. Avec une règle `active: true`, la nouvelle zone
+est ouverte puis la règle est exécutée dans cette zone. L'événement qui ouvre
+l'isolation est donc toujours recevable par la story inactive.
+
+### Sémantique contractuelle
+
+- `active: true` ferme d'abord la zone actuellement active dans l'instance,
+  puis ouvre une nouvelle zone appartenant à la story qui vient d'être
+  adressée. Une seconde activation de la même story ferme donc l'activation
+  précédente et en ouvre une nouvelle.
+- `active: false` ferme la zone si la story adressée en est la propriétaire.
+  L'opération est idempotente : si elle n'est pas active, elle ne produit pas
+  d'erreur et ne touche pas une autre story. Une règle sans propriété `active`
+  ne modifie pas l'isolation.
+- `active: true` et `reset: true` peuvent être portés par la même règle. Ils
+  forment une transition unique : le reset établit la frontière de projection
+  de la story et l'activation établit la nouvelle provenance des plans futurs.
+  Aucun état intermédiaire ne doit être observable.
+- La fermeture n'efface aucun fait du journal. Elle invalide, pour la
+  projection courante et les matérialisations futures, les occurrences
+  planifiées sous l'activation fermée. Une réactivation reçoit une nouvelle
+  identité d'activation ; les occurrences `repeat` qu'elle produira ne
+  pourront pas être confondues avec celles de l'activation précédente.
+- L'isolation porte uniquement sur les plans runtime futurs et leur
+  provenance. Elle ne remplace ni `reset`, ni le changement de visibilité, ni
+  le montage DOM, ni l'état de scène ou de session.
+- Une émission issue d'une source externe à la story doit être explicitement
+  rattachée à l'activation si elle doit être isolée. Sinon, elle reste une
+  émission de scène et n'est pas supprimée implicitement. Cette distinction
+  évite de prétendre qu'un préfixe de nom pourrait couvrir les sources
+  externes.
+
+La conséquence technique à spécifier est la propagation d'une identité
+d'activation dans les occurrences planifiées et les événements différés. Le
+`RuntimeTrackJournal` conserve les faits ; la projection vérifie que leur
+identité d'activation est encore ouverte. Cette identité est le mécanisme
+d'isolation, pas une suppression opportuniste des événements futurs et pas un
+nouveau circuit de dispatch.
+
+### Critères d'acceptation
+
+L'implémentation suit la spécification ciblée et doit notamment prouver :
+
+- l'index de réveil et le diagnostic des règles d'activation en doublon ;
+- le réveil d'une story inactive et l'ignorance des événements ordinaires ;
+- la transition atomique `active: true` avec `reset: true` ;
+- la provenance des `repeat`, straps et événements différés ;
+- la conservation des faits et la stabilité de Play/Seek avant et après
+  fermeture puis réactivation.
+
+Le contrat est validé pour implémentation ; les propriétés `active` et l'index
+de réveil ne sont pas encore présents dans l'API interne actuelle.
 
 ## Hors perimetre V2
 
-- helpers `live` et emissions liees aux frames;
 - invalidation et generation obsolete des resultats de straps asynchrones; ce protocole relève de V3;
 - effects non rejouables;
 - composants et renderer.
@@ -131,11 +230,9 @@ La tranche est couverte par les tests du dispatcher, du player, du journal, de
 `listen` et des straps. La demo reste un banc visible et ne constitue pas une
 seconde implementation du pipeline.
 
-## Extension de compatibilité V1 acceptée le 2026-08-29
+## Transformations multi-événements
 
-La forme V2 initiale qui traitait `listen.transform` comme une transformation
-unique de `event.data` était trop restrictive pour le contrat effectivement
-utilisé par V1. La forme retenue est désormais la suivante :
+Une règle `listen.transform` peut produire une liste ordonnée d'événements :
 
 ```ts
 type ListenTransform = (event: ListenEventInput) => readonly ListenEvent[] | undefined
@@ -146,7 +243,3 @@ explicitement supportés). Le dispatcher l'ajoute au journal avec un nouvel
 identifiant d'occurrence, puis le réinjecte dans le même pipeline que toute
 autre émission déclarée. `seek()` ne réexécute jamais le transform : il relit
 les events déjà journalisés. Cette règle conserve l'identité `Play(t) = Seek(t)`.
-
-Cette extension ne concerne ni `capture`, ni les effects live par tick, ni le
-composant polygon. Elle porte uniquement la production multi-événements déjà
-présente dans `listen.transform` V1.

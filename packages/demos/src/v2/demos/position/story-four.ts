@@ -67,6 +67,8 @@ export function createStoryFour(): StoryDoc {
       [POSITION_LIVE_TARGET_COMMIT_STRAP]: createAnchorCommitStrap('target'),
     },
     listen: [
+      { on: CAROUSEL_EVENTS[3].enter, active: true, reset: true },
+      { on: CAROUSEL_EVENTS[3].leave, active: false },
       { on: CAROUSEL_EVENTS[3].reset, reset: true },
       { on: POSITION_LIVE_SOURCE_RELEASED_EVENT, straps: [POSITION_LIVE_SOURCE_COMMIT_STRAP] },
       { on: POSITION_LIVE_TARGET_RELEASED_EVENT, straps: [POSITION_LIVE_TARGET_COMMIT_STRAP] },

@@ -116,6 +116,25 @@ describe('RuntimeEngine', () => {
     ])
   })
 
+  it('keeps the shared clock and frame dispatch unchanged during synchronous seek', () => {
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const frames: number[] = []
+    engine.registerInstance('player', (frame) => frames.push(frame.nowMs), {
+      validateSeek: () => undefined,
+      prepareSeek: () => undefined,
+      commitSeek: () => undefined,
+      presentSeek: () => undefined,
+      rollbackSeek: () => undefined,
+    })
+
+    engine.advance(100)
+    frames.length = 0
+    engine.seek([{ instanceId: 'player', timeMs: 300 }])
+
+    expect(frames).toEqual([])
+    expect(engine.getCurrentNowMs()).toBe(100)
+  })
+
   it('does not prepare a group when one target cannot be validated', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const phases: string[] = []

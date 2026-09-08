@@ -4,9 +4,11 @@
     "paths": {
       "codplay": ["./src/index.ts"],
       "codplay/*": ["./src/*"],
+      "codplay-v1": ["../codplay-v1/src/index.ts"],
+      "codplay-v1/*": ["../codplay-v1/src/*"],
       "ace": ["./src/ace/index.ts"],
       "ace/*": ["./src/ace/*"]
     }
   },
-  "include": ["src", "demos", "tests", "bench"]
+  "include": ["src", "demos", "tests", "bench", "../codplay-v1/src/types/typed-om-polyfill.d.ts"]
 }

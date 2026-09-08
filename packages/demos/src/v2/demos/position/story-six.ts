@@ -177,7 +177,11 @@ export function createStorySix(): StoryDoc {
 
   return {
     id: POSITION_STORY_SIX_ID,
-    listen: [{ on: CAROUSEL_EVENTS[5].reset, reset: true }],
+    listen: [
+      { on: CAROUSEL_EVENTS[5].enter, active: true, reset: true },
+      { on: CAROUSEL_EVENTS[5].leave, active: false },
+      { on: CAROUSEL_EVENTS[5].reset, reset: true },
+    ],
     eventimes: [],
     persos: [
       view,

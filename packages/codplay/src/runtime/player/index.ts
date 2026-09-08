@@ -3,6 +3,7 @@ export {
   type PlayerInitResult,
   type PlayerSeekResult,
   type PlayerLifecycleState,
+  type RuntimePlayerRefreshOptions,
 } from './runtime-player'
 export {
   RuntimeCaptureSession,

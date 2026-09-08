@@ -72,12 +72,20 @@ export class HtmlMotionSystem {
 
   /** Replaces the immutable boundary data after an explicit geometry capture. */
   setBoundaries(boundaries: readonly MotionBoundary[]): void {
-    this.boundaries = Object.freeze([...boundaries])
-    if (this.initialized) this.rebuild()
+    this.commit(boundaries, this.resetTimesByItem)
   }
 
   /** Replaces the logical reset barriers used by the immutable motion graph. */
   setResetTimesByItem(resetTimesByItem: MotionResetTimesByItem): void {
+    this.commit(this.boundaries, resetTimesByItem)
+  }
+
+  /** Commits boundaries and reset partitioning as one immutable graph update. */
+  commit(
+    boundaries: readonly MotionBoundary[],
+    resetTimesByItem: MotionResetTimesByItem,
+  ): void {
+    this.boundaries = Object.freeze([...boundaries])
     this.resetTimesByItem = resetTimesByItem
     if (this.initialized) this.rebuild()
   }

@@ -57,6 +57,8 @@ export type RuntimeEventDispatchResult = Readonly<{
   issues: readonly RuntimeEventDispatchIssue[]
   /** Stories whose selected listen rule projected a reset boundary. */
   resetStoryIds?: readonly string[]
+  /** Stories whose previous isolation period was closed by this dispatch. */
+  isolationClosedStoryIds?: readonly string[]
 }>
 
 /** Dependencies of the deterministic event router. */
@@ -92,6 +94,7 @@ type DispatchAccumulator = {
   straps: ListenStrapExecution[]
   issues: RuntimeEventDispatchIssue[]
   resetStoryIds: string[]
+  isolationClosedStoryIds: string[]
 }
 
 /**
@@ -106,6 +109,9 @@ export class RuntimeEventDispatcher {
   private readonly stateStore: RuntimeStateStore | undefined
   private readonly maxCascadeDepth: number
   private readonly eventIdFactory: (() => string) | undefined
+  private readonly storyRulesByEvent = new Map<string, ReadonlyMap<string, readonly CompiledListenRule[]>>()
+  private readonly storyActivationRulesByEvent = new Map<string, ReadonlyMap<string, CompiledListenRule>>()
+  private readonly sceneRulesByEvent: ReadonlyMap<string, readonly CompiledListenRule[]>
   private nextGeneratedEventId = 0
 
   /** Creates one dispatcher bound to one player journal and compiled scene. */
@@ -126,6 +132,31 @@ export class RuntimeEventDispatcher {
     this.stateStore = options.stateStore
     this.maxCascadeDepth = options.maxCascadeDepth ?? 32
     this.eventIdFactory = options.eventIdFactory
+    this.sceneRulesByEvent = buildListenRuleIndex(this.scene.scene.listen)
+    for (const [storyId, story] of Object.entries(this.scene.scene.stories)) {
+      const rulesByEvent = buildListenRuleIndex(story.listen)
+      this.storyRulesByEvent.set(storyId, rulesByEvent)
+      const activationRules = new Map<string, CompiledListenRule>()
+      const indexedActivations = this.scene.storyActivationIndex?.[storyId]
+      if (indexedActivations !== undefined) {
+        for (const [eventName, ruleIndex] of Object.entries(indexedActivations)) {
+          const rule = story.listen[ruleIndex]
+          if (rule?.active === true) activationRules.set(eventName, rule)
+        }
+      } else {
+        for (const rule of story.listen) {
+          if (rule.active === true && !activationRules.has(rule.on)) {
+            activationRules.set(rule.on, rule)
+          }
+        }
+      }
+      for (const rule of story.listen) {
+        if (rule.active === true && !activationRules.has(rule.on)) {
+          activationRules.set(rule.on, rule)
+        }
+      }
+      this.storyActivationRulesByEvent.set(storyId, activationRules)
+    }
   }
 
   /** Dispatches one live event through the complete V2 event circuit. */
@@ -136,6 +167,7 @@ export class RuntimeEventDispatcher {
       straps: [],
       issues: [],
       resetStoryIds: [],
+      isolationClosedStoryIds: [],
     }
     if (input.name.trim().length === 0) {
       accumulator.ok = false
@@ -149,6 +181,7 @@ export class RuntimeEventDispatcher {
     return {
       ...accumulator,
       resetStoryIds: Object.freeze([...new Set(accumulator.resetStoryIds)]),
+      isolationClosedStoryIds: Object.freeze([...new Set(accumulator.isolationClosedStoryIds)]),
     }
   }
 
@@ -171,6 +204,9 @@ export class RuntimeEventDispatcher {
     const target = this.resolveTarget(input, accumulator, depth)
     if (target === undefined) return
     const selection = this.selectPipeline(input, target)
+    const storyIsolation = this.resolveStoryIsolationAction(input, target, selection)
+    this.journal.reconcileStoryIsolationAt(input.applyAtMs)
+    const previousIsolationOwner = this.journal.getActiveStoryIsolationStoryId()
     const appended = this.journal.appendLiveEvent({
       eventId: input.eventId ?? this.createGeneratedEventId(),
       trackId: target.trackId,
@@ -182,6 +218,7 @@ export class RuntimeEventDispatcher {
       context: input.context,
       meta: input.meta,
       mode: input.mode,
+      storyIsolation,
     })
     if (!appended.ok) {
       accumulator.ok = false
@@ -194,6 +231,11 @@ export class RuntimeEventDispatcher {
       return
     }
     accumulator.events.push(appended.data)
+    if (storyIsolation !== undefined
+      && previousIsolationOwner !== undefined
+      && (storyIsolation === 'activate' || previousIsolationOwner === target.storyId)) {
+      accumulator.isolationClosedStoryIds.push(previousIsolationOwner)
+    }
 
     this.collectResetStoryIds(appended.data, accumulator)
     await this.processAppendedEvent(input, target, appended.data, depth, accumulator, selection)
@@ -223,6 +265,9 @@ export class RuntimeEventDispatcher {
 
     const selection = selectedPipeline ?? this.selectPipeline(input, target)
     if (selection === undefined) return
+    if (selection.scope === 'story'
+      && selection.storyId !== undefined
+      && !this.journal.isStoryEventEligible(selection.storyId, appended)) return
     const event: ListenEventInput = {
       eventId: appended.eventId,
       eventSeq: appended.eventSeq,
@@ -288,6 +333,7 @@ export class RuntimeEventDispatcher {
         continue
       }
       accumulator.events.push(...appendedOutput.data.events)
+      accumulator.isolationClosedStoryIds.push(...appendedOutput.data.isolationClosedStoryIds)
       this.applyImmediateStateUpdates(
         appendedOutput.data.events,
         input.applyAtMs,
@@ -418,8 +464,7 @@ export class RuntimeEventDispatcher {
   /** Chooses story rules first, then scene rules, without mixing scopes. */
   private selectPipeline(input: RuntimeEventInput, target: DispatchTarget): PipelineSelection | undefined {
     if (target.storyId !== undefined) {
-      const story = this.scene.scene.stories[target.storyId]
-      const storyRules = story?.listen.filter((rule) => rule.on === input.name) ?? []
+      const storyRules = this.storyRulesByEvent.get(target.storyId)?.get(input.name) ?? []
       if (storyRules.length > 0) {
         return {
           scope: 'story',
@@ -429,13 +474,24 @@ export class RuntimeEventDispatcher {
         }
       }
     }
-    const sceneRules = this.scene.scene.listen.filter((rule) => rule.on === input.name)
+    const sceneRules = this.sceneRulesByEvent.get(input.name) ?? []
     if (sceneRules.length === 0) return undefined
     return {
       scope: 'scene',
       rules: sceneRules,
       straps: this.strapCollections.scene,
     }
+  }
+
+  /** Resolves the declaration-driven isolation transition before pipeline execution. */
+  private resolveStoryIsolationAction(
+    input: RuntimeEventInput,
+    target: DispatchTarget,
+    selection: PipelineSelection | undefined,
+  ): 'activate' | 'deactivate' | undefined {
+    if (target.storyId === undefined || selection?.scope !== 'story') return undefined
+    if (this.storyActivationRulesByEvent.get(target.storyId)?.has(input.name)) return 'activate'
+    return selection.rules.some((rule) => rule.active === false) ? 'deactivate' : undefined
   }
 
   /** Reinjects transform and declared emit outputs, preventing pass-through loops. */
@@ -504,4 +560,17 @@ export class RuntimeEventDispatcher {
 /** Identifies controls that mutate only the declared track activity layer. */
 function isTrackControlEvent(name: string): boolean {
   return name === TRACK_EVENT_ACTIVATE || name === TRACK_EVENT_DEACTIVATE || name === TRACK_EVENT_TOGGLE
+}
+
+/** Builds one exact event-name index without scanning rules during dispatch. */
+function buildListenRuleIndex(
+  rules: readonly CompiledListenRule[],
+): ReadonlyMap<string, readonly CompiledListenRule[]> {
+  const index = new Map<string, CompiledListenRule[]>()
+  for (const rule of rules) {
+    const matching = index.get(rule.on) ?? []
+    matching.push(rule)
+    index.set(rule.on, matching)
+  }
+  return index
 }

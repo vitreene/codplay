@@ -77,7 +77,7 @@ export class CompiledSceneCodec {
 
 /** Checks the complete serializable compiled-scene boundary. */
 function isValidCompiledScene(value: unknown, schemaVersion: string): value is CompiledScene {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'createdAt', 'scene', 'resources', 'rootNodeIds', 'requirements', 'actionTargetIndex'])) {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'createdAt', 'scene', 'resources', 'rootNodeIds', 'requirements', 'actionTargetIndex', 'storyActivationIndex'])) {
     return false
   }
   return value.schemaVersion === schemaVersion
@@ -87,6 +87,20 @@ function isValidCompiledScene(value: unknown, schemaVersion: string): value is C
     && isStringArray(value.rootNodeIds)
     && isValidRequirements(value.requirements)
     && isValidActionTargetIndex(value.actionTargetIndex)
+    && (value.storyActivationIndex === undefined || isValidStoryActivationIndex(value.storyActivationIndex))
+}
+
+/** Checks the exact compiled lookup used to wake inactive stories. */
+function isValidStoryActivationIndex(value: unknown): boolean {
+  if (!isPlainRecord(value)) return false
+  return Object.values(value).every((storyIndex) => {
+    if (!isPlainRecord(storyIndex)) return false
+    return Object.values(storyIndex).every((ruleIndex) => (
+      typeof ruleIndex === 'number'
+      && Number.isInteger(ruleIndex)
+      && ruleIndex >= 0
+    ))
+  })
 }
 
 /** Checks the compiled lookup from action names to perso identities. */
@@ -233,8 +247,9 @@ function isCompiledCaptureDeclaration(value: unknown): boolean {
 /** Checks one compiled listen array and its function references. */
 function isCompiledListenArray(value: unknown): value is readonly CompiledListenRule[] {
   return Array.isArray(value) && value.every((rule) => {
-    if (!isPlainRecord(rule) || !hasOnlyKeys(rule, ['on', 'reset', 'transform', 'emit', 'straps'])) return false
+    if (!isPlainRecord(rule) || !hasOnlyKeys(rule, ['on', 'active', 'reset', 'transform', 'emit', 'straps'])) return false
     return typeof rule.on === 'string'
+      && (rule.active === undefined || typeof rule.active === 'boolean')
       && (rule.reset === undefined || typeof rule.reset === 'boolean')
       && (rule.transform === undefined || Array.isArray(rule.transform) && rule.transform.every(isFunctionReference))
       && (rule.emit === undefined || Array.isArray(rule.emit) && rule.emit.every(isCompiledRecord))

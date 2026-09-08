@@ -172,14 +172,21 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
       const afterStartScene = group.structural
         ? input.player.resolveSceneAt(group.startAt, input.includePersistOnly)
         : undefined
+      const endpointTime = resolveMotionEndpointTime(
+        input.player,
+        group.storyIds,
+        group.startAt,
+        group.endAt,
+        input.includePersistOnly,
+      )
       // The logical move is committed at startAt, but its geometric LAST is
       // the transition endpoint. Resolve the left side of that endpoint so a
       // following event scheduled at the exact same time is not imported into
       // the preceding move. The current move is already included because its
       // startAt is earlier than endAt. The same boundary data is then consumed
       // by Play and Seek.
-      const afterScene = input.player.resolveSceneBeforeBoundary(group.endAt, input.includePersistOnly)
-      const keyTimes = resolveIntermediateKeyTimes(group.intents, group.startAt, group.endAt)
+      const afterScene = input.player.resolveSceneBeforeBoundary(endpointTime, input.includePersistOnly)
+      const keyTimes = resolveIntermediateKeyTimes(group.intents, group.startAt, endpointTime)
       const keyScenes = keyTimes.map((timeMs) => Object.freeze({
         timeMs,
         scene: input.player.resolveSceneBeforeBoundary(timeMs, input.includePersistOnly),
@@ -231,6 +238,7 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
       boundaries.push(Object.freeze({
         id: `boundary:${group.startAt}:${group.endAt}:${intents.map((intent) => intent.id).join(',')}`,
         timeMs: group.startAt,
+        storyIds: group.storyIds,
         before,
         ...(afterStart === undefined ? {} : { afterStart }),
         after,
@@ -267,6 +275,25 @@ function resolveIntermediateKeyTimes(
   return Object.freeze([...new Set(intents.flatMap((intent) => intent.keyTimes ?? []))]
     .filter((timeMs) => timeMs > startAt && timeMs < endAt && Number.isFinite(timeMs))
     .sort((left, right) => left - right))
+}
+
+/** Stops a replay capture at the first reset that invalidates its story scope. */
+function resolveMotionEndpointTime(
+  player: RuntimePlayer,
+  storyIds: readonly string[],
+  startAt: number,
+  endAt: number,
+  includePersistOnly: boolean,
+): number {
+  const journal = player.trackJournal
+  if (journal === undefined) return endAt
+  let endpoint = endAt
+  for (const storyId of storyIds) {
+    const reset = journal.getStoryResetBoundaries(storyId, includePersistOnly)
+      .find((boundary) => boundary.applyAtMs > startAt && boundary.applyAtMs < endpoint)
+    if (reset !== undefined) endpoint = reset.applyAtMs
+  }
+  return endpoint
 }
 
 /** Unions the selected branches required by two boundary layout states. */
@@ -314,6 +341,7 @@ export function captureHtmlLiveMotionBoundary(input: Readonly<{
     boundaries.push(Object.freeze({
       id: `boundary:live:${group.startAt}:${group.endAt}:${intents.map((intent) => intent.id).join(',')}`,
       timeMs: group.startAt,
+      storyIds: group.storyIds,
       before: input.first,
       after,
       intents: Object.freeze(intents),

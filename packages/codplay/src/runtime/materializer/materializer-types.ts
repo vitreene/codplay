@@ -32,6 +32,8 @@ export type RuntimeMaterializerSceneContext = Readonly<{
   phase?: 'normal' | 'geometry-capture'
   /** Stories whose event projection just crossed a reset boundary. */
   resetStoryIds?: readonly string[]
+  /** Stories whose isolation period just closed and whose motion groups are stale. */
+  isolationClosedStoryIds?: readonly string[]
 }>
 
 /** Single materializer boundary consumed by the component runtime and player. */

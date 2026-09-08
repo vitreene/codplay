@@ -343,7 +343,7 @@ function getLiveEventsForStory(
 ): readonly FlattenedEventime[] {
   if (journal === undefined) return []
   const reset = journal.getLatestStoryReset(storyId, timeMs, includeBoundary, includePersistOnly)
-  return journal.getEventsForStory(storyId)
+  return journal.getEventsForStory(storyId, timeMs, includeBoundary)
     .filter((event) => {
       const track = journal.registry.tracks[event.trackId]
       return (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))

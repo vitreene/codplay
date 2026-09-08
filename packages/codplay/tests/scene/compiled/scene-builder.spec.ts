@@ -52,6 +52,67 @@ describe('SceneBuilder', () => {
     ])
   })
 
+  it('compiles the exact story activation index and rejects duplicate wake rules', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
+    const result = builder.build({
+      id: 'story-isolation-scene',
+      stories: {
+        main: {
+          id: 'main',
+          listen: [
+            { on: 'main:enter', active: true, reset: true },
+            { on: 'main:leave', active: false },
+          ],
+          persos: [],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.compiledScene.storyActivationIndex).toEqual({ main: { 'main:enter': 0 } })
+      expect(result.compiledScene.scene.stories.main?.listen[0]).toMatchObject({
+        on: 'main:enter',
+        active: true,
+        reset: true,
+      })
+    }
+
+    const duplicate = builder.build({
+      id: 'duplicate-story-isolation-scene',
+      stories: {
+        main: {
+          id: 'main',
+          listen: [
+            { on: 'main:enter', active: true },
+            { on: 'main:enter', active: true },
+          ],
+          persos: [],
+        },
+      },
+    })
+    expect(duplicate.ok).toBe(false)
+    if (!duplicate.ok) {
+      expect(duplicate.diagnostics.errors.map((diagnostic) => diagnostic.code))
+        .toContain('COMPILED_STORY_ACTIVATION_DUPLICATE')
+    }
+  })
+
+  it('rejects active declarations at scene scope', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
+    const result = builder.build({
+      id: 'scene-isolation-invalid',
+      listen: [{ on: 'scene:enter', active: true }],
+      stories: { main: { id: 'main', persos: [] } },
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostics.errors.map((diagnostic) => diagnostic.code))
+        .toContain('COMPILED_SCENE_LISTEN_ACTIVE_INVALID')
+    }
+  })
+
   it('compiles scene-level eventimes independently from story eventimes', () => {
     const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
     const result = builder.build({

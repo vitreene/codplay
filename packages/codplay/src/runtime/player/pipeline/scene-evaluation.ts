@@ -17,6 +17,9 @@ export function collectLogicalEvaluationBoundaries(
     collectStoryEventBoundaries(story.eventimes ?? [], 0, story.persos, times)
   }
   for (const event of journal?.getAllEvents() ?? []) {
+    if (event.storyId !== undefined
+      && journal !== undefined
+      && !journal.isStoryEventEligible(event.storyId, event)) continue
     times.add(event.applyAtMs)
     for (const story of Object.values(scene.scene.stories)) {
       if (event.storyId === undefined && event.cascade !== true && event.trackId !== TRACK_GLOBAL_ID) continue

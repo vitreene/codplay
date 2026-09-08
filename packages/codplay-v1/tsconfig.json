@@ -10,5 +10,5 @@
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"]
     }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "src/types/typed-om-polyfill.d.ts"]
 }

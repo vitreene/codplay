@@ -7,6 +7,7 @@ import {
   POSITION_STORY_PAUSED_EVENT,
   POSITION_STORY_RESUMED_EVENT,
   POSITION_TWEEN_STOP_EVENT,
+  POSITION_VIEW_STORY_IDS,
   VIEW_COUNT,
 } from './constants'
 import { CAROUSEL_EVENTS } from './carousel'
@@ -34,15 +35,25 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
 
       const output: readonly StrapReturnValue[] = [
         {
-          update: { currentView: next },
-          events: [
-            { name: POSITION_TWEEN_STOP_EVENT, visibility: 'scene' },
-            { name: CAROUSEL_EVENTS[current].reset, visibility: 'scene' },
-            { name: CAROUSEL_EVENTS[current].outro, visibility: 'scene' },
-            { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
+            update: { currentView: next },
+            events: [
+              { name: POSITION_TWEEN_STOP_EVENT, visibility: 'scene' },
+              {
+                name: CAROUSEL_EVENTS[current].leave,
+                storyId: POSITION_VIEW_STORY_IDS[current],
+                visibility: 'story',
+              },
+              { name: CAROUSEL_EVENTS[current].reset, visibility: 'scene' },
+              { name: CAROUSEL_EVENTS[current].outro, visibility: 'scene' },
+              {
+                name: CAROUSEL_EVENTS[next].enter,
+                storyId: POSITION_VIEW_STORY_IDS[next],
+                visibility: 'story',
+              },
+              { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
           ],
         },
-        planStoryAnimation(next as ViewIndex, context.planned, state),
+          planStoryAnimation(next as ViewIndex, POSITION_VIEW_STORY_IDS[next], context.planned, state),
       ]
       return output
     },
@@ -55,7 +66,7 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
             update: { storyPaused: false },
             events: [{ name: POSITION_STORY_RESUMED_EVENT, visibility: 'scene' }],
           },
-          planStoryAnimation(current as ViewIndex, context.planned, state),
+          planStoryAnimation(current as ViewIndex, POSITION_VIEW_STORY_IDS[current], context.planned, state),
         ]
         return output
       }

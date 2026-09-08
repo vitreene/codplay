@@ -2,11 +2,11 @@
 
 ## Statut
 
-> Status: En cours — extension transactionnelle de Seek pour la préparation
-> motion autorisée.
+> Status: En cours — transaction synchrone atomique de Seek et préparation
+> motion par occurrence.
 > CodPlay version: V2 foundation
 > Review: frontière Engine/Player et seek groupé validés le 2026-08-20 ; la
-> préparation géométrique attendable est définie dans
+> préparation géométrique synchrone par occurrence définie dans
 > [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
 ## Frontiere
@@ -100,11 +100,12 @@ a `1000`, sa cible locale est `2000`. Une scene non selectionnee reste inchangee
 elle n'est pas une consequence du nom `seek(3000)`.
 
 La sémantique de Seek reste atomique pour toute la portée : aucune instance ne
-publie une reconstruction partielle. La transaction interne peut être
-attendable lorsqu’une préparation motion doit répartir son travail ; elle met
-alors en attente la portée concernée jusqu’au commit et à la présentation
-cohérente. La façade publique `instance.telco.seek()` conserve sa promesse
-existante.
+publie une reconstruction partielle. La transaction interne est synchrone :
+elle calcule les scènes et la préparation motion dans la même tâche, puis
+commit et présente l’ensemble une seule fois. Le navigateur ne peint pas avant
+le retour de cette tâche ; aucune horloge ne progresse pendant le calcul. La
+façade publique `instance.telco.seek()` conserve sa promesse existante comme
+enveloppe de commande.
 
 `RuntimeEngine.seek()` collecte les diagnostics par instance après la validation
 du groupe et le commit de présentation, puis les publie par la sortie de
@@ -113,14 +114,12 @@ CodPlay interprète sa portée ni sa timeline globale.
 
 La première frontière engine est en place : `RuntimeEngine.seek()` orchestre les
 cibles locales par phases `validateSeek`, `prepareSeek`, `commitSeek` puis
-`presentSeek`. `prepareSeek` devient attendable lorsqu’un groupe motion doit
-être capturé ; les phases de commit et de présentation restent uniques pour la
-portée. Le player individuel utilise ce chemin commun. Il reconstruit
-`materialize -> resolve -> solve` pendant la validation, met le résultat en
-attente, puis le committe avant présentation. Le solve structurel et le graphe
-parent/enfant restent ouverts pour les moves compilés ; les transforms
-d’ancêtres, les mesures et le materializer de production relèvent de leur
-tranche respective.
+`presentSeek`, toutes synchrones. Le player individuel utilise ce chemin
+commun. Il reconstruit `materialize -> resolve -> solve`, prépare les modules et
+les groupes motion nécessaires, puis committe le résultat avant la présentation
+unique. Le solve structurel et le graphe parent/enfant restent ouverts pour les
+moves compilés ; les transforms d’ancêtres, les mesures et le materializer de
+production relèvent de leur tranche respective.
 
 Cette hierarchie, les composants, les transforms et le renderer ne sont pas des manques du seek.
 Ce sont des producteurs ou consommateurs d'etat situes de part et d'autre de sa frontiere. Le seek

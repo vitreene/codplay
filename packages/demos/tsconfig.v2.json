@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/v2", "../codplay-v1/src/types/typed-om-polyfill.d.ts"]
+}

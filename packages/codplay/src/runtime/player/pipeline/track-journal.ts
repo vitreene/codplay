@@ -20,6 +20,8 @@ export type RuntimeTrackEvent = Readonly<{
   name: string
   applyAtMs: number
   storyId?: string
+  /** Internal provenance of the story isolation period that produced the fact. */
+  activationId?: string
   data?: CompiledRecord
   update?: CompiledRecord
   stateScope?: StrapScope
@@ -48,6 +50,8 @@ export type AppendRuntimeTrackEventInput = Readonly<{
   name: string
   applyAtMs: number
   storyId?: string
+  /** Internal transition applied atomically with this source event. */
+  storyIsolation?: RuntimeStoryIsolationAction
   data?: CompiledRecord
   update?: CompiledRecord
   stateScope?: StrapScope
@@ -57,6 +61,9 @@ export type AppendRuntimeTrackEventInput = Readonly<{
   mode?: RuntimeEventInsertMode
   visibility?: CompiledEventime['visibility']
 }>
+
+/** One declarative story isolation transition applied by the journal. */
+export type RuntimeStoryIsolationAction = 'activate' | 'deactivate'
 
 /** Input used to anchor a portable relative eventime tree at runtime. */
 export type AppendAnchoredEventimesInput = Readonly<{
@@ -103,6 +110,7 @@ export type StrapOutputAppendResult = Readonly<{
   trackId: string
   events: readonly RuntimeTrackEvent[]
   immediateEvents: readonly RuntimeTrackEvent[]
+  isolationClosedStoryIds: readonly string[]
   materializedUpdateCount: number
 }>
 
@@ -112,8 +120,12 @@ export class RuntimeTrackJournal {
   readonly registry: MaterializedTrackRegistry
   private readonly activeTrackIds: Map<string, boolean>
   private readonly eventsByTrack = new Map<string, RuntimeTrackEvent[]>()
+  private readonly isolatedStoryIds: ReadonlySet<string>
+  private readonly activationPeriodsByStory = new Map<string, MutableStoryActivationPeriod[]>()
+  private currentIsolation: MutableStoryActivationPeriod | undefined
   private readonly eventIds = new Set<string>()
   private nextEventSeq = 0
+  private nextActivationId = 0
   private nextGeneratedEventId = 0
   private revision = 0
 
@@ -123,6 +135,11 @@ export class RuntimeTrackJournal {
     this.registry = buildTrackRegistry(scene)
     this.activeTrackIds = new Map(
       Object.values(this.registry.tracks).map((track) => [track.id, track.active]),
+    )
+    this.isolatedStoryIds = new Set(
+      Object.values(scene.scene.stories)
+        .filter((story) => story.listen.some((rule) => rule.active !== undefined))
+        .map((story) => story.id),
     )
   }
 
@@ -143,9 +160,30 @@ export class RuntimeTrackJournal {
       return { ok: false, code: 'RUNTIME_EVENT_TIME_INVALID', message: 'Runtime event time must be finite.' }
     }
 
+    if (input.storyIsolation !== undefined
+      && (input.storyId === undefined || !this.isolatedStoryIds.has(input.storyId))) {
+      return {
+        ok: false,
+        code: 'RUNTIME_STORY_ISOLATION_TARGET_INVALID',
+        message: 'Story isolation transitions require an isolated declared story target.',
+      }
+    }
+
+    if (input.storyId !== undefined && this.isStoryIsolationEnabled(input.storyId)) {
+      this.reconcileStoryIsolationAt(input.applyAtMs)
+    }
+    const eventSeq = this.nextEventSeq
+    const activationId = this.applyStoryIsolationTransition(
+      input.storyId,
+      input.storyIsolation,
+      input.applyAtMs,
+      eventSeq,
+    )
+    const { storyIsolation: _storyIsolation, ...eventInput } = input
     const event: RuntimeTrackEvent = {
-      ...input,
-      eventSeq: this.nextEventSeq,
+      ...eventInput,
+      eventSeq,
+      ...(activationId === undefined ? {} : { activationId }),
     }
     this.nextEventSeq += 1
     this.eventIds.add(input.eventId)
@@ -213,8 +251,12 @@ export class RuntimeTrackJournal {
 
     const events: RuntimeTrackEvent[] = []
     const immediateEvents: RuntimeTrackEvent[] = []
+    const isolationClosedStoryIds: string[] = []
     const storyId = input.storyId
     for (const event of input.output.events) {
+      const targetStoryId = event.storyId ?? storyId
+      const storyIsolation = this.resolveStoryIsolationAction(targetStoryId, event.name)
+      const previousIsolationOwner = this.currentIsolation?.storyId
       const appended = this.appendStrapEvent(
         event,
         trackId,
@@ -222,10 +264,16 @@ export class RuntimeTrackJournal {
         input.scope === STRAP_SCOPE_SCENE,
         input.anchorMs,
         input.mode,
+        storyIsolation,
       )
       if (!appended.ok) return appended
       events.push(appended.data)
       immediateEvents.push(appended.data)
+      if (storyIsolation !== undefined
+        && previousIsolationOwner !== undefined
+        && (storyIsolation === 'activate' || previousIsolationOwner === targetStoryId)) {
+        isolationClosedStoryIds.push(previousIsolationOwner)
+      }
     }
     for (const update of input.output.updates) {
       const appended = this.appendStateUpdate(update, trackId, input.scope, input.storyId, input.anchorMs, input.mode)
@@ -264,6 +312,7 @@ export class RuntimeTrackJournal {
         trackId,
         events,
         immediateEvents,
+        isolationClosedStoryIds: Object.freeze([...new Set(isolationClosedStoryIds)]),
         materializedUpdateCount: input.output.updates.length + input.output.planned.filter((occurrence) => occurrence.step.update !== undefined).length,
       },
     }
@@ -305,12 +354,80 @@ export class RuntimeTrackJournal {
   }
 
   /** Returns live events visible to one story; callers apply track activity. */
-  getEventsForStory(storyId: string): readonly RuntimeTrackEvent[] {
+  getEventsForStory(
+    storyId: string,
+    timeMs?: number,
+    includeBoundary = true,
+  ): readonly RuntimeTrackEvent[] {
     return this.getAllEvents().filter(
-      (event) => event.storyId === storyId
+      (event) => (
+        (event.storyId === storyId
+          && (timeMs === undefined
+            ? this.isStoryEventEligible(storyId, event)
+            : this.isStoryEventEligibleAt(storyId, event, timeMs, includeBoundary)))
         || event.cascade === true
-        || event.trackId === TRACK_GLOBAL_ID,
+        || event.trackId === TRACK_GLOBAL_ID
+      ),
     )
+  }
+
+  /** Returns whether one story has opted into declarative isolation. */
+  isStoryIsolationEnabled(storyId: string): boolean {
+    return this.isolatedStoryIds.has(storyId)
+  }
+
+  /** Returns whether one story currently owns the exclusive isolation period. */
+  isStoryIsolationActive(storyId: string): boolean {
+    return this.currentIsolation?.storyId === storyId
+  }
+
+  /** Returns the story that currently owns the exclusive isolation period. */
+  getActiveStoryIsolationStoryId(): string | undefined {
+    return this.currentIsolation?.storyId
+  }
+
+  /** Reconciles the live owner with the historical activation at one timeline time. */
+  reconcileStoryIsolationAt(timeMs: number): void {
+    if (!Number.isFinite(timeMs)) return
+    let owner: MutableStoryActivationPeriod | undefined
+    for (const periods of this.activationPeriodsByStory.values()) {
+      for (const period of periods) {
+        if (period.openedAt.applyAtMs > timeMs) continue
+        if (period.closedAt !== undefined && period.closedAt.applyAtMs <= timeMs) continue
+        if (owner === undefined || compareStoryBoundary(period.openedAt, owner.openedAt) > 0) {
+          owner = period
+        }
+      }
+    }
+    this.currentIsolation = owner
+  }
+
+  /** Reports whether one story-targeted fact belongs to an open historical period. */
+  isStoryEventEligible(storyId: string, event: RuntimeTrackEvent): boolean {
+    if (event.storyId !== storyId || !this.isStoryIsolationEnabled(storyId)) return true
+    if (event.activationId === undefined) return false
+    const period = this.activationPeriodsByStory.get(storyId)
+      ?.find((candidate) => candidate.activationId === event.activationId)
+    if (period === undefined) return false
+    const boundary = { applyAtMs: event.applyAtMs, eventSeq: event.eventSeq }
+    return compareStoryBoundary(boundary, period.openedAt) >= 0
+      && (period.closedAt === undefined || compareStoryBoundary(boundary, period.closedAt) <= 0)
+  }
+
+  /** Reports whether one story fact belongs to a period still active at a projection time. */
+  isStoryEventEligibleAt(
+    storyId: string,
+    event: RuntimeTrackEvent,
+    timeMs: number,
+    includeBoundary = true,
+  ): boolean {
+    if (!this.isStoryEventEligible(storyId, event)) return false
+    if (event.storyId !== storyId || !this.isStoryIsolationEnabled(storyId)) return true
+    const period = this.findStoryActivationPeriod(storyId, event.activationId)
+    if (period === undefined || period.openedAt.applyAtMs > timeMs) return false
+    if (period.closedAt === undefined || period.closedAt.applyAtMs > timeMs) return true
+    if (period.closedAt.applyAtMs < timeMs) return false
+    return !includeBoundary
   }
 
   /** Reports whether one journal event is the reset capability of a story. */
@@ -318,6 +435,7 @@ export class RuntimeTrackJournal {
     const addressedToStory = event.storyId === storyId
       || (event.storyId === undefined && event.visibility === 'scene')
     return addressedToStory
+      && (event.storyId !== storyId || this.isStoryEventEligible(storyId, event))
       && isStoryResetEvent(this.scene.scene.stories[storyId]?.listen ?? [], event)
   }
 
@@ -328,7 +446,7 @@ export class RuntimeTrackJournal {
     includeBoundary = true,
     includePersistOnly = true,
   ): RuntimeStoryResetBoundary | undefined {
-    const boundaries = this.getStoryResetBoundaries(storyId, includePersistOnly)
+    const boundaries = this.getStoryResetBoundaries(storyId, includePersistOnly, timeMs, includeBoundary)
       .filter((boundary) => boundary.applyAtMs < timeMs
         || (includeBoundary && boundary.applyAtMs === timeMs))
     return boundaries.at(-1)
@@ -338,6 +456,8 @@ export class RuntimeTrackJournal {
   getStoryResetBoundaries(
     storyId: string,
     includePersistOnly = true,
+    projectionTimeMs?: number,
+    includeBoundary = true,
   ): readonly RuntimeStoryResetBoundary[] {
     const story = this.scene.scene.stories[storyId]
     if (story === undefined || !story.listen.some((rule) => rule.reset === true)) return []
@@ -345,6 +465,8 @@ export class RuntimeTrackJournal {
       .filter((event) => this.isStoryResetEvent(storyId, event))
       .filter((event) => includePersistOnly || event.mode !== 'persist-only')
       .filter((event) => this.isTrackActive(event.trackId))
+      .filter((event) => projectionTimeMs === undefined
+        || this.isStoryEventEligibleAt(storyId, event, projectionTimeMs, includeBoundary))
       .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
       .map((event) => ({ applyAtMs: event.applyAtMs, eventSeq: event.eventSeq }))
   }
@@ -361,7 +483,9 @@ export class RuntimeTrackJournal {
 
   /** Returns every runtime event boundary in deterministic chronological order. */
   getEventTimes(): readonly number[] {
-    return [...new Set(this.getAllEvents().map((event) => event.applyAtMs))].sort((left, right) => left - right)
+    return [...new Set(this.getAllEvents()
+      .filter((event) => event.storyId === undefined || this.isStoryEventEligible(event.storyId, event))
+      .map((event) => event.applyAtMs))].sort((left, right) => left - right)
   }
 
   /** Returns replayable state patches in deterministic timeline order. */
@@ -380,6 +504,9 @@ export class RuntimeTrackJournal {
         && event.stateScope === scope
         && (includePersistOnly || event.mode !== 'persist-only')
         && this.isTrackActive(event.trackId)
+        && (scope !== STRAP_SCOPE_STORY
+          || storyId === undefined
+          || this.isStoryEventEligibleAt(storyId, event, timeMs, includeBoundary))
         && (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
         && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
       .filter((event) => reset === undefined || isAfterStoryReset(event, reset))
@@ -407,6 +534,66 @@ export class RuntimeTrackJournal {
     }
   }
 
+  /** Applies one story transition and returns the provenance for its source event. */
+  private applyStoryIsolationTransition(
+    storyId: string | undefined,
+    action: RuntimeStoryIsolationAction | undefined,
+    applyAtMs: number,
+    eventSeq: number,
+  ): string | undefined {
+    if (storyId === undefined || !this.isStoryIsolationEnabled(storyId)) return undefined
+    const boundary = { applyAtMs, eventSeq }
+    if (action === 'activate') {
+      this.closeCurrentIsolation(boundary)
+      const period: MutableStoryActivationPeriod = {
+        storyId,
+        activationId: this.createActivationId(storyId),
+        openedAt: boundary,
+      }
+      const periods = this.activationPeriodsByStory.get(storyId) ?? []
+      periods.push(period)
+      this.activationPeriodsByStory.set(storyId, periods)
+      this.currentIsolation = period
+      return period.activationId
+    }
+
+    const current = this.currentIsolation
+    if (action === 'deactivate') {
+      if (current?.storyId !== storyId) return undefined
+      current.closedAt = boundary
+      this.currentIsolation = undefined
+      return current.activationId
+    }
+
+    return this.currentIsolation?.storyId === storyId
+      ? this.currentIsolation.activationId
+      : undefined
+  }
+
+  /** Closes the currently active period before another story is activated. */
+  private closeCurrentIsolation(boundary: StoryActivationBoundary): void {
+    if (this.currentIsolation === undefined) return
+    this.currentIsolation.closedAt = boundary
+    this.currentIsolation = undefined
+  }
+
+  /** Allocates an identity that cannot be reused by a later activation. */
+  private createActivationId(storyId: string): string {
+    const index = this.nextActivationId
+    this.nextActivationId += 1
+    return `story-isolation:${storyId}:${index}`
+  }
+
+  /** Finds one activation period without exposing mutable journal state. */
+  private findStoryActivationPeriod(
+    storyId: string,
+    activationId: string | undefined,
+  ): MutableStoryActivationPeriod | undefined {
+    if (activationId === undefined) return undefined
+    return this.activationPeriodsByStory.get(storyId)
+      ?.find((candidate) => candidate.activationId === activationId)
+  }
+
   /** Creates a deterministic identifier for one anchored runtime occurrence. */
   private createGeneratedEventId(trackId: string, storyId: string | undefined): string {
     const index = this.nextGeneratedEventId
@@ -422,18 +609,34 @@ export class RuntimeTrackJournal {
     cascade: boolean,
     applyAtMs: number,
     mode?: RuntimeEventInsertMode,
+    storyIsolation?: RuntimeStoryIsolationAction,
   ): TrackCommandResult<RuntimeTrackEvent> {
     return this.appendLiveEvent({
       eventId: this.createGeneratedEventId(trackId, storyId ?? STRAP_SCOPE_SCENE),
       trackId,
-      storyId,
+      storyId: event.storyId ?? storyId,
       name: event.name,
       applyAtMs,
       data: event.data,
-      cascade: event.cascade ?? cascade,
+      // A scene strap may address one story explicitly. That target remains
+      // isolated; only an unaddressed scene event may cascade to every story.
+      cascade: event.cascade ?? (event.storyId === undefined ? cascade : false),
       visibility: event.visibility,
       mode,
+      storyIsolation,
     })
+  }
+
+  /** Resolves the isolation transition declared by one immediate story event. */
+  private resolveStoryIsolationAction(
+    storyId: string | undefined,
+    eventName: string,
+  ): RuntimeStoryIsolationAction | undefined {
+    if (storyId === undefined || !this.isStoryIsolationEnabled(storyId)) return undefined
+    const rules = this.scene.scene.stories[storyId]?.listen ?? []
+    if (rules.some((rule) => rule.on === eventName && rule.active === true)) return 'activate'
+    if (rules.some((rule) => rule.on === eventName && rule.active === false)) return 'deactivate'
+    return undefined
   }
 
   /** Appends one state patch as a replayable runtime event. */
@@ -456,6 +659,25 @@ export class RuntimeTrackJournal {
       mode,
     })
   }
+}
+
+/** One ordered edge delimiting a story activation period. */
+type StoryActivationBoundary = Readonly<{
+  applyAtMs: number
+  eventSeq: number
+}>
+
+/** Mutable journal representation of one historical story activation. */
+type MutableStoryActivationPeriod = {
+  storyId: string
+  activationId: string
+  openedAt: StoryActivationBoundary
+  closedAt?: StoryActivationBoundary
+}
+
+/** Compares two journal boundaries without reducing equal-time events to one tick. */
+function compareStoryBoundary(left: StoryActivationBoundary, right: StoryActivationBoundary): number {
+  return left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq
 }
 
 /** Tests whether one journal event is a reset trigger for one story. */

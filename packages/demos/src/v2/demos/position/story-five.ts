@@ -53,7 +53,11 @@ export function createStoryFive(): StoryDoc {
   `, 'position-story-five-frame')
   return {
     id: POSITION_STORY_FIVE_ID,
-    listen: [{ on: CAROUSEL_EVENTS[4].reset, reset: true }],
+    listen: [
+      { on: CAROUSEL_EVENTS[4].enter, active: true, reset: true },
+      { on: CAROUSEL_EVENTS[4].leave, active: false },
+      { on: CAROUSEL_EVENTS[4].reset, reset: true },
+    ],
     persos: [
       view,
       {

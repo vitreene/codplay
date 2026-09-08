@@ -199,8 +199,8 @@ alors :
 
 Au seek, les memes operations de materialisation structurelle sont effectuees
 sans rejouer une animation passée. Si la frame cible dépend d'un groupe
-`move`/`reparent` absent, le runner peut préparer et capturer ce groupe dans la
-transaction attendable définie par
+`move`/`reparent` absent, le runner prépare et capture ce groupe dans la
+transaction synchrone définie par
 [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md),
 puis committer directement la frame demandée. Cette capture n'ajoute pas une
 animation visible au seek.

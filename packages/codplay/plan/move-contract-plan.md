@@ -182,9 +182,9 @@ Pour `endEmit`, FIRST est la pose visible prise avant le commit live. Pour
 LAST est capturé à l’endpoint du move. Le FIRST live est retiré avant un Seek ;
 il ne remplace jamais la trajectoire persistante source → cible.
 
-La préparation détaillée, la transaction coopérative et le choix du conteneur
-d’overlay appartiennent au plan motion. `MoveStateDelta` ne devient pas une
-source de géométrie et les captures ne créent pas une seconde histoire.
+La préparation détaillée, la transaction synchrone de Seek et le choix du
+conteneur d’overlay appartiennent au plan motion. `MoveStateDelta` ne devient
+pas une source de géométrie et les captures ne créent pas une seconde histoire.
 
 ## Migration de `flipMode`
 

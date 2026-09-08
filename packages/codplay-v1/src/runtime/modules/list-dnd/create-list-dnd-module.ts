@@ -15,6 +15,13 @@ import type { ListDndDropTarget, ListDndGhostConfig, ListDndModule, ListDndRegis
 type LocalPoint = { x: number; y: number }
 type LocalBox = { left: number; top: number; width: number; height: number }
 
+/** Narrows a runtime element to the HTML subset required by list-dnd styles. */
+function isHtmlElement(nodeRef: unknown): nodeRef is HTMLElement {
+  return isDomElement(nodeRef)
+    && typeof globalThis.HTMLElement !== 'undefined'
+    && nodeRef instanceof globalThis.HTMLElement
+}
+
 /**
  * Reads `node`'s true layout rect, mathematically subtracting out whatever
  * FLIP transform this module currently has running on it — a sibling still
@@ -145,7 +152,7 @@ function resolveIndexFromLocalChildBoxes(localY: number, childBoxes: LocalBox[],
  * or when nothing actually moved/resized.
  */
 function playFlipTransition(node: unknown, fromRect: { left: number; top: number; width: number; height: number }, durationMs = 220): void {
-  if (!isDomElement(node)) {
+  if (!isHtmlElement(node)) {
     return
   }
 
@@ -283,7 +290,7 @@ class ListDndModuleInstance implements ListDndModule {
       const childLocalBoxes: LocalBox[] = []
       for (const childId of childIds) {
         const childNode = this.registries.node.get(childId)
-        if (!isDomElement(childNode)) {
+        if (!isHtmlElement(childNode)) {
           continue
         }
         childLocalBoxes.push(toLocalBox(listMatrix, origin, measureSettledRect(childNode)))
@@ -389,7 +396,7 @@ class ListDndModuleInstance implements ListDndModule {
         continue
       }
       const node = this.registries.node.get(childId)
-      if (isDomElement(node)) {
+      if (isHtmlElement(node)) {
         rects.set(childId, measureSettledRect(node))
       }
     }
@@ -455,7 +462,7 @@ class ListDndModuleInstance implements ListDndModule {
       this.registries.container.setParentId(input.draggedPersoId, null)
       this.registries.mounted.set(input.draggedPersoId, false)
 
-      if (isDomElement(draggedNode) && rect !== null) {
+      if (isHtmlElement(draggedNode) && rect !== null) {
         draggedNode.style.position = 'fixed'
         draggedNode.style.left = `${rect.left}px`
         draggedNode.style.top = `${rect.top}px`
@@ -477,7 +484,7 @@ class ListDndModuleInstance implements ListDndModule {
 
     const draggedNode = this.registries.node.get(input.draggedPersoId)
     const grabOffset = this.grabOffsetByPersoId.get(input.draggedPersoId)
-    if (isDomElement(draggedNode) && grabOffset !== undefined) {
+    if (isHtmlElement(draggedNode) && grabOffset !== undefined) {
       draggedNode.style.left = `${input.clientX - grabOffset.x}px`
       draggedNode.style.top = `${input.clientY - grabOffset.y}px`
     }
@@ -604,7 +611,7 @@ class ListDndModuleInstance implements ListDndModule {
 
   /** Clears the inline floating-state properties `previewAt` applies to escape normal flow — a no-op for a non-DOM/non-floated node. */
   private clearFloatingStyle(node: unknown): void {
-    if (!isDomElement(node)) {
+    if (!isHtmlElement(node)) {
       return
     }
     node.style.removeProperty('position')

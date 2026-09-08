@@ -237,7 +237,7 @@ describe('position V2 demo', () => {
 
     codplay.engine.advance(7_400)
     const viewTwoMove = trace.filter((event) => event.name === 'position:demo:view:2:move').at(-1)
-    expect(viewTwoMove?.visibility).toBe('scene')
+    expect(viewTwoMove?.visibility).toBe('story')
     expect(viewTwoMove?.data).toMatchObject({
       move: {
         target: 'position:view-two:target',
@@ -599,6 +599,38 @@ describe('position V2 demo', () => {
     await instance.telco.seek(3_000)
     expect(instance.telco.getProgress()).toEqual({ timelineMs: 3_000, durationMs: 3_000 })
   })
+
+  it('does not project future targeted story plans into a later structural seek', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'position-targeted-story-seek-isolation-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    const diagnostics: string[] = []
+    instance.diagnostic.onDiagnostic((diagnostic) => diagnostics.push(diagnostic.code))
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    for (let index = 0; index < 5; index += 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      await flushDomEvent()
+    }
+
+    await instance.telco.rewind()
+    await instance.telco.seek(3_000)
+    expect(diagnostics).not.toContain('TELCO_COMMAND_FAILED')
+    expect(diagnostics).not.toContain('RUNTIME_SEEK_FAILED')
+  }, 15_000)
 
   it('keeps a position story overlay inside that story root', async () => {
     const root = document.createElement('main')

@@ -21,6 +21,7 @@ export type {
   CompiledScene,
   CompiledSceneData,
   CompiledStory,
+  CompiledStoryActivationIndex,
   CompiledValue,
 } from './types'
 export type { LogicalLengthUnit } from '../config/scene-build'

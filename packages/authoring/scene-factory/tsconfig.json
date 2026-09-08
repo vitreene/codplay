@@ -7,5 +7,5 @@
       "codplay-v1/*": ["../../codplay-v1/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../codplay-v1/src/types/typed-om-polyfill.d.ts"]
 }

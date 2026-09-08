@@ -44,6 +44,13 @@ export const POSITION_STORY_THREE: StoryDoc = {
     },
   },
   listen: [{
+    on: CAROUSEL_EVENTS[2].enter,
+    active: true,
+    reset: true,
+  }, {
+    on: CAROUSEL_EVENTS[2].leave,
+    active: false,
+  }, {
     on: CAROUSEL_EVENTS[2].reset,
     reset: true,
   }, {

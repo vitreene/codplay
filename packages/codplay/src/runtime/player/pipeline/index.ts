@@ -64,6 +64,7 @@ export type {
   AnchoredEventimesResult,
   RuntimeTrackEvent,
   RuntimeStoryResetBoundary,
+  RuntimeStoryIsolationAction,
   TrackActivationResult,
   TrackCommandResult,
   StrapOutputAppendResult,

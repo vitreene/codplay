@@ -13,6 +13,8 @@ export type PositionPoint = Readonly<{ x: number; y: number }>
 export type CarouselEventNames = Readonly<{
   intro: string
   outro: string
+  enter: string
+  leave: string
   reset: string
 }>
 

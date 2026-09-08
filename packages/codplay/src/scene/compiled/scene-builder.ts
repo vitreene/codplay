@@ -35,6 +35,7 @@ import type {
   CompiledSceneData,
   CompiledStrapDeclarations,
   CompiledStory,
+  CompiledStoryActivationIndex,
 } from './types'
 import { qualifyStructuredLengthStyles } from './length'
 import { validateCompiledSceneSemantics } from './semantic-validator'
@@ -104,6 +105,7 @@ export class SceneBuilder {
         rootNodeIds: deriveRootNodeIds(activeScene),
         requirements: deriveRequirements(activeScene, this.validationEngine),
         actionTargetIndex: deriveActionTargetIndex(compiledData),
+        storyActivationIndex: deriveStoryActivationIndex(compiledData),
       }
       validateCompiledSceneSemantics(compiledScene, diagnostics)
       if (diagnostics.hasErrors()) {
@@ -262,11 +264,26 @@ function compileListenRule(
 ): CompiledListenRule {
   return {
     on: rule.on,
+    active: rule.active,
     reset: rule.reset,
     transform: rule.transform?.map((fn, index) => extractFunction(fn as unknown as AuthorFunction, `${scope}.transform[${index}]`, state)),
     emit: rule.emit?.map((value, index) => extractCompiledValue(value, `${scope}.emit[${index}]`, state) as CompiledRecord),
     straps: rule.straps,
   }
+}
+
+/** Derives the exact activation-rule index kept with one compiled artifact. */
+function deriveStoryActivationIndex(scene: CompiledSceneData): CompiledStoryActivationIndex {
+  return Object.fromEntries(
+    Object.entries(scene.stories).map(([storyId, story]) => [
+      storyId,
+      Object.fromEntries(
+        story.listen.flatMap((rule, index) => rule.active === true
+          ? [[rule.on, index] as const]
+          : []),
+      ),
+    ]),
+  )
 }
 
 /** Derives the ordered unique root candidates from initial and action placements. */

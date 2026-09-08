@@ -142,48 +142,34 @@ et les événements simultanés utilisent ce même regroupement ordonné. Le FIR
 live garde sa sémantique particulière de pose visible avant le commit ; il ne
 devient pas un fait logique ni une trajectoire de relecture distincte.
 
-## Transaction de préparation coopérative
+## Transaction synchrone de Seek
 
-Le move visuel commence seulement après que ses positions ont été préparées. La
-préparation peut étaler son travail topologique sur plusieurs frames, mais les
-mesures numériques engagées ne peuvent pas être étalées : une position lue avant
-un resize ou un changement de layout ne peut pas être combinée avec une position
-lue plus tard.
+Un `Seek` n’est pas une lecture ralentie. Il calcule entièrement la projection
+de l’instant demandé, puis la présente une seule fois. Le navigateur ne repeint
+pas au milieu d’un appel JavaScript synchrone ; aucune frame intermédiaire n’est
+donc publiée et l’horloge CodPlay n’avance pas pendant l’opération.
 
 ```text
-frontière b atteinte
-  -> conserver la dernière présentation engagée de cette instance
-  -> préparer sélection, dépendances, timings et delta topologique par tranches
-  -> fenêtre finale sans yield : FIRST, états nécessaires, LAST et restauration
-  -> commit atomique du groupe et de sa présentation
-  -> reprendre l’horloge de l’instance à b
+seek(t)
+  -> valider toutes les cibles
+  -> reconstruire les scènes et préparer les modules
+  -> capturer synchroniquement les groupes motion nécessaires
+  -> commit atomique des frontières, resets et graphe
+  -> présenter la scène cible une seule fois
 ```
 
-Le temps logique est tenu à `b` pour l’instance concernée pendant cette
-préparation. Les autres instances continuent. Les événements adressés à
-l’instance retenue restent ordonnés après la transaction. Cette attente est
-coopérative : aucune boucle synchrone ne monopolise le thread et la boucle de
-rendu peut traiter les autres instances. Le temps écoulé durant la préparation
-ne devient jamais une progression cachée du segment.
+Pour un Seek groupé, toutes les instances terminent `validate` et `prepare`
+avant le moindre `commit`, puis sont présentées après le commit de l’ensemble.
+Une erreur avant la fin restaure la présentation précédente avant que l’appel
+ne rende la main. Les mesures `FIRST`, `afterStart`, keyframes et `LAST` d’un
+groupe sont capturées dans la même opération synchrone ; elles ne sont jamais
+assemblées sur plusieurs frames.
 
-La phase répartissable peut résoudre la fermeture minimale, les dépendances
-parent/enfant, les timings, le régime de présentation et le conteneur d’overlay.
-Ses mesures éventuelles ne servent qu’à estimer le travail. La fenêtre finale,
-elle, lit le FIRST réellement affiché, matérialise les états `before`,
-`afterStart`, keyframes nécessaires et `after`, lit leurs poses, puis restaure
-la présentation retenue avant de rendre la main. Toutes les poses publiées
-proviennent de cette unique fenêtre cohérente.
-
-La capture finale reste obligatoire même si la topologie a été préparée sans
-changement apparent : les positions peuvent avoir évolué entre deux frames. Si
-sa fermeture dépasse le budget accepté, la première réponse est de réduire le
-scope de capture. Une présentation explicitement figée pendant une capture
-longue demanderait un contrat propre ; elle ne fait pas partie de cette tranche.
-
-`telco.seek()` retourne déjà une promesse. La migration rend attendables les
-transactions internes de Seek, du moteur au runner, et conserve leurs garanties
-de rollback. La promesse publique ne se résout qu’après préparation, commit et
-présentation cohérente de la cible.
+La préparation peut bloquer brièvement le thread principal si la scène est
+lourde. C’est le coût assumé de l’atomicité et de l’égalité `play(t) = seek(t)`.
+Il n’existe pas de budget coopératif, de yield multi-frame ou d’attente interne
+à ajouter au contrat de Seek. La promesse publique de `telco.seek()` reste une
+enveloppe de commande ; elle se résout après cette transaction synchrone.
 
 ## Portée de l’overlay
 
@@ -286,10 +272,12 @@ les transporte avec la scène résolue pour les frontières compilées, les
 événements live et les seeks. En présentation normale, le runner fabrique
 directement l'intention à partir de cette occurrence — y compris les données
 dynamiques du payload — sans recompiler le planning ni rescanner le journal.
-La compilation globale reste limitée aux reconstructions forcées, notamment le
-resize, et le chemin spécial de fermeture live conserve encore sa propre
-transition. Les reconstructions utilisées uniquement par la timeline d'ordre
-omettent cette métadonnée de présentation.
+La compilation globale du planning n’est plus utilisée par le runner motion.
+La fermeture live `endEmit` réutilise maintenant l'occurrence conservée
+par la materialisation normale : elle ne reconstruit plus le planning depuis le
+journal et ne remplace que le FIRST visible dans le groupe live. Les
+reconstructions utilisées uniquement par la timeline d'ordre omettent cette
+métadonnée de présentation.
 
 **Gate :** le runner ne lit pas le journal pour redécouvrir une occurrence déjà
 résolue par le player.
@@ -308,32 +296,38 @@ résolue par le player.
 
 `init()` et la présentation normale ne lancent plus de découverte générale. La
 capture ciblée reçoit directement l'intention résolue et choisit désormais le
-conteneur à partir de toutes les stories touchées. La préparation coopérative,
-le commit de delta unique et la partition durable des groupes restent à
-compléter.
+conteneur à partir de toutes les stories touchées. La fermeture `endEmit` suit
+le même transport pour son FIRST live. `HtmlMotionSystem.commit()` réunit
+désormais frontières et partition de reset dans une seule reconstruction
+immutable ; la partition durable complète des groupes reste à valider.
 
 **Gate :** un événement sans `move` ne provoque aucune lecture géométrique ni
 construction du graphe de positions `move`/`reparent`.
 
-### 4. Rendre la préparation et Seek transactionnels — à faire
+### 4. Finaliser la préparation ciblée et le Seek synchrone — première passe réalisée
 
-- Découper uniquement le travail topologique ; capturer les positions publiées
-  dans une fenêtre finale cohérente.
-- Tenir l’horloge de l’instance à la frontière pendant la transaction.
-- Rendre attendables `RuntimeEngine.seek()`, les participants de groupe et le
-  runner, avec rollback identique en cas d’échec.
+- Préparer et capturer le groupe requis dans la même tâche synchrone.
+- Ne publier aucune frame intermédiaire et ne faire avancer aucune horloge.
+- Restaurer la présentation et le graphe précédents si le Seek échoue.
 
 **Gate :** aucune frame partielle, aucun saut à l’entrée du move, aucune
 progression accumulée pendant le calcul.
 
-### 5. Partitionner les ressources de présentation et traiter le reset — à faire
+### 5. Partitionner les ressources de présentation et traiter le reset — en cours
 
-- Indexer les graphes et ressources par groupe et stories touchées.
+- Porter les stories source/destination sur chaque frontière et indexer les
+  groupes par ce scope — première passe réalisée.
+- Retirer au reset les groupes concernés, leurs dépendances mesurées et leurs
+  ressources HTML — première passe réalisée.
 - Appliquer les trois scopes d’overlay définis plus haut, sans modifier le repli
   multi-racines de `flip-stress`.
 - Remplacer les barrières `resetTimesByItem` par la suppression des groupes
-  concernés et la libération de leurs ressources.
-- Rendre le resize invalide sans recapture anticipée.
+  concernés au reset et sur les seeks qui traversent un reset ; le chemin
+  `forceAll` n’est plus utilisé par `resize`.
+- Rendre le resize invalide sans recapture anticipée et recapturer paresseusement
+  le groupe requis. Les poses retenues sont supprimées, puis seules les
+  occurrences actives de la scène courante sont réémises ; les groupes
+  historiques et futurs attendent un Play ou un Seek qui les rende nécessaires.
 
 **Gate :** un reset ne lance pas de capture et un groupe inter-story est retiré
 en entier lorsque l’une de ses stories est réinitialisée.
@@ -364,8 +358,8 @@ navigateur réel. Une suite isolée n’est pas suffisante.
   multi-racines de `flip-stress` avec son ordre d’empilement à FIRST, MIDDLE et
   LAST.
 - **Temps :** Play et Seek froid/chaud aux frontières et au milieu du segment,
-  avec transaction longue simulée, rollback, plusieurs instances et événements
-  en attente.
+  avec transaction synchrone, rollback, plusieurs instances et événements en
+  attente.
 - **Cycle :** resize, reset avant/pendant/après move, persistence, replay,
   lifecycle et destruction.
 - **Navigateurs :** parcours réel de `position` et de `flip-stress`, incluant
@@ -374,15 +368,17 @@ navigateur réel. Une suite isolée n’est pas suffisante.
 ## Observation de performance
 
 L’instrumentation distingue au minimum la résolution d’occurrence, la
-préparation topologique, la fenêtre finale de capture, le commit de graphe et
-les lectures de journal. Elle ne mesure pas seulement `getBoundingClientRect`.
+préparation synchrone, la capture, le commit de graphe et les lectures de
+journal. Elle ne mesure pas seulement `getBoundingClientRect`.
 
-Sur le relevé actuel de `position`, 928 entrées dans
-`rebuildMotionBoundaries()` n’ont produit que 8 constructions de graphe. Le
-parcours équivalent doit supprimer les 920 entrées sans groupe à préparer ; ce
-chiffre est une cible d’observation, pas une promesse de temps de rendu. La
-validation décidera ensuite si la fermeture de certains groupes exige un travail
-supplémentaire.
+Le relevé navigateur ciblé du 2026-09-08 utilise Safari MCP sur `position`.
+Après remount, remise à zéro des compteurs, puis Seek de `0` à `1500 ms`, le
+parcours a produit `30` appels `getBoundingClientRect`, `31` lectures de style
+calculé, `33` ajouts DOM, aucun retrait DOM et aucune `requestAnimationFrame`.
+Sur le même circuit, un Play de `1200 ms` a produit `30` appels
+`getBoundingClientRect`, `31` lectures de style calculé et `242`
+`requestAnimationFrame`. Les mesures géométriques ne progressent donc plus avec
+les frames ordinaires ; le Seek calcule et présente sans frame intermédiaire.
 
 ## Relecture de cohérence — 2026-09-08
 
@@ -396,22 +392,20 @@ Les plans dépendants ont été relus contre cette cible :
   pas ce chemin ; les actions de pose relevant d’un autre contrat gardent leur
   traitement ; un `move` local transitionnel (`duration > 0`) capture FIRST/LAST,
   et les `className`/`style` de la même action sont appliqués avant les mesures ;
-- la sélection et la topologie peuvent être préparées sur plusieurs frames,
-  mais les poses publiées sont capturées dans une fenêtre finale cohérente ; la
-  dernière présentation engagée reste affichée pendant l’attente ;
+- la sélection, la topologie et les poses publiées sont préparées dans une même
+  opération synchrone ; la dernière présentation engagée reste en place jusqu’au
+  commit ;
 - l’overlay reste dans le conteneur de story par défaut, utilise le repli racine
   déjà requis par `flip-stress` pour les stories multi-racines et ne monte à la
   racine que pour un reparent inter-story ;
 - un reset est chaud, conserve le journal et retire les groupes et ressources
   qui touchent sa story ; un Seek antérieur les reconstruit seulement s’il doit
   présenter le move correspondant.
-
 Les plans `player-engine`, `move-contract`, `runner-flip-integration-study` et
-`story-reset` sont `En cours` avec ce plan. Le code et les fixtures V2 suivent
-déjà `reparent`, les defaults internes et la capture par occurrence.
-Les plans ne sont pas déclarés terminés : préparation multi-frame, scope
-inter-story, retrait physique des groupes au reset et invalidation lazy du
-resize restent des étapes de validation.
+`story-reset` restent `En cours` pour leurs propres validations. Le code et les
+fixtures V2 suivent déjà `reparent`, les defaults internes, la capture par
+occurrence et le Seek synchrone atomique. La préparation multi-frame et
+l’attente groupée ne font plus partie du contrat.
 
 ## Reprise d’intégration — 2026-09-08
 
@@ -421,21 +415,77 @@ de l’événement, ainsi que les stories avant/après ; le runner fabrique alor
 directement l’intention et la capture ciblée choisit le host local ou la racine
 selon ce scope. Les tests couvrent le payload complet de l’occurrence et les
 trois résolutions de conteneur (story unique, stories multiples, racines
-multiples). La fermeture `captureLiveFirstLayout` de `endEmit` reste le chemin
-spécial explicitement suivi plus haut ; elle n’est pas déclarée migrée par cette
-reprise.
+multiples). La fermeture `captureLiveFirstLayout` de `endEmit` reste un chemin
+spécial pour la pose FIRST, mais elle réutilise maintenant l’occurrence déjà
+transportée et ne relit plus le calendrier du journal.
 
 Validation exécutée :
 
-- suite V2 CodPlay : 90 fichiers, 571 tests passés (`npm test --workspace=codplay`) ;
+- suite V2 CodPlay : 90 fichiers, 574 tests passés (`npm test --workspace=codplay`) ;
+- typecheck CodPlay et `@codplay/scene-factory` passés (`npm run typecheck --workspace=codplay` et
+  `npm run typecheck --workspace=@codplay/scene-factory`) ;
 - suite V1 historique : 69 fichiers, 342 tests passés (`npm test`) ;
 - build des démos V2 passé (`npm run build --workspace=@codplay/demos`) ;
 - `git diff --check` passé ;
-- le typecheck global reste bloqué par les imports historiques manquants
-  `codplay-v1/builder/types` et `codplay-v1/player/strap-types` dans
-  `authoring/scene-factory`, avec les erreurs en cascade correspondantes ; aucun
-  diagnostic ne concerne les fichiers modifiés ici.
 
-La tranche reste donc `En cours` jusqu’à la préparation transactionnelle, au
-reset chaud partitionné, à l’invalidation lazy du resize et à la matrice
-navigateur complète.
+La résolution provenait du graphe TypeScript : les démos V2 réimportent les
+sources de `scene-factory` dans le programme `codplay`, dont le `tsconfig` ne
+déclarait pas les alias `codplay-v1` et n’incluait pas le shim de type
+`typed-om-polyfill` suivi par `player/strap-types`. Les deux configurations
+incluent maintenant ces éléments ; aucun pont runtime V1/V2 n’est ajouté.
+
+La validation navigateur ciblée de `position` et le relevé d’appels sont
+maintenant consignés ci-dessus. Le reset chaud partitionné, l’invalidation lazy
+du resize et la transaction Seek synchrone atomique sont implémentés dans le
+runner ; les validations de corpus indépendantes de `flip-stress` restent
+suivies dans leurs plans propres.
+
+## Reprise d’intégration — 2026-09-08 — fermeture live et reset partitionné
+
+La fermeture `endEmit` ne compile plus le calendrier motion après le retour de
+`RuntimePlayer.endCapture()`. Pendant la materialisation de l’événement, le
+runner associe l’occurrence résolue au capture id qui a fourni FIRST ; la
+fermeture réutilise ensuite cette donnée, restaure explicitement la scène `after`
+avant de mesurer LAST et remplace la frontière de présentation live. Le chemin
+de relecture `persist-only` reste distinct et conserve sa capture rejouable.
+
+Les frontières capturées portent désormais les `storyIds` source/destination
+du groupe. Lorsqu’un reset franchit la tête de présentation, le runner retire
+les groupes qui touchent la story réinitialisée — y compris leurs dépendances
+mesurées — libère leurs ressources HTML et reconstruit le graphe de présentation
+avec les groupes restants. Le même filtrage physique est appliqué avant un Seek
+vers une position située après un reset. Un resize invalide maintenant toutes
+les poses retenues dans le runner, vide le graphe et réémet seulement les moves
+actifs de la scène courante ; il ne compile donc plus le calendrier historique
+et ne prépare pas les moves futurs. `HtmlMotionSystem.commit()` échange les
+frontières et la partition de reset dans une seule reconstruction. Le Seek
+synchrone atomique est implémenté ; la validation Safari MCP de `position` et
+le relevé d’appels sont consignés dans l’observation de performance.
+
+Validation ciblée de cette reprise : tests runner/facade motion passés, avec
+recapture du move actif après resize ; le cas S6 réel couvre la fermeture
+`endEmit`, le commit de liste et le seek de relecture. Le test de reset couvre
+aussi un Seek vers l’instant antérieur : le player retransporte une occurrence
+active lors d’un Seek arrière même lorsque la materialisation réutilise le même
+tableau d’actions, et la capture borne son endpoint avant le reset invalidant.
+
+## Reprise d’intégration — 2026-09-08 — commit unique et resize paresseux
+
+Le système HTML expose maintenant un commit interne unique pour remplacer les
+frontières capturées et la partition de reset avant de reconstruire le graphe.
+Les chemins de Seek, reset chaud et fermeture live l’emploient afin de ne pas
+publier un état intermédiaire entre deux reconstructions cohérentes.
+
+Après un resize, le runner libère les ressources de présentation et invalide
+les frontières replay/presentation retenues. Il demande ensuite au player de
+réémettre les occurrences `move` encore actives sur la scène courante ; la
+capture ciblée se fait dans ce seul groupe. Une occurrence future n’est pas
+préparée par ce refresh et sera capturée lorsqu’elle atteindra réellement la
+présentation. La résolution de la scène source reste logique et ne constitue
+pas une redécouverte du calendrier motion.
+
+Le Seek est désormais documenté comme une transaction synchrone atomique : le
+runner calcule la cible, capture les groupes requis, commit le graphe et ne
+présente qu’après cette préparation. La démo `position` a été contrôlée dans
+Safari MCP : le Seek à `1500 ms` n’a produit aucune frame intermédiaire et le
+relevé d’appels est consigné dans l’observation de performance.

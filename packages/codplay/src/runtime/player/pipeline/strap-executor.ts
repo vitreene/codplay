@@ -4,6 +4,8 @@ import { createPlannedStrapHelpers, type PlannedStrapHelpers } from './planned-h
 /** Event emitted by a strap and eligible for track materialization. */
 export type StrapEvent = Readonly<{
   name: string
+  /** Explicit story target for a scene-owned output that must be isolated. */
+  storyId?: string
   data?: CompiledRecord
   eventId?: string
   eventSeq?: number

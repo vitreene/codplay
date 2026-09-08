@@ -199,19 +199,12 @@ Les trois sources doivent produire la même occurrence interne :
 
 ## Invariant `play(t) = seek(t)`
 
-L’état logique reste immédiat à la frontière de l’événement. Rendre la
-préparation géométrique différée ne doit pas rendre le fait logique
-asynchrone.
-
-La préparation peut être asynchrone côté renderer, mais elle doit former une
-barrière avant la publication de la frame qui dépend du move. Une préparation
-lancée sans attente, puis terminée après la frame, créerait un saut visuel et
-ferait dépendre le résultat de Seek du fait que Play a déjà rencontré ou non
-l’événement.
-
-Cette barrière est coopérative : elle ne bloque pas le thread par une boucle
-synchrone. L’instance qui attend conserve sa dernière présentation engagée,
-tandis que les autres instances et leurs frames peuvent continuer.
+L’état logique reste immédiat à la frontière de l’événement. La préparation
+géométrique d’un Seek est elle aussi synchrone dans la tâche de commande : elle
+se termine avant la présentation et ne laisse aucune frame intermédiaire
+visible. Une préparation lancée sans attente, puis terminée après la frame,
+créerait un saut visuel et ferait dépendre le résultat de Seek du fait que Play
+a déjà rencontré ou non l’événement.
 
 Les règles à préserver sont les suivantes :
 
@@ -225,84 +218,37 @@ Les règles à préserver sont les suivantes :
 5. à journal, viewport et géométrie auteur identiques, Play et Seek résolvent
    la même frame au même temps absolu.
 
-### Transaction coopérative proposée
+### Décision : transaction synchrone de Seek
 
-Le move ne commence visuellement qu’après la préparation de ses positions. Pour
-éviter un long blocage tout en conservant l’égalité stricte, la préparation doit
-être une barrière de temps logique locale à l’instance : le navigateur continue
-de produire des frames, mais le temps CodPlay reste à la frontière `b` du move
-jusqu’au commit du graphe.
+Un `Seek` ne reproduit pas la boucle de `Play`. Il reconstruit entièrement la
+projection demandée, prépare les groupes motion nécessaires, puis présente le
+résultat une seule fois. Le navigateur ne repeint pas au milieu de la tâche
+JavaScript synchrone ; aucune frame partielle n’est donc visible et le temps
+logique ne progresse pas pendant l’opération.
 
 ```text
-t = b : occurrence move reçue ; dernière présentation conservée
-frames suivantes : préparation topologique découpée ; temps logique toujours b
-frame de commit : capture cohérente FIRST/LAST, liaison au graphe, échange atomique
-frame suivante : temps logique b + delta ; le move progresse depuis 0
+seek(t) : validate -> prepare -> commit -> present
 ```
 
-La scène logique après l’événement peut être résolue pendant cette attente, mais
-elle ne doit pas être exposée partiellement. Le renderer conserve la dernière
-présentation engagée pour le groupe concerné.
+Pour un Seek groupé, toutes les instances ciblées terminent `validate` et
+`prepare` avant le moindre `commit`, puis sont présentées après le commit de
+l’ensemble. La scène logique et les mesures de géométrie ne sont jamais
+exposées partiellement.
 
-Une pose numérique relevée pendant une frame de préparation ne peut pas être
-assemblée avec une pose relevée plusieurs frames plus tard : les éléments, leurs
-ancêtres ou leur contexte de layout ont pu se déplacer entre les deux lectures.
-Les mesures antérieures ne peuvent donc servir qu’à estimer un coût ou à préparer
-la sélection ; elles ne sont jamais des FIRST, LAST ou keyframes engageant une
-frontière.
+La sélection, la topologie et les captures `FIRST`, `afterStart`, keyframes et
+`LAST` sont effectuées dans la même tâche synchrone. Le runner remplace ensuite
+en une seule opération les frontières, les partitions de reset et le graphe
+immuable. La présentation précédente reste en place jusqu’à ce commit.
 
-Le travail répartissable comprend la résolution de l’occurrence, la sélection
-minimale, les dépendances parent/enfant, les temps, le repère d’overlay et la
-construction topologique du delta de graphe. Une fois ce travail prêt, le runner
-ouvre une unique fenêtre de capture, sans céder au navigateur : il lit le FIRST
-réellement affiché, matérialise successivement les états nécessaires (`before`,
-`afterStart`, keyframes et `after`), lit la fermeture sélectionnée, puis restaure
-la présentation retenue avant de rendre la main. Les poses qui seront publiées
-proviennent toutes de cette fenêtre cohérente ; le navigateur ne peint aucun
-état historique intermédiaire.
+Une scène lourde peut bloquer brièvement le thread principal ; ce coût est
+accepté pour préserver l’atomicité et l’égalité `play(t) = seek(t)`. La
+préparation multi-frame, le budget de yield et la barrière de temps locale ne
+font pas partie du contrat.
 
-Les positions peuvent évoluer pendant les frames de préparation, par exemple
-après un resize, un changement auteur extérieur ou le mouvement d’une autre
-instance. La capture finale est alors obligatoire, et non conditionnée à la
-détection d’une révision. Elle lie la topologie déjà préparée au FIRST réellement
-visible et au LAST de la structure résolue au moment du commit. Une invalidation
-survenue avant cette fenêtre abandonne seulement les nombres provisoires ; la
-sélection, les temps et les dépendances restent réutilisables. Le segment part
-ainsi de la pose effectivement affichée, sans saut.
-
-La fenêtre de capture finale ne peut pas être découpée sur plusieurs frames tout
-en conservant une géométrie atomique. Si sa fermeture dépasse le budget accepté,
-aucun découpage de mesures indépendantes ne peut garantir simultanément absence
-de blocage et absence de saut. La première réponse est de réduire la fermeture :
-overlay dans le conteneur de story par défaut, racine de scène seulement pour le
-reparent inter-story. Une représentation visuelle explicitement figée pendant
-une capture longue serait une autre stratégie possible, mais elle constituerait
-un comportement de présentation à concevoir et à valider, pas un simple cache
-de positions.
-
-Le commit final doit être court : le graphe ou son delta est préparé avant ce
-point, puis le système HTML remplace en une seule opération frontières,
-barrières de reset et graphe immuable. La barrière est ensuite levée ; le premier
-delta d’horloge évalue une progression nulle ou faible, jamais une progression
-accumulée pendant le calcul.
-
-La barrière concerne l’instance qui présente le move, pas l’engine entier ni
-les autres instances. Les événements adressés à cette instance pendant la
-préparation restent ordonnés après la transaction afin de ne pas introduire de
-course entre deux frontières.
-
-Permettre au temps logique de continuer pendant le calcul imposerait de donner
-au segment un instant de départ dépendant de la durée réelle de préparation. Il
-faudrait alors journaliser cet instant pour qu’un Seek à froid le reproduise :
-cela introduirait un nouveau fait temporel et rendrait le résultat dépendant de
-la machine. Cette solution est écartée pour préserver `play(t) = seek(t)`.
-
-La façade publique `telco.seek()` retourne déjà une promesse. Le plan peut donc
-rendre la transaction interne de Seek coopérative sans changer cette surface :
-la promesse se résout après préparation, commit et présentation. En revanche,
-`RuntimeEngine.seek()`, `HtmlPlayerRunner.seek()` et les participants de Seek
-sont aujourd’hui synchrones ; ils devront devenir une transaction groupée
-attendable, avec les mêmes garanties de rollback.
+En cas d’échec avant le retour de l’appel, le runtime restaure la présentation
+et le graphe précédents. La promesse publique de `telco.seek()` reste une
+enveloppe de commande ; elle se résout après cette transaction synchrone et ne
+rend pas la préparation asynchrone.
 
 ## Compatibilité fonctionnelle et syntaxe cible de `move`
 
@@ -373,28 +319,19 @@ ni second player, ni second journal, ni graphe parallèle.
 
 ## Points restant à traiter
 
-La forme `reparent`, les defaults du path et le transport interne de l’occurrence
-`move` sont définis et raccordés dans la première tranche. Restent à traiter :
+La forme `reparent`, les defaults du path, le transport interne de l’occurrence
+`move`, la transaction Seek synchrone, le rollback de présentation et
+l’invalidation lazy du resize sont désormais raccordés. Restent à valider ou à
+préciser dans les tranches spécialisées :
 
-1. Définir la transaction coopérative : barrière de temps locale, budget des
-   tâches topologiques, fenêtre de capture cohérente, annulation et
-   généralisation asynchrone du groupe de Seek interne.
-2. Définir la stratégie de préparation lors d’un Seek qui traverse plusieurs
-   moves, notamment leurs groupes simultanés et leur ordre `eventSeq`.
-3. Définir l’invalidation après resize sans retomber dans un rebuild global.
-4. Distinguer précisément le chemin local du chemin overlay afin de ne pas
-   perdre les comportements de reflow et de parent/enfant existants.
-5. Faire porter à la préparation les stories source et destination résolues,
-   afin de choisir le conteneur de story par défaut et le conteneur racine pour
-   le seul reparent inter-story ; préciser le coût et la fermeture de capture
-   de cette exception.
-6. Définir le comportement lorsque la fermeture nécessaire ne tient pas dans le
-   budget de la fenêtre de capture : limite de portée, nouvelle tentative ou
-   représentation visuelle figée explicitement conçue.
-7. Remplacer les barrières de reset qui masquent aujourd’hui des segments
-   conservés par l’effacement des graphes de la story, y compris les frontières
-   inter-story qui la touchent, et définir leur préparation à la reconstruction
-   d’un Seek antérieur.
+1. La préparation d’un Seek qui traverse plusieurs moves, notamment leurs
+   groupes simultanés et leur ordre `eventSeq`.
+2. La distinction complète du chemin local et du chemin overlay pour les cas
+   de reflow et de parent/enfant.
+3. Les stories source et destination résolues pour le choix du conteneur de
+   story et l’exception de reparent inter-story.
+4. Le corpus navigateur indépendant de `flip-stress`. La démo `position` a
+   déjà été vérifiée dans Safari MCP avec le relevé d’appels demandé.
 
 ## Validation attendue
 
@@ -423,17 +360,18 @@ démo :
 - un Seek vers un instant antérieur au reset réutilise cette même instance et
   ne prépare un graphe effacé qu’à la présentation du `move` requis ;
 - absence de mesure DOM dans les frames ordinaires ;
-- une préparation sur plusieurs frames ne publie jamais une frontière composée
-  de poses numériques lues dans des frames différentes ;
-- une géométrie qui évolue pendant la préparation est reliée au graphe par une
-  capture finale cohérente, sans saut à son commit ;
-- contrôle navigateur, y compris Safari, sur les démos `position` et
-  `flip-stress` comme corpus de régression.
+- un Seek calcule entièrement sa cible dans une tâche synchrone, sans frame
+  intermédiaire ni progression d’horloge ;
+- une erreur de Seek restaure la présentation et le graphe précédents avant le
+  retour de l’appel ;
+- contrôle navigateur ciblé de `position` dans Safari MCP ; le parcours
+  `flip-stress` reste le corpus navigateur indépendant à valider dans son plan.
 
 ## État documentaire
 
-Le plan central et le contrat cible de `move` sont désormais marqués `En cours`.
-La première tranche couvre la migration `flipMode` → `reparent`, les defaults
-internes, le transport par occurrence et la capture ciblée. Cette note reste la
-justification et le relevé de contraintes ; elle ne devient pas une
+Le plan central et le contrat cible de `move` restent `En cours` pour leurs
+validations spécialisées. La première tranche couvre la migration `flipMode` →
+`reparent`, les defaults internes, le transport par occurrence, la capture
+ciblée et le Seek synchrone avec restauration en cas d’échec. Cette note reste
+la justification et le relevé de contraintes ; elle ne devient pas une
 spécification exécutable et n’autorise aucune modification ad hoc de la démo.

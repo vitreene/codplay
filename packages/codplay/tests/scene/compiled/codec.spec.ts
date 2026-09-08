@@ -56,6 +56,34 @@ describe('CompiledSceneCodec', () => {
     }
   })
 
+  it('round-trips active listen rules and their exact activation index', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const value: CompiledScene = {
+      ...artifact,
+      storyActivationIndex: { main: { 'story:enter': 0 } },
+      scene: {
+        ...artifact.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [],
+            listen: [{ on: 'story:enter', active: true, reset: true }],
+          },
+        },
+      },
+    }
+
+    const decoded = codec.decode(codec.encode(value))
+
+    expect(decoded.ok).toBe(true)
+    if (decoded.ok) {
+      expect(decoded.value.storyActivationIndex).toEqual({ main: { 'story:enter': 0 } })
+      expect(decoded.value.scene.stories.main?.listen).toEqual([
+        { on: 'story:enter', active: true, reset: true },
+      ])
+    }
+  })
+
   it('rejects invalid JSON and invalid envelope versions', () => {
     const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
 

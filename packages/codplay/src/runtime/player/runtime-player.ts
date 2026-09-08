@@ -110,6 +110,16 @@ export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
 const RUNTIME_SEQUENCE_END_EVENT_NAME = 'sequence:end' as const
 
+/** Controls whether a refresh re-emits the currently active move occurrences. */
+export type RuntimePlayerRefreshOptions = Readonly<{
+  emitMotionOccurrences?: boolean
+}>
+
+/** Adds player-local materialization controls without expanding the materializer contract. */
+type RuntimePlayerMaterializationContext = RuntimeMaterializerSceneContext & Readonly<{
+  forceMotionOccurrences?: boolean
+}>
+
 /** Result returned by player initialization. */
 export type PlayerInitResult = Readonly<
   | { ok: true; diagnostics: DiagnosticReport }
@@ -433,6 +443,7 @@ export class RuntimePlayer {
         this.includePersistOnlyInCurrent = true
         this.synchronizeStateStoreFromScene(this.solvedScene)
         this.currentTimeMs = timeMs
+        this.trackJournal.reconcileStoryIsolationAt(timeMs)
         this.skipNextDelta = true
         transaction.moveDeltas = moveDeltas
         transaction.preparedInstances = preparedInstances
@@ -499,6 +510,7 @@ export class RuntimePlayer {
     this.sequenceEndPending = false
     this.idleMonitor.reset()
     this.currentTimeMs = 0
+    this.trackJournal.reconcileStoryIsolationAt(0)
     this.includePersistOnlyInCurrent = true
     this.skipNextDelta = true
     this.observedPublicEventIds.clear()
@@ -563,10 +575,14 @@ export class RuntimePlayer {
   }
 
   /** Reapplies the current solved scene after a materializer-context change. */
-  refresh(): void {
+  refresh(options: RuntimePlayerRefreshOptions = {}): void {
     if (this.solvedScene === undefined) throw new Error('Player has not been initialized.')
     this.componentRuntime?.sync(this.solvedScene, true)
-    this.materializeScene(this.solvedScene, { previousScene: this.solvedScene, moveDeltas: [] })
+    this.materializeScene(this.solvedScene, {
+      previousScene: this.solvedScene,
+      moveDeltas: [],
+      ...(options.emitMotionOccurrences === true ? { forceMotionOccurrences: true } : {}),
+    })
   }
 
   /**
@@ -586,6 +602,21 @@ export class RuntimePlayer {
     this.requireSequenceActive('emitEventime')
     const normalized = normalizeRuntimeEventime(eventime, true)
     const resolvedTarget = resolveEventimeTarget(this.compiledScene, target)
+    if (shouldDispatchImmediateStoryEventime(this.compiledScene, eventime, target)) {
+      const dispatched = await this.emitEvent({
+        name: eventime.name,
+        applyAtMs: this.currentTimeMs,
+        trackId: resolvedTarget.trackId,
+        storyId: resolvedTarget.storyId,
+        visibility: normalized.eventime.visibility,
+        data: normalized.eventime.data,
+        mode: normalized.mode,
+      })
+      if (!dispatched.ok) {
+        throw new Error(dispatched.issues.map((issue) => issue.message).join(' '))
+      }
+      return { events: dispatched.events }
+    }
     if (isImmediateTrackControlEvent(eventime)) {
       const dispatched = await this.emitEvent({
         name: eventime.name,
@@ -689,6 +720,7 @@ export class RuntimePlayer {
         ? []
         : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
       const resetStoryIds = this.resolvePresentedResetStoryIds(result.events)
+      const isolationClosedStoryIds = result.isolationClosedStoryIds ?? []
       notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
       this.solvedScene = nextSolvedScene
       this.materializeScene(nextSolvedScene, {
@@ -697,6 +729,7 @@ export class RuntimePlayer {
         ...(resetStoryIds.length === 0
           ? {}
           : { resetStoryIds }),
+        ...(isolationClosedStoryIds.length === 0 ? {} : { isolationClosedStoryIds }),
       })
       this.notifyTransportObservers()
       if (this.state === PLAYER_LIFECYCLE_PLAYING && sequenceEndTime !== undefined) {
@@ -977,7 +1010,7 @@ export class RuntimePlayer {
   }
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */
-  private materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
+  private materializeScene(scene: SolvedScene, context: RuntimePlayerMaterializationContext): void {
     this.componentRuntime?.sync(scene)
     notifyModuleScenePresented(
       this.moduleServiceInstances,
@@ -988,7 +1021,19 @@ export class RuntimePlayer {
     this.componentRuntime?.presentAt?.(scene.timeMs)
     const motionOccurrences = context.phase === 'geometry-capture'
       ? []
-      : collectMoveOccurrences(context.previousScene, scene)
+      : collectMoveOccurrences(
+        context.previousScene,
+        scene,
+        context.forceMotionOccurrences === true
+          ? {
+            forceActive: true,
+            resolveBeforeScene: (timeMs) => this.resolveSceneBeforeBoundary(
+              timeMs,
+              this.includePersistOnlyInCurrent,
+            ),
+          }
+          : undefined,
+      )
     this.materializer?.materializeScene(
       scene,
       motionOccurrences.length === 0
@@ -1211,6 +1256,7 @@ export class RuntimePlayer {
       this.pendingSolvedScene = undefined
       this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
       this.currentTimeMs = transaction.previousTimeMs
+      this.trackJournal.reconcileStoryIsolationAt(this.currentTimeMs)
       this.includePersistOnlyInCurrent = transaction.previousIncludePersistOnly
       this.skipNextDelta = transaction.previousSkipNextDelta
       if (this.solvedScene !== undefined) {
@@ -1437,6 +1483,19 @@ function resolveEventimeTarget(
   }
 }
 
+/** Sends an immediate targeted event through listen so it can wake its story. */
+function shouldDispatchImmediateStoryEventime(
+  scene: CompiledScene,
+  eventime: RuntimePlayerEventime,
+  target: RuntimePlayerEventimeTarget,
+): boolean {
+  if (target.scope !== 'story' || target.storyId === undefined) return false
+  if (eventime.startAt !== undefined && eventime.startAt !== 0) return false
+  if (eventime.events !== undefined && eventime.events.length > 0) return false
+  if (eventime.visibility === 'scene' || eventime.visibility === 'public') return false
+  return scene.scene.stories[target.storyId]?.listen.some((rule) => rule.on === eventime.name) === true
+}
+
 /** Flattens one story's nested eventimes to the absolute sequence:end times. */
 function collectSequenceEndTimes(
   eventimes: readonly CompiledEventime[],
@@ -1466,26 +1525,38 @@ function isSequenceEndInRange(
 function collectMoveOccurrences(
   previousScene: SolvedScene | undefined,
   scene: SolvedScene,
+  options: Readonly<{
+    forceActive?: boolean
+    resolveBeforeScene?: (timeMs: number) => SolvedScene
+  }> = {},
 ): readonly RuntimeMoveOccurrence[] {
   const occurrences: RuntimeMoveOccurrence[] = []
   const previousTimeMs = previousScene?.timeMs
   const movingBackward = previousTimeMs !== undefined && scene.timeMs < previousTimeMs
   const currentMoves = scene.moveOccurrences ?? []
   const previousMoves = previousScene?.moveOccurrences ?? []
-  // A frame that only advances a time-dependent action reuses the same
-  // materialized move list. No occurrence can have appeared at that boundary.
-  if (previousScene !== undefined && previousMoves === currentMoves) return []
+  const forceActive = options.forceActive === true
+  // A forward frame that only advances a time-dependent action reuses the same
+  // materialized move list. A backward seek is different: the target graph may
+  // have been physically partitioned by a reset, so the active move must be
+  // offered again even when materialization reused the same action array.
+  if (previousScene !== undefined && previousMoves === currentMoves && !movingBackward && !forceActive) return []
   const previousKeys = new Set(previousMoves.map(({ action }) => actionOccurrenceKey(action)))
 
   for (const { itemId, action } of currentMoves) {
     const key = actionOccurrenceKey(action)
-    const newlyVisible = previousScene === undefined
+    const newlyVisible = forceActive
+      ? isMoveActiveAt(action.action.move, action.startAt, scene.timeMs)
+      : previousScene === undefined
       ? action.startAt === scene.timeMs
       : movingBackward
         ? isMoveActiveAt(action.action.move, action.startAt, scene.timeMs)
         : (action.startAt > (previousTimeMs ?? Number.NEGATIVE_INFINITY)
           && action.startAt <= scene.timeMs) || !previousKeys.has(key)
     if (!newlyVisible) continue
+    const beforeScene = options.resolveBeforeScene?.(action.startAt) ?? previousScene ?? scene
+    const beforeStoryIds = resolveMotionStoryIds(beforeScene, itemId)
+    const afterStoryIds = resolveMotionStoryIds(scene, itemId)
     occurrences.push(Object.freeze({
       itemId,
       startAt: action.startAt,
@@ -1493,8 +1564,8 @@ function collectMoveOccurrences(
       ...(action.eventSeq === undefined ? {} : { eventSeq: action.eventSeq }),
       declarationPath: Object.freeze([...action.declarationPath]),
       action,
-      beforeStoryIds: resolveMotionStoryIds(previousScene ?? scene, itemId),
-      afterStoryIds: resolveMotionStoryIds(scene, itemId),
+      beforeStoryIds,
+      afterStoryIds,
     }))
   }
 

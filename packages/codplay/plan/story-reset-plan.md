@@ -57,7 +57,7 @@ faits autorisés après cette frontière dans leur ordre. Un Seek avant la front
 reconstruit les faits antérieurs comme auparavant.
 
 Cette reconstruction applique les valeurs dans les mêmes materialisations. Un
-Seek ne devient jamais une source de création d’instances ou de composants.
+Seek ne devient jamais une source de création d'instances ou de composants.
 
 ## Contrat de présentation motion cible
 
@@ -114,11 +114,12 @@ logiques attendus sans deuxième journal.
 ### 2. Introduire le retrait par groupe dans le système motion
 
 - Faire porter à chaque groupe capturé ses stories touchées et ses ressources de
-  présentation.
+  présentation — première passe réalisée.
 - Ajouter l’opération interne qui retire un groupe et restaure ses ressources
-  auteur sans écrire une animation de sortie.
+  auteur sans écrire une animation de sortie — première passe réalisée.
 - Remplacer l’application séparée de barrières de reset et de frontières par un
-  commit unique de graphe.
+  commit unique de graphe — commit interne réalisé ; la coordination avec une
+  préparation asynchrone reste à compléter.
 
 **Gate :** aucune géométrie d’un groupe supprimé ne reste accessible au graphe
 ou au host HTML.
@@ -138,6 +139,11 @@ résiduel.
   frame visée par Seek.
 - Marquer les poses invalides après resize sans recapture anticipée.
 - Préserver la destruction finale des ressources temporaires.
+
+La première passe du runner retire les frontières invalidées au reset et au Seek
+post-reset. `resize` vide les poses capturées puis réémet uniquement les moves
+actifs de la scène courante ; il ne relance pas de compilation globale du
+calendrier.
 
 **Gate :** Seek ne recrée pas d’instance et resize ne redémarre pas une découverte
 globale de moves.

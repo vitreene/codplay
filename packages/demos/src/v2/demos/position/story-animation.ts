@@ -1,4 +1,4 @@
-import type { PlannedStrapHelpers, PlannedStrapOccurrence } from 'codplay/runtime/player'
+import type { PlannedStrapHelpers, PlannedStrapOccurrence, StrapStep } from 'codplay/runtime/player'
 import { planStoryFiveAnimation } from './story-five'
 import { planStoryFourAnimation } from './story-four'
 import { POSITION_STORY_ONE_ANIMATION_PLAN } from './story-one'
@@ -22,16 +22,36 @@ export function createStoryAnimationPlan(
 /** Anchors the selected story's eventimes to the navigation interaction. */
 export function planStoryAnimation(
   index: ViewIndex,
+  storyId: string,
   planned: Pick<PlannedStrapHelpers, 'wait' | 'repeat'>,
   state: Readonly<Record<string, unknown>>,
 ): readonly PlannedStrapOccurrence[] {
-  if (index === 3) return planStoryFourAnimation(state, planned)
-  if (index === 4) return planStoryFiveAnimation(planned)
-  return createStoryAnimationPlan(index).flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
-    event: {
-      name: occurrence.name,
-      visibility: 'scene',
-      ...(occurrence.data === undefined ? {} : { data: occurrence.data }),
-    },
+  const occurrences = index === 3
+    ? planStoryFourAnimation(state, planned)
+    : index === 4
+      ? planStoryFiveAnimation(planned)
+      : createStoryAnimationPlan(index).flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
+        event: {
+          name: occurrence.name,
+          visibility: 'scene',
+          ...(occurrence.data === undefined ? {} : { data: occurrence.data }),
+        },
+      }))
+  return occurrences.map((occurrence) => ({
+    ...occurrence,
+    step: targetStoryStep(occurrence.step, storyId),
   }))
+}
+
+/** Adds an explicit story target to every runtime plan emitted by navigation. */
+function targetStoryStep(step: StrapStep, storyId: string): StrapStep {
+  if (step.event === undefined) return step
+  return {
+    ...step,
+    event: {
+      ...step.event,
+      storyId,
+      visibility: 'story',
+    },
+  }
 }

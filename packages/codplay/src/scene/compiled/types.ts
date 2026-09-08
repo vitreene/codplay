@@ -78,6 +78,8 @@ export interface CompiledRecord {
 /** One compiled listen declaration after function extraction. */
 export type CompiledListenRule = Readonly<{
   on: string
+  /** Opens or closes the owning story isolation period at this event boundary. */
+  active?: boolean
   /** Projects the intercepted event as the initial state of this story. */
   reset?: boolean
   transform?: readonly CompiledFunctionReference[]
@@ -172,6 +174,11 @@ export type CompiledActionTarget = Readonly<{
 /** Derived lookup from an action name to its compiled perso targets. */
 export type CompiledActionTargetIndex = Readonly<Record<string, readonly CompiledActionTarget[]>>
 
+/** Exact activation-rule positions indexed by story and event name. */
+export type CompiledStoryActivationIndex = Readonly<
+  Record<string, Readonly<Record<string, number>>>
+>
+
 /** Versioned, serializable, immutable-at-runtime playback artifact. */
 export type CompiledScene = Readonly<{
   schemaVersion: string
@@ -182,4 +189,6 @@ export type CompiledScene = Readonly<{
   requirements: CompiledRequirements
   /** Derived index emitted from the fixed action declarations by SceneBuilder. */
   actionTargetIndex: CompiledActionTargetIndex
+  /** Internal exact index of story rules declaring active: true. */
+  storyActivationIndex?: CompiledStoryActivationIndex
 }>

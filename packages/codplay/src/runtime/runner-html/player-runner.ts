@@ -19,14 +19,12 @@ import type { RuntimeCaptureState } from '../capture'
 import { HtmlPersoEmitSourceAdapter } from './perso-emit-source-adapter'
 import type { Diagnostic } from '../../diagnostics'
 import {
-  compileMotionSchedule,
   createScheduledMotionIntent,
   MotionMaterializer,
 } from '../motion'
 import type {
   LayoutSnapshot,
   MotionBoundary,
-  MotionResetTimesByItem,
   PresentationFrame,
   ScheduledMotionIntent,
 } from '../motion'
@@ -65,9 +63,8 @@ type HtmlRootTarget = Readonly<{
   storyId: string
 }>
 
-/** Selects whether motion capture is forced or limited to resolved occurrences. */
+/** Selects the resolved occurrences whose groups need a geometry capture. */
 type MotionBoundaryRebuildOptions = Readonly<{
-  forceAll?: boolean
   occurrences?: readonly RuntimeMoveOccurrence[]
 }>
 
@@ -155,15 +152,15 @@ export class HtmlPlayerRunner {
   private motionSystem: HtmlMotionSystem | undefined = undefined
   private replayMotionBoundaries: readonly MotionBoundary[] = []
   private presentationMotionBoundaries: readonly MotionBoundary[] = []
-  private motionJournalRevision = -1
-  private motionResetSignature = ''
   private rebuildingMotion = false
   private readonly liveFirstLayouts = new Map<string, {
+    persoKey: string
     timeMs: number
     snapshot: LayoutSnapshot
     before: SolvedScene
     presentationFrame: PresentationFrame | undefined
   }>()
+  private readonly liveCaptureOccurrences = new Map<string, readonly RuntimeMoveOccurrence[]>()
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
   private readonly emitSourceAdapter: HtmlPersoEmitSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
@@ -238,11 +235,6 @@ export class HtmlPlayerRunner {
       options.onPublicEvent,
       options.idle,
       options.onTrace,
-      () => {
-        // Journal revisions are consumed when a move occurrence is presented.
-        // Appending a future event must not scan or measure the motion graph.
-        this.motionJournalRevision = -1
-      },
     )
     this.stopTerminalObservation = this.player.subscribeTransport(() => {
       if (this.ownsEngine && this.player.hasSequenceEnded()) this.engine.pause()
@@ -366,24 +358,56 @@ export class HtmlPlayerRunner {
     this.engine.advance(nowMs, marginMs)
   }
 
-  /** Presents one logical time through the exact same motion operation as Play. */
+  /** Reconstructs and presents one complete logical target in one synchronous transaction. */
   seek(timeMs: number): PlayerSeekResult {
     // The live release handoff belongs only to the current capture close. A
     // seek must rebuild the replayable persist-only source-to-target motion.
     this.liveFirstLayouts.clear()
+    this.liveCaptureOccurrences.clear()
+    const previousReplayBoundaries = this.replayMotionBoundaries
+    const previousPresentationBoundaries = this.presentationMotionBoundaries
+    const previousTimeMs = this.player.getCurrentTimeMs()
     this.motionSystem?.prepareSeek()
     try {
       if (this.motionSystem !== undefined) {
+        this.pruneMotionGroupsBeforeSeek(timeMs)
         this.presentationMotionBoundaries = this.replayMotionBoundaries
-        this.motionSystem.setResetTimesByItem(this.resolveMotionResetTimes(true))
-        this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
+        this.motionSystem.commit(this.presentationMotionBoundaries, new Map())
       }
       const result = this.player.seek(timeMs)
+      if (!result.ok) {
+        this.restoreSeekPresentation(
+          previousReplayBoundaries,
+          previousPresentationBoundaries,
+          previousTimeMs,
+        )
+      }
       this.syncInteractionLock()
       return result
+    } catch (error) {
+      this.restoreSeekPresentation(
+        previousReplayBoundaries,
+        previousPresentationBoundaries,
+        previousTimeMs,
+      )
+      throw error
     } finally {
       this.motionSystem?.completeSeek()
     }
+  }
+
+  /** Restores the last committed motion graph after a failed synchronous seek. */
+  private restoreSeekPresentation(
+    replayBoundaries: readonly MotionBoundary[],
+    presentationBoundaries: readonly MotionBoundary[],
+    timeMs: number,
+  ): void {
+    this.replayMotionBoundaries = replayBoundaries
+    this.presentationMotionBoundaries = presentationBoundaries
+    if (this.motionSystem === undefined) return
+    this.motionSystem.clearTransientPresentation()
+    this.motionSystem.commit(this.presentationMotionBoundaries, new Map())
+    this.motionSystem.present(timeMs)
   }
 
   /** Emits one live event through the visible player's shared journal. */
@@ -396,8 +420,12 @@ export class HtmlPlayerRunner {
     if (numericLengthScale !== undefined) this.materializerContext.numericLengthScale = numericLengthScale
     this.materializationEpoch += 1
     if (this.player.getSolvedScene() !== undefined) {
-      this.rebuildMotionBoundaries({ forceAll: true })
-      this.player.refresh()
+      const hadCapturedMotion = this.hasCapturedMotionBoundaries()
+      if (hadCapturedMotion) this.invalidateMotionGeometry()
+      // Re-emit only the active occurrence after invalidation. Historical and
+      // future groups remain uncaptured until a Play or Seek actually needs
+      // them, so resize never performs a global journal rebuild.
+      this.player.refresh({ emitMotionOccurrences: hadCapturedMotion })
       return
     }
   }
@@ -465,83 +493,51 @@ export class HtmlPlayerRunner {
       new Set([persoKey]),
       motionContainer.key,
     )
-    this.liveFirstLayouts.set(captureId, { timeMs, snapshot, before, presentationFrame })
+    this.liveFirstLayouts.set(captureId, {
+      persoKey,
+      timeMs,
+      snapshot,
+      before,
+      presentationFrame,
+    })
   }
 
   /** Captures only requested motion groups while retaining historical seek data. */
   private rebuildMotionBoundaries(options: MotionBoundaryRebuildOptions = {}): void {
-    const forceAll = options.forceAll === true
     if (this.rebuildingMotion) return
 
     const occurrences = options.occurrences ?? []
-    const hasRequestedOccurrences = occurrences.length > 0
-    if (!forceAll && !hasRequestedOccurrences) return
-
-    // Normal occurrence preparation does not inspect the journal. A reset is
-    // already handled by presentMotion's reset context; a first motion system
-    // still needs the current reset snapshot once before it is initialized.
-    const refreshResetSnapshot = forceAll || this.motionSystem === undefined
-    const resetTimesByItem = refreshResetSnapshot
-      ? this.resolveMotionResetTimes(this.player.includesPersistOnlyInCurrent())
-      : undefined
-    const resetSignature = refreshResetSnapshot
-      ? JSON.stringify([...(resetTimesByItem ?? new Map())])
-      : this.motionResetSignature
-    const resetChanged = refreshResetSnapshot && resetSignature !== this.motionResetSignature
-    const journalRevision = forceAll
-      ? this.player.trackJournal.getRevision()
-      : this.motionJournalRevision
+    if (occurrences.length === 0) return
 
     // A normal materialization already resolved the action and its event data.
     // Recompiling the complete scene and rescanning the journal here would
     // recreate the discovery circuit that the occurrence transport removed.
-    const occurrenceIntents = hasRequestedOccurrences
-      ? createMotionIntentsFromOccurrences(occurrences)
-      : []
-    const replayIntents = forceAll
-      ? compileMotionSchedule(
-          this.player.compiledScene,
-          this.player.trackJournal,
-          {
-            includePersistOnly: true,
-            resolveActionTransition: resolveHtmlMotionActionTransition,
-          },
-        )
-      : occurrenceIntents
-    const presentationIntents = forceAll
-      ? compileMotionSchedule(
-          this.player.compiledScene,
-          this.player.trackJournal,
-          {
-            includePersistOnly: this.player.includesPersistOnlyInCurrent(),
-            resolveActionTransition: resolveHtmlMotionActionTransition,
-          },
-        )
-      : occurrenceIntents
+    const occurrenceIntents = createMotionIntentsFromOccurrences(occurrences)
     const knownReplayIntentIds = collectBoundaryIntentIds(this.replayMotionBoundaries)
     const knownPresentationIntentIds = collectBoundaryIntentIds(this.presentationMotionBoundaries)
-    const replayCandidates = forceAll
-      ? replayIntents
-      : selectMotionIntentGroupsForOccurrences(replayIntents, occurrences, this.motionStoryByItemId)
-    const presentationCandidates = forceAll
-      ? presentationIntents
-      : selectMotionIntentGroupsForOccurrences(presentationIntents, occurrences, this.motionStoryByItemId)
-    const replayCaptureIntents = forceAll
-      ? replayCandidates
-      : selectNewMotionIntentGroups(replayCandidates, knownReplayIntentIds, this.motionStoryByItemId)
-    const presentationCaptureIntents = forceAll
-      ? presentationCandidates
-      : selectNewMotionIntentGroups(presentationCandidates, knownPresentationIntentIds, this.motionStoryByItemId)
-    const replayNeedsCapture = forceAll || replayCaptureIntents.length > 0
-    const presentationNeedsCapture = forceAll || presentationCaptureIntents.length > 0
-
-    if (!forceAll && !hasRequestedOccurrences && !resetChanged && !replayNeedsCapture && !presentationNeedsCapture) {
-      // Journal revisions also cover non-motion events. They do not invalidate
-      // a captured motion graph when no new move intent was introduced.
-      this.motionJournalRevision = journalRevision
-      this.motionResetSignature = resetSignature
-      return
-    }
+    const replayCandidates = selectMotionIntentGroupsForOccurrences(
+      occurrenceIntents,
+      occurrences,
+      this.motionStoryByItemId,
+    )
+    const presentationCandidates = selectMotionIntentGroupsForOccurrences(
+      occurrenceIntents,
+      occurrences,
+      this.motionStoryByItemId,
+    )
+    const replayCaptureIntents = selectNewMotionIntentGroups(
+      replayCandidates,
+      knownReplayIntentIds,
+      this.motionStoryByItemId,
+    )
+    const presentationCaptureIntents = selectNewMotionIntentGroups(
+      presentationCandidates,
+      knownPresentationIntentIds,
+      this.motionStoryByItemId,
+    )
+    const replayNeedsCapture = replayCaptureIntents.length > 0
+    const presentationNeedsCapture = presentationCaptureIntents.length > 0
+    if (!replayNeedsCapture && !presentationNeedsCapture) return
 
     this.rebuildingMotion = true
     try {
@@ -567,24 +563,19 @@ export class HtmlPlayerRunner {
           })
         : []
 
-      if (forceAll) {
-        this.replayMotionBoundaries = replayBoundaries
-        this.presentationMotionBoundaries = presentationBoundaries
-      } else {
-        if (replayNeedsCapture) {
-          this.replayMotionBoundaries = mergeMotionBoundaries(
-            this.replayMotionBoundaries,
-            replayBoundaries,
-            this.motionStoryByItemId,
-          )
-        }
-        if (presentationNeedsCapture) {
-          this.presentationMotionBoundaries = mergeMotionBoundaries(
-            this.presentationMotionBoundaries,
-            presentationBoundaries,
-            this.motionStoryByItemId,
-          )
-        }
+      if (replayNeedsCapture) {
+        this.replayMotionBoundaries = mergeMotionBoundaries(
+          this.replayMotionBoundaries,
+          replayBoundaries,
+          this.motionStoryByItemId,
+        )
+      }
+      if (presentationNeedsCapture) {
+        this.presentationMotionBoundaries = mergeMotionBoundaries(
+          this.presentationMotionBoundaries,
+          presentationBoundaries,
+          this.motionStoryByItemId,
+        )
       }
 
       const initialize = this.motionSystem === undefined
@@ -593,20 +584,11 @@ export class HtmlPlayerRunner {
       const motionSystem = this.motionSystem
         ?? (hasMotionData ? this.createMotionSystem() : undefined)
       if (motionSystem === undefined) {
-        this.motionJournalRevision = journalRevision
-        this.motionResetSignature = resetSignature
         return
       }
       this.motionSystem = motionSystem
-      if (initialize || resetChanged || forceAll) {
-        motionSystem.setResetTimesByItem(resetTimesByItem ?? new Map())
-      }
-      if (initialize || presentationNeedsCapture || forceAll) {
-        motionSystem.setBoundaries(this.presentationMotionBoundaries)
-      }
+      if (initialize || presentationNeedsCapture) motionSystem.commit(this.presentationMotionBoundaries, new Map())
       if (initialize) motionSystem.initialize()
-      this.motionJournalRevision = journalRevision
-      this.motionResetSignature = resetSignature
     } finally {
       this.rebuildingMotion = false
     }
@@ -616,41 +598,30 @@ export class HtmlPlayerRunner {
   private completeLiveCaptureMotion(captureId: string, completed: boolean): void {
     const first = this.liveFirstLayouts.get(captureId)
     this.liveFirstLayouts.delete(captureId)
-    if (!completed || first === undefined) return
+    if (!completed || first === undefined) {
+      this.liveCaptureOccurrences.delete(captureId)
+      return
+    }
 
-    const replayIntents = compileMotionSchedule(
-      this.player.compiledScene,
-      this.player.trackJournal,
-      {
-        includePersistOnly: true,
-        resolveActionTransition: resolveHtmlMotionActionTransition,
-      },
-    )
-    const currentIntents = compileMotionSchedule(
-      this.player.compiledScene,
-      this.player.trackJournal,
-      {
-        includePersistOnly: false,
-        resolveActionTransition: resolveHtmlMotionActionTransition,
-      },
-    )
+    const occurrences = this.liveCaptureOccurrences.get(captureId) ?? []
+    this.liveCaptureOccurrences.delete(captureId)
+    if (occurrences.length === 0) return
+
+    // The normal materialization already transported the resolved occurrence.
+    // Reuse that immutable payload here so endEmit only replaces the visible
+    // FIRST side; closing a capture must not rediscover the journal schedule.
+    const occurrenceIntents = createMotionIntentsFromOccurrences(occurrences)
     const knownIntentIds = new Set(this.replayMotionBoundaries
       .flatMap((boundary) => boundary.intents.map((intent) => intent.id)))
-    const knownPresentationIntentIds = collectBoundaryIntentIds(this.presentationMotionBoundaries)
-    const liveIntents = currentIntents.filter((intent) => (
-      intent.startAt === first.timeMs && !knownIntentIds.has(intent.id)
-    ))
     const replayCaptureIntents = selectNewMotionIntentGroups(
-      replayIntents,
+      occurrenceIntents,
       knownIntentIds,
       this.motionStoryByItemId,
     )
-    const presentationCaptureIntents = selectNewMotionIntentGroups(
-      currentIntents,
-      knownPresentationIntentIds,
-      this.motionStoryByItemId,
-    )
-    if (replayCaptureIntents.length > 0 || presentationCaptureIntents.length > 0 || liveIntents.length > 0) {
+    const liveIntents = occurrenceIntents.filter((intent) => (
+      intent.itemId === first.persoKey && intent.startAt === first.timeMs
+    ))
+    if (replayCaptureIntents.length > 0 || liveIntents.length > 0) {
       this.motionSystem?.prepareGeometryCapture()
     }
     let firstSnapshot = first.snapshot
@@ -661,7 +632,8 @@ export class HtmlPlayerRunner {
         root: this.interactionRoot,
         scenes: [first.before, currentScene],
         itemIds: [...new Set(liveIntents.map((intent) => intent.itemId))],
-        storyId: liveStoryId,
+        storyIds: [...new Set(liveIntents.flatMap((intent) => intent.storyIds ?? []))],
+        ...(liveStoryId === undefined ? {} : { storyId: liveStoryId }),
       })
       this.player.presentSceneForGeometryCapture(first.before)
       firstSnapshot = captureCurrentHtmlMotionLayout(
@@ -690,17 +662,14 @@ export class HtmlPlayerRunner {
           includePersistOnly: true,
           resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
         })
-    let presentationBoundaries = presentationCaptureIntents.length === 0
-      ? []
-      : captureHtmlMotionBoundaries({
-          player: this.player,
-          root: this.interactionRoot,
-          nodes: this.nodes.persoNodes,
-          intents: presentationCaptureIntents,
-          includePersistOnly: false,
-          resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
-        })
+    let presentationBoundaries: readonly MotionBoundary[] = []
     if (liveIntents.length > 0) {
+      // The FIRST handoff temporarily materializes the pre-event scene. Restore
+      // the committed after-scene before reading LAST when no replay capture
+      // below performs that restoration for us.
+      if (currentScene !== undefined && replayBoundaries.length === 0) {
+        this.player.presentSceneForGeometryCapture(currentScene)
+      }
       const liveBoundaries = captureHtmlLiveMotionBoundary({
         player: this.player,
         root: this.interactionRoot,
@@ -725,22 +694,22 @@ export class HtmlPlayerRunner {
       presentationBoundaries,
       this.motionStoryByItemId,
     )
+    const initialize = this.motionSystem === undefined
     const motionSystem = this.motionSystem ?? this.createMotionSystem()
     this.motionSystem = motionSystem
-    motionSystem.setResetTimesByItem(this.resolveMotionResetTimes(false))
-    motionSystem.setBoundaries(this.presentationMotionBoundaries)
-    motionSystem.initialize()
-    this.motionJournalRevision = this.player.trackJournal.getRevision()
-    this.motionResetSignature = JSON.stringify([...this.resolveMotionResetTimes(false)])
+    motionSystem.commit(this.presentationMotionBoundaries, new Map())
+    if (initialize) motionSystem.initialize()
     motionSystem.present(this.player.getCurrentTimeMs())
   }
 
   /** Presents one materialized scene and prepares only moves resolved at its boundary. */
   private presentMotion(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
+    this.rememberLiveCaptureOccurrences(context.motionOccurrences ?? [])
     const resetStoryIds = context.resetStoryIds ?? []
-    if (resetStoryIds.length > 0 && this.motionSystem !== undefined) {
-      this.motionSystem.clearTransientPresentation(this.resolveMotionItemIds(scene, resetStoryIds))
-      this.updateMotionResetTimes()
+    const isolationClosedStoryIds = context.isolationClosedStoryIds ?? []
+    const staleStoryIds = [...new Set([...resetStoryIds, ...isolationClosedStoryIds])]
+    if (staleStoryIds.length > 0) {
+      this.removeMotionGroupsForStories(scene, staleStoryIds)
     }
     if (context.motionOccurrences !== undefined && context.motionOccurrences.length > 0) {
       this.rebuildMotionBoundaries({ occurrences: context.motionOccurrences })
@@ -750,15 +719,103 @@ export class HtmlPlayerRunner {
     motionSystem.present(scene.timeMs)
   }
 
-  /** Updates reset barriers without rescanning or recapturing motion groups. */
-  private updateMotionResetTimes(): void {
-    const motionSystem = this.motionSystem
-    if (motionSystem === undefined) return
-    const resetTimesByItem = this.resolveMotionResetTimes(this.player.includesPersistOnlyInCurrent())
-    const resetSignature = JSON.stringify([...resetTimesByItem])
-    if (resetSignature === this.motionResetSignature) return
-    motionSystem.setResetTimesByItem(resetTimesByItem)
-    this.motionResetSignature = resetSignature
+  /** Removes captured groups and their HTML resources when a story resets. */
+  private removeMotionGroupsForStories(scene: SolvedScene, storyIds: readonly string[]): void {
+    const selectedStories = new Set(storyIds)
+    if (selectedStories.size === 0) return
+
+    const removedItemIds = new Set(this.resolveMotionItemIds(scene, storyIds))
+    const retainedReplay: MotionBoundary[] = []
+    const retainedPresentation: MotionBoundary[] = []
+    const collectRetained = (
+      boundaries: readonly MotionBoundary[],
+      retained: MotionBoundary[],
+    ): void => {
+      for (const boundary of boundaries) {
+        if (resolveBoundaryStoryIds(boundary, this.motionStoryByItemId)
+          .some((storyId) => selectedStories.has(storyId))) {
+          for (const intent of boundary.intents) removedItemIds.add(intent.itemId)
+          for (const itemId of boundary.before.items.keys()) removedItemIds.add(itemId)
+          for (const itemId of boundary.after.items.keys()) removedItemIds.add(itemId)
+          continue
+        }
+        retained.push(boundary)
+      }
+    }
+    collectRetained(this.replayMotionBoundaries, retainedReplay)
+    collectRetained(this.presentationMotionBoundaries, retainedPresentation)
+    this.replayMotionBoundaries = Object.freeze(retainedReplay)
+    this.presentationMotionBoundaries = Object.freeze(retainedPresentation)
+
+    if (this.motionSystem === undefined) return
+    this.motionSystem.clearTransientPresentation(removedItemIds)
+    this.motionSystem.commit(this.presentationMotionBoundaries, new Map())
+  }
+
+  /** Drops stale geometry while preserving the persistent player and DOM nodes. */
+  private invalidateMotionGeometry(): void {
+    this.replayMotionBoundaries = []
+    this.presentationMotionBoundaries = []
+    if (this.motionSystem === undefined) return
+    this.motionSystem.clearTransientPresentation()
+    this.motionSystem.commit([], new Map())
+  }
+
+  /** Physically prunes pre-reset groups before a cold or hot seek target. */
+  private pruneMotionGroupsBeforeSeek(timeMs: number): void {
+    const removedItemIds = new Set<string>()
+    const shouldRemove = (boundary: MotionBoundary): boolean => (
+      resolveBoundaryStoryIds(boundary, this.motionStoryByItemId).some((storyId) => (
+        this.isBoundaryInvalidatedByReset(boundary, storyId, timeMs)
+      ))
+    )
+    const filter = (boundaries: readonly MotionBoundary[]): readonly MotionBoundary[] => (
+      Object.freeze(boundaries.filter((boundary) => {
+        if (!shouldRemove(boundary)) return true
+        for (const itemId of boundary.before.items.keys()) removedItemIds.add(itemId)
+        for (const itemId of boundary.after.items.keys()) removedItemIds.add(itemId)
+        return false
+      }))
+    )
+    this.replayMotionBoundaries = filter(this.replayMotionBoundaries)
+    this.presentationMotionBoundaries = filter(this.presentationMotionBoundaries)
+    if (this.motionSystem === undefined) return
+    this.motionSystem.clearTransientPresentation(removedItemIds)
+  }
+
+  /** Tests one captured boundary against reset facts visible at a seek target. */
+  private isBoundaryInvalidatedByReset(
+    boundary: MotionBoundary,
+    storyId: string,
+    timeMs: number,
+  ): boolean {
+    const resetBoundaries = this.player.trackJournal.getStoryResetBoundaries(storyId, true)
+    return resetBoundaries.some((reset) => {
+      if (reset.applyAtMs > timeMs) return false
+      if (boundary.timeMs < reset.applyAtMs) return true
+      if (boundary.timeMs > reset.applyAtMs) return false
+      return boundary.intents.some((intent) => (
+        intent.eventSeq === undefined || intent.eventSeq <= reset.eventSeq
+      ))
+    })
+  }
+
+  /** Associates a resolved occurrence with the live capture that supplied its FIRST pose. */
+  private rememberLiveCaptureOccurrences(occurrences: readonly RuntimeMoveOccurrence[]): void {
+    if (occurrences.length === 0 || this.liveFirstLayouts.size === 0) return
+    for (const [captureId, first] of this.liveFirstLayouts) {
+      const matching = occurrences.filter((occurrence) => (
+        occurrence.itemId === first.persoKey
+        && occurrence.startAt === first.timeMs
+      ))
+      if (matching.length === 0) continue
+      this.liveCaptureOccurrences.set(captureId, Object.freeze([...matching]))
+    }
+  }
+
+  /** Reports whether this runner has captured any motion geometry yet. */
+  private hasCapturedMotionBoundaries(): boolean {
+    return this.replayMotionBoundaries.length > 0 || this.presentationMotionBoundaries.length > 0
   }
 
   /** Collects logical item identities belonging to the stories just reset. */
@@ -767,18 +824,6 @@ export class HtmlPlayerRunner {
     return new Set(Object.values(scene.persos)
       .filter((perso) => selectedStories.has(perso.storyId))
       .map((perso) => perso.key))
-  }
-
-  /** Collects every journal reset boundary for the current motion view. */
-  private resolveMotionResetTimes(includePersistOnly: boolean): MotionResetTimesByItem {
-    const resetTimes = new Map<string, readonly { timeMs: number; eventSeq: number }[]>()
-    for (const [storyId, story] of Object.entries(this.player.compiledScene.scene.stories)) {
-      const boundaries = this.player.trackJournal.getStoryResetBoundaries(storyId, includePersistOnly)
-        .map((boundary) => ({ timeMs: boundary.applyAtMs, eventSeq: boundary.eventSeq }))
-      if (boundaries.length === 0) continue
-      for (const perso of story.persos) resetTimes.set(`${storyId}:${perso.id}`, boundaries)
-    }
-    return resetTimes
   }
 
   /** Creates the one optional HTML motion presenter for this visible root. */
@@ -817,6 +862,7 @@ export class HtmlPlayerRunner {
     this.emitSourceAdapter.destroy()
     this.motionSystem?.destroy()
     this.liveFirstLayouts.clear()
+    this.liveCaptureOccurrences.clear()
     this.player.destroy()
     this.nodes.persoNodes.clear()
     this.nodes.persoParts.clear()
@@ -924,7 +970,10 @@ function scheduledMotionGroupKey(
   intent: ScheduledMotionIntent,
   storyByItemId: ReadonlyMap<string, string>,
 ): string {
-  return `${storyByItemId.get(intent.itemId) ?? '<unknown>'}:${intent.startAt}:${intent.endAt}:${intent.targetReflow ? 'structural' : 'pose'}`
+  const storyIds = intent.storyIds === undefined || intent.storyIds.length === 0
+    ? [storyByItemId.get(intent.itemId) ?? '<unknown>']
+    : [...new Set(intent.storyIds)].sort()
+  return `${storyIds.join(',')}:${intent.startAt}:${intent.endAt}:${intent.targetReflow ? 'structural' : 'pose'}`
 }
 
 /** Merges newly captured groups while replacing an older capture of that group. */
@@ -947,10 +996,25 @@ function motionBoundaryGroupKey(
   storyByItemId: ReadonlyMap<string, string>,
 ): string {
   const intent = boundary.intents[0]
-  const storyId = intent === undefined ? '<unknown>' : storyByItemId.get(intent.itemId) ?? '<unknown>'
+  const storyIds = boundary.storyIds === undefined || boundary.storyIds.length === 0
+    ? [intent === undefined ? '<unknown>' : storyByItemId.get(intent.itemId) ?? '<unknown>']
+    : [...new Set(boundary.storyIds)].sort()
   const structural = intent?.targetReflow === true ? 'structural' : 'pose'
   const intentIds = boundary.intents.map(({ id }) => id).sort().join(',')
-  return `${storyId}:${boundary.timeMs}:${structural}:${intentIds}`
+  return `${storyIds.join(',')}:${boundary.timeMs}:${structural}:${intentIds}`
+}
+
+/** Resolves a captured boundary's logical scope for reset partitioning. */
+function resolveBoundaryStoryIds(
+  boundary: MotionBoundary,
+  storyByItemId: ReadonlyMap<string, string>,
+): readonly string[] {
+  if (boundary.storyIds !== undefined && boundary.storyIds.length > 0) {
+    return boundary.storyIds
+  }
+  return [...new Set(boundary.intents
+    .map((intent) => storyByItemId.get(intent.itemId))
+    .filter((storyId): storyId is string => storyId !== undefined))]
 }
 
 /** Creates one component runtime around the visible node registry. */

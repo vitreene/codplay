@@ -7,6 +7,7 @@ export function validateCompiledSceneSemantics(
   diagnostics: DiagnosticCollector,
 ): void {
   validateSceneIdentity(scene, diagnostics)
+  validateStoryIsolation(scene, diagnostics)
 
   const persoIds = new Set<string>()
   const componentTypes = new Set<string>()
@@ -18,6 +19,70 @@ export function validateCompiledSceneSemantics(
   validateActionTargetIndex(scene, diagnostics)
   validateRequirements(scene, componentTypes, diagnostics)
   validateResources(scene, diagnostics)
+}
+
+/** Validates scene-level isolation declarations and the compiled wake index. */
+function validateStoryIsolation(scene: CompiledScene, diagnostics: DiagnosticCollector): void {
+  for (const rule of scene.scene.listen) {
+    if (rule.active !== undefined) {
+      diagnostics.error(
+        'COMPILED_SCENE_LISTEN_ACTIVE_INVALID',
+        'Scene-level listen rules cannot declare story isolation with active.',
+        { context: { sceneId: scene.scene.id, eventName: rule.on } },
+      )
+    }
+  }
+
+  const expected: Record<string, Record<string, number>> = {}
+  for (const [storyId, story] of Object.entries(scene.scene.stories)) {
+    const storyIndex: Record<string, number> = {}
+    for (const [ruleIndex, rule] of story.listen.entries()) {
+      if (rule.active !== true) continue
+      if (storyIndex[rule.on] !== undefined) {
+        diagnostics.error(
+          'COMPILED_STORY_ACTIVATION_DUPLICATE',
+          `Story activation is declared more than once for the event: ${rule.on}.`,
+          { context: { sceneId: scene.scene.id, storyId, eventName: rule.on } },
+        )
+        continue
+      }
+      storyIndex[rule.on] = ruleIndex
+    }
+    expected[storyId] = storyIndex
+  }
+
+  if (Object.values(expected).some((storyIndex) => Object.keys(storyIndex).length > 0)
+    && scene.storyActivationIndex === undefined) {
+    diagnostics.error(
+      'COMPILED_STORY_ACTIVATION_INDEX_MISSING',
+      'CompiledScene storyActivationIndex is required when a story declares active: true.',
+      { context: { sceneId: scene.scene.id } },
+    )
+    return
+  }
+  if (scene.storyActivationIndex === undefined) return
+
+  const actualStoryIds = new Set(Object.keys(scene.storyActivationIndex))
+  const expectedStoryIds = new Set(Object.keys(expected))
+  if (!sameSet(actualStoryIds, expectedStoryIds)) {
+    diagnostics.error(
+      'COMPILED_STORY_ACTIVATION_INDEX_INCONSISTENT',
+      'CompiledScene storyActivationIndex must contain exactly the compiled story ids.',
+      { context: { sceneId: scene.scene.id } },
+    )
+    return
+  }
+  for (const storyId of expectedStoryIds) {
+    const actual = scene.storyActivationIndex[storyId]
+    const expectedRules = expected[storyId] ?? {}
+    if (actual === undefined || !sameRecord(actual, expectedRules)) {
+      diagnostics.error(
+        'COMPILED_STORY_ACTIVATION_INDEX_INCONSISTENT',
+        `CompiledScene storyActivationIndex does not match story.listen for: ${storyId}.`,
+        { context: { sceneId: scene.scene.id, storyId } },
+      )
+    }
+  }
 }
 
 /** Validates the identity fields that are meaningful beyond their primitive types. */
@@ -256,4 +321,15 @@ function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean
     if (!right.has(value)) return false
   }
   return true
+}
+
+/** Compares two string-to-number index records without imposing key order. */
+function sameRecord(
+  left: Readonly<Record<string, number>>,
+  right: Readonly<Record<string, number>>,
+): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => left[key] === right[key])
 }

@@ -132,7 +132,7 @@ CompiledScene -> StructuralTimeline -> événement traité par le player
                                       |
                           groupe local ou reparent nécessaire
                                       |
-                    préparation topologique coopérative
+                    préparation synchrone complète
                                       |
                          fenêtre de capture cohérente
                                       |
@@ -273,10 +273,11 @@ tween de style reconnu.
 Pour une occurrence live, la fenêtre finale doit prendre FIRST dans la pose
 réellement visible avant le commit structurel, puis LAST après la matérialisation
 de la destination. Le chemin normal transporte déjà l'occurrence complète ; la
-réconciliation spéciale du FIRST capturé pour `endEmit` conserve encore un
-chemin de fermeture distinct et reste suivie dans le plan de découverte. Une
-frontière `persist-only` conserve de son côté son endpoint géométrique pour la
-relecture. Aucune présentation normale ne redécouvre un move dans le journal.
+réconciliation spéciale du FIRST capturé pour `endEmit` réutilise désormais cette
+occurrence au moment de la fermeture, sans recompiler le calendrier depuis le
+journal. Une frontière `persist-only` conserve de son côté son endpoint
+géométrique pour la relecture. Aucune présentation normale ne redécouvre un
+move dans le journal.
 
 ### 4. Graphe temporel par item
 
@@ -1097,8 +1098,9 @@ indépendant. Safari a été vérifié sur les passages `1930 ms`, `7200 ms`,
 La distinction entre frontière `persist-only` de relecture et remise live
 `endEmit` demeure nécessaire, mais elle n’autorise pas deux rebuilds globaux du
 graphe. Le groupe issu de l’occurrence prépare les deux données dont sa forme a
-besoin, puis les publie par un commit unique ; la fermeture live spéciale reste
-un point de migration à aligner sur ce même transport.
+besoin, puis les publie par un commit unique ; la fermeture live réutilise
+maintenant l’occurrence associée au capture id et ne reconstruit que le FIRST
+visible avant son LAST.
 
 `init()` ne prépare aucune frontière. `resize()` invalide les poses déjà
 capturées ; il ne reconstruit pas toutes les frontières. Une future occurrence

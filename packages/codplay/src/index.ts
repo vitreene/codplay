@@ -76,6 +76,7 @@ export type {
   CompiledStrapCollection,
   CompiledStrapDeclarations,
   CompiledScene,
+  CompiledStoryActivationIndex,
 } from './scene/compiled'
 export type {
   AuthorListenEvent,

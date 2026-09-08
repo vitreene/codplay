@@ -63,6 +63,8 @@ export type MotionIntent = Readonly<{
 export type MotionBoundary = Readonly<{
   id: string
   timeMs: number
+  /** Logical stories touched by the captured group, including both endpoints. */
+  storyIds?: readonly string[]
   before: LayoutSnapshot
   /** Natural layout immediately after the boundary, before later eventimes. */
   afterStart?: LayoutSnapshot

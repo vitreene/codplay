@@ -23,7 +23,11 @@ const STORY_TWO_END_OFFSET_MS = 4_100;
 /** Story 2: the visible source and target move while the item changes outlet. */
 export const POSITION_STORY_TWO: StoryDoc = {
 	id: POSITION_STORY_TWO_ID,
-	listen: [{ on: CAROUSEL_EVENTS[1].reset, reset: true }],
+	listen: [
+		{ on: CAROUSEL_EVENTS[1].enter, active: true, reset: true },
+		{ on: CAROUSEL_EVENTS[1].leave, active: false },
+		{ on: CAROUSEL_EVENTS[1].reset, reset: true },
+	],
 	persos: [
 		{
 			id: VIEW_IDS[1],

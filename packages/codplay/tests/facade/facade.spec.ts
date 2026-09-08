@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   CodPlay,
@@ -76,7 +76,7 @@ function createInstance(
 }
 
 /** Declares one structural move used to verify facade-to-runner initialization. */
-function motionSceneDoc(): SceneDoc {
+function motionSceneDoc(): SceneDoc<string> {
   return {
     id: 'facade-motion-scene',
       stories: {
@@ -106,7 +106,7 @@ function motionSceneDoc(): SceneDoc {
 }
 
 /** Declares the same move without a compiled eventime for live-discovery coverage. */
-function liveMotionSceneDoc(): SceneDoc {
+function liveMotionSceneDoc(): SceneDoc<string> {
   const scene = motionSceneDoc()
   const story = scene.stories.main
   if (story === undefined) throw new Error('Live motion test story is missing.')
@@ -120,6 +120,53 @@ function liveMotionSceneDoc(): SceneDoc {
         eventimes: [],
       },
     },
+  }
+}
+
+/** Declares a motion scene with a reset after the first captured move. */
+function seekRollbackMotionSceneDoc(): SceneDoc<string> {
+  const scene = motionSceneDoc()
+  const story = scene.stories.main
+  if (story === undefined) throw new Error('Seek rollback story is missing.')
+  return {
+    ...scene,
+    id: 'facade-seek-rollback-scene',
+    stories: {
+      main: {
+        ...story,
+        persos: story.persos.map((perso) => (
+          perso.id === 'item' ? { ...perso, type: 'seek-rollback-component' } : perso
+        )),
+        listen: [{ on: 'reset-motion', reset: true }],
+        eventimes: [
+          { name: 'transfer', startAt: 50 },
+          { name: 'reset-motion', startAt: 100 },
+        ],
+      },
+    },
+  }
+}
+
+/** Adds a module that rejects only the post-reset seek used by the rollback test. */
+function seekRollbackModuleDefinition(): RuntimeModuleServiceDefinition {
+  return {
+    id: 'seek-rollback-module',
+    create: () => ({
+      prepareSeek: (scene) => {
+        if (scene.timeMs !== 150) return { commit: () => undefined }
+        throw new Error('post-reset seek preparation failed')
+      },
+    }),
+  }
+}
+
+/** Declares the registry component with the rejecting seek module attached. */
+function seekRollbackComponentDefinition(): RuntimeComponentDefinition {
+  return {
+    type: 'seek-rollback-component',
+    component: RegistryComponent,
+    modules: ['seek-rollback-module'],
+    validateInitial: () => undefined,
   }
 }
 
@@ -408,6 +455,67 @@ describe('CodPlay facade', () => {
     codplay.destroy()
   })
 
+  it('restores the committed motion graph when a post-reset seek fails during preparation', async () => {
+    const codplay = createCodPlay({
+      engine: {
+        components: { register: [seekRollbackComponentDefinition()] },
+        services: { register: [registryServiceDefinition('seek-rollback')] },
+        modules: { register: [seekRollbackModuleDefinition()] },
+      },
+    })
+    const build = codplay.build({ scene: seekRollbackMotionSceneDoc() })
+
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const root = document.createElement('div')
+    const instance = codplay.instances.create({
+      instanceId: 'motion-seek-rollback-instance',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    await instance.telco.seek(75)
+    const committedMarkup = root.innerHTML
+    expect(findTestOverlayLayer(root)).not.toBeUndefined()
+    expect(instance.telco.getProgress().timelineMs).toBe(75)
+
+    await instance.telco.seek(150)
+
+    expect(instance.telco.getProgress().timelineMs).toBe(75)
+    expect(root.innerHTML).toBe(committedMarkup)
+    expect(findTestOverlayLayer(root)).not.toBeUndefined()
+    codplay.destroy()
+  })
+
+  it('recaptures the active move after resize without rebuilding future motion groups', async () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    const codplay = createCodPlay()
+    const build = codplay.build({ scene: motionSceneDoc() })
+
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const root = document.createElement('div')
+    const instance = codplay.instances.create({
+      instanceId: 'motion-resize-instance',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    try {
+      await instance.telco.seek(150)
+      expect(findTestOverlayLayer(root)).not.toBeUndefined()
+
+      window.dispatchEvent(new Event('resize'))
+
+      expect(findTestOverlayLayer(root)).not.toBeUndefined()
+    } finally {
+      codplay.destroy()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('discovers a move carried by an eventime appended after initialization', async () => {
     const codplay = createCodPlay()
     const build = codplay.build({ scene: liveMotionSceneDoc() })
@@ -473,6 +581,12 @@ describe('CodPlay facade', () => {
 
     expect(findTestOverlayLayer(root)).toBeUndefined()
     expect(instance.telco.getProgress().timelineMs).toBe(1)
+
+    await instance.telco.seek(0)
+    expect(findTestOverlayLayer(root)).not.toBeUndefined()
+
+    await instance.telco.seek(1)
+    expect(findTestOverlayLayer(root)).toBeUndefined()
     codplay.destroy()
   })
 

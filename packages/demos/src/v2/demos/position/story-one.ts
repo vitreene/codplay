@@ -20,7 +20,11 @@ const STORY_ONE_END_OFFSET_MS = FIRST_VIEW_MOVE_OFFSET_MS + POSITION_MOVE_DURATI
 /** Story 1: a stable source and target, with one item reparented between them. */
 export const POSITION_STORY_ONE: StoryDoc = {
   id: POSITION_STORY_ONE_ID,
-  listen: [{ on: CAROUSEL_EVENTS[0].reset, reset: true }],
+  listen: [
+    { on: CAROUSEL_EVENTS[0].enter, active: true, reset: true },
+    { on: CAROUSEL_EVENTS[0].leave, active: false },
+    { on: CAROUSEL_EVENTS[0].reset, reset: true },
+  ],
   eventimes: [{
     name: POSITION_VIEW_ONE_ITEM_MOVE_EVENT,
     startAt: FIRST_VIEW_MOVE_OFFSET_MS,

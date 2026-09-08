@@ -66,6 +66,14 @@ export const VIEW_IDS = [
   'position-view-five',
   'position-view-six',
 ] as const
+export const POSITION_VIEW_STORY_IDS = [
+  POSITION_STORY_ONE_ID,
+  POSITION_STORY_TWO_ID,
+  POSITION_STORY_THREE_ID,
+  POSITION_STORY_FOUR_ID,
+  POSITION_STORY_FIVE_ID,
+  POSITION_STORY_SIX_ID,
+] as const
 export const VIEW_COUNT = VIEW_IDS.length
 export const VIEW_DURATION_MS = 5_000
 export const CAROUSEL_AUTHORING_HORIZON_MS = VIEW_COUNT * VIEW_DURATION_MS

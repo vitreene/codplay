@@ -128,6 +128,8 @@ export type AuthorListenTransform = (event: AuthorListenEvent) => readonly Autho
 /** One authoring listen declaration. */
 export type SceneListenRule = Readonly<{
   on: string
+  /** Opens or closes the owning story isolation period at this event boundary. */
+  active?: boolean
   /** Projects the intercepted event as the initial state of this story. */
   reset?: boolean
   transform?: readonly AuthorListenTransform[]

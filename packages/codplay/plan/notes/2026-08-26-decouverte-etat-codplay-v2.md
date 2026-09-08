@@ -20,6 +20,15 @@ Cette mise à jour ne constitue pas une spécification. Les modifications du cor
 engagées suivent le plan central et restent `En cours` jusqu’aux gates de
 validation prévues.
 
+### Mise à jour du 2026-09-08 — résolution TypeScript
+
+Le typecheck du workspace `codplay` réimporte les sources de `scene-factory`
+depuis les fixtures V2. Les alias `codplay-v1` et la déclaration locale de
+`typed-om-polyfill` sont maintenant inclus dans les programmes TypeScript de
+`codplay` et de `scene-factory`. Les imports historiques restent des imports de
+types explicites ; aucun circuit runtime V1 n’est introduit. Les deux
+typechecks passent.
+
 Ce document est le point d'entrée pour reprendre CodPlay V2. Il décrit où se
 trouve chaque responsabilité, ce qui est fixé, ce qui est effectivement
 implémenté et ce qui reste ouvert. Il évite de redécouvrir les mêmes décisions
