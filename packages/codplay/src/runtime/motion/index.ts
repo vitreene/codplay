@@ -5,6 +5,7 @@ export {
 } from './motion-graph'
 export {
   compileMotionSchedule,
+  createScheduledMotionIntent,
   type MotionScheduleOptions,
   type MotionScheduleTransition,
   type ScheduledMotionIntent,

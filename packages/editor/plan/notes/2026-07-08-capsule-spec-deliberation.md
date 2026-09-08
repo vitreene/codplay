@@ -1,10 +1,10 @@
 # Notes — délibération spec capsule (fusion et arbitrages)
 
-Trace de travail de la fusion de `2026-07-08-capsule-spec.md` à partir des documents sources existants (capsule-distribution-spec, dedit-spec §8, sequence-editor-grid-spec, capsule-automation README, plan zones) et des arbitrages qui ont suivi. Le contenu normatif final vit dans la spec elle-même — ce document garde uniquement le POURQUOI et l'historique des décisions, pour référence.
+Trace de travail de la fusion de `2026-07-08-capsule-spec.md` à partir des documents sources existants (capsule-distribution-spec, dedit-spec §8, sequence-editor-grid-spec, package capsule-automation, plan zones) et des arbitrages qui ont suivi. Le contenu normatif final vit dans la spec elle-même — ce document garde uniquement le POURQUOI et l'historique des décisions, pour référence.
 
 ## Incohérences relevées à la fusion (2026-07-08) et leur résolution
 
-1. **Nommage `carrousel`/`carrousel`** — capsule-automation (code + README) utilisait l'orthographe française, sequence-editor-grid-spec l'anglaise. Tranché : l'anglais fait foi partout, « il y aura des erreurs partout » sinon (justification utilisateur).
+1. **Nommage `carrousel`/`carrousel`** — capsule-automation (code + documentation précédente) utilisait l'orthographe française, sequence-editor-grid-spec l'anglaise. Tranché : l'anglais fait foi partout, « il y aura des erreurs partout » sinon (justification utilisateur).
 
 2. **`GRID_MODE` vs `GRID_POLICY`** — deux enums capsule-automation non reliés : `GRID_MODE` (`AutoCapsuleGridInput.mode`, ce qui pilote réellement la forme de la grille) et `GRID_POLICY` (métadonnée par `CAPSULE_TYPE`, mais seul `.stack` était effectivement lu en code — les cinq autres valeurs assignées mais jamais comparées). Aucune dérivation automatique entre les deux n'existait. Tranché : `GRID_POLICY` retiré entièrement, `GRID_MODE` seul fait foi. Mapping détaillé `CapsuleKind`→`GRID_MODE` reste à finaliser (pistes discutées : `carousel`→`forced`, `liste`→`list`, le reste→`manual`).
 

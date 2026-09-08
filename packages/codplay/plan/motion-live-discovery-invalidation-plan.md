@@ -265,8 +265,11 @@ nom ni de domaine pendant cette migration.
   modifier la capture.
 
 La forme `Move`/`MoveObject`, la validation `reparent`, les defaults internes du
-path et le transport interne `RuntimeMoveOccurrence` sont en place. La clé de
-scope inter-story et l'indexation des stories touchées restent à finaliser.
+path et le transport interne `RuntimeMoveOccurrence` sont en place. L'occurrence
+transporte l'action complète après résolution des données d'événement, son
+ordre, ainsi que les stories source et destination ; la résolution locale ou
+racine de ce scope est maintenant portée jusqu'à la capture. L'indexation
+persistante des groupes reste à finaliser avec le reset chaud.
 
 **Gate :** aucun appel d’auteur ne perd `target`, `mode`, `reorder` ou les
 propriétés de `transition`.
@@ -280,10 +283,13 @@ propriétés de `transition`.
 
 La matérialisation canonique identifie maintenant les actions `move` actives et
 les transporte avec la scène résolue pour les frontières compilées, les
-événements live et les seeks. Le runner sélectionne encore le groupe à partir
-du planning compilé ; l'optimisation d'un index direct de groupes reste ouverte.
-Les reconstructions utilisées uniquement par la timeline d'ordre omettent cette
-métadonnée de présentation.
+événements live et les seeks. En présentation normale, le runner fabrique
+directement l'intention à partir de cette occurrence — y compris les données
+dynamiques du payload — sans recompiler le planning ni rescanner le journal.
+La compilation globale reste limitée aux reconstructions forcées, notamment le
+resize, et le chemin spécial de fermeture live conserve encore sa propre
+transition. Les reconstructions utilisées uniquement par la timeline d'ordre
+omettent cette métadonnée de présentation.
 
 **Gate :** le runner ne lit pas le journal pour redécouvrir une occurrence déjà
 résolue par le player.
@@ -301,8 +307,10 @@ résolue par le player.
   système HTML.
 
 `init()` et la présentation normale ne lancent plus de découverte générale. La
-capture ciblée est en place ; la préparation coopérative et le commit de delta
-unique restent à compléter.
+capture ciblée reçoit directement l'intention résolue et choisit désormais le
+conteneur à partir de toutes les stories touchées. La préparation coopérative,
+le commit de delta unique et la partition durable des groupes restent à
+compléter.
 
 **Gate :** un événement sans `move` ne provoque aucune lecture géométrique ni
 construction du graphe de positions `move`/`reparent`.
@@ -333,7 +341,7 @@ en entier lorsque l’une de ses stories est réinitialisée.
 ### 6. Migrer les fixtures, spécifications et validation — en cours
 
 - Remplacer la propriété auteur dans les scènes, les payloads live et les tests.
-- Mettre à jour les contrats et README une fois le circuit exécuté et vérifié.
+- Mettre à jour les contrats et le suivi du plan une fois le circuit exécuté et vérifié.
 - Garder `position` et `flip-stress` sur le chemin runtime réel, sans
   contournement spécifique.
 
@@ -399,8 +407,35 @@ Les plans dépendants ont été relus contre cette cible :
   présenter le move correspondant.
 
 Les plans `player-engine`, `move-contract`, `runner-flip-integration-study` et
-`story-reset` sont `En cours` avec ce plan. Les README V2 et les fixtures V2
-suivent déjà `reparent`, les defaults internes et la capture par occurrence.
+`story-reset` sont `En cours` avec ce plan. Le code et les fixtures V2 suivent
+déjà `reparent`, les defaults internes et la capture par occurrence.
 Les plans ne sont pas déclarés terminés : préparation multi-frame, scope
 inter-story, retrait physique des groupes au reset et invalidation lazy du
 resize restent des étapes de validation.
+
+## Reprise d’intégration — 2026-09-08
+
+La première intégration du transport d’occurrence est vérifiée sur le circuit
+réel : `RuntimeMoveOccurrence` conserve l’action résolue, l’identité et l’ordre
+de l’événement, ainsi que les stories avant/après ; le runner fabrique alors
+directement l’intention et la capture ciblée choisit le host local ou la racine
+selon ce scope. Les tests couvrent le payload complet de l’occurrence et les
+trois résolutions de conteneur (story unique, stories multiples, racines
+multiples). La fermeture `captureLiveFirstLayout` de `endEmit` reste le chemin
+spécial explicitement suivi plus haut ; elle n’est pas déclarée migrée par cette
+reprise.
+
+Validation exécutée :
+
+- suite V2 CodPlay : 90 fichiers, 571 tests passés (`npm test --workspace=codplay`) ;
+- suite V1 historique : 69 fichiers, 342 tests passés (`npm test`) ;
+- build des démos V2 passé (`npm run build --workspace=@codplay/demos`) ;
+- `git diff --check` passé ;
+- le typecheck global reste bloqué par les imports historiques manquants
+  `codplay-v1/builder/types` et `codplay-v1/player/strap-types` dans
+  `authoring/scene-factory`, avec les erreurs en cascade correspondantes ; aucun
+  diagnostic ne concerne les fichiers modifiés ici.
+
+La tranche reste donc `En cours` jusqu’à la préparation transactionnelle, au
+reset chaud partitionné, à l’invalidation lazy du resize et à la matrice
+navigateur complète.

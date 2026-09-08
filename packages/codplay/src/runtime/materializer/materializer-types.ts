@@ -3,13 +3,20 @@ import type { BaseComponent } from '../components/base-component'
 import type { RuntimeComponentHandle } from '../components/runtime-component-runtime'
 import type { RuntimeComponentIdentity } from '../catalog'
 import type { MoveStateDelta } from '../move'
-import type { SolvedScene } from '../player/pipeline/types'
+import type { MaterializedAction, SolvedScene } from '../player/pipeline/types'
 
 /** One resolved move occurrence that may require a presentation capture. */
 export type RuntimeMoveOccurrence = Readonly<{
   itemId: string
   startAt: number
   eventId?: string
+  eventSeq?: number
+  declarationPath: readonly number[]
+  /** Complete action after event-data resolution, including the move payload. */
+  action: MaterializedAction
+  /** Logical stories touched by the source and destination snapshots. */
+  beforeStoryIds: readonly string[]
+  afterStoryIds: readonly string[]
 }>
 
 /** Context supplied when one materializer applies a solved scene. */

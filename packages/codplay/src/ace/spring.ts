@@ -6,7 +6,8 @@
  * numérique qui détermine la durée de stabilisation, et les conversions entre
  * (rebond, durée perçue) et (raideur, amortissement) — formules SwiftUI d'Apple.
  *
- * Ce qui a été retiré, et pourquoi — voir `src/vendor/README.md` :
+ * Ce qui a été retiré, et pourquoi — voir les notes et la spécification du
+ * runtime motion :
  *
  * 1. **La référence arrière vers l'animation et le rappel `onComplete`.** L'original les
  *    portait *dans la fonction d'easing elle-même* : évaluer à `t` déclenchait un effet de

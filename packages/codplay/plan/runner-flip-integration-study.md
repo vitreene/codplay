@@ -270,12 +270,13 @@ Une classe ou un style direct sans timing reste une mutation immédiate ; le but
 d’interpoler une position doit être porté par la transition du `move` ou par un
 tween de style reconnu.
 
-Pour une occurrence live, la fenêtre finale prend FIRST dans la pose réellement
-visible avant le commit structurel, puis prend LAST après la matérialisation de
-la destination. `endEmit` conserve ainsi sa remise immédiate. Une frontière
-`persist-only` conserve de son côté son endpoint géométrique pour la relecture.
-Ces deux formes sont préparées depuis l’occurrence traitée, jamais découvertes
-après coup dans le journal.
+Pour une occurrence live, la fenêtre finale doit prendre FIRST dans la pose
+réellement visible avant le commit structurel, puis LAST après la matérialisation
+de la destination. Le chemin normal transporte déjà l'occurrence complète ; la
+réconciliation spéciale du FIRST capturé pour `endEmit` conserve encore un
+chemin de fermeture distinct et reste suivie dans le plan de découverte. Une
+frontière `persist-only` conserve de son côté son endpoint géométrique pour la
+relecture. Aucune présentation normale ne redécouvre un move dans le journal.
 
 ### 4. Graphe temporel par item
 
@@ -1096,7 +1097,8 @@ indépendant. Safari a été vérifié sur les passages `1930 ms`, `7200 ms`,
 La distinction entre frontière `persist-only` de relecture et remise live
 `endEmit` demeure nécessaire, mais elle n’autorise pas deux rebuilds globaux du
 graphe. Le groupe issu de l’occurrence prépare les deux données dont sa forme a
-besoin, puis les publie par un commit unique.
+besoin, puis les publie par un commit unique ; la fermeture live spéciale reste
+un point de migration à aligner sur ce même transport.
 
 `init()` ne prépare aucune frontière. `resize()` invalide les poses déjà
 capturées ; il ne reconstruit pas toutes les frontières. Une future occurrence
@@ -1113,8 +1115,8 @@ groupe et stories touchées ; le reset en retire les partitions invalides.
 
 `projet/notes/2026-08-02-flip-reprise.md` est une archive et ne doit plus être
 lu comme un contrat : il conserve des noms supprimés tels que `HtmlFlipRuntime`
-et `FlipCapture`. Le contrat courant est celui du présent plan et des README de
-`runner`, `motion` et `player`.
+et `FlipCapture`. Le contrat courant est celui du présent plan et des
+spécifications et plans associés à `runner`, `motion` et `player`.
 
 ### Correction de régression — repère local et descendants Q/K
 

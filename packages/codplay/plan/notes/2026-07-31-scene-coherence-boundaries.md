@@ -5,7 +5,7 @@
 Decision active pour la fondation `SceneDoc -> CompiledScene`.
 
 Cette note est une reference interne de chantier. Elle ne constitue pas une API
-auteur et ne doit pas etre recopiee dans les README de modules.
+auteur et ne doit pas etre recopiee dans les guides utilisateur de modules.
 
 ## Normalisation
 

@@ -1032,7 +1032,7 @@ Après E2, E3, D1, D2 et leurs tests navigateur :
 - supprimer le double protocole offset et les chemins de preview DOM ; ne pas
   laisser une branche « temporaire » non nommée qui pourrait devenir le
   comportement normal ;
-- mettre à jour les README/statuts et cette matrice pour refléter les preuves,
+- mettre à jour les guides utilisateur, les spécifications et cette matrice pour refléter les preuves,
   puis faire la recherche d'imports V1 dans toute l'application éditeur.
 
 **Acceptation :** navigateur réel sur chargement, sélection, palette, geste,

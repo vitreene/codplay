@@ -18,7 +18,11 @@ import { HtmlPointerCaptureSourceAdapter } from '../capture'
 import type { RuntimeCaptureState } from '../capture'
 import { HtmlPersoEmitSourceAdapter } from './perso-emit-source-adapter'
 import type { Diagnostic } from '../../diagnostics'
-import { compileMotionSchedule, MotionMaterializer } from '../motion'
+import {
+  compileMotionSchedule,
+  createScheduledMotionIntent,
+  MotionMaterializer,
+} from '../motion'
 import type {
   LayoutSnapshot,
   MotionBoundary,
@@ -53,6 +57,7 @@ import type {
   RuntimePreloadSuccess,
 } from '../preload'
 import type { RuntimeIdleOptions } from '../idle'
+import { compareNumberPaths } from '../../shared'
 
 /** One instance-local root target mapped to the runner's supplied root element. */
 type HtmlRootTarget = Readonly<{
@@ -470,29 +475,49 @@ export class HtmlPlayerRunner {
 
     const occurrences = options.occurrences ?? []
     const hasRequestedOccurrences = occurrences.length > 0
+    if (!forceAll && !hasRequestedOccurrences) return
 
-    const journalRevision = this.player.trackJournal.getRevision()
-    const resetTimesByItem = this.resolveMotionResetTimes(this.player.includesPersistOnlyInCurrent())
-    const resetSignature = JSON.stringify([...resetTimesByItem])
-    const resetChanged = resetSignature !== this.motionResetSignature
-    if (!forceAll && !hasRequestedOccurrences && journalRevision === this.motionJournalRevision && !resetChanged) return
+    // Normal occurrence preparation does not inspect the journal. A reset is
+    // already handled by presentMotion's reset context; a first motion system
+    // still needs the current reset snapshot once before it is initialized.
+    const refreshResetSnapshot = forceAll || this.motionSystem === undefined
+    const resetTimesByItem = refreshResetSnapshot
+      ? this.resolveMotionResetTimes(this.player.includesPersistOnlyInCurrent())
+      : undefined
+    const resetSignature = refreshResetSnapshot
+      ? JSON.stringify([...(resetTimesByItem ?? new Map())])
+      : this.motionResetSignature
+    const resetChanged = refreshResetSnapshot && resetSignature !== this.motionResetSignature
+    const journalRevision = forceAll
+      ? this.player.trackJournal.getRevision()
+      : this.motionJournalRevision
 
-    const replayIntents = compileMotionSchedule(
-      this.player.compiledScene,
-      this.player.trackJournal,
-      {
-        includePersistOnly: true,
-        resolveActionTransition: resolveHtmlMotionActionTransition,
-      },
-    )
-    const presentationIntents = compileMotionSchedule(
-      this.player.compiledScene,
-      this.player.trackJournal,
-      {
-        includePersistOnly: this.player.includesPersistOnlyInCurrent(),
-        resolveActionTransition: resolveHtmlMotionActionTransition,
-      },
-    )
+    // A normal materialization already resolved the action and its event data.
+    // Recompiling the complete scene and rescanning the journal here would
+    // recreate the discovery circuit that the occurrence transport removed.
+    const occurrenceIntents = hasRequestedOccurrences
+      ? createMotionIntentsFromOccurrences(occurrences)
+      : []
+    const replayIntents = forceAll
+      ? compileMotionSchedule(
+          this.player.compiledScene,
+          this.player.trackJournal,
+          {
+            includePersistOnly: true,
+            resolveActionTransition: resolveHtmlMotionActionTransition,
+          },
+        )
+      : occurrenceIntents
+    const presentationIntents = forceAll
+      ? compileMotionSchedule(
+          this.player.compiledScene,
+          this.player.trackJournal,
+          {
+            includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+            resolveActionTransition: resolveHtmlMotionActionTransition,
+          },
+        )
+      : occurrenceIntents
     const knownReplayIntentIds = collectBoundaryIntentIds(this.replayMotionBoundaries)
     const knownPresentationIntentIds = collectBoundaryIntentIds(this.presentationMotionBoundaries)
     const replayCandidates = forceAll
@@ -573,7 +598,9 @@ export class HtmlPlayerRunner {
         return
       }
       this.motionSystem = motionSystem
-      if (initialize || resetChanged || forceAll) motionSystem.setResetTimesByItem(resetTimesByItem)
+      if (initialize || resetChanged || forceAll) {
+        motionSystem.setResetTimesByItem(resetTimesByItem ?? new Map())
+      }
       if (initialize || presentationNeedsCapture || forceAll) {
         motionSystem.setBoundaries(this.presentationMotionBoundaries)
       }
@@ -825,6 +852,38 @@ function createMotionStoryIndex(scene: CompiledScene): ReadonlyMap<string, strin
   return index
 }
 
+/** Normalizes materialized move occurrences without rediscovering their action. */
+function createMotionIntentsFromOccurrences(
+  occurrences: readonly RuntimeMoveOccurrence[],
+): readonly ScheduledMotionIntent[] {
+  const effective = new Map<string, ScheduledMotionIntent>()
+  for (const occurrence of occurrences) {
+    const action = occurrence.action
+    const eventId = occurrence.eventId
+      ?? `${occurrence.itemId}:${action.name}:${occurrence.declarationPath.join('.')}`
+    const intent = createScheduledMotionIntent({
+      id: occurrence.eventId === undefined
+        ? `motion:${eventId}:${occurrence.startAt}`
+        : `motion:${eventId}`,
+      eventId,
+      itemId: occurrence.itemId,
+      declarationPath: occurrence.declarationPath,
+      startAt: occurrence.startAt,
+      eventSeq: occurrence.eventSeq,
+      storyIds: [...new Set([...occurrence.beforeStoryIds, ...occurrence.afterStoryIds])],
+      action: action.action,
+      resolveActionTransition: resolveHtmlMotionActionTransition,
+    })
+    if (intent === undefined) continue
+    // One item has one effective action command at a boundary: the last
+    // materialized occurrence wins, matching the compiled schedule contract.
+    effective.set(`${occurrence.itemId}:${occurrence.startAt}`, intent)
+  }
+  return Object.freeze([...effective.values()]
+    .sort((left, right) => left.startAt - right.startAt
+      || compareNumberPaths(left.declarationPath, right.declarationPath)))
+}
+
 /** Collects the move identities already represented by captured boundaries. */
 function collectBoundaryIntentIds(boundaries: readonly MotionBoundary[]): ReadonlySet<string> {
   return new Set(boundaries.flatMap((boundary) => boundary.intents.map((intent) => intent.id)))
@@ -890,7 +949,8 @@ function motionBoundaryGroupKey(
   const intent = boundary.intents[0]
   const storyId = intent === undefined ? '<unknown>' : storyByItemId.get(intent.itemId) ?? '<unknown>'
   const structural = intent?.targetReflow === true ? 'structural' : 'pose'
-  return `${storyId}:${boundary.timeMs}:${boundary.after.timeMs}:${structural}`
+  const intentIds = boundary.intents.map(({ id }) => id).sort().join(',')
+  return `${storyId}:${boundary.timeMs}:${structural}:${intentIds}`
 }
 
 /** Creates one component runtime around the visible node registry. */

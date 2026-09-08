@@ -330,7 +330,7 @@ Note : `lottie.freeze()` est global. En pratique, charger avec `autoplay: false`
 
 ### Phase 4 — Exemples et doc
 - Adapter Lottie dans `src/examples/lottie-adapter-example.ts`
-- `README` dans `src/player/` pour le pattern adapter
+- une documentation utilisateur dans `src/player/` pour le pattern adapter
 
 ---
 

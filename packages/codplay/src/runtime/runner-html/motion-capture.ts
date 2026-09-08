@@ -185,17 +185,17 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
         scene: input.player.resolveSceneBeforeBoundary(timeMs, input.includePersistOnly),
       }))
       const selection = mergeSelections(
-        collectBoundarySelection(beforeScene, afterScene, group.intents, group.storyId),
+        collectBoundarySelection(beforeScene, afterScene, group.intents, group.storyIds),
         afterStartScene === undefined
           ? []
-          : collectBoundarySelection(beforeScene, afterStartScene, group.intents, group.storyId),
-        ...keyScenes.map(({ scene }) => collectBoundarySelection(beforeScene, scene, group.intents, group.storyId)),
+          : collectBoundarySelection(beforeScene, afterStartScene, group.intents, group.storyIds),
+        ...keyScenes.map(({ scene }) => collectBoundarySelection(beforeScene, scene, group.intents, group.storyIds)),
       )
       const motionContainer = input.resolveMotionContainer?.({
         root: input.root,
         scenes: [beforeScene, ...(afterStartScene === undefined ? [] : [afterStartScene]), afterScene],
         itemIds: [...new Set(group.intents.map((intent) => intent.itemId))],
-        storyId: group.storyId,
+        storyIds: group.storyIds,
       })
       const captureRoot = motionContainer?.element ?? input.root
       const rootKey = motionContainer?.key
@@ -299,7 +299,7 @@ export function captureHtmlLiveMotionBoundary(input: Readonly<{
       root: input.root,
       scenes: [beforeScene, afterScene],
       itemIds: [...new Set(group.intents.map((intent) => intent.itemId))],
-      storyId: group.storyId,
+      storyIds: group.storyIds,
     })
     const captureRoot = motionContainer?.element ?? input.root
     const rootKey = motionContainer?.key ?? input.first.rootKey
@@ -307,7 +307,7 @@ export function captureHtmlLiveMotionBoundary(input: Readonly<{
       beforeScene,
       afterScene,
       group.intents,
-      group.storyId,
+      group.storyIds,
     )
     const after = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, afterScene, selection, rootKey)
     const intents = group.intents.map(toMotionIntent)
@@ -338,19 +338,30 @@ function toMotionIntent(intent: ScheduledMotionIntent): MotionIntent {
   })
 }
 
+/** Resolves the logical scope carried by an occurrence, with a scene fallback. */
+function resolveMotionIntentStoryIds(
+  intent: ScheduledMotionIntent,
+  scene: SolvedScene,
+): readonly string[] {
+  const carried = intent.storyIds ?? []
+  if (carried.length > 0) return Object.freeze([...new Set(carried)].sort())
+  const storyId = scene.persos[intent.itemId]?.storyId
+  return storyId === undefined ? Object.freeze([]) : Object.freeze([storyId])
+}
+
 /** Groups simultaneous direct moves into one browser capture transaction. */
 function groupMotionIntents(
   intents: readonly ScheduledMotionIntent[],
   scene: SolvedScene,
 ): readonly Readonly<{
-  storyId?: string
+  storyIds: readonly string[]
   startAt: number
   endAt: number
   structural: boolean
   intents: readonly ScheduledMotionIntent[]
 }>[] {
   const grouped = new Map<string, {
-    storyId?: string
+    storyIds: readonly string[]
     startAt: number
     endAt: number
     structural: boolean
@@ -361,23 +372,25 @@ function groupMotionIntents(
     // duration and therefore an anchor below the playable timeline. Such a
     // fact is journaled, but it has no materializable motion boundary.
     if (intent.startAt < 0) continue
-    const storyId = scene.persos[intent.itemId]?.storyId
+    const storyIds = resolveMotionIntentStoryIds(intent, scene)
     const structural = intent.targetReflow
-    const key = `${storyId ?? '<unknown>'}:${intent.startAt}:${intent.endAt}:${structural ? 'structural' : 'pose'}`
+    const scopeKey = storyIds.length === 1 ? storyIds[0]! : '<root>'
+    const key = `${scopeKey}:${intent.startAt}:${intent.endAt}:${structural ? 'structural' : 'pose'}`
     const group = grouped.get(key) ?? {
-      ...(storyId === undefined ? {} : { storyId }),
+      storyIds,
       startAt: intent.startAt,
       endAt: intent.endAt,
       structural,
       intents: [],
     }
+    group.storyIds = Object.freeze([...new Set([...group.storyIds, ...storyIds])])
     group.intents.push(intent)
     grouped.set(key, group)
   }
   return Object.freeze([...grouped.values()]
     .sort((left, right) => left.startAt - right.startAt || left.endAt - right.endAt)
     .map((group) => Object.freeze({
-      ...(group.storyId === undefined ? {} : { storyId: group.storyId }),
+      storyIds: group.storyIds,
       startAt: group.startAt,
       endAt: group.endAt,
       structural: group.structural,
@@ -393,7 +406,7 @@ function collectBoundarySelection(
   before: SolvedScene,
   after: SolvedScene,
   intents: readonly ScheduledMotionIntent[],
-  storyId?: string,
+  storyIds: readonly string[],
 ): ReadonlySet<string> {
   const selected = new Set<string>()
   for (const intent of intents) {
@@ -405,8 +418,8 @@ function collectBoundarySelection(
       addTargetChildren(after, after.graph.targetByPerso[intent.itemId], selected)
     }
   }
-  addAncestorClosure(before, selected, storyId)
-  addAncestorClosure(after, selected, storyId)
+  addAncestorClosure(before, selected, storyIds)
+  addAncestorClosure(after, selected, storyIds)
   return selected
 }
 
@@ -432,11 +445,11 @@ function addTargetChildren(
 }
 
 /** Adds logical parent chains required to derive FIRST/LAST context. */
-function addAncestorClosure(scene: SolvedScene, selected: Set<string>, storyId?: string): void {
+function addAncestorClosure(scene: SolvedScene, selected: Set<string>, storyIds: readonly string[]): void {
   for (const itemId of [...selected]) {
     let parentItemId = scene.graph.parentByPerso[itemId]
     while (parentItemId !== undefined) {
-      if (storyId !== undefined && scene.persos[parentItemId]?.storyId !== storyId) break
+      if (storyIds.length > 0 && !storyIds.includes(scene.persos[parentItemId]?.storyId ?? '')) break
       selected.add(parentItemId)
       parentItemId = scene.graph.parentByPerso[parentItemId]
     }

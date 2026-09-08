@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import { RuntimePlayer } from '../../../src/runtime/player'
+import type { RuntimeMoveOccurrence } from '../../../src/runtime/materializer'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { CompiledEmitRule } from '../../../src/scene/compiled'
 import { createDragCaptureScene, s6Straps } from '../../fixtures/drag-scene'
@@ -10,6 +11,7 @@ import { createDragCaptureScene, s6Straps } from '../../fixtures/drag-scene'
 describe('V2 drag capture demo scene', () => {
   it('compiles capture functions and routes the end state through the normal event path', async () => {
     const catalog = createCoreRuntimeCatalog()
+    const motionOccurrences: RuntimeMoveOccurrence[] = []
     const build = new SceneBuilder(catalog.validationSnapshot(), {
       createdAt: '2026-08-21T00:00:00.000Z',
     }).build(createDragCaptureScene())
@@ -24,7 +26,14 @@ describe('V2 drag capture demo scene', () => {
       { scene: {}, stories: { main: s6Straps } },
       undefined,
       [{ id: 'root-host', kind: 'root', storyId: 'main' }],
-      undefined,
+      {
+        id: 'test:materializer',
+        context: {},
+        materializeComponent: () => ({ destroy: () => undefined }),
+        materializeScene: (_scene, context) => {
+          motionOccurrences.push(...(context?.motionOccurrences ?? []))
+        },
+      },
       undefined,
       build.functions,
     )
@@ -104,6 +113,18 @@ describe('V2 drag capture demo scene', () => {
       'item-3': 'list-a',
     })
     expect(player.resolveSceneAt(0).persos['main:item-1']?.placement.targetId).toBe('list-b')
+    expect(motionOccurrences).toContainEqual(expect.objectContaining({
+      itemId: 'main:item-1',
+      startAt: 0,
+      eventId: expect.any(String),
+      action: expect.objectContaining({
+        action: expect.objectContaining({
+          move: expect.objectContaining({ target: 'list-b' }),
+        }),
+      }),
+      beforeStoryIds: ['main'],
+      afterStoryIds: ['main'],
+    }))
     expect(player.trackJournal.getStateUpdates('story', 'main', 0)).toContainEqual(expect.objectContaining({
       update: {
         itemListById: {

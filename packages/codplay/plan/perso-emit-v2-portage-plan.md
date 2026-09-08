@@ -303,7 +303,7 @@ contournement propre à la démo.
 - retenir `ref` comme compatibilité V1 et fixer sa résolution sur les parts
   publiées par le materializer ;
 - maintenir ce plan comme suivi de l’implémentation et de ses invariants ;
-- ne modifier aucun README utilisateur pour documenter le debug.
+- ne modifier aucun guide utilisateur pour documenter le debug.
 
 ### Étape B — Compilation et codec — réalisée
 

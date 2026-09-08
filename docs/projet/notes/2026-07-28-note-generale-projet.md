@@ -3,8 +3,8 @@
 Vue d'ensemble à l'usage de qui arrive, ou de qui revient après une pause. Elle dit **ce que le projet
 couvre**, **comment il est rangé**, **où en est chaque pièce**, et **ce qui manque encore**.
 
-Elle ne développe rien : le cadre des échelles et de la combinatoire est dans `../README.md`, le détail
-dans les notes de chaque app.
+Elle ne développe rien : le cadre des échelles et de la combinatoire est dans les notes de cadrage de
+`docs/projet/`, le détail dans les notes de chaque app.
 
 ## 1. L'ampleur
 
@@ -96,13 +96,10 @@ peut en héberger un autre (une instance jouée dans une autre) : c'est une rela
 docs/
   formalisation/            specs normatives V1 — comportement figé, fait foi
   projet/
-    README.md               le routeur : les échelles, la combinatoire, par où entrer
     notes/                  notes transverses aux apps (cette page)
     codplay-v2/
-      README.md
       notes/                cahier des charges V2 du moteur
     sighty/
-      README.md
       notes/                l'orchestrateur, première intention
   plans/                    plans et défauts datés, historiques
 packages/*/plan/            plans et specs colocalisés avec leur package (dont l'éditeur)

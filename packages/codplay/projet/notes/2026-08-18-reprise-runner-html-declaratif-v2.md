@@ -749,7 +749,6 @@ le sont également.
 - `packages/codplay/src/runtime/flip/html-flip-runtime.ts`
 - `packages/codplay/src/runtime/flip/html-dom-projection.ts`
 - `packages/codplay/src/runtime/flip/html-pose.ts`
-- `packages/codplay/src/runtime/flip/README.md`
-- `packages/codplay/src/runtime/runner-html/README.md`
+- `packages/codplay/plan/runner-flip-integration-study.md`
 - `packages/codplay/demos/validation/runner/main.ts`
 - `packages/demos/src/v2/demos/flip-stress/main.ts`

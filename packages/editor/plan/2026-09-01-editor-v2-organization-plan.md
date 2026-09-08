@@ -985,7 +985,7 @@ chemin V1 dans `packages/editor/src` doivent disparaître ou être remplacés.
 | `packages/editor/src/sequence-editor/controller.ts` et `machine.ts` | `syncPlayheadFromTelco()`, l'événement `TELCO.SYNC_PLAYHEAD`, sa transition et les commentaires décrivant `playheadMs` comme miroir continu de telco | aucun mirroring continu ; `playheadMs` est écrit par l'éditeur en mode édition et reçoit seulement l'adoption unique `RECONCILE_PLAYBACK_TIME` à la sortie de lecture |
 | `packages/editor/src/sequence-editor/mount.ts` | les imports `TelcoApi`/`PlayerStateSnapshot` de `codplay-v1`, `attachTelco(telco)`, les appels directs `telco.play()`/`telco.pause()`, `unsubscribeTelcoProgress`, `syncFromTelco()` et l'appel `ctrl.syncPlayheadFromTelco(...)` | recevoir un port de transport générique fourni par `sequence-editor-bridge` ; ses commandes Play/Pause deviennent des intentions vers le bridge de coordination ; consommer `onTransportChange` pour l'état UI et `onPlaybackProgress` pour un affichage de lecture distinct, sans écriture continue du playhead |
 | `packages/editor/src/decor-editor/decor-live-session.ts` | les seules mentions de `TrackedSession` dans les commentaires | le module et sa machine xState restent utiles ; les commentaires parlent d'une session de geste éditeur, sans type ni contrat `selection-frame` V1 |
-| `packages/editor/src/builder/build-scene.ts` et `src/builder/` | le builder V1, son import `codplay-v1/builder/types`, son README et son exposition comme chemin de build de l'éditeur | `src/builder-v2/` et `buildSceneDocV2` ; supprimer l'ancien dossier après migration ou retrait de ses tests et consommateurs, jamais maintenir deux chemins de build dans l'éditeur |
+| `packages/editor/src/builder/build-scene.ts` et `src/builder/` | le builder V1, son import `codplay-v1/builder/types` et son exposition comme chemin de build de l'éditeur | `src/builder-v2/` et `buildSceneDocV2` ; supprimer l'ancien dossier après migration ou retrait de ses tests et consommateurs, jamais maintenir deux chemins de build dans l'éditeur |
 | `packages/editor/package.json` | la dépendance directe `codplay-v1` | conserver `codplay` ; la télécommande de l'éditeur est portée par `sequence-editor` dans cette tranche et aucune dépendance remote séparée n'est ajoutée |
 
 Le même contrôle doit être appliqué aux deux paquets consommés par cette
@@ -1016,8 +1016,8 @@ Le retrait s'effectue dans cet ordre :
    les exports V1 résiduels ;
 5. vérifier par recherche que `packages/editor/src` et
    `packages/editor/package.json` ne contiennent plus d'import, type ou appel
-   V1. Les mentions négatives nécessaires dans les README de frontière et
-   dans ce plan peuvent rester documentaires ; elles ne doivent correspondre
+   V1. Les mentions négatives nécessaires dans les guides utilisateur de
+   frontière et dans ce plan peuvent rester documentaires ; elles ne doivent correspondre
    à aucun chemin d'exécution.
 
 Le contrat `SelectionFrameValue` est interne à la verticale éditeur. Il ne
@@ -1570,7 +1570,7 @@ pas de filet de compatibilité.
 5. Implémenter D1, puis D2 sur le circuit réel.
 6. Exécuter R1 et la matrice navigateur complète.
 7. Mettre à jour la spécification des modules effectivement stabilisés et les
-   README d'utilisation concernés ; le présent document ne devient pas une
+   guides utilisateur concernés ; le présent document ne devient pas une
    spécification après exécution.
 
 ## Conditions de fin

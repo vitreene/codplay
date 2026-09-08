@@ -11,8 +11,10 @@ export type HtmlMotionContainerSceneInput = Readonly<{
   root: Element
   scenes: readonly SolvedScene[]
   itemIds: readonly string[]
-  /** Logical story whose items are being captured. */
+  /** Logical story whose items are being captured when the scope is local. */
   storyId?: string
+  /** Stories touched by the source and destination sides of the boundary. */
+  storyIds?: readonly string[]
 }>
 
 /** Resolves local motion containers without adding an author-facing contract. */
@@ -33,14 +35,16 @@ export class HtmlMotionContainerResolver {
 
   /** Resolves the persistent presentation container owned by one story. */
   resolve(input: HtmlMotionContainerSceneInput): HtmlMotionContainerResolution {
-    if (input.storyId === undefined) {
+    const storyIds = resolveStoryIds(input)
+    if (storyIds.length !== 1) {
       return Object.freeze({ element: input.root, key: this.keyFor(input.root) })
     }
 
-    const key = this.storyKey(input.storyId)
+    const storyId = storyIds[0]!
+    const key = this.storyKey(storyId)
     const storyContainer = resolveStoryContainerElement(
       input.scenes,
-      input.storyId,
+      storyId,
       this.persoNodes,
     )
     const element = storyContainer ?? input.root
@@ -79,6 +83,12 @@ export class HtmlMotionContainerResolver {
   private storyKey(storyId: string): string {
     return `motion-story-${storyId}`
   }
+}
+
+/** Normalizes the stories touched by one boundary without inspecting the DOM. */
+function resolveStoryIds(input: HtmlMotionContainerSceneInput): readonly string[] {
+  const storyIds = input.storyIds ?? (input.storyId === undefined ? [] : [input.storyId])
+  return [...new Set(storyIds.filter((storyId) => storyId.length > 0))]
 }
 
 /** Narrows one materializer value to a DOM element across browser realms. */

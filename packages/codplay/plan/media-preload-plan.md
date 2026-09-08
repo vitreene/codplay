@@ -277,7 +277,7 @@ propriétaire.
   ticker, absence de seek par frame, pause avant seek et seek ;
 - démo V2 `player` non retenue dans le registre ; le preload reste validé par
   son API et ses tests runtime, indépendamment d'une démo média ;
-- README des modules et plan général mis à jour ;
+- spécifications et plan général mis à jour ;
 - aucune modification du core V1 `packages/codplay`.
 
 ## Preuves

@@ -72,9 +72,12 @@ Les plans de référence sont :
 - [DnD et capacité `list`](../list-dnd-integration-plan.md) ;
 - [media et preload](../media-preload-plan.md).
 
-Les documents `README.md` expliquent l'usage d'un module. Ils ne définissent
-pas les contrats internes. Les notes historiques servent à retrouver une
-décision, pas à inventer une nouvelle API.
+Un document `README.md` est un guide utilisateur d'une feature ou d'un package :
+il en explique le but en langage simple et montre au moins un exemple concret
+de son usage. Il ne définit pas les contrats internes et ne porte ni
+architecture, ni statut d'implémentation, ni plan, ni suivi de validation. Les
+notes historiques servent à retrouver une décision, pas à inventer une nouvelle
+API.
 
 Les références V1 ne servent qu'à comparer le comportement à préserver : le
 runtime V2 n'importe pas le runtime V1 et ne crée pas de pont implicite vers
@@ -327,8 +330,6 @@ adaptateur parallèle.
 Le détail normatif du graphe, des contextes parent/enfant, des bornes FIRST/LAST
 et de la capture sans DOM d'analyse appartient au module de présentation HTML :
 
-- [README du runner HTML](../../src/runtime/runner-html/README.md) décrit le
-  fonctionnement effectivement exposé par le runner ;
 - [plan d'intégration FLIP](../runner-flip-integration-study.md) porte le
   contrat, les invariants et le suivi de validation.
 
@@ -396,10 +397,10 @@ FLIP.
 
 | Domaine | État constaté | Ce que cela autorise / interdit |
 |---|---|---|
-| Façade CodPlay | Plan de façade et README marqués `Fini`; code et tests présents | Utiliser la surface publique. Ne pas ajouter `engine.seek`, `instance.capture` ou des méthodes non planifiées. |
+| Façade CodPlay | Plan de façade, code et tests présents | Utiliser la surface publique. Ne pas ajouter `engine.seek`, `instance.capture` ou des méthodes non planifiées. |
 | Cohérence documentaire de la façade | Le plan détaillé dit `Fini`, le plan général la laisse encore `En cours` | Écart documentaire à résoudre ; ne pas en déduire une API manquante. |
-| Engine, player, telco, catalogue | Code présent, tests ciblés présents ; plusieurs README restent `En cours` ou `Fixe` | Fondation utilisable, mais ne pas marquer les modules `Fini` sans leur preuve propre. |
-| CompiledScene et validation | Tranche initiale présente ; plans et README encore `En cours` | Toute extension doit être spécifiée et compilée, pas déduite du DOM. |
+| Engine, player, telco, catalogue | Code présent, tests ciblés présents | Fondation utilisable, mais ne pas marquer les modules `Fini` sans leur preuve propre. |
+| CompiledScene et validation | Tranche initiale présente ; plans encore `En cours` | Toute extension doit être spécifiée et compilée, pas déduite du DOM. |
 | Capture core | Plan capture et validation S5 marqués `Fini`; tests présents | Ne pas ajouter une capacité `instance.capture` pour la démo. |
 | Runner HTML et motion | Corrections de l'endpoint FIRST/LAST, de la source pré-frontière du retarget et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless rejoué sur `flip-stress`, matrice Safari complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, conserve le mover et ses ancêtres dans le bon repère temporel, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |

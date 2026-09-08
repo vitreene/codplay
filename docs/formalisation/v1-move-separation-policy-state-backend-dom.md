@@ -167,7 +167,6 @@ Phase 0 a Phase 6 doivent converger vers les fichiers suivants:
 - `src/runtime/move/dom/dom-layout-snapshot.ts`
 - `src/runtime/move/dom/dom-flip-transition-builder.ts`
 - `src/runtime/move/dom/dom-overlay-world-transition-builder.ts`
-- `src/runtime/move/README.md`
 - `tests/lot18/move-policy.spec.ts`
 - `tests/lot18/runtime-container-state.spec.ts`
 - `tests/lot18/dom-move-backend.spec.ts`
@@ -199,8 +198,8 @@ Travail:
 
 - creer `src/runtime/move/types.ts`
 - y definir `MoveAuditRecord`, `MoveDecision`, `MoveStateDelta`, `MoveBackendResult`
-- creer `src/runtime/move/README.md`
-- y ecrire le contrat `move` courant et l'architecture cible
+- reporter le contrat `move` courant et l'architecture cible dans la specification
+  et le plan applicables
 - ajouter un hook d'audit non destructif dans `RuntimeComponentOrchestrator`
 - logguer pour chaque move:
 - `eventId`

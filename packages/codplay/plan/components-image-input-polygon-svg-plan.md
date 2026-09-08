@@ -227,5 +227,5 @@ La tranche est acceptee seulement lorsque les preuves suivantes passent :
    scène, `polygon:value:*` ni calcul CSS dans la scène ; un seul événement
    `polygon:<parameter>` est diffusé aux persos intéressés.
 
-Les README des nouveaux dossiers portent le statut de la tranche et restent
+Les spécifications des nouveaux dossiers portent le contrat de la tranche et restent
 alignes avec ce document avant sa cloture.

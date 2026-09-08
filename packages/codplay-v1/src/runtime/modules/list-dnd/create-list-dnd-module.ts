@@ -200,9 +200,8 @@ function resolvePersoId(payload: RuntimeModuleHookPayload): string | null {
 /**
  * Implements the list-dnd geometric module — registry access exclusively
  * through `ListDndRegistries` (a direct subset of `RuntimeModuleHost.
- * registries`), never through a public-facing facade. See this folder's
- * `README.md`/the plan for why (low-level node access from a scene-facing
- * mechanism belongs to the module system alone).
+ * registries`), never through a public-facing facade. This low-level access
+ * stays private to the module system rather than a scene-facing facade.
  */
 class ListDndModuleInstance implements ListDndModule {
   private readonly registries: ListDndRegistries

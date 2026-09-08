@@ -19,7 +19,7 @@ porte les tranches et leurs critères d'acceptation :
 - [contexte des décisions déjà prises](./2026-08-30-editor-codplay-v2-context.md) ;
 - [état de découverte CodPlay V2](../../../codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) ;
 - [plan de façade et d'instance](../../../codplay/plan/facade-engine-instance-plan.md) ;
-- [contrat du runner HTML](../../../codplay/src/runtime/runner-html/README.md).
+- [plan du runner HTML](../../../codplay/plan/runner-flip-integration-study.md).
 
 ## État confirmé à l'ouverture de la session
 

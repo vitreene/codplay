@@ -1490,10 +1490,29 @@ function collectMoveOccurrences(
       itemId,
       startAt: action.startAt,
       ...(action.eventId === undefined ? {} : { eventId: action.eventId }),
+      ...(action.eventSeq === undefined ? {} : { eventSeq: action.eventSeq }),
+      declarationPath: Object.freeze([...action.declarationPath]),
+      action,
+      beforeStoryIds: resolveMotionStoryIds(previousScene ?? scene, itemId),
+      afterStoryIds: resolveMotionStoryIds(scene, itemId),
     }))
   }
 
   return Object.freeze(occurrences)
+}
+
+/** Collects the logical stories touched by one item's current placement. */
+function resolveMotionStoryIds(scene: SolvedScene, itemId: string): readonly string[] {
+  const perso = scene.persos[itemId]
+  if (perso === undefined) return Object.freeze([])
+  const storyIds = new Set<string>([perso.storyId])
+  const targetStoryId = perso.placement.target?.storyId
+  if (targetStoryId !== undefined) storyIds.add(targetStoryId)
+  const parentStoryId = perso.placement.parentKey === undefined
+    ? undefined
+    : scene.persos[perso.placement.parentKey]?.storyId
+  if (parentStoryId !== undefined) storyIds.add(parentStoryId)
+  return Object.freeze([...storyIds])
 }
 
 /** Identifies one materialized action occurrence across adjacent scenes. */

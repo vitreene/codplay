@@ -37,7 +37,7 @@
 - V2 demos are pre-release validation references, not disposable bug fixtures. A fix in a complex component must not be accepted from one visual symptom or one passing scenario.
 - Before declaring such a fix stable, record the causal analysis and run the complete relevant validation set: focused regression tests for the failing boundary, non-regression tests for affected parent/child and reparent cases, and the applicable Play, Seek, resize, persistence, lifecycle, typecheck, test, build, and Safari checks. Omit categories only when the analysis explicitly proves they are not affected.
 - If this evidence is incomplete, keep the implementation `En cours` or `A relire`; do not present it as stabilized and do not modify the demo to hide the defect.
-- `README.md` files document usage. They are not the authority for internal contracts. Stable contracts belong in the applicable specifications; plans track implementation work and validation status.
+- A `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It is not the authority for internal contracts. Stable contracts belong in the applicable specifications; plans track implementation work and validation status.
 - Keep the specification, plan, implementation status, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
 
 ## Documentation and implementation tracking
@@ -46,7 +46,7 @@
   - `notes/` records project elaboration, exploration, rationale, and open questions;
   - `plan/` records actions to perform, their order, gates, status, and acceptance path;
   - specifications record what has been implemented, normalized, and made normative;
-  - `README.md` records the user operating instructions.
+  - `README.md` records only simple user-facing usage, with an illustrated concrete example; it must not contain internal contracts, architecture, implementation status, plans, or validation tracking.
 - A `*-reprise-report.md` is a handoff report, not a living documentation surface. Do not append project elaboration, implementation specification, or user instructions to it. Put each new content in the one appropriate category above; if an action must be retained, record it in the applicable plan, not in the report.
 - Keep plans and implementation tracking up to date until the corresponding work is complete.
 - Keep resolved situations that explain the current design; do not keep investigation history merely for its chronology.
@@ -56,7 +56,7 @@
 
 ## Module status
 
-- Every module README starts with a visible status and the target CodPlay version.
+- Module status belongs in the applicable plans and implementation tracking, not in README files.
 - `En cours` means design or implementation is active; proposals are not contracts.
 - `Fixe` means the module contract and decisions are stable, even if implementation remains.
 - `A relire` marks a module or decision that requires explicit review before dependent work.

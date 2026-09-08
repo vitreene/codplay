@@ -1,6 +1,6 @@
 # Spec — Capsule (ed2)
 
-**Périmètre** : point d'entrée unique pour le concept de capsule dans ed2, fusionnant ce qui était réparti entre `2026-06-12-capsule-distribution-spec.md` (`packages/authoring/scene-factory/`), `2026-07-07-dedit-spec.md` §8 (`docs/formalisation/`), `2026-06-11-sequence-editor-grid-spec.md` (`docs/formalisation/`), `packages/authoring/capsule-automation/README.md` et `2026-07-03-selection-frame-variantes-plan.md` (`docs/plans/`). Ces documents restent la référence de détail sur leur périmètre propre (grid-editor, dedit, capsule-automation) ; le pourquoi des arbitrages qui suivent est conservé dans `notes/2026-07-08-capsule-spec-deliberation.md`.
+**Périmètre** : point d'entrée unique pour le concept de capsule dans ed2, fusionnant ce qui était réparti entre `2026-06-12-capsule-distribution-spec.md` (`packages/authoring/scene-factory/`), `2026-07-07-dedit-spec.md` §8 (`docs/formalisation/`), `2026-06-11-sequence-editor-grid-spec.md` (`docs/formalisation/`), le package `packages/authoring/capsule-automation/` et `2026-07-03-selection-frame-variantes-plan.md` (`docs/plans/`). Ces documents restent la référence de détail sur leur périmètre propre (grid-editor, dedit, capsule-automation) ; le pourquoi des arbitrages qui suivent est conservé dans `notes/2026-07-08-capsule-spec-deliberation.md`.
 
 Capsule est une notion **inconnue de Codplay** — c'est un concept d'authoring ed2 qui se résout, au build, en perso Codplay ordinaire.
 
@@ -47,7 +47,7 @@ transition nommée portée par ces frontières prime le défaut de la capsule. U
 keyframe fixe son entrée et reçoit une sortie virtuelle de la distribution, afin de ne pas produire
 une fenêtre de durée nulle.
 
-**Nommage** : l'anglais fait foi pour `carousel` (pas `carrousel`) — s'applique à `CapsuleKind` et à `CAPSULE_TYPE` (capsule-automation) : un seul mot dans les deux packages, y compris dans les exemples du README capsule-automation.
+**Nommage** : l'anglais fait foi pour `carousel` (pas `carrousel`) — s'applique à `CapsuleKind` et à `CAPSULE_TYPE` (capsule-automation) : un seul mot dans les deux packages et dans les exemples d'authoring.
 
 ## 3. `CAPSULE_TYPE` — sous-types de capsule, comportements par défaut
 

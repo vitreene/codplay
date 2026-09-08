@@ -13,6 +13,8 @@ export type ScheduledMotionIntent = Readonly<{
   startAt: number
   /** Journal order retained for same-time reset ordering. */
   eventSeq?: number
+  /** Logical stories touched by the source and destination sides of the occurrence. */
+  storyIds?: readonly string[]
   duration: number
   delay: number
   endAt: number
@@ -61,18 +63,17 @@ export function compileMotionSchedule(
         const action = resolveAction(perso.actions[event.name], event.data)
         const itemId = `${storyId}:${perso.id}`
         const eventId = `${itemId}:${event.name}:${event.declarationPath.join('.')}`
-        const moveTransition = readTransition(action?.move)
-        const poseTransition = options.resolveActionTransition?.(action)
-        const transition = mergeMotionScheduleTransitions(moveTransition, poseTransition)
-        if (transition === undefined) continue
-        const intent = createMotionIntent({
+        const intent = createScheduledMotionIntent({
           id: `motion:${eventId}:${event.startAt}`,
           eventId,
           itemId,
           declarationPath: event.declarationPath,
           startAt: event.startAt,
-          transition,
+          storyIds: [storyId],
+          action,
+          resolveActionTransition: options.resolveActionTransition,
         })
+        if (intent === undefined) continue
         // One item has one effective action command at a boundary: the last declaration wins.
         effective.set(`${itemId}:${event.startAt}`, intent)
       }
@@ -87,26 +88,53 @@ export function compileMotionSchedule(
         const story = scene.scene.stories[target.storyId]
         const perso = story?.persos.find((candidate) => candidate.id === target.persoId)
         const action = resolveAction(perso?.actions[event.name], event.data)
-        const moveTransition = readTransition(action?.move)
-        const poseTransition = options.resolveActionTransition?.(action)
-        const transition = mergeMotionScheduleTransitions(moveTransition, poseTransition)
-        if (transition === undefined) continue
         const itemId = `${target.storyId}:${target.persoId}`
         const declarationPath = Object.freeze([Number.MAX_SAFE_INTEGER, event.eventSeq])
-        effective.set(`${itemId}:${event.applyAtMs}`, createMotionIntent({
+        const intent = createScheduledMotionIntent({
           id: `motion:${event.eventId}`,
           eventId: event.eventId,
           itemId,
           declarationPath,
           startAt: event.applyAtMs,
           eventSeq: event.eventSeq,
-          transition,
-        }))
+          storyIds: [target.storyId],
+          action,
+          resolveActionTransition: options.resolveActionTransition,
+        })
+        if (intent !== undefined) effective.set(`${itemId}:${event.applyAtMs}`, intent)
       }
     }
   }
   return Object.freeze([...effective.values()]
     .sort((left, right) => left.startAt - right.startAt || compareNumberPaths(left.declarationPath, right.declarationPath)))
+}
+
+/** Creates one normalized motion intent from an already resolved action. */
+export function createScheduledMotionIntent(input: Readonly<{
+  id: string
+  eventId: string
+  itemId: string
+  declarationPath: readonly number[]
+  startAt: number
+  eventSeq?: number
+  storyIds?: readonly string[]
+  action?: CompiledRecord
+  resolveActionTransition?: (action: CompiledRecord | undefined) => MotionScheduleTransition | undefined
+}>): ScheduledMotionIntent | undefined {
+  const moveTransition = readTransition(input.action?.move)
+  const poseTransition = input.resolveActionTransition?.(input.action)
+  const transition = mergeMotionScheduleTransitions(moveTransition, poseTransition)
+  if (transition === undefined) return undefined
+  return createMotionIntent({
+    id: input.id,
+    eventId: input.eventId,
+    itemId: input.itemId,
+    declarationPath: input.declarationPath,
+    startAt: input.startAt,
+    ...(input.eventSeq === undefined ? {} : { eventSeq: input.eventSeq }),
+    ...(input.storyIds === undefined ? {} : { storyIds: Object.freeze([...new Set(input.storyIds)]) }),
+    transition,
+  })
 }
 
 /** Flattens nested eventimes into absolute declaration positions. */
@@ -140,6 +168,7 @@ function createMotionIntent(input: Readonly<{
   declarationPath: readonly number[]
   startAt: number
   eventSeq?: number
+  storyIds?: readonly string[]
   transition: Readonly<{
     duration: number
     delay?: number
@@ -163,6 +192,7 @@ function createMotionIntent(input: Readonly<{
     declarationPath: Object.freeze([...input.declarationPath]),
     startAt: input.startAt,
     ...(input.eventSeq === undefined ? {} : { eventSeq: input.eventSeq }),
+    ...(input.storyIds === undefined ? {} : { storyIds: Object.freeze([...new Set(input.storyIds)]) }),
     duration: input.transition.duration,
     delay,
     endAt: input.startAt + endOffsetMs,
