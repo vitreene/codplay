@@ -104,7 +104,7 @@ export function createPositionMoveData(
     return {
       move: {
         target,
-        ...(presentation === 'overlay' ? { flipMode: 'overlay-world' } : {}),
+        ...(presentation === 'overlay' ? { reparent: true } : {}),
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
           ease,
@@ -116,12 +116,11 @@ export function createPositionMoveData(
   return {
     move: {
       target,
-      ...(presentation === 'overlay' ? { flipMode: 'overlay-world' } : {}),
+      ...(presentation === 'overlay' ? { reparent: true } : {}),
       transition: {
         duration: POSITION_MOVE_DURATION_MS,
         ease,
         path: typeof path === 'string' ? prepareAuthoredPositionPath(path) : path,
-        ...(presentation === 'local' ? { pathAnchor: 'center' } : {}),
       },
     },
   }

@@ -1019,7 +1019,7 @@ describe('HtmlPlayerRunner', () => {
         move: {
           target: 'list-b',
           mode: 0,
-          flipMode: 'overlay-world',
+          reparent: true,
           transition: { duration: 420, ease: 'out(2)' },
         },
       }),

@@ -17,10 +17,10 @@ crée l'engine, le player, le runner et la télécommande.
 Deux scénarios exposent les usages distincts du même graphe :
 
 - `List / local movement` : A appartient déjà à la liste et passe de la dernière
-  à la première position à `800 ms`. Aucun `flipMode` n'est déclaré ; la target
+  à la première position à `800 ms`. Aucun `reparent` n'est déclaré ; la target
   inchangée sélectionne automatiquement le mode local pour A, B et C.
 - `flip imbriqué` : P change de conteneur et Q change d'outlet dans P. Sans
-  `flipMode`, leur changement de cible impose une présentation reparent dans
+  `reparent`, leur changement de cible impose une présentation reparent dans
   l'overlay, tandis que B et C restent des reflows locaux.
 
 Dans les deux scénarios, la transition dure `1400 ms`. FIRST est l'état exact

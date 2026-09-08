@@ -28,9 +28,9 @@ verticale de test ne l'ont pas ouverte.
 La revue reste fixe pour ces invariants de graphe et de player. Leur
 orchestration de préparation n’est pas une décision gelée : la découverte par
 occurrence `move`, la capture finale cohérente, le reset chaud avec retrait des
-groupes et l’attente interne de Seek sont suivis dans les plans marqués
-`A relire`. Cette extension ne rouvre ni la sémantique logique du journal ni la
-façade publique de commande.
+groupes et l’attente interne de Seek sont suivis dans les plans dédiés, marqués
+`En cours` pendant leur implémentation. Cette extension ne rouvre ni la
+sémantique logique du journal ni la façade publique de commande.
 
 ## Limites volontairement ouvertes
 

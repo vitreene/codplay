@@ -5,10 +5,19 @@ import type { RuntimeComponentIdentity } from '../catalog'
 import type { MoveStateDelta } from '../move'
 import type { SolvedScene } from '../player/pipeline/types'
 
+/** One resolved move occurrence that may require a presentation capture. */
+export type RuntimeMoveOccurrence = Readonly<{
+  itemId: string
+  startAt: number
+  eventId?: string
+}>
+
 /** Context supplied when one materializer applies a solved scene. */
 export type RuntimeMaterializerSceneContext = Readonly<{
   previousScene?: SolvedScene
   moveDeltas: readonly MoveStateDelta[]
+  /** Move actions that became visible at this materialization boundary. */
+  motionOccurrences?: readonly RuntimeMoveOccurrence[]
   /**
    * Identifies an internal geometry-capture presentation. It must update the
    * persistent author materialization without triggering playback side effects.

@@ -2,8 +2,8 @@
 
 ## Statut
 
-> Status: A relire — extension transactionnelle de Seek pour la préparation
-> motion
+> Status: En cours — extension transactionnelle de Seek pour la préparation
+> motion autorisée.
 > CodPlay version: V2 foundation
 > Review: frontière Engine/Player et seek groupé validés le 2026-08-20 ; la
 > préparation géométrique attendable est définie dans

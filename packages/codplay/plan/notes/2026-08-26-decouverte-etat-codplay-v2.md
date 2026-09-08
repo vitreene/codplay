@@ -8,15 +8,17 @@
 
 La stratégie de préparation motion fait désormais l’objet de
 [`motion-live-discovery-invalidation-plan.md`](../motion-live-discovery-invalidation-plan.md),
-marqué `A relire`. Le plan remplace la découverte globale à `init()` et lors
+marqué `En cours`. Le plan remplace la découverte globale à `init()` et lors
 des présentations ordinaires par une occurrence `move` résolue, une capture
-finale cohérente et un commit atomique. Le reset est chaud et retire les
-groupes de présentation qui touchent sa story. Le contrat auteur cible remplace
-uniquement `flipMode` par `reparent`; `mode` garde l’ordre et les autres
-propriétés de `move` restent disponibles.
+finale cohérente et un commit atomique. La première tranche de code applique
+déjà le transport par occurrence et la capture ciblée ; le reset chaud et les
+autres étapes restent ouverts. Le contrat auteur cible remplace uniquement
+`flipMode` par `reparent`; `mode` garde l’ordre et les autres propriétés de
+`move` restent disponibles.
 
-Cette mise à jour ne constitue pas une spécification et ne lance pas de
-modification du core tant que les plans référencés ne sont pas relus.
+Cette mise à jour ne constitue pas une spécification. Les modifications du core
+engagées suivent le plan central et restent `En cours` jusqu’aux gates de
+validation prévues.
 
 Ce document est le point d'entrée pour reprendre CodPlay V2. Il décrit où se
 trouve chaque responsabilité, ce qui est fixé, ce qui est effectivement

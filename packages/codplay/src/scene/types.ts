@@ -7,6 +7,7 @@ import type { ListAction, ListInitial } from '../runtime/components/list'
 import type { MediaAction, MediaInitial } from '../runtime/components/media'
 import type { PolygonAction, PolygonInitial } from '../runtime/components/polygon'
 import type { TagAction, TagInitial } from '../runtime/components/tag'
+import type { MoveOrderMode } from '../runtime/config/move'
 
 /** Function value allowed in authoring data before compilation extracts it. */
 export type AuthorFunction = (...args: readonly unknown[]) => unknown
@@ -34,8 +35,27 @@ export interface PersoTypeRegistry {
 /** Built-in component type names understood by the V2 core catalog. */
 export type CorePersoType = keyof PersoTypeRegistry
 
+/** Author transition options retained by the public `move` contract. */
+export type MoveTransition = Readonly<{
+  duration?: number
+  delay?: number
+  ease?: string
+  path?: string
+}>
+
 /** Author placement shared by initial profiles and action patches. */
-type PersoPlacement = string | AuthorRecord
+export type MoveObject = Readonly<{
+  target: string
+  mode?: MoveOrderMode
+  reparent?: boolean
+  reorder?: boolean
+  transition?: MoveTransition
+}>
+
+/** Short and object forms accepted by the public `move` contract. */
+export type Move = string | MoveObject
+
+type PersoPlacement = Move
 
 /** Common initial fields supplied by the scene boundary rather than a component. */
 type PersoInitialCommon = Readonly<{

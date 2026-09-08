@@ -8,7 +8,7 @@ Review: frontière HTML/DOM et composants à contexte interne relus le 2026-08-2
 
 La frontière composant/materializer reste fixe. La préparation géométrique
 conditionnelle d'un groupe `move`/`reparent` pendant Play ou Seek relève de
-l'extension actuellement `A relire` dans
+l'extension actuellement `En cours` dans
 [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md) ;
 elle ne change ni le writer unique ni la persistance des materialisations auteur.
 

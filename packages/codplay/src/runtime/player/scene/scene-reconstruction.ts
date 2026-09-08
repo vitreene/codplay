@@ -30,8 +30,9 @@ export function reconstructPlayerScene(
   includeBoundary = true,
   includePersistOnly = true,
   snapshotContribution?: RuntimeSnapshotContribution,
+  includeMoveOccurrences = true,
 ): SolvedScene {
-  const options: MaterializeOptions = { includePersistOnly }
+  const options: MaterializeOptions = { includePersistOnly, includeMoveOccurrences }
   const materialized = includeBoundary
     ? materializeScene(context.compiledScene, timeMs, context.trackJournal, options)
     : materializeSceneBeforeBoundary(context.compiledScene, timeMs, context.trackJournal, options)

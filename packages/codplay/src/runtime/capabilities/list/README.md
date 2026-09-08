@@ -45,13 +45,15 @@ FLIP — comparaison des positions avant et après un changement — est réalis
 par le graphe de mouvement existant.
 
 Les paramètres de transition restent sur l'action `move` :
-`move.transition.duration`, `ease`, `path`, `traversal` et, pour une trajectoire
-calée sur le centre affine, `pathAnchor: 'center'` sont consommés par le graphe
-existant. La capacité `list` ne crée pas de pipeline d'animation parallèle.
+`move.transition.duration`, `delay`, `ease` et `path` sont consommés par le graphe
+existant. Le parcours selon la longueur du path et le suivi du centre visuel
+affine sont des conventions internes. La capacité `list` ne crée pas de pipeline
+d'animation parallèle.
 
 Un déplacement dans la même liste est présenté comme un mouvement local par
 défaut. Un transfert vers une autre liste change de parent logique et devient
-un mouvement de type `reparent`. Cette décision ne dépend pas de `flipMode`.
+un mouvement de type `reparent`. `reparent: true` peut aussi forcer l'overlay sans
+modifier la destination.
 
 ## Contrat et limites
 

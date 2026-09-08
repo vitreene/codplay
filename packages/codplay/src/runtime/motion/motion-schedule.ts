@@ -1,7 +1,6 @@
 import { isPreparedPath, type Path } from 'ace'
 import { compareNumberPaths, isPlainRecord } from '../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../scene/compiled'
-import type { MoveFlipMode, MovePathAnchor } from '../config/move'
 import type { RuntimeTrackEvent, RuntimeTrackJournal } from '../player/pipeline/track-journal'
 import type { MotionPresentationMode } from './types'
 
@@ -20,8 +19,6 @@ export type ScheduledMotionIntent = Readonly<{
   ease: string
   presentationMode: MotionPresentationMode
   path?: Path
-  /** Anchor used to map a prepared path to the presented item pose. */
-  pathAnchor?: MovePathAnchor
   /** Whether this movement may create target-sibling reflow segments. */
   targetReflow: boolean
   /** Absolute times at which the resolved pose must be captured. */
@@ -33,10 +30,8 @@ export type MotionScheduleTransition = Readonly<{
   duration: number
   delay?: number
   ease?: string
-  flipMode?: MoveFlipMode
+  reparent?: boolean
   path?: Path
-  /** Anchor used to map a prepared path to the presented item pose. */
-  pathAnchor?: MovePathAnchor
   /** Move transitions reflow their source/target lists; pose transitions do not by default. */
   targetReflow?: boolean
   /** Relative endpoints of all property transitions contributing to this action. */
@@ -149,9 +144,8 @@ function createMotionIntent(input: Readonly<{
     duration: number
     delay?: number
     ease?: string
-    flipMode?: MoveFlipMode
+    reparent?: boolean
     path?: Path
-    pathAnchor?: MovePathAnchor
     targetReflow?: boolean
     captureOffsetsMs?: readonly number[]
   }>
@@ -173,13 +167,12 @@ function createMotionIntent(input: Readonly<{
     delay,
     endAt: input.startAt + endOffsetMs,
     ease: input.transition.ease ?? 'out(2)',
-    presentationMode: resolvePresentationMode(input.transition.flipMode),
+    presentationMode: resolvePresentationMode(input.transition.reparent),
     targetReflow: input.transition.targetReflow ?? false,
     ...(captureOffsetsMs.length === 0 ? {} : {
       keyTimes: Object.freeze(captureOffsetsMs.map((offset) => input.startAt + offset)),
     }),
     ...(input.transition.path === undefined ? {} : { path: input.transition.path }),
-    ...(input.transition.pathAnchor === undefined ? {} : { pathAnchor: input.transition.pathAnchor }),
   })
 }
 
@@ -199,9 +192,8 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   duration: number
   delay?: number
   ease: string
-  flipMode?: MoveFlipMode
+  reparent?: boolean
   path?: Path
-  pathAnchor?: MovePathAnchor
   targetReflow: boolean
   captureOffsetsMs: readonly number[]
 }> | undefined {
@@ -213,25 +205,23 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
     || !Number.isFinite(transition.duration)
     || transition.duration <= 0) return undefined
   if (transition.ease !== undefined && typeof transition.ease !== 'string') return undefined
-  if (move.flipMode !== undefined && move.flipMode !== 'local' && move.flipMode !== 'overlay-world') return undefined
+  if (move.reparent !== undefined && typeof move.reparent !== 'boolean') return undefined
+  if (Object.prototype.hasOwnProperty.call(move, 'flipMode')) return undefined
   if (transition.path !== undefined && !isPreparedPath(transition.path)) {
     throw new Error('Move transition path must be prepared by the scene compiler.')
   }
-  if (transition.pathAnchor !== undefined
-    && transition.pathAnchor !== 'aabb'
-    && transition.pathAnchor !== 'center') return undefined
-  if (transition.pathAnchor !== undefined && transition.path === undefined) return undefined
+  if (Object.prototype.hasOwnProperty.call(transition, 'traversal')) return undefined
+  if (Object.prototype.hasOwnProperty.call(transition, 'pathAnchor')) return undefined
   return Object.freeze({
     duration: transition.duration,
     ...(transition.delay === undefined ? {} : { delay: readNonNegativeNumber(transition.delay, 'Move transition delay') }),
     ease: (transition.ease as string | undefined) ?? 'out(2)',
-    ...(move.flipMode === undefined ? {} : { flipMode: move.flipMode as MoveFlipMode }),
+    ...(move.reparent === undefined ? {} : { reparent: move.reparent }),
     targetReflow: true,
     captureOffsetsMs: Object.freeze([
       transition.duration + (transition.delay === undefined ? 0 : transition.delay as number),
     ]),
     ...(transition.path === undefined ? {} : { path: transition.path as Path }),
-    ...(transition.pathAnchor === undefined ? {} : { pathAnchor: transition.pathAnchor as MovePathAnchor }),
   })
 }
 
@@ -252,9 +242,6 @@ function mergeMotionScheduleTransitions(
   if (poseTransition === undefined) return moveTransition
   return Object.freeze({
     ...moveTransition,
-    ...(moveTransition.pathAnchor === undefined && poseTransition.pathAnchor !== undefined
-      ? { pathAnchor: poseTransition.pathAnchor }
-      : {}),
     captureOffsetsMs: Object.freeze(uniqueSortedNumbers([
       ...(moveTransition.captureOffsetsMs ?? []),
       ...(poseTransition.captureOffsetsMs ?? []),
@@ -268,6 +255,6 @@ function uniqueSortedNumbers(values: readonly number[]): number[] {
 }
 
 /** Maps the public presentation choice to the graph's structural terminology. */
-function resolvePresentationMode(mode: MoveFlipMode | undefined): MotionPresentationMode {
-  return mode === 'overlay-world' ? 'reparent' : 'local'
+function resolvePresentationMode(reparent: boolean | undefined): MotionPresentationMode {
+  return reparent === true ? 'reparent' : 'local'
 }

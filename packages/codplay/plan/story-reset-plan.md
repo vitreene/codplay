@@ -2,8 +2,8 @@
 
 ## Statut
 
-> Status: A relire — coordination du reset avec la migration motion déclenchée
-> par occurrence.
+> Status: En cours — coordination du reset avec la migration motion déclenchée
+> par occurrence autorisée.
 > CodPlay version: V2 foundation
 > Référence d’exécution :
 > [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)

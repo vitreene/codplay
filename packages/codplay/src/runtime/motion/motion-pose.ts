@@ -1,6 +1,5 @@
 import { invertMatrix, multiplyMatrix, resolvePath, type Point } from 'ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
-import type { MovePathAnchor } from '../config/move'
 import type { RelativeMotionPose } from './types'
 
 /** Converts one world pose into the local coordinates of its parent pose. */
@@ -50,7 +49,6 @@ export function interpolateMotionPose(
   to: HtmlPose,
   progress: number,
   path?: Parameters<typeof resolvePath>[0],
-  pathAnchor: MovePathAnchor = 'aabb',
 ): HtmlPose {
   const matrix: HtmlMatrix = {
     a: lerp(from.matrix.a, to.matrix.a, progress),
@@ -62,16 +60,14 @@ export function interpolateMotionPose(
   }
   const width = lerp(from.localWidth, to.localWidth, progress)
   const height = lerp(from.localHeight, to.localHeight, progress)
-  const fromAnchor = pathAnchor === 'center' ? visualCenter(from) : [from.rect.left, from.rect.top] as Point
-  const toAnchor = pathAnchor === 'center' ? visualCenter(to) : [to.rect.left, to.rect.top] as Point
+  const fromAnchor = visualCenter(from)
+  const toAnchor = visualCenter(to)
   const pathPoint = path === undefined
     ? undefined
     : resolvePath(path, fromAnchor, toAnchor, progress)
   const origin: Point = pathPoint === undefined
     ? [lerp(from.origin.x, to.origin.x, progress), lerp(from.origin.y, to.origin.y, progress)]
-    : pathAnchor === 'center'
-      ? originFromVisualCenter(pathPoint, matrix, width, height)
-      : originFromAabb(pathPoint, matrix, width, height)
+    : originFromVisualCenter(pathPoint, matrix, width, height)
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, to.parentMatrix, width, height)
 }
 
@@ -81,7 +77,6 @@ export function extrapolateMotionPoseAtProgress(
   destination: HtmlPose,
   progress: number,
   path?: Parameters<typeof resolvePath>[0],
-  pathAnchor: MovePathAnchor = 'aabb',
 ): HtmlPose {
   const clamped = Math.min(1 - 1e-6, Math.max(1e-6, progress))
   const inverseRemaining = 1 / (1 - clamped)
@@ -95,8 +90,8 @@ export function extrapolateMotionPoseAtProgress(
   }
   const width = (current.localWidth - destination.localWidth * clamped) * inverseRemaining
   const height = (current.localHeight - destination.localHeight * clamped) * inverseRemaining
-  const currentAnchor = pathAnchor === 'center' ? visualCenter(current) : [current.rect.left, current.rect.top] as Point
-  const destinationAnchor = pathAnchor === 'center' ? visualCenter(destination) : [destination.rect.left, destination.rect.top] as Point
+  const currentAnchor = visualCenter(current)
+  const destinationAnchor = visualCenter(destination)
   const sourceAnchor = path === undefined
     ? [
         (current.origin.x - destination.origin.x * clamped) * inverseRemaining,
@@ -105,9 +100,7 @@ export function extrapolateMotionPoseAtProgress(
     : solvePathSourceAnchor(path, currentAnchor[0], currentAnchor[1], destinationAnchor[0], destinationAnchor[1], clamped)
   const origin = path === undefined
     ? sourceAnchor
-    : pathAnchor === 'center'
-      ? originFromVisualCenter(sourceAnchor, matrix, width, height)
-      : originFromAabb(sourceAnchor, matrix, width, height)
+    : originFromVisualCenter(sourceAnchor, matrix, width, height)
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, current.parentMatrix, width, height)
 }
 
@@ -177,12 +170,6 @@ function poseFromAffine(affine: HtmlMatrix, parentMatrix: HtmlMatrix, width: num
     frameWidth: width * scaleX,
     frameHeight: height * scaleY,
   }
-}
-
-/** Converts an AABB top-left path point back to a local-box origin. */
-function originFromAabb(anchor: Point, matrix: HtmlMatrix, width: number, height: number): Point {
-  const bounds = transformedBounds(matrix, width, height)
-  return [anchor[0] - bounds.left, anchor[1] - bounds.top]
 }
 
 /** Reads the affine visual center without measuring or deriving an AABB. */

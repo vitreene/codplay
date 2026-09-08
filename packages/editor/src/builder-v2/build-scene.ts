@@ -16,7 +16,7 @@ import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
 import type { CapsuleDistributionOutput } from '@codplay/scene-factory/capsule-distribution'
 import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
-import type { PersoDoc, SceneDoc } from 'codplay'
+import type { Move, PersoDoc, SceneDoc } from 'codplay'
 import { prepareSvgPath } from 'ace'
 import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
@@ -309,7 +309,7 @@ type DecorAction = Readonly<{
   style?: Record<string, unknown>
   className?: ClassNameAction
   startAt: number
-  move?: Record<string, unknown>
+  move?: Move
 }>
 
 type CapsuleResolution = Readonly<{
@@ -554,7 +554,7 @@ function buildLeafPerso(
     childArtifact.className,
     initialClassName,
   )
-  const actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Record<string, unknown> }> = { ...transition.actions }
+  const actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }> = { ...transition.actions }
   for (const action of decorActions) {
     actions[action.name] = {
       ...(action.style === undefined || Object.keys(action.style).length === 0 ? {} : { style: action.style }),
@@ -721,15 +721,10 @@ function buildInterpolationActions(
         ...(hasMotionPath && intervalMs > 0 ? {
           move: {
             target: item.parentId === null ? EDITOR_V2_ROOT_PERSO_ID : item.parentId,
-            flipMode: 'local',
             transition: {
               duration: intervalMs,
               ease,
               path,
-              traversal: 'arc-length',
-              // The editor overlay is authored from affine visual centers;
-              // CodPlay must resolve the same center path at presentation time.
-              pathAnchor: 'center',
             },
           },
         } : {}),
@@ -836,13 +831,10 @@ function buildUnifiedPoseActions(
         ...(hasMotionPath && intervalMs > 0 ? {
           move: {
             target: item.parentId === null ? EDITOR_V2_ROOT_PERSO_ID : item.parentId,
-            flipMode: 'local',
             transition: {
               duration: intervalMs,
               ease,
               path,
-              traversal: 'arc-length',
-              pathAnchor: 'center',
             },
           },
         } : {}),

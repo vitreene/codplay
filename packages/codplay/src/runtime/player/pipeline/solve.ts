@@ -34,6 +34,7 @@ export function solveScene(
     persos: effectivePersos,
     graph,
     moveIssues: Object.values(effectivePersos).flatMap((perso) => perso.moveIssues),
+    moveOccurrences: resolved.moveOccurrences,
   }
 }
 
@@ -53,12 +54,12 @@ function resolvePlacement(
         targetId: target?.id,
         target,
         mode: perso.placement.mode,
-        flipMode: perso.placement.flipMode,
+        reparent: perso.placement.reparent,
         source: perso.placement.source,
       }
     }
     case MOUNT_PLACEMENT_OFF:
-      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, flipMode: perso.placement.flipMode, source: perso.placement.source }
+      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, reparent: perso.placement.reparent, source: perso.placement.source }
     case MOUNT_PLACEMENT_PARENT: {
       const target = targets.resolve(perso.placement.targetId)
       return {
@@ -74,7 +75,7 @@ function resolvePlacement(
               ? persoByComponentId.get(target.ownerId ?? '') ?? persoByTargetId.get(target.ownerId ?? '')
               : undefined,
         mode: perso.placement.mode,
-        flipMode: perso.placement.flipMode,
+        reparent: perso.placement.reparent,
         reorder: perso.placement.reorder,
         source: perso.placement.source,
       }

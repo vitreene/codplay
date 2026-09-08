@@ -38,7 +38,7 @@ import {
   TRACK_EVENT_TOGGLE,
 } from '../config/track-events'
 import { RenderSync } from './render-sync'
-import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
+import type { RuntimeMaterializer, RuntimeMaterializerSceneContext, RuntimeMoveOccurrence } from '../materializer'
 import type { RuntimeComponentRuntime } from '../components'
 import {
   RuntimeCaptureSession,
@@ -986,7 +986,15 @@ export class RuntimePlayer {
     )
     this.applyLiveCaptureActions(scene)
     this.componentRuntime?.presentAt?.(scene.timeMs)
-    this.materializer?.materializeScene(scene, context)
+    const motionOccurrences = context.phase === 'geometry-capture'
+      ? []
+      : collectMoveOccurrences(context.previousScene, scene)
+    this.materializer?.materializeScene(
+      scene,
+      motionOccurrences.length === 0
+        ? context
+        : { ...context, motionOccurrences },
+    )
   }
 
   /** Publishes one logical position update without creating another frame loop. */
@@ -1319,8 +1327,8 @@ export class RuntimePlayer {
     for (const instance of this.moduleServiceInstances.values()) instance.resetStructuralOrder?.()
     this.structuralTimeline = new StructuralTimeline(
       this.compiledScene,
-      (timeMs) => this.reconstructBaseScene(timeMs, undefined, true, includePersistOnly),
-      (timeMs) => this.reconstructBaseScene(timeMs, undefined, false, includePersistOnly),
+      (timeMs) => this.reconstructBaseScene(timeMs, undefined, true, includePersistOnly, undefined, false),
+      (timeMs) => this.reconstructBaseScene(timeMs, undefined, false, includePersistOnly, undefined, false),
       (previousOrder, scene, deltas) => resolveStructuralOrder(
         this.moduleServiceInstances,
         previousOrder,
@@ -1349,6 +1357,7 @@ export class RuntimePlayer {
     includeBoundary = true,
     includePersistOnly = true,
     snapshotContribution?: RuntimeSnapshotContribution,
+    includeMoveOccurrences = true,
   ): SolvedScene {
     return reconstructPlayerScene({
       compiledScene: this.compiledScene,
@@ -1356,7 +1365,7 @@ export class RuntimePlayer {
       trackJournal: this.trackJournal,
       mountTargets: this.mountTargets,
       moduleServiceInstances: this.moduleServiceInstances,
-    }, timeMs, childrenByTarget, includeBoundary, includePersistOnly, snapshotContribution)
+    }, timeMs, childrenByTarget, includeBoundary, includePersistOnly, snapshotContribution, includeMoveOccurrences)
   }
 
   /** Reconciles the mutable strap input snapshot from one solved evaluation. */
@@ -1451,6 +1460,62 @@ function isSequenceEndInRange(
   if (eventTimeMs > currentTimeMs) return false
   if (previousTimeMs === undefined) return eventTimeMs === currentTimeMs
   return eventTimeMs >= previousTimeMs
+}
+
+/** Collects move actions that became relevant at one normal presentation boundary. */
+function collectMoveOccurrences(
+  previousScene: SolvedScene | undefined,
+  scene: SolvedScene,
+): readonly RuntimeMoveOccurrence[] {
+  const occurrences: RuntimeMoveOccurrence[] = []
+  const previousTimeMs = previousScene?.timeMs
+  const movingBackward = previousTimeMs !== undefined && scene.timeMs < previousTimeMs
+  const currentMoves = scene.moveOccurrences ?? []
+  const previousMoves = previousScene?.moveOccurrences ?? []
+  // A frame that only advances a time-dependent action reuses the same
+  // materialized move list. No occurrence can have appeared at that boundary.
+  if (previousScene !== undefined && previousMoves === currentMoves) return []
+  const previousKeys = new Set(previousMoves.map(({ action }) => actionOccurrenceKey(action)))
+
+  for (const { itemId, action } of currentMoves) {
+    const key = actionOccurrenceKey(action)
+    const newlyVisible = previousScene === undefined
+      ? action.startAt === scene.timeMs
+      : movingBackward
+        ? isMoveActiveAt(action.action.move, action.startAt, scene.timeMs)
+        : (action.startAt > (previousTimeMs ?? Number.NEGATIVE_INFINITY)
+          && action.startAt <= scene.timeMs) || !previousKeys.has(key)
+    if (!newlyVisible) continue
+    occurrences.push(Object.freeze({
+      itemId,
+      startAt: action.startAt,
+      ...(action.eventId === undefined ? {} : { eventId: action.eventId }),
+    }))
+  }
+
+  return Object.freeze(occurrences)
+}
+
+/** Identifies one materialized action occurrence across adjacent scenes. */
+function actionOccurrenceKey(action: Readonly<{
+  name: string
+  startAt: number
+  eventId?: string
+  declarationPath: readonly number[]
+}>): string {
+  return `${action.eventId ?? action.name}:${action.startAt}:${action.declarationPath.join('.')}`
+}
+
+/** Reports whether a move transition is active at a backward seek target. */
+function isMoveActiveAt(moveValue: unknown, startAt: number, timeMs: number): boolean {
+  if (!isPlainRecord(moveValue) || !isPlainRecord(moveValue.transition)) return false
+  const transition = moveValue.transition
+  const duration = transition.duration
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return false
+  const delay = transition.delay
+  const delayMs = delay === undefined ? 0 : typeof delay === 'number' && Number.isFinite(delay) && delay >= 0 ? delay : 0
+  // The captured FIRST must also cover the delay hold before interpolation.
+  return timeMs >= startAt && timeMs <= startAt + delayMs + duration
 }
 
 /** Reports whether one advancing frame crosses a known logical event boundary. */

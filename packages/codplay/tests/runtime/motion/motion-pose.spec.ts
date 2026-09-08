@@ -46,7 +46,7 @@ describe('motion pose path anchors', () => {
       rect: { left: 150, top: 100, width: 70, height: 60 },
     })
     const path = preparePath({ control: [0.5, 1] }, { traversal: 'arc-length' })
-    const frame = interpolateMotionPose(from, to, 0.5, path, 'center')
+    const frame = interpolateMotionPose(from, to, 0.5, path)
     const expectedCenter = resolvePath(path, visualCenter(from), visualCenter(to), 0.5)
     const actualCenter = visualCenter(frame)
 
@@ -55,7 +55,7 @@ describe('motion pose path anchors', () => {
     expect(frame.origin.x).not.toBeCloseTo(frame.rect.left, 2)
   })
 
-  it('keeps the default V2 AABB anchor when no center mode is declared', () => {
+  it('uses the affine visual center as the default path anchor', () => {
     const from = pose({
       origin: { x: 10, y: 20 },
       matrix: IDENTITY,
@@ -73,10 +73,11 @@ describe('motion pose path anchors', () => {
     })
     const path = preparePath({ control: [0.5, 1] }, { traversal: 'arc-length' })
     const frame = interpolateMotionPose(from, to, 0.5, path)
-    const expectedTopLeft = resolvePath(path, [from.rect.left, from.rect.top], [to.rect.left, to.rect.top], 0.5)
+    const expectedCenter = resolvePath(path, visualCenter(from), visualCenter(to), 0.5)
+    const actualCenter = visualCenter(frame)
 
-    expect(frame.rect.left).toBeCloseTo(expectedTopLeft[0], 6)
-    expect(frame.rect.top).toBeCloseTo(expectedTopLeft[1], 6)
+    expect(actualCenter[0]).toBeCloseTo(expectedCenter[0], 6)
+    expect(actualCenter[1]).toBeCloseTo(expectedCenter[1], 6)
   })
 })
 

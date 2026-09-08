@@ -60,7 +60,7 @@ export const POSITION_STORY_THREE: StoryDoc = {
           data: {
             move: {
               target: TARGET_CONTAINER,
-              flipMode: 'overlay-world',
+              reparent: true,
               transition: {
                 duration: POSITION_MOVE_DURATION_MS,
                 ease: 'inOutCubic',
@@ -215,7 +215,7 @@ export const POSITION_STORY_THREE_ANIMATION_PLAN: readonly StoryAnimationOccurre
   data: {
     move: {
       target: TARGET_CONTAINER,
-      flipMode: 'overlay-world',
+      reparent: true,
       transition: {
         duration: POSITION_MOVE_DURATION_MS,
         ease: 'inOutCubic',

@@ -126,6 +126,7 @@ export {
   resolveStoryStrap,
   validateStrapCollections,
   type MaterializedAction,
+  type MaterializedMoveOccurrence,
   type MaterializedPerso,
   type MaterializedScene,
   type MaterializeOptions,

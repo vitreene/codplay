@@ -7,16 +7,16 @@
 > Version CodPlay : V2 foundation
 
 Cette note rassemble les conclusions de travail issues de l’examen de la
-surcharge motion révélée par la démo `position`. Elle ne modifie pas encore le
-contrat auteur, le player ou le runner. Le plan d’action correspondant est
-maintenant regroupé dans
+surcharge motion révélée par la démo `position`. Elle conserve le raisonnement
+et les décisions préparatoires ; l’implémentation de la première tranche est
+suivie dans le plan d’action regroupé dans
 [`motion-live-discovery-invalidation-plan.md`](../motion-live-discovery-invalidation-plan.md),
-marqué `A relire` ; les contrats actuellement publiés restent applicables tant
-que ce plan n’est pas validé.
+désormais marqué `En cours`.
 
 ## Constat de départ
 
-Le chemin actuel prépare des frontières motion avant qu’elles soient utiles :
+Le chemin observé avant la migration préparait des frontières motion avant
+qu’elles soient utiles :
 
 - `HtmlPlayerRunner.init()` appelle `rebuildMotionBoundaries({ forceAll: true })` ;
 - chaque matérialisation normale appelle ensuite `rebuildMotionBoundaries()`
@@ -338,11 +338,10 @@ alors que la structure ne change pas. `reparent: false` ou l’absence de la
 propriété ne peut pas annuler un reparent structurel. Le runner utilise le mode
 résolu pour choisir le chemin overlay.
 
-Le dépôt actuel porte la présentation dans `flipMode`. Le plan de migration doit
-remplacer cette seule propriété par `reparent`, dans les types, le compilateur,
-le resolver, les payloads dynamiques, les démos et les tests. Il ne doit ni
-modifier `mode` d’ordre, ni supprimer une capacité existante, ni introduire un
-alias permanent ambigu.
+Avant la migration, le dépôt portait la présentation dans `flipMode`. La
+première tranche remplace cette seule propriété par `reparent` dans les types,
+le compilateur, le resolver, les payloads dynamiques, les démos et les tests.
+`mode` d’ordre et les autres capacités de `move` restent inchangés.
 
 ## Conséquences architecturales attendues
 
@@ -372,29 +371,27 @@ segment actif, les captures live `endEmit` et les frontières `persist-only`
 doivent rester des transactions ordonnées du même circuit. Ils ne justifient
 ni second player, ni second journal, ni graphe parallèle.
 
-## Points à décider avant le code
+## Points restant à traiter
 
-1. Formaliser le remplacement de la seule propriété de présentation :
-   `flipMode` devient `reparent?: boolean`, tandis que `mode` d’ordre et toutes
-   les autres capacités de `move` restent inchangés.
-2. Définir le transport interne de l’occurrence `move` entre résolution du
-   player et préparation HTML, sans nouvelle API publique.
-3. Définir la transaction coopérative : barrière de temps locale, budget des
+La forme `reparent`, les defaults du path et le transport interne de l’occurrence
+`move` sont définis et raccordés dans la première tranche. Restent à traiter :
+
+1. Définir la transaction coopérative : barrière de temps locale, budget des
    tâches topologiques, fenêtre de capture cohérente, annulation et
    généralisation asynchrone du groupe de Seek interne.
-4. Définir la stratégie de préparation lors d’un Seek qui traverse plusieurs
+2. Définir la stratégie de préparation lors d’un Seek qui traverse plusieurs
    moves, notamment leurs groupes simultanés et leur ordre `eventSeq`.
-5. Définir l’invalidation après resize sans retomber dans un rebuild global.
-6. Distinguer précisément le chemin local du chemin overlay afin de ne pas
+3. Définir l’invalidation après resize sans retomber dans un rebuild global.
+4. Distinguer précisément le chemin local du chemin overlay afin de ne pas
    perdre les comportements de reflow et de parent/enfant existants.
-7. Faire porter à la préparation les stories source et destination résolues,
+5. Faire porter à la préparation les stories source et destination résolues,
    afin de choisir le conteneur de story par défaut et le conteneur racine pour
    le seul reparent inter-story ; préciser le coût et la fermeture de capture
    de cette exception.
-8. Définir le comportement lorsque la fermeture nécessaire ne tient pas dans le
+6. Définir le comportement lorsque la fermeture nécessaire ne tient pas dans le
    budget de la fenêtre de capture : limite de portée, nouvelle tentative ou
    représentation visuelle figée explicitement conçue.
-9. Remplacer les barrières de reset qui masquent aujourd’hui des segments
+7. Remplacer les barrières de reset qui masquent aujourd’hui des segments
    conservés par l’effacement des graphes de la story, y compris les frontières
    inter-story qui la touchent, et définir leur préparation à la reconstruction
    d’un Seek antérieur.
@@ -435,9 +432,8 @@ démo :
 
 ## État documentaire
 
-Le plan central et le contrat cible de `move` sont désormais marqués `A relire`.
-Ils portent la migration unique `flipMode` → `reparent`, la préparation par
-occurrence, la capture finale cohérente, la portée story/root de l’overlay et
-le retrait réel des groupes au reset. Cette note reste la justification et le
-relevé de contraintes ; elle ne devient pas une spécification exécutable et
-n’autorise aucune modification ad hoc de la démo.
+Le plan central et le contrat cible de `move` sont désormais marqués `En cours`.
+La première tranche couvre la migration `flipMode` → `reparent`, les defaults
+internes, le transport par occurrence et la capture ciblée. Cette note reste la
+justification et le relevé de contraintes ; elle ne devient pas une
+spécification exécutable et n’autorise aucune modification ad hoc de la démo.

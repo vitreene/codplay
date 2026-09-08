@@ -2,7 +2,7 @@ import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import type { MaterializedTrackRegistry } from './tracks'
 import type { MountTarget } from './mount-targets'
 import type { SolvedGraph } from './presentation-graph'
-import type { MoveFlipMode, MoveOrderMode, MovePolicyIssue } from '../../config/move'
+import type { MoveOrderMode, MovePolicyIssue } from '../../config/move'
 import {
   MOUNT_PLACEMENT_INVALID,
   MOUNT_PLACEMENT_OFF,
@@ -41,6 +41,12 @@ export type MaterializedPerso = RuntimePersoIdentity & Readonly<{
   actions: readonly MaterializedAction[]
 }>
 
+/** One move action emitted by materialization for the player presentation boundary. */
+export type MaterializedMoveOccurrence = Readonly<{
+  itemId: string
+  action: MaterializedAction
+}>
+
 /** Scene data selected for one timeline position. */
 export type MaterializedScene = Readonly<{
   scene: CompiledScene
@@ -49,14 +55,16 @@ export type MaterializedScene = Readonly<{
   sceneState: CompiledRecord
   storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, MaterializedPerso>>
+  /** Move actions already identified while the scene actions were materialized. */
+  moveOccurrences?: readonly MaterializedMoveOccurrence[]
 }>
 
 /** Placement value selected from the authored initial state and active moves. */
 export type ResolvedPlacement = Readonly<
-  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED; mode?: MoveOrderMode; flipMode?: MoveFlipMode; source?: MountPlacementSource }
-  | { kind: typeof MOUNT_PLACEMENT_ROOT; mode?: MoveOrderMode; flipMode?: MoveFlipMode; source?: MountPlacementSource }
-  | { kind: typeof MOUNT_PLACEMENT_OFF; mode?: MoveOrderMode; flipMode?: MoveFlipMode; source?: MountPlacementSource }
-  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string; mode?: MoveOrderMode; flipMode?: MoveFlipMode; reorder?: boolean; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED; mode?: MoveOrderMode; reparent?: boolean; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_ROOT; mode?: MoveOrderMode; reparent?: boolean; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_OFF; mode?: MoveOrderMode; reparent?: boolean; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string; mode?: MoveOrderMode; reparent?: boolean; reorder?: boolean; source?: MountPlacementSource }
   | { kind: typeof MOUNT_PLACEMENT_INVALID; source?: MountPlacementSource }
 >
 
@@ -76,6 +84,8 @@ export type ResolvedScene = Readonly<{
   sceneState: CompiledRecord
   storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, ResolvedPerso>>
+  /** Move actions carried from the canonical materialization boundary. */
+  moveOccurrences?: readonly MaterializedMoveOccurrence[]
 }>
 
 /** Placement after resolving an opaque target through internal declarations. */
@@ -86,7 +96,7 @@ export type SolvedPlacement = Readonly<{
   target?: MountTarget
   parentKey?: string
   mode?: MoveOrderMode
-  flipMode?: MoveFlipMode
+  reparent?: boolean
   reorder?: boolean
   source?: MountPlacementSource
 }>
@@ -109,4 +119,6 @@ export type SolvedScene = Readonly<{
   persos: Readonly<Record<string, SolvedPerso>>
   graph: SolvedGraph
   moveIssues: readonly MovePolicyIssue[]
+  /** Move actions carried from the canonical materialization boundary. */
+  moveOccurrences?: readonly MaterializedMoveOccurrence[]
 }>

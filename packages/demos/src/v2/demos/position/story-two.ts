@@ -137,7 +137,7 @@ export const POSITION_STORY_TWO_ANIMATION_PLAN: readonly StoryAnimationOccurrenc
 		data: {
 			move: {
 				target: TARGET_CONTAINER,
-				flipMode: 'overlay-world',
+				reparent: true,
 				transition: {
 					duration: POSITION_MOVE_DURATION_MS,
 					ease: 'inOutQuint',

@@ -4,7 +4,6 @@ import {
   MOVE_OPERATION_UNMOUNT,
   type MoveOperation,
 } from '../config/move'
-import type { MoveFlipMode } from '../config/move'
 import type { SolvedPlacement, SolvedScene } from '../player/pipeline/types'
 
 /** Generic structural change between two solved scene snapshots. */
@@ -17,7 +16,7 @@ export type MoveStateDelta = Readonly<{
   mountedAfter: boolean
   fromPlacement?: SolvedPlacement
   toPlacement?: SolvedPlacement
-  flipMode?: MoveFlipMode
+  reparent?: boolean
 }>
 
 /** Compares two solved snapshots without applying any list or renderer policy. */
@@ -38,7 +37,7 @@ export function diffSolvedScenes(before: SolvedScene, after: SolvedScene): reado
       && fromTargetId === toTargetId
       && beforePlacement?.kind === afterPlacement?.kind
       && beforePlacement?.mode === afterPlacement?.mode
-      && beforePlacement?.flipMode === afterPlacement?.flipMode
+      && beforePlacement?.reparent === afterPlacement?.reparent
       && beforePlacement?.reorder === afterPlacement?.reorder
       && beforePlacement?.source === afterPlacement?.source) continue
 
@@ -55,7 +54,7 @@ export function diffSolvedScenes(before: SolvedScene, after: SolvedScene): reado
       mountedAfter,
       fromPlacement: beforePlacement,
       toPlacement: afterPlacement,
-      flipMode: afterPlacement?.flipMode,
+      reparent: afterPlacement?.reparent,
     })
   }
 

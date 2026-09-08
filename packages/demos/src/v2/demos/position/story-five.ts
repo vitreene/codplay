@@ -231,7 +231,7 @@ export function planStoryFiveAnimation(
         data: {
           move: {
             target: K_CONTAINER,
-            flipMode: 'overlay-world',
+            reparent: true,
             transition: {
               duration: POSITION_MOVE_DURATION_MS,
               ease: 'inOutCubic',
@@ -247,7 +247,7 @@ export function planStoryFiveAnimation(
         data: {
           move: {
             target: Q_CONTAINER,
-            flipMode: 'overlay-world',
+            reparent: true,
             transition: {
               duration: POSITION_MOVE_DURATION_MS,
               ease: 'inOutCubic',
@@ -263,7 +263,7 @@ export function planStoryFiveAnimation(
         data: {
           move: {
             target: K_CONTAINER,
-            flipMode: 'overlay-world',
+            reparent: true,
             transition: {
               duration: POSITION_MOVE_DURATION_MS,
               ease: 'inOutCubic',
@@ -279,7 +279,7 @@ export function planStoryFiveAnimation(
         data: {
           move: {
             target: Q_CONTAINER,
-            flipMode: 'overlay-world',
+            reparent: true,
             transition: {
               duration: POSITION_MOVE_DURATION_MS,
               ease: 'inOutCubic',

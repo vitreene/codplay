@@ -11,7 +11,7 @@ import { isActionSequence, isTweenAction, planActionSequenceSteps } from './acti
 import { resolveActionDefinition } from './action-resolution'
 import type { RuntimeStoryResetBoundary, RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
-import type { MaterializedAction, MaterializedPerso, MaterializedScene } from './types'
+import type { MaterializedAction, MaterializedMoveOccurrence, MaterializedPerso, MaterializedScene } from './types'
 
 type IndexedMaterializedAction = MaterializedAction & { declarationPath: readonly number[] }
 type FlattenedEventime = Readonly<{
@@ -27,6 +27,8 @@ type FlattenedEventime = Readonly<{
 /** Selects whether persisted-only facts participate in one evaluation. */
 export type MaterializeOptions = Readonly<{
   includePersistOnly?: boolean
+  /** Skips presentation-only move metadata for internal structural reconstructions. */
+  includeMoveOccurrences?: boolean
 }>
 
 /** Selects discrete occurrences active at or before one timeline position. */
@@ -59,6 +61,9 @@ function materializeSceneAtBoundary(
 ): MaterializedScene {
   assertTimelineTime(timeMs)
   const persos: Record<string, MaterializedPerso> = {}
+  const moveOccurrences = options.includeMoveOccurrences === false
+    ? undefined
+    : [] as MaterializedMoveOccurrence[]
   const tracks = journal?.registry ?? buildTrackRegistry(scene)
   const sceneState = cloneRecord(scene.scene.state)
   if (journal !== undefined) {
@@ -116,6 +121,13 @@ function materializeSceneAtBoundary(
     for (const perso of story.persos) {
       const key = `${storyId}:${perso.id}`
       const actions = materializePersoActions(events, perso.actions, timeMs, includeBoundary)
+      if (moveOccurrences !== undefined) {
+        for (const action of actions) {
+          if (Object.prototype.hasOwnProperty.call(action.action, 'move')) {
+            moveOccurrences.push(Object.freeze({ itemId: key, action }))
+          }
+        }
+      }
       persos[key] = {
         key,
         storyId,
@@ -127,7 +139,15 @@ function materializeSceneAtBoundary(
     }
   }
 
-  return { scene, timeMs, tracks, sceneState, storyStates, persos }
+  return {
+    scene,
+    timeMs,
+    tracks,
+    sceneState,
+    storyStates,
+    persos,
+    ...(moveOccurrences === undefined ? {} : { moveOccurrences: Object.freeze(moveOccurrences) }),
+  }
 }
 
 /** Expands one perso's event occurrences into the active action occurrences. */

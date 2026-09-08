@@ -59,7 +59,7 @@ describe('V2 drag capture demo scene', () => {
       move: {
         target: 'list-b',
         mode: 0,
-        flipMode: 'overlay-world',
+        reparent: true,
         transition: { duration: 420, ease: 'out(2)' },
       },
     })
@@ -75,7 +75,7 @@ describe('V2 drag capture demo scene', () => {
         move: {
           target: 'list-b',
           mode: 0,
-          flipMode: 'overlay-world',
+          reparent: true,
         },
       },
     })
@@ -88,7 +88,7 @@ describe('V2 drag capture demo scene', () => {
         move: {
           target: 'list-b',
           mode: 0,
-          flipMode: 'overlay-world',
+          reparent: true,
         },
         captureState: {
           persoId: 'item-1',

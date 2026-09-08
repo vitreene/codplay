@@ -1,7 +1,7 @@
 # CodPlay V2 — architecture du mouvement hiérarchique HTML
 
-> Status: A relire — migration vers une préparation motion déclenchée par
-> occurrence `move`
+> Status: En cours — migration vers une préparation motion déclenchée par
+> occurrence `move` autorisée.
 > CodPlay version: V2 foundation
 > Référence de migration :
 > [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
@@ -800,7 +800,7 @@ résidu de `Qc` à `3700 ms` est `1.710 px`, contre une rupture précédente de 
 de `40 px`. Play a aussi traversé `3700 ms` (`3698 -> 3715 ms`) sans saut
 supplémentaire. La validation Safari de ce nouveau graphe et la matrice
 complète resize/persistance restent ouvertes ; cette validation historique reste
-à rejouer après la migration événementielle, dont le statut est `A relire`.
+à rejouer après la migration événementielle, dont le statut est `En cours`.
 
 ### Pose naturelle des ancêtres HTML
 

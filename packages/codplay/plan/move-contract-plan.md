@@ -2,17 +2,17 @@
 
 ## Statut
 
-> Status: A relire — forme auteur cible de la migration motion déclenchée par
-> occurrence.
+> Status: En cours — migration de la forme auteur et des defaults internes,
+> autorisée pour implémentation.
 > CodPlay version: V2 foundation
 > Référence d’exécution :
 > [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
 Les règles de destination, d’ordre, de placement et de transition déjà validées
-restent inchangées. Le code publié porte encore `flipMode` et accepte encore les
-deux paramètres de chemin historiques ; le présent document décrit la forme
-cible qui les retire de la surface auteur lors de la migration atomique des
-types, du compilateur, du runtime, des démos et des tests.
+restent inchangées. La tranche V2 en cours applique la forme cible dans les
+types, le compilateur, le runtime, les démos et les tests : `flipMode` est
+remplacé par `reparent`, tandis que les deux paramètres de chemin restent des
+defaults internes et sortent de la surface auteur.
 
 ## Rôle
 
@@ -33,6 +33,7 @@ type MoveObject = {
 
 type MoveTransition = {
   duration?: number
+  delay?: number
   ease?: TransitionEase
   path?: string
 }
@@ -103,7 +104,8 @@ interpolation. La migration conserve ces règles.
 Les propriétés de `transition` sont facultatives :
 
 - `duration`, en millisecondes ;
-- `ease`, identifiant ou descripteur d’easing ;
+- `delay`, en millisecondes avant le début visuel ;
+- `ease`, identifiant ou descripteur d'easing ;
 - `path`, chaîne SVG `d`.
 
 Lorsqu’un `path` est présent, le compilateur et le graphe appliquent toujours
@@ -202,8 +204,9 @@ La migration doit modifier ensemble les types source, validation, compilation,
 résolution, données dynamiques, scènes, fixtures et assertions. Aucune méthode
 ni capacité de déplacement n’est supprimée ; `flipMode` est migrée vers
 `reparent`, tandis que `traversal` et `pathAnchor` sont retirées de la surface
-auteur au profit des defaults internes. Il n’y a pas d’alias permanent entre les
-syntaxes retirées et la forme cible.
+auteur au profit des defaults internes. Il n’y a pas d’alias de syntaxe auteur
+entre les formes retirées et la forme cible ; les alias de types internes
+conservés pour compatibilité ne valident aucune ancienne propriété.
 
 ## Invariants
 

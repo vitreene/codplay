@@ -43,6 +43,7 @@ export function resolveScene(
     timeMs: materialized.timeMs,
     sceneState: materialized.sceneState,
     storyStates: materialized.storyStates,
+    moveOccurrences: materialized.moveOccurrences,
     persos,
   }
 }

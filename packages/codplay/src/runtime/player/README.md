@@ -1,6 +1,6 @@
 # Lecteur runtime V2
 
-> Statut : Fixe
+> Statut : En cours — occurrences `move` transmises au runner pour une capture ciblée
 > Version CodPlay : V2 foundation
 > Relecture : contrat Engine/Player et seek groupé validés le 2026-08-20 ; renderer de production et capacités supplémentaires restent ouverts
 
@@ -33,8 +33,9 @@ historique séparé ou de carte d'ordre possédée par un module.
 
 `SolvedGraph` est la source unique pour le parent logique, la cible opaque,
 l'ordre complet des enfants, les racines montées et la révision structurelle.
-`flipMode` reste une indication de présentation ; il ne modifie ni la résolution
-des cibles ni l'ordre structurel.
+La matérialisation canonique identifie les occurrences d'action qui portent
+`move` et les transmet au materializer comme contexte interne de présentation ;
+elles ne modifient ni la résolution des cibles ni l'ordre structurel.
 
 ## Organisation interne
 
@@ -98,12 +99,11 @@ pendant la fermeture courante ; une reconstruction ultérieure peut l'inclure.
 `actionTargetIndex` produit par le builder. Les références directes sont
 préparées à la construction ; une action live ne fait que lire cet index.
 
-Après l'ajout d'un eventime au journal, le player appelle un raccord interne du
-runner. Ce raccord ne mesure rien et n'ajoute aucune API publique : le runner
-recompile le planning et ne recapture que si les données de l'eventime
-introduisent effectivement un `move`. Ainsi, un eventime sans `move` ne crée pas
-de graphe, tandis qu'un `move` ajouté après `init()` suit le même chemin de
-capture que `resize()` et reste disponible pour Play, Seek et replay.
+Après l'ajout d'un eventime au journal, le player rematérialise la scène. La
+matérialisation identifie les occurrences `move` nouvellement résolues et les
+transmet au runner. Ce transport ne mesure rien et n'ajoute aucune API publique.
+Ainsi, un eventime sans `move` n'ouvre pas le graphe de positions ; un `move`
+suit ensuite le même chemin de capture pour Play, Seek et replay.
 
 ### Reset événementiel d'une story
 

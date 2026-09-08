@@ -99,6 +99,36 @@ describe('materialize -> resolve -> solve', () => {
     expect(materializeScene(zeroBoundaryScene, 0).persos['main:root']?.actions).toHaveLength(1)
   })
 
+  it('emits move occurrences from the canonical materialization pass', () => {
+    const moveScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              ...scene.scene.stories.main!.persos[0]!,
+              actions: {
+                transfer: { move: { target: '@root', transition: { duration: 100 } } },
+              },
+            }],
+            eventimes: [{ name: 'transfer', startAt: 100 }],
+          },
+        },
+      },
+    }
+
+    const materialized = materializeScene(moveScene, 120)
+    expect(materialized.moveOccurrences).toHaveLength(1)
+    expect(materialized.moveOccurrences?.[0]).toMatchObject({
+      itemId: 'main:root',
+      action: { name: 'transfer', startAt: 100 },
+    })
+    expect(resolveScene(materialized).moveOccurrences).toBe(materialized.moveOccurrences)
+    expect(solveScene(resolveScene(materialized)).moveOccurrences).toBe(materialized.moveOccurrences)
+  })
+
   it('consolidates the static track registry in declaration order', () => {
     const registry = buildTrackRegistry(scene)
 
@@ -753,7 +783,7 @@ describe('materialize -> resolve -> solve', () => {
                   move: {
                     target: 'outlet-a',
                     mode: 'append',
-                    flipMode: 'overlay-world',
+                    reparent: true,
                     reorder: true,
                     transition: {
                       duration: 320,
@@ -778,7 +808,7 @@ describe('materialize -> resolve -> solve', () => {
     expect(solved.persos['main:root']?.placement).toMatchObject({
       targetId: 'outlet-a',
       mode: 'append',
-      flipMode: 'overlay-world',
+      reparent: true,
       reorder: true,
     })
     expect(solved.persos['main:root']?.placement).not.toHaveProperty('transition')

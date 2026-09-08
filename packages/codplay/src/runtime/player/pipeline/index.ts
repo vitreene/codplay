@@ -34,6 +34,7 @@ export {
 } from './strap-collections'
 export type {
   MaterializedAction,
+  MaterializedMoveOccurrence,
   MaterializedPerso,
   MaterializedScene,
   ResolvedPerso,

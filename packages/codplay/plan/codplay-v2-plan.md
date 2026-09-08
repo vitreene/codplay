@@ -139,13 +139,13 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Partie | Plan detaille | Etat |
 |---|---|---|
 | Revue priorité 0 des contrats | [`2026-08-20-priority-0-contract-review.md`](./2026-08-20-priority-0-contract-review.md) | Fixe |
-| Contrats Engine / Player | [`player-engine-plan.md`](./player-engine-plan.md) | A relire : préparation motion attendable dans une transaction de Seek, sémantique logique inchangée |
+| Contrats Engine / Player | [`player-engine-plan.md`](./player-engine-plan.md) | En cours : préparation motion attendable dans une transaction de Seek, sémantique logique inchangée |
 | Façade engine, instances et pilotage | [`facade-engine-instance-plan.md`](./facade-engine-instance-plan.md) | En cours : contrat validé le 2026-08-26, implémentation engagée |
 | Inactivité du player | [`idle-inactivity-plan.md`](./idle-inactivity-plan.md) | Fini pour le monitor core V2 ; l’adaptateur d’inactivité de fenêtre reste hors cœur |
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
-| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | A relire : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
-| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | A relire : préparation par occurrence, capture finale cohérente et commit atomique |
-| Découverte motion et reset chaud | [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md), [`story-reset-plan.md`](./story-reset-plan.md) | A relire : suppression de la découverte globale et retrait réel des groupes reset |
+| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
+| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | En cours : préparation par occurrence, capture finale cohérente et commit atomique |
+| Découverte motion et reset chaud | [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md), [`story-reset-plan.md`](./story-reset-plan.md) | En cours : suppression de la découverte globale et retrait réel des groupes reset |
 | Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
 | Démo standard runner | [`../../demos/src/v2/README.md`](../../demos/src/v2/README.md) | Fixe comme gabarit de validation |
 | Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |

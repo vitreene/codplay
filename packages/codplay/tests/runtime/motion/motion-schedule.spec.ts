@@ -91,7 +91,7 @@ describe('compileMotionSchedule', () => {
             persos: [{
               ...story.persos[0]!,
               actions: {
-                move: { move: { target: 'target', flipMode: 'overlay-world', transition: { duration: 100 } } },
+                move: { move: { target: 'target', reparent: true, transition: { duration: 100 } } },
               },
             }],
           },

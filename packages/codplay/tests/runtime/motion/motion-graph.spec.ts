@@ -497,7 +497,6 @@ describe('motion graph', () => {
       boundary('curved-first', 0, beforeFirst, afterFirst, [{
         ...intent('A', 0, 1000),
         path: preparePath({ control: [0.5, 1] }),
-        pathAnchor: 'center',
       }]),
       boundary('curved-second', 500, beforeSecond, afterSecond, [intent('B', 500, 1000)]),
     ])
@@ -512,7 +511,6 @@ describe('motion graph', () => {
     expect(boundaryRect.top).toBeCloseTo(beforeRect.top, 3)
     expect(graph.tracksByItem.get('A')?.segments).toHaveLength(1)
     expect(graph.tracksByItem.get('A')?.segments[0]?.path).toBeDefined()
-    expect(graph.tracksByItem.get('A')?.segments[0]?.pathAnchor).toBe('center')
   })
 
   it('resolves an active mover against its committed slot before a later reflow', () => {

@@ -1,7 +1,7 @@
 # Coordination mouvement / listes V2
 
-> Status: A relire — coordination logique conservée ; syntaxe `move` et
-> préparation motion alignées sur la migration en attente.
+> Status: En cours — coordination logique conservée ; syntaxe `move` et
+> préparation motion alignées sur la migration autorisée.
 > CodPlay version: V2 foundation
 > Référence : [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 

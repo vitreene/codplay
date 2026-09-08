@@ -2,15 +2,15 @@
 
 ## Statut
 
-> Status: A relire — migration de l’architecture de découverte motion ; aucun
-> changement du core ne commence avant validation de ce plan.
+> Status: En cours — migration de l’architecture de découverte motion autorisée.
 > CodPlay version: V2 foundation
 
 Ce plan remplace la stratégie de découverte globale précédemment décrite dans
 ce fichier. La note de cadrage
 [`2026-09-07-motion-reparent-event-driven-preparation.md`](./notes/2026-09-07-motion-reparent-event-driven-preparation.md)
-en conserve les constats et le raisonnement. Les contrats actuellement publiés
-restent ceux du code tant que cette migration n’est pas réalisée.
+en conserve les constats et le raisonnement. La première tranche de migration
+est en cours dans le code V2 ; les étapes encore ouvertes restent listées dans
+la mise en œuvre ordonnée et ne sont pas présentées comme terminées.
 
 ## But et limites
 
@@ -247,12 +247,15 @@ toujours ce régime. L’absence de `reparent`, ou `false`, ne peut pas annuler 
 reparent structurel. `flipMode` est remplacé par cette propriété ;
 `traversal` et `pathAnchor` ne sont plus acceptés dans le payload auteur et sont
 fixés respectivement à `arc-length` et `center` dans le pipeline interne. Aucune
-autre capacité de `move` n’est retirée et aucun alias ambigu ne subsiste après la
-migration. `mode` ne change donc ni de nom ni de domaine pendant cette migration.
+autre capacité de `move` n’est retirée et aucun alias de syntaxe auteur ne
+subsiste après la migration. Les anciens alias de types conservés sur des
+sous-chemins internes servent uniquement à éviter une suppression d’API ; ils
+ne rendent pas les anciennes propriétés acceptées. `mode` ne change donc ni de
+nom ni de domaine pendant cette migration.
 
 ## Mise en œuvre ordonnée
 
-### 1. Stabiliser le contrat et les interfaces internes
+### 1. Stabiliser le contrat et les interfaces internes — première passe réalisée
 
 - Mettre à jour le type auteur, les validateurs, le compilateur, les résolveurs
   et les payloads de tests pour `reparent?: boolean`.
@@ -261,20 +264,31 @@ migration. `mode` ne change donc ni de nom ni de domaine pendant cette migration
 - Définir la clé de groupe, les stories touchées et le choix de scope avant de
   modifier la capture.
 
+La forme `Move`/`MoveObject`, la validation `reparent`, les defaults internes du
+path et le transport interne `RuntimeMoveOccurrence` sont en place. La clé de
+scope inter-story et l'indexation des stories touchées restent à finaliser.
+
 **Gate :** aucun appel d’auteur ne perd `target`, `mode`, `reorder` ou les
 propriétés de `transition`.
 
-### 2. Émettre l’occurrence depuis le circuit player réel
+### 2. Émettre l’occurrence depuis le circuit player réel — première passe réalisée
 
 - Raccorder la même émission aux événements compilés, live, cascades et à la
   reconstruction de Seek.
 - Grouper les occurrences à une frontière sans modifier leur ordre logique.
 - Ne préparer à froid que les groupes nécessaires à la frame demandée.
 
+La matérialisation canonique identifie maintenant les actions `move` actives et
+les transporte avec la scène résolue pour les frontières compilées, les
+événements live et les seeks. Le runner sélectionne encore le groupe à partir
+du planning compilé ; l'optimisation d'un index direct de groupes reste ouverte.
+Les reconstructions utilisées uniquement par la timeline d'ordre omettent cette
+métadonnée de présentation.
+
 **Gate :** le runner ne lit pas le journal pour redécouvrir une occurrence déjà
 résolue par le player.
 
-### 3. Remplacer la découverte générale par une préparation ciblée
+### 3. Remplacer la découverte générale par une préparation ciblée — en cours
 
 - Retirer la construction motion forcée de `HtmlPlayerRunner.init()`.
 - Retirer l’appel de découverte `move`/`reparent` de `presentMotion()` et de
@@ -286,10 +300,14 @@ résolue par le player.
 - Réunir l’affectation des frontières et du graphe dans un seul commit du
   système HTML.
 
+`init()` et la présentation normale ne lancent plus de découverte générale. La
+capture ciblée est en place ; la préparation coopérative et le commit de delta
+unique restent à compléter.
+
 **Gate :** un événement sans `move` ne provoque aucune lecture géométrique ni
 construction du graphe de positions `move`/`reparent`.
 
-### 4. Rendre la préparation et Seek transactionnels
+### 4. Rendre la préparation et Seek transactionnels — à faire
 
 - Découper uniquement le travail topologique ; capturer les positions publiées
   dans une fenêtre finale cohérente.
@@ -300,7 +318,7 @@ construction du graphe de positions `move`/`reparent`.
 **Gate :** aucune frame partielle, aucun saut à l’entrée du move, aucune
 progression accumulée pendant le calcul.
 
-### 5. Partitionner les ressources de présentation et traiter le reset
+### 5. Partitionner les ressources de présentation et traiter le reset — à faire
 
 - Indexer les graphes et ressources par groupe et stories touchées.
 - Appliquer les trois scopes d’overlay définis plus haut, sans modifier le repli
@@ -312,7 +330,7 @@ progression accumulée pendant le calcul.
 **Gate :** un reset ne lance pas de capture et un groupe inter-story est retiré
 en entier lorsque l’une de ses stories est réinitialisée.
 
-### 6. Migrer les fixtures, spécifications et validation
+### 6. Migrer les fixtures, spécifications et validation — en cours
 
 - Remplacer la propriété auteur dans les scènes, les payloads live et les tests.
 - Mettre à jour les contrats et README une fois le circuit exécuté et vérifié.
@@ -381,7 +399,8 @@ Les plans dépendants ont été relus contre cette cible :
   présenter le move correspondant.
 
 Les plans `player-engine`, `move-contract`, `runner-flip-integration-study` et
-`story-reset` restent `A relire` avec ce plan. Les README du runtime et le code
-conservent volontairement la forme publiée actuelle (`flipMode` et la
-découverte existante) jusqu’à la validation puis l’implémentation de cette
-migration ; ils ne sont pas des oublis documentaires.
+`story-reset` sont `En cours` avec ce plan. Les README V2 et les fixtures V2
+suivent déjà `reparent`, les defaults internes et la capture par occurrence.
+Les plans ne sont pas déclarés terminés : préparation multi-frame, scope
+inter-story, retrait physique des groupes au reset et invalidation lazy du
+resize restent des étapes de validation.

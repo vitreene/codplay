@@ -155,7 +155,7 @@ export class HtmlListDndPreview {
       ...(isPlainRecord(captureState.move) ? captureState.move : {}),
       target: target.listId,
       mode: target.index,
-      flipMode: 'overlay-world',
+      reparent: true,
     }
     return {
       ...captureState,

@@ -62,13 +62,10 @@ describe('editor V2 motion path adapter', () => {
     const moveAction = perso.actions['item-kf-target-kf'] as Record<string, unknown>
     expect(moveAction.move).toEqual({
       target: `${EDITOR_V2_STORY_ID}__root`,
-      flipMode: 'local',
       transition: {
         duration: 1_000,
         ease: 'inOut',
         path: 'M 0 0 A 0.7 0.7 0 0 1 1 0',
-        traversal: 'arc-length',
-        pathAnchor: 'center',
       },
     })
     expect(moveAction).toHaveProperty('style')
@@ -111,7 +108,6 @@ describe('editor V2 motion path adapter', () => {
     expect((state?.move as Record<string, unknown> | undefined)?.transition).toEqual(expect.objectContaining({
       duration: 1_000,
       path: expect.objectContaining({ kind: 'segments' }),
-      pathAnchor: 'center',
     }))
   })
 

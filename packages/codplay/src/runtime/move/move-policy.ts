@@ -1,6 +1,5 @@
 import { isPlainRecord } from '../../shared'
 import { isPreparedPath } from 'ace'
-import type { PathTraversal } from 'ace'
 import { SCENE_BUILD_CONFIG } from '../../scene/config/scene-build'
 import {
   MOVE_ORDER_MODE_APPEND,
@@ -12,8 +11,6 @@ import {
   MOVE_ISSUE_CONFLICT_SAME_TICK,
   MOVE_ISSUE_LAST_INVALID_SAME_TICK,
   type MoveTransition,
-  type MoveFlipMode,
-  type MovePathAnchor,
   type MoveOrderMode,
   type MovePolicyIssue,
 } from '../config/move'
@@ -98,45 +95,47 @@ function readMove(value: CompiledValue | undefined, actionMove: boolean): Resolv
   if (typeof record.target !== 'string') return { kind: MOUNT_PLACEMENT_INVALID, source }
   const mode = actionMove ? readMoveMode(record.mode) : undefined
   if (actionMove && record.mode !== undefined && mode === undefined) return { kind: MOUNT_PLACEMENT_INVALID, source }
-  const flipMode = readMoveFlipMode(record.flipMode)
-  if (flipMode === INVALID_FLIP_MODE) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  const reparent = readMoveReparent(record.reparent)
+  if (reparent === INVALID_REPARENT) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  // The former presentation and path-integration fields are deliberately not
+  // accepted after the author contract migration.
+  if (Object.prototype.hasOwnProperty.call(record, 'flipMode')) return { kind: MOUNT_PLACEMENT_INVALID, source }
   const transition = readMoveTransition(record.transition)
   if (transition === INVALID_TRANSITION) return { kind: MOUNT_PLACEMENT_INVALID, source }
-  const target = readTarget(record.target, source, mode, flipMode, record.reorder, actionMove)
+  const target = readTarget(record.target, source, mode, reparent, record.reorder, actionMove)
   return target
 }
 
 const INVALID_TRANSITION = Symbol('invalid move transition')
-const INVALID_FLIP_MODE = Symbol('invalid move flip mode')
+const INVALID_REPARENT = Symbol('invalid move reparent')
 
 /** Resolves one authored target while preserving structural placement metadata. */
 function readTarget(
   target: string,
   source: MountPlacementSource,
   mode?: MoveOrderMode,
-  flipMode?: MoveFlipMode | typeof INVALID_FLIP_MODE,
+  reparent?: boolean | typeof INVALID_REPARENT,
   reorder?: CompiledValue,
   actionMove = false,
 ): ResolvedPlacement {
-  if (flipMode === INVALID_FLIP_MODE) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  if (reparent === INVALID_REPARENT) return { kind: MOUNT_PLACEMENT_INVALID, source }
   const reorderValue = typeof reorder === 'boolean' ? reorder : undefined
-  if (target === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, mode, flipMode, source }
-  if (target === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, mode, flipMode, source }
+  if (target === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, mode, reparent, source }
+  if (target === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, mode, reparent, source }
   return {
     kind: MOUNT_PLACEMENT_PARENT,
     targetId: target,
     mode: mode ?? (actionMove ? MOVE_ORDER_MODE_AUTO : undefined),
-    flipMode,
+    reparent,
     source,
     reorder: reorderValue,
   }
 }
 
-/** Validates the explicit HTML presentation strategy without inventing one. */
-function readMoveFlipMode(value: CompiledValue | undefined): MoveFlipMode | typeof INVALID_FLIP_MODE | undefined {
+/** Validates the optional author request for an overlay reparent presentation. */
+function readMoveReparent(value: CompiledValue | undefined): boolean | typeof INVALID_REPARENT | undefined {
   if (value === undefined) return undefined
-  if (value === 'local' || value === 'overlay-world') return value
-  return INVALID_FLIP_MODE
+  return typeof value === 'boolean' ? value : INVALID_REPARENT
 }
 
 /** Accepts compiler-prepared transition data without parsing SVG at runtime. */
@@ -147,18 +146,19 @@ function readMoveTransition(value: CompiledValue | undefined): MoveTransition | 
   if (record.duration !== undefined && (typeof record.duration !== 'number' || !Number.isFinite(record.duration) || record.duration <= 0)) {
     return INVALID_TRANSITION
   }
+  if (record.delay !== undefined
+    && (typeof record.delay !== 'number' || !Number.isFinite(record.delay) || record.delay < 0)) {
+    return INVALID_TRANSITION
+  }
   if (record.ease !== undefined && typeof record.ease !== 'string') return INVALID_TRANSITION
   if (record.path !== undefined && !isPreparedPath(record.path)) return INVALID_TRANSITION
-  if (record.traversal !== undefined && record.traversal !== 'parameter' && record.traversal !== 'arc-length') return INVALID_TRANSITION
-  if (record.traversal !== undefined && record.path === undefined) return INVALID_TRANSITION
-  if (record.pathAnchor !== undefined && record.pathAnchor !== 'aabb' && record.pathAnchor !== 'center') return INVALID_TRANSITION
-  if (record.pathAnchor !== undefined && record.path === undefined) return INVALID_TRANSITION
+  if (Object.prototype.hasOwnProperty.call(record, 'traversal')) return INVALID_TRANSITION
+  if (Object.prototype.hasOwnProperty.call(record, 'pathAnchor')) return INVALID_TRANSITION
   return {
     duration: record.duration as number | undefined,
+    delay: record.delay as number | undefined,
     ease: record.ease,
     path: record.path,
-    traversal: record.traversal as PathTraversal | undefined,
-    pathAnchor: record.pathAnchor as MovePathAnchor | undefined,
   }
 }
 

@@ -163,7 +163,6 @@ describe('position V2 demo', () => {
           duration: 7_275,
           ease: 'inOutQuad',
           path: { kind: 'segments' },
-          traversal: 'arc-length',
         },
       },
     })
@@ -174,7 +173,6 @@ describe('position V2 demo', () => {
           duration: 7_275,
           ease: 'inOutQuad',
           path: { kind: 'segments' },
-          traversal: 'arc-length',
         },
       },
     })
@@ -186,7 +184,6 @@ describe('position V2 demo', () => {
           duration: 875,
           ease: 'inOutQuad',
           path: { kind: 'segments' },
-          traversal: 'arc-length',
         },
       },
     })
@@ -244,7 +241,7 @@ describe('position V2 demo', () => {
     expect(viewTwoMove?.data).toMatchObject({
       move: {
         target: 'position:view-two:target',
-        flipMode: 'overlay-world',
+        reparent: true,
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
         },
@@ -374,7 +371,7 @@ describe('position V2 demo', () => {
     expect(viewFiveMoves.at(-1)?.data).toMatchObject({
       move: {
         target: 'position:view-five:q',
-        flipMode: 'overlay-world',
+        reparent: true,
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
         },
@@ -431,6 +428,7 @@ describe('position V2 demo', () => {
       functions: build.functions,
       root,
     })
+    const geometryReads = vi.spyOn(Element.prototype, 'getBoundingClientRect')
     codplay.engine.advance(0)
     await instance.telco.play()
     for (let index = 5; index > 0; index -= 1) {
@@ -445,8 +443,13 @@ describe('position V2 demo', () => {
     expect(source?.contains(item)).toBe(true)
     codplay.engine.advance(999)
     expect(source?.contains(item)).toBe(true)
-    codplay.engine.advance(1)
-    expect(source?.contains(item)).toBe(true)
+    expect(geometryReads).not.toHaveBeenCalled()
+    codplay.engine.advance(1_000)
+    expect(target?.contains(item)).toBe(true)
+    const readsAfterMove = geometryReads.mock.calls.length
+    expect(readsAfterMove).toBeGreaterThan(0)
+    codplay.engine.advance(1_100)
+    expect(geometryReads).toHaveBeenCalledTimes(readsAfterMove)
     codplay.engine.advance(FIRST_VIEW_MOVE_OFFSET_MS + POSITION_MOVE_DURATION_MS + 1)
     expect(target?.contains(item)).toBe(true)
   })
@@ -514,6 +517,7 @@ describe('position V2 demo', () => {
     codplay.engine.advance(0)
     await instance.telco.play()
     const readsAfterInit = geometryReads.mock.calls.length
+    expect(readsAfterInit).toBe(0)
 
     await instance.events.emit(
       { name: CAROUSEL_EVENTS[0]!.reset, visibility: 'scene' },

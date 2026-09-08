@@ -1,8 +1,8 @@
 import type { Path, Tween } from 'ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
-import type { MovePathAnchor } from '../config/move'
 
-export type { MovePathAnchor }
+/** Keeps the historical subpath type available without accepting the old author property. */
+export type { MovePathAnchor } from '../config/move'
 
 /** Host presentation selected after one structural movement is classified. */
 export type MotionPresentationMode = 'local' | 'reparent'
@@ -55,8 +55,6 @@ export type MotionIntent = Readonly<{
   ease: string
   presentationMode: MotionPresentationMode
   path?: Path
-  /** Anchor used to map the normalized path to the presented pose. */
-  pathAnchor?: MovePathAnchor
   /** Whether this intent changes the target layout and may reflow its siblings. */
   targetReflow?: boolean
 }>
@@ -118,8 +116,6 @@ export type MotionSegment = Readonly<{
   ease: string
   presentationMode: MotionPresentationMode
   path?: Path
-  /** Anchor used to map the normalized path to the presented pose. */
-  pathAnchor?: MovePathAnchor
   /** The segment owns a structural destination and must use its LAST pose. */
   targetReflow: boolean
   direct: boolean

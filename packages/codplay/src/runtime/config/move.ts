@@ -1,5 +1,4 @@
 import type { CompiledValue } from '../../scene/compiled'
-import type { PathTraversal } from 'ace'
 
 /** Stable logical ordering modes for mounted children. */
 export const MOVE_ORDER_MODE_AUTO = 'auto' as const
@@ -22,20 +21,18 @@ export type MoveOrderMode =
   | typeof MOVE_ORDER_MODE_PREPEND
   | number
 
-/** HTML presentation strategy for one authored movement transition. */
+/** Legacy subpath type retained for compatibility; it is not an accepted V2 author field. */
 export type MoveFlipMode = 'local' | 'overlay-world'
 
-/** Point followed by an authored path during HTML presentation. */
+/** Legacy subpath type retained for compatibility; path anchoring is now fixed to center. */
 export type MovePathAnchor = 'aabb' | 'center'
 
 /** Compiled transition data carried by a move and consumed by the motion materializer. */
 export type MoveTransition = Readonly<{
   duration?: number
+  delay?: number
   ease?: CompiledValue
   path?: CompiledValue
-  traversal?: PathTraversal
-  /** `center` follows the affine visual center; absent/`aabb` preserves the existing V2 AABB anchor. */
-  pathAnchor?: MovePathAnchor
 }>
 
 export type MovePolicyIssue = Readonly<{

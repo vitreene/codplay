@@ -27,7 +27,7 @@ export const POSITION_STORY_ONE: StoryDoc = {
     data: {
       move: {
         target: TARGET_CONTAINER,
-        flipMode: 'overlay-world',
+        reparent: true,
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
           ease: 'inOutCubic',
@@ -114,7 +114,7 @@ export const POSITION_STORY_ONE_ANIMATION_PLAN: readonly StoryAnimationOccurrenc
   data: {
     move: {
       target: TARGET_CONTAINER,
-      flipMode: 'overlay-world',
+      reparent: true,
       transition: {
         duration: POSITION_MOVE_DURATION_MS,
         ease: 'inOutCubic',

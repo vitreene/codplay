@@ -49,22 +49,19 @@ une capture live ouverte, le FIRST utilisé pour la remise `endEmit`. Il ne
 conserve jamais un arbre DOM historique et ne rejoue pas une branche spéciale
 de capture.
 
-Le planning de mouvement est compilé à l'initialisation du journal visible,
-après une capture live terminée et après un resize. Si un eventime est ensuite
-ajouté au journal, le raccord interne du player réveille le runner ; celui-ci
-compare les intents issus de `move`, recapture uniquement lorsqu'un nouvel
-intent existe, puis remplace les frontières du même graphe. La boucle de frame
-résout alors le graphe conservé et l'état de présentation du materializer ; elle
-ne relit pas la géométrie du DOM et ne reconstruit pas le planning à chaque
-frame.
+Le planning de mouvement n'est pas construit pour les moves futurs lors de
+`init()`. Le player transmet au runner les occurrences `move` résolues à une
+frontière ; le runner compile alors le planning utile, capture le groupe demandé
+et remplace ses frontières. La boucle de frame résout ensuite le graphe conservé
+et l'état de présentation du materializer ; elle ne relit pas la géométrie du DOM
+et ne reconstruit pas le planning à chaque frame.
 
 Un reset événementiel de story ne constitue pas une demande de recapture. Le
-runner retire les ressources transitoires de la story interceptante, met à jour
-les barrières de reset du graphe et conserve les frontières historiques pour le
-seek. Les autres stories préconstruites ne sont pas visitées. Une capture ne
-reprend que lorsqu'un nouvel intent `move` est effectivement apparu dans le
-journal ; elle est alors limitée au groupe de frontières concerné. `resize()`
-reste le cas distinct qui recapture explicitement le repère géométrique global.
+runner retire les ressources transitoires de la story interceptante et met à jour
+les barrières du graphe sans visiter les autres stories. Une capture ne reprend
+que lorsqu'une occurrence `move` est effectivement résolue ; elle est alors
+limitée au groupe de frontières concerné. `resize()` reste le cas distinct qui
+recapture explicitement le repère géométrique global.
 
 À la fermeture d’une capture live, si l’item possède déjà une présentation
 active, le runner conserve sa pose numérique courante comme FIRST transitoire
@@ -255,8 +252,8 @@ source change.
 
 Le mode `reparent` masque le nœud auteur et crée une représentation indexée dans
 l'overlay local du conteneur capturé. Il est obligatoire lorsque la cible ou le parent logique
-change, notamment lors d'un transfert entre deux listes. `flipMode:
-'overlay-world'` peut aussi le demander explicitement.
+change, notamment lors d'un transfert entre deux listes. `reparent: true` peut
+aussi le demander explicitement.
 
 Les poses de l'overlay sont calculées par rapport à sa propre couche mesurée,
 avec ses bordures et transformations. Un descendant en mouvement indépendant
@@ -271,11 +268,10 @@ lorsqu'elles changent ; la matrice de pose reste la seule écriture par frame.
 
 ## Cycle de vie
 
-- `init()` initialise les composants visibles, capture les frontières seulement
-  lorsqu'un mouvement existe, puis construit le graphe immuable ;
-- l'ajout live d'un eventime ne modifie pas la scène compilée : le journal
-  signale sa nouvelle révision, le runner vérifie la présence d'un `move`, et le
-  même cœur de capture reconstruit les frontières avant la prochaine frame ;
+- `init()` initialise les composants visibles sans capturer les moves futurs ;
+- l'ajout live d'un eventime ne modifie pas la scène compilée : le player
+  rematérialise la frontière et transmet les occurrences `move`, puis le runner
+  capture seulement le groupe concerné ;
 - `play()` et `seek(t)` présentent le graphe à un temps logique absolu ;
 - `resize()` prépare la géométrie naturelle, invalide les captures, reconstruit
   le graphe et réapplique la frame courante sans recréer les overlays stables ;

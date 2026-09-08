@@ -338,7 +338,7 @@ Ordre d'exécution de la tranche P2-D :
 | P3-A — Audit SE existant | Fixe | Audit statique terminé : capsule racine et capsules explicites, 0/1/2 KFs réels, bornes virtuelles, affichage, matérialisation et absence d’écriture lors de Play/Seek/resize sont distingués. |
 | P3-B — Contrat SE | Fixe | Contrat validé après l’audit statique : valeurs spéciales, KF réel d’apparition + sortie virtuelle, transition unique, point facultatif et plateau. |
 | P3-C — Implémentation SE | Fixe | Implémentation et tests terminés : capsule racine implicite, 0/1/2 KFs réels, matérialisation par double-clic ou glisser-déposer et non-écriture pendant Play/Seek/resize. La validation native reste P6. |
-| P4 — Builder/runtime | Fixe | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Aucun `{to}` sans `from`, aucun `Move` structurel. La validation native reste P6. |
+| P4 — Builder/runtime | En cours | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Le builder émet `reparent` et ne sérialise ni `traversal` ni `pathAnchor` ; CodPlay applique les defaults internes `arc-length`/`center`. Aucun `{to}` sans `from`, aucun `Move` structurel. La validation native reste P6. |
 | P5 — Persistance | Fixe | Copy-on-write du décor cible, sérialisation, suppression/réordonnancement, capsules imbriquées et diagnostics de données invalides vérifiés. La validation native reste P6. |
 | P6 — Validation native | En cours | Matrice réelle rejouée dans Safari Technology Preview sur l’unique serveur `localhost:5174` : scène, seek, ghost-click, Play/pause, resize, console et réseau validés ; la preuve native du drag/double-clic reste ouverte car le relais MCP ne les expose pas. |
 
@@ -500,12 +500,11 @@ Ordre d'exécution de la tranche P2-D :
   déplacement conserve les deux KFs, ne modifie pas le décor du KF amont et crée le décor cible
   isolé par copy-on-write. La même vérification confirme qu’une seule surface de déplacement est
   montée et qu’aucune zone bord distincte n’est exposée.
-- P4 est fixé sur le chemin de trajectoire côté éditeur, mais doit être réaligné sur la forme auteur
-  `move` relue : `buildSceneDocV2` conserve le `path` du décor cible sans sérialiser `traversal` ni
-  `pathAnchor`, et CodPlay applique ses valeurs internes `arc-length` et `center`. Le builder et
-  l'overlay ont déjà le calcul `arc-length`/centre visuel ; le runtime doit encore faire de `center`
-  son défaut effectif avant la clôture. Les tests builder, compilateur, player, bridge et rebuild
-  devront vérifier la parité visuelle sans lire ces deux champs ; la preuve native reste la porte P6.
+- P4 est aligné sur la forme auteur `move` relue : `buildSceneDocV2` conserve le `path` du décor
+  cible et émet `reparent` sans sérialiser `traversal` ni `pathAnchor`. CodPlay applique ses valeurs
+  internes `arc-length` et `center`. Le builder et l'overlay ont le même calcul de trajectoire ; les
+  tests builder, compilateur, player, bridge et rebuild vérifient la parité sans lire ces deux champs.
+  La preuve native reste la porte P6.
 - P5 est fixé côté persistance : les suppressions de KF, d’item et de capsule ne retirent un décor
   ou un contenu que s’il n’existe plus aucune référence restante (`initialDecorId`, `rootDecorId`,
   KF ou item). Le round-trip contrôleur conserve le `Decor.path` segment-local, et le réordonnancement

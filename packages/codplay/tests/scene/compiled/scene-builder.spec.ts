@@ -415,7 +415,6 @@ describe('SceneBuilder', () => {
                   transition: {
                     duration: 100,
                     path: 'M 10 20 L 20 30 L 30 20',
-                    pathAnchor: 'center',
                   },
                 },
               },
@@ -436,7 +435,7 @@ describe('SceneBuilder', () => {
       : undefined
 
     expect(isPreparedPath(pathValue)).toBe(true)
-    expect(transitionValue).toMatchObject({ pathAnchor: 'center' })
+    expect(transitionValue).not.toHaveProperty('pathAnchor')
     if (isPreparedPath(pathValue)) {
       expect(pathValue.kind).toBe('segments')
       expect(pathValue.segments?.[0]?.to).toEqual([0.5, 0.5])

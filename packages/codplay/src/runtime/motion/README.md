@@ -85,11 +85,10 @@ Les deux utilisent les mêmes `MotionBoundary` et le même graphe. Ainsi, un
 `endEmit` live conserve la première géométrie visible, tandis qu'un seek utilise
 la frontière logique persistée sans conserver une branche spéciale de capture.
 
-Le planning est compilé à l'initialisation du journal visible, après une capture
-live terminée et après un resize. Un append live réveille le runner ; si le
-planning contient alors un nouvel intent issu de `move`, la géométrie naturelle
-est recapturée aux frontières FIRST/LAST correspondantes et conservée comme
-donnée. Un append sans `move` ne reconstruit pas le graphe.
+Le planning est compilé lorsqu'une occurrence `move` est résolue par le player.
+Le runner recapture alors les frontières FIRST/LAST du groupe concerné et les
+conserve comme données. Une matérialisation ou un append sans `move` ne
+reconstruit pas le graphe.
 
 Si ce nouvel intent arrive alors que l’item est déjà présenté dans un segment
 actif, le runner copie la pose numérique de la `PresentationFrame` courante
@@ -118,14 +117,13 @@ présentateur HTML de conserver un overlay par story lorsque plusieurs stories
 sont actives au même instant. Le graphe reste unique et la frame reste résolue
 sans lecture du DOM.
 
-La préparation du graphe est terminée avant la première présentation. Elle
-enregistre d'abord tous les propriétaires de trajectoire, y compris ceux qui
-commencent plus tard mais dont la pose est nécessaire à un enfant déjà en
-mouvement. Elle résout ensuite les poses des segments dans l'ordre temporel.
-Ainsi, un retarget de `Qa` ne peut pas figer la pose finale de `K` simplement
-parce que le segment de `K` n'avait pas encore été parcouru. Cette organisation
-est interne au planificateur : elle n'ajoute pas de seconde API ni de second
-circuit d'événements.
+Pour chaque occurrence demandée, la préparation enregistre tous les propriétaires
+de trajectoire nécessaires, y compris ceux qui commencent plus tard mais dont la
+pose est requise par un enfant déjà en mouvement. Elle résout ensuite les poses
+des segments dans l'ordre temporel. Ainsi, un retarget de `Qa` ne peut pas figer
+la pose finale de `K` simplement parce que le segment de `K` n'avait pas encore
+été parcouru. Cette organisation est interne au planificateur : elle n'ajoute
+pas de seconde API ni de second circuit d'événements.
 
 Après cette préparation, `present(t)` ne construit pas le graphe et ne mesure
 pas les ancêtres. Il sélectionne le layout naturel préparé, suit les relations
@@ -155,9 +153,11 @@ remplacé par un simple point final.
 Le journal fournit au graphe les frontières de reset par identifiant d'item.
 Avant une frontière, les segments antérieurs restent disponibles pour un seek
 historique. À partir de la frontière, ils ne sont plus sélectionnés ; le runner
-libère alors les overlays et styles transitoires de la story concernée avant de
-présenter son état initial. Les nœuds auteur restent montés et la résolution ne
-fait aucune lecture supplémentaire du DOM.
+met à jour la présentation de la story concernée et libère les styles
+transitoires avant de présenter son état initial. Les nœuds auteur restent
+montés et la résolution ne fait aucune lecture supplémentaire du DOM. Le retrait
+physique des groupes et de leurs géométries est encore suivi dans le plan de
+reset chaud.
 
 ## Résolution
 
@@ -203,15 +203,12 @@ normalisée par `deriveRelativeMotionPose` en prenant provisoirement `origin`.
 
 ### Ancrage d'un path
 
-Une transition `move` peut déclarer `pathAnchor`. La valeur `center` est le
-contrat V2 utilisé par l'éditeur ed2 : le path est résolu entre les centres
-visuels affines des poses (`origin + matrix × dimensions locales / 2`) et chaque
-point résolu reconstruit l'origine de l'item avec sa matrice et ses dimensions
-courantes. Ainsi, rotation et redimensionnement ne décalent pas l'item par
-rapport au path affiché. `aabb` ou l'absence du champ conserve l'ancrage AABB
-des transitions V2 qui ne déclarent pas l'extension. Cette donnée est immuable
-dans le segment ; aucun bounding box ni pixel de viewport n'est écrit dans le
-décor.
+Le path est toujours résolu entre les centres visuels affines des poses
+(`origin + matrix × dimensions locales / 2`) et chaque point résolu reconstruit
+l'origine de l'item avec sa matrice et ses dimensions courantes. Ainsi, rotation
+et redimensionnement ne décalent pas l'item par rapport au path affiché. Cette
+convention est interne au graphe : `pathAnchor` n'est pas une propriété auteur et
+aucun bounding box ni pixel de viewport n'est écrit dans le décor.
 
 Un perso détaché conserve ses relations logiques `parentByPerso` et
 `targetByPerso`, sans entrer dans l'ordre des cibles ni dans la présentation DOM.
@@ -237,7 +234,7 @@ layout courant.
 
 - même cible : `local` par défaut ;
 - cible ou parent logique différent : `reparent` ;
-- `flipMode: 'overlay-world'` : `reparent`, même si la cible ne change pas ;
+- `reparent: true` : `reparent`, même si la cible ne change pas ;
 - `local` ne peut pas annuler un véritable changement de cible ou de parent.
 
 ## Contrat et limites
