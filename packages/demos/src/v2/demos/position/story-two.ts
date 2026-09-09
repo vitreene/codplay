@@ -5,13 +5,16 @@ import {
 	POSITION_MOVE_DURATION_MS,
 	POSITION_STORY_END_EVENT,
 	POSITION_STORY_TWO_ID,
+	POSITION_STORY_VIEW_IDS,
 	POSITION_VIEW_TWO_ITEM_MOVE_EVENT,
 	POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT,
 	POSITION_VIEW_TWO_TARGET_SHIFT_EVENT,
 	POSITION_VIEWPORT_TARGET,
-	VIEW_IDS,
 } from './constants';
-import { CAROUSEL_EVENTS, POSITION_CAPSULE } from './carousel';
+import {
+	CAROUSEL_EVENTS_BY_STORY_ID,
+	isInitialPositionStory,
+} from './carousel';
 import type { StoryAnimationOccurrence } from './types';
 
 const STAGE_TARGET = 'position:view-two:stage';
@@ -19,22 +22,46 @@ const SOURCE_CONTAINER = 'position:view-two:source';
 const TARGET_CONTAINER = 'position:view-two:target';
 const STORY_TWO_ANCHOR_SHIFT = 15;
 const STORY_TWO_END_OFFSET_MS = 4_100;
+const STORY_EVENTS = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_TWO_ID];
+
+/** Eventimes used when story 2 is activated in the validation carousel. */
+export const POSITION_STORY_TWO_ANIMATION_PLAN: readonly StoryAnimationOccurrence[] = [
+	{ name: POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT, offsetMs: 450 },
+	{ name: POSITION_VIEW_TWO_TARGET_SHIFT_EVENT, offsetMs: 450 },
+	{
+		name: POSITION_VIEW_TWO_ITEM_MOVE_EVENT,
+		offsetMs: 1_350,
+		data: {
+			move: {
+				target: TARGET_CONTAINER,
+				reparent: true,
+				transition: {
+					duration: POSITION_MOVE_DURATION_MS,
+				},
+			},
+		},
+	},
+	{
+		name: POSITION_STORY_END_EVENT,
+		offsetMs: STORY_TWO_END_OFFSET_MS,
+	},
+];
 
 /** Story 2: the visible source and target move while the item changes outlet. */
 export const POSITION_STORY_TWO: StoryDoc = {
 	id: POSITION_STORY_TWO_ID,
 	listen: [
-		{ on: CAROUSEL_EVENTS[1].enter, active: true, reset: true },
-		{ on: CAROUSEL_EVENTS[1].leave, active: false },
-		{ on: CAROUSEL_EVENTS[1].reset, reset: true },
+		{ on: STORY_EVENTS.enter, active: true, reset: true },
+		{ on: STORY_EVENTS.leave, active: false },
+		{ on: STORY_EVENTS.reset, reset: true },
 	],
 	persos: [
 		{
-			id: VIEW_IDS[1],
+			id: POSITION_STORY_VIEW_IDS[POSITION_STORY_TWO_ID],
 			type: 'layout',
 			initial: {
 				move: { target: POSITION_VIEWPORT_TARGET },
-				className: `${POSITION_CAPSULE.children[1]!.className} position-story-cell position-view--hidden`,
+				className: `position-view position-story-cell ${isInitialPositionStory(POSITION_STORY_TWO_ID) ? 'position-view--visible' : 'position-view--hidden'}`,
 				markup: `
           <section class="position-view__frame position-view__frame--lesson">
             <div class="position-moving-stage position-two-node-stage" data-part="${STAGE_TARGET}">
@@ -49,7 +76,7 @@ export const POSITION_STORY_TWO: StoryDoc = {
         `,
 			},
 			actions: {
-				[CAROUSEL_EVENTS[1].intro]: {
+				[STORY_EVENTS.intro]: {
 					className: {
 						add: 'position-view--visible',
 						remove: 'position-view--hidden',
@@ -63,7 +90,7 @@ export const POSITION_STORY_TWO: StoryDoc = {
 						},
 					},
 				},
-				[CAROUSEL_EVENTS[1].outro]: {
+				[STORY_EVENTS.outro]: {
 					className: {
 						add: 'position-view--hidden',
 						remove: 'position-view--visible',
@@ -130,27 +157,3 @@ export const POSITION_STORY_TWO: StoryDoc = {
 		},
 	],
 };
-
-/** Eventimes appended when navigation activates story 2. */
-export const POSITION_STORY_TWO_ANIMATION_PLAN: readonly StoryAnimationOccurrence[] = [
-	{ name: POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT, offsetMs: 450 },
-	{ name: POSITION_VIEW_TWO_TARGET_SHIFT_EVENT, offsetMs: 450 },
-	{
-		name: POSITION_VIEW_TWO_ITEM_MOVE_EVENT,
-		offsetMs: 1_350,
-		data: {
-			move: {
-				target: TARGET_CONTAINER,
-				reparent: true,
-				transition: {
-					duration: POSITION_MOVE_DURATION_MS,
-					ease: 'inOutQuint',
-				},
-			},
-		},
-	},
-	{
-		name: POSITION_STORY_END_EVENT,
-		offsetMs: STORY_TWO_END_OFFSET_MS,
-	},
-];

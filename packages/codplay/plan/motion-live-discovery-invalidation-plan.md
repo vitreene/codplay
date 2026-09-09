@@ -212,6 +212,25 @@ une recapture immédiate de tous les moves. Les groupes devenus invalides sont
 recapturés lorsqu’ils doivent à nouveau être présentés par Play ou Seek. Une
 destruction finale libère leurs ressources comme aujourd’hui.
 
+### Dépendance d’une trajectoire à sa target — implémentation en cours
+
+Le retarget déclenché par le déplacement d’une cible est détaillé dans
+[`move-target-dependency-plan.md`](./move-target-dependency-plan.md). La
+frontière capturée depuis une occurrence `move` conserve l’identité de la target
+montée résolue dans l’attachement `LAST` dont elle dépend. Lorsqu’un nouvel événement
+résout un `move` qui modifie cette target pendant la
+trajectoire, le chemin normal de conflit traite le nouveau `move`, puis le
+runner retargete les segments dépendants dans la même transaction : pose
+visuelle courante de l’item en `FIRST`, projection post-move de la target en
+`LAST`. Le déplacement continu ne recapture rien ; le relâchement produit un
+`move` normal. Si ce relâchement produit également un nouveau `move` pour
+l’item en trajectoire, ce segment direct repart de la pose visible et sa durée
+est réduite au temps restant jusqu’à l’`endAt` initial ; il ne réutilise ni la
+pose initiale ni la pose provisoire du segment futur. Cette règle est validée
+pour implémentation ; elle ne constitue pas encore une modification normative
+du contrat `move` tant que les
+validations d’acceptation du plan dédié ne sont pas terminées.
+
 ## Migration de la propriété auteur
 
 La migration de `move` est atomique à l’échelle des types, compilation,
@@ -489,3 +508,34 @@ runner calcule la cible, capture les groupes requis, commit le graphe et ne
 présente qu’après cette préparation. La démo `position` a été contrôlée dans
 Safari MCP : le Seek à `1500 ms` n’a produit aucune frame intermédiaire et le
 relevé d’appels est consigné dans l’observation de performance.
+
+## Réexamen d'intégration — 2026-09-08 — trajectoire de la story 2
+
+La précédente attribution de la régression à `layout-snapshot.ts` n'est pas
+confirmée pour cette démo. Le test de parent mis à l'échelle couvre une
+frontière géométrique distincte ; dans Safari MCP, le root de la story 2 n'a
+ni transformation ni échelle CSS et l'overlay est bien présenté dans ce root.
+
+Le relevé dans l'onglet Safari MCP existant donne, relativement au root de la
+story, une pose de départ `(157.21875, 221.70874)` à `1 350 ms` et une pose
+d'arrivée `(756.203125, 67.022476)` à `3 350 ms`. Les poses intermédiaires
+restent collinéaires avec ces deux points : le calcul spatial n'ajoute donc pas
+de soulèvement ni de courbe.
+
+La non-linéarité observée était temporelle et correspondait à l'easing auteur
+`inOutQuint` déclaré par le `move` de la story 2. À `1 800 ms`, l'overlay restait
+presque au départ ; à `2 500 ms`, il avait déjà parcouru environ `77,8 %` de la
+distance alors que `57,5 %` de la durée s'était écoulée. Les déplacements
+`translateY` indépendants des ancres expliquent en plus le déplacement vertical
+avant `1 350 ms` et après `3 350 ms`.
+
+La validation précédente limitée au début, au milieu et à la fin était donc
+insuffisante : elle ne distinguait pas une interpolation linéaire d'une easing
+symétrique. La story 2 ne déclare maintenant plus d'easing pour son item ; cela
+retire `inOutQuint` de la démo sans modifier les tweens verticaux des ancres.
+La correction de la capture d'ascendance reste une frontière distincte et n'est
+pas utilisée pour expliquer ce symptôme. Le parcours Safari MCP après correction
+confirme le départ horizontal : `x=157,219` à `1 350 ms`, `186,794` à
+`1 400 ms`, `243,697` à `1 500 ms` et `323,437` à `1 650 ms`, sans warning ni
+erreur console. L'absence du champ auteur laisse inchangé le défaut global du
+runtime ; elle retire seulement l'easing explicite de cette démo.

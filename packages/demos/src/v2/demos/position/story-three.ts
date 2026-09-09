@@ -11,10 +11,13 @@ import {
   POSITION_PATH_ITEM_MOVE_EVENT,
   POSITION_STORY_END_EVENT,
   POSITION_STORY_THREE_ID,
+  POSITION_STORY_VIEW_IDS,
   POSITION_VIEWPORT_TARGET,
-  VIEW_IDS,
 } from './constants'
-import { CAROUSEL_EVENTS, POSITION_CAPSULE } from './carousel'
+import {
+  CAROUSEL_EVENTS_BY_STORY_ID,
+  isInitialPositionStory,
+} from './carousel'
 import { clamp, preparePositionPath, readFinite, readRecord } from './shared'
 import type { StoryAnimationOccurrence } from './types'
 
@@ -23,6 +26,7 @@ const TARGET_CONTAINER = 'position:view-three:target'
 const CONTROL_TARGET = 'position:view-three:control'
 const STORY_THREE_PATH = prepareSvgPath('M 0 0 A 0.5 0.5 0 0 1 1 0', { precision: 2 })
 const STORY_THREE_END_OFFSET_MS = 1_050 + POSITION_MOVE_DURATION_MS
+const STORY_EVENTS = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_THREE_ID]
 
 /** Story 3: the captured midpoint is sent as a prepared path in the item move. */
 export const POSITION_STORY_THREE: StoryDoc = {
@@ -44,14 +48,14 @@ export const POSITION_STORY_THREE: StoryDoc = {
     },
   },
   listen: [{
-    on: CAROUSEL_EVENTS[2].enter,
+    on: STORY_EVENTS.enter,
     active: true,
     reset: true,
   }, {
-    on: CAROUSEL_EVENTS[2].leave,
+    on: STORY_EVENTS.leave,
     active: false,
   }, {
-    on: CAROUSEL_EVENTS[2].reset,
+    on: STORY_EVENTS.reset,
     reset: true,
   }, {
     on: POSITION_PATH_CAPTURE_EVENT,
@@ -91,11 +95,11 @@ export const POSITION_STORY_THREE: StoryDoc = {
   }],
   persos: [
     {
-      id: VIEW_IDS[2],
+      id: POSITION_STORY_VIEW_IDS[POSITION_STORY_THREE_ID],
       type: 'layout',
       initial: {
         move: { target: POSITION_VIEWPORT_TARGET },
-        className: `${POSITION_CAPSULE.children[2]!.className} position-story-cell position-view--hidden`,
+        className: `position-view position-story-cell ${isInitialPositionStory(POSITION_STORY_THREE_ID) ? 'position-view--visible' : 'position-view--hidden'}`,
         markup: `
           <section class="position-view__frame position-view__frame--lesson">
             <div class="position-path-stage">
@@ -123,7 +127,7 @@ export const POSITION_STORY_THREE: StoryDoc = {
         `,
       },
       actions: {
-        [CAROUSEL_EVENTS[2].intro]: {
+        [STORY_EVENTS.intro]: {
           className: {
             add: 'position-view--visible',
             remove: 'position-view--hidden',
@@ -137,7 +141,7 @@ export const POSITION_STORY_THREE: StoryDoc = {
             },
           },
         },
-        [CAROUSEL_EVENTS[2].outro]: {
+        [STORY_EVENTS.outro]: {
           className: {
             add: 'position-view--hidden',
             remove: 'position-view--visible',

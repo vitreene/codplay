@@ -1,10 +1,7 @@
 import type { CompiledRecord } from 'codplay'
 
-/** Index of one view in the manually navigated carousel. */
-export type ViewIndex = 0 | 1 | 2 | 3 | 4 | 5
-
-/** The two semantic roles used by the source/target lesson views. */
-export type AnchorRole = 'source' | 'target'
+/** The two stable physical containers used by the live trajectory story. */
+export type AnchorId = 'a' | 'b'
 
 /** Point expressed in the local coordinate system of a position story. */
 export type PositionPoint = Readonly<{ x: number; y: number }>

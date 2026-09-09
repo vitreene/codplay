@@ -16,7 +16,8 @@
 - Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only when the contract or decision itself has been explicitly agreed and documenting that change is part of the task.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
-- Demos exist to validate the project and reveal missing pieces; they must not hide gaps or be made to work at all costs.
+- V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.
+- A demo failure is therefore project evidence, not an isolated presentation problem. Any proposed demo-local correction must state which CodPlay contract it validates, why the runtime is not the responsible boundary, and how the real runtime path remains exercised.
 - CodPlay core capabilities are approaching v1. Adding to or modifying `packages/codplay` core requires explicit user authorization and must always be the consequence of an agreed plan. No opportunistic or speculative core patches.
 - Additional instructions may be added later and should be followed.
 

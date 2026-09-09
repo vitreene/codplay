@@ -11,12 +11,15 @@ import {
   POSITION_KEYBOARD_TOGGLE_EVENT,
   POSITION_NAMESPACE,
   POSITION_NOTICE_TARGET,
+  POSITION_STORY_VIEW_IDS,
   POSITION_STATUS_TARGET,
+  POSITION_VIEW_STORY_IDS,
   POSITION_VIEWPORT_TARGET,
   VIEW_COUNT,
   VIEW_IDS,
 } from './constants'
-import type { CarouselEventNames, ViewIndex } from './types'
+import type { CarouselEventNames } from './types'
+import type { PositionStoryId } from './constants'
 
 /** Builds the capsule artifact that owns the six exclusive carousel ranges. */
 function createPositionCapsule(): AutoCapsuleResult {
@@ -87,17 +90,28 @@ function resolveCarouselEventNames(): readonly CarouselEventNames[] {
 /** Generated intro/outro events used by the story-local carousel circuit. */
 export const CAROUSEL_EVENTS = resolveCarouselEventNames()
 
+/** Resolves the visual events belonging to a story in the current presentation order. */
+export const CAROUSEL_EVENTS_BY_STORY_ID: Readonly<Record<PositionStoryId, CarouselEventNames>> =
+  POSITION_VIEW_STORY_IDS.reduce((events, storyId, index) => {
+    events[storyId] = CAROUSEL_EVENTS[index]!
+    return events
+  }, {} as Record<PositionStoryId, CarouselEventNames>)
+
+/** Reports whether a story occupies the first visible carousel position. */
+export function isInitialPositionStory(storyId: PositionStoryId): boolean {
+  return POSITION_VIEW_STORY_IDS[0] === storyId
+}
+
 /** Creates a root view layout with exclusive cut visibility actions. */
-export function createViewRoot(index: ViewIndex, markup: string, extraClass = ''): PersoDoc {
-  const artifact = POSITION_CAPSULE.children[index]!
-  const events = CAROUSEL_EVENTS[index]
-  const initialVisibility = index === 0 ? 'position-view--visible' : 'position-view--hidden'
+export function createViewRoot(storyId: PositionStoryId, markup: string, extraClass = ''): PersoDoc {
+  const events = CAROUSEL_EVENTS_BY_STORY_ID[storyId]
+  const initialVisibility = isInitialPositionStory(storyId) ? 'position-view--visible' : 'position-view--hidden'
   return {
-    id: artifact.id,
+    id: POSITION_STORY_VIEW_IDS[storyId],
     type: 'layout',
     initial: {
       move: { target: POSITION_VIEWPORT_TARGET },
-      className: `${artifact.className} position-story-cell ${initialVisibility}${extraClass.length > 0 ? ` ${extraClass}` : ''}`,
+      className: `position-view position-story-cell ${initialVisibility}${extraClass.length > 0 ? ` ${extraClass}` : ''}`,
       markup,
     },
     actions: {

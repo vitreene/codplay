@@ -4,7 +4,7 @@ import {
   POSITION_STORY_END_EVENT,
   POSITION_STORY_SIX_ID,
 } from './constants'
-import { CAROUSEL_EVENTS, createViewRoot } from './carousel'
+import { CAROUSEL_EVENTS_BY_STORY_ID, createViewRoot } from './carousel'
 import type { StoryAnimationOccurrence } from './types'
 
 type ContentId = 'qa' | 'qb' | 'qc' | 'qd' | 'qe' | 'qf' | 'ka' | 'kb' | 'kc' | 'kd' | 'ke' | 'kf'
@@ -165,7 +165,8 @@ function contentPerso(exchange: ContentExchange): PersoDoc {
 
 /** Creates story 6 as the position-styled declarative conclusion of flip-stress. */
 export function createStorySix(): StoryDoc {
-  const view = createViewRoot(5, `
+  const storyEvents = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_SIX_ID]
+  const view = createViewRoot(POSITION_STORY_SIX_ID, `
     <section class="position-view__frame position-view__frame--conclusion">
       <div class="position-conclusion-network" data-part="${STAGE_TARGET}"></div>
       <div class="position-story-caption">
@@ -178,9 +179,9 @@ export function createStorySix(): StoryDoc {
   return {
     id: POSITION_STORY_SIX_ID,
     listen: [
-      { on: CAROUSEL_EVENTS[5].enter, active: true, reset: true },
-      { on: CAROUSEL_EVENTS[5].leave, active: false },
-      { on: CAROUSEL_EVENTS[5].reset, reset: true },
+      { on: storyEvents.enter, active: true, reset: true },
+      { on: storyEvents.leave, active: false },
+      { on: storyEvents.reset, reset: true },
     ],
     eventimes: [],
     persos: [

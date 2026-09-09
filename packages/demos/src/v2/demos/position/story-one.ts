@@ -7,48 +7,35 @@ import {
   POSITION_STORY_END_EVENT,
   POSITION_STORY_ONE_ID,
   POSITION_VIEW_ONE_ITEM_MOVE_EVENT,
+  POSITION_STORY_VIEW_IDS,
   POSITION_VIEWPORT_TARGET,
-  VIEW_IDS,
 } from './constants'
-import { CAROUSEL_EVENTS, POSITION_CAPSULE } from './carousel'
+import {
+  CAROUSEL_EVENTS_BY_STORY_ID,
+  isInitialPositionStory,
+} from './carousel'
 import type { StoryAnimationOccurrence } from './types'
 
 const SOURCE_CONTAINER = 'position:view-one:source'
 const TARGET_CONTAINER = 'position:view-one:target'
 const STORY_ONE_END_OFFSET_MS = FIRST_VIEW_MOVE_OFFSET_MS + POSITION_MOVE_DURATION_MS
+const STORY_EVENTS = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_ONE_ID]
 
 /** Story 1: a stable source and target, with one item reparented between them. */
 export const POSITION_STORY_ONE: StoryDoc = {
   id: POSITION_STORY_ONE_ID,
   listen: [
-    { on: CAROUSEL_EVENTS[0].enter, active: true, reset: true },
-    { on: CAROUSEL_EVENTS[0].leave, active: false },
-    { on: CAROUSEL_EVENTS[0].reset, reset: true },
+    { on: STORY_EVENTS.enter, active: true, reset: true },
+    { on: STORY_EVENTS.leave, active: false },
+    { on: STORY_EVENTS.reset, reset: true },
   ],
-  eventimes: [{
-    name: POSITION_VIEW_ONE_ITEM_MOVE_EVENT,
-    startAt: FIRST_VIEW_MOVE_OFFSET_MS,
-    data: {
-      move: {
-        target: TARGET_CONTAINER,
-        reparent: true,
-        transition: {
-          duration: POSITION_MOVE_DURATION_MS,
-          ease: 'inOutCubic',
-        },
-      },
-    },
-  }, {
-    name: POSITION_STORY_END_EVENT,
-    startAt: STORY_ONE_END_OFFSET_MS,
-  }],
   persos: [
     {
-      id: VIEW_IDS[0],
+      id: POSITION_STORY_VIEW_IDS[POSITION_STORY_ONE_ID],
       type: 'layout',
       initial: {
         move: { target: POSITION_VIEWPORT_TARGET },
-        className: `${POSITION_CAPSULE.children[0]!.className} position-story-cell position-view--visible`,
+        className: `position-view position-story-cell ${isInitialPositionStory(POSITION_STORY_ONE_ID) ? 'position-view--visible' : 'position-view--hidden'}`,
         markup: `
           <section class="position-view__frame position-view__frame--lesson">
             <div class="position-two-node-stage">
@@ -72,7 +59,7 @@ export const POSITION_STORY_ONE: StoryDoc = {
         `,
       },
       actions: {
-        [CAROUSEL_EVENTS[0].intro]: {
+        [STORY_EVENTS.intro]: {
           className: {
             add: 'position-view--visible',
             remove: 'position-view--hidden',
@@ -86,7 +73,7 @@ export const POSITION_STORY_ONE: StoryDoc = {
             },
           },
         },
-        [CAROUSEL_EVENTS[0].outro]: {
+        [STORY_EVENTS.outro]: {
           className: {
             add: 'position-view--hidden',
             remove: 'position-view--visible',

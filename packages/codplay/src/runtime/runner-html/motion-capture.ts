@@ -155,6 +155,10 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   nodes: ReadonlyMap<string, unknown>
   intents: readonly ScheduledMotionIntent[]
   includePersistOnly: boolean
+  /** Preserves the visible pose when a new occurrence replaces stale plans. */
+  firstSnapshots?: ReadonlyMap<string, LayoutSnapshot>
+  /** Resolves the effective endpoint of a move replacing an active segment. */
+  resolveActiveMotionEndAt?: (itemId: string, startAt: number, requestedEndAt: number) => number | undefined
   resolveMotionContainer?: (input: HtmlMotionContainerSceneInput) => HtmlMotionContainerResolution
 }>): readonly MotionBoundary[] {
   const currentScene = input.player.getSolvedScene()
@@ -178,6 +182,8 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
         group.startAt,
         group.endAt,
         input.includePersistOnly,
+        group.intents,
+        input.resolveActiveMotionEndAt,
       )
       // The logical move is committed at startAt, but its geometric LAST is
       // the transition endpoint. Resolve the left side of that endpoint so a
@@ -208,7 +214,8 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
       const rootKey = motionContainer?.key
 
       input.player.presentSceneForGeometryCapture(beforeScene)
-      let before = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, beforeScene, selection, rootKey)
+      let before = resolveFirstSnapshot(group, input.firstSnapshots)
+        ?? captureCurrentHtmlMotionLayout(captureRoot, input.nodes, beforeScene, selection, rootKey)
       const afterStart = afterStartScene === undefined
         ? undefined
         : captureStartLayout(afterStartScene, selection, captureRoot, rootKey)
@@ -266,6 +273,24 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   }
 }
 
+/** Resolves the optional current-presentation snapshot for one motion group. */
+function resolveFirstSnapshot(
+  group: Readonly<{ intents: readonly ScheduledMotionIntent[] }>,
+  firstSnapshots: ReadonlyMap<string, LayoutSnapshot> | undefined,
+): LayoutSnapshot | undefined {
+  if (firstSnapshots === undefined) return undefined
+  for (const intent of group.intents) {
+    const snapshot = firstSnapshots.get(createMotionFirstSnapshotKey(intent.itemId, intent.startAt))
+    if (snapshot !== undefined) return snapshot
+  }
+  return undefined
+}
+
+/** Builds the runner-local key for a visible FIRST snapshot. */
+export function createMotionFirstSnapshotKey(itemId: string, startAt: number): string {
+  return `${itemId}:${startAt}`
+}
+
 /** Resolves the property endpoints that fall strictly inside one boundary. */
 function resolveIntermediateKeyTimes(
   intents: readonly ScheduledMotionIntent[],
@@ -284,10 +309,19 @@ function resolveMotionEndpointTime(
   startAt: number,
   endAt: number,
   includePersistOnly: boolean,
+  intents: readonly ScheduledMotionIntent[],
+  resolveActiveMotionEndAt: ((itemId: string, startAt: number, requestedEndAt: number) => number | undefined) | undefined,
 ): number {
   const journal = player.trackJournal
-  if (journal === undefined) return endAt
-  let endpoint = endAt
+  let endpoint = resolveActiveMotionEndAt === undefined
+    ? endAt
+    : Math.min(
+      endAt,
+      ...intents
+        .map((intent) => resolveActiveMotionEndAt(intent.itemId, startAt, endAt))
+        .filter((value): value is number => value !== undefined && Number.isFinite(value) && value > startAt),
+    )
+  if (journal === undefined) return endpoint
   for (const storyId of storyIds) {
     const reset = journal.getStoryResetBoundaries(storyId, includePersistOnly)
       .find((boundary) => boundary.applyAtMs > startAt && boundary.applyAtMs < endpoint)

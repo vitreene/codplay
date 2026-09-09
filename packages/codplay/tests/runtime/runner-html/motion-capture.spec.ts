@@ -73,6 +73,47 @@ describe('HTML motion boundary capture', () => {
       .toEqual([1_200, 1_200, 1_600, 2_200, 1_200])
   })
 
+  it('uses the active segment endpoint when a direct move replaces it', () => {
+    const before = createSolvedScene(1_200, false)
+    const afterStart = createSolvedScene(1_200, true)
+    const after = createSolvedScene(2_000, true)
+    const resolveSceneBeforeBoundary = vi.fn((timeMs: number) => {
+      if (timeMs === 1_200) return before
+      if (timeMs === 2_000) return after
+      throw new Error(`Unexpected boundary: ${timeMs}`)
+    })
+    const resolveSceneAt = vi.fn((timeMs: number) => {
+      if (timeMs !== 1_200) throw new Error(`Start must use left-boundary resolution: ${timeMs}`)
+      return afterStart
+    })
+    const resolveActiveMotionEndAt = vi.fn((itemId: string, startAt: number, requestedEndAt: number) => {
+      expect(itemId).toBe('main:item')
+      expect(startAt).toBe(1_200)
+      expect(requestedEndAt).toBe(2_200)
+      return 2_000
+    })
+    const player = {
+      getSolvedScene: () => before,
+      resolveSceneBeforeBoundary,
+      resolveSceneAt,
+      presentSceneForGeometryCapture: vi.fn(),
+    } as unknown as RuntimePlayer
+
+    const boundaries = captureHtmlMotionBoundaries({
+      player,
+      root: {} as Element,
+      nodes: new Map(),
+      intents: [createIntent()],
+      includePersistOnly: false,
+      resolveActiveMotionEndAt,
+    })
+
+    expect(resolveActiveMotionEndAt).toHaveBeenCalledTimes(1)
+    expect(resolveSceneBeforeBoundary).toHaveBeenCalledWith(2_000, false)
+    expect(resolveSceneBeforeBoundary).not.toHaveBeenCalledWith(2_200, false)
+    expect(boundaries[0]?.after.timeMs).toBe(2_000)
+  })
+
   it('uses the latest presented item pose as transient live FIRST without journaling it', () => {
     const captured = createLayoutSnapshot(10)
     const frame: PresentationFrame = {

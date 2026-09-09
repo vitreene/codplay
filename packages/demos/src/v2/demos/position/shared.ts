@@ -1,4 +1,4 @@
-import { prepareSvgPath, type Path } from 'ace'
+import { preparePath, prepareSvgPath, type Path } from 'ace'
 import type { CompiledRecord } from 'codplay'
 import { POSITION_MOVE_DURATION_MS } from './constants'
 import type { PositionPoint } from './types'
@@ -84,6 +84,11 @@ export function preparePositionPath(controlX: number, controlY: number): Path {
   return prepareSvgPath(createCircularArcPath(controlX, controlY), {
     precision: 2,
   })
+}
+
+/** Prepares one quadratic trajectory with a single normalized control point. */
+export function prepareQuadraticPositionPath(controlX: number, controlY: number): Path {
+  return preparePath({ control: [controlX, controlY] }, { traversal: 'arc-length' })
 }
 
 /** Prepares an authored SVG path for transport through a runtime move event. */

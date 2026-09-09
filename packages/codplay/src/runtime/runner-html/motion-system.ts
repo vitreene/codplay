@@ -55,6 +55,16 @@ export class HtmlMotionSystem {
     return this.currentFrame
   }
 
+  /** Returns the end of the segment currently presented for one item. */
+  resolveActiveMotionEndAt(itemId: string, timeMs: number): number | undefined {
+    const presentation = this.currentFrame?.items.get(itemId)
+    const segmentId = presentation?.activeSegmentId
+    if (segmentId === undefined) return undefined
+    const segment = this.graph.tracksByItem.get(itemId)?.segments.find((candidate) => candidate.id === segmentId)
+    if (segment === undefined || timeMs < segment.startAt || timeMs >= segment.endAt) return undefined
+    return segment.endAt
+  }
+
   /** Prepares the visible author nodes before the runner captures geometry. */
   prepareGeometryCapture(): void {
     this.host.prepareNaturalCapture()

@@ -38,7 +38,21 @@ type MotionBuildOperation = Readonly<{
   structuralAfter: LayoutSnapshot
   endpointAfter: LayoutItemSnapshot
   segmentId: string
+}> | Readonly<{
+  kind: 'target-retarget'
+  boundary: MotionBoundary
+  itemId: string
+  segmentId: string
+  targetItemId: string
 }>
+
+/** Ephemeral index of active motion segments by the target they depend on. */
+type TargetDependencyIndex = Map<string, Map<string, Readonly<{
+  itemId: string
+  segmentId: string
+  startAt: number
+  endAt: number
+}>>>
 
 /** Optional logical reset barriers used while rebuilding one motion graph. */
 export type MotionGraphOptions = Readonly<{
@@ -69,12 +83,63 @@ export function buildMotionGraph(
       operation.boundary.before,
       operation.itemId,
     )
-    const source = sourceLayout.items.get(operation.itemId) ?? operation.before
-    const current = resolveMotionItem(graph, sourceLayout, operation.itemId, operation.boundary.timeMs)
-    if (current === undefined) {
+    const source = sourceLayout.items.get(operation.itemId)
+      ?? (operation.kind === 'target-retarget' ? undefined : operation.before)
+    const current = resolveMotionOperationCurrent(graph, sourceLayout, operation)
+    if (current === undefined || source === undefined) {
       if (operation.kind === 'segment') {
         graph = replaceMotionSegment(graph, operation.itemId, operation.segmentId, undefined)
       }
+      continue
+    }
+
+    if (operation.kind === 'target-retarget') {
+      const activeSegment = graph.tracksByItem
+        .get(operation.itemId)
+        ?.segments.find((segment) => segment.id === operation.segmentId)
+      if (activeSegment === undefined) continue
+
+      const to = createTargetRetargetAttachment(
+        activeSegment,
+        operation.boundary,
+        operation.itemId,
+        operation.targetItemId,
+      )
+      if (to === undefined) continue
+
+      const sourceParentPose = source.parentItemId === undefined
+        ? createMotionRootPose()
+        : resolveMotionItem(graph, sourceLayout, source.parentItemId, operation.boundary.timeMs)?.pose
+      const destinationAtBoundary = resolveAttachment(
+        to,
+        operation.boundary.after,
+        operation.itemId,
+        (parentItemId) => resolveTargetRetargetParent(
+          graph,
+          operation.boundary,
+          parentItemId,
+          operation.boundary.timeMs,
+        ),
+        false,
+      )
+      const phase = resolveSegmentProgress(activeSegment, operation.boundary.timeMs)
+      const retargetedFrom = extrapolateMotionPoseAtProgress(
+        current.pose,
+        destinationAtBoundary,
+        phase,
+        activeSegment.path,
+      )
+      graph = replaceMotionSegment(graph, operation.itemId, operation.segmentId, Object.freeze({
+        ...activeSegment,
+        retargets: Object.freeze([
+          ...(activeSegment.retargets ?? []),
+          Object.freeze({
+            at: operation.boundary.timeMs,
+            from: createAttachment(source, retargetedFrom, sourceParentPose, sourceLayout),
+            to,
+          }),
+        ]),
+      }))
       continue
     }
 
@@ -156,12 +221,35 @@ function buildMotionGraphStructure(
 }> {
   const mutableTracks = new Map<string, MotionSegment[]>()
   const presentationItemIds = new Set<string>()
+  const targetDependencies: TargetDependencyIndex = new Map()
   let graph = freezeMotionGraph(mutableTracks, presentationItemIds, resetTimesByItem)
   const operations: MotionBuildOperation[] = []
 
   for (const boundary of [...boundaries].sort((left, right) => left.timeMs - right.timeMs)) {
     const transition = selectBoundaryTransition(boundary.intents)
     if (transition === undefined) continue
+    const directItemIds = new Set(boundary.intents.map((intent) => intent.itemId))
+    const targetRetargetedSegments = new Set<string>()
+    for (const targetItemId of resolveChangedItemIds(boundary)) {
+      for (const reference of targetDependencies.get(targetItemId)?.values() ?? []) {
+        if (directItemIds.has(reference.itemId)) continue
+        const activeSegment = mutableTracks.get(reference.itemId)
+          ?.find((segment) => segment.id === reference.segmentId)
+        if (activeSegment === undefined
+          || boundary.timeMs < activeSegment.startAt
+          || boundary.timeMs >= activeSegment.endAt) continue
+        const referenceKey = motionSegmentReferenceKey(reference.itemId, reference.segmentId)
+        if (targetRetargetedSegments.has(referenceKey)) continue
+        targetRetargetedSegments.add(referenceKey)
+        operations.push({
+          kind: 'target-retarget',
+          boundary,
+          itemId: reference.itemId,
+          segmentId: reference.segmentId,
+          targetItemId,
+        })
+      }
+    }
     const scope = resolveBoundaryMotionScope(boundary)
     for (const itemId of scope.itemIds) {
       // Ancestors are part of the boundary data so their own motion can be
@@ -180,18 +268,21 @@ function buildMotionGraphStructure(
       const after = directIntent === undefined
         ? structuralAfter.items.get(itemId)
         : boundary.after.items.get(itemId) ?? structuralAfter.items.get(itemId)
-      if (before === undefined || after === undefined || !layoutAttachmentChanged(before, after)) continue
+      if (before === undefined || after === undefined) continue
+      // An explicit move is meaningful even when its target relation is
+      // unchanged: releasing a target emits a new move whose LAST pose has
+      // changed through the target's captured geometry.
+      if (directIntent === undefined && !layoutAttachmentChanged(before, after)) continue
       const endpointAfter = boundary.after.items.get(itemId) ?? after
       const timing = directIntent ?? transition
-      const activeSegment = directIntent === undefined
-        && !isReparented(before, after)
-        ? findContinuingSegment(
-          graph.tracksByItem.get(itemId),
-          boundary.timeMs,
-          latestResetAt(resetTimesByItem, itemId, boundary.timeMs),
-        )
-        : undefined
-      if (activeSegment !== undefined) {
+      const continuingSegment = findContinuingSegment(
+        graph.tracksByItem.get(itemId),
+        boundary.timeMs,
+        latestResetAt(resetTimesByItem, itemId, boundary.timeMs),
+      )
+      if (directIntent === undefined && continuingSegment !== undefined && !isReparented(before, after)) {
+        const activeSegment = continuingSegment
+        if (targetRetargetedSegments.has(motionSegmentReferenceKey(itemId, activeSegment.id))) continue
         operations.push({
           kind: 'retarget',
           boundary,
@@ -207,6 +298,13 @@ function buildMotionGraphStructure(
 
       const segmentId = `${boundary.id}:${itemId}`
       const eventSeq = directIntent?.eventSeq ?? transition.eventSeq
+      const replacementTiming = directIntent === undefined || continuingSegment === undefined
+        ? Object.freeze({
+          duration: timing.duration,
+          delay: timing.delay ?? 0,
+          endAt: boundary.timeMs + (timing.delay ?? 0) + timing.duration,
+        })
+        : resolveReplacementTiming(continuingSegment, boundary.timeMs)
       const from = createAttachment(
         before,
         before.rootPose,
@@ -221,11 +319,17 @@ function buildMotionGraphStructure(
         itemId,
         startAt: boundary.timeMs,
         ...(eventSeq === undefined ? {} : { eventSeq }),
-        endAt: boundary.timeMs + (timing.delay ?? 0) + timing.duration,
-        duration: timing.duration,
-        delay: timing.delay ?? 0,
+        endAt: replacementTiming.endAt,
+        duration: replacementTiming.duration,
+        delay: replacementTiming.delay,
         ease: timing.ease,
-        tween: prepareTween({ from: 0, to: 1, duration: timing.duration, delay: timing.delay, ease: timing.ease }),
+        tween: prepareTween({
+          from: 0,
+          to: 1,
+          duration: replacementTiming.duration,
+          delay: replacementTiming.delay,
+          ease: timing.ease,
+        }),
         presentationMode: isReparented(before, after) ? 'reparent' : (directIntent?.presentationMode ?? 'local'),
         // A compiled HTML style transition is materialized on the source node
         // by the style service. It is nevertheless kept in the graph so that
@@ -238,10 +342,12 @@ function buildMotionGraphStructure(
         to,
         boundaryId: boundary.id,
       })
+      removeOverlappingTargetDependencies(targetDependencies, itemId, segment.startAt)
       const segments = mutableTracks.get(itemId) ?? []
       segments.push(segment)
       mutableTracks.set(itemId, segments)
       presentationItemIds.add(itemId)
+      if (segment.targetReflow) registerTargetDependencies(targetDependencies, segment)
       operations.push({
         kind: 'segment',
         boundary,
@@ -428,6 +534,63 @@ export function resolvePresentationFrame(
   }
 }
 
+/** Resolves an operation's FIRST pose without consulting its own provisional segment. */
+function resolveMotionOperationCurrent(
+  graph: MotionGraph,
+  layout: LayoutSnapshot,
+  operation: MotionBuildOperation,
+): ItemPresentation | undefined {
+  const excludedSegmentId = operation.kind === 'segment' ? operation.segmentId : undefined
+  const current = resolveMotionItem(
+    graph,
+    layout,
+    operation.itemId,
+    operation.boundary.timeMs,
+    undefined,
+    undefined,
+    excludedSegmentId,
+  )
+  if (current !== undefined || operation.kind !== 'segment') return current
+
+  // A natural source layout may omit an HTML-only parent. The segment's
+  // captured FIRST context still contains the measured ancestor chain, so it
+  // is the safe fallback for the segment being built. It cannot reintroduce
+  // the initial pose: this context belongs to this boundary's FIRST capture.
+  const provisionalSegment = graph.tracksByItem
+    .get(operation.itemId)
+    ?.segments.find((segment) => segment.id === operation.segmentId)
+  const context = provisionalSegment?.from.context
+  if (context === undefined) return undefined
+
+  const completeContext = completeMotionContext(context, layout, operation.itemId)
+  return resolveMotionItem(
+    graph,
+    layout,
+    operation.itemId,
+    operation.boundary.timeMs,
+    undefined,
+    completeContext,
+    operation.segmentId,
+  )
+}
+
+/** Completes a captured attachment context with missing ancestors from the same FIRST layout. */
+function completeMotionContext(
+  context: ReadonlyMap<string, LayoutItemSnapshot>,
+  layout: LayoutSnapshot,
+  itemId: string,
+): ReadonlyMap<string, LayoutItemSnapshot> {
+  const completed = new Map(context)
+  let current = completed.get(itemId) ?? layout.items.get(itemId)
+  while (current?.parentItemId !== undefined && !completed.has(current.parentItemId)) {
+    const parent = layout.items.get(current.parentItemId)
+    if (parent === undefined) break
+    completed.set(parent.itemId, parent)
+    current = parent
+  }
+  return completed
+}
+
 /** Resolves one item presentation for graph construction and retargeting. */
 function resolveMotionItem(
   graph: MotionGraph,
@@ -436,6 +599,7 @@ function resolveMotionItem(
   timeMs: number,
   resolveKnown?: (itemId: string) => ItemPresentation | undefined,
   context?: ReadonlyMap<string, LayoutItemSnapshot>,
+  excludedSegmentId?: string,
 ): ItemPresentation | undefined {
   const base = context?.get(itemId) ?? layout.items.get(itemId)
   if (base === undefined) return undefined
@@ -445,14 +609,22 @@ function resolveMotionItem(
   ): HtmlPose | undefined => {
     if (parentItemId === undefined) return createMotionRootPose()
     return resolveKnown?.(parentItemId)?.pose
-      ?? resolveMotionItem(graph, layout, parentItemId, timeMs, resolveKnown, parentContext ?? context)?.pose
+      ?? resolveMotionItem(
+        graph,
+        layout,
+        parentItemId,
+        timeMs,
+        resolveKnown,
+        parentContext ?? context,
+        excludedSegmentId,
+      )?.pose
   }
-  const pose = resolveMotionPose(graph, layout, itemId, timeMs, resolveParent, context)
+  const pose = resolveMotionPose(graph, layout, itemId, timeMs, resolveParent, context, excludedSegmentId)
   if (pose === undefined) return undefined
   const resetAt = latestResetAt(graph.resetTimesByItem, itemId, timeMs)
-  const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs, resetAt)
+  const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs, resetAt, excludedSegmentId)
   const endpoint = segment === undefined
-    ? findMotionEndpoint(graph.tracksByItem.get(itemId), timeMs, resetAt)
+    ? findMotionEndpoint(graph.tracksByItem.get(itemId), timeMs, resetAt, excludedSegmentId)
     : undefined
   const progress = segment === undefined
     ? endpoint?.side === 'from' ? 0 : 1
@@ -486,13 +658,14 @@ function resolveMotionPose(
     context?: ReadonlyMap<string, LayoutItemSnapshot>,
   ) => HtmlPose | undefined,
   context?: ReadonlyMap<string, LayoutItemSnapshot>,
+  excludedSegmentId?: string,
 ): HtmlPose | undefined {
   const base = context?.get(itemId) ?? layout.items.get(itemId)
   const track = graph.tracksByItem.get(itemId)
   const resetAt = latestResetAt(graph.resetTimesByItem, itemId, timeMs)
-  const segment = findActiveSegment(track, timeMs, resetAt)
+  const segment = findActiveSegment(track, timeMs, resetAt, excludedSegmentId)
   if (segment === undefined) {
-    const endpoint = findMotionEndpoint(track, timeMs, resetAt)
+    const endpoint = findMotionEndpoint(track, timeMs, resetAt, excludedSegmentId)
     if (endpoint !== undefined) {
       const attachment = endpoint.side === 'from'
         ? endpoint.segment.from
@@ -501,7 +674,10 @@ function resolveMotionPose(
     }
     if (base === undefined) return undefined
     const parent = resolveParent(base.parentItemId, context)
-    return parent === undefined ? undefined : composeMotionPose(parent, base.localPose)
+    // `rootPose` is the measured world pose from this same FIRST/LAST
+    // capture. It is the correct fallback when the HTML host parent is not
+    // represented in the logical layout snapshot.
+    return parent === undefined ? base.rootPose : composeMotionPose(parent, base.localPose)
   }
 
   const retarget = resolveSegmentRetarget(segment, timeMs)
@@ -760,6 +936,153 @@ function createAttachmentContext(
   return context
 }
 
+/** Returns the target identities that one destination attachment depends on. */
+function targetDependencyKeys(attachment: MotionAttachment): readonly string[] {
+  // A mounted target is identified by its concrete parent item. The logical
+  // target id is only a fallback for root-level attachments; indexing every
+  // sibling that shares that id would retarget unrelated moves.
+  return Object.freeze([
+    attachment.parentItemId ?? attachment.targetId,
+  ])
+}
+
+/** Registers one active target-dependent segment in the temporary build index. */
+function registerTargetDependencies(
+  index: TargetDependencyIndex,
+  segment: MotionSegment,
+): void {
+  for (const targetKey of targetDependencyKeys(segment.to)) {
+    const references = index.get(targetKey) ?? new Map()
+    references.set(segment.id, Object.freeze({
+      itemId: segment.itemId,
+      segmentId: segment.id,
+      startAt: segment.startAt,
+      endAt: segment.endAt,
+    }))
+    index.set(targetKey, references)
+  }
+}
+
+/** Drops dependencies belonging to an older overlapping direct segment. */
+function removeOverlappingTargetDependencies(
+  index: TargetDependencyIndex,
+  itemId: string,
+  startAt: number,
+): void {
+  for (const [targetKey, references] of index) {
+    for (const [segmentId, reference] of references) {
+      if (reference.itemId !== itemId
+        || reference.startAt > startAt
+        || reference.endAt <= startAt) continue
+      references.delete(segmentId)
+    }
+    if (references.size === 0) index.delete(targetKey)
+  }
+}
+
+/** Identifies one segment reference without exposing the dependency index. */
+function motionSegmentReferenceKey(itemId: string, segmentId: string): string {
+  return `${itemId}\u0000${segmentId}`
+}
+
+/** Finds every item whose captured pose changed across a new boundary. */
+function resolveChangedItemIds(boundary: MotionBoundary): readonly string[] {
+  const candidates = [
+    ...(boundary.afterStart === undefined ? [] : [boundary.afterStart]),
+    boundary.after,
+  ]
+  const itemIds = new Set<string>(boundary.before.items.keys())
+  for (const snapshot of candidates) for (const itemId of snapshot.items.keys()) itemIds.add(itemId)
+
+  return Object.freeze([...itemIds].filter((itemId) => {
+    const before = boundary.before.items.get(itemId)
+    if (before === undefined) return candidates.some((snapshot) => snapshot.items.has(itemId))
+    return candidates.some((snapshot) => {
+      const after = snapshot.items.get(itemId)
+      return after === undefined || layoutItemPoseChanged(before, after)
+    })
+  }))
+}
+
+/** Detects structural, local or composed world-pose changes for a target item. */
+function layoutItemPoseChanged(before: LayoutItemSnapshot, after: LayoutItemSnapshot): boolean {
+  return layoutAttachmentChanged(before, after) || !sameHtmlPose(before.rootPose, after.rootPose)
+}
+
+/** Compares the world-space data relevant to a target dependency. */
+function sameHtmlPose(left: HtmlPose, right: HtmlPose, epsilon = 0.001): boolean {
+  return nearlyEqual(left.origin.x, right.origin.x, epsilon)
+    && nearlyEqual(left.origin.y, right.origin.y, epsilon)
+    && nearlyEqual(left.matrix.a, right.matrix.a, epsilon)
+    && nearlyEqual(left.matrix.b, right.matrix.b, epsilon)
+    && nearlyEqual(left.matrix.c, right.matrix.c, epsilon)
+    && nearlyEqual(left.matrix.d, right.matrix.d, epsilon)
+    && nearlyEqual(left.localWidth, right.localWidth, epsilon)
+    && nearlyEqual(left.localHeight, right.localHeight, epsilon)
+}
+
+/** Rebuilds one destination attachment against a newly captured target pose. */
+function createTargetRetargetAttachment(
+  segment: MotionSegment,
+  boundary: MotionBoundary,
+  itemId: string,
+  targetItemId: string,
+): MotionAttachment | undefined {
+  const projectedItem = boundary.after.items.get(itemId)
+  if (projectedItem !== undefined
+    && projectedItem.parentItemId === segment.to.parentItemId
+    && projectedItem.targetId === segment.to.targetId) {
+    return createStaticAttachment(projectedItem, boundary.after)
+  }
+
+  const target = boundary.after.items.get(targetItemId)
+    ?? boundary.afterStart?.items.get(targetItemId)
+  if (target === undefined) return undefined
+
+  const context = new Map(segment.to.context ?? [])
+  let current: LayoutItemSnapshot | undefined = target
+  while (current !== undefined && !context.has(current.itemId)) {
+    context.set(current.itemId, current)
+    current = current.parentItemId === undefined
+      ? undefined
+      : boundary.after.items.get(current.parentItemId)
+        ?? boundary.afterStart?.items.get(current.parentItemId)
+        ?? context.get(current.parentItemId)
+  }
+
+  const targetIsContainer = segment.to.parentItemId === targetItemId
+    || (segment.to.parentItemId === undefined && segment.to.targetId === targetItemId)
+  return Object.freeze({
+    ...segment.to,
+    fallbackRootPose: targetIsContainer
+      ? decomposeRootMotionPose(composeMotionPose(target.rootPose, segment.to.localPose))
+      : segment.to.fallbackRootPose,
+    context,
+  })
+}
+
+/** Resolves a target's pose at the retarget boundary without freezing an old target. */
+function resolveTargetRetargetParent(
+  graph: MotionGraph,
+  boundary: MotionBoundary,
+  parentItemId: string | undefined,
+  timeMs: number,
+): HtmlPose | undefined {
+  if (parentItemId === undefined) return createMotionRootPose()
+
+  const activeTargetSegment = findActiveSegment(
+    graph.tracksByItem.get(parentItemId),
+    timeMs,
+    latestResetAt(graph.resetTimesByItem, parentItemId, timeMs),
+  )
+  const currentLayout = activeTargetSegment === undefined
+    ? boundary.after
+    : boundary.before
+  return resolveMotionItem(graph, currentLayout, parentItemId, timeMs)?.pose
+    ?? boundary.after.items.get(parentItemId)?.rootPose
+    ?? boundary.afterStart?.items.get(parentItemId)?.rootPose
+}
+
 /** Detects local reflow or reparentage without duplicating ancestor movement. */
 function layoutAttachmentChanged(before: LayoutItemSnapshot, after: LayoutItemSnapshot): boolean {
   return before.parentItemId !== after.parentItemId
@@ -770,6 +1093,11 @@ function layoutAttachmentChanged(before: LayoutItemSnapshot, after: LayoutItemSn
 /** Classifies a parent/target change as a reparent presentation regardless of author defaults. */
 function isReparented(before: LayoutItemSnapshot, after: LayoutItemSnapshot): boolean {
   return before.parentItemId !== after.parentItemId || before.targetId !== after.targetId
+}
+
+/** Compares finite geometry values without making sub-pixel retargets visible. */
+function nearlyEqual(left: number, right: number, epsilon: number): boolean {
+  return Math.abs(left - right) <= epsilon
 }
 
 /** Uses an item's own timing, or the longest direct timing for shared reflow. */
@@ -785,15 +1113,26 @@ function selectBoundaryTransition(intents: readonly MotionIntent[]): MotionInten
   return longest
 }
 
+/** Shortens a replacement move so it ends with the segment it supersedes. */
+function resolveReplacementTiming(
+  activeSegment: MotionSegment,
+  timeMs: number,
+): Readonly<{ duration: number; delay: number; endAt: number }> {
+  const remainingDuration = Math.max(0, activeSegment.endAt - timeMs)
+  return Object.freeze({ duration: remainingDuration, delay: 0, endAt: activeSegment.endAt })
+}
+
 /** Finds the latest segment owning one item at the requested time. */
 function findActiveSegment(
   track: ItemMotionTrack | undefined,
   timeMs: number,
   resetAt?: MotionResetBoundary,
+  excludedSegmentId?: string,
 ): MotionSegment | undefined {
   if (track === undefined) return undefined
   for (let index = track.segments.length - 1; index >= 0; index -= 1) {
     const segment = track.segments[index]!
+    if (segment.id === excludedSegmentId) continue
     if (resetAt !== undefined && !isAfterReset(segment, resetAt)) continue
     if (timeMs >= segment.startAt && timeMs <= segment.endAt) return segment
   }
@@ -805,16 +1144,24 @@ function findMotionEndpoint(
   track: ItemMotionTrack | undefined,
   timeMs: number,
   resetAt?: MotionResetBoundary,
+  excludedSegmentId?: string,
 ): Readonly<{ segment: MotionSegment; side: 'from' | 'to' }> | undefined {
   if (track === undefined || track.segments.length === 0) return undefined
   const segments = resetAt === undefined
     ? track.segments
     : track.segments.filter((segment) => isAfterReset(segment, resetAt))
-  if (segments.length === 0) return undefined
-  const first = segments[0]!
+  // During graph construction, an operation excludes its own newly planned
+  // segment. Future segments must be excluded from that FIRST lookup as well;
+  // otherwise a first segment would resolve against a later segment's
+  // provisional `from` pose and jump back to it.
+  const eligibleSegments = excludedSegmentId === undefined
+    ? segments
+    : segments.filter((segment) => segment.id !== excludedSegmentId && segment.startAt <= timeMs)
+  if (eligibleSegments.length === 0) return undefined
+  const first = eligibleSegments[0]!
   if (timeMs < first.startAt) return { segment: first, side: 'from' }
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    const segment = segments[index]!
+  for (let index = eligibleSegments.length - 1; index >= 0; index -= 1) {
+    const segment = eligibleSegments[index]!
     if (timeMs > segment.endAt) return { segment, side: 'to' }
   }
   return undefined

@@ -7,7 +7,7 @@ import {
   POSITION_STORY_FIVE_ID,
   POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
 } from './constants'
-import { CAROUSEL_EVENTS, createViewRoot } from './carousel'
+import { CAROUSEL_EVENTS_BY_STORY_ID, createViewRoot } from './carousel'
 
 const SOURCE_CONTAINER = 'position:view-five:source'
 const TARGET_CONTAINER = 'position:view-five:target'
@@ -38,7 +38,8 @@ const STORY_FIVE_END_OFFSET_MS = STORY_FIVE_K_OSCILLATION_START_OFFSET_MS
 
 /** Creates story 5 with one Q/K container in each visible position card. */
 export function createStoryFive(): StoryDoc {
-  const view = createViewRoot(4, `
+  const storyEvents = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FIVE_ID]
+  const view = createViewRoot(POSITION_STORY_FIVE_ID, `
     <section class="position-view__frame position-view__frame--lesson position-story-five-frame">
       <div class="position-two-node-stage" data-part="${STAGE_TARGET}">
         <div class="position-route position-route--straight" aria-hidden="true">
@@ -54,9 +55,9 @@ export function createStoryFive(): StoryDoc {
   return {
     id: POSITION_STORY_FIVE_ID,
     listen: [
-      { on: CAROUSEL_EVENTS[4].enter, active: true, reset: true },
-      { on: CAROUSEL_EVENTS[4].leave, active: false },
-      { on: CAROUSEL_EVENTS[4].reset, reset: true },
+      { on: storyEvents.enter, active: true, reset: true },
+      { on: storyEvents.leave, active: false },
+      { on: storyEvents.reset, reset: true },
     ],
     persos: [
       view,

@@ -32,14 +32,15 @@ export const POSITION_PATH_CONTROL_LIVE_EVENT = `${POSITION_NAMESPACE}:path:cont
 export const POSITION_PATH_CONTROL_SETTLED_EVENT = `${POSITION_NAMESPACE}:path:control:settled`
 export const POSITION_PATH_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:path:item:move`
 
-/** Story-four capture and live move events. */
-export const POSITION_LIVE_SOURCE_RELEASED_EVENT = `${POSITION_NAMESPACE}:live:source:released`
-export const POSITION_LIVE_TARGET_RELEASED_EVENT = `${POSITION_NAMESPACE}:live:target:released`
-export const POSITION_LIVE_SOURCE_DRAG_EVENT = `${POSITION_NAMESPACE}:live:source:drag`
-export const POSITION_LIVE_TARGET_DRAG_EVENT = `${POSITION_NAMESPACE}:live:target:drag`
-export const POSITION_LIVE_SOURCE_SETTLED_EVENT = `${POSITION_NAMESPACE}:live:source:settled`
-export const POSITION_LIVE_TARGET_SETTLED_EVENT = `${POSITION_NAMESPACE}:live:target:settled`
+/** Story-four capture and live move events, keyed by physical container. */
+export const POSITION_LIVE_A_RELEASED_EVENT = `${POSITION_NAMESPACE}:live:a:released`
+export const POSITION_LIVE_B_RELEASED_EVENT = `${POSITION_NAMESPACE}:live:b:released`
+export const POSITION_LIVE_A_DRAG_EVENT = `${POSITION_NAMESPACE}:live:a:drag`
+export const POSITION_LIVE_B_DRAG_EVENT = `${POSITION_NAMESPACE}:live:b:drag`
+export const POSITION_LIVE_A_SETTLED_EVENT = `${POSITION_NAMESPACE}:live:a:settled`
+export const POSITION_LIVE_B_SETTLED_EVENT = `${POSITION_NAMESPACE}:live:b:settled`
 export const POSITION_LIVE_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:live:item:move`
+export const POSITION_LIVE_INITIALIZE_EVENT = `${POSITION_NAMESPACE}:live:initialize`
 
 /** Fixed story-two events for its moving anchors and item. */
 export const POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:2:source:shift`
@@ -54,8 +55,10 @@ export const POSITION_VIEW_FIVE_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:5:
 export const POSITION_KEYBOARD_NAVIGATION_STRAP = `${POSITION_NAMESPACE}:keyboard:navigate`
 export const POSITION_KEYBOARD_TOGGLE_STRAP = `${POSITION_NAMESPACE}:keyboard:toggle`
 export const POSITION_PATH_COMMIT_STRAP = `${POSITION_NAMESPACE}:path:commit`
-export const POSITION_LIVE_SOURCE_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:source:commit`
-export const POSITION_LIVE_TARGET_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:target:commit`
+export const POSITION_LIVE_BOUNCE_START_STRAP = `${POSITION_NAMESPACE}:live:start`
+export const POSITION_LIVE_A_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:a:commit`
+export const POSITION_LIVE_B_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:b:commit`
+export const POSITION_LIVE_ITEM_MOVE_STATE_STRAP = `${POSITION_NAMESPACE}:live:item:move:state`
 
 /** Number and timing of the authored carousel views. */
 export const VIEW_IDS = [
@@ -66,14 +69,30 @@ export const VIEW_IDS = [
   'position-view-five',
   'position-view-six',
 ] as const
+
+/** Presentation order of the position stories in the validation carousel. */
 export const POSITION_VIEW_STORY_IDS = [
-  POSITION_STORY_ONE_ID,
-  POSITION_STORY_TWO_ID,
-  POSITION_STORY_THREE_ID,
   POSITION_STORY_FOUR_ID,
+  POSITION_STORY_TWO_ID,
+  POSITION_STORY_ONE_ID,
+  POSITION_STORY_THREE_ID,
   POSITION_STORY_FIVE_ID,
   POSITION_STORY_SIX_ID,
 ] as const
+
+/** Stable root identity belonging to each story, independent of carousel order. */
+export const POSITION_STORY_VIEW_IDS = {
+  [POSITION_STORY_ONE_ID]: VIEW_IDS[0],
+  [POSITION_STORY_TWO_ID]: VIEW_IDS[1],
+  [POSITION_STORY_THREE_ID]: VIEW_IDS[2],
+  [POSITION_STORY_FOUR_ID]: VIEW_IDS[3],
+  [POSITION_STORY_FIVE_ID]: VIEW_IDS[4],
+  [POSITION_STORY_SIX_ID]: VIEW_IDS[5],
+} as const
+
+/** Stable story identity used when resolving plans and carousel events. */
+export type PositionStoryId = typeof POSITION_VIEW_STORY_IDS[number]
+
 export const VIEW_COUNT = VIEW_IDS.length
 export const VIEW_DURATION_MS = 5_000
 export const CAROUSEL_AUTHORING_HORIZON_MS = VIEW_COUNT * VIEW_DURATION_MS

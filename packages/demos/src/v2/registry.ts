@@ -147,6 +147,7 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			return {
 				createScene: module.createScene,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+				initialEvents: module.POSITION_INITIAL_EVENTS,
 			}
 		},
 	},

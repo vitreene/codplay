@@ -25,6 +25,8 @@ export type V2DemoPlayback = Readonly<{
 export type V2DemoModule = Readonly<{
   createScene: () => SceneDoc
   stylesheetUrl: string
+  /** Events sent through the public facade after the instance is ready. */
+  initialEvents?: readonly V2DemoEventInjection[]
   /** Adds scene resources that are not derivable from compiled `src` fields. */
   preloadManifest?: CompiledResourceManifest
   /** Selects whether unavailable demo resources block the mount. */

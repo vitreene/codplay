@@ -11,8 +11,6 @@ export type HtmlMotionContainerSceneInput = Readonly<{
   root: Element
   scenes: readonly SolvedScene[]
   itemIds: readonly string[]
-  /** Logical story whose items are being captured when the scope is local. */
-  storyId?: string
   /** Stories touched by the source and destination sides of the boundary. */
   storyIds?: readonly string[]
 }>
@@ -87,8 +85,7 @@ export class HtmlMotionContainerResolver {
 
 /** Normalizes the stories touched by one boundary without inspecting the DOM. */
 function resolveStoryIds(input: HtmlMotionContainerSceneInput): readonly string[] {
-  const storyIds = input.storyIds ?? (input.storyId === undefined ? [] : [input.storyId])
-  return [...new Set(storyIds.filter((storyId) => storyId.length > 0))]
+  return [...new Set((input.storyIds ?? []).filter((storyId) => storyId.length > 0))]
 }
 
 /** Narrows one materializer value to a DOM element across browser realms. */

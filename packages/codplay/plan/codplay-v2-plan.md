@@ -146,6 +146,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | En cours : préparation par occurrence, capture finale cohérente et commit atomique |
 | Découverte motion et reset chaud | [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md), [`story-reset-plan.md`](./story-reset-plan.md) | En cours : suppression de la découverte globale et retrait réel des groupes reset |
+| Dépendance d’un `move` à sa target | [`move-target-dependency-plan.md`](./move-target-dependency-plan.md) | En cours : implémentation validée, retarget déclenché par une nouvelle frontière qui modifie la target, sans recalcul pendant le déplacement continu |
 | Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
 | Démo standard runner | [`../../demos/plan/2026-09-04-position-v2-plan.md`](../../demos/plan/2026-09-04-position-v2-plan.md) | Fixe comme gabarit de validation |
 | Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |

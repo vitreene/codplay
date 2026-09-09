@@ -49,11 +49,13 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Espace produit un comportement de story : le strap bascule l'état, arrête
   les tweens courants par événement et relance la séquence visuelle de la vue
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
-- Le premier `move` est un eventime initial de la story, à `1 000 ms`, avec une
-  durée de `2 000 ms`. Chaque reparenting d'item utilise cette même durée et
-  un `move` explicite. Les mouvements des vues parcourues ensuite sont ajoutés
-  par le strap de navigation sur le track de la story. La lecture temporelle
-  ne change jamais de vue.
+- L'ordre de validation courant commence par la story 4 ; la story 2 est
+  activée ensuite. Dans la story 2, les deux déplacements d'ancre commencent
+  à `450 ms`, son item est reparenté à `1 350 ms` pendant `2 000 ms`, et sa
+  borne de story arrive à `4 100 ms`. Chaque reparenting d'item utilise cette
+  même durée et un `move` explicite. Les mouvements des vues parcourues ensuite
+  sont ajoutés par le strap de navigation sur le track de la story. La lecture
+  temporelle ne change jamais de vue.
 - Chaque plan de story se termine par un eventime ordinaire
   `position:demo:story:end`, positionné à la fin de sa dernière transition.
   Il fixe l'horizon observable utilisé par le seek sans déclencher la borne
@@ -118,7 +120,8 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - La lecture temporelle seule ne change jamais de vue ; chaque changement
   vient d'une interaction de navigation, et n'expose jamais deux vues du
   carousel simultanément.
-- La première vue lance son `move` à `1 000 ms` et le termine à `3 000 ms`.
+- La vue initiale de validation est la story 4. Lorsque la story 2 est activée,
+  son `move` d'item commence à `1 350 ms` et se termine à `3 350 ms`.
 - Les six vues montrent réellement les mouvements/reparentings via les actions
   `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
   eventimes ajoutés à la volée contiennent leur payload `move` complet.
@@ -150,14 +153,16 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   des autres démos V2, avec une amplitude de `50` unités numériques CodPlay.
 - Validation ciblée : le test façade vérifie le payload `move`, le changement
   d'outlet avant/après la transition et la présence des deux conteneurs dans la
-  grille de la story 2. La vérification visuelle de l'overlay reste à faire
-  dans Safari.
-- Défaut d'intégration identifié : lors d'un eventime ajouté live par la
-  navigation, `RuntimePlayer` rematérialise bien le nouvel outlet, mais le
-  runner reconstruit encore ses frontières motion hors de l'occurrence qui les
-  nécessite. Le payload `reparent: true` reste donc sans représentation overlay
-  au moment attendu. Ce point appartient à la migration CodPlay dédiée ; aucun
-  eventime statique ni contournement n'est ajouté à la démo.
+  grille de la story 2. Le parcours Safari sur la vue initiale vérifie le début
+  sans saut de l'overlay, son arrivée dans la cible et l'absence d'erreur
+  console.
+- Le test de parent mis à l'échelle de
+  `tests/runtime/runner-html/layout-snapshot.spec.ts` couvre une frontière de
+  capture distincte. Il ne valide pas à lui seul la trajectoire de la story 2.
+  Le parcours Safari MCP a montré que la trajectoire était spatialement droite,
+  mais temporellement non linéaire à cause de l'easing auteur `inOutQuint`.
+  Le `move` de la story 2 ne déclare désormais plus d'easing ; les
+  déplacements indépendants des ancres restent leurs tweens verticaux séparés.
 
 ## Dépendance au plan CodPlay
 
@@ -198,7 +203,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,
-  premier move à `1 000 ms`, capture de la vue 3, quatre rebonds de la vue 4,
+  story 4 en première position, le move initial de la story 2 à `1 350 ms`, capture de la vue 3, quatre rebonds de la vue 4,
   reparenting imbriqué de la vue 5 et la conclusion `flip-stress` avec quatre
   conteneurs, deux cadres en transfert, deux listes et douze échanges d'items.
 - La conclusion reprend les constantes de mouvement de `flip-stress` :
@@ -229,3 +234,139 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   conclusion au-delà de `9 650 ms`, un seek à `3 000 ms` conserve `max=9 650`,
   puis un seek à `9 650 ms` revient à `100 %`. Aucun warning ni error n'est
   produit dans la console.
+
+### Reprise d'intégration — 2026-09-08 — identité de story et ordre de validation
+
+- Le carousel conserve un ordre de cases, mais une case ne constitue plus
+  l'identité d'une story. `POSITION_VIEW_STORY_IDS` porte l'ordre de
+  présentation ; `POSITION_STORY_VIEW_IDS` conserve l'identité stable de la
+  racine visuelle ; `CAROUSEL_EVENTS_BY_STORY_ID` résout les événements de la
+  case occupée par chaque story.
+- `createStoryAnimationPlan` et `planStoryAnimation` sont maintenant indexés
+  par `storyId`. Le plan transmis par une navigation est donc ciblé par la
+  même identité que le document de story, quelle que soit sa position dans le
+  carousel.
+- La validation courante place la story 4 en première case, puis la story 2.
+  Les plans sont ciblés par l'identité de story ; le plan statique d'une autre
+  story n'est plus exécuté en arrière-plan avant son activation.
+- Réexamen navigateur sur l'onglet Safari MCP existant de `5173` : la mesure
+  précédente a isolé l'easing auteur comme cause du démarrage sans déplacement
+  horizontal. La correction conserve le même move, la même durée et le même
+  circuit d'overlay, mais ne déclare plus l'easing `inOutQuint` afin que
+  l'item commence sa transition horizontale dès son départ. La console Safari
+  ne contient ni warning ni erreur. Après correction, les poses relatives
+  relevées sont `x=157,219` à `1 350 ms`, `186,794` à `1 400 ms`, `243,697` à
+  `1 500 ms` et `323,437` à `1 650 ms` : le déplacement horizontal commence
+  bien avec la transition.
+
+### Reprise d'intégration — 2026-09-08 — trajectoire de la story 4
+
+- `POSITION_VIEW_STORY_IDS` commence par `position-story-four`. Les identités
+  stables des racines restent celles des vues authored ; seul l'ordre de
+  présentation du carousel est modifié.
+- Les points d'ancrage `sourcePoint` et `targetPoint` gardent leur identité
+  propre. Pour chaque mouvement, `firstPoint` désigne le conteneur mesuré en
+  FIRST et `lastPoint` celui mesuré en LAST ; `lastRole` conserve cette
+  distinction lorsque le mouvement inverse les deux conteneurs et ne dépend
+  pas de l'ancre qui vient d'être déplacée.
+- La courbure réduite est appliquée uniquement lorsque le conteneur cible est
+  LAST. Le placement inverse, où la source est LAST, conserve sa courbure
+  existante ; aucune autre trajectoire n'est modifiée par ce correctif.
+- Le contrôle Safari MCP confirme dans l'onglet existant de `5173` que la
+  première case affiche la story 4 (`01 / 06`) et que la console ne produit
+  aucun warning ni error après le changement d'ordre.
+
+### Reprise d'intégration — 2026-09-08 — régression du déplacement live
+
+- Le symptôme « l'item ne se déplace plus et les conteneurs reviennent à leur
+  position initiale » venait d'une erreur de résolution de la transition de la
+  racine du carousel. Le canal `x` est une longueur logique : ses deux bornes
+  doivent rester numériques et être qualifiées ensemble. Une borne authored en
+  CSS (`320px`) mélangée à la borne numérique `0` déclenche
+  `RUNTIME_STYLE_LENGTH_INCOMPATIBLE`, ce qui interrompait le traitement de
+  l'événement avant la conservation du drag.
+- `CAROUSEL_SLIDE_OFFSET_PX` reste donc numérique (`320`) afin que `from` et
+  `to` suivent le même contrat de longueur. Aucun contournement n'a été ajouté
+  au runner ni au circuit de capture.
+- Validation effectuée : les 9 tests ciblés position/layout passent, le
+  typecheck CodPlay passe, le typecheck V2 des démos passe, le build V2 passe,
+  et l'onglet Safari MCP existant confirme que les translations relâchées de
+  `source` (`34,-18`) et `cible` (`18,18`) sont conservées et que l'item reste
+  dans la cible. Le plan global reste `En cours` pour les volets non validés.
+
+### Reprise d'intégration — 2026-09-08 — distinction source / cible dans la trajectoire
+
+- Pour le déplacement `source → cible`, la cible est le conteneur `LAST` et
+  possède désormais une forme de trajectoire mémorisée dans l'état de la
+  story (`liveTargetControlY`). Le relâchement de la source met à jour sa
+  position mais conserve cette forme ; il ne modifie donc pas le trajet vers
+  la cible.
+- Le relâchement de la cible recalcule au contraire cette forme à partir des
+  deux positions, puis la transmet aux prochains `move`. Le calcul dépend
+  ainsi du conteneur placé en `LAST`, et non de l'ancre qui vient d'être
+  déplacée.
+- Le test façade vérifie sur le circuit runtime réel que le prochain move
+  vers `position:view-four:target` conserve son rayon après un déplacement de
+  la source. Le libellé de la story décrit maintenant cette distinction.
+
+### Reprise d'intégration — 2026-09-09 — repositionnement du conteneur source
+
+- Le saut observé après un déplacement de la cible ne venait pas de la pose de
+  l'item ni de sa nouvelle trajectoire. Le snapshot logique montrait déjà le
+  conteneur `source` revenu à `0px,0px` avant la présentation motion.
+- La cause était déclarative : les événements internes de relâchement de la
+  source et de la cible portaient `active: true`. Selon le contrat d'isolation,
+  cette propriété ouvre une nouvelle période, y compris si la même story est
+  déjà active ; la période précédente et son état de story ne sont alors plus
+  projetés. Les relâchements ne sont pas des événements d'activation : ils ne
+  portent plus `active`. L'activation reste portée par l'entrée et
+  l'initialisation de la story.
+- La régression façade `keeps the source anchor pose when the target is
+  repositioned` vérifie sur le circuit réel que `translate(34px, -18px)` est
+  conservé après le relâchement de la cible. Aucun filtrage spécial du
+  conteneur `source` n'a été ajouté au graphe motion.
+
+### Reprise d'intégration — 2026-09-09 — identités physiques A/B et direction du move
+
+Les lignes précédentes décrivent l'ancienne hypothèse de la fixture ; elles ne
+sont plus le modèle courant de la story 4. Les deux conteneurs sont désormais
+`A` et `B`. `source` et `target` sont des rôles transitoires du move courant :
+le premier rebond est A→B, le suivant B→A, puis l'alternance continue.
+
+- L'état de story mémorise les poses de A et B ainsi que l'identifiant de la
+  cible du dernier move exécuté. Les payloads `move` portent également cette
+  cible physique afin que le suivi reste attaché à l'occurrence réelle, sans
+  déduire une destination du nom du geste ou du conteneur relâché.
+- Le relâchement de la source physique courante ne produit que son événement
+  de pose et sa mise à jour d'état. Il ne réémet pas de `move` et ne modifie
+  pas la trajectoire en cours vers la cible.
+- Le relâchement de la cible physique courante produit un nouveau `move` vers
+  cette même cible. Le runner CodPlay prend alors la pose visible de l'item
+  comme FIRST et la projection de la cible déplacée comme LAST ; le segment
+  conserve la fin et la durée totale prévues par le contrat de retarget.
+- L'initialisation et les plans de story 4 restent dans le track story. Les
+  occurrences futures mettent à jour la cible courante dans ce même scope,
+  ce qui permet de traiter correctement le rebond inverse B→A après une
+  lecture réelle.
+- Les tests façade couvrent maintenant le markup A/B, le trajet A→B après le
+  déplacement de A, la conservation de la pose de A lorsque B est déplacé,
+  et le retarget vers A lorsque la série est passée à B→A.
+
+### Reprise d'intégration — 2026-09-09 — aucun repeat parasite au relâchement
+
+- Le `repeat` de la story 4 est créé une seule fois par son événement
+  d'initialisation. Le strap de relâchement ne replanifie jamais cette série.
+- Le relâchement de la source physique émet uniquement son événement de pose.
+  Le relâchement de la cible émet son événement de pose et un seul `move`
+  ordinaire, que CodPlay retargete selon le plan de dépendance de cible.
+- Plusieurs relâchements successifs ne créent donc pas de nouvelles
+  occurrences futures. La fixture mesure ce chemin réel ; elle ne compense pas
+  un défaut du runtime par un cache ou une logique locale.
+- Contrôle Safari MCP : cinq relâchements successifs de B à `700 ms` ont
+  produit chacun 33 lectures de géométrie/styles ; les seeks à `30 000` et
+  `40 000 ms` sont restés à 90 lectures, sans croissance correspondant à cinq
+  séries supplémentaires. La console est restée sans warning ni erreur.
+
+Le statut reste `En cours` : cette correction est implémentée, testée sur le
+circuit réel et documentée, mais la validation CodPlay d'acceptation complète
+reste ouverte.

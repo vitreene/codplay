@@ -3,19 +3,38 @@ import {
   POSITION_KEYBOARD_NAVIGATION_STRAP,
   POSITION_KEYBOARD_TOGGLE_EVENT,
   POSITION_KEYBOARD_TOGGLE_STRAP,
+  POSITION_LIVE_INITIALIZE_EVENT,
   POSITION_NAMESPACE,
   POSITION_STORY_PAUSED_EVENT,
   POSITION_STORY_RESUMED_EVENT,
   POSITION_TWEEN_STOP_EVENT,
   POSITION_VIEW_STORY_IDS,
+  POSITION_STORY_FOUR_ID,
   VIEW_COUNT,
 } from './constants'
 import { CAROUSEL_EVENTS } from './carousel'
 import { planStoryAnimation } from './story-animation'
 import { clamp, readFinite, readRecord } from './shared'
 import type { SceneListenRule } from 'codplay/scene/types'
-import type { ViewIndex } from './types'
-import type { StrapFunction, StrapReturnValue } from 'codplay/runtime/player'
+import type { PlannedStrapHelpers, StrapFunction, StrapReturnValue } from 'codplay/runtime/player'
+
+/** Starts one position story through its own story-scoped event circuit. */
+function planSelectedStory(
+  storyId: typeof POSITION_VIEW_STORY_IDS[number],
+  planned: Pick<PlannedStrapHelpers, 'wait' | 'repeat'>,
+  state: Readonly<Record<string, unknown>>,
+): StrapReturnValue {
+  if (storyId === POSITION_STORY_FOUR_ID) {
+    return {
+      events: [{
+        name: POSITION_LIVE_INITIALIZE_EVENT,
+        storyId,
+        visibility: 'story',
+      }],
+    }
+  }
+  return planStoryAnimation(storyId, planned, state)
+}
 
 /** Names the scene strap that records the currently visible carousel story. */
 function viewRememberStrap(index: number): string {
@@ -53,7 +72,7 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
               { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
           ],
         },
-          planStoryAnimation(next as ViewIndex, POSITION_VIEW_STORY_IDS[next], context.planned, state),
+          planSelectedStory(POSITION_VIEW_STORY_IDS[next], context.planned, state),
       ]
       return output
     },
@@ -64,9 +83,20 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
         const output: readonly StrapReturnValue[] = [
           {
             update: { storyPaused: false },
-            events: [{ name: POSITION_STORY_RESUMED_EVENT, visibility: 'scene' }],
+            events: [
+              { name: POSITION_STORY_RESUMED_EVENT, visibility: 'scene' },
+              ...(POSITION_VIEW_STORY_IDS[current] === POSITION_STORY_FOUR_ID
+                ? [{
+                    name: POSITION_LIVE_INITIALIZE_EVENT,
+                    storyId: POSITION_STORY_FOUR_ID,
+                    visibility: 'story' as const,
+                  }]
+                : []),
+            ],
           },
-          planStoryAnimation(current as ViewIndex, POSITION_VIEW_STORY_IDS[current], context.planned, state),
+          ...(POSITION_VIEW_STORY_IDS[current] === POSITION_STORY_FOUR_ID
+            ? []
+            : [planStoryAnimation(POSITION_VIEW_STORY_IDS[current], context.planned, state)]),
         ]
         return output
       }

@@ -606,6 +606,247 @@ describe('motion graph', () => {
     expect(atBoundary.rect.top).toBeCloseTo(beforeBoundary.rect.top, 3)
   })
 
+  it('retargets an active move when its resolved target moves', () => {
+    const beforeMove = snapshot(0, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const afterMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const beforeTargetMove = snapshot(500, [
+      item('target', 'root', 100),
+      item('source', 'root', 0),
+    ])
+    const afterTargetMove = snapshot(1_000, [
+      item('target', 'root', 200),
+      item('source', 'root', 0),
+    ])
+    const firstBoundary = boundary('move-to-target', 0, beforeMove, afterMove, [{
+      ...intent('moving', 0, 1_000),
+      targetReflow: true,
+    }])
+    const targetBoundary = boundary('target-move', 500, beforeTargetMove, afterTargetMove, [{
+      ...intent('target', 500, 500),
+      targetReflow: false,
+    }])
+    const graph = buildMotionGraph([firstBoundary, targetBoundary])
+    const timeline = buildNaturalLayoutTimeline([firstBoundary, targetBoundary])
+
+    const beforeRetarget = resolvePresentationFrame(
+      graph,
+      resolveNaturalLayout(timeline, 499.999),
+      499.999,
+    ).items.get('moving')?.pose
+    const atRetarget = resolvePresentationFrame(
+      graph,
+      resolveNaturalLayout(timeline, 500),
+      500,
+    ).items.get('moving')?.pose
+    const atTargetEndpoint = resolvePresentationFrame(
+      graph,
+      resolveNaturalLayout(timeline, 1_000),
+      1_000,
+    ).items.get('moving')?.pose
+
+    if (beforeRetarget === undefined || atRetarget === undefined || atTargetEndpoint === undefined) {
+      throw new Error('Target dependency retarget test item is missing.')
+    }
+
+    expect(atRetarget.rect.left).toBeCloseTo(beforeRetarget.rect.left, 3)
+    expect(atRetarget.rect.top).toBeCloseTo(beforeRetarget.rect.top, 3)
+    expect(atRetarget.rect.left).toBeCloseTo(60, 3)
+    expect(atTargetEndpoint.rect.left).toBeCloseTo(210, 3)
+    expect(graph.tracksByItem.get('moving')?.segments[0]?.retargets).toHaveLength(1)
+  })
+
+  it('restarts a direct move from the visible pose and keeps the original end time', () => {
+    const beforeMove = snapshot(0, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const afterMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const beforeRecalculation = snapshot(500, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const afterRecalculation = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target', 'root', 200),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('move-to-target', 0, beforeMove, afterMove, [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }]),
+      boundary('target-recalculation', 500, beforeRecalculation, afterRecalculation, [
+        {
+          ...intent('target', 500, 500),
+          targetReflow: false,
+        },
+        {
+          ...intent('moving', 500, 1_000),
+          targetReflow: true,
+        },
+      ]),
+    ])
+
+    const beforeRecalculationFrame = resolvePresentationFrame(graph, beforeRecalculation, 499.999)
+    const atRecalculationFrame = resolvePresentationFrame(graph, afterRecalculation, 500)
+    const finalFrame = resolvePresentationFrame(graph, afterRecalculation, 1_000)
+    const beforePose = beforeRecalculationFrame.items.get('moving')?.pose
+    const recalculatedPose = atRecalculationFrame.items.get('moving')?.pose
+    if (beforePose === undefined || recalculatedPose === undefined) {
+      throw new Error('Direct move replacement test item is missing.')
+    }
+
+    expect(recalculatedPose.rect.left).toBeCloseTo(beforePose.rect.left, 3)
+    expect(recalculatedPose.rect.left).toBeCloseTo(60, 3)
+    expect(finalFrame.items.get('moving')?.pose.rect.left).toBeCloseTo(210, 3)
+    expect(graph.tracksByItem.get('moving')?.segments).toHaveLength(2)
+    expect(graph.tracksByItem.get('moving')?.segments[1]).toMatchObject({
+      startAt: 500,
+      endAt: 1_000,
+      duration: 500,
+      delay: 0,
+    })
+  })
+
+  it('does not retarget a move when an unrelated sibling shares its target id', () => {
+    const beforeMove = snapshot(0, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const afterMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const beforeSiblingMove = snapshot(500, [
+      item('target', 'root', 100),
+      item('source', 'root', 0),
+      item('sibling', 'target:content', 20, 'target'),
+    ])
+    const afterSiblingMove = snapshot(1_000, [
+      item('target', 'root', 100),
+      item('source', 'root', 0),
+      item('sibling', 'target:content', 40, 'target'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('move-to-target', 0, beforeMove, afterMove, [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }]),
+      boundary('sibling-move', 500, beforeSiblingMove, afterSiblingMove, [{
+        ...intent('sibling', 500, 500),
+        targetReflow: false,
+      }]),
+    ])
+
+    expect(graph.tracksByItem.get('moving')?.segments[0]?.retargets).toBeUndefined()
+  })
+
+  it('retargets every active move attached to the same concrete target', () => {
+    const beforeMove = snapshot(0, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving-a', 'source:content', 10, 'source'),
+      item('moving-b', 'source:content', 20, 'source'),
+    ])
+    const afterMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving-a', 'target:content', 10, 'target'),
+      item('moving-b', 'target:content', 20, 'target'),
+    ])
+    const beforeTargetMove = snapshot(500, [
+      item('target', 'root', 100),
+      item('source', 'root', 0),
+    ])
+    const afterTargetMove = snapshot(1_000, [
+      item('target', 'root', 200),
+      item('source', 'root', 0),
+    ])
+    const graph = buildMotionGraph([
+      boundary('moves-to-target', 0, beforeMove, afterMove, [
+        { ...intent('moving-a', 0, 1_000), targetReflow: true },
+        { ...intent('moving-b', 0, 1_000), targetReflow: true },
+      ]),
+      boundary('target-move', 500, beforeTargetMove, afterTargetMove, [{
+        ...intent('target', 500, 500),
+        targetReflow: false,
+      }]),
+    ])
+
+    expect(graph.tracksByItem.get('moving-a')?.segments[0]?.retargets).toHaveLength(1)
+    expect(graph.tracksByItem.get('moving-b')?.segments[0]?.retargets).toHaveLength(1)
+  })
+
+  it('does not retarget an overlapping segment superseded by a newer move', () => {
+    const beforeFirstMove = snapshot(0, [
+      item('source', 'root', 0),
+      item('target-a', 'root', 100),
+      item('target-b', 'root', 300),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const afterFirstMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target-a', 'root', 100),
+      item('target-b', 'root', 300),
+      item('moving', 'target-a:content', 10, 'target-a'),
+    ])
+    const beforeSecondMove = snapshot(500, [
+      item('source', 'root', 0),
+      item('target-a', 'root', 100),
+      item('target-b', 'root', 300),
+      item('moving', 'target-a:content', 10, 'target-a'),
+    ])
+    const afterSecondMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target-a', 'root', 100),
+      item('target-b', 'root', 300),
+      item('moving', 'target-b:content', 20, 'target-b'),
+    ])
+    const beforeTargetMove = snapshot(700, [
+      item('target-a', 'root', 100),
+      item('target-b', 'root', 300),
+    ])
+    const afterTargetMove = snapshot(1_000, [
+      item('target-a', 'root', 200),
+      item('target-b', 'root', 300),
+    ])
+    const graph = buildMotionGraph([
+      boundary('first-move', 0, beforeFirstMove, afterFirstMove, [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }]),
+      boundary('second-move', 500, beforeSecondMove, afterSecondMove, [{
+        ...intent('moving', 500, 500),
+        targetReflow: true,
+      }]),
+      boundary('target-a-move', 700, beforeTargetMove, afterTargetMove, [{
+        ...intent('target-a', 700, 300),
+        targetReflow: false,
+      }]),
+    ])
+
+    const segments = graph.tracksByItem.get('moving')?.segments
+    expect(segments).toHaveLength(2)
+    expect(segments?.[0]?.retargets).toBeUndefined()
+    expect(segments?.[1]?.retargets).toBeUndefined()
+  })
+
   it('does not import a later sibling reflow into an earlier boundary', () => {
     const before = snapshot(1_700, [
       item('list', 'root', 0),

@@ -210,6 +210,16 @@
 	--node-fill: rgb(28 155 179 / 8%);
 }
 
+.position-node--a {
+	--node-accent: var(--position-violet);
+	--node-fill: rgb(115 87 214 / 8%);
+}
+
+.position-node--b {
+	--node-accent: var(--position-cyan);
+	--node-fill: rgb(28 155 179 / 8%);
+}
+
 .position-node strong {
 	color: var(--position-ink);
 	font-size: clamp(1rem, 2.4cqw, 1.65rem);
@@ -399,6 +409,16 @@
 	left: 4%;
 }
 .position-anchor--target {
+	right: 4%;
+	bottom: 8%;
+}
+
+.position-anchor--a {
+	top: 8%;
+	left: 4%;
+}
+
+.position-anchor--b {
 	right: 4%;
 	bottom: 8%;
 }

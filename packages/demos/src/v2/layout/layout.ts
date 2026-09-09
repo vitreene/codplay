@@ -312,6 +312,9 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       });
     }
     installTelco(instance.telco, instance, module.playback, () => mount(module));
+    for (const injection of module.initialEvents ?? []) {
+      await instance.events.emit(injection.eventime, injection.target);
+    }
     log(`${options.active.title} initialisée · horizon issu des eventimes compilés`);
 
     sceneCleanup = () => {
