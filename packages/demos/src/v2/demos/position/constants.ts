@@ -26,10 +26,12 @@ export const POSITION_STORY_RESUMED_EVENT = `${POSITION_NAMESPACE}:story:resumed
 export const POSITION_STORY_END_EVENT = `${POSITION_NAMESPACE}:story:end`
 export const POSITION_TWEEN_STOP_EVENT = 'tween:stop'
 
-/** Story-three capture and move events. */
-export const POSITION_PATH_CAPTURE_EVENT = `${POSITION_NAMESPACE}:path:captured`
-export const POSITION_PATH_CONTROL_LIVE_EVENT = `${POSITION_NAMESPACE}:path:control:live`
-export const POSITION_PATH_CONTROL_SETTLED_EVENT = `${POSITION_NAMESPACE}:path:control:settled`
+/** Story-three initialization, selection, and move events. */
+export const POSITION_PATH_INITIALIZE_EVENT = `${POSITION_NAMESPACE}:path:initialize`
+export const POSITION_PATH_STRAIGHT_SELECT_EVENT = `${POSITION_NAMESPACE}:path:select:straight`
+export const POSITION_PATH_QUADRATIC_SELECT_EVENT = `${POSITION_NAMESPACE}:path:select:quadratic`
+export const POSITION_PATH_BROKEN_SELECT_EVENT = `${POSITION_NAMESPACE}:path:select:broken`
+export const POSITION_PATH_LOOP_SELECT_EVENT = `${POSITION_NAMESPACE}:path:select:loop`
 export const POSITION_PATH_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:path:item:move`
 
 /** Story-four capture and live move events, keyed by physical container. */
@@ -56,7 +58,7 @@ export const POSITION_VIEW_SIX_INITIALIZE_EVENT = `${POSITION_NAMESPACE}:view:6:
 /** Straps owned by the position scene or by its individual stories. */
 export const POSITION_KEYBOARD_NAVIGATION_STRAP = `${POSITION_NAMESPACE}:keyboard:navigate`
 export const POSITION_KEYBOARD_TOGGLE_STRAP = `${POSITION_NAMESPACE}:keyboard:toggle`
-export const POSITION_PATH_COMMIT_STRAP = `${POSITION_NAMESPACE}:path:commit`
+export const POSITION_PATH_SELECT_STRAP = `${POSITION_NAMESPACE}:path:select`
 export const POSITION_LIVE_BOUNCE_START_STRAP = `${POSITION_NAMESPACE}:live:start`
 export const POSITION_LIVE_A_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:a:commit`
 export const POSITION_LIVE_B_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:b:commit`

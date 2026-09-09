@@ -34,19 +34,21 @@ export function planStoryAnimation(
   planned: Pick<PlannedStrapHelpers, 'wait' | 'repeat'>,
   _state: Readonly<Record<string, unknown>>,
 ): readonly PlannedStrapOccurrence[] {
-  // Stories 4, 5 and 6 start through their story-scoped initialize events.
+  // Stories 3, 4, 5 and 6 start through their story-scoped initialize events.
   // Returning no scene-level occurrences keeps their future state in the
   // story-local circuit and prevents a second timeline from being appended.
-  if (storyId === POSITION_STORY_FOUR_ID
+  if (storyId === POSITION_STORY_THREE_ID
+    || storyId === POSITION_STORY_FOUR_ID
     || storyId === POSITION_STORY_FIVE_ID
     || storyId === POSITION_STORY_SIX_ID) return []
   const occurrences = createStoryAnimationPlan(storyId as StaticStoryId).flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
-      event: {
-        name: occurrence.name,
-        visibility: 'scene',
-        ...(occurrence.data === undefined ? {} : { data: occurrence.data }),
-      },
-    }))
+    event: {
+      name: occurrence.name,
+      visibility: 'scene',
+      ...(occurrence.data === undefined ? {} : { data: occurrence.data }),
+    },
+    ...(occurrence.update === undefined ? {} : { update: occurrence.update }),
+  }))
   return occurrences.map((occurrence) => ({
     ...occurrence,
     step: targetStoryStep(occurrence.step, storyId),

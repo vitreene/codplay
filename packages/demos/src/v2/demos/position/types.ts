@@ -20,4 +20,5 @@ export type StoryAnimationOccurrence = Readonly<{
   offsetMs: number
   name: string
   data?: CompiledRecord
+  update?: CompiledRecord
 }>

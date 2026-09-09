@@ -64,10 +64,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `event.data`. Le listen n'est pas réévalué lorsque l'horloge atteint un
   eventime planifié ; un simple nom d'event ne peut donc pas suffire à lancer
   un mouvement.
-- La trajectoire de la troisième vue est une capture simulée. Les points
-  capturés sont transportés dans `event.data.captureState`; un listen
-  transforme ensuite ces données en événement `move` avec un chemin préparé
-  par `prepareSvgPath`, selon la géométrie circulaire propre à la scène.
+- La troisième vue propose quatre boutons de path. Chaque clic est un event de
+  sélection traité dans la story, qui prépare le path choisi et émet un unique
+  `move` vers l'outlet opposé ; elle ne comporte pas de capture pointer.
 - La quatrième vue utilise des captures de déplacement sur la source et la
   cible. Les déplacements issus de `movementX/Y` sont conservés en pixels
   dans `event.data.style`, puis les rebonds ajoutés à la réception de
@@ -126,8 +125,8 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Après un seek arrière, le curseur peut revenir à l'eventime
   `position:demo:story:end` de la story parcourue ; cet eventime ne met pas le
   player en état terminal.
-- La troisième vue produit un événement de mouvement dont le chemin vient de
-  `event.data` après une capture, sans écriture DOM dans une fonction auteur.
+- La troisième vue produit un événement de mouvement par clic de bouton, avec
+  le path choisi dans `event.data`, sans écriture DOM dans une fonction auteur.
 - La quatrième vue applique le déplacement souris en pixels, recalcule
   immédiatement un rebond par strap après le relâchement d'une ancre, et
   exécute quatre rebonds planifiés comme des eventimes `move` complets de
@@ -205,7 +204,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,
-  story 6 en première position, le move initial de la story 2 à `1 350 ms`, capture de la vue 3, quatre rebonds de la vue 4,
+  story 6 en première position, le move initial de la story 2 à `1 350 ms`, les presets cliquables de la vue 3, quatre rebonds de la vue 4,
   reparenting imbriqué de la vue 5 et la conclusion `flip-stress` avec quatre
   conteneurs, deux cadres en transfert, deux listes et douze échanges d'items.
 - La conclusion reprend les constantes de mouvement de `flip-stress` :
@@ -486,3 +485,80 @@ la même pose ; la console Safari ne contient ni warning ni erreur.
 Le statut reste `En cours` : le premier Play est couvert par le runner et la
 façade, mais la matrice navigateur complète Play, Seek, replay, reset, resize,
 persistence et lifecycle n’est pas encore close.
+
+### Mesure du freeze aux bornes FIRST/LAST — 2026-09-09
+
+Une instrumentation temporaire dans Safari MCP a séparé les frames ordinaires
+des transactions de capture. Les frames ordinaires ne lisent ni
+`getBoundingClientRect` ni le style calculé et restent autour de `1–2 ms`.
+Le freeze est donc ponctuel, au moment où une occurrence ouvre sa capture.
+
+Sur le premier Play, les mesures observées sont :
+
+| Boundary | Durée JS | Rectangles | Styles | Mutations DOM |
+|---|---:|---:|---:|---:|
+| `Qa` à `1 200 ms` | `≈12–16 ms` | `72` | `73` | `111` |
+| `Ka` à `1 700 ms` | `≈9–11 ms` | `78` | `79` | `62` |
+| `Qb` à `2 200 ms` | `≈14–17 ms` | `72` | `75` | `59` |
+| `Kb` à `2 700 ms` | `≈18 ms` | `72` | `75` | `64` |
+| `Qd/Kd` à `4 200–4 700 ms` | `≈33–38 ms` | `72` | `75` | `59–64` |
+| `Qe/Ke` à `5 200–5 700 ms` | `≈50–51 ms` | `72` | `75` | `59–64` |
+| `Qf/Kf` à `6 200–6 700 ms` | `≈58–61 ms` | `72` | `75` | `46–64` |
+
+Un move de contenu relit donc environ trois fois la fermeture Q/K : la
+sélection contient les frères concernés par le reflow, puis la capture mesure
+`before`, `afterStart` et `after`. Elle matérialise aussi plusieurs états DOM,
+ce qui explique les dizaines de `appendChild`/`insertBefore`/`removeChild`.
+Le nombre de mesures reste stable tandis que la durée augmente avec les
+boundaries déjà engagées ; le recalcul excessif semble donc venir du coût
+combiné de la capture DOM et de la reconstruction/présentation du graphe
+historique, plutôt que d’une lecture géométrique à chaque frame.
+
+Cette mesure n’a pas modifié le runtime. L’optimisation éventuelle doit être
+traitée comme une tâche distincte et conserver les trois bornes FIRST,
+`afterStart` et LAST ainsi que la composition Q/K.
+
+### Reprise d’intégration — 2026-09-09 — presets de trajectoire de la story 3
+
+La story 3 expose désormais quatre boutons déclaratifs, dans l’ordre suivant :
+
+- `droit` : path segmenté `M 0 0 L 1 0` ;
+- `quadratique` : path ACE quadratique préparé avec le contrôle normalisé
+  `0.5, -0.82` ;
+- `brisée` : path segmenté à cinq lignes, avec une amplitude encore réduite de moitié ;
+- `boucle` : path segmenté composé de deux arcs formant une boucle puis d’une
+  sortie vers la cible.
+
+Les quatre tracés SVG reprennent leurs géométries normalisées respectives, avec
+une transformation d’affichage commune `translate(8 55) scale(84)`. La brisée
+reprend les coordonnées quantifiées à deux décimales par `prepareSvgPath`.
+Aucun marqueur directionnel ni path décoratif supplémentaire n’est ajouté : les
+trajectoires peuvent être parcourues dans les deux sens et le dessin ne montre
+que le path sélectionné.
+
+Chaque bouton est un perso `tag` de la story et passe par
+`POSITION_PATH_SELECT_STRAP`. La story mémorise le côté courant de l'item dans
+`pathItemPosition`, puis le strap choisit l'outlet opposé avant d'émettre un
+unique `move` complet avec `reparent: true`, la durée commune de `2 000 ms` et
+le path déjà préparé. L'initialisation de la story est elle-même planifiée dans
+le scope de la story et enregistre l'arrivée initiale en cible ; les clics
+suivants alternent donc cible → source → cible, sans reset ni second move
+parasite. Le runtime capture ainsi la position courante comme départ de chaque
+nouveau move. La sélection est également reflétée par le bouton actif et par
+le tracé affiché dans la vue. L'ancien contrôle et la capture du point médian
+ne font pas partie de cette story : les quatre boutons sont son unique
+interface de path.
+
+Cette extension reste dans la fixture : aucun chemin DOM parallèle ni aucune
+modification du core n’a été ajoutée. Les paths SVG segmentés sont normalisés
+par `prepareSvgPath`, tandis que la courbe quadratique utilise
+`preparePath`, conformément au contrat `move.transition.path`.
+
+Validation du 2026-09-09 : le test façade de la démo vérifie les quatre clics,
+les quatre formes préparées, le payload `move` réel, l’alternance des outlets
+cible/source et le remplacement d’une trajectoire en cours par deux clics
+successifs (`14` tests passent). Le typecheck CodPlay et le typecheck V2 des
+démos passent. Dans Safari MCP, une navigation fraîche sur `5173`, puis deux
+clics successifs sur `droit` et `quadratique`, active bien les boutons et
+présente l’item dans le circuit d’overlay vers les outlets opposés. La console
+ne contient ni warning ni erreur.

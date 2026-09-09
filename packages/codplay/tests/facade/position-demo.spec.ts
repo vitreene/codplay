@@ -6,6 +6,10 @@ import { createCoreRuntimeCatalog } from '../../src/runtime/catalog'
 import { HtmlPlayerRunner } from '../../src/runtime/runner-html'
 import {
   FIRST_VIEW_MOVE_OFFSET_MS,
+  POSITION_PATH_BROKEN_SELECT_EVENT,
+  POSITION_PATH_LOOP_SELECT_EVENT,
+  POSITION_PATH_QUADRATIC_SELECT_EVENT,
+  POSITION_PATH_STRAIGHT_SELECT_EVENT,
   POSITION_LIVE_A_RELEASED_EVENT,
   POSITION_LIVE_B_RELEASED_EVENT,
   POSITION_LIVE_INITIALIZE_EVENT,
@@ -23,6 +27,12 @@ import {
   CAROUSEL_EVENTS,
   CAROUSEL_EVENTS_BY_STORY_ID,
 } from '../../../demos/src/v2/demos/position/carousel'
+import {
+  POSITION_STORY_THREE_BROKEN_PATH_D,
+  POSITION_STORY_THREE_LOOP_PATH_D,
+  POSITION_STORY_THREE_QUADRATIC_PATH_D,
+  POSITION_STORY_THREE_STRAIGHT_PATH_D,
+} from '../../../demos/src/v2/demos/position/story-three'
 
 /** Creates a scheduler whose frame advancement stays under test control. */
 function createManualScheduler(): CodPlayFrameScheduler {
@@ -106,6 +116,178 @@ describe('position V2 demo', () => {
     codplay?.destroy()
     codplay = undefined
     document.body.replaceChildren()
+  })
+
+  it('projects the story-three item with each selected path preset', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const instance = codplay.instances.create({
+      instanceId: 'position-demo-path-presets-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    const trace: Array<{
+      name: string
+      timeMs: number
+      data?: Readonly<Record<string, unknown>>
+    }> = []
+    const stopTrace = instance.diagnostic.onTrace((event) => trace.push({
+      name: event.name,
+      timeMs: event.timeMs,
+      data: event.data,
+    }))
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    for (let index = 0; index < 4; index += 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      await flushDomEvent()
+    }
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('05 / 06')
+    codplay.engine.advance(12_000)
+
+    const activeStory = root.querySelector<HTMLElement>('.position-view--visible')
+    const item = activeStory?.querySelector<HTMLElement>('.position-item')
+    const source = activeStory?.querySelector<HTMLElement>('.position-node--source .position-node__outlet')
+    const target = activeStory?.querySelector<HTMLElement>('.position-node--target .position-node__outlet')
+    expect(activeStory).not.toBeNull()
+    expect(item).not.toBeNull()
+    expect(source).not.toBeNull()
+    expect(target).not.toBeNull()
+    if (item === null || item === undefined || source === null || source === undefined || target === null || target === undefined) return
+
+    const straightVisual = activeStory?.querySelector<SVGPathElement>('.position-path-visual__path--straight')
+    const quadraticVisual = activeStory?.querySelector<SVGPathElement>('.position-path-visual__path--quadratic')
+    const loopVisual = activeStory?.querySelector<SVGPathElement>('.position-path-visual__path--loop')
+    const brokenVisual = activeStory?.querySelector<SVGPathElement>('.position-path-visual__path--broken')
+    expect(activeStory?.querySelector('.position-path-visual__ghost')).toBeNull()
+    expect(straightVisual?.getAttribute('d')).toBe(POSITION_STORY_THREE_STRAIGHT_PATH_D)
+    expect(straightVisual?.getAttribute('transform')).toBe('translate(8 55) scale(84)')
+    expect(quadraticVisual?.getAttribute('d')).toBe(POSITION_STORY_THREE_QUADRATIC_PATH_D)
+    expect(quadraticVisual?.getAttribute('transform')).toBe('translate(8 55) scale(84)')
+    expect(brokenVisual?.getAttribute('d')).toBe(POSITION_STORY_THREE_BROKEN_PATH_D)
+    expect(brokenVisual?.getAttribute('transform')).toBe('translate(8 55) scale(84)')
+    expect(loopVisual?.getAttribute('d')).toBe(POSITION_STORY_THREE_LOOP_PATH_D)
+    expect(loopVisual?.getAttribute('transform')).toBe('translate(8 55) scale(84)')
+
+    const presets = [
+      { id: 'position-view-three-path-straight', event: POSITION_PATH_STRAIGHT_SELECT_EVENT, kind: 'segments', segmentCount: 1 },
+      { id: 'position-view-three-path-quadratic', event: POSITION_PATH_QUADRATIC_SELECT_EVENT, kind: 'quadratic', segmentCount: undefined },
+      { id: 'position-view-three-path-broken', event: POSITION_PATH_BROKEN_SELECT_EVENT, kind: 'segments', segmentCount: 5 },
+      { id: 'position-view-three-path-loop', event: POSITION_PATH_LOOP_SELECT_EVENT, kind: 'segments', segmentCount: 4 },
+    ] as const
+    let now = 12_000
+    let currentPosition: 'source' | 'target' = 'target'
+
+    for (const preset of presets) {
+      const button = root.querySelector<HTMLButtonElement>(`#${preset.id}`)
+      expect(button).not.toBeNull()
+      if (button === null) return
+
+      const traceBeforeClick = trace.length
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushDomEvent()
+      const clickTrace = trace.slice(traceBeforeClick)
+      expect(clickTrace.some((event) => event.name === preset.event)).toBe(true)
+      codplay.engine.advance(now)
+
+      const clickMoves = clickTrace.filter((event) => event.name === 'position:demo:path:item:move')
+      expect(clickMoves).toHaveLength(1)
+      const move = clickMoves.find((event) => event.timeMs === now)
+      expect(move).toBeDefined()
+      expect(move?.data).toMatchObject({
+        move: {
+          target: currentPosition === 'source'
+            ? 'position:view-three:target'
+            : 'position:view-three:source',
+          reparent: true,
+          transition: {
+            duration: POSITION_MOVE_DURATION_MS,
+            path: { kind: preset.kind },
+          },
+        },
+      })
+      if (preset.segmentCount !== undefined) {
+        const path = (move?.data?.move as Readonly<Record<string, unknown>> | undefined)?.transition
+        const preparedPath = (path as Readonly<Record<string, unknown>> | undefined)?.path
+        expect((preparedPath as Readonly<Record<string, unknown>> | undefined)?.segments).toHaveLength(preset.segmentCount)
+      }
+      expect(button.getAttribute('aria-pressed')).toBe('true')
+
+      now += POSITION_MOVE_DURATION_MS
+      codplay.engine.advance(now)
+      const destination = currentPosition === 'source' ? target : source
+      expect(destination.contains(item)).toBe(true)
+      currentPosition = currentPosition === 'source' ? 'target' : 'source'
+    }
+
+    stopTrace()
+  })
+
+  it('reprojects story-three from the current presentation on consecutive path clicks', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const instance = codplay.instances.create({
+      instanceId: 'position-demo-path-retarget-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    const trace: string[] = []
+    instance.diagnostic.onTrace((event) => trace.push(event.name))
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    for (let index = 0; index < 4; index += 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      await flushDomEvent()
+    }
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('05 / 06')
+
+    // Story 3's authored move is still active at this boundary.
+    codplay.engine.advance(2_000)
+    const activeStory = root.querySelector<HTMLElement>('.position-view--visible')
+    const firstButton = root.querySelector<HTMLButtonElement>('#position-view-three-path-straight')
+    const secondButton = root.querySelector<HTMLButtonElement>('#position-view-three-path-quadratic')
+    expect(activeStory).not.toBeNull()
+    expect(firstButton).not.toBeNull()
+    expect(secondButton).not.toBeNull()
+    if (activeStory === null || firstButton === null || secondButton === null) return
+
+    firstButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushDomEvent()
+    const firstTraceLength = trace.length
+    codplay.engine.advance(2_200)
+    const firstFrame = instance.presentation.get()
+    const firstPresentation = firstFrame?.items.find((item) => item.itemId.endsWith(':position-view-three-item'))
+    expect(firstPresentation?.activeSegmentId).toBeDefined()
+    if (firstPresentation?.activeSegmentId === undefined) return
+
+    secondButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushDomEvent()
+    expect(trace.slice(firstTraceLength)).toContain(POSITION_PATH_QUADRATIC_SELECT_EVENT)
+    codplay.engine.advance(2_400)
+    const secondFrame = instance.presentation.get()
+    const secondPresentation = secondFrame?.items.find((item) => item.itemId.endsWith(':position-view-three-item'))
+    expect(secondPresentation?.activeSegmentId).toBeDefined()
+    expect(secondPresentation?.activeSegmentId).not.toBe(firstPresentation.activeSegmentId)
   })
 
   it('keeps carousel progression manual and inside the scene event circuit', async () => {
@@ -321,35 +503,6 @@ describe('position V2 demo', () => {
         target: 'position:view-three:target',
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
-          path: { kind: 'segments' },
-        },
-      },
-    })
-
-    const pathControl = root.querySelector<HTMLElement>('.position-path-control')
-    expect(pathControl).not.toBeNull()
-    if (pathControl === null) return
-    dispatchPointer(pathControl, 'pointerdown', {})
-    await flushDomEvent()
-    dispatchPointer(pathControl, 'pointermove', {
-      clientX: 80,
-      clientY: 40,
-      movementX: 46,
-      movementY: 22,
-    })
-    dispatchPointer(pathControl, 'pointerup', { clientX: 80, clientY: 40 })
-    await flushDomEvent()
-
-    const pathMove = trace.filter((event) => event.name === 'position:demo:path:item:move').at(-1)
-    expect(trace.map((event) => event.name)).toContain('position:demo:path:captured')
-    expect(pathMove?.data).toMatchObject({
-      move: {
-        transition: { duration: POSITION_MOVE_DURATION_MS },
-      },
-    })
-    expect(pathMove?.data).toMatchObject({
-      move: {
-        transition: {
           path: { kind: 'segments' },
         },
       },

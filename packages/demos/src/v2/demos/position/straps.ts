@@ -5,10 +5,12 @@ import {
   POSITION_KEYBOARD_TOGGLE_STRAP,
   POSITION_LIVE_INITIALIZE_EVENT,
   POSITION_NAMESPACE,
+  POSITION_PATH_INITIALIZE_EVENT,
   POSITION_STORY_PAUSED_EVENT,
   POSITION_STORY_RESUMED_EVENT,
   POSITION_STORY_FIVE_ID,
   POSITION_STORY_SIX_ID,
+  POSITION_STORY_THREE_ID,
   POSITION_TWEEN_STOP_EVENT,
   POSITION_VIEW_STORY_IDS,
   POSITION_VIEW_FIVE_INITIALIZE_EVENT,
@@ -32,6 +34,15 @@ function planSelectedStory(
     return {
       events: [{
         name: POSITION_LIVE_INITIALIZE_EVENT,
+        storyId,
+        visibility: 'story',
+      }],
+    }
+  }
+  if (storyId === POSITION_STORY_THREE_ID) {
+    return {
+      events: [{
+        name: POSITION_PATH_INITIALIZE_EVENT,
         storyId,
         visibility: 'story',
       }],
