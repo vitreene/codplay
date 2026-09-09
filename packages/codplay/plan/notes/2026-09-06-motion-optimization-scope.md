@@ -90,3 +90,53 @@ logique et la limite de capture story-local.
 La scène `position` reste une validation du comportement du core. Elle ne doit
 pas devenir le support d’une architecture spéciale destinée à masquer cette
 limite de performance.
+
+## Observation à reprendre — 2026-09-09
+
+Les mesures de la démo `position` montrent une durée JavaScript qui peut
+augmenter alors que le nombre de lectures géométriques et de mutations DOM
+reste relativement stable. L’hypothèse prioritaire est donc une dépense de
+construction du graphe motion, indépendante du nombre de mutations visibles.
+
+Trois opérations paraissent particulièrement coûteuses et doivent être
+réexaminées avant toute nouvelle mesure de freeze :
+
+- `buildMotionGraphStructure()` appelle `freezeMotionGraph()` après chaque
+  boundary, alors que la construction dispose déjà de `mutableTracks` et que
+  cette vue intermédiaire ne sort pas du builder ;
+- `freezeMotionGraph()` recopie tous les tracks puis sérialise le graphe entier
+  par `JSON.stringify`, y compris les attachments et leurs contextes. La même
+  opération est répétée pendant les remplacements de segments, puis une
+  dernière fois pour le graphe final ;
+- `buildMotionGraph()` construit un `NaturalLayoutTimeline` pour résoudre les
+  opérations, puis `HtmlMotionSystem.rebuild()` reconstruit la même timeline
+  pour la présentation.
+
+Questions à résoudre lors de la reprise :
+
+1. Un contrat actif exige-t-il réellement un `freeze` sur le graphe final
+   exposé au système de présentation ? Aucun `freeze` intermédiaire ne doit
+   être conservé pour protéger le code contre une future erreur interne.
+2. `MotionGraph.revision` doit-il réellement être une sérialisation complète,
+   ou un identifiant stable et peu coûteux suffit-il pour les usages actuels
+   (frame, diagnostic et réutilisation) ?
+3. Peut-on transférer la timeline calculée par `buildMotionGraph()` à
+   `HtmlMotionSystem` afin d’éviter la seconde construction ?
+
+Piste d’optimisation à évaluer : conserver une représentation de travail
+mutable pendant la planification, supprimer les `freeze` intermédiaires et
+partager la timeline déjà calculée. Un `freeze` final ne peut rester que s’il
+répond à un contrat actif et démontré ; il ne peut pas être justifié par une
+programmation défensive dans le chemin chaud du player. Cette piste n’est pas
+encore autorisée ni implémentée ; aucune optimisation ne doit supprimer la
+preuve de régression Qa/K ou remplacer une mesure par un cache DOM non
+invalidé.
+
+### Correction de cadrage — 2026-09-09
+
+La qualification d’une protection défensive contre de futures erreurs de
+programmation est explicitement rejetée pour les parties chaudes du player.
+Le code interne est l’unique propriétaire de ces structures et le graphe
+intermédiaire n’est pas exposé. Un `Object.freeze()` ou une sérialisation ne
+peuvent donc être maintenus à cet endroit qu’en présence d’une exigence
+contractuelle précise ; sinon ils constituent un coût injustifié à retirer.
