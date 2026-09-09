@@ -7,8 +7,10 @@ import {
   POSITION_NAMESPACE,
   POSITION_STORY_PAUSED_EVENT,
   POSITION_STORY_RESUMED_EVENT,
+  POSITION_STORY_FIVE_ID,
   POSITION_TWEEN_STOP_EVENT,
   POSITION_VIEW_STORY_IDS,
+  POSITION_VIEW_FIVE_INITIALIZE_EVENT,
   POSITION_STORY_FOUR_ID,
   VIEW_COUNT,
 } from './constants'
@@ -28,6 +30,15 @@ function planSelectedStory(
     return {
       events: [{
         name: POSITION_LIVE_INITIALIZE_EVENT,
+        storyId,
+        visibility: 'story',
+      }],
+    }
+  }
+  if (storyId === POSITION_STORY_FIVE_ID) {
+    return {
+      events: [{
+        name: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
         storyId,
         visibility: 'story',
       }],
@@ -80,23 +91,29 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
       const current = clamp(Math.round(readFinite(state.currentView, 0)), 0, VIEW_COUNT - 1)
       const paused = state.storyPaused === true
       if (paused) {
+        const storyId = POSITION_VIEW_STORY_IDS[current]
+        const initialize = storyId === POSITION_STORY_FOUR_ID
+          ? {
+              name: POSITION_LIVE_INITIALIZE_EVENT,
+              storyId,
+              visibility: 'story' as const,
+            }
+          : storyId === POSITION_STORY_FIVE_ID
+            ? {
+                name: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
+                storyId,
+                visibility: 'story' as const,
+              }
+            : undefined
         const output: readonly StrapReturnValue[] = [
           {
             update: { storyPaused: false },
             events: [
               { name: POSITION_STORY_RESUMED_EVENT, visibility: 'scene' },
-              ...(POSITION_VIEW_STORY_IDS[current] === POSITION_STORY_FOUR_ID
-                ? [{
-                    name: POSITION_LIVE_INITIALIZE_EVENT,
-                    storyId: POSITION_STORY_FOUR_ID,
-                    visibility: 'story' as const,
-                  }]
-                : []),
+              ...(initialize === undefined ? [] : [initialize]),
             ],
           },
-          ...(POSITION_VIEW_STORY_IDS[current] === POSITION_STORY_FOUR_ID
-            ? []
-            : [planStoryAnimation(POSITION_VIEW_STORY_IDS[current], context.planned, state)]),
+          ...(initialize === undefined ? [planStoryAnimation(storyId, context.planned, state)] : []),
         ]
         return output
       }

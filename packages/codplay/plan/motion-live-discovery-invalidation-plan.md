@@ -118,6 +118,14 @@ layout ou de transform entre donc dans les positions mesurées. Un tween de styl
 reconnu par le materializer conserve aussi son chemin de capture FIRST/LAST,
 sans reflow structurel ni overlay par défaut.
 
+Exception nécessaire pour les tweens de style répétés : lorsque la déclaration
+porte `loop` ou `alternate` et que sa durée totale dépasse sa première itération,
+ACE reste l'autorité de la valeur du style sur le nœud auteur. Le graphe
+géométrique ne transforme pas cette séquence en un unique segment FIRST/LAST,
+car cela supprimerait les retours successifs et pourrait créer un overlay
+induit. Le nœud reste donc dans son parent pendant toute cette animation ; seuls
+les `move` qui demandent réellement `reparent` utilisent l'overlay.
+
 Le but d’interpoler une position doit donc être exprimé par une transition
 temporisée du `move` ou par un tween de style reconnu. Une attribution directe de
 classe ou de style sans cette durée ne donne pas de borne d’interpolation : elle

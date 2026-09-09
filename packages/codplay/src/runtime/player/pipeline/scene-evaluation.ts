@@ -47,7 +47,7 @@ function isActiveTimeDependentAction(action: CompiledRecord, elapsedMs: number):
   if (!isPlainRecord(style)) return false
   return Object.values(style).some((value) => {
     const timing = resolveStyleTweenTiming(value as CompiledValue)
-    return timing !== undefined && elapsedMs < timing.delay + timing.duration
+    return timing !== undefined && elapsedMs < timing.delay + timing.totalDuration
   })
 }
 

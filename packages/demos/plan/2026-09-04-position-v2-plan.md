@@ -49,7 +49,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Espace produit un comportement de story : le strap bascule l'état, arrête
   les tweens courants par événement et relance la séquence visuelle de la vue
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
-- L'ordre de validation courant commence par la story 4 ; la story 2 est
+- L'ordre de validation courant commence par la story 5 ; la story 4 est
   activée ensuite. Dans la story 2, les deux déplacements d'ancre commencent
   à `450 ms`, son item est reparenté à `1 350 ms` pendant `2 000 ms`, et sa
   borne de story arrive à `4 100 ms`. Chaque reparenting d'item utilise cette
@@ -75,19 +75,17 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   relâchée, le circuit
   capture → listen → strap émet en plus un rebond immédiat avec un path
   recalculé dans `event.data`.
-- La cinquième vue reprend exactement les deux cartes source/cible des vues
-  précédentes et les déplace verticalement en sens opposés par un tween
-  `translateY` de `3 650 ms`. Chaque carte contient directement un seul
-  sous-conteneur, Q ou K, large de `50 %` et haut de `100 %`. Les classes
-  `flex-start` et `flex-end`, appuyées par un `move` local de `2 000 ms`,
-  déplacent ce sous-conteneur d'un bord à l'autre ;
-  `planned.repeat({ eachMs: 4000, times: 20 })` produit les vingt
-  aller-retours. Les départs des éléments sont décalés par pas de `500 ms`,
-  du premier départ à `+2 000 ms`, afin que source, cible, Q, K et l'item ne
-  se déplacent pas ensemble. L'item est monté directement dans Q puis
-  reparenté quatre fois par des `move` overlay de `2 000 ms`, soit deux
-  aller-retours Q→K→Q. Aucun rail, outlet intermédiaire ou path décoratif
-  n'est utilisé.
+- La cinquième vue reprend exactement les deux cartes `source` et `cible` des
+  vues précédentes et les déplace verticalement en sens opposés par un tween
+  `translateY` de `3 650 ms`. K est l'enfant de `source` et Q l'enfant de
+  `cible`; chacun est large de `50 %` et haut de `100 %`, puis animé
+  horizontalement dans son propre parent par un tween `translateX` ACE avec
+  `alternate` et `loop`. Ces actions de style ne contiennent pas de `move` et
+  ne créent pas d'overlay. Les départs sont décalés par pas de `500 ms`, du
+  premier départ à `+2 000 ms`, afin que source, cible, K, Q et X ne se
+  déplacent pas ensemble. X est monté dans K puis transféré quatre fois entre
+  K et Q par des `move` `reparent: true` de `2 000 ms`, soit la succession
+  K→Q→K→Q→K. Aucun rail, outlet intermédiaire ou path décoratif n'est utilisé.
 - La représentation graphique des trajectoires reste une étape séparée. Le
   présent volet valide seulement les destinations, durées, reparentings et
   payloads de `move`.
@@ -120,7 +118,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - La lecture temporelle seule ne change jamais de vue ; chaque changement
   vient d'une interaction de navigation, et n'expose jamais deux vues du
   carousel simultanément.
-- La vue initiale de validation est la story 4. Lorsque la story 2 est activée,
+- La vue initiale de validation est la story 5. Lorsque la story 2 est activée,
   son `move` d'item commence à `1 350 ms` et se termine à `3 350 ms`.
 - Les six vues montrent réellement les mouvements/reparentings via les actions
   `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
@@ -134,6 +132,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   immédiatement un rebond par strap après le relâchement d'une ancre, et
   exécute quatre rebonds planifiés comme des eventimes `move` complets de
   `2 000 ms`.
+- La cinquième vue conserve K dans `source` et Q dans `cible`; leurs mouvements
+  sont des translations horizontales locales au parent, pilotées par les
+  options ACE `loop` et `alternate`, sans overlay. Seul X est reparenté entre
+  K et Q.
 - La sixième vue exerce plusieurs trajectoires et plusieurs items par le même
   circuit de materialization que les autres vues.
 - Les dessins de trajectoire ne sont pas considérés comme validés par ce
@@ -203,7 +205,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,
-  story 4 en première position, le move initial de la story 2 à `1 350 ms`, capture de la vue 3, quatre rebonds de la vue 4,
+  story 5 en première position, le move initial de la story 2 à `1 350 ms`, capture de la vue 3, quatre rebonds de la vue 4,
   reparenting imbriqué de la vue 5 et la conclusion `flip-stress` avec quatre
   conteneurs, deux cadres en transfert, deux listes et douze échanges d'items.
 - La conclusion reprend les constantes de mouvement de `flip-stress` :
@@ -246,7 +248,8 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   par `storyId`. Le plan transmis par une navigation est donc ciblé par la
   même identité que le document de story, quelle que soit sa position dans le
   carousel.
-- La validation courante place la story 4 en première case, puis la story 2.
+- La validation courante place la story 5 en première case, puis la story 4,
+  puis la story 2.
   Les plans sont ciblés par l'identité de story ; le plan statique d'une autre
   story n'est plus exécuté en arrière-plan avant son activation.
 - Réexamen navigateur sur l'onglet Safari MCP existant de `5173` : la mesure
@@ -366,6 +369,25 @@ le premier rebond est A→B, le suivant B→A, puis l'alternance continue.
   produit chacun 33 lectures de géométrie/styles ; les seeks à `30 000` et
   `40 000 ms` sont restés à 90 lectures, sans croissance correspondant à cinq
   séries supplémentaires. La console est restée sans warning ni erreur.
+
+### Reprise d'intégration — 2026-09-09 — mouvement horizontal local de la story 5
+
+- La story 5 est la première case de validation. Le parentage physique est
+  stable : K reste enfant de `source` et Q reste enfant de `cible`.
+- K et Q se déplacent horizontalement dans leur parent par leurs propres
+  tweens `style.translateX`. Leur action ne contient aucun `move`; le graphe
+  géométrique ne les capture donc pas et aucun overlay ne les contient.
+- L'aller-retour est porté par ACE (`loop: 39`, `alternate: true`) sur une
+  seule occurrence d'animation par conteneur. La démo ne recrée pas cette
+  oscillation avec `planned.repeat`.
+- X conserve le seul changement de parent de cette story : ses quatre
+  transferts K→Q→K→Q→K demandent explicitement `reparent: true`. L'overlay
+  éventuel concerne donc X uniquement, jamais K ou Q.
+- Vérification Safari MCP sur l'onglet existant de `5173` : à `2 500 ms`,
+  `translateX` vaut environ `17,5 %` pour K et `-53,9 %` pour Q; chacun reste
+  entièrement dans son parent. Le seul calque de présentation contient X et
+  ne contient ni K ni Q. À `16 000 ms`, K et Q sont toujours dans `source` et
+  `cible`, et X est revenu dans K. Aucun warning ni error Safari n'a été relevé.
 
 Le statut reste `En cours` : cette correction est implémentée, testée sur le
 circuit réel et documentée, mais la validation CodPlay d'acceptation complète

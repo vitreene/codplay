@@ -29,6 +29,16 @@ describe('HTML motion boundary capture', () => {
     expect(transition?.captureOffsetsMs).toEqual([360, 8_150])
   })
 
+  it('leaves repeated style transforms to the ACE materializer instead of making one linear motion', () => {
+    const transition = resolveHtmlMotionActionTransition({
+      style: {
+        translateX: { from: '0%', to: '100%', duration: 200, loop: 3, alternate: true, ease: 'linear' },
+      },
+    } as CompiledRecord)
+
+    expect(transition).toBeUndefined()
+  })
+
   it('captures a structural move LAST at its endpoint when the target mounts after FIRST', () => {
     const before = createSolvedScene(1_200, false)
     const afterStart = createSolvedScene(1_200, true)

@@ -144,3 +144,13 @@ longueurs reçoivent `px` à la frontière HTML, après application du
 
 `HtmlPlayerRunner.resize(scale)` réapplique la frame logique courante après la
 mise à jour du facteur. Il ne recompile ni ne rejoue la timeline.
+
+Les tweens scalaires d'un canal de transformation peuvent aussi porter les
+options ACE `loop` et `alternate`. Le resolver conserve ces options et la durée
+totale calculée par ACE (`totalDuration`) afin que la valeur de style soit
+réévaluée pendant toutes les itérations, sans créer un eventime par aller-retour.
+Un tween de style répété reste une présentation locale du nœud auteur : il n'est
+pas aplati en une seule frontière FIRST/LAST par le graphe géométrique et ne
+crée donc aucun overlay. Cette règle est distincte de `planned.repeat`, qui
+produit des occurrences d'événements, et ne crée pas de nouvel helper de
+planification.

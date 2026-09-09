@@ -133,6 +133,14 @@ export function resolveHtmlMotionActionTransition(
   }
   if (transitions.length === 0) return undefined
 
+  // A repeated style tween is already resolved by ACE on the author node.
+  // The geometric graph only represents one monotonic FIRST/LAST interval;
+  // routing an alternating tween through it would replace the later legs with
+  // a single straight segment. Descendants read the natural layout instead.
+  if (transitions.some((timing) => timing.totalDuration !== timing.duration)) {
+    return undefined
+  }
+
   const selected = transitions.reduce((longest, timing) => (
     timing.delay + timing.duration > longest.delay + longest.duration ? timing : longest
   ))

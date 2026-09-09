@@ -10,7 +10,7 @@ import {
   POSITION_STORY_ONE_ID,
   POSITION_STORY_THREE_ID,
   POSITION_STORY_TWO_ID,
-  POSITION_LIVE_INITIALIZE_EVENT,
+  POSITION_VIEW_FIVE_INITIALIZE_EVENT,
 } from './constants'
 import { createStoryFive } from './story-five'
 import { createStoryFour } from './story-four'
@@ -23,16 +23,16 @@ import { createPositionSceneListenRules, createPositionSceneStraps } from './str
 /** Activates and starts the first visible story through its declared listen rule. */
 export const POSITION_INITIAL_EVENTS: readonly V2DemoEventInjection[] = [{
   eventime: {
-    name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FOUR_ID].enter,
+    name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FIVE_ID].enter,
     visibility: 'story',
   },
-  target: { scope: 'story', storyId: POSITION_STORY_FOUR_ID },
+  target: { scope: 'story', storyId: POSITION_STORY_FIVE_ID },
 }, {
   eventime: {
-    name: POSITION_LIVE_INITIALIZE_EVENT,
+    name: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
     visibility: 'story',
   },
-  target: { scope: 'story', storyId: POSITION_STORY_FOUR_ID },
+  target: { scope: 'story', storyId: POSITION_STORY_FIVE_ID },
 }]
 
 /** The main story owns only the shared carousel shell and its keyboard source. */

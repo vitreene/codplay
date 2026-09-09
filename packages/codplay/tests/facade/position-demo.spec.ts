@@ -11,7 +11,9 @@ import {
   POSITION_LIVE_INITIALIZE_EVENT,
   POSITION_LIVE_ITEM_MOVE_EVENT,
   POSITION_MOVE_DURATION_MS,
+  POSITION_STORY_FIVE_ID,
   POSITION_STORY_FOUR_ID,
+  POSITION_VIEW_FIVE_INITIALIZE_EVENT,
   POSITION_VIEW_STORY_IDS,
 } from '../../../demos/src/v2/demos/position/constants'
 import { createScene } from '../../../demos/src/v2/demos/position/main'
@@ -124,6 +126,7 @@ describe('position V2 demo', () => {
       'position-story-six',
     ])
     expect(build.compiledScene.scene.stories.main?.listen).toEqual([])
+    expect(POSITION_VIEW_STORY_IDS[0]).toBe(POSITION_STORY_FIVE_ID)
     for (const storyId of POSITION_VIEW_STORY_IDS) {
       expect(build.compiledScene.scene.stories[storyId]?.listen).toContainEqual({
         on: CAROUSEL_EVENTS_BY_STORY_ID[storyId].reset,
@@ -149,46 +152,36 @@ describe('position V2 demo', () => {
     expect(storyTwoTarget?.actions['position:demo:view:2:target:shift']).not.toHaveProperty('style.y')
     expect(storyFiveSourceContainer?.initial?.move).toEqual({ target: 'position:view-five:source' })
     expect(storyFiveTargetContainer?.initial?.move).toEqual({ target: 'position:view-five:target' })
-    expect(storyFiveSourceContainer?.actions['position:demo:view:5:q:shift']).toMatchObject({
-      move: {
-        target: 'position:view-five:source',
-        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-      },
-      className: {
-        add: 'position-nested-container--flex-end',
-        remove: 'position-nested-container--flex-start',
-      },
-    })
-    expect(storyFiveSourceContainer?.actions['position:demo:view:5:q:return']).toMatchObject({
-      move: {
-        target: 'position:view-five:source',
-        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-      },
-      className: {
-        add: 'position-nested-container--flex-start',
-        remove: 'position-nested-container--flex-end',
+    expect(storyFiveSourceContainer?.actions['position:demo:view:5:k:animate']).toMatchObject({
+      style: {
+        translateX: {
+          from: '0%',
+          to: '100%',
+          duration: POSITION_MOVE_DURATION_MS,
+          loop: 39,
+          alternate: true,
+        },
       },
     })
-    expect(storyFiveTargetContainer?.actions['position:demo:view:5:k:shift']).toMatchObject({
-      move: {
-        target: 'position:view-five:target',
-        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-      },
-      className: {
-        add: 'position-nested-container--flex-start',
-        remove: 'position-nested-container--flex-end',
-      },
-    })
-    expect(storyFiveTargetContainer?.actions['position:demo:view:5:k:return']).toMatchObject({
-      move: {
-        target: 'position:view-five:target',
-        transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-      },
-      className: {
-        add: 'position-nested-container--flex-end',
-        remove: 'position-nested-container--flex-start',
+    expect(storyFiveTargetContainer?.actions['position:demo:view:5:q:animate']).toMatchObject({
+      style: {
+        translateX: {
+          from: '0%',
+          to: '-100%',
+          duration: POSITION_MOVE_DURATION_MS,
+          loop: 39,
+          alternate: true,
+        },
       },
     })
+    expect(storyFiveSourceContainer?.actions['position:demo:view:5:k:animate']).not.toHaveProperty('move')
+    expect(storyFiveTargetContainer?.actions['position:demo:view:5:q:animate']).not.toHaveProperty('move')
+    expect(storyFive?.listen).toContainEqual({
+      on: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
+      straps: ['position:demo:view:5:start'],
+    })
+    expect(storyFive?.persos.find((perso) => perso.id === 'position-view-five-item')?.initial?.move)
+      .toEqual({ target: 'position:view-five:k' })
     expect(storySix?.persos).toHaveLength(21)
     expect(storySix?.persos.filter((perso) => perso.type === 'layout')).toHaveLength(7)
     expect(storySix?.persos.filter((perso) => perso.type === 'list')).toHaveLength(2)
@@ -263,7 +256,7 @@ describe('position V2 demo', () => {
     await instance.telco.play()
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
-    expect(root.querySelector('.position-view--visible .position-anchor--a')).not.toBeNull()
+    expect(root.querySelector('.position-view--visible .position-nested-container--k')).not.toBeNull()
 
     codplay.engine.advance(0)
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
@@ -272,6 +265,10 @@ describe('position V2 demo', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('02 / 06')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('03 / 06')
 
     codplay.engine.advance(7_400)
     const activeStoryTwo = root.querySelector<HTMLElement>('.position-view--visible')
@@ -291,13 +288,13 @@ describe('position V2 demo', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('03 / 06')
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('04 / 06')
     expect(trace.map((event) => event.name)).toContain('position:demo:keyboard:navigate')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('04 / 06')
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('05 / 06')
 
     codplay.engine.advance(12_000)
     const scheduledPathMove = trace.filter((event) => event.name === 'position:demo:path:item:move').at(-1)
@@ -344,7 +341,7 @@ describe('position V2 demo', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
       await flushDomEvent()
     }
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('02 / 06')
 
     codplay.engine.advance(26_000)
     const scheduledLiveMoves = trace.filter((event) => event.name === 'position:demo:live:item:move')
@@ -382,17 +379,15 @@ describe('position V2 demo', () => {
     expect(trace.map((event) => event.name)).toContain('position:demo:live:a:settled')
     expect(liveMove).toBeUndefined()
 
-    for (let index = 0; index < 4; index += 1) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
-      await flushDomEvent()
-    }
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('05 / 06')
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
+    await flushDomEvent()
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
 
     codplay.engine.advance(42_000)
     const viewFiveSourceCard = root.querySelector<HTMLElement>('.position-view--visible .position-node--source')
     const viewFiveTargetCard = root.querySelector<HTMLElement>('.position-view--visible .position-node--target')
-    const viewFiveSourceContainer = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--q')
-    const viewFiveTargetContainer = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--k')
+    const viewFiveSourceContainer = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--k')
+    const viewFiveTargetContainer = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--q')
     expect(viewFiveSourceContainer?.classList.contains('position-nested-container--flex-start')).toBe(true)
     expect(viewFiveTargetContainer?.classList.contains('position-nested-container--flex-end')).toBe(true)
     expect(viewFiveSourceContainer?.parentElement).toBe(viewFiveSourceCard)
@@ -401,7 +396,7 @@ describe('position V2 demo', () => {
     expect(viewFiveMoves).toHaveLength(4)
     expect(viewFiveMoves.at(-1)?.data).toMatchObject({
       move: {
-        target: 'position:view-five:q',
+        target: 'position:view-five:k',
         reparent: true,
         transition: {
           duration: POSITION_MOVE_DURATION_MS,
@@ -409,11 +404,13 @@ describe('position V2 demo', () => {
       },
     })
     expect(viewFiveMoves.at(-1)?.data).not.toHaveProperty('move.transition.path')
-    const nestedSource = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--q')
+    const nestedSource = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--k')
     expect(nestedSource?.querySelector<HTMLElement>('.position-item')).not.toBeNull()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
-    await flushDomEvent()
+    for (let index = 0; index < 5; index += 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      await flushDomEvent()
+    }
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('06 / 06')
     codplay.engine.advance(52_000)
     expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-q')).toHaveLength(1)
@@ -462,7 +459,7 @@ describe('position V2 demo', () => {
     const geometryReads = vi.spyOn(Element.prototype, 'getBoundingClientRect')
     codplay.engine.advance(0)
     await instance.telco.play()
-    for (let index = 0; index < 2; index += 1) {
+    for (let index = 0; index < 3; index += 1) {
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
       await flushDomEvent()
     }
@@ -604,7 +601,7 @@ describe('position V2 demo', () => {
       { scope: 'story', storyId: POSITION_STORY_FOUR_ID },
     )
 
-    const visibleStory = root.querySelector<HTMLElement>('.position-view--visible')
+    const visibleStory = root.querySelector<HTMLElement>('.position-live-anchor')?.closest<HTMLElement>('.position-view')
     expect(visibleStory).not.toBeNull()
     expect(geometryReads.length).toBeGreaterThan(0)
     expect(geometryReads.every((element) => visibleStory?.contains(element) === true)).toBe(true)
@@ -769,7 +766,7 @@ describe('position V2 demo', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     const firstView = root.querySelector<HTMLElement>('.position-view--visible')
-    expect(firstView?.querySelector('.position-node--source .position-node__outlet .position-item')).not.toBeNull()
+    expect(firstView?.querySelector('.position-anchor--a .position-node__outlet .position-item')).not.toBeNull()
     for (let index = 0; index < 5; index += 1) {
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
       await flushDomEvent()
@@ -836,26 +833,26 @@ describe('position V2 demo', () => {
 
     codplay.engine.advance(0)
     await instance.telco.play()
-    for (let index = 0; index < 4; index += 1) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
-      await flushDomEvent()
-    }
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('05 / 06')
-    codplay.engine.advance(16_000)
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
+    codplay.engine.advance(2_500)
 
     const storyRoot = root.querySelector<HTMLElement>('.position-view--visible')
     const source = storyRoot?.querySelector<HTMLElement>('.position-node--source')
     const target = storyRoot?.querySelector<HTMLElement>('.position-node--target')
     const q = storyRoot?.querySelector<HTMLElement>('.position-nested-container--q')
     const k = storyRoot?.querySelector<HTMLElement>('.position-nested-container--k')
-    const item = storyRoot?.querySelector<HTMLElement>('.position-item')
     expect(storyRoot?.querySelector('.position-node__outlet')).toBeNull()
     expect(storyRoot?.querySelector('.position-nested-parent__item-mount')).toBeNull()
-    expect(q?.parentElement).toBe(source)
-    expect(k?.parentElement).toBe(target)
-    expect(q?.classList.contains('position-nested-container--flex-start')).toBe(true)
-    expect(k?.classList.contains('position-nested-container--flex-end')).toBe(true)
-    expect(q?.contains(item ?? null)).toBe(true)
+    expect(k?.parentElement).toBe(source)
+    expect(q?.parentElement).toBe(target)
+    expect(k?.classList.contains('position-nested-container--flex-start')).toBe(true)
+    expect(q?.classList.contains('position-nested-container--flex-end')).toBe(true)
+    const overlay = storyRoot === null ? undefined : findTestOverlayLayer(storyRoot)
+    expect(overlay?.contains(k ?? null) ?? false).toBe(false)
+    expect(overlay?.contains(q ?? null) ?? false).toBe(false)
+
+    codplay.engine.advance(16_000)
+    expect(k?.contains(storyRoot?.querySelector<HTMLElement>('.position-item') ?? null)).toBe(true)
   })
 
   it('keeps the active story end available across backward and forward seek', async () => {
@@ -877,6 +874,8 @@ describe('position V2 demo', () => {
 
     codplay.engine.advance(0)
     await instance.telco.play()
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     codplay.engine.advance(1)
@@ -943,6 +942,8 @@ describe('position V2 demo', () => {
 
     codplay.engine.advance(0)
     await instance.telco.play()
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     codplay.engine.advance(FIRST_VIEW_MOVE_OFFSET_MS + 500)

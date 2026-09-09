@@ -1,10 +1,11 @@
 import type { StoryDoc } from 'codplay'
-import type { PlannedStrapHelpers, PlannedStrapOccurrence } from 'codplay/runtime/player'
+import type { PlannedStrapHelpers, PlannedStrapOccurrence, StrapFunction } from 'codplay/runtime/player'
 import {
   POSITION_NAMESPACE,
   POSITION_MOVE_DURATION_MS,
   POSITION_STORY_END_EVENT,
   POSITION_STORY_FIVE_ID,
+  POSITION_VIEW_FIVE_INITIALIZE_EVENT,
   POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
 } from './constants'
 import { CAROUSEL_EVENTS_BY_STORY_ID, createViewRoot } from './carousel'
@@ -16,10 +17,9 @@ const Q_CONTAINER = 'position:view-five:q'
 const K_CONTAINER = 'position:view-five:k'
 const SOURCE_VERTICAL_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:source:shift`
 const TARGET_VERTICAL_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:target:shift`
-const Q_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:q:shift`
-const Q_RETURN_EVENT = `${POSITION_NAMESPACE}:view:5:q:return`
-const K_SHIFT_EVENT = `${POSITION_NAMESPACE}:view:5:k:shift`
-const K_RETURN_EVENT = `${POSITION_NAMESPACE}:view:5:k:return`
+const Q_ANIMATION_EVENT = `${POSITION_NAMESPACE}:view:5:q:animate`
+const K_ANIMATION_EVENT = `${POSITION_NAMESPACE}:view:5:k:animate`
+const STORY_FIVE_START_STRAP = `${POSITION_NAMESPACE}:view:5:start`
 const STORY_FIVE_ANIMATION_START_OFFSET_MS = 450
 const STORY_FIVE_PHASE_STEP_MS = 500
 const STORY_FIVE_SOURCE_VERTICAL_SHIFT_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS
@@ -29,14 +29,15 @@ const STORY_FIVE_K_OSCILLATION_START_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFS
 const STORY_FIVE_VERTICAL_SHIFT = 15
 const STORY_FIVE_VERTICAL_SHIFT_DURATION_MS = 3_650
 const STORY_FIVE_OSCILLATION_DURATION_MS = 4_000
-const STORY_FIVE_OSCILLATION_LEG_DURATION_MS = STORY_FIVE_OSCILLATION_DURATION_MS / 2
 const STORY_FIVE_OSCILLATION_REPEAT_COUNT = 20
+const STORY_FIVE_OSCILLATION_LEG_DURATION_MS = STORY_FIVE_OSCILLATION_DURATION_MS / 2
+const STORY_FIVE_OSCILLATION_LOOP_COUNT = STORY_FIVE_OSCILLATION_REPEAT_COUNT * 2 - 1
 const STORY_FIVE_ITEM_MOVE_OFFSET_MS = STORY_FIVE_ANIMATION_START_OFFSET_MS + STORY_FIVE_PHASE_STEP_MS * 4
 const STORY_FIVE_ITEM_MOVE_INTERVAL_MS = POSITION_MOVE_DURATION_MS
 const STORY_FIVE_END_OFFSET_MS = STORY_FIVE_K_OSCILLATION_START_OFFSET_MS
   + STORY_FIVE_OSCILLATION_DURATION_MS * STORY_FIVE_OSCILLATION_REPEAT_COUNT
 
-/** Creates story 5 with one Q/K container in each visible position card. */
+/** Creates story 5 with one fixed-parent K/Q container in each visible position card. */
 export function createStoryFive(): StoryDoc {
   const storyEvents = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FIVE_ID]
   const view = createViewRoot(POSITION_STORY_FIVE_ID, `
@@ -54,10 +55,14 @@ export function createStoryFive(): StoryDoc {
   `, 'position-story-five-frame')
   return {
     id: POSITION_STORY_FIVE_ID,
+    straps: {
+      [STORY_FIVE_START_STRAP]: createStoryFiveStartStrap(),
+    },
     listen: [
       { on: storyEvents.enter, active: true, reset: true },
       { on: storyEvents.leave, active: false },
       { on: storyEvents.reset, reset: true },
+      { on: POSITION_VIEW_FIVE_INITIALIZE_EVENT, straps: [STORY_FIVE_START_STRAP] },
     ],
     persos: [
       view,
@@ -110,28 +115,21 @@ export function createStoryFive(): StoryDoc {
         type: 'layout',
         initial: {
           move: { target: SOURCE_CONTAINER },
-          className: 'position-nested-container position-nested-container--q position-nested-container--flex-start',
-          markup: `<div data-part="${Q_CONTAINER}"></div>`,
+          className: 'position-nested-container position-nested-container--k position-nested-container--flex-start',
+          markup: `<div data-part="${K_CONTAINER}"></div>`,
         },
         actions: {
-          [Q_SHIFT_EVENT]: {
-            move: {
-              target: SOURCE_CONTAINER,
-              transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-            },
-            className: {
-              add: 'position-nested-container--flex-end',
-              remove: 'position-nested-container--flex-start',
-            },
-          },
-          [Q_RETURN_EVENT]: {
-            move: {
-              target: SOURCE_CONTAINER,
-              transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-            },
-            className: {
-              add: 'position-nested-container--flex-start',
-              remove: 'position-nested-container--flex-end',
+          // K remains in source; this style tween moves it horizontally in that parent.
+          [K_ANIMATION_EVENT]: {
+            style: {
+              translateX: {
+                from: '0%',
+                to: '100%',
+                duration: STORY_FIVE_OSCILLATION_LEG_DURATION_MS,
+                loop: STORY_FIVE_OSCILLATION_LOOP_COUNT,
+                alternate: true,
+                ease: 'inOutSine',
+              },
             },
           },
         },
@@ -141,28 +139,21 @@ export function createStoryFive(): StoryDoc {
         type: 'layout',
         initial: {
           move: { target: TARGET_CONTAINER },
-          className: 'position-nested-container position-nested-container--k position-nested-container--flex-end',
-          markup: `<div data-part="${K_CONTAINER}"></div>`,
+          className: 'position-nested-container position-nested-container--q position-nested-container--flex-end',
+          markup: `<div data-part="${Q_CONTAINER}"></div>`,
         },
         actions: {
-          [K_SHIFT_EVENT]: {
-            move: {
-              target: TARGET_CONTAINER,
-              transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-            },
-            className: {
-              add: 'position-nested-container--flex-start',
-              remove: 'position-nested-container--flex-end',
-            },
-          },
-          [K_RETURN_EVENT]: {
-            move: {
-              target: TARGET_CONTAINER,
-              transition: { duration: POSITION_MOVE_DURATION_MS, ease: 'inOutSine' },
-            },
-            className: {
-              add: 'position-nested-container--flex-end',
-              remove: 'position-nested-container--flex-start',
+          // Q remains in target; this style tween moves it horizontally in that parent.
+          [Q_ANIMATION_EVENT]: {
+            style: {
+              translateX: {
+                from: '0%',
+                to: '-100%',
+                duration: STORY_FIVE_OSCILLATION_LEG_DURATION_MS,
+                loop: STORY_FIVE_OSCILLATION_LOOP_COUNT,
+                alternate: true,
+                ease: 'inOutSine',
+              },
             },
           },
         },
@@ -174,7 +165,7 @@ export function createStoryFive(): StoryDoc {
           tag: 'span',
           content: 'item',
           className: 'position-item position-item--rose',
-          move: { target: Q_CONTAINER },
+          move: { target: K_CONTAINER },
         },
         actions: { [POSITION_VIEW_FIVE_ITEM_MOVE_EVENT]: true },
       },
@@ -182,60 +173,35 @@ export function createStoryFive(): StoryDoc {
   }
 }
 
-/** Schedules twenty four-second Q/K oscillations and two item round trips. */
+/** Starts the story-local finite timeline without creating one event per K/Q oscillation leg. */
+function createStoryFiveStartStrap(): StrapFunction {
+  return ({ context }) => planStoryFiveAnimation(context.planned)
+}
+
+/** Schedules the vertical shifts and four explicit X exchanges. */
 export function planStoryFiveAnimation(
-  planned: Pick<PlannedStrapHelpers, 'repeat' | 'wait'>,
+  planned: Pick<PlannedStrapHelpers, 'wait'>,
 ): readonly PlannedStrapOccurrence[] {
-  const qShifts = planned.repeat(
-    { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: Q_SHIFT_EVENT, visibility: 'scene' } }],
-  ).map((occurrence) => ({
-    ...occurrence,
-    offsetMs: STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS + occurrence.offsetMs,
-  }))
-  const kShifts = planned.repeat(
-    { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: K_SHIFT_EVENT, visibility: 'scene' } }],
-  ).map((occurrence) => ({
-    ...occurrence,
-    offsetMs: STORY_FIVE_K_OSCILLATION_START_OFFSET_MS + occurrence.offsetMs,
-  }))
-  const qReturns = planned.repeat(
-    { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: Q_RETURN_EVENT, visibility: 'scene' } }],
-  ).map((occurrence) => ({
-    ...occurrence,
-    offsetMs: STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS
-      + STORY_FIVE_OSCILLATION_LEG_DURATION_MS
-      + occurrence.offsetMs,
-  }))
-  const kReturns = planned.repeat(
-    { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: K_RETURN_EVENT, visibility: 'scene' } }],
-  ).map((occurrence) => ({
-    ...occurrence,
-    offsetMs: STORY_FIVE_K_OSCILLATION_START_OFFSET_MS
-      + STORY_FIVE_OSCILLATION_LEG_DURATION_MS
-      + occurrence.offsetMs,
-  }))
   return [
     ...planned.wait(STORY_FIVE_SOURCE_VERTICAL_SHIFT_OFFSET_MS, {
-      event: { name: SOURCE_VERTICAL_SHIFT_EVENT, visibility: 'scene' },
+      event: { name: SOURCE_VERTICAL_SHIFT_EVENT, visibility: 'story' },
     }),
     ...planned.wait(STORY_FIVE_TARGET_VERTICAL_SHIFT_OFFSET_MS, {
-      event: { name: TARGET_VERTICAL_SHIFT_EVENT, visibility: 'scene' },
+      event: { name: TARGET_VERTICAL_SHIFT_EVENT, visibility: 'story' },
     }),
-    ...qShifts,
-    ...kShifts,
-    ...qReturns,
-    ...kReturns,
+    ...planned.wait(STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS, {
+      event: { name: Q_ANIMATION_EVENT, visibility: 'story' },
+    }),
+    ...planned.wait(STORY_FIVE_K_OSCILLATION_START_OFFSET_MS, {
+      event: { name: K_ANIMATION_EVENT, visibility: 'story' },
+    }),
     ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        visibility: 'scene',
+        visibility: 'story',
         data: {
           move: {
-            target: K_CONTAINER,
+            target: Q_CONTAINER,
             reparent: true,
             transition: {
               duration: POSITION_MOVE_DURATION_MS,
@@ -248,23 +214,7 @@ export function planStoryFiveAnimation(
     ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        visibility: 'scene',
-        data: {
-          move: {
-            target: Q_CONTAINER,
-            reparent: true,
-            transition: {
-              duration: POSITION_MOVE_DURATION_MS,
-              ease: 'inOutCubic',
-            },
-          },
-        },
-      },
-    }),
-    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 2, {
-      event: {
-        name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        visibility: 'scene',
+        visibility: 'story',
         data: {
           move: {
             target: K_CONTAINER,
@@ -277,10 +227,10 @@ export function planStoryFiveAnimation(
         },
       },
     }),
-    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 3, {
+    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 2, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        visibility: 'scene',
+        visibility: 'story',
         data: {
           move: {
             target: Q_CONTAINER,
@@ -293,8 +243,24 @@ export function planStoryFiveAnimation(
         },
       },
     }),
+    ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 3, {
+      event: {
+        name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
+        visibility: 'story',
+        data: {
+          move: {
+            target: K_CONTAINER,
+            reparent: true,
+            transition: {
+              duration: POSITION_MOVE_DURATION_MS,
+              ease: 'inOutCubic',
+            },
+          },
+        },
+      },
+    }),
     ...planned.wait(STORY_FIVE_END_OFFSET_MS, {
-      event: { name: POSITION_STORY_END_EVENT, visibility: 'scene' },
+      event: { name: POSITION_STORY_END_EVENT, visibility: 'story' },
     }),
   ]
 }

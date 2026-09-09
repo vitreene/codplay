@@ -206,7 +206,8 @@ L'implémentation suit la spécification ciblée et doit notamment prouver :
   fermeture puis réactivation.
 
 Le contrat est validé pour implémentation ; les propriétés `active` et l'index
-de réveil ne sont pas encore présents dans l'API interne actuelle.
+de réveil sont présents dans l'API interne V2. La validation de sortie reste
+ouverte selon les gates indiquées ci-dessus.
 
 ## Hors perimetre V2
 

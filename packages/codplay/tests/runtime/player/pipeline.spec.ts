@@ -682,6 +682,49 @@ describe('materialize -> resolve -> solve', () => {
     })
   })
 
+  it('resolves an alternating ACE loop on a style transform without creating move placement', () => {
+    const loopScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { translateX: '0%' } },
+              actions: {
+                oscillate: {
+                  style: {
+                    translateX: {
+                      from: '0%',
+                      to: '100%',
+                      duration: 100,
+                      loop: 1,
+                      alternate: true,
+                      ease: 'linear',
+                    },
+                  },
+                },
+              },
+            }],
+            eventimes: [{ name: 'oscillate', startAt: 0 }],
+          },
+        },
+      },
+    }
+
+    expect(resolveScene(materializeScene(loopScene, 50)).persos['main:root']?.state.style)
+      .toMatchObject({ translateX: '50%' })
+    expect(resolveScene(materializeScene(loopScene, 100)).persos['main:root']?.state.style)
+      .toMatchObject({ translateX: '100%' })
+    expect(resolveScene(materializeScene(loopScene, 150)).persos['main:root']?.state.style)
+      .toMatchObject({ translateX: '50%' })
+    expect(resolveScene(materializeScene(loopScene, 200)).persos['main:root']?.state.style)
+      .toMatchObject({ translateX: '0%' })
+  })
+
   it('keeps visual transition metadata out of the solved structural placement', () => {
     const transitionScene: CompiledScene = {
       ...scene,

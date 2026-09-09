@@ -50,6 +50,7 @@ export const POSITION_VIEW_TWO_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:2:m
 /** Fixed story-one, story-five and story-six move events. */
 export const POSITION_VIEW_ONE_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:1:move`
 export const POSITION_VIEW_FIVE_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:5:move`
+export const POSITION_VIEW_FIVE_INITIALIZE_EVENT = `${POSITION_NAMESPACE}:view:5:initialize`
 
 /** Straps owned by the position scene or by its individual stories. */
 export const POSITION_KEYBOARD_NAVIGATION_STRAP = `${POSITION_NAMESPACE}:keyboard:navigate`
@@ -72,11 +73,11 @@ export const VIEW_IDS = [
 
 /** Presentation order of the position stories in the validation carousel. */
 export const POSITION_VIEW_STORY_IDS = [
+  POSITION_STORY_FIVE_ID,
   POSITION_STORY_FOUR_ID,
   POSITION_STORY_TWO_ID,
   POSITION_STORY_ONE_ID,
   POSITION_STORY_THREE_ID,
-  POSITION_STORY_FIVE_ID,
   POSITION_STORY_SIX_ID,
 ] as const
 
