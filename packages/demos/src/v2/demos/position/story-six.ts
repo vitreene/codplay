@@ -1,8 +1,10 @@
 import type { PersoDoc, StoryDoc } from 'codplay'
+import type { PlannedStrapHelpers, PlannedStrapOccurrence, StrapFunction } from 'codplay/runtime/player'
 import {
   POSITION_NAMESPACE,
   POSITION_STORY_END_EVENT,
   POSITION_STORY_SIX_ID,
+  POSITION_VIEW_SIX_INITIALIZE_EVENT,
 } from './constants'
 import { CAROUSEL_EVENTS_BY_STORY_ID, createViewRoot } from './carousel'
 import type { StoryAnimationOccurrence } from './types'
@@ -49,6 +51,7 @@ const CONTENT_EXCHANGE_SPACING_MS = 500
 const CONTENT_EASE = 'inOutQuad'
 const CENTER_CURVE_PATH = 'M 0 0 A 0.8 0.8 0 0 0 1 0'
 const STORY_SIX_END_OFFSET_MS = BOUNDARY_TIME_MS + 500 + SECONDARY_CONTAINER_DURATION_MS
+const STORY_SIX_START_STRAP = `${POSITION_NAMESPACE}:view:6:start`
 
 const CONTENT_EXCHANGES: readonly ContentExchange[] = [
   { name: `${POSITION_NAMESPACE}:conclusion:exchange-qa`, timeMs: CONTENT_FIRST_EXCHANGE_MS, itemId: 'qa', from: 'q', to: 'k' },
@@ -178,10 +181,14 @@ export function createStorySix(): StoryDoc {
 
   return {
     id: POSITION_STORY_SIX_ID,
+    straps: {
+      [STORY_SIX_START_STRAP]: createStorySixStartStrap(),
+    },
     listen: [
       { on: storyEvents.enter, active: true, reset: true },
       { on: storyEvents.leave, active: false },
       { on: storyEvents.reset, reset: true },
+      { on: POSITION_VIEW_SIX_INITIALIZE_EVENT, straps: [STORY_SIX_START_STRAP] },
     ],
     eventimes: [],
     persos: [
@@ -332,6 +339,24 @@ export function createStorySix(): StoryDoc {
       ...CONTENT_EXCHANGES.map((exchange) => contentPerso(exchange)),
     ],
   }
+}
+
+/** Starts the story-local conclusion timeline after the story is active. */
+function createStorySixStartStrap(): StrapFunction {
+  return ({ context }) => planStorySixAnimation(context.planned)
+}
+
+/** Schedules the conclusion events relative to one story activation. */
+export function planStorySixAnimation(
+  planned: Pick<PlannedStrapHelpers, 'wait'>,
+): readonly PlannedStrapOccurrence[] {
+  return createStorySixAnimationPlan().flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
+    event: {
+      name: occurrence.name,
+      visibility: 'story',
+      ...(occurrence.data === undefined ? {} : { data: occurrence.data }),
+    },
+  }))
 }
 
 /** Schedules the same four container, two frame and twelve content events as flip-stress. */

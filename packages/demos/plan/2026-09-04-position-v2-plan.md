@@ -49,7 +49,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Espace produit un comportement de story : le strap bascule l'état, arrête
   les tweens courants par événement et relance la séquence visuelle de la vue
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
-- L'ordre de validation courant commence par la story 5 ; la story 4 est
+- L'ordre de validation courant commence par la story 6 ; la story 4 est
   activée ensuite. Dans la story 2, les deux déplacements d'ancre commencent
   à `450 ms`, son item est reparenté à `1 350 ms` pendant `2 000 ms`, et sa
   borne de story arrive à `4 100 ms`. Chaque reparenting d'item utilise cette
@@ -118,7 +118,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - La lecture temporelle seule ne change jamais de vue ; chaque changement
   vient d'une interaction de navigation, et n'expose jamais deux vues du
   carousel simultanément.
-- La vue initiale de validation est la story 5. Lorsque la story 2 est activée,
+- La vue initiale de validation est la story 6. Lorsque la story 2 est activée,
   son `move` d'item commence à `1 350 ms` et se termine à `3 350 ms`.
 - Les six vues montrent réellement les mouvements/reparentings via les actions
   `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
@@ -205,7 +205,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,
-  story 5 en première position, le move initial de la story 2 à `1 350 ms`, capture de la vue 3, quatre rebonds de la vue 4,
+  story 6 en première position, le move initial de la story 2 à `1 350 ms`, capture de la vue 3, quatre rebonds de la vue 4,
   reparenting imbriqué de la vue 5 et la conclusion `flip-stress` avec quatre
   conteneurs, deux cadres en transfert, deux listes et douze échanges d'items.
 - La conclusion reprend les constantes de mouvement de `flip-stress` :
@@ -248,8 +248,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   par `storyId`. Le plan transmis par une navigation est donc ciblé par la
   même identité que le document de story, quelle que soit sa position dans le
   carousel.
-- La validation courante place la story 5 en première case, puis la story 4,
-  puis la story 2.
+- La validation courante place la story 6 en première case, puis la story 4,
+  puis la story 2. La story 5 reste la dernière case afin de conserver les
+  autres positions de lecture.
   Les plans sont ciblés par l'identité de story ; le plan statique d'une autre
   story n'est plus exécuté en arrière-plan avant son activation.
 - Réexamen navigateur sur l'onglet Safari MCP existant de `5173` : la mesure
@@ -264,9 +265,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 
 ### Reprise d'intégration — 2026-09-08 — trajectoire de la story 4
 
-- `POSITION_VIEW_STORY_IDS` commence par `position-story-four`. Les identités
-  stables des racines restent celles des vues authored ; seul l'ordre de
-  présentation du carousel est modifié.
+- Lors de la reprise intermédiaire du 2026-09-08,
+  `POSITION_VIEW_STORY_IDS` commençait par `position-story-four`. Les
+  identités stables des racines restent celles des vues authored ; seul l'ordre
+  de présentation du carousel est modifié.
 - Les points d'ancrage `sourcePoint` et `targetPoint` gardent leur identité
   propre. Pour chaque mouvement, `firstPoint` désigne le conteneur mesuré en
   FIRST et `lastPoint` celui mesuré en LAST ; `lastRole` conserve cette
@@ -372,8 +374,8 @@ le premier rebond est A→B, le suivant B→A, puis l'alternance continue.
 
 ### Reprise d'intégration — 2026-09-09 — mouvement horizontal local de la story 5
 
-- La story 5 est la première case de validation. Le parentage physique est
-  stable : K reste enfant de `source` et Q reste enfant de `cible`.
+- La story 5 reste disponible en dernière case de validation. Son parentage
+  physique est stable : K reste enfant de `source` et Q reste enfant de `cible`.
 - K et Q se déplacent horizontalement dans leur parent par leurs propres
   tweens `style.translateX`. Leur action ne contient aucun `move`; le graphe
   géométrique ne les capture donc pas et aucun overlay ne les contient.
@@ -392,3 +394,95 @@ le premier rebond est A→B, le suivant B→A, puis l'alternance continue.
 Le statut reste `En cours` : cette correction est implémentée, testée sur le
 circuit réel et documentée, mais la validation CodPlay d'acceptation complète
 reste ouverte.
+
+### Reprise d'intégration — 2026-09-09 — premier Play direct de la story 5
+
+- La capture Safari MCP de la première transition à `2 450 ms` mesure K côté
+  source au FIRST et Q côté cible au `afterStart`/LAST ; la cible est donc déjà
+  montée dans cette fixture au moment du premier calcul.
+- À `2 800 ms`, le premier Play présente l'overlay dans le sens K→Q. Un seek au
+  même temps produit la même pose à moins d'un pixel (`x≈134,6`, `y≈460,3`),
+  et la console Safari reste sans warning ni erreur.
+- Le test façade `story-five-motion.spec.ts` verrouille en plus les identités
+  de cible (`K` puis `Q`), le mode `reparent`, la durée et l'absence de
+  retarget parasite. Le cas général d'une cible absente au FIRST puis montée
+  au LAST est couvert séparément par la story 6 et le graphe motion.
+
+Le diagnostic initial « cible absente au FIRST » n'est pas reproduit dans la
+story 5 actuelle ; le garde runtime correspondant reste validé par la story 6.
+Le statut global reste `En cours` jusqu'à la matrice complète Play, Seek,
+replay, resize, persistence et lifecycle.
+
+### Reprise d’intégration — 2026-09-09 — saut de Q vers B à l’endpoint
+
+- Le second bug confirmé concerne la story 6 : entre `t=9 180` et `t=9 300`,
+  Q rejoint B et sautait de position aussi bien au Play qu’au Seek. La story 6
+  est désormais la première lecture de la démo afin que cette reproduction
+  commence directement sur son premier Play.
+- La cause n’était pas une simple différence de taille de l’overlay. Lors des
+  frontières de reflow du contenu de B, le graphe comparait `before` à un
+  `after` capturé à l’endpoint. Comme B poursuivait son propre mouvement dans
+  cet intervalle, cette pose avancée était interprétée comme une modification
+  structurelle de B ; Q était alors retargeté plusieurs fois avec une pose
+  intermédiaire périmée.
+- Le runtime distingue maintenant les intentions directes des changements
+  indirects : les premiers invalident explicitement, tandis que les seconds
+  ne comparent que `before` et `afterStart`. L’endpoint `after` ne peut plus
+  retargeter Q simplement parce que son ancêtre a avancé dans le temps.
+- Le test de graphe
+  `does not retarget a child when an ancestor only advances during an unrelated
+  reflow` verrouille cette causalité sans modifier la fixture. Les tests
+  façade de la story 6 continuent d’exercer le parcours réel.
+- Safari MCP sur `5173` confirme au Seek l’alignement de Q à `t=9 274`, puis
+  `t=9 275`, avec un écart inférieur au pixel avant disparition de l’overlay.
+  Un premier Play réel traverse la zone `t≈9 190`–`t≈9 310` sans discontinuité
+  visible et sans warning ni erreur de console.
+
+Le statut reste `En cours` : le correctif est implémenté, testé sur le runtime
+réel et documenté, mais la matrice complète Play, Seek, replay, resize,
+persistence et lifecycle reste ouverte.
+
+### Reprise d'intégration — 2026-09-09 — première lecture de la démo 06
+
+- Correction de numérotation : la démo concernée par le bug de premier Play est
+  la story 6, et non la story 5.
+- `POSITION_VIEW_STORY_IDS` commence maintenant par
+  `position-story-six`, puis conserve l'ordre des autres cases (`4, 2, 1, 3,
+  5`).
+- `POSITION_INITIAL_EVENTS` émet directement l'entrée et l'initialisation de
+  la story 6. Le premier écran est donc la démo 06 dès `t=0`, sans navigation
+  préalable ; la story 5 reste testable directement par son parcours dédié.
+- Safari MCP sur une navigation fraîche de `5173` confirme `01 / 06`, le
+  caption `06` et la story 6 visible à `0 ms`. Le premier Play est lancé sur
+  cet état, sans seek ni navigation préalable ; le passage observé place
+  ensuite `Qa` dans la liste `K`, dans le sens attendu `Q → K`.
+- Cette observation confirme le point d'entrée de la reproduction, mais ne
+  clôt pas la correction du bug du premier Play : la matrice de validation
+  navigateur complète reste ouverte.
+
+### Régression du premier calcul de `Qa` — 2026-09-09
+
+Le premier bug est une régression de la feature FIRST/LAST, et non une
+correction de fixture. Dans la story 6, `Qa` part à `1 200 ms` vers une cible
+dont le dernier parent effectif est le cadre `K`. `K` n’est monté qu’à
+`1 500 ms` et son propre transfert vers `C` commence à `2 000 ms`. La capture
+par occurrence préparait `Qa` sans la boundary future de `K` ; sa position LAST
+était donc construite sur la branche statique de `C`. Un seek ultérieur pouvait
+masquer la régression en ayant déjà préparé cette boundary.
+
+Le runtime restaure la fermeture de dépendance existante : la capture de `Qa`
+ajoute uniquement les moves résolus sur la chaîne d’ancêtres de sa destination
+et compris dans l’intervalle de `Qa`. La boundary de `K` est ainsi présente dès
+le premier calcul (`2 000 → 9 275 ms`), sans scan global ni logique locale dans
+la démo. Le test façade verrouille cette préparation au premier passage.
+
+Validation du 2026-09-09 : 94 fichiers et 602 tests CodPlay passent, ainsi que
+le typecheck CodPlay. Une navigation fraîche dans Safari MCP suivie d’un
+premier seek à `1 500 ms` place l’overlay `Qa` à `x≈298,9`, dans la direction
+de `D/K`, au lieu de la pose erronée observée précédemment vers `C` (`x≈141`).
+Le seek suivant à `2 500 ms`, puis retour à `1 500 ms`, conserve exactement
+la même pose ; la console Safari ne contient ni warning ni erreur.
+
+Le statut reste `En cours` : le premier Play est couvert par le runner et la
+façade, mais la matrice navigateur complète Play, Seek, replay, reset, resize,
+persistence et lifecycle n’est pas encore close.

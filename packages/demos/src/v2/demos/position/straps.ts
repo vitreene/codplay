@@ -8,9 +8,11 @@ import {
   POSITION_STORY_PAUSED_EVENT,
   POSITION_STORY_RESUMED_EVENT,
   POSITION_STORY_FIVE_ID,
+  POSITION_STORY_SIX_ID,
   POSITION_TWEEN_STOP_EVENT,
   POSITION_VIEW_STORY_IDS,
   POSITION_VIEW_FIVE_INITIALIZE_EVENT,
+  POSITION_VIEW_SIX_INITIALIZE_EVENT,
   POSITION_STORY_FOUR_ID,
   VIEW_COUNT,
 } from './constants'
@@ -39,6 +41,15 @@ function planSelectedStory(
     return {
       events: [{
         name: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
+        storyId,
+        visibility: 'story',
+      }],
+    }
+  }
+  if (storyId === POSITION_STORY_SIX_ID) {
+    return {
+      events: [{
+        name: POSITION_VIEW_SIX_INITIALIZE_EVENT,
         storyId,
         visibility: 'story',
       }],
@@ -104,6 +115,12 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
                 storyId,
                 visibility: 'story' as const,
               }
+            : storyId === POSITION_STORY_SIX_ID
+              ? {
+                  name: POSITION_VIEW_SIX_INITIALIZE_EVENT,
+                  storyId,
+                  visibility: 'story' as const,
+                }
             : undefined
         const output: readonly StrapReturnValue[] = [
           {

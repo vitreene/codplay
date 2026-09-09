@@ -832,6 +832,13 @@ scène et ne crée pas de DOM d'analyse. Elle concerne le contexte de destinatio
 et ne doit pas être confondue avec la composition hybride nécessaire lorsqu'un
 mover source est lui-même absent au FIRST.
 
+Lorsque cette cible n'était pas disponible au FIRST, sa première apparition
+entre FIRST et LAST matérialise seulement le contexte de destination déjà
+capturé ; elle ne constitue pas un déplacement de cible et ne retargete pas le
+mover. Une modification ultérieure, sur une frontière où la cible est déjà
+présente, reste un nouveau `move` de la cible et retargete le mover selon le
+contrat de dépendance.
+
 ### Mover source absent au FIRST, présent au LAST
 
 Un perso détaché reste dans le graphe logique avec son `parentByPerso` et son
@@ -1229,3 +1236,34 @@ la fixture testée, une seule story affichée, l'absence de marqueurs
 `data-codplay-motion-*` sur les nœuds et l'absence d'erreur de console ; la
 matrice complète Play/Seek/replay,
 resize et lifecycle reste à compléter avant de passer le plan à `Fini`.
+
+### Règle d’invalidation à l’endpoint — 2026-09-09
+
+Une frontière créée par un descendant ne retargete pas la dépendance d’une
+cible uniquement parce que `after` a été mesuré plus tard et que l’ancêtre a
+continué son propre mouvement entre-temps. Pour un item indirect, l’invalidation
+compare `before` à `afterStart`, qui représente le reflow immédiat de la
+frontière. Le snapshot `after` conserve la pose capturée à l’endpoint et ne
+sert pas à déduire un changement structurel rétroactif. Une intention directe
+sur l’item reste, elle, une invalidation explicite.
+
+Cette règle maintient la composition hiérarchique : Q peut suivre le
+chemin de B sans être reconstruit à chaque frontière de son contenu, et B
+atteint sa pose LAST sans que Q reçoive une trajectoire intermédiaire périmée.
+
+### Restauration de la fermeture de capture pour une destination tardive — 2026-09-09
+
+La préparation par occurrence avait supprimé, pour le premier passage de
+`Qa`, la boundary future du cadre `K` pourtant requise pour résoudre la pose
+LAST de sa destination. Le contrat FIRST/LAST reste inchangé : la destination
+peut être absente au FIRST, mais la composition doit disposer des mouvements de
+ses ancêtres montés avant l’endpoint.
+
+La capture construit maintenant une fermeture locale à partir de la scène
+endpoint déjà résolue : elle ajoute les occurrences de `move` actives sur la
+chaîne d’ancêtres de destination, si leur début est postérieur au move courant
+et antérieur à son endpoint, puis laisse le graphe ordonner et composer ces
+boundaries normalement. Elle ne compile pas le planning complet et ne scanne
+pas le journal ; un move futur sans dépendance reste paresseux. Les identités
+d’occurrence sont conservées afin que la boundary préparée ne soit pas
+dupliquée lorsque son événement atteindra ensuite la présentation normale.

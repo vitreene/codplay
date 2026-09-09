@@ -141,6 +141,82 @@ describe('motion graph', () => {
     expect(originX(resolvePresentationFrame(graph, after, 2_200), 'moving')).toBeCloseTo(320)
   })
 
+  it('starts a move when the target is absent at FIRST but mounted at LAST', () => {
+    const before = snapshot(1_200, [
+      item('source', 'root', 0),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const afterStart = snapshot(1_200, [
+      item('source', 'root', 0),
+    ])
+    const after = snapshot(2_075, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 300),
+      item('target', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target:content', 20, 'target'),
+    ])
+    const graph = buildMotionGraph([{
+      ...boundary('target-mounted-only-at-last', 1_200, before, after, [{
+        ...intent('moving', 1_200, 875),
+        targetReflow: true,
+      }]),
+      afterStart,
+    }])
+    const timeline = buildNaturalLayoutTimeline([{
+      ...boundary('target-mounted-only-at-last', 1_200, before, after, [{
+        ...intent('moving', 1_200, 875),
+        targetReflow: true,
+      }]),
+      afterStart,
+    }])
+
+    expect(graph.tracksByItem.has('moving')).toBe(true)
+    const naturalAtStart = resolveNaturalLayout(timeline, 1_200)
+    const naturalAtLast = resolveNaturalLayout(timeline, 2_075)
+    expect(originX(resolvePresentationFrame(graph, naturalAtStart, 1_200), 'moving')).toBeCloseTo(10)
+    expect(originX(resolvePresentationFrame(graph, naturalAtLast, 2_075), 'moving')).toBeCloseTo(320)
+  })
+
+  it('does not retarget a move when its late target is merely mounted', () => {
+    const beforeMove = snapshot(0, [
+      item('source', 'root', 0),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const afterStartMove = snapshot(0, [
+      item('source', 'root', 0),
+    ])
+    const afterMove = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 300),
+      item('target', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target:content', 20, 'target'),
+    ])
+    const beforeMount = snapshot(500, [
+      item('source', 'root', 0),
+      item('revealer', 'root', 50),
+    ])
+    const afterMount = snapshot(1_000, [
+      item('source', 'root', 0),
+      item('revealer', 'root', 50),
+      item('target-frame', 'root', 300),
+      item('target', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target:content', 20, 'target'),
+    ])
+    const firstBoundary = {
+      ...boundary('late-target-move', 0, beforeMove, afterMove, [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }]),
+      afterStart: afterStartMove,
+    }
+    const graph = buildMotionGraph([
+      firstBoundary,
+      boundary('target-mount', 500, beforeMount, afterMount, [intent('revealer', 500, 500)]),
+    ])
+
+    expect(graph.tracksByItem.get('moving')?.segments[0]?.retargets).toBeUndefined()
+  })
+
   it('animates a target container when structural reflow changes its measured height', () => {
     const before = snapshot(0, [
       itemWithSize('target-list', 'target-outlet', 0, 180, 40),
@@ -661,6 +737,73 @@ describe('motion graph', () => {
     expect(atRetarget.rect.left).toBeCloseTo(60, 3)
     expect(atTargetEndpoint.rect.left).toBeCloseTo(210, 3)
     expect(graph.tracksByItem.get('moving')?.segments[0]?.retargets).toHaveLength(1)
+  })
+
+  it('does not retarget a child when an ancestor only advances during an unrelated reflow', () => {
+    const parentBefore = snapshot(0, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, 12),
+    ])
+    const parentAfter = snapshot(9_350, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, -8),
+    ])
+    const transferBefore = snapshot(2_000, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, 8),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const transferAfterStart = snapshot(2_000, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, 8),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const transferAfter = snapshot(9_275, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, -8),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const siblingBefore = snapshot(2_200, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, 7.5),
+      item('moving', 'target:content', 10, 'target'),
+      item('sibling', 'target:content', 20, 'target'),
+    ])
+    const siblingAfterStart = snapshot(2_200, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 100, 7.5),
+      item('moving', 'target:content', 10, 'target'),
+      item('sibling', 'source:content', 20, 'source'),
+    ])
+    const siblingAfter = snapshot(3_075, [
+      item('source', 'root', 0),
+      rotatedItem('target', 'root', 5.5, 6),
+      item('moving', 'target:content', 10, 'target'),
+      item('sibling', 'source:content', 20, 'source'),
+    ])
+
+    const graph = buildMotionGraph([
+      boundary('target-motion', 0, parentBefore, parentAfter, [{
+        ...intent('target', 0, 9_350),
+        targetReflow: false,
+      }]),
+      {
+        ...boundary('transfer', 2_000, transferBefore, transferAfter, [{
+          ...intent('moving', 2_000, 7_275),
+          targetReflow: true,
+        }]),
+        afterStart: transferAfterStart,
+      },
+      {
+        ...boundary('sibling-reflow', 2_200, siblingBefore, siblingAfter, [{
+          ...intent('sibling', 2_200, 875),
+          targetReflow: true,
+        }]),
+        afterStart: siblingAfterStart,
+      },
+    ])
+
+    expect(graph.tracksByItem.get('moving')?.segments[0]?.retargets).toBeUndefined()
   })
 
   it('restarts a direct move from the visible pose and keeps the original end time', () => {

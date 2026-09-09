@@ -15,6 +15,7 @@ import type {
   ScheduledMotionIntent,
 } from '../motion'
 import {
+  createScheduledMotionIntent,
   decomposeRootMotionPose,
   deriveRelativeMotionPose,
 } from '../motion'
@@ -172,9 +173,31 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   const currentScene = input.player.getSolvedScene()
   if (currentScene === undefined || input.intents.length === 0) return []
 
+  const activeMotionEndCache = new Map<string, number | undefined>()
+  const resolveActiveMotionEndAt = input.resolveActiveMotionEndAt === undefined
+    ? undefined
+    : (itemId: string, startAt: number, requestedEndAt: number): number | undefined => {
+      const key = `${itemId}:${startAt}:${requestedEndAt}`
+      if (activeMotionEndCache.has(key)) return activeMotionEndCache.get(key)
+      const resolved = input.resolveActiveMotionEndAt!(itemId, startAt, requestedEndAt)
+      activeMotionEndCache.set(key, resolved)
+      return resolved
+    }
+
+  // A structural move can reach a destination whose ancestor is mounted by a
+  // later move before this move's endpoint. Preserve the existing FIRST/LAST
+  // contract by preparing that narrow ancestor closure in the same capture;
+  // this replaces the old full-schedule preparation removed by occurrence
+  // discovery, without reopening a journal-wide scan.
+  const captureIntents = expandLateDestinationAncestorIntents({
+    player: input.player,
+    intents: input.intents,
+    includePersistOnly: input.includePersistOnly,
+    resolveActiveMotionEndAt,
+  })
   const boundaries: MotionBoundary[] = []
   try {
-    for (const group of groupMotionIntents(input.intents, currentScene)) {
+    for (const group of groupMotionIntents(captureIntents, currentScene)) {
       // FIRST is the logical state immediately before the event. For a
       // structural move, the destination may be mounted only after that
       // boundary, so it is deliberately not required to exist here.
@@ -191,7 +214,7 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
         group.endAt,
         input.includePersistOnly,
         group.intents,
-        input.resolveActiveMotionEndAt,
+        resolveActiveMotionEndAt,
       )
       // The logical move is committed at startAt, but its geometric LAST is
       // the transition endpoint. Resolve the left side of that endpoint so a
@@ -279,6 +302,139 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
     input.player.presentSceneForGeometryCapture(scene)
     return captureCurrentHtmlMotionLayout(root, input.nodes, scene, selection, rootKey)
   }
+}
+
+/**
+ * Restores the pre-occurrence-discovery preparation of a late destination by
+ * adding only future moves on the destination's mounted ancestor chain.
+ */
+function expandLateDestinationAncestorIntents(input: Readonly<{
+  player: RuntimePlayer
+  intents: readonly ScheduledMotionIntent[]
+  includePersistOnly: boolean
+  resolveActiveMotionEndAt?: (itemId: string, startAt: number, requestedEndAt: number) => number | undefined
+}>): readonly ScheduledMotionIntent[] {
+  const expanded = new Map(input.intents.map((intent) => [intent.id, intent]))
+  const pending = [...input.intents]
+
+  for (let index = 0; index < pending.length; index += 1) {
+    const intent = pending[index]
+    if (intent === undefined || intent.startAt < 0 || !intent.targetReflow) continue
+
+    const beforeScene = input.player.resolveSceneBeforeBoundary(
+      intent.startAt,
+      input.includePersistOnly,
+    )
+    const endpointTime = resolveMotionEndpointTime(
+      input.player,
+      resolveMotionIntentStoryIds(intent, beforeScene),
+      intent.startAt,
+      intent.endAt,
+      input.includePersistOnly,
+      [intent],
+      input.resolveActiveMotionEndAt,
+    )
+    if (endpointTime <= intent.startAt) continue
+
+    const afterScene = input.player.resolveSceneBeforeBoundary(
+      endpointTime,
+      input.includePersistOnly,
+    )
+    const ancestorIds = resolveDestinationAncestorIds(afterScene, intent.itemId)
+    if (ancestorIds.size === 0 || !hasLateDestinationAncestor(beforeScene, afterScene, ancestorIds)) continue
+
+    for (const occurrence of afterScene.moveOccurrences ?? []) {
+      const action = occurrence.action
+      if (!ancestorIds.has(occurrence.itemId)
+        || action.startAt <= intent.startAt
+        || action.startAt >= endpointTime) continue
+
+      const eventId = action.eventId
+        ?? `${occurrence.itemId}:${action.name}:${action.declarationPath.join('.')}`
+      const supportIntent = createScheduledMotionIntent({
+        id: action.eventId === undefined
+          ? `motion:${eventId}:${action.startAt}`
+          : `motion:${eventId}`,
+        eventId,
+        itemId: occurrence.itemId,
+        declarationPath: action.declarationPath,
+        startAt: action.startAt,
+        eventSeq: action.eventSeq,
+        storyIds: resolveSupportStoryIds(beforeScene, afterScene, occurrence.itemId),
+        action: action.action,
+        resolveActionTransition: resolveHtmlMotionActionTransition,
+      })
+      if (supportIntent === undefined || expanded.has(supportIntent.id)) continue
+
+      expanded.set(supportIntent.id, supportIntent)
+      pending.push(supportIntent)
+    }
+  }
+
+  return Object.freeze([...expanded.values()]
+    .sort((left, right) => left.startAt - right.startAt
+      || left.endAt - right.endAt
+      || compareMotionDeclarationPaths(left.declarationPath, right.declarationPath)))
+}
+
+/** Resolves the mounted destination parent chain at one motion endpoint. */
+function resolveDestinationAncestorIds(scene: SolvedScene, itemId: string): ReadonlySet<string> {
+  const ancestorIds = new Set<string>()
+  let parentItemId = scene.graph.parentByPerso[itemId]
+  while (parentItemId !== undefined && !ancestorIds.has(parentItemId)) {
+    ancestorIds.add(parentItemId)
+    parentItemId = scene.graph.parentByPerso[parentItemId]
+  }
+  return ancestorIds
+}
+
+/** Checks whether the endpoint destination uses an ancestor unavailable at FIRST. */
+function hasLateDestinationAncestor(
+  before: SolvedScene,
+  after: SolvedScene,
+  ancestorIds: ReadonlySet<string>,
+): boolean {
+  for (const itemId of ancestorIds) {
+    if (after.persos[itemId]?.placement.mounted === true
+      && before.persos[itemId]?.placement.mounted !== true) return true
+  }
+  return false
+}
+
+/** Resolves the story scope touched by one supporting ancestor move. */
+function resolveSupportStoryIds(
+  before: SolvedScene,
+  after: SolvedScene,
+  itemId: string,
+): readonly string[] {
+  return Object.freeze([...new Set([
+    ...resolveMotionStoryIds(before, itemId),
+    ...resolveMotionStoryIds(after, itemId),
+  ])].sort())
+}
+
+/** Resolves the story ids carried by one solved scene item and its target. */
+function resolveMotionStoryIds(scene: SolvedScene, itemId: string): readonly string[] {
+  const perso = scene.persos[itemId]
+  if (perso === undefined) return Object.freeze([])
+  const storyIds = new Set<string>([perso.storyId])
+  const targetStoryId = perso.placement.target?.storyId
+  if (targetStoryId !== undefined) storyIds.add(targetStoryId)
+  const parentStoryId = perso.placement.parentKey === undefined
+    ? undefined
+    : scene.persos[perso.placement.parentKey]?.storyId
+  if (parentStoryId !== undefined) storyIds.add(parentStoryId)
+  return Object.freeze([...storyIds])
+}
+
+/** Provides deterministic ordering for generated support intents. */
+function compareMotionDeclarationPaths(left: readonly number[], right: readonly number[]): number {
+  const length = Math.min(left.length, right.length)
+  for (let index = 0; index < length; index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return left.length - right.length
 }
 
 /** Resolves the optional current-presentation snapshot for one motion group. */

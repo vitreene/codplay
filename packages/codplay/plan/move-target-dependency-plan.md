@@ -130,6 +130,11 @@ réintroduire une approximation par arc SVG ni modifier le contrat auteur du
 - Une dépendance d’ancêtre ou de composition ne crée pas automatiquement une
   seconde trajectoire pour chaque descendant. Seuls les items possédant une
   dépendance `move -> target` active sont retargetés.
+- Si la cible concrète était absente au FIRST du `move` dépendant, sa première
+  apparition avant LAST ne déclenche pas de retarget : elle rend disponible le
+  contexte déjà capturé pour la trajectoire initiale. Dès une frontière où cette
+  cible est présente, tout changement de pose reste un nouveau `move` de cible
+  et retargete les dépendants actifs.
 - Les occurrences futures issues d’un `repeat` ne sont pas préparées à
   l’avance par ce mécanisme. La dépendance est enregistrée lorsque chaque
   occurrence `move` est effectivement résolue ; le plan ne change pas les
@@ -228,26 +233,61 @@ son tween jusqu’à l’`endAt` initial et retire seulement la dépendance deve
 obsolète ; l’historique reste disponible pour Play et Seek. Aucun champ auteur,
 manager de story ou circuit d’événement parallèle n’a été ajouté.
 
-Validation ciblée exécutée le 2026-09-09 : le test de graphe couvrant le
-recalcul direct pendant une trajectoire vérifie l’absence de retour à la pose
-initiale, la continuité de la pose à la frontière et la durée restante ; les
-28 tests du fichier `motion-graph.spec.ts` passent.
+Validation ciblée exécutée le 2026-09-09 : le graphe distingue maintenant la
+première apparition d’une cible absente au FIRST d’un déplacement ultérieur de
+la cible. Les tests vérifient la trajectoire initiale vers le LAST disponible,
+l’absence de retarget à la simple montée de la cible, le retarget d’un vrai
+move de cible et la frontière réelle de la démo 6.
 
-Validation exécutée :
-
-- `npm run test --workspace=codplay` : 92 fichiers, 592 tests passés ;
-- typecheck CodPlay et `@codplay/demos` passés ;
-- build `@codplay/demos` passé ;
-- onglet Safari MCP existant de `5173` : `0` lecture de géométrie pendant le
-  `pointermove`, `39` au relâchement, sans erreur runtime. Les 39 lectures
-  concernent uniquement la story visible (son root, son stage, ses ancres,
-  ses outlets et son item) ; `html`, `body`, le layout de page et les cinq
-  autres stories ne sont plus parcourus. La continuité de l’overlay a été
-  contrôlée de part et d’autre de la frontière.
+- `motion-graph.spec.ts`, `motion-layout.spec.ts`,
+  `runner-html/motion-capture.spec.ts` et `facade/story-six-motion.spec.ts` :
+  46 tests passés ;
+- `facade/story-five-motion.spec.ts` confirme sur le chemin de premier Play que
+  le premier segment de la story 5 conserve `K -> Q`, le mode `reparent`, sa
+  durée `2 000 ms` et aucune sous-frontière de retarget ;
+- `npm run typecheck --workspace=codplay` : passé ;
+- `npm test --workspace=codplay` : 94 fichiers, 601 tests passés ;
+- le typecheck CodPlay, le typecheck `@codplay/demos` et le build
+  `@codplay/demos` passent ;
+- Safari MCP sur `5173` confirme, sur une navigation fraîche, que la story 6
+  est la première case (`01 / 06`) et que son premier Play part directement
+  sans seek préalable. L'observation à `2 138 ms` place `Qa` dans la liste K,
+  dans le sens attendu Q -> K ; la console ne contient ni warning ni erreur.
+- Le chemin isolé de la story 5 reste couvert par `story-five-motion.spec.ts` :
+  il vérifie le premier segment K -> Q indépendamment de sa position dans le
+  carousel.
 
 Le statut reste `En cours` jusqu’à l’exécution des cas d’acceptation restant
 ouverts (notamment les combinaisons complètes de reparent, reset, Seek et
 répétitions dans le navigateur réel).
+
+### Correction du saut d’endpoint descendant/ancêtre — 2026-09-09
+
+Le saut observé dans la story 6 entre `t=9 180` et `t=9 300` venait de la
+résolution des items invalidés à une frontière de mouvement. `resolveChangedItemIds`
+comparait auparavant le snapshot `before` au snapshot `after` de l’événement.
+Or `after` est capturé à l’endpoint, alors que l’ancêtre B peut continuer son
+propre mouvement pendant l’intervalle : une frontière de reflow d’un descendant
+faisait donc croire que B avait changé et retargetait Q avec une pose
+intermédiaire devenue obsolète.
+
+La résolution distingue maintenant les intentions directes des changements
+indirects. Une intention directe reste toujours invalidante ; pour un item
+indirect, seule la comparaison `before`/`afterStart` du reflow structurel
+invalide la dépendance. Le snapshot `after` reste réservé à la capture de la
+pose endpoint et ne peut plus importer l’avancement temporel d’un ancêtre déjà
+en mouvement.
+
+Le test de non-régression `does not retarget a child when an ancestor only
+advances during an unrelated reflow` couvre précisément ce cas. Validation du
+correctif : 31 tests du graphe motion, 2 tests façade de la story 6, puis la
+suite CodPlay complète (94 fichiers, 602 tests), les deux typechecks et le build
+des démos passent. Safari MCP sur `5173` ne montre plus de discontinuité entre
+`9 274` et `9 275` au Seek ; le premier Play réel traverse également la zone
+`9 190`–`9 310` sans saut et sans erreur de console.
+
+Le statut reste `En cours` : la matrice navigateur complète de reset, replay,
+resize, persistence et lifecycle n’est pas encore exécutée.
 
 ### Fixture position — identité physique et rôles transitoires — 2026-09-09
 
@@ -271,3 +311,25 @@ La règle est validée pour implémentation dans la branche de travail. Elle ne
 sera reportée comme décision normative dans [`move-contract-plan.md`](./move-contract-plan.md)
 qu’après les validations d’acceptation du §7 ; le plan motion parent conserve
 le statut `En cours` jusque-là.
+
+### Régression restaurée — ancêtre de destination nécessaire au premier FIRST/LAST — 2026-09-09
+
+La story 6 a exposé une régression distincte du retarget : au premier passage,
+`Qa` était capturé à `1 200 ms`, mais la boundary du cadre de `K`, démarrant à
+`2 000 ms`, n’était pas encore dans le graphe. La scène LAST de `Qa` contenait
+alors la branche finale de `C` sans la trajectoire de `K`, ce qui orientait le
+premier trajet vers `C`. Le phénomène disparaissait après un seek ayant franchi
+`2 000 ms`.
+
+Le contrat historique est restauré dans la capture : pour un move dont la
+destination gagne un ancêtre monté avant son endpoint, les occurrences `move`
+résolues sur cette chaîne et situées dans l’intervalle du move sont préparées
+dans la même transaction. Le graphe peut donc composer le LAST de `Qa` avec la
+pose de `K` commencée à `2 000 ms`. Cette fermeture reste strictement bornée à
+la destination et ne réintroduit pas la découverte globale du journal.
+
+Le test façade `story-six-motion.spec.ts` vérifie que le premier passage de
+`Qa` contient déjà le segment du cadre `K` (`2 000 → 9 275 ms`), en plus de la
+chaîne FIRST/LAST et de l’absence de retarget parasite. Le statut du plan reste
+`En cours` jusqu’à la matrice complète Play, Seek, replay, reset, resize,
+persistence et lifecycle.

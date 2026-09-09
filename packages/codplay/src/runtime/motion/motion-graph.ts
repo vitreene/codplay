@@ -52,6 +52,8 @@ type TargetDependencyIndex = Map<string, Map<string, Readonly<{
   segmentId: string
   startAt: number
   endAt: number
+  /** False when the destination parent was not mounted at the move FIRST. */
+  availableAtStart: boolean
 }>>>
 
 /** Optional logical reset barriers used while rebuilding one motion graph. */
@@ -232,6 +234,12 @@ function buildMotionGraphStructure(
     const targetRetargetedSegments = new Set<string>()
     for (const targetItemId of resolveChangedItemIds(boundary)) {
       for (const reference of targetDependencies.get(targetItemId)?.values() ?? []) {
+        // Mounting a destination that was unavailable at FIRST completes the
+        // already captured move; it is not a target move and must not restart
+        // the dependent item. A later change is a genuine retarget.
+        if (!reference.availableAtStart
+          && !boundary.before.items.has(targetItemId)
+          && boundary.after.items.has(targetItemId)) continue
         if (directItemIds.has(reference.itemId)) continue
         const activeSegment = mutableTracks.get(reference.itemId)
           ?.find((segment) => segment.id === reference.segmentId)
@@ -347,7 +355,7 @@ function buildMotionGraphStructure(
       segments.push(segment)
       mutableTracks.set(itemId, segments)
       presentationItemIds.add(itemId)
-      if (segment.targetReflow) registerTargetDependencies(targetDependencies, segment)
+      if (segment.targetReflow) registerTargetDependencies(targetDependencies, segment, boundary.before)
       operations.push({
         kind: 'segment',
         boundary,
@@ -950,7 +958,9 @@ function targetDependencyKeys(attachment: MotionAttachment): readonly string[] {
 function registerTargetDependencies(
   index: TargetDependencyIndex,
   segment: MotionSegment,
+  boundaryBefore: LayoutSnapshot,
 ): void {
+  const availableAtStart = isAttachmentAvailableAtStart(segment.to, boundaryBefore)
   for (const targetKey of targetDependencyKeys(segment.to)) {
     const references = index.get(targetKey) ?? new Map()
     references.set(segment.id, Object.freeze({
@@ -958,9 +968,24 @@ function registerTargetDependencies(
       segmentId: segment.id,
       startAt: segment.startAt,
       endAt: segment.endAt,
+      availableAtStart,
     }))
     index.set(targetKey, references)
   }
+}
+
+/** Checks whether the complete concrete destination parent chain existed at FIRST. */
+function isAttachmentAvailableAtStart(
+  attachment: MotionAttachment,
+  boundaryBefore: LayoutSnapshot,
+): boolean {
+  let parentItemId = attachment.parentItemId
+  while (parentItemId !== undefined) {
+    const parent = boundaryBefore.items.get(parentItemId)
+    if (parent === undefined) return false
+    parentItemId = parent.parentItemId
+  }
+  return true
 }
 
 /** Drops dependencies belonging to an older overlapping direct segment. */
@@ -987,14 +1012,23 @@ function motionSegmentReferenceKey(itemId: string, segmentId: string): string {
 
 /** Finds every item whose captured pose changed across a new boundary. */
 function resolveChangedItemIds(boundary: MotionBoundary): readonly string[] {
-  const candidates = [
-    ...(boundary.afterStart === undefined ? [] : [boundary.afterStart]),
-    boundary.after,
-  ]
-  const itemIds = new Set<string>(boundary.before.items.keys())
-  for (const snapshot of candidates) for (const itemId of snapshot.items.keys()) itemIds.add(itemId)
+  const directItemIds = new Set(boundary.intents.map((intent) => intent.itemId))
+  const structuralAfter = boundary.afterStart
+  const candidates = structuralAfter === undefined ? [] : [structuralAfter]
+  const itemIds = new Set<string>([
+    ...boundary.before.items.keys(),
+    ...(structuralAfter === undefined ? [] : structuralAfter.items.keys()),
+    ...directItemIds,
+  ])
 
   return Object.freeze([...itemIds].filter((itemId) => {
+    // A direct style or move intent is an explicit change even when its
+    // endpoint is captured later than the logical boundary.
+    if (directItemIds.has(itemId)) return true
+    // Endpoint snapshots are intentionally excluded for indirect items: they
+    // also contain the elapsed pose of an ancestor that is already moving.
+    // Only the immediate afterStart reflow may invalidate a dependent move.
+    if (structuralAfter === undefined) return false
     const before = boundary.before.items.get(itemId)
     if (before === undefined) return candidates.some((snapshot) => snapshot.items.has(itemId))
     return candidates.some((snapshot) => {

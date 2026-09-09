@@ -13,10 +13,12 @@ import {
   POSITION_MOVE_DURATION_MS,
   POSITION_STORY_FIVE_ID,
   POSITION_STORY_FOUR_ID,
+  POSITION_STORY_SIX_ID,
   POSITION_VIEW_FIVE_INITIALIZE_EVENT,
+  POSITION_VIEW_SIX_INITIALIZE_EVENT,
   POSITION_VIEW_STORY_IDS,
 } from '../../../demos/src/v2/demos/position/constants'
-import { createScene } from '../../../demos/src/v2/demos/position/main'
+import { createScene, POSITION_INITIAL_EVENTS } from '../../../demos/src/v2/demos/position/main'
 import {
   CAROUSEL_EVENTS,
   CAROUSEL_EVENTS_BY_STORY_ID,
@@ -126,7 +128,23 @@ describe('position V2 demo', () => {
       'position-story-six',
     ])
     expect(build.compiledScene.scene.stories.main?.listen).toEqual([])
-    expect(POSITION_VIEW_STORY_IDS[0]).toBe(POSITION_STORY_FIVE_ID)
+    expect(POSITION_VIEW_STORY_IDS[0]).toBe(POSITION_STORY_SIX_ID)
+    expect(POSITION_INITIAL_EVENTS).toEqual([
+      {
+        eventime: {
+          name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_SIX_ID].enter,
+          visibility: 'story',
+        },
+        target: { scope: 'story', storyId: POSITION_STORY_SIX_ID },
+      },
+      {
+        eventime: {
+          name: POSITION_VIEW_SIX_INITIALIZE_EVENT,
+          visibility: 'story',
+        },
+        target: { scope: 'story', storyId: POSITION_STORY_SIX_ID },
+      },
+    ])
     for (const storyId of POSITION_VIEW_STORY_IDS) {
       expect(build.compiledScene.scene.stories[storyId]?.listen).toContainEqual({
         on: CAROUSEL_EVENTS_BY_STORY_ID[storyId].reset,
@@ -256,7 +274,7 @@ describe('position V2 demo', () => {
     await instance.telco.play()
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
-    expect(root.querySelector('.position-view--visible .position-nested-container--k')).not.toBeNull()
+    expect(root.querySelector('.position-view--visible .position-conclusion-network')).not.toBeNull()
 
     codplay.engine.advance(0)
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
@@ -383,6 +401,11 @@ describe('position V2 demo', () => {
     await flushDomEvent()
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
 
+    for (let index = 0; index < 5; index += 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      await flushDomEvent()
+    }
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('06 / 06')
     codplay.engine.advance(42_000)
     const viewFiveSourceCard = root.querySelector<HTMLElement>('.position-view--visible .position-node--source')
     const viewFiveTargetCard = root.querySelector<HTMLElement>('.position-view--visible .position-node--target')
@@ -408,14 +431,14 @@ describe('position V2 demo', () => {
     expect(nestedSource?.querySelector<HTMLElement>('.position-item')).not.toBeNull()
 
     for (let index = 0; index < 5; index += 1) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
       await flushDomEvent()
     }
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('06 / 06')
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
     codplay.engine.advance(52_000)
-    expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-q')).toHaveLength(1)
-    expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-k')).toHaveLength(1)
-    expect(trace.filter((event) => event.name.startsWith('position:demo:conclusion:exchange-'))).toHaveLength(12)
+    expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-q')).toHaveLength(2)
+    expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-k')).toHaveLength(2)
+    expect(trace.filter((event) => event.name.startsWith('position:demo:conclusion:exchange-'))).toHaveLength(24)
     const conclusionTargetB = root.querySelector<HTMLElement>('.position-conclusion-node--b .position-conclusion-node__outlet')
     const conclusionTargetC = root.querySelector<HTMLElement>('.position-conclusion-node--c .position-conclusion-node__outlet')
     const conclusionTransferQ = root.querySelector<HTMLElement>('.position-conclusion-transfer-frame--q')
@@ -831,9 +854,27 @@ describe('position V2 demo', () => {
       root,
     })
 
+    await instance.events.emit(
+      {
+        name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FIVE_ID].enter,
+        visibility: 'story',
+      },
+      { scope: 'story', storyId: POSITION_STORY_FIVE_ID },
+    )
+    await instance.events.emit(
+      {
+        name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FIVE_ID].intro,
+        visibility: 'scene',
+      },
+      { scope: 'scene' },
+    )
+    await instance.events.emit(
+      { name: POSITION_VIEW_FIVE_INITIALIZE_EVENT, visibility: 'story' },
+      { scope: 'story', storyId: POSITION_STORY_FIVE_ID },
+    )
     codplay.engine.advance(0)
     await instance.telco.play()
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('06 / 06')
     codplay.engine.advance(2_500)
 
     const storyRoot = root.querySelector<HTMLElement>('.position-view--visible')

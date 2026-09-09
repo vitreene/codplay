@@ -16,8 +16,9 @@ la mise en œuvre ordonnée et ne sont pas présentées comme terminées.
 
 Le runner ne doit préparer des positions et un graphe motion que lorsqu’il
 matérialise une occurrence résolue de `move` qui nécessite une présentation
-visuelle. Il ne doit ni anticiper les moves futurs, ni rescanner le journal à
-chaque présentation normale.
+visuelle. Il ne doit ni anticiper les moves futurs sans dépendance de capture,
+ni rescanner le journal à chaque présentation normale. Une fermeture locale
+des ancêtres nécessaires au LAST d’une occurrence déjà résolue reste autorisée.
 
 Cette migration conserve le contrat structurel de `move` et ses capacités
 existantes : destination, ordre, `reorder`, montage, démontage, transition,
@@ -547,3 +548,29 @@ confirme le départ horizontal : `x=157,219` à `1 350 ms`, `186,794` à
 `1 400 ms`, `243,697` à `1 500 ms` et `323,437` à `1 650 ms`, sans warning ni
 erreur console. L'absence du champ auteur laisse inchangé le défaut global du
 runtime ; elle retire seulement l'easing explicite de cette démo.
+
+## Régression de préparation FIRST/LAST avec ancêtre de destination tardif — 2026-09-09
+
+La migration de la découverte globale vers la préparation par occurrence avait
+perdu une capacité déjà couverte par le contrat `move` : lorsqu'un déplacement
+atteint une destination dont un ancêtre n'est pas monté au FIRST mais est monté
+avant le LAST, la boundary de cet ancêtre doit être disponible au moment de la
+construction du graphe. Dans la story 6, `Qa` commence à `1 200 ms`, tandis que
+le cadre de `K` ne commence son transfert qu'à `2 000 ms`. Sans cette boundary,
+le LAST de `Qa` était attaché à la branche statique de `C` et son premier trajet
+partait dans la mauvaise direction. Un seek ultérieur fonctionnait parce que le
+passage à `2 000 ms` avait alors déjà préparé le mouvement de `K`.
+
+La capture rétablit cette sémantique sans revenir à une compilation globale :
+elle résout la scène endpoint déjà nécessaire au FIRST/LAST courant, puis ajoute
+seulement les occurrences `move` futures qui appartiennent à la chaîne
+d'ancêtres de la destination et dont le début tombe strictement dans l'intervalle
+du move courant. Ces occurrences réutilisent leur identité et leur action
+résolue ; la fermeture peut être récursive, mais elle ne lit ni le catalogue
+complet ni le journal pour anticiper des moves sans dépendance. Les intentions
+à temps négatif restent exclues comme dans le regroupement de capture.
+
+Cette correction est une restauration de la feature FIRST/LAST existante, pas une
+nouvelle sémantique auteur. Les moves futurs sans relation avec la destination,
+les occurrences `repeat` non encore résolues et les événements sans `move`
+restent paresseux.
