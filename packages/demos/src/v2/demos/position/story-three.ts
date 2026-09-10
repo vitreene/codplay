@@ -105,7 +105,7 @@ function containerForPathItemPosition(position: PathItemPosition): string {
 /** Creates one path move and records its destination for the next button click. */
 function createStoryThreeMoveData(position: PathItemPosition, path: Path): ReturnType<typeof createPositionMoveData> {
   return {
-    ...createPositionMoveData(containerForPathItemPosition(position), path, 'overlay'),
+    ...createPositionMoveData(containerForPathItemPosition(position), path),
     pathItemPosition: position,
   }
 }

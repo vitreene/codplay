@@ -332,6 +332,35 @@ immutable ; la partition durable complète des groupes reste à valider.
 **Gate :** un événement sans `move` ne provoque aucune lecture géométrique ni
 construction du graphe de positions `move`/`reparent`.
 
+### 3 bis. Réduire le coût de construction du graphe — première passe réalisée
+
+- Construire le graphe dans une représentation de travail mutable, privée à la
+  transaction, sans snapshot intermédiaire par boundary ou par opération.
+- Remplacer les copies complètes de `replaceMotionSegment()` par une mise à jour
+  du track concerné.
+- Finaliser les segments, attachments, keyframes, retargets et collections une
+  seule fois lorsque le graphe devient visible par le système de présentation.
+- Produire la timeline naturelle une seule fois et la transmettre à
+  `HtmlMotionSystem`, sans modifier l'API de `buildMotionGraph()`.
+- Indexer les segments par identifiant dans chaque track de travail ; cet index
+  reste privé et disparaît lors de la finalisation du graphe.
+- Calculer une seule fois par boundary les identifiants directs, la première
+  intention de chaque item, les exclusions `targetReflow: false`, les items
+  modifiés et la portée de composition.
+- Conserver pour cette tranche le format de `MotionGraph.revision`, mais ne le
+  calculer qu'à la finalisation. Le remplacement futur par un identifiant court
+  reste une décision séparée, car il modifierait une donnée interne observée
+  par certains tests.
+
+Cette réécriture ne change ni l'ordre des opérations, ni les règles de
+FIRST/LAST, ni le retarget, ni les resets. Le graphe de travail n'est jamais
+exposé ; l'ancien graphe reste donc présent jusqu'au commit final. Aucun guard
+générique ou fallback défensif n'est ajouté dans le builder.
+
+**Gate :** mêmes frames, poses, représentations, keyframes, retargets et
+barrières de reset avant et après construction ; Play et Seek restent
+identiques sur `position`, Qa/K et `flip-stress`.
+
 ### 4. Finaliser la préparation ciblée et le Seek synchrone — première passe réalisée
 
 - Préparer et capturer le groupe requis dans la même tâche synchrone.
@@ -407,6 +436,29 @@ Sur le même circuit, un Play de `1200 ms` a produit `30` appels
 `getBoundingClientRect`, `31` lectures de style calculé et `242`
 `requestAnimationFrame`. Les mesures géométriques ne progressent donc plus avec
 les frames ordinaires ; le Seek calcule et présente sans frame intermédiaire.
+
+Un profilage complémentaire sous Node/jsdom, avec le `HtmlPlayerRunner` réel,
+sépare `resolvePresentationFrame`, `host.commit` et leur chemin combiné. Sur
+600 échantillons, la story six de `position` (12 items) donne environ
+`0,051 ms` pour la résolution, `0,048–0,051 ms` pour le commit et
+`0,101–0,108 ms` pour le chemin combiné ; `flip-stress` (16 items) donne
+`0,044–0,045 ms`, `0,047–0,048 ms` et `0,085–0,099 ms`. Le proxy heap est
+respectivement d’environ `43 KB` et `51 KB` par résolution sous jsdom, sans
+croissance retenue après GC. Firefox headless terminant par `exit 134` avant le
+chargement direct, le Firefox DevTools MCP relancé a permis une vérification
+navigateur. Sur `1,2 s` de Play après chargement frais, `position` a produit
+`9` lectures `getBoundingClientRect`, `9` lectures de style, `75` RAF,
+`47` ajouts et `9` retraits DOM ; `flip-stress` a produit respectivement
+`72`, `73`, `77`, `61` et `21`. Un Seek à `1500 ms`, puis un Reset à `0`, a
+été exécuté sur `position` et l’instance est restée `ready`. Ces compteurs
+ne remplacent pas une mesure isolée de `resolvePresentationFrame` ou de
+`host.commit`, et ne motivent pas à eux seuls une nouvelle réécriture de cette
+fonction. La différence `9`/`72` n’est pas une comparaison à temps logique
+égal : `position` était à `1190 ms`, avant `exchange-qa` (`1200 ms`), alors que
+`flip-stress` était à `1230 ms`. À `1,5 s`, `position` donne `81` lectures de
+géométrie et `82` de style, contre `78` et `79` pour `flip-stress` à `1520 ms`.
+La hausse correspond à la capture FIRST/LAST et à la fermeture d’ancêtres du
+move structurel nouvellement matérialisé.
 
 ## Relecture de cohérence — 2026-09-08
 
@@ -574,3 +626,18 @@ Cette correction est une restauration de la feature FIRST/LAST existante, pas un
 nouvelle sémantique auteur. Les moves futurs sans relation avec la destination,
 les occurrences `repeat` non encore résolues et les événements sans `move`
 restent paresseux.
+
+## Validation des passes du builder — 2026-09-10
+
+- CodPlay : `94` fichiers, `604` tests passés ; typecheck `packages/codplay`
+  passé.
+- Après l'indexation des segments et la métadonnée par boundary : tests motion
+  ciblés `52/52` passés et typecheck CodPlay passé.
+- `flip-stress-motion.spec.ts` passé.
+- Typecheck éditeur passé et build `@codplay/demos` passé.
+- Un test éditeur sur le rendu d’un path attend `translate(...)` mais reçoit
+  `matrix(...)`. Le même échec est reproduit sur l’état précédent de la branche ;
+  il n’est pas introduit par cette réécriture et reste à traiter séparément.
+
+La validation navigateur complète de `position` et `flip-stress` reste requise
+avant de modifier le statut global du plan.

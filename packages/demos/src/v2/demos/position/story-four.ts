@@ -199,7 +199,6 @@ function createLiveBounceMoveData(
   const move = createPositionMoveData(
     containerFor(targetId),
     prepareQuadraticPositionPath(0.5, controlY),
-    'overlay',
     LIVE_BOUNCE_EASE,
   )
   return { ...move, liveTargetId: targetId }

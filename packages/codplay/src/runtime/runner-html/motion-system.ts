@@ -1,6 +1,4 @@
 import {
-  buildNaturalLayoutTimeline,
-  buildMotionGraph,
   resolveNaturalLayout,
   resolvePresentationFrame,
   type MotionBoundary,
@@ -10,13 +8,14 @@ import {
   type MotionResetTimesByItem,
   type PresentationFrame,
 } from '../motion'
+import { buildMotionGraphPreparation } from '../motion/motion-graph'
 import { HtmlMotionPresentationHost } from './motion-presentation-host'
 
 /** Owns one immutable captured graph and one absolute-time HTML presentation. */
 export class HtmlMotionSystem {
-  private graph: MotionGraph = buildMotionGraph([])
+  private graph: MotionGraph
   private boundaries: readonly MotionBoundary[] = []
-  private naturalLayoutTimeline: NaturalLayoutTimeline = buildNaturalLayoutTimeline([])
+  private naturalLayoutTimeline: NaturalLayoutTimeline
   private resetTimesByItem: MotionResetTimesByItem = new Map()
   private currentFrame: PresentationFrame | undefined
   private initialized = false
@@ -30,6 +29,9 @@ export class HtmlMotionSystem {
     resolveSourceRevision?: (itemId: string) => string | undefined
     boundaries?: readonly MotionBoundary[]
   }>) {
+    const emptyPreparation = buildMotionGraphPreparation([])
+    this.graph = emptyPreparation.graph
+    this.naturalLayoutTimeline = emptyPreparation.naturalLayoutTimeline
     this.host = options.host
     this.resolveSourceRevision = options.resolveSourceRevision
     this.boundaries = options.boundaries ?? []
@@ -120,9 +122,10 @@ export class HtmlMotionSystem {
 
   /** Rebuilds the pure graph from the latest captured boundary data. */
   private rebuild(): void {
-    this.graph = buildMotionGraph(this.boundaries, {
+    const preparation = buildMotionGraphPreparation(this.boundaries, {
       resetTimesByItem: this.resetTimesByItem,
     })
-    this.naturalLayoutTimeline = buildNaturalLayoutTimeline(this.boundaries)
+    this.graph = preparation.graph
+    this.naturalLayoutTimeline = preparation.naturalLayoutTimeline
   }
 }

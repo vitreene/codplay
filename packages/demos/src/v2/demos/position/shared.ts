@@ -28,7 +28,7 @@ export function createPixelPositionStyle(x: number, y: number): Record<string, s
 
 /** Prepares one quadratic trajectory with a single normalized control point. */
 export function prepareQuadraticPositionPath(controlX: number, controlY: number): Path {
-  return preparePath({ control: [controlX, controlY] }, { traversal: 'arc-length' })
+  return preparePath({ control: [controlX, controlY] })
 }
 
 /** Prepares an authored SVG path for transport through a runtime move event. */
@@ -38,34 +38,20 @@ export function prepareAuthoredPositionPath(path: string): Path {
   })
 }
 
-/** Creates the complete move payload shared by all item reparentings. */
+/** Creates the complete reparent move payload shared by the dynamic stories. */
 export function createPositionMoveData(
   target: string,
-  path?: string | Path,
-  presentation: 'local' | 'overlay' = 'local',
+  path: Path,
   ease: string = 'inOutCubic',
 ): CompiledRecord {
-  if (path === undefined) {
-    return {
-      move: {
-        target,
-        ...(presentation === 'overlay' ? { reparent: true } : {}),
-        transition: {
-          duration: POSITION_MOVE_DURATION_MS,
-          ease,
-        },
-      },
-    }
-  }
-
   return {
     move: {
       target,
-      ...(presentation === 'overlay' ? { reparent: true } : {}),
+      reparent: true,
       transition: {
         duration: POSITION_MOVE_DURATION_MS,
         ease,
-        path: typeof path === 'string' ? prepareAuthoredPositionPath(path) : path,
+        path,
       },
     },
   }

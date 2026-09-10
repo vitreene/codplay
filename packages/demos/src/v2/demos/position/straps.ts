@@ -27,8 +27,7 @@ import type { PlannedStrapHelpers, StrapFunction, StrapReturnValue } from 'codpl
 /** Starts one position story through its own story-scoped event circuit. */
 function planSelectedStory(
   storyId: typeof POSITION_VIEW_STORY_IDS[number],
-  planned: Pick<PlannedStrapHelpers, 'wait' | 'repeat'>,
-  state: Readonly<Record<string, unknown>>,
+  planned: Pick<PlannedStrapHelpers, 'wait'>,
 ): StrapReturnValue {
   if (storyId === POSITION_STORY_FOUR_ID) {
     return {
@@ -66,7 +65,7 @@ function planSelectedStory(
       }],
     }
   }
-  return planStoryAnimation(storyId, planned, state)
+  return planStoryAnimation(storyId, planned)
 }
 
 /** Names the scene strap that records the currently visible carousel story. */
@@ -105,7 +104,7 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
               { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
           ],
         },
-          planSelectedStory(POSITION_VIEW_STORY_IDS[next], context.planned, state),
+          planSelectedStory(POSITION_VIEW_STORY_IDS[next], context.planned),
       ]
       return output
     },
@@ -141,7 +140,7 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
               ...(initialize === undefined ? [] : [initialize]),
             ],
           },
-          ...(initialize === undefined ? [planStoryAnimation(storyId, context.planned, state)] : []),
+          ...(initialize === undefined ? [planStoryAnimation(storyId, context.planned)] : []),
         ]
         return output
       }

@@ -1,20 +1,14 @@
 import type { PlannedStrapHelpers, PlannedStrapOccurrence, StrapStep } from 'codplay/runtime/player'
 import {
-  POSITION_STORY_FIVE_ID,
-  POSITION_STORY_FOUR_ID,
   POSITION_STORY_ONE_ID,
-  POSITION_STORY_SIX_ID,
-  POSITION_STORY_THREE_ID,
   POSITION_STORY_TWO_ID,
   type PositionStoryId,
 } from './constants'
 import { POSITION_STORY_ONE_ANIMATION_PLAN } from './story-one'
-import { createStorySixAnimationPlan } from './story-six'
-import { POSITION_STORY_THREE_ANIMATION_PLAN } from './story-three'
 import { POSITION_STORY_TWO_ANIMATION_PLAN } from './story-two'
 import type { StoryAnimationOccurrence } from './types'
 
-type StaticStoryId = Exclude<PositionStoryId, typeof POSITION_STORY_FOUR_ID | typeof POSITION_STORY_FIVE_ID>
+type StaticStoryId = typeof POSITION_STORY_ONE_ID | typeof POSITION_STORY_TWO_ID
 
 /** Returns the eventime plan owned by the selected position story. */
 export function createStoryAnimationPlan(
@@ -23,25 +17,19 @@ export function createStoryAnimationPlan(
   switch (storyId) {
     case POSITION_STORY_ONE_ID: return POSITION_STORY_ONE_ANIMATION_PLAN
     case POSITION_STORY_TWO_ID: return POSITION_STORY_TWO_ANIMATION_PLAN
-    case POSITION_STORY_THREE_ID: return POSITION_STORY_THREE_ANIMATION_PLAN
-    case POSITION_STORY_SIX_ID: return createStorySixAnimationPlan()
   }
 }
 
 /** Anchors the selected story's eventimes to the navigation interaction. */
 export function planStoryAnimation(
   storyId: PositionStoryId,
-  planned: Pick<PlannedStrapHelpers, 'wait' | 'repeat'>,
-  _state: Readonly<Record<string, unknown>>,
+  planned: Pick<PlannedStrapHelpers, 'wait'>,
 ): readonly PlannedStrapOccurrence[] {
   // Stories 3, 4, 5 and 6 start through their story-scoped initialize events.
   // Returning no scene-level occurrences keeps their future state in the
   // story-local circuit and prevents a second timeline from being appended.
-  if (storyId === POSITION_STORY_THREE_ID
-    || storyId === POSITION_STORY_FOUR_ID
-    || storyId === POSITION_STORY_FIVE_ID
-    || storyId === POSITION_STORY_SIX_ID) return []
-  const occurrences = createStoryAnimationPlan(storyId as StaticStoryId).flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
+  if (storyId !== POSITION_STORY_ONE_ID && storyId !== POSITION_STORY_TWO_ID) return []
+  const occurrences = createStoryAnimationPlan(storyId).flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
     event: {
       name: occurrence.name,
       visibility: 'scene',

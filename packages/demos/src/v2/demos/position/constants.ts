@@ -76,12 +76,12 @@ export const VIEW_IDS = [
 
 /** Presentation order of the position stories in the validation carousel. */
 export const POSITION_VIEW_STORY_IDS = [
-  POSITION_STORY_SIX_ID,
-  POSITION_STORY_FOUR_ID,
-  POSITION_STORY_TWO_ID,
   POSITION_STORY_ONE_ID,
+  POSITION_STORY_TWO_ID,
   POSITION_STORY_THREE_ID,
+  POSITION_STORY_FOUR_ID,
   POSITION_STORY_FIVE_ID,
+  POSITION_STORY_SIX_ID,
 ] as const
 
 /** Stable root identity belonging to each story, independent of carousel order. */

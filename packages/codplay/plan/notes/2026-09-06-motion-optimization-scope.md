@@ -140,3 +140,84 @@ Le code interne est l’unique propriétaire de ces structures et le graphe
 intermédiaire n’est pas exposé. Un `Object.freeze()` ou une sérialisation ne
 peuvent donc être maintenus à cet endroit qu’en présence d’une exigence
 contractuelle précise ; sinon ils constituent un coût injustifié à retirer.
+
+## Mise en œuvre de la première passe — 2026-09-10
+
+La réécriture est appliquée dans le builder motion :
+
+- `buildMotionGraphStructure()` conserve un état mutable privé ; il ne crée
+  plus de graphe gelé après chaque boundary ;
+- `replaceMotionSegment()` modifie le track concerné au lieu de recopier tous
+  les tracks ;
+- les attachments, keyframes, retargets et segments sont finalisés une seule
+  fois avant l'exposition du graphe ;
+- `buildMotionGraphPreparation()` partage la `NaturalLayoutTimeline` avec
+  `HtmlMotionSystem`, tandis que `buildMotionGraph()` conserve sa signature ;
+- `MotionGraph.revision` garde son format actuel pour préserver le résultat
+  observable, mais son `JSON.stringify` n'est exécuté qu'une fois par build.
+- Chaque track de travail possède maintenant un index `segmentId` privé, utilisé
+  pour les opérations de retarget et de résolution sans modifier le track
+  public final.
+- Les identifiants directs, la première intention par item, les exclusions
+  `targetReflow: false`, les items modifiés et la portée de boundary sont
+  calculés une seule fois et réutilisés pendant la planification.
+
+Le remplacement de cette révision par un identifiant court est laissé à une
+tranche distincte : il faut d'abord fixer son contrat d'identité. La première
+passe ne modifie pas l'ordre des opérations, la résolution FIRST/LAST, les
+retargets, les resets ou la représentation local/reparent. Les guards de
+validation restent hors du builder chaud.
+
+## Profilage de la présentation sans navigateur — 2026-09-10
+
+Le lancement direct de Firefox headless termine encore par `exit 134` avant
+d’ouvrir la page, y compris sur `about:blank`. Le serveur Firefox DevTools MCP
+relancé fonctionne en revanche et permet la mesure sur la page réellement
+servie par Vite.
+
+Un harness Vitest temporaire a appelé le `HtmlPlayerRunner` et le
+`HtmlMotionSystem` réels sous Node/jsdom. Il a préchauffé le runtime, puis
+mesuré 600 échantillons sur deux exécutions, avec les layouts naturels
+pré-résolus : `resolvePresentationFrame` seul, `host.commit` sur des frames
+préparées et le chemin combiné. Le scénario `position` couvre la story six
+(12 items et 12 segments motion) ; `flip-stress` couvre 16 items et 16
+segments.
+
+| Scénario | Résolution pure | Commit HTML | Chemin combiné | Pression heap pendant 6 000 résolutions |
+| --- | ---: | ---: | ---: | ---: |
+| `position` | 0,051 ms/appel | 0,048–0,051 ms/appel | 0,101–0,108 ms/appel | 258 MB, soit environ 43 KB/appel |
+| `flip-stress` | 0,044–0,045 ms/appel | 0,047–0,048 ms/appel | 0,085–0,099 ms/appel | 307 MB, soit environ 51 KB/appel |
+
+La pression heap est un proxy V8/jsdom, pas une mesure d’allocations
+navigateur ; après `global.gc()`, aucune croissance retenue n’est observée
+dans ces deux passes. La résolution représente donc environ la moitié du coût
+de ce chemin réduit, mais la mesure ne permet pas d’estimer un gain navigateur
+ou un gain de frame complet. Elle ne justifie pas à elle seule une nouvelle
+réécriture de `resolvePresentationFrame`. Le profilage navigateur reste requis
+pour décider d’une optimisation d’allocations ou de `host.commit` ; le
+profilage du builder mesure séparément le coût de construction du graphe.
+
+### Vérification Firefox DevTools MCP — 2026-09-10
+
+Après chargement frais, les compteurs ont été installés après l’initialisation
+de la page, puis relevés sur `1,2 s` de Play avant Pause :
+
+| Scénario | `getBoundingClientRect` | `getComputedStyle` | `requestAnimationFrame` | Ajouts DOM | Retraits DOM |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `position` | 9 | 9 | 75 | 47 | 9 |
+| `flip-stress` | 72 | 73 | 77 | 61 | 21 |
+
+Le temps logique atteint respectivement `1190 ms` et `1230 ms`. Un Seek à
+`1500 ms`, suivi d’un Reset à `0`, a également été exécuté sur `position` ; la
+page est restée dans l’état `ready`. Ces compteurs mesurent les effets du
+runtime et du DOM, pas le coût interne isolé de `resolvePresentationFrame`.
+
+La comparaison initiale `position`/`flip-stress` à `1,2 s` n’était pas à temps
+logique égal : `position` s’arrêtait à `1190 ms`, avant le premier échange de
+contenu à `1200 ms`, tandis que `flip-stress` atteignait `1230 ms` et avait déjà
+matérialisé `exchange-qa`. À `1,5 s`, `position` produit `81`
+`getBoundingClientRect` et `82` lectures de style ; `flip-stress` mesuré à
+`1520 ms` en produit `78` et `79`. Le saut observé vient donc de la frontière
+de l’occurrence `move`, pas d’une différence équivalente entre les deux scènes.
+Cette occurrence structurelle capture plusieurs snapshots FIRST/LAST et leur
+fermeture d’ancêtres, ce qui explique la hausse groupée des lectures.

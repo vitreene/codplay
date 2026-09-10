@@ -49,13 +49,14 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Espace produit un comportement de story : le strap bascule l'état, arrête
   les tweens courants par événement et relance la séquence visuelle de la vue
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
-- L'ordre de validation courant commence par la story 6 ; la story 4 est
-  activée ensuite. Dans la story 2, les deux déplacements d'ancre commencent
-  à `450 ms`, son item est reparenté à `1 350 ms` pendant `2 000 ms`, et sa
-  borne de story arrive à `4 100 ms`. Chaque reparenting d'item utilise cette
-  même durée et un `move` explicite. Les mouvements des vues parcourues ensuite
-  sont ajoutés par le strap de navigation sur le track de la story. La lecture
-  temporelle ne change jamais de vue.
+- L'ordre de validation courant suit l'ordre initial des stories, de la story 1
+  à la story 6. La story 1 est activée par l'événement initial ; les autres
+  stories sont activées par navigation. Dans la story 2, les deux déplacements
+  d'ancre commencent à `450 ms`, son item est reparenté à `1 350 ms` pendant
+  `2 000 ms`, et sa borne de story arrive à `4 100 ms`. Chaque reparenting
+  d'item utilise cette même durée et un `move` explicite. Les mouvements des
+  vues parcourues ensuite sont ajoutés par le strap de navigation sur le track
+  de la story. La lecture temporelle ne change jamais de vue.
 - Chaque plan de story se termine par un eventime ordinaire
   `position:demo:story:end`, positionné à la fin de sa dernière transition.
   Il fixe l'horizon observable utilisé par le seek sans déclencher la borne
@@ -117,7 +118,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - La lecture temporelle seule ne change jamais de vue ; chaque changement
   vient d'une interaction de navigation, et n'expose jamais deux vues du
   carousel simultanément.
-- La vue initiale de validation est la story 6. Lorsque la story 2 est activée,
+- La vue initiale de validation est la story 1. Lorsque la story 2 est activée,
   son `move` d'item commence à `1 350 ms` et se termine à `3 350 ms`.
 - Les six vues montrent réellement les mouvements/reparentings via les actions
   `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
@@ -203,9 +204,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `story-one.ts` à `story-six.ts` portent chacune un `StoryDoc`, et
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
-- Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,
-  story 6 en première position, le move initial de la story 2 à `1 350 ms`, les presets cliquables de la vue 3, quatre rebonds de la vue 4,
-  reparenting imbriqué de la vue 5 et la conclusion `flip-stress` avec quatre
+- Validé par `tests/facade/position-demo.spec.ts` : progression manuelle dans
+  l'ordre story 1 → story 6, le move de la story 2 à `1 350 ms`, les presets
+  cliquables de la vue 3, quatre rebonds de la vue 4, le reparenting imbriqué
+  de la vue 5 et la conclusion `flip-stress` avec quatre
   conteneurs, deux cadres en transfert, deux listes et douze échanges d'items.
 - La conclusion reprend les constantes de mouvement de `flip-stress` :
   conteneurs à `9 350 ms` / `8 150 ms`, cadres à `7 275 ms`, échanges à
@@ -247,11 +249,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   par `storyId`. Le plan transmis par une navigation est donc ciblé par la
   même identité que le document de story, quelle que soit sa position dans le
   carousel.
-- La validation courante place la story 6 en première case, puis la story 4,
-  puis la story 2. La story 5 reste la dernière case afin de conserver les
-  autres positions de lecture.
-  Les plans sont ciblés par l'identité de story ; le plan statique d'une autre
-  story n'est plus exécuté en arrière-plan avant son activation.
+- L'ordre courant revient à la séquence initiale story 1 → story 2 → story 3 →
+  story 4 → story 5 → story 6. Les plans sont ciblés par l'identité de story ;
+  le plan statique d'une autre story n'est pas exécuté en arrière-plan avant son
+  activation.
 - Réexamen navigateur sur l'onglet Safari MCP existant de `5173` : la mesure
   précédente a isolé l'easing auteur comme cause du démarrage sans déplacement
   horizontal. La correction conserve le même move, la même durée et le même
@@ -415,9 +416,9 @@ replay, resize, persistence et lifecycle.
 ### Reprise d’intégration — 2026-09-09 — saut de Q vers B à l’endpoint
 
 - Le second bug confirmé concerne la story 6 : entre `t=9 180` et `t=9 300`,
-  Q rejoint B et sautait de position aussi bien au Play qu’au Seek. La story 6
-  est désormais la première lecture de la démo afin que cette reproduction
-  commence directement sur son premier Play.
+  Q rejoint B et sautait de position aussi bien au Play qu’au Seek. Une
+  configuration temporaire a placé la story 6 en première lecture pour isoler
+  cette reproduction ; l'ordre courant reste celui des six stories.
 - La cause n’était pas une simple différence de taille de l’overlay. Lors des
   frontières de reflow du contenu de B, le graphe comparait `before` à un
   `after` capturé à l’endpoint. Comme B poursuivait son propre mouvement dans
@@ -441,16 +442,17 @@ Le statut reste `En cours` : le correctif est implémenté, testé sur le runtim
 réel et documenté, mais la matrice complète Play, Seek, replay, resize,
 persistence et lifecycle reste ouverte.
 
-### Reprise d'intégration — 2026-09-09 — première lecture de la démo 06
+### Reprise d'intégration — 2026-09-09 — première lecture temporaire de la démo 06
 
 - Correction de numérotation : la démo concernée par le bug de premier Play est
   la story 6, et non la story 5.
-- `POSITION_VIEW_STORY_IDS` commence maintenant par
-  `position-story-six`, puis conserve l'ordre des autres cases (`4, 2, 1, 3,
-  5`).
-- `POSITION_INITIAL_EVENTS` émet directement l'entrée et l'initialisation de
-  la story 6. Le premier écran est donc la démo 06 dès `t=0`, sans navigation
-  préalable ; la story 5 reste testable directement par son parcours dédié.
+- Une configuration de validation temporaire a placé
+  `position-story-six` en première case et a ajouté son initialisation dans
+  `POSITION_INITIAL_EVENTS`. Elle a servi à reproduire le premier Play sans
+  navigation préalable.
+- Cette configuration a été retirée : l'ordre courant est story 1 → story 6 et
+  `POSITION_INITIAL_EVENTS` n'active que l'entrée de la story 1. La story 6
+  reste accessible par le cinquième déplacement vers la droite.
 - Safari MCP sur une navigation fraîche de `5173` confirme `01 / 06`, le
   caption `06` et la story 6 visible à `0 ms`. Le premier Play est lancé sur
   cet état, sans seek ni navigation préalable ; le passage observé place
@@ -562,3 +564,38 @@ démos passent. Dans Safari MCP, une navigation fraîche sur `5173`, puis deux
 clics successifs sur `droit` et `quadratique`, active bien les boutons et
 présente l’item dans le circuit d’overlay vers les outlets opposés. La console
 ne contient ni warning ni erreur.
+
+### Nettoyage de la démo — 2026-09-10
+
+- Suppression des règles CSS héritées sans markup (`position-live-stage`, ses
+  décorations et les variantes d’ancre `source`/`target`).
+- `createPositionMoveData` ne porte plus de branche locale ni de conversion de
+  path non utilisée : ses deux consommateurs fournissent déjà un `Path` et
+  demandent toujours `reparent: true`.
+- La préparation quadratique utilise le défaut ACE `arc-length` sans recopier
+  une option d’intégration dans la démo.
+- `story-animation` ne référence plus les plans locaux des stories 3 et 6 ;
+  celles-ci démarrent exclusivement par leur événement d’initialisation.
+
+Validation : typecheck V2 des démos, build des démos, façade position/story 6
+(`16` tests) et suite CodPlay (`94` fichiers, `604` tests) passent.
+
+### Restauration de l'ordre initial — 2026-09-10
+
+- `POSITION_VIEW_STORY_IDS` reprend l'ordre story 1 → story 2 → story 3 →
+  story 4 → story 5 → story 6.
+- `POSITION_INITIAL_EVENTS` active uniquement l'entrée de la story 1. Aucune
+  initialisation ni aucun graphe de la story 6 n'est construit avant sa
+  présentation.
+- Les tests de parcours ont été réalignés sur cet ordre. La conclusion n'est
+  donc calculée qu'une fois, lors de l'accès à la story 6, au lieu d'être
+  préparée une seconde fois au chargement.
+
+### Correction de visibilité des paths — 2026-09-10
+
+- Les sélecteurs CSS des paths actifs exigent désormais la classe
+  `.position-view--visible`. Un path d'une story masquée ne peut plus rétablir
+  `visibility: visible` sur son propre élément et apparaître au-dessus du
+  carousel.
+- La vérification Firefox confirme les quatre paths masqués après la sortie de
+  la story 3 et le path sélectionné seul visible pendant sa présentation.
