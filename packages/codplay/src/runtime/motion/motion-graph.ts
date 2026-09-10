@@ -6,6 +6,7 @@ import {
   deriveRelativeMotionPose,
   extrapolateMotionPoseAtProgress,
   interpolateMotionPose,
+  resizeMotionPose,
   sameRelativeMotionPose,
 } from './motion-pose'
 import type {
@@ -395,6 +396,7 @@ function buildMotionGraphStructure(
           ease: timing.ease,
         }),
         presentationMode: isReparented(before, after) ? 'reparent' : (directIntent?.presentationMode ?? 'local'),
+        ...(directIntent?.resize === undefined ? {} : { resize: directIntent.resize }),
         // A compiled HTML style transition is materialized on the source node
         // by the style service. It is nevertheless kept in the graph so that
         // descendants can compose against its current pose.
@@ -573,6 +575,9 @@ export function resolvePresentationFrame(
       ...(motionRoot?.motionRootKey === undefined ? {} : { motionRootKey: motionRoot.motionRootKey }),
       ...(motionRoot?.motionRootPose === undefined ? {} : { motionRootPose: motionRoot.motionRootPose }),
       ...(overlayStacking === undefined ? {} : { overlayStacking }),
+      ...(segment?.resize === undefined ? {} : { resize: segment.resize }),
+      ...(segment?.targetReflow !== true ? {} : { targetReflow: true }),
+      ...(segment?.direct !== true ? {} : { direct: true }),
       pose,
       representation: segment === undefined
         ? 'source'
@@ -735,6 +740,9 @@ function resolveMotionItem(
     targetId: base.targetId,
     targetOrder: base.targetOrder,
     ...(overlayStacking === undefined ? {} : { overlayStacking }),
+    ...(segment?.resize === undefined ? {} : { resize: segment.resize }),
+    ...(segment?.targetReflow !== true ? {} : { targetReflow: true }),
+    ...(segment?.direct !== true ? {} : { direct: true }),
     pose,
     representation: segment === undefined
       ? 'source'
@@ -798,7 +806,12 @@ function resolveMotionPose(
       resolveParent,
       false,
     )
-    return interpolateMotionPose(from, to, keyframeInterval.progress, segment.path)
+    return applyMotionResize(
+      interpolateMotionPose(from, to, keyframeInterval.progress, segment.path),
+      segment.resize,
+      keyframeInterval.to,
+      resolveParent,
+    )
   }
 
   const from = resolveAttachment(retarget?.from ?? segment.from, layout, itemId, resolveParent, false)
@@ -809,7 +822,60 @@ function resolveMotionPose(
     resolveParent,
     !segment.materializerOwned && !segment.targetReflow,
   )
-  return interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path)
+  return applyMotionResize(
+    interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path),
+    segment.resize,
+    retarget?.to ?? segment.to,
+    resolveParent,
+  )
+}
+
+/** Applies item sizing without measuring the DOM during frame resolution. */
+function applyMotionResize(
+  pose: HtmlPose,
+  resize: MotionSegment['resize'],
+  destination: MotionAttachment,
+  resolveParent: (parentItemId: string | undefined, context?: ReadonlyMap<string, LayoutItemSnapshot>) => HtmlPose | undefined,
+): HtmlPose {
+  if (resize === undefined) return pose
+  const needsContainer = resize.width === 'container' || resize.height === 'container'
+  const parent = !needsContainer || destination.parentItemId === undefined
+    ? undefined
+    : resolveParent(destination.parentItemId, destination.context)
+  const parentNatural = !needsContainer || destination.parentItemId === undefined
+    ? undefined
+    : destination.context?.get(destination.parentItemId)
+  const width = resolveMotionResizeAxis(
+    resize.width,
+    pose.localWidth,
+    destination.localPose.width,
+    parent?.localWidth,
+    parentNatural?.localPose.width,
+  )
+  const height = resolveMotionResizeAxis(
+    resize.height,
+    pose.localHeight,
+    destination.localPose.height,
+    parent?.localHeight,
+    parentNatural?.localPose.height,
+  )
+  if (width === pose.localWidth && height === pose.localHeight) return pose
+  return resizeMotionPose(pose, width, height)
+}
+
+/** Resolves one size axis from the captured destination and current parent. */
+function resolveMotionResizeAxis(
+  policy: 'auto' | 'preserve' | 'container' | undefined,
+  current: number,
+  destination: number,
+  parentCurrent: number | undefined,
+  parentNatural: number | undefined,
+): number {
+  // Preserve reserves the materialized slot in the HTML host. The visual
+  // pose continues to use the measured FIRST/LAST interpolation.
+  if (policy === 'preserve') return current
+  if (policy !== 'container' || parentCurrent === undefined || parentNatural === undefined) return current
+  return Math.max(0, parentCurrent - Math.max(0, parentNatural - destination))
 }
 
 /** Resolves a retarget parent at the boundary instead of at the mover endpoint. */
@@ -1472,6 +1538,7 @@ function createGraphRevision(
       delay: segment.delay,
       ease: segment.ease,
       presentationMode: segment.presentationMode,
+      resize: segment.resize,
       targetReflow: segment.targetReflow,
       direct: segment.direct,
       eventSeq: segment.eventSeq,

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { HtmlMotionPresentationHost } from '../../../src/runtime/runner-html'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 import { createMotionRootPose } from '../../../src/runtime/motion'
-import type { ItemPresentation, PresentationFrame } from '../../../src/runtime/motion'
+import type { ItemPresentation, LayoutSnapshot, PresentationFrame } from '../../../src/runtime/motion'
 
 const IDENTITY: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
@@ -26,6 +26,61 @@ function findTestGhost(root: Element, index = 0): HTMLElement | undefined {
 }
 
 describe('HtmlMotionPresentationHost overlay resources', () => {
+  it('reserves a preserved destination dimension and restores it at the segment end', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const frame = createFrame([{
+      ...createItem('item'),
+      activeSegmentId: 'item:segment',
+      resize: { height: 'preserve' },
+    }])
+    const natural = createNaturalLayout(30, 40)
+
+    host.commit(frame, undefined, natural)
+    expect(source.style.minHeight).toBe('40px')
+
+    host.commit({
+      ...frame,
+      timeMs: 100,
+      items: new Map([['item', {
+        ...frame.items.get('item')!,
+        progress: 1,
+        representation: 'source',
+        activeSegmentId: undefined,
+        resize: undefined,
+      }]]),
+    }, undefined, natural)
+    expect(source.style.minHeight).toBe('')
+    host.destroy()
+    root.remove()
+  })
+
+  it('lets a reflowed local container keep its CSS position while its size changes', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('section')
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const natural = createNaturalLayout(20, 20)
+    host.commit(createFrame([{
+      ...createItem('item'),
+      representation: 'local',
+      targetReflow: true,
+      pose: createPose(40),
+    }]), undefined, natural)
+
+    expect(source.style.width).toBe('20px')
+    expect(source.style.transform).toBe('')
+
+    host.destroy()
+    root.remove()
+  })
+
   it('reuses a stable overlay node across presentation frames', () => {
     const root = document.createElement('main')
     const source = document.createElement('article')
@@ -817,6 +872,21 @@ function createPose(x: number): HtmlPose {
     localHeight: 20,
     frameWidth: 20,
     frameHeight: 20,
+  }
+}
+
+/** Creates one natural layout containing the destination dimensions. */
+function createNaturalLayout(width: number, height: number): LayoutSnapshot {
+  return {
+    timeMs: 0,
+    revision: 'natural',
+    items: new Map([['item', {
+      itemId: 'item',
+      targetId: 'root',
+      targetOrder: 0,
+      localPose: { origin: [0, 0], layoutOrigin: [0, 0], matrix: IDENTITY, width, height },
+      rootPose: { ...createPose(0), localWidth: width, localHeight: height, frameWidth: width, frameHeight: height },
+    }]]),
   }
 }
 

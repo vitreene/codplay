@@ -30,7 +30,7 @@ export function createNestedFlipScene(): SceneDoc {
 						initial: {
 							move: { target: 'nested-source-panel' },
 							markup:
-								'<section class="flip-box flip-box--source nested-flip-stage"><span class="flip-box__tag">CONTENEUR SOURCE</span><h2>ÉTAT FIRST</h2><div class="flip-box__outlet nested-flip-stage__outlet" data-part="source-outlet"></div></section>',
+								'<section class="flip-box flip-box--source"><span class="flip-box__tag">CONTENEUR SOURCE</span><h2>ÉTAT FIRST</h2><div class="flip-box__outlet" data-part="source-outlet"></div></section>',
 						},
 						actions: {},
 					},
@@ -40,7 +40,7 @@ export function createNestedFlipScene(): SceneDoc {
 						initial: {
 							move: { target: 'nested-target-panel' },
 							markup:
-								'<section class="flip-box flip-box--target nested-flip-stage"><span class="flip-box__tag">CONTENEUR CIBLE</span><h2>ÉTAT LAST</h2><div class="flip-box__outlet" data-part="target-outlet"></div></section>',
+								'<section class="flip-box flip-box--target"><span class="flip-box__tag">CONTENEUR CIBLE</span><h2>ÉTAT LAST</h2><div class="flip-box__outlet" data-part="target-outlet"></div></section>',
 						},
 						actions: {},
 					},
@@ -67,6 +67,7 @@ export function createNestedFlipScene(): SceneDoc {
 								move: {
 									target: 'nested-target-list',
 									mode: 'first',
+									resize: { height: 'preserve' },
 									transition: { duration: MOVE_DURATION_MS, ease: 'linear' },
 								},
 							},

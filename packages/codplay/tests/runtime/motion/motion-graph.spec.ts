@@ -29,6 +29,21 @@ type ItemDefinition = Readonly<{
 }>
 
 describe('motion graph', () => {
+  it('carries an item resize policy to the active presentation frame', () => {
+    const before = snapshot(0, [itemWithSize('item', 'root', 0, 20, 20)])
+    const after = snapshot(100, [itemWithSize('item', 'root', 100, 30, 40)])
+    const graph = buildMotionGraph([
+      boundary('resize', 0, before, after, [{
+        ...intent('item', 0, 100),
+        resize: { height: 'preserve' },
+      }]),
+    ])
+
+    const presentation = resolvePresentationFrame(graph, after, 50).items.get('item')
+    expect(presentation?.resize).toEqual({ height: 'preserve' })
+    expect(presentation?.pose.localHeight).toBeCloseTo(30)
+  })
+
   it('keeps pre-reset motion available before the boundary and drops it after reset', () => {
     const before = snapshot(0, [item('item', 'root', 0)])
     const after = snapshot(100, [item('item', 'root', 100)])

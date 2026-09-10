@@ -22,6 +22,7 @@ type StyleDeclarationLike = {
 
 /** The authored properties temporarily replaced by a local motion pose. */
 const LOCAL_SIZE_PROPERTIES = ['width', 'height'] as const
+const PRESERVED_SIZE_PROPERTIES = ['min-width', 'min-height'] as const
 const LOCAL_TRANSFORM_PROPERTIES = ['transition', 'transform-origin', 'translate', 'rotate', 'scale', 'transform'] as const
 const HIDDEN_PROPERTIES = ['visibility'] as const
 
@@ -37,6 +38,8 @@ const installedSeekStyles = new WeakSet<Document>()
 /** Host-owned transient contribution layer for local poses and overlay visibility. */
 export type HtmlMotionStyleLayer = Readonly<{
   applyLocalSize: (node: HTMLElement, width: number, height: number) => void
+  applyPreservedSize: (node: HTMLElement, width?: number, height?: number) => void
+  clearPreservedSize: (node: HTMLElement) => void
   applyLocalTransform: (node: HTMLElement, matrix: HtmlMatrix) => void
   clearLocal: (node: HTMLElement) => void
   applyHidden: (node: HTMLElement) => void
@@ -56,11 +59,19 @@ export function createHtmlMotionStyleLayer(root: Element): HtmlMotionStyleLayer 
 /** Creates the inline layer used by browser hosts and lightweight DOM doubles alike. */
 function createInlineLayer(): HtmlMotionStyleLayer {
   const localContributions = new WeakMap<HTMLElement, InlineContributionMap>()
+  const preservedContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   const hiddenContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   return {
     applyLocalSize: (node, width, height) => {
       applyInlineContribution(node, 'width', `${width}px`, localContributions)
       applyInlineContribution(node, 'height', `${height}px`, localContributions)
+    },
+    applyPreservedSize: (node, width, height) => {
+      if (width !== undefined) applyInlineContribution(node, 'min-width', `${width}px`, preservedContributions)
+      if (height !== undefined) applyInlineContribution(node, 'min-height', `${height}px`, preservedContributions)
+    },
+    clearPreservedSize: (node) => {
+      clearInlineContributions(node, PRESERVED_SIZE_PROPERTIES, preservedContributions)
     },
     applyLocalTransform: (node, matrix) => {
       applyInlineContribution(node, 'transition', 'none', localContributions)
@@ -76,10 +87,11 @@ function createInlineLayer(): HtmlMotionStyleLayer {
     },
     applyHidden: (node) => applyInlineContribution(node, 'visibility', 'hidden', hiddenContributions),
     clearHidden: (node) => clearInlineContributions(node, HIDDEN_PROPERTIES, hiddenContributions),
-    captureTemplate: (node) => captureInlineTemplate(node, localContributions, hiddenContributions),
+    captureTemplate: (node) => captureInlineTemplate(node, localContributions, preservedContributions, hiddenContributions),
     syncTemplate: (source, target) => syncInlineTemplate(source, target, (sourceNode, targetNode) => {
       if (!(sourceNode instanceof HTMLElement) || !(targetNode instanceof HTMLElement)) return
       restoreTemplateContributions(sourceNode, targetNode, localContributions)
+      restoreTemplateContributions(sourceNode, targetNode, preservedContributions)
       restoreTemplateContributions(sourceNode, targetNode, hiddenContributions)
     }),
   }
@@ -89,11 +101,13 @@ function createInlineLayer(): HtmlMotionStyleLayer {
 function captureInlineTemplate(
   node: HTMLElement,
   localContributions: WeakMap<HTMLElement, InlineContributionMap>,
+  preservedContributions: WeakMap<HTMLElement, InlineContributionMap>,
   hiddenContributions: WeakMap<HTMLElement, InlineContributionMap>,
 ): HTMLElement {
   const clone = node.cloneNode(true) as HTMLElement
   restoreTemplateTree(node, clone, (source, target) => {
     restoreTemplateContributions(source, target, localContributions)
+    restoreTemplateContributions(source, target, preservedContributions)
     restoreTemplateContributions(source, target, hiddenContributions)
   })
   return clone

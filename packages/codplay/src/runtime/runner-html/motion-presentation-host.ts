@@ -55,6 +55,11 @@ export class HtmlMotionPresentationHost {
     height: number
   }>>()
   private readonly localTransforms = new Map<string, LocalTransformResource>()
+  private readonly preservedSizes = new Map<string, Readonly<{
+    target: HTMLElement
+    width?: number
+    height?: number
+  }>>()
   private readonly hiddenDescendantClones = new Set<HTMLElement>()
   private hiddenDescendantKey = ''
   private readonly motionRoots = new Map<MotionRootToken, MotionRootState>()
@@ -94,6 +99,8 @@ export class HtmlMotionPresentationHost {
     this.localTargets.clear()
     this.localSizes.clear()
     this.localTransforms.clear()
+    for (const preserved of this.preservedSizes.values()) this.transientStyles.clearPreservedSize(preserved.target)
+    this.preservedSizes.clear()
     for (const state of this.motionRoots.values()) state.overlayOrder = []
     this.clearElementPathCache()
   }
@@ -126,6 +133,11 @@ export class HtmlMotionPresentationHost {
         this.localTargets.delete(itemId)
         this.localSizes.delete(itemId)
         this.localTransforms.delete(itemId)
+        const preserved = this.preservedSizes.get(itemId)
+        if (preserved !== undefined) {
+          this.transientStyles.clearPreservedSize(preserved.target)
+          this.preservedSizes.delete(itemId)
+        }
       }
       for (const state of this.motionRoots.values()) {
         const overlayOrder = state.overlayOrder.filter((itemId) => !itemIds.has(itemId))
@@ -232,6 +244,7 @@ export class HtmlMotionPresentationHost {
     const localParentInverses = new Map<string, HtmlMatrix>()
     const localParentPoses = new Map<string, HtmlPose>()
     for (const itemId of orderedLocalItemIds) this.prepareLocal(itemId, frame, directOverlayItemIds, naturalLayout)
+    this.syncPreservedSizes(frame, directOverlayItemIds, naturalLayout)
     for (const itemId of orderedLocalItemIds) this.applyLocal(
       itemId,
       frame,
@@ -251,6 +264,64 @@ export class HtmlMotionPresentationHost {
       applyGhostPose(resource, rootPose, overlayInverse, worldPose)
     }
     this.showOverlayResources(activeItemIds)
+  }
+
+  /** Reserves natural destination dimensions for active preserve policies. */
+  private syncPreservedSizes(
+    frame: PresentationFrame,
+    directOverlayItemIds: ReadonlySet<string>,
+    naturalLayout?: LayoutSnapshot,
+  ): void {
+    for (const [itemId, current] of this.preservedSizes) {
+      const next = this.resolvePreservedSize(frame.items.get(itemId), frame, directOverlayItemIds, naturalLayout)
+      if (next === undefined) {
+        this.transientStyles.clearPreservedSize(current.target)
+        this.preservedSizes.delete(itemId)
+        continue
+      }
+      if (next.target === current.target
+        && next.width === current.width
+        && next.height === current.height) continue
+      this.transientStyles.clearPreservedSize(current.target)
+      this.transientStyles.applyPreservedSize(next.target, next.width, next.height)
+      this.preservedSizes.set(itemId, next)
+    }
+
+    for (const item of frame.items.values()) {
+      if (this.preservedSizes.has(item.itemId)) continue
+      const next = this.resolvePreservedSize(item, frame, directOverlayItemIds, naturalLayout)
+      if (next === undefined) continue
+      const itemId = item.itemId
+      this.transientStyles.applyPreservedSize(next.target, next.width, next.height)
+      this.preservedSizes.set(itemId, next)
+    }
+  }
+
+  /** Resolves one active preserve reservation from captured natural dimensions. */
+  private resolvePreservedSize(
+    item: ItemPresentation | undefined,
+    frame: PresentationFrame,
+    directOverlayItemIds: ReadonlySet<string>,
+    naturalLayout?: LayoutSnapshot,
+  ): Readonly<{ target: HTMLElement; width?: number; height?: number }> | undefined {
+    if (item === undefined || item.resize === undefined) return undefined
+    // Keep the reservation on the final active frame. The segment is absent
+    // on the following frame, when natural CSS layout can be restored without
+    // moving the already materialized target.
+    if (item.progress >= 1 && item.activeSegmentId === undefined) return undefined
+    const naturalItem = naturalLayout?.items.get(item.itemId)
+    const width = item.resize.width === 'preserve'
+      ? naturalItem?.localPose.width ?? item.pose.localWidth
+      : undefined
+    const height = item.resize.height === 'preserve'
+      ? naturalItem?.localPose.height ?? item.pose.localHeight
+      : undefined
+    if (width === undefined && height === undefined) return undefined
+    const target = item.representation === 'reparent' && directOverlayItemIds.has(item.itemId)
+      ? this.resources.get(item.itemId)?.source
+      : this.resolveLocalTarget(item.itemId, frame, directOverlayItemIds, naturalLayout)
+    if (target === undefined) return undefined
+    return { target, ...(width === undefined ? {} : { width }), ...(height === undefined ? {} : { height }) }
   }
 
   /** Releases every overlay resource and restores all materialized sources. */
@@ -326,6 +397,18 @@ export class HtmlMotionPresentationHost {
     // Subtract only the untransformed layout slot captured for this item;
     // subtracting localPose.origin would apply the authored transform twice.
     const naturalLayoutOrigin: readonly [number, number] = naturalItem?.localPose.layoutOrigin ?? [0, 0]
+    if (item.targetReflow === true && item.direct !== true) {
+      // A reflowed container keeps its CSS position. Its interpolated size is
+      // already applied above, so the authored layout can resolve its
+      // corresponding position without a second FLIP translation.
+      const previous = this.localTransforms.get(itemId)
+      if (previous !== undefined) {
+        this.transientStyles.clearLocal(previous.target)
+        this.localTransforms.delete(itemId)
+        this.transientStyles.applyLocalSize(target, item.pose.localWidth, item.pose.localHeight)
+      }
+      return
+    }
     const matrix = resolveLocalPresentationMatrix(naturalLayoutOrigin, worldPose, parentInverse)
     const previous = this.localTransforms.get(itemId)
     if (previous?.target === target && sameHtmlMatrix(previous.matrix, matrix)) return

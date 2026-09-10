@@ -79,7 +79,7 @@ composants ; la validation de disponibilite reste au runtime engine. Cette
 tranche ne reintroduit pas le melange V1 entre declaration `install(host)` et
 instance runtime.
 
-Le contrat de coordination FLIP V2 est specifie dans
-`../flip-list-coordination-plan.md`. La mesure et la projection restent dans le
-runner/materializer ; aucun hook `beforeUpdate` DOM ni circuit de demo n'est
-ajoute au module list.
+Le contrat d’interpolation dimensionnelle de `list` est suivi dans
+`../list-dimension-interpolation-plan.md`. La mesure et la projection restent
+dans le runner/materializer ; aucun hook `beforeUpdate` DOM ni circuit de démo
+n’est ajouté au module list.

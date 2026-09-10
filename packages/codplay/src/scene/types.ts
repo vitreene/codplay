@@ -43,12 +43,19 @@ export type MoveTransition = Readonly<{
   path?: string
 }>
 
+/** Per-axis item sizing policy applied while a move is presented. */
+export type MoveResize = Readonly<{
+  width?: 'auto' | 'preserve' | 'container'
+  height?: 'auto' | 'preserve' | 'container'
+}>
+
 /** Author placement shared by initial profiles and action patches. */
 export type MoveObject = Readonly<{
   target: string
   mode?: MoveOrderMode
   reparent?: boolean
   reorder?: boolean
+  resize?: MoveResize
   transition?: MoveTransition
 }>
 

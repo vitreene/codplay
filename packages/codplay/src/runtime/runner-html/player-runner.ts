@@ -578,8 +578,7 @@ export class HtmlPlayerRunner {
             resolveActiveMotionEndAt: (itemId, startAt) => this.motionSystem?.resolveActiveMotionEndAt(itemId, startAt),
             resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
           }))
-        : []
-
+          : []
       if (replayNeedsCapture) {
         this.replayMotionBoundaries = mergeMotionBoundaries(
           this.replayMotionBoundaries,

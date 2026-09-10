@@ -17,6 +17,7 @@ export {
   decomposeRootMotionPose,
   deriveRelativeMotionPose,
   interpolateMotionPose,
+  resizeMotionPose,
   sameRelativeMotionPose,
 } from './motion-pose'
 export {
@@ -39,6 +40,8 @@ export type {
   MotionIntent,
   MotionKeyframe,
   MotionPresentationMode,
+  MotionResizeAxis,
+  MotionResizePolicy,
   MotionSegment,
   OverlayStackingContext,
   PresentationFrame,

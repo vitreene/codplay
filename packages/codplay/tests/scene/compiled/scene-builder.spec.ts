@@ -322,6 +322,19 @@ describe('SceneBuilder', () => {
     }])
   })
 
+  it('keeps the optional move resize policy in the compiled author payload', () => {
+    const compiled = compileMovePath({
+      move: { target: '@root', resize: { width: 'auto', height: 'preserve' } },
+    }, 'resize.move')
+
+    expect(compiled).toEqual({
+      move: { target: '@root', resize: { width: 'auto', height: 'preserve' } },
+    })
+    expect(() => compileMovePath({
+      move: { target: '@root', resize: { height: 'invalid' } },
+    }, 'resize.invalid')).toThrow('resize.invalid.move.resize.height')
+  })
+
   it('builds representative demo scenes with requirements, roots, and resources', () => {
     const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), {
       createdAt: '2026-07-31T00:00:00.000Z',

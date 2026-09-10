@@ -7,6 +7,15 @@ export type { MovePathAnchor } from '../config/move'
 /** Host presentation selected after one structural movement is classified. */
 export type MotionPresentationMode = 'local' | 'reparent'
 
+/** Per-axis item sizing policy carried from an authored move. */
+export type MotionResizeAxis = 'auto' | 'preserve' | 'container'
+
+/** Normalized sizing policy used by the motion graph and HTML host. */
+export type MotionResizePolicy = Readonly<{
+  width?: MotionResizeAxis
+  height?: MotionResizeAxis
+}>
+
 /** One pose expressed in the affine coordinate system of an attachment parent. */
 export type RelativeMotionPose = Readonly<{
   origin: readonly [number, number]
@@ -54,6 +63,7 @@ export type MotionIntent = Readonly<{
   delay?: number
   ease: string
   presentationMode: MotionPresentationMode
+  resize?: MotionResizePolicy
   path?: Path
   /** Whether this intent changes the target layout and may reflow its siblings. */
   targetReflow?: boolean
@@ -117,6 +127,7 @@ export type MotionSegment = Readonly<{
   delay: number
   ease: string
   presentationMode: MotionPresentationMode
+  resize?: MotionResizePolicy
   path?: Path
   /** The segment owns a structural destination and must use its LAST pose. */
   targetReflow: boolean
@@ -193,6 +204,11 @@ export type ItemPresentation = Readonly<{
   motionRootPose?: HtmlPose
   /** Extra endpoint relation used by the reparent overlay stacking graph. */
   overlayStacking?: OverlayStackingContext
+  resize?: MotionResizePolicy
+  /** True when this item is the container reflow participant of a move. */
+  targetReflow?: boolean
+  /** True when the segment comes from the item's own move declaration. */
+  direct?: boolean
   pose: HtmlPose
   representation: 'source' | MotionPresentationMode
   activeSegmentId?: string

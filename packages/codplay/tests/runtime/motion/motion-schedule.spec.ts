@@ -102,6 +102,36 @@ describe('compileMotionSchedule', () => {
     expect(schedule.every((intent) => intent.presentationMode === 'reparent')).toBe(true)
   })
 
+  it('propagates the optional per-axis resize policy to the schedule', () => {
+    const base = compiledScene()
+    const story = base.scene.stories.main!
+    const schedule = compileMotionSchedule({
+      ...base,
+      scene: {
+        ...base.scene,
+        stories: {
+          main: {
+            ...story,
+            persos: [{
+              ...story.persos[0]!,
+              actions: {
+                move: {
+                  move: {
+                    target: 'target',
+                    resize: { width: 'container', height: 'preserve' },
+                    transition: { duration: 100 },
+                  },
+                },
+              },
+            }],
+          },
+        },
+      },
+    })
+
+    expect(schedule[0]?.resize).toEqual({ width: 'container', height: 'preserve' })
+  })
+
   it('can exclude persist-only runtime moves from the current playback schedule', () => {
     const base = compiledScene()
     const runtimeScene: CompiledScene = {

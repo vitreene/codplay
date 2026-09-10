@@ -559,6 +559,7 @@ function toMotionIntent(intent: ScheduledMotionIntent): MotionIntent {
     delay: intent.delay,
     ease: intent.ease,
     presentationMode: intent.presentationMode,
+    ...(intent.resize === undefined ? {} : { resize: intent.resize }),
     targetReflow: intent.targetReflow,
     ...(intent.path === undefined ? {} : { path: intent.path }),
   })

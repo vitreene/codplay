@@ -2,7 +2,7 @@ import { isPreparedPath, type Path } from 'ace'
 import { compareNumberPaths, isPlainRecord } from '../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../scene/compiled'
 import type { RuntimeTrackEvent, RuntimeTrackJournal } from '../player/pipeline/track-journal'
-import type { MotionPresentationMode } from './types'
+import type { MotionPresentationMode, MotionResizePolicy } from './types'
 
 /** One immutable direct movement scheduled by the compiled scene. */
 export type ScheduledMotionIntent = Readonly<{
@@ -20,6 +20,7 @@ export type ScheduledMotionIntent = Readonly<{
   endAt: number
   ease: string
   presentationMode: MotionPresentationMode
+  resize?: MotionResizePolicy
   path?: Path
   /** Whether this movement may create target-sibling reflow segments. */
   targetReflow: boolean
@@ -33,6 +34,7 @@ export type MotionScheduleTransition = Readonly<{
   delay?: number
   ease?: string
   reparent?: boolean
+  resize?: MotionResizePolicy
   path?: Path
   /** Move transitions reflow their source/target lists; pose transitions do not by default. */
   targetReflow?: boolean
@@ -174,6 +176,7 @@ function createMotionIntent(input: Readonly<{
     delay?: number
     ease?: string
     reparent?: boolean
+    resize?: MotionResizePolicy
     path?: Path
     targetReflow?: boolean
     captureOffsetsMs?: readonly number[]
@@ -198,6 +201,7 @@ function createMotionIntent(input: Readonly<{
     endAt: input.startAt + endOffsetMs,
     ease: input.transition.ease ?? 'out(2)',
     presentationMode: resolvePresentationMode(input.transition.reparent),
+    ...(input.transition.resize === undefined ? {} : { resize: input.transition.resize }),
     targetReflow: input.transition.targetReflow ?? false,
     ...(captureOffsetsMs.length === 0 ? {} : {
       keyTimes: Object.freeze(captureOffsetsMs.map((offset) => input.startAt + offset)),
@@ -223,6 +227,7 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   delay?: number
   ease: string
   reparent?: boolean
+  resize?: MotionResizePolicy
   path?: Path
   targetReflow: boolean
   captureOffsetsMs: readonly number[]
@@ -242,17 +247,40 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   }
   if (Object.prototype.hasOwnProperty.call(transition, 'traversal')) return undefined
   if (Object.prototype.hasOwnProperty.call(transition, 'pathAnchor')) return undefined
+  const resize = readMoveResize(move.resize)
   return Object.freeze({
     duration: transition.duration,
     ...(transition.delay === undefined ? {} : { delay: readNonNegativeNumber(transition.delay, 'Move transition delay') }),
     ease: (transition.ease as string | undefined) ?? 'out(2)',
     ...(move.reparent === undefined ? {} : { reparent: move.reparent }),
+    ...(resize === undefined ? {} : { resize }),
     targetReflow: true,
     captureOffsetsMs: Object.freeze([
       transition.duration + (transition.delay === undefined ? 0 : transition.delay as number),
     ]),
     ...(transition.path === undefined ? {} : { path: transition.path as Path }),
   })
+}
+
+/** Reads one compiler-validated per-axis sizing policy. */
+function readMoveResize(value: CompiledValue | undefined): MotionResizePolicy | undefined {
+  if (value === undefined) return undefined
+  if (!isPlainRecord(value)) throw new Error('Move resize must be an object.')
+  const record = value as unknown as Readonly<Record<string, unknown>>
+  const width = readMoveResizeAxis(record.width, 'width')
+  const height = readMoveResizeAxis(record.height, 'height')
+  if (width === undefined && height === undefined) return Object.freeze({})
+  return Object.freeze({
+    ...(width === undefined ? {} : { width }),
+    ...(height === undefined ? {} : { height }),
+  })
+}
+
+/** Reads one optional sizing axis without allocating a fallback policy. */
+function readMoveResizeAxis(value: unknown, axis: string): 'auto' | 'preserve' | 'container' | undefined {
+  if (value === undefined) return undefined
+  if (value === 'auto' || value === 'preserve' || value === 'container') return value
+  throw new Error(`Move resize ${axis} must be auto, preserve or container.`)
 }
 
 /** Reads one optional non-negative transition delay. */

@@ -18,6 +18,7 @@ export function compileMovePath(value: unknown, scope: string): unknown {
   if (move.reparent !== undefined && typeof move.reparent !== 'boolean') {
     throw new Error(`${scope}.move.reparent must be a boolean.`)
   }
+  if (move.resize !== undefined) validateMoveResize(move.resize, `${scope}.move.resize`)
   if (!isPlainRecord(move.transition)) return compiledValue
   if (Object.prototype.hasOwnProperty.call(move.transition, 'traversal')) {
     throw new Error(`${scope}.move.transition.traversal is an internal integration option and must be omitted.`)
@@ -48,5 +49,16 @@ export function compileMovePath(value: unknown, scope: string): unknown {
         path,
       },
     },
+  }
+}
+
+/** Validates the optional per-axis item sizing policy without changing it. */
+function validateMoveResize(value: unknown, scope: string): void {
+  if (!isPlainRecord(value)) throw new Error(`${scope} must be an object.`)
+  for (const axis of ['width', 'height'] as const) {
+    const policy = value[axis]
+    if (policy !== undefined && policy !== 'auto' && policy !== 'preserve' && policy !== 'container') {
+      throw new Error(`${scope}.${axis} must be auto, preserve or container.`)
+    }
   }
 }

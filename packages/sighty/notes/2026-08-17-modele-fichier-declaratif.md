@@ -593,3 +593,63 @@ Il devrait vérifier :
 - l'héritage puis le remplacement d'une action par une vue enfant ;
 - la modification du contexte uniquement lors d'une transition ;
 - la sauvegarde et la restauration du parcours.
+
+## 9. Premier cas concret demandé le 2026-09-10
+
+La première mise en place part d'un cas plus petit que le parcours du §8. Ce
+dernier reste une perspective de validation ; il ne constitue pas le périmètre
+à implémenter pour commencer.
+
+Le cas demandé comporte trois scènes autonomes :
+
+- **Scène A** : une image de fond et un titre centré apparaissent l'un après
+  l'autre en fondu.
+- **Scène B** : un pavé de couleur présente les nombres de 1 à 10, avec un
+  changement chaque seconde.
+- **Scène layout** : elle divise la vue et accueille les scènes de contenu.
+  La demande mentionne dix parties ; la répartition de A et B, ou une éventuelle
+  correction vers deux parties, reste à préciser avec l'auteur.
+
+Chaque scène possède son fichier déclaratif. Un fichier Sighty distinct décrit
+leur composition. Ces fichiers doivent se lire directement, sans fonctions
+intermédiaires de construction, générateurs de scènes ou calculs cachés derrière
+des helpers. Les fondus et les changements de nombres appartiennent aux scènes
+CodPlay ; le fichier Sighty porte leurs relations de montage.
+
+La démo sert à révéler les questions de construction à mesure qu'elles se
+présentent. Elle ne justifie pas d'inventer les contrats encore ouverts du §8,
+ni d'en implémenter immédiatement toutes les capacités.
+
+### Première question révélée : monter une scène dans une autre
+
+Le [mode hôte envisagé côté CodPlay](../../codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md#5-le-mode-hôte--une-instance-jouée-dans-une-autre)
+prévoit une cible adressable dans le modèle : le scénario nomme un hôte, et
+l'application fournit uniquement la racine HTML du layout principal.
+
+Le [plan de scène foreign](../../codplay/plan/replace-foreign-plan.md) fixe une
+direction pour les opérations de montage, démontage et remplacement dans un
+slot. Il indique une implémentation non commencée et laisse les noms des events
+à aligner avec Sighty.
+
+La surface publique actuellement exposée par
+[`CodPlayInstanceOptions`](../../codplay/src/facade/facade-types.ts) reçoit
+`root: HTMLElement`. Elle ne fournit pas encore de montage adressé à un slot
+d'une autre instance. Le
+[`LayoutComponent`](../../codplay/src/runtime/components/layout/layout-component.ts)
+publie son markup et applique ses services visuels ; les opérations de scène
+foreign ne sont pas implémentées dans ce composant.
+
+Il manque donc un raccord exécutable entre le `view.slots` proposé dans cette
+note et l'hébergement réel d'une instance CodPlay. Extraire un élément HTML du
+layout dans la démo pour y créer le player enfant ne validerait pas ce contrat
+de montage adressé.
+
+La proposition est de définir d'abord la tranche minimale de montage et de
+démontage nécessaire à cette composition fixe. Elle doit préciser la désignation
+du slot, la frontière publique de commande, le moment où l'hôte est disponible
+et la propriété des ressources. Le remplacement animé entre scènes ne fait pas
+partie du cas demandé : les fondus de A sont internes à A.
+
+Cette proposition n'est pas encore un contrat. Son exécution et ses points de
+décision sont suivis dans le
+[plan de première implémentation](../plan/2026-09-10-premiere-implementation-plan.md).

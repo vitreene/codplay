@@ -87,6 +87,7 @@ export type {
   CustomPersoDoc,
   Move,
   MoveObject,
+  MoveResize,
   MoveTransition,
   PersoActionSequenceStep,
   PersoActionValue,

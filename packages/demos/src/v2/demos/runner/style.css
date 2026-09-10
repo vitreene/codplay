@@ -91,7 +91,6 @@
 
 .flip-list--nested {
   width: min(16.25rem, 100%);
-  align-items: stretch;
 }
 
 .flip-list::before {
@@ -117,7 +116,6 @@
   letter-spacing: 0;
 }
 
-.flip-item--a { background: #f7b267; }
 .flip-item--b { background: #8ed1c5; }
 .flip-item--c { background: #a9a1e8; }
 
@@ -153,7 +151,7 @@
 .nested-flip-parent__outlet--last { background: #182a2d; }
 
 /* An empty outlet must not reserve space. The target outlet then grows only
-   when the child has actually entered it, exposing the real reparent resize. */
+   when the child has entered it, exposing the actual dimension change. */
 .nested-flip-parent__outlet:empty {
   display: none;
 }

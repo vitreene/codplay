@@ -369,9 +369,9 @@ démo :
 
 ## État documentaire
 
-Le plan central et le contrat cible de `move` restent `En cours` pour leurs
-validations spécialisées. La première tranche couvre la migration `flipMode` →
-`reparent`, les defaults internes, le transport par occurrence, la capture
-ciblée et le Seek synchrone avec restauration en cas d’échec. Cette note reste
-la justification et le relevé de contraintes ; elle ne devient pas une
+Le plan central reste `En cours` pour ses validations spécialisées ; le contrat
+cible de `move` est désormais clôturé. La première tranche couvre la migration
+`flipMode` → `reparent`, les defaults internes, le transport par occurrence, la
+capture ciblée et le Seek synchrone avec restauration en cas d’échec. Cette note
+reste la justification et le relevé de contraintes ; elle ne devient pas une
 spécification exécutable et n’autorise aucune modification ad hoc de la démo.

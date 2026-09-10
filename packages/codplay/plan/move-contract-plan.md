@@ -2,17 +2,16 @@
 
 ## Statut
 
-> Status: En cours — migration de la forme auteur et des defaults internes,
-> autorisée pour implémentation.
+> Status: Fini — forme auteur, migration et validation réalisées.
 > CodPlay version: V2 foundation
 > Référence d’exécution :
 > [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
 Les règles de destination, d’ordre, de placement et de transition déjà validées
-restent inchangées. La tranche V2 en cours applique la forme cible dans les
-types, le compilateur, le runtime, les démos et les tests : `flipMode` est
-remplacé par `reparent`, tandis que les deux paramètres de chemin restent des
-defaults internes et sortent de la surface auteur.
+restent inchangées. La forme cible est appliquée dans les types, le compilateur,
+le runtime, les démos et les tests : `flipMode` est remplacé par `reparent`,
+tandis que les deux paramètres de chemin restent des defaults internes et
+sortent de la surface auteur.
 
 ## Rôle
 
@@ -28,7 +27,13 @@ type MoveObject = {
   mode?: MoveOrderMode
   reparent?: boolean
   reorder?: boolean
+  resize?: MoveResize
   transition?: MoveTransition
+}
+
+type MoveResize = {
+  width?: 'auto' | 'preserve' | 'container'
+  height?: 'auto' | 'preserve' | 'container'
 }
 
 type MoveTransition = {
@@ -52,6 +57,8 @@ valeurs réservées de `target`. L’absence de `move` ne déduit aucun montage.
   destination ; lors d’un changement de conteneur, le retrait de la source suit
   en plus la policy `reorderOnRemove` de cette source ;
 - `reparent` exprime une demande de présentation par overlay ;
+- `resize` décrit, séparément pour `width` et `height`, la règle de taille
+  de l’item pendant une transition ;
 - `transition` décrit le trajet visuel après la production de l’état
   structurel.
 
@@ -98,6 +105,28 @@ un tween de style reconnu engage également FIRST/LAST selon ses bornes. Le but
 d’interpoler une position doit être porté par l’un de ces timings ; une
 attribution directe sans timing reste immédiate et ne suffit pas à définir une
 interpolation. La migration conserve ces règles.
+
+### Adaptation dimensionnelle de l’item
+
+`resize` est facultatif et ne porte que sur `width` et `height`. Une propriété
+d’axe absente, comme une propriété `resize` absente, vaut `auto`.
+
+- `auto` conserve le comportement courant : le CSS produit les poses naturelles
+  FIRST et LAST, puis le graphe interpole les dimensions mesurées ;
+- `preserve` demande au host de conserver la dimension naturelle de l’item dans
+  son emplacement matérialisé après la frontière pendant la transition. La
+  pose visuelle continue l’interpolation FIRST/LAST mesurée ; le host retire la
+  réservation après la dernière frame active ;
+- `container` demande une dimension calculée à partir de la place disponible
+  dans le conteneur, en utilisant les dimensions naturelles capturées et la
+  dimension courante du parent, sans nouvelle mesure DOM par frame.
+
+Ces deux derniers modes ne sont des propriétés auteur que parce qu’ils ajoutent
+un calcul ou une contribution de présentation que le CSS seul ne garantit pas
+pendant un reparentage. Une règle CSS qui suffit à produire le comportement
+n’ajoute pas de nouvelle propriété `move`. En particulier, `overflow`,
+`overflow-x` et `overflow-y` restent des propriétés CSS de l’auteur : `move` ne
+les duplique pas.
 
 ## Transition et path
 
@@ -245,3 +274,14 @@ conservés pour compatibilité ne valident aucune ancienne propriété.
   Play, Seek et resize ;
 - recherche finale : aucun appel auteur, test ou démo ne conserve `flipMode`
   après le commit de migration.
+
+## Validation réalisée — 2026-09-10
+
+- suite CodPlay : `94` fichiers, `609` tests passés ;
+- typechecks CodPlay et démos passés ;
+- build des démos passé ;
+- Firefox : `flip-nested`, `flip-stress` et `position` vérifiés en Seek et Play,
+  y compris en fenêtre compacte, sans erreur ni saut observé ;
+- README d’usage ajouté dans
+  [`src/runtime/move/README.md`](../src/runtime/move/README.md) ;
+- `git diff --check` passé.

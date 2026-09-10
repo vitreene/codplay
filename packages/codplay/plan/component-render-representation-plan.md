@@ -272,8 +272,9 @@ materialisation peut publier des parts/outlets internes, mais le composant ne
 decide pas la politique de parentage.
 
 La capacite list calcule l'ensemble affecte. Le materializer DOM fournit les
-nœuds HTML reels que FLIP mesure et anime ensuite selon
-`flip-list-coordination-plan.md`.
+nœuds HTML reels que le runner mesure pour le contrat de mouvement défini dans
+`runner-flip-integration-study.md` ; l’interpolation de `width` et `height` de
+la liste est suivie séparément dans `list-dimension-interpolation-plan.md`.
 
 ## Seek
 

@@ -143,7 +143,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Façade engine, instances et pilotage | [`facade-engine-instance-plan.md`](./facade-engine-instance-plan.md) | En cours : contrat validé le 2026-08-26, implémentation engagée |
 | Inactivité du player | [`idle-inactivity-plan.md`](./idle-inactivity-plan.md) | Fini pour le monitor core V2 ; l’adaptateur d’inactivité de fenêtre reste hors cœur |
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
-| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
+| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fini : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | En cours : préparation par occurrence, capture finale cohérente et commit atomique |
 | Découverte motion et reset chaud | [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md), [`story-reset-plan.md`](./story-reset-plan.md) | En cours : suppression de la découverte globale et retrait réel des groupes reset |
 | Dépendance d’un `move` à sa target | [`move-target-dependency-plan.md`](./move-target-dependency-plan.md) | En cours : implémentation validée, retarget déclenché par une nouvelle frontière qui modifie la target, sans recalcul pendant le déplacement continu |

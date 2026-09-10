@@ -97,6 +97,9 @@ function readMove(value: CompiledValue | undefined, actionMove: boolean): Resolv
   if (actionMove && record.mode !== undefined && mode === undefined) return { kind: MOUNT_PLACEMENT_INVALID, source }
   const reparent = readMoveReparent(record.reparent)
   if (reparent === INVALID_REPARENT) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  if (record.resize !== undefined && !isValidMoveResize(record.resize)) {
+    return { kind: MOUNT_PLACEMENT_INVALID, source }
+  }
   // The former presentation and path-integration fields are deliberately not
   // accepted after the author contract migration.
   if (Object.prototype.hasOwnProperty.call(record, 'flipMode')) return { kind: MOUNT_PLACEMENT_INVALID, source }
@@ -108,6 +111,14 @@ function readMove(value: CompiledValue | undefined, actionMove: boolean): Resolv
 
 const INVALID_TRANSITION = Symbol('invalid move transition')
 const INVALID_REPARENT = Symbol('invalid move reparent')
+
+/** Validates one optional per-axis sizing policy at the structural boundary. */
+function isValidMoveResize(value: CompiledValue): boolean {
+  if (!isPlainRecord(value)) return false
+  const record = value as unknown as Readonly<Record<string, unknown>>
+  return (record.width === undefined || record.width === 'auto' || record.width === 'preserve' || record.width === 'container')
+    && (record.height === undefined || record.height === 'auto' || record.height === 'preserve' || record.height === 'container')
+}
 
 /** Resolves one authored target while preserving structural placement metadata. */
 function readTarget(

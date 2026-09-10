@@ -4,7 +4,7 @@ Note de réflexion (2026-07-26), dont le statut a été réévalué le 2026-08-0
 un **contrat de base du FLIP HTML V2**, pas seulement un cas limite. Il stresse-teste le flux
 `solve/project` (`2026-07-16-solve-project-moteur-custom.md` S5-S8) et révèle une tension que le
 reste du cadre n'expose pas. La note conserve le raisonnement ; l'implémentation de base est suivie
-dans `packages/codplay/plan/flip-list-coordination-plan.md`.
+dans `packages/codplay/plan/runner-flip-integration-study.md`.
 
 ## Le cas
 

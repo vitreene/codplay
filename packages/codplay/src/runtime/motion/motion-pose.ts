@@ -71,6 +71,14 @@ export function interpolateMotionPose(
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, to.parentMatrix, width, height)
 }
 
+/** Rebuilds one pose around its visual center after an explicit size policy. */
+export function resizeMotionPose(pose: HtmlPose, width: number, height: number): HtmlPose {
+  if (pose.localWidth === width && pose.localHeight === height) return pose
+  const center = visualCenter(pose)
+  const origin = originFromVisualCenter(center, pose.matrix, width, height)
+  return poseFromAffine({ ...pose.matrix, e: origin[0], f: origin[1] }, pose.parentMatrix, width, height)
+}
+
 /** Derives a virtual source pose so a retarget keeps its phase and authored path. */
 export function extrapolateMotionPoseAtProgress(
   current: HtmlPose,

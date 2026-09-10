@@ -481,11 +481,12 @@ Les plans dépendants ont été relus contre cette cible :
 - un reset est chaud, conserve le journal et retire les groupes et ressources
   qui touchent sa story ; un Seek antérieur les reconstruit seulement s’il doit
   présenter le move correspondant.
-Les plans `player-engine`, `move-contract`, `runner-flip-integration-study` et
-`story-reset` restent `En cours` pour leurs propres validations. Le code et les
-fixtures V2 suivent déjà `reparent`, les defaults internes, la capture par
-occurrence et le Seek synchrone atomique. La préparation multi-frame et
-l’attente groupée ne font plus partie du contrat.
+Les plans `player-engine`, `runner-flip-integration-study` et `story-reset`
+restent `En cours` pour leurs propres validations. Le contrat auteur
+`move-contract` est clôturé ; le code et les fixtures V2 suivent déjà
+`reparent`, les defaults internes, la capture par occurrence et le Seek
+synchrone atomique. La préparation multi-frame et l’attente groupée ne font
+plus partie du contrat.
 
 ## Reprise d’intégration — 2026-09-08
 
