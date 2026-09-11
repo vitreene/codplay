@@ -636,22 +636,34 @@ l'application fournit uniquement la racine HTML du layout principal.
 
 Le [plan du composant core de contenu foreign](../../codplay/plan/foreign-scene-component-plan.md)
 fixe la frontière pour exposer, remplacer et adresser un contenu opaque dans la
-racine d'un composant CodPlay. Sa première tranche (profil `slot`, manifeste et
-surface HTML d'attachement) est engagée ; le remplacement, l'orchestration
-entre instances et le raccord Sighty restent à aligner et à implémenter.
+racine d'un composant CodPlay. Sa première tranche (profil `slot`, manifeste,
+surface HTML d'attachement et `codplay.instances.mount`) est consommée par la
+première fixture Sighty sous `packages/demos/src/sighty/demo1/` ; l'orchestration
+générique, les politiques d'échec et la validation navigateur restent ouvertes.
 
 La surface publique actuellement exposée par
-[`CodPlayInstanceOptions`](../../codplay/src/facade/facade-types.ts) reçoit
-`root: HTMLElement`. Elle ne fournit pas encore de montage adressé à un slot
-d'une autre instance. Le
+[`CodPlayInstanceOptions`](../../codplay/src/facade/facade-types.ts) reçoit une
+racine HTML optionnelle : la racine d'application du layout est fournie par la
+page, tandis que CodPlay possède un conteneur détaché pour un enfant qui n'en
+reçoit pas. Le registre `codplay.instances` tente maintenant le montage adressé
+par `mount({ host: { instanceId, storyId, persoId }, childInstanceId })`.
+Le
 [`LayoutComponent`](../../codplay/src/runtime/components/layout/layout-component.ts)
 publie son markup et applique ses services visuels ; les opérations de scène
 foreign ne sont pas implémentées dans ce composant.
 
-Il manque donc un raccord exécutable entre le `view.slots` proposé dans cette
-note et l'hébergement réel d'une instance CodPlay. Extraire un élément HTML du
-layout dans la démo pour y créer le player enfant ne validerait pas ce contrat
-de montage adressé.
+Le raccord core est exécutable hors de la démo par cette surface et il est
+maintenant exercé depuis le `view.slots` réel de la fixture Sighty. La
+composition résout les entrées par le manifeste d'authoring puis transmet
+l'adresse logique complète à `codplay.instances.mount`; elle ne sélectionne pas
+un élément HTML pour créer le player enfant, ne crée aucune envelope ou racine
+de montage et n'installe pas de circuit DOM parallèle. Les racines matérialisées
+de l'enfant sont produites et attachées directement par CodPlay.
+
+Cette interdiction est normative pour Sighty : aucun `document.createElement`,
+`innerHTML`, `appendChild` ou wrapper analogue ne doit préparer le DOM des
+scènes. Le HTML de la page et ses contrôles de démonstration sont une surface de
+présentation distincte ; ils ne peuvent pas remplacer le materializer CodPlay.
 
 La proposition est de définir d'abord la tranche minimale de montage et de
 démontage nécessaire à cette composition fixe. Elle doit préciser la désignation
@@ -659,6 +671,10 @@ du slot, la frontière publique de commande, le moment où l'hôte est disponibl
 et la propriété des ressources. Le remplacement animé entre scènes ne fait pas
 partie du cas demandé : les fondus de A sont internes à A.
 
-Cette proposition n'est pas encore un contrat. Son exécution et ses points de
-décision sont suivis dans le
-[plan de première implémentation](../plan/2026-09-10-premiere-implementation-plan.md).
+La première exécution Sighty est maintenant présente dans la fixture dédiée :
+elle compile séparément le layout, A et B, crée leurs instances sous un même
+propriétaire CodPlay, monte les deux enfants et exerce le démontage/remontage
+explicite d'un slot. Elle n'est pas encore stabilisée comme politique générale :
+le parcours navigateur, Safari, les fins de séquence, les erreurs partielles,
+les ressources asynchrones et les représentations multi-racines restent suivis
+dans le [plan de première implémentation](../plan/2026-09-10-premiere-implementation-plan.md).

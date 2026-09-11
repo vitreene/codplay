@@ -9,6 +9,7 @@ import {
 } from '../runtime/catalog'
 import { RuntimeEngine } from '../runtime/engine'
 import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
+import type { ForeignContentSurface } from '../runtime/components'
 import { SceneBuilder } from '../scene/compiled'
 import type {
   CodPlayComponents,
@@ -22,6 +23,9 @@ import type {
   CodPlayEventInput,
   CodPlayInstances,
   CodPlayInstance,
+  CodPlayInstanceHostTarget,
+  CodPlayInstanceMountHandle,
+  CodPlayInstanceMountRequest,
   CodPlayInstanceOptions,
   CodPlayModules,
   CodPlayPublicEvent,
@@ -53,6 +57,15 @@ type CapabilityRegistries = Readonly<{
 type CapabilityFamily = 'component' | 'service' | 'module'
 type RegistryOperation = 'register' | 'override'
 
+type ManagedInstanceMount = Readonly<{
+  mountId: number
+  host: CodPlayInstanceHostTarget
+  hostKey: string
+  childInstanceId: string
+  child: ManagedInstance
+  surface: ForeignContentSurface
+}>
+
 /** Internal engine adapter that owns one catalog, clock, and instance registry. */
 export class EngineFacadeImpl implements CodPlayEngine {
   private readonly catalog: RuntimeCapabilityCatalog
@@ -60,12 +73,16 @@ export class EngineFacadeImpl implements CodPlayEngine {
   private readonly diagnostics: DiagnosticChannel
   private readonly defaultTicker: Ticker | undefined
   private readonly managedInstances = new Map<string, ManagedInstance>()
+  private readonly instanceMounts = new Map<number, ManagedInstanceMount>()
+  private readonly mountIdByHost = new Map<string, number>()
+  private readonly mountIdByChild = new Map<string, number>()
   private readonly playingInstanceIds = new Set<string>()
   private readonly publicEventListeners = new Set<CodPlayEventListener>()
   private readonly resourceMetadata = new Map<string, import('../runtime/preload').RuntimePreloadResourceMetadata>()
   private readonly resourceMedia = new Map<string, import('../runtime/preload').RuntimePreloadMediaResources[string]>()
   private externalClockMode = false
   private destroyed = false
+  private nextMountId = 1
 
   /** Composes core and foreign capabilities while keeping the catalog open for direct registration. */
   constructor(config: EngineFacadeConfig = {}) {
@@ -158,6 +175,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
   createInstanceRegistry(): CodPlayInstances {
     return {
       create: (options) => this.createInstance(options),
+      mount: (request) => this.mountInstance(request),
       get: (instanceId) => this.managedInstances.get(instanceId),
       destroy: (instanceId) => this.destroyInstance(instanceId),
     }
@@ -259,6 +277,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    for (const mountId of [...this.instanceMounts.keys()]) this.detachInstanceMount(mountId)
     this.playingInstanceIds.clear()
     for (const instance of this.managedInstances.values()) instance.destroyInternal()
     this.managedInstances.clear()
@@ -325,6 +344,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
       }
       const instance = new InstanceFacadeImpl({
         instanceId: options.instanceId,
+        root: host.root,
         player,
         runner,
         diagnostics,
@@ -342,6 +362,131 @@ export class EngineFacadeImpl implements CodPlayEngine {
       eventListeners.clear()
       traceListeners.clear()
       throw error
+    }
+  }
+
+  /** Mounts a child's materialized roots directly through the host slot surface. */
+  private mountInstance(request: CodPlayInstanceMountRequest): CodPlayInstanceMountHandle {
+    if (this.destroyed) {
+      return this.rejectMount(request, new Error('CodPlay owner has been destroyed.'))
+    }
+
+    const hostInstance = this.managedInstances.get(request.host.instanceId)
+    if (hostInstance === undefined) {
+      return this.rejectMount(
+        request,
+        new Error(`CodPlay host instance is not registered: ${request.host.instanceId}`),
+      )
+    }
+    const childInstance = this.managedInstances.get(request.childInstanceId)
+    if (childInstance === undefined) {
+      return this.rejectMount(
+        request,
+        new Error(`CodPlay child instance is not registered: ${request.childInstanceId}`),
+      )
+    }
+    if (request.host.instanceId === request.childInstanceId) {
+      return this.rejectMount(request, new Error('CodPlay cannot mount an instance into itself.'))
+    }
+
+    const hostKey = createInstanceMountHostKey(request.host)
+    if (this.mountIdByHost.has(hostKey)) {
+      return this.rejectMount(request, new Error(`CodPlay host is already mounted: ${hostKey}`))
+    }
+    if (this.mountIdByChild.has(request.childInstanceId)) {
+      return this.rejectMount(
+        request,
+        new Error(`CodPlay child instance is already mounted: ${request.childInstanceId}`),
+      )
+    }
+
+    const surface = hostInstance.getForeignContentSurface(request.host)
+    if (surface === undefined) {
+      return this.rejectMount(
+        request,
+        new Error(
+          `CodPlay mount host is not a materialized slot: `
+          + `${request.host.instanceId}/${request.host.storyId}/${request.host.persoId}`,
+        ),
+      )
+    }
+    const hostRoot = hostInstance.getForeignContentHostRoot(request.host)
+    if (hostRoot === undefined) {
+      return this.rejectMount(
+        request,
+        new Error(
+          `CodPlay mount host is not a materialized HTML slot root: `
+          + `${request.host.instanceId}/${request.host.storyId}/${request.host.persoId}`,
+        ),
+      )
+    }
+    if (childInstance.getMaterializedRoots() === undefined) {
+      return this.rejectMount(request, new Error(`CodPlay child instance is destroyed: ${request.childInstanceId}`))
+    }
+
+    try {
+      const childRoots = childInstance.setMountContainer(hostRoot) ?? []
+      surface.attach(childRoots)
+    } catch (error) {
+      try {
+        childInstance.setMountContainer(undefined)
+      } catch {
+        // Preserve the original mount error; teardown remains owned by the engine.
+      }
+      return this.rejectMount(request, error)
+    }
+
+    const mountId = this.nextMountId++
+    const mount: ManagedInstanceMount = {
+      mountId,
+      host: request.host,
+      hostKey,
+      childInstanceId: request.childInstanceId,
+      child: childInstance,
+      surface,
+    }
+    this.instanceMounts.set(mountId, mount)
+    this.mountIdByHost.set(hostKey, mountId)
+    this.mountIdByChild.set(request.childInstanceId, mountId)
+    return {
+      detach: () => this.detachInstanceMount(mountId),
+    }
+  }
+
+  /** Rejects one invalid mount through the existing facade diagnostic channel. */
+  private rejectMount(
+    request: CodPlayInstanceMountRequest,
+    error: unknown,
+  ): never {
+    publishFacadeError(
+      this.diagnostics,
+      'CODPLAY_INSTANCE_MOUNT_FAILED',
+      error,
+      {
+        instanceId: request.host.instanceId,
+        storyId: request.host.storyId,
+        persoId: request.host.persoId,
+      },
+    )
+    throw error instanceof Error ? error : new Error(String(error))
+  }
+
+  /** Detaches one mount exactly once while keeping both instances alive. */
+  private detachInstanceMount(mountId: number): void {
+    const mount = this.instanceMounts.get(mountId)
+    if (mount === undefined) return
+    try {
+      mount.surface.detach()
+    } finally {
+      try {
+        mount.child.setMountContainer(undefined)
+      } finally {
+        this.instanceMounts.delete(mountId)
+        if (this.mountIdByHost.get(mount.hostKey) === mountId) this.mountIdByHost.delete(mount.hostKey)
+        if (this.mountIdByChild.get(mount.childInstanceId) === mountId) {
+          this.mountIdByChild.delete(mount.childInstanceId)
+        }
+      }
     }
   }
 
@@ -441,6 +586,11 @@ export class EngineFacadeImpl implements CodPlayEngine {
   private destroyInstance(instanceId: string): void {
     const instance = this.managedInstances.get(instanceId)
     if (instance === undefined) return
+    for (const [mountId, mount] of this.instanceMounts) {
+      if (mount.host.instanceId === instanceId || mount.childInstanceId === instanceId) {
+        this.detachInstanceMount(mountId)
+      }
+    }
     this.playingInstanceIds.delete(instanceId)
     this.pausePlaybackClockWhenIdle()
     this.managedInstances.delete(instanceId)
@@ -467,6 +617,11 @@ export class EngineFacadeImpl implements CodPlayEngine {
     if (this.playingInstanceIds.size > 0 || this.destroyed) return
     this.runEngineOperation('CODPLAY_ENGINE_AUTO_PAUSE_FAILED', () => this.runtimeEngine.pause())
   }
+}
+
+/** Creates a collision-resistant key for one logical host address. */
+function createInstanceMountHostKey(target: CodPlayInstanceHostTarget): string {
+  return JSON.stringify([target.instanceId, target.storyId, target.persoId])
 }
 
 /** Registers component additions and overrides in one deterministic order. */

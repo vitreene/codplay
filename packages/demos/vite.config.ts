@@ -31,6 +31,7 @@ export default defineConfig({
         index: resolve(__dirname, 'index.html'),
         v1: resolve(__dirname, 'v1.html'),
         fame: resolve(__dirname, 'fame.html'),
+        sighty: resolve(__dirname, 'sighty.html'),
       },
     },
   },

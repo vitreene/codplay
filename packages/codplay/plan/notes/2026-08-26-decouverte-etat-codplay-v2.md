@@ -85,12 +85,13 @@ La spécification ciblée et le suivi détaillé sont :
   pour le point de reprise factuel.
 
 Le module partagé `replace`, ses hooks V2 et son instantané de présentation
-HTML sont traités dans la mise à jour ci-dessous. L'ownership entre instances,
-l'exposition par la façade publique et l'exécution Sighty ne sont pas encore
-implémentés. La démo A/B n'a donc pas été créée et aucune API interscène n'a
-été inventée pour la rendre artificiellement fonctionnelle. Les tests CodPlay,
-les typechecks CodPlay et démos V2 et le build des démos passent pour la
-tranche correspondante.
+HTML sont traités dans la mise à jour ci-dessous. Une première surface publique
+de montage entre instances est maintenant consommée par une fixture Sighty A/B
+séparée. Cette fixture compile trois scènes, utilise un seul propriétaire
+CodPlay, résout les slots par le manifeste et exerce le montage, le démontage et
+le remontage. Les tests CodPlay, les typechecks CodPlay et démos V2 et le build
+des démos passent pour la tranche correspondante ; la validation navigateur
+reste ouverte.
 
 Décision de frontière ajoutée le 2026-09-11 : Sighty pilote le cycle de vie des
 occurrences de scènes (création, montage, pilotage, démontage et destruction).
@@ -115,14 +116,42 @@ le chemin `replace-simple`/`fade` est utilisé. Le test
 `tests/runtime/capabilities/replace-module.spec.ts` couvre le parcours runtime
 réel et la mise en place d'une nouvelle racine foreign pendant la transition.
 
-Le raccord interinstances Sighty, la façade publique d'adressage, les contenus
-asynchrones et l'extension du module aux autres composants restent ouverts.
+Le raccord interinstances Sighty, les contenus asynchrones et l'extension du
+module aux autres composants restent ouverts ; une première surface publique
+de montage est maintenant tentée et couverte par un test core.
 
 La gate de réutilisation du module `replace` est partiellement avancée : le
 composant core `img` exerce maintenant le même chemin `fade` et la même surface
 de présentation que `slot`, avec les URLs déclarées par le runtime. `tag`, les
-contenus non clonables comme les iframes et le raccord interinstances restent
-hors implémentation de cette reprise.
+contenus non clonables comme les iframes et l'intégration Sighty restent hors
+implémentation de cette reprise.
+
+### Mise à jour du 2026-09-11 — première tentative de montage public
+
+La façade `codplay.instances` expose maintenant une tentative minimale de
+composition :
+
+```ts
+codplay.instances.mount({
+  host: { instanceId, storyId, persoId },
+  childInstanceId,
+})
+```
+
+CodPlay résout le `slot` hôte et attache directement les racines matérialisées
+de l'instance enfant via `ForeignContentSurface`. Si aucun `root` n'est fourni,
+CodPlay conserve seulement un conteneur interne détaché. Le handle `detach` est
+idempotent. Le montage ne pilote ni le temps ni la destruction de l'enfant.
+La destruction d'une instance nettoie la relation avant son teardown. Le test
+`tests/facade/foreign-mount.spec.ts` couvre deux vrais players, un seek de part
+et d'autre, le détachement et la destruction indépendante.
+
+Cette tentative n'ajoute aucune envelope visible par instance enfant. La
+fixture Sighty A/B séparée (`packages/demos/sighty.html` et
+`packages/demos/src/sighty/demo1/`) l'exerce depuis le fichier `view.slots` réel,
+avec trois instances publiques et des commandes de cycle de vie portées par
+Sighty. Les représentations multi-racines, le remontage automatique, l'ordre
+général du cycle Sighty et la validation navigateur restent ouverts.
 
 ## 1. Ordre de lecture et sources d'autorité
 
@@ -198,6 +227,7 @@ codplay.build({ scene })
 codplay.preload
 codplay.resources
   -> codplay.instances.create(...)
+  -> codplay.instances.mount({ host, childInstanceId })
   -> instance.telco / instance.events / instance.diagnostic
 ```
 

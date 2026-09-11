@@ -1221,16 +1221,20 @@ composés, validés puis verrouillés en interne. L'interface ne propose pas de
 
 ```text
 codplay.instances.create(options) -> InstanceFacade
+codplay.instances.mount({ host, childInstanceId }) -> { detach() }
 codplay.instances.get(instanceId) -> InstanceFacade | undefined
 codplay.instances.destroy(instanceId)
 engine.destroy()
 ```
 
 `options` contient notamment `instanceId`, `CompiledScene`, les fonctions
-compilées, la racine HTML et les cibles de montage. L'assemblage CodPlay fournit
-toujours le runner et la materialisation HTML/DOM. La création d'une instance
-ne modifie pas le catalogue et ne partage ni racine ni état runtime avec une
-autre instance. Aucun materializer n'est fourni par l'appelant.
+compilées et, lorsqu'elle est visible, la racine HTML d'application. Si elle
+est absente, CodPlay crée un conteneur de materialization détaché ; les racines
+de scène peuvent alors être montées directement dans un `slot` par
+`instances.mount`. L'assemblage CodPlay fournit toujours le runner et la
+materialisation HTML/DOM. La création d'une instance ne modifie pas le
+catalogue et ne partage ni racine ni état runtime avec une autre instance.
+Aucun materializer n'est fourni par l'appelant.
 
 #### Ticker et pilotage de l'engine
 
@@ -1384,6 +1388,9 @@ cachées de l'instance.
   catalogue secondaire ;
 - [x] partager le catalogue et l'horloge entre les instances d'un même engine,
   sans partager leur racine ni leur état runtime ;
+- [x] tenter le montage d'une racine d'instance enfant dans un composant `slot`
+  adressé par `{ instanceId, storyId, persoId }`, via la surface
+  `foreignContent`, sans exposer de DOM à la façade ;
 - [x] conserver le seek groupé comme transaction interne du runtime ; la façade
   ne l'expose pas et le seek public passe par `instance.telco` ;
 - [x] garantir que `engine.start` réarme le ticker sans recréer d'instance ni de
@@ -1522,6 +1529,10 @@ Déjà implémenté :
   `instance.diagnostic` et transfert explicite des ressources ;
 - `instance.snapshot`, avec lecture logique, remplacement atomique d'une
   preview de style et effacement explicite, sans accès au DOM ;
+- `codplay.instances.mount`, première relation publique de composition entre un
+  `slot` hôte et les racines matérialisées d'une instance enfant ; aucune
+  envelope visible n'est introduite, le handle de détachement reste idempotent
+  et le cycle de vie des deux players demeure séparé ;
 - la longueur logique `cqw` pour les offsets structurés, son interpolation dans
   `resolve` et sa projection HTML selon la largeur de la racine ;
 - tests de contrat du socle et absence de ticker propre à la telco.

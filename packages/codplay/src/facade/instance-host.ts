@@ -23,6 +23,7 @@ export type InstanceHostOptions = Readonly<{
 
 /** One runtime player and the single teardown that owns its host resources. */
 export type InstanceHost = Readonly<{
+  root: HTMLElement
   player: RuntimePlayer
   runner: HtmlPlayerRunner
   init: PlayerInitResult
@@ -31,11 +32,12 @@ export type InstanceHost = Readonly<{
 
 /** Creates the one public HTML/DOM host used by every CodPlay V2 instance. */
 export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
+  const root = options.instance.root ?? createDetachedInstanceRoot()
   const runner = new HtmlPlayerRunner({
     id: options.instance.instanceId,
     compiledScene: options.instance.compiledScene,
-    root: options.instance.root,
-    numericLengthScale: resolveRootNumericLengthScale(options.instance.root),
+    root,
+    numericLengthScale: resolveRootNumericLengthScale(root),
     catalog: options.catalog,
     resourceMetadata: toResourceMetadata(options.resourceMetadata),
     resourceMedia: toResourceMedia(options.resourceMedia),
@@ -51,15 +53,16 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
   try {
     const init = runner.init()
     if (init.ok) {
-      stopResizeObservation = observeRootResize(options.instance.root, () => {
+      stopResizeObservation = observeRootResize(root, () => {
         try {
-          runner.resize(resolveRootNumericLengthScale(options.instance.root))
+          runner.resize(resolveRootNumericLengthScale(root))
         } catch (error) {
           options.onResizeError(error)
         }
       })
     }
     return {
+      root,
       player: runner.player,
       runner,
       init,
@@ -72,6 +75,14 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     runner.destroy()
     throw error
   }
+}
+
+/** Creates the detached root owned by CodPlay for an instance without an application root. */
+function createDetachedInstanceRoot(): HTMLElement {
+  if (typeof globalThis.document === 'undefined') {
+    throw new Error('CodPlay HTML instances require a DOM environment.')
+  }
+  return globalThis.document.createElement('div')
 }
 
 /** Resolves the pixel scale for one cqw from the current scene-root width. */

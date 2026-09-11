@@ -303,6 +303,24 @@ export type CodPlaySnapshotApi = Readonly<{
   clear: () => void
 }>
 
+/** Logical address of one foreign-content host component in one instance. */
+export type CodPlayInstanceHostTarget = Readonly<{
+  instanceId: string
+  storyId: string
+  persoId: string
+}>
+
+/** Request to expose one child's materialized roots inside a host slot component. */
+export type CodPlayInstanceMountRequest = Readonly<{
+  host: CodPlayInstanceHostTarget
+  childInstanceId: string
+}>
+
+/** Idempotent relation handle returned by one instance mount operation. */
+export type CodPlayInstanceMountHandle = Readonly<{
+  detach: () => void
+}>
+
 /** Linear part of one currently presented HTML pose in instance-root coordinates. */
 export type CodPlayPresentationMatrix = Readonly<{
   a: number
@@ -353,7 +371,12 @@ type CodPlayInstanceOptionsBase = Readonly<{
 
 /** Options for one public instance using CodPlay's HTML/DOM materialization. */
 export type CodPlayInstanceOptions = CodPlayInstanceOptionsBase & Readonly<{
-  root: HTMLElement
+  /**
+   * Visible application root. When omitted, CodPlay owns a detached internal
+   * materialization root; only the instance's materialized scene roots become
+   * visible when another instance mounts them in a `slot`.
+   */
+  root?: HTMLElement
 }>
 
 /** Public instance boundary; runtime classes and materializer internals stay hidden. */
@@ -370,6 +393,7 @@ export type CodPlayInstance = Readonly<{
 /** Public instance registry owned by one CodPlay owner. */
 export type CodPlayInstances = Readonly<{
   create: (options: CodPlayInstanceOptions) => CodPlayInstance
+  mount: (request: CodPlayInstanceMountRequest) => CodPlayInstanceMountHandle
   get: (instanceId: string) => CodPlayInstance | undefined
   destroy: (instanceId: string) => void
 }>

@@ -11,11 +11,13 @@ import type {
   RuntimeTrackEvent,
 } from '../runtime/player/pipeline'
 import type { HtmlPlayerRunner } from '../runtime/runner-html'
+import type { ForeignContentSurface } from '../runtime/components'
 import type {
   CodPlayEventListener,
   CodPlayInstance,
   CodPlayInstanceDiagnostic,
   CodPlayInstanceEvents,
+  CodPlayInstanceHostTarget,
   CodPlayProgress,
   CodPlayPublicEvent,
   CodPlaySnapshot,
@@ -33,6 +35,7 @@ import { toPublicEvent } from './public-event'
 
 type InstanceFacadeOptions = Readonly<{
   instanceId: string
+  root: HTMLElement
   player: RuntimePlayer
   runner: HtmlPlayerRunner
   diagnostics: DiagnosticChannel
@@ -52,6 +55,8 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   readonly snapshot: CodPlaySnapshotApi
   readonly presentation: CodPlayPresentationApi
   private readonly player: RuntimePlayer
+  private readonly runner: HtmlPlayerRunner
+  private readonly instanceRoot: HTMLElement
   private readonly diagnostics: DiagnosticChannel
   private readonly eventListeners: Set<CodPlayEventListener>
   private readonly traceListeners: Set<CodPlayTraceListener>
@@ -63,6 +68,8 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   constructor(options: InstanceFacadeOptions) {
     this.instanceId = options.instanceId
     this.player = options.player
+    this.runner = options.runner
+    this.instanceRoot = options.root
     this.diagnostics = options.diagnostics
     this.eventListeners = options.eventListeners
     this.traceListeners = options.traceListeners
@@ -84,6 +91,31 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   }
 
   private readonly onPublicEvent: (event: CodPlayPublicEvent) => void
+
+  /** Returns the currently materialized top-level roots without publishing DOM to callers. */
+  getMaterializedRoots(): readonly unknown[] | undefined {
+    return this.destroyed ? undefined : this.runner.getMaterializedRoots()
+  }
+
+  /** Rebinds the instance root targets for an internal CodPlay mount operation. */
+  setMountContainer(container: HTMLElement | undefined): readonly unknown[] | undefined {
+    if (this.destroyed) return undefined
+    this.runner.setMountContainer(container ?? this.instanceRoot)
+    return this.runner.getMaterializedRoots()
+  }
+
+  /** Returns the materialized host root addressed by one logical slot target. */
+  getForeignContentHostRoot(target: CodPlayInstanceHostTarget): HTMLElement | undefined {
+    if (this.destroyed) return undefined
+    const node = this.runner.getPersoNode(`${target.storyId}:${target.persoId}`)
+    return isHTMLElement(node) ? node : undefined
+  }
+
+  /** Resolves a host component surface without exposing the runner publicly. */
+  getForeignContentSurface(target: CodPlayInstanceHostTarget): ForeignContentSurface | undefined {
+    if (this.destroyed) return undefined
+    return this.runner.getComponentSurface(`${target.storyId}:${target.persoId}`, 'foreignContent')
+  }
 
   /** Receives one internal public event and isolates listener failures. */
   handlePublicEvent(event: RuntimeTrackEvent): void {
@@ -111,6 +143,11 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.destroyTelco()
     this.destroyHost()
   }
+}
+
+/** Narrows one materialized slot root to an HTML element without exposing it publicly. */
+function isHTMLElement(value: unknown): value is HTMLElement {
+  return typeof HTMLElement !== 'undefined' && value instanceof HTMLElement
 }
 
 /** Creates the read-only numeric presentation port without exposing runtime pose classes. */

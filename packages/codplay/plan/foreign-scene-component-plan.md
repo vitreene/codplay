@@ -4,7 +4,7 @@
 
 - **Statut : En cours — première tranche d'implémentation autorisée le 2026-09-11**
 - **Version : CodPlay V2 foundation**
-- **Implémentation : tranche profil/validation et surface HTML d'attachement en cours**
+- **Implémentation : profil, surface HTML et première surface publique de montage en cours**
 - **Nom de travail : `ForeignContentComponent` / type auteur `slot`**
 
 Ce plan définit un composant du core CodPlay et la capacité de remplacement de
@@ -19,11 +19,13 @@ autre contenu pris en charge par son propriétaire de représentation.
 
 L'autorisation d'implémenter a été donnée le 2026-09-11. La tranche engagée
 couvre le type auteur `slot`, la validation du `name` racine, le manifeste de
-découverte, la surface HTML qui attache/détache des racines foreign et le
-module partagé `replace` raccordé aux hooks V2 pour le chemin `fade`. Le
-profil `slot` accepte `replace.split` mais l'ignore. L'orchestration
-interinstances et l'exposition de la surface par la façade publique restent à
-traiter ; aucune de ces capacités n'est présentée comme déjà disponible.
+découverte, la surface HTML qui attache/détache des racines foreign, le module
+partagé `replace` raccordé aux hooks V2 pour le chemin `fade` et une première
+surface publique `codplay.instances.mount`. Le profil `slot` accepte
+`replace.split` mais l'ignore. Le montage public attache directement les
+racines matérialisées de l'instance enfant, sans envelope visible ajoutée par
+le raccord ; l'orchestration complète interinstances, les politiques de
+remontage et l'intégration Sighty restent à valider.
 
 La spécification de la tranche effectivement codée est suivie dans
 [`../specs/slot-component-spec.md`](../specs/slot-component-spec.md).
@@ -358,14 +360,16 @@ registre de materialization du player hôte. Sighty ne la recherche pas avec
 `querySelector` et ne reçoit pas le nœud.
 
 Pour une scène enfant, le chemin CodPlay retenu comme cible de la phase
-d'adressage est le suivant ; la surface publique entre instances reste à
-arrêter avant son implémentation :
+d'adressage est le suivant. La première surface publique qui l'exerce est
+`codplay.instances.mount` :
 
 1. Sighty adresse le perso hôte avec `{ instanceId, storyId, persoId }` et
    adresse séparément l'instance enfant.
-2. Une surface runtime de mode hôte résout cette adresse en `hostRoot` et
-   demande à l'instance enfant une représentation de ses racines persistantes.
-   Cette surface est interne à CodPlay ; sa forme publique reste à fixer.
+2. `codplay.instances.mount` résout cette adresse en `hostRoot` et demande au
+   player enfant ses racines matérialisées de premier niveau. Si l'enfant n'a
+   pas reçu de racine d'application, CodPlay utilise un conteneur interne
+   détaché pour produire ces racines ; ce conteneur n'est jamais retourné à
+   Sighty ni inséré dans le `slot`.
 3. Le propriétaire de la représentation fournit les racines à la surface
    `foreignContent`; le `HtmlComponentMaterializer` est le writer DOM de la
    frontière HTML. Pour
@@ -399,8 +403,26 @@ d'une même scène, cette écriture existe déjà dans
 `parent.appendChild(...)`, puis `parent.removeChild(...)` au détachement. Le cas
 foreign entre deux players ne peut pas réutiliser directement la map
 `persoNodes` de cette réconciliation, car chaque player possède son propre
-materializer. Il faut donc arrêter une surface d'attachement CodPlay qui appelle
-ces mêmes primitives pour le raccord foreign.
+materializer. La première surface publique d'attachement CodPlay appelle ces
+mêmes primitives via la surface `foreignContent`. Elle ne crée pas de circuit
+DOM dans Sighty et ne pilote pas le player enfant.
+
+Le contrat public de cette tentative est :
+
+```ts
+const mount = codplay.instances.mount({
+  host: { instanceId: 'layout-1', storyId: 'main', persoId: 'body-host' },
+  childInstanceId: 'scene-a-1',
+})
+
+mount.detach() // idempotent ; le parent et l'enfant restent vivants
+```
+
+Une seule relation active est admise par adresse d'hôte et par instance
+enfant. Une erreur d'adressage ou une cible qui n'est pas un `slot` publie un
+diagnostic de façade et l'opération est rejetée. La destruction de l'hôte ou
+de l'enfant détache automatiquement la relation, sans détruire l'autre
+instance.
 
 Lors d'un `replace`, la surface de présentation HTML crée un instantané
 temporaire de `hostRoot` et le module le garde visible le temps de sa
@@ -846,11 +868,17 @@ touche pas au DOM et n'appelle pas le composant par une méthode impérative. Un
 commande adressée à l'enfant utilise un autre `instanceId` : le parent et
 l'enfant ne se parlent pas directement.
 
-La façade publique actuelle de `instances.create` accepte une racine HTML pour
-une instance autonome, mais ne définit pas encore le descripteur de montage
-d'une instance dans un perso. C'est précisément la surface à arrêter en phase
-0 : l'exemple rend le raccord nécessaire explicite sans faire passer une
-opération conceptuelle pour une API déjà disponible.
+La façade publique de `instances.create` accepte une racine HTML visible
+optionnelle pour chaque instance. Sans cette racine, CodPlay crée un conteneur
+de materialization détaché. La première surface `instances.mount` utilise les
+racines matérialisées de premier niveau de l'enfant et les attache directement
+dans le `slot`; elle ne publie ni la racine du slot ni le runner à l'appelant.
+
+Cette frontière interdit à Sighty de créer une racine enfant, une envelope ou
+un wrapper HTML pour préparer le montage. Sighty adresse les persos par les
+identifiants logiques et conserve seulement les handles de cycle de vie ; le
+runner/materializer CodPlay crée et déplace les nœuds rendus. Le HTML de la
+page et les contrôles propres à une démonstration sont hors de cette frontière.
 
 Les events qui remontent vers Sighty suivent la visibilité V2 (`public`) et le
 canal d'observation existant. CodPlay ne route pas directement un event vers une
@@ -906,12 +934,12 @@ autre scène.
 | Phase | Statut | Preuve attendue |
 | --- | --- | --- |
 | 0. Relecture du contrat | **Validée le 2026-09-11** | Le type `slot`, le `name` racine, le manifeste, le diagnostic de découverte, l'absence d'opinion CSS du core et la frontière materializer sont acceptés pour l'ouverture de l'implémentation. Les décisions encore ouvertes restent listées dans les phases suivantes. |
-| 1. Profil et validation | **En cours** | Le type de perso, le défaut structurel `div`, le `name` racine, la référence foreign sérialisable, le manifeste et l'ignorance de `replace.split` sont raccordés au catalogue et au builder. La correspondance `view.slots`/`name` reste à exercer dans Sighty. |
-| 2. Surface opaque et materializer | **En cours** | La surface `foreignContent` attache/détache des racines HTML ordonnées dans la racine materialisée du `slot`, avec nettoyage au démontage. Sighty décide du cycle de vie des occurrences ; l'asynchronisme, l'ownership technique interinstances et la façade publique restent à raccorder. |
+| 1. Profil et validation | **En cours** | Le type de perso, le défaut structurel `div`, le `name` racine, la référence foreign sérialisable, le manifeste et l'ignorance de `replace.split` sont raccordés au catalogue et au builder. La première fixture exerce la correspondance `view.slots`/`name` ; les diagnostics d'intégration et les variantes de portée restent à compléter. |
+| 2. Surface opaque et materializer | **En cours** | La surface `foreignContent` attache/détache des racines HTML ordonnées dans la racine materialisée du `slot`, avec nettoyage au démontage. La première surface publique attache directement les racines matérialisées de l'enfant, sans envelope visible ; Sighty décide toujours du cycle de vie des occurrences. L'asynchronisme et les représentations multi-racines générales restent à raccorder. |
 | 3. Module `replace` partagé | **En cours** | Module core player-scoped, hooks génériques V2, instantané temporaire de l'ancien hôte, transition `fade`, annulation, finalisation et absence de fuite. `replace.split` est ignoré par le profil `slot`. |
 | 4. Composants compatibles | **En cours** | La même capacité est exercée par `slot` et `img` sans duplication de clone ; `tag` et les autres composants compatibles restent à examiner. |
-| 5. Adressage CodPlay | À engager | Le chemin Sighty → adresse d'hôte → surface `foreign-content` → instance enfant est exercé avec les façades existantes, et l'insertion `appendChild`/`insertBefore` est observée au bon `hostRoot` ; aucune API DOM ou route interscène parallèle. |
-| 6. Play, seek et lifecycle | À engager | Sighty pilote Play/Seek/replay, interruptions, remount et destruction ; CodPlay exécute chaque instance de façon idempotente et les players enfant et hôte gardent leur indépendance. |
+| 5. Adressage CodPlay | **En cours — première tentative** | Le chemin façade `codplay.instances.mount` → adresse d'hôte → surface `foreign-content` → racine d'instance enfant est exercé avec deux vrais players. L'insertion et le détachement sont observés au bon `hostRoot`, sans API DOM Sighty ni route interscène parallèle. |
+| 6. Play, seek et lifecycle | **En cours — première fixture** | Sighty pilote déjà le démarrage et le démontage/remontage explicites de A, avec des télécommandes par instance ; CodPlay exécute chaque instance de façon idempotente et les players enfant et hôte gardent leur indépendance. Pause/reprise, replay, interruptions, fins de séquence, ressources et validation navigateur restent à compléter. |
 
 ## Acceptance path du composant core
 
@@ -926,9 +954,10 @@ doit pas être remplacée par un setter local.
 2. Monter une représentation opaque simple, puis un fragment à plusieurs
    racines, et vérifier que le composant ne dépend ni de leur type ni de leur
    structure interne.
-3. Monter une scène CodPlay enfant réelle dans la racine, piloter séparément
-   l'hôte et l'enfant, puis vérifier que pause, seek, rate et destroy ne
-   traversent pas implicitement la frontière.
+3. Monter une scène CodPlay enfant réelle dans la racine par
+   `codplay.instances.mount`, piloter séparément l'hôte et l'enfant, puis
+   vérifier que pause, seek, rate et destroy ne traversent pas implicitement la
+   frontière.
 4. Remplacer le contenu avec `{ replace: 'fade' }`, vérifier la capture de
    l'ancien hôte, l'animation, l'absence d'event/target sur le clone et son
    nettoyage final.
@@ -945,13 +974,13 @@ doit pas être remplacée par un setter local.
 Les points suivants valident l'intégration du composant dans le scénario décrit
 par Sighty. Ils ne sont pas des contraintes supplémentaires du contrat core.
 
-8. Résoudre la relation Sighty entre `view.slots.body` et le perso
-   `body-host` dont `name` vaut `body`, obtenir l'adresse
-   `{ instanceId, storyId, persoId }`, monter l'instance enfant par la surface
-   hôte CodPlay, puis vérifier que ses racines deviennent des enfants de la
-   racine `hostRoot` par `appendChild`/`insertBefore`. Au démontage, vérifier que
-   ces racines seules sont retirées et que le parent et l'enfant restent
-   pilotables séparément.
+8. Résoudre les relations Sighty entre `view.slots.A` / `view.slots.B` et les
+   persos `slot` dont `name` vaut respectivement `A` / `B`, obtenir pour chacun
+   l'adresse `{ instanceId, storyId, persoId }`, monter les instances enfants par
+   la surface hôte CodPlay, puis vérifier que leurs racines deviennent des
+   enfants des `hostRoot` correspondants par `appendChild`/`insertBefore`. Au
+   démontage, vérifier que ces racines seules sont retirées et que le parent et
+   les enfants restent pilotables séparément.
 9. Adresser le perso par event local puis par la façade engine avec
    `instanceId` et cible story ; vérifier la séparation entre identité hôte et
    référence du nouveau contenu.
@@ -984,9 +1013,9 @@ par Sighty. Ils ne sont pas des contraintes supplémentaires du contrat core.
   démos V2 passent également.
 
 Cette première sous-tranche de profil et de surface ne prouve pas encore le remplacement animé, le raccord Sighty
-entre deux instances, la résolution asynchrone du contenu ou l'exposition de
-la surface par la façade publique. Ces points restent `En cours` ou `À engager`
-et ne doivent pas être simulés dans la démo.
+complet entre plusieurs vues, la résolution asynchrone du contenu ou les
+représentations foreign multi-racines. Ces points restent `En cours` ou `À
+engager` et ne doivent pas être simulés dans la démo.
 
 ### Preuves obtenues pour le raccord `replace` (2026-09-11)
 
@@ -1009,9 +1038,31 @@ et ne doivent pas être simulés dans la démo.
   dans `ImageComponent`.
 
 Cette tranche ne prouve pas encore l'exercice du module sur `tag`, le raccord
-Sighty entre deux instances, la résolution asynchrone du contenu ou
-l'exposition de la surface par la façade publique. Ces points restent `En
-cours` ou `À engager` et ne doivent pas être simulés dans la démo.
+Sighty complet entre plusieurs vues, la résolution asynchrone du contenu ou
+les représentations foreign multi-racines. Ces points restent `En cours` ou
+`À engager` et ne doivent pas être simulés dans la démo.
+
+### Preuves obtenues pour la première surface publique de montage (2026-09-11)
+
+- `codplay.instances.mount({ host, childInstanceId })` résout un `slot` par
+  `{ instanceId, storyId, persoId }` sans exposer le runner ni le DOM à
+  l'appelant.
+- La racine matérialisée de premier niveau de l'instance enfant est attachée
+  directement par la surface `foreignContent` dans le `hostRoot` du `slot`, sans
+  wrapper de montage. Le seek de l'hôte et celui de l'enfant conservent cette
+  relation et leurs états restent indépendants.
+- `detach()` est idempotent. La destruction explicite de l'enfant détache sa
+  racine et conserve l'instance hôte ; le nettoyage global détache les
+  relations avant le teardown des players.
+- `tests/facade/foreign-mount.spec.ts` exerce ce parcours avec deux instances
+  publiques réellement initialisées. Il s'agit d'une preuve core distincte
+  du scénario de démonstration Sighty.
+- `tests/facade/sighty-demo.spec.ts` exerce maintenant une première fixture
+  Sighty séparée : trois instances publiques sont compilées et créées sous un
+  même propriétaire, les noms `A` et `B` sont résolus par le manifeste, puis
+  les deux enfants sont montés et A est démontée/remontée sans effet sur B.
+  Cette preuve d'intégration ne clôt pas les politiques générales de cycle de
+  vie, les ressources asynchrones ou la validation navigateur.
 
 ### Parcours d'intégration recommandé pour une application auteur
 

@@ -171,8 +171,11 @@ export class HtmlPlayerRunner {
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
   private readonly emitSourceAdapter: HtmlPersoEmitSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
+  private readonly materializer: MotionMaterializer
   private readonly interactionLockEnabled: boolean
   private readonly interactionRoot: HTMLElement
+  private readonly rootTargetIds: readonly string[]
+  private mountContainer: HTMLElement
   private readonly motionContainerResolver: HtmlMotionContainerResolver
   private readonly initialPointerEvents: string
   private readonly initialInert: boolean
@@ -185,6 +188,7 @@ export class HtmlPlayerRunner {
   constructor(options: HtmlPlayerRunnerOptions) {
     this.defaultTicker = options.ticker
     this.interactionRoot = options.root
+    this.mountContainer = options.root
     this.motionStoryByItemId = createMotionStoryIndex(options.compiledScene)
     this.motionContainerResolver = new HtmlMotionContainerResolver(
       options.root,
@@ -209,6 +213,7 @@ export class HtmlPlayerRunner {
     })
     this.ownsEngine = options.engine === undefined
     const rootTargets = resolveRootTargets(options.compiledScene)
+    this.rootTargetIds = rootTargets.map((target) => target.id)
     const rootDeclarations = rootTargets.map((target) => ({
       id: target.id,
       kind: 'root' as const,
@@ -221,6 +226,7 @@ export class HtmlPlayerRunner {
       componentMaterializer,
       (scene, context) => this.presentMotion(scene, context),
     )
+    this.materializer = materializer
     const componentRuntime = createComponentRuntime(
       options.catalog,
       materializer,
@@ -470,6 +476,24 @@ export class HtmlPlayerRunner {
   /** Resolves one runner target node by its opaque target ID. */
   getTargetNode(targetId: string): unknown | undefined {
     return this.nodes.targetNodes.get(targetId)
+  }
+
+  /** Returns the currently mounted scene roots, without introducing an envelope node. */
+  getMaterializedRoots(): readonly unknown[] {
+    const scene = this.player.getSolvedScene()
+    if (scene === undefined) return []
+    return scene.graph.rootPersoKeys.flatMap((persoKey) => (
+      materializedRootNodes(this.nodes.persoNodes.get(persoKey))
+    ))
+  }
+
+  /** Rebinds root targets and reconciles the current scene in a CodPlay-owned mount container. */
+  setMountContainer(container: HTMLElement): void {
+    if (this.mountContainer === container) return
+    this.mountContainer = container
+    for (const targetId of this.rootTargetIds) this.nodes.targetNodes.set(targetId, container)
+    this.materializer.invalidateStructure?.()
+    if (this.player.getSolvedScene() !== undefined) this.player.refresh()
   }
 
   /** Resolves one typed component surface for an adapter owned by this runner. */
@@ -1159,6 +1183,12 @@ function createDefaultTicker(): Ticker {
 /** Resolves one materialized HTML element without exposing component handles. */
 function resolveHtmlHandle(node: unknown): HTMLElement | undefined {
   return typeof HTMLElement !== 'undefined' && node instanceof HTMLElement ? node : undefined
+}
+
+/** Expands one materialized component root or an ordered fragment of roots. */
+function materializedRootNodes(root: unknown): readonly unknown[] {
+  if (root === undefined || root === null) return []
+  return Array.isArray(root) ? root : [root]
 }
 
 /** Derives the instance-local root targets from the compiled scene manifest. */

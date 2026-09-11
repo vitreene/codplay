@@ -2,10 +2,11 @@
 
 ## Statut
 
-> Status: En cours — profil auteur, manifeste, surface HTML et module `replace`
-> `fade` implémentés et testés ; raccord interinstances et façade publique
-> restent à définir et valider ; le pilotage du cycle de vie des scènes relève
-> de Sighty.
+> Status: En cours — profil auteur, manifeste, surface HTML, module `replace`
+> `fade` et première surface publique de montage implémentés et testés ;
+> une première fixture Sighty de montage est testée ; les politiques générales
+> interinstances et de cycle de vie restent à valider ; le pilotage des scènes
+> relève de Sighty.
 > CodPlay version: V2 foundation
 > Décision d'ouverture: 2026-09-11
 > Plan: [`../plan/foreign-scene-component-plan.md`](../plan/foreign-scene-component-plan.md)
@@ -108,15 +109,66 @@ Le conteneur, `hostRoot` et les racines foreign doivent coordonner leurs règles
 CSS selon les choix de l'application auteur. Le composant core n'impose aucune
 couleur, dimension, ratio, débordement, alignement ou classe de présentation.
 
+## Première surface publique interinstances
+
+La première tentative de raccord CodPlay expose une scène enfant par la
+façade d'instances, sans publier de nœud DOM :
+
+```ts
+const mount = codplay.instances.mount({
+  host: { instanceId: 'layout-1', storyId: 'main', persoId: 'body-host' },
+  childInstanceId: 'child-1',
+})
+
+mount.detach()
+```
+
+`host` est une adresse logique complète. CodPlay résout le composant `slot`,
+demande au player enfant ses racines matérialisées de premier niveau et les
+attache directement via `ForeignContentSurface`. Si aucune racine n'est fournie
+à `instances.create`, CodPlay possède un conteneur interne détaché pour la
+matérialisation ; ce conteneur n'est jamais exposé ni inséré dans le `slot`.
+Les racines rendues restent possédées par l'enfant ; `mount` ne crée pas
+d'enveloppe supplémentaire, ne démarre, ne met en pause, ne seek ni ne détruit
+aucune instance.
+
+Le handle `detach` est idempotent. Une relation active est limitée à une
+adresse d'hôte et à une instance enfant ; une seconde relation concurrente est
+rejetée par diagnostic. La destruction de l'une des deux instances détache la
+relation avant son teardown, sans détruire l'autre instance. Les règles de
+remontage automatique, de composition multi-racines et d'intégration Sighty
+restent hors de cette tentative.
+
+## Interdiction de fabrication HTML par Sighty
+
+Le runtime Sighty qui décrit et orchestre une composition ne fabrique pas le
+DOM de ses scènes. Il lui est interdit de créer une racine enfant, une
+enveloppe de montage ou un wrapper avec `document.createElement`, `innerHTML`,
+`appendChild` ou une primitive équivalente, et de déplacer lui-même une racine
+dans un `slot`. Il lui est également interdit de rechercher le `slot` par
+inspection du DOM pour contourner l'adressage logique.
+
+La racine du `slot`, les racines matérialisées des scènes et leur insertion
+appartiennent au runner/materializer HTML CodPlay. `instances.mount` réaffecte
+si nécessaire les cibles racines du player enfant, puis attache directement
+ses racines matérialisées dans l'hôte. Une classe ou un élément tel que
+`sighty-child-root`, ajouté uniquement pour rendre ce raccord possible, est
+donc interdit. Le HTML statique de la page et ses contrôles de démonstration
+restent du ressort de la page de démo ; ils ne constituent pas la composition
+des scènes ni un substitut au materializer.
+
 ## Limites actuelles
 
 - Le module partagé `replace` est raccordé aux hooks V2 pour le profil `slot` et
   fournit la transition `fade`. La présence de `replace.split` est acceptée
   pour compatibilité de déclaration puis ignorée ; elle n'active aucune
   stratégie de split.
-- La surface est disponible dans le runtime HTML interne ; la façade publique
-  d'adressage entre instances reste à raccorder. Le pilotage du cycle de vie
-  des scènes appartient à Sighty et ne fait pas partie du composant `slot`.
+- La surface est disponible dans le runtime HTML interne et une première
+  façade `codplay.instances.mount` l'exerce pour les racines matérialisées
+  directes d'un enfant, sans enveloppe visible supplémentaire.
+  L'intégration Sighty, les remontages et les représentations multi-racines
+  restent à valider. Le pilotage du cycle de vie des scènes appartient à Sighty
+  et ne fait pas partie du composant `slot`.
 - Le code qui possède la représentation foreign conserve ses racines, ses
   ressources et son chargement. Dans la V2 actuelle, ce code n'est pas une
   classe core d'adaptation : c'est le propriétaire ou fournisseur de la
@@ -173,3 +225,14 @@ réel `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer
 un instantané sortant est animé par `fade`, le nouveau contenu reste porté par
 la surface `foreignContent`, puis l'instantané et ses styles transitoires sont
 supprimés.
+
+Le test `tests/facade/foreign-mount.spec.ts` exerce la première surface publique
+avec deux instances CodPlay réelles : adressage du `slot`, insertion directe de
+la racine matérialisée enfant, seek indépendant, détachement idempotent et
+nettoyage lors de la destruction de l'enfant.
+
+Le test `tests/facade/sighty-demo.spec.ts` exerce la fixture Sighty A/B avec un
+layout et deux instances enfants réelles : résolution des noms `A` et `B` par le
+manifeste, montage des deux racines et démontage/remontage indépendant de A.
+Cette fixture est une preuve consommateur séparée du contrat générique `slot` ;
+elle ne fixe ni politique de fin de scène ni support foreign multi-racines.

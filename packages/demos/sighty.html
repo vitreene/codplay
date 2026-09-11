@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sighty — composition A/B</title>
+  </head>
+  <body>
+    <main class="sighty-demo">
+      <header class="sighty-demo__header">
+        <div>
+          <p class="sighty-demo__eyebrow">Sighty · CodPlay V2</p>
+          <h1>Composition layout / A / B</h1>
+          <p>
+            Une composition déclarative monte deux scènes autonomes dans les
+            slots nommés du layout.
+          </p>
+        </div>
+        <p class="sighty-demo__status" data-sighty-status>Initialisation…</p>
+      </header>
+
+      <section class="sighty-demo__stage" aria-label="Composition Sighty">
+        <div class="sighty-demo__scene" data-sighty-stage></div>
+      </section>
+
+      <section class="sighty-demo__controls" aria-label="Pilotage Sighty">
+        <div class="sighty-demo__controls-header">
+          <h2>Pilotage des occurrences</h2>
+          <p>
+            Chaque télécommande agit sur une instance. Les boutons de montage
+            exercent le cycle de vie Sighty.
+          </p>
+        </div>
+        <div class="sighty-demo__controls-grid" data-sighty-controls></div>
+      </section>
+
+      <section class="sighty-demo__journal" aria-live="polite">
+        <h2>Journal</h2>
+        <pre data-sighty-log></pre>
+      </section>
+    </main>
+    <script type="module" src="/src/sighty/demo1/main.ts"></script>
+  </body>
+</html>
