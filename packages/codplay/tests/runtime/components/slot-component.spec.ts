@@ -114,10 +114,10 @@ describe('V2 slot component', () => {
     expect(foreignB.parentNode).toBeNull()
   })
 
-  it('rejects split replacement declarations', () => {
+  it('accepts and ignores split replacement declarations', () => {
     const catalog = createCoreRuntimeCatalog()
     const result = new SceneBuilder(catalog.validationSnapshot()).build({
-      id: 'slot-replace-invalid',
+      id: 'slot-replace-split-ignored',
       stories: {
         main: {
           id: 'main',
@@ -125,17 +125,20 @@ describe('V2 slot component', () => {
             id: 'host',
             name: 'body',
             type: 'slot',
-            initial: { replace: { transition: 'fade', split: 'cells' } as never },
+            initial: { content: { source: 'first' } },
+            actions: {
+              swap: {
+                content: { source: 'second' },
+                replace: { transition: 'fade', split: 'cells' },
+              },
+            },
           }],
         },
       },
     })
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.diagnostics.errors.map((diagnostic) => diagnostic.code))
-        .toContain('AUTHOR_SLOT_REPLACE_SPLIT_UNSUPPORTED')
-    }
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.compiledScene.requirements.modules).toContain('replace')
   })
 
   it('rejects attempts to move the root name into state or an action', () => {

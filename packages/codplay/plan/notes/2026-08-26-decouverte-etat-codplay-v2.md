@@ -69,7 +69,7 @@ défaut, ses services sont limités à `className`, `style` et `attr`, et son ch
 au service textuel `content` de `TagComponent`.
 
 Le materializer HTML publie une surface interne `foreignContent`. Elle écrit les
-racines fournies par un adaptateur dans le `hostRoot` par `appendChild` ou
+racines fournies par le propriétaire de la représentation dans le `hostRoot` par `appendChild` ou
 `insertBefore`, puis retire uniquement la relation qu'elle possède au démontage
 ou à la destruction. Sighty ne manipule pas le DOM. Le helper d'authoring
 `slotManifest`/`resolveSlotManifestEntry` découvre les noms et produit les
@@ -84,12 +84,45 @@ La spécification ciblée et le suivi détaillé sont :
 - [`2026-09-11-slot-foreign-reprise-report.md`](../2026-09-11-slot-foreign-reprise-report.md)
   pour le point de reprise factuel.
 
-Le module partagé `replace`, la représentation clonable, l'ownership entre
-instances, l'exposition par la façade publique et l'exécution Sighty ne sont pas
-encore implémentés. La démo A/B n'a donc pas été créée et aucune API interscène
-n'a été inventée pour la rendre artificiellement fonctionnelle. Les tests
-CodPlay, les typechecks CodPlay et démos V2 et le build des démos passent pour
-cette tranche.
+Le module partagé `replace`, ses hooks V2 et son instantané de présentation
+HTML sont traités dans la mise à jour ci-dessous. L'ownership entre instances,
+l'exposition par la façade publique et l'exécution Sighty ne sont pas encore
+implémentés. La démo A/B n'a donc pas été créée et aucune API interscène n'a
+été inventée pour la rendre artificiellement fonctionnelle. Les tests CodPlay,
+les typechecks CodPlay et démos V2 et le build des démos passent pour la
+tranche correspondante.
+
+Décision de frontière ajoutée le 2026-09-11 : Sighty pilote le cycle de vie des
+occurrences de scènes (création, montage, pilotage, démontage et destruction).
+CodPlay fournit les opérations d'instance et l'exécution runtime ; `slot` ne
+prend aucune décision de survie sur le player enfant. Une première tranche de
+composition A/B peut donc être engagée et affinée par la démo, sans transformer
+ses choix particuliers en contrat générique du composant.
+
+### Mise à jour du 2026-09-11 — raccord V2 de `replace`
+
+Le module partagé `replace` est maintenant enregistré dans le catalogue core et
+requis par `slot`. Le runtime composant diffuse des hooks génériques avant et
+après `component.update()` ; la surface de présentation HTML crée l'instantané
+DOM temporaire du host et le détruit à la fin, à l'annulation, au seek ou à la
+destruction. Ce snapshot ne possède ni contenu foreign, ni player, ni ressource.
+
+Le propriétaire de la représentation foreign reste le code qui détient ses
+racines et son chargement. Il consomme la surface `foreignContent`; aucune
+classe core nommée « adaptateur » n'est introduite. Dans le profil `slot`,
+`replace.split` est accepté pour compatibilité de déclaration puis ignoré, et
+le chemin `replace-simple`/`fade` est utilisé. Le test
+`tests/runtime/capabilities/replace-module.spec.ts` couvre le parcours runtime
+réel et la mise en place d'une nouvelle racine foreign pendant la transition.
+
+Le raccord interinstances Sighty, la façade publique d'adressage, les contenus
+asynchrones et l'extension du module aux autres composants restent ouverts.
+
+La gate de réutilisation du module `replace` est partiellement avancée : le
+composant core `img` exerce maintenant le même chemin `fade` et la même surface
+de présentation que `slot`, avec les URLs déclarées par le runtime. `tag`, les
+contenus non clonables comme les iframes et le raccord interinstances restent
+hors implémentation de cette reprise.
 
 ## 1. Ordre de lecture et sources d'autorité
 

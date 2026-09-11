@@ -210,6 +210,13 @@ sont pas des propriétés opérationnelles publiques de l'instance : ils sont
 fournis à la création et restent encapsulés. `destroy` reste porté par
 `codplay.instances.destroy()` afin que le propriétaire contrôle le teardown.
 
+Dans une composition Sighty, ces opérations de façade sont les primitives que
+Sighty ordonne pour piloter chaque occurrence. CodPlay exécute le cycle de vie
+de l'instance et ne décide ni de la survie d'une scène enfant, ni du moment où
+elle doit être créée, montée, démontée ou détruite. Cette première tranche peut
+être exercée par la démo A/B ; ses observations pourront affiner l'orchestration
+Sighty sans ajouter une politique de cycle de vie au composant `slot`.
+
 Il n'y aura donc pas de surface publique `instance.play()`, `instance.pause()`,
 `instance.emit()`, `instance.beginCapture()` ou `instance.onDiagnostic()` en
 parallèle des groupes ci-dessus. Une commodité à plat ne pourra être ajoutée

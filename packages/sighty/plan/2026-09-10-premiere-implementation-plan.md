@@ -5,11 +5,16 @@
 Statut : En cours — cadrage de la première démo.  
 Périmètre du scénario : demandé par l'auteur le 2026-09-10.  
 Tranche de montage interscènes : En cours côté CodPlay ; raccord Sighty encore à engager.
+Tranche de cycle de vie Sighty : première tranche autorisée le 2026-09-11 ;
+affinage prévu à partir de la démo.
 Implémentation : non commencée.
 
 Ce document décrit uniquement la démonstration Sighty. Il ne définit pas le
 composant CodPlay d’hébergement : son contrat et ses phases sont suivis dans le
 [plan du composant foreign CodPlay](../../codplay/plan/foreign-scene-component-plan.md).
+La description du scénario A/B est conservée dans la [note du modèle
+déclaratif Sighty](../notes/2026-08-17-modele-fichier-declaratif.md) ; ce plan
+en suit l'implémentation et la preuve d'intégration.
 
 ## Sources à relire
 
@@ -24,6 +29,11 @@ composant CodPlay d’hébergement : son contrat et ses phases sont suivis dans 
 
 ## Résultat demandé
 
+Le résultat demandé est une fixture de démonstration et d'intégration Sighty,
+pas une spécification exhaustive du composant `slot`. Les besoins génériques
+du composant restent dans les documents CodPlay référencés ci-dessus ; ce
+document ne fait que préciser comment cette composition fixe les consomme.
+
 Préparer trois fichiers de scènes déclaratives, un pour A, un pour B et un pour
 le layout, puis un fichier Sighty déclaratif qui les compose. Les fichiers
 auteur ne contiennent aucune fonction de construction intermédiaire.
@@ -37,13 +47,41 @@ Le layout de cette première démo comporte exactement deux zones nommées `A` e
 `B`, confirmées par l'auteur le 2026-09-10. La zone `A` reçoit une occurrence de
 la scène A et la zone `B` une occurrence de la scène B.
 
+## Première tranche de cycle de vie Sighty
+
+La décision de frontière est fixée : Sighty pilote le cycle de vie des
+occurrences de scènes ; `slot` ne pilote pas les players qu'il héberge. La
+première tranche est volontairement limitée à la composition fixe A/B et sert
+de parcours réel pour faire émerger les détails à stabiliser ensuite.
+
+Le parcours initial à exercer est le suivant :
+
+1. Sighty résout, compile et précharge séparément le layout, A et B.
+2. Sighty crée l'occurrence du layout et attend que ses deux hôtes `slot` soient
+   disponibles via le raccord CodPlay prévu.
+3. Sighty crée les occurrences A et B, demande leur montage dans les hôtes
+   correspondants, puis les démarre séparément.
+4. Sighty envoie les commandes de play, pause/reprise, seek et replay à chaque
+   occurrence selon le scénario ; aucun de ces ordres ne traverse implicitement
+   le composant hôte.
+5. Lorsque la composition est retirée, Sighty demande explicitement le
+   démontage puis la destruction des occurrences concernées. Le détachement de
+   `slot` ne détruit pas à lui seul le player enfant.
+
+Cette tranche n'institue pas encore une politique générale de remplacement, de
+fin de lecture ou d'échec partiel. La démo vérifiera le chemin réel et permettra
+d'affiner l'ordre des opérations, la conservation ou la destruction en fin de
+scène, le remontage et la libération des ressources propres à chaque occurrence.
+Les opérations de DOM restent dans CodPlay ; Sighty ne crée pas de circuit
+parallèle dans la démo.
+
 ## Étapes et gates
 
 | Étape | Statut | Action et condition de passage |
 | --- | --- | --- |
 | 0. Reprise | Effectuée | Relire les quatre notes Sighty, identifier les contrats CodPlay concernés et confronter le montage prévu à la façade publique. |
 | 1. Scénario précis | En cours | Le découpage A/B est fixé ; préciser encore les bornes des fondus, les changements de B et le maintien ou la sortie de chaque scène en fin de lecture. |
-| 2. Montage interscènes | En cours côté core, intégration Sighty à engager | La première tranche du [plan du composant foreign CodPlay](../../codplay/plan/foreign-scene-component-plan.md) est autorisée et raccorde le profil `slot` ainsi que la surface HTML d'attachement. Le chemin Sighty entre deux instances, sa façade publique et son cycle de vie restent à arrêter avant la démo. |
+| 2. Montage interscènes | En cours côté core, intégration Sighty à engager | La première tranche du [plan du composant foreign CodPlay](../../codplay/plan/foreign-scene-component-plan.md) est autorisée et raccorde le profil `slot` ainsi que la surface HTML d'attachement. La responsabilité du cycle de vie est fixée côté Sighty ; le raccord public, l'ordre concret et les cas d'échec restent à exercer puis à affiner. |
 | 3. Fichiers auteur | À engager après les décisions | Arrêter la représentation des ressources de scène et écrire les trois scènes et le fichier Sighty sans fonctions intermédiaires. |
 | 4. Exécution Sighty | À engager après les décisions | Construire le chargement, la validation et l'entrée dans cette composition fixe ; utiliser la façade CodPlay et son preload. |
 | 5. Accueil navigateur | À engager après les décisions | Raccorder un hôte de validation pour Sighty ; conserver dans le layout commun les services partagés si le parcours utilise `packages/demos/src/v2`. |
@@ -59,7 +97,9 @@ décrit la tranche à relire et son adressage CodPlay. Le layout de la démo ne
 définit pas cette capacité : il fournit seulement les deux zones structurelles
 dans lesquelles les composants hôtes sont placés.
 
-Avant de coder, arrêter :
+La responsabilité du cycle de vie étant arrêtée côté Sighty, les points suivants
+sont maintenant des choix de première tranche et des éléments d'affinage par la
+démo, pas une raison pour transférer ce pilotage au composant `slot` :
 
 1. La relation entre le nom de slot du fichier Sighty et la cible publiée par
    la scène layout, notamment sa portée lorsqu'une scène contient plusieurs
@@ -190,8 +230,9 @@ Le chemin d'exécution est le suivant :
    du perso `slot` et associe la représentation de l'enfant à cette racine.
    Sighty ne sélectionne pas le DOM.
 
-5. La capacité/adaptateur `foreign-content` de `layout-1` monte la représentation de
-   `scene-a-1` dans `host-a`. Le composant `slot` expose la boîte ; il ne
+5. Le raccord propriétaire `foreign-content` de `layout-1` monte la
+   représentation de `scene-a-1` dans `host-a` via la surface du slot. Le
+   composant `slot` expose la boîte ; il ne
    connaît ni le player enfant ni sa timeline.
 
 6. Sighty pilote `scene-a-1` et `scene-b-1` séparément. Leurs temps, seek,
@@ -221,8 +262,9 @@ await codplay.events.emit(hostCommand)
 Cette commande ne crée ni ne pilote `scene-a-1`. Sighty reste responsable de la
 création, du rattachement et de la destruction des occurrences ; le composant
 foreign reste responsable de l'exposition de sa racine. Lors d'un remplacement,
-`replace` ne crée qu'un clone technique de la représentation sortante et jamais
-une seconde instance CodPlay.
+`replace` ne crée qu'un instantané DOM technique et temporaire de la
+représentation sortante, jamais une seconde instance CodPlay ; cet instantané
+est géré par la présentation HTML et ne participe pas au cycle de vie Sighty.
 
 Le choix entre documents JSON et modules TypeScript exportant directement de
 la donnée, leur résolution depuis `resources.scenes`, ainsi que le raccord à
@@ -281,6 +323,11 @@ Aucune scène ni exécution Sighty n'a été créée à ce stade. Aucun test run
 ou navigateur n'a été exécuté. Le constat de montage absent est fondé sur la
 lecture des contrats, des types publics et du composant layout ; il ne s'agit
 pas d'une panne déjà reproduite dans une démo.
+
+La responsabilité Sighty du cycle de vie et le périmètre de la première tranche
+A/B sont maintenant acceptés comme décisions de cadrage. Ils restent à prouver
+par une exécution réelle ; les choix d'ordre, de fin de scène, de remontage et
+de teardown seront ajustés à partir de cette preuve.
 
 Après validation des décisions et implémentation, créer la spécification
 ciblée des capacités réellement prises en charge et un guide utilisateur avec

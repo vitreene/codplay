@@ -118,6 +118,8 @@ export type RuntimePlayerRefreshOptions = Readonly<{
 /** Adds player-local materialization controls without expanding the materializer contract. */
 type RuntimePlayerMaterializationContext = RuntimeMaterializerSceneContext & Readonly<{
   forceMotionOccurrences?: boolean
+  /** Controls whether component module presentation hooks may start effects. */
+  componentPhase?: 'normal' | 'seek' | 'geometry-capture'
 }>
 
 /** Result returned by player initialization. */
@@ -371,7 +373,7 @@ export class RuntimePlayer {
     if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
       throw new Error('Geometry capture requires an initialized runtime player.')
     }
-    this.componentRuntime?.sync(scene)
+    this.componentRuntime?.sync(scene, false, { phase: 'geometry-capture' })
     this.componentRuntime?.presentAt?.(scene.timeMs)
     this.materializer?.materializeScene(scene, {
       moveDeltas: [],
@@ -465,6 +467,7 @@ export class RuntimePlayer {
         this.materializeScene(solvedScene, {
           previousScene: transaction.previousSolvedScene,
           moveDeltas: transaction.moveDeltas,
+          componentPhase: 'seek',
         })
         this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
         this.pendingSolvedScene = undefined
@@ -525,7 +528,11 @@ export class RuntimePlayer {
       : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
     notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
-    this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.materializeScene(nextSolvedScene, {
+      previousScene: previousSolvedScene,
+      moveDeltas,
+      componentPhase: 'seek',
+    })
     this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
     this.state = PLAYER_LIFECYCLE_READY
     this.notifyTransportObservers()
@@ -1011,7 +1018,10 @@ export class RuntimePlayer {
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */
   private materializeScene(scene: SolvedScene, context: RuntimePlayerMaterializationContext): void {
-    this.componentRuntime?.sync(scene)
+    this.componentRuntime?.sync(scene, false, {
+      phase: context.componentPhase
+        ?? (context.phase === 'geometry-capture' ? 'geometry-capture' : 'normal'),
+    })
     notifyModuleScenePresented(
       this.moduleServiceInstances,
       scene,
@@ -1271,6 +1281,7 @@ export class RuntimePlayer {
         this.materializeScene(this.solvedScene, {
           previousScene: currentSolvedScene,
           moveDeltas,
+          componentPhase: 'seek',
         })
         this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
       }

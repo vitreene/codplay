@@ -12,7 +12,7 @@ export type ForeignContentValue =
 /** Initial and resolved data profile accepted by one slot host perso. */
 export type SlotState = BaseComponentVisualData & Readonly<{
   tag?: string
-  /** Opaque serialized reference resolved by the owning foreign-content adapter. */
+  /** Opaque serialized reference resolved by the owning foreign-content provider. */
   content?: ForeignContentValue
   replace?: SlotReplace
 }>
@@ -27,4 +27,6 @@ export type SlotAction = Partial<SlotState>
 export type SlotReplace = 'fade' | Readonly<{
   transition: 'fade'
   duration?: number
+  /** Shared replace compatibility field; the opaque slot deliberately ignores it. */
+  split?: 'letter' | 'word' | 'line' | 'cells'
 }>

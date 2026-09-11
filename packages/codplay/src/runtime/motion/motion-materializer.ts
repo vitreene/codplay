@@ -1,6 +1,9 @@
 import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import type { BaseComponent, RuntimeComponentHandle, RuntimeComponentIdentity } from '../components'
-import type { ForeignContentSurface } from '../components'
+import type {
+  ForeignContentSurface,
+  ReplaceComponentSurface,
+} from '../components'
 import type { RuntimeModuleServiceInstance } from '../engine'
 import type { SolvedScene } from '../player/pipeline'
 
@@ -43,6 +46,11 @@ export class MotionMaterializer implements RuntimeMaterializer {
   /** Delegates foreign-root attachment to the underlying HTML materializer. */
   getForeignContentSurface(componentId: string): ForeignContentSurface | undefined {
     return this.base.getForeignContentSurface?.(componentId)
+  }
+
+  /** Delegates the presentation-only replace surface to the HTML materializer. */
+  getReplaceSurface(componentId: string): ReplaceComponentSurface | undefined {
+    return this.base.getReplaceSurface?.(componentId)
   }
 
   /** Forwards an external transient-structure invalidation to the base host. */

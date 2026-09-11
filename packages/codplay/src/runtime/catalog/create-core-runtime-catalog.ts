@@ -37,6 +37,7 @@ import {
 import { createMarkupModuleServiceDefinition } from '../capabilities/markup'
 import { createListModuleServiceDefinition } from '../capabilities/list'
 import { createMediaSyncModuleServiceDefinition } from '../capabilities/media-sync'
+import { createReplaceModuleServiceDefinition } from '../capabilities/replace'
 import {
   HTML_ATTR_SERVICE,
   HTML_CLASS_NAME_SERVICE,
@@ -55,6 +56,7 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
   catalog.registerModule({ ...createMarkupModuleServiceDefinition(), origin: 'core' }, 'core')
   catalog.registerModule({ ...createListModuleServiceDefinition(), origin: 'core' }, 'core')
   catalog.registerModule({ ...createMediaSyncModuleServiceDefinition(), origin: 'core' }, 'core')
+  catalog.registerModule({ ...createReplaceModuleServiceDefinition(), origin: 'core' }, 'core')
 
   catalog.registerComponent(coreTagDefinition, 'core')
   catalog.registerComponent(coreImageDefinition, 'core')
@@ -80,7 +82,7 @@ const coreTagDefinition: RuntimeComponentDefinition = {
 const coreImageDefinition: RuntimeComponentDefinition = {
   type: 'img',
   component: ImageComponent,
-  modules: [],
+  modules: ['replace'],
   validateInitial: validateImageInitial,
   validateAction: validateImageAction,
 }
@@ -150,7 +152,7 @@ const corePolygonDefinition: RuntimeComponentDefinition = {
 const coreSlotDefinition: RuntimeComponentDefinition = {
   type: 'slot',
   component: ForeignContentComponent,
-  modules: [],
+  modules: ['replace'],
   validateInitial: validateSlotInitial,
   validateAction: validateSlotAction,
   validatePerso: validateSlotPerso,

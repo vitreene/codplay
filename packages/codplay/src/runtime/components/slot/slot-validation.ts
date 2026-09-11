@@ -32,7 +32,7 @@ export const validateSlotInitial: ValidationFunction = (value, context) => {
   validateReplace(value.replace, context)
 }
 
-/** Validates one slot action patch and rejects unsupported split replacement. */
+/** Validates one slot action patch while keeping shared replace fields opaque. */
 export const validateSlotAction: ValidationFunction = (value, context) => {
   if (!isComponentRecord(value)) {
     reportInvalidComponentValue(context, 'AUTHOR_SLOT_ACTION_INVALID', 'slot action must be a plain object.')
@@ -90,7 +90,7 @@ function isForeignContentValue(value: unknown): value is ForeignContentValue {
   return Object.values(value).every(isForeignContentValue)
 }
 
-/** Validates the first slot replacement profile, including the split rejection. */
+/** Validates the slot replacement profile while deliberately ignoring split. */
 function validateReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
   if (value === undefined) return
   if (value === 'fade') return
@@ -102,14 +102,6 @@ function validateReplace(value: unknown, context: Parameters<ValidationFunction>
       'replace',
     )
     return
-  }
-  if (value.split !== undefined) {
-    reportInvalidComponentValue(
-      context,
-      'AUTHOR_SLOT_REPLACE_SPLIT_UNSUPPORTED',
-      'slot.replace.split is not supported by the slot profile.',
-      'replace.split',
-    )
   }
   if (value.transition !== 'fade') {
     reportInvalidComponentValue(

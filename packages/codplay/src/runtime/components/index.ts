@@ -40,7 +40,7 @@ export {
 export { RuntimeComponentRuntime } from './runtime-component-runtime'
 export type { LayoutAction, LayoutInitial, LayoutState } from './layout'
 export type { ListAction, ListConfig, ListInitial, ListState } from './list'
-export type { ImageAction, ImageInitial, ImagePartState, ImageState } from './image'
+export type { ImageAction, ImageInitial, ImagePartState, ImageReplace, ImageState } from './image'
 export type {
   InputAction,
   InputActionDoc,
@@ -68,6 +68,8 @@ export type {
 export type {
   ForeignContentSurface,
   MediaComponentSurface,
+  ReplaceComponentSurface,
+  ReplacePresentationSession,
   RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,
@@ -111,5 +113,6 @@ export type {
 export type {
   RuntimeComponentHandle,
   RuntimeComponentIdentity,
+  RuntimeComponentSyncOptions,
   RuntimeComponentRuntimeOptions,
 } from './runtime-component-runtime'

@@ -19,7 +19,7 @@ export class ForeignContentComponent extends BaseHTMLComponent<SlotInitial> {
     return `<${tag}></${tag}>`
   }
 
-  /** Applies host-root services while leaving the opaque foreign value to its adapter. */
+  /** Applies host-root services while leaving the opaque foreign value to its owner. */
   update(input: ComponentUpdateInput<SlotState>): void {
     if (this.node === null) throw new Error(`Foreign content component is not materialized: ${this.perso.id}`)
     this.services.apply(this.node, {

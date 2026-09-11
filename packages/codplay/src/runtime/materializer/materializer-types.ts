@@ -1,7 +1,10 @@
 import type { RuntimeModuleServiceInstance } from '../engine/module-service-types'
 import type { BaseComponent } from '../components/base-component'
 import type { RuntimeComponentHandle } from '../components/runtime-component-runtime'
-import type { ForeignContentSurface } from '../components/component-surface-types'
+import type {
+  ForeignContentSurface,
+  ReplaceComponentSurface,
+} from '../components/component-surface-types'
 import type { RuntimeComponentIdentity } from '../catalog'
 import type { MoveStateDelta } from '../move'
 import type { MaterializedAction, SolvedScene } from '../player/pipeline/types'
@@ -51,6 +54,8 @@ export type RuntimeMaterializer = Readonly<{
   materializeScene: (scene: SolvedScene, context?: RuntimeMaterializerSceneContext) => void
   /** Resolves the foreign-root attachment surface for one materialized component. */
   getForeignContentSurface?: (componentId: string) => ForeignContentSurface | undefined
+  /** Resolves the presentation-only replace surface for one materialized component. */
+  getReplaceSurface?: (componentId: string) => ReplaceComponentSurface | undefined
   /** Marks structure dirty after an external transient presentation releases nodes. */
   invalidateStructure?: () => void
   destroy?: () => void

@@ -1,5 +1,9 @@
 import type { SolvedScene } from '../player/pipeline'
-import type { RuntimeModuleServiceInstance } from '../engine'
+import type {
+  RuntimeComponentUpdateContext,
+  RuntimeComponentUpdatePhase,
+  RuntimeModuleServiceInstance,
+} from '../engine'
 import type { BaseComponent } from './base-component'
 import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../catalog'
 import type { RuntimeMaterializer } from '../materializer'
@@ -33,7 +37,14 @@ export type RuntimeComponentRuntimeOptions = Readonly<{
   resourceMedia?: ReadonlyMap<string, RuntimePreloadMediaHandle>
 }>
 
+/** Optional presentation mode supplied by the player around one scene sync. */
+export type RuntimeComponentSyncOptions = Readonly<{
+  phase?: RuntimeComponentUpdatePhase
+}>
+
 type MountedComponent = Readonly<{
+  identity: RuntimeComponentIdentity
+  persoId: string
   component: BaseComponent<Record<string, unknown>>
   handle: RuntimeComponentHandle
   surfaces: Partial<RuntimeComponentSurfaceMap>
@@ -74,6 +85,7 @@ export class RuntimeComponentRuntime {
       getSurface: <SurfaceId extends RuntimeComponentSurfaceId>(componentId: string, surfaceId: SurfaceId) =>
         this.mounted.get(componentId)?.surfaces[surfaceId],
       getForeignContentSurface: (componentId) => this.mounted.get(componentId)?.surfaces.foreignContent,
+      getReplaceSurface: (componentId) => this.mounted.get(componentId)?.surfaces.replace,
     }
   }
 
@@ -88,18 +100,20 @@ export class RuntimeComponentRuntime {
    * An explicit force is reserved for commands such as refresh that must reapply
    * the current state despite its logical identity being unchanged.
    */
-  sync(scene: SolvedScene, force = false): void {
+  sync(scene: SolvedScene, force = false, options: RuntimeComponentSyncOptions = {}): void {
+    const phase = options.phase ?? 'normal'
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
       const actions = createStableActionSignature(perso.actions)
-      if (force
+      if (phase !== 'normal'
+        || force
         || this.hasStateChanged(perso.key, perso.state)
         || !sameRuntimeValue(this.lastActions.get(perso.key), actions)) {
         this.applyComponentUpdate(mounted, perso.key, {
           state: perso.state,
           timeMs: scene.timeMs,
           activeActions: perso.actions,
-        })
+        }, phase)
         this.lastActions.set(perso.key, actions)
         this.recordStateRevision(perso.key, perso.state)
       }
@@ -120,7 +134,7 @@ export class RuntimeComponentRuntime {
     const mounted = this.mounted.get(persoKey)
     if (mounted === undefined) throw new Error(`Runtime component is not mounted: ${persoKey}`)
     if (!this.hasStateChanged(persoKey, state)) return
-    this.applyComponentUpdate(mounted, persoKey, { state, timeMs })
+    this.applyComponentUpdate(mounted, persoKey, { state, timeMs }, 'normal')
     this.recordStateRevision(persoKey, state)
   }
 
@@ -142,12 +156,29 @@ export class RuntimeComponentRuntime {
     mounted: MountedComponent,
     persoKey: string,
     input: Omit<ComponentUpdateInput<Record<string, unknown>>, 'registerAnimation'>,
+    phase: RuntimeComponentUpdatePhase,
   ): void {
     const registered: ComponentAnimation[] = []
-    mounted.component.update({
-      ...input,
+    const context: RuntimeComponentUpdateContext = {
+      ...mounted.identity,
+      persoId: mounted.persoId,
+      state: input.state,
+      timeMs: input.timeMs,
+      activeActions: input.activeActions ?? [],
+      phase,
       registerAnimation: (animation) => registered.push(animation),
-    })
+    }
+    try {
+      for (const instance of this.moduleServices.values()) instance.beforeComponentUpdate?.(context)
+      mounted.component.update({
+        ...input,
+        registerAnimation: (animation) => registered.push(animation),
+      })
+      for (const instance of this.moduleServices.values()) instance.afterComponentUpdate?.(context)
+    } catch (error) {
+      for (const instance of this.moduleServices.values()) instance.onComponentUpdateError?.(context, error)
+      throw error
+    }
     if (registered.length === 0) {
       this.animations.delete(persoKey)
       return
@@ -239,18 +270,24 @@ export class RuntimeComponentRuntime {
     )
     let surfaces: Partial<RuntimeComponentSurfaceMap>
     try {
-      surfaces = this.options.catalog.getComponentSurfaces(
+      const componentSurfaces = this.options.catalog.getComponentSurfaces(
         perso.type,
         component,
         identity,
         this.options.materializer,
       )
+      const replaceSurface = this.options.materializer.getReplaceSurface?.(perso.key)
+      surfaces = replaceSurface === undefined
+        ? componentSurfaces
+        : { ...componentSurfaces, replace: replaceSurface }
     } catch (error) {
       handle.destroy()
       component.destroy()
       throw error
     }
     const mounted: MountedComponent = {
+      identity,
+      persoId: perso.persoId,
       component,
       surfaces,
       handle,

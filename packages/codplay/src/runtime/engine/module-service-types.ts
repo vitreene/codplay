@@ -3,6 +3,10 @@ import type { MoveStateDelta } from '../move'
 import type { SolvedScene } from '../player/pipeline/types'
 import type { MountTargetDeclaration } from '../player/pipeline/mount-targets'
 import type { RuntimeComponentSurfaceResolver } from '../components/component-surface-types'
+import type {
+  ComponentActionOccurrence,
+  ComponentAnimation,
+} from '../components/component-types'
 
 /** Context supplied when one module instance is created for a player. */
 export type RuntimeModuleServiceContext = Readonly<{
@@ -18,6 +22,23 @@ export type RuntimeModuleServiceSeekHandle = Readonly<{
   abort?: () => void
 }>
 
+/** Identifies why the component runtime is delivering one state update. */
+export type RuntimeComponentUpdatePhase = 'normal' | 'seek' | 'geometry-capture'
+
+/** Context shared by generic module hooks around one component update. */
+export type RuntimeComponentUpdateContext = Readonly<{
+  componentId: string
+  storyId: string
+  persoId: string
+  componentType: string
+  state: Readonly<Record<string, unknown>>
+  timeMs: number
+  activeActions: readonly ComponentActionOccurrence[]
+  phase: RuntimeComponentUpdatePhase
+  /** Adds a player-clocked presentation stream to this component update. */
+  registerAnimation: (animation: ComponentAnimation) => void
+}>
+
 /** Complete structural order returned by one runtime capability policy. */
 export type RuntimeStructuralOrder = Readonly<Record<string, readonly string[]>>
 
@@ -31,6 +52,12 @@ export type RuntimeStructuralOrderResolver = (
 /** Hooks exposed by one player-scoped module instance. */
 export type RuntimeModuleServiceInstance = Readonly<{
   initializeScene?: (scene: SolvedScene) => void
+  /** Runs immediately before the component receives one logical update. */
+  beforeComponentUpdate?: (context: RuntimeComponentUpdateContext) => void
+  /** Runs immediately after the component successfully receives one update. */
+  afterComponentUpdate?: (context: RuntimeComponentUpdateContext) => void
+  /** Cleans module state when the component update fails after preparation. */
+  onComponentUpdateError?: (context: RuntimeComponentUpdateContext, error: unknown) => void
   /** Receives the solved scene after its component state has been synchronized. */
   onScenePresented?: (scene: SolvedScene, playbackState: 'playing' | 'paused') => void
   /** Receives a player lifecycle transition at the current logical time. */

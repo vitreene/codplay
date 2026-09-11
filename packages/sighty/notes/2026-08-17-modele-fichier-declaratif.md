@@ -600,6 +600,11 @@ La première mise en place part d'un cas plus petit que le parcours du §8. Ce
 dernier reste une perspective de validation ; il ne constitue pas le périmètre
 à implémenter pour commencer.
 
+Cette section est la description de la fixture de démonstration Sighty A/B.
+Elle ne constitue ni l'expression de besoin du composant CodPlay `slot`, ni un
+contrat générique de contenu foreign. Les capacités nécessaires à sa
+consommation sont définies séparément dans les spécifications et plans CodPlay.
+
 Le cas demandé comporte trois scènes autonomes :
 
 - **Scène A** : une image de fond et un titre centré apparaissent l'un après

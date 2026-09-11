@@ -41,4 +41,36 @@ function validateImageFields(
   if (value.img !== undefined && !isPlainRecord(value.img)) {
     reportInvalidComponentValue(context, 'AUTHOR_IMAGE_PART_INVALID', 'img.img must be a plain object.', 'img')
   }
+  validateImageReplace(value.replace, context)
+}
+
+/** Validates the simple replacement declaration without adding split semantics to img. */
+function validateImageReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
+  if (value === undefined || value === 'fade') return
+  if (!isPlainRecord(value)) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_IMAGE_REPLACE_INVALID',
+      'img.replace must be "fade" or an object with transition: "fade".',
+      'replace',
+    )
+    return
+  }
+  if (value.transition !== 'fade') {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_IMAGE_REPLACE_TRANSITION_INVALID',
+      'img.replace.transition must be "fade".',
+      'replace.transition',
+    )
+  }
+  if (value.duration !== undefined
+    && (typeof value.duration !== 'number' || !Number.isFinite(value.duration) || value.duration < 0)) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_IMAGE_REPLACE_DURATION_INVALID',
+      'img.replace.duration must be a finite non-negative number.',
+      'replace.duration',
+    )
+  }
 }

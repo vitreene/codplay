@@ -9,6 +9,7 @@ import type {
   BaseComponent,
   ForeignContentSurface,
   MaterializedPart,
+  ReplaceComponentSurface,
   RuntimeComponentHandle,
   RuntimeComponentIdentity,
 } from '../components'
@@ -21,6 +22,7 @@ import type {
 } from '../materializer'
 import type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
 import { isHtmlTransientNode } from './transient-node'
+import { createHtmlReplacePresentationSurface } from './replace-presentation-surface'
 
 export type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
 
@@ -158,12 +160,17 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     this.structureDirty = true
   }
 
-  /** Returns the host-owned surface used by an adapter to expose foreign roots. */
+  /** Returns the host-owned surface used by a content owner to expose foreign roots. */
   getForeignContentSurface(componentId: string): ForeignContentSurface {
     return {
       attach: (roots, referenceRoot) => this.attachForeignContent(componentId, roots, referenceRoot),
       detach: () => this.detachForeignContent(componentId),
     }
+  }
+
+  /** Returns the presentation-only surface used by the shared replace module. */
+  getReplaceSurface(componentId: string): ReplaceComponentSurface | undefined {
+    return createHtmlReplacePresentationSurface(this.nodes.persoNodes.get(componentId))
   }
 
   /** Detaches all currently materialized roots from their structural parents. */

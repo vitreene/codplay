@@ -112,7 +112,10 @@ export type {
 } from './scene/authoring'
 export type {
   ForeignContentValue,
+  ImageReplace,
   ForeignContentSurface,
+  ReplaceComponentSurface,
+  ReplacePresentationSession,
   RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,
@@ -124,6 +127,10 @@ export type {
   SlotState,
 } from './runtime/components'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
+export type {
+  RuntimeComponentUpdateContext,
+  RuntimeComponentUpdatePhase,
+} from './runtime/engine'
 export type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,

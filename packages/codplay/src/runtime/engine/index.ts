@@ -10,6 +10,8 @@ export type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
   RuntimeModuleServiceSeekHandle,
+  RuntimeComponentUpdateContext,
+  RuntimeComponentUpdatePhase,
   RuntimeStructuralOrder,
   RuntimeStructuralOrderResolver,
 } from './module-service-types'

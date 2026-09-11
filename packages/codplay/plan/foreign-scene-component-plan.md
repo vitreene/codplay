@@ -15,19 +15,40 @@ plan ne définit pas d'orchestrateur d'application ni de composition de vues.
 Le nom du fichier est conservé pour éviter une nouvelle rupture de liens. Le
 composant n'est toutefois pas un composant « scène » spécialisé : une scène
 CodPlay est son premier usage, aux côtés d'une iframe, d'un flux vidéo ou d'un
-autre contenu pris en charge par un adaptateur.
+autre contenu pris en charge par son propriétaire de représentation.
 
 L'autorisation d'implémenter a été donnée le 2026-09-11. La tranche engagée
 couvre le type auteur `slot`, la validation du `name` racine, le manifeste de
-découverte et la surface HTML qui attache/détache des racines foreign. Le
-module partagé `replace`, l'orchestration interinstances et l'exposition de
-la surface par la façade publique restent à traiter ; aucune de ces capacités
-n'est présentée comme déjà disponible.
+découverte, la surface HTML qui attache/détache des racines foreign et le
+module partagé `replace` raccordé aux hooks V2 pour le chemin `fade`. Le
+profil `slot` accepte `replace.split` mais l'ignore. L'orchestration
+interinstances et l'exposition de la surface par la façade publique restent à
+traiter ; aucune de ces capacités n'est présentée comme déjà disponible.
 
 La spécification de la tranche effectivement codée est suivie dans
 [`../specs/slot-component-spec.md`](../specs/slot-component-spec.md).
 
-## Objet du composant
+## Séparation avec la démonstration Sighty A/B
+
+Ce document porte sur l'expression de besoin et le plan d'implémentation du
+composant core `slot`. Cette expression est générique : la scène CodPlay est un
+premier consommateur du contenu foreign, au même titre qu'une iframe, un média,
+un flux ou toute autre représentation attachable.
+
+La description détaillée du scénario A/B appartient à la [note du modèle
+déclaratif Sighty](../../sighty/notes/2026-08-17-modele-fichier-declaratif.md),
+et son exécution est suivie dans le [plan de première implémentation
+Sighty](../../sighty/plan/2026-09-10-premiere-implementation-plan.md). Dans ce
+plan CodPlay, ce scénario n'apparaît qu'à deux titres : comme exemple de
+consommation et comme parcours d'intégration réel. Il ne fixe ni le nombre de
+slots, ni le nombre de scènes, ni le style, ni l'orchestrateur du composant.
+
+Si la démo révèle une capacité manquante, le besoin doit être reformulé en
+termes génériques du contrat core avant toute modification du runtime. Les
+choix propres à A/B restent dans le périmètre Sighty et ne peuvent pas être
+ajoutés implicitement au profil `slot`.
+
+## Expression de besoin du composant
 
 Le composant est un **hôte d'exposition** très simple :
 
@@ -48,10 +69,11 @@ scène ou à un composant auteur qui les encapsule.
 
 Le contenu est différent d'un contenu de tag : le composant **ne l'interprète
 pas**. Il ne parcourt pas l'arbre d'une scène enfant, ne connaît pas l'API d'un
-player, ne lit pas le contenu d'une iframe et ne pilote pas le flux vidéo. Un
-adaptateur de materialization fournit ou retire la représentation opaque dans la
-racine. Le composant fournit la frontière technique d'exposition par sa boîte ;
-les choix visuels de cette boîte et du contenu restent ceux de l'auteur.
+player, ne lit pas le contenu d'une iframe et ne pilote pas le flux vidéo. Le
+propriétaire de la représentation fournit ou retire le contenu via la surface
+`foreignContent`, et le materializer réalise l'écriture DOM dans la racine. Le
+composant fournit la frontière technique d'exposition par sa boîte ; les choix
+visuels de cette boîte et du contenu restent ceux de l'auteur.
 
 Les cas de contenu visés sont :
 
@@ -65,6 +87,23 @@ Le composant ne crée ni player, ni catalogue, ni ticker. Une scène enfant rest
 une instance CodPlay autonome. Son temps, ses ressources, son cycle de vie et
 ses events sont possédés par le propriétaire de cette instance (Sighty ou une
 application), pas par le composant hôte.
+
+### Vocabulaire de la frontière foreign
+
+« Propriétaire de la représentation foreign » désigne ici le code applicatif ou
+la capacité qui détient les racines persistantes et les ressources d'un contenu
+non interprété par CodPlay. Ce n'est pas une classe `Adapter` fournie par le
+core V2 : à ce stade, la surface concrète est `ForeignContentSurface`, et le
+code qui la consomme reste à définir dans le raccord d'application/Sighty.
+Pour une scène CodPlay, ce propriétaire est Sighty pour la décision de cycle de
+vie et le player enfant pour ses racines et ressources ; pour une iframe ou un
+flux, c'est le code qui les crée et les détient.
+
+Ce propriétaire n'a pas à déclarer une capacité de clonage. Le clone de
+`replace` est un instantané visuel temporaire créé par le materializer HTML,
+piloté par le module `replace` uniquement via une surface de présentation, et
+détruit par cette même surface. Il ne charge ni ne pilote la représentation
+foreign et ne transfère jamais sa propriété.
 
 ## Bases normatives relues
 
@@ -94,13 +133,28 @@ relatif à ce plan pour que la source de la décision soit visible.
 | Élément | Possède | Ne fait pas |
 | --- | --- | --- |
 | `ForeignContentComponent` | La racine HTML, les services visuels, l'exposition et les points d'exécution des états et animations déclarés | Lire ou transformer le contenu foreign, choisir une politique CSS par défaut, créer un player, router un event vers une autre scène |
-| Adaptateur de contenu foreign | La représentation opaque, la demande de montage/démontage et les opérations propres au support | Choisir le style de la boîte hôte, créer un player ou imposer une politique visuelle au composant |
-| Module `replace` | La session de remplacement, les clones de présentation, les transitions, l'annulation et le nettoyage | Connaître une classe de composant ou gérer le player du contenu |
+| Propriétaire de la représentation foreign (raccord d'application) | Les racines persistantes, les ressources, le chargement et les opérations propres au support ; il consomme `foreignContent` pour demander le montage/démontage | Choisir le style de la boîte hôte, créer un clone de transition, gérer la présentation ou imposer une politique visuelle au composant |
+| Module `replace` | La session de remplacement, la demande d'instantané de présentation, les transitions, l'annulation et le nettoyage | Connaître une classe de composant, charger/cloner le contenu foreign ou gérer le player du contenu |
 | `TagComponent` / `ImageComponent` / autres composants compatibles | Leur rendu et leurs services propres | Réimplémenter la mécanique de clone du module `replace` |
 | Composant auteur de l'application | Une structure et une opinion de style si l'auteur souhaite les encapsuler | Faire passer cette opinion pour une règle du core ou modifier le contenu qu'il ne possède pas |
-| `HtmlComponentMaterializer` | La création des racines, l'écriture DOM effective du montage/détachement et les références de materialization | Interpréter la provenance du contenu foreign ou décider du cycle de vie de la ressource fournie par l'adaptateur |
-| Player de la scène enfant | Son état, sa timeline, ses racines et ses ressources | Connaître la scène hôte ou son identifiant de perso |
-| Sighty ou l'application hôte | Les instances, leurs relations, le choix du contenu et les politiques de survie | Manipuler directement le DOM ou installer un player parallèle dans le composant |
+| `HtmlComponentMaterializer` | La création des racines, l'écriture DOM effective du montage/détachement, l'instantané DOM temporaire de présentation et les références de materialization | Interpréter la provenance du contenu foreign ou décider du cycle de vie de la ressource fournie par son propriétaire |
+| Player de la scène enfant | Son état, sa timeline, ses racines et ses ressources, ainsi que l'exécution de son teardown | Décider seul quand l'occurrence doit être créée, montée, pilotée ou détruite, ou connaître la scène hôte |
+| Sighty ou l'application hôte | Les instances, leurs relations, le choix du contenu et le pilotage du cycle de vie des occurrences | Manipuler directement le DOM ou installer un player parallèle dans le composant |
+
+## Décision de frontière du cycle de vie (2026-09-11)
+
+Pour une scène CodPlay hébergée, Sighty possède la politique et le pilotage du
+cycle de vie de l'occurrence : création, montage, démarrage, pause/reprise,
+seek, démontage, remontage et destruction. CodPlay fournit les opérations
+d'instance, l'ordonnancement de l'engine et l'exécution du teardown ; le
+composant `slot` fournit uniquement la boîte et la relation d'attachement de
+ses racines foreign. Il ne crée ni ne détruit le player enfant et ne transforme
+pas un détachement DOM en décision de survie.
+
+Cette décision permet une première tranche limitée au scénario Sighty A/B. Elle
+ne prétend pas figer toutes les politiques de fin, de reprise ou d'échec : la
+démo doit exercer le chemin réel, puis fournir les faits permettant d'affiner
+ces règles dans le plan Sighty sans élargir le contrat générique de `slot`.
 
 Le composant est donc un perso ordinaire du point de vue de la scène hôte. La
 relation « cette représentation vient de telle instance » est une association
@@ -109,10 +163,11 @@ runtime externe ; elle ne transforme pas le composant en layout et ne donne pas
 
 Le materializer HTML ne sait donc pas si la représentation montée vient d'une
 scène CodPlay, d'une iframe ou d'un flux. Il projette la racine et les opérations
-DOM demandées par le composant et les capacités. La décision d'arrêter, de
-détacher ou de détruire la ressource foreign reste à préciser dans le contrat de
-l'adaptateur et de son propriétaire ; elle ne peut pas être déduite du seul fait
-que le contenu est monté dans une racine HTML.
+DOM demandées par le composant et les capacités. Pour une scène CodPlay,
+Sighty décide quand arrêter, détacher ou détruire l'occurrence ; pour les autres
+supports, la décision relève du propriétaire de la représentation. Elle ne
+peut jamais être déduite du seul fait que le contenu est monté dans une racine
+HTML.
 
 ## Profil auteur et frontière runtime
 
@@ -120,12 +175,33 @@ Le profil de la première tranche est fixé ci-dessous à deux niveaux clairemen
 séparés : la déclaration structurelle du slot et la représentation foreign
 résolue à la frontière runtime.
 
-### Déclaration explicite du slot hôte
+La règle `name` appartient au profil auteur générique du composant `slot`. Les
+paragraphes qui mentionnent `view.slots` précisent uniquement le raccord d'un
+consommateur Sighty ; ils ne transforment pas ce modèle de composition en
+contrat obligatoire pour les autres contenus foreign.
 
-Un slot Sighty ne doit pas être déduit de l'identifiant du perso ni d'un élément
-DOM. Si une vue Sighty déclare `slots.body`, la scène hôte doit déclarer
-explicitement l'identité `body` sur le composant `slot` qui accueille cette vue.
-Cette identité est portée par la propriété racine `name` du perso :
+### Déclaration générique du slot
+
+Pour un perso de type `slot`, `name` est requis, résolu avant la compilation et
+ne peut pas être modifié par une valeur `initial` ou une action. `name` existe
+déjà à la racine de `PersoDoc` et de `CompiledPerso` ; le profil `slot` en
+resserre la règle de stabilité et recopie sa valeur une fois lors de la
+normalisation et de la compilation. Il ne fait pas partie de `initial`, n'est
+pas une entrée de `update()` et ne peut pas être remplacé par une mise à jour de
+contenu. Le champ `content` reste réservé à la représentation foreign elle-même.
+
+Cette déclaration est un invariant du composant, quelle que soit l'application
+qui consomme sa surface. Elle ne présuppose ni `view.slots`, ni Sighty, ni une
+scène CodPlay enfant.
+
+### Raccord Sighty du consommateur
+
+Le raccord Sighty est une règle de consommation de ce composant, pas une
+extension de son contrat. Un slot Sighty ne doit pas être déduit de
+l'identifiant du perso ni d'un élément DOM. Si une vue Sighty déclare
+`slots.body`, la scène hôte doit déclarer explicitement l'identité `body` sur le
+composant `slot` qui accueille cette vue. Cette identité est portée par la
+propriété racine `name` du perso :
 
 ```ts
 {
@@ -137,17 +213,8 @@ Cette identité est portée par la propriété racine `name` du perso :
 ```
 
 Ici, `body-host` est l'identifiant du perso CodPlay et `body` est le nom du
-slot Sighty : ces deux identifiants sont volontairement distincts. Pour un
-perso de type `slot`, `name` est requis, résolu avant la compilation et ne peut
-pas être modifié par une valeur `initial` ou une action. Le champ `content` reste
-réservé à la représentation foreign elle-même ; il n'est pas utilisé pour
-nommer le slot.
-
-`name` existe déjà à la racine de `PersoDoc` et de `CompiledPerso`. Le profil
-`slot` en resserre la règle : il doit être présent et sa valeur est recopiée une
-fois lors de la normalisation et de la compilation. Elle ne fait pas partie de
-`initial`, n'est pas une entrée de `update()` et ne peut pas être remplacée par
-une mise à jour de contenu.
+slot Sighty : ces deux identifiants sont volontairement distincts. Le champ
+`content` n'est pas utilisé pour nommer le slot.
 
 La règle est bijective pour une composition donnée : pour chaque clé
 `view.slots.<slotName>`, il existe exactement un composant `slot` de la scène
@@ -237,7 +304,8 @@ signalée comme telle.
 Dans le cas d'une iframe, d'un flux broadcast ou d'un autre contenu foreign,
 `initial.content` peut porter une référence sérialisable propre à la capacité
 concernée. Il n'existe pas de valeur universelle à inventer dans le composant :
-la forme de cette référence est validée par l'adaptateur qui sait la résoudre.
+la forme de cette référence est validée par le propriétaire de la représentation
+qui sait la résoudre.
 
 ### Référence déclarative
 
@@ -248,7 +316,7 @@ exposition, ni ses transitions. Elle ne serait utile qu'à un résolveur externe
 et sa place éventuelle est donc dans le contrat de la capacité ou de l'hôte,
 jamais dans le contrat du composant.
 
-La forme exacte de cette référence reste à arrêter avec la capacité
+La forme exacte de cette référence reste à arrêter avec le raccord
 `foreign-content`. La seule contrainte retenue ici est qu'elle ne contienne
 jamais une `HTMLElement`, un `RuntimePlayer`, une fonction de construction ou un
 objet mutable. Le builder et le codec devront valider et conserver la forme
@@ -258,16 +326,18 @@ runtime opaque restera hors de l'artefact sérialisable.
 ### Valeur runtime opaque
 
 À la frontière de materialization, la référence est résolue en une valeur
-opaque fournie par une capacité de contenu. Le contrat à arrêter doit permettre
-au materializer de :
+opaque fournie par le propriétaire de la représentation. Le contrat à arrêter
+doit permettre au materializer de :
 
-1. fournir à l'adaptateur une représentation ordonnée (une ou plusieurs racines)
-   dans le runtime ;
+1. recevoir du propriétaire une représentation ordonnée (une ou plusieurs
+   racines) dans le runtime ;
 2. monter ces racines dans la racine du composant ;
 3. les retirer sans détruire la ressource ou le player qui les possède ;
 4. signaler une disponibilité asynchrone si le support en a besoin ;
-5. fournir une représentation clonable, ou déclarer qu'une transition donnée
-   ne peut pas capturer ce contenu.
+5. offrir au module `replace` une surface de présentation qui peut, si le
+   support HTML le permet, créer un instantané DOM temporaire de la racine
+   hôte. Cette opération ne clone ni ne pilote une ressource foreign et ne
+   demande aucune décision de clonage au propriétaire du contenu.
 
 Le composant ne reçoit pas les détails de ces opérations. Il demande seulement
 que le contenu courant soit exposé dans sa racine. Le contenu foreign peut être
@@ -296,8 +366,9 @@ arrêter avant son implémentation :
 2. Une surface runtime de mode hôte résout cette adresse en `hostRoot` et
    demande à l'instance enfant une représentation de ses racines persistantes.
    Cette surface est interne à CodPlay ; sa forme publique reste à fixer.
-3. L'adaptateur `foreign-content` fournit la représentation au
-   `HtmlComponentMaterializer`, qui est le writer DOM de la frontière HTML. Pour
+3. Le propriétaire de la représentation fournit les racines à la surface
+   `foreignContent`; le `HtmlComponentMaterializer` est le writer DOM de la
+   frontière HTML. Pour
    un hôte vide, l'opération réelle est équivalente à :
 
    ```ts
@@ -307,8 +378,8 @@ arrêter avant son implémentation :
    }
    ```
 
-   Si une représentation doit être placée avant une racine déjà attachée, le
-   même adaptateur utilise `hostRoot.insertBefore(childRoot, referenceRoot)`.
+   Si une représentation doit être placée avant une racine déjà attachée, la
+   même surface utilise `hostRoot.insertBefore(childRoot, referenceRoot)`.
 4. Le raccord conserve les racines attachées et fournit le détachement associé :
 
    ```ts
@@ -317,7 +388,7 @@ arrêter avant son implémentation :
    ```
 
    La propriété des racines et leur destruction restent celles du player enfant ;
-   l'adaptateur ne possède que la relation d'attachement. `hostRoot` reste la
+   le raccord ne possède que la relation d'attachement. `hostRoot` reste la
    racine du composant parent, qui conserve le contrôle de ses états et
    animations déclarés.
 
@@ -329,12 +400,13 @@ d'une même scène, cette écriture existe déjà dans
 foreign entre deux players ne peut pas réutiliser directement la map
 `persoNodes` de cette réconciliation, car chaque player possède son propre
 materializer. Il faut donc arrêter une surface d'attachement CodPlay qui appelle
-ces mêmes primitives dans l'adaptateur foreign.
+ces mêmes primitives pour le raccord foreign.
 
-Lors d'un `replace`, le clone de la représentation sortante reste attaché au
-support de présentation choisi par le module le temps de sa disparition. Il ne
-devient ni une racine de l'instance enfant ni un perso ; le détachement du clone
-est séparé du détachement de la représentation persistante.
+Lors d'un `replace`, la surface de présentation HTML crée un instantané
+temporaire de `hostRoot` et le module le garde visible le temps de sa
+disparition. Cet artefact ne devient ni une racine de l'instance enfant ni un
+perso ; il ne possède aucune ressource et son retrait est séparé du
+détachement de la représentation persistante.
 
 ## Rendu et comportement ordinaire
 
@@ -353,7 +425,8 @@ Le composant suit le modèle de `TagComponent` :
   events du clone de transition.
 
 Sans propriété `replace`, un changement de contenu suit la politique ordinaire
-de l'adaptateur : le nouveau contenu remplace l'ancien dans la racine. Le
+du propriétaire de la représentation : le nouveau contenu remplace l'ancien
+dans la racine. Le
 composant ne déduit pas automatiquement une transition.
 
 ### Principe de présentation
@@ -398,7 +471,8 @@ composant.
 
 Le composant core continue d'appliquer `className` et `style` à `hostRoot` et
 d'exposer les racines au materializer. L'application auteur choisit et applique
-les classes ou styles nécessaires aux `foreignRoot`, par l'adaptateur ou par sa
+les classes ou styles nécessaires aux `foreignRoot`, par le propriétaire de la
+représentation ou par sa
 propre feuille de présentation ; Sighty ne modifie aucune racine DOM. Une iframe,
 une scène CodPlay et une vidéo peuvent ainsi recevoir des règles différentes
 tout en partageant le même hôte.
@@ -459,11 +533,11 @@ validation V2 du catalogue :
 
 Cette forme est le profil accepté par le composant `slot` lorsqu'il expose la
 capacité `foreign-content` dans cette version : il ne fournit que
-`replace-simple` avec une transition `fade`. La propriété `replace.split`
-n'appartient pas à ce profil. Si elle est présente,
-le builder/validateur doit rejeter l'action avec un diagnostic `error` ; elle ne
-doit pas être ignorée silencieusement ni rabattue sur `replace-simple`. Le
-runtime ne reçoit donc pas une commande dont une partie serait perdue.
+`replace-simple` avec une transition `fade`. La propriété `replace.split` peut
+être présente pour conserver une déclaration compatible avec le module partagé,
+mais elle n'a aucune sémantique pour une représentation opaque et est ignorée
+par le profil `slot`, sans diagnostic de rejet. Le runtime normalise alors la
+commande sur `replace-simple` ; aucune logique de split n'est activée.
 
 La spécification V1 générale documente aussi les variantes
 `replace-split-text` et `replace-split-cells`, sélectionnées par `split`. Cette
@@ -477,37 +551,41 @@ correspondante.
 
 Pour un changement de `content` associé à `replace`, le chemin attendu est :
 
-1. **`beforeUpdate`** — le module demande au materializer une représentation de
-   l'état courant de la racine. L'adaptateur HTML utilise par défaut un
-   `cloneNode(true)` de la racine hôte. Cette copie ne reçoit aucune identité
-   logique ; tout attribut DOM d'identifiant est retiré et la copie est rendue
-   insensible aux events et au placement. La géométrie est capturée dans le
-   parent ; la racine réelle est masquée pendant la préparation.
+1. **`beforeUpdate`** — le module demande à la surface de présentation HTML un
+   instantané DOM de `hostRoot`. La surface crée par défaut un `cloneNode(true)`
+   temporaire, sans identité logique ; les identifiants et handlers inline en
+   sont retirés, puis la copie est rendue insensible aux events et au
+   placement. La géométrie est capturée dans le parent et la racine réelle est
+   masquée pendant la préparation.
 2. **Mise à jour composant** — `ForeignContentComponent.update()` applique les
-   services et demande à l'adaptateur de monter la nouvelle valeur foreign dans
-   la racine réelle. Le clone sortant reste une représentation figée ; il ne
-   contient pas une seconde instance vivante.
-3. **`afterUpdate`** — le module prépare l'animation entrante sur la racine
-   réelle ou sur une représentation entrante fournie par l'adaptateur, puis
-   l'animation sortante sur le clone. Le module ne suppose pas qu'une iframe ou
-   un flux vidéo puisse être cloné comme un player vivant.
+   services de la racine. Le propriétaire de la représentation peut, par sa
+   surface `foreignContent`, détacher les anciennes racines et monter la
+   nouvelle représentation ; l'instantané sortant reste figé et ne contient
+   pas une seconde instance vivante.
+3. **`afterUpdate`** — le module demande à la surface de présentation d'animer
+   la racine réelle et l'instantané sortant. Il ne charge, ne pilote et ne
+   clone aucun player ou contenu foreign.
 4. **Finalisation** — lorsque le groupe de transitions est terminé, le module
    supprime le clone temporaire, retire les styles de positionnement, restaure
    la visibilité de la racine et laisse le nouveau contenu comme représentation
    active.
 
-Le clone de l'ancien élément relève de l'invariant général des clones de
-présentation CodPlay : il représente l'ancien contenu pendant sa disparition,
-sans prolonger son ownership. Comme les clones d'overlay de `move` et de
-remplacement, c'est une copie technique temporaire destinée uniquement à un
-effet visuel, comme pour les autres capacités. Il n'est jamais un perso, ne
-possède ni `perso.id` ni
-`componentId`, n'entre dans aucun registre et n'a aucune existence pérenne. La V1
-créait également un `cloneB` pour certaines intros ; cette possibilité reste ouverte
-pour un adaptateur qui sait produire une représentation entrante fiable, mais
-elle n'est pas une obligation pour le contenu foreign. Une iframe ou une vidéo
-ne doit pas être déclarée clonable simplement parce que `cloneNode` est
-disponible.
+L'instantané de l'ancien hôte est un artefact de présentation appartenant à la
+surface HTML pendant la transition. Il ne gère rien, n'est jamais un perso, ne
+possède ni `perso.id` ni `componentId`, n'entre dans aucun registre et n'a
+aucune existence pérenne. Il est supprimé par `finish`, `cancel`, seek ou
+destruction. La V1 créait aussi une représentation entrante clonée pour
+certaines intros ; cette tranche V2 ne le fait pas : la racine réelle porte le
+nouveau contenu, ce qui évite de confondre une copie visuelle avec une seconde
+instance foreign.
+
+Cette mécanique ne peut pas être déduite comme une règle pour tout contenu
+foreign. En particulier, `cloneNode(true)` sur une iframe copie son élément DOM
+mais pas son contexte de navigation ni son rendu courant ; le snapshot ne peut
+donc pas fournir une transition fiable dans ce cas. Le contrat futur devra
+arrêter, pour ces représentations, soit un remplacement immédiat sans
+transition, soit un élément visuel de substitution par défaut. Aucun fallback
+et aucune détection spécifique ne sont ajoutés dans cette tranche.
 
 Une nouvelle demande sur la même racine annule et nettoie la session précédente
 avant d'en créer une autre. Les sessions sont indexées par cible runtime et par
@@ -538,13 +616,14 @@ remplacement. La transposition devra donc arrêter, avant le code, une extension
 générique de cette frontière :
 
 1. le catalogue enregistre le module `replace` et ses validateurs de commande ;
-2. le composant déclare une capacité sémantique de cible remplaçable (nom à
-   fixer, par exemple `replaceable-content`) ;
+2. le composant `slot` déclare la capacité `replace` requise ; les autres
+   composants pourront la déclarer lorsqu'ils exposeront le même contrat ;
 3. le runtime composant diffuse un contexte `beforeUpdate` puis `afterUpdate`
    autour de `component.update()` ;
-4. le materializer publie une surface typée donnant au module la racine `hostRoot`
-   et les opérations de capture, d'attachement foreign et de nettoyage ; les
-   écritures `appendChild`/`insertBefore` restent dans cette frontière HTML ;
+4. le materializer publie une surface typée de présentation qui crée et détruit
+   l'instantané DOM temporaire ; la surface `foreignContent` reste séparée et
+   conserve la relation avec les racines persistantes ; les écritures
+   `appendChild`/`insertBefore` restent dans la frontière HTML ;
 5. le module maintient ses sessions par player et remet ses
    `ComponentAnimation`/transitions à la présentation commune ;
 6. les événements techniques et la finalisation réutilisent le journal et la
@@ -603,12 +682,17 @@ portée CodPlay locale, non hors de cette portée**. Elle réutilise les adresse
 déjà présentes au lieu d'ajouter une identité au composant uniquement pour
 Sighty.
 
-### Exemple commenté : le chemin Sighty → hôte `slot` → scène enfant
+### Annexe consommateur (non normative) : chemin Sighty → hôte `slot` → scène enfant
 
 L'exemple suit la forme déclarative `SightyFile` / `ViewGraph` proposée dans la
 note Sighty du 2026-08-17. Une vue porte la scène hôte et son champ `slots`
 décrit les vues à accueillir ; aucune table d'instances ni commande impérative
 n'est ajoutée au fichier.
+
+Cet exemple ne constitue pas une exigence supplémentaire du composant `slot`.
+Il montre comment le scénario Sighty A/B peut consommer ses primitives lorsque
+le raccord interinstances aura été décidé et implémenté. Les détails de la
+démonstration et ses critères propres restent dans les documents Sighty.
 
 La forme `start`/`views` de `ViewMap` n'est nécessaire que pour plusieurs vues
 nommées ou des transitions dans un même graphe. Pour une composition fixe, une
@@ -709,8 +793,9 @@ Le cheminement runtime correspondant est le suivant :
    materialisée du perso parent (`hostRoot`) et les racines persistantes
    présentées par l'enfant ; elle ne doit pas devenir un `querySelector` Sighty.
 
-5. Le raccord CodPlay remet ces deux surfaces à l'adaptateur `foreign-content`
-   du parent. C'est lui qui écrit dans le DOM : pour chaque racine enfant,
+5. Le raccord CodPlay remet ces deux surfaces au propriétaire de la
+   représentation `foreign-content` du parent. Celui-ci demande le montage via
+   la surface, qui écrit dans le DOM : pour chaque racine enfant,
    `hostRoot.appendChild(childRoot)` (ou `hostRoot.insertBefore(childRoot,
    referenceRoot)` pour conserver une position). Au démontage, il exécute le
    `removeChild` correspondant. Le composant parent anime et expose sa boîte ;
@@ -725,8 +810,8 @@ Le cheminement runtime correspondant est le suivant :
    `ViewMap` et remplace sa vue active, Sighty décide de conserver, remplacer ou
    détruire l'instance enfant, puis demande le nouveau montage. Pour une mise à
    jour de contenu déjà exposé, un eventime adressé au parent peut déclencher
-   `replace` ; le module crée seulement le clone technique de la représentation
-   sortante pendant la transition.
+   `replace` ; sa surface de présentation crée seulement l'instantané technique
+   de la représentation sortante pendant la transition.
 ```
 
 Quand une mise à jour doit passer par la scène parent, elle reprend la façade
@@ -742,8 +827,9 @@ await codplay.events.emit({
     data: {
       // Référence sérialisable acceptée par `foreign-content` ; sa forme reste
       // définie par la capacité et ne contient ni DOM ni player. Elle est
-      // résolue par l'adaptateur, qui réalise ensuite l'appendChild/insertBefore
-      // dans la racine du perso `body-host`.
+      // résolue par le propriétaire de la représentation, qui demande ensuite
+      // l'appendChild/insertBefore via la surface dans la racine du perso
+      // `body-host`.
     },
   },
 })
@@ -752,9 +838,10 @@ await codplay.events.emit({
 La story hôte doit avoir déclaré l'action correspondant à cet eventime. Le
 pipeline `materialize → resolve → solve → runner` sélectionne alors le perso,
 et `ForeignContentComponent.update()` reçoit la valeur. Le materializer fournit
-la racine `hostRoot` à l'adaptateur ; celui-ci détache les anciennes racines,
-insère les nouvelles avec `appendChild` ou `insertBefore`, puis remet le
-résultat à la présentation `replace` si une transition est demandée. Sighty ne
+la surface `foreignContent` au propriétaire de la représentation ; celui-ci
+détache les anciennes racines et demande l'insertion des nouvelles avec
+`appendChild` ou `insertBefore`, puis la présentation `replace` capture
+l'instantané de l'hôte si une transition est demandée. Sighty ne
 touche pas au DOM et n'appelle pas le composant par une méthode impérative. Une
 commande adressée à l'enfant utilise un autre `instanceId` : le parent et
 l'enfant ne se parlent pas directement.
@@ -775,8 +862,8 @@ autre scène.
   Sighty.
 - Sa racine est un tag HTML simple, `div` par défaut ; aucune zone nommée, aucun
   `markup` et aucun outlet ne font partie de son profil.
-- Le composant possède l'exposition de la racine ; un adaptateur possède le
-  contenu opaque et ses ressources internes.
+- Le composant possède l'exposition de la racine ; le propriétaire de la
+  représentation foreign possède le contenu opaque et ses ressources internes.
 - Quand il sert d'hôte Sighty, le composant de type `slot` déclare un `name`
   racine requis et stable ; la clé `view.slots` correspondante doit être
   identique et la correspondance ne se déduit jamais du `perso.id`. Le champ
@@ -787,20 +874,19 @@ autre scène.
   produit un diagnostic explicite avec les valeurs disponibles.
 - Le core ne choisit aucune politique CSS de remplissage, de ratio, de
   débordement ou d'alignement. L'application auteur coordonne, selon ses
-  besoins, le conteneur parent, `hostRoot` et les `foreignRoot` fournis par
-  l'adaptateur ; ses règles sont explicites et ne sont pas déduites par une
-  inspection DOM du composant.
+  besoins, le conteneur parent, `hostRoot` et les `foreignRoot` fournis par le
+  propriétaire de la représentation ; ses règles sont explicites et ne sont
+  pas déduites par une inspection DOM du composant.
 - L'insertion d'une représentation foreign se fait dans la racine materialisée
-  du perso hôte, par l'adaptateur de materialization (`appendChild` ou
-  `insertBefore`) ; Sighty ne manipule aucun nœud DOM.
+  du perso hôte, via la surface `foreignContent` et ses primitives
+  (`appendChild` ou `insertBefore`) ; Sighty ne manipule aucun nœud DOM.
 - Une scène CodPlay enfant reste une instance séparée avec son temps, son
   journal, ses events et son teardown.
 - `replace` est une capacité stateful partagée, sélectionnée par hooks et
   capacités, jamais une branche codée dans le composant ou dans Sighty.
-- Dans cette version, le profil `slot`/`foreign-content` n'accepte pas
-  `replace.split` : sa
-  présence produit un diagnostic de validation et ne devient jamais une option
-  ignorée au runtime.
+- Dans cette version, le profil `slot`/`foreign-content` ignore
+  `replace.split` : sa présence ne produit pas de diagnostic et n'active jamais
+  une logique de split ; la commande est exécutée comme `replace-simple`.
 - À l'arrivée d'un nouveau contenu avec transition, un clone temporaire de la
   représentation sortante peut disparaître indépendamment de l'instance qui
   possède le contenu ; comme tout clone d'overlay de `move`, il n'est jamais un
@@ -820,22 +906,23 @@ autre scène.
 | Phase | Statut | Preuve attendue |
 | --- | --- | --- |
 | 0. Relecture du contrat | **Validée le 2026-09-11** | Le type `slot`, le `name` racine, le manifeste, le diagnostic de découverte, l'absence d'opinion CSS du core et la frontière materializer sont acceptés pour l'ouverture de l'implémentation. Les décisions encore ouvertes restent listées dans les phases suivantes. |
-| 1. Profil et validation | **En cours** | Le type de perso, le défaut structurel `div`, le `name` racine, la référence foreign sérialisable, le manifeste et le rejet explicite de `replace.split` sont raccordés au catalogue et au builder. La correspondance `view.slots`/`name` reste à exercer dans Sighty. |
-| 2. Surface opaque et materializer | **En cours** | La surface `foreignContent` attache/détache des racines HTML ordonnées dans la racine materialisée du `slot`, avec nettoyage au démontage. L'asynchronisme, l'ownership interinstances et la façade publique restent à arrêter. |
-| 3. Module `replace` partagé | À engager | Module core player-scoped, hooks génériques, capture de l'ancien hôte, transition `fade`, annulation, finalisation et absence de fuite. |
-| 4. Composants compatibles | À engager | La même capacité est exercée par `slot` et au moins un composant existant (`tag` ou `img`) sans duplication de clone. |
+| 1. Profil et validation | **En cours** | Le type de perso, le défaut structurel `div`, le `name` racine, la référence foreign sérialisable, le manifeste et l'ignorance de `replace.split` sont raccordés au catalogue et au builder. La correspondance `view.slots`/`name` reste à exercer dans Sighty. |
+| 2. Surface opaque et materializer | **En cours** | La surface `foreignContent` attache/détache des racines HTML ordonnées dans la racine materialisée du `slot`, avec nettoyage au démontage. Sighty décide du cycle de vie des occurrences ; l'asynchronisme, l'ownership technique interinstances et la façade publique restent à raccorder. |
+| 3. Module `replace` partagé | **En cours** | Module core player-scoped, hooks génériques V2, instantané temporaire de l'ancien hôte, transition `fade`, annulation, finalisation et absence de fuite. `replace.split` est ignoré par le profil `slot`. |
+| 4. Composants compatibles | **En cours** | La même capacité est exercée par `slot` et `img` sans duplication de clone ; `tag` et les autres composants compatibles restent à examiner. |
 | 5. Adressage CodPlay | À engager | Le chemin Sighty → adresse d'hôte → surface `foreign-content` → instance enfant est exercé avec les façades existantes, et l'insertion `appendChild`/`insertBefore` est observée au bon `hostRoot` ; aucune API DOM ou route interscène parallèle. |
-| 6. Play, seek et lifecycle | À engager | Convergence Play/Seek/replay, interruptions, remount et destruction idempotente ; les players enfant et hôte gardent leur indépendance. |
+| 6. Play, seek et lifecycle | À engager | Sighty pilote Play/Seek/replay, interruptions, remount et destruction ; CodPlay exécute chaque instance de façon idempotente et les players enfant et hôte gardent leur indépendance. |
 
 ## Acceptance path du composant core
 
 La validation doit passer par le runtime réel et le materializer HTML. Elle ne
 doit pas être remplacée par un setter local.
 
+### Preuves propres au composant core
+
 1. Compiler un perso `slot` sans `tag` et vérifier que sa racine est un
    `div`, puis appliquer `className`, `style` et `attr` par les services core.
-   Dans une composition, vérifier aussi que `name` est déclaré à la racine,
-   reste stable et qu'une clé Sighty de même nom le référence.
+   Vérifier aussi que `name` est déclaré à la racine et reste stable.
 2. Monter une représentation opaque simple, puis un fragment à plusieurs
    racines, et vérifier que le composant ne dépend ni de leur type ni de leur
    structure interne.
@@ -846,12 +933,18 @@ doit pas être remplacée par un setter local.
    l'ancien hôte, l'animation, l'absence d'event/target sur le clone et son
    nettoyage final.
 5. Compiler une action `foreign` qui contient `replace.split` et vérifier que le
-   builder la rejette avec un diagnostic `error`, sans exécution ni repli vers
-   `replace-simple`.
+   builder l'accepte sans diagnostic de rejet, puis que le runtime exécute le
+   chemin `replace-simple` sans activer de logique de split.
 6. Répéter le remplacement et interrompre une transition ; vérifier qu'aucun
    clone, style de positionnement ou callback obsolète ne subsiste.
 7. Exercer le même module sur un `tag` ou une image pour prouver que la capacité
    n'est pas liée au composant `slot`.
+
+### Parcours consommateur Sighty A/B
+
+Les points suivants valident l'intégration du composant dans le scénario décrit
+par Sighty. Ils ne sont pas des contraintes supplémentaires du contrat core.
+
 8. Résoudre la relation Sighty entre `view.slots.body` et le perso
    `body-host` dont `name` vaut `body`, obtenir l'adresse
    `{ instanceId, storyId, persoId }`, monter l'instance enfant par la surface
@@ -862,6 +955,9 @@ doit pas être remplacée par un setter local.
 9. Adresser le perso par event local puis par la façade engine avec
    `instanceId` et cible story ; vérifier la séparation entre identité hôte et
    référence du nouveau contenu.
+
+### Preuves génériques complémentaires et validation globale
+
 10. Tester un contenu asynchrone avec une disponibilité tardive et vérifier la
    réintégration déterministe, puis les seeks avant, pendant et après la fenêtre
    de transition.
@@ -887,10 +983,35 @@ doit pas être remplacée par un setter local.
   materializer et du module média passent ; le typecheck CodPlay et celui des
   démos V2 passent également.
 
-Cette tranche ne prouve pas encore le remplacement animé, le raccord Sighty
+Cette première sous-tranche de profil et de surface ne prouve pas encore le remplacement animé, le raccord Sighty
 entre deux instances, la résolution asynchrone du contenu ou l'exposition de
 la surface par la façade publique. Ces points restent `En cours` ou `À engager`
 et ne doivent pas être simulés dans la démo.
+
+### Preuves obtenues pour le raccord `replace` (2026-09-11)
+
+- Le catalogue core enregistre le module player-scoped `replace` et le profil
+  `slot` le requiert ; le runtime composant diffuse désormais les hooks V2
+  `beforeComponentUpdate` et `afterComponentUpdate` autour de `update()`.
+- `HtmlComponentMaterializer` publie une surface de présentation distincte de
+  `foreignContent`. Elle crée un instantané DOM transitoire, marqué pour être
+  ignoré par la réconciliation structurelle, puis le supprime à la fin, à
+  l'annulation, au seek ou à la destruction. Cet instantané n'est ni une
+  ressource ni une instance foreign.
+- Le test réel
+  `tests/runtime/capabilities/replace-module.spec.ts` vérifie le chemin
+  `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer`, le
+  fondu `fade`, le montage d'une nouvelle racine foreign et la disparition de
+  l'instantané. Il vérifie également qu'un `replace.split` est accepté puis
+  exécuté par le chemin simple.
+- Le même test exerce le module partagé sur `img` : le wrapper et sa source
+  sortante utilisent la même surface de présentation, sans clone spécialisé
+  dans `ImageComponent`.
+
+Cette tranche ne prouve pas encore l'exercice du module sur `tag`, le raccord
+Sighty entre deux instances, la résolution asynchrone du contenu ou
+l'exposition de la surface par la façade publique. Ces points restent `En
+cours` ou `À engager` et ne doivent pas être simulés dans la démo.
 
 ### Parcours d'intégration recommandé pour une application auteur
 
@@ -914,12 +1035,15 @@ acceptance CSS supplémentaire du composant core.
   tampon restent ceux de la capacité de flux déclarée ;
 - les materializers Canvas, Three.js ou autres supports non HTML ;
 - l'acceptation de `replace-split-text` et `replace-split-cells` par le profil
-  `foreign` dans la première tranche ; `replace.split` est rejeté à la
-  validation ;
+  `foreign` dans la première tranche ; `replace.split` est accepté mais ignoré
+  par `slot` ;
+- la stratégie de `replace` pour une iframe ou une autre représentation dont
+  le snapshot DOM ne restitue pas l'état rendu ; le choix entre absence de
+  transition et élément de substitution par défaut reste à décider ;
 - la destruction automatique du player qui possède le contenu ;
 - une nouvelle identité globale pour remplacer les adresses CodPlay existantes.
 
-Toute extension de support doit fournir son propre adaptateur de contenu et
-préciser sa capacité de capture de représentation. Elle ne doit pas introduire
-de branche locale dans une application ni affaiblir le contrat du composant
-core.
+Toute extension de support doit fournir son propre raccord de représentation et
+préciser les ressources qu'il possède. La capture de transition relève de la
+surface de présentation HTML ; l'extension ne doit pas introduire de branche
+locale dans une application ni affaiblir le contrat du composant core.

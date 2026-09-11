@@ -39,9 +39,26 @@ Le chemin CSS reste donc distinct du chemin média : la CSS éphémère est gér
 par son slot immédiat, tandis que les médias suivent le cache et le comptage de
 propriétaires du preload.
 
-## Ce qui reste à fixer avec Sighty
+## Décision de frontière et première tranche (2026-09-11)
 
-Cette note ne crée pas encore d’API Sighty. Le contrat devra préciser :
+Sighty pilote le cycle de vie des occurrences de scènes : création, montage,
+démarrage, pause/reprise, seek, démontage, remontage et destruction. CodPlay
+exécute les opérations de chaque instance et son player reste propriétaire de
+son état, de sa materialization et de son teardown. Le composant `slot` ne
+pilote aucun player enfant ; sa surface ne fait qu'attacher ou détacher la
+représentation foreign.
+
+La première tranche est la composition fixe A/B décrite dans la note Sighty du
+modèle déclaratif. Elle sera exercée avec le runtime réel, puis utilisée pour
+affiner les détails de cycle de vie. Une fin de lecture ne déclenche pas
+implicitement une destruction ; la décision de conserver, remonter ou détruire
+reste une décision explicite de Sighty.
+
+## Points à affiner avec Sighty et la démo
+
+Cette note ne crée pas encore d’API Sighty et ne fige pas l'ordre final des
+opérations. Le contrat devra préciser, à partir des observations de la
+première démo :
 
 - l’identité d’une occurrence de scène et la dérivation de son slot CSS ;
 - les ressources URL effectivement possédées par cette occurrence ;
@@ -52,4 +69,3 @@ Cette note ne crée pas encore d’API Sighty. Le contrat devra préciser :
 Le principe à conserver est néanmoins fixé : **pas de clear automatique à la
 fin de lecture ; clear et release explicites lors du démontage effectif, limités
 aux ressources appartenant à la scène démontée.**
-
