@@ -29,6 +29,14 @@ export {
   validatePolygonInitial,
 } from './polygon'
 export { TagComponent, sanitizeTagInitial, validateTagInitial } from './tag'
+export {
+  ForeignContentComponent,
+  SlotComponent,
+  sanitizeSlotInitial,
+  validateSlotAction,
+  validateSlotInitial,
+  validateSlotPerso,
+} from './slot'
 export { RuntimeComponentRuntime } from './runtime-component-runtime'
 export type { LayoutAction, LayoutInitial, LayoutState } from './layout'
 export type { ListAction, ListConfig, ListInitial, ListState } from './list'
@@ -58,12 +66,21 @@ export type {
   PolygonState,
 } from './polygon'
 export type {
+  ForeignContentSurface,
   MediaComponentSurface,
+  RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,
   RuntimeComponentSurfaceProvider,
   RuntimeComponentSurfaceResolver,
 } from './component-surface-types'
+export type {
+  ForeignContentValue,
+  SlotAction,
+  SlotInitial,
+  SlotReplace,
+  SlotState,
+} from './slot'
 export type { TagAction, TagInitial, TagState } from './tag'
 export {
   clampProgress,

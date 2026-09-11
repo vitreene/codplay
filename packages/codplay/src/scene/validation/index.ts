@@ -12,6 +12,7 @@ export { reportMissingValidator } from './validation-warnings'
 export type {
   ComponentValidationDefinition,
   ComponentSanitizer,
+  PersoValidationFunction,
   PersoValidationInput,
   PropertyValidationDefinition,
   ServiceValidationDefinition,

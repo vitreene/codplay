@@ -47,11 +47,13 @@ local parallèle n'est utilisé. Le composant déclare les services abstraits qu
 emploie ; `RuntimeCapabilityCatalog` les résout vers les adapters compatibles avec
 le materializer courant. Le materializer ne construit pas de catalogue local.
 
-La composition d'une scène Sighty dans un slot de layout relève du plan
-[`replace-foreign-plan.md`](./replace-foreign-plan.md). Le materializer HTML y
-fournit la résolution du node, la capture du clone transitoire et le montage de
-la représentation entrante ; il ne possède ni le player enfant ni sa durée de
-vie.
+L'exposition d'un contenu foreign dans une racine HTML relève du plan du
+[`composant core de contenu foreign`](./foreign-scene-component-plan.md). Le
+materializer HTML y fournit la résolution du nœud et, dans la tranche engagée,
+le montage/démontage de la représentation opaque ; la capture d'un clone
+transitoire reste liée au module `replace` à construire. Il ne possède ni le
+player du contenu ni sa durée de vie. Un layout peut fournir la cible structurelle
+qui contient ce composant, mais il ne fait pas partie de son contrat.
 
 ## Du template au substrat
 
@@ -130,7 +132,10 @@ identite est conservee qu'ils soient montes ou non dans le DOM.
 - la destruction finale libere les ressources auteur, y compris les ressources
   media, et retire les references et les elements conserves ;
 - les clones d'overlay FLIP et le DOM de mesure sont des ressources techniques
-  temporaires distinctes des materialisations auteur.
+  temporaires distinctes des materialisations auteur. Cet invariant vaut pour
+  tous les clones de présentation CodPlay : un clone est une copie temporaire
+  destinée à l'effet visuel, jamais un perso, une nouvelle instance de composant
+  ou une materialisation persistante.
 
 Cette persistance est notamment requise pour les composants media : un seek ou un
 detachement ne doit pas recreer l'element ni recharger sa source.

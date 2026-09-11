@@ -179,6 +179,7 @@ function validateStory(
     )
   }
 
+  const slotNames = new Map<string, string>()
   for (const perso of story.persos) {
     if (perso.id.trim().length === 0) {
       diagnostics.error(
@@ -204,6 +205,27 @@ function validateStory(
       )
     }
     componentTypes.add(perso.type)
+
+    if (perso.type === 'slot') {
+      if (perso.name === undefined || perso.name.trim().length === 0) {
+        diagnostics.error(
+          'COMPILED_SLOT_NAME_INVALID',
+          `CompiledScene slot perso must declare a non-empty root name: ${perso.id}.`,
+          { context: { sceneId: scene.scene.id, storyId: story.id, persoId: perso.id } },
+        )
+      } else {
+        const previousPersoId = slotNames.get(perso.name)
+        if (previousPersoId !== undefined) {
+          diagnostics.error(
+            'COMPILED_SLOT_NAME_DUPLICATE',
+            `CompiledScene slot name is duplicated in story ${story.id}: ${perso.name}.`,
+            { context: { sceneId: scene.scene.id, storyId: story.id, persoId: perso.id, previousPersoId } },
+          )
+        } else {
+          slotNames.set(perso.name, perso.id)
+        }
+      }
+    }
 
     if (!(perso.id in perso.actions) || perso.actions[perso.id] !== null) {
       diagnostics.error(

@@ -606,9 +606,12 @@ Le cas demandé comporte trois scènes autonomes :
   l'autre en fondu.
 - **Scène B** : un pavé de couleur présente les nombres de 1 à 10, avec un
   changement chaque seconde.
-- **Scène layout** : elle divise la vue et accueille les scènes de contenu.
-  La demande mentionne dix parties ; la répartition de A et B, ou une éventuelle
-  correction vers deux parties, reste à préciser avec l'auteur.
+- **Scène layout** : elle divise la vue en deux zones nommées `A` et `B` et
+  accueille les deux scènes de contenu.
+
+Le 2026-09-10, l'auteur a confirmé que cette première démo ne comporte que ces
+deux zones. La mention initiale de dix parties ne fait donc pas partie de ce
+scénario.
 
 Chaque scène possède son fichier déclaratif. Un fichier Sighty distinct décrit
 leur composition. Ces fichiers doivent se lire directement, sans fonctions
@@ -626,10 +629,11 @@ Le [mode hôte envisagé côté CodPlay](../../codplay/plan/notes/2026-07-28-dec
 prévoit une cible adressable dans le modèle : le scénario nomme un hôte, et
 l'application fournit uniquement la racine HTML du layout principal.
 
-Le [plan de scène foreign](../../codplay/plan/replace-foreign-plan.md) fixe une
-direction pour les opérations de montage, démontage et remplacement dans un
-slot. Il indique une implémentation non commencée et laisse les noms des events
-à aligner avec Sighty.
+Le [plan du composant core de contenu foreign](../../codplay/plan/foreign-scene-component-plan.md)
+fixe la frontière pour exposer, remplacer et adresser un contenu opaque dans la
+racine d'un composant CodPlay. Sa première tranche (profil `slot`, manifeste et
+surface HTML d'attachement) est engagée ; le remplacement, l'orchestration
+entre instances et le raccord Sighty restent à aligner et à implémenter.
 
 La surface publique actuellement exposée par
 [`CodPlayInstanceOptions`](../../codplay/src/facade/facade-types.ts) reçoit

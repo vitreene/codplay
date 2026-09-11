@@ -7,6 +7,7 @@ import type { ListAction, ListInitial } from '../runtime/components/list'
 import type { MediaAction, MediaInitial } from '../runtime/components/media'
 import type { PolygonAction, PolygonInitial } from '../runtime/components/polygon'
 import type { TagAction, TagInitial } from '../runtime/components/tag'
+import type { SlotAction, SlotInitial } from '../runtime/components/slot'
 import type { MoveOrderMode } from '../runtime/config/move'
 
 /** Function value allowed in authoring data before compilation extracts it. */
@@ -30,6 +31,7 @@ export interface PersoTypeRegistry {
   list: { initial: ListInitial; action: ListAction }
   media: { initial: MediaInitial; action: MediaAction }
   polygon: { initial: PolygonInitial; action: PolygonAction }
+  slot: { initial: SlotInitial; action: SlotAction }
 }
 
 /** Built-in component type names understood by the V2 core catalog. */

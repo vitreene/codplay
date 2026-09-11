@@ -82,9 +82,13 @@ Un seek ne detruit, ne recree et ne recharge donc pas les elements media ; il
 reconcilie uniquement l'etat cible, le parentage et l'ordre.
 
 La destruction des materialisations auteur intervient uniquement lors du teardown
-final du player/sequence. Les clones d'overlay sont des ressources techniques
-transitoires. Aucune materialisation auteur, aucun composant et aucun media ne
-doit être créé dans un second arbre pour mesurer FLIP.
+final du player/sequence. L'invariant général des clones de présentation reste
+le même pour chaque capacité : les clones d'overlay sont des ressources
+techniques transitoires, des copies temporaires destinées à l'effet visuel ; ils
+ne sont jamais des persos, des instances de composant, des materialisations
+auteur persistantes ou des cibles de placement. Aucune materialisation auteur,
+aucun composant et aucun media ne doit être créé dans un second arbre pour
+mesurer FLIP.
 
 ### Côtés d'une frontière
 

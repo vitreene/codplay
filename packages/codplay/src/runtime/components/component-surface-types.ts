@@ -1,4 +1,6 @@
 import type { BaseComponent } from './base-component'
+import type { RuntimeComponentIdentity } from '../catalog/runtime-capability-catalog'
+import type { RuntimeMaterializer } from '../materializer/materializer-types'
 
 /** Author-declared media property transition applied by the media-sync module. */
 export type MediaTransition = Readonly<{
@@ -21,17 +23,29 @@ export type MediaComponentSurface = Readonly<{
   setRate?: (rate: number) => void
 }>
 
+/** Attaches and detaches opaque foreign roots inside one materialized host. */
+export type ForeignContentSurface = Readonly<{
+  attach: (roots: readonly unknown[], referenceRoot?: unknown) => void
+  detach: () => void
+}>
+
 /** Type map of substrate-neutral surfaces, extensible by future runtime families. */
 export interface RuntimeComponentSurfaceMap {
   readonly media: MediaComponentSurface
+  readonly foreignContent: ForeignContentSurface
 }
 
-/** Surface identifiers accepted by the player-local resolver. */
-export type RuntimeComponentSurfaceId = keyof RuntimeComponentSurfaceMap
+/** Existing module-facing surface identifier retained for resolver compatibility. */
+export type RuntimeComponentSurfaceId = 'media'
+
+/** All surfaces that can be requested by an internal CodPlay adapter. */
+export type RuntimeComponentSurfaceKey = keyof RuntimeComponentSurfaceMap
 
 /** Adapts one component instance to the surfaces declared by its runtime type. */
 export type RuntimeComponentSurfaceProvider = (
   component: BaseComponent<Record<string, unknown>>,
+  identity?: RuntimeComponentIdentity,
+  materializer?: RuntimeMaterializer,
 ) => Partial<RuntimeComponentSurfaceMap>
 
 /** Resolves typed operations for one player-local mounted component. */
@@ -40,4 +54,6 @@ export type RuntimeComponentSurfaceResolver = Readonly<{
     runtimeItemId: string,
     surfaceId: SurfaceId,
   ) => RuntimeComponentSurfaceMap[SurfaceId] | undefined
+  /** Resolves the foreign-content attachment surface without widening media modules. */
+  getForeignContentSurface?: (runtimeItemId: string) => ForeignContentSurface | undefined
 }>

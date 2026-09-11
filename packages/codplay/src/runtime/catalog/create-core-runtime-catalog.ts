@@ -5,6 +5,7 @@ import {
   LayoutComponent,
   MediaComponent,
   PolygonComponent,
+  ForeignContentComponent,
   sanitizeInputAction,
   sanitizeInputInitial,
   sanitizeListInitial,
@@ -23,6 +24,10 @@ import {
   validatePolygonInitial,
   TagComponent,
   validateTagInitial,
+  sanitizeSlotInitial,
+  validateSlotAction,
+  validateSlotInitial,
+  validateSlotPerso,
 } from '../components'
 import { correctionIconPartId, selectionIconPartId } from '../components/input'
 import {
@@ -58,6 +63,7 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
   catalog.registerComponent(coreMediaDefinition, 'core')
   catalog.registerComponent(coreListDefinition, 'core')
   catalog.registerComponent(corePolygonDefinition, 'core')
+  catalog.registerComponent(coreSlotDefinition, 'core')
   return catalog
 }
 
@@ -138,4 +144,19 @@ const corePolygonDefinition: RuntimeComponentDefinition = {
   validateAction: validatePolygonAction,
   sanitizeInitial: sanitizePolygonInitial,
   sanitizeAction: sanitizePolygonAction,
+}
+
+/** Creates the core opaque foreign-content host declaration. */
+const coreSlotDefinition: RuntimeComponentDefinition = {
+  type: 'slot',
+  component: ForeignContentComponent,
+  modules: [],
+  validateInitial: validateSlotInitial,
+  validateAction: validateSlotAction,
+  validatePerso: validateSlotPerso,
+  sanitizeInitial: sanitizeSlotInitial,
+  surfaces: (_component, identity, materializer) => {
+    if (identity === undefined || materializer?.getForeignContentSurface === undefined) return {}
+    return { foreignContent: materializer.getForeignContentSurface(identity.componentId) }
+  },
 }

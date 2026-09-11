@@ -73,6 +73,7 @@ export class RuntimeComponentRuntime {
     return {
       getSurface: <SurfaceId extends RuntimeComponentSurfaceId>(componentId: string, surfaceId: SurfaceId) =>
         this.mounted.get(componentId)?.surfaces[surfaceId],
+      getForeignContentSurface: (componentId) => this.mounted.get(componentId)?.surfaces.foreignContent,
     }
   }
 
@@ -229,16 +230,30 @@ export class RuntimeComponentRuntime {
       this.options.materializer,
       this.moduleServices,
     )
-    const mounted: MountedComponent = {
+    const handle = this.options.materializer.materializeComponent(
       component,
-      surfaces: this.options.catalog.getComponentSurfaces(perso.type, component),
-      handle: this.options.materializer.materializeComponent(
+      identity,
+      compiledPerso.initial,
+      this.options.catalog.getMountablePartIds(perso.type, identity),
+      this.moduleServices,
+    )
+    let surfaces: Partial<RuntimeComponentSurfaceMap>
+    try {
+      surfaces = this.options.catalog.getComponentSurfaces(
+        perso.type,
         component,
         identity,
-        compiledPerso.initial,
-        this.options.catalog.getMountablePartIds(perso.type, identity),
-        this.moduleServices,
-      ),
+        this.options.materializer,
+      )
+    } catch (error) {
+      handle.destroy()
+      component.destroy()
+      throw error
+    }
+    const mounted: MountedComponent = {
+      component,
+      surfaces,
+      handle,
     }
     this.mounted.set(perso.key, mounted)
     return mounted

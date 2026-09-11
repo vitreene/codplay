@@ -1,5 +1,6 @@
 import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import type { BaseComponent, RuntimeComponentHandle, RuntimeComponentIdentity } from '../components'
+import type { ForeignContentSurface } from '../components'
 import type { RuntimeModuleServiceInstance } from '../engine'
 import type { SolvedScene } from '../player/pipeline'
 
@@ -37,6 +38,11 @@ export class MotionMaterializer implements RuntimeMaterializer {
     this.base.materializeScene(scene, context)
     if (context.phase === 'geometry-capture') return
     this.presentMotion(scene, context)
+  }
+
+  /** Delegates foreign-root attachment to the underlying HTML materializer. */
+  getForeignContentSurface(componentId: string): ForeignContentSurface | undefined {
+    return this.base.getForeignContentSurface?.(componentId)
   }
 
   /** Forwards an external transient-structure invalidation to the base host. */

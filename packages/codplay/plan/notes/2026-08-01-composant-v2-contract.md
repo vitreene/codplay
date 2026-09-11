@@ -4,7 +4,7 @@
 
 Status: Fixe pour la fondation composant et la tranche HTML/DOM V2
 CodPlay version: V2 foundation  
-Review: séparation BaseComponent/BaseHTMLComponent et déclaration locale des services validées le 2026-08-25; JSX, Canvas et Three.js restent hors tranche
+Review: séparation BaseComponent/BaseHTMLComponent et déclaration locale des services validées le 2026-08-25; absence d'opinion visuelle implicite pour les composants core et responsabilité de l'application auteur confirmées le 2026-09-11; JSX, Canvas et Three.js restent hors tranche
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -164,6 +164,25 @@ de mutations precedentes pour produire la materialisation a `t`.
 Le composant conserve une reference interne vers son node racine materialise. Cette
 reference sert a `update()`. Elle n'est ni l'etat logique du perso ni un handle
 public.
+
+### Présentation et opinion de style
+
+Un composant core fournit une structure, des services et des capacités ; il ne
+porte pas d'opinion visuelle implicite. Il n'impose donc pas de couleurs, de
+dimensions, de mode d'affichage, de ratio, de débordement, d'alignement ou de
+feuille de style par défaut. Une valeur structurelle nécessaire au contrat,
+comme le `div` par défaut de la tranche HTML, ne constitue pas une opinion de
+présentation.
+
+Une capacité ou une animation n'est exécutée que lorsqu'elle est déclarée dans
+les données auteur ou requise explicitement par le contrat concerné. Son
+implémentation peut appliquer les mutations nécessaires à l'effet demandé, sans
+ajouter une politique visuelle implicite au composant.
+
+Un composant auteur peut encapsuler une opinion de style si l'application le
+souhaite. Cette opinion appartient alors au contrat de ce composant auteur et
+est appliquée par sa materialisation ou par la feuille de l'application ; elle
+ne devient pas une règle générale des composants core.
 
 ## Instanciation runtime
 

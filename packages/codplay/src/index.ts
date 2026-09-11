@@ -98,6 +98,31 @@ export type {
   SceneDoc,
   StoryDoc,
 } from './scene/types'
+export {
+  resolveSlotManifestEntry,
+  slotManifest,
+} from './scene/authoring'
+export type {
+  SlotManifestDiagnostic,
+  SlotManifestEntry,
+  SlotManifestOptions,
+  SlotManifestResolution,
+  SlotManifestResolveOptions,
+  SlotManifestScene,
+} from './scene/authoring'
+export type {
+  ForeignContentValue,
+  ForeignContentSurface,
+  RuntimeComponentSurfaceKey,
+  RuntimeComponentSurfaceId,
+  RuntimeComponentSurfaceMap,
+  RuntimeComponentSurfaceProvider,
+  RuntimeComponentSurfaceResolver,
+  SlotAction,
+  SlotInitial,
+  SlotReplace,
+  SlotState,
+} from './runtime/components'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
 export type {
   RuntimePreloadApi,

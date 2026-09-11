@@ -1,6 +1,10 @@
 import { RuntimeEngine, type Ticker } from '../engine'
 import { TimeTicker } from '../time'
 import { RuntimeComponentRuntime } from '../components'
+import type {
+  ForeignContentSurface,
+  MediaComponentSurface,
+} from '../components'
 import { RuntimeCapabilityCatalog } from '../catalog'
 import type { RuntimeMaterializer, RuntimeMaterializerSceneContext, RuntimeMoveOccurrence } from '../materializer'
 import {
@@ -466,6 +470,18 @@ export class HtmlPlayerRunner {
   /** Resolves one runner target node by its opaque target ID. */
   getTargetNode(targetId: string): unknown | undefined {
     return this.nodes.targetNodes.get(targetId)
+  }
+
+  /** Resolves one typed component surface for an adapter owned by this runner. */
+  getComponentSurface(componentId: string, surfaceId: 'media'): MediaComponentSurface | undefined
+  getComponentSurface(componentId: string, surfaceId: 'foreignContent'): ForeignContentSurface | undefined
+  getComponentSurface(
+    componentId: string,
+    surfaceId: 'media' | 'foreignContent',
+  ): MediaComponentSurface | ForeignContentSurface | undefined {
+    const surfaces = this.player.componentRuntime?.getComponentSurfaces()
+    if (surfaceId === 'foreignContent') return surfaces?.getForeignContentSurface?.(componentId)
+    return surfaces?.getSurface(componentId, surfaceId)
   }
 
   /** Captures the visible FIRST layout before one capture close is committed. */

@@ -7,6 +7,7 @@ import { resolvePresentationOrder, type SolvedPerso, type SolvedScene } from '..
 import type { RuntimeModuleServiceInstance } from '../engine'
 import type {
   BaseComponent,
+  ForeignContentSurface,
   MaterializedPart,
   RuntimeComponentHandle,
   RuntimeComponentIdentity,
@@ -36,6 +37,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   readonly id = HTML_MATERIALIZER_ID
   readonly context: HtmlMaterializerRuntimeContext
   private readonly nodes: HtmlComponentMaterializerNodes
+  private readonly foreignAttachments = new Map<string, readonly unknown[]>()
   private mountedPersos = new Set<string>()
   private lastStructuralRevision: string | undefined
   private structureDirty = true
@@ -89,6 +91,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
           if (destroyed) return
           destroyed = true
           cleanupMarkup?.()
+          this.detachForeignContent(identity.componentId)
           detachMaterializedRoot(rootNode)
           this.nodes.persoNodes.delete(identity.componentId)
           this.nodes.persoParts?.delete(identity.componentId)
@@ -98,6 +101,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
         },
       }
     } catch (error) {
+      this.detachForeignContent(identity.componentId)
       this.nodes.persoNodes.delete(identity.componentId)
       this.nodes.persoParts?.delete(identity.componentId)
       detachMaterializedRoot(rootNode)
@@ -119,7 +123,10 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     )
 
     for (const persoKey of this.mountedPersos) {
-      if (!nextMountedPersos.has(persoKey)) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
+      if (!nextMountedPersos.has(persoKey)) {
+        this.detachForeignContent(persoKey)
+        detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
+      }
     }
 
     const desiredRootsByParent = new Map<unknown, unknown[]>()
@@ -138,7 +145,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     }
 
     for (const [parent, desiredRoots] of desiredRootsByParent) {
-      reconcileStructuredRoots(parent, desiredRoots)
+      reconcileStructuredRoots(parent, desiredRoots, (node) => isHtmlTransientNode(node) || this.isForeignRoot(node))
     }
 
     this.mountedPersos = nextMountedPersos
@@ -151,12 +158,78 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     this.structureDirty = true
   }
 
+  /** Returns the host-owned surface used by an adapter to expose foreign roots. */
+  getForeignContentSurface(componentId: string): ForeignContentSurface {
+    return {
+      attach: (roots, referenceRoot) => this.attachForeignContent(componentId, roots, referenceRoot),
+      detach: () => this.detachForeignContent(componentId),
+    }
+  }
+
   /** Detaches all currently materialized roots from their structural parents. */
   destroy(): void {
+    for (const componentId of this.foreignAttachments.keys()) this.detachForeignContent(componentId)
     for (const persoKey of this.mountedPersos) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
     this.mountedPersos.clear()
+    this.foreignAttachments.clear()
     this.lastStructuralRevision = undefined
     this.structureDirty = true
+  }
+
+  /** Attaches an ordered foreign-root representation into one materialized host. */
+  private attachForeignContent(
+    componentId: string,
+    roots: readonly unknown[],
+    referenceRoot?: unknown,
+  ): void {
+    const host = this.nodes.persoNodes.get(componentId)
+    if (!isAppendable(host)) {
+      throw new Error(`Foreign content host is not materialized as an appendable node: ${componentId}`)
+    }
+
+    this.detachForeignContent(componentId)
+    const attached: unknown[] = []
+    try {
+      const canInsertBefore = referenceRoot !== undefined
+        && isInsertable(host)
+        && isObjectNode(referenceRoot)
+        && referenceRoot.parentNode === host
+      for (const root of roots) {
+        if (!isObjectNode(root) || root === host || root === referenceRoot) {
+          throw new Error(`Foreign content root is not attachable for component: ${componentId}`)
+        }
+        if (canInsertBefore) host.insertBefore(root, referenceRoot)
+        else host.appendChild(root)
+        attached.push(root)
+      }
+      this.foreignAttachments.set(componentId, attached)
+    } catch (error) {
+      for (const root of attached) {
+        if (isObjectNode(root) && root.parentNode === host && isRemovable(host)) host.removeChild(root)
+      }
+      throw error
+    }
+  }
+
+  /** Detaches the current foreign representation without destroying its roots. */
+  private detachForeignContent(componentId: string): void {
+    const roots = this.foreignAttachments.get(componentId)
+    if (roots === undefined) return
+    const host = this.nodes.persoNodes.get(componentId)
+    if (isRemovable(host)) {
+      for (const root of roots) {
+        if (isObjectNode(root) && root.parentNode === host) host.removeChild(root)
+      }
+    }
+    this.foreignAttachments.delete(componentId)
+  }
+
+  /** Reports whether a node is currently owned by a foreign attachment relation. */
+  private isForeignRoot(node: unknown): boolean {
+    for (const roots of this.foreignAttachments.values()) {
+      if (roots.includes(node)) return true
+    }
+    return false
   }
 }
 
@@ -209,8 +282,12 @@ function resolveParentNode(perso: SolvedPerso, nodes: HtmlComponentMaterializerN
 }
 
 /** Reconciles author roots while preserving nodes owned by a transient preview. */
-function reconcileStructuredRoots(parent: unknown, desiredRoots: readonly unknown[]): void {
-  for (const child of desiredRoots) reconcileStructuredNode(parent, child, desiredRoots)
+function reconcileStructuredRoots(
+  parent: unknown,
+  desiredRoots: readonly unknown[],
+  isIgnoredNode: (node: unknown) => boolean = isHtmlTransientNode,
+): void {
+  for (const child of desiredRoots) reconcileStructuredNode(parent, child, desiredRoots, isIgnoredNode)
 }
 
 /** Detaches every real root of one persistent component materialization. */
@@ -223,11 +300,12 @@ function reconcileStructuredNode(
   parent: unknown,
   child: unknown,
   desiredRoots: readonly unknown[],
+  isIgnoredNode: (node: unknown) => boolean = isHtmlTransientNode,
 ): void {
   if (parent === undefined || child === undefined || parent === child) return
-  if (isHtmlTransientNode(child)) return
+  if (isIgnoredNode(child)) return
   if (isAppendable(parent)) {
-    const managedChildren = Array.from(parent.children ?? []).filter((node) => !isHtmlTransientNode(node))
+    const managedChildren = Array.from(parent.children ?? []).filter((node) => !isIgnoredNode(node))
     const desiredIndex = desiredRoots.indexOf(child)
     const currentIndex = managedChildren.indexOf(child)
     const childNode = isObjectNode(child) ? child : undefined
@@ -238,7 +316,7 @@ function reconcileStructuredNode(
       .find((node) => node !== child
         && isObjectNode(node)
         && node.parentNode === parent
-        && !isHtmlTransientNode(node))
+        && !isIgnoredNode(node))
     if (reference !== undefined && isInsertable(parent)) parent.insertBefore(child, reference)
     else parent.appendChild(child)
     return
@@ -246,7 +324,7 @@ function reconcileStructuredNode(
   if (!isObjectNode(parent) || !isObjectNode(child)) return
 
   const children = Array.isArray(parent.children) ? parent.children : []
-  const managedChildren = children.filter((node) => !isHtmlTransientNode(node))
+  const managedChildren = children.filter((node) => !isIgnoredNode(node))
   const desiredIndex = desiredRoots.indexOf(child)
   if (child.parentNode === parent && desiredIndex >= 0 && managedChildren.indexOf(child) === desiredIndex) return
 

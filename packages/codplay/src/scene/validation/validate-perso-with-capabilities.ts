@@ -37,6 +37,16 @@ export function validatePersoWithCapabilities(
     return
   }
 
+  component.validatePerso?.(
+    perso,
+    createValidationContext(
+      VALIDATION_TARGET_INITIAL,
+      perso.validationPath ?? `persos.${perso.id}`,
+      { ...refs, ...(perso.storyId === undefined ? {} : { storyId: perso.storyId }) },
+      diagnostics,
+    ),
+  )
+
   const payloads = createPersoValidationPayloads(perso)
   for (const payload of payloads) {
     const validator = payload.target === VALIDATION_TARGET_INITIAL ? component.validateInitial : component.validateAction

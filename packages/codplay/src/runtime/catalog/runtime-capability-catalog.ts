@@ -1,6 +1,7 @@
 import type {
   CapabilityValidationSnapshot,
   ComponentSanitizer,
+  PersoValidationFunction,
 } from '../../scene/validation/validation-types'
 import type {
   PropertyValidationDefinition,
@@ -65,6 +66,8 @@ export type RuntimeComponentDefinition = Readonly<{
   /** Validates the complete author-facing initial profile before compilation. */
   validateInitial: ValidationFunction
   validateAction?: ValidationFunction
+  /** Validates structural fields declared on the perso root. */
+  validatePerso?: PersoValidationFunction
   /** Sanitizes the initial profile once before it enters CompiledScene. */
   sanitizeInitial?: ComponentSanitizer
   /** Sanitizes one action patch once before it enters CompiledScene. */
@@ -167,8 +170,10 @@ export class RuntimeCapabilityCatalog {
   getComponentSurfaces(
     type: string,
     component: BaseComponent<Record<string, unknown>>,
+    identity?: RuntimeComponentIdentity,
+    materializer?: RuntimeMaterializer,
   ): Partial<RuntimeComponentSurfaceMap> {
-    return this.components.get(type)?.surfaces?.(component) ?? {}
+    return this.components.get(type)?.surfaces?.(component, identity, materializer) ?? {}
   }
 
   /** Returns one service definition by its data namespace. */
@@ -229,6 +234,7 @@ export class RuntimeCapabilityCatalog {
         modules: [...definition.modules],
         validateInitial: definition.validateInitial,
         validateAction: definition.validateAction,
+        validatePerso: definition.validatePerso,
         sanitizeInitial: definition.sanitizeInitial,
         sanitizeAction: definition.sanitizeAction,
       }])),

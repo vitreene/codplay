@@ -59,6 +59,38 @@ Il ne remplace pas les spécifications ni les plans. En cas de conflit, l'ordre
 d'autorité est celui de la section 1. Une affirmation de ce document ne crée
 jamais une API ou une règle absente des contrats cités.
 
+### Mise à jour du 2026-09-11 — première tranche de l'hôte foreign
+
+La première tranche autorisée du composant core d'hébergement de contenu foreign
+est engagée. Le catalogue CodPlay V2 enregistre le type auteur `slot`, dont le
+perso porte un `name` racine requis et immuable. Sa racine HTML est un `div` par
+défaut, ses services sont limités à `className`, `style` et `attr`, et son champ
+`initial.content` reste une référence sérialisable opaque ; il n'est pas envoyé
+au service textuel `content` de `TagComponent`.
+
+Le materializer HTML publie une surface interne `foreignContent`. Elle écrit les
+racines fournies par un adaptateur dans le `hostRoot` par `appendChild` ou
+`insertBefore`, puis retire uniquement la relation qu'elle possède au démontage
+ou à la destruction. Sighty ne manipule pas le DOM. Le helper d'authoring
+`slotManifest`/`resolveSlotManifestEntry` découvre les noms et produit les
+diagnostics d'absence ou d'ambiguïté.
+
+La spécification ciblée et le suivi détaillé sont :
+
+- [`slot-component-spec.md`](../../specs/slot-component-spec.md) pour le
+  contrat actuellement implémenté ;
+- [`foreign-scene-component-plan.md`](../foreign-scene-component-plan.md) pour
+  les phases, les gates et les limites ;
+- [`2026-09-11-slot-foreign-reprise-report.md`](../2026-09-11-slot-foreign-reprise-report.md)
+  pour le point de reprise factuel.
+
+Le module partagé `replace`, la représentation clonable, l'ownership entre
+instances, l'exposition par la façade publique et l'exécution Sighty ne sont pas
+encore implémentés. La démo A/B n'a donc pas été créée et aucune API interscène
+n'a été inventée pour la rendre artificiellement fonctionnelle. Les tests
+CodPlay, les typechecks CodPlay et démos V2 et le build des démos passent pour
+cette tranche.
+
 ## 1. Ordre de lecture et sources d'autorité
 
 Avant toute modification :

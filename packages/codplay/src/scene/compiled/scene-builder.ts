@@ -13,7 +13,10 @@ import type {
 } from '../types'
 import { CompiledSceneValidationEngine } from '../validation/compiled-scene-validation-engine'
 import { SceneGuardEngine } from '../validation/scene-guard-engine'
-import type { CapabilityValidationSnapshot } from '../validation/validation-types'
+import type {
+  CapabilityValidationSnapshot,
+  PersoValidationInput,
+} from '../validation/validation-types'
 import {
   createExtractionState,
   extractCompiledRecord,
@@ -152,8 +155,12 @@ function withoutDisabledStories(scene: CanonicalSceneDoc): CanonicalSceneDoc {
 }
 
 /** Projects active persos into the validation input consumed by the catalog engine. */
-function listPersoValidationInputs(scene: CanonicalSceneDoc): readonly CanonicalPersoDoc[] {
-  return Object.values(scene.stories).flatMap((story) => story.persos)
+function listPersoValidationInputs(scene: CanonicalSceneDoc): readonly PersoValidationInput[] {
+  return Object.values(scene.stories).flatMap((story) => story.persos.map((perso, index) => ({
+    ...perso,
+    storyId: story.id,
+    validationPath: `stories.${story.id}.persos[${index}]`,
+  })))
 }
 
 /** Compiles the scene payload while replacing every author function with a reference. */
