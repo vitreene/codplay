@@ -1,4 +1,4 @@
-import '../shared/demo-shell.css'
+import '../shared/demo-frame.css'
 
 import { TalkingHead } from '@met4citizen/talkinghead'
 import { phraseWordsFR, MOUTH_CUES, PRESTON_TO_TH } from '../scenes/avatar-data/phrase-fr'

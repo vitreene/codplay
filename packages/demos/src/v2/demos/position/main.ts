@@ -28,14 +28,14 @@ export const POSITION_INITIAL_EVENTS: readonly V2DemoEventInjection[] = [{
   target: { scope: 'story', storyId: POSITION_STORY_ONE_ID },
 }]
 
-/** The main story owns only the shared carousel shell and its keyboard source. */
+/** The main story owns only the shared carousel layout and its keyboard source. */
 const POSITION_MAIN_STORY: StoryDoc = {
   id: POSITION_MAIN_STORY_ID,
   initial: { move: '@root' },
   persos: createCarouselPersos(),
 }
 
-/** Builds the complete scene: the shell plus its six independent stories. */
+/** Builds the complete scene: the layout plus its six independent stories. */
 export function createPositionScene(): SceneDoc {
   return {
     id: POSITION_SCENE_ID,

@@ -3,7 +3,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CodPlay } from '../../src'
-import { SightyComposition } from '../../../demos/src/sighty/demo1/sighty-composition'
+import {
+  createDemo1Composition,
+  type Demo1Runtime,
+  type Demo1Sighty,
+} from '../../../demos/src/sighty/demo1/sighty-composition'
+import { createDemo1Controls, type Demo1Controls } from '../../../demos/src/sighty/demo1/page-controls'
 import { sceneA } from '../../../demos/src/sighty/demo1/scenes/scene-a'
 
 /** Provides an immediately ready image for the preload boundary in jsdom. */
@@ -18,12 +23,17 @@ class ImmediateImage {
 }
 
 describe('Sighty A/B demo composition', () => {
-  let composition: SightyComposition | undefined
+  let sighty: Demo1Sighty | undefined
+  let runtime: Demo1Runtime | undefined
+  let pageControls: Demo1Controls | undefined
   let codplay: CodPlay | undefined
 
   afterEach(() => {
-    composition?.destroy()
-    composition = undefined
+    pageControls?.destroy()
+    pageControls = undefined
+    runtime?.destroy()
+    runtime = undefined
+    sighty = undefined
     codplay?.destroy()
     codplay = undefined
     vi.unstubAllGlobals()
@@ -35,13 +45,22 @@ describe('Sighty A/B demo composition', () => {
     const stage = document.createElement('div')
     const controls = document.createElement('div')
     document.body.append(stage, controls)
-    composition = new SightyComposition({
+    sighty = createDemo1Composition({
       stage,
-      controls,
       onLog: () => undefined,
     })
+    runtime = sighty.runtime
 
-    await composition.initialize()
+    await runtime.initialize()
+    pageControls = createDemo1Controls({
+      container: controls,
+      runtime,
+      onLog: () => undefined,
+    })
+    const controlHeadings = Array.from(controls.querySelectorAll('h3')).map((heading) => heading.textContent)
+    expect(controlHeadings).not.toContain('Instance layout-1')
+    expect(controlHeadings).toEqual(expect.arrayContaining(['Instance scene-a-1', 'Instance scene-b-1']))
+    await runtime.playAll()
 
     const authoringStyle = document.head.querySelector('style[data-codplay-preload-css-slot="sighty-demo-capsule-automation"]')
     expect(authoringStyle?.textContent).toContain('.ac-scene-root{')
@@ -53,10 +72,13 @@ describe('Sighty A/B demo composition', () => {
     const slotA = childA.parentElement
     const slotB = childB.parentElement
     if (slotA === null || slotB === null) throw new Error('Sighty slot roots are missing.')
+    const layoutRoot = stage.querySelector<HTMLElement>('.sighty-scene-layout')
+    if (layoutRoot === null) throw new Error('Sighty A/B layout root is missing.')
 
-    expect(stage.querySelector('.sighty-layout-shell__grid')).not.toBeNull()
-    expect(stage.querySelector('.sighty-layout-shell')).not.toBeNull()
-    expect(stage.querySelector('.sighty-layout-shell')?.classList.contains('ac-scene-root')).toBe(true)
+    expect(layoutRoot.classList.contains('ac-scene-root')).toBe(true)
+    expect(layoutRoot.children).toHaveLength(2)
+    expect(slotA.parentNode).toBe(layoutRoot)
+    expect(slotB.parentNode).toBe(layoutRoot)
     expect(childA.querySelector('.sighty-scene-a__image')).not.toBeNull()
     expect(childB.querySelector('.sighty-scene-b__number')?.textContent).toBe('1')
     expect(slotA.classList.contains('sighty-slot')).toBe(true)

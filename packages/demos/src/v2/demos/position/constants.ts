@@ -11,7 +11,7 @@ export const POSITION_STORY_FOUR_ID = 'position-story-four'
 export const POSITION_STORY_FIVE_ID = 'position-story-five'
 export const POSITION_STORY_SIX_ID = 'position-story-six'
 
-/** Shared carousel targets mounted by the story shell. */
+/** Shared carousel targets mounted by the story layout. */
 export const POSITION_CAROUSEL_ID = 'position-carousel'
 export const POSITION_VIEWPORT_TARGET = 'position:carousel:viewport'
 export const POSITION_STATUS_TARGET = 'position:carousel:status'

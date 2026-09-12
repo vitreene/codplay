@@ -1,5 +1,5 @@
 import type { SceneDoc } from 'codplay/scene/types'
-import { SIGHTY_SCENE_ROOT_CLASS_NAME } from '../scene-root-capsule'
+import { SIGHTY_SCENE_ROOT_CLASS_NAME } from '../../scene-root-capsule'
 
 /** Declarative scene A with a title fade-in and a ten-second image zoom. */
 export const sceneA: SceneDoc<string> = {
@@ -9,7 +9,7 @@ export const sceneA: SceneDoc<string> = {
       id: 'main',
       persos: [
         {
-          id: 'scene-a-shell',
+          id: 'scene-a-frame',
           type: 'layout',
           initial: {
             move: '@root',

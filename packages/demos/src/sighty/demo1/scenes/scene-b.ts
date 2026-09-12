@@ -1,5 +1,5 @@
 import type { SceneDoc } from 'codplay/scene/types'
-import { SIGHTY_SCENE_ROOT_CLASS_NAME } from '../scene-root-capsule'
+import { SIGHTY_SCENE_ROOT_CLASS_NAME } from '../../scene-root-capsule'
 
 /** Declarative scene B that changes its displayed number once per second. */
 export const sceneB: SceneDoc<string> = {
@@ -9,7 +9,7 @@ export const sceneB: SceneDoc<string> = {
       id: 'main',
       persos: [
         {
-          id: 'scene-b-shell',
+          id: 'scene-b-frame',
           type: 'layout',
           initial: {
             move: '@root',

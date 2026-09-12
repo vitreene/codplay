@@ -2,13 +2,26 @@
 
 ## Statut
 
-Statut : En cours — première fixture exécutable implémentée, validation en cours.
+Statut : En cours — première fixture exécutable et première surface auteur
+implémentées, validation en cours.
 Périmètre du scénario : demandé par l'auteur le 2026-09-10.  
 Tranche de montage interscènes : première surface publique CodPlay exercée par la fixture ;
 les politiques complètes restent à valider.
 Tranche de cycle de vie Sighty : première tranche autorisée le 2026-09-11 ;
 la fixture exerce le montage, le démontage et le remontage explicites ;
 affinage prévu à partir de cette preuve.
+Tranche de librairie auteur : première classe `Sighty` ajoutée le 2026-09-11 ;
+elle regroupe les surfaces `scenario` et `runtime`, avec une séparation
+DRY/KISS/SRP entre façade, scénario, runtime et validation.
+Tranche de runtime générique et de séparation page/démo : explicitement demandée
+le 2026-09-11 ; `Sighty.runtime` porte l'exécution commune et la démo 1 ne
+garde que sa configuration, tandis que les contrôles restent dans la page.
+Tranche d'interface commune des démos Sighty : demandée le 2026-09-12 ; une seule
+entrée `sighty.html` sélectionne les scénarios, l'interface partagée porte la
+télécommande générale et le volet de logs, et une zone de contrôles optionnelle
+reste disponible pour les modules propres à la démo 1.
+Décision d'API du 2026-09-12 : les vues sont adressées par la `sceneKey` racine
+et non par la position du tableau `views`.
 Implémentation : première tranche présente sous `packages/demos/src/sighty/demo1/` et
 `packages/demos/sighty.html` ; validation navigateur et Safari encore ouvertes.
 
@@ -18,6 +31,26 @@ composant CodPlay d’hébergement : son contrat et ses phases sont suivis dans 
 La description du scénario A/B est conservée dans la [note du modèle
 déclaratif Sighty](../notes/2026-08-17-modele-fichier-declaratif.md) ; ce plan
 en suit l'implémentation et la preuve d'intégration.
+
+## Tranche retenue : façade Sighty et surfaces scenario/runtime
+
+La décision du 2026-09-12 est de conserver un seul point d'entrée public dans
+le projet `packages/sighty` : la classe `Sighty`. Elle est instanciée avec
+`{ scenario, runtime }` et expose ces deux surfaces par `sighty.scenario` et
+`sighty.runtime` (ou par destructuration).
+
+La surface `scenario` porte le fichier, le catalogue de scènes, les données,
+les accès aux vues et la validation. La surface `runtime` regroupe les
+opérations CodPlay génériques de compilation, préchargement, création,
+montage, pilotage et destruction, sans créer l'interface de page.
+Les accès `scenario.getView(sceneKey)` et `scenario.getSlotNames(sceneKey)`
+utilisent la scène racine comme identité sémantique ; l'ordre de `views` reste
+un détail de sérialisation.
+
+Les fichiers auteur des deux démos fournissent leurs ressources scénarisées.
+La construction de chaque démo instancie `Sighty` et configure sa surface
+`runtime` ; les contrôles, le journal, le statut et les choix visuels restent
+dans les modules de page ou dans les documents de scène.
 
 ## Sources à relire
 
@@ -89,9 +122,12 @@ racines rendues. Sighty ne crée pas de circuit parallèle dans la démo.
 | 1. Scénario précis | En cours | Le découpage A/B est fixé ; préciser encore les bornes des fondus, les changements de B et le maintien ou la sortie de chaque scène en fin de lecture. |
 | 2. Montage interscènes | **Exercée dans la fixture** | `codplay.instances.mount({ host, childInstanceId })` adresse le `slot` et attache directement les racines matérialisées de l'enfant ; Sighty ne crée aucun DOM de scène. La responsabilité du cycle de vie est fixée côté Sighty ; le test de fixture vérifie l'ordre de création, le démontage et le remontage indépendant de A. Les erreurs partielles restent à compléter. |
 | 3. Fichiers auteur | **Effectuée pour la première fixture** | Les scènes `layout`, A et B et le fichier Sighty sont séparés sous `packages/demos/src/sighty/demo1/`. Les documents sont des données directes ; aucune fonction de construction ne masque leur déclaration. |
-| 4. Exécution Sighty | **Première exécution implémentée** | `SightyComposition` compile séparément les trois scènes, précharge leurs manifestes, crée trois instances sous un propriétaire CodPlay, résout les slots par le manifeste core et utilise la façade publique de montage. |
-| 5. Accueil navigateur | **Fixture raccordée ; validation navigateur à effectuer** | `packages/demos/sighty.html` fournit l'hôte dédié. La feuille de présentation importe les contrôles partagés uniquement pour les télécommandes ; le layout de la démo et ses deux scènes occupent toute la hauteur de la zone de lecture. Le layout V2 commun mono-scène n'est pas modifié. |
+| 4. Exécution Sighty | **Première exécution implémentée** | `Sighty.runtime` compile séparément les scènes, précharge leurs manifestes, crée les instances sous un propriétaire CodPlay, résout les slots par le manifeste core et utilise la façade publique de montage ; la démo 1 ne fournit que sa configuration. |
+| 5. Accueil navigateur | **Fixture raccordée ; validation navigateur à effectuer** | `packages/demos/sighty.html` fournit l'entrée partagée des deux démos. L'interface porte la télécommande générale et les logs ; les contrôles propres à la démo 1 ne sont montés que dans sa zone optionnelle. Le layout V2 commun mono-scène n'est pas modifié. |
 | 6. Validation et documentation | **En cours** | Le test d'intégration de la fixture, les typechecks et le build constituent la première preuve. Il reste le parcours navigateur réel, Safari et l'affinage des politiques de fin, replay, resize et ressources. |
+| 7. Façade Sighty | **Première tranche implémentée ; à stabiliser** | `packages/sighty/src/` expose une seule classe `Sighty`, qui regroupe `scenario` et `runtime`. La démo 1 consomme cette façade sans recopier son fichier ni son catalogue ; les tests auteur passent. |
+| 8. Runtime générique et page | **Première tranche implémentée ; à stabiliser** | `Sighty.runtime` porte le cycle CodPlay commun, `sighty-composition.ts` ne fournit que la configuration de la démo 1 et `page-controls.ts` porte les contrôles DOM. Il reste la validation navigateur et l'affinage des politiques runtime. |
+| 9. Interface commune des démos Sighty | **En cours** | Une seule entrée `sighty.html` sélectionne les démos 1 et 2. L'interface porte le titre discret, le toggle général play/pause et le bouton iconique de remise à zéro en pied, le volet logs et la responsivité ; les contrôles propres à la démo 1 passent par sa zone optionnelle. Le panneau `Instance layout-1` est exclu de cette zone ; les telcos des instances A et B y restent disponibles avec leur progression. |
 
 ## Dépendance au composant core
 
@@ -116,7 +152,7 @@ démo, pas une raison pour transférer ce pilotage au composant `slot` :
    ne traverse cette surface ; les diagnostics de montage partiel restent à
    compléter.
 3. Le moment où la surface hôte est disponible et l'ordre de préparation du
-   parent et des enfants sont maintenant matérialisés dans `SightyComposition`.
+   parent et des enfants sont maintenant matérialisés par `Sighty.runtime`.
    La fixture vérifie que les deux cibles `A` et `B` existent avant le montage ;
    les politiques d'attente asynchrone restent ouvertes.
 4. L'identité d'une occurrence, les règles CSS que l'application auteur choisit
@@ -334,19 +370,35 @@ boucle CodPlay locale.
 ## Suivi de validation
 
 La première fixture d'exécution Sighty est maintenant créée sous
-`packages/demos/src/sighty/demo1/`, avec une entrée dédiée
-`packages/demos/sighty.html`. `SightyComposition` utilise un seul propriétaire
+`packages/demos/src/sighty/demo1/`, avec l'entrée partagée
+`packages/demos/sighty.html`. `Sighty.runtime` utilise un seul propriétaire
 CodPlay, compile et précharge séparément les trois scènes, puis monte A et B par
 `view.slots` et `resolveSlotManifestEntry`, sans accès DOM dans le chemin de
-composition. Ses contrôles de cycle de vie détachent et remontent A sans
-perturber B.
+composition. Les contrôles de page détachent et remontent A sans perturber B.
+
+L'interface `packages/demos/src/sighty/layout/` fournit le sélecteur des scénarios,
+le toggle général `play`/`pause`, le bouton iconique de remise à zéro, le volet de logs et la
+responsivité. Chaque module de démo ne retourne qu'une session Sighty ; seule
+la démo 1 fournit une zone de contrôles optionnelle pour ses slots et ses
+occurrences. Cette zone reste sous la scène ; les telcos qui pilotent une
+occurrence réutilisent le remote graphique CodPlay avec sa progression, tandis
+que la télécommande générale du layout reste distincte et sans progression.
+`sighty.html?demo=demo2` sélectionne la seconde fixture sans dupliquer le
+fichier de page.
 
 La scène A déclare le scale de son image de `1` à `1.2` sur 10 secondes. Les
 racines du layout, de A et de B utilisent l'artefact `sceneRoot:true` de
 `capsule-automation` pour occuper toute la boîte de lecture ; sa seule règle de
-remplissage est publiée par `SightyComposition` dans le canal CSS de la
+remplissage est publiée par `Sighty.runtime` dans le canal CSS de la
 composition. Le layout est une racine auteur unique, ce qui permet à sa chaîne
 de hauteur de s'appliquer jusqu'aux deux zones `slot`.
+
+Le correctif de présentation du 2026-09-12 renforce cette chaîne sans modifier
+CodPlay ni `slot` : la racine du layout porte directement la grille A/B en deux
+colonnes `1fr` égales, sans panneau ni placeholder `slot-a`/`slot-b`. Les deux
+hôtes `slot` sont ses enfants directs et chaque racine de scène s'étire jusqu'à
+la moitié qui lui est attribuée. La zone des contrôles reste hors de cette
+boîte, sous la scène.
 
 Le test `tests/facade/sighty-demo.spec.ts` vérifie le chemin réel avec les trois
 instances publiques, les deux hôtes et le remontage indépendant. Le test core

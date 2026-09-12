@@ -1,6 +1,6 @@
 import { AutoCapsule, CAPSULE_TYPE, type AutoCapsuleResult } from '@codplay/capsule-automation'
 
-/** Resolves the scene-root fill artifact shared by the layout and its child scenes. */
+/** Resolves the scene-root fill artifact shared by the Sighty demo fixtures. */
 function createSceneRootCapsule(): AutoCapsuleResult {
   const capsule = new AutoCapsule({
     capsule: {
@@ -20,8 +20,8 @@ export const SIGHTY_SCENE_ROOT_CAPSULE = createSceneRootCapsule()
 /**
  * Returns the fixed scene-root class from a resolved capsule artifact.
  *
- * The layout owns its internal grid, so the generated one-cell grid class is
- * intentionally not projected onto the authored scene roots.
+ * Each authored layout owns its internal grid, so the generated one-cell grid
+ * class is intentionally not projected onto the scene roots.
  */
 function resolveSceneRootClassName(result: AutoCapsuleResult): string {
   const className = result.capsule.classTokens.find((token) => token === 'ac-scene-root')

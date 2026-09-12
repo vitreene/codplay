@@ -3,42 +3,64 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sighty — composition A/B</title>
+    <title>Sighty — démos</title>
   </head>
   <body>
-    <main class="sighty-demo">
-      <header class="sighty-demo__header">
-        <div>
-          <p class="sighty-demo__eyebrow">Sighty · CodPlay V2</p>
-          <h1>Composition layout / A / B</h1>
-          <p>
-            Une composition déclarative monte deux scènes autonomes dans les
-            slots nommés du layout.
-          </p>
+    <div id="app">
+      <main class="sighty-layout" data-sighty-layout>
+        <header class="sighty-layout__header">
+          <h1 class="sighty-layout__title" data-sighty-title></h1>
+          <div class="sighty-layout__tools">
+            <label>
+              <span class="sighty-layout__status">Démo</span>
+              <select class="sighty-layout__selector" data-sighty-selector aria-label="Choisir une démo"></select>
+            </label>
+            <button class="sighty-layout__icon-button" data-sighty-log-toggle type="button" aria-expanded="false" aria-label="Afficher les logs" title="Afficher les logs">
+              <svg class="sighty-layout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 3h9l3 3v15H6V3zm2 2v14h8V7h-2V5H8zm2 5h4v1h-4zm0 3h4v1h-4zm0 3h4v1h-4z"></path>
+              </svg>
+            </button>
+          </div>
+          <span class="sighty-layout__status" data-sighty-status aria-live="polite"></span>
+        </header>
+
+        <div class="sighty-layout__body">
+          <section class="sighty-layout__stage" aria-label="Scène Sighty">
+            <div class="sighty-layout__stage-root" data-sighty-stage></div>
+            <aside class="sighty-layout__log-layer" aria-live="polite">
+              <section class="sighty-layout__log-panel" data-sighty-log-panel hidden>
+                <div class="sighty-layout__log-header">
+                  <span>Logs</span>
+                  <div class="sighty-layout__log-actions">
+                    <button class="sighty-layout__icon-button" data-sighty-log-copy type="button" aria-label="Copier les logs" title="Copier les logs">
+                      <svg class="sighty-layout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M8 7V4h11v13h-3v3H5V7h3zm2 0h4v8h2V6h-6v1zm4 11v-1H8V9H7v9h7z"></path>
+                      </svg>
+                    </button>
+                    <button class="sighty-layout__icon-button" data-sighty-log-close type="button" aria-label="Fermer les logs" title="Fermer les logs">
+                      <svg class="sighty-layout__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4-5.3-5.3-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3 1.4-1.4z"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <pre class="sighty-layout__log-output" data-sighty-log-output></pre>
+              </section>
+            </aside>
+          </section>
+
+          <footer class="sighty-layout__footer" data-sighty-footer aria-live="polite">
+            <section class="sighty-layout__panel sighty-layout__optional-zone" data-sighty-optional-zone hidden>
+              <div data-sighty-demo-controls></div>
+            </section>
+
+            <section class="sighty-layout__panel sighty-layout__remote">
+              <div data-sighty-remote></div>
+            </section>
+          </footer>
         </div>
-        <p class="sighty-demo__status" data-sighty-status>Initialisation…</p>
-      </header>
-
-      <section class="sighty-demo__stage" aria-label="Composition Sighty">
-        <div class="sighty-demo__scene" data-sighty-stage></div>
-      </section>
-
-      <section class="sighty-demo__controls" aria-label="Pilotage Sighty">
-        <div class="sighty-demo__controls-header">
-          <h2>Pilotage des occurrences</h2>
-          <p>
-            Chaque télécommande agit sur une instance. Les boutons de montage
-            exercent le cycle de vie Sighty.
-          </p>
-        </div>
-        <div class="sighty-demo__controls-grid" data-sighty-controls></div>
-      </section>
-
-      <section class="sighty-demo__journal" aria-live="polite">
-        <h2>Journal</h2>
-        <pre data-sighty-log></pre>
-      </section>
-    </main>
-    <script type="module" src="/src/sighty/demo1/main.ts"></script>
+      </main>
+    </div>
+    <script type="module" src="/src/sighty/main.ts"></script>
   </body>
 </html>

@@ -1,4 +1,4 @@
-import '../shared/demo-shell.css';
+import '../shared/demo-frame.css';
 
 import { animate, engine } from 'animejs';
 

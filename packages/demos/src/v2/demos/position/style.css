@@ -1,4 +1,4 @@
-.position-carousel-shell {
+.position-carousel-layout {
 	--position-ink: #152238;
 	--position-muted: #65738a;
 	--position-paper: #f7f8f5;
@@ -20,7 +20,7 @@
 	font-family: 'Avenir Next', 'Segoe UI', sans-serif;
 }
 
-.position-carousel-shell__surface {
+.position-carousel-layout__surface {
 	position: relative;
 	display: grid;
 	width: 100%;
@@ -822,7 +822,7 @@
 	background: #8caf58;
 }
 
-.position-carousel-shell__footer {
+.position-carousel-layout__footer {
 	position: relative;
 	z-index: 4;
 	display: grid;
@@ -884,7 +884,7 @@
 	.position-live-anchor {
 		width: 8.2rem;
 	}
-	.position-carousel-shell__footer {
+	.position-carousel-layout__footer {
 		grid-template-columns: auto minmax(0, 1fr);
 	}
 	.position-keyboard-manager-mount {

@@ -15,6 +15,7 @@
       // @codplay/capsule-automation + @codplay/capsule-automation/*).
       "@codplay/editor": ["../editor/src/index.ts"],
       "@codplay/editor/*": ["../editor/src/*"],
+      "@codplay/sighty": ["../sighty/src/index.ts"],
       // Keep the same priority order as build/resolve-codplay-authoring.ts.
       "@codplay/*": [
         "../authoring/components/*/src/index.ts",

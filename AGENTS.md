@@ -9,6 +9,12 @@
 - Add function comments describing each function role.
 - JavaScript classes are allowed when useful.
 
+## Project vocabulary
+
+- The architectural term `shell` is forbidden in identifiers, class names,
+  filenames, comments, documentation, and UI labels. Use a role-specific term
+  such as `layout`, `frame`, `stage`, or `host` instead.
+
 ## Implementation process
 
 - Ask the user questions when implementation certainty is below 95%.

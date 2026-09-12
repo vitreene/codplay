@@ -1,4 +1,4 @@
-import "../shared/demo-shell.css";
+import "../shared/demo-frame.css";
 
 import { CodPlay } from "codplay-v1/creator";
 import { createDemoRemoteV1 } from "@codplay/remote";

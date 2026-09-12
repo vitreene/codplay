@@ -20,6 +20,7 @@
     "@codplay/remote": "*",
     "@codplay/scene-factory": "*",
     "@codplay/selection-frame": "*",
+    "@codplay/sighty": "*",
     "codplay": "*",
     "codplay-v1": "*"
   },

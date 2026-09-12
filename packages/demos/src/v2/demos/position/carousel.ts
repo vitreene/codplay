@@ -143,17 +143,17 @@ export function createViewRoot(storyId: PositionStoryId, markup: string, extraCl
 function createCarouselRoot(): PersoDoc {
   const capsuleClassName = POSITION_CAPSULE.capsule.className
   return {
-    id: 'position-carousel-shell',
+    id: 'position-carousel-layout',
     type: 'layout',
     initial: {
       move: '@root',
-      className: 'position-carousel-shell',
+      className: 'position-carousel-layout',
       markup: `
-        <main class="position-carousel-shell__surface">
+        <main class="position-carousel-layout__surface">
           <div class="${capsuleClassName}" data-part="${POSITION_VIEWPORT_TARGET}"></div>
-          <footer class="position-carousel-shell__footer">
-            <div class="position-carousel-shell__progress" data-part="${POSITION_STATUS_TARGET}"></div>
-            <div class="position-carousel-shell__hint" data-part="${POSITION_NOTICE_TARGET}"></div>
+          <footer class="position-carousel-layout__footer">
+            <div class="position-carousel-layout__progress" data-part="${POSITION_STATUS_TARGET}"></div>
+            <div class="position-carousel-layout__hint" data-part="${POSITION_NOTICE_TARGET}"></div>
             <div class="position-keyboard-manager-mount" data-part="${POSITION_KEYBOARD_TARGET}"></div>
           </footer>
         </main>

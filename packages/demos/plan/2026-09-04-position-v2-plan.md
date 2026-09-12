@@ -17,7 +17,7 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 
 ## Décisions retenues
 
-- La démo reste une seule `SceneDoc`, avec une story `main` qui porte le shell
+- La démo reste une seule `SceneDoc`, avec une story `main` qui porte le layout
   du carousel et six `StoryDoc` qui portent chacun une étape. Le carousel est
   un `AutoCapsule` de type `carousel`, et ses intervalles sont calculés par
   `CapsulePreset` puis `CapsuleDistribution`.
