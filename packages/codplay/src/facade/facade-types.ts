@@ -363,6 +363,8 @@ type CodPlayInstanceOptionsBase = Readonly<{
   instanceId: string
   compiledScene: CompiledScene
   functions?: CompiledFunctionCollection
+  /** Prefix before `part` in comment-based HTML markers; defaults to `data-`. */
+  partMarkerPrefix?: string
   /** Optional inactivity policy overriding the engine default for this player. */
   idle?: CodPlayIdleOptions
   /** Optional reusable straps used only by declarations that name external implementations. */

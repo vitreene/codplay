@@ -15,6 +15,7 @@ import type {
 } from '../components'
 import { BaseHTMLComponent } from '../components'
 import { materializeTemplateString, type HtmlMaterializedRoot } from './template-materializer'
+import { MOUNT_TARGET_KIND_ANCHOR, MOUNT_TARGET_KIND_PERSO } from '../config/mount-target'
 import { HTML_MATERIALIZER_ID } from '../catalog'
 import type {
   RuntimeMaterializer,
@@ -65,7 +66,9 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     if (!(component instanceof BaseHTMLComponent)) {
       throw new Error(`${this.id.toUpperCase()} materializer received a non-markup component: ${identity.componentType}`)
     }
-    const materialization = materializeTemplateString(component.render())
+    const materialization = materializeTemplateString(component.render(), {
+      partMarkerPrefix: this.context.partMarkerPrefix,
+    })
     const rootNode = materialization.rootNode
     const publicParts = selectPublicParts(materialization.parts, mountablePartIds)
     const markup = publicParts.length === 0
@@ -131,23 +134,36 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
       }
     }
 
-    const desiredRootsByParent = new Map<unknown, unknown[]>()
+    const desiredRootsByDestination = new Map<unknown, {
+      parent: unknown
+      reference?: unknown
+      roots: unknown[]
+    }>()
     for (const childKeys of Object.values(childrenByTarget)) {
       for (const childKey of childKeys) {
         const child = scene.persos[childKey]
         if (child === undefined || !child.placement.mounted) continue
-        const parent = resolveParentNode(child, this.nodes)
-        if (parent === undefined) continue
-        const desiredRoots = desiredRootsByParent.get(parent) ?? []
-        for (const root of materializedRootNodes(this.nodes.persoNodes.get(childKey))) {
-          if (!isHtmlTransientNode(root)) desiredRoots.push(root)
+        const destination = resolveStructuralDestination(child, this.nodes)
+        if (destination === undefined) continue
+        const key = destination.reference ?? destination.parent
+        const entry = desiredRootsByDestination.get(key) ?? {
+          ...destination,
+          roots: [],
         }
-        desiredRootsByParent.set(parent, desiredRoots)
+        for (const root of materializedRootNodes(this.nodes.persoNodes.get(childKey))) {
+          if (!isHtmlTransientNode(root)) entry.roots.push(root)
+        }
+        desiredRootsByDestination.set(key, entry)
       }
     }
 
-    for (const [parent, desiredRoots] of desiredRootsByParent) {
-      reconcileStructuredRoots(parent, desiredRoots, (node) => isHtmlTransientNode(node) || this.isForeignRoot(node))
+    for (const { parent, reference, roots } of desiredRootsByDestination.values()) {
+      reconcileStructuredRoots(
+        parent,
+        roots,
+        (node) => isHtmlTransientNode(node) || this.isForeignRoot(node),
+        reference,
+      )
     }
 
     this.mountedPersos = nextMountedPersos
@@ -278,14 +294,27 @@ function detachMaterializedRoot(root: HtmlMaterializedRoot): void {
   }
 }
 
-/** Resolves one solved child's logical parent to a materialized node. */
-function resolveParentNode(perso: SolvedPerso, nodes: HtmlComponentMaterializerNodes): unknown {
+/** Resolves one solved placement to a parent and, for an anchor, an insertion reference. */
+function resolveStructuralDestination(
+  perso: SolvedPerso,
+  nodes: HtmlComponentMaterializerNodes,
+): { parent: unknown; reference?: unknown } | undefined {
   const placement = perso.placement
   if (placement.target === undefined) return undefined
-  if (placement.target.kind === 'perso') {
-    return placement.parentKey === undefined ? undefined : nodes.persoNodes.get(placement.parentKey)
+  if (placement.target.kind === MOUNT_TARGET_KIND_PERSO) {
+    if (placement.parentKey === undefined) return undefined
+    const parent = nodes.persoNodes.get(placement.parentKey)
+    return parent === undefined ? undefined : { parent }
   }
-  return nodes.targetNodes.get(placement.target.id)
+  const targetNode = nodes.targetNodes.get(placement.target.id)
+  if (placement.target.kind === MOUNT_TARGET_KIND_ANCHOR) {
+    if (!isObjectNode(targetNode)) return undefined
+    const parent = targetNode.parentNode
+    return parent === undefined || parent === null
+      ? undefined
+      : { parent, reference: targetNode }
+  }
+  return targetNode === undefined ? undefined : { parent: targetNode }
 }
 
 /** Reconciles author roots while preserving nodes owned by a transient preview. */
@@ -293,7 +322,16 @@ function reconcileStructuredRoots(
   parent: unknown,
   desiredRoots: readonly unknown[],
   isIgnoredNode: (node: unknown) => boolean = isHtmlTransientNode,
+  reference?: unknown,
 ): void {
+  if (reference !== undefined) {
+    if (!isInsertable(parent) || !isObjectNode(reference) || reference.parentNode !== parent) return
+    for (const child of desiredRoots) {
+      if (!isObjectNode(child) || child === reference || isIgnoredNode(child)) continue
+      parent.insertBefore(child, reference)
+    }
+    return
+  }
   for (const child of desiredRoots) reconcileStructuredNode(parent, child, desiredRoots, isIgnoredNode)
 }
 

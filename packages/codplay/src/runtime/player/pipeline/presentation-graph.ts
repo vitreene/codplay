@@ -1,5 +1,9 @@
 import type { MountTargetKind } from '../../config/mount-target'
-import { MOUNT_TARGET_KIND_OUTLET, MOUNT_TARGET_KIND_PERSO } from '../../config/mount-target'
+import {
+  MOUNT_TARGET_KIND_ANCHOR,
+  MOUNT_TARGET_KIND_OUTLET,
+  MOUNT_TARGET_KIND_PERSO,
+} from '../../config/mount-target'
 import type { SolvedPerso, SolvedScene } from './types'
 
 /** Immutable parentage and ordering graph produced by one scene solve. */
@@ -195,7 +199,8 @@ function resolveParentFromPerso(
   persos: Readonly<Record<string, SolvedPerso>>,
 ): string | undefined {
   if (perso.placement.target?.kind === MOUNT_TARGET_KIND_PERSO) return perso.placement.parentKey
-  if (perso.placement.target?.kind === MOUNT_TARGET_KIND_OUTLET) {
+  if (perso.placement.target?.kind === MOUNT_TARGET_KIND_OUTLET
+    || perso.placement.target?.kind === MOUNT_TARGET_KIND_ANCHOR) {
     const ownerId = perso.placement.target.ownerId
     if (ownerId === undefined) return undefined
     if (persos[ownerId] !== undefined) return ownerId

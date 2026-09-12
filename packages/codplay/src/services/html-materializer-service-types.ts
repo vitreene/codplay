@@ -4,6 +4,8 @@ import { isCompiledLengthValue } from '../scene/compiled'
 export type HtmlMaterializerRuntimeContext = {
   /** Pixel scale for unitless lengths and explicit cqw values at the HTML boundary. */
   numericLengthScale: number
+  /** Prefix before `part` in comment-based author markers; defaults to `data-`. */
+  partMarkerPrefix?: string
 }
 
 /** Minimal element contract required by the HTML service adapters. */

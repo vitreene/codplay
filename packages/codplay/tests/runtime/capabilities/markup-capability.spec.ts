@@ -12,7 +12,12 @@ import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
-function registration(componentId: string, componentType: string, partId: string) {
+function registration(
+  componentId: string,
+  componentType: string,
+  partId: string,
+  kind: 'outlet' | 'anchor' = 'outlet',
+) {
   return {
     componentId,
     storyId: 'story',
@@ -23,7 +28,7 @@ function registration(componentId: string, componentType: string, partId: string
       storyId: 'story',
       componentType,
       partId,
-      kind: 'outlet' as const,
+      kind,
     }],
   }
 }
@@ -80,6 +85,21 @@ describe('MarkupCapabilityState', () => {
     }])
   })
 
+  it('preserves anchor parts as insertion targets', () => {
+    const service = createMarkupModuleServiceDefinition().create({
+      playerId: 'player',
+      compiledScene: {} as CompiledScene,
+    }) as MarkupModuleServiceInstance
+    service.registerComponent(registration('layout', 'layout', 'scene-b', 'anchor'))
+
+    expect(service.getMountTargets()).toEqual([{
+      id: 'scene-b',
+      kind: 'anchor',
+      storyId: 'story',
+      ownerId: 'layout',
+    }])
+  })
+
   it('registers only public materialized parts and removes them with the component', () => {
     const definition = createMarkupModuleServiceDefinition()
     const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as MarkupModuleServiceInstance
@@ -88,7 +108,7 @@ describe('MarkupCapabilityState', () => {
       componentId: 'layout',
       storyId: 'story',
       componentType: 'layout',
-    }, [{ partId: 'content', nodeRef: {} }])
+    }, [{ partId: 'content', nodeRef: {}, kind: 'outlet' }])
 
     expect(service.resolveTarget('content')).toMatchObject({
       ownerId: 'layout',

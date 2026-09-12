@@ -1,3 +1,5 @@
+/** @vitest-environment jsdom */
+
 import { describe, expect, it } from 'vitest'
 import { MOUNT_PLACEMENT_PARENT } from '../../../src/runtime/player'
 import { buildSolvedGraph } from '../../../src/runtime/player'
@@ -26,7 +28,7 @@ function node(): TestNode {
 
 function perso(
   key: string,
-  target: { id: string; kind: 'root' | 'outlet' | 'perso' },
+  target: { id: string; kind: 'root' | 'outlet' | 'anchor' | 'perso' },
   parentKey?: string,
   mounted = true,
 ): SolvedPerso {
@@ -142,6 +144,26 @@ describe('HtmlComponentMaterializer scene materialization', () => {
     })
 
     expect(root.children).toEqual([second, first])
+  })
+
+  it('inserts roots before a comment anchor without creating a container', () => {
+    const layoutRoot = document.createElement('main')
+    const anchor = document.createComment('data-part="scene-b"')
+    layoutRoot.append(anchor)
+    const child = document.createElement('article')
+    const materializer = new HtmlComponentMaterializer({
+      persoNodes: new Map([['main:child', child]]),
+      targetNodes: new Map([['scene-b', anchor]]),
+    })
+
+    materializer.materializeScene(scene([
+      perso('main:child', { id: 'scene-b', kind: 'anchor' }),
+    ], { 'scene-b': ['main:child'] }))
+
+    expect(Array.from(layoutRoot.childNodes)).toEqual([child, anchor])
+    expect(child.parentNode).toBe(layoutRoot)
+    expect(anchor.parentNode).toBe(layoutRoot)
+    expect(layoutRoot.children).toHaveLength(1)
   })
 
   it('preserves transient preview roots across repeated frame materialization', () => {

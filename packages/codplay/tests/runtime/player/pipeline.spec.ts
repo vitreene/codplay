@@ -4,6 +4,7 @@ import { parseColor } from '../../../src/ace'
 import {
   buildTrackRegistry,
   createStrapTrackId,
+  MOUNT_TARGET_KIND_ANCHOR,
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_ROOT,
   MOUNT_PLACEMENT_OFF,
@@ -808,6 +809,48 @@ describe('materialize -> resolve -> solve', () => {
       targetId: 'toto',
       target: { kind: MOUNT_TARGET_KIND_OUTLET },
     })
+  })
+
+  it('resolves an anchor target to its logical layout owner', () => {
+    const anchorScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [
+              {
+                id: 'layout',
+                type: 'layout',
+                initial: { move: '@root' },
+                actions: {},
+              },
+              {
+                id: 'child',
+                type: 'tag',
+                initial: { move: { target: 'scene-b' } },
+                actions: {},
+              },
+            ],
+          },
+        },
+      },
+    }
+
+    const solved = solveScene(resolveScene(materializeScene(anchorScene, 0)), {
+      mountTargets: [
+        { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+        { id: 'scene-b', kind: MOUNT_TARGET_KIND_ANCHOR, storyId: 'main', ownerId: 'layout' },
+      ],
+    })
+
+    expect(solved.persos['main:child']?.placement).toMatchObject({
+      targetId: 'scene-b',
+      target: { kind: MOUNT_TARGET_KIND_ANCHOR },
+      parentKey: 'main:layout',
+    })
+    expect(solved.graph.parentByPerso['main:child']).toBe('main:layout')
   })
 
   it('normalizes only structural movement data into the placement graph', () => {

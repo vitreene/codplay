@@ -114,7 +114,7 @@ const coreLayoutDefinition: RuntimeComponentDefinition = {
   component: LayoutComponent,
   modules: ['markup'],
   validateInitial: validateLayoutInitial,
-  // Layout makes every data-part in its template available as a target.
+  // Layout makes every author part marker in its template available as a target.
   mountableParts: 'all',
 }
 

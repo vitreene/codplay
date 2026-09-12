@@ -26,7 +26,7 @@ describe('LayoutComponent V2', () => {
         id: 'page-layout',
         storyId: 'main',
         initial: {
-          markup: '<section><main data-part="page-layout:content"></main></section>',
+          markup: '<section id="page-layout-root"><main id="page-layout-content" data-part="page-layout:content"></main></section>',
         },
       },
       services: testServices(),
@@ -41,7 +41,7 @@ describe('LayoutComponent V2', () => {
       perso: {
         id: 'page-layout',
         storyId: 'main',
-        initial: { markup: '<section></section>' },
+        initial: { markup: '<section id="page-layout-root"></section>' },
       },
       services: testServices(apply),
     })
@@ -77,7 +77,7 @@ describe('LayoutComponent V2', () => {
       perso: {
         id: 'page-layout',
         storyId: 'main',
-        initial: { markup: '<main data-part="page-layout:content"></main>' },
+        initial: { markup: '<main id="page-layout-root" data-part="page-layout:content"></main>' },
       },
       services: testServices(),
     })
@@ -86,8 +86,8 @@ describe('LayoutComponent V2', () => {
       component,
       identity: { componentId: 'page-layout', storyId: 'main', componentType: 'layout' },
       rootNode: {},
-      parts: [{ partId: 'page-layout:content', nodeRef: {} }],
-      publicParts: [{ partId: 'page-layout:content', nodeRef: {} }],
+      parts: [{ partId: 'page-layout:content', nodeRef: {}, kind: 'outlet' }],
+      publicParts: [{ partId: 'page-layout:content', nodeRef: {}, kind: 'outlet' }],
     })
 
     expect(markup.resolveTarget('page-layout:content')).toBeDefined()

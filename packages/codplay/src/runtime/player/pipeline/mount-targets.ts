@@ -1,6 +1,7 @@
 import type { CompiledScene } from '../../../scene/compiled'
 import {
   MOUNT_TARGET_KIND_HOST,
+  MOUNT_TARGET_KIND_ANCHOR,
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_PERSO,
   MOUNT_TARGET_KIND_ROOT,
@@ -70,6 +71,7 @@ export class MountTargetRegistry {
 
 export {
   MOUNT_TARGET_KIND_HOST,
+  MOUNT_TARGET_KIND_ANCHOR,
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_PERSO,
   MOUNT_TARGET_KIND_ROOT,

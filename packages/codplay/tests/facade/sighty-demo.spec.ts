@@ -76,7 +76,10 @@ describe('Sighty A/B demo composition', () => {
     if (layoutRoot === null) throw new Error('Sighty A/B layout root is missing.')
 
     expect(layoutRoot.classList.contains('ac-scene-root')).toBe(true)
+    expect(layoutRoot.id).toBe('sighty-layout-root')
     expect(layoutRoot.children).toHaveLength(2)
+    expect(layoutRoot.querySelectorAll('[data-part]')).toHaveLength(0)
+    expect(Array.from(layoutRoot.childNodes).filter((node) => node.nodeType === 8)).toHaveLength(2)
     expect(slotA.parentNode).toBe(layoutRoot)
     expect(slotB.parentNode).toBe(layoutRoot)
     expect(childA.querySelector('.sighty-scene-a__image')).not.toBeNull()

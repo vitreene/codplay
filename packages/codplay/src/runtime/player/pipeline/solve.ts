@@ -1,5 +1,11 @@
 import { MOUNT_PLACEMENT_INVALID, MOUNT_PLACEMENT_OFF, MOUNT_PLACEMENT_PARENT, MOUNT_PLACEMENT_ROOT, MOUNT_PLACEMENT_UNSPECIFIED } from '../../config/mount-placement'
-import { MOUNT_TARGET_KIND_OUTLET, MOUNT_TARGET_KIND_PERSO, MountTargetRegistry, type MountTargetDeclaration } from './mount-targets'
+import {
+  MOUNT_TARGET_KIND_ANCHOR,
+  MOUNT_TARGET_KIND_OUTLET,
+  MOUNT_TARGET_KIND_PERSO,
+  MountTargetRegistry,
+  type MountTargetDeclaration,
+} from './mount-targets'
 import type { ResolvedScene, SolvedPerso, SolvedScene } from './types'
 import { buildSolvedGraph } from './presentation-graph'
 
@@ -71,7 +77,7 @@ function resolvePlacement(
           ? undefined
           : target.kind === MOUNT_TARGET_KIND_PERSO
             ? persoByTargetId.get(target.id)
-            : target.kind === MOUNT_TARGET_KIND_OUTLET
+            : target.kind === MOUNT_TARGET_KIND_OUTLET || target.kind === MOUNT_TARGET_KIND_ANCHOR
               ? persoByComponentId.get(target.ownerId ?? '') ?? persoByTargetId.get(target.ownerId ?? '')
               : undefined,
         mode: perso.placement.mode,

@@ -14,7 +14,12 @@ export const layoutScene: SceneDoc<string> = {
 					initial: {
 						move: '@root',
             className: `${SIGHTY_SCENE_ROOT_CLASS_NAME} sighty-scene-layout`,
-            markup: '<div></div>',
+						markup: `
+              <main id="sighty-layout-root">
+                <!-- data-part="sighty-layout-slot-a" -->
+                <!-- data-part="sighty-layout-slot-b" -->
+              </main>
+            `,
 					},
 					actions: {},
 				},
@@ -23,7 +28,7 @@ export const layoutScene: SceneDoc<string> = {
 					name: 'A',
 					type: 'slot',
 					initial: {
-						move: { target: 'layout-frame' },
+						move: { target: 'sighty-layout-slot-a' },
 						className: 'sighty-slot',
 					},
 					actions: {},
@@ -33,7 +38,7 @@ export const layoutScene: SceneDoc<string> = {
 					name: 'B',
 					type: 'slot',
 					initial: {
-						move: { target: 'layout-frame' },
+						move: { target: 'sighty-layout-slot-b' },
 						className: 'sighty-slot',
 					},
 					actions: {},

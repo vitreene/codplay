@@ -1,6 +1,9 @@
 import type { RuntimeModuleServiceDefinition } from '../../catalog'
 import type { RuntimeModuleServiceInstance } from '../../engine/module-service-types'
-import { MOUNT_TARGET_KIND_OUTLET } from '../../config/mount-target'
+import {
+  MOUNT_TARGET_KIND_ANCHOR,
+  MOUNT_TARGET_KIND_OUTLET,
+} from '../../config/mount-target'
 import type { MountTargetDeclaration } from '../../player/pipeline/mount-targets'
 
 /** Runtime module identifier for markup and public-part registration. */
@@ -13,7 +16,7 @@ export type MountablePartDeclaration = Readonly<{
   storyId: string
   componentType: string
   partId: string
-  kind: 'outlet'
+  kind: 'outlet' | 'anchor'
 }>
 
 /** One component registration submitted to the generic mountable-part capability. */
@@ -125,7 +128,7 @@ export function createMarkupModuleServiceDefinition(): RuntimeModuleServiceDefin
 function toMountTargetDeclaration(part: MountablePartDeclaration): MountTargetDeclaration {
   return {
     id: part.id,
-    kind: MOUNT_TARGET_KIND_OUTLET,
+    kind: part.kind === 'anchor' ? MOUNT_TARGET_KIND_ANCHOR : MOUNT_TARGET_KIND_OUTLET,
     storyId: part.storyId,
     ownerId: part.ownerId,
   }
@@ -139,7 +142,9 @@ function validateMountablePart(
 ): void {
   if (part.id.length === 0) throw new Error('Markup mount target ID must not be empty.')
   if (part.partId.length === 0) throw new Error('Markup part ID must not be empty.')
-  if (part.kind !== 'outlet') throw new Error(`Invalid markup mount target kind: ${part.kind}`)
+  if (part.kind !== 'outlet' && part.kind !== 'anchor') {
+    throw new Error(`Invalid markup mount target kind: ${part.kind}`)
+  }
   if (part.ownerId !== registration.componentId) {
     throw new Error(`Markup mount target owner does not match component: ${part.id}`)
   }

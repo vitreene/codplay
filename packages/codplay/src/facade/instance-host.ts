@@ -38,6 +38,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     compiledScene: options.instance.compiledScene,
     root,
     numericLengthScale: resolveRootNumericLengthScale(root),
+    partMarkerPrefix: options.instance.partMarkerPrefix,
     catalog: options.catalog,
     resourceMetadata: toResourceMetadata(options.resourceMetadata),
     resourceMedia: toResourceMedia(options.resourceMedia),

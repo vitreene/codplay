@@ -107,6 +107,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   idle?: RuntimeIdleOptions
   /** Initial HTML projection scale; one cqw is the scene-root width divided by 100. */
   numericLengthScale?: number
+  /** Prefix before `part` in comment-based HTML markers; defaults to `data-`. */
+  partMarkerPrefix?: string
   functions?: CompiledFunctionCollection
   /** Optional reusable straps selected by named declarations in the scene. */
   strapCollections?: StrapCollections
@@ -199,6 +201,7 @@ export class HtmlPlayerRunner {
     this.initialInert = options.root.hasAttribute('inert')
     this.materializerContext = {
       numericLengthScale: options.numericLengthScale ?? 1,
+      partMarkerPrefix: options.partMarkerPrefix,
     }
     for (const [url, metadata] of Object.entries(options.resourceMetadata ?? {})) {
       this.resourceMetadata.set(url, metadata)

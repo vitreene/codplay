@@ -8,6 +8,8 @@
 - Isolate each feature in its own dedicated folder.
 - Add function comments describing each function role.
 - JavaScript classes are allowed when useful.
+- Every parent element in authored `markup` must have an explicit `id`; never
+  leave an authored parent element anonymous.
 
 ## Project vocabulary
 

@@ -109,6 +109,7 @@ export type {
   HTMLComponentServices,
   ComponentUpdateInput,
   MaterializedPart,
+  MaterializedPartKind,
 } from './component-types'
 export type {
   RuntimeComponentHandle,

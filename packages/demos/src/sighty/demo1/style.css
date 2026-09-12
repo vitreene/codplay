@@ -1,107 +1,107 @@
 .sighty-scene-layout {
-  display: grid;
-  flex: 1 1 0%;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  align-items: stretch;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: clamp(0.6rem, 1.5vw, 1rem);
-  padding: clamp(0.8rem, 2vw, 1.5rem);
-  background: linear-gradient(140deg, #10243e, #173f4c);
+	display: grid;
+	flex: 1 1 0%;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	align-items: stretch;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
+	gap: clamp(0.6rem, 1.5vw, 1rem);
+	padding: clamp(0.8rem, 2vw, 1.5rem);
+	background: linear-gradient(140deg, #10243e, #173f4c);
 }
 
 .sighty-scene-layout > .sighty-slot {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid rgb(207 244 237 / 35%);
-  border-radius: 14px;
+	display: flex;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid rgb(207 244 237 / 35%);
+	border-radius: 14px;
 }
 
 .sighty-slot > .ac-scene-root {
-  display: flex;
-  flex: 1 1 0%;
-  width: auto;
-  height: auto;
-  min-width: 0;
-  min-height: 0;
+	display: flex;
+	flex: 1 1 0%;
+	width: auto;
+	height: auto;
+	min-width: 0;
+	min-height: 0;
 }
 
 .sighty-demo__controls-grid {
-  display: grid;
-  min-width: 0;
-  gap: 0.65rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+	display: grid;
+	min-width: 0;
+	gap: 0.65rem;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .sighty-control-panel {
-  min-width: 0;
-  padding: 0.7rem;
-  border: 1px solid #d9e1eb;
-  border-radius: 12px;
-  background: #f8fafc;
+	min-width: 0;
+	padding: 0.7rem;
+	border: 1px solid #d9e1eb;
+	border-radius: 12px;
+	background: #f8fafc;
 }
 
 .sighty-control-panel--lifecycle {
-  grid-column: span 1;
+	grid-column: span 1;
 }
 
 .sighty-control-panel h3 {
-  margin: 0;
-  font-size: 0.78rem;
+	margin: 0;
+	font-size: 0.78rem;
 }
 
 .sighty-control-panel p {
-  margin: 0.3rem 0 0.55rem;
-  color: #52627a;
-  font-size: 0.7rem;
-  line-height: 1.4;
+	margin: 0.3rem 0 0.55rem;
+	color: #52627a;
+	font-size: 0.7rem;
+	line-height: 1.4;
 }
 
 .sighty-control-panel__buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
 }
 
 .sighty-action-button {
-  padding: 0.38rem 0.55rem;
-  border: 1px solid #0b7a75;
-  border-radius: 7px;
-  color: #fff;
-  background: #0b7a75;
-  cursor: pointer;
-  font-size: 0.68rem;
-  font-weight: 700;
+	padding: 0.38rem 0.55rem;
+	border: 1px solid #0b7a75;
+	border-radius: 7px;
+	color: #fff;
+	background: #0b7a75;
+	cursor: pointer;
+	font-size: 0.68rem;
+	font-weight: 700;
 }
 
 @media (max-width: 900px) {
-  .sighty-demo__controls-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+	.sighty-demo__controls-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 
-  .sighty-control-panel--lifecycle {
-    grid-column: span 2;
-  }
+	.sighty-control-panel--lifecycle {
+		grid-column: span 2;
+	}
 }
 
 @media (max-width: 620px) {
-  .sighty-scene-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-  }
+	.sighty-scene-layout {
+		grid-template-columns: 1fr;
+		grid-template-rows: repeat(2, minmax(0, 1fr));
+	}
 
-  .sighty-demo__controls-grid {
-    grid-template-columns: 1fr;
-  }
+	.sighty-demo__controls-grid {
+		grid-template-columns: 1fr;
+	}
 
-  .sighty-control-panel--lifecycle {
-    grid-column: auto;
-  }
+	.sighty-control-panel--lifecycle {
+		grid-column: auto;
+	}
 }

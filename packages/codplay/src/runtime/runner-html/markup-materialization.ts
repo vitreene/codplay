@@ -36,7 +36,7 @@ export function registerMaterializedComponent(
       storyId: identity.storyId,
       componentType: identity.componentType,
       partId: part.partId,
-      kind: 'outlet' as const,
+      kind: part.kind,
     })),
   })
 }

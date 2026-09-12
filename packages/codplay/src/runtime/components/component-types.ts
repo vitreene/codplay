@@ -40,10 +40,14 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
 export type HTMLComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> =
   ComponentInput<Initial>
 
+/** One kind of author part discovered while materializing a component template. */
+export type MaterializedPartKind = 'outlet' | 'anchor'
+
 /** One internal part discovered while materializing a component template. */
 export type MaterializedPart = Readonly<{
   partId: string
   nodeRef: unknown
+  kind: MaterializedPartKind
 }>
 
 /** One component-owned presentation sample produced by a temporal update. */
