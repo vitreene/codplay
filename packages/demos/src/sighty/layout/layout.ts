@@ -142,7 +142,11 @@ export function createSightyLayout(options: SightyLayoutOptions): {
     const session = demo.create({ stage, onLog: log })
     const remote = session.showRemote === false
       ? undefined
-      : createSightyRemote(session.transport, { onLog: log, enabled: false })
+      : createSightyRemote(session.transport, {
+          onLog: log,
+          enabled: false,
+          onReset: () => mount(demo),
+        })
     if (remote !== undefined) remoteSlot.replaceChildren(remote.element)
     remotePanel.hidden = remote === undefined
     mounted = { session, remote }

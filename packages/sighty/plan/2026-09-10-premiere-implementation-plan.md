@@ -22,6 +22,10 @@ télécommande générale et le volet de logs, et une zone de contrôles optionn
 reste disponible pour les modules propres à la démo 1.
 Décision d'API du 2026-09-12 : les vues sont adressées par la `sceneKey` racine
 et non par la position du tableau `views`.
+Décision de comportement du 2026-09-12 : la remise à zéro générale de la page
+détruit puis recrée la session Sighty sélectionnée afin de ne pas conserver les
+enregistrements utilisateur ; `instance.telco.rewind()` conserve son contrat
+CodPlay de simple retour à la position zéro avec journal préservé.
 Implémentation : première tranche présente sous `packages/demos/src/sighty/demo1/` et
 `packages/demos/sighty.html` ; validation navigateur et Safari encore ouvertes.
 
@@ -127,7 +131,7 @@ racines rendues. Sighty ne crée pas de circuit parallèle dans la démo.
 | 6. Validation et documentation | **En cours** | Le test d'intégration de la fixture, les typechecks et le build constituent la première preuve. Il reste le parcours navigateur réel, Safari et l'affinage des politiques de fin, replay, resize et ressources. |
 | 7. Façade Sighty | **Première tranche implémentée ; à stabiliser** | `packages/sighty/src/` expose une seule classe `Sighty`, qui regroupe `scenario` et `runtime`. La démo 1 consomme cette façade sans recopier son fichier ni son catalogue ; les tests auteur passent. |
 | 8. Runtime générique et page | **Première tranche implémentée ; à stabiliser** | `Sighty.runtime` porte le cycle CodPlay commun, `sighty-composition.ts` ne fournit que la configuration de la démo 1 et `page-controls.ts` porte les contrôles DOM. Il reste la validation navigateur et l'affinage des politiques runtime. |
-| 9. Interface commune des démos Sighty | **En cours** | Une seule entrée `sighty.html` sélectionne les démos 1 et 2. L'interface porte le titre discret, le toggle général play/pause et le bouton iconique de remise à zéro en pied, le volet logs et la responsivité ; les contrôles propres à la démo 1 passent par sa zone optionnelle. Le panneau `Instance layout-1` est exclu de cette zone ; les telcos des instances A et B y restent disponibles avec leur progression. |
+| 9. Interface commune des démos Sighty | **En cours** | Une seule entrée `sighty.html` sélectionne les démos 1, 2 et 3. L'interface porte le titre discret, le toggle général play/pause et le bouton iconique de remise à zéro en pied, le volet logs et la responsivité ; les contrôles propres à chaque démo passent par sa zone optionnelle. La remise à zéro recrée la session active pour abandonner son journal utilisateur. Le panneau `Instance layout-1` est exclu de cette zone ; les telcos des instances A et B y restent disponibles avec leur progression. |
 
 ## Dépendance au composant core
 

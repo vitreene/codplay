@@ -1,6 +1,12 @@
 import type { SceneDoc } from 'codplay/scene/types'
 import { SIGHTY_SCENE_ROOT_CLASS_NAME } from '../../scene-root-capsule'
 
+/** Events accepted by the reusable scene A text surface. */
+export const SCENE_A_EVENTS = {
+  setContent: 'scene-a:set-content',
+  setColor: 'scene-a:set-color',
+} as const
+
 /** Declarative scene A with a title fade-in and a ten-second image zoom. */
 export const sceneA: SceneDoc<string> = {
   id: 'sighty-scene-a',
@@ -15,9 +21,9 @@ export const sceneA: SceneDoc<string> = {
             move: '@root',
             className: `${SIGHTY_SCENE_ROOT_CLASS_NAME} sighty-scene-a`,
             markup: `
-              <article class="sighty-scene-a">
-                <div class="sighty-scene-a__image-outlet" data-part="scene-a:image"></div>
-                <div class="sighty-scene-a__title-outlet" data-part="scene-a:title"></div>
+              <article id="sighty-scene-a-root" class="sighty-scene-a">
+                <div id="sighty-scene-a-image-outlet" class="sighty-scene-a__image-outlet" data-part="scene-a:image"></div>
+                <div id="sighty-scene-a-title-outlet" class="sighty-scene-a__title-outlet" data-part="scene-a:title"></div>
               </article>
             `,
           },
@@ -58,6 +64,8 @@ export const sceneA: SceneDoc<string> = {
             move: { target: 'scene-a:title' },
           },
           actions: {
+            [SCENE_A_EVENTS.setContent]: null,
+            [SCENE_A_EVENTS.setColor]: null,
             'scene-a:show-title': {
               style: {
                 opacity: { from: 0, to: 1, duration: 650, ease: 'outCubic' },

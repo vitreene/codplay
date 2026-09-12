@@ -3,6 +3,7 @@ import type { SightyDemoLogger, SightyDemoTransport } from './types'
 type SightyRemoteOptions = Readonly<{
   onLog: SightyDemoLogger
   enabled?: boolean
+  onReset?: () => void | Promise<void>
 }>
 
 type RemoteCommand = 'play' | 'pause' | 'relaunch'
@@ -54,7 +55,11 @@ export function createSightyRemote(
     sync()
     options.onLog(label)
     try {
-      await transport[command]()
+      if (command === 'relaunch' && options.onReset !== undefined) {
+        await options.onReset()
+      } else {
+        await transport[command]()
+      }
       playing = command === 'relaunch' || command === 'play'
     } catch (error) {
       if (destroyed) return

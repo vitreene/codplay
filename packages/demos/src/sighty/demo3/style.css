@@ -1,0 +1,118 @@
+.demo3-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.4vw, 1rem);
+  padding: clamp(0.8rem, 2vw, 1.4rem);
+  background: linear-gradient(145deg, #12243d, #174d59);
+}
+
+.demo3-layout__scene,
+.demo3-layout__telco {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.demo3-layout__scene {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.demo3-layout__telco {
+  min-height: 7.5rem;
+  flex: 0 0 auto;
+}
+
+.demo3-slot {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(207 244 237 / 35%);
+  border-radius: 14px;
+}
+
+.demo3-slot > .ac-scene-root {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.demo3-telco {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: clamp(0.8rem, 2vw, 1.2rem);
+  border-radius: 14px;
+  color: #f8fafc;
+  background: rgb(4 20 37 / 82%);
+}
+
+.demo3-telco__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.demo3-telco__button,
+.demo3-page-controls__button {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.demo3-telco__button--first,
+.demo3-page-controls__button--blue {
+  background: #0b7a75;
+}
+
+.demo3-telco__button--second,
+.demo3-page-controls__button--coral {
+  background: #b45309;
+}
+
+.demo3-telco__button:focus-visible,
+.demo3-page-controls__button:focus-visible {
+  outline: 3px solid #fbbf24;
+  outline-offset: 2px;
+}
+
+.demo3-telco__status {
+  min-height: 1.2rem;
+}
+
+.demo3-telco__status-text {
+  margin: 0;
+  color: #b9dfd8;
+  font-size: 0.72rem;
+}
+
+.demo3-page-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 620px) {
+  .demo3-layout__telco {
+    min-height: 10rem;
+  }
+}
