@@ -1,11 +1,13 @@
 import { validateAuthoringResources } from './authoring-validation'
+import { findGraphViewByScene, normalizeSightyViewGraph } from './view-graph'
 import type {
   SightyAuthoringDiagnostic,
   SightyScenarioApi,
   SightyScenarioResources,
   SightySceneCatalog,
-  SightyView,
   SightyFile,
+  SightyView,
+  SightyViewGraph,
 } from './types'
 
 /** Owns and exposes the scenario resources grouped by the Sighty facade. */
@@ -14,10 +16,12 @@ export class SightyScenarioImpl<
   SlotName extends string = string,
 > implements SightyScenarioApi<SceneKey, SlotName> {
   private readonly resources: SightyScenarioResources<SceneKey, SlotName>
+  private readonly viewGraph: SightyViewGraph<SceneKey, SlotName>
 
   /** Creates one scenario surface without rendering or running its scenes. */
   constructor(resources: SightyScenarioResources<SceneKey, SlotName>) {
     this.resources = resources
+    this.viewGraph = normalizeSightyViewGraph<SceneKey, SlotName>(resources.file.views, resources.file.version)
   }
 
   /** Returns the serializable Sighty scenario file. */
@@ -32,18 +36,18 @@ export class SightyScenarioImpl<
 
   /** Returns the scenario data or an empty catalog when none was supplied. */
   get data(): Readonly<Record<string, unknown>> {
-    return this.resources.data ?? {}
+    return this.resources.data ?? this.file.resources?.data ?? {}
   }
 
-  /** Returns the scene keys declared by the scenario file. */
+  /** Returns the scene keys made available to the scenario. */
   get sceneKeys(): readonly SceneKey[] {
-    return Object.keys(this.file.resources.scenes) as SceneKey[]
+    return Object.keys(this.file.resources?.scenes ?? this.scenes) as SceneKey[]
   }
 
   /** Returns the slot names declared by the view rooted at one scene. */
   getSlotNames(sceneKey: SceneKey): readonly SlotName[] {
     const view = this.getView(sceneKey)
-    return view === undefined ? [] : Object.keys(view.view.slots) as SlotName[]
+    return view === undefined ? [] : Object.keys(view.view.slots ?? {}) as SlotName[]
   }
 
   /** Returns one scene definition by its authored key. */
@@ -58,7 +62,12 @@ export class SightyScenarioImpl<
 
   /** Returns the first authored view rooted at one scene key. */
   getView(sceneKey: SceneKey): SightyView<SceneKey, SlotName> | undefined {
-    return this.file.views.find((view) => view.view.scene === sceneKey)
+    return findGraphViewByScene(this.viewGraph, sceneKey)?.view
+  }
+
+  /** Returns the normalized recursive view graph used by the runtime. */
+  getViewGraph(): SightyViewGraph<SceneKey, SlotName> {
+    return this.viewGraph
   }
 
   /** Validates scenario references without compiling, rendering or running scenes. */

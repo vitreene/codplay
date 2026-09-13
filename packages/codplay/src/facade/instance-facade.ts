@@ -5,6 +5,7 @@ import {
   type RuntimeTelcoState,
 } from '../runtime/telco'
 import type { RuntimePlayer } from '../runtime/player'
+import type { RuntimeExternalPresentationHandle } from '../runtime/engine'
 import type {
   RuntimeSnapshotPatch,
   RuntimeSnapshotSetResult,
@@ -18,6 +19,7 @@ import type {
   CodPlayInstanceDiagnostic,
   CodPlayInstanceEvents,
   CodPlayInstanceHostTarget,
+  CodPlayInstanceMountReplace,
   CodPlayProgress,
   CodPlayPublicEvent,
   CodPlaySnapshot,
@@ -115,6 +117,19 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   getForeignContentSurface(target: CodPlayInstanceHostTarget): ForeignContentSurface | undefined {
     if (this.destroyed) return undefined
     return this.runner.getComponentSurface(`${target.storyId}:${target.persoId}`, 'foreignContent')
+  }
+
+  /** Prepares the shared replace presentation for a foreign mount replacement. */
+  prepareForeignMountReplacement(
+    target: CodPlayInstanceHostTarget,
+    replace: CodPlayInstanceMountReplace,
+  ): RuntimeExternalPresentationHandle | undefined {
+    if (this.destroyed) return undefined
+    return this.runner.prepareExternalPresentation(
+      `${target.storyId}:${target.persoId}`,
+      'replace',
+      replace,
+    )
   }
 
   /** Receives one internal public event and isolates listener failures. */

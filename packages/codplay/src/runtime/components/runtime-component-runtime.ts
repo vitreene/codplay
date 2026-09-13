@@ -2,6 +2,9 @@ import type { SolvedScene } from '../player/pipeline'
 import type {
   RuntimeComponentUpdateContext,
   RuntimeComponentUpdatePhase,
+  RuntimeExternalPresentation,
+  RuntimeExternalPresentationHandle,
+  RuntimeExternalPresentationRequest,
   RuntimeModuleServiceInstance,
 } from '../engine'
 import type { BaseComponent } from './base-component'
@@ -59,6 +62,10 @@ type ActiveComponentAnimation = {
   lastTimeMs: number | undefined
 }
 
+type ActiveExternalComponentAnimation = ActiveComponentAnimation & Readonly<{
+  presentation: RuntimeExternalPresentation
+}>
+
 /** Synchronizes compiled solved persos with a player-local component host. */
 export class RuntimeComponentRuntime {
   private readonly mounted = new Map<string, MountedComponent>()
@@ -66,6 +73,7 @@ export class RuntimeComponentRuntime {
   private readonly lastStates = new Map<string, Readonly<Record<string, unknown>>>()
   private readonly lastActions = new Map<string, readonly StableComponentAction[]>()
   private readonly animations = new Map<string, ActiveComponentAnimation[]>()
+  private readonly externalAnimations = new Map<string, ActiveExternalComponentAnimation>()
   private readonly options: RuntimeComponentRuntimeOptions
   private moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance> = new Map()
 
@@ -89,6 +97,40 @@ export class RuntimeComponentRuntime {
     }
   }
 
+  /** Prepares one module-owned presentation around an external runtime operation. */
+  prepareExternalPresentation(
+    request: RuntimeExternalPresentationRequest,
+  ): RuntimeExternalPresentationHandle | undefined {
+    this.cancelExternalPresentation(request.componentId)
+    for (const service of this.moduleServices.values()) {
+      const presentation = service.prepareExternalPresentation?.(request)
+      if (presentation === undefined) continue
+      this.externalAnimations.set(request.componentId, {
+        animation: presentation.animation,
+        hasValue: false,
+        lastValue: undefined,
+        lastTimeMs: undefined,
+        presentation,
+      })
+      let started = false
+      return {
+        start: () => {
+          if (started) return
+          started = true
+          try {
+            presentation.start()
+            this.presentExternalAnimations(request.componentId, request.timeMs)
+          } catch (error) {
+            this.cancelExternalPresentation(request.componentId, presentation)
+            throw error
+          }
+        },
+        cancel: () => this.cancelExternalPresentation(request.componentId, presentation),
+      }
+    }
+    return undefined
+  }
+
   /** Returns the logical materialization revision last delivered to one component. */
   getStateRevision(componentId: string): number | undefined {
     return this.stateRevisions.get(componentId)
@@ -102,6 +144,7 @@ export class RuntimeComponentRuntime {
    */
   sync(scene: SolvedScene, force = false, options: RuntimeComponentSyncOptions = {}): void {
     const phase = options.phase ?? 'normal'
+    if (phase !== 'normal') this.cancelAllExternalPresentations()
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
       const actions = createStableActionSignature(perso.actions)
@@ -122,7 +165,11 @@ export class RuntimeComponentRuntime {
 
   /** Presents component-owned animation samples at one player-clocked time. */
   presentAt(timeMs: number): void {
-    for (const componentId of this.animations.keys()) this.presentAnimations(componentId, timeMs)
+    const componentIds = new Set([...this.animations.keys(), ...this.externalAnimations.keys()])
+    for (const componentId of componentIds) {
+      this.presentAnimations(componentId, timeMs)
+      this.presentExternalAnimations(componentId, timeMs)
+    }
   }
 
   /** Applies one transient live state through the same component update path. */
@@ -140,6 +187,7 @@ export class RuntimeComponentRuntime {
 
   /** Destroys all materialized component instances. */
   destroy(): void {
+    this.cancelAllExternalPresentations()
     for (const mounted of this.mounted.values()) {
       mounted.component.destroy()
       mounted.handle.destroy()
@@ -149,6 +197,7 @@ export class RuntimeComponentRuntime {
     this.lastStates.clear()
     this.lastActions.clear()
     this.animations.clear()
+    this.externalAnimations.clear()
   }
 
   /** Delivers one logical state update and replaces its component-owned animations. */
@@ -206,6 +255,21 @@ export class RuntimeComponentRuntime {
   private presentAnimations(componentId: string, timeMs: number): void {
     const active = this.animations.get(componentId)
     if (active === undefined) return
+    this.presentAnimationEntries(active, timeMs)
+  }
+
+  /** Applies and retires one externally prepared presentation stream. */
+  private presentExternalAnimations(componentId: string, timeMs: number): void {
+    const active = this.externalAnimations.get(componentId)
+    if (active === undefined) return
+    this.presentAnimationEntries([active], timeMs)
+    if (active.lastTimeMs !== undefined && active.lastTimeMs >= active.animation.endAt) {
+      this.externalAnimations.delete(componentId)
+    }
+  }
+
+  /** Applies only changed samples from one player-clocked animation collection. */
+  private presentAnimationEntries(active: readonly ActiveComponentAnimation[], timeMs: number): void {
     for (const entry of active) {
       const movingForwardAfterEnd = entry.lastTimeMs !== undefined
         && entry.lastTimeMs >= entry.animation.endAt
@@ -222,6 +286,32 @@ export class RuntimeComponentRuntime {
         entry.hasValue = true
       }
       entry.lastTimeMs = timeMs
+    }
+  }
+
+  /** Cancels one external presentation if it still belongs to the expected request. */
+  private cancelExternalPresentation(
+    componentId: string,
+    expected?: RuntimeExternalPresentation,
+  ): void {
+    const active = this.externalAnimations.get(componentId)
+    if (active === undefined) {
+      expected?.cancel()
+      return
+    }
+    if (expected !== undefined && active.presentation !== expected) {
+      expected.cancel()
+      return
+    }
+    this.externalAnimations.delete(componentId)
+    active.presentation.cancel()
+  }
+
+  /** Cancels every externally prepared presentation before a seek or teardown. */
+  private cancelAllExternalPresentations(): void {
+    for (const [componentId, active] of this.externalAnimations) {
+      this.externalAnimations.delete(componentId)
+      active.presentation.cancel()
     }
   }
 

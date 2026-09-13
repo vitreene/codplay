@@ -131,7 +131,17 @@ racines rendues. Sighty ne crée pas de circuit parallèle dans la démo.
 | 6. Validation et documentation | **En cours** | Le test d'intégration de la fixture, les typechecks et le build constituent la première preuve. Il reste le parcours navigateur réel, Safari et l'affinage des politiques de fin, replay, resize et ressources. |
 | 7. Façade Sighty | **Première tranche implémentée ; à stabiliser** | `packages/sighty/src/` expose une seule classe `Sighty`, qui regroupe `scenario` et `runtime`. La démo 1 consomme cette façade sans recopier son fichier ni son catalogue ; les tests auteur passent. |
 | 8. Runtime générique et page | **Première tranche implémentée ; à stabiliser** | `Sighty.runtime` porte le cycle CodPlay commun, `sighty-composition.ts` ne fournit que la configuration de la démo 1 et `page-controls.ts` porte les contrôles DOM. Il reste la validation navigateur et l'affinage des politiques runtime. |
-| 9. Interface commune des démos Sighty | **En cours** | Une seule entrée `sighty.html` sélectionne les démos 1, 2 et 3. L'interface porte le titre discret, le toggle général play/pause et le bouton iconique de remise à zéro en pied, le volet logs et la responsivité ; les contrôles propres à chaque démo passent par sa zone optionnelle. La remise à zéro recrée la session active pour abandonner son journal utilisateur. Le panneau `Instance layout-1` est exclu de cette zone ; les telcos des instances A et B y restent disponibles avec leur progression. |
+| 9. Interface commune des démos Sighty | **En cours** | Une seule entrée `sighty.html` sélectionne les démos 1 à 4. L'interface porte le titre discret, le toggle général play/pause et le bouton iconique de remise à zéro en pied, le volet logs et la responsivité ; les contrôles propres à chaque démo passent par sa zone optionnelle. La remise à zéro recrée la session active pour abandonner son journal utilisateur. Le panneau `Instance layout-1` est exclu de cette zone ; les telcos des instances A et B y restent disponibles avec leur progression. |
+
+## Suite explicitement demandée : graphe de vues et démo 4
+
+La démo 4 est suivie par le
+[plan de corrections visuelles](./2026-09-13-demo4-visual-plan.md), traité en
+premier, et par le [plan principal de navigation Sighty](./2026-09-13-sighty-navigation-plan.md).
+Le graphe récursif, les actions, les routes, le préchargement et la sélection
+des slots appartiennent à Sighty ; la fixture ne fait que déclarer le scénario
+et ses features sur mesure. Elle ne crée ni index courant, ni table de routes,
+ni circuit concurrent.
 
 ## Dépendance au composant core
 

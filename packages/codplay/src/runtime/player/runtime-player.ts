@@ -13,6 +13,7 @@ import type { EngineFrame } from '../engine'
 import {
   RuntimeEngine,
   type RuntimeModuleServiceInstance,
+  type RuntimeExternalPresentationHandle,
   type RuntimeModuleServiceSeekHandle,
 } from '../engine'
 import {
@@ -378,6 +379,21 @@ export class RuntimePlayer {
     this.materializer?.materializeScene(scene, {
       moveDeltas: [],
       phase: 'geometry-capture',
+    })
+  }
+
+  /** Prepares a module-owned presentation around an external host operation. */
+  prepareExternalPresentation(
+    componentId: string,
+    kind: string,
+    options?: unknown,
+  ): RuntimeExternalPresentationHandle | undefined {
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) return undefined
+    return this.componentRuntime?.prepareExternalPresentation({
+      componentId,
+      kind,
+      ...(options === undefined ? {} : { options }),
+      timeMs: this.currentTimeMs,
     })
   }
 

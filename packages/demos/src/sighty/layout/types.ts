@@ -6,7 +6,7 @@ export type SightyDemoLogLevel = 'info' | 'warn' | 'error'
 /** Receives one message produced by a Sighty scenario or page control. */
 export type SightyDemoLogger = (message: string, level?: SightyDemoLogLevel) => void
 
-/** Groups the three transport operations exposed by the common page remote. */
+/** Groups the transport operations exposed by the common page remote. */
 export type SightyDemoTransport = Readonly<{
   play: () => Promise<void>
   pause: () => Promise<void>

@@ -1,8 +1,10 @@
 # Sighty — synthèse et modèle de fichier déclaratif
 
-**Statut : réflexion non normative.** Cette note reformule les notes du
-2026-07-28 et du 2026-08-01 à partir des réflexions sur la structure du fichier
-Sighty. Elle ne fixe pas encore une API ni un format définitif.
+**Statut : base de conception Sighty, à affiner et à éprouver.** Cette note
+reformule les notes du 2026-07-28 et du 2026-08-01 à partir des réflexions sur
+la structure du fichier Sighty. Elle constitue la base de conception du graphe,
+des événements et du parcours ; les contrats exécutables sont précisés dans
+les spécifications Sighty au fur et à mesure de leur validation.
 
 ## 1. Objet de la note
 
@@ -512,8 +514,9 @@ injectée dans une scène.
 
 ## 8. Contrat minimal du premier prototype
 
-La note fixe l'intention du modèle, mais les contrats exécutables suivants sont
-encore nécessaires pour lancer un premier prototype.
+La note fixe le modèle de conception. Les contrats exécutables ci-dessous sont
+les points à préciser, implémenter et éprouver par tranches ; l'absence d'un cas
+dans une démo ne réduit pas le modèle à cette démo.
 
 ### Manques à définir
 
@@ -570,7 +573,7 @@ encore nécessaires pour lancer un premier prototype.
 
 ### Parcours de validation
 
-Le premier cas de validation devrait contenir :
+Le premier cas de validation du modèle devrait contenir :
 
 ```text
 menu
@@ -596,9 +599,9 @@ Il devrait vérifier :
 
 ## 9. Premier cas concret demandé le 2026-09-10
 
-La première mise en place part d'un cas plus petit que le parcours du §8. Ce
-dernier reste une perspective de validation ; il ne constitue pas le périmètre
-à implémenter pour commencer.
+La première fixture peut n'exercer qu'une partie du parcours du §8. Ce dernier
+reste la base de conception à affiner : la fixture fournit une preuve concrète,
+mais ne définit ni ne remplace le périmètre de Sighty.
 
 Cette section est la description de la fixture de démonstration Sighty A/B.
 Elle ne constitue ni l'expression de besoin du composant CodPlay `slot`, ni un
@@ -624,9 +627,9 @@ intermédiaires de construction, générateurs de scènes ou calculs cachés der
 des helpers. Les fondus et les changements de nombres appartiennent aux scènes
 CodPlay ; le fichier Sighty porte leurs relations de montage.
 
-La démo sert à révéler les questions de construction à mesure qu'elles se
-présentent. Elle ne justifie pas d'inventer les contrats encore ouverts du §8,
-ni d'en implémenter immédiatement toutes les capacités.
+La démo sert à éprouver les contrats issus du modèle et à révéler les points à
+affiner. Elle ne doit pas devenir le lieu d'une implémentation concurrente du
+graphe, des routes ou du cycle de vie Sighty.
 
 ### Première question révélée : monter une scène dans une autre
 

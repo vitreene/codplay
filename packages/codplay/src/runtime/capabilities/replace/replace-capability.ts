@@ -6,6 +6,8 @@ import type {
 } from '../../components'
 import type {
   RuntimeComponentUpdateContext,
+  RuntimeExternalPresentation,
+  RuntimeExternalPresentationRequest,
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from '../../engine'
@@ -99,15 +101,54 @@ export function createReplaceModuleService(
 
     if (active.animation === undefined) {
       active.session.start()
-      active.animation = createReplaceAnimation(
-        update.componentId,
-        occurrence,
-        active.session,
+      active.animation = createReplaceAnimation({
+        componentId: update.componentId,
+        key: occurrence.key,
+        startAt: occurrence.action.startAt,
+        command: occurrence.command,
+        session: active.session,
         sessions,
-        nextSessionId++,
-      )
+        sessionId: nextSessionId++,
+      })
     }
     update.registerAnimation(active.animation)
+  }
+
+  /** Prepares the same replace fade for a foreign mount initiated outside component update. */
+  function prepareExternalPresentation(
+    request: RuntimeExternalPresentationRequest,
+  ): RuntimeExternalPresentation | undefined {
+    if (request.kind !== REPLACE_MODULE_SERVICE_ID) return undefined
+    const command = normalizeReplaceSimpleCommand(request.options)
+    if (command === undefined) return undefined
+
+    cancelSession(request.componentId)
+    const session = getReplaceSurface(request.componentId)?.begin()
+    if (session === undefined) return undefined
+
+    const sessionId = nextSessionId++
+    const key = `external:${sessionId}`
+    sessions.set(request.componentId, { key, session })
+    const animation = createReplaceAnimation({
+      componentId: request.componentId,
+      key,
+      startAt: request.timeMs,
+      command,
+      session,
+      sessions,
+      sessionId,
+    })
+    sessions.get(request.componentId)!.animation = animation
+
+    return {
+      start: session.start,
+      animation,
+      cancel: () => {
+        const active = sessions.get(request.componentId)
+        if (active?.session === session) cancelSession(request.componentId)
+        else session.cancel()
+      },
+    }
   }
 
   /** Removes a prepared snapshot when the component update throws. */
@@ -132,6 +173,7 @@ export function createReplaceModuleService(
   return {
     beforeComponentUpdate,
     afterComponentUpdate,
+    prepareExternalPresentation,
     onComponentUpdateError,
     beforeSeek,
     destroy,
@@ -172,38 +214,41 @@ function createOccurrenceKey(action: ComponentActionOccurrence): string {
 }
 
 /** Registers a simple fade whose samples mutate only the presentation surface. */
-function createReplaceAnimation(
-  componentId: string,
-  occurrence: ReplaceOccurrence,
-  session: ReplacePresentationSession,
-  sessions: Map<string, ActiveReplaceSession>,
-  sessionId: number,
-): ComponentAnimation {
-  const startAt = occurrence.action.startAt
-  const endAt = startAt + occurrence.command.duration
-  const animationId = `replace:${componentId}:${occurrence.key}:${sessionId}`
+function createReplaceAnimation(options: Readonly<{
+  componentId: string
+  key: string
+  startAt: number
+  command: ReplaceSimpleCommand
+  session: ReplacePresentationSession
+  sessions: Map<string, ActiveReplaceSession>
+  sessionId: number
+}>): ComponentAnimation {
+  const endAt = options.startAt + options.command.duration
+  const animationId = `replace:${options.componentId}:${options.key}:${options.sessionId}`
 
   return {
     id: animationId,
-    startAt,
+    startAt: options.startAt,
     endAt,
     sample: (timeMs) => {
-      if (timeMs < startAt) return undefined
+      if (timeMs < options.startAt) return undefined
       if (timeMs >= endAt) {
         return {
           value: 'complete',
           apply: () => {
-            session.finish()
-            const active = sessions.get(componentId)
-            if (active?.session === session) sessions.delete(componentId)
+            options.session.finish()
+            const active = options.sessions.get(options.componentId)
+            if (active?.session === options.session) options.sessions.delete(options.componentId)
           },
         }
       }
-      const progress = endAt === startAt ? 1 : (timeMs - startAt) / (endAt - startAt)
+      const progress = endAt === options.startAt
+        ? 1
+        : (timeMs - options.startAt) / (endAt - options.startAt)
       const normalized = Math.min(1, Math.max(0, progress))
       return {
         value: normalized,
-        apply: () => session.sample(normalized),
+        apply: () => options.session.sample(normalized),
       }
     },
   }

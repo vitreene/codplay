@@ -15,10 +15,10 @@ export const sceneB: SceneDoc<string> = {
             move: '@root',
             className: `${SIGHTY_SCENE_ROOT_CLASS_NAME} sighty-scene-b`,
             markup: `
-              <section class="sighty-scene-b">
-                <p class="sighty-scene-b__eyebrow">SCÈNE B · TIMELINE INDÉPENDANTE</p>
-                <div class="sighty-scene-b__number-outlet" data-part="scene-b:number"></div>
-                <p class="sighty-scene-b__caption">Un changement à chaque seconde</p>
+              <section id="sighty-scene-b-root" class="sighty-scene-b">
+                <p id="sighty-scene-b-eyebrow" class="sighty-scene-b__eyebrow">SCÈNE B · TIMELINE INDÉPENDANTE</p>
+                <div id="sighty-scene-b-number-outlet" class="sighty-scene-b__number-outlet" data-part="scene-b:number"></div>
+                <p id="sighty-scene-b-caption" class="sighty-scene-b__caption">Un changement à chaque seconde</p>
               </section>
             `,
           },

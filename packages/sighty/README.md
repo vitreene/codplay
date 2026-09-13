@@ -1,34 +1,75 @@
 # Sighty
 
-Sighty est l'unique point d'entrée du projet. Une instance regroupe son
-scénario auteur et son runtime CodPlay sous deux propriétés explicites :
-`sighty.scenario` et `sighty.runtime`.
+Sighty regroupe le scénario auteur et son exécution CodPlay derrière un seul
+point d'entrée. Le scénario décrit un graphe de vues ; le runtime reçoit les
+événements et suit les routes déclarées.
 
 ```ts
-import { Sighty } from '@codplay/sighty'
+import { Sighty, type SightyFile } from '@codplay/sighty'
+
+const file: SightyFile<'scene-layout' | 'scene-menu' | 'scene-a' | 'scene-b', 'slot-scene'> = {
+  views: {
+    start: 'view-main',
+    views: {
+      'view-main': {
+        view: {
+          scene: 'scene-layout',
+          views: {
+            start: 'view-chapter',
+            views: {
+              'view-chapter': {
+                actions: {
+                  'navigation:next': { go: { direction: 'next' } },
+                },
+                view: {
+                  slots: {
+                    'slot-scene': {
+                      start: 'view-menu',
+                      views: {
+                        'view-menu': { view: { scene: 'scene-menu' } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
+// The scene catalogue is supplied separately from the serializable file.
+const scenes = {
+  'scene-layout': layout,
+  'scene-menu': menu,
+  'scene-a': sceneA,
+  'scene-b': sceneB,
+}
 
 const sighty = new Sighty({
-  scenario: {
-    file: sightyFile,
-    scenes: { layout: layoutScene, sceneB },
-    data: { locale: 'fr' },
-  },
+  scenario: { file, scenes },
   runtime: {
     root,
-    instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-    layout: { sceneKey: 'layout', storyId: 'main' },
+    instanceIds: {
+      'scene-layout': 'layout-1',
+      'scene-menu': 'menu-1',
+      'scene-a': 'scene-a-1',
+      'scene-b': 'scene-b-1',
+    },
+    layout: { sceneKey: 'scene-layout', storyId: 'main' },
   },
 })
 
-const { scenario, runtime } = sighty
-const diagnostics = scenario.validate()
-const layoutView = scenario.getView('layout')
-const slotNames = scenario.getSlotNames('layout')
-
-await runtime.initialize()
-await runtime.playAll()
+await sighty.runtime.initialize()
+await sighty.runtime.dispatch({ name: 'navigation:next' })
 ```
 
-`scenario` expose le fichier, les scènes, les données et les requêtes de
-validation. `runtime` exécute les scènes via CodPlay. Les contrôles, le journal,
-le statut et la présentation restent à la charge de la page ou de la démo.
+Chaque entrée d'une `ViewList` reçoit un `id` stable ; `next` et `previous`
+suivent l'ordre déclaré. Le scénario ne crée pas de DOM et ne contient pas les
+sources des scènes : `sighty.scenario` les reçoit dans son catalogue, tandis
+que `sighty.runtime` pilote les occurrences, les slots et la navigation.
+
+Les contrôles de page et les fonctionnalités propres à une application restent
+à l'extérieur.

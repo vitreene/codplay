@@ -1,5 +1,6 @@
 import type { CompiledScene } from '../compiled'
 import type { SceneDoc } from '../types'
+import type { SlotReplace } from '../../runtime/components/slot'
 
 /** One declared slot host discovered in an authoring scene. */
 export type SlotManifestEntry = Readonly<{
@@ -7,6 +8,8 @@ export type SlotManifestEntry = Readonly<{
   storyId: string
   persoId: string
   sourcePath: string
+  /** Optional presentation used when an application replaces foreign content in this slot. */
+  replace?: SlotReplace
 }>
 
 /** Restricts manifest discovery to one story when a scene has several scopes. */
@@ -56,11 +59,13 @@ export function slotManifest(
     if (options.storyId !== undefined && options.storyId !== storyKey && options.storyId !== storyId) continue
     story.persos.forEach((perso, index) => {
       if (perso.type !== 'slot') return
+      const replace = readSlotReplace(perso.initial)
       entries.push({
         slot: perso.name ?? '',
         storyId,
         persoId: perso.id,
         sourcePath: `stories.${storyKey}.persos[${index}].name`,
+        ...(replace === undefined ? {} : { replace }),
       })
     })
   }
@@ -125,8 +130,28 @@ function formatNames(names: readonly string[]): string {
   return names.length === 0 ? '(none)' : names.map((name) => `"${name}"`).join(', ')
 }
 
+/** Reads the validated slot replacement declaration without interpreting foreign content. */
+function readSlotReplace(initial: Readonly<Record<string, unknown>> | undefined): SlotReplace | undefined {
+  const value = initial?.replace
+  if (value === 'fade') return value
+  if (!isRecord(value) || value.transition !== 'fade') return undefined
+  if (value.duration === undefined) return { transition: 'fade' }
+  if (typeof value.duration !== 'number' || !Number.isFinite(value.duration) || value.duration < 0) return undefined
+  return { transition: 'fade', duration: value.duration }
+}
+
+/** Narrows a slot profile value to a plain record before reading its transition. */
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /** Common story shape needed by manifest discovery on author and compiled data. */
 type SlotManifestStory = Readonly<{
   id: string
-  persos: readonly Readonly<{ id: string; name?: string; type: string }>[]
+  persos: readonly Readonly<{
+    id: string
+    name?: string
+    type: string
+    initial?: Readonly<Record<string, unknown>>
+  }>[]
 }>

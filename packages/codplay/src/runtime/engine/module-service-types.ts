@@ -39,6 +39,27 @@ export type RuntimeComponentUpdateContext = Readonly<{
   registerAnimation: (animation: ComponentAnimation) => void
 }>
 
+/** Requests one module-owned presentation around an operation outside component update. */
+export type RuntimeExternalPresentationRequest = Readonly<{
+  componentId: string
+  kind: string
+  options?: unknown
+  timeMs: number
+}>
+
+/** Presentation prepared by a module before an external runtime operation. */
+export type RuntimeExternalPresentation = Readonly<{
+  start: () => void
+  animation: ComponentAnimation
+  cancel: () => void
+}>
+
+/** Handle retained by a caller while one external presentation is being applied. */
+export type RuntimeExternalPresentationHandle = Readonly<{
+  start: () => void
+  cancel: () => void
+}>
+
 /** Complete structural order returned by one runtime capability policy. */
 export type RuntimeStructuralOrder = Readonly<Record<string, readonly string[]>>
 
@@ -56,6 +77,10 @@ export type RuntimeModuleServiceInstance = Readonly<{
   beforeComponentUpdate?: (context: RuntimeComponentUpdateContext) => void
   /** Runs immediately after the component successfully receives one update. */
   afterComponentUpdate?: (context: RuntimeComponentUpdateContext) => void
+  /** Prepares a module-owned presentation around a non-component runtime operation. */
+  prepareExternalPresentation?: (
+    request: RuntimeExternalPresentationRequest,
+  ) => RuntimeExternalPresentation | undefined
   /** Cleans module state when the component update fails after preparation. */
   onComponentUpdateError?: (context: RuntimeComponentUpdateContext, error: unknown) => void
   /** Receives the solved scene after its component state has been synchronized. */

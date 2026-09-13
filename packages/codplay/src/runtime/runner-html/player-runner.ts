@@ -1,4 +1,8 @@
-import { RuntimeEngine, type Ticker } from '../engine'
+import {
+  RuntimeEngine,
+  type RuntimeExternalPresentationHandle,
+  type Ticker,
+} from '../engine'
 import { TimeTicker } from '../time'
 import { RuntimeComponentRuntime } from '../components'
 import type {
@@ -509,6 +513,15 @@ export class HtmlPlayerRunner {
     const surfaces = this.player.componentRuntime?.getComponentSurfaces()
     if (surfaceId === 'foreignContent') return surfaces?.getForeignContentSurface?.(componentId)
     return surfaces?.getSurface(componentId, surfaceId)
+  }
+
+  /** Prepares a module-owned presentation around one runner-level operation. */
+  prepareExternalPresentation(
+    componentId: string,
+    kind: string,
+    options?: unknown,
+  ): RuntimeExternalPresentationHandle | undefined {
+    return this.player.prepareExternalPresentation(componentId, kind, options)
   }
 
   /** Captures the visible FIRST layout before one capture close is committed. */

@@ -26,6 +26,7 @@ export type {
   CodPlayInstanceEvents,
   CodPlayInstanceHostTarget,
   CodPlayInstanceMountHandle,
+  CodPlayInstanceMountReplace,
   CodPlayInstanceMountRequest,
   CodPlayInstanceOptions,
   CodPlayModules,

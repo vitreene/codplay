@@ -390,7 +390,11 @@ export class EngineFacadeImpl implements CodPlayEngine {
     }
 
     const hostKey = createInstanceMountHostKey(request.host)
-    if (this.mountIdByHost.has(hostKey)) {
+    const existingMountId = this.mountIdByHost.get(hostKey)
+    const existingMount = existingMountId === undefined
+      ? undefined
+      : this.instanceMounts.get(existingMountId)
+    if (existingMount !== undefined && request.replace === undefined) {
       return this.rejectMount(request, new Error(`CodPlay host is already mounted: ${hostKey}`))
     }
     if (this.mountIdByChild.has(request.childInstanceId)) {
@@ -424,30 +428,86 @@ export class EngineFacadeImpl implements CodPlayEngine {
       return this.rejectMount(request, new Error(`CodPlay child instance is destroyed: ${request.childInstanceId}`))
     }
 
+    const replacement = existingMount === undefined || request.replace === undefined
+      ? undefined
+      : hostInstance.prepareForeignMountReplacement(request.host, request.replace)
+    if (existingMount !== undefined && replacement === undefined) {
+      return this.rejectMount(
+        request,
+        new Error(`CodPlay mount host does not provide the requested replace transition: ${hostKey}`),
+      )
+    }
+
+    if (existingMount !== undefined) this.detachInstanceMount(existingMount.mountId)
+
+    let mount: CodPlayInstanceMountHandle | undefined
     try {
-      const childRoots = childInstance.setMountContainer(hostRoot) ?? []
-      surface.attach(childRoots)
+      mount = this.attachMountRelation({
+        request,
+        hostKey,
+        hostRoot,
+        childInstance,
+        surface,
+      })
+      replacement?.start()
+      return mount
     } catch (error) {
-      try {
-        childInstance.setMountContainer(undefined)
-      } catch {
-        // Preserve the original mount error; teardown remains owned by the engine.
+      mount?.detach()
+      replacement?.cancel()
+      if (existingMount !== undefined) {
+        try {
+          this.attachMountRelation({
+            request: {
+              host: existingMount.host,
+              childInstanceId: existingMount.childInstanceId,
+            },
+            hostKey: existingMount.hostKey,
+            hostRoot,
+            childInstance: existingMount.child,
+            surface: existingMount.surface,
+          })
+        } catch {
+          // Preserve the original replacement error; the owner still controls teardown.
+        }
       }
       return this.rejectMount(request, error)
     }
+  }
 
+  /** Attaches one validated child relation and records its idempotent handle. */
+  private attachMountRelation(options: Readonly<{
+    request: Readonly<{
+      host: CodPlayInstanceHostTarget
+      childInstanceId: string
+    }>
+    hostKey: string
+    hostRoot: HTMLElement
+    childInstance: ManagedInstance
+    surface: ForeignContentSurface
+  }>): CodPlayInstanceMountHandle {
+    try {
+      const childRoots = options.childInstance.setMountContainer(options.hostRoot) ?? []
+      options.surface.attach(childRoots)
+    } catch (error) {
+      try {
+        options.childInstance.setMountContainer(undefined)
+      } catch {
+        // Preserve the original mount error; teardown remains owned by the engine.
+      }
+      throw error
+    }
     const mountId = this.nextMountId++
     const mount: ManagedInstanceMount = {
       mountId,
-      host: request.host,
-      hostKey,
-      childInstanceId: request.childInstanceId,
-      child: childInstance,
-      surface,
+      host: options.request.host,
+      hostKey: options.hostKey,
+      childInstanceId: options.request.childInstanceId,
+      child: options.childInstance,
+      surface: options.surface,
     }
     this.instanceMounts.set(mountId, mount)
-    this.mountIdByHost.set(hostKey, mountId)
-    this.mountIdByChild.set(request.childInstanceId, mountId)
+    this.mountIdByHost.set(options.hostKey, mountId)
+    this.mountIdByChild.set(options.request.childInstanceId, mountId)
     return {
       detach: () => this.detachInstanceMount(mountId),
     }

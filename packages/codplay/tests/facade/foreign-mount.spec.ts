@@ -40,7 +40,7 @@ function createLayoutScene(): SceneDoc<string> {
 }
 
 /** Declares one autonomous child scene rendered inside its supplied root. */
-function createChildScene(): SceneDoc<string> {
+function createChildScene(content = 'child'): SceneDoc<string> {
   return {
     id: 'foreign-child-scene',
     stories: {
@@ -52,7 +52,7 @@ function createChildScene(): SceneDoc<string> {
           initial: {
             tag: 'article',
             move: '@root',
-            content: 'child',
+            content,
           },
         }],
         eventimes: [],
@@ -62,6 +62,17 @@ function createChildScene(): SceneDoc<string> {
     eventimes: [],
     tracks: {},
   }
+}
+
+/** Creates one autonomous child instance with a distinct public identity. */
+function createChildInstance(codplay: CodPlay, instanceId: string, content: string): CodPlayInstance {
+  const build = codplay.build({ scene: createChildScene(content) })
+  if (!build.ok) throw new Error(`Foreign child scene did not compile: ${instanceId}`)
+  return codplay.instances.create({
+    instanceId,
+    compiledScene: build.compiledScene,
+    functions: build.functions,
+  })
 }
 
 /** Creates the layout and child instances through the public CodPlay facade. */
@@ -206,5 +217,54 @@ describe('CodPlay instance foreign mount', () => {
     expect(hostRoot.querySelector('article')).toBeNull()
     expect(codplay.instances.get('layout-1')).toBeUndefined()
     expect(codplay.instances.get('child-1')).toBe(child)
+  })
+
+  it('replaces the mounted child through the shared replace presentation', async () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const { layout, layoutRoot } = createForeignInstances(codplay)
+    const childB = createChildInstance(codplay, 'child-2', 'child-b')
+    const hostRoot = layoutRoot.firstElementChild
+    if (!(hostRoot instanceof HTMLElement)) throw new Error('Foreign host root is missing.')
+
+    codplay.engine.advance(0)
+    const firstMount = codplay.instances.mount({
+      host: {
+        instanceId: 'layout-1',
+        storyId: 'main',
+        persoId: 'body-host',
+      },
+      childInstanceId: 'child-1',
+    })
+    await layout.telco.play()
+    codplay.engine.advance(0)
+
+    const replacementMount = codplay.instances.mount({
+      host: {
+        instanceId: 'layout-1',
+        storyId: 'main',
+        persoId: 'body-host',
+      },
+      childInstanceId: childB.instanceId,
+      replace: { transition: 'fade', duration: 100 },
+    })
+
+    const snapshots = (): HTMLElement[] => Array.from(layoutRoot.children)
+      .filter((child): child is HTMLElement => child.getAttribute('data-codplay-transient') !== null)
+    expect(snapshots()).toHaveLength(1)
+    expect(snapshots()[0]?.textContent).toBe('child')
+    expect(hostRoot.querySelector('article')?.textContent).toBe('child-b')
+    expect(hostRoot.style.opacity).toBe('0')
+
+    codplay.engine.advance(50)
+    expect(snapshots()[0]?.style.opacity).toBe('0.5')
+    expect(hostRoot.style.opacity).toBe('0.5')
+
+    codplay.engine.advance(100)
+    expect(snapshots()).toHaveLength(0)
+    expect(hostRoot.style.opacity).toBe('')
+    expect(hostRoot.querySelector('article')?.textContent).toBe('child-b')
+
+    firstMount.detach()
+    replacementMount.detach()
   })
 })

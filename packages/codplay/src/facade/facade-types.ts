@@ -310,10 +310,18 @@ export type CodPlayInstanceHostTarget = Readonly<{
   persoId: string
 }>
 
+/** Presentation transition requested when an instance replaces another mount. */
+export type CodPlayInstanceMountReplace = 'fade' | Readonly<{
+  transition: 'fade'
+  duration?: number
+}>
+
 /** Request to expose one child's materialized roots inside a host slot component. */
 export type CodPlayInstanceMountRequest = Readonly<{
   host: CodPlayInstanceHostTarget
   childInstanceId: string
+  /** Optional presentation transition used only when this host already has a child. */
+  replace?: CodPlayInstanceMountReplace
 }>
 
 /** Idempotent relation handle returned by one instance mount operation. */

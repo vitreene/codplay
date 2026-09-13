@@ -205,6 +205,13 @@ opération de chargement, de pilotage ou de destruction d'une ressource foreign.
 Une mise à jour `seek` ou de capture géométrique annule les sessions et ne
 rejoue pas une transition passée.
 
+Une seule session de présentation `replace` peut être active pour un hôte à un
+instant donné. Si un nouveau remplacement intervient avant la fin du
+précédent, le runtime annule et nettoie d'abord cette session, puis capture la
+présentation courante comme état sortant du nouveau remplacement. Les deux
+sessions ne se superposent donc pas et la logique de remplacement ne crée pas
+de concurrence visuelle entre plusieurs instantanés.
+
 Pour `slot`, `replace` est limité à `fade` et `replace.split` est un champ de
 compatibilité sans effet. Il est conservé dans la déclaration compilée, ne
 produit aucun diagnostic et n'active jamais un split de la représentation

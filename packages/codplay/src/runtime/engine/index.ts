@@ -12,6 +12,9 @@ export type {
   RuntimeModuleServiceSeekHandle,
   RuntimeComponentUpdateContext,
   RuntimeComponentUpdatePhase,
+  RuntimeExternalPresentation,
+  RuntimeExternalPresentationHandle,
+  RuntimeExternalPresentationRequest,
   RuntimeStructuralOrder,
   RuntimeStructuralOrderResolver,
 } from './module-service-types'

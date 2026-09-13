@@ -1032,7 +1032,11 @@ engager` et ne doivent pas être simulés dans la démo.
   `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer`, le
   fondu `fade`, le montage d'une nouvelle racine foreign et la disparition de
   l'instantané. Il vérifie également qu'un `replace.split` est accepté puis
-  exécuté par le chemin simple.
+  exécuté par le chemin simple, ainsi que l'annulation d'une présentation
+  interrompue avant un seek.
+- La fixture d'intégration
+  `tests/facade/sighty-demo4.spec.ts` vérifie le montage Sighty réel et qu'une
+  navigation rapide conserve une seule présentation sortante pour le slot.
 - Le même test exerce le module partagé sur `img` : le wrapper et sa source
   sortante utilisent la même surface de présentation, sans clone spécialisé
   dans `ImageComponent`.
