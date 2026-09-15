@@ -64,12 +64,21 @@ const sighty = new Sighty({
 
 await sighty.runtime.initialize()
 await sighty.runtime.dispatch({ name: 'navigation:next' })
+
+const unsubscribe = sighty.runtime.events.onEvent((event) => {
+  console.log(event.name, event.data, event.sourceSceneKey)
+})
+
+unsubscribe()
 ```
 
 Chaque entrée d'une `ViewList` reçoit un `id` stable ; `next` et `previous`
 suivent l'ordre déclaré. Le scénario ne crée pas de DOM et ne contient pas les
 sources des scènes : `sighty.scenario` les reçoit dans son catalogue, tandis
 que `sighty.runtime` pilote les occurrences, les slots et la navigation.
+Les événements publics produits par les scènes remontent vers l’application
+hôte par `runtime.events.onEvent`; l’abonnement renvoie une fonction de
+désabonnement.
 
 Les contrôles de page et les fonctionnalités propres à une application restent
-à l'extérieur.
+à l’extérieur.

@@ -1,5 +1,5 @@
-import { Sighty } from '@codplay/sighty'
-import type { CodPlayEventime, CodPlayPublicEvent, CodPlayTelcoState } from 'codplay'
+import { Sighty, type SightyPublicEvent } from '@codplay/sighty'
+import type { CodPlayEventime, CodPlayTelcoState } from 'codplay'
 import {
   DEMO4_PLAYBACK_INTENTS,
   DEMO4_PLAYBACK_STATE_EVENTS,
@@ -127,8 +127,8 @@ export class SightyComposition {
 
   /** Connects the scene telco playback intents to the currently selected scene. */
   private connectPlaybackFeature(): void {
-    const telco = this.requireInstance('scene-telco')
-    this.cleanups.push(telco.events.onEvent((event) => {
+    this.cleanups.push(this.runtime.events.onEvent((event) => {
+      if (event.sourceSceneKey !== 'scene-telco') return
       const command = PLAYBACK_COMMANDS[event.name as Demo4PlaybackIntentName]
       if (command === undefined) return
       if (!this.isSceneTelcoMounted()) return
@@ -167,8 +167,8 @@ export class SightyComposition {
 
   /** Connects the scene progress intent and the live progress observations. */
   private connectProgressFeature(): void {
-    const telco = this.requireInstance('scene-telco')
-    this.cleanups.push(telco.events.onEvent((event) => {
+    this.cleanups.push(this.runtime.events.onEvent((event) => {
+      if (event.sourceSceneKey !== 'scene-telco') return
       if (event.name !== DEMO4_PROGRESS_INTENTS.seek) return
       if (!this.isSceneTelcoMounted()) return
       const value = readNumericEventValue(event)
@@ -430,7 +430,7 @@ export class SightyComposition {
 }
 
 /** Reads the numeric slider value from one public CodPlay event. */
-function readNumericEventValue(event: CodPlayPublicEvent): number | undefined {
+function readNumericEventValue(event: Pick<SightyPublicEvent, 'data'>): number | undefined {
   const value = event.data?.value
   return typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : undefined
 }

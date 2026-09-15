@@ -1,5 +1,5 @@
 import { Sighty } from '@codplay/sighty'
-import type { CodPlayPublicEvent } from 'codplay'
+import type { SightyPublicEvent } from '@codplay/sighty'
 import { TELCO_INTENTS, type TelcoIntentName } from './messages'
 import { sightyScenario } from './scene-resources'
 import type { SightyDemo2SceneKey, SightyDemo2SlotName } from './sighty-file'
@@ -76,9 +76,8 @@ export class SightyComposition {
 
   /** Subscribes Sighty to public intentions emitted by the command scene. */
   private connectMessageRelay(): void {
-    const telco = this.sighty.runtime.getInstance('telco')
-    if (telco === undefined) throw new Error('La scène-telco de la démo 2 est absente.')
-    this.messageCleanup = telco.events.onEvent((event) => {
+    this.messageCleanup = this.sighty.runtime.events.onEvent((event) => {
+      if (event.sourceSceneKey !== 'telco') return
       const route = MESSAGE_ROUTES[event.name as TelcoIntentName]
       if (route === undefined) return
       this.messageChain = this.messageChain
@@ -95,7 +94,7 @@ export class SightyComposition {
   }
 
   /** Applies one scenario route to the reused scene B through its telco surface. */
-  private async dispatchMessage(event: CodPlayPublicEvent, route: Demo2MessageRoute): Promise<void> {
+  private async dispatchMessage(event: SightyPublicEvent<SightyDemo2SceneKey>, route: Demo2MessageRoute): Promise<void> {
     if (this.destroyed) return
     const sceneB = this.sighty.runtime.getInstance('sceneB')
     if (sceneB === undefined) throw new Error('La scène B de la démo 2 est absente.')

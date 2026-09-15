@@ -104,16 +104,18 @@ export function getDirectEntries<
     ? Object.entries(graph.views).map(([key, view]) => ({ key, view }))
     : graph.map((view, index) => ({ key: listEntryId(view, index), view }))
 
-  return rawEntries.map(({ key, view }, index) => ({
-    key,
-    path: appendPath(graphPath, key),
-    graphPath,
-    graph,
-    view,
-    index,
-    parentViews: [],
-    graphScopes: [],
-  }))
+  return rawEntries
+    .filter(({ view }) => view.hidden !== true)
+    .map(({ key, view }, index) => ({
+      key,
+      path: appendPath(graphPath, key),
+      graphPath,
+      graph,
+      view,
+      index,
+      parentViews: [],
+      graphScopes: [],
+    }))
 }
 
 /** Returns the declared start entry of one indexed graph. */
@@ -128,7 +130,7 @@ export function getStartEntry<
   if (graph === undefined) return undefined
   const authoredGraph = graph.graph
   if (!isViewMap(authoredGraph)) return graph.entries[0]
-  return graph.entries.find((entry) => entry.key === authoredGraph.start)
+  return graph.entries.find((entry) => entry.key === authoredGraph.start) ?? graph.entries[0]
 }
 
 /** Finds the deepest slot containing one normalized view address. */

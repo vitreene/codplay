@@ -29,9 +29,10 @@ composition appartiennent au propriétaire de la représentation et à
 l'application qui l'intègrent.
 
 Le scénario A/B de la première démonstration Sighty est décrit séparément dans
-la [note du modèle déclaratif Sighty](../../sighty/notes/2026-08-17-modele-fichier-declaratif.md)
-et suivi dans le [plan de première implémentation Sighty](../../sighty/plan/2026-09-10-premiere-implementation-plan.md).
-Il constitue un parcours consommateur et une preuve d'intégration du composant,
+la [note du modèle déclaratif Sighty](../../sighty/notes/2026-08-17-modele-fichier-declaratif.md).
+La reconstruction actuelle de la navigation Sighty est suivie dans le
+[plan de référence Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
+Ce scénario constitue un parcours consommateur et une preuve d'intégration du composant,
 pas son expression de besoin. Ses deux zones, ses trois scènes, ses choix
 visuels et son orchestration ne deviennent donc pas des contraintes
 intrinsèques du profil `slot`. Le même contrat doit rester utilisable pour une

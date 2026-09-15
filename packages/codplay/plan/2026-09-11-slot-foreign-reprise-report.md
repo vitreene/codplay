@@ -74,9 +74,10 @@ démo :
 4. l'orchestration Sighty (chargement, cycle de vie, adressage et destruction)
    et la première démo A/B déclarative.
 
-Le plan Sighty correspondant est
-[2026-09-10-premiere-implementation-plan.md](../../sighty/plan/2026-09-10-premiere-implementation-plan.md).
-Il reste `En cours` et ne contient encore aucun fichier de scène exécuté.
+Le plan Sighty de référence pour cette orchestration est
+[2026-09-15-sighty-navigation-reconstruction-plan.md](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
+Il reste `En cours` ; la validation complète du raccord Sighty/CodPlay est
+encore à poursuivre.
 
 ## Reprise ordonnée
 

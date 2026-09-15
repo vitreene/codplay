@@ -201,6 +201,11 @@ L’application ne fournit pas de génération, d’adresse interne, d’identif
 d’occurrence ou de handle. Les demandes sont sérialisées par un coordinateur
 unique et ne deviennent pas un historique permanent.
 
+Lorsqu’une entrée externe fournit `sourceSceneKey`, cette scène doit posséder
+une liaison active unique. Une source inactive ou ambiguë est ignorée avant la
+résolution de l’action ; le nom de scène ne permet pas de contourner
+l’invalidation d’une liaison sortie.
+
 ### 4.3. Sortie vers l’application hôte
 
 La surface de sortie est le pendant de `dispatch` :
@@ -231,6 +236,12 @@ Sighty écoute les événements publics des instances CodPlay. Pour une scène
 active, il les adapte, les rend disponibles à l’hôte et les place dans le
 même coordinateur d’admission que `dispatch`. Un événement d’une scène sortie
 est abandonné avant publication et avant tout effet de navigation.
+
+L’écoute interne est attachée à la liaison active de la sélection, et non à la
+durée de vie générale de l’instance CodPlay. Elle est ouverte après le commit
+d’une entrée et fermée avant le détachement d’une sortie. Une même `SceneKey`
+peut ainsi être conservée ou réadmise sans laisser une ancienne liaison
+recevoir les événements de la composition courante.
 
 La surface de sortie ne possède pas de `emit` parallèle : l’entrée vers Sighty
 reste `dispatch`. L’abonnement retourne une fonction de désabonnement ; les
@@ -306,9 +317,13 @@ destination absente du fichier et ne touche pas au DOM.
 Une route résolue produit d’abord une composition cible. Sighty calcule alors
 les sélections conservées, entrantes et sortantes. Les événements des
 sélections sortantes sont invalidés avant le détachement. Les occurrences
-sortantes sont mises en pause lorsqu’elles sont encore en lecture ; les
-montages sont détachés ; les scènes entrantes sont montées par
-`owner.instances.mount` ; enfin la composition logique est publiée.
+sortantes sont mises en pause lorsqu’elles sont encore en lecture. Pour un
+changement de sélection dans le même slot physique, Sighty demande à
+`owner.instances.mount` le remplacement CodPlay lorsque le slot déclare une
+transition `replace`; CodPlay conserve alors la présentation sortante pendant
+le montage de l’entrante. Sans cette transition, l’ancien montage est détaché
+avant le nouveau. Les sorties qui n’ont pas d’entrante sont détachées, puis la
+composition logique est publiée.
 
 Une sélection conservée garde son occurrence et sa position. Une sélection
 entrante provenant d’une scène absente de la composition est rembobinée puis
@@ -379,14 +394,18 @@ La tranche actuelle est considérée comme en cours, avec les preuves suivantes 
 - index récursif et normalisation v1 ;
 - navigation `path`, `label`, `next` et `previous` avec héritage ;
 - montage et détachement réels via la façade publique CodPlay ;
+- remplacement de contenu dans un même slot physique, y compris lorsque les
+  adresses logiques des vues diffèrent ;
 - sérialisation des transitions et invalidation des scènes sorties ;
 - abonnement hôte `runtime.events.onEvent`, données publiques et
-  désabonnement ;
-- typecheck et tests Sighty.
+  désabonnement, avec isolation des erreurs d’observateur ;
+- relais Demo 3 branché sur `runtime.events`, comme les relais Demo 2 et
+  Demo 4, sans abonnement direct aux événements publics de l’instance telco ;
+- nettoyage des instances, montages, abonnements, ressources et CSS lors d’une
+  initialisation partiellement échouée ;
+- typecheck et tests Sighty, ainsi que les intégrations Demo 2, Demo 3 et Demo 4.
 
 Restent à réaliser avant une stabilisation : les guards, les fins de vue, les
 `data` dynamiques, les occurrences multiples d’une même `SceneKey`, le
-couplage télécommande spécialisé, la migration complète des démos, la
-validation navigateur/Safari et la suite complète des vérifications de cycle
-de vie et de ressources.
-
+couplage télécommande spécialisé, la validation navigateur/Safari et la suite
+complète des vérifications de cycle de vie et de ressources.

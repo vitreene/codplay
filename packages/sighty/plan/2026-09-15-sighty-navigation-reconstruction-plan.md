@@ -2,8 +2,7 @@
 
 ## Statut
 
-**A relire — aucun code n’est autorisé sur ce plan avant validation explicite
-du modèle et de ses gates.**
+**En cours — cohérence relue et réécriture engagée le 2026-09-15.**
 
 La priorité de validation est l’API auteur de déclaration : sa forme, ses
 identifiants, ses routes, ses actions, ses conditions de parcours, ses données
@@ -19,9 +18,8 @@ Ce plan est rédigé le 2026-09-15 à partir de :
   [Sighty — scénario, graphe de vues et runtime](../specs/authoring-library-spec.md) ;
 - les règles de navigation héritées fournies avec la demande du 2026-09-15.
 
-Il remplace, après validation, le plan
-[2026-09-13-sighty-navigation-fiabilisation-plan.md](./2026-09-13-sighty-navigation-fiabilisation-plan.md),
-qui ne constitue pas une base d’implémentation. Le plan
+Il remplace les anciens plans de première implémentation, de navigation et de
+fiabilisation, retirés de la surface active des plans. Le plan
 [d’évaluation de la progression](./2026-09-13-sighty-progress-evaluation-plan.md)
 reste informatif et hors périmètre de cette reconstruction.
 
@@ -161,8 +159,10 @@ Règles impératives de la frontière :
    des champs de l’API auteur ;
 3. si une même information existe aux deux niveaux, un normaliseur explicite
    traduit l’API auteur vers le modèle interne ;
-4. une API publique ne retourne pas d’instance CodPlay, de player,
-   d’abonnement, de montage ou de handle de ressource ;
+4. l’API auteur ne retourne pas d’instance CodPlay, de player, d’abonnement,
+   de montage ou de handle de ressource ; l’API d’intégration peut exposer les
+   capacités publiques CodPlay nécessaires aux contrôles de scènes existants,
+   sans faire de ces capacités des types de l’API auteur ;
 5. toute signature publique qui ferait apparaître un type interne est un échec
    de conception à traiter en M0, pas une commodité d’implémentation.
 
@@ -678,6 +678,11 @@ de données sérialisables facultatives et, si le contrat le permet, d’une
 ni `OccurrenceId`. Les commandes explicites du scheduler suivent la même
 frontière publique et sont converties par Sighty avant la résolution.
 
+Lorsqu’une `SceneKey` source est fournie par l’application, elle doit
+correspondre à une liaison active unique. Une source inactive ou ambiguë est
+abandonnée avant la résolution ; le nom public ne remplace pas l’identité
+interne de la liaison.
+
 La signature exacte de cette entrée d’intégration sera arrêtée en M0. Elle
 doit rester exprimable avec les types de l’API auteur ou avec des types
 d’intégration documentés ; elle ne doit pas reprendre les types internes
@@ -899,7 +904,8 @@ publiée. Elle ne devient jamais un journal à rejouer.
 7. invalider les liaisons sortantes ;
 8. neutraliser les livraisons différées devenues obsolètes ;
 9. appliquer les politiques de scène ;
-10. détacher et monter selon les surfaces publiques autorisées ;
+10. détacher ou remplacer les montages selon la configuration du slot, puis
+    monter les scènes entrantes par les surfaces publiques autorisées ;
 11. publier la nouvelle composition en une seule fois ;
 12. ouvrir les liaisons entrantes ;
 13. exécuter les actions déclarées qui concernent les scènes actives ;
@@ -908,6 +914,12 @@ publiée. Elle ne devient jamais un journal à rejouer.
 Une erreur de préparation ne doit jamais publier une composition mixte. Si les
 surfaces CodPlay ne permettent pas cette garantie, un plan CodPlay séparé est
 requis.
+
+La première verticale vérifie aussi le cas où deux adresses logiques
+successives désignent le même slot physique : avec `replace`, le nouveau
+montage est demandé avant le détachement géré par CodPlay ; sans `replace`, la
+relation sortante est détachée avant la nouvelle demande. Le suivi de cette
+cible physique reste interne à Sighty.
 
 ### 7.4. Concurrence
 
@@ -1680,24 +1692,24 @@ Ne pas inclure dans la reconstruction de navigation :
 - une copie de telco entre scènes ;
 - une simulation de Reset par un simple Rewind.
 
-## 17. Suivi initial
+## 17. Suivi de l’implémentation
 
-| Tranche | Statut initial | Condition de passage |
+| Tranche | Statut actuel | Condition de passage |
 | --- | --- | --- |
-| M0 — modèle et décisions | A relire | validation explicite du modèle |
-| M1 — index et résolveur | Bloquée | M0 accepté |
-| M2 — machine et opérations | Bloquée | M1 accepté |
-| M3 — événements et invalidation | Bloquée | M2 accepté |
-| M4 — cycle de vie | Bloquée | garantie CodPlay vérifiée |
-| M5 — ressources | Bloquée | propriété et acquisition définies |
+| M0 — modèle et décisions | En cours | validation des décisions encore ouvertes |
+| M1 — index et résolveur | En cours | tests du graphe et des routes complétés, validation des cas restants |
+| M2 — machine et opérations | En cours | opérations versionnées et composition active éprouvées, erreurs partielles restantes |
+| M3 — événements et invalidation | En cours | événements publics, abonnements actifs, sources inactives et invalidation testés |
+| M4 — cycle de vie | En cours | garanties CodPlay vérifiées sur les parcours d’intégration, navigateur/Safari et reset à compléter |
+| M5 — ressources | En cours | propriété, acquisition et release à définir complètement |
 | M6 — conditions et erreurs | Bloquée | contrats de sortie validés |
 | M7 — données et sauvegarde | Bloquée | vocabulaire et format validés |
 | M8 — mutations | Bloquée | versionnement accepté |
 | M9 — coupling/telco | Plan séparé | plan dédié validé |
-| M10 — Demo 4 | Bloquée | noyau validé |
+| M10 — Demo 4 | En cours | intégrations Demo 2/3/4 et relais Sighty validés, parcours navigateur à compléter |
 | M11 — validation complète | Bloquée | toutes les preuves applicables |
 | progression | Hors périmètre | plan dédié ultérieur |
 
-Ce plan reste A relire jusqu’à validation de M0. Aucun changement de code ne
-doit être présenté comme stabilisé avant l’exécution des gates et des
-validations correspondantes.
+Ce plan reste En cours tant que les gates et validations correspondantes ne
+sont pas exécutées. Aucun changement de code ne doit être présenté comme
+stabilisé avant cette validation.

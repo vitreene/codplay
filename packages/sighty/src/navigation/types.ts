@@ -10,7 +10,7 @@ export type IndexedGraph<SceneKey extends string = string, SlotName extends stri
   path: string
   graph: SightyViewGraph<SceneKey, SlotName>
   entries: readonly IndexedEntry<SceneKey, SlotName>[]
-  scope: SightyViewScope
+  scope: SightyViewScope<SceneKey>
 }>
 
 /** Describes one authored view with its stable internal address. */

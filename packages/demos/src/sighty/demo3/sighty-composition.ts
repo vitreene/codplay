@@ -1,5 +1,6 @@
 import { Sighty } from '@codplay/sighty'
-import type { CodPlayEventime, CodPlayPublicEvent } from 'codplay'
+import type { CodPlayEventime } from 'codplay'
+import type { SightyPublicEvent } from '@codplay/sighty'
 import { SCENE_A_EVENTS } from '../demo1/scenes/scene-a'
 import {
   DEMO3_COLOR_INTENTS,
@@ -79,9 +80,8 @@ export class SightyComposition {
 
   /** Subscribes Sighty to the public text messages emitted by the command scene. */
   private connectMessageRelay(): void {
-    const telco = this.sighty.runtime.getInstance('telco')
-    if (telco === undefined) throw new Error('La scène-telco de la démo 3 est absente.')
-    this.messageCleanup = telco.events.onEvent((event) => {
+    this.messageCleanup = this.sighty.runtime.events.onEvent((event) => {
+      if (event.sourceSceneKey !== 'telco') return
       if (CONTENT_ROUTES[event.name as Demo3ContentIntentName] !== true) return
       this.messageChain = this.messageChain
         .then(() => this.dispatchContent(event))
@@ -97,7 +97,7 @@ export class SightyComposition {
   }
 
   /** Injects the public text payload into the declared scene A action. */
-  private async dispatchContent(event: CodPlayPublicEvent): Promise<void> {
+  private async dispatchContent(event: SightyPublicEvent<SightyDemo3SceneKey>): Promise<void> {
     if (this.destroyed) return
     const content = event.data?.content
     if (typeof content !== 'string' && typeof content !== 'number') {

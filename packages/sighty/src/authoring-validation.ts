@@ -5,6 +5,7 @@ import type {
 } from './types'
 import {
   findGraphViewByPath,
+  getGraphEntries,
   getDirectGraphEntries,
   isSightyViewMap,
   normalizeSightyViewGraph,
@@ -17,15 +18,28 @@ export function validateAuthoringResources<
 >(resources: SightyScenarioResources<SceneKey, SlotName>): readonly SightyAuthoringDiagnostic[] {
   const diagnostics: SightyAuthoringDiagnostic[] = []
   const embeddedSceneResources = resources.file.resources?.scenes
-  const declaredSceneKeys = new Set(Object.keys(embeddedSceneResources ?? resources.scenes))
+  const declaredSceneKeys = new Set(
+    embeddedSceneResources === undefined
+      ? [
+          ...Object.keys(resources.scenes ?? {}),
+          ...Object.keys(resources.sceneSources ?? {}),
+        ]
+      : Object.keys(embeddedSceneResources),
+  )
 
   /** Checks whether a scene is declared and available in the authoring catalog. */
   const hasAvailableScene = (sceneKey: string): boolean =>
-    declaredSceneKeys.has(sceneKey) && resources.scenes[sceneKey as SceneKey] !== undefined
+    declaredSceneKeys.has(sceneKey) && (
+      resources.scenes?.[sceneKey as SceneKey] !== undefined
+      || resources.sceneSources?.[sceneKey as SceneKey] !== undefined
+    )
 
   if (embeddedSceneResources !== undefined) {
-    for (const sceneKey of declaredSceneKeys) {
-      if (resources.scenes[sceneKey as SceneKey] === undefined) {
+    for (const sceneKey of Object.keys(embeddedSceneResources)) {
+      if (
+        resources.scenes?.[sceneKey as SceneKey] === undefined
+        && resources.sceneSources?.[sceneKey as SceneKey] === undefined
+      ) {
         diagnostics.push({
           code: 'AUTHOR_SCENE_RESOURCE_MISSING',
           path: `resources.scenes.${sceneKey}`,
@@ -34,7 +48,7 @@ export function validateAuthoringResources<
       }
     }
 
-    for (const sceneKey of Object.keys(resources.scenes)) {
+    for (const sceneKey of Object.keys(resources.scenes ?? {})) {
       if (!declaredSceneKeys.has(sceneKey)) {
         diagnostics.push({
           code: 'AUTHOR_SCENE_RESOURCE_UNDECLARED',
@@ -43,9 +57,20 @@ export function validateAuthoringResources<
         })
       }
     }
+
+    for (const sceneKey of Object.keys(resources.sceneSources ?? {})) {
+      if (!declaredSceneKeys.has(sceneKey)) {
+        diagnostics.push({
+          code: 'AUTHOR_SCENE_RESOURCE_UNDECLARED',
+          path: `sceneSources.${sceneKey}`,
+          message: `La source de scène auteur « ${sceneKey} » est présente dans le catalogue mais absente du fichier.`,
+        })
+      }
+    }
   }
 
   const viewGraph = normalizeSightyViewGraph<SceneKey, SlotName>(resources.file.views, resources.file.version)
+  const graphEntries = getGraphEntries(viewGraph)
 
   /** Checks one view node, its nested slots and its route declarations. */
   const validateView = (entryPath: string, view: SightyGraphView<SceneKey, SlotName>): void => {
@@ -59,18 +84,7 @@ export function validateAuthoringResources<
       })
     }
 
-    const actions = view.actions ?? {}
-    for (const [eventName, action] of Object.entries(actions)) {
-      const target = action.go
-      if (target === undefined || !('path' in target)) continue
-      if (findGraphViewByPath(viewGraph, target.path) === undefined) {
-        diagnostics.push({
-          code: 'AUTHOR_VIEW_ROUTE_UNKNOWN',
-          path: `views.${entryPath}.actions.${eventName}.go.path`,
-          message: `L'action « ${eventName} » de la vue « ${entryPath} » référence le chemin inconnu « ${target.path} ».`,
-        })
-      }
-    }
+    validateActions(`de la vue « ${entryPath} »`, entryPath, view.actions)
 
     const slots = view.view.slots ?? {}
     for (const [slotName, childGraph] of Object.entries(slots) as [string, typeof viewGraph][]) {
@@ -88,6 +102,9 @@ export function validateAuthoringResources<
         path: `views.${graphPath}.start`,
         message: `Le graphe « ${graphPath} » désigne un départ inconnu « ${graph.start} ».`,
       })
+    }
+    if (isSightyViewMap(graph)) {
+      validateActions(`du graphe « ${graphPath || 'racine'} »`, graphPath, graph.actions)
     }
 
     if (!isSightyViewMap(graph)) {
@@ -113,6 +130,51 @@ export function validateAuthoringResources<
       })
     }
     for (const entry of getDirectGraphEntries(graph, graphPath)) validateView(entry.path, entry.view)
+  }
+
+  /** Validates route paths in one author action scope. */
+  function validateActions(
+    scopeLabel: string,
+    scopePath: string,
+    actions: Readonly<Record<string, { go?: unknown }>> | undefined,
+  ): void {
+    for (const [eventName, action] of Object.entries(actions ?? {})) {
+      const target = action.go
+      const actionPath = scopePath.length === 0
+        ? `views.actions.${eventName}.go.path`
+        : `views.${scopePath}.actions.${eventName}.go.path`
+      if (typeof target !== 'object' || target === null) continue
+
+      if ('path' in target) {
+        const routePath = (target as { path?: unknown }).path
+        if (typeof routePath !== 'string' || findGraphViewByPath(viewGraph, routePath) !== undefined) continue
+        diagnostics.push({
+          code: 'AUTHOR_VIEW_ROUTE_UNKNOWN',
+          path: actionPath,
+          message: `L'action « ${eventName} » ${scopeLabel} référence le chemin inconnu « ${String(routePath)} ».`,
+        })
+        continue
+      }
+
+      if (!('label' in target)) continue
+      const routeLabel = (target as { label?: unknown }).label
+      if (typeof routeLabel !== 'string') continue
+      const matches = graphEntries.filter((entry) => entry.key === routeLabel)
+      if (matches.length === 1) continue
+      if (matches.length === 0) {
+        diagnostics.push({
+          code: 'AUTHOR_VIEW_ROUTE_UNKNOWN',
+          path: actionPath.replace(/\.path$/, '.label'),
+          message: `L'action « ${eventName} » ${scopeLabel} référence le label inconnu « ${routeLabel} ».`,
+        })
+        continue
+      }
+      diagnostics.push({
+        code: 'AUTHOR_VIEW_ROUTE_AMBIGUOUS',
+        path: actionPath.replace(/\.path$/, '.label'),
+        message: `L'action « ${eventName} » ${scopeLabel} référence le label ambigu « ${routeLabel} ».`,
+      })
+    }
   }
 
   validateGraph(viewGraph, '')

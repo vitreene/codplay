@@ -69,4 +69,105 @@ describe('Sighty authoring class', () => {
     ])
     project.runtime.destroy()
   })
+
+  it('validates routes declared on a view map scope', () => {
+    const invalidFile: SightyFile<'layout' | 'sceneB', 'main'> = {
+      format: 'sighty',
+      version: 2,
+      id: 'invalid-map-action',
+      views: {
+        start: 'layout',
+        actions: {
+          'navigation:missing': { go: { path: 'does-not-exist' } },
+        },
+        views: {
+          layout: {
+            view: {
+              scene: 'layout',
+              slots: {
+                main: [{ id: 'scene-b', view: { scene: 'sceneB' } }],
+              },
+            },
+          },
+        },
+      },
+    }
+    const project = new Sighty({
+      scenario: {
+        file: invalidFile,
+        scenes: {
+          layout: { id: 'layout', stories: {} },
+          sceneB: { id: 'scene-b', stories: {} },
+        },
+      },
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+        layout: { sceneKey: 'layout', storyId: 'main' },
+      },
+    })
+
+    expect(project.scenario.validate()).toEqual([{
+      code: 'AUTHOR_VIEW_ROUTE_UNKNOWN',
+      path: 'views.actions.navigation:missing.go.path',
+      message: 'L\'action « navigation:missing » du graphe « racine » référence le chemin inconnu « does-not-exist ».',
+    }])
+    project.runtime.destroy()
+  })
+
+  it('rejects unknown and ambiguous route labels during authoring validation', () => {
+    const invalidFile: SightyFile<'layout' | 'sceneB', 'main' | 'secondary'> = {
+      format: 'sighty',
+      version: 2,
+      id: 'invalid-label-routes',
+      views: {
+        start: 'layout',
+        actions: {
+          'navigation:unknown-label': { go: { label: 'missing' } },
+        },
+        views: {
+          layout: {
+            actions: {
+              'navigation:ambiguous-label': { go: { label: 'same' } },
+            },
+            view: {
+              scene: 'layout',
+              slots: {
+                main: [{ id: 'same', view: { scene: 'sceneB' } }],
+                secondary: [{ id: 'same', view: { scene: 'sceneB' } }],
+              },
+            },
+          },
+        },
+      },
+    }
+    const project = new Sighty({
+      scenario: {
+        file: invalidFile,
+        scenes: {
+          layout: { id: 'layout', stories: {} },
+          sceneB: { id: 'scene-b', stories: {} },
+        },
+      },
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+        layout: { sceneKey: 'layout', storyId: 'main' },
+      },
+    })
+
+    expect(project.scenario.validate()).toEqual([
+      {
+        code: 'AUTHOR_VIEW_ROUTE_UNKNOWN',
+        path: 'views.actions.navigation:unknown-label.go.label',
+        message: 'L\'action « navigation:unknown-label » du graphe « racine » référence le label inconnu « missing ».',
+      },
+      {
+        code: 'AUTHOR_VIEW_ROUTE_AMBIGUOUS',
+        path: 'views.layout.actions.navigation:ambiguous-label.go.label',
+        message: 'L\'action « navigation:ambiguous-label » de la vue « layout » référence le label ambigu « same ».',
+      },
+    ])
+    project.runtime.destroy()
+  })
 })

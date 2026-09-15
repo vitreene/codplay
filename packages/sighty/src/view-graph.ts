@@ -27,7 +27,7 @@ export type SightyGraphContext<
 > = Readonly<{
   entry: SightyGraphEntry<SceneKey, SlotName>
   parentViews: readonly SightyGraphEntry<SceneKey, SlotName>[]
-  graphScopes: readonly SightyViewScope[]
+  graphScopes: readonly SightyViewScope<SceneKey>[]
 }>
 
 /** Identifies one slot graph together with the view that owns it. */
@@ -148,7 +148,7 @@ function collectGraphActionReferences<
 }
 
 /** Adds each non-empty external action reference from one scope once. */
-function addActionReferences(scope: SightyViewScope, references: string[]): void {
+function addActionReferences<SceneKey extends string>(scope: SightyViewScope<SceneKey>, references: string[]): void {
   for (const action of Object.values(scope.actions ?? {})) {
     if (action.action !== undefined && !references.includes(action.action)) references.push(action.action)
   }
@@ -274,7 +274,7 @@ function findGraphContextInGraph<
   basePath: string,
   targetPath: string,
   parentViews: readonly SightyGraphEntry<SceneKey, SlotName>[],
-  inheritedGraphScopes: readonly SightyViewScope[],
+  inheritedGraphScopes: readonly SightyViewScope<SceneKey>[],
 ): SightyGraphContext<SceneKey, SlotName> | undefined {
   const graphScopes = isSightyViewMap(graph)
     ? [...inheritedGraphScopes, graph]

@@ -6,8 +6,8 @@
 
 Ce plan ne définit ni la navigation ni le cycle de vie de Sighty. Il décrit les
 corrections visibles à apporter à la fixture Demo 4 avant de poursuivre la
-preuve du runtime. Le plan principal de navigation est
-[`2026-09-13-sighty-navigation-plan.md`](./2026-09-13-sighty-navigation-plan.md).
+preuve du runtime. Le plan de référence de la navigation est
+[`2026-09-15-sighty-navigation-reconstruction-plan.md`](./2026-09-15-sighty-navigation-reconstruction-plan.md).
 
 ## 1. Référence visuelle
 

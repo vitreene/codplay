@@ -680,4 +680,4 @@ propriétaire CodPlay, monte les deux enfants et exerce le démontage/remontage
 explicite d'un slot. Elle n'est pas encore stabilisée comme politique générale :
 le parcours navigateur, Safari, les fins de séquence, les erreurs partielles,
 les ressources asynchrones et les représentations multi-racines restent suivis
-dans le [plan de première implémentation](../plan/2026-09-10-premiere-implementation-plan.md).
+dans le [plan de reconstruction de la navigation](../plan/2026-09-15-sighty-navigation-reconstruction-plan.md).

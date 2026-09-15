@@ -21,6 +21,32 @@ export type SightyDataBinding = Readonly<{
 /** Describes one authored value or one authored data binding. */
 export type SightyDataValue = unknown | SightyDataBinding
 
+/** Describes the event information made available to one author condition. */
+export type SightyConditionEvent<SceneKey extends string = string> = Readonly<{
+  name: string
+  sourceSceneKey?: SceneKey
+  data?: unknown
+}>
+
+/** Describes the read-only situation in which one access or exit condition runs. */
+export type SightyConditionContext<SceneKey extends string = string> = Readonly<{
+  event?: SightyConditionEvent<SceneKey>
+  sceneKey: SceneKey
+  data: Readonly<Record<string, unknown>>
+  context: Readonly<Record<string, unknown>>
+  state: Readonly<Record<string, unknown>>
+}>
+
+/** Defines one author condition; functions are allowed in the author file. */
+export type SightyConditionFunction<SceneKey extends string = string> = (
+  context: SightyConditionContext<SceneKey>,
+) => boolean | Promise<boolean>
+
+/** References a condition by catalog name or embeds its author function. */
+export type SightyCondition<SceneKey extends string = string> =
+  | string
+  | SightyConditionFunction<SceneKey>
+
 /** Describes one direction understood by the Sighty view graph. */
 export type SightyViewDirection = 'next' | 'previous' | 'up' | 'down'
 
@@ -36,10 +62,16 @@ export type SightyViewAction = Readonly<{
   go?: SightyRouteTarget
 }>
 
-/** Describes actions and guards inherited by descendant view nodes. */
-export type SightyViewScope = Readonly<{
+/** Describes actions, conditions and data inherited by descendant view nodes. */
+export type SightyViewScope<SceneKey extends string = string> = Readonly<{
   actions?: Readonly<Record<string, SightyViewAction>>
-  guards?: Readonly<Record<string, string>>
+  data?: Readonly<Record<string, SightyDataValue>>
+  /** Admits the view when the condition returns true. */
+  accessBy?: SightyCondition<SceneKey>
+  /** Allows the owning view to be left when the condition returns true. */
+  exitBy?: SightyCondition<SceneKey>
+  /** Route used when the access condition refuses the view. */
+  onDenied?: SightyRouteTarget
 }>
 
 /** Describes the scene, slots and nested graph carried by one view node. */
@@ -59,9 +91,10 @@ export type SightyViewContent<
 export type SightyGraphView<
   SceneKey extends string = string,
   SlotName extends string = string,
-> = SightyViewScope & Readonly<{
-  data?: Readonly<Record<string, SightyDataValue>>
+> = SightyViewScope<SceneKey> & Readonly<{
   view: SightyViewContent<SceneKey, SlotName>
+  /** Keeps a declaration in the file while excluding it from navigation. */
+  hidden?: boolean
 }>
 
 /** Describes an ordered graph whose next/previous routes use array order. */
@@ -82,7 +115,7 @@ export type SightyViewList<
 export type SightyViewMap<
   SceneKey extends string = string,
   SlotName extends string = string,
-> = SightyViewScope & Readonly<{
+> = SightyViewScope<SceneKey> & Readonly<{
   start: string
   views: Readonly<Record<string, SightyGraphView<SceneKey, SlotName>>>
 }>
@@ -120,9 +153,11 @@ export type SightyFile<
   /** Optional until the file format is versioned as a published contract. */
   version?: number
   id?: string
+  /** Author-provided base data for the declared scenario. */
+  data?: Readonly<Record<string, unknown>>
   /** Legacy embedded resource declarations. */
   resources?: Readonly<{
-    scenes: Readonly<Record<SceneKey, string>>
+    scenes?: Partial<Readonly<Record<SceneKey, string>>>
     data?: Readonly<Record<string, string>>
   }>
   views: SightyViewGraph<SceneKey, SlotName> | readonly SightyLegacyView<SceneKey, SlotName>[]
@@ -133,13 +168,19 @@ export type SightySceneCatalog<SceneKey extends string = string> = Readonly<
   Record<SceneKey, SceneDoc<string>>
 >
 
+/** Supplies one scene immediately or creates it only when selected. */
+export type SightySceneSource =
+  | SceneDoc<string>
+  | (() => SceneDoc<string> | Promise<SceneDoc<string>>)
+
 /** Groups the scenario resources consumed by one Sighty project. */
 export type SightyScenarioResources<
   SceneKey extends string = string,
   SlotName extends string = string,
 > = Readonly<{
   file: SightyFile<SceneKey, SlotName>
-  scenes: SightySceneCatalog<SceneKey>
+  scenes?: Partial<SightySceneCatalog<SceneKey>>
+  sceneSources?: Partial<Readonly<Record<SceneKey, SightySceneSource>>>
   data?: Readonly<Record<string, unknown>>
 }>
 
@@ -148,6 +189,43 @@ export type SightyAuthoringResources<
   SceneKey extends string = string,
   SlotName extends string = string,
 > = SightyScenarioResources<SceneKey, SlotName>
+
+/** Identifies one authored view for an integration operation. */
+export type SightyViewReference = Readonly<
+  | { path: string }
+  | { label: string }
+>
+
+/** Describes the shallow view fields that an integration may replace. */
+export type SightyViewPatch<
+  SceneKey extends string = string,
+  SlotName extends string = string,
+> = Readonly<Partial<SightyGraphView<SceneKey, SlotName>>>
+
+/** Describes one validated scenario structure mutation. */
+export type SightyScenarioMutation<
+  SceneKey extends string = string,
+  SlotName extends string = string,
+> =
+  | Readonly<{
+      kind: 'add-view'
+      parent: SightyViewReference
+      id: string
+      view: SightyGraphView<SceneKey, SlotName>
+      slot?: SlotName
+    }>
+  | Readonly<{
+      kind: 'update-view'
+      target: SightyViewReference
+      patch: SightyViewPatch<SceneKey, SlotName>
+    }>
+  | Readonly<{
+      kind: 'remove-view' | 'hide-view' | 'show-view'
+      target: SightyViewReference
+    }>
+
+/** Selects how existing execution is treated after a scenario mutation. */
+export type SightyMutationReloadPolicy = 'preserve' | 'rewind' | 'reset' | 'reload'
 
 /** Reports one inconsistency in an authored Sighty resource graph. */
 export type SightyAuthoringDiagnostic = Readonly<{
@@ -160,6 +238,7 @@ export type SightyAuthoringDiagnostic = Readonly<{
     | 'AUTHOR_VIEW_LIST_ID_MISSING'
     | 'AUTHOR_VIEW_LIST_ID_DUPLICATE'
     | 'AUTHOR_VIEW_ROUTE_UNKNOWN'
+    | 'AUTHOR_VIEW_ROUTE_AMBIGUOUS'
   path: string
   message: string
 }>
@@ -170,11 +249,12 @@ export type SightyScenarioApi<
   SlotName extends string = string,
 > = Readonly<{
   file: SightyFile<SceneKey, SlotName>
-  scenes: SightySceneCatalog<SceneKey>
+  scenes: Partial<SightySceneCatalog<SceneKey>>
   data: Readonly<Record<string, unknown>>
   sceneKeys: readonly SceneKey[]
   getSlotNames: (sceneKey: SceneKey) => readonly SlotName[]
   getScene: (sceneKey: SceneKey) => SightySceneCatalog<SceneKey>[SceneKey] | undefined
+  resolveScene: (sceneKey: SceneKey) => Promise<SightySceneCatalog<SceneKey>[SceneKey] | undefined>
   getData: (dataKey: string) => unknown
   getView: (sceneKey: SceneKey) => SightyView<SceneKey, SlotName> | undefined
   getViewGraph: () => SightyViewGraph<SceneKey, SlotName>

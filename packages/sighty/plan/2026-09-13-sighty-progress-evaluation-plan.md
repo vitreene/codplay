@@ -5,7 +5,7 @@
 **A relire — propositions uniquement, aucune implémentation.**
 
 Ce document ouvre l’évaluation de la progression séparément du plan de
-fiabilisation de la navigation. Il ne modifie ni le contrat Sighty, ni le
+reconstruction de la navigation. Il ne modifie ni le contrat Sighty, ni le
 runtime CodPlay, ni Demo 4.
 
 Une instrumentation temporaire, limitée à Demo 4, a été utilisée pour mesurer
@@ -15,7 +15,7 @@ de CodPlay.
 
 ## Références et frontière
 
-- [`2026-09-13-sighty-navigation-fiabilisation-plan.md`](./2026-09-13-sighty-navigation-fiabilisation-plan.md)
+- [`2026-09-15-sighty-navigation-reconstruction-plan.md`](./2026-09-15-sighty-navigation-reconstruction-plan.md)
   traite les changements de vue, l’invalidation des sources sorties de la vue
   et la remise à zéro du contexte de navigation ;
 - [`2026-08-01-composition-et-avancement-evenementiel.md`](../notes/2026-08-01-composition-et-avancement-evenementiel.md)

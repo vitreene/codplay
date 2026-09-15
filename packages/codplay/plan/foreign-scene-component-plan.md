@@ -38,9 +38,9 @@ premier consommateur du contenu foreign, au même titre qu'une iframe, un média
 un flux ou toute autre représentation attachable.
 
 La description détaillée du scénario A/B appartient à la [note du modèle
-déclaratif Sighty](../../sighty/notes/2026-08-17-modele-fichier-declaratif.md),
-et son exécution est suivie dans le [plan de première implémentation
-Sighty](../../sighty/plan/2026-09-10-premiere-implementation-plan.md). Dans ce
+déclaratif Sighty](../../sighty/notes/2026-08-17-modele-fichier-declaratif.md).
+La reconstruction actuelle de la navigation Sighty est suivie dans le [plan
+de référence Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md). Dans ce
 plan CodPlay, ce scénario n'apparaît qu'à deux titres : comme exemple de
 consommation et comme parcours d'intégration réel. Il ne fixe ni le nombre de
 slots, ni le nombre de scènes, ni le style, ni l'orchestrateur du composant.
