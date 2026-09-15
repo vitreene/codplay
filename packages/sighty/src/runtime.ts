@@ -14,23 +14,31 @@ import {
   type CodPlayTraceEvent,
   type RuntimePreloadMode,
 } from 'codplay'
+import { createSightyPublicEventChannel, type SightyPublicEvent, type SightyPublicEvents } from './public-events'
 import {
-  findGraphContext,
-  getGraphActionReferences,
-  findGraphViewByPath,
-  findGraphViewByScene,
-  getDirectGraphEntries,
-  getGraphEntries,
-  getGraphSlots,
-  getGraphStartEntry,
-  type SightyGraphEntry,
-  type SightyGraphSlot,
-} from './view-graph'
+  createViewIndex,
+  getStartEntry,
+  isPathPrefix,
+} from './navigation/graph-index'
+import {
+  buildComposition,
+  createSelection,
+  resolveInitialAnchor,
+  resolveRouteTarget,
+} from './navigation/composition'
+import { resolveActionCandidates } from './navigation/resolver'
+import { planCompositionTransition } from './navigation/transition'
+import type {
+  ActiveComposition,
+  ActiveSelection,
+  IndexedEntry,
+  IndexedSlot,
+  ViewIndex,
+} from './navigation/types'
 import type {
   SightyRouteTarget,
   SightyScenarioApi,
   SightyViewAction,
-  SightyViewGraph,
 } from './types'
 
 /** Identifies the authored layout used as the host of one runtime composition. */
@@ -68,7 +76,7 @@ export type SightyActionContext<SceneKey extends string = string> = Readonly<{
   ) => Promise<void>
 }>
 
-/** Defines one executable action kept outside the serializable scenario file. */
+/** Defines one executable action kept outside the declarative route graph. */
 export type SightyActionHandler<SceneKey extends string = string> = (
   context: SightyActionContext<SceneKey>,
 ) => void | Promise<void>
@@ -84,9 +92,7 @@ export type SightyRuntimeSlotChangeListener<SceneKey extends string = string> = 
 ) => void
 
 /** Configures the generic CodPlay execution grouped under one Sighty facade. */
-export type SightyRuntimeConfiguration<
-  SceneKey extends string = string,
-> = Readonly<{
+export type SightyRuntimeConfiguration<SceneKey extends string = string> = Readonly<{
   root: HTMLElement
   instanceIds: Readonly<Record<SceneKey, string>>
   layout: SightyRuntimeLayout<SceneKey>
@@ -105,6 +111,7 @@ export type SightyRuntimeApi<
 > = Readonly<{
   sceneKeys: readonly SceneKey[]
   slotNames: readonly SlotName[]
+  events: SightyPublicEvents<SceneKey>
   getInstance: (sceneKey: SceneKey) => CodPlayInstance | undefined
   initialize: () => Promise<void>
   dispatch: (event: SightyRuntimeEvent<SceneKey>) => Promise<boolean>
@@ -130,36 +137,30 @@ type SightyRuntimeOptions<
 
 type SightyRuntimeBuilds<SceneKey extends string> = ReadonlyMap<SceneKey, CodPlayCompileSuccess>
 
-type SightySlotSelection<
-  SceneKey extends string,
-  SlotName extends string,
-> = Readonly<{
-  slotName: SlotName
-  graph: SightyViewGraph<SceneKey, SlotName>
-  graphPath: string
-  ownerPath: string
-  entry: SightyGraphEntry<SceneKey, SlotName>
-  sceneEntry: SightyGraphEntry<SceneKey, SlotName>
+type RuntimeBinding<SceneKey extends string> = Readonly<{
+  slotAddress: string
   sceneKey: SceneKey
+  generation: number
 }>
 
-type SightyActionCandidate<
-  SceneKey extends string,
-  SlotName extends string,
-> = Readonly<{
-  action: SightyViewAction
-  selection: SightySlotSelection<SceneKey, SlotName>
-  depth: number
-  sourceMatch: boolean
-  order: number
+type DispatchRequest<SceneKey extends string> = Readonly<{
+  event: SightyRuntimeEvent<SceneKey>
+  binding?: RuntimeBinding<SceneKey>
 }>
 
-/** Joins diagnostic messages into one error detail without adding policy. */
-function diagnosticDetails(diagnostics: readonly { message: string }[]): string {
-  return diagnostics.map((diagnostic) => diagnostic.message).join(' ')
-}
+type SynchronizationResult<SceneKey extends string, SlotName extends string> = Readonly<{
+  entered: readonly ActiveSelection<SceneKey, SlotName>[]
+  previousSceneKeys: ReadonlySet<SceneKey>
+  changed: boolean
+  previous: ActiveComposition<SceneKey, SlotName>
+  next: ActiveComposition<SceneKey, SlotName>
+}>
 
-/** Executes one Sighty scenario through the public CodPlay facade. */
+type MountedState = Readonly<{
+  wasPlaying: boolean
+}>
+
+/** Executes one authored Sighty graph through one CodPlay owner. */
 class SightyRuntimeController<
   SceneKey extends string = string,
   SlotName extends string = string,
@@ -173,25 +174,26 @@ class SightyRuntimeController<
   private readonly styles: readonly SightyRuntimeStyle[]
   private readonly onTrace: SightyRuntimeOptions<SceneKey, SlotName>['onTrace']
   private readonly onPreloadWarning: SightyRuntimeOptions<SceneKey, SlotName>['onPreloadWarning']
+  private readonly viewIndex: ViewIndex<SceneKey, SlotName>
   private readonly authoredSceneKeys: readonly SceneKey[]
-  private readonly viewGraph: SightyViewGraph<SceneKey, SlotName>
   private readonly owner: CodPlay
+  private readonly publicEventChannel = createSightyPublicEventChannel<SceneKey>()
   private readonly instances = new Map<SceneKey, CodPlayInstance>()
-  private readonly mounts = new Map<SlotName, CodPlayInstanceMountHandle>()
-  private readonly mountedChildren = new Map<SlotName, SceneKey>()
-  private readonly selections = new Map<SlotName, SightySlotSelection<SceneKey, SlotName>>()
-  private readonly slotChangeListeners = new Map<
-    SlotName,
-    Set<SightyRuntimeSlotChangeListener<SceneKey>>
-  >()
+  private readonly mounts = new Map<string, CodPlayInstanceMountHandle>()
+  private readonly slotChangeListeners = new Map<SlotName, Set<SightyRuntimeSlotChangeListener<SceneKey>>>()
   private readonly cleanups: Array<() => void> = []
+  private readonly generationCounters = new Map<string, number>()
   private readonly navigationChain: { current: Promise<unknown> } = { current: Promise.resolve() }
-  private layoutEntry: SightyGraphEntry<SceneKey, SlotName> | undefined
+  private layoutEntry: IndexedEntry<SceneKey, SlotName> | undefined
+  private initialAnchor: IndexedEntry<SceneKey, SlotName> | undefined
+  private composition: ActiveComposition<SceneKey, SlotName>
   private resourceUrls: readonly string[] = []
+  private layoutGeneration = 0
   private initialized = false
+  private transitioning = false
   private destroyed = false
 
-  /** Creates one runtime bound to a scenario and one visible root. */
+  /** Creates one runtime bound to one scenario and one visible root. */
   constructor(options: SightyRuntimeOptions<SceneKey, SlotName>) {
     this.scenario = options.scenario
     this.root = options.root
@@ -202,20 +204,30 @@ class SightyRuntimeController<
     this.styles = options.styles ?? []
     this.onTrace = options.onTrace
     this.onPreloadWarning = options.onPreloadWarning
-    this.viewGraph = this.scenario.getViewGraph()
-    this.authoredSceneKeys = collectReferencedSceneKeys(this.viewGraph)
-    this.layoutEntry = findGraphViewByScene(this.viewGraph, this.layout.sceneKey)
+    this.viewIndex = createViewIndex(this.scenario.getViewGraph())
+    this.layoutEntry = this.viewIndex.entriesByScene.get(this.layout.sceneKey)?.[0]
+    this.authoredSceneKeys = collectSceneKeys(this.viewIndex)
     this.owner = new CodPlay(options.codplay)
+    this.composition = {
+      revision: 0,
+      layoutPath: this.layoutEntry?.path ?? '',
+      selections: new Map(),
+    }
   }
 
-  /** Returns the scene keys selected from the authored file. */
+  /** Exposes the host-facing event observation surface. */
+  get events(): SightyPublicEvents<SceneKey> {
+    return this.publicEventChannel.api
+  }
+
+  /** Returns the scene keys referenced by the normalized author graph. */
   get sceneKeys(): readonly SceneKey[] {
     return this.authoredSceneKeys
   }
 
-  /** Returns the slot names selected from the configured authored view. */
+  /** Returns the distinct slot names declared by the author graph. */
   get slotNames(): readonly SlotName[] {
-    return [...new Set(getGraphSlots(this.viewGraph).map((slot) => slot.slotName))] as SlotName[]
+    return uniqueSlotNames(this.viewIndex.slots)
   }
 
   /** Returns one live CodPlay instance by its authored scene key. */
@@ -223,7 +235,7 @@ class SightyRuntimeController<
     return this.instances.get(sceneKey)
   }
 
-  /** Compiles, preloads, materializes and mounts the authored graph once. */
+  /** Compiles, prepares, creates and mounts the initial authored composition. */
   async initialize(): Promise<void> {
     if (this.destroyed) throw new Error('Le runtime Sighty est déjà détruit.')
     if (this.initialized) return
@@ -233,18 +245,23 @@ class SightyRuntimeController<
       throw new Error(`Le fichier auteur Sighty est invalide. ${diagnosticDetails(diagnostics)}`)
     }
     this.validateActionCatalog()
-
     this.layoutEntry = this.requireLayoutEntry()
+    this.initialAnchor = resolveInitialAnchor(this.viewIndex, this.layoutEntry)
+    this.ensureInstanceIds()
+
     const builds = this.compileScenes()
     await this.preloadScenes(builds)
     this.installStyles()
     this.createInstances(builds)
-    this.mountDeclaredChildren()
+    this.layoutGeneration = 1
     this.initialized = true
-    for (const [slotName, selection] of this.selections) this.notifySlotChange(slotName, selection.sceneKey)
+
+    const desired = this.buildDesiredComposition()
+    const synchronization = this.synchronizeComposition(desired, true)
+    if (synchronization.changed) this.initialized = true
   }
 
-  /** Compiles every scene named by the authored file. */
+  /** Compiles every scene referenced by the author graph. */
   private compileScenes(): SightyRuntimeBuilds<SceneKey> {
     const builds = new Map<SceneKey, CodPlayCompileSuccess>()
     for (const sceneKey of this.authoredSceneKeys) {
@@ -313,7 +330,7 @@ class SightyRuntimeController<
     }
   }
 
-  /** Forwards traces and public scene events into the Sighty router. */
+  /** Connects CodPlay diagnostics and public scene events to Sighty. */
   private observeInstance(instance: CodPlayInstance, sceneKey: SceneKey): void {
     const onTrace = this.onTrace
     if (onTrace !== undefined) {
@@ -322,190 +339,60 @@ class SightyRuntimeController<
     this.cleanups.push(instance.events.onEvent((event) => this.receivePublicEvent(sceneKey, event)))
   }
 
-  /** Queues one public CodPlay event for declarative scenario routing. */
+  /** Adapts one active CodPlay event, publishes it and queues it for routing. */
   private receivePublicEvent(sceneKey: SceneKey, event: CodPlayPublicEvent): void {
-    void this.dispatch({
+    const binding = this.findCurrentBinding(sceneKey)
+    if (binding === undefined) return
+
+    const publicEvent: SightyPublicEvent<SceneKey> = {
       name: event.name,
       sourceSceneKey: sceneKey,
       data: event.data,
-    }).catch((error: unknown) => {
-      if (this.destroyed) return
-      this.onPreloadWarning?.({
-        code: 'SIGHTY_NAVIGATION_FAILED',
-        message: error instanceof Error ? error.message : String(error),
-      })
+    }
+    const task = this.enqueue({ event: publicEvent, binding })
+    for (const error of this.publicEventChannel.publish(publicEvent)) {
+      this.reportWarning('SIGHTY_EVENT_LISTENER_FAILED', error)
+    }
+    void task.catch((error: unknown) => {
+      if (!this.destroyed) this.reportWarning('SIGHTY_NAVIGATION_FAILED', error)
     })
   }
 
-  /** Mounts the declared start nodes of the initial composition branch. */
-  private mountDeclaredChildren(): void {
-    const initialView = this.resolveInitialView(this.requireLayoutEntry())
-    for (const slot of this.compositionSlots(initialView.path)) {
-      const entry = getGraphStartEntry(slot.graph, slot.graphPath)
-      if (entry === undefined) throw new Error(`Le slot Sighty ${slot.slotName} est vide.`)
-      const selection = this.createSelection(slot.slotName, slot.graph, slot.graphPath, slot.ownerPath, entry)
-      this.mountSelection(selection, false)
-    }
-  }
-
-  /** Returns the authored layout node selected by the runtime configuration. */
-  private requireLayoutEntry(): SightyGraphEntry<SceneKey, SlotName> {
-    const entry = this.layoutEntry ?? findGraphViewByScene(this.viewGraph, this.layout.sceneKey)
-    if (entry === undefined) throw new Error('Le fichier Sighty ne contient aucune vue layout.')
-    return entry
-  }
-
-  /** Resolves the first structural view on the configured layout branch. */
-  private resolveInitialView(entry: SightyGraphEntry<SceneKey, SlotName>): SightyGraphEntry<SceneKey, SlotName> {
-    const childViews = entry.view.view.views
-    if (childViews === undefined) return entry
-    const child = getGraphStartEntry(childViews, entry.path)
-    return child === undefined ? entry : this.resolveInitialView(child)
-  }
-
-  /** Returns all graph slots whose owner belongs to one active composition branch. */
-  private compositionSlots(
-    ownerPath: string,
-    selectedEntryPath?: string,
-  ): readonly SightyGraphSlot<SceneKey, SlotName>[] {
-    const layoutPath = this.requireLayoutEntry().path
-    return getGraphSlots(this.viewGraph).filter((slot) => {
-      if (!isPathPrefix(layoutPath, slot.ownerPath)) return false
-      if (isPathPrefix(slot.ownerPath, ownerPath)) return true
-      if (slot.ownerPath === ownerPath) return true
-      return selectedEntryPath !== undefined && isPathPrefix(selectedEntryPath, slot.ownerPath)
-    })
-  }
-
-  /** Finds the graph slot that contains one authored entry path. */
-  private findContainingSlot(path: string): SightyGraphSlot<SceneKey, SlotName> | undefined {
-    return getGraphSlots(this.viewGraph)
-      .filter((slot) => isPathPrefix(slot.graphPath, path))
-      .sort((left, right) => right.graphPath.length - left.graphPath.length)[0]
-  }
-
-  /** Describes one slot reference for CodPlay's authored manifest resolver. */
-  private slotReferencePath(slotName: SlotName): string {
-    return `views.${this.requireLayoutEntry().path}.view.slots.${slotName}`
-  }
-
-  /** Resolves one slot graph and an optional scene selection. */
-  private resolveSlotSelection(
-    slotName: SlotName,
-    childSceneKey?: SceneKey,
-  ): SightySlotSelection<SceneKey, SlotName> {
-    const activeSlot = this.selections.get(slotName)
-    const slot = activeSlot === undefined
-      ? getGraphSlots(this.viewGraph).find((candidate) => candidate.slotName === slotName)
-      : getGraphSlots(this.viewGraph).find((candidate) => candidate.graphPath === activeSlot.graphPath)
-    if (slot === undefined) throw new Error(`Le slot Sighty ${slotName} n'est pas déclaré dans le layout.`)
-    const { graph, graphPath } = slot
-    const entries = getGraphEntries(graph, graphPath)
-    const entry = childSceneKey === undefined
-      ? getGraphStartEntry(graph, graphPath)
-      : entries.find((candidate) => candidate.view.view.scene === childSceneKey)
-    if (entry === undefined) {
-      if (childSceneKey === undefined) throw new Error(`Le slot Sighty ${slotName} est vide.`)
-      throw new Error(`La scène Sighty ${childSceneKey} n'est pas déclarée dans le slot ${slotName}.`)
-    }
-    return this.createSelection(slotName, graph, graphPath, slot.ownerPath, entry)
-  }
-
-  /** Resolves one graph entry to the scene that must be mounted for it. */
-  private resolveSceneEntry(
-    entry: SightyGraphEntry<SceneKey, SlotName>,
-  ): SightyGraphEntry<SceneKey, SlotName> | undefined {
-    if (entry.view.view.scene !== undefined) return entry
-    const nestedGraph = entry.view.view.views ?? entry.view.view.graph
-    if (nestedGraph === undefined) return undefined
-    const nestedPath = entry.view.view.views === undefined ? `${entry.path}/graph` : entry.path
-    const nestedStart = getGraphStartEntry(nestedGraph, nestedPath)
-    return nestedStart === undefined ? undefined : this.resolveSceneEntry(nestedStart)
-  }
-
-  /** Creates one active slot selection and resolves its materialized scene. */
-  private createSelection(
-    slotName: SlotName,
-    graph: SightyViewGraph<SceneKey, SlotName>,
-    graphPath: string,
-    ownerPath: string,
-    entry: SightyGraphEntry<SceneKey, SlotName>,
-  ): SightySlotSelection<SceneKey, SlotName> {
-    const sceneEntry = this.resolveSceneEntry(entry)
-    if (sceneEntry === undefined || sceneEntry.view.view.scene === undefined) {
-      throw new Error(`La vue Sighty « ${entry.path} » ne désigne aucune scène montable.`)
-    }
-    return {
-      slotName,
-      graph,
-      graphPath,
-      ownerPath,
-      entry,
-      sceneEntry,
-      sceneKey: sceneEntry.view.view.scene,
-    }
-  }
-
-  /** Mounts one selected authored scene in its layout slot. */
-  private mountSelection(selection: SightySlotSelection<SceneKey, SlotName>, notify: boolean): void {
-    this.mountChild(selection.slotName, selection.sceneKey, this.slotReferencePath(selection.slotName))
-    this.selections.set(selection.slotName, selection)
-    if (notify) this.notifySlotChange(selection.slotName, selection.sceneKey)
-  }
-
-  /** Mounts one authored child in the slot exposed by the configured layout. */
-  private mountChild(slotName: SlotName, childSceneKey: SceneKey, referencePath: string): void {
-    const layoutInstance = this.instances.get(this.layout.sceneKey)
-    if (layoutInstance === undefined) throw new Error('L’instance layout Sighty est absente.')
-    const layoutScene = this.scenario.getScene(this.layout.sceneKey)
-    if (layoutScene === undefined) throw new Error('La ressource layout Sighty est absente.')
-    const resolution = resolveSlotManifestEntry(slotManifest(layoutScene, { storyId: this.layout.storyId }), slotName, {
-      sceneId: layoutScene.id,
-      storyId: this.layout.storyId,
-      referencePath,
-    })
-    if (!resolution.ok) throw new Error(resolution.diagnostic.message)
-
-    const child = this.instances.get(childSceneKey)
-    if (child === undefined) throw new Error(`L’instance enfant ${childSceneKey} est absente.`)
-    const host: CodPlayInstanceHostTarget = {
-      instanceId: layoutInstance.instanceId,
-      storyId: resolution.entry.storyId,
-      persoId: resolution.entry.persoId,
-    }
-    const replace = resolution.entry.replace
-    if (this.mounts.has(slotName) && replace === undefined) this.detachSlotInternal(slotName, false)
-    this.mounts.set(slotName, this.owner.instances.mount({
-      host,
-      childInstanceId: child.instanceId,
-      ...(replace === undefined ? {} : { replace }),
-    }))
-    this.mountedChildren.set(slotName, childSceneKey)
-  }
-
-  /** Routes one external or public event through the active declarative scopes. */
+  /** Queues one external event behind the single navigation coordinator. */
   dispatch(event: SightyRuntimeEvent<SceneKey>): Promise<boolean> {
     if (this.destroyed) return Promise.reject(new Error('Le runtime Sighty est déjà détruit.'))
     if (!this.initialized) return Promise.reject(new Error('Le runtime Sighty n’est pas initialisé.'))
-    const task = this.navigationChain.current.then(() => this.dispatchNow(event))
+    return this.enqueue({ event })
+  }
+
+  /** Serializes one request and preserves the previous request's rejection boundary. */
+  private enqueue(request: DispatchRequest<SceneKey>): Promise<boolean> {
+    const task = this.navigationChain.current.then(() => this.dispatchNow(request))
     this.navigationChain.current = task.then(() => undefined, () => undefined)
     return task
   }
 
-  /** Resolves one event action and activates the declared destination. */
-  private async dispatchNow(event: SightyRuntimeEvent<SceneKey>): Promise<boolean> {
-    for (const candidate of this.resolveActionCandidates(event)) {
+  /** Resolves one admitted event and executes its first valid authored action. */
+  private async dispatchNow(request: DispatchRequest<SceneKey>): Promise<boolean> {
+    if (request.binding !== undefined && !this.isCurrentBinding(request.binding)) return false
+
+    const candidates = resolveActionCandidates(this.composition, request.event)
+    for (const candidate of candidates) {
       const { action } = candidate
       if (action.go !== undefined) {
-        const selection = this.resolveRouteTarget(action.go, candidate.selection)
-        if (selection === undefined) {
+        const rawTarget = resolveRouteTarget(this.viewIndex, action.go, candidate.selection, 0)
+        if (rawTarget === undefined) {
           if (isDirectionalTarget(action.go)) continue
           return false
         }
-        await this.activateSelection(selection)
+        const target = this.withCurrentGeneration(rawTarget)
+        const desired = this.buildDesiredComposition(target)
+        const synchronization = this.synchronizeComposition(desired, false)
+        await this.startEntered(synchronization)
+        this.notifyCompositionChanges(synchronization.previous, synchronization.next)
       }
 
-      if (action.action !== undefined) await this.executeAction(action.action, event)
+      if (action.action !== undefined) await this.executeAction(action.action, request.event)
       return action.go !== undefined || action.action !== undefined
     }
     return false
@@ -513,7 +400,10 @@ class SightyRuntimeController<
 
   /** Rejects authored action references that have no application-owned handler. */
   private validateActionCatalog(): void {
-    for (const reference of getGraphActionReferences(this.viewGraph)) {
+    const references = new Set<string>()
+    for (const entry of this.viewIndex.entries) addActionReferences(entry.view.actions, references)
+    for (const graph of this.viewIndex.graphs.values()) addActionReferences(graph.scope.actions, references)
+    for (const reference of references) {
       if (this.actionCatalog[reference] === undefined) {
         throw new Error(`L'action Sighty « ${reference} » n'est pas enregistrée dans le catalogue.`)
       }
@@ -521,10 +411,7 @@ class SightyRuntimeController<
   }
 
   /** Executes one catalogued action after its declared route is active. */
-  private async executeAction(
-    reference: string,
-    event: SightyRuntimeEvent<SceneKey>,
-  ): Promise<void> {
+  private async executeAction(reference: string, event: SightyRuntimeEvent<SceneKey>): Promise<void> {
     const handler = this.actionCatalog[reference]
     if (handler === undefined) {
       throw new Error(`L'action Sighty « ${reference} » n'est pas enregistrée dans le catalogue.`)
@@ -534,247 +421,344 @@ class SightyRuntimeController<
       event,
       send: async (sceneKey, eventime, target) => {
         const instance = this.instances.get(sceneKey)
-        if (instance === undefined) {
-          throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
-        }
+        if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
         await instance.events.emit(eventime, target)
       },
     })
   }
 
-  /** Searches active view scopes and keeps parent actions available as fallbacks. */
-  private resolveActionCandidates(event: SightyRuntimeEvent<SceneKey>): readonly SightyActionCandidate<SceneKey, SlotName>[] {
-    const candidates: SightyActionCandidate<SceneKey, SlotName>[] = []
-    let order = 0
-    for (const selection of this.selections.values()) {
-      const context = findGraphContext(this.viewGraph, selection.entry.path)
-      if (context === undefined) continue
-      const entryDepth = graphPathDepth(selection.entry.path)
-      const scopedViews = [
-        { scope: context.entry.view, depth: entryDepth },
-        ...context.graphScopes.slice().reverse().map((scope, index) => ({
-          scope,
-          depth: Math.max(0, entryDepth - index - 1),
-        })),
-        ...context.parentViews.slice().reverse().map((parent) => ({
-          scope: parent.view,
-          depth: graphPathDepth(parent.path),
-        })),
-      ]
-      for (const { scope, depth } of scopedViews) {
-        const action = scope.actions?.[event.name]
-        if (action === undefined) continue
-        if (candidates.some((candidate) => candidate.action === action && candidate.selection === selection)) continue
-        candidates.push({
-          action,
-          selection,
-          depth,
-          sourceMatch: selection.sceneKey === event.sourceSceneKey,
-          order: order++,
-        })
+  /** Returns the authored layout entry required for physical mounting. */
+  private requireLayoutEntry(): IndexedEntry<SceneKey, SlotName> {
+    const entry = this.layoutEntry
+    if (entry === undefined) throw new Error('Le fichier Sighty ne contient aucune vue layout.')
+    return entry
+  }
+
+  /** Ensures every referenced scene has one stable CodPlay instance identity. */
+  private ensureInstanceIds(): void {
+    for (const sceneKey of this.authoredSceneKeys) {
+      const instanceId = this.instanceIds[sceneKey]
+      if (typeof instanceId !== 'string' || instanceId.length === 0) {
+        throw new Error(`L’identifiant d’instance Sighty de la scène ${sceneKey} est absent.`)
       }
     }
-    return candidates.sort((left, right) => {
-      if (left.depth !== right.depth) return right.depth - left.depth
-      if (left.sourceMatch !== right.sourceMatch) return left.sourceMatch ? -1 : 1
-      return left.order - right.order
-    })
   }
 
-  /** Resolves a declarative path, label or direction into one active slot target. */
-  private resolveRouteTarget(
-    target: SightyRouteTarget,
-    preferredSelection?: SightySlotSelection<SceneKey, SlotName>,
-  ): SightySlotSelection<SceneKey, SlotName> | undefined {
-    if ('direction' in target) return this.resolveDirectionalSelection(target.direction, preferredSelection)
-
-    const entry = 'path' in target
-      ? findGraphViewByPath(this.viewGraph, target.path)
-      : getGraphEntries(this.viewGraph).find((candidate) => candidate.key === target.label)
-    return entry === undefined ? undefined : this.resolveEntrySelection(entry.path)
+  /** Builds the desired composition from the current layout branch and target. */
+  private buildDesiredComposition(
+    target?: ActiveSelection<SceneKey, SlotName>,
+  ): ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>> {
+    const layoutEntry = this.requireLayoutEntry()
+    const initialAnchor = this.initialAnchor ?? resolveInitialAnchor(this.viewIndex, layoutEntry)
+    const generations = new Map<string, number>()
+    for (const slot of this.viewIndex.slots) {
+      const current = this.composition.selections.get(slot.address)
+      generations.set(slot.address, current?.generation ?? this.nextGenerationNumber(slot.address))
+    }
+    return buildComposition(
+      this.viewIndex,
+      layoutEntry.path,
+      initialAnchor,
+      target,
+      generations,
+    )
   }
 
-  /** Resolves a graph path to the physical slot that contains it. */
-  private resolveEntrySelection(path: string): SightySlotSelection<SceneKey, SlotName> | undefined {
-    const slot = this.findContainingSlot(path)
-    if (slot === undefined) return undefined
-    const entry = getGraphEntries(slot.graph, slot.graphPath).find((candidate) => candidate.path === path)
-    return entry === undefined
-      ? undefined
-      : this.createSelection(slot.slotName, slot.graph, slot.graphPath, slot.ownerPath, entry)
+  /** Assigns the next generation to a route target before its transition. */
+  private withCurrentGeneration(
+    target: ActiveSelection<SceneKey, SlotName>,
+  ): ActiveSelection<SceneKey, SlotName> {
+    const current = this.composition.selections.get(target.slotAddress)
+    const generation = current !== undefined && sameSelection(current, target)
+      ? current.generation
+      : this.nextGenerationNumber(target.slotAddress)
+    return { ...target, generation }
   }
 
-  /** Resolves next, previous, up and down against the active graph hierarchy. */
-  private resolveDirectionalSelection(
-    direction: 'next' | 'previous' | 'up' | 'down',
-    preferredSelection?: SightySlotSelection<SceneKey, SlotName>,
-  ): SightySlotSelection<SceneKey, SlotName> | undefined {
-    const selections = preferredSelection === undefined
-      ? [...this.selections.values()]
-      : [preferredSelection]
+  /** Returns the next monotone generation without mutating the counter. */
+  private nextGenerationNumber(slotAddress: string): number {
+    const current = this.composition.selections.get(slotAddress)?.generation ?? 0
+    return Math.max(current, this.generationCounters.get(slotAddress) ?? 0) + 1
+  }
+
+  /** Synchronizes physical mounts and commits one new logical composition. */
+  private synchronizeComposition(
+    desired: ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>>,
+    notify: boolean,
+  ): SynchronizationResult<SceneKey, SlotName> {
+    const previous = this.composition
+    const transition = planCompositionTransition(previous.selections, desired)
+    const previousSceneKeys = new Set([...previous.selections.values()].map((selection) => selection.sceneKey))
+    if (transition.entered.length === 0 && transition.exited.length === 0) {
+      return {
+        entered: [],
+        previousSceneKeys,
+        changed: false,
+        previous,
+        next: previous,
+      }
+    }
+
+    const desiredMap = new Map(desired)
+    const desiredSceneKeys = new Set([...desiredMap.values()].map((selection) => selection.sceneKey))
+    const previousStates = this.captureExitedStates(transition.exited, desiredSceneKeys)
+    this.transitioning = true
+    this.composition = {
+      revision: previous.revision + 1,
+      layoutPath: previous.layoutPath,
+      selections: new Map(),
+    }
+
+    try {
+      this.pauseExitedScenes(transition.exited, desiredSceneKeys)
+      for (const selection of transition.exited) this.detachMount(selection.slotAddress)
+      for (const selection of transition.entered) this.mountSelection(selection)
+      this.composition = {
+        revision: previous.revision + 1,
+        layoutPath: previous.layoutPath,
+        selections: desiredMap,
+      }
+      this.recordGenerations(desiredMap)
+      this.transitioning = false
+      const next = this.composition
+      if (notify) this.notifyCompositionChanges(previous, next)
+      return { entered: transition.entered, previousSceneKeys, changed: true, previous, next }
+    } catch (error: unknown) {
+      this.restoreComposition(previous, previousStates)
+      throw error
+    }
+  }
+
+  /** Captures the playback state needed to restore a failed transition. */
+  private captureExitedStates(
+    selections: readonly ActiveSelection<SceneKey, SlotName>[],
+    desiredSceneKeys: ReadonlySet<SceneKey>,
+  ): ReadonlyMap<string, MountedState> {
+    const states = new Map<string, MountedState>()
     for (const selection of selections) {
-      if (direction === 'next' || direction === 'previous') {
-        const entries = getDirectGraphEntries(selection.graph, selection.graphPath)
-        const currentIndex = entries.findIndex((entry) => entry.path === selection.entry.path)
-        if (currentIndex < 0) continue
-        const offset = direction === 'next' ? 1 : -1
-        const target = entries[currentIndex + offset]
-        if (target !== undefined) return this.createSelection(
-          selection.slotName,
-          selection.graph,
-          selection.graphPath,
-          selection.ownerPath,
-          target,
-        )
-        continue
-      }
+      if (desiredSceneKeys.has(selection.sceneKey)) continue
+      const instance = this.instances.get(selection.sceneKey)
+      if (instance === undefined) continue
+      const state = instance.telco.getState()
+      states.set(selection.slotAddress, {
+        wasPlaying: state.status === 'playing' && !state.sequenceEnded,
+      })
+    }
+    return states
+  }
 
-      if (direction === 'down') {
-        const nestedGraph = selection.entry.view.view.views ?? selection.entry.view.view.graph
-        if (nestedGraph === undefined) continue
-        const nestedPath = selection.entry.view.view.views === undefined
-          ? `${selection.entry.path}/graph`
-          : selection.entry.path
-        const target = getGraphStartEntry(nestedGraph, nestedPath)
-        if (target !== undefined) return this.createSelection(
-          selection.slotName,
-          selection.graph,
-          selection.graphPath,
-          selection.ownerPath,
-          target,
-        )
-        continue
-      }
+  /** Pauses occurrences that are no longer present in the desired branch. */
+  private pauseExitedScenes(
+    selections: readonly ActiveSelection<SceneKey, SlotName>[],
+    desiredSceneKeys: ReadonlySet<SceneKey>,
+  ): void {
+    for (const selection of selections) {
+      if (desiredSceneKeys.has(selection.sceneKey)) continue
+      const instance = this.instances.get(selection.sceneKey)
+      if (instance === undefined) continue
+      const state = instance.telco.getState()
+      if (state.status !== 'playing' || state.sequenceEnded) continue
+      void instance.telco.pause().catch((error: unknown) => this.reportWarning('SIGHTY_PAUSE_FAILED', error))
+    }
+  }
 
-      const context = findGraphContext(this.viewGraph, selection.entry.path)
-      if (context === undefined) continue
-      for (const parent of context.parentViews.slice().reverse()) {
-        if (!parent.path.startsWith(`${selection.graphPath}/`)) continue
-        if (parent.view.view.scene === undefined) continue
-        return this.createSelection(
-          selection.slotName,
-          selection.graph,
-          selection.graphPath,
-          selection.ownerPath,
-          parent,
-        )
+  /** Starts only occurrences that entered from an inactive scene key. */
+  private async startEntered(
+    synchronization: SynchronizationResult<SceneKey, SlotName>,
+  ): Promise<void> {
+    for (const selection of synchronization.entered) {
+      if (synchronization.previousSceneKeys.has(selection.sceneKey)) continue
+      const instance = this.instances.get(selection.sceneKey)
+      if (instance === undefined) throw new Error(`L’instance Sighty ${selection.sceneKey} est absente.`)
+      await instance.telco.rewind()
+      await instance.telco.play()
+    }
+  }
+
+  /** Restores the previous physical and logical composition after a mount failure. */
+  private restoreComposition(
+    previous: ActiveComposition<SceneKey, SlotName>,
+    previousStates: ReadonlyMap<string, MountedState>,
+  ): void {
+    for (const mount of this.mounts.values()) mount.detach()
+    this.mounts.clear()
+    this.composition = {
+      revision: previous.revision,
+      layoutPath: previous.layoutPath,
+      selections: new Map(),
+    }
+    try {
+      for (const selection of previous.selections.values()) this.mountSelection(selection)
+      this.composition = previous
+      this.transitioning = false
+      for (const [slotAddress, state] of previousStates) {
+        if (!state.wasPlaying) continue
+        const selection = previous.selections.get(slotAddress)
+        const instance = selection === undefined ? undefined : this.instances.get(selection.sceneKey)
+        if (instance !== undefined) void instance.telco.play()
+      }
+    } catch (restoreError: unknown) {
+      this.transitioning = false
+      this.reportWarning('SIGHTY_COMPOSITION_RESTORE_FAILED', restoreError)
+    }
+  }
+
+  /** Mounts one logical selection through CodPlay's public instance relation. */
+  private mountSelection(selection: ActiveSelection<SceneKey, SlotName>): void {
+    const slot = this.viewIndex.slotsByAddress.get(selection.slotAddress)
+    if (slot === undefined) throw new Error(`Le slot Sighty ${selection.slotName} est absent de l’index.`)
+    const layoutInstance = this.instances.get(this.layout.sceneKey)
+    if (layoutInstance === undefined) throw new Error('L’instance layout Sighty est absente.')
+    const layoutScene = this.scenario.getScene(this.layout.sceneKey)
+    if (layoutScene === undefined) throw new Error('La ressource layout Sighty est absente.')
+
+    const resolution = resolveSlotManifestEntry(
+      slotManifest(layoutScene, { storyId: this.layout.storyId }),
+      slot.slotName,
+      {
+        sceneId: layoutScene.id,
+        storyId: this.layout.storyId,
+        referencePath: slotReferencePath(slot),
+      },
+    )
+    if (!resolution.ok) throw new Error(resolution.diagnostic.message)
+
+    const child = this.instances.get(selection.sceneKey)
+    if (child === undefined) throw new Error(`L’instance enfant ${selection.sceneKey} est absente.`)
+    const host: CodPlayInstanceHostTarget = {
+      instanceId: layoutInstance.instanceId,
+      storyId: resolution.entry.storyId,
+      persoId: resolution.entry.persoId,
+    }
+    this.mounts.set(slot.address, this.owner.instances.mount({
+      host,
+      childInstanceId: child.instanceId,
+      ...(resolution.entry.replace === undefined ? {} : { replace: resolution.entry.replace }),
+    }))
+  }
+
+  /** Detaches one physical relation without destroying the child occurrence. */
+  private detachMount(slotAddress: string): void {
+    this.mounts.get(slotAddress)?.detach()
+    this.mounts.delete(slotAddress)
+  }
+
+  /** Reports every changed public slot after one composition commit. */
+  private notifyCompositionChanges(
+    previous: ActiveComposition<SceneKey, SlotName>,
+    next: ActiveComposition<SceneKey, SlotName>,
+  ): void {
+    const addresses = new Set([...previous.selections.keys(), ...next.selections.keys()])
+    for (const address of addresses) {
+      const before = previous.selections.get(address)
+      const after = next.selections.get(address)
+      if (before !== undefined && after !== undefined && sameSelection(before, after)) continue
+      const slotName = after?.slotName ?? before?.slotName
+      if (slotName === undefined) continue
+      this.notifySlotChange(slotName, after?.sceneKey)
+    }
+  }
+
+  /** Returns one active binding for a scene that emitted a public event. */
+  private findCurrentBinding(sceneKey: SceneKey): RuntimeBinding<SceneKey> | undefined {
+    if (this.destroyed || this.transitioning || !this.initialized) return undefined
+    if (sceneKey === this.layout.sceneKey && this.layoutGeneration > 0) {
+      return {
+        slotAddress: this.layoutEntry?.path ?? 'layout',
+        sceneKey,
+        generation: this.layoutGeneration,
+      }
+    }
+    for (const selection of this.composition.selections.values()) {
+      if (selection.sceneKey === sceneKey) {
+        return {
+          slotAddress: selection.slotAddress,
+          sceneKey,
+          generation: selection.generation,
+        }
       }
     }
     return undefined
   }
 
-  /** Pauses the current mounted scene when it can still receive commands. */
-  private async pauseSelection(selection: SightySlotSelection<SceneKey, SlotName> | undefined): Promise<void> {
-    if (selection === undefined) return
-    const instance = this.instances.get(selection.sceneKey)
-    if (instance === undefined) return
-    const state = instance.telco.getState()
-    if (state.status === 'playing' && !state.sequenceEnded) await instance.telco.pause()
+  /** Rejects an event captured from a selection whose generation has ended. */
+  private isCurrentBinding(binding: RuntimeBinding<SceneKey>): boolean {
+    if (this.destroyed || this.transitioning) return false
+    if (binding.sceneKey === this.layout.sceneKey
+      && binding.slotAddress === (this.layoutEntry?.path ?? 'layout')) {
+      return this.layoutGeneration === binding.generation
+    }
+    const selection = this.composition.selections.get(binding.slotAddress)
+    return selection?.sceneKey === binding.sceneKey && selection.generation === binding.generation
   }
 
-  /** Builds the selections required by one target composition branch. */
-  private desiredComposition(
-    target: SightySlotSelection<SceneKey, SlotName>,
-  ): ReadonlyMap<SlotName, SightySlotSelection<SceneKey, SlotName>> {
-    const desired = new Map<SlotName, SightySlotSelection<SceneKey, SlotName>>()
-    for (const slot of this.compositionSlots(target.ownerPath, target.entry.path)) {
-      if (desired.has(slot.slotName)) {
-        throw new Error(`Le slot Sighty ${slot.slotName} est déclaré plusieurs fois dans la branche active.`)
-      }
-
-      const current = this.selections.get(slot.slotName)
-      if (slot.slotName === target.slotName && slot.graphPath === target.graphPath) {
-        desired.set(slot.slotName, target)
-        continue
-      }
-      if (current?.graphPath === slot.graphPath && this.mounts.has(slot.slotName)) {
-        desired.set(slot.slotName, current)
-        continue
-      }
-
-      const entry = getGraphStartEntry(slot.graph, slot.graphPath)
-      if (entry === undefined) throw new Error(`Le slot Sighty ${slot.slotName} est vide.`)
-      desired.set(
-        slot.slotName,
-        this.createSelection(slot.slotName, slot.graph, slot.graphPath, slot.ownerPath, entry),
-      )
+  /** Records the latest generation used by each active binding. */
+  private recordGenerations(selections: ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>>): void {
+    for (const [slotAddress, selection] of selections) {
+      const current = this.generationCounters.get(slotAddress) ?? 0
+      if (selection.generation > current) this.generationCounters.set(slotAddress, selection.generation)
     }
-    return desired
   }
 
-  /** Aligns the physical slots and returns the occurrences newly activated by the branch. */
-  private async synchronizeComposition(
-    target: SightySlotSelection<SceneKey, SlotName>,
-  ): Promise<readonly SightySlotSelection<SceneKey, SlotName>[]> {
-    const desired = this.desiredComposition(target)
-    const newlyMounted: SightySlotSelection<SceneKey, SlotName>[] = []
-
-    for (const [slotName, current] of this.selections) {
-      const next = desired.get(slotName)
-      if (next === undefined || next.entry.path !== current.entry.path) await this.pauseSelection(current)
-    }
-
-    for (const [slotName] of this.selections) {
-      if (!desired.has(slotName)) this.detachSlotInternal(slotName, false)
-    }
-
-    for (const selection of desired.values()) {
-      const current = this.selections.get(selection.slotName)
-      if (current?.entry.path === selection.entry.path && this.mounts.has(selection.slotName)) continue
-      this.mountSelection(selection, false)
-      newlyMounted.push(selection)
-    }
-    return newlyMounted
-  }
-
-  /** Replaces one selected branch and starts every newly mounted occurrence from its beginning. */
-  private async activateSelection(selection: SightySlotSelection<SceneKey, SlotName>): Promise<void> {
-    const current = this.selections.get(selection.slotName)
-    if (current?.entry.path === selection.entry.path && this.mounts.has(selection.slotName)) return
-    const newlyMounted = await this.synchronizeComposition(selection)
-    for (const activated of newlyMounted) {
-      const instance = this.instances.get(activated.sceneKey)
-      if (instance === undefined) throw new Error(`L’instance Sighty ${activated.sceneKey} est absente.`)
-      await instance.telco.rewind()
-      await instance.telco.play()
-    }
-    this.notifySlotChange(selection.slotName, selection.sceneKey)
-  }
-
-  /** Mounts the requested declared child and replaces the current slot child when needed. */
+  /** Mounts one declared child or the start entry in a public slot. */
   mountSlot(slotName: SlotName, childSceneKey?: SceneKey): void {
-    const selection = this.resolveSlotSelection(slotName, childSceneKey)
-    const current = this.selections.get(slotName)
-    if (current?.entry.path === selection.entry.path && this.mounts.has(slotName)) return
-    this.mountSelection(selection, true)
+    this.requireInitialized()
+    const slot = this.resolvePublicSlot(slotName)
+    const entry = childSceneKey === undefined
+      ? getStartEntry(this.viewIndex, slot.graphPath)
+      : this.findSceneEntry(slot, childSceneKey)
+    if (entry === undefined) {
+      if (childSceneKey === undefined) throw new Error(`Le slot Sighty ${slotName} est vide.`)
+      throw new Error(`La scène Sighty ${childSceneKey} n'est pas déclarée dans le slot ${slotName}.`)
+    }
+    const target = createSelection(this.viewIndex, slot, entry, this.nextGenerationNumber(slot.address))
+    const desired = this.buildDesiredComposition(this.withCurrentGeneration(target))
+    this.synchronizeComposition(desired, true)
   }
 
-  /** Detaches one mounted slot child without destroying its CodPlay instance. */
+  /** Detaches one active slot and every nested slot below it. */
   detachSlot(slotName: SlotName): void {
-    this.detachSlotInternal(slotName, true)
+    this.requireInitialized()
+    const slot = this.resolvePublicSlot(slotName)
+    const addresses = [...this.composition.selections.keys()]
+      .filter((address) => address === slot.address || isPathPrefix(slot.address, address))
+    if (addresses.length === 0) return
+
+    const previous = this.composition
+    const nextSelections = new Map(previous.selections)
+    this.transitioning = true
+    this.composition = {
+      revision: previous.revision + 1,
+      layoutPath: previous.layoutPath,
+      selections: new Map(),
+    }
+    for (const address of addresses) {
+      this.detachMount(address)
+      nextSelections.delete(address)
+    }
+    this.composition = {
+      revision: previous.revision + 1,
+      layoutPath: previous.layoutPath,
+      selections: nextSelections,
+    }
+    this.transitioning = false
+    for (const address of addresses) {
+      const selection = previous.selections.get(address)
+      if (selection !== undefined) this.notifySlotChange(selection.slotName, undefined)
+    }
   }
 
-  /** Detaches one slot and optionally reports the empty selection to observers. */
-  private detachSlotInternal(slotName: SlotName, notify: boolean): void {
-    const mount = this.mounts.get(slotName)
-    if (mount !== undefined) mount.detach()
-    this.mounts.delete(slotName)
-    this.mountedChildren.delete(slotName)
-    this.selections.delete(slotName)
-    if (notify) this.notifySlotChange(slotName, undefined)
-  }
-
-  /** Reports whether one authored slot currently has a mount handle. */
+  /** Reports whether one public slot currently has a physical mount. */
   isSlotMounted(slotName: SlotName): boolean {
-    return this.mounts.has(slotName)
+    return this.findActiveSlots(slotName).some((slot) => this.mounts.has(slot.address))
   }
 
-  /** Returns the scene currently selected by one authored slot. */
+  /** Returns the scene currently selected in one public slot. */
   getMountedSceneKey(slotName: SlotName): SceneKey | undefined {
-    return this.mountedChildren.get(slotName)
+    return this.findActiveSelections(slotName)[0]?.sceneKey
   }
 
-  /** Subscribes to selection changes in one authored slot. */
+  /** Subscribes to selection changes in one public slot name. */
   onSlotChange(slotName: SlotName, listener: SightyRuntimeSlotChangeListener<SceneKey>): () => void {
     const listeners = this.slotChangeListeners.get(slotName) ?? new Set()
     listeners.add(listener)
@@ -785,40 +769,94 @@ class SightyRuntimeController<
     }
   }
 
-  /** Notifies the observers of one slot selection without changing the DOM. */
+  /** Notifies all listeners registered for one slot name. */
   private notifySlotChange(slotName: SlotName, sceneKey: SceneKey | undefined): void {
     for (const listener of this.slotChangeListeners.get(slotName) ?? []) listener(sceneKey)
   }
 
   /** Starts one initialized scene occurrence. */
   async play(sceneKey: SceneKey): Promise<void> {
+    this.requireInitialized()
     const instance = this.instances.get(sceneKey)
     if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
     await instance.telco.play()
   }
 
-  /** Starts the selected scene occurrences in declaration order. */
+  /** Starts selected scene occurrences in authored order. */
   async playAll(sceneKeys: readonly SceneKey[] = this.authoredSceneKeys): Promise<void> {
     for (const sceneKey of sceneKeys) await this.play(sceneKey)
   }
 
-  /** Releases mounts, instances, resources and the CodPlay owner once. */
+  /** Releases mounts, subscriptions, instances, resources and the CodPlay owner. */
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.transitioning = true
     for (const cleanup of this.cleanups.splice(0)) cleanup()
+    this.publicEventChannel.clear()
     for (const mount of this.mounts.values()) mount.detach()
     this.mounts.clear()
-    this.mountedChildren.clear()
-    this.selections.clear()
-    this.slotChangeListeners.clear()
+    this.composition = {
+      revision: this.composition.revision + 1,
+      layoutPath: this.composition.layoutPath,
+      selections: new Map(),
+    }
     for (const sceneKey of [...this.instances.keys()].reverse()) {
       this.owner.instances.destroy(this.instanceIds[sceneKey])
     }
     this.owner.preload.release(this.resourceUrls)
     this.owner.destroy()
     this.instances.clear()
+    this.slotChangeListeners.clear()
     this.initialized = false
+  }
+
+  /** Requires a live initialized runtime for explicit operations. */
+  private requireInitialized(): void {
+    if (this.destroyed) throw new Error('Le runtime Sighty est déjà détruit.')
+    if (!this.initialized) throw new Error('Le runtime Sighty n’est pas initialisé.')
+  }
+
+  /** Resolves one public slot name against the active branch or author index. */
+  private resolvePublicSlot(slotName: SlotName): IndexedSlot<SceneKey, SlotName> {
+    const active = this.findActiveSlots(slotName)
+    if (active.length === 1) return active[0]
+    if (active.length > 1) throw new Error(`Le slot Sighty ${slotName} est ambigu dans la composition active.`)
+    const declared = this.viewIndex.slots.filter((slot) => slot.slotName === slotName)
+    if (declared.length === 1) return declared[0]
+    if (declared.length === 0) throw new Error(`Le slot Sighty ${slotName} n'est pas déclaré dans le layout.`)
+    throw new Error(`Le slot Sighty ${slotName} est ambigu dans le fichier auteur.`)
+  }
+
+  /** Finds all indexed slots with one public name in the active composition. */
+  private findActiveSlots(slotName: SlotName): readonly IndexedSlot<SceneKey, SlotName>[] {
+    return this.viewIndex.slots.filter((slot) =>
+      slot.slotName === slotName && this.composition.selections.has(slot.address))
+  }
+
+  /** Finds all active selections with one public slot name. */
+  private findActiveSelections(slotName: SlotName): readonly ActiveSelection<SceneKey, SlotName>[] {
+    return [...this.composition.selections.values()].filter((selection) => selection.slotName === slotName)
+  }
+
+  /** Finds one declared descendant entry that resolves to a requested scene. */
+  private findSceneEntry(
+    slot: IndexedSlot<SceneKey, SlotName>,
+    sceneKey: SceneKey,
+  ): IndexedEntry<SceneKey, SlotName> | undefined {
+    return this.viewIndex.entries.find((entry) => {
+      if (!isPathPrefix(slot.graphPath, entry.path)) return false
+      const sceneEntry = resolveEntryScene(this.viewIndex, entry)
+      return sceneEntry?.view.view.scene === sceneKey
+    })
+  }
+
+  /** Reports a non-fatal runtime problem through the configured warning channel. */
+  private reportWarning(code: string, error: unknown): void {
+    this.onPreloadWarning?.({
+      code,
+      message: error instanceof Error ? error.message : String(error),
+    })
   }
 }
 
@@ -833,30 +871,77 @@ export function createSightyRuntime<
   return new SightyRuntimeController({ scenario, ...options })
 }
 
-/** Tests a normalized graph path prefix without confusing sibling identifiers. */
-function isPathPrefix(prefix: string, path: string): boolean {
-  return path === prefix || path.startsWith(`${prefix}/`)
+/** Joins diagnostic messages into one readable error detail. */
+function diagnosticDetails(diagnostics: readonly { message: string }[]): string {
+  return diagnostics.map((diagnostic) => diagnostic.message).join(' ')
 }
 
-/** Returns the hierarchy depth of one normalized graph path. */
-function graphPathDepth(path: string): number {
-  return path.length === 0 ? 0 : path.split('/').length
+/** Adds all action references from one optional scope to a set. */
+function addActionReferences(
+  actions: Readonly<Record<string, SightyViewAction>> | undefined,
+  references: Set<string>,
+): void {
+  for (const action of Object.values(actions ?? {})) {
+    if (action.action !== undefined) references.add(action.action)
+  }
 }
 
-/** Identifies route targets eligible for inherited boundary resolution. */
+/** Collects scene keys in the first-seen order of the immutable index. */
+function collectSceneKeys<
+  SceneKey extends string,
+  SlotName extends string,
+>(index: ViewIndex<SceneKey, SlotName>): readonly SceneKey[] {
+  const sceneKeys: SceneKey[] = []
+  for (const entry of index.entries) {
+    const sceneKey = entry.view.view.scene
+    if (sceneKey !== undefined && !sceneKeys.includes(sceneKey)) sceneKeys.push(sceneKey)
+  }
+  return sceneKeys
+}
+
+/** Returns each distinct slot name in authored declaration order. */
+function uniqueSlotNames<
+  SceneKey extends string,
+  SlotName extends string,
+>(slots: readonly IndexedSlot<SceneKey, SlotName>[]): readonly SlotName[] {
+  const names: SlotName[] = []
+  for (const slot of slots) if (!names.includes(slot.slotName)) names.push(slot.slotName)
+  return names
+}
+
+/** Finds the scene resolved by one entry, including its nested start graph. */
+function resolveEntryScene<
+  SceneKey extends string,
+  SlotName extends string,
+>(
+  index: ViewIndex<SceneKey, SlotName>,
+  entry: IndexedEntry<SceneKey, SlotName>,
+): IndexedEntry<SceneKey, SlotName> | undefined {
+  if (entry.view.view.scene !== undefined) return entry
+  const nestedPath = entry.view.view.views !== undefined
+    ? entry.path
+    : entry.view.view.graph === undefined ? undefined : `${entry.path}/graph`
+  if (nestedPath === undefined) return undefined
+  const nestedStart = getStartEntry(index, nestedPath)
+  return nestedStart === undefined ? undefined : resolveEntryScene(index, nestedStart)
+}
+
+/** Returns the author path used when resolving one physical slot manifest entry. */
+function slotReferencePath<SceneKey extends string, SlotName extends string>(
+  slot: IndexedSlot<SceneKey, SlotName>,
+): string {
+  return `views.${slot.ownerPath}.view.slots.${slot.slotName}`
+}
+
+/** Identifies route targets that can fall through to an inherited action. */
 function isDirectionalTarget(target: SightyRouteTarget): target is { direction: 'next' | 'previous' | 'up' | 'down' } {
   return 'direction' in target
 }
 
-/** Returns each scene referenced by the scenario graph in first-seen order. */
-function collectReferencedSceneKeys<
-  SceneKey extends string,
-  SlotName extends string,
->(graph: SightyViewGraph<SceneKey, SlotName>): readonly SceneKey[] {
-  const keys: SceneKey[] = []
-  for (const entry of getGraphEntries(graph)) {
-    const sceneKey = entry.view.view.scene
-    if (sceneKey !== undefined && !keys.includes(sceneKey)) keys.push(sceneKey)
-  }
-  return keys
+/** Determines whether two logical selections retain their physical occurrence. */
+function sameSelection<SceneKey extends string, SlotName extends string>(
+  left: ActiveSelection<SceneKey, SlotName>,
+  right: ActiveSelection<SceneKey, SlotName>,
+): boolean {
+  return left.entry.path === right.entry.path && left.sceneKey === right.sceneKey
 }

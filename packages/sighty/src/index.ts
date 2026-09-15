@@ -15,6 +15,11 @@ export type {
   SightyRuntimeWarning,
 } from './runtime'
 export type {
+  SightyPublicEvent,
+  SightyPublicEventListener,
+  SightyPublicEvents,
+} from './public-events'
+export type {
   SightyAuthoringDiagnostic,
   SightyAuthoringResources,
   SightyScenarioApi,
@@ -28,6 +33,7 @@ export type {
   SightySceneKey,
   SightySlotName,
   SightySlotPlacement,
+  SightyDataValue,
   SightyView,
   SightyViewAction,
   SightyViewContent,

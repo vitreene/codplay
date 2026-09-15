@@ -18,6 +18,9 @@ export type SightyDataBinding = Readonly<{
   event?: string
 }>
 
+/** Describes one authored value or one authored data binding. */
+export type SightyDataValue = unknown | SightyDataBinding
+
 /** Describes one direction understood by the Sighty view graph. */
 export type SightyViewDirection = 'next' | 'previous' | 'up' | 'down'
 
@@ -57,12 +60,7 @@ export type SightyGraphView<
   SceneKey extends string = string,
   SlotName extends string = string,
 > = SightyViewScope & Readonly<{
-  data?: Readonly<Record<string, SightyDataBinding>>
-  meta?: Readonly<Record<string, unknown | SightyDataBinding>>
-  access?: Readonly<{
-    guard: string
-    onDenied?: SightyRouteTarget
-  }>
+  data?: Readonly<Record<string, SightyDataValue>>
   view: SightyViewContent<SceneKey, SlotName>
 }>
 

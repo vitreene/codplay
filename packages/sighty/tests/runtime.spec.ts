@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { CodPlayFrameScheduler } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 import { Sighty, type SightyFile } from '../src'
 
@@ -12,6 +13,29 @@ type SlotName = 'main'
 type NavigationSceneKey = 'scene-layout' | 'scene-menu' | 'scene-a' | 'scene-b' | 'scene-c' | 'scene-telco'
 
 type NavigationSlotName = 'slot-scene' | 'slot-telco'
+
+/** Creates a deterministic CodPlay frame scheduler for public-event tests. */
+function createManualFrameScheduler(): CodPlayFrameScheduler & { flush: () => void } {
+  let nextRequestId = 1
+  const pending = new Map<number, () => void>()
+  return {
+    request(callback) {
+      const requestId = nextRequestId
+      nextRequestId += 1
+      pending.set(requestId, callback)
+      return requestId
+    },
+    cancel(requestId) {
+      pending.delete(requestId)
+    },
+    flush() {
+      for (const [requestId, callback] of [...pending.entries()]) {
+        pending.delete(requestId)
+        callback()
+      }
+    },
+  }
+}
 
 /** Creates one child document with a visible root and no page-specific logic. */
 function createChildScene(sceneKey: Exclude<SceneKey, 'layout'>): SceneDoc<string> {
@@ -319,6 +343,7 @@ describe('Sighty runtime slot selection', () => {
     project = undefined
     navigationProject = undefined
     document.body.replaceChildren()
+    vi.restoreAllMocks()
   })
 
   it('mounts only the declared child selected by scene key', async () => {
@@ -505,5 +530,121 @@ describe('Sighty runtime slot selection', () => {
     expect(await navigationProject.runtime.dispatch({ name: 'navigation:sequence-end', sourceSceneKey: 'scene-c' })).toBe(true)
     expect(navigationProject.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
     expect(navigationProject.runtime.getMountedSceneKey('slot-telco')).toBeUndefined()
+  })
+
+  it('publishes active CodPlay events through the Sighty host event surface', async () => {
+    const stage = document.createElement('div')
+    const scheduler = createManualFrameScheduler()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0)
+    const events: Array<{ name: string; sourceSceneKey?: NavigationSceneKey; data?: unknown }> = []
+    document.body.append(stage)
+    navigationProject = new Sighty({
+      scenario: {
+        file: createNavigationFile(),
+        scenes: {
+          'scene-layout': createNavigationLayoutScene(),
+          'scene-menu': createNavigationScene('scene-menu'),
+          'scene-a': createNavigationScene('scene-a'),
+          'scene-b': createNavigationScene('scene-b'),
+          'scene-c': createNavigationScene('scene-c'),
+          'scene-telco': createNavigationScene('scene-telco'),
+        },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: {
+          'scene-layout': 'events-layout-1',
+          'scene-menu': 'events-menu-1',
+          'scene-a': 'events-a-1',
+          'scene-b': 'events-b-1',
+          'scene-c': 'events-c-1',
+          'scene-telco': 'events-telco-1',
+        },
+        layout: { sceneKey: 'scene-layout', storyId: 'main' },
+        codplay: { frameScheduler: scheduler, pauseOnDocumentHidden: false },
+      },
+    })
+    const unsubscribe = navigationProject.runtime.events.onEvent((event) => events.push({
+      name: event.name,
+      sourceSceneKey: event.sourceSceneKey,
+      data: event.data,
+    }))
+
+    await navigationProject.runtime.initialize()
+    const menu = navigationProject.runtime.getInstance('scene-menu')
+    if (menu === undefined) throw new Error('La scène menu de test est absente.')
+    await navigationProject.runtime.play('scene-menu')
+    await menu.events.emit(
+      { name: 'navigation:open-a', visibility: 'public', data: { choice: 'a' } },
+      { scope: 'story', storyId: 'main' },
+    )
+
+    expect(events).toEqual([])
+    now.mockReturnValue(20)
+    scheduler.flush()
+
+    expect(events).toEqual([{
+      name: 'navigation:open-a',
+      sourceSceneKey: 'scene-menu',
+      data: { choice: 'a' },
+    }])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(navigationProject.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
+
+    unsubscribe()
+    const sceneA = navigationProject.runtime.getInstance('scene-a')
+    if (sceneA === undefined) throw new Error('La scène A de test est absente.')
+    await sceneA.events.emit(
+      { name: 'host:after-unsubscribe', visibility: 'public' },
+      { scope: 'scene' },
+    )
+    now.mockReturnValue(40)
+    scheduler.flush()
+    expect(events).toHaveLength(1)
+  })
+
+  it('drops public events emitted by a scene after its binding has ended', async () => {
+    const stage = document.createElement('div')
+    const events: string[] = []
+    document.body.append(stage)
+    navigationProject = new Sighty({
+      scenario: {
+        file: createNavigationFile(),
+        scenes: {
+          'scene-layout': createNavigationLayoutScene(),
+          'scene-menu': createNavigationScene('scene-menu'),
+          'scene-a': createNavigationScene('scene-a'),
+          'scene-b': createNavigationScene('scene-b'),
+          'scene-c': createNavigationScene('scene-c'),
+          'scene-telco': createNavigationScene('scene-telco'),
+        },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: {
+          'scene-layout': 'stale-layout-1',
+          'scene-menu': 'stale-menu-1',
+          'scene-a': 'stale-a-1',
+          'scene-b': 'stale-b-1',
+          'scene-c': 'stale-c-1',
+          'scene-telco': 'stale-telco-1',
+        },
+        layout: { sceneKey: 'scene-layout', storyId: 'main' },
+      },
+    })
+    navigationProject.runtime.events.onEvent((event) => events.push(event.name))
+
+    await navigationProject.runtime.initialize()
+    await navigationProject.runtime.dispatch({ name: 'navigation:open-a', sourceSceneKey: 'scene-menu' })
+    const sceneB = navigationProject.runtime.getInstance('scene-b')
+    if (sceneB === undefined) throw new Error('La scène B de test est absente.')
+    await sceneB.events.emit(
+      { name: 'navigation:next', visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+
+    expect(events).toEqual([])
+    expect(navigationProject.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
   })
 })

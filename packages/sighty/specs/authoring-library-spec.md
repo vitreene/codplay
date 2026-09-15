@@ -2,27 +2,46 @@
 
 ## Statut
 
-Tranche navigation : façade unique, navigation déclarative récursive et
-références d'actions exécutables implémentées ; acquisition lazy, données,
-guards et reprise restent à affiner.
+**En cours — réécriture de la navigation engagée le 2026-09-15.**
 
-La structure récursive, les identifiants stables de `ViewList`, les routes de
-base, le changement de branche et l'exécution des références d'action sont
-couverts par les tests Sighty et par la fixture Demo 4. La voie d'erreur et les
-sources acquises à la demande ne sont pas encore des capacités exécutables.
+Cette spécification décrit le contrat actuellement exécuté par la première
+verticale de la réécriture et distingue explicitement trois niveaux :
 
-Le modèle de conception de référence est
-[`2026-08-17-modele-fichier-declaratif.md`](../notes/2026-08-17-modele-fichier-declaratif.md).
-La présente spécification en fixe la première partie exécutable et ses limites.
+- l’API auteur, écrite dans le fichier de déclaration ;
+- l’API d’intégration, utilisée par l’application hôte qui instancie Sighty ;
+- les types internes, produits et utilisés par Sighty pour exécuter le
+  scénario.
 
-## Point d'entrée public
+Les conditions d’accès, les conditions de fin de vue, la résolution complète
+des `data`, la sauvegarde et les sources lazy ne sont pas encore exécutées.
+Elles restent des tranches de conception et d’implémentation séparées. Cette
+spécification ne transforme pas ces propositions en comportements disponibles.
 
-`Sighty` est l'unique classe d'entrée de la librairie. Une instance regroupe
-deux surfaces nommées :
+Le modèle de conception de référence est la
+[note du modèle de fichier déclaratif](../notes/2026-08-17-modele-fichier-declaratif.md).
+La reconstruction et son ordre d’implémentation sont suivis dans le
+[plan de reconstruction de la navigation](../plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
 
-- `scenario`, qui possède le fichier, le catalogue de scènes, les données et
-  les requêtes d'authoring ;
-- `runtime`, qui possède l'exécution CodPlay et le parcours du graphe.
+## 1. Responsabilités et frontières
+
+Sighty conduit un parcours de vues composé de scènes CodPlay. Il possède le
+fichier de scénario, son index, la résolution des routes, la composition
+logique active et l’admission des événements. CodPlay possède la compilation,
+les occurrences de scènes, leur telco, leur rendu, leurs ressources et les
+montages entre surfaces CodPlay.
+
+Sighty ne crée pas de markup, ne recherche pas d’élément HTML et ne déplace pas
+les racines rendues. Il demande les montages au moyen de la façade publique
+CodPlay et conserve seulement les handles nécessaires à leur détachement.
+
+Les démos sont des chemins d’acceptation. Elles fournissent un fichier, un
+catalogue de `SceneDoc` et, lorsque le scénario le demande, des actions de
+présentation. Elles ne recréent pas l’index ni le routeur de Sighty.
+
+## 2. Entrée publique unique
+
+`Sighty` est l’unique point d’entrée du package. Une instance regroupe deux
+surfaces publiques distinctes :
 
 ```ts
 const sighty = new Sighty({
@@ -30,79 +49,50 @@ const sighty = new Sighty({
   runtime: {
     root,
     instanceIds,
-    layout: { sceneKey: 'layout', storyId: 'main' },
-  },
-})
-
-const { scenario, runtime } = sighty
-const diagnostics = scenario.validate()
-
-await runtime.initialize()
-await runtime.dispatch({ name: 'navigation:next' })
-runtime.mountSlot('main', 'sceneB')
-runtime.detachSlot('main')
-runtime.destroy()
-```
-
-Une référence `ViewAction.action` est résolue dans le catalogue fourni à la
-surface `runtime` :
-
-```ts
-const sighty = new Sighty({
-  scenario: { file, scenes },
-  runtime: {
-    root,
-    instanceIds,
     layout: { sceneKey: 'scene-layout', storyId: 'main' },
-    actionCatalog: {
-      'project:show-chapter': ({ send }) => send(
-        'scene-layout',
-        { name: 'layout:show-chapter' },
-        { scope: 'story', storyId: 'main' },
-      ),
-    },
   },
 })
+
+const diagnostics = sighty.scenario.validate()
+await sighty.runtime.initialize()
+await sighty.runtime.dispatch({ name: 'navigation:next' })
+sighty.runtime.destroy()
 ```
 
-Le fichier conserve uniquement le nom de la référence et sa destination
-déclarée. Le handler est écrit dans le code de l'application. Il peut envoyer
-une action à une scène via `send`, mais il ne crée pas de DOM et ne choisit pas
-une destination absente du scénario. Toute référence présente dans le fichier
-doit être enregistrée avant `runtime.initialize()` ; sinon l'initialisation
-échoue avec un diagnostic explicite.
+`scenario` ne crée ni instance, ni player, ni montage. `runtime` exécute le
+scénario validé et raccorde les scènes à CodPlay.
 
-Les options de runtime décrivent uniquement le raccordement à CodPlay et les
-handlers externes du scénario : racine de scène, identifiants d'occurrence,
-scène layout, catalogue d'actions, preload et observations facultatives. Elles
-ne décrivent ni contrôles de page, ni journal, ni présentation.
+## 3. API auteur publique
 
-## Fichier auteur
+Cette section concerne uniquement ce que l’auteur écrit ou qu’un outil
+d’authoring produit. Elle ne décrit ni l’index, ni la composition active, ni
+les occurrences CodPlay.
 
-La forme cible de `SightyFile.views` est un `SightyViewGraph` récursif :
+### 3.1. Forme déclarative
+
+La forme de travail actuelle est un graphe récursif de listes et de maps :
 
 ```ts
-type ViewGraph = ViewList | ViewMap
+type ViewGraph<SceneKey, SlotName> =
+  | readonly ViewListEntry<SceneKey, SlotName>[]
+  | {
+      start: string
+      views: Record<string, GraphView<SceneKey, SlotName>>
+      actions?: Record<string, ViewAction>
+    }
 
-type ViewList = ViewListEntry[]
+type ViewListEntry<SceneKey, SlotName> =
+  GraphView<SceneKey, SlotName> & { id: string }
 
-type ViewListEntry = ViewDefinition & {
-  id: string
-}
-
-type ViewMap = {
-  start: string
-  views: Record<string, ViewDefinition>
-  actions?: Record<string, ViewAction>
-}
-
-type ViewDefinition = {
+type GraphView<SceneKey, SlotName> = {
   view: {
-    scene?: string
-    views?: ViewGraph
-    slots?: Partial<Record<string, ViewGraph>>
+    scene?: SceneKey
+    views?: ViewGraph<SceneKey, SlotName>
+    slots?: Partial<Record<SlotName, ViewGraph<SceneKey, SlotName>>>
   }
   actions?: Record<string, ViewAction>
+  guards?: Record<string, string>
+  data?: Record<string, unknown | DataBinding>
 }
 
 type ViewAction = {
@@ -114,174 +104,289 @@ type ViewAction = {
 }
 ```
 
-`ViewList` utilise l'ordre déclaré pour `next` et `previous`, mais chaque entrée
-possède un `id` stable : une route ne désigne jamais un index. `ViewMap` utilise
-ses clés identifiées et son `start`. Les `views` et les graphes de slots sont
-récursifs ; ils ne sont pas des listes plates de placements.
+Une `ViewList` utilise l’ordre déclaré pour `next` et `previous`, mais chaque
+entrée possède un `id` stable. Une `ViewMap` utilise ses clés et son `start`.
+Les graphes de `views` et de `slots` peuvent être imbriqués sans devenir une
+liste plate de placements.
 
-Les fichiers historiques portant l'ancien tableau de placements sont
-normalisés par `scenario.getViewGraph()` vers cette forme interne. Cette
-compatibilité permet aux démos existantes de migrer sans créer un second
-parcours d'exécution. La forme cible ne contient ni source de scène, ni chemin
-de fichier, ni propriété auteur `graph`.
+La forme historique de fichier v1, qui contient un tableau de placements, est
+normalisée à la frontière du scénario vers ce même graphe. Elle ne crée pas un
+second exécuteur.
 
-Les propriétés `format`, `version`, `id` et `resources.scenes` restent
-acceptées uniquement pour les fichiers historiques ; elles ne sont pas
-nécessaires dans la définition de projet cible.
+### 3.2. Scènes, slots et identifiants auteur
 
-## Surface `scenario`
+`SceneKey` désigne une scène fournie par l’application autour du fichier.
+`SlotName` désigne le nom d’un slot déclaré dans la scène layout. `ViewId`
+désigne la clé d’une vue de map ou l’identifiant stable d’une entrée de liste.
 
-`scenario` expose :
+Le fichier décrit ces références. Il ne décrit pas l’instance physique qui
+sera créée pour les exécuter. Les formes `ViewAddress`, `SlotAddress`,
+`OccurrenceId`, `BindingId`, `Generation` et `Revision` ne sont pas des champs
+que l’auteur doit écrire.
+
+### 3.3. Fichier et fonctions d’auteur
+
+Le fichier de déclaration n’est pas limité par principe à JSON. Comme dans
+CodPlay, l’API auteur peut exposer des fonctions ou d’autres mécanismes
+exécutables dans la forme écrite par l’auteur.
+
+La forme compilée/exportable est une représentation différente. À cette
+frontière, les fonctions peuvent être extraites, référencées ou remplacées
+par une représentation portable selon le contrat de compilation. Cette
+contrainte appartient à l’export, pas à une interdiction artificielle imposée
+au fichier auteur.
+
+La tranche de navigation actuellement exécutée utilise les références
+`action` et le catalogue d’actions d’intégration. Elle ne prétend pas encore
+fixer la syntaxe des fonctions d’auteur pour les actions ou les conditions.
+
+### 3.4. Conditions de parcours
+
+Deux usages fonctionnels sont retenus pour les guards, même si leur syntaxe
+exacte reste à arrêter :
+
+1. une condition d’accès à une page ou à une section ; lorsqu’elle est
+   refusée, le parcours va à la page suivante ou à une échappatoire déclarée ;
+2. une condition de fin de vue ; elle empêche la sortie de la vue tant que
+   l’ensemble attendu n’est pas établi. Les scènes impliquées peuvent
+   produire chacune un événement discret qui alimente, par exemple, un
+   compteur. Lorsque la condition est satisfaite, la navigation peut repartir
+   vers la suite déclarée.
+
+La fin d’une scène n’est pas, par elle-même, la fin d’une vue. Une scène
+passive ne contribue pas à l’ensemble attendu. La condition peut être
+réévaluée après une mise à jour du state ou après un événement, selon le
+mécanisme qui sera validé avec sa justification.
+
+Les termes situationnels tels que `accessBy` ou `exitBy` restent des exemples
+de vocabulaire et ne sont pas des champs normatifs. La réécriture courante ne
+introduit ni `access.guard`, ni `filterBy`, ni un autre mécanisme non décidé.
+Le mode automatique éventuellement nommé `auto`, ainsi que les conventions
+`scene:end` et `sequence:end`, restent également à évaluer. Ils ne sont pas
+des comportements implicites de cette tranche.
+
+## 4. API d’intégration publique
+
+L’application hôte porte la logique métier que Sighty projette. Elle fournit
+les scènes et les options d’exécution, envoie des événements vers Sighty et
+peut souscrire aux événements que Sighty rend accessibles à l’extérieur.
+
+### 4.1. Surface `scenario`
+
+La surface `scenario` expose :
 
 - `file`, `scenes` et `data` ;
 - `sceneKeys`, `getScene(sceneKey)` et `getData(dataKey)` ;
-- `getView(sceneKey)`, qui recherche récursivement le premier noeud portant la
-  scène demandée ;
-- `getViewGraph()`, qui retourne le graphe récursif normalisé consommé par
-  Sighty ;
+- `getView(sceneKey)` et `getViewGraph()` ;
 - `getSlotNames(sceneKey)` ;
-- `validate()`, qui vérifie les ressources de scènes, les graphes, les départs
-  de `ViewMap` et les routes `path`.
+- `validate()`.
 
-Cette surface ne crée ni DOM, ni player, ni montage.
+Elle réalise la normalisation et la validation auteur, mais aucun travail de
+rendu ou d’exécution.
 
-## Surface `runtime`
+### 4.2. Entrée vers Sighty
 
-`runtime` porte le cycle CodPlay commun : compilation, preload, création des
-occurrences, montage des départs de la branche active, pilotage, démontage et
-destruction.
+`runtime.dispatch` est le point d’admission des événements et intentions
+fournis par l’application hôte :
 
-### Réception et navigation
+```ts
+await sighty.runtime.dispatch({
+  name: 'navigation:next',
+  data: { origin: 'remote' },
+})
+```
 
-`runtime.dispatch({ name, sourceSceneKey?, data? })` reçoit une intention ou un
-fait. Les événements publics des instances CodPlay sont transmis
-automatiquement au même point d'entrée ; une application extérieure peut
-également appeler `dispatch`.
+La `sourceSceneKey`, lorsqu’elle est utilisée, est une identité auteur stable.
+L’application ne fournit pas de génération, d’adresse interne, d’identifiant
+d’occurrence ou de handle. Les demandes sont sérialisées par un coordinateur
+unique et ne deviennent pas un historique permanent.
 
-Pour résoudre un événement, Sighty explore les portées des vues actives, de la
-plus spécifique à la plus générale :
+### 4.3. Sortie vers l’application hôte
 
-1. la définition de la vue active ;
-2. le `ViewGraph` qui la contient ;
-3. les vues parentes et leurs graphes, en remontant vers la racine.
+La surface de sortie est le pendant de `dispatch` :
 
-Lorsqu'une composition porte plusieurs scènes, la portée la plus spécifique de
-la branche active est examinée avant l'action héritée d'une branche sœur ; la
-scène source départage les portées de même niveau. La première action dont la
-destination est résolue est retenue. La tranche exécutable applique sa
-destination `go` :
+```ts
+const unsubscribe = sighty.runtime.events.onEvent((event) => {
+  host.receive(event.name, event.data, event.sourceSceneKey)
+})
+```
 
-- `path` cible un noeud déclaré par son chemin séparé par `/` ;
-- `label` cible la clé d'un noeud identifié ;
-- `direction` utilise l'ordre du graphe actif pour `next` et `previous` ; une
-  `ViewList` est adressée par l'`id` stable de ses entrées.
+L’événement actuellement exposé est :
 
-Si une action directionnelle atteint une borne de `ViewList`, Sighty poursuit
-la recherche du même événement dans les portées parentes. Une action héritée
-peut alors déclarer la sortie du niveau, par exemple un chemin vers le
-sommaire. Cette remontée est une résolution en cascade ; elle ne synthétise
-pas une direction `up` et l'émetteur ne calcule aucune destination. Si aucune
-action héritée ne résout la destination, la sélection courante reste inchangée.
+```ts
+type SightyPublicEvent<SceneKey extends string = string> = {
+  name: string
+  sourceSceneKey?: SceneKey
+  data?: Readonly<Record<string, unknown>>
+}
+```
 
-Les directions `up` et `down` sont reconnues par le type et le runtime couvre
-les descentes vers `view.views` ainsi que la compatibilité interne avec
-`view.graph`. Les cas de graphes imbriqués complexes restent à éprouver.
+Cette enveloppe ne contient ni player, ni montage, ni handle, ni adresse,
+génération ou révision interne. Elle peut transporter les événements publics
+de télécommande, les intentions de navigation et les informations produites
+par une interaction de scène, y compris un formulaire, lorsque la scène les
+déclare comme événements publics CodPlay.
 
-Quand une route change la sélection d'un slot, Sighty :
+Sighty écoute les événements publics des instances CodPlay. Pour une scène
+active, il les adapte, les rend disponibles à l’hôte et les place dans le
+même coordinateur d’admission que `dispatch`. Un événement d’une scène sortie
+est abandonné avant publication et avant tout effet de navigation.
 
-1. met en pause les occurrences quittées si elles sont encore lisibles ;
-2. retire les slots qui ne sont plus dans la branche active, sans détruire
-   leurs instances ;
-3. met à disposition les slots requis par la branche cible ;
-4. monte les scènes correspondant aux noeuds de la branche cible ;
-5. appelle `telco.rewind()` pour chaque occurrence nouvellement montée ;
-6. démarre avec `telco.play()` chaque occurrence nouvellement montée.
+La surface de sortie ne possède pas de `emit` parallèle : l’entrée vers Sighty
+reste `dispatch`. L’abonnement retourne une fonction de désabonnement ; les
+erreurs d’un observateur ne doivent ni interrompre les autres observateurs ni
+le routage du scénario. La destruction supprime les abonnements et les
+livraisons ultérieures.
 
-Une occurrence déjà sélectionnée est conservée et n'est ni réinitialisée ni
-relancée. Une fin de séquence ne reçoit pas de commande de pause supplémentaire.
-Cette règle garantit qu'une scène auxiliaire nouvellement remontée, par exemple
-une telco, reste active et peut recevoir les événements DOM de sa propre scène.
-La notification de changement de sélection intervient après cette remise à
-zéro et ce démarrage, afin qu'un message adressé à une occurrence nouvellement
-montée soit ancré à son nouveau départ, jamais à une position antérieure.
+`runtime.getInstance(sceneKey)` est conservé comme surface d’intégration
+CodPlay publique pour les contrôles de scène encore nécessaires aux démos,
+notamment la telco. Il ne fait pas partie de l’API auteur et ne doit pas être
+utilisé pour contourner la publication Sighty des événements destinés à
+l’application hôte. Une surface Sighty spécialisée de telco pourra remplacer
+ce raccord lorsqu’elle sera définie dans un plan accepté.
 
-Après l'activation de la destination, Sighty exécute la référence `action` de
-l'action résolue dans `runtime.actionCatalog`. Le handler reçoit l'événement
-original et une fonction `send(sceneKey, eventime, target)` qui utilise la
-surface publique d'événements de l'occurrence visée. Une action sans `go` peut
-ainsi seulement envoyer un message ou effectuer le traitement prévu par son
-catalogue ; elle n'invente pas de route.
+### 4.4. Montage et pilotage
 
-### Montage explicite et observation
+`runtime.initialize()` valide le fichier, compile les `SceneDoc`, précharge
+les ressources, crée les occurrences et monte la composition initiale. Il ne
+démarre pas implicitement toutes les telcos ; `runtime.play(sceneKey)` et
+`runtime.playAll()` pilotent le démarrage explicite.
 
-`runtime.mountSlot(slotName)` monte le départ du graphe déclaré dans le slot
-actif.
-`runtime.mountSlot(slotName, childSceneKey)` sélectionne une scène déclarée
-dans ce graphe. Cette aide de montage ne décide pas d'une route et ne démarre
-pas la scène ; la navigation événementielle est portée par `dispatch`.
+`mountSlot` et `detachSlot` sont des aides d’intégration pour le montage
+explicite. Les changements de scénario passent par `dispatch`. La sélection
+courante d’un slot est lisible par `getMountedSceneKey` et observable avec
+`onSlotChange`.
 
-`runtime.getMountedSceneKey(slotName)` lit la sélection courante. Une application
-peut observer ses changements avec `runtime.onSlotChange(slotName, listener)`.
-Cette observation ne crée ni DOM ni état de présentation.
+## 5. Types internes
 
-### Persos de layout, carrousel et slots
+Les types suivants sont dérivés par Sighty et ne sont pas exportés comme
+contrats à construire par l’auteur ou l’application :
 
-`runtime.layout.storyId` désigne la story CodPlay dans laquelle Sighty résout
-les persos `slot` du layout. Cette propriété ne transforme pas les branches du
-scénario en stories et ne nécessite pas une story par composition.
+- l’index immuable des graphes, des entrées et des slots ;
+- `ActiveSelection` et `ActiveComposition` ;
+- les chemins complets des vues et des slots ;
+- les générations et l’état des liaisons actives ;
+- les plans `retained`, `entered` et `exited` d’une transition ;
+- les handles de montage, les instances CodPlay et l’état d’exécution local.
 
-Une même story peut contenir plusieurs persos `layout` ordinaires. Ils peuvent
-former un carrousel en partageant un point d'accès ; leurs actions déclarées
-portent alors les positions, classes et événements de présentation. Ces persos
-ne sont ni des `View`, ni des sélections de scénario, ni des occurrences
-supplémentaires du layout.
+L’index est construit une seule fois pour une version de scénario. La
+composition active est une map interne par adresse de slot ; deux slots de
+même nom appartenant à des branches distinctes restent indépendants.
 
-Sighty ne crée pas le markup de ces persos et ne choisit pas leur présentation.
-Il résout le slot déclaré dans la story configurée, monte la scène sélectionnée
-dans ce slot et envoie les événements prévus par le catalogue d'actions. La
-scène layout et CodPlay exécutent les actions de rendu qui leur appartiennent.
-Un slot peut être déplacé par ses propres actions vers le point d'accès d'une
-autre composition ; la sélection de la scène qu'il reçoit reste une décision
-du scénario et de Sighty.
+## 6. Navigation exécutable
 
-### Progression
+### 6.1. Résolution des actions
 
-Sighty n'expose pas de progression globale. La progression reste une capacité
-de la scène ou de sa telco auteur. Une composition peut relayer un événement de
-seek vers l'instance sélectionnée en utilisant les surfaces CodPlay publiques.
+Pour chaque événement admis, Sighty examine les sélections de la composition
+active et les portées suivantes, de la plus spécifique à la plus générale :
 
-### Limites de cette tranche
+1. la vue sélectionnée ;
+2. le graphe qui la contient ;
+3. les vues parentes et leurs graphes.
 
-Les références `action` du fichier sont exécutées par le catalogue fourni au
-runtime ; la séquence reste écrite dans le handler externe et est attendue
-avant la fin de `dispatch`. Une référence absente du catalogue invalide
-l'initialisation. Les `guards`, la
-résolution des `data` et `meta`, le `context`, le `state`, la sauvegarde et la
-restauration feront l'objet de tranches Sighty dédiées. Ils ne doivent pas être
-simulés dans une démo.
+Une action locale est essayée avant une action héritée. La source de scène
+départage les actions de même niveau. Une route `path` désigne une adresse
+déclarée, une route `label` une clé non ambiguë et une route directionnelle le
+voisin du graphe approprié.
 
-Le catalogue externe accepté par cette première tranche contient des
-`SceneDoc` déjà résolus. La même clé est utilisée par le scénario et le
-runtime, mais les factories, sources lazy ou distantes, l'acquisition à la
-demande et la libération sélective restent à spécifier et à tester.
+`next` et `previous` suivent l’ordre d’une liste. À une borne, Sighty poursuit
+la recherche de la même intention dans les portées parentes ; il ne fabrique
+pas une sortie implicite. `up` et `down` sont des routes explicites vers un
+niveau parent ou vers le départ d’un graphe enfant lorsque cette cible est
+adressable dans la composition.
 
-Le runtime ne construit pas les composants de page et ne crée pas de circuit de
-commande propre à une démonstration. Les contrôles, le journal et les features
-sur mesure restent dans l'application auteur.
+Une action peut porter une route, une référence `action`, ou les deux. Une
+référence est exécutée dans `runtime.actionCatalog` après la transition
+déclarée. Le handler reçoit l’événement d’intégration et `send`, qui utilise la
+surface publique d’événements de l’occurrence visée. Le handler ne crée pas de
+destination absente du fichier et ne touche pas au DOM.
 
-La classe interne du runtime n'est pas exportée comme une seconde entrée. Elle
-est créée par `Sighty` et accessible uniquement par `sighty.runtime`.
+### 6.2. Composition et cycle de transition
 
-## Structure interne
+Une route résolue produit d’abord une composition cible. Sighty calcule alors
+les sélections conservées, entrantes et sortantes. Les événements des
+sélections sortantes sont invalidés avant le détachement. Les occurrences
+sortantes sont mises en pause lorsqu’elles sont encore en lecture ; les
+montages sont détachés ; les scènes entrantes sont montées par
+`owner.instances.mount` ; enfin la composition logique est publiée.
 
-La séparation DRY/KISS/SRP est conservée derrière la façade unique :
+Une sélection conservée garde son occurrence et sa position. Une sélection
+entrante provenant d’une scène absente de la composition est rembobinée puis
+démarrée explicitement. En cas d’échec de montage, Sighty restaure la
+composition précédente et ne publie pas la composition partielle.
 
-- `sighty.ts` assemble les deux surfaces publiques ;
-- `scenario.ts` possède les ressources et le graphe normalisé ;
-- `view-graph.ts` parcourt et normalise les graphes ;
-- `runtime.ts` porte l'exécution CodPlay et la navigation ;
-- `authoring-validation.ts` porte la validation récursive ;
-- `types.ts` porte les contrats partagés.
+Les demandes concurrentes empruntent une seule chaîne de navigation. Une
+demande provenant d’une liaison devenue obsolète est abandonnée avant son
+effet.
 
-Les modules internes ne sont pas exposés comme sous-chemins du package : la
-surface publique passe par `@codplay/sighty`.
+### 6.3. Événements de scène
+
+CodPlay notifie ses événements déclarés `public` selon son propre contrat
+d’observation. Sighty n’ouvre pas un second journal et ne transforme pas une
+progression continue en événements normaux. Il vérifie l’appartenance de la
+scène à la composition active, publie l’enveloppe Sighty, puis envoie la même
+demande au coordinateur de navigation.
+
+Cette verticale ne fixe pas encore la transformation automatique d’un fait de
+fin de scène en intention de navigation. Si elle est retenue, elle devra
+réutiliser `dispatch` et être traitée dans la tranche des guards et des fins de
+vue.
+
+## 7. Données, guards et fonctionnalités différées
+
+### 7.1. `data`
+
+Sighty conserve une seule catégorie déclarative nommée `data`. Le terme
+`meta` n’est pas une seconde catégorie dans l’API Sighty : la distinction
+n’est pas suffisante et le vocabulaire `data` est déjà celui de CodPlay.
+
+La forme `DataBinding` actuelle est :
+
+```ts
+type DataBinding = {
+  from: string
+  update: 'entry' | 'live'
+  event?: string
+}
+```
+
+La tranche de navigation accepte le champ de déclaration pour préserver la
+forme auteur, mais ne résout pas encore son héritage, son injection dans les
+scènes ou son lien avec `ScenarioContext`. Ces comportements feront l’objet
+d’une décision et de tests dédiés.
+
+### 7.2. Conditions
+
+Le type auteur conserve un emplacement général pour les `guards` afin de ne
+pas perdre le besoin exprimé par le modèle. La présente tranche ne lui attribue
+pas de structure situationnelle ni de comportement implicite. La prochaine
+tranche devra fixer : l’attachement de la condition d’accès et de la condition
+de fin de vue, leur héritage, leur combinaison, leur échappatoire et le
+mécanisme de réévaluation.
+
+### 7.3. Progression et état vivant
+
+La progression reste une observation vivante de la telco. Elle ne passe ni par
+`runtime.events`, ni par `dispatch`, ni par le journal normal des événements.
+Le plan d’évaluation dédié à la progression reste la référence pour cette
+question.
+
+## 8. Validation de la tranche actuelle
+
+La tranche actuelle est considérée comme en cours, avec les preuves suivantes :
+
+- validation auteur sans exécution ;
+- index récursif et normalisation v1 ;
+- navigation `path`, `label`, `next` et `previous` avec héritage ;
+- montage et détachement réels via la façade publique CodPlay ;
+- sérialisation des transitions et invalidation des scènes sorties ;
+- abonnement hôte `runtime.events.onEvent`, données publiques et
+  désabonnement ;
+- typecheck et tests Sighty.
+
+Restent à réaliser avant une stabilisation : les guards, les fins de vue, les
+`data` dynamiques, les occurrences multiples d’une même `SceneKey`, le
+couplage télécommande spécialisé, la migration complète des démos, la
+validation navigateur/Safari et la suite complète des vérifications de cycle
+de vie et de ressources.
+
