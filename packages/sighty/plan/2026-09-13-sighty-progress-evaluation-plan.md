@@ -8,6 +8,11 @@ Ce document ouvre l’évaluation de la progression séparément du plan de
 fiabilisation de la navigation. Il ne modifie ni le contrat Sighty, ni le
 runtime CodPlay, ni Demo 4.
 
+Une instrumentation temporaire, limitée à Demo 4, a été utilisée pour mesurer
+le phénomène avant de choisir une solution de progression. Elle a été retirée
+immédiatement après la mesure et ne fait pas partie du scénario, de Sighty ou
+de CodPlay.
+
 ## Références et frontière
 
 - [`2026-09-13-sighty-navigation-fiabilisation-plan.md`](./2026-09-13-sighty-navigation-fiabilisation-plan.md)
@@ -46,6 +51,18 @@ Le défaut à éliminer est donc précisément le chemin actuel qui convertit le
 Réduire la fréquence, regrouper ces émissions ou les rejouer différemment ne
 résout pas le problème de frontière : ces valeurs ne doivent pas entrer dans
 le journal des événements normaux.
+
+## Mesure temporaire réalisée
+
+L'instrumentation a été posée dans la télécommande Sighty globale, puis retirée
+une fois la mesure effectuée. Elle additionnait directement la taille des
+tracks du journal live de `scene-telco`, sans ajouter elle-même d'événement au
+journal mesuré.
+
+La mesure a relevé environ **110 événements** avant l'apparition perceptible de
+la vibration du progress. Ce résultat est un point d'observation de Demo 4,
+pas un seuil universel de réactivité. Le bouton, la sortie, la lecture directe
+du journal et le callback de transport ne sont plus présents dans le code.
 
 ## Critères de comparaison
 

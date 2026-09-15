@@ -1,275 +1,408 @@
-# Sighty — plan de correction de la navigation et du cycle de vie
+# Sighty — reconstruction du code de navigation
 
 ## Statut
 
-**A relire — aucune implémentation de cette correction n'est autorisée avant
-validation du plan.**
+**A relire — modèle interne à valider avant toute implémentation.**
 
-Ce plan corrige les défauts observés lors des parcours répétés de Demo 4 :
-événements d'une scène sortie de la vue, messages envoyés pendant un changement
-de vue, désactivation progressive des contrôles et conservation indue de l'état
-de la scène telco.
+Ce plan concerne la reconstruction du code qui exécute la navigation Sighty.
+Il ne propose pas un nouveau format de scénario et ne transforme pas Demo 4
+en solution de remplacement. Le scénario existant est l'entrée ; le runtime
+doit en déduire une composition active, piloter les scènes et isoler leur
+cycle de vie.
 
-Il met en œuvre des responsabilités déjà posées pour Sighty. Il n'introduit
-pas un nouveau modèle d'événements, ne modifie pas le vocabulaire du scénario
-et ne fait pas de Demo 4 une seconde implémentation du runtime.
+Le progress est exclu. Il reste traité dans le
+[plan dédié](./2026-09-13-sighty-progress-evaluation-plan.md) et ne doit pas
+être réintroduit dans le canal d'événements de navigation.
 
-Références de conception :
+## Objet du plan
 
-- [`2026-08-17-modele-fichier-declaratif.md`](../notes/2026-08-17-modele-fichier-declaratif.md) ;
-- [`2026-08-01-composition-et-avancement-evenementiel.md`](../notes/2026-08-01-composition-et-avancement-evenementiel.md) ;
-- [`authoring-library-spec.md`](../specs/authoring-library-spec.md) ;
-- [`2026-09-13-sighty-navigation-plan.md`](./2026-09-13-sighty-navigation-plan.md).
+À partir du scénario déjà défini et validé par `scenario`, Sighty doit fournir
+un exécuteur de navigation qui :
 
-La progression de lecture est explicitement hors de ce plan. Elle fait l'objet
-d'une [évaluation séparée](./2026-09-13-sighty-progress-evaluation-plan.md),
-avec une solution d'observation ou de projection qui ne passera jamais par des
-événements périodiques.
-
-## 1. Constat à corriger
-
-La tranche actuelle possède déjà une sélection par slot et une chaîne qui
-sérialise `runtime.dispatch()`. Les défauts se situent aux frontières que cette
-chaîne ne couvre pas encore :
-
-- les écouteurs d'événements publics sont installés pour toute la durée de vie
-  des scènes, même lorsqu'elles ne sont plus dans la vue active ;
-- la réception d'un événement ne vérifie pas l'appartenance de sa source à la
+- démarre la vue de départ déjà déclarée ;
+- résout les vues récursives, les slots, les actions et les directions sans
+  recalcul dispersé dans plusieurs méthodes ;
+- maintient un état unique de la composition réellement active ;
+- pilote l'entrée, la conservation, la sortie, la remise à zéro et la
+  destruction des scènes ;
+- admet les événements discrets uniquement lorsqu'ils proviennent encore de la
   composition active ;
-- un événement accepté avant un changement de vue peut encore être exécuté
-  après ce changement ;
-- `send` atteint directement une scène CodPlay sans passer par la même
-  séquence que la navigation ;
-- le démontage d'un slot retire le montage mais ne choisit pas le devenir de la
-  scène et de son état ;
-- Demo 4 contient donc des gardes locaux qui compensent ces absences au lieu de
-  s'appuyer sur Sighty ;
-- les logs exposent les changements de scène et les erreurs, mais pas la
-  décision Sighty d'accepter, d'ignorer ou d'annuler une livraison.
+- applique les actions prévues dans le scénario et transmet à la scène hôte ce
+  qui concerne le rendu de son slot ;
+- prépare et libère les ressources au moment défini par le runtime, sans faire
+  du chemin d'un fichier une donnée de navigation ;
+- expose une erreur exploitable lorsque la résolution ou l'acquisition échoue.
 
-Le contrôle du statut `playing` ne doit pas remplacer ce mécanisme : une scène
-présente peut être en pause et recevoir une action discrète. La frontière est
-la composition active, pas l'état de lecture.
+Sighty décide quelle scène est disponible et quelle scène doit être pilotée.
+La scène hôte et les scènes reçues décident de leur rendu dans leurs propres
+`actions`. Sighty ne crée pas de markup.
 
-## 2. Invariants à obtenir
+## Problématiques à résoudre
 
-1. Sighty est l'autorité unique de l'appartenance à la vue active.
-2. Un événement produit par une scène qui n'est plus dans la vue active est
-   ignoré avant d'entrer dans le parcours.
-3. Une livraison en attente qui devient obsolète lors d'un changement de vue
-   ne peut pas modifier la nouvelle vue.
-4. Les messages émis par Sighty et ses actions empruntent un seul ordre de
-   livraison, partagé avec la navigation.
-5. Un message destiné à une scène absente de la composition active n'est pas
-   émis vers cette scène.
-6. Le changement de vue expose une composition cohérente : l'ancienne vue est
-   invalidée avant que la nouvelle ne soit autorisée à recevoir des messages.
-7. La sortie de `chapter` remet la scène telco dans un état neuf pour sa
-   prochaine entrée. Le passage A → B → C ne réinitialise pas la telco qui
-   reste attachée au chapitre.
-8. Sighty ne crée aucun markup et ne décide aucune présentation visuelle.
-9. Demo 4 ne possède ni garde d'appartenance à la vue, ni canal de messages
-   parallèle au runtime Sighty.
-
-## 3. Tranches de correction
-
-### 3.1. Modèle interne de composition active
-
-Ajouter au runtime Sighty une représentation unique de la composition active,
-à partir des sélections déjà maintenues par les slots.
-
-Cette représentation doit permettre de répondre génériquement à deux
-questions :
-
-- la scène source appartient-elle à la vue active ?
-- la scène cible peut-elle encore recevoir un message ?
-
-Le layout configuré reste toujours le point d'accueil actif. Les autres scènes
-ne sont admissibles que lorsqu'elles sont sélectionnées dans un slot de la
-composition courante.
-
-**Preuve attendue :** aucune décision ne dépend d'un nom de slot particulier
-comme `slot-telco`.
-
-### 3.2. Invalidation d'une vue devenue obsolète
-
-Associer aux changements de composition une génération interne de vue, inconnue
-du fichier auteur.
-
-À chaque changement effectif de composition :
-
-1. Sighty invalide la génération précédente ;
-2. il suspend les scènes qui sortent ;
-3. il retire les montages devenus inactifs ;
-4. il établit la nouvelle composition ;
-5. il autorise seulement cette génération à recevoir des messages.
-
-Toute réception ou livraison différée doit vérifier sa génération au moment de
-son exécution. Une livraison obsolète est abandonnée et ne doit pas être
-rejouée plus tard.
-
-Cette génération est un mécanisme interne de fiabilité. Elle ne devient ni une
-propriété du scénario, ni une donnée d'auteur.
-
-### 3.3. Réception des événements publics
-
-Conserver le raccordement CodPlay existant, mais faire de Sighty la frontière
-d'admission :
-
-- vérifier la composition active dès la réception ;
-- vérifier à nouveau la génération avant l'exécution si la navigation est déjà
-  occupée ;
-- ne pas faire intervenir un test de statut `playing` pour décider de
-  l'appartenance à la vue ;
-- ne pas laisser une source inactive participer au choix d'une action héritée.
-
-Le filtrage doit être réalisé dans le runtime Sighty, près de
-`receivePublicEvent()` et de la résolution des actions. Demo 4 ne doit plus
-porter ce contrôle.
-
-### 3.4. Canal unique des messages sortants
-
-Introduire dans la surface runtime une opération générique de message, utilisée
-par :
-
-- les handlers du catalogue d'actions ;
-- les fonctions de pilotage propres à une composition ;
-- les messages adressés à la scène layout ou à une scène actuellement
-  sélectionnée.
-
-Cette opération doit être ordonnée avec la navigation et appliquer la même
-vérification de génération et de cible active. Le handler d'action conserve sa
-responsabilité de relier des actions écrites ailleurs ; il ne devient pas un
-routeur ni un gestionnaire de cycle de vie.
-
-**Preuve attendue :** aucune émission directe depuis Demo 4 ne peut atteindre
-une scène retirée ou contourner l'ordre d'une navigation en cours.
-
-### 3.5. Cycle de vie à la sortie d'une vue
-
-Séparer explicitement trois opérations déjà distinctes dans les responsabilités
-de Sighty :
-
-- suspendre une scène conservée pour une vue ultérieure ;
-- remettre une scène à son état initial sans conserver ses faits de session ;
-- détruire et libérer une scène dont Sighty abandonne la propriété.
-
-Pour Demo 4, la règle de la scène telco est :
-
-```text
-chapter → menu : suspendre, détacher, remettre à zéro pour la prochaine entrée
-menu → chapter : monter, initialiser et démarrer une telco neuve
-```
-
-Le sens précis de « remettre à zéro » doit couvrir l'état de lecture, les
-événements publics déjà observés et les travaux différés. `rewind()` seul ne
-constitue pas cette opération.
-
-Si la surface publique CodPlay ne permet pas cette remise à zéro ciblée, la
-tranche s'arrête à cette frontière et le besoin est remonté dans un plan
-CodPlay explicite. Aucun contournement dans Demo 4 n'est accepté.
-
-### 3.6. Suppression des compensations Demo 4
-
-Après les tranches précédentes :
-
-- supprimer `isSceneTelcoMounted()` et tous ses appels ;
-- supprimer les décisions d'acceptation fondées sur la présence de la telco
-  dans la composition depuis la démo ;
-- faire passer les messages discrets par le runtime Sighty ;
-- conserver dans la démo uniquement les actions spécifiques de présentation et
-  de pilotage qui ne sont pas génériques ;
-- ne pas modifier la progression dans cette tranche.
-
-### 3.7. Diagnostics Sighty
-
-Ajouter une observation structurée, distincte des traces CodPlay, pour chaque
-livraison pertinente :
-
-- source ;
-- vue ou composition active ;
-- génération ;
-- nom de l'événement ou du message ;
-- cible ;
-- décision : accepté, ignoré ou annulé ;
-- raison de la décision.
-
-Les diagnostics doivent rester désactivables en diffusion et ne doivent pas
-devenir un nouveau circuit de commande.
-
-## 4. Validation
-
-### Tests unitaires et runtime Sighty
-
-- une scène active peut publier un événement et déclencher sa route ;
-- une scène retirée ne déclenche aucune route ;
-- un événement reçu avant un changement de vue mais exécuté après celui-ci est
-  annulé ;
-- un message vers une scène retirée n'est pas émis ;
-- les messages layout restent ordonnés avec le changement de vue ;
-- la sortie du chapitre applique la remise à zéro prévue de la telco ;
-- le retour au chapitre ne rejoue aucun fait de la visite précédente ;
-- une scène en pause mais toujours active reste pilotable.
-
-### Régression Demo 4
-
-Rejouer plusieurs fois, avec des délais contrôlés :
-
-```text
-menu → A → B → C → menu
-menu → A → suivant
-menu → B → précédent
-menu → C → suivant
-menu → A → pause / lecture / retour au début
-```
-
-Vérifier uniquement dans ce plan :
-
-- la scène active reçoit les commandes ;
-- une ancienne scène ne modifie plus la vue ;
-- les boutons de navigation conservent leur état cohérent ;
-- aucune commande tardive ne réapparaît après une nouvelle entrée dans le
-  chapitre ;
-- la transition layout reçoit ses messages dans l'ordre.
-
-La progression n'est pas un critère de validation ici. Elle sera testée dans
-un plan séparé, sans émission d'événements périodiques.
-
-### Diagnostics
-
-Le parcours de régression doit permettre de lire dans les diagnostics :
-
-- l'entrée et la sortie de chaque composition ;
-- les événements rejetés parce que leur source n'est plus active ;
-- les messages annulés par changement de génération ;
-- la remise à zéro de la telco au retour au menu.
-
-## 5. Gates
-
-- **Gate de conception :** ce plan est `A relire` jusqu'à validation explicite.
-- **Gate de responsabilité :** aucune garde spécifique à Demo 4 ne remplace le
-  contrôle Sighty.
-- **Gate de cycle de vie :** `rewind()` ne peut pas être présenté comme une
-  remise à zéro complète.
-- **Gate de progression :** aucune modification de cette capacité dans ce
-  plan ; aucune émission périodique n'est une solution acceptable.
-- **Gate CodPlay :** toute extension nécessaire de la surface CodPlay doit
-  faire l'objet d'une autorisation et d'un plan séparés avant modification du
-  package CodPlay.
-- **Gate d'intégration :** les tests doivent utiliser le parcours public
-  Sighty et les vrais players de la fixture ; aucun routeur de substitution ne
-  peut rendre la démo passante.
-
-## 6. État de suivi
-
-| Tranche | État |
+| Problème observé | Ce que la reconstruction doit garantir |
 | --- | --- |
-| composition active | Non commencée |
-| invalidation de génération | Non commencée |
-| réception des événements publics | Non commencée |
-| canal unique des messages | Non commencée |
-| cycle de vie et remise à zéro telco | Non commencée |
-| retrait des gardes Demo 4 | Non commencée |
-| diagnostics Sighty | Non commencée |
-| validation runtime et Demo 4 | Non commencée |
-| progression | Hors périmètre |
+| Après `menu → A → B → C → menu → A`, des réactions de scènes sorties semblent encore atteindre la telco. | Une source sortie est désabonnée, invalidée et ne peut plus être admise par la navigation. |
+| Les contrôles deviennent parfois inactifs après plusieurs remontées et réentrées. | Une seule composition publiée est active ; aucune ancienne sélection ne reste dans le routage. |
+| La livraison d'un événement peut chevaucher un changement de vue. | Toute demande porte une identité de source et une révision contrôlées avant exécution. |
+| `dispatch` est sérialisé, mais `send` émet directement vers une instance. | Toute émission pilotée par une action passe par le même point d'admission et le même ordre. |
+| Le démontage, la conservation, `rewind()` et la destruction sont actuellement mêlés. | Chaque étape du cycle de vie possède une opération et une garantie distinctes. |
+| Le runtime prépare actuellement toutes les scènes au démarrage. | La résolution d'une scène et l'acquisition de ses ressources sont séparées et peuvent devenir lazy. |
+| Le progress a mis en évidence une surcharge, mais son traitement n'est pas décidé. | Aucun événement continu n'est ajouté à ce plan. |
+| `guards`, `meta`, `data`, `context`, `state` et sauvegarde restent à raccorder. | Ils sont ajoutés par des tranches ultérieures dans la même machine, sans circuit propre à une démo. |
+
+## 1. Contrat d'entrée : le format existant reste inchangé
+
+Le runtime consomme les contrats déjà définis dans
+[`authoring-library-spec.md`](../specs/authoring-library-spec.md) et exposés par
+`Sighty` :
+
+- `scenario.getViewGraph()` fournit la structure récursive normalisée déjà
+  portée par `SightyFile.views` ;
+- `ViewList` conserve l'ordre déclaré et les identifiants stables ;
+- `ViewMap` conserve ses clés et son départ déclaré ;
+- `view.views`, `view.slots`, `view.scene`, `actions` et les cibles de route
+  sont lus tels qu'ils existent ;
+- les directions `next` et `previous` suivent l'ordre des listes ; à une borne,
+  la résolution remonte selon le mécanisme hiérarchique déjà décrit dans les
+  notes ;
+- `scenario.validate()` reste le contrôle auteur préalable à l'exécution.
+
+Ces éléments ne sont pas redéfinis ici. Le plan n'ajoute ni propriété de
+fichier, ni nouvelle forme de `views`, ni champ de source de scène. Un chemin
+de fichier relève du preload ou de l'acquisition d'une ressource, pas de la
+destination d'une vue. Le support futur d'une factory, d'un objet ou d'un
+fetch devra donc être traité dans la surface d'acquisition du runtime et son
+contrat propre, sans être encodé dans le scénario.
+
+## 2. Ce que montre le code actuel
+
+L'analyse de `packages/sighty/src/runtime.ts` fournit les frontières à
+reconstruire :
+
+| Code actuel | Limite pour la navigation cible |
+| --- | --- |
+| `selections`, `mounts` et `mountedChildren` indexés par seul nom de slot | Deux slots homonymes dans des branches différentes ne disposent pas d'une identité suffisante. |
+| `observeInstance()` installé pour toute la durée du runtime | Une instance sortie reste une source observée jusqu'à la destruction générale. |
+| `navigationChain` autour de `dispatch` | La sérialisation existe, mais elle ne suffit pas à invalider une demande déjà admise. |
+| `executeAction().send()` appelant directement `instance.events.emit()` | Ce chemin contourne l'admission de la composition active. |
+| `synchronizeComposition()` modifiant progressivement les maps et les montages | Une erreur au milieu peut laisser une sélection partielle. |
+| `rewind()` puis `play()` pour une entrée | Rien ne démontre encore que cette séquence constitue une session neuve. |
+| compilation et preload de toutes les scènes dans `initialize()` | La disponibilité de toutes les scènes est imposée avant la navigation. |
+| `destroy()` comme principal nettoyage | Il manque un nettoyage normal à la sortie d'une branche. |
+| résolution des candidats en parcourant toutes les sélections | La source et la portée active ne sont pas représentées par un contexte unique. |
+
+Ces limites sont des constats de conception, pas des comportements à masquer
+dans Demo 4. La reconstruction ne prendra pas le découpage actuel comme
+ossature si une garantie exige une autre séparation.
+
+## 3. Modèle interne retenu
+
+Les éléments suivants sont des structures privées d'implémentation. Ils ne
+sont pas des props de `SightyFile`, ne sont pas sérialisés et ne constituent
+pas une nouvelle API auteur.
+
+### 3.1. Index de navigation
+
+Un index est construit une fois à partir du résultat de
+`scenario.getViewGraph()` après validation. Il conserve :
+
+- l'adresse interne de chaque vue ;
+- son parent et le conteneur qui la porte ;
+- l'ordre des entrées d'une `ViewList` ;
+- le départ et les clés d'une `ViewMap` ;
+- le propriétaire et le nom de chaque slot ;
+- les portées d'actions utiles à la recherche hiérarchique.
+
+Cet index ne contient ni `CodPlayInstance`, ni montage, ni DOM, ni historique
+d'événements. Sa seule responsabilité est de rendre la structure existante
+adressable et déterministe.
+
+### 3.2. État actif
+
+L'état interne publié par la machine contient :
+
+- la phase (`non initialisée`, `prête`, `en changement`, `en erreur` ou
+  `détruite`) ;
+- une révision monotone de composition ;
+- le point de vue actif ;
+- la liste complète des sélections de slots actifs ;
+- l'erreur courante, lorsqu'il y en a une.
+
+Chaque sélection active porte l'adresse de son slot propriétaire, l'adresse de
+la vue choisie et sa `SceneKey`. Le nom du slot seul n'est donc pas une clé
+suffisante pour le runtime.
+
+### 3.3. Liaisons actives
+
+La liaison entre une scène et le routage est distincte de son montage physique.
+Elle porte :
+
+- une identité interne de liaison ;
+- la révision qui l'a ouverte ;
+- la `SceneKey` source ;
+- la fonction de désabonnement de l'observation publique ;
+- la référence physique nécessaire à l'exécuteur pour détacher ou libérer.
+
+À la sortie, la liaison est invalidée avant le détachement. Une représentation
+physique conservée pour une transition ne reste donc pas une source de
+navigation.
+
+### 3.4. Opération de navigation
+
+Une opération éphémère contient l'entrée discrète, le contexte de résolution,
+la composition cible et la différence entre composition courante et cible :
+
+- sélections conservées ;
+- sélections entrantes ;
+- sélections sortantes ;
+- remplacements de slots.
+
+Elle contient aussi les actions déjà résolues à exécuter. Elle ne contient pas
+de destination recalculée pendant l'exécution et ne devient jamais un journal
+à rejouer.
+
+### 3.5. Registre d'acquisition
+
+La résolution de `SceneKey` et l'acquisition de la ressource restent deux
+étapes distinctes. Un registre interne pourra suivre, pour chaque scène :
+
+```text
+clé de scène → source fournie au runtime → document résolu → build CodPlay
+→ ressource acquise → occurrence montée
+```
+
+Cette chaîne décrit l'exécution interne. Elle ne change pas la structure du
+scénario et ne décide pas de la destination d'une route.
+
+## 4. Machine de navigation
+
+Le modèle retenu est une petite machine hiérarchique interne, sans dépendance
+obligatoire à une bibliothèque externe. Elle sépare trois responsabilités :
+
+1. **résolveur pur** : lit l'état actif, l'entrée et le scénario ; trouve
+   l'action, la destination, l'ordre de liste et la remontée hiérarchique ;
+2. **coordinateur d'opération** : sérialise les demandes, attribue une
+   révision et refuse les sources obsolètes ;
+3. **exécuteur d'effets** : acquiert, monte, pilote, notifie, détache et
+   libère via les surfaces autorisées.
+
+Les états et passages internes sont :
+
+```text
+non initialisée → prête → en changement → prête
+                                  ↘ en erreur
+prête → détruite
+```
+
+Pour une demande discrète :
+
+1. vérifier que la source est externe ou appartient à la composition publiée ;
+2. résoudre l'action et sa destination contre l'index immuable ;
+3. préparer la composition cible sans modifier l'état publié ;
+4. appliquer les guards et résolutions de données lorsqu'ils seront raccordés ;
+5. invalider les liaisons sortantes avant tout détachement ;
+6. appliquer le montage et les actions de la scène hôte ;
+7. publier la composition complète en une seule étape ;
+8. ouvrir les nouvelles liaisons et piloter les scènes entrantes selon leur
+   cycle de vie ;
+9. terminer l'opération ou atteindre une erreur explicite.
+
+Une demande arrivée d'une liaison dont la révision n'est plus active est
+abandonnée. Elle n'est ni stockée, ni rejouée après la transition. Les demandes
+externes peuvent être sérialisées ; les événements d'une scène quittée ne
+doivent pas devenir une file de rattrapage.
+
+Si la préparation échoue, l'état publié reste cohérent : soit l'ancienne
+composition est conservée, soit une voie d'erreur déclarée est activée. Il ne
+doit pas exister d'état intermédiaire où une partie des slots appartient à
+l'ancienne vue et l'autre à la nouvelle.
+
+## 5. Isolation et cycle de vie
+
+### 5.1. Admission des événements
+
+L'observation CodPlay doit être liée aux liaisons actives, et non à la durée de
+vie globale du runtime. Sighty doit :
+
+- ouvrir l'observation à l'activation d'une sélection ;
+- vérifier la liaison et sa révision à la réception ;
+- vérifier à nouveau cette identité avant l'exécution différée ;
+- fermer l'observation et invalider la révision à la sortie ;
+- faire passer le `send` fourni aux actions par le même point d'admission.
+
+La télémétrie de diagnostic peut rester séparée du routage. Elle ne doit pas
+réactiver une scène ni alimenter une relecture d'événements.
+
+### 5.2. Opérations distinctes
+
+Le runtime doit distinguer explicitement :
+
+- **entrée** : rendre une sélection active et ouvrir sa liaison ;
+- **conservation** : garder une sélection appartenant encore à la branche
+  active ;
+- **sortie** : invalider, désabonner et détacher ;
+- **remise à zéro** : obtenir une session initiale selon une garantie réelle de
+  CodPlay ;
+- **destruction** : supprimer l'occurrence et libérer ses ressources.
+
+Pour le scénario de Demo 4, ces règles donnent le comportement attendu sans
+code spécial de démo :
+
+```text
+menu → chapitre : la telco du chapitre est créée et activée immédiatement
+A → B → C       : la telco du chapitre est conservée
+chapitre → menu : les liaisons du chapitre sont fermées et la session est remise à zéro
+menu → chapitre : une nouvelle composition du chapitre est publiée
+```
+
+`rewind()` ne sera pas considéré comme une remise à zéro complète tant que la
+surface CodPlay ne garantit pas l'absence d'état et de livraisons différées.
+
+### 5.3. Navigation aux bornes
+
+La machine ne recopie pas un parcours propre à Demo 4. Elle applique le
+comportement déjà décrit : `next` et `previous` utilisent l'ordre de la liste ;
+à une borne, la résolution recherche une action dans le niveau parent. Ainsi,
+un chapitre peut remonter au sommaire ou à un autre niveau sans que le bouton
+connaisse cette destination.
+
+## 6. Acquisition et mémoire
+
+Le code de navigation ne doit pas confondre trois décisions :
+
+1. quelle `SceneKey` le scénario demande ;
+2. comment le runtime obtient le document correspondant ;
+3. quand CodPlay acquiert, conserve ou libère ses ressources.
+
+La première est de la navigation. Les deux autres sont des services
+d'exécution raccordés à la navigation, sans chemin de fichier dans le
+scénario. Le catalogue actuellement fourni avec des `SceneDoc` déjà résolus
+reste le point de départ mesurable ; factory, acquisition distante, preload
+sélectif, annulation et éviction sont des extensions à concevoir à partir de
+la surface réelle de CodPlay.
+
+Une ressource partagée doit être libérée seulement lorsqu'aucune sélection
+active ni préparation autorisée ne la réclame. Une préparation abandonnée ne
+doit pas publier son résultat dans une composition plus récente.
+
+## 7. Compléments prévus après le noyau
+
+Ces sujets ne sont pas reconstitués dans Demo 4. Ils s'insèrent dans les
+points d'extension de la même machine :
+
+- **guards** : lecture avant la composition cible ; décision d'autoriser, de
+  refuser ou d'atteindre l'erreur ;
+- **meta** : données descriptives calculées pour la composition active ;
+- **data** : résolution des données d'entrée d'une scène selon le contrat déjà
+  prévu par les notes ;
+- **context** : données durables modifiées uniquement par une action autorisée ;
+- **state** : position et composition d'exécution, séparées du context ;
+- **sauvegarde/restauration** : projection sérialisable de ces deux états, sans
+  player, abonnement, montage ou ressource physique ;
+- **erreur de navigation** : diagnostic auteur et vue d'erreur déclarée,
+  permettant une relance sans conserver une sélection incohérente.
+
+Les règles détaillées de ces compléments devront être validées dans leurs
+tranches propres avant leur ajout au résolveur.
+
+## 8. Évolutions CodPlay à évaluer
+
+Sighty doit d'abord tester les garanties de la surface publique actuelle. Une
+modification de `packages/codplay` est séparée de ce plan et nécessite une
+autorisation explicite.
+
+| Question issue du code | Évolution CodPlay seulement si le test la rend nécessaire |
+| --- | --- |
+| Le désabonnement `events.onEvent()` suffit-il à neutraliser une livraison déjà engagée ? | Une invalidation publique d'une occurrence ou de ses sorties. |
+| `rewind()` garantit-il une session vierge ? | Une opération publique de reset complète, ou une séquence de destruction/recréation documentée. |
+| Montage, remplacement et détachement peuvent-ils être appliqués sans état partiel ? | Une frontière atomique de montage si les surfaces existantes ne suffisent pas. |
+| Build et preload peuvent-ils être annulés et libérés séparément ? | Une acquisition cancellable et un comptage de ressources. |
+| Les diagnostics permettent-ils de distinguer une livraison tardive d'une erreur de route ? | Des traces de cycle de vie plus précises, sans journal de replay. |
+
+Le progress n'est pas une évolution à déduire ici. Il reste hors de ce plan.
+
+## 9. Construction et validation
+
+Aucune tranche de code ne démarre tant que ce modèle n'est pas relu et
+accepté.
+
+### N0 — preuve du contrat existant
+
+Écrire les cas de résolution à partir du scénario existant : départ, liste,
+borne, remontée, slots récursifs et actions. Aucun nouveau champ de fichier.
+
+### N1 — résolveur et index internes
+
+Construire l'index à partir de `getViewGraph()`, puis tester la résolution pure
+des routes et de la composition cible.
+
+### N2 — état actif et machine
+
+Introduire le snapshot de composition, les révisions, la sérialisation des
+opérations et la décision atomique, sans CodPlay ni DOM dans le résolveur.
+
+### N3 — exécuteur et isolation
+
+Raccorder les liaisons actives, l'invalidation, le port des actions, le
+montage, le détachement et la publication d'une composition complète.
+
+### N4 — cycle de vie et acquisition
+
+Éprouver entrée, conservation, sortie, reset, destruction, résolution lazy,
+annulation, release et erreurs partielles contre les surfaces CodPlay
+existantes. Ouvrir un plan CodPlay séparé si une garantie manque.
+
+### N5 — compléments du scénario
+
+Ajouter guards, meta, data, context, state, sauvegarde et erreur selon leurs
+contrats validés, sans les simuler localement dans une démo.
+
+### N6 — fixture Demo 4
+
+Utiliser Demo 4 uniquement pour l'acceptation du parcours réel, avec ses vrais
+players, ses actions et son rendu. La démo ne doit pas porter de routeur, de
+registre de sources, de garde de montage ou de nettoyage parallèle.
+
+## 10. Critères d'acceptation
+
+### Résolution pure
+
+- le scénario existant est la seule entrée de structure ;
+- l'ordre des listes et les identifiants existants sont respectés ;
+- `next` depuis la dernière entrée et `previous` depuis la première remontent
+  au niveau parent quand une action y est déclarée ;
+- une vue inconnue produit une erreur explicite sans sélection partielle ;
+- deux slots homonymes de branches différentes restent isolés.
+
+### Intégration Sighty/CodPlay
+
+- `menu → A → B → C → menu → A`, répété, conserve une réactivité constante ;
+- les événements d'une scène sortie et les demandes différées obsolètes sont
+  ignorés ;
+- `send` ne contourne jamais l'admission Sighty ;
+- la telco est disponible immédiatement à l'entrée du chapitre ;
+- la telco est conservée dans le chapitre et remise à zéro à sa sortie ;
+- aucune sélection, observation ou montage ne s'accumule après les réentrées ;
+- un échec de préparation ne publie pas une composition mixte.
+
+### Validation navigateur
+
+Rejouer les parcours avec les vrais players dans la démo, les clics rapprochés,
+les sorties et réentrées, puis vérifier Safari. Les diagnostics doivent
+distinguer au minimum source inactive, demande obsolète, route inconnue,
+échec d'acquisition et échec de reset.
+
+Le progress est exclu de ces critères.
+
+## 11. Suivi
+
+| Tranche | Statut |
+| --- | --- |
+| N0 — contrat et cas d'acceptation | À relire |
+| N1 — index et résolveur | Bloquée |
+| N2 — état et machine | Bloquée |
+| N3 — exécution et isolation | Bloquée |
+| N4 — cycle de vie et acquisition | Bloquée |
+| N5 — guards, meta, data, context, state et erreur | Bloquée |
+| N6 — validation Demo 4 | Bloquée |
+| progress | Hors périmètre |
