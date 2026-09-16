@@ -39,11 +39,4 @@ export const DEMO4_PLAYBACK_STATE_EVENTS = {
   paused: 'sighty-demo4:playback-state:paused',
 } as const
 
-/** Private scene-telco update used to display the selected scene position. */
-export const DEMO4_PROGRESS_STATE_EVENTS = {
-  update: 'sighty-demo4:progress:update',
-} as const
-
-export type Demo4MenuIntentName = typeof DEMO4_MENU_INTENTS[keyof typeof DEMO4_MENU_INTENTS]
-export type Demo4NavigationIntentName = typeof DEMO4_NAVIGATION_INTENTS[keyof typeof DEMO4_NAVIGATION_INTENTS]
 export type Demo4PlaybackIntentName = typeof DEMO4_PLAYBACK_INTENTS[keyof typeof DEMO4_PLAYBACK_INTENTS]

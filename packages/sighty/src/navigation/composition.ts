@@ -125,9 +125,13 @@ export function resolveRouteTarget<
 ): ActiveSelection<SceneKey, SlotName> | undefined {
   if ('direction' in target) return resolveDirection(index, target.direction, preferredSelection, generation)
 
-  const entry = 'path' in target
-    ? index.entriesByPath.get(normalizeRoutePath(target.path))
-    : uniqueEntry(index.entriesByKey.get(target.label))
+  let entry: IndexedEntry<SceneKey, SlotName> | undefined
+  if ('path' in target) {
+    entry = index.entriesByPath.get(target.path.trim().replace(/^\/+|\/+$/g, ''))
+  } else {
+    const entries = index.entriesByKey.get(target.label)
+    entry = entries?.length === 1 ? entries[0] : undefined
+  }
   if (entry === undefined) return undefined
   const slot = findContainingSlot(index, entry.path)
   if (slot === undefined) return undefined
@@ -196,17 +200,4 @@ function nestedGraphPath<
   if (entry.view.view.views !== undefined) return entry.path
   if (entry.view.view.graph !== undefined) return `${entry.path}/graph`
   return undefined
-}
-
-/** Normalizes a route path before looking it up in the immutable index. */
-function normalizeRoutePath(path: string): string {
-  return path.trim().replace(/^\/+|\/+$/g, '')
-}
-
-/** Returns one entry only when a label resolves without ambiguity. */
-function uniqueEntry<
-  SceneKey extends string,
-  SlotName extends string,
->(entries: readonly IndexedEntry<SceneKey, SlotName>[] | undefined): IndexedEntry<SceneKey, SlotName> | undefined {
-  return entries?.length === 1 ? entries[0] : undefined
 }

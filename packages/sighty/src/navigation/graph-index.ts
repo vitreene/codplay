@@ -1,8 +1,8 @@
 import type {
   SightyGraphView,
   SightyViewGraph,
-  SightyViewMap,
 } from '../types'
+import { isSightyViewMap } from '../view-graph'
 import type {
   IndexedEntry,
   IndexedGraph,
@@ -34,7 +34,7 @@ export function createViewIndex<
       path: graphPath,
       graph,
       entries: [],
-      scope: isViewMap(graph) ? graph : {},
+      scope: isSightyViewMap(graph) ? graph : {},
     }
     const graphScopes = [...inheritedScopes, graphScope]
     const directEntries = getDirectEntries(graph, graphPath).map((entry) => ({
@@ -100,7 +100,7 @@ export function getDirectEntries<
   graph: SightyViewGraph<SceneKey, SlotName>,
   graphPath: string,
 ): readonly IndexedEntry<SceneKey, SlotName>[] {
-  const rawEntries = isViewMap(graph)
+  const rawEntries = isSightyViewMap(graph)
     ? Object.entries(graph.views).map(([key, view]) => ({ key, view }))
     : graph.map((view, index) => ({ key: listEntryId(view, index), view }))
 
@@ -108,7 +108,7 @@ export function getDirectEntries<
     .filter(({ view }) => view.hidden !== true)
     .map(({ key, view }, index) => ({
       key,
-      path: appendPath(graphPath, key),
+      path: graphPath.length === 0 ? key : `${graphPath}/${key}`,
       graphPath,
       graph,
       view,
@@ -129,7 +129,7 @@ export function getStartEntry<
   const graph = index.graphs.get(graphPath)
   if (graph === undefined) return undefined
   const authoredGraph = graph.graph
-  if (!isViewMap(authoredGraph)) return graph.entries[0]
+  if (!isSightyViewMap(authoredGraph)) return graph.entries[0]
   return graph.entries.find((entry) => entry.key === authoredGraph.start) ?? graph.entries[0]
 }
 
@@ -151,19 +151,6 @@ export function isPathPrefix(prefix: string, path: string): boolean {
   return path === prefix || path.startsWith(`${prefix}/`)
 }
 
-/** Normalizes a route path without changing its internal segments. */
-export function normalizePath(path: string): string {
-  return path.trim().replace(/^\/+|\/+$/g, '')
-}
-
-/** Tests whether a graph is an identified map rather than an ordered list. */
-function isViewMap<
-  SceneKey extends string = string,
-  SlotName extends string = string,
->(graph: SightyViewGraph<SceneKey, SlotName>): graph is SightyViewMap<SceneKey, SlotName> {
-  return !Array.isArray(graph)
-}
-
 /** Gets the stable key of one ordered entry, with a validation fallback. */
 function listEntryId<
   SceneKey extends string,
@@ -171,11 +158,6 @@ function listEntryId<
 >(view: SightyGraphView<SceneKey, SlotName>, index: number): string {
   const id = (view as { id?: unknown }).id
   return typeof id === 'string' && id.length > 0 ? id : String(index)
-}
-
-/** Appends one path segment without introducing a leading separator. */
-function appendPath(basePath: string, segment: string): string {
-  return basePath.length === 0 ? segment : `${basePath}/${segment}`
 }
 
 /** Adds an indexed item to a string-keyed multimap. */

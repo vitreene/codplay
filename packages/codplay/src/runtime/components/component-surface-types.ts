@@ -23,6 +23,12 @@ export type MediaComponentSurface = Readonly<{
   setRate?: (rate: number) => void
 }>
 
+/** Presentation-only value surface exposed by a mounted input component. */
+export type InputComponentSurface = Readonly<{
+  /** Projects one live scalar value without changing the logical scene state. */
+  setValue: (value: string | number) => void
+}>
+
 /** Attaches and detaches opaque foreign roots inside one materialized host. */
 export type ForeignContentSurface = Readonly<{
   attach: (roots: readonly unknown[], referenceRoot?: unknown) => void
@@ -50,11 +56,12 @@ export type ReplaceComponentSurface = Readonly<{
 /** Type map of substrate-neutral surfaces, extensible by future runtime families. */
 export interface RuntimeComponentSurfaceMap {
   readonly media: MediaComponentSurface
+  readonly input: InputComponentSurface
   readonly foreignContent: ForeignContentSurface
   readonly replace: ReplaceComponentSurface
 }
 
-/** Existing module-facing surface identifier retained for resolver compatibility. */
+/** Module-facing component surface identifier retained for resolver compatibility. */
 export type RuntimeComponentSurfaceId = 'media'
 
 /** All surfaces that can be published by a component/materializer boundary. */
@@ -73,6 +80,8 @@ export type RuntimeComponentSurfaceResolver = Readonly<{
     runtimeItemId: string,
     surfaceId: SurfaceId,
   ) => RuntimeComponentSurfaceMap[SurfaceId] | undefined
+  /** Resolves the live value surface of a mounted input component. */
+  getInputSurface?: (runtimeItemId: string) => InputComponentSurface | undefined
   /** Resolves the foreign-content attachment surface without widening media modules. */
   getForeignContentSurface?: (runtimeItemId: string) => ForeignContentSurface | undefined
   /** Resolves the presentation-only surface used by the shared replace module. */

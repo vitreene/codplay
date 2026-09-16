@@ -15,7 +15,7 @@ export const layoutScene: SceneDoc<string> = {
             move: '@root',
             className: `${SIGHTY_SCENE_ROOT_CLASS_NAME} demo2-layout`,
             markup: `
-              <main class="demo2-layout">
+              <main id="demo2-layout-root" class="demo2-layout">
                 <section class="demo2-layout__scene" data-part="demo2:layout-scene-b" aria-label="Scene B"></section>
                 <section class="demo2-layout__telco" data-part="demo2:layout-telco" aria-label="Commandes"></section>
               </main>

@@ -1,4 +1,4 @@
-import type { SightyCondition } from '../types'
+import type { SightyCondition, SightyShowMode } from '../types'
 import type { ActiveSelection } from './types'
 
 /** Identifies one author scope that can provide an inherited condition. */
@@ -7,6 +7,7 @@ export type ConditionScope<SceneKey extends string = string> = Readonly<{
   scope: Readonly<{
     accessBy?: SightyCondition<SceneKey>
     exitBy?: SightyCondition<SceneKey>
+    showMode?: SightyShowMode
     onDenied?: Readonly<{ path: string } | { label: string } | { direction: 'next' | 'previous' | 'up' | 'down' }>
   }>
 }>

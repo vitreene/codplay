@@ -54,6 +54,15 @@ export class InputComponent extends BaseHTMLComponent<InputInitial> {
     this.applyState(nextState, previousState)
   }
 
+  /** Projects one live value onto the native control without entering scene state. */
+  setValue(value: string | number): void {
+    const control = this.getPart(PART.control)
+    if (!isInputElementLike(control)) {
+      throw new Error(`Input component control is not materialized: ${this.perso.id}`)
+    }
+    control.value = String(value)
+  }
+
   /** Last projected visual state, used only to remove prior generated classes. */
   private lastState: ResolvedInputState | null = null
 

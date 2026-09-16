@@ -4,10 +4,10 @@
 
 **En cours — cohérence relue et réécriture engagée le 2026-09-15.**
 
-La priorité de validation est l’API auteur de déclaration : sa forme, ses
+La priorité de validation a été l’API auteur de déclaration : sa forme, ses
 identifiants, ses routes, ses actions, ses conditions de parcours, ses données
 et ses politiques, ainsi que sa transformation éventuelle vers une vue
-compilée/exportable, doivent être arrêtés avant les modèles d’exécution
+compilée/exportable, sont maintenant arrêtés avant les modèles d’exécution
 internes.
 
 Ce plan est rédigé le 2026-09-15 à partir de :
@@ -21,11 +21,58 @@ Ce plan est rédigé le 2026-09-15 à partir de :
 Il remplace les anciens plans de première implémentation, de navigation et de
 fiabilisation, retirés de la surface active des plans. Le plan
 [d’évaluation de la progression](./2026-09-13-sighty-progress-evaluation-plan.md)
-reste informatif et hors périmètre de cette reconstruction.
+porte désormais l’implémentation dédiée de la projection vivante ; cette
+reconstruction ne réintroduit pas de transport `progress:update`.
+
+### État d’implémentation de la verticale actuelle
+
+La verticale déjà exécutée comprend l’index récursif, les routes, les
+conditions `accessBy` et `exitBy` héritées par portée avec leur repli
+`onDenied`, les données `entry`/`live`, la mise à jour du contexte, le reset,
+les sources différées (lazy) résolues et mises en cache, et les mutations
+versionnées. Les quatre
+politiques de mutation (`preserve`, `rewind`, `reset`, `reload`) empruntent le
+même coordinateur et leurs échecs restaurent la version auteur, les occurrences,
+les montages et les ressources détenues.
+
+Cette liste décrit le comportement actuellement vérifiable ; elle ne ferme pas
+encore les gates de validation navigateur/Safari et de vérification complète du
+cycle de vie. Les occurrences multiples, le couplage télécommande et la
+distinction `scene:end`/`sequence:end` sont maintenant arrêtés dans la
+spécification et couverts par l’implémentation et les tests ciblés. La
+persistance sérialisée n’appartient pas à cette reprise : elle relève d’une
+intégration hôte ultérieure.
+
+La validation automatisée de cette reprise est verte : 30 tests Sighty, 648
+tests CodPlay, les trois typechecks concernés et le build Vite des démos. Le
+parcours Safari MCP frais a validé Demo 4 sur menu → scène A, pause/reprise,
+progression vivante et fin de séquence ; les autres gates de reconstruction
+restent suivies dans les tranches correspondantes.
 
 La première implantation de Sighty est une preuve d’usage et une source de
-constats. Elle ne fournit pas le découpage à conserver. Demo 4 reste une
-fixture d’acceptation ; elle ne définit pas le modèle générique.
+constats. Demo 4 reste une fixture d’acceptation ; elle ne définit pas le
+modèle générique.
+
+Le runtime est désormais découpé dans `packages/sighty/src/runtime/`. Le
+fichier `src/runtime.ts` conserve uniquement la compatibilité de l’entrée
+publique ; `controller.ts` orchestre les services `state`, `scene-manager`,
+`binding-manager`, `composition-manager`, `navigation-manager` et
+`mutation-manager`. Les helpers de validation et les fonctions transverses
+sont isolés dans leurs modules dédiés ; la validation des catalogues runtime est
+nommée `catalog-validation.ts` pour la distinguer de la validation du fichier
+auteur. Dans `src/navigation/`, les opérations pures d’indexation, de
+résolution et de transition restent séparées de l’orchestration runtime. Les
+wrappers one-shot sans valeur sémantique sont désormais intégrés directement,
+et les utilitaires de
+`view-graph.ts` sans consommateur ont été supprimés. Ce découpage est interne :
+il ne modifie aucune signature de l’API auteur ou de l’API d’intégration.
+
+Le nettoyage des démos 1 à 4 a supprimé les façades réexportées sans
+consommateur, les alias de types inutilisés et le transport d’occurrence
+abandonné. Les quatre démos restent branchées sur leurs chemins Sighty/CodPlay
+réels et leurs intégrations passent ; Demo 4 conserve le seek discret et
+projette désormais la progression vivante par la surface CodPlay dédiée, sans
+réintroduire de transport `progress:update`.
 
 ## 1. Objet et résultat attendu
 
@@ -135,7 +182,7 @@ de donnée proposée doit être rattachée à l’un d’eux avant son implémen
 | Niveau | Destinataire | Contenu autorisé | Statut |
 | --- | --- | --- | --- |
 | **API auteur publique** | auteur du fichier, éditeur, outil de génération | structure de déclaration du scénario, mécanismes auteur exposés, références stables, routes, actions, conditions de parcours, data et politiques déclaratives | priorité M0 |
-| **API d’intégration publique** | application qui instancie et pilote Sighty | construction de `Sighty`, catalogues, sources, `dispatch`, commandes, abonnement aux événements publics, observations et sauvegarde | à stabiliser séparément de l’API auteur |
+| **API d’intégration publique** | application qui instancie et pilote Sighty | construction de `Sighty`, catalogues, sources, `dispatch`, commandes, abonnement aux événements publics et observations | à stabiliser séparément de l’API auteur |
 | **Types internes** | modules Sighty uniquement | index, adresses dérivées, composition active, bindings, générations, révisions, opérations et registres | non exportés comme contrats utilisateur |
 
 La frontière CodPlay est une frontière d’intégration existante : Sighty y
@@ -190,10 +237,11 @@ portable. Sighty doit conserver la même distinction pour les mécanismes qu’i
 expose et raccorder les scènes aux surfaces CodPlay existantes, sans les
 reproduire ni les interdire par une règle de sérialisation.
 
-## 3. Décisions structurantes proposées
+## 3. Décisions structurantes de la verticale actuelle
 
-Les décisions suivantes seront soumises à validation en M0. Une fois validées,
-elles seront contraignantes pour l’implémentation.
+Les décisions suivantes constituent le cadre retenu pour l’implémentation
+actuelle. Toute extension qui modifierait ces frontières doit être documentée,
+testée et validée avant de rejoindre le runtime.
 
 ### 3.1. Arbre auteur, graphe de parcours
 
@@ -270,7 +318,7 @@ avant la construction du runtime.
 
 ### 4.1. Inventaire de la surface auteur
 
-**[API AUTEUR] — contrat à stabiliser en M0.**
+**[API AUTEUR] — surface exécutable de la verticale actuelle.**
 
 | Élément | Responsabilité publique | Résultat interne dérivé |
 | --- | --- | --- |
@@ -280,7 +328,7 @@ avant la construction du runtime.
 | `ViewAction`, `RouteTarget` | références d’action et routes déclarées | action et destination résolues |
 | conditions de parcours | conditions d’entrée d’une page ou de fin d’une vue | conditions évaluées au moment prévu par le scénario |
 | `DataBinding` | origine et mode de fourniture d’une donnée | valeur résolue pour une occurrence |
-| `SceneTransitionMode` | politique déclarative de transition de scène | effet de transition appliqué en interne |
+| `showMode` | politique déclarative d’affichage d’une scène | effet de cycle de vie appliqué en interne |
 
 La colonne de droite n’est pas une seconde forme du fichier. Elle indique
 seulement le résultat de la normalisation et de la résolution ; ses types sont
@@ -288,7 +336,7 @@ internes et peuvent évoluer sans modifier le contrat auteur.
 
 ### 4.2. Structure récursive
 
-**[API AUTEUR] — structure de déclaration candidate.**
+**[API AUTEUR] — structure actuelle de la déclaration.**
 
 La structure de déclaration cible reste une structure `Views` récursive :
 
@@ -306,6 +354,7 @@ type ViewMap<SceneKey, SlotName> = {
   start: string
   views: Record<string, ViewDefinition<SceneKey, SlotName>>
   actions?: Record<string, ViewAction>
+  showMode?: 'reset' | 'maintain' | 'rewind'
 }
 
 type ViewDefinition<SceneKey, SlotName> = {
@@ -315,8 +364,14 @@ type ViewDefinition<SceneKey, SlotName> = {
     slots?: Partial<Record<SlotName, Views<SceneKey, SlotName>>>
   }
   actions?: Record<string, ViewAction>
+  accessBy?: Condition<SceneKey>
+  exitBy?: Condition<SceneKey>
+  onDenied?: RouteTarget
   data?: Record<string, unknown | DataBinding>
+  showMode?: 'reset' | 'maintain' | 'rewind'
 }
+
+type Condition<SceneKey> = string | ((context: ConditionContext<SceneKey>) => boolean | Promise<boolean>)
 ~~~
 
 La propriété auteur graph n’est pas retenue dans la forme cible. Une lecture
@@ -329,66 +384,35 @@ dépend jamais d’un index numérique.
 
 ### 4.3. Conditions de parcours : deux usages principaux
 
-**[API AUTEUR] — comportements à conserver ; la forme de déclaration reste à
-arrêter.**
+**[API AUTEUR — VERTICALE ACTUELLE]** — les champs exécutés sont `accessBy`,
+`exitBy` et `onDenied`. Une condition peut être une fonction d’auteur ou une
+référence de catalogue d’intégration.
 
-Le plan retient deux usages principaux des conditions, appelées « guards » dans
-la note de conception :
+1. **Condition d’accès à une page ou à une section.** La condition la plus
+   spécifique parmi la vue, les graphes contenants et les vues parentes est
+   évaluée avant l’entrée. En cas de refus, `onDenied` est résolu ; à défaut,
+   la route `next` est essayée. Une cible absente ou une boucle de repli refuse
+   l’opération sans publier de composition partielle.
+2. **Condition de sortie d’une vue active.** La condition `exitBy` la plus
+   spécifique est évaluée avant le détachement. Un résultat faux bloque la
+   transition.
 
-1. **Condition d’accès à une page ou à une section.** La condition compare le
-   state et les données de la vue. Si elle est refusée, le parcours va soit à
-   la page suivante, soit vers un échappatoire déclaré.
-2. **Condition de fin de vue.** Elle empêche la fin d’une vue — et non la fin
-   d’une scène — tant qu’un ensemble de conditions n’est pas établi. Les
-   scènes impliquées peuvent chacune produire un événement discret ; ces
-   événements peuvent contribuer à un état partagé, par exemple un compteur.
-   Lorsque le seuil ou l’ensemble attendu est atteint, la condition est
-   réévaluée et la vue peut passer à la suite déclarée.
+La condition lit l’événement reçu, la `SceneKey`, les `data` résolues, le
+contexte et l’état de l’occurrence. Elle ne modifie pas ces valeurs et ne
+fabrique pas de destination. La fin d’une scène ne déclenche pas
+automatiquement une navigation dans cette verticale.
 
-Dans le second cas, une scène passive ne contribue pas aux conditions requises.
-La fin d’une scène ne déclenche donc pas, à elle seule, la fin de la vue.
-
-Les deux usages suivent eux aussi le mécanisme d’héritage des portées. Une
-condition ou une convention établie à un niveau parent peut donc s’appliquer à
-des vues descendantes sans être répétée dans chaque définition. La règle de
-combinaison et de priorité entre une condition héritée et une déclaration plus
-spécifique doit être arrêtée en M0.
-
-La condition de fin de vue peut être satisfaite ou déclenchée par plusieurs
-mécanismes, sans constituer de nouveaux types de guards :
-
-- suggestion non normative : un mode automatique, provisoirement noté `auto`,
-  pourrait autoriser le passage à la vue suivante à la fin de la scène ;
-- une convention de configuration peut associer un fait tel que `scene:end`
-  ou, selon le cas, `sequence:end` à la fin ou au retrait d’une scène. Ces deux
-  conventions peuvent avoir des significations distinctes et ne doivent pas
-  être confondues ;
-- une interaction utilisateur, comme celle de Demo 4, peut produire l’intention
-  de navigation attendue.
-
-Dans ces cas, l’issue est adressée à Sighty sous la forme d’un événement de
-navigation. Un mécanisme d’écoute CodPlay peut éventuellement transformer le
-fait reçu en une intention de navigation — par exemple `scene:end` en
-`go:next` — avant de l’adresser au point d’entrée de Sighty. Cet exemple de
-nom est illustratif : il ne crée pas une propriété `go` supplémentaire dans
-l’API auteur. La pertinence de cette écoute et de cette transformation doit
-être évaluée ; si elle est retenue, elle doit rejoindre le chemin d’admission
-normal de Sighty et ne pas créer un second circuit de navigation.
-
-Une condition lit le state, les données de la vue et, si nécessaire, l’événement
-reçu. Elle ne modifie pas directement ces données et ne fabrique pas de
-destination. Dans le fichier de déclaration, elle peut utiliser la fonction
-d’auteur exposée par l’API auteur. Si une vue compilée/exportable est produite,
-son corps n’est pas conservé dans le payload exportable : il est extrait ou
-représenté selon le mécanisme de compilation validé.
-
-La forme exacte des références et des points d’attachement reste à définir en
-M0. Aucun nom de champ situationnel n’est normatif dans ce plan. Le mécanisme
-qui réévalue la condition de fin de vue — après une mise à jour du state, après
-un événement de navigation, ou par un autre mécanisme justifié — doit être
-choisi et testé avant l’implémentation. Demo 4 fournit le cas d’interaction
-utilisateur ; il ne nécessite actuellement pas de guard d’accès ni de
-compteur de fin de vue.
+Lorsqu’une vue contient plusieurs scènes, son `exitBy` est le garde de sortie
+de la vue : un refus sur une sélection sortante bloque la transition entière.
+La distinction des signaux est arrêtée : `scene:end` indique à Sighty que la
+scène a terminé sans la détacher, tandis que `sequence:end` conserve le
+comportement CodPlay existant : la séquence du player est terminée, la lecture
+est arrêtée, les captures actives sont annulées, le hook de fin est appelé et
+l’état de transport est publié. Ce signal ne détruit ni l’instance, ni le
+montage, ni les ressources. Si une transition de vue est engagée ensuite,
+Sighty applique son cycle de vie normal de détachement ou de destruction.
+Toute transformation d’un fait CodPlay en intention de navigation réutilise le
+point d’admission normal de Sighty et ne crée pas un second circuit.
 
 ### 4.4. Exemple minimal issu de Demo 4
 
@@ -525,12 +549,23 @@ type DataBinding = {
 }
 ~~~
 
-La résolution de `data`, sa portée, son héritage éventuel et son mode de mise à
-jour doivent suivre une seule règle. Une valeur de `data` ne devient pas
-automatiquement une route, une condition de parcours ou une modification du
-contexte durable ; une action ou une condition ne l’utilise que selon un
-contrat explicite. Demo 4 ne déclare actuellement pas de `data` ; il ne doit
-donc pas servir à en déduire une implémentation locale.
+La verticale actuelle résout `data` du moins spécifique au plus spécifique :
+données du scénario, portées de graphe, vues parentes puis vue active. Une
+valeur locale remplace la valeur précédente. Un binding `from` lit un chemin
+pointé dans `context` ou `data` ; un chemin non préfixé essaie d’abord le
+contexte puis les données du scénario.
+
+À l’entrée d’une sélection, les valeurs déclarées sont livrées par le chemin
+d’événement public de la scène. `update: 'entry'` est livré une fois à
+l’admission ; `update: 'live'` est réévalué après une mise à jour explicite du
+contexte. L’événement indiqué par le binding est utilisé, avec `data:update`
+par défaut. Une donnée ne devient pas automatiquement une route, une condition
+ou une modification durable du contexte.
+
+La persistance sérialisée d’un `RuntimeState` reste hors de cette reprise. Si
+une application hôte en a besoin, elle en porte la responsabilité lors de son
+intégration. Demo 4 ne déclare actuellement pas de `data` ; les tests de la
+verticale dédiée portent donc sur une fixture Sighty indépendante.
 
 ### 4.8. Ce que l’auteur écrit dans le fichier
 
@@ -683,15 +718,13 @@ correspondre à une liaison active unique. Une source inactive ou ambiguë est
 abandonnée avant la résolution ; le nom public ne remplace pas l’identité
 interne de la liaison.
 
-La signature exacte de cette entrée d’intégration sera arrêtée en M0. Elle
-doit rester exprimable avec les types de l’API auteur ou avec des types
-d’intégration documentés ; elle ne doit pas reprendre les types internes
-ci-dessous.
+La signature actuelle est `runtime.dispatch(event)`, avec `name`, `data` et
+une `sourceSceneKey` facultative. Elle reste exprimable avec les types de
+l’API d’intégration et ne reprend aucun type interne ci-dessous.
 
 ### 6.2. Sortie publique vers l’application hôte
 
-**[API INTÉGRATION] — besoin à retenir ; forme exacte et sémantique à valider
-en M0.**
+**[API INTÉGRATION] — surface retenue et exécutée dans cette reprise.**
 
 L’application hôte doit pouvoir souscrire aux événements que Sighty expose à
 l’extérieur. Cette surface est le pendant de `runtime.dispatch` :
@@ -716,19 +749,17 @@ fait qu’un événement puisse aussi provoquer une navigation ne crée pas un
 second routeur : la navigation passe par le point d’admission Sighty avant sa
 publication éventuelle.
 
-La forme envisagée peut reprendre la convention de CodPlay, notamment une
-surface d’observation dont l’abonnement retourne une fonction de désabonnement :
+La surface reprend la convention de CodPlay : l’abonnement retourne une
+fonction de désabonnement :
 
 ~~~ts
 runtime.events.onEvent(listener): () => void
 ~~~
 
-Cette signature est un exemple de direction, pas encore un nom normatif. Le
-plan doit encore décider si la surface est portée par `runtime.events` ou par
-une autre façade équivalente, quelles catégories sont publiques, si un
-événement représente un fait reçu, une intention admise, une transition
-effectuée ou plusieurs de ces niveaux, et quelles données de contexte sont
-accessibles à l’hôte. Le parallèle avec CodPlay porte sur le modèle
+Cette surface est portée par `runtime.events`. Elle publie les événements
+publics reçus d’une scène active, avec leur `name`, leur `data` et leur
+`sourceSceneKey`, avant que la demande correspondante ne soit admise par le
+coordinateur. Le parallèle avec CodPlay porte sur le modèle
 `onEvent`/désabonnement ; il ne justifie pas l’ajout d’un second `emit` public
 si `dispatch` couvre déjà l’entrée vers Sighty.
 
@@ -736,9 +767,11 @@ L’enveloppe sortante doit rester une enveloppe d’intégration. Elle peut
 conserver un nom, des `data` et, si cela est nécessaire au contrat, une source
 ou une portée exprimée par des identifiants publics stables. Elle ne doit pas
 exposer `BindingId`, `Generation`, `OccurrenceId`, une adresse interne, un
-player, un montage ou un handle de ressource. L’absence de fuite interne et
-les règles de livraison (ordre, réentrance, désabonnement, destruction et
-éventuelle perte d’événements) seront arrêtées en M0.
+player, un montage ou un handle de ressource. L’absence de fuite interne est
+vérifiée par le type de l’enveloppe. La publication est synchrone pour les
+observateurs, isole leurs erreurs, respecte l’ordre d’émission, et le
+désabonnement ou la destruction supprime les livraisons ultérieures. La
+navigation éventuelle reste asynchrone dans la chaîne unique du runtime.
 
 Le système de télécommande et les événements de navigation ne doivent donc pas
 être rendus accessibles à l’hôte par des abonnements directs et spécifiques à
@@ -903,13 +936,15 @@ publiée. Elle ne devient jamais un journal à rejouer.
 6. calculer retained, entered, exited ;
 7. invalider les liaisons sortantes ;
 8. neutraliser les livraisons différées devenues obsolètes ;
-9. appliquer les politiques de scène ;
+9. résoudre la politique de scène et préparer les éventuels resets ;
 10. détacher ou remplacer les montages selon la configuration du slot, puis
     monter les scènes entrantes par les surfaces publiques autorisées ;
 11. publier la nouvelle composition en une seule fois ;
 12. ouvrir les liaisons entrantes ;
-13. exécuter les actions déclarées qui concernent les scènes actives ;
-14. terminer l’opération ou publier une erreur cohérente.
+13. livrer les `data` d’entrée ;
+14. finaliser la politique de transport (`maintain`, `rewind` ou `reset`) ;
+15. exécuter les actions déclarées qui concernent les scènes actives ;
+16. terminer l’opération ou publier une erreur cohérente.
 
 Une erreur de préparation ne doit jamais publier une composition mixte. Si les
 surfaces CodPlay ne permettent pas cette garantie, un plan CodPlay séparé est
@@ -940,11 +975,12 @@ et leur application aux occurrences restent internes à Sighty.
 Les réglages sont résolus du moins spécifique au plus spécifique :
 
 ~~~text
-configuration par défaut
-→ options de l’instance à la construction
-→ niveau du scénario
-→ niveau du graphe
-→ vue ou slot
+défaut intégré (`rewind`)
+→ option `runtime.showMode` de l’instance
+→ `file.showMode` du scénario
+→ portée parente
+→ graphe contenant (dont le graphe d’un slot)
+→ vue active
 ~~~
 
 La configuration par défaut et les options de l’instance relèvent de l’API
@@ -953,27 +989,28 @@ auteur lorsqu’ils sont déclarés dans le fichier. Le mécanisme qui fusionne 
 valeurs et produit une politique effective reste interne.
 
 Chaque propriété est résolue séparément. Une valeur absente hérite ; une
-valeur explicite locale remplace l’héritage. La possibilité de désactiver une
-valeur héritée doit être définie dans M0.
+valeur explicite locale remplace l’héritage. `showMode` n’a pas de valeur
+`off` : l’absence de déclaration utilise le défaut `rewind`.
 
 ### 8.2. Modes
 
 **[API AUTEUR] — valeur déclarative.**
 
 ~~~ts
-type SceneTransitionMode = 'maintain' | 'rewind' | 'reset'
+type SightyShowMode = 'reset' | 'maintain' | 'rewind'
 ~~~
 
 Cette valeur est publique lorsqu’elle est déclarée dans le fichier auteur ou
 dans une option d’intégration prévue par le contrat. La politique effectivement
 résolue pour une liaison reste interne.
 
-- Maintain conserve la scène, son état de lecture, sa position et son journal.
-- Rewind appelle la capacité publique de retour à zéro de la scène. Dans
-  CodPlay, cela correspond à telco.rewind et ne constitue pas une nouvelle
+- `reset` détruit l’occurrence réadmise et en crée une nouvelle session ; il
+  réinitialise donc l’état logique, les entrées et le journal.
+- `maintain` conserve l’occurrence, son état de lecture, sa position, son
+  débit et son journal ; une occurrence qui était en pause reste en pause.
+- `rewind` conserve l’occurrence, appelle la capacité publique
+  `telco.rewind` et démarre la scène admise ; ce n’est pas une nouvelle
   session.
-- Reset réinitialise l’état logique et la session de la scène. Il ne peut pas
-  être remplacé silencieusement par Rewind.
 
 Ces modes sont exécutés uniquement lorsqu’une vue ou une liaison logique
 change. Ils ne sont pas exécutés pour un simple play, pause, seek, événement
@@ -998,9 +1035,10 @@ Le runtime distingue :
 | reset | recrée l’état logique ou l’occurrence selon le contrat |
 | destruction | supprime l’occurrence et libère ses ressources |
 
-La preuve de Reset doit précéder son utilisation par Demo 4. Une séquence
-destruction/recréation ne sera retenue que si elle est documentée comme
-garantie et si elle respecte la propriété des ressources.
+La preuve de Reset est fournie par le test de réadmission Sighty ; Demo 4 doit
+déclarer `showMode: 'reset'` pour ses scènes qui ne doivent pas conserver les
+entrées utilisateur. Une séquence destruction/recréation reste limitée à
+l’occurrence de la liaison concernée et respecte la propriété des ressources.
 
 ## 9. Fin de vue et fins de parcours
 
@@ -1017,52 +1055,49 @@ Lorsqu’une scène sort de la composition :
 5. tout fait qui doit encore être traité par le scénario est admis par le
    coordinateur et non par une source déjà fermée.
 
-La fin d’une scène et son retrait technique sont potentiellement deux faits
-distincts. Les conventions envisagées sont `scene:end` et `sequence:end` ;
-selon la configuration, `sequence:end` peut notamment désigner le retrait
-d’une scène. Leurs significations, leur ordre dans le cycle de vie et leur nom
-canonique doivent être arrêtés en M0. Deux noms ne doivent pas devenir deux
-circuits de navigation.
+La fin d’une scène et son retrait technique sont deux faits distincts, décision
+arrêtée le 2026-09-15 :
+
+- `scene:end` est un signal fonctionnel adressé à Sighty. La scène indique
+  « j’ai fini, à toi » ; elle reste montée et liée, et peut poursuivre un état
+  `idle` d’une animation perpétuelle. Sighty décide ensuite de la suite selon
+  le scénario.
+- `sequence:end` conserve le comportement CodPlay du player : il termine la
+  séquence et arrête la lecture, sans détruire l’instance, le montage ou les
+  ressources. Le détachement et la destruction relèvent ensuite du cycle de
+  vie Sighty si une transition les exige.
+
+Ces deux signaux peuvent entraîner un changement de vue si le scénario le
+paramètre ou si une écoute les transforme en intention adressée au point
+d’admission normal de Sighty. Ils ne doivent pas créer deux coordinateurs ni
+confondre signal fonctionnel et retrait technique.
 
 ### 9.2. Condition de fin de vue
 
 **[API AUTEUR] — comportement à déclarer ; aucune structure de configuration
 n’est inventée ici.**
 
-Une vue peut contenir plusieurs scènes. Sa fin est une décision du parcours,
-distincte de la fin de chacune de ces scènes. Les scènes concernées émettent un
-événement discret ; le scénario peut alors mettre à jour l’état partagé qui
-porte l’ensemble ou le compteur des conditions établies. La condition de fin
-est testée après ce changement : tant qu’elle échoue, la vue reste active ; dès
-qu’elle réussit, la suite déclarée peut être engagée.
+Une vue peut contenir plusieurs scènes. Sa sortie est gardée par `exitBy`,
+distincte de la fin de chacune de ces scènes : la condition la plus spécifique
+est évaluée pour les sélections sortantes et un seul refus bloque la transition
+entière. Une scène passive qui ne sort pas de la composition n’est pas évaluée.
+Les conditions peuvent être explicites et héritées depuis une portée parente ;
+elles n’ont donc pas à être répétées dans toutes les vues.
 
-Une scène passive est exclue de l’ensemble attendu. Les conditions peuvent être
-explicites et héritées depuis une portée parente selon la règle retenue en M0.
-Elles n’ont donc pas à être répétées dans toutes les vues.
+Les signaux `scene:end` et `sequence:end` ne déclenchent pas implicitement une
+navigation. Une action `go` peut toutefois être déclarée avec l’un ou l’autre
+comme clé d’événement, ou l’application hôte peut observer l’événement public
+et réinjecter une intention avec `runtime.dispatch`.
 
-Une suggestion non normative consiste à noter `auto` un mode automatique qui
-autoriserait le passage à la vue suivante à la fin de la scène. Cette suggestion
-doit être comparée à d’autres formes de configuration avant toute décision.
-Une autre configuration peut s’appuyer sur un événement convenu, tel que
-`scene:end` ou `sequence:end`. Ces événements ne sont pas confondus avec le
-retrait technique de la scène ; `sequence:end` peut justement être la
-convention choisie pour ce retrait, auquel cas les deux faits restent
-distincts.
+Une interaction utilisateur, une convention de fin de scène/séquence ou une
+écoute d’intégration peut donc produire une intention de navigation adressée à
+Sighty. Dans tous les cas, cette intention emprunte le même point d’admission
+et le même coordinateur ; elle ne crée pas une sélection directe.
 
-Une interaction utilisateur, comme celle de Demo 4, constitue une autre
-condition explicite de passage. Qu’il provienne du mode automatique s’il est
-retenu, d’une convention de fin de scène/séquence ou de l’interaction, le
-déclenchement
-produit un événement de navigation adressé à Sighty. Un écouteur CodPlay peut
-éventuellement transformer le fait reçu en intention de navigation, par
-exemple `scene:end` en `go:next`, puis utiliser le même point d’entrée que les
-autres événements. La pertinence de ce mécanisme d’écoute et de transformation
-reste à évaluer ; il ne doit pas créer une sélection directe ni un second
-coordinateur.
-
-Le choix entre une réévaluation déclenchée par une mise à jour du state, par un
-événement de navigation ou par un autre mécanisme doit être arrêté en M0/M6
-avec sa justification et ses tests.
+Le choix entre une action auteur et une écoute d’intégration est explicite dans
+le contrat d’utilisation : l’action est locale au fichier auteur, tandis que
+l’écoute reste sous la responsabilité de l’application hôte. Les deux voies
+réutilisent `dispatch` pour naviguer.
 
 Les destinations possibles sont :
 
@@ -1083,26 +1118,33 @@ Le couplage de la télécommande avec la scène contrôlée est une tranche
 spécifique. Cette tranche de navigation doit toutefois fournir le point
 d’ancrage générique :
 
-**[API AUTEUR] — descripteur déclaratif candidat, à valider dans le plan
-dédié du couplage.** `controllerBinding` et `controlledSlot` sont des
-références auteur ; ils ne contiennent pas un `BindingId` runtime.
+**[API AUTEUR] — descripteur déclaratif arrêté pour cette reprise.** Les
+références restent des noms de slots de la vue ; elles ne contiennent pas un
+`BindingId`, une adresse de slot interne ou une occurrence CodPlay.
 
 ~~~ts
-type CouplingDescriptor = {
+type CouplingDescriptor<SlotName> = {
   couplingId: string
-  controllerBinding: string
-  controlledSlot: string
-  initialization: 'maintain' | 'reset'
-  commands: Readonly<Record<string, string>>
+  controllerSlot?: SlotName
+  controlledSlot: SlotName
+  commands: Readonly<Record<string, TelcoCommand | readonly TelcoCommand[]>>
 }
+
+type TelcoCommand =
+  | 'play'
+  | 'pause'
+  | 'togglePlay'
+  | 'setRate'
+  | 'seek'
+  | 'rewind'
 ~~~
 
 Le descripteur indique :
 
-- quelle liaison reçoit les commandes ;
+- quel slot reçoit les commandes, ou laisse Sighty utiliser la liaison source
+  de l’événement dans la vue ;
 - quel slot est contrôlé ;
 - quels noms d’événements sont acceptés ;
-- quelle politique d’initialisation s’applique ;
 - comment le couplage est fermé à la sortie.
 
 La télécommande ne parle pas directement à l’instance de contenu. Sighty
@@ -1112,14 +1154,16 @@ Lorsque les événements produits par la télécommande doivent être accessible
 à l’application hôte, ils empruntent la surface publique de souscription
 décrite en §6.2. L’application hôte n’a pas à connaître l’instance CodPlay qui
 porte la telco et ne crée pas un abonnement parallèle pour recevoir ces
-événements. La liste exacte des événements de télécommande rendus publics et
-la forme de leur `data` doivent suivre le contrat CodPlay existant et être
-arrêtées en M0 ; cette exigence ne crée pas une seconde implémentation de la
-télécommande.
+événements. La liste des événements de télécommande reste fournie par les
+scènes CodPlay. Les commandes `setRate` et `seek` attendent respectivement les
+données `{ rate }` et `{ timeMs }`; `seek` accepte aussi la valeur native
+`{ value }` d’un composant d’entrée. Sighty ne crée pas une seconde
+implémentation de la télécommande.
 
-Le progress getter/setter, les observations vivantes et leur projection dans
-une telco restent hors de ce plan. Aucun événement progress:update ne sera
-introduit pour les traiter.
+L’intégration hôte conserve l’accès à toute la telco CodPlay via l’instance
+retournée par `runtime.getInstanceAt(slotAddress)` ; ses getters, commandes et
+observations vivantes ne sont pas recopiés par Sighty. Aucun événement
+`progress:update` ne sera introduit pour les traiter.
 
 La possibilité d’importer une méthode de telco d’une scène vers une autre sera
 traitée comme un port de commande réutilisable, pas comme une copie de
@@ -1184,34 +1228,30 @@ La référence de la vue active, les bindings d’occurrence et les informations
 de reprise sont produites par Sighty. Les helpers dynamiques sont des
 résolveurs de lecture ; ils ne créent pas une horloge ni un flux parallèle.
 
-Une scène peut recevoir un snapshot à son initialisation. Une mise à jour
-vivante ne sera ajoutée que pour des données dont le changement est déclenché
-par un fait discret ou par un contrat d’observation séparé.
+Une scène reçoit les données déclarées à l’entrée par le chemin d’événement
+CodPlay. Une liaison `live` est réévaluée après `runtime.updateContext`, qui est
+le déclencheur discret de cette verticale ; elle ne crée ni horloge ni flux de
+progression.
 
 ### 11.4. Données transmises
 
 Les `data` déclarées par les vues et fournies par une commande externe relèvent
-d’une seule catégorie. Leur portée, leur héritage éventuel et leur priorité
-doivent être définis par une règle unique ; aucune fusion particulière n’est
-introduite.
+d’une seule catégorie. La verticale résout les portées du moins spécifique au
+plus spécifique, puis transmet les clés déclarées à la scène active. Les
+valeurs littérales et les bindings suivent la même règle de remplacement ; un
+binding lit `context` ou `data` par chemin pointé. Sighty ne modifie pas l’état
+interne de la scène pour injecter ces données.
 
-À l’entrée d’une scène, Sighty résout les bindings et transmet les `data`
-initiales autorisées. Il ne modifie pas l’état interne de la scène.
+`entry` est livré à l’admission de la sélection et `live` après une mise à jour
+du contexte. L’événement personnalisé du binding est conservé, avec
+`data:update` comme valeur par défaut.
 
-### 11.5. Sauvegarde
+### 11.5. Persistance hors périmètre
 
-Un état sauvegardable ne contient jamais :
-
-- une instance CodPlay ;
-- un player ;
-- un abonnement ;
-- un montage ;
-- un handle de ressource ;
-- une promesse en cours.
-
-Il contient uniquement la projection sérialisable du RuntimeState et du
-ScenarioContext selon la version du scénario. La restauration doit résoudre
-les adresses stables avant d’acquérir ou de monter les scènes.
+Aucune API de sauvegarde ou de restauration sérialisée n’est définie par cette
+reprise. Le `RuntimeState` désigne ici l’état vivant d’exécution de Sighty ; il
+ne doit pas être confondu avec une sauvegarde durable. Une éventuelle
+persistance relève de l’application hôte et de son intégration.
 
 ## 12. API d’intégration — mutation du scénario
 
@@ -1235,9 +1275,9 @@ type ScenarioMutation =
   | { kind: 'hide-view' | 'show-view'; target: AuthorViewReference }
 ~~~
 
-**[API INTÉGRATION] — proposition à stabiliser en M8.** Le normaliseur traduit
+**[API INTÉGRATION — VERTICALE ACTUELLE]** Le scénario traduit
 `AuthorViewReference` en adresse interne ; l’adresse interne ne franchit pas la
-frontière publique.
+frontière publique. La nouvelle version est validée avant d’être publiée.
 
 Chaque mutation indique ou résout une politique :
 
@@ -1259,9 +1299,18 @@ Règles :
    l’action de mutation ;
 7. l’ajout d’une vue inactive n’acquiert aucune ressource avant sa sélection.
 
-La mutation du scénario est une capacité ultérieure, mais ses invariants sont
-fixés dès le modèle afin de ne pas enfermer le runtime dans des identifiants
-éphémères.
+La verticale actuelle exécute ces opérations par `runtime.mutate`. En mode
+`preserve`, elle conserve la sélection encore déclarée et les occurrences
+compatibles ; `rewind` rembobine la composition résultante ; `reset` recrée les
+occurrences depuis l’ancre initiale ; `reload` réacquiert les ressources avant
+ce reset. Une mutation ajoutant une vue inactive ne crée toujours aucune
+occurrence avant sa sélection.
+
+Si la préparation, le preload, le montage ou la livraison échoue, Sighty
+restaure la version auteur précédente, l’index, la composition et les
+occurrences physiques. Les ressources introduites par la tentative sont
+libérées par la surface de preload de l’owner CodPlay. La persistance
+sérialisée reste hors de cette reprise.
 
 ## 13. API auteur des sources et types internes de ressources
 
@@ -1283,7 +1332,19 @@ SceneKey
 ~~~
 
 La même source doit être utilisée pour le preload et l’acquisition à la
-sélection. Le preload ne doit pas créer un second loader.
+sélection. Le preload ne doit pas créer un second loader. Ce comportement est
+déjà implémenté dans la verticale actuelle : les scènes directes sont
+compilées et préparées à l’initialisation ; une source différée (lazy) est
+résolue, compilée et préparée uniquement lorsqu’une vue référente entre, puis
+réutilisée depuis le cache du scénario. Cette section ne décrit donc pas une
+fonctionnalité à inventer, mais le contrat à vérifier et à maintenir.
+
+Sighty conserve les URLs préparées par `SceneKey` et libère les URLs devenues
+inutiles via `owner.preload.release`. Le cache CodPlay porte la propriété par
+owner et ne supprime une entrée partagée qu’après le relâchement de tous ses
+propriétaires. Le rollback d’une mutation relâche les URLs introduites par la
+tentative ou reconstruit les claims de la version précédente après un reload
+destructif.
 
 Un registre interne peut suivre :
 
@@ -1321,10 +1382,11 @@ Fixer et faire valider :
 - le comportement en cas de refus d’accès : page suivante ou échappatoire ;
 - le mécanisme d’héritage des conditions et des conventions de fin, y compris
   la règle de combinaison et de priorité des déclarations ;
-- l’opportunité d’un mode automatique, provisoirement noté `auto`, et sa
-  comparaison avec les autres formes de configuration ;
-- la distinction entre les conventions `scene:end` et `sequence:end`, y
-  compris le cas où `sequence:end` signale le retrait d’une scène ;
+- l’absence de navigation automatique implicite en fin de scène ou de
+  séquence ;
+- la distinction entre `scene:end`, signal fonctionnel qui laisse l’occurrence
+  active, et `sequence:end`, signal terminal traité selon le comportement
+  CodPlay sans destruction automatique de l’occurrence ;
 - le mécanisme de réévaluation de la fin de vue après les événements produits
   par les scènes ou une interaction utilisateur, ainsi que sa justification ;
 - la pertinence d’un écouteur CodPlay transformant un fait de scène en
@@ -1345,6 +1407,8 @@ Fixer et faire valider :
   interne ;
 - la syntaxe des routes et des références auteur ;
 - la priorité des portées ;
+- le nom public `showMode`, ses valeurs `reset`, `maintain` et `rewind`, son
+  héritage et son défaut `rewind` ;
 - la distinction événements/commandes ;
 - les noms et sémantiques canoniques des faits de fin de scène, de fin de
   séquence et de retrait ;
@@ -1392,7 +1456,7 @@ Ajouter les modèles **internes** :
 - publication atomique de la composition logique.
 
 **Tests :** transitions concurrentes, erreur de préparation, annulation,
-stop/play/pause, fin locale et fin globale.
+play/pause, fin locale et fin globale.
 
 **Gate :** aucune carte active ne change avant le commit d’une opération
 complète.
@@ -1440,13 +1504,22 @@ masque une garantie absente.
 
 ### M5 — acquisition et propriété des ressources
 
-Introduire la résolution de source, le preload partagé, l’acquisition à la
-demande et la libération contrôlée.
+Consolider et valider la résolution de source, le preload partagé, l’acquisition
+à la demande et la libération contrôlée déjà exécutés par la verticale.
 
-**Tests :** source directe, factory, source lazy, source indisponible, preload
-réutilisé, ressources partagées, annulation et libération idempotente.
+La source directe est préparée à l’initialisation ; la source différée (lazy)
+est résolue une seule fois à sa première sélection, puis son document, son
+build et ses ressources sont réutilisés. Sighty suit les URLs par scène et
+libère celles devenues inutiles ; le cache CodPlay conserve les entrées tant
+qu’un owner les possède encore.
 
-**Gate :** une seule source et un seul chemin de preload/acquisition.
+**Preuves actuelles :** source directe, factory, source lazy, source
+indisponible, preload réutilisé, ressources partagées, annulation et libération
+idempotente sont couvertes par les suites existantes. Les vérifications media,
+intégration complète et navigateur restent à compléter.
+
+**Gate restante :** préserver une seule source et un seul chemin de
+preload/acquisition, y compris pendant reset, mutation, rollback et destruction.
 
 ### M6 — conditions de parcours, fin de vue et erreurs
 
@@ -1455,20 +1528,19 @@ Ajouter les deux usages de conditions :
 - condition d’accès à une page ou une section ;
 - page suivante ou échappatoire déclarée en cas de refus ;
 - héritage des conditions et conventions de fin selon les portées validées ;
-- condition empêchant la fin d’une vue ;
-- évaluation du mode automatique éventuellement noté `auto`, s’il est retenu en
-  M0 ;
-- conventions `scene:end` et `sequence:end`, avec vérification de leur
-  éventuelle distinction avec le retrait d’une scène ;
-- contribution des événements produits par les scènes à l’ensemble ou au
-  compteur attendu ;
+- `exitBy` comme garde de sortie d’une vue, y compris lorsqu’elle contient
+  plusieurs scènes ;
+- conventions `scene:end` et `sequence:end`, avec vérification du signal
+  fonctionnel, du traitement terminal CodPlay et de leur raccord éventuel à la
+  navigation ;
+- distinction entre le signal de fin d’une scène et la sortie gardée de la vue ;
 - interaction utilisateur comme déclencheur de navigation, selon le cas de
   Demo 4 ;
 - événement de navigation adressé à Sighty dans chacun de ces cas ;
 - écoute CodPlay et transformation éventuelle vers une intention de
   navigation, si cette solution est jugée pertinente ;
-- réévaluation selon le mécanisme retenu en M0 ;
-- scènes passives ignorées dans les conditions de fin ;
+- réévaluation du garde `exitBy` lorsque le contexte change ;
+- scènes passives ignorées lorsqu’elles ne sortent pas de la composition ;
 - voie d’erreur déclarée ;
 - diagnostic observable ;
 - relance depuis le départ déclaré.
@@ -1477,7 +1549,7 @@ Ajouter les deux usages de conditions :
 vue ne survient pas avant l’établissement de ses conditions, et la voie
 d’erreur ne produit pas de sélection mixte.
 
-### M7 — données, context et sauvegarde
+### M7 — données, context et état vivant
 
 Fixer puis implémenter :
 
@@ -1486,8 +1558,7 @@ Fixer puis implémenter :
 - actions de mise à jour ;
 - résolution et transmission des `data` ;
 - valeurs dynamiques ;
-- RuntimeState sérialisable ;
-- sauvegarde/restauration d’une adresse imbriquée.
+- état vivant lisible par les conditions et les couplages.
 
 **Gate :** aucune scène ne modifie directement le contexte ou l’état Sighty.
 
@@ -1506,17 +1577,16 @@ Implémenter les mutations versionnées après validation :
 
 ### M9 — couplage télécommande/scène
 
-Traiter dans un plan dédié le descripteur de coupling :
+Consolider et valider le descripteur de coupling arrêté en §10 :
 
-- assignation du slot contrôlé ;
+- slot source et slot contrôlé déclarés dans la vue ;
 - événements de commande configurables ;
-- initialisation maintain/reset ;
-- fermeture à la sortie ;
-- médiation Sighty ;
-- progress getter/setter et observation vivante.
+- commandes telco complètes et séquences ordonnées ;
+- fermeture à la sortie et validation du binding ;
+- accès hôte à l’instance telco complète par slot.
 
 Cette tranche ne doit pas réintroduire de progression périodique dans les
-événements normaux.
+événements normaux et ne doit pas ajouter de persistance à Sighty.
 
 ### M10 — réécriture et acceptation de Demo 4
 
@@ -1557,8 +1627,10 @@ Exécuter, selon les catégories affectées :
 - souscription de l’application hôte aux événements publics Sighty, propagation
   des événements de télécommande, de navigation et d’interaction, puis
   désabonnement et destruction ;
-- Play, Pause, Stop, Rewind, Seek et répétitions ;
-- redimensionnement et persistance si affectés ;
+- surface telco CodPlay complète (`play`, `pause`, `togglePlay`, `setRate`,
+  `seek`, `rewind`, `commandInFlight`, `rate`, `getState`, `getProgress`,
+  `onChange` et `onProgress`) et répétitions ;
+- redimensionnement si affecté ;
 - typecheck ;
 - suite de tests ;
 - build ;
@@ -1597,6 +1669,8 @@ elle n’est pas affectée.
 - next/previous essaient le voisin local puis la portée parente à la borne ;
 - up et down sont explicites ;
 - les conditions et conventions de fin suivent l’héritage de portée validé ;
+- `showMode` suit cette même résolution de portée, avec `reset`, `maintain` et
+  `rewind` comme seules valeurs ;
 - deux slots homonymes ne se mélangent pas ;
 - path et label n’utilisent pas d’index caché ;
 - une destination inconnue produit un diagnostic avant tout commit.
@@ -1629,16 +1703,18 @@ elle n’est pas affectée.
 - Maintain conserve réellement la scène ;
 - Rewind revient à zéro sans être présenté comme un reset ;
 - Reset obtient une session neuve selon une garantie vérifiée ;
+- une entrée issue d’une navigation passe par le coordinateur unique, qui
+  livre ses données avant de finaliser le comportement `showMode` ;
 - la sortie invalide avant le détachement ;
 - la fin de chaque scène est distincte de la fin de la vue ;
-- si M0 retient un mode automatique, son autorisation de la vue suivante à la
-  fin de la scène est vérifiée ;
-- `scene:end` et `sequence:end` ne sont pas confondus avec le retrait d’une
-  scène sans décision explicite ;
-- les événements des scènes établissent les conditions de fin de vue ;
+- aucune navigation automatique n’est déduite d’une fin de scène ou de
+  séquence ;
+- `scene:end` reste un signal fonctionnel ; `sequence:end` termine la séquence
+  selon le comportement CodPlay sans détruire l’occurrence ;
+- `exitBy` garde la sortie d’une vue multi-scènes ;
 - une interaction utilisateur peut produire l’événement de navigation attendu ;
-- les déclenchements automatiques, conventionnels ou issus d’une interaction
-  adressent Sighty par un événement de navigation ;
+- les signaux de fin déclarés ou transformés par l’hôte adressent Sighty par
+  un événement de navigation ;
 - une vue ne se termine pas tant que sa condition n’est pas satisfaite ;
 - une scène passive est ignorée dans l’ensemble attendu ;
 - finished est un état explicite de la machine.
@@ -1648,7 +1724,7 @@ elle n’est pas affectée.
 - les conditions de parcours ne modifient rien ;
 - les actions modifient le contexte par transaction ;
 - les `data` suivent une règle unique de résolution documentée ;
-- l’état sauvegardé ne contient aucune référence physique ;
+- l’état vivant ne fuit aucune référence physique dans l’API auteur ;
 - une mutation est validée avant publication ;
 - une mutation active applique la politique de rechargement déclarée.
 
@@ -1680,7 +1756,8 @@ Il doit vérifier :
 Ne pas inclure dans la reconstruction de navigation :
 
 - l’exposition des types internes comme API utilisateur ;
-- une API de progression globale ;
+- une API de progression globale Sighty ; la projection locale CodPlay relève
+  du plan dédié d’évaluation de la progression ;
 - un flux continu d’événements ;
 - un accès au DOM ou aux racines matérialisées ;
 - un nouveau mécanisme interne CodPlay exposé sans contrat ;
@@ -1696,19 +1773,19 @@ Ne pas inclure dans la reconstruction de navigation :
 
 | Tranche | Statut actuel | Condition de passage |
 | --- | --- | --- |
-| M0 — modèle et décisions | En cours | validation des décisions encore ouvertes |
+| M0 — modèle et décisions | En cours | décisions auteur, intégration et fin de scène relues ; smoke Safari Demo 4 exécuté le 2026-09-16, autres parcours à valider |
 | M1 — index et résolveur | En cours | tests du graphe et des routes complétés, validation des cas restants |
 | M2 — machine et opérations | En cours | opérations versionnées et composition active éprouvées, erreurs partielles restantes |
 | M3 — événements et invalidation | En cours | événements publics, abonnements actifs, sources inactives et invalidation testés |
-| M4 — cycle de vie | En cours | garanties CodPlay vérifiées sur les parcours d’intégration, navigateur/Safari et reset à compléter |
-| M5 — ressources | En cours | propriété, acquisition et release à définir complètement |
-| M6 — conditions et erreurs | Bloquée | contrats de sortie validés |
-| M7 — données et sauvegarde | Bloquée | vocabulaire et format validés |
-| M8 — mutations | Bloquée | versionnement accepté |
-| M9 — coupling/telco | Plan séparé | plan dédié validé |
-| M10 — Demo 4 | En cours | intégrations Demo 2/3/4 et relais Sighty validés, parcours navigateur à compléter |
-| M11 — validation complète | Bloquée | toutes les preuves applicables |
-| progression | Hors périmètre | plan dédié ultérieur |
+| M4 — cycle de vie | En cours | reset et showMode couverts ; Demo 4 vérifié dans Safari, erreurs partielles et autres parcours à terminer |
+| M5 — ressources | En cours | résolution directe/lazy et propriété du cache CodPlay vérifiées ; couverture media, intégration complète et navigateur à terminer |
+| M6 — conditions et erreurs | En cours | accès/sortie par portée, garde `exitBy` et signaux de fin exécutés, avec régression d’intégration ; navigateur restant |
+| M7 — données et état vivant | En cours | data/context `entry`/`live` et lecture d’état exécutés ; navigateur restant |
+| M8 — mutations | En cours | mutations versionnées, politiques et rollback exécutés ; versionnement durable à valider |
+| M9 — coupling/telco | En cours | couplage déclaré, occurrences indépendantes et surface telco vérifiés ; autres parcours navigateur à compléter |
+| M10 — Demo 4 | En cours | intégrations Demo 2/3/4 et relais Sighty validés (Demo 4 : 10/10 ; CodPlay : 648/648), progression live et smoke Safari Demo 4 validés ; autres parcours à compléter |
+| M11 — validation complète | En cours | suites (Sighty 30/30, CodPlay 648/648), typechecks, build et smoke Safari Demo 4 validés le 2026-09-16 ; les preuves restantes sont encore à exécuter |
+| progression | Plan dédié en cours | projection locale CodPlay par `onProgress` et surface `input`, sans `progress:update` |
 
 Ce plan reste En cours tant que les gates et validations correspondantes ne
 sont pas exécutées. Aucun changement de code ne doit être présenté comme

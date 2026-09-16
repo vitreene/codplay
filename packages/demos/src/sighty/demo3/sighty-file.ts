@@ -2,7 +2,6 @@ import type { SightyFile as SightyFileDefinition } from '@codplay/sighty'
 
 export type SightyDemo3SceneKey = 'layout' | 'sceneA' | 'telco'
 export type SightyDemo3SlotName = 'sceneA' | 'telco'
-export type SightyDemo3ChildSceneKey = Exclude<SightyDemo3SceneKey, 'layout'>
 
 /** Declarative composition file for the demo 3 data-injection scenario. */
 export type SightyDemo3File = SightyFileDefinition<SightyDemo3SceneKey, SightyDemo3SlotName>

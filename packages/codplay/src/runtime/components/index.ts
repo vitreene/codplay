@@ -67,6 +67,7 @@ export type {
 } from './polygon'
 export type {
   ForeignContentSurface,
+  InputComponentSurface,
   MediaComponentSurface,
   ReplaceComponentSurface,
   ReplacePresentationSession,

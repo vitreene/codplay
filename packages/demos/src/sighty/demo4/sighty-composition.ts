@@ -1,13 +1,9 @@
-import { Sighty, type SightyPublicEvent } from '@codplay/sighty'
+import { Sighty } from '@codplay/sighty'
 import type { CodPlayEventime, CodPlayTelcoState } from 'codplay'
 import {
-  DEMO4_PLAYBACK_INTENTS,
   DEMO4_PLAYBACK_STATE_EVENTS,
-  DEMO4_PROGRESS_INTENTS,
-  DEMO4_PROGRESS_STATE_EVENTS,
   DEMO4_TELCO_STATE_EVENTS,
 } from './messages'
-import type { Demo4PlaybackIntentName } from './messages'
 import { sightyScenario } from './scene-resources'
 import { actionCatalog } from './action-catalog'
 import { DEMO4_LAYOUT_CAROUSEL } from './carousel'
@@ -23,10 +19,10 @@ type SightyDemo4Options = Readonly<{
 }>
 
 type Demo4Sighty = Sighty<SightyDemo4SceneKey, SightyDemo4SlotName>
-export type Demo4Runtime = Demo4Sighty['runtime']
-type Demo4PlaybackCommand = 'toggle' | 'rewind'
+type Demo4Runtime = Demo4Sighty['runtime']
 
 const CHAPTER_SCENE_SLOT = 'slot-scene' as const
+const CHAPTER_TELCO_SLOT_ADDRESS = 'view-main/view-chapter/slot-telco' as const
 
 const INSTANCE_IDS: Readonly<Record<SightyDemo4SceneKey, string>> = {
   'scene-layout': 'demo4-layout-1',
@@ -37,15 +33,11 @@ const INSTANCE_IDS: Readonly<Record<SightyDemo4SceneKey, string>> = {
   'scene-telco': 'demo4-telco-1',
 }
 
-const PROGRESS_SCENE_KEYS = ['scene-a', 'scene-b', 'scene-c'] as const
+const CONTENT_SCENE_KEYS = ['scene-a', 'scene-b', 'scene-c'] as const
 const SCENE_TARGET = { scope: 'story', storyId: 'main' } as const
-const PROGRESS_UPDATE_INTERVAL_MS = 100
-const PLAYBACK_COMMANDS: Readonly<Record<Demo4PlaybackIntentName, Demo4PlaybackCommand>> = {
-  [DEMO4_PLAYBACK_INTENTS.toggle]: 'toggle',
-  [DEMO4_PLAYBACK_INTENTS.rewind]: 'rewind',
-}
+const PROGRESS_CONTROL_TARGET = { storyId: 'main', persoId: 'demo4-telco-progress' } as const
 
-/** Owns demo-specific progress and button presentation around one Sighty facade. */
+/** Owns demo-specific seek and button presentation around one Sighty facade. */
 export class SightyComposition {
   private readonly sighty: Demo4Sighty
   private readonly onLog: SightyDemo4Options['onLog']
@@ -53,16 +45,6 @@ export class SightyComposition {
   private readonly cleanups: Array<() => void> = []
   private readonly activeSceneCleanups: Array<() => void> = []
   private selectionRevision = 0
-  private progressUpdatePending: Readonly<{
-    revision: number
-    sceneKey: SightyDemo4SceneKey
-    value: number
-    max: number
-  }> | undefined
-  private progressUpdateRunning = false
-  private progressUpdateScheduled = false
-  private progressUpdateTimer: ReturnType<typeof globalThis.setTimeout> | undefined
-  private playbackCommandRevision: number | undefined
   private playbackStatePending: Readonly<{
     revision: number
     sceneKey: SightyDemo4SceneKey
@@ -70,6 +52,7 @@ export class SightyComposition {
   }> | undefined
   private playbackStateRunning = false
   private playbackStateScheduled = false
+  private telcoProjectionChain: Promise<void> = Promise.resolve()
   private destroyed = false
 
   /** Creates the Sighty facade and supplies only demo-specific presentation features. */
@@ -115,38 +98,11 @@ export class SightyComposition {
   async initialize(): Promise<void> {
     await this.runtime.initialize()
     this.connectSelectionFeature()
-    this.connectProgressFeature()
-    this.connectPlaybackFeature()
     const initialSceneKey = this.runtime.getMountedSceneKey(CHAPTER_SCENE_SLOT)
-    this.connectActiveSceneObservation(initialSceneKey, this.selectionRevision)
     await this.runtime.play('scene-layout')
     await this.runtime.play('scene-menu')
-    await this.syncTelcoState(initialSceneKey, this.selectionRevision)
+    await this.activateSelection(initialSceneKey, this.selectionRevision)
     this.onLog('Démo 4 initialisée : menu → scènes A/B/C')
-  }
-
-  /** Connects the scene telco playback intents to the currently selected scene. */
-  private connectPlaybackFeature(): void {
-    this.cleanups.push(this.runtime.events.onEvent((event) => {
-      if (event.sourceSceneKey !== 'scene-telco') return
-      const command = PLAYBACK_COMMANDS[event.name as Demo4PlaybackIntentName]
-      if (command === undefined) return
-      if (!this.isSceneTelcoMounted()) return
-      const revision = this.selectionRevision
-      if (this.playbackCommandRevision === revision) return
-      this.playbackCommandRevision = revision
-      void this.controlSelectedScene(command, revision)
-        .finally(() => {
-          if (this.playbackCommandRevision === revision) this.playbackCommandRevision = undefined
-        })
-        .catch((error: unknown) => {
-          if (this.destroyed) return
-          this.onLog(
-            `Commande de lecture impossible : ${error instanceof Error ? error.message : String(error)}`,
-            'error',
-          )
-        })
-    }))
   }
 
   /** Connects the demo-specific state of the scene telco to Sighty selection changes. */
@@ -154,8 +110,7 @@ export class SightyComposition {
     this.cleanups.push(this.runtime.onSlotChange(CHAPTER_SCENE_SLOT, (sceneKey) => {
       const revision = ++this.selectionRevision
       this.disconnectActiveSceneObservation()
-      this.connectActiveSceneObservation(sceneKey, revision)
-      void this.syncTelcoState(sceneKey, revision).catch((error: unknown) => {
+      void this.activateSelection(sceneKey, revision).catch((error: unknown) => {
         if (this.destroyed) return
         this.onLog(
           `État de la telco indisponible : ${error instanceof Error ? error.message : String(error)}`,
@@ -165,28 +120,19 @@ export class SightyComposition {
     }))
   }
 
-  /** Connects the scene progress intent and the live progress observations. */
-  private connectProgressFeature(): void {
-    this.cleanups.push(this.runtime.events.onEvent((event) => {
-      if (event.sourceSceneKey !== 'scene-telco') return
-      if (event.name !== DEMO4_PROGRESS_INTENTS.seek) return
-      if (!this.isSceneTelcoMounted()) return
-      const value = readNumericEventValue(event)
-      if (value === undefined) {
-        this.onLog('La progression reçue par la démo 4 est invalide.', 'warn')
-        return
-      }
-      void this.seekSelectedScene(value).catch((error: unknown) => {
-        if (this.destroyed) return
-        this.onLog(
-          `Seek de la scène impossible : ${error instanceof Error ? error.message : String(error)}`,
-          'error',
-        )
-      })
-    }))
+  /** Synchronizes the scene telco state after Sighty admits the new selection. */
+  private async activateSelection(
+    sceneKey: SightyDemo4SceneKey | undefined,
+    revision: number,
+  ): Promise<void> {
+    if (!this.isCurrentSceneSelection(sceneKey, revision)) return
+    await this.syncTelcoState(sceneKey, revision)
+    if (this.isCurrentSceneSelection(sceneKey, revision)) {
+      this.connectActiveSceneObservation(sceneKey, revision)
+    }
   }
 
-  /** Observes only the scene currently mounted in the chapter slot. */
+  /** Observes playback state only for the scene currently mounted in the chapter slot. */
   private connectActiveSceneObservation(
     sceneKey: SightyDemo4SceneKey | undefined,
     revision: number,
@@ -194,139 +140,57 @@ export class SightyComposition {
     if (!this.isCurrentSceneSelection(sceneKey, revision)
       || sceneKey === undefined
       || sceneKey === 'scene-menu') return
-    if (!PROGRESS_SCENE_KEYS.includes(sceneKey as typeof PROGRESS_SCENE_KEYS[number])) return
+    if (!CONTENT_SCENE_KEYS.includes(sceneKey as typeof CONTENT_SCENE_KEYS[number])) return
 
     const instance = this.requireInstance(sceneKey)
     this.activeSceneCleanups.push(
-      instance.telco.onProgress((state) => this.requestProgressUpdate(sceneKey, revision, state)),
+      instance.telco.onProgress((state) => {
+        this.projectActiveSceneProgress(sceneKey, revision, state)
+      }),
       instance.telco.onChange((state) => {
-        this.requestProgressUpdate(sceneKey, revision, state)
         this.requestPlaybackState(sceneKey, revision, state)
       }),
     )
     const state = instance.telco.getState()
-    this.requestProgressUpdate(sceneKey, revision, state)
+    this.projectActiveSceneProgress(sceneKey, revision, state)
     this.requestPlaybackState(sceneKey, revision, state)
   }
 
-  /** Removes progress and playback observers from the scene that just exited. */
-  private disconnectActiveSceneObservation(): void {
-    for (const cleanup of this.activeSceneCleanups.splice(0)) cleanup()
-    this.progressUpdatePending = undefined
-    this.playbackStatePending = undefined
-    if (this.progressUpdateTimer !== undefined) {
-      globalThis.clearTimeout(this.progressUpdateTimer)
-      this.progressUpdateTimer = undefined
-      this.progressUpdateScheduled = false
-    }
-  }
-
-  /** Relays the scene telco slider to the scene currently selected by Sighty. */
-  private async seekSelectedScene(value: number): Promise<void> {
-    if (!this.isSceneTelcoMounted()) return
-    const revision = this.selectionRevision
-    const sceneKey = this.runtime.getMountedSceneKey(CHAPTER_SCENE_SLOT)
-    if (sceneKey === undefined
-      || sceneKey === 'scene-menu'
-      || !this.isActiveScene(sceneKey, revision)) return
-    const instance = this.requireInstance(sceneKey)
-    const duration = instance.telco.getProgress().durationMs
-    const targetTime = Math.max(0, Math.min(duration, value))
-    const state = instance.telco.getState()
-    if (state.status === 'playing' && !state.sequenceEnded) await instance.telco.pause()
-    if (!this.isActiveScene(sceneKey, revision)) return
-    await instance.telco.seek(targetTime)
-  }
-
-  /** Applies one playback command to the scene selected in the chapter slot. */
-  private async controlSelectedScene(command: Demo4PlaybackCommand, revision: number): Promise<void> {
-    if (!this.isSceneTelcoMounted()) return
-    const sceneKey = this.runtime.getMountedSceneKey(CHAPTER_SCENE_SLOT)
-    if (sceneKey === undefined
-      || sceneKey === 'scene-menu'
-      || !this.isActiveScene(sceneKey, revision)) return
-    const instance = this.requireInstance(sceneKey)
-    if (command === 'toggle') await instance.telco.togglePlay()
-    else await instance.telco.rewind()
-    if (!this.isActiveScene(sceneKey, revision)) return
-    this.requestPlaybackState(sceneKey, revision, instance.telco.getState())
-  }
-
-  /** Schedules the latest active-scene progress for the authored telco input. */
-  private requestProgressUpdate(
+  /** Projects the active scene time into the authored telco input without journaling it. */
+  private projectActiveSceneProgress(
     sceneKey: SightyDemo4SceneKey,
     revision: number,
     state: CodPlayTelcoState,
   ): void {
     if (!this.isActiveScene(sceneKey, revision)) return
-    this.progressUpdatePending = {
-      revision,
-      sceneKey,
-      value: state.timelineMs,
-      max: state.durationMs,
-    }
-    this.scheduleProgressUpdateFlush()
-  }
-
-  /** Sends coalesced progress updates through the telco scene event path. */
-  private async flushProgressUpdates(): Promise<void> {
-    const update = this.progressUpdatePending
-    this.progressUpdatePending = undefined
-    try {
-      if (this.destroyed || update === undefined) return
-      if (!this.isActiveScene(update.sceneKey, update.revision)) return
-      const telco = this.requireInstance('scene-telco')
-      await telco.events.emit({
-        name: DEMO4_PROGRESS_STATE_EVENTS.update,
-        data: { value: update.value, max: update.max },
-      }, SCENE_TARGET)
-    } finally {
-      this.progressUpdateRunning = false
-      if (!this.destroyed && this.progressUpdatePending !== undefined) {
-        this.scheduleProgressUpdateFlush()
-      }
+    const telco = this.requireInstance('scene-telco')
+    const result = telco.projection.setInputValue(PROGRESS_CONTROL_TARGET, state.timelineMs)
+    if (!result.ok && result.code !== 'TARGET_NOT_PRESENT') {
+      this.onLog(`Projection de progression impossible : ${result.code}`, 'error')
     }
   }
 
-  /** Defers and samples non-critical progress so playback commands stay responsive. */
-  private scheduleProgressUpdateFlush(): void {
-    if (this.progressUpdateRunning || this.progressUpdateScheduled) return
-    this.progressUpdateScheduled = true
-    this.progressUpdateTimer = globalThis.setTimeout(() => {
-      this.progressUpdateTimer = undefined
-      this.progressUpdateScheduled = false
-      if (this.destroyed || this.progressUpdatePending === undefined) return
-      const update = this.progressUpdatePending
-      if (!this.isActiveScene(update.sceneKey, update.revision)) {
-        this.progressUpdatePending = undefined
-        return
-      }
-      this.progressUpdateRunning = true
-      void this.flushProgressUpdates().catch((error: unknown) => {
-        if (this.destroyed) return
-        this.onLog(
-          `Projection de progression impossible : ${error instanceof Error ? error.message : String(error)}`,
-          'error',
-        )
-      })
-    }, PROGRESS_UPDATE_INTERVAL_MS)
+  /** Removes the playback observer from the scene that just exited. */
+  private disconnectActiveSceneObservation(): void {
+    for (const cleanup of this.activeSceneCleanups.splice(0)) cleanup()
+    this.playbackStatePending = undefined
   }
 
-  /** Enables or disables the authored navigation, playback and progress controls. */
+  /** Enables or disables the authored navigation, playback and seek controls. */
   private async syncTelcoState(
     sceneKey: SightyDemo4SceneKey | undefined,
     revision: number,
   ): Promise<void> {
     if (!this.isCurrentSceneSelection(sceneKey, revision)) return
-    const telco = this.requireInstance('scene-telco')
     const enabled = sceneKey !== undefined && sceneKey !== 'scene-menu'
     const eventime: CodPlayEventime = {
       name: enabled ? DEMO4_TELCO_STATE_EVENTS.enable : DEMO4_TELCO_STATE_EVENTS.disable,
     }
-    await telco.events.emit(eventime, SCENE_TARGET)
+    await this.emitTelcoEvent(eventime, () => this.isCurrentSceneSelection(sceneKey, revision))
     if (!this.isCurrentSceneSelection(sceneKey, revision)) return
     if (enabled) {
       const selected = this.requireInstance(sceneKey)
+      this.projectActiveSceneProgress(sceneKey, revision, selected.telco.getState())
       this.requestPlaybackState(sceneKey, revision, selected.telco.getState())
     }
     if (sceneKey !== undefined) this.onLog(`Sighty → ${sceneKey}`)
@@ -342,8 +206,29 @@ export class SightyComposition {
     const eventName = state.status === 'playing' && !state.sequenceEnded
       ? DEMO4_PLAYBACK_STATE_EVENTS.playing
       : DEMO4_PLAYBACK_STATE_EVENTS.paused
-    const telco = this.requireInstance('scene-telco')
-    await telco.events.emit({ name: eventName }, SCENE_TARGET)
+    await this.emitTelcoEvent({ name: eventName }, () => this.isActiveScene(sceneKey, revision))
+    if (!this.isActiveScene(sceneKey, revision)) return
+    const currentState = this.requireInstance(sceneKey).telco.getState()
+    this.projectActiveSceneProgress(sceneKey, revision, currentState)
+  }
+
+  /** Presents one injected telco event immediately while preserving its transport state. */
+  private emitTelcoEvent(
+    eventime: CodPlayEventime,
+    isCurrent: () => boolean = () => true,
+  ): Promise<void> {
+    const task = this.telcoProjectionChain.then(async () => {
+      if (this.destroyed || !isCurrent()) return
+      const telco = this.runtime.getInstanceAt(CHAPTER_TELCO_SLOT_ADDRESS)
+      if (telco === undefined) return
+      const state = telco.telco.getState()
+      await telco.events.emit(eventime, SCENE_TARGET)
+      if (this.destroyed || !isCurrent()) return
+      await telco.telco.seek(state.timelineMs)
+      if (state.status === 'playing' && !state.sequenceEnded) await telco.telco.play()
+    })
+    this.telcoProjectionChain = task.then(() => undefined, () => undefined)
+    return task
   }
 
   /** Keeps only the latest playback state waiting for the authored telco. */
@@ -427,10 +312,4 @@ export class SightyComposition {
     for (const cleanup of this.cleanups.splice(0)) cleanup()
     this.sighty.runtime.destroy()
   }
-}
-
-/** Reads the numeric slider value from one public CodPlay event. */
-function readNumericEventValue(event: Pick<SightyPublicEvent, 'data'>): number | undefined {
-  const value = event.data?.value
-  return typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : undefined
 }

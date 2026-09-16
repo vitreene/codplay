@@ -2,6 +2,8 @@ import type {
   SightyAuthoringDiagnostic,
   SightyGraphView,
   SightyScenarioResources,
+  SightyShowMode,
+  SightyTelcoCommand,
 } from './types'
 import {
   findGraphViewByPath,
@@ -71,9 +73,19 @@ export function validateAuthoringResources<
 
   const viewGraph = normalizeSightyViewGraph<SceneKey, SlotName>(resources.file.views, resources.file.version)
   const graphEntries = getGraphEntries(viewGraph)
+  const showModes = new Set<SightyShowMode>(['reset', 'maintain', 'rewind'])
+  const telcoCommands = new Set<SightyTelcoCommand>([
+    'play',
+    'pause',
+    'togglePlay',
+    'setRate',
+    'seek',
+    'rewind',
+  ])
 
   /** Checks one view node, its nested slots and its route declarations. */
   const validateView = (entryPath: string, view: SightyGraphView<SceneKey, SlotName>): void => {
+    validateShowMode(`views.${entryPath}.showMode`, view.showMode)
     const sceneKey = view.view.scene
     if (sceneKey !== undefined && !hasAvailableScene(sceneKey)) {
       const isRootView = !entryPath.includes('/')
@@ -85,6 +97,7 @@ export function validateAuthoringResources<
     }
 
     validateActions(`de la vue « ${entryPath} »`, entryPath, view.actions)
+    validateCoupling(entryPath, view)
 
     const slots = view.view.slots ?? {}
     for (const [slotName, childGraph] of Object.entries(slots) as [string, typeof viewGraph][]) {
@@ -94,8 +107,57 @@ export function validateAuthoringResources<
     if (view.view.graph !== undefined) validateGraph(view.view.graph, `${entryPath}/graph`)
   }
 
+  /** Validates one view-level event-to-telco relation without executing it. */
+  function validateCoupling(
+    entryPath: string,
+    view: SightyGraphView<SceneKey, SlotName>,
+  ): void {
+    const coupling = view.coupling
+    if (coupling === undefined) return
+    const couplingPath = `views.${entryPath}.coupling`
+    if (typeof coupling.couplingId !== 'string' || coupling.couplingId.length === 0) {
+      diagnostics.push({
+        code: 'AUTHOR_COUPLING_ID_MISSING',
+        path: `${couplingPath}.couplingId`,
+        message: `Le couplage de la vue « ${entryPath} » doit avoir un identifiant non vide.`,
+      })
+    }
+
+    const slotNames = new Set(Object.keys(view.view.slots ?? {}))
+    if (coupling.controllerSlot !== undefined && !slotNames.has(coupling.controllerSlot)) {
+      diagnostics.push({
+        code: 'AUTHOR_COUPLING_CONTROLLER_SLOT_UNKNOWN',
+        path: `${couplingPath}.controllerSlot`,
+        message: `Le slot contrôleur « ${String(coupling.controllerSlot)} » du couplage « ${String(coupling.couplingId)} » est inconnu dans la vue « ${entryPath} ».`,
+      })
+    }
+    if (!slotNames.has(coupling.controlledSlot)) {
+      diagnostics.push({
+        code: 'AUTHOR_COUPLING_CONTROLLED_SLOT_UNKNOWN',
+        path: `${couplingPath}.controlledSlot`,
+        message: `Le slot contrôlé « ${String(coupling.controlledSlot)} » du couplage « ${String(coupling.couplingId)} » est inconnu dans la vue « ${entryPath} ».`,
+      })
+    }
+
+    for (const [eventName, declaration] of Object.entries(coupling.commands ?? {})) {
+      const commands = Array.isArray(declaration) ? declaration : [declaration]
+      for (const command of commands) {
+        if (telcoCommands.has(command as SightyTelcoCommand)) continue
+        diagnostics.push({
+          code: 'AUTHOR_COUPLING_COMMAND_UNKNOWN',
+          path: `${couplingPath}.commands.${eventName}`,
+          message: `La commande telco « ${String(command)} » du couplage « ${String(coupling.couplingId)} » est inconnue.`,
+        })
+      }
+    }
+  }
+
   /** Checks one graph container and validates its declared start node. */
   const validateGraph = (graph: typeof viewGraph, graphPath: string): void => {
+    validateShowMode(
+      graphPath.length === 0 ? 'views.showMode' : `views.${graphPath}.showMode`,
+      isSightyViewMap(graph) ? graph.showMode : undefined,
+    )
     if (isSightyViewMap(graph) && getDirectGraphEntries(graph, graphPath).every((entry) => entry.key !== graph.start)) {
       diagnostics.push({
         code: 'AUTHOR_VIEW_GRAPH_START_UNKNOWN',
@@ -130,6 +192,16 @@ export function validateAuthoringResources<
       })
     }
     for (const entry of getDirectGraphEntries(graph, graphPath)) validateView(entry.path, entry.view)
+  }
+
+  /** Validates one optional occurrence policy at its author-facing path. */
+  function validateShowMode(path: string, value: unknown): void {
+    if (value === undefined || showModes.has(value as SightyShowMode)) return
+    diagnostics.push({
+      code: 'AUTHOR_SHOW_MODE_UNKNOWN',
+      path,
+      message: `La politique showMode « ${String(value)} » est inconnue. Les valeurs admises sont reset, maintain et rewind.`,
+    })
   }
 
   /** Validates route paths in one author action scope. */
@@ -177,6 +249,7 @@ export function validateAuthoringResources<
     }
   }
 
+  validateShowMode('showMode', resources.file.showMode)
   validateGraph(viewGraph, '')
 
   return diagnostics

@@ -1,8 +1,8 @@
 import type { SightyFile as SightyFileDefinition } from '@codplay/sighty'
+import { TELCO_INTENTS } from './messages'
 
 export type SightyDemo2SceneKey = 'layout' | 'sceneB' | 'telco'
 export type SightyDemo2SlotName = 'sceneB' | 'telco'
-export type SightyDemo2ChildSceneKey = Exclude<SightyDemo2SceneKey, 'layout'>
 
 /** Declarative composition file consumed by the Sighty scene-to-scene demo. */
 export type SightyDemo2File = SightyFileDefinition<SightyDemo2SceneKey, SightyDemo2SlotName>
@@ -21,6 +21,16 @@ export const sightyFile: SightyDemo2File = {
   },
   views: [
     {
+      coupling: {
+        couplingId: 'sighty-demo2-telco-sceneB',
+        controllerSlot: 'telco',
+        controlledSlot: 'sceneB',
+        commands: {
+          [TELCO_INTENTS.play]: 'play',
+          [TELCO_INTENTS.pause]: 'pause',
+          [TELCO_INTENTS.replay]: ['rewind', 'play'],
+        },
+      },
       view: {
         scene: 'layout',
         slots: {

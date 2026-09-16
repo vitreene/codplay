@@ -31,6 +31,9 @@ export type {
   CodPlayInstanceOptions,
   CodPlayModules,
   CodPlayOptions,
+  CodPlayProjectionApi,
+  CodPlayProjectionResult,
+  CodPlayProjectionTarget,
   CodPlayPreloadOptions,
   CodPlayPresentationApi,
   CodPlayPresentationFrame,
@@ -116,6 +119,7 @@ export type {
 } from './scene/authoring'
 export type {
   ForeignContentValue,
+  InputComponentSurface,
   ImageReplace,
   ForeignContentSurface,
   ReplaceComponentSurface,

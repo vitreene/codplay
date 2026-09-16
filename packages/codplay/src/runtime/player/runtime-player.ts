@@ -106,6 +106,11 @@ import {
   resolveModuleTimeline,
   resolveStructuralOrder,
 } from './modules'
+import {
+  projectInputValue,
+  type RuntimeInputProjectionResult,
+  type RuntimeInputProjectionTarget,
+} from './input-projection'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
@@ -284,6 +289,25 @@ export class RuntimePlayer {
         state: freezeSnapshotRecord(perso.state),
       }))),
     }
+  }
+
+  /** Projects one live input value without changing the journal or logical state. */
+  projectInputValue(
+    target: RuntimeInputProjectionTarget,
+    value: string | number,
+  ): RuntimeInputProjectionResult {
+    if (this.state === PLAYER_LIFECYCLE_DESTROYED) {
+      return { ok: false, code: 'TIME_NOT_PRESENTED' }
+    }
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.solvedScene === undefined) {
+      return { ok: false, code: 'TIME_NOT_PRESENTED' }
+    }
+    return projectInputValue({
+      scene: this.solvedScene,
+      componentRuntime: this.componentRuntime,
+      target,
+      value,
+    })
   }
 
   /** Validates, replaces, and presents one logical preview snapshot atomically. */

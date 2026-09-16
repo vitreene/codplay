@@ -393,11 +393,43 @@ export type CodPlayInstanceOptions = CodPlayInstanceOptionsBase & Readonly<{
 export type CodPlayInstance = Readonly<{
   readonly instanceId: string
   readonly telco: CodPlayTelco
+  /** Non-journaled live projections owned by the instance presentation. */
+  readonly projection: CodPlayProjectionApi
   readonly events: CodPlayInstanceEvents
   readonly diagnostic: CodPlayInstanceDiagnostic
   readonly snapshot: CodPlaySnapshotApi
   /** Current numeric runtime presentation, separate from the logical snapshot. */
   readonly presentation: CodPlayPresentationApi
+}>
+
+/** Logical target of one live presentation projection. */
+export type CodPlayProjectionTarget = Readonly<{
+  storyId: string
+  persoId: string
+}>
+
+/** Result returned after one input value projection request. */
+export type CodPlayProjectionResult = Readonly<
+  | { ok: true }
+  | {
+      ok: false
+      code:
+        | 'INSTANCE_DESTROYED'
+        | 'TIME_NOT_PRESENTED'
+        | 'TARGET_NOT_PRESENT'
+        | 'TARGET_NOT_INPUT'
+        | 'PROJECTION_UNAVAILABLE'
+        | 'INVALID_VALUE'
+    }
+>
+
+/** Presentation-only projection surface that never appends a runtime event. */
+export type CodPlayProjectionApi = Readonly<{
+  /** Projects one scalar value onto a declared input perso. */
+  setInputValue: (
+    target: CodPlayProjectionTarget,
+    value: string | number,
+  ) => CodPlayProjectionResult
 }>
 
 /** Public instance registry owned by one CodPlay owner. */

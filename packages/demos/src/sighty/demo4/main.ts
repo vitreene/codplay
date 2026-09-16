@@ -20,5 +20,3 @@ export const demo4: SightyDemoDefinition = {
     }
   },
 }
-
-export { SightyComposition }

@@ -17,7 +17,7 @@ export const telcoScene: SceneDoc<string> = {
             move: '@root',
             className: `${SIGHTY_SCENE_ROOT_CLASS_NAME} demo2-telco`,
             markup: `
-              <section class="demo2-telco">
+              <section id="demo2-telco-root" class="demo2-telco">
                 <div class="demo2-telco__buttons" data-part="demo2:telco-buttons"></div>
                 <div class="demo2-telco__status" data-part="demo2:telco-status"></div>
               </section>

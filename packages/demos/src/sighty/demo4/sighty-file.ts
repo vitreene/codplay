@@ -1,5 +1,11 @@
 import type { SightyFile as SightyFileDefinition } from "@codplay/sighty";
-import { DEMO4_MENU_INTENTS, DEMO4_NAVIGATION_INTENTS, DEMO4_SCENARIO_EVENTS } from "./messages";
+import {
+  DEMO4_MENU_INTENTS,
+  DEMO4_NAVIGATION_INTENTS,
+  DEMO4_PLAYBACK_INTENTS,
+  DEMO4_PROGRESS_INTENTS,
+  DEMO4_SCENARIO_EVENTS,
+} from "./messages";
 
 export type SightyDemo4SceneKey =
   | "scene-layout"
@@ -9,7 +15,6 @@ export type SightyDemo4SceneKey =
   | "scene-c"
   | "scene-telco";
 export type SightyDemo4SlotName = "slot-scene" | "slot-telco";
-export type SightyDemo4ContentSceneKey = Exclude<SightyDemo4SceneKey, "scene-layout" | "scene-telco">;
 
 /** Declarative navigation file; scene sources are supplied by the catalogue. */
 export type SightyDemo4File = SightyFileDefinition<SightyDemo4SceneKey, SightyDemo4SlotName>;
@@ -34,6 +39,8 @@ const CHAPTER_BOUNDARY_ACTIONS = {
 
 /** Describes the recursive menu/chapter composition consumed by Sighty. */
 export const sightyFile: SightyDemo4File = {
+  // Demo 4 is a replay fixture: every newly shown scene starts from a fresh session.
+  showMode: "reset",
   views: {
     start: "view-main",
     views: {
@@ -74,6 +81,16 @@ export const sightyFile: SightyDemo4File = {
                 },
               },
               "view-chapter": {
+                coupling: {
+                  couplingId: "sighty-demo4-scene-telco",
+                  controllerSlot: "slot-telco",
+                  controlledSlot: "slot-scene",
+                  commands: {
+                    [DEMO4_PLAYBACK_INTENTS.toggle]: "togglePlay",
+                    [DEMO4_PLAYBACK_INTENTS.rewind]: "rewind",
+                    [DEMO4_PROGRESS_INTENTS.seek]: ["pause", "seek"],
+                  },
+                },
                 actions: CHAPTER_BOUNDARY_ACTIONS,
                 view: {
                   slots: {

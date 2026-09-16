@@ -17,6 +17,8 @@ Définir la frontière publique de CodPlay V2 pour :
 - créer un propriétaire `CodPlay`, son engine et son registre d'instances ;
 - compiler séparément une `SceneDoc` en `CompiledScene` ;
 - piloter une instance ;
+- projeter une valeur vivante sur un composant `input` déjà monté, sans journal
+  ni accès DOM depuis l'appelant ;
 - injecter des events dans une scène ;
 - exposer les events publics produits par une instance ;
 - utiliser l'assemblage HTML/DOM core sans faire entrer le DOM dans le cœur.
@@ -62,6 +64,8 @@ Il ne construit plus de catalogue et n'accède plus au runner.
   occurrence `move`, transaction de préparation, portée d’overlay et reset chaud ;
 - [`media-preload-plan.md`](./media-preload-plan.md) : preload externalisé,
   cache partagé et façade `run` autonome.
+- [`../specs/input-projection-spec.md`](../specs/input-projection-spec.md) :
+  projection transitoire et non journalisée d'une valeur sur un `input` monté.
 
 Pour l'accès d'authoring de l'éditeur, la référence comportementale est
 [`v1-author-api-spec.md`](../../../docs/formalisation/v1-author-api-spec.md) :
@@ -1464,6 +1468,10 @@ cachées de l'instance.
 - [x] fixer le transfert explicite des ressources et métadonnées preload vers
   l'engine ;
 - [x] conserver `run()` comme option de diffusion autonome.
+- [x] exposer `instance.projection.setInputValue()` comme surface de présentation
+  transitoire et non journalisée pour les composants `input` montés ;
+- [x] vérifier que cette projection ne modifie ni l'état logique, ni la
+  révision du journal, ni le circuit des events.
 
 #### Phase F — migration et validation — en cours
 
@@ -1493,7 +1501,9 @@ cachées de l'instance.
   par ticks et extension par les événements compilés ou journalisés ;
 - [x] vérifier que la télécommande officielle étend le curseur de seek lorsque
   `onProgress` découvre un nouvel horizon ;
-- [x] exécuter la suite complète V2 : 86 fichiers et 537 tests passés ;
+- [x] exposer et tester la projection vivante bornée aux composants `input`,
+  sans événement ni modification du journal ;
+- [x] exécuter la suite complète V2 : 104 fichiers et 645 tests passés ;
 - [x] compiler l'application de démos V2 avec le layout public ;
 - [x] vérifier dans Firefox headless les routes registry `runner` et
   `flip-nested`, avec Play et Seek via la télécommande commune ;
@@ -1529,6 +1539,8 @@ Déjà implémenté :
   `instance.diagnostic` et transfert explicite des ressources ;
 - `instance.snapshot`, avec lecture logique, remplacement atomique d'une
   preview de style et effacement explicite, sans accès au DOM ;
+- `instance.projection.setInputValue`, surface transitoire et non journalisée
+  pour une valeur scalaire projetée sur un `input` monté ;
 - `codplay.instances.mount`, première relation publique de composition entre un
   `slot` hôte et les racines matérialisées d'une instance enfant ; aucune
   envelope visible n'est introduite, le handle de détachement reste idempotent
@@ -1537,26 +1549,30 @@ Déjà implémenté :
   `resolve` et sa projection HTML selon la largeur de la racine ;
 - tests de contrat du socle et absence de ticker propre à la telco.
 
-Validation exécutée :
+Validation exécutée le 2026-09-15 :
 
-- `npm test --workspace=codplay` : 86 fichiers, 537 tests passés ;
+- `npm test --workspace=codplay` : 104 fichiers, 645 tests passés ;
+- `npm test --workspace=@codplay/sighty` : 3 fichiers, 26 tests passés ;
 - `npm run typecheck --workspace=codplay` : succès ;
+- `npm run typecheck --workspace=@codplay/sighty` et
+  `npm run typecheck --workspace=@codplay/demos` : succès ;
 - `npm run build --workspace=@codplay/demos` : succès ;
-- le typecheck global des démos et celui de `@codplay/remote` restent bloqués
-  par les erreurs V1/`typed-om-polyfill` préexistantes, sans erreur dans cette
-  tranche ;
+- les tests ciblés de projection et Demo 4 : 2 fichiers, 11 tests passés ;
+- le parcours Safari MCP de Demo 4 : lecture, pause, reprise et progression
+  vivante validés sans erreur applicative ;
 - `git diff --check` : succès.
 
-Reste à valider dans ce plan : la suite complète après le portage de l’horizon
-ouvert et le contrôle navigateur associé. La propriété `idle` est explicitement
-hors de ce plan et sera traitée séparément.
+Les contrôles navigateur complémentaires restent ouverts dans ce plan. La
+propriété `idle` est explicitement hors de ce plan et reste traitée par
+[`idle-inactivity-plan.md`](./idle-inactivity-plan.md).
 
 La reprise séparée de l'accès authoring de l'éditeur reste un chantier
 ultérieur, hors de ce plan.
 
 Le [descriptif de découverte et d'état destiné aux agents](./notes/2026-08-26-decouverte-etat-codplay-v2.md)
-est créé. Aucune API supplémentaire ne doit être ajoutée en dehors de ces
-éléments.
+est créé. Toute API supplémentaire doit être ajoutée par un contrat dédié ; la
+projection `instance.projection` est l'exception désormais spécifiée par
+[`../specs/input-projection-spec.md`](../specs/input-projection-spec.md).
 
 ## 10. Proposition de recentrage de la façade — à relire
 

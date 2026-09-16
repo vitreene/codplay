@@ -56,16 +56,38 @@ export type SightyRouteTarget =
   | Readonly<{ label: string }>
   | Readonly<{ direction: SightyViewDirection }>
 
+/** Selects how an occurrence is treated when its view is shown again. */
+export type SightyShowMode = 'reset' | 'maintain' | 'rewind'
+
 /** Describes one serializable action attached to a view or graph scope. */
 export type SightyViewAction = Readonly<{
   action?: string
   go?: SightyRouteTarget
 }>
 
+/** Names of the CodPlay telco commands that Sighty can mediate declaratively. */
+export type SightyTelcoCommand =
+  | 'play'
+  | 'pause'
+  | 'togglePlay'
+  | 'setRate'
+  | 'seek'
+  | 'rewind'
+
+/** Describes one event-to-telco relation declared by an authored view. */
+export type SightyCouplingDescriptor<SlotName extends string = string> = Readonly<{
+  couplingId: string
+  controllerSlot?: SlotName
+  controlledSlot: SlotName
+  commands: Readonly<Record<string, SightyTelcoCommand | readonly SightyTelcoCommand[]>>
+}>
+
 /** Describes actions, conditions and data inherited by descendant view nodes. */
 export type SightyViewScope<SceneKey extends string = string> = Readonly<{
   actions?: Readonly<Record<string, SightyViewAction>>
   data?: Readonly<Record<string, SightyDataValue>>
+  /** Controls the occurrence when this scope admits a view again. */
+  showMode?: SightyShowMode
   /** Admits the view when the condition returns true. */
   accessBy?: SightyCondition<SceneKey>
   /** Allows the owning view to be left when the condition returns true. */
@@ -93,6 +115,8 @@ export type SightyGraphView<
   SlotName extends string = string,
 > = SightyViewScope<SceneKey> & Readonly<{
   view: SightyViewContent<SceneKey, SlotName>
+  /** Mediates public controller events to the telco of another declared slot. */
+  coupling?: SightyCouplingDescriptor<SlotName>
   /** Keeps a declaration in the file while excluding it from navigation. */
   hidden?: boolean
 }>
@@ -131,6 +155,10 @@ export type SightyLegacyView<
   SceneKey extends string = string,
   SlotName extends string = string,
 > = Readonly<{
+  /** Allows legacy flat files to use the current view-level coupling contract. */
+  coupling?: SightyCouplingDescriptor<SlotName>
+  /** Applies to legacy placements after they are normalized to a view graph. */
+  showMode?: SightyShowMode
   view: Readonly<{
     scene: SceneKey
     slots: Readonly<Record<SlotName, readonly SightySlotPlacement<SceneKey>[]>>
@@ -155,6 +183,8 @@ export type SightyFile<
   id?: string
   /** Author-provided base data for the declared scenario. */
   data?: Readonly<Record<string, unknown>>
+  /** Default occurrence policy inherited by every view in this scenario. */
+  showMode?: SightyShowMode
   /** Legacy embedded resource declarations. */
   resources?: Readonly<{
     scenes?: Partial<Readonly<Record<SceneKey, string>>>
@@ -239,6 +269,11 @@ export type SightyAuthoringDiagnostic = Readonly<{
     | 'AUTHOR_VIEW_LIST_ID_DUPLICATE'
     | 'AUTHOR_VIEW_ROUTE_UNKNOWN'
     | 'AUTHOR_VIEW_ROUTE_AMBIGUOUS'
+    | 'AUTHOR_COUPLING_ID_MISSING'
+    | 'AUTHOR_COUPLING_CONTROLLER_SLOT_UNKNOWN'
+    | 'AUTHOR_COUPLING_CONTROLLED_SLOT_UNKNOWN'
+    | 'AUTHOR_COUPLING_COMMAND_UNKNOWN'
+    | 'AUTHOR_SHOW_MODE_UNKNOWN'
   path: string
   message: string
 }>

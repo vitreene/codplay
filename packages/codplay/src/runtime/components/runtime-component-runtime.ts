@@ -92,6 +92,7 @@ export class RuntimeComponentRuntime {
     return {
       getSurface: <SurfaceId extends RuntimeComponentSurfaceId>(componentId: string, surfaceId: SurfaceId) =>
         this.mounted.get(componentId)?.surfaces[surfaceId],
+      getInputSurface: (componentId) => this.mounted.get(componentId)?.surfaces.input,
       getForeignContentSurface: (componentId) => this.mounted.get(componentId)?.surfaces.foreignContent,
       getReplaceSurface: (componentId) => this.mounted.get(componentId)?.surfaces.replace,
     }

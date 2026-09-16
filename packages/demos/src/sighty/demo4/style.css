@@ -207,7 +207,7 @@
   opacity: 0.45;
 }
 
-.demo4-telco__progress {
+.demo4-telco__seek {
   display: flex;
   min-width: 12rem;
   align-items: center;
@@ -216,19 +216,11 @@
   white-space: nowrap;
 }
 
-.demo4-telco__progress .input__control {
+.demo4-telco__seek .input__control {
   width: clamp(7rem, 18vw, 16rem);
   flex: 1 1 auto;
 }
 
-.demo4-telco__status-text {
-  min-height: 0;
-  margin: 0;
-  color: #b9dfd8;
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
-.demo4-telco__progress .input__hint {
+.demo4-telco__seek .input__hint {
   display: none;
 }

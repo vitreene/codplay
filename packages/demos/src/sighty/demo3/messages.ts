@@ -24,4 +24,3 @@ export const DEMO3_COLOR_VALUES = {
 
 export type Demo3ContentIntentName = typeof DEMO3_CONTENT_INTENTS[keyof typeof DEMO3_CONTENT_INTENTS]
 export type Demo3ColorName = keyof typeof DEMO3_COLOR_VALUES
-export type Demo3Color = typeof DEMO3_COLOR_VALUES[Demo3ColorName]

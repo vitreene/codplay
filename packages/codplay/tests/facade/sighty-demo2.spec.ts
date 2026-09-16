@@ -1,11 +1,11 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { SightyComposition } from '../../../demos/src/sighty/demo2/sighty-composition'
 
-/** Lets the delegated DOM emit and the Sighty message queue complete. */
-function flushMessageRelay(): Promise<void> {
+/** Lets the delegated DOM emit and the Sighty coordinator complete. */
+function flushSightyEvent(): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, 100))
 }
 
@@ -19,7 +19,7 @@ describe('Sighty scene B command demo', () => {
     document.body.replaceChildren()
   })
 
-  it('relays real command-scene messages to scene B through Sighty', async () => {
+  it('executes the declared command-scene coupling through Sighty', async () => {
     const stage = document.createElement('div')
     const logs: string[] = []
     document.body.append(stage)
@@ -40,6 +40,9 @@ describe('Sighty scene B command demo', () => {
     const sceneBSlot = sceneB.parentElement
     const telcoSlot = telco.parentElement
     if (sceneBSlot === null || telcoSlot === null) throw new Error('Demo 2 slot roots are missing.')
+    const sceneBInstance = composition.runtime.getInstance('sceneB')
+    if (sceneBInstance === undefined) throw new Error('Demo 2 scene B instance is missing.')
+    const rewind = vi.spyOn(sceneBInstance.telco, 'rewind')
     const playButton = telco.querySelector<HTMLButtonElement>('.demo2-telco__button--play')
     const pauseButton = telco.querySelector<HTMLButtonElement>('.demo2-telco__button--pause')
     const replayButton = telco.querySelector<HTMLButtonElement>('.demo2-telco__button--replay')
@@ -54,20 +57,20 @@ describe('Sighty scene B command demo', () => {
     expect(sceneBNumber.textContent).toBe('1')
 
     pauseButton.click()
-    await flushMessageRelay()
-    expect(logs.some((message) => message.includes('message sighty-demo2:intent:pause → sceneB (pause)'))).toBe(true)
-    expect(logs.some((message) => message.includes('Sighty → sceneB : telco.pause'))).toBe(true)
+    await flushSightyEvent()
+    expect(logs.some((message) => message.includes('event sighty-demo2:intent:pause → Sighty'))).toBe(true)
+    expect(sceneBInstance.telco.getState().status).toBe('paused')
 
     playButton.click()
-    await flushMessageRelay()
-    expect(logs.some((message) => message.includes('sighty-demo2:intent:play'))).toBe(true)
-    expect(logs.some((message) => message.includes('message sighty-demo2:intent:play → sceneB (play)'))).toBe(true)
-    expect(logs.some((message) => message.includes('Sighty → sceneB : telco.play'))).toBe(true)
+    await flushSightyEvent()
+    expect(logs.some((message) => message.includes('event sighty-demo2:intent:play → Sighty'))).toBe(true)
+    expect(sceneBInstance.telco.getState().status).toBe('playing')
 
     replayButton.click()
-    await flushMessageRelay()
-    expect(logs.some((message) => message.includes('message sighty-demo2:intent:replay → sceneB (replay)'))).toBe(true)
-    expect(logs.some((message) => message.includes('Sighty → sceneB : telco.rewind'))).toBe(true)
+    await flushSightyEvent()
+    expect(logs.some((message) => message.includes('event sighty-demo2:intent:replay → Sighty'))).toBe(true)
+    expect(sceneBInstance.telco.getState().status).toBe('playing')
+    expect(rewind).toHaveBeenCalled()
     expect(sceneBNumber.textContent).toBe('1')
 
     const styleSlot = 'sighty-demo2-scene-root'

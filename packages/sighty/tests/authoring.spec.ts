@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SceneDoc } from 'codplay/scene/types'
-import { Sighty, type SightyFile } from '../src'
+import { Sighty, type SightyFile, type SightyGraphView } from '../src'
 
 const file: SightyFile<'layout' | 'sceneB', 'main'> = {
   format: 'sighty',
@@ -168,6 +168,83 @@ describe('Sighty authoring class', () => {
         message: 'L\'action « navigation:ambiguous-label » de la vue « layout » référence le label ambigu « same ».',
       },
     ])
+    project.runtime.destroy()
+  })
+
+  it('validates view couplings before runtime initialization', () => {
+    const invalidFile: SightyFile<'layout' | 'sceneB', 'main'> = {
+      format: 'sighty',
+      version: 2,
+      id: 'invalid-coupling',
+      views: {
+        start: 'layout-view',
+        views: {
+          'layout-view': {
+            coupling: {
+              couplingId: '',
+              controllerSlot: 'unknown',
+              controlledSlot: 'missing',
+              commands: { 'coupling:invalid': 'stop' },
+            } as unknown as SightyGraphView<'layout' | 'sceneB', 'main'>['coupling'],
+            view: {
+              scene: 'layout',
+              slots: {
+                main: [{ id: 'scene-b', view: { scene: 'sceneB' } }],
+              },
+            },
+          },
+        },
+      },
+    }
+    const project = new Sighty({
+      scenario: {
+        file: invalidFile,
+        scenes: {
+          layout: { id: 'layout', stories: {} },
+          sceneB: { id: 'scene-b', stories: {} },
+        },
+      },
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+        layout: { sceneKey: 'layout', storyId: 'main' },
+      },
+    })
+
+    expect(project.scenario.validate().map((diagnostic) => diagnostic.code)).toEqual([
+      'AUTHOR_COUPLING_ID_MISSING',
+      'AUTHOR_COUPLING_CONTROLLER_SLOT_UNKNOWN',
+      'AUTHOR_COUPLING_CONTROLLED_SLOT_UNKNOWN',
+      'AUTHOR_COUPLING_COMMAND_UNKNOWN',
+    ])
+    project.runtime.destroy()
+  })
+
+  it('validates the public showMode vocabulary before runtime initialization', () => {
+    const invalidFile = {
+      ...file,
+      showMode: 'replay',
+    } as unknown as SightyFile<'layout' | 'sceneB', 'main'>
+    const project = new Sighty({
+      scenario: {
+        file: invalidFile,
+        scenes: {
+          layout: { id: 'layout', stories: {} },
+          sceneB: { id: 'scene-b', stories: {} },
+        },
+      },
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+        layout: { sceneKey: 'layout', storyId: 'main' },
+      },
+    })
+
+    expect(project.scenario.validate()).toEqual([{
+      code: 'AUTHOR_SHOW_MODE_UNKNOWN',
+      path: 'showMode',
+      message: 'La politique showMode « replay » est inconnue. Les valeurs admises sont reset, maintain et rewind.',
+    }])
     project.runtime.destroy()
   })
 })

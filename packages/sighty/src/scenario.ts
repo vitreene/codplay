@@ -268,6 +268,17 @@ function cloneView<SceneKey extends string, SlotName extends string>(
     ...view,
     ...(view.actions === undefined ? {} : { actions: { ...view.actions } }),
     ...(view.data === undefined ? {} : { data: { ...view.data } }),
+    ...(view.coupling === undefined ? {} : {
+      coupling: {
+        ...view.coupling,
+        commands: Object.fromEntries(
+          Object.entries(view.coupling.commands).map(([eventName, command]) => [
+            eventName,
+            Array.isArray(command) ? [...command] : command,
+          ]),
+        ),
+      },
+    }),
     view: {
       ...view.view,
       ...(view.view.views === undefined ? {} : { views: cloneGraph(view.view.views) }),

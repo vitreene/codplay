@@ -8,6 +8,12 @@ import {
   DEMO4_NAVIGATION_INTENTS,
   DEMO4_SCENARIO_EVENTS,
 } from '../../../demos/src/sighty/demo4/messages'
+import {
+  createLayoutCarouselItem,
+  DEMO4_LAYOUT_CAROUSEL,
+  DEMO4_LAYOUT_CAROUSEL_EVENTS,
+  DEMO4_LAYOUT_ITEM_IDS,
+} from '../../../demos/src/sighty/demo4/carousel'
 
 /** Provides an immediately ready image for the reused scene A preload. */
 class ImmediateImage {
@@ -34,6 +40,25 @@ describe('Sighty graph navigation demo', () => {
     document.head.querySelectorAll('style[data-codplay-preload-css-slot]').forEach((style) => style.remove())
     vi.unstubAllGlobals()
     document.body.replaceChildren()
+  })
+
+  it('declares the menu return as a bottom-to-top carousel entry', () => {
+    const menuItem = createLayoutCarouselItem(
+      DEMO4_LAYOUT_ITEM_IDS.menu,
+      '<section id="demo4-layout-test-menu"></section>',
+    )
+    const menuArtifact = DEMO4_LAYOUT_CAROUSEL.children.find(
+      (child) => child.id === DEMO4_LAYOUT_ITEM_IDS.menu,
+    )
+    const menuEnter = menuItem.actions[DEMO4_LAYOUT_CAROUSEL_EVENTS[DEMO4_LAYOUT_ITEM_IDS.menu].enter]
+
+    expect(menuArtifact?.events.intro?.ref).toBe('swipe-down')
+    expect(menuEnter).toMatchObject({
+      style: {
+        x: '0%',
+        y: { from: '100%', to: '0%' },
+      },
+    })
   })
 
   it('routes menu, directions and sequence end through the authored Sighty graph', async () => {
@@ -133,7 +158,8 @@ describe('Sighty graph navigation demo', () => {
     vi.stubGlobal('Image', ImmediateImage)
     const stage = document.createElement('div')
     document.body.append(stage)
-    composition = new SightyComposition({ stage, onLog: () => undefined })
+    const logs: string[] = []
+    composition = new SightyComposition({ stage, onLog: (message) => logs.push(message) })
     await composition.initialize()
 
     const menuButton = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
@@ -146,44 +172,28 @@ describe('Sighty graph navigation demo', () => {
     const sceneA = composition.runtime.getInstance('scene-a')
     if (sceneA === undefined) throw new Error('Scene A instance is missing.')
     await sceneA.telco.pause()
+    await sceneA.telco.seek(2_400)
+    await flushDemo4Relay()
+    expect(Number(progress.value)).toBe(2_400)
+
+    await sceneA.telco.play()
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 120))
+    expect(Number(progress.value)).toBeGreaterThan(2_400)
+    await sceneA.telco.pause()
+
     progress.value = '3000'
     progress.dispatchEvent(new Event('input', { bubbles: true }))
     await flushDemo4Relay()
 
     expect(sceneA.telco.getProgress().timelineMs).toBe(3000)
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
-  })
-
-  it('keeps progress projections on the scene selected by the active view', async () => {
-    vi.stubGlobal('Image', ImmediateImage)
-    const stage = document.createElement('div')
-    document.body.append(stage)
-    composition = new SightyComposition({ stage, onLog: () => undefined })
-    await composition.initialize()
-
-    const menuButtonA = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
-    if (menuButtonA === null) throw new Error('Demo 4 menu control A is missing.')
-    menuButtonA.click()
-    await flushDemo4Relay()
 
     const nextButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--next')
-    const progress = stage.querySelector<HTMLInputElement>('#demo4-telco-progress-control')
-    if (nextButton === null || progress === null) {
-      throw new Error('Demo 4 chapter controls are missing.')
-    }
-    const sceneA = composition.runtime.getInstance('scene-a')
-    const sceneB = composition.runtime.getInstance('scene-b')
-    if (sceneA === undefined || sceneB === undefined) {
-      throw new Error('Demo 4 content scene instances are missing.')
-    }
-
-    await sceneA.telco.pause()
-    await sceneA.telco.seek(2_400)
-    await flushDemo4Relay()
-    expect(Number(progress.value)).toBe(2_400)
-
+    if (nextButton === null) throw new Error('Demo 4 next control is missing.')
     nextButton.click()
     await flushDemo4Relay()
+    const sceneB = composition.runtime.getInstance('scene-b')
+    if (sceneB === undefined) throw new Error('Scene B instance is missing.')
     await sceneB.telco.pause()
     await sceneB.telco.seek(500)
     await flushDemo4Relay()
@@ -343,6 +353,94 @@ describe('Sighty graph navigation demo', () => {
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
   })
 
+  it('resets a reused content scene whenever it is entered', async () => {
+    vi.stubGlobal('Image', ImmediateImage)
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new SightyComposition({ stage, onLog: () => undefined })
+    await composition.initialize()
+
+    const menuButtonA = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
+    if (menuButtonA === null) throw new Error('Demo 4 menu control A is missing.')
+    menuButtonA.click()
+    await flushDemo4Relay()
+
+    const sceneA = composition.runtime.getInstance('scene-a')
+    if (sceneA === undefined) throw new Error('Scene A instance is missing.')
+    await sceneA.telco.pause()
+    await sceneA.telco.seek(3_000)
+    await flushDemo4Relay()
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--next')
+    if (nextButton === null) throw new Error('Demo 4 next control is missing.')
+    nextButton.click()
+    await flushDemo4Relay()
+    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
+
+    const previousButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--previous')
+    if (previousButton === null) throw new Error('Demo 4 previous control is missing.')
+    previousButton.click()
+    await flushDemo4Relay()
+
+    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
+    const resetSceneA = composition.runtime.getInstance('scene-a')
+    expect(resetSceneA).toBeDefined()
+    expect(resetSceneA).not.toBe(sceneA)
+    expect(resetSceneA?.telco.getProgress().timelineMs).toBeLessThan(1_000)
+    expect(resetSceneA?.telco.getState().status).toBe('playing')
+  })
+
+  it('keeps the telco usable after sequence:end and resets it on the next access', async () => {
+    vi.stubGlobal('Image', ImmediateImage)
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new SightyComposition({ stage, onLog: () => undefined })
+    await composition.initialize()
+
+    const menuButtonA = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
+    if (menuButtonA === null) throw new Error('Demo 4 menu control A is missing.')
+    menuButtonA.click()
+    await flushDemo4Relay()
+
+    const sceneA = composition.runtime.getInstance('scene-a')
+    if (sceneA === undefined) throw new Error('Scene A instance is missing.')
+    await sceneA.events.emit(
+      { name: DEMO4_SCENARIO_EVENTS.sequenceEnd, startAt: 100, visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 200))
+    await flushDemo4Relay()
+
+    const previousButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--previous')
+    const nextButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--next')
+    const toggleButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--toggle')
+    const progress = stage.querySelector<HTMLInputElement>('#demo4-telco-progress-control')
+    if (previousButton === null || nextButton === null || toggleButton === null || progress === null) {
+      throw new Error('Demo 4 chapter controls are incomplete after sequence:end.')
+    }
+    expect(sceneA.telco.getState().sequenceEnded).toBe(true)
+    expect(previousButton.disabled).toBe(false)
+    expect(nextButton.disabled).toBe(false)
+    expect(toggleButton.disabled).toBe(false)
+    expect(progress.disabled).toBe(false)
+
+    previousButton.click()
+    await flushDemo4Relay()
+    const menuButtonAgain = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
+    if (menuButtonAgain === null) throw new Error('Demo 4 menu control A is missing after sequence:end.')
+    menuButtonAgain.click()
+    await flushDemo4Relay()
+
+    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
+    const resetSceneA = composition.runtime.getInstance('scene-a')
+    expect(resetSceneA).toBeDefined()
+    expect(resetSceneA).not.toBe(sceneA)
+    expect(resetSceneA?.telco.getState().sequenceEnded).toBe(false)
+    expect(resetSceneA?.telco.getProgress().timelineMs).toBeLessThan(1_000)
+    expect(toggleButton.disabled).toBe(false)
+    expect(progress.disabled).toBe(false)
+  })
+
   it('enables the chapter telco immediately after resetting a stale timeline', async () => {
     vi.stubGlobal('Image', ImmediateImage)
     const stage = document.createElement('div')
@@ -362,6 +460,70 @@ describe('Sighty graph navigation demo', () => {
     const nextButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--next')
     if (nextButton === null) throw new Error('Demo 4 next control is missing after activation.')
     expect(nextButton.disabled).toBe(false)
-    expect(telco.telco.getProgress().timelineMs).toBeLessThan(1_000)
+    const resetTelco = composition.runtime.getInstance('scene-telco')
+    expect(resetTelco).toBeDefined()
+    expect(resetTelco).not.toBe(telco)
+    expect(resetTelco?.telco.getProgress().timelineMs).toBeLessThan(1_000)
   })
+
+  it('does not replay a hidden telco disable event after chapter re-entry', async () => {
+    vi.stubGlobal('Image', ImmediateImage)
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const logs: string[] = []
+    composition = new SightyComposition({ stage, onLog: (message) => logs.push(message) })
+    await composition.initialize()
+
+    const menuButtonA = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
+    if (menuButtonA === null) throw new Error('Demo 4 menu control A is missing.')
+    menuButtonA.click()
+    await flushDemo4Relay()
+
+    const telco = composition.runtime.getInstance('scene-telco')
+    if (telco === undefined) throw new Error('Demo 4 scene telco instance is missing.')
+    await telco.telco.seek(5_000)
+    await telco.telco.play()
+    await flushDemo4Relay()
+
+    const getNextButton = (): HTMLButtonElement => {
+      const button = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--next')
+      if (button === null) throw new Error('Demo 4 next control is missing.')
+      return button
+    }
+    expect(getNextButton().disabled).toBe(false)
+    getNextButton().click()
+    await flushDemo4Relay()
+    if (composition.runtime.getMountedSceneKey('slot-scene') !== 'scene-b') {
+      throw new Error(`Demo 4 did not navigate after delayed telco seek. events=${logs.join('|')}`)
+    }
+    getNextButton().click()
+    await flushDemo4Relay()
+    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-c')
+
+    const sceneC = composition.runtime.getInstance('scene-c')
+    if (sceneC === undefined) throw new Error('Scene C instance is missing.')
+    await sceneC.events.emit(
+      { name: DEMO4_SCENARIO_EVENTS.sequenceEnd, visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+    await flushDemo4Relay()
+
+    const menuButtonAgain = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
+    if (menuButtonAgain === null) throw new Error('Demo 4 menu control A is missing after exit.')
+    menuButtonAgain.click()
+    await flushDemo4Relay()
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--next')
+    const activePreviousButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--previous')
+    if (nextButton === null || activePreviousButton === null) {
+      throw new Error('Demo 4 chapter navigation controls are missing after re-entry.')
+    }
+    expect(nextButton.disabled).toBe(false)
+    expect(activePreviousButton.disabled).toBe(false)
+
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 5_200))
+
+    expect(nextButton.disabled).toBe(false)
+    expect(activePreviousButton.disabled).toBe(false)
+  }, 10_000)
 })

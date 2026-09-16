@@ -55,6 +55,8 @@ fonctionnement ne sont pas traités ici.
 - préserver les styles et l'aspect établis des scènes A et B.
 - régler la durée du `replace` entre les scènes du chapitre à 1 seconde pour
   rendre la transition observable pendant la démonstration.
+- faire entrer le menu du bas vers le haut lorsqu'il est réaffiché après la
+  sortie du chapitre, via l'événement d'entrée du carrousel de `scene-layout`.
 
 ### Telco de scène
 
@@ -64,12 +66,13 @@ fonctionnement ne sont pas traités ici.
   est un toggle et son icône/libellé reflète l'état de la scène ;
 - conserver le bouton graphique de rembobinage séparé du toggle ;
 - conserver le slider de progression dans cette telco ;
-- projeter la progression de façon coalescée et différée afin que cette mise à
-  jour secondaire ne retarde pas la commande de lecture/pause ;
-- observer uniquement la scène actuellement sélectionnée et retirer ses
-  abonnements lors de toute sortie de scène ;
+- conserver le seek du slider comme intention discrète vers la scène active ;
+- observer uniquement l’état de lecture de la scène actuellement sélectionnée
+  et retirer son abonnement lors de toute sortie de scène ;
 - invalider les projections différées et les commandes de la sélection
   précédente dès que la vue active change ;
+- projeter la progression vivante dans le contrôle `input` de la telco par la
+  surface CodPlay dédiée, sans événement ni écriture dans le journal ;
 - monter la telco uniquement dans le chapitre ; elle est absente du menu, et
   non simplement désactivée ;
 - conserver une apparence distincte de la télécommande générale ;
@@ -91,9 +94,15 @@ La télécommande générale de Sighty, le volet de logs et la responsivité du
 layout partagé sont des éléments de page distincts. Ils ne servent pas de
 référence pour le montage de la vue ni pour la telco de scène.
 
-La telco, lorsqu'elle est présente dans le chapitre, peut observer la scène
-sélectionnée et lui relayer son slider ; cette observation est une feature de
-présentation. Elle ne doit pas devenir une seconde implémentation de navigation.
+La telco, lorsqu'elle est présente dans le chapitre, peut relayer le seek de
+son slider à la scène sélectionnée ; cette commande discrète reste une feature
+de présentation. La progression vivante est observée par la telco de la scène
+active et projetée par `instance.projection.setInputValue()` dans le contrôle
+déclaré de la telco. Aucun de ces mécanismes ne doit devenir une seconde
+implémentation de navigation. Le mapping des
+événements de cette telco vers les commandes CodPlay est porté par le
+descripteur générique `coupling` du plan de reconstruction ; ce plan visuel
+n'ajoute aucun circuit de commande spécifique.
 
 ## 4. Étapes et preuve
 
@@ -109,23 +118,31 @@ présentation. Elle ne doit pas devenir une seconde implémentation de navigatio
 - Le menu et chaque scène occupent la surface prévue sans troncature.
 - La scène B est centrée et la scène C remplit sa zone.
 - Le `replace` entre deux scènes du chapitre dure 1 seconde.
+- Au retour du chapitre vers le menu, le menu entre visuellement du bas vers
+  le haut ; cette animation passe par l'événement d'entrée du carrousel déjà
+  utilisé par `scene-layout`.
 - La telco de scène est sous la scène du chapitre et reste visuellement distincte.
 - Les boutons `previous`/`next`, le toggle lecture/pause, le rembobinage et le
   slider ne sont présents que dans cette telco ; aucun de ces contrôles n'est
   rendu au menu.
 - Un clic sur le toggle commande immédiatement la scène active ; une
-  projection de progression en attente ne bloque pas cette commande.
-- Une scène quittée ne conserve aucun abonnement de la feature de progression
-  et de lecture de la telco.
-- Une progression, un état de lecture ou un seek issu d'une vue précédente est
-  ignoré dès qu'une autre scène est sélectionnée ; seule la sélection active
-  peut mettre à jour la telco.
+  présentation d'état en attente ne bloque pas cette commande.
+- Une scène quittée ne conserve aucun abonnement de la feature d'état de
+  lecture de la telco.
+- Un état de lecture ou un seek issu d'une vue précédente est ignoré dès
+  qu'une autre scène est sélectionnée ; seule la sélection active peut mettre
+  à jour la telco.
+- Pendant la lecture, le slider suit `onProgress()` de la scène sélectionnée ;
+  il reste stable en pause et un Seek remplace immédiatement sa valeur.
+- Aucun événement `progress:update` n'est introduit pour projeter une
+  progression vivante.
 - Le layout de démo ne présente pas de niveaux visuels inutiles autour de la
   vue.
 - L'item menu reçoit directement la racine de son slot ; l'item chapitre reçoit
   directement les racines de son slot scène et de son slot telco.
-- Aucun fichier Sighty ou aucune API de navigation n'est modifié pour obtenir
-  ces résultats.
+- La phase visuelle n'introduit aucun changement spécifique au runtime ou à
+  l'API de navigation ; les commandes utilisent le `coupling` générique déjà
+  arrêté dans le plan de reconstruction.
 
 ## 6. Ordre de travail
 

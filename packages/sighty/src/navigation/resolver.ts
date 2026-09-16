@@ -31,7 +31,7 @@ export function resolveActionCandidates<
         action,
         selection,
         order: order++,
-        depth: scopeDepth(scope.path),
+        depth: scope.path.length === 0 ? 0 : scope.path.split('/').length,
         sourceMatch: selection.sceneKey === event.sourceSceneKey,
       })
     }
@@ -74,11 +74,6 @@ function compareCandidates<
   if (left.depth !== right.depth) return right.depth - left.depth
   if (left.sourceMatch !== right.sourceMatch) return left.sourceMatch ? -1 : 1
   return left.order - right.order
-}
-
-/** Gives one path a deterministic specificity value without exposing it. */
-function scopeDepth(path: string): number {
-  return path.length === 0 ? 0 : path.split('/').length
 }
 
 /** Keeps action scope typing separate from the public authoring type. */

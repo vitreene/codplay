@@ -1,6 +1,5 @@
 import type { SightyDataBinding, SightyDataValue } from '../types'
 import type { ActiveSelection } from './types'
-import type { ViewIndex } from './types'
 
 /** Contains resolved view data and the keys that must be refreshed live. */
 export type ResolvedViewData = Readonly<{
@@ -12,7 +11,6 @@ export type ResolvedViewData = Readonly<{
 
 /** Resolves inherited view data against scenario data and the current context. */
 export function resolveViewData<SceneKey extends string, SlotName extends string>(
-  index: ViewIndex<SceneKey, SlotName>,
   selection: ActiveSelection<SceneKey, SlotName>,
   scenarioData: Readonly<Record<string, unknown>>,
   context: Readonly<Record<string, unknown>>,
@@ -38,9 +36,6 @@ export function resolveViewData<SceneKey extends string, SlotName extends string
     }
   }
 
-  // Keep the index in the function signature explicit: data resolution is
-  // tied to the same normalized selection as navigation, not to raw paths.
-  void index
   return { values, declaredKeys, liveKeys, events }
 }
 
@@ -56,7 +51,9 @@ function collectDataDeclarations<SceneKey extends string, SlotName extends strin
   return declarations
     .map((declaration, order) => ({ ...declaration, order }))
     .sort((left, right) => {
-      const depthDifference = pathDepth(left.path) - pathDepth(right.path)
+      const leftDepth = left.path.length === 0 ? 0 : left.path.split('/').length
+      const rightDepth = right.path.length === 0 ? 0 : right.path.split('/').length
+      const depthDifference = leftDepth - rightDepth
       return depthDifference === 0 ? left.order - right.order : depthDifference
     })
 }
@@ -95,9 +92,4 @@ function readNested(source: Readonly<Record<string, unknown>>, path: string): un
     current = (current as Record<string, unknown>)[segment]
   }
   return current
-}
-
-/** Computes a deterministic specificity depth for data declarations. */
-function pathDepth(path: string): number {
-  return path.length === 0 ? 0 : path.split('/').length
 }

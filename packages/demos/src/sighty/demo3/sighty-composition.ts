@@ -19,7 +19,7 @@ type SightyDemo3Options = Readonly<{
 }>
 
 type Demo3Sighty = Sighty<SightyDemo3SceneKey, SightyDemo3SlotName>
-export type Demo3Runtime = Demo3Sighty['runtime']
+type Demo3Runtime = Demo3Sighty['runtime']
 
 const INSTANCE_IDS: Readonly<Record<SightyDemo3SceneKey, string>> = {
   layout: 'demo3-layout-1',

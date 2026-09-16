@@ -7,6 +7,7 @@ import { TimeTicker } from '../time'
 import { RuntimeComponentRuntime } from '../components'
 import type {
   ForeignContentSurface,
+  InputComponentSurface,
   MediaComponentSurface,
 } from '../components'
 import { RuntimeCapabilityCatalog } from '../catalog'
@@ -505,13 +506,15 @@ export class HtmlPlayerRunner {
 
   /** Resolves one typed component surface for an adapter owned by this runner. */
   getComponentSurface(componentId: string, surfaceId: 'media'): MediaComponentSurface | undefined
+  getComponentSurface(componentId: string, surfaceId: 'input'): InputComponentSurface | undefined
   getComponentSurface(componentId: string, surfaceId: 'foreignContent'): ForeignContentSurface | undefined
   getComponentSurface(
     componentId: string,
-    surfaceId: 'media' | 'foreignContent',
-  ): MediaComponentSurface | ForeignContentSurface | undefined {
+    surfaceId: 'media' | 'input' | 'foreignContent',
+  ): MediaComponentSurface | InputComponentSurface | ForeignContentSurface | undefined {
     const surfaces = this.player.componentRuntime?.getComponentSurfaces()
     if (surfaceId === 'foreignContent') return surfaces?.getForeignContentSurface?.(componentId)
+    if (surfaceId === 'input') return surfaces?.getInputSurface?.(componentId)
     return surfaces?.getSurface(componentId, surfaceId)
   }
 

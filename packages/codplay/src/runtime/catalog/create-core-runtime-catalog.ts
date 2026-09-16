@@ -96,6 +96,7 @@ const coreInputDefinition: RuntimeComponentDefinition = {
   validateAction: validateInputAction,
   sanitizeInitial: sanitizeInputInitial,
   sanitizeAction: sanitizeInputAction,
+  surfaces: (component) => component instanceof InputComponent ? { input: component } : {},
   mountablePartResolver: (identity) => [
     selectionIconPartId(identity.storyId, resolvePersoId(identity)),
     correctionIconPartId(identity.storyId, resolvePersoId(identity)),

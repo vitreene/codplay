@@ -39,7 +39,7 @@ export function planCompositionTransition<
 }
 
 /** Determines whether one selection can retain its physical occurrence. */
-function sameSelection<SceneKey extends string, SlotName extends string>(
+export function sameSelection<SceneKey extends string, SlotName extends string>(
   left: ActiveSelection<SceneKey, SlotName>,
   right: ActiveSelection<SceneKey, SlotName>,
 ): boolean {

@@ -25,7 +25,7 @@ const CAROUSEL_EVENT_NAMES = {
   chapterLeave: `${DEMO4_LAYOUT_CAROUSEL_NAMESPACE}:chapter:outro`,
 } as const
 
-/** Builds the authoring artifact for the two-item horizontal layout carousel. */
+/** Builds the authoring artifact for the two-item layout carousel. */
 function createLayoutCarousel(): AutoCapsuleResult {
   const preset = CapsulePreset.resolve({
     capsuleType: CAPSULE_TYPE.carousel,
@@ -57,7 +57,7 @@ function createLayoutCarousel(): AutoCapsuleResult {
         ? { intro: CAROUSEL_EVENT_NAMES.menuEnter, outro: CAROUSEL_EVENT_NAMES.menuLeave }
         : { intro: CAROUSEL_EVENT_NAMES.chapterEnter, outro: CAROUSEL_EVENT_NAMES.chapterLeave }
       const refs = itemId === DEMO4_LAYOUT_ITEM_IDS.menu
-        ? { intro: 'swipe-right', outro: 'swipe-left' }
+        ? { intro: 'swipe-down', outro: 'swipe-left' }
         : { intro: 'swipe-left', outro: 'swipe-right' }
       return {
         id: child.trackId,
@@ -118,7 +118,7 @@ export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: stri
     initial: {
       move: { target: DEMO4_LAYOUT_CAROUSEL_VIEWPORT_TARGET },
       className: `${item.className} ${initialState}`,
-      style: { x: initialOffset },
+      style: { x: initialOffset, y: '0%' },
       markup,
     },
     actions: {
@@ -128,12 +128,24 @@ export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: stri
           remove: 'demo4-layout__carousel-item--inactive demo4-layout__carousel-item--leaving',
         },
         style: {
-          x: {
-            from: initialOffset,
-            to: '0%',
-            duration: CAROUSEL_SLIDE_DURATION_MS,
-            ease: 'inOutCubic',
-          },
+          ...(itemId === DEMO4_LAYOUT_ITEM_IDS.menu
+            ? {
+                x: '0%',
+                y: {
+                  from: '100%',
+                  to: '0%',
+                  duration: CAROUSEL_SLIDE_DURATION_MS,
+                  ease: 'inOutCubic',
+                },
+              }
+            : {
+                x: {
+                  from: initialOffset,
+                  to: '0%',
+                  duration: CAROUSEL_SLIDE_DURATION_MS,
+                  ease: 'inOutCubic',
+                },
+              }),
         },
       },
       [events.leave]: {

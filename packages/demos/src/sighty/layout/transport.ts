@@ -1,4 +1,3 @@
-import type { CodPlayTelco } from 'codplay'
 import type { SightyDemoRuntime, SightyDemoTransport } from './types'
 
 type SightyTransportOptions<SceneKey extends string> = Readonly<{
@@ -16,18 +15,6 @@ export function createSightyTransport<SceneKey extends string, SlotName extends 
     play: () => playRuntime(runtime, selectCommandSceneKeys()),
     pause: () => pauseRuntime(runtime, selectCommandSceneKeys()),
     relaunch: () => relaunchRuntime(runtime, selectCommandSceneKeys()),
-  }
-}
-
-/** Creates the same three transport commands for one CodPlay occurrence. */
-export function createSightyInstanceTransport(telco: CodPlayTelco): SightyDemoTransport {
-  return {
-    play: () => telco.play(),
-    pause: () => telco.pause(),
-    relaunch: async () => {
-      await telco.rewind()
-      await telco.play()
-    },
   }
 }
 

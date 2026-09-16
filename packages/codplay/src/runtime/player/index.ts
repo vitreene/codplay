@@ -6,6 +6,11 @@ export {
   type RuntimePlayerRefreshOptions,
 } from './runtime-player'
 export {
+  projectInputValue,
+  type RuntimeInputProjectionResult,
+  type RuntimeInputProjectionTarget,
+} from './input-projection'
+export {
   RuntimeCaptureSession,
   openRuntimeCaptureSession,
   resolveCompiledCaptureDeclaration,

@@ -28,6 +28,9 @@ import type {
   CodPlaySnapshotSetResult,
   CodPlayPresentationApi,
   CodPlayPresentationFrame,
+  CodPlayProjectionApi,
+  CodPlayProjectionResult,
+  CodPlayProjectionTarget,
   CodPlayTraceListener,
   CodPlayTelco,
   CodPlayTelcoState,
@@ -52,6 +55,7 @@ type InstanceFacadeOptions = Readonly<{
 export class InstanceFacadeImpl implements CodPlayInstance {
   readonly instanceId: string
   readonly telco: CodPlayTelco
+  readonly projection: CodPlayProjectionApi
   readonly events: CodPlayInstanceEvents
   readonly diagnostic: CodPlayInstanceDiagnostic
   readonly snapshot: CodPlaySnapshotApi
@@ -79,6 +83,12 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     const telco = createTelcoFacade(options)
     this.telco = telco.api
     this.destroyTelco = telco.destroy
+    this.projection = createProjectionFacade(
+      this.player,
+      this.diagnostics,
+      this.instanceId,
+      () => this.destroyed,
+    )
     this.events = createEventsFacade(this.player, this.diagnostics, this.instanceId, this.eventListeners)
     this.snapshot = createSnapshotFacade(this.player, this.diagnostics, this.instanceId, () => this.destroyed)
     this.presentation = createPresentationFacade(options.runner, () => this.destroyed)
@@ -157,6 +167,33 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.traceListeners.clear()
     this.destroyTelco()
     this.destroyHost()
+  }
+}
+
+/** Creates the presentation-only input projection without exposing runtime components. */
+function createProjectionFacade(
+  player: RuntimePlayer,
+  diagnostics: DiagnosticChannel,
+  instanceId: string,
+  isDestroyed: () => boolean,
+): CodPlayProjectionApi {
+  return {
+    setInputValue: (
+      target: CodPlayProjectionTarget,
+      value: string | number,
+    ): CodPlayProjectionResult => {
+      if (isDestroyed()) return { ok: false, code: 'INSTANCE_DESTROYED' }
+      const result = player.projectInputValue(target, value)
+      if (!result.ok) {
+        publishFacadeError(
+          diagnostics,
+          `CODPLAY_PROJECTION_${result.code}`,
+          `Input projection rejected: ${result.code}.`,
+          { instanceId },
+        )
+      }
+      return result
+    },
   }
 }
 

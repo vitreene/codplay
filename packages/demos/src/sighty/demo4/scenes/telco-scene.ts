@@ -5,7 +5,6 @@ import {
   DEMO4_PLAYBACK_INTENTS,
   DEMO4_PLAYBACK_STATE_EVENTS,
   DEMO4_PROGRESS_INTENTS,
-  DEMO4_PROGRESS_STATE_EVENTS,
   DEMO4_TELCO_STATE_EVENTS,
 } from '../messages'
 
@@ -157,24 +156,6 @@ export const telcoScene: SceneDoc<string> = {
           },
         },
         {
-          id: 'demo4-telco-status',
-          type: 'tag',
-          initial: {
-            tag: 'span',
-            content: 'Menu',
-            className: 'demo4-telco__status-text',
-            move: { target: 'demo4:telco-controls' },
-          },
-          actions: {
-            [DEMO4_TELCO_STATE_EVENTS.enable]: { content: 'Navigation active' },
-            [DEMO4_TELCO_STATE_EVENTS.disable]: { content: 'Menu' },
-            [DEMO4_NAVIGATION_INTENTS.previous]: { content: 'Scène précédente' },
-            [DEMO4_NAVIGATION_INTENTS.next]: { content: 'Scène suivante' },
-            [DEMO4_PLAYBACK_INTENTS.toggle]: { content: 'Lecture / pause' },
-            [DEMO4_PLAYBACK_INTENTS.rewind]: { content: 'Retour au début' },
-          },
-        },
-        {
           id: 'demo4-telco-progress',
           type: 'input',
           initial: {
@@ -184,9 +165,8 @@ export const telcoScene: SceneDoc<string> = {
             min: 0,
             max: 10_000,
             step: 10,
-            label: 'Progression',
             hint: '',
-            className: 'demo4-telco__progress',
+            className: 'demo4-telco__seek',
             move: { target: 'demo4:telco-controls' },
           },
           emit: {
@@ -198,7 +178,6 @@ export const telcoScene: SceneDoc<string> = {
             },
           },
           actions: {
-            [DEMO4_PROGRESS_STATE_EVENTS.update]: null,
             [DEMO4_TELCO_STATE_EVENTS.enable]: { disabled: false, value: 0 },
             [DEMO4_TELCO_STATE_EVENTS.disable]: { disabled: true, value: 0 },
           },
