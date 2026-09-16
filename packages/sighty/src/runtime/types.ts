@@ -120,9 +120,6 @@ export type SightyRuntimeApi<
     mutation: SightyScenarioMutation<SceneKey, SlotName>,
     policy?: SightyMutationReloadPolicy,
   ) => Promise<boolean>
-  mountSlot: (slotName: SlotName, childSceneKey?: SceneKey) => void
-  detachSlot: (slotName: SlotName) => void
-  isSlotMounted: (slotName: SlotName) => boolean
   getMountedSceneKey: (slotName: SlotName) => SceneKey | undefined
   onSlotChange: (
     slotName: SlotName,
@@ -192,6 +189,7 @@ export type RuntimeMutationSnapshot<
   deliveredData: ReadonlyMap<string, Readonly<Record<string, unknown>>>
   instances: ReadonlyMap<string, CodPlayInstance>
   instanceSceneKeys: ReadonlyMap<string, SceneKey>
+  presentation: readonly PresentationRelation<SceneKey, SlotName>[]
   playback: ReadonlyMap<string, MountedState>
 }>
 
@@ -200,4 +198,13 @@ export type ResolvedMount = Readonly<{
   host: CodPlayInstanceHostTarget
   childInstanceId: string
   replace?: CodPlayInstanceMountReplace
+}>
+
+/** Captures one physical relation independently from its live detach handle. */
+export type PresentationRelation<
+  SceneKey extends string,
+  SlotName extends string,
+> = Readonly<{
+  selection: ActiveSelection<SceneKey, SlotName>
+  mount: ResolvedMount
 }>

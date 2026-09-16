@@ -313,7 +313,6 @@ select:focus-visible {
 }
 
 .sighty-remote__button:disabled,
-.sighty-action-button:disabled,
 .sighty-layout__selector:disabled {
   cursor: not-allowed;
   opacity: 0.5;

@@ -49,8 +49,8 @@ export const telcoScene: SceneDoc<string> = {
             },
           },
           actions: {
-            [DEMO4_TELCO_STATE_EVENTS.enable]: { attr: { disabled: false } },
-            [DEMO4_TELCO_STATE_EVENTS.disable]: { attr: { disabled: true } },
+            [DEMO4_TELCO_STATE_EVENTS.on]: { attr: { disabled: false } },
+            [DEMO4_TELCO_STATE_EVENTS.off]: { attr: { disabled: true } },
           },
         },
         {
@@ -72,8 +72,8 @@ export const telcoScene: SceneDoc<string> = {
             },
           },
           actions: {
-            [DEMO4_TELCO_STATE_EVENTS.enable]: { attr: { disabled: false } },
-            [DEMO4_TELCO_STATE_EVENTS.disable]: { attr: { disabled: true } },
+            [DEMO4_TELCO_STATE_EVENTS.on]: { attr: { disabled: false } },
+            [DEMO4_TELCO_STATE_EVENTS.off]: { attr: { disabled: true } },
           },
         },
         {
@@ -100,8 +100,8 @@ export const telcoScene: SceneDoc<string> = {
             },
           },
           actions: {
-            [DEMO4_TELCO_STATE_EVENTS.enable]: { attr: { disabled: false } },
-            [DEMO4_TELCO_STATE_EVENTS.disable]: {
+            [DEMO4_TELCO_STATE_EVENTS.on]: { attr: { disabled: false } },
+            [DEMO4_TELCO_STATE_EVENTS.off]: {
               content: '▶',
               attr: {
                 disabled: true,
@@ -151,8 +151,8 @@ export const telcoScene: SceneDoc<string> = {
             },
           },
           actions: {
-            [DEMO4_TELCO_STATE_EVENTS.enable]: { attr: { disabled: false } },
-            [DEMO4_TELCO_STATE_EVENTS.disable]: { attr: { disabled: true } },
+            [DEMO4_TELCO_STATE_EVENTS.on]: { attr: { disabled: false } },
+            [DEMO4_TELCO_STATE_EVENTS.off]: { attr: { disabled: true } },
           },
         },
         {
@@ -178,8 +178,8 @@ export const telcoScene: SceneDoc<string> = {
             },
           },
           actions: {
-            [DEMO4_TELCO_STATE_EVENTS.enable]: { disabled: false, value: 0 },
-            [DEMO4_TELCO_STATE_EVENTS.disable]: { disabled: true, value: 0 },
+            [DEMO4_TELCO_STATE_EVENTS.on]: { disabled: false, value: 0 },
+            [DEMO4_TELCO_STATE_EVENTS.off]: { disabled: true, value: 0 },
           },
         },
       ],

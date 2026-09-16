@@ -3,8 +3,10 @@ import {
   DEMO4_MENU_INTENTS,
   DEMO4_NAVIGATION_INTENTS,
   DEMO4_PLAYBACK_INTENTS,
+  DEMO4_PLAYBACK_STATE_EVENTS,
   DEMO4_PROGRESS_INTENTS,
   DEMO4_SCENARIO_EVENTS,
+  DEMO4_TELCO_STATE_EVENTS,
 } from "./messages";
 
 export type SightyDemo4SceneKey =
@@ -35,6 +37,12 @@ const CHAPTER_NAVIGATION_ACTIONS = {
 const CHAPTER_BOUNDARY_ACTIONS = {
   [DEMO4_NAVIGATION_INTENTS.previous]: RETURN_TO_MENU_ACTION,
   [DEMO4_NAVIGATION_INTENTS.next]: RETURN_TO_MENU_ACTION,
+} as const;
+const CHAPTER_TELCO_ACTIONS = {
+  [DEMO4_TELCO_STATE_EVENTS.on]: { action: "demo4:project-telco-event" },
+  [DEMO4_TELCO_STATE_EVENTS.off]: { action: "demo4:project-telco-event" },
+  [DEMO4_PLAYBACK_STATE_EVENTS.playing]: { action: "demo4:project-telco-event" },
+  [DEMO4_PLAYBACK_STATE_EVENTS.paused]: { action: "demo4:project-telco-event" },
 } as const;
 
 /** Describes the recursive menu/chapter composition consumed by Sighty. */
@@ -91,7 +99,10 @@ export const sightyFile: SightyDemo4File = {
                     [DEMO4_PROGRESS_INTENTS.seek]: ["pause", "seek"],
                   },
                 },
-                actions: CHAPTER_BOUNDARY_ACTIONS,
+                actions: {
+                  ...CHAPTER_BOUNDARY_ACTIONS,
+                  ...CHAPTER_TELCO_ACTIONS,
+                },
                 view: {
                   slots: {
                     "slot-scene": [

@@ -4,9 +4,8 @@ import type {
   SightyLegacyView,
   SightyViewGraph,
   SightyViewList,
-  SightyViewMap,
 } from './types'
-import { getAuthoredGraphEntries, isAuthoredViewMap } from './navigation/graph-entries'
+import { getAuthoredGraphEntries } from './navigation/graph-entries'
 
 /** Identifies one graph node together with its authored path and container. */
 export type SightyGraphEntry<
@@ -18,14 +17,6 @@ export type SightyGraphEntry<
   graph: SightyViewGraph<SceneKey, SlotName>
   view: SightyGraphView<SceneKey, SlotName>
 }>
-
-/** Narrows a graph to the identified map representation. */
-export function isSightyViewMap<
-  SceneKey extends string = string,
-  SlotName extends string = string,
->(graph: SightyViewGraph<SceneKey, SlotName>): graph is SightyViewMap<SceneKey, SlotName> {
-  return isAuthoredViewMap(graph)
-}
 
 /** Converts the legacy flat placement representation into the recursive graph form. */
 export function normalizeSightyViewGraph<
@@ -114,17 +105,6 @@ function collectGraphEntries<
     const nestedGraph = entry.view.view.graph
     if (nestedGraph !== undefined) collectGraphEntries(nestedGraph, `${entry.path}/graph`, entries)
   }
-}
-
-/** Finds the first node carrying one scene key in a recursive graph. */
-export function findGraphViewByScene<
-  SceneKey extends string = string,
-  SlotName extends string = string,
->(
-  graph: SightyViewGraph<SceneKey, SlotName>,
-  sceneKey: SceneKey,
-): SightyGraphEntry<SceneKey, SlotName> | undefined {
-  return getGraphEntries(graph).find((entry) => entry.view.view.scene === sceneKey)
 }
 
 /** Finds one node by its normalized slash-separated graph path. */

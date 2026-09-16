@@ -36,8 +36,9 @@ même coordinateur et leurs échecs restaurent la version auteur, les occurrence
 les montages et les ressources détenues.
 
 Cette liste décrit le comportement actuellement vérifiable ; elle ne ferme pas
-encore les gates de validation navigateur/Safari et de vérification complète du
-cycle de vie. Les occurrences multiples, le couplage télécommande et la
+encore la matrice complète de validation navigateur/Safari ni la vérification
+complète du cycle de vie. La disponibilité de l’instance Safari MCP n’est pas
+un blocage : un smoke test frais de Demo 4 a été exécuté le 2026-09-16. Les occurrences multiples, le couplage télécommande et la
 distinction `scene:end`/`sequence:end` sont maintenant arrêtés dans la
 spécification et couverts par l’implémentation et les tests ciblés. La
 persistance sérialisée n’appartient pas à cette reprise : elle relève d’une
@@ -46,8 +47,11 @@ intégration hôte ultérieure.
 La validation automatisée de cette reprise est verte : 31 tests Sighty, 650
 tests CodPlay, les trois typechecks concernés et le build Vite des démos. Le
 parcours Safari MCP frais a validé Demo 4 sur menu → scène A, pause/reprise,
-progression vivante et fin de séquence ; les autres gates de reconstruction
-restent suivies dans les tranches correspondantes.
+progression vivante, le verrou d’une navigation rapide et la terminalisation
+de la scène C. Le routage automatique de l’eventime auteur `sequence:end` reste
+ouvert à la frontière CodPlay, car il n’est pas publié par le player actuel ;
+les autres gates de reconstruction restent suivies dans les tranches
+correspondantes.
 
 La première implantation de Sighty est une preuve d’usage et une source de
 constats. Demo 4 reste une fixture d’acceptation ; elle ne définit pas le
@@ -56,11 +60,11 @@ modèle générique.
 Le runtime est désormais découpé dans `packages/sighty/src/runtime/`. Le
 fichier `src/runtime.ts` conserve uniquement la compatibilité de l’entrée
 publique ; `controller.ts` orchestre les services `state`, `scene-manager`,
-`binding-manager`, `composition-manager`, `navigation-manager` et
-`mutation-manager`. Les helpers de validation et les fonctions transverses
-sont isolés dans leurs modules dédiés ; la validation des catalogues runtime est
-nommée `catalog-validation.ts` pour la distinguer de la validation du fichier
-auteur. Dans `src/navigation/`, les opérations pures d’indexation, de
+`binding-manager`, `presentation-manager`, `composition-manager`,
+`navigation-manager` et `mutation-manager`. Les helpers de validation et les
+fonctions transverses sont isolés dans leurs modules dédiés ; la validation des
+catalogues runtime est nommée `catalog-validation.ts` pour la distinguer de la
+validation du fichier auteur. Dans `src/navigation/`, les opérations pures d’indexation, de
 résolution et de transition restent séparées de l’orchestration runtime. Les
 wrappers one-shot sans valeur sémantique sont désormais intégrés directement,
 et les utilitaires de
@@ -412,7 +416,10 @@ comportement CodPlay existant : la séquence du player est terminée, la lecture
 est arrêtée, les captures actives sont annulées, le hook de fin est appelé et
 l’état de transport est publié. Ce signal ne détruit ni l’instance, ni le
 montage, ni les ressources. Si une transition de vue est engagée ensuite,
-Sighty applique son cycle de vie normal de détachement ou de destruction.
+Sighty modifie la composition logique ; la présentation physique conserve le
+montage tant qu’aucun host ne doit accueillir une autre relation. Le
+détachement ou la destruction interviennent lors d’un conflit de host, d’une
+reconstruction ou de la destruction du runtime.
 Toute transformation d’un fait CodPlay en intention de navigation réutilise le
 point d’admission normal de Sighty et ne crée pas un second circuit.
 
@@ -662,7 +669,6 @@ type ActiveSelection = {
   sceneKey: string
   bindingId: string
   generation: number
-  lifecycle: 'entering' | 'active' | 'leaving' | 'inactive'
 }
 ~~~
 
@@ -846,7 +852,8 @@ type ActiveBindingPort = {
 2. la génération est invalidée ;
 3. les désabonnements sont exécutés ;
 4. les demandes différées portant cette génération sont abandonnées ;
-5. le montage est détaché selon le plan ;
+5. la relation physique est conservée si aucun host ne doit être repris ;
+   sinon elle est remplacée ou détachée selon le plan ;
 6. les ressources sont libérées seulement si leur propriété le permet.
 
 Un événement déjà en cours d’exécution est contrôlé à nouveau avant chaque
@@ -939,8 +946,10 @@ publiée. Elle ne devient jamais un journal à rejouer.
 7. invalider les liaisons sortantes ;
 8. neutraliser les livraisons différées devenues obsolètes ;
 9. résoudre la politique de scène et préparer les éventuels resets ;
-10. détacher ou remplacer les montages selon la configuration du slot, puis
-    monter les scènes entrantes par les surfaces publiques autorisées ;
+10. réconcilier les relations de présentation : remplacer ou détacher une
+    relation seulement en cas de conflit de host, puis monter les scènes
+    entrantes par les surfaces publiques autorisées ; une sortie sans conflit
+    peut rester physiquement conservée hors composition active ;
 11. publier la nouvelle composition en une seule fois ;
 12. ouvrir les liaisons entrantes ;
 13. demander le reset CodPlay des occurrences conservées dont le
@@ -957,17 +966,25 @@ requis.
 La première verticale vérifie aussi le cas où deux adresses logiques
 successives désignent le même slot physique : avec `replace`, le nouveau
 montage est demandé avant le détachement géré par CodPlay ; sans `replace`, la
-relation sortante est détachée avant la nouvelle demande. Le suivi de cette
-cible physique reste interne à Sighty.
+relation sortante est détachée avant la nouvelle demande. Une sortie sans
+entrante dans son host n’est pas démontée par le seul changement de branche :
+la présentation physique la conserve afin que les layouts, carousels et
+compositions imbriquées restent propriétaires de leur visibilité. Le suivi de
+cette cible physique reste interne à Sighty.
 
 ### 7.4. Concurrence
 
 Les demandes discrètes admises sont sérialisées par le coordinateur. Une
-demande issue d’un binding devenu obsolète est abandonnée, jamais rejouée.
+intention qui peut changer la composition réserve atomiquement la phase
+`changing` avant l’entrée dans la file ; une seconde intention de transition
+arrivée pendant cette phase est rejetée avec `false`, et non accumulée. Les
+commandes discrètes sans changement de vue peuvent attendre leur tour dans la
+même file. Une demande issue d’un binding devenu obsolète est abandonnée,
+jamais rejouée.
 
-Les commandes externes peuvent attendre leur tour, mais elles ne doivent pas
-être transformées en historique permanent. La politique de saturation,
-d’annulation et de priorité sera testée en M2 avant l’intégration de Demo 4.
+Cette protection est portée par la machine d’état Sighty et non par une
+démo ou un contrôle HTML. Elle s’applique donc aussi aux graphes imbriqués,
+aux carousels et aux compositions parallèles d’un même runtime.
 
 ## 8. API auteur des politiques de changement de vue
 
@@ -1038,7 +1055,7 @@ Le runtime distingue :
 | --- | --- |
 | entrée | crée ou active une sélection et son binding |
 | conservation | garde la sélection et son état |
-| sortie | invalide, désabonne et détache |
+| sortie | invalide et désabonne ; conserve le montage tant qu’aucun host n’est repris |
 | rewind | repositionne à zéro sans session neuve |
 | reset | réinitialise l’état logique via CodPlay sur l’occurrence conservée |
 | destruction | supprime l’occurrence et libère ses ressources |
@@ -1074,8 +1091,10 @@ arrêtée le 2026-09-15 :
   le scénario.
 - `sequence:end` conserve le comportement CodPlay du player : il termine la
   séquence et arrête la lecture, sans détruire l’instance, le montage ou les
-  ressources. Le détachement et la destruction relèvent ensuite du cycle de
-  vie Sighty si une transition les exige.
+  ressources. Une transition peut modifier la composition logique, mais le
+  montage physique est conservé tant qu’il n’entre pas en conflit avec un
+  autre child ; le détachement et la destruction relèvent d’une reconstruction,
+  d’un conflit de host ou de la destruction du runtime.
 
 Ces deux signaux peuvent entraîner un changement de vue si le scénario le
 paramètre ou si une écoute les transforme en intention adressée au point
@@ -1147,6 +1166,7 @@ type TelcoCommand =
   | 'setRate'
   | 'seek'
   | 'rewind'
+  | 'reset'
 ~~~
 
 Le descripteur indique :
@@ -1433,7 +1453,7 @@ code qui en dépend.
 - la correspondance entre remise à zéro des entrées, état de lecture, journal
   et éventuelles données utilisateur, selon le contrat CodPlay ;
 - la séparation entre registry d’instances conservées, composition active,
-  montage/bindings et destruction effective ;
+  registre de présentation physique, bindings et destruction effective ;
 - la surface CodPlay exacte qui porte le reset ; Sighty ne doit pas créer une
   API de remplacement ni une instance à la volée pour compenser une absence
   d’adaptateur ;
@@ -1482,6 +1502,7 @@ Ajouter les modèles **internes** :
 - TransitionOperation ;
 - révisions monotones ;
 - sérialisation des commandes ;
+- verrou d’admission des transitions concurrentes ;
 - rejet des demandes obsolètes ;
 - publication atomique de la composition logique.
 
@@ -1670,7 +1691,7 @@ Exécuter, selon les catégories affectées :
   des événements de télécommande, de navigation et d’interaction, puis
   désabonnement et destruction ;
 - surface telco CodPlay complète (`play`, `pause`, `togglePlay`, `setRate`,
-  `seek`, `rewind`, `commandInFlight`, `rate`, `getState`, `getProgress`,
+  `seek`, `rewind`, `reset`, `commandInFlight`, `rate`, `getState`, `getProgress`,
   `onChange` et `onProgress`) et répétitions ;
 - absence de toute voie de commande concurrente dans Sighty ou les démos ;
 - redimensionnement si affecté ;
@@ -1750,7 +1771,7 @@ elle n’est pas affectée.
 - aucune création à la volée ne sert de mécanisme de remise à zéro ;
 - une entrée issue d’une navigation passe par le coordinateur unique, qui
   livre ses données avant de finaliser le comportement `showMode` ;
-- la sortie invalide avant le détachement ;
+- la sortie invalide avant tout remplacement ou détachement physique nécessaire ;
 - la fin de chaque scène est distincte de la fin de la vue ;
 - aucune navigation automatique n’est déduite d’une fin de scène ou de
   séquence ;
@@ -1829,8 +1850,8 @@ Ne pas inclure dans la reconstruction de navigation :
 | M7 — données et état vivant | En cours | data/context `entry`/`live` et lecture d’état exécutés ; navigateur restant |
 | M8 — mutations | En cours | mutations versionnées, politiques et rollback exécutés ; versionnement durable à valider |
 | M9 — coupling/telco | En cours | couplage déclaré, occurrences indépendantes et surface telco vérifiés ; autres parcours navigateur à compléter |
-| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 11/11 ; CodPlay : 650/650), progression live et smoke Safari Demo 4 validés ; les démos 1 à 3 sont différées et non bloquantes |
-| M11 — validation complète | En cours | suites (Sighty 31/31, CodPlay 650/650), typechecks, build et smoke Safari Demo 4 validés le 2026-09-16 ; les preuves restantes sont encore à exécuter |
+| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 11/11 ; Sighty : 31/31 ; CodPlay : 650/650), progression live, verrou de navigation rapide et terminalisation Safari validés ; le routage automatique de `sequence:end` reste ouvert côté CodPlay ; les démos 1 à 3 sont différées et non bloquantes |
+| M11 — validation complète | En cours | suites (Sighty 30/30, CodPlay 650/650), typechecks, build et smoke Safari Demo 4 validés le 2026-09-16 ; les preuves restantes sont encore à exécuter |
 | progression | Plan dédié en cours | projection locale CodPlay par `onProgress` et surface `input`, sans `progress:update` |
 
 Ce plan reste En cours tant que les gates et validations correspondantes ne

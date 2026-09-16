@@ -163,35 +163,6 @@ function createNavigationLayoutScene(): SceneDoc<string> {
   }
 }
 
-/** Builds the minimal Sighty file whose slot has several legal child choices. */
-function createFile(): SightyFile<SceneKey, SlotName> {
-  return {
-    format: 'sighty',
-    version: 1,
-    id: 'runtime-multiple-placements',
-    resources: {
-      scenes: {
-        layout: './layout',
-        menu: './menu',
-        sceneA: './scene-a',
-        sceneB: './scene-b',
-      },
-    },
-    views: [{
-      view: {
-        scene: 'layout',
-        slots: {
-          main: [
-            { view: { scene: 'menu' } },
-            { view: { scene: 'sceneA' } },
-            { view: { scene: 'sceneB' } },
-          ],
-        },
-      },
-    }],
-  }
-}
-
 /** Builds one recursive view graph with inherited direction and direct routes. */
 function createGraphFile(): SightyFile<SceneKey, SlotName> {
   return {
@@ -350,50 +321,7 @@ describe('Sighty runtime slot selection', () => {
     vi.restoreAllMocks()
   })
 
-  it('mounts only the declared child selected by scene key', async () => {
-    const stage = document.createElement('div')
-    document.body.append(stage)
-    project = new Sighty({
-      scenario: {
-        file: createFile(),
-        scenes: {
-          layout: createLayoutScene(),
-          menu: createChildScene('menu'),
-          sceneA: createChildScene('sceneA'),
-          sceneB: createChildScene('sceneB'),
-        },
-      },
-      runtime: {
-        root: stage,
-        instanceIds: {
-          layout: 'runtime-layout-1',
-          menu: 'runtime-menu-1',
-          sceneA: 'runtime-scene-a-1',
-          sceneB: 'runtime-scene-b-1',
-        },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-      },
-    })
-
-    await project.runtime.initialize()
-    expect(stage.querySelector('#runtime-menu-root')).not.toBeNull()
-    expect(stage.querySelector('#runtime-scene-a-root')).toBeNull()
-
-    project.runtime.mountSlot('main', 'sceneB')
-    expect(stage.querySelector('#runtime-menu-root')).toBeNull()
-    expect(stage.querySelector('#runtime-scene-b-root')).not.toBeNull()
-
-    project.runtime.mountSlot('main', 'sceneA')
-    expect(stage.querySelector('#runtime-scene-b-root')).toBeNull()
-    expect(stage.querySelector('#runtime-scene-a-root')).not.toBeNull()
-
-    expect(() => project!.runtime.mountSlot('main', 'unknown' as SceneKey)).toThrow(
-      "La scène Sighty unknown n'est pas déclarée dans le slot main.",
-    )
-    expect(stage.querySelector('#runtime-scene-a-root')).not.toBeNull()
-  })
-
-  it('routes graph actions and inherited directions inside Sighty', async () => {
+  it('routes a declared graph action through Sighty', async () => {
     const stage = document.createElement('div')
     const selected: (SceneKey | undefined)[] = []
     let macroExecuted = false
@@ -432,14 +360,6 @@ describe('Sighty runtime slot selection', () => {
 
     await project.runtime.initialize()
     expect(selected).toEqual(['menu'])
-    expect(await project.runtime.dispatch({ name: 'runtime:next', sourceSceneKey: 'menu' })).toBe(true)
-    expect(project.runtime.getMountedSceneKey('main')).toBe('sceneA')
-    expect(stage.querySelector('#runtime-scene-a-root')).not.toBeNull()
-
-    expect(await project.runtime.dispatch({ name: 'runtime:next', sourceSceneKey: 'sceneA' })).toBe(true)
-    expect(project.runtime.getMountedSceneKey('main')).toBe('sceneB')
-
-    project.runtime.mountSlot('main', 'menu')
     expect(await project.runtime.dispatch({ name: 'runtime:open-b', sourceSceneKey: 'menu' })).toBe(true)
     expect(project.runtime.getMountedSceneKey('main')).toBe('sceneB')
     expect(macroExecuted).toBe(true)
@@ -646,6 +566,51 @@ describe('Sighty runtime slot selection', () => {
     expect(await navigationProject.runtime.dispatch({ name: 'navigation:sequence-end', sourceSceneKey: 'scene-c' })).toBe(true)
     expect(navigationProject.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
     expect(navigationProject.runtime.getMountedSceneKey('slot-telco')).toBeUndefined()
+    expect(stage.querySelector('#scene-telco-root')).not.toBeNull()
+  })
+
+  it('rejects a second composition-changing intent during the changing phase', async () => {
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    navigationProject = new Sighty({
+      scenario: {
+        file: createNavigationFile(),
+        scenes: {
+          'scene-layout': createNavigationLayoutScene(),
+          'scene-menu': createNavigationScene('scene-menu'),
+          'scene-a': createNavigationScene('scene-a'),
+          'scene-b': createNavigationScene('scene-b'),
+          'scene-c': createNavigationScene('scene-c'),
+          'scene-telco': createNavigationScene('scene-telco'),
+        },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: {
+          'scene-layout': 'concurrent-layout-1',
+          'scene-menu': 'concurrent-menu-1',
+          'scene-a': 'concurrent-a-1',
+          'scene-b': 'concurrent-b-1',
+          'scene-c': 'concurrent-c-1',
+          'scene-telco': 'concurrent-telco-1',
+        },
+        layout: { sceneKey: 'scene-layout', storyId: 'main' },
+      },
+    })
+
+    await navigationProject.runtime.initialize()
+    const first = navigationProject.runtime.dispatch({
+      name: 'navigation:open-a',
+      sourceSceneKey: 'scene-menu',
+    })
+    const second = navigationProject.runtime.dispatch({
+      name: 'navigation:open-a',
+      sourceSceneKey: 'scene-menu',
+    })
+
+    await expect(second).resolves.toBe(false)
+    await expect(first).resolves.toBe(true)
+    expect(navigationProject.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
   })
 
   it('publishes active CodPlay events through the Sighty host event surface', async () => {
@@ -821,13 +786,13 @@ describe('Sighty runtime slot selection', () => {
     expect(navigationProject.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
   })
 
-  it('closes a binding when a slot is detached explicitly', async () => {
+  it('closes a binding when a scene leaves through navigation', async () => {
     const stage = document.createElement('div')
     const events: string[] = []
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createFile(),
+        file: createGraphFile(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -844,6 +809,10 @@ describe('Sighty runtime slot selection', () => {
           sceneB: 'detach-binding-scene-b-1',
         },
         layout: { sceneKey: 'layout', storyId: 'main' },
+        actionCatalog: {
+          'runtime:macro-open-b': async () => undefined,
+          'runtime:send-inactive': async () => undefined,
+        },
       },
     })
     project.runtime.events.onEvent((event) => events.push(event.name))
@@ -851,13 +820,13 @@ describe('Sighty runtime slot selection', () => {
     await project.runtime.initialize()
     const menu = project.runtime.getInstance('menu')
     if (menu === undefined) throw new Error('La scène menu de test est absente.')
-    project.runtime.detachSlot('main')
+    await project.runtime.dispatch({ name: 'runtime:next', sourceSceneKey: 'menu' })
     await menu.events.emit(
-      { name: 'navigation:after-detach', visibility: 'public' },
+      { name: 'navigation:after-exit', visibility: 'public' },
       { scope: 'scene' },
     )
 
-    expect(project.runtime.getMountedSceneKey('main')).toBeUndefined()
+    expect(project.runtime.getMountedSceneKey('main')).toBe('sceneA')
     expect(events).toEqual([])
   })
 

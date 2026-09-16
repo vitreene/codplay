@@ -9,9 +9,9 @@ import {
   findGraphViewByPath,
   getGraphEntries,
   getDirectGraphEntries,
-  isSightyViewMap,
   normalizeSightyViewGraph,
 } from './view-graph'
+import { isAuthoredViewMap } from './navigation/graph-entries'
 
 /** Validates authored scene resources and view references without executing them. */
 export function validateAuthoringResources<
@@ -157,20 +157,20 @@ export function validateAuthoringResources<
   const validateGraph = (graph: typeof viewGraph, graphPath: string): void => {
     validateShowMode(
       graphPath.length === 0 ? 'views.showMode' : `views.${graphPath}.showMode`,
-      isSightyViewMap(graph) ? graph.showMode : undefined,
+      isAuthoredViewMap(graph) ? graph.showMode : undefined,
     )
-    if (isSightyViewMap(graph) && getDirectGraphEntries(graph, graphPath).every((entry) => entry.key !== graph.start)) {
+    if (isAuthoredViewMap(graph) && getDirectGraphEntries(graph, graphPath).every((entry) => entry.key !== graph.start)) {
       diagnostics.push({
         code: 'AUTHOR_VIEW_GRAPH_START_UNKNOWN',
         path: `views.${graphPath}.start`,
         message: `Le graphe « ${graphPath} » désigne un départ inconnu « ${graph.start} ».`,
       })
     }
-    if (isSightyViewMap(graph)) {
+    if (isAuthoredViewMap(graph)) {
       validateActions(`du graphe « ${graphPath || 'racine'} »`, graphPath, graph.actions)
     }
 
-    if (!isSightyViewMap(graph)) {
+    if (!isAuthoredViewMap(graph)) {
       const ids = new Set<string>()
       graph.forEach((entry, index) => {
         const id = (entry as { id?: unknown }).id

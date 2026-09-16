@@ -1,12 +1,11 @@
 import { validateAuthoringResources } from './authoring-validation'
 import {
   findGraphViewByPath,
-  findGraphViewByScene,
   getDirectGraphEntries,
   getGraphEntries,
-  isSightyViewMap,
   normalizeSightyViewGraph,
 } from './view-graph'
+import { isAuthoredViewMap } from './navigation/graph-entries'
 import type {
   SightyAuthoringDiagnostic,
   SightyScenarioApi,
@@ -135,7 +134,8 @@ export class SightyScenarioImpl<
 
   /** Returns the first authored view rooted at one scene key. */
   getView(sceneKey: SceneKey): SightyView<SceneKey, SlotName> | undefined {
-    return findGraphViewByScene(this.currentViewGraph, sceneKey)?.view
+    return getGraphEntries(this.currentViewGraph)
+      .find((entry) => entry.view.view.scene === sceneKey)?.view
   }
 
   /** Returns the normalized recursive view graph used by the runtime. */
@@ -192,7 +192,7 @@ function applyViewMutation<SceneKey extends string, SlotName extends string>(
     if (childGraph === undefined) {
       const created = [addedView] as unknown as SightyViewGraph<SceneKey, SlotName>
       replaceEntryViewGraph(next, parent.path, created, mutation.slot)
-    } else if (isSightyViewMap(childGraph)) {
+    } else if (isAuthoredViewMap(childGraph)) {
       if (childGraph.views[mutation.id] !== undefined) {
         throw new Error(`La vue Sighty « ${mutation.id} » existe déjà dans son graphe.`)
       }
@@ -314,6 +314,39 @@ function replaceEntryViewGraph<SceneKey extends string, SlotName extends string>
   replaceEntry(graph, path, nextView as unknown as SightyGraphView<SceneKey, SlotName>)
 }
 
+type MutationEntryLocation<SceneKey extends string, SlotName extends string> = Readonly<{
+  graph: SightyViewGraph<SceneKey, SlotName>
+  key: string
+  view: SightyGraphView<SceneKey, SlotName>
+}>
+
+/** Locates one mutable entry by walking the declared slot and child graph boundaries. */
+function locateMutationEntry<SceneKey extends string, SlotName extends string>(
+  graph: SightyViewGraph<SceneKey, SlotName>,
+  path: string,
+): MutationEntryLocation<SceneKey, SlotName> | undefined {
+  const segments = path.split('/').filter(Boolean)
+  if (segments.length === 0) return undefined
+  const key = segments.shift()!
+  const direct = getDirectGraphEntries(graph).find((entry) => entry.key === key)
+  if (direct === undefined) return undefined
+  if (segments.length === 0) return { graph, key, view: direct.view }
+
+  const childPath = segments.join('/')
+  for (const [slotName, child] of Object.entries(direct.view.view.slots ?? {}) as [SlotName, SightyViewGraph<SceneKey, SlotName>][]) {
+    if (childPath === slotName || childPath.startsWith(`${slotName}/`)) {
+      return locateMutationEntry(child, childPath.slice(slotName.length + 1))
+    }
+  }
+  if (direct.view.view.views !== undefined) {
+    return locateMutationEntry(direct.view.view.views, childPath)
+  }
+  if (direct.view.view.graph !== undefined && (childPath === 'graph' || childPath.startsWith('graph/'))) {
+    return locateMutationEntry(direct.view.view.graph, childPath.slice('graph'.length + 1))
+  }
+  return undefined
+}
+
 /** Replaces one view in a mutable structural clone at its stable graph path. */
 function replaceEntry<SceneKey extends string, SlotName extends string>(
   graph: SightyViewGraph<SceneKey, SlotName>,
@@ -322,42 +355,20 @@ function replaceEntry<SceneKey extends string, SlotName extends string>(
 ): void {
   const segments = path.split('/').filter(Boolean)
   if (segments.length === 0) throw new Error('Une mutation ne peut pas remplacer la racine du graphe Sighty.')
-  const key = segments.shift()!
-  const direct = getDirectGraphEntries(graph).find((entry) => entry.key === key)
-  if (direct === undefined) throw new Error(`La vue Sighty « ${path} » est introuvable.`)
-  if (segments.length === 0) {
-    if (Array.isArray(graph)) {
-      const index = graph.findIndex((entry) => entry.id === key)
-      if (index >= 0) {
-        const current = graph[index]
-        ;(graph as SightyGraphView<SceneKey, SlotName>[])[index] = {
-          ...replacement,
-          id: current.id,
-        } as SightyGraphView<SceneKey, SlotName>
-      }
-    } else {
-      ;(graph as { views: Record<string, SightyGraphView<SceneKey, SlotName>> }).views[key] = replacement
+  const location = locateMutationEntry(graph, path)
+  if (location === undefined) throw new Error(`La vue Sighty « ${path} » est introuvable.`)
+  if (Array.isArray(location.graph)) {
+    const index = location.graph.findIndex((entry) => entry.id === location.key)
+    if (index >= 0) {
+      const current = location.graph[index]
+      ;(location.graph as SightyGraphView<SceneKey, SlotName>[])[index] = {
+        ...replacement,
+        id: current.id,
+      } as SightyGraphView<SceneKey, SlotName>
     }
     return
   }
-
-  const childPath = segments.join('/')
-  const slots = direct.view.view.slots ?? {}
-  for (const [slotName, child] of Object.entries(slots) as [SlotName, SightyViewGraph<SceneKey, SlotName>][]) {
-    if (childPath === slotName || childPath.startsWith(`${slotName}/`)) {
-      replaceEntry(child, childPath.slice(slotName.length + 1), replacement)
-      return
-    }
-  }
-  if (direct.view.view.views !== undefined) {
-    replaceEntry(direct.view.view.views, childPath, replacement)
-    return
-  }
-  if (direct.view.view.graph !== undefined && (childPath === 'graph' || childPath.startsWith('graph/'))) {
-    replaceEntry(direct.view.view.graph, childPath.slice('graph'.length + 1), replacement)
-    return
-  }
-  throw new Error(`La vue Sighty « ${path} » est introuvable.`)
+  ;(location.graph as { views: Record<string, SightyGraphView<SceneKey, SlotName>> }).views[location.key] = replacement
 }
 
 /** Removes one view from a cloned graph and leaves its parent graph valid. */
@@ -367,34 +378,14 @@ function removeEntry<SceneKey extends string, SlotName extends string>(
 ): void {
   const segments = path.split('/').filter(Boolean)
   if (segments.length === 0) throw new Error('Une mutation ne peut pas supprimer la racine du graphe Sighty.')
-  const key = segments.shift()!
-  if (segments.length === 0) {
-    if (Array.isArray(graph)) {
-      const index = graph.findIndex((entry) => entry.id === key)
-      if (index >= 0) (graph as SightyGraphView<SceneKey, SlotName>[]).splice(index, 1)
-      return
-    }
-    const map = graph as { start: string; views: Record<string, SightyGraphView<SceneKey, SlotName>> }
-    if (map.start === key) throw new Error(`La vue de départ Sighty « ${key} » ne peut pas être supprimée.`)
-    delete map.views[key]
+  const location = locateMutationEntry(graph, path)
+  if (location === undefined) throw new Error(`La vue Sighty « ${path} » est introuvable.`)
+  if (Array.isArray(location.graph)) {
+    const index = location.graph.findIndex((entry) => entry.id === location.key)
+    if (index >= 0) (location.graph as SightyGraphView<SceneKey, SlotName>[]).splice(index, 1)
     return
   }
-  const direct = getDirectGraphEntries(graph).find((entry) => entry.key === key)
-  if (direct === undefined) throw new Error(`La vue Sighty « ${path} » est introuvable.`)
-  const childPath = segments.join('/')
-  for (const [slotName, child] of Object.entries(direct.view.view.slots ?? {}) as [SlotName, SightyViewGraph<SceneKey, SlotName>][]) {
-    if (childPath === slotName || childPath.startsWith(`${slotName}/`)) {
-      removeEntry(child, childPath.slice(slotName.length + 1))
-      return
-    }
-  }
-  if (direct.view.view.views !== undefined) {
-    removeEntry(direct.view.view.views, childPath)
-    return
-  }
-  if (direct.view.view.graph !== undefined && (childPath === 'graph' || childPath.startsWith('graph/'))) {
-    removeEntry(direct.view.view.graph, childPath.slice('graph'.length + 1))
-    return
-  }
-  throw new Error(`La vue Sighty « ${path} » est introuvable.`)
+  const map = location.graph as { start: string; views: Record<string, SightyGraphView<SceneKey, SlotName>> }
+  if (map.start === location.key) throw new Error(`La vue de départ Sighty « ${location.key} » ne peut pas être supprimée.`)
+  delete map.views[location.key]
 }

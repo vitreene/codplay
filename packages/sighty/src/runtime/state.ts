@@ -2,8 +2,6 @@ import {
   CodPlay,
   type CodPlayCompileSuccess,
   type CodPlayInstance,
-  type CodPlayInstanceHostTarget,
-  type CodPlayInstanceMountHandle,
   type RuntimePreloadMode,
 } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
@@ -36,8 +34,6 @@ export type SightyRuntimeState<SceneKey extends string, SlotName extends string>
   readonly instances: Map<string, CodPlayInstance>
   /** Associates each internal occurrence key with its authored scene key. */
   readonly instanceSceneKeys: Map<string, SceneKey>
-  readonly mounts: Map<string, CodPlayInstanceMountHandle>
-  readonly mountTargets: Map<string, CodPlayInstanceHostTarget>
   readonly activeBindings: Map<string, import('./types').RuntimeBinding<SceneKey>>
   readonly bindingCleanups: Map<string, () => void>
   readonly slotChangeListeners: Map<SlotName, Set<SightyRuntimeSlotChangeListener<SceneKey>>>
@@ -92,8 +88,6 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     publicEventChannel,
     instances: new Map(),
     instanceSceneKeys: new Map(),
-    mounts: new Map(),
-    mountTargets: new Map(),
     activeBindings: new Map(),
     bindingCleanups: new Map(),
     slotChangeListeners: new Map(),

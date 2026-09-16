@@ -6,7 +6,9 @@ import { RuntimeCompositionManager } from './composition-manager'
 import { RuntimeCouplingManager } from './coupling-manager'
 import { RuntimeMutationManager } from './mutation-manager'
 import { RuntimeNavigationManager } from './navigation-manager'
+import { RuntimeNavigationStateMachine } from './navigation-state-machine'
 import { RuntimeOperationCoordinator } from './operation-coordinator'
+import { RuntimePresentationManager } from './presentation-manager'
 import { RuntimeSceneEventGateway } from './scene-event-gateway'
 import { RuntimeSceneManager } from './scene-manager'
 import { RuntimeTransitionManager } from './transition-manager'
@@ -27,8 +29,10 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   implements SightyRuntimeApi<SceneKey, SlotName> {
   private readonly state: SightyRuntimeState<SceneKey, SlotName>
   private readonly operations = new RuntimeOperationCoordinator()
+  private readonly navigationState = new RuntimeNavigationStateMachine()
   private readonly scenes: RuntimeSceneManager<SceneKey, SlotName>
   private readonly bindings: RuntimeBindingManager<SceneKey, SlotName>
+  private readonly presentation: RuntimePresentationManager<SceneKey, SlotName>
   private readonly composition: RuntimeCompositionManager<SceneKey, SlotName>
   private readonly transitions: RuntimeTransitionManager<SceneKey, SlotName>
   private readonly couplings: RuntimeCouplingManager<SceneKey, SlotName>
@@ -40,11 +44,13 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
     this.state = createRuntimeState(options)
     this.scenes = new RuntimeSceneManager(this.state)
     this.bindings = new RuntimeBindingManager(this.state, (request) => this.enqueue(request))
+    this.presentation = new RuntimePresentationManager(this.state)
     const events = new RuntimeSceneEventGateway(this.state, this.bindings)
     this.composition = new RuntimeCompositionManager(
       this.state,
       this.scenes,
       this.bindings,
+      this.presentation,
       (slotName, sceneKey) => this.notifySlotChange(slotName, sceneKey),
     )
     this.transitions = new RuntimeTransitionManager(this.state, this.scenes, this.composition)
@@ -146,7 +152,19 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
 
   /** Serializes one navigation request and preserves rejection boundaries. */
   private enqueue(request: DispatchRequest<SceneKey>): Promise<boolean> {
-    return this.operations.enqueue(() => this.navigation.dispatchNow(request))
+    const transitionIntent = this.navigation.isTransitionRequest(request)
+    const lease = transitionIntent
+      ? this.navigationState.acquireTransition()
+      : undefined
+    if (transitionIntent && lease === undefined) return Promise.resolve(false)
+
+    return this.operations.enqueue(async () => {
+      try {
+        return await this.navigation.dispatchNow(request)
+      } finally {
+        if (lease !== undefined) this.navigationState.releaseTransition(lease)
+      }
+    })
   }
 
   /** Serializes one non-navigation runtime operation. */
@@ -176,23 +194,6 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
     if (this.state.destroyed) return Promise.reject(new Error('Le runtime Sighty est déjà détruit.'))
     if (!this.state.initialized) return Promise.reject(new Error('Le runtime Sighty n’est pas initialisé.'))
     return this.enqueueOperation(() => this.mutations.mutateNow(mutation, policy))
-  }
-
-  /** Mounts one declared child or its start entry in a public slot. */
-  mountSlot(slotName: SlotName, childSceneKey?: SceneKey): void {
-    this.requireInitialized()
-    this.transitions.mountSlot(slotName, childSceneKey)
-  }
-
-  /** Detaches one active slot and all nested active slots. */
-  detachSlot(slotName: SlotName): void {
-    this.requireInitialized()
-    this.transitions.detachSlot(slotName)
-  }
-
-  /** Reports whether one public slot has a physical mount. */
-  isSlotMounted(slotName: SlotName): boolean {
-    return this.composition.isSlotMounted(slotName)
   }
 
   /** Returns the scene selected in one public slot. */

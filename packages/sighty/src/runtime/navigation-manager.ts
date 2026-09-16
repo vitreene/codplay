@@ -51,10 +51,7 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
 
   /** Resolves one admitted event and executes its first valid authored action. */
   async dispatchNow(request: DispatchRequest<SceneKey>): Promise<boolean> {
-    if (request.binding !== undefined && !this.bindings.isCurrentBinding(request.binding)) return false
-    if (request.binding === undefined
-      && request.event.sourceSceneKey !== undefined
-      && !this.bindings.isAdmissibleExternalSource(request.event.sourceSceneKey)) return false
+    if (!this.isAdmissibleRequest(request)) return false
     if (await this.couplings.dispatch(request)) return true
 
     const candidates = resolveActionCandidates(this.state.composition, request.event)
@@ -85,6 +82,21 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
       return action.go !== undefined || action.action !== undefined
     }
     return false
+  }
+
+  /** Determines whether an incoming request can change the active composition. */
+  isTransitionRequest(request: DispatchRequest<SceneKey>): boolean {
+    if (!this.isAdmissibleRequest(request)) return false
+    if (this.couplings.hasMatch(request)) return false
+    return resolveActionCandidates(this.state.composition, request.event)
+      .some((candidate) => candidate.action.go !== undefined)
+  }
+
+  /** Checks the binding or external source before any route resolution occurs. */
+  private isAdmissibleRequest(request: DispatchRequest<SceneKey>): boolean {
+    if (request.binding !== undefined) return this.bindings.isCurrentBinding(request.binding)
+    return request.event.sourceSceneKey === undefined
+      || this.bindings.isAdmissibleExternalSource(request.event.sourceSceneKey)
   }
 
   /** Resolves a target and redirects denied entries through their declared escape. */

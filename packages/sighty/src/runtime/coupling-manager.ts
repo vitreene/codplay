@@ -45,6 +45,13 @@ export class RuntimeCouplingManager<SceneKey extends string, SlotName extends st
     return true
   }
 
+  /** Reports whether a valid request is owned by a declared telco coupling. */
+  hasMatch(request: DispatchRequest<SceneKey>): boolean {
+    if (request.binding === undefined) return false
+    if (!this.isCurrentBinding(request.binding)) return false
+    return this.findMatch(request.binding.slotAddress, request.event.name) !== undefined
+  }
+
   /** Keeps a coupling command sequence attached to its source and target generation. */
   private isCurrentMatch(
     sourceBinding: RuntimeBinding<SceneKey>,

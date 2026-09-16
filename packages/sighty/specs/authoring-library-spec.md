@@ -17,8 +17,10 @@ portée (`accessBy`, `exitBy`, `onDenied`), la résolution des `data` `entry` et
 `live`, le reset, les sources de scènes lazy et les mutations versionnées. Ces
 comportements sont décrits comme tels dans cette spécification. Une même
 `SceneKey` peut avoir une occurrence CodPlay indépendante dans chaque slot
-actif qui la sélectionne. Le couplage télécommande/scène est déclaré dans la
-vue et médiatisé par Sighty. La persistance sérialisée d’un parcours
+actif qui la sélectionne. Le pilotage d’une télécommande n’existe dans Sighty
+que dans le contexte d’un couplage déclaré par le fichier scénario : la scène
+telco émet ses événements publics et Sighty règle en interne l’accrochage à la
+liaison active. La persistance sérialisée d’un parcours
 n’appartient pas à cette reprise et ne constitue pas un contrat Sighty actuel.
 Lorsqu’une application hôte aura besoin de persister un parcours, cette
 responsabilité relèvera de son intégration et non de Sighty.
@@ -32,13 +34,23 @@ La reconstruction et son ordre d’implémentation sont suivis dans le
 
 Sighty conduit un parcours de vues composé de scènes CodPlay. Il possède le
 fichier de scénario, son index, la résolution des routes, la composition
-logique active et l’admission des événements. CodPlay possède la compilation,
+logique active et l’admission des événements. Il coordonne également une
+présentation physique interne, qui peut conserver une relation de montage
+indépendamment de cette composition logique. CodPlay possède la compilation,
 les occurrences de scènes, leur telco, leur rendu, leurs ressources et les
 montages entre surfaces CodPlay.
 
 Sighty ne crée pas de markup, ne recherche pas d’élément HTML et ne déplace pas
 les racines rendues. Il demande les montages au moyen de la façade publique
-CodPlay et conserve seulement les handles nécessaires à leur détachement.
+CodPlay et conserve dans un registre interne les relations physiques et les
+handles nécessaires à leur remplacement ou à leur détachement effectif.
+
+La composition logique et la présentation physique sont deux représentations
+distinctes d’un même scénario : une sortie logique ferme sa liaison et retire
+la sélection de la composition active, mais ne signifie pas à elle seule que
+les racines doivent être démontées. Cette distinction permet à un layout de
+présenter des carousels, des scènes parallèles ou des imbrications sans que le
+routeur Sighty présume leur structure visuelle.
 
 Les démos sont des fixtures de validation non normatives. Elles fournissent un
 fichier, un catalogue de `SceneDoc` et, lorsque le scénario le demande, des
@@ -122,6 +134,7 @@ type TelcoCommand =
   | 'setRate'
   | 'seek'
   | 'rewind'
+  | 'reset'
 
 type ViewAction = {
   action?: string
@@ -214,7 +227,8 @@ La verticale exécutable retient deux usages distincts :
    à défaut, la route `next` est essayée. Une absence de cible ou une boucle de
    redirection produit un diagnostic et aucune composition partielle.
 2. `exitBy` autorise la sortie d’une vue active lorsqu’il renvoie vrai. La
-   condition la plus spécifique applicable est évaluée avant le détachement ;
+   condition la plus spécifique applicable est évaluée avant la
+   réconciliation physique ;
    un refus bloque la transition.
 
 Une condition reçoit l’événement de la demande, la `SceneKey`, les `data`
@@ -230,8 +244,9 @@ ni ne libère l’occurrence. `sequence:end` conserve le comportement CodPlay
 existant : il termine la séquence du player, arrête sa lecture, annule ses
 captures actives, appelle le hook de fin et publie l’état de transport. Il ne
 détruit ni l’instance, ni le montage, ni ses ressources. Un changement de vue
-peut ensuite entraîner le détachement ou la destruction selon le cycle de vie
-normal de Sighty. Les deux signaux peuvent être associés à une action `go`
+peut ensuite modifier la composition logique ; il ne provoque pas par lui-même
+le détachement physique d’un montage qui reste possédé par la présentation.
+Les deux signaux peuvent être associés à une action `go`
 déclarée dans la vue, ou être observés par l’application hôte qui réinjecte une
 intention avec `runtime.dispatch`. Dans les deux cas, l’admission Sighty reste
 l’unique chemin de navigation ; l’émission d’un signal n’entraîne aucune
@@ -315,6 +330,14 @@ d’une entrée et fermée avant le détachement d’une sortie. Une même `Scen
 peut ainsi être conservée ou réadmise sans laisser une ancienne liaison
 recevoir les événements de la composition courante.
 
+Cette écoute interne ne constitue pas une API de pilotage supplémentaire. Elle
+est activée par la déclaration de couplage et l’admission de la composition ;
+la scène telco reste la source de ses événements publics. Les événements
+optionnels `on` et `off` peuvent être déclarés par cette scène lorsqu’un
+scénario veut activer volontairement une fonctionnalité. Sighty les laisse
+emprunter le même circuit d’événements ; il ne les fabrique pas et n’ajoute pas
+de cycle automatique d’activation ou de désactivation.
+
 La surface de sortie ne possède pas de `emit` parallèle : l’entrée vers Sighty
 reste `dispatch`. L’abonnement retourne une fonction de désabonnement ; les
 erreurs d’un observateur ne doivent ni interrompre les autres observateurs ni
@@ -376,10 +399,14 @@ contrat CodPlay lorsque l’application hôte la fournit ; l’absence de cette
 option ne devient pas une valeur `false` injectée par Sighty et ne constitue
 jamais un effet implicite de la telco.
 
-`mountSlot` et `detachSlot` sont des aides d’intégration pour le montage
-explicite. Les changements de parcours passent par `dispatch` ou `mutate` ;
-les aides de montage ne recréent pas le routeur. La sélection courante d’un
-slot est lisible par `getMountedSceneKey` et observable avec `onSlotChange`.
+Pour la composition et le parcours, le fichier déclaratif du scénario est la
+surface publique auteur. Les changements de sélection passent par les routes,
+actions et mutations déclarées, résolues par `dispatch` ou `mutate`. Le
+montage et le détachement physiques sont des opérations internes du
+réconciliateur ; aucune primitive `mountSlot` ou `detachSlot` n’appartient à
+l’API d’intégration Sighty. La sélection courante d’un slot reste observable
+par `getMountedSceneKey` et `onSlotChange` ; ces observations ne permettent pas
+de modifier directement la composition.
 
 ## 5. Types internes
 
@@ -395,7 +422,10 @@ contrats à construire par l’auteur ou l’application :
 
 L’index est construit une seule fois pour une version de scénario. La
 composition active est une map interne par adresse de slot ; deux slots de
-même nom appartenant à des branches distinctes restent indépendants.
+même nom appartenant à des branches distinctes restent indépendants. Le
+registre de présentation physique est séparé de cette map : il peut contenir
+une relation conservée pour une sélection sortie, sans la rendre active ni lui
+rouvrir une liaison.
 
 ## 6. Navigation exécutable
 
@@ -429,14 +459,25 @@ destination absente du fichier et ne touche pas au DOM.
 
 Une route résolue produit d’abord une composition cible. Sighty calcule alors
 les sélections conservées, entrantes et sortantes. Les événements des
-sélections sortantes sont invalidés avant le détachement. Les occurrences
-sortantes sont mises en pause lorsqu’elles sont encore en lecture. Pour un
-changement de sélection dans le même slot physique, Sighty demande à
+sélections sortantes sont invalidés avant toute modification physique. Les
+occurrences sortantes sont mises en pause lorsqu’elles sont encore en lecture.
+Pour un changement de sélection dans le même slot physique, Sighty demande à
 `owner.instances.mount` le remplacement CodPlay lorsque le slot déclare une
 transition `replace`; CodPlay conserve alors la présentation sortante pendant
 le montage de l’entrante. Sans cette transition, l’ancien montage est détaché
-avant le nouveau. Les sorties qui n’ont pas d’entrante sont détachées, puis la
-composition logique est publiée.
+avant le nouveau. Une sortie qui n’a pas d’entrante dans le même host reste
+enregistrée dans la présentation physique ; elle est retirée de la composition
+logique et sa liaison est fermée, mais ses racines restent disponibles pour le
+layout. Le détachement effectif intervient seulement lors d’un conflit de
+host, d’un remplacement, d’une reconstruction physique ou de la destruction
+du runtime.
+
+Cette conservation physique n’expose aucun état `active`/`inactive` et ne
+change pas les méthodes d’observation publiques : `getMountedSceneKey`,
+`getInstanceAt` et le couplage ne voient que la composition logique publiée.
+Lorsqu’une même occurrence revient, Sighty réutilise la relation physique
+conservée puis applique le `showMode` de la nouvelle admission ; il ne crée
+pas d’instance pour effectuer un reset.
 
 Une sélection conservée garde son occurrence et sa position. Deux sélections
 actives qui portent la même `SceneKey` ne partagent ni instance, ni telco, ni
@@ -462,7 +503,14 @@ mutation. Les ressources introduites par la tentative sont libérées selon le
 contrat de preload CodPlay.
 
 Les demandes concurrentes empruntent une seule chaîne de navigation. Une
-demande provenant d’une liaison devenue obsolète est abandonnée avant son
+intention qui peut modifier la composition obtient un verrou d’admission
+interne avant d’entrer dans cette chaîne ; tant que la machine est dans la
+phase `changing`, une nouvelle intention de transition est rejetée avec la
+valeur `false` et n’est pas mise en attente. Cela empêche un contrôle rapide
+de programmer une seconde transition contre une composition déjà en cours de
+réconciliation. Les commandes discrètes qui ne changent pas de vue peuvent
+continuer à attendre dans la même file et sont réévaluées à leur exécution.
+Une demande provenant d’une liaison devenue obsolète est abandonnée avant son
 effet.
 
 ### 6.3. Événements de scène
@@ -488,7 +536,10 @@ une commande telco, ou une séquence de commandes telco exécutées dans l’ord
 par l’interface `CodPlayTelco` unique. `SightyTelcoCommand` est uniquement le
 vocabulaire déclaratif du couplage ; Sighty ne fournit pas une interface
 concurrente. Il vérifie la cible et le binding, puis délègue l’exécution à ce
-port.
+port. `on` et `off` restent des événements publics optionnels de la scène telco
+lorsque le scénario les utilise pour activer volontairement une fonctionnalité ;
+ils ne deviennent ni des commandes Sighty implicites, ni un mécanisme parallèle
+d’ouverture ou de fermeture du binding.
 Les commandes `setRate` et `seek` lisent respectivement `{ rate }` et
 `{ timeMs }` dans `event.data`. Pour un composant d’entrée CodPlay, `seek`
 accepte également la valeur native `{ value }`, numérique ou textuelle. Sighty
@@ -583,7 +634,8 @@ La tranche actuelle est considérée comme en cours, avec les preuves suivantes 
 - validation auteur sans exécution ;
 - index récursif et normalisation v1 ;
 - navigation `path`, `label`, `next` et `previous` avec héritage ;
-- montage et détachement réels via la façade publique CodPlay ;
+- réconciliation des montages, conservation physique hors composition active,
+  remplacement et détachement réels via la façade publique CodPlay ;
 - remplacement de contenu dans un même slot physique, y compris lorsque les
   adresses logiques des vues diffèrent ;
 - sérialisation des transitions et invalidation des scènes sorties ;
@@ -607,7 +659,10 @@ La tranche actuelle est considérée comme en cours, avec les preuves suivantes 
   initialisation partiellement échouée ;
 - typecheck, tests de contrat Sighty et intégration du chemin runtime réel.
 
-Restent à réaliser avant une stabilisation : la validation navigateur/Safari et
-la suite complète des vérifications de cycle de vie et de ressources. La
-persistance reste une responsabilité de l’application hôte lorsqu’elle sera
-intégrée ; elle ne sera pas ajoutée à l’API Sighty pour cette reprise.
+Restent à réaliser avant une stabilisation : la matrice complète des parcours
+navigateur/Safari et la suite complète des vérifications de cycle de vie et de
+ressources. Le smoke test Safari MCP de Demo 4 est déjà exécuté sur l’instance
+active ; sa disponibilité ne constitue donc pas une décision ou un blocage
+d’architecture. La persistance reste une responsabilité de l’application hôte
+lorsqu’elle sera intégrée ; elle ne sera pas ajoutée à l’API Sighty pour cette
+reprise.

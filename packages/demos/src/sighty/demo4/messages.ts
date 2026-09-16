@@ -11,10 +11,10 @@ export const DEMO4_NAVIGATION_INTENTS = {
   next: 'sighty-demo4:navigation:next',
 } as const
 
-/** Events used by Sighty to update the authored telco button state. */
+/** Optional events used to activate or deactivate the authored telco feature. */
 export const DEMO4_TELCO_STATE_EVENTS = {
-  enable: 'sighty-demo4:telco:enable',
-  disable: 'sighty-demo4:telco:disable',
+  on: 'sighty-demo4:telco:on',
+  off: 'sighty-demo4:telco:off',
 } as const
 
 /** Identifies the scene event used to leave the final content scene. */
@@ -33,7 +33,7 @@ export const DEMO4_PLAYBACK_INTENTS = {
   rewind: 'sighty-demo4:playback:rewind',
 } as const
 
-/** Private scene-telco updates used to reflect the selected scene playback state. */
+/** Discrete scene-telco updates used to reflect the selected scene playback state. */
 export const DEMO4_PLAYBACK_STATE_EVENTS = {
   playing: 'sighty-demo4:playback-state:playing',
   paused: 'sighty-demo4:playback-state:paused',

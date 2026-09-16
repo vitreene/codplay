@@ -146,7 +146,9 @@ describe('Sighty graph navigation demo', () => {
     await flushDemo4Relay()
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
     expect(stage.querySelector('.demo4-menu')).not.toBeNull()
-    expect(stage.querySelector('.demo4-telco')).toBeNull()
+    const chapterItemAfterReturn = stage.querySelector<HTMLElement>('#demo4-layout-chapter-item')
+    expect(chapterItemAfterReturn?.querySelector('.demo4-telco')).not.toBeNull()
+    expect(chapterItemAfterReturn?.classList.contains('demo4-layout__carousel-item--leaving')).toBe(true)
     expect(logs.some((message) => message.includes('Sighty → scene-c'))).toBe(true)
     expect(logs.some((message) => message.includes('Sighty → scene-menu'))).toBe(true)
   })
@@ -201,11 +203,17 @@ describe('Sighty graph navigation demo', () => {
     expect(Number(progress.value)).toBe(500)
   })
 
-  it('keeps one outgoing presentation when scene changes are queued during a fade', async () => {
+  it('rejects a rapid second navigation while keeping one outgoing presentation', async () => {
     vi.stubGlobal('Image', ImmediateImage)
     const stage = document.createElement('div')
     document.body.append(stage)
-    composition = new SightyComposition({ stage, onLog: () => undefined })
+    const errors: string[] = []
+    composition = new SightyComposition({
+      stage,
+      onLog: (message, level) => {
+        if (level === 'error') errors.push(message)
+      },
+    })
     await composition.initialize()
 
     const menuButton = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
@@ -219,10 +227,11 @@ describe('Sighty graph navigation demo', () => {
     nextButton.click()
     await flushDemo4Relay()
 
-    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-c')
+    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
     const snapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-transient]'))
     expect(snapshots).toHaveLength(1)
-    expect(snapshots[0]?.textContent).toContain('SCÈNE B')
+    expect(snapshots[0]?.textContent).toContain('Scène A')
+    expect(errors).toEqual([])
   })
 
   it('controls the selected scene and cascades both list boundaries to the menu', async () => {

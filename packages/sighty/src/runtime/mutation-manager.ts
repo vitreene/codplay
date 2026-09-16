@@ -131,6 +131,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       if (policy === 'reset' || policy === 'reload') {
         if (policy === 'reload') await this.reloadResources()
         await this.resetNow()
+        this.composition.detachUnavailableMounts()
         this.scenes.pruneUnusedScenes()
         return true
       }
@@ -149,6 +150,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
         notify: true,
         deliverEnteredData: (selections) => this.navigation.deliverEnteredData(selections),
       })
+      this.composition.detachUnavailableMounts()
       this.scenes.pruneUnusedScenes()
       return true
     } catch (error: unknown) {
@@ -197,6 +199,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       deliveredData: new Map(this.state.deliveredData),
       instances: new Map(this.state.instances),
       instanceSceneKeys: new Map(this.state.instanceSceneKeys),
+      presentation: this.composition.capturePresentation(),
       playback: this.capturePlaybackStates(this.state.instances),
     }
   }
@@ -284,12 +287,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     }
 
     this.scenes.installStyles()
-    this.state.composition = {
-      revision: snapshot.composition.revision,
-      layoutPath: snapshot.composition.layoutPath,
-      selections: new Map(),
-    }
-    for (const selection of snapshot.composition.selections.values()) this.composition.mountSelection(selection)
+    this.composition.restorePresentation(snapshot.presentation)
     this.state.composition = snapshot.composition
     this.bindings.openLayoutBinding()
     this.bindings.openBindings([...snapshot.composition.selections.values()])

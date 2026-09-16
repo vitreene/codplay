@@ -207,6 +207,7 @@ function createRollbackFile(): SightyFile<RollbackSceneKey, RollbackSlotName> {
           'rollback:rate': 'setRate',
           'rollback:seek': 'seek',
           'rollback:rewind': 'rewind',
+          'rollback:reset': 'reset',
         },
       },
       view: {
@@ -766,8 +767,9 @@ describe('Sighty runtime feature reconstruction', () => {
     const pause = vi.spyOn(controlled.telco, 'pause')
     const seek = vi.spyOn(controlled.telco, 'seek')
     const rewind = vi.spyOn(controlled.telco, 'rewind')
+    const reset = vi.spyOn(controlled.telco, 'reset')
     const published: string[] = []
-    const unsubscribe = rollbackProject.runtime.events.onEvent((event) => published.push(event.name))
+    rollbackProject.runtime.events.onEvent((event) => published.push(event.name))
     const target = { scope: 'story', storyId: 'main' } as const
     const emit = async (
       name: string,
@@ -797,12 +799,10 @@ describe('Sighty runtime feature reconstruction', () => {
     expect(seek).toHaveBeenCalledWith(25)
     await emit('rollback:rewind')
     expect(rewind).toHaveBeenCalled()
-
-    rollbackProject.runtime.detachSlot('first')
-    const pauseCallsBeforeStaleEvent = pause.mock.calls.length
-    await controller.events.emit({ name: 'rollback:pause', visibility: 'public' }, target)
-    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 100))
-    expect(pause).toHaveBeenCalledTimes(pauseCallsBeforeStaleEvent)
-    unsubscribe()
+    await controlled.telco.seek(1_500)
+    await emit('rollback:reset')
+    expect(reset).toHaveBeenCalled()
+    expect(controlled.telco.getProgress().timelineMs).toBe(0)
+    expect(controlled.telco.getState().sequenceEnded).toBe(false)
   })
 })

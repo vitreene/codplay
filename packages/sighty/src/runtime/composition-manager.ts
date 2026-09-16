@@ -1,32 +1,31 @@
-import {
-  resolveSlotManifestEntry,
-  slotManifest,
-  type CodPlayInstanceHostTarget,
-} from 'codplay'
-import { getStartEntry, isPathPrefix } from '../navigation/graph-index'
-import { buildComposition, createSelection, resolveInitialAnchor, resolveSceneEntry } from '../navigation/composition'
+import { buildComposition, resolveInitialAnchor } from '../navigation/composition'
 import { sameSelection, type CompositionTransition } from '../navigation/transition'
 import type {
   ActiveComposition,
   ActiveSelection,
   IndexedEntry,
-  IndexedSlot,
 } from '../navigation/types'
 import {
   occurrenceKeyForSelection,
   reportWarning,
-  sameMountHost,
 } from './helpers'
-import type { MountedState, ResolvedMount, SynchronizationResult } from './types'
+import type {
+  MountedState,
+  PresentationRelation,
+  ResolvedMount,
+  SynchronizationResult,
+} from './types'
 import type { SightyRuntimeState } from './state'
 import { RuntimeBindingManager } from './binding-manager'
+import { RuntimePresentationManager } from './presentation-manager'
 import { RuntimeSceneManager } from './scene-manager'
 
-/** Owns logical composition calculation and physical CodPlay mounting. */
+/** Owns logical composition calculation and delegates physical presentation. */
 export class RuntimeCompositionManager<SceneKey extends string, SlotName extends string> {
   private readonly state: SightyRuntimeState<SceneKey, SlotName>
   private readonly scenes: RuntimeSceneManager<SceneKey, SlotName>
   private readonly bindings: RuntimeBindingManager<SceneKey, SlotName>
+  private readonly presentation: RuntimePresentationManager<SceneKey, SlotName>
   private readonly notifySlotChange: (slotName: SlotName, sceneKey: SceneKey | undefined) => void
 
   /** Creates a composition manager with the binding and warning boundaries. */
@@ -34,11 +33,13 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     state: SightyRuntimeState<SceneKey, SlotName>,
     scenes: RuntimeSceneManager<SceneKey, SlotName>,
     bindings: RuntimeBindingManager<SceneKey, SlotName>,
+    presentation: RuntimePresentationManager<SceneKey, SlotName>,
     notifySlotChange: (slotName: SlotName, sceneKey: SceneKey | undefined) => void,
   ) {
     this.state = state
     this.scenes = scenes
     this.bindings = bindings
+    this.presentation = presentation
     this.notifySlotChange = notifySlotChange
   }
 
@@ -104,9 +105,10 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
 
     const desiredMap = new Map(desired)
     const previousStates = options.exitedStates ?? this.captureExitedStates(transition.exited)
+    const previousPresentation = this.presentation.capture()
     const enteredMounts = transition.entered.map((selection) => {
       this.scenes.createSelectionInstance(selection)
-      return { selection, mount: this.resolveMount(selection) }
+      return { selection, mount: this.presentation.resolveMount(selection) }
     })
     this.state.transitioning = true
     this.state.composition = {
@@ -118,12 +120,8 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     try {
       this.bindings.closeBindings(transition.exited)
       for (const { selection, mount } of enteredMounts) {
-        if (mount.replace === undefined) this.detachMountForHost(mount.host)
+        if (mount.replace === undefined) this.presentation.detachForHost(mount.host)
         this.mountSelection(selection, mount)
-      }
-      const enteredAddresses = new Set(transition.entered.map((selection) => selection.slotAddress))
-      for (const selection of transition.exited) {
-        if (!enteredAddresses.has(selection.slotAddress)) this.detachMount(selection.slotAddress)
       }
       this.state.composition = {
         revision: previous.revision + 1,
@@ -137,16 +135,31 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
       if (notify) this.notifyCompositionChanges(previous, next)
       return { entered: transition.entered, previous, next }
     } catch (error: unknown) {
-      this.restoreComposition(previous, previousStates)
+      this.restoreComposition(previous, previousStates, previousPresentation)
       throw error
     }
   }
 
   /** Detaches all physical mounts without destroying scene occurrences. */
   detachAllMounts(): void {
-    for (const mount of this.state.mounts.values()) mount.detach()
-    this.state.mounts.clear()
-    this.state.mountTargets.clear()
+    this.presentation.detachAll()
+  }
+
+  /** Removes physical relations whose occurrences are no longer retained. */
+  detachUnavailableMounts(): void {
+    this.presentation.detachUnavailable()
+  }
+
+  /** Captures the complete internal presentation for an operation snapshot. */
+  capturePresentation(): readonly PresentationRelation<SceneKey, SlotName>[] {
+    return this.presentation.capture()
+  }
+
+  /** Restores the complete internal presentation from an operation snapshot. */
+  restorePresentation(
+    relations: readonly PresentationRelation<SceneKey, SlotName>[],
+  ): void {
+    this.presentation.restore(relations)
   }
 
   /** Captures playback states needed when an outgoing transition is reverted. */
@@ -188,16 +201,16 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
   private restoreComposition(
     previous: ActiveComposition<SceneKey, SlotName>,
     previousStates: ReadonlyMap<string, MountedState>,
+    previousPresentation: readonly PresentationRelation<SceneKey, SlotName>[],
   ): void {
     this.bindings.closeAllBindings()
-    this.detachAllMounts()
+    this.presentation.restore(previousPresentation)
     this.state.composition = {
       revision: previous.revision,
       layoutPath: previous.layoutPath,
       selections: new Map(),
     }
     try {
-      for (const selection of previous.selections.values()) this.mountSelection(selection)
       this.state.composition = previous
       this.bindings.openLayoutBinding()
       this.bindings.openBindings([...previous.selections.values()])
@@ -217,67 +230,12 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     }
   }
 
-  /** Resolves one logical selection to a validated CodPlay mount request. */
-  resolveMount(selection: ActiveSelection<SceneKey, SlotName>): ResolvedMount {
-    const slot = this.state.viewIndex.slotsByAddress.get(selection.slotAddress)
-    if (slot === undefined) throw new Error(`Le slot Sighty ${selection.slotName} est absent de l’index.`)
-    const layoutOccurrenceKey = this.state.layoutEntry?.path ?? 'layout'
-    const layoutInstance = this.state.instances.get(layoutOccurrenceKey)
-    if (layoutInstance === undefined) throw new Error('L’instance layout Sighty est absente.')
-    const layoutScene = this.state.sceneDocuments.get(this.state.layout.sceneKey)
-    if (layoutScene === undefined) throw new Error('La ressource layout Sighty est absente.')
-
-    const resolution = resolveSlotManifestEntry(
-      slotManifest(layoutScene, { storyId: this.state.layout.storyId }),
-      slot.slotName,
-      {
-        sceneId: layoutScene.id,
-        storyId: this.state.layout.storyId,
-        referencePath: `views.${slot.ownerPath}.view.slots.${slot.slotName}`,
-      },
-    )
-    if (!resolution.ok) throw new Error(resolution.diagnostic.message)
-
-    const child = this.state.instances.get(occurrenceKeyForSelection(selection))
-    if (child === undefined) throw new Error(`L’instance enfant ${selection.sceneKey} est absente.`)
-    return {
-      host: {
-        instanceId: layoutInstance.instanceId,
-        storyId: resolution.entry.storyId,
-        persoId: resolution.entry.persoId,
-      },
-      childInstanceId: child.instanceId,
-      ...(resolution.entry.replace === undefined ? {} : { replace: resolution.entry.replace }),
-    }
-  }
-
-  /** Mounts one logical selection through CodPlay's public instance relation. */
+  /** Mounts one logical selection through CodPlay’s public instance relation. */
   mountSelection(
     selection: ActiveSelection<SceneKey, SlotName>,
-    mount: ResolvedMount = this.resolveMount(selection),
+    mount?: ResolvedMount,
   ): void {
-    const handle = this.state.owner.instances.mount(mount)
-    for (const [slotAddress, target] of this.state.mountTargets) {
-      if (slotAddress === selection.slotAddress || !sameMountHost(target, mount.host)) continue
-      this.state.mounts.delete(slotAddress)
-      this.state.mountTargets.delete(slotAddress)
-    }
-    this.state.mounts.set(selection.slotAddress, handle)
-    this.state.mountTargets.set(selection.slotAddress, mount.host)
-  }
-
-  /** Detaches one physical relation without destroying its child occurrence. */
-  detachMount(slotAddress: string): void {
-    this.state.mounts.get(slotAddress)?.detach()
-    this.state.mounts.delete(slotAddress)
-    this.state.mountTargets.delete(slotAddress)
-  }
-
-  /** Detaches any logical mount occupying one physical host target. */
-  detachMountForHost(host: CodPlayInstanceHostTarget): void {
-    for (const [slotAddress, target] of this.state.mountTargets) {
-      if (sameMountHost(target, host)) this.detachMount(slotAddress)
-    }
+    this.presentation.mountSelection(selection, mount)
   }
 
   /** Reports each changed public slot after a composition commit. */
@@ -304,81 +262,9 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     }
   }
 
-  /** Builds the desired composition for one explicit public slot selection. */
-  buildMountedComposition(
-    slotName: SlotName,
-    childSceneKey?: SceneKey,
-  ): ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>> {
-    const slot = this.resolvePublicSlot(slotName)
-    const entry = childSceneKey === undefined
-      ? getStartEntry<SceneKey, SlotName>(this.state.viewIndex, slot.graphPath)
-      : this.findSceneEntry(slot, childSceneKey)
-    if (entry === undefined) {
-      if (childSceneKey === undefined) throw new Error(`Le slot Sighty ${slotName} est vide.`)
-      throw new Error(`La scène Sighty ${childSceneKey} n'est pas déclarée dans le slot ${slotName}.`)
-    }
-    const target = createSelection<SceneKey, SlotName>(
-      this.state.viewIndex,
-      slot,
-      entry,
-      this.nextGenerationNumber(slot.address),
-    )
-    return this.buildDesiredComposition(this.withCurrentGeneration(target))
-  }
-
-  /** Builds the desired composition after detaching one public slot branch. */
-  buildDetachedComposition(slotName: SlotName): ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>> {
-    const slot = this.resolvePublicSlot(slotName)
-    const addresses = [...this.state.composition.selections.keys()]
-      .filter((address) => address === slot.address || isPathPrefix(slot.address, address))
-    if (addresses.length === 0) return new Map(this.state.composition.selections)
-
-    const desired = new Map(this.state.composition.selections)
-    for (const address of addresses) desired.delete(address)
-    return desired
-  }
-
-  /** Reports whether one public slot currently has a physical mount. */
-  isSlotMounted(slotName: SlotName): boolean {
-    return this.findActiveSlots(slotName).some((slot) => this.state.mounts.has(slot.address))
-  }
-
   /** Returns the scene currently selected in one public slot. */
   getMountedSceneKey(slotName: SlotName): SceneKey | undefined {
-    return this.findActiveSelections(slotName)[0]?.sceneKey
-  }
-
-  /** Resolves one public slot name against active or declared branches. */
-  resolvePublicSlot(slotName: SlotName): IndexedSlot<SceneKey, SlotName> {
-    const active = this.findActiveSlots(slotName)
-    if (active.length === 1) return active[0]
-    if (active.length > 1) throw new Error(`Le slot Sighty ${slotName} est ambigu dans la composition active.`)
-    const declared = this.state.viewIndex.slots.filter((candidateSlot) => candidateSlot.slotName === slotName)
-    if (declared.length === 1) return declared[0]
-    if (declared.length === 0) throw new Error(`Le slot Sighty ${slotName} n'est pas déclaré dans le layout.`)
-    throw new Error(`Le slot Sighty ${slotName} est ambigu dans le fichier auteur.`)
-  }
-
-  /** Finds all indexed slots with one public name in the active composition. */
-  findActiveSlots(slotName: SlotName): readonly IndexedSlot<SceneKey, SlotName>[] {
-    return this.state.viewIndex.slots.filter((candidateSlot) =>
-      candidateSlot.slotName === slotName && this.state.composition.selections.has(candidateSlot.address))
-  }
-
-  /** Finds all active selections with one public slot name. */
-  findActiveSelections(slotName: SlotName): readonly ActiveSelection<SceneKey, SlotName>[] {
-    return [...this.state.composition.selections.values()].filter((selection) => selection.slotName === slotName)
-  }
-
-  /** Finds one declared descendant entry that resolves to a requested scene. */
-  findSceneEntry(
-    slot: IndexedSlot<SceneKey, SlotName>,
-    sceneKey: SceneKey,
-  ): IndexedEntry<SceneKey, SlotName> | undefined {
-    return this.state.viewIndex.entries.find((candidateEntry) => {
-      if (!isPathPrefix(slot.graphPath, candidateEntry.path)) return false
-      const sceneEntry = resolveSceneEntry<SceneKey, SlotName>(this.state.viewIndex, candidateEntry)
-      return sceneEntry?.view.view.scene === sceneKey
-    })
+    return [...this.state.composition.selections.values()]
+      .find((selection) => selection.slotName === slotName)?.sceneKey
   }
 }

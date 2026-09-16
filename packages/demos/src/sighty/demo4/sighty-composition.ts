@@ -1,5 +1,5 @@
 import { Sighty } from '@codplay/sighty'
-import type { CodPlayEventime, CodPlayTelcoState } from 'codplay'
+import type { CodPlayTelcoState } from 'codplay'
 import {
   DEMO4_PLAYBACK_STATE_EVENTS,
   DEMO4_TELCO_STATE_EVENTS,
@@ -22,7 +22,6 @@ type Demo4Sighty = Sighty<SightyDemo4SceneKey, SightyDemo4SlotName>
 type Demo4Runtime = Demo4Sighty['runtime']
 
 const CHAPTER_SCENE_SLOT = 'slot-scene' as const
-const CHAPTER_TELCO_SLOT_ADDRESS = 'view-main/view-chapter/slot-telco' as const
 
 const INSTANCE_IDS: Readonly<Record<SightyDemo4SceneKey, string>> = {
   'scene-layout': 'demo4-layout-1',
@@ -34,7 +33,6 @@ const INSTANCE_IDS: Readonly<Record<SightyDemo4SceneKey, string>> = {
 }
 
 const CONTENT_SCENE_KEYS = ['scene-a', 'scene-b', 'scene-c'] as const
-const SCENE_TARGET = { scope: 'story', storyId: 'main' } as const
 const PROGRESS_CONTROL_TARGET = { storyId: 'main', persoId: 'demo4-telco-progress' } as const
 
 /** Owns demo-specific seek and button presentation around one Sighty facade. */
@@ -52,7 +50,6 @@ export class SightyComposition {
   }> | undefined
   private playbackStateRunning = false
   private playbackStateScheduled = false
-  private telcoProjectionChain: Promise<void> = Promise.resolve()
   private destroyed = false
 
   /** Creates the Sighty facade and supplies only demo-specific presentation features. */
@@ -176,23 +173,29 @@ export class SightyComposition {
     this.playbackStatePending = undefined
   }
 
-  /** Enables or disables the authored navigation, playback and seek controls. */
+  /** Activates the authored telco controls after a content selection is admitted. */
   private async syncTelcoState(
     sceneKey: SightyDemo4SceneKey | undefined,
     revision: number,
   ): Promise<void> {
     if (!this.isCurrentSceneSelection(sceneKey, revision)) return
     const enabled = sceneKey !== undefined && sceneKey !== 'scene-menu'
-    const eventime: CodPlayEventime = {
-      name: enabled ? DEMO4_TELCO_STATE_EVENTS.enable : DEMO4_TELCO_STATE_EVENTS.disable,
+    if (!enabled) {
+      if (sceneKey !== undefined) this.onLog(`Sighty → ${sceneKey}`)
+      return
     }
-    await this.emitTelcoEvent(eventime, () => this.isCurrentSceneSelection(sceneKey, revision))
+    const handled = await this.runtime.dispatch({
+      name: DEMO4_TELCO_STATE_EVENTS.on,
+      sourceSceneKey: sceneKey,
+    })
+    if (!handled) {
+      if (!this.isCurrentSceneSelection(sceneKey, revision)) return
+      throw new Error(`L’activation de la telco Demo 4 n’a pas été admise pour ${sceneKey}.`)
+    }
     if (!this.isCurrentSceneSelection(sceneKey, revision)) return
-    if (enabled) {
-      const selected = this.requireInstance(sceneKey)
-      this.projectActiveSceneProgress(sceneKey, revision, selected.telco.getState())
-      this.requestPlaybackState(sceneKey, revision, selected.telco.getState())
-    }
+    const selected = this.requireInstance(sceneKey)
+    this.projectActiveSceneProgress(sceneKey, revision, selected.telco.getState())
+    this.requestPlaybackState(sceneKey, revision, selected.telco.getState())
     if (sceneKey !== undefined) this.onLog(`Sighty → ${sceneKey}`)
   }
 
@@ -206,25 +209,17 @@ export class SightyComposition {
     const eventName = state.status === 'playing' && !state.sequenceEnded
       ? DEMO4_PLAYBACK_STATE_EVENTS.playing
       : DEMO4_PLAYBACK_STATE_EVENTS.paused
-    await this.emitTelcoEvent({ name: eventName }, () => this.isActiveScene(sceneKey, revision))
+    const handled = await this.runtime.dispatch({
+      name: eventName,
+      sourceSceneKey: sceneKey,
+    })
+    if (!handled) {
+      if (!this.isActiveScene(sceneKey, revision)) return
+      throw new Error(`La projection de l’état de lecture n’a pas été admise pour ${sceneKey}.`)
+    }
     if (!this.isActiveScene(sceneKey, revision)) return
     const currentState = this.requireInstance(sceneKey).telco.getState()
     this.projectActiveSceneProgress(sceneKey, revision, currentState)
-  }
-
-  /** Presents one injected telco event through CodPlay's current event circuit. */
-  private emitTelcoEvent(
-    eventime: CodPlayEventime,
-    isCurrent: () => boolean = () => true,
-  ): Promise<void> {
-    const task = this.telcoProjectionChain.then(async () => {
-      if (this.destroyed || !isCurrent()) return
-      const telco = this.runtime.getInstanceAt(CHAPTER_TELCO_SLOT_ADDRESS)
-      if (telco === undefined) return
-      await telco.events.emit(eventime, SCENE_TARGET)
-    })
-    this.telcoProjectionChain = task.then(() => undefined, () => undefined)
-    return task
   }
 
   /** Keeps only the latest playback state waiting for the authored telco. */
@@ -284,12 +279,7 @@ export class SightyComposition {
   /** Checks that one content scene and its scene telco are both active. */
   private isActiveScene(sceneKey: SightyDemo4SceneKey, revision: number): boolean {
     return this.isCurrentSceneSelection(sceneKey, revision)
-      && this.isSceneTelcoMounted()
-  }
-
-  /** Checks that the scene telco is currently part of the selected chapter view. */
-  private isSceneTelcoMounted(): boolean {
-    return this.runtime.getMountedSceneKey('slot-telco') === 'scene-telco'
+      && this.runtime.getMountedSceneKey('slot-telco') === 'scene-telco'
   }
 
   /** Resolves one live occurrence and reports a demo-specific missing resource. */

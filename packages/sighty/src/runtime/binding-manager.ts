@@ -106,7 +106,7 @@ export class RuntimeBindingManager<SceneKey extends string, SlotName extends str
     for (const selection of selections) this.closeBinding(selection.slotAddress)
   }
 
-  /** Closes one active binding before its physical relation is detached. */
+  /** Closes one active binding before its relation is replaced or retired. */
   closeBinding(slotAddress: string): void {
     this.state.bindingCleanups.get(slotAddress)?.()
     this.state.bindingCleanups.delete(slotAddress)

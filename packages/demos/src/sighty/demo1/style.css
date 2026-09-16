@@ -33,75 +33,9 @@
 	min-height: 0;
 }
 
-.sighty-demo__controls-grid {
-	display: grid;
-	min-width: 0;
-	gap: 0.65rem;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.sighty-control-panel {
-	min-width: 0;
-	padding: 0.7rem;
-	border: 1px solid #d9e1eb;
-	border-radius: 12px;
-	background: #f8fafc;
-}
-
-.sighty-control-panel--lifecycle {
-	grid-column: span 1;
-}
-
-.sighty-control-panel h3 {
-	margin: 0;
-	font-size: 0.78rem;
-}
-
-.sighty-control-panel p {
-	margin: 0.3rem 0 0.55rem;
-	color: #52627a;
-	font-size: 0.7rem;
-	line-height: 1.4;
-}
-
-.sighty-control-panel__buttons {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.35rem;
-}
-
-.sighty-action-button {
-	padding: 0.38rem 0.55rem;
-	border: 1px solid #0b7a75;
-	border-radius: 7px;
-	color: #fff;
-	background: #0b7a75;
-	cursor: pointer;
-	font-size: 0.68rem;
-	font-weight: 700;
-}
-
-@media (max-width: 900px) {
-	.sighty-demo__controls-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.sighty-control-panel--lifecycle {
-		grid-column: span 2;
-	}
-}
-
 @media (max-width: 620px) {
 	.sighty-scene-layout {
 		grid-template-columns: 1fr;
 		grid-template-rows: repeat(2, minmax(0, 1fr));
-	}
-
-	.sighty-demo__controls-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.sighty-control-panel--lifecycle {
-		grid-column: auto;
 	}
 }

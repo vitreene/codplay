@@ -94,20 +94,6 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
     }
   }
 
-  /** Applies an explicit slot selection through the shared transition planner. */
-  mountSlot(slotName: SlotName, childSceneKey?: SceneKey): void {
-    const desired = this.composition.buildMountedComposition(slotName, childSceneKey)
-    const transition = planCompositionTransition(this.state.composition.selections, desired)
-    this.composition.synchronizeComposition(desired, transition, true)
-  }
-
-  /** Applies an explicit slot detachment through the shared transition planner. */
-  detachSlot(slotName: SlotName): void {
-    const desired = this.composition.buildDetachedComposition(slotName)
-    const transition = planCompositionTransition(this.state.composition.selections, desired)
-    this.composition.synchronizeComposition(desired, transition, true)
-  }
-
   /** Captures an existing occurrence before a reset or physical replacement. */
   private captureEntryStates(
     selections: readonly ActiveSelection<SceneKey, SlotName>[],

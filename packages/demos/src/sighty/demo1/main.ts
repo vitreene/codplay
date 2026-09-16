@@ -1,6 +1,5 @@
 import { createSightyTransport } from '../layout/transport'
 import type { SightyDemoDefinition } from '../layout/types'
-import { createDemo1Controls } from './page-controls'
 import { createDemo1Composition } from './sighty-composition'
 
 import '../../v2/layout/layout.css'
@@ -21,7 +20,6 @@ export const demo1: SightyDemoDefinition = {
         await runtime.initialize()
         await runtime.playAll()
       },
-      createOptionalControls: (container) => createDemo1Controls({ container, runtime, onLog }),
       destroy: () => runtime.destroy(),
     }
   },

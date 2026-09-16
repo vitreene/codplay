@@ -10,9 +10,10 @@ Ce plan complète le plan de reconstruction de la navigation :
 Il ne l’annule pas et ne transforme aucune proposition en contrat avant la
 validation de la tranche M0 ci-dessous.
 
-Les décisions résiduelles identifiées en M0 restent `A relire` et bloquent
-uniquement le code qui en dépend. Les décisions déjà arrêtées peuvent être
-appliquées et vérifiées dans leur circuit propre.
+Les décisions de composition publique, de couplage telco et de signaux
+`on`/`off` sont arrêtées et appliquées. Le plan reste `En cours` pour la
+validation complète et le nettoyage différé des démos ; toute évolution de
+transport hors de ce périmètre devra être relue avant qu’un code en dépende.
 
 ## 1. Objectif
 
@@ -99,19 +100,20 @@ doit pas recréer cette garantie dans un circuit privé.
 
 ### 3.1. Circuits parallèles avérés
 
-#### A. Montage public hors coordinateur de transition
+#### A. Ancienne voie de montage direct — supprimée
 
-`runtime.mountSlot()` et `runtime.detachSlot()` appellent directement le
-composition manager. Cette voie ne passe ni par la file de navigation, ni par
-la résolution complète des politiques `showMode`, ni par la livraison des
-`data`, ni par les mêmes garanties d’erreur que `dispatch`.
+Une ancienne version du runtime exposait `runtime.mountSlot()` et
+`runtime.detachSlot()` comme des opérations d’intégration. Cette voie ne
+passait ni par la file de navigation, ni par la résolution complète des
+politiques `showMode`, ni par la livraison des `data`, ni par les mêmes
+garanties d’erreur que `dispatch`.
 
-La démonstration 1 l’exerce actuellement avec ses contrôles de page. Ces
-contrôles ne sont pas une justification de compatibilité : ils sont une
-fixture non normative qui doit être supprimée. Le problème à traiter reste la
-présence éventuelle de cette voie dans l’API et le runtime Sighty ; sa
-validation appartient aux tests du package ou à une intégration réelle, jamais
-à un panneau de démonstration conservé artificiellement.
+La décision est maintenant arrêtée : le fichier déclaratif du scénario est la
+surface publique auteur de la composition. Le runtime ne propose donc aucune
+commande publique de montage ou de détachement ; les montages et détachements
+physiques restent internes au réconciliateur appelé par les transitions
+résolues depuis le scénario. Les contrôles de Demo 1 qui entretenaient cette
+ancienne voie ont été supprimés.
 
 #### B. Préservation de lecture recopiée
 
@@ -173,6 +175,14 @@ autre surface ou contourne cette interface. L’accès complet à la telco reste
 accessible lorsqu’il désigne ce port CodPlay canonique ; il ne constitue pas
 une seconde forme d’exécution.
 
+Le pilotage de télécommande n’a de sens que dans le contexte Sighty du
+scénario : le fichier déclaratif porte le couplage, la scène telco émet les
+événements publics disponibles et Sighty accroche en interne cette source au
+binding actif après admission de la composition. Les événements optionnels
+`on` et `off` peuvent être fournis par la scène lorsque l’auteur veut activer
+volontairement une fonctionnalité. Ils empruntent le circuit public existant ;
+Sighty ne crée ni émission implicite, ni interface d’activation concurrente.
+
 #### F. Entrées événementielles directes dans les démos
 
 Demo 3 injecte le contenu avec `sceneA.events.emit()`. Demo 4 injecte l’état
@@ -224,8 +234,6 @@ Il accepte des opérations normalisées :
 
 - événement entrant d’une liaison CodPlay ;
 - événement ou intention de l’application hôte ;
-- sélection explicite d’un slot ;
-- détachement explicite d’un slot ;
 - mise à jour de contexte ;
 - reset ;
 - mutation ;
@@ -235,6 +243,13 @@ Il accepte des opérations normalisées :
 Le contrôleur public ne décide plus de l’ordre d’exécution. Il vérifie
 uniquement l’état public (`destroyed`, `initialized`) et soumet l’opération.
 Le coordinateur conserve la règle d’abandon des opérations obsolètes.
+
+La machine interne d’admission réserve atomiquement une transition dès qu’une
+demande est reconnue comme pouvant modifier la composition. Pendant la phase
+`changing`, une autre intention de transition retourne `false` avant son
+entrée dans la file ; elle n’est ni accumulée ni rejouée. Les commandes
+discrètes sans changement de vue restent dans la file unique et ne constituent
+pas une seconde voie de synchronisation.
 
 `instance.telco` est le port telco CodPlay canonique lorsqu’il est exposé par
 l’intégration. Les opérations Sighty le ciblent et les sérialisent autour de
@@ -257,19 +272,35 @@ Le composition manager devient un réconciliateur physique sans API de
 parcours. Il reçoit un plan déjà calculé et :
 
 - acquiert ou réutilise les occurrences entrantes selon la registry ;
-- détache ou remplace les montages ;
+- délègue les relations physiques à un registre de présentation séparé de la
+  composition logique ;
+- conserve un montage sorti lorsque son host n’est pas repris par une entrée ;
+- détache ou remplace uniquement les relations qui entrent en conflit, ou lors
+  d’une reconstruction et de la destruction du runtime ;
 - ouvre ou ferme les liaisons via le binding manager ;
 - commit la map de composition ;
 - restaure l’état précédent en cas d’erreur.
 
-Il ne doit plus appeler `planCompositionTransition()` et ne doit plus exposer
-une seconde implémentation de `mountSlot()` ou `detachSlot()`.
-
-Les opérations publiques de montage sont converties en intentions de
-composition, puis soumises au même transition manager que les routes
-résolues par `dispatch`.
+Il ne doit plus appeler `planCompositionTransition()` et ne possède aucune
+API de parcours ou de montage public. Toute sélection de composition vient du
+fichier déclaratif et est soumise au même transition manager, qu’elle soit
+déclenchée par `dispatch` ou par une `mutate` validée.
 
 ### 4.3. Cycle de vie et reset sur instance conservée
+
+La composition logique active et la présentation physique ne sont pas un même
+registre. La première détermine les bindings, le couplage, les événements
+admis et les observations publiques. La seconde conserve les relations de
+montage nécessaires au layout, y compris lorsqu’une branche sortante n’est
+plus active. Un carousel imbriqué, un dashboard ou plusieurs zones de scène
+peuvent donc conserver des racines sans fabriquer une nouvelle route Sighty.
+
+Une sortie logique ferme sa liaison et peut arrêter sa lecture, mais ne fait
+pas disparaître physiquement son montage par défaut. Un montage est réellement
+détaché quand un nouveau child doit occuper le même host sans `replace`, quand
+CodPlay effectue un `replace`, ou quand Sighty reconstruit ou détruit la
+présentation. Cette règle est interne : elle n’ajoute pas de propriété
+`active`/`inactive` à l’API auteur ni à l’API d’intégration.
 
 Le scene manager doit gérer une registry d’occurrences dont l’identité
 physique est stable. Les états de cette registry sont distincts de la
@@ -278,16 +309,16 @@ doit au minimum distinguer :
 
 1. une instance préparée ou conservée ;
 2. une occurrence active dans la composition ;
-3. une occurrence détachée mais réutilisable ;
+3. une occurrence et sa relation de présentation conservées hors composition ;
 4. une instance effectivement détruite.
 
-Une instance préparée non montée peut donc être conservée si le contrat
-CodPlay ou le coût de préparation le justifie. Elle ne doit simplement pas
-être confondue avec une sélection active, ni être retournée par une résolution
-qui exige une occurrence active. Il faut supprimer la sémantique implicite qui
+Une instance et son montage peuvent donc être conservés hors composition si
+la présentation les possède encore. Ils ne doivent simplement pas être
+confondus avec une sélection active, ni être retournés par une résolution qui
+exige une occurrence active. Il faut supprimer la sémantique implicite qui
 déplace une instance préparée vers une adresse active et les adresses
-techniques qui masquent ces états, pas supprimer automatiquement toute
-instance non montée.
+techniques qui masquent ces états, pas supprimer automatiquement une relation
+physique dont le layout a encore la charge.
 
 Le comportement cible est :
 
@@ -323,8 +354,8 @@ responsabilités sont séparées :
   conservée, par son circuit normal ;
 - le scene manager Sighty associe une occurrence à une sélection, sans
   rappeler directement le player interne ;
-- le composition manager Sighty invalide les bindings, détache ou monte les
-  surfaces et publie la composition ;
+- le composition manager Sighty invalide les bindings, transmet les opérations
+  au registre de présentation et publie la composition logique ;
 - le mutation manager Sighty coordonne la politique de mutation et demande à
   CodPlay le reset voulu, mais ne reconstruit pas l’état du player ;
 - la destruction passe uniquement par `owner.instances.destroy` lorsqu’elle
@@ -357,7 +388,6 @@ La forme interne proposée est un seul service avec des requêtes explicites :
 
     sendToSelection(selection, eventime, target, { transport: 'preserve' })
     sendToActiveScene(sceneKey, eventime, target, { transport: 'current' })
-    sendToSlot(slotAddress, eventime, target, { transport: 'preserve' })
 
 Ces opérations sont strictement discrètes : une requête produit au plus un
 envoi d’événement pour une intention donnée. La passerelle ne doit jamais être
@@ -374,15 +404,10 @@ l’algorithme technique.
 cible minces vers cette passerelle. La sauvegarde de la position, le seek de
 restauration et la reprise éventuelle ne doivent exister qu’à un seul endroit.
 
-Pour les intégrations qui doivent envoyer un événement à une occurrence
-active, une surface publique Sighty ciblée, de préférence
-`runtime.sendToSlot(slotAddress, eventime, target)`, sera étudiée. Elle
-permettrait à Demo 3 et Demo 4 d’utiliser le même service sans accéder
-directement à `instance.events.emit()`.
-
-Cette extension d’API doit être validée avant implémentation. Elle doit
-résoudre une cible vers l’interface telco ou événementielle CodPlay retenue,
-sans ajouter une deuxième interface de commande.
+Aucune API publique Sighty ciblée ne fait partie du plan. La surface publique
+reste le fichier déclaratif du scénario, ses actions et `dispatch`/`mutate` ;
+la passerelle reste un service interne du runtime. Une démo ou une intégration
+ne doit pas fabriquer une façade concurrente pour atteindre une occurrence.
 
 ### 4.6. Interface telco CodPlay unique et ciblage Sighty
 
@@ -394,7 +419,7 @@ commandes :
 - `togglePlay` ;
 - `setRate` ;
 - `seek` ;
-- `rewind`.
+- `rewind` ;
 - `reset`.
 
 Le coupling manager, les opérations publiques `play`/`playAll` et la
@@ -452,8 +477,9 @@ des tâches du chemin critique actuel.
 - conserver uniquement le scénario réel, la composition Sighty et les surfaces
   communes de la page qui restent nécessaires aux autres démos ;
 - ne pas recréer de contrôles de montage/détachement sous un autre nom ;
-- vérifier les opérations `mountSlot`/`detachSlot` uniquement dans les tests
-  du package si leur contrat public est finalement conservé ;
+- ne conserver aucun test ou adaptateur qui suppose une API publique de
+  montage/détachement ; les opérations physiques se vérifient uniquement au
+  travers du parcours déclaratif réel ;
 - ne pas traiter une instance préparée mais inactive comme une occurrence
   active ; si le parcours ne peut pas être garanti par le chemin Sighty réel,
   appliquer la politique `deprecated` ci-dessous.
@@ -544,19 +570,12 @@ Les invariants déjà arrêtés à contrôler sont notamment :
 - Demo 4 est la fixture prioritaire ; les démos 1 à 3 sont différées et ne
   constituent pas une gate.
 
-Les seuls sujets à soumettre à une validation nouvelle sont les surfaces ou
-choix qui ne sont pas déjà couverts par ces références, notamment :
-
-- le maintien ou la suppression de `mountSlot` et `detachSlot` ;
-- la forme exacte d’une passerelle Sighty ciblée telle que
-  `runtime.sendToSlot` ;
-- le contrôle `on/off` de l’accès aux flux telco : Sighty doit-il le porter
-  uniquement par l’ouverture et la fermeture des bindings, les events restant
-  des signaux admis, ou une surface CodPlay supplémentaire est-elle requise ;
-- l’autorité et l’ordre des commandes telco directes de l’intégration hôte
-  lorsque Sighty doit arbitrer le flux ;
-- les politiques `transport: 'preserve'` et `transport: 'current'` si leur
-  sémantique n’est pas déjà acceptée.
+Le seul sujet à soumettre à une validation nouvelle est une politique de
+transport (`transport: 'preserve'` ou `transport: 'current'`) si sa sémantique
+n’est pas déjà acceptée. Le couplage n’ouvre pas une seconde autorité de
+pilotage : ses déclarations et les événements publics de la scène telco sont
+traités par Sighty dans le contexte du scénario. L’accès d’intégration à
+`CodPlayTelco` reste, lui, le port CodPlay canonique déjà accepté.
 
 **Sortie M0 :** matrice de conformité établie, divergences rattachées à leur
 contrat source et seules les décisions nouvelles identifiées comme `A relire`.
@@ -575,7 +594,8 @@ déjà rattachées à un contrat accepté peuvent être corrigées.
 | Progression vivante | Plan Sighty de progression `Fini` ; façade `CodPlayTelco.onProgress` | Conforme ; aucun `progress:update` ni événement continu |
 | Héritage `idle` | Façade CodPlay `engine.idle` → instance ; décision Sighty explicite | Conforme après suppression de la surcharge `idle ?? false` dans `runtime/state.ts` ; test d’héritage ajouté |
 | Priorité des démos | Décision de reprise | Demo 4 est la fixture bloquante ; Demo 1 à 3 sont différées et non bloquantes |
-| `mountSlot`/`detachSlot`, passerelle ciblée, autorité hôte et accès telco `on/off` | Aucun contrat accepté identifié | Décisions nouvelles à isoler avant le code dépendant |
+| `mountSlot`/`detachSlot` | Décision auteur du 2026-09-16 : le fichier déclaratif du scénario est la surface publique de composition | Primitives retirées de l’API ; montage et détachement conservés en interne uniquement |
+| Passerelle événementielle interne et couplage telco `on/off` | Passerelle interne déjà présente ; déclaration de couplage dans le scénario | Conforme après décision KISS : la scène telco émet les événements publics ; Sighty accroche en interne le binding actif ; `on`/`off` restent optionnels et volontaires, sans nouvelle API |
 
 La spécification Sighty et le plan de reconstruction décrivent désormais le
 reset logique CodPlay sur l’instance conservée. Toute mention résiduelle de
@@ -591,27 +611,61 @@ Les décisions indépendantes déjà arrêtées sont maintenant appliquées :
   instance active ;
 - la chaîne d’opérations du contrôleur est portée par
   `RuntimeOperationCoordinator`, et `play`/`playAll` rejoignent cette chaîne ;
+- `RuntimeNavigationStateMachine` réserve la phase `changing` dès l’admission
+  d’une intention de transition ; une seconde intention concurrente est
+  rejetée avant d’entrer dans la file ;
 - `RuntimeTransitionManager` est le seul producteur de
   `CompositionTransition` ; le composition manager reçoit désormais le plan
-  déjà calculé, y compris pour les aides de montage conservées ;
+  déjà calculé et ne possède aucune façade de montage public ;
 - `RuntimeSceneEventGateway` porte l’unique émission Sighty vers
   `instance.events.emit`, avec la préservation ponctuelle du transport au même
   endroit ;
 - l’énumération map/liste brute du graphe est partagée par
   `navigation/graph-entries.ts` et ne possède plus deux implémentations.
+- les primitives publiques `mountSlot`, `detachSlot` et `isSlotMounted` ont été
+  retirées ; la composition est modifiée uniquement par le parcours déclaré,
+  tandis que `getMountedSceneKey` et `onSlotChange` restent des observations.
+- les wrappers one-shot `findGraphViewByScene` et `isSightyViewMap` ont été
+  retirés ; l’énumération auteur passe par `navigation/graph-entries.ts`, et
+  la localisation mutable des mutations partage désormais un seul parcours
+  de graphe au lieu de recopier celui de `replaceEntry` et `removeEntry`.
+- `RuntimePresentationManager` porte désormais le registre interne des
+  relations physiques ; la sortie logique ferme les bindings sans démonter
+  automatiquement un host qui n’est pas repris, tandis que les conflits,
+  reconstructions et rollbacks restent traités par le même circuit CodPlay.
 
 Le reset d’occurrence est maintenant raccordé à `instance.telco.reset()` ; la
-passerelle ciblée publique et l’autorité `on/off` du flux telco restent à leur
-frontière `A relire` décrite ci-dessus. Aucun circuit de remplacement n’est
-introduit pour ces deux décisions restantes.
+passerelle événementielle reste interne et aucune API Sighty ciblée n’est
+ajoutée. Le couplage telco suit désormais le circuit arrêté : déclaration dans
+le scénario, événements publics émis par la scène telco, accrochage interne
+par Sighty après admission, et signaux `on`/`off` seulement lorsqu’ils sont
+volontairement fournis par la scène.
+
+#### Divergence CodPlay observée pendant la validation — 2026-09-16
+
+Le parcours navigateur confirme que la scène C atteint la borne déclarée de
+`10 s` et passe à `sequenceEnded`. L’eventime auteur `sequence:end` de
+visibilité `public` n’est toutefois pas transmis à Sighty :
+`RuntimePlayer.notifyPublicEvents()` parcourt uniquement
+`RuntimeTrackJournal.getAllEvents()`, qui ne contient pas les eventimes
+compilés de la scène. La navigation déclarée au titre de cette fin ne peut
+donc pas se déclencher automatiquement.
+
+Il s’agit d’une divergence à la frontière du contrat CodPlay, pas d’un défaut
+du routeur Sighty. Aucun observateur privé de `sequenceEnded` ne doit être
+ajouté pour la masquer, car cela créerait un second circuit de fin. La
+correction éventuelle doit être portée par un plan CodPlay explicitement
+autorisé ; jusqu’à cette décision, la validation Sighty distingue la
+terminalisation automatique observée du routage automatique non disponible.
 
 ### M1 — coordinateur d’opérations
 
 - extraire la sérialisation du contrôleur ;
+- verrouiller l’admission des intentions de transition avec la machine d’état
+  interne ;
 - représenter les opérations publiques et les événements liés sous un type
   interne unique ;
-- soumettre `dispatch`, context, reset, mutate, mount, detach et play à ce
-  coordinateur ;
+- soumettre `dispatch`, context, reset, mutate et play à ce coordinateur ;
 - conserver l’invalidation des bindings avant toute opération obsolète ;
 - ajouter les tests de concurrence et de rejet.
 
@@ -623,9 +677,8 @@ un appel direct au transition manager depuis la façade.
 - faire produire le plan une seule fois ;
 - faire accepter le plan au composition manager ;
 - supprimer ses appels directs au planificateur ;
-- transformer mount/detach en intentions de composition ;
 - vérifier pause, replacement, binding, data, showMode, notification et
-  rollback dans le même ordre pour route et montage explicite.
+  rollback dans le même ordre pour toute sélection issue du scénario.
 
 **Gate :** une opération de sélection, quelle que soit son origine, suit la
 même transition observable.
@@ -719,9 +772,10 @@ Exécuter la suite complète applicable :
 - `scene:end` et `sequence:end` ;
 - instances répétées et adressage par slot ;
 - data `entry`/`live`, context et mutations ;
-- commandes `play`, `pause`, `togglePlay`, `setRate`, `seek`, `rewind` ;
+- commandes `play`, `pause`, `togglePlay`, `setRate`, `seek`, `rewind`, `reset` ;
 - événements publics, couplage et invalidation ;
-- montage, détachement, replacement, ressources et destruction ;
+- réconciliation interne des montages, détachement, replacement, ressources et
+  destruction ;
 - progression live sans `progress:update` ;
 - typecheck, tests, build et validation Safari MCP ;
 - parcours complet de Demo 4, avec répétitions et retour arrière ; parcours
@@ -752,7 +806,8 @@ Les recherches et revues de code doivent confirmer :
 - aucun `idle ?? false` caché dans Sighty ;
 - aucune copie locale de routeur, index ou coupling dans les démos ;
 - aucun contrôle de démo ne maintient artificiellement une API Sighty ;
-- aucune démo ne dépend de `mountSlot` ou `detachSlot` pour rester fonctionnelle ;
+- aucune méthode publique `mountSlot`, `detachSlot` ou `isSlotMounted` n’existe ;
+  aucune démo ne contourne le fichier déclaratif pour modifier la composition ;
 - Demo 4 reste une fixture d’acceptation du runtime, pas une source normative
   ni une implémentation de secours ;
 - Demo 1 à 3 sont soit validées par le chemin Sighty réel, soit explicitement
@@ -762,8 +817,8 @@ Les recherches et revues de code doivent confirmer :
 
 ## 8. Critères d’acceptation comportementaux
 
-Pour toute origine équivalente — navigation, événement de scène, commande de
-couplage ou montage explicite — :
+Pour toute origine équivalente — navigation, événement de scène ou commande de
+couplage — :
 
 - la composition cible est résolue avec le même index ;
 - les mêmes conditions sont évaluées ;
@@ -782,14 +837,14 @@ introduire une commande parallèle ou contourner sa coordination.
 
 | Tranche | Statut initial | Passage |
 | --- | --- | --- |
-| M0 — audit | En cours | matrice de conformité établie ; les divergences arrêtées sont applicables et les décisions nouvelles restent bloquées avant leur code dépendant |
-| M1 — opérations | En cours | file extraite dans `RuntimeOperationCoordinator` ; dispatch, contexte, reset, mutation et commandes de lecture partagent cette file |
-| M2 — transitions | En cours | plan unique transmis au réconciliateur ; comportement complet des intentions à poursuivre |
+| M0 — audit | En cours | matrice de conformité établie ; les divergences sont rattachées aux contrats acceptés et aucune décision nouvelle ne porte le code appliqué |
+| M1 — opérations | En cours | file extraite dans `RuntimeOperationCoordinator` ; dispatch, contexte, reset, mutation et commandes de lecture partagent cette file ; les transitions sont verrouillées dès l’admission et les tentatives concurrentes sont rejetées |
+| M2 — transitions | En cours | plan unique transmis au réconciliateur ; présentation physique séparée de la composition logique et rollback des relations couvertes ; parcours complets à poursuivre |
 | M3 — cycle/reset | En cours | `instance.telco.reset()` est intégré à `showMode` et `runtime.reset()` ; Demo 4 prouve l’identité conservée et le reset de session, les erreurs partielles et validations navigateur restent ouvertes |
-| M4 — événements/telco | En cours | passerelle interne unique active ; migration Demo 4 et surface ciblée restent à traiter |
-| M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; extraction des calculs mutualisés à poursuivre |
-| M6 — nettoyage | Non commencée | code mort et documentation alignés |
-| M7 — validation | Non commencée | matrice complète exécutée ; Demo 4 bloquante, Demo 1 à 3 non bloquantes si deprecated |
+| M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 4 passe par l’action déclarée et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
+| M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; wrappers one-shot sans sémantique supprimés ; revue globale à poursuivre sur les parcours différés |
+| M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée ; le relais direct résiduel de Demo 3 reste explicitement différé et ne bloque pas la fixture prioritaire |
+| M7 — validation | En cours | Sighty : 31 tests ; CodPlay : 650 tests et typecheck ; démos : typecheck et build ; Safari MCP actif a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind et rejet d’une navigation rapide sans warning/error ; la publication/réaction automatique à `sequence:end` reste ouverte à la frontière CodPlay |
 
-Le plan reste `En cours` ; les décisions résiduelles M0 restent `A relire` et
-bloquent leur code dépendant jusqu’à validation explicite.
+Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
+du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.
