@@ -120,8 +120,14 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     try {
       this.bindings.closeBindings(transition.exited)
       for (const { selection, mount } of enteredMounts) {
-        if (mount.replace === undefined) this.presentation.detachForHost(mount.host)
-        this.mountSelection(selection, mount)
+        const reusesRelation = this.presentation.canReuseSelection(selection, mount)
+        const replacesActiveOutgoing = mount.replace !== undefined
+          && this.presentation.canReplaceHost(mount.host, previous.selections, transition.exited)
+        if (!reusesRelation && !replacesActiveOutgoing) this.presentation.detachForHost(mount.host)
+        const effectiveMount = replacesActiveOutgoing || mount.replace === undefined
+          ? mount
+          : { host: mount.host, childInstanceId: mount.childInstanceId }
+        this.mountSelection(selection, effectiveMount)
       }
       this.state.composition = {
         revision: previous.revision + 1,

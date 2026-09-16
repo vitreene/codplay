@@ -5,6 +5,7 @@ import {
   type CodPlayInstanceMountHandle,
 } from 'codplay'
 import type { ActiveSelection } from '../navigation/types'
+import { sameSelection } from '../navigation/transition'
 import { occurrenceKeyForSelection, sameMountHost } from './helpers'
 import type { SightyRuntimeState } from './state'
 import type { PresentationRelation, ResolvedMount } from './types'
@@ -57,6 +58,34 @@ export class RuntimePresentationManager<SceneKey extends string, SlotName extend
       childInstanceId: child.instanceId,
       ...(resolution.entry.replace === undefined ? {} : { replace: resolution.entry.replace }),
     }
+  }
+
+  /** Returns whether an incoming selection already owns the requested relation. */
+  canReuseSelection(
+    selection: ActiveSelection<SceneKey, SlotName>,
+    mount: ResolvedMount,
+  ): boolean {
+    const current = this.mounts.get(selection.slotAddress)
+    return current !== undefined
+      && current.mount.childInstanceId === mount.childInstanceId
+      && sameMountHost(current.mount.host, mount.host)
+  }
+
+  /** Returns whether a host is occupied by an active outgoing relation of this transition. */
+  canReplaceHost(
+    host: CodPlayInstanceHostTarget,
+    previousSelections: ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>>,
+    exited: readonly ActiveSelection<SceneKey, SlotName>[],
+  ): boolean {
+    const relation = [...this.mounts.values()]
+      .find((candidate) => sameMountHost(candidate.mount.host, host))
+    if (relation === undefined) return false
+
+    const activeSelection = previousSelections.get(relation.selection.slotAddress)
+    if (activeSelection === undefined || !sameSelection(activeSelection, relation.selection)) {
+      return false
+    }
+    return exited.some((selection) => sameSelection(selection, relation.selection))
   }
 
   /** Mounts or reuses one physical relation for a logical selection. */

@@ -183,16 +183,16 @@ binding actif après admission de la composition. Les événements optionnels
 volontairement une fonctionnalité. Ils empruntent le circuit public existant ;
 Sighty ne crée ni émission implicite, ni interface d’activation concurrente.
 
-#### F. Entrées événementielles directes dans les démos
+#### F. Entrées événementielles directes dans les démos — résolu
 
-Demo 3 injecte le contenu avec `sceneA.events.emit()`. Demo 4 injecte l’état
-visuel de sa scène telco avec `instance.events.emit()`.
+Demo 3 envoyait auparavant le contenu et la couleur directement à
+`sceneA.events.emit()` depuis sa composition. Ce relais contournait l’admission
+déclarée du scénario et entretenait une file locale supplémentaire.
 
-Ces chemins sont documentés et ne sont pas des routeurs concurrents, mais ils
-contournent la même admission Sighty pour des effets inter-scènes. Ils doivent
-soit rejoindre une passerelle publique unique, soit rester explicitement
-limités à l’observation/projection CodPlay. Le choix ne doit pas être laissé à
-chaque démo.
+Le parcours est maintenant déclaré sur la vue de la scène telco : les events
+publics de la scène et les intentions de l’hôte résolvent une action Sighty,
+dont le catalogue utilise `send`. Le seul appel `instance.events.emit()` reste
+donc dans `RuntimeSceneEventGateway`, qui porte la passerelle interne unique.
 
 ### 3.2. Duplications de calcul à supprimer
 
@@ -275,6 +275,12 @@ parcours. Il reçoit un plan déjà calculé et :
 - délègue les relations physiques à un registre de présentation séparé de la
   composition logique ;
 - conserve un montage sorti lorsque son host n’est pas repris par une entrée ;
+- détache une relation conservée lorsqu’un nouveau child reprend son host sans
+  être la sortie active de la transition courante ;
+- demande le `replace` CodPlay uniquement lorsque la relation du host appartient
+  encore à une sélection active sortante de cette transition ;
+- réutilise directement une relation lorsque la même occurrence revient sur le
+  même host, puis laisse `showMode` traiter son état ;
 - détache ou remplace uniquement les relations qui entrent en conflit, ou lors
   d’une reconstruction et de la destruction du runtime ;
 - ouvre ou ferme les liaisons via le binding manager ;
@@ -301,6 +307,14 @@ détaché quand un nouveau child doit occuper le même host sans `replace`, quan
 CodPlay effectue un `replace`, ou quand Sighty reconstruit ou détruit la
 présentation. Cette règle est interne : elle n’ajoute pas de propriété
 `active`/`inactive` à l’API auteur ni à l’API d’intégration.
+
+La présence d’une déclaration `replace` ne suffit pas à déclencher un
+remplacement visuel. Elle ne s’applique qu’à une relation encore active dans
+la composition précédente et sortie dans la transition courante. Ainsi,
+`scene A → scene B` dans le chapitre peut produire le remplacement déclaré,
+mais `scene A → menu → scene B` est un accès direct à B : la relation A
+conservée hors composition est détachée sans snapshot CodPlay. La réadmission
+de A réutilise sa relation conservée et ne déclenche pas de remplacement.
 
 Le scene manager doit gérer une registry d’occurrences dont l’identité
 physique est stable. Les états de cette registry sont distincts de la
@@ -497,17 +511,24 @@ des tâches du chemin critique actuel.
 ### Demo 3 — reprise différée
 
 - conserver le scénario de relais public telco → Sighty ;
-- remplacer l’émission directe vers `sceneA` par la passerelle Sighty validée,
-  ou par une action déclarée qui délègue à cette passerelle ;
+- utiliser l’action déclarée de la vue telco, qui délègue à la passerelle Sighty
+  validée ;
 - ne pas créer de catalogue de couplage ou de routeur dans la démo ;
-- conserver la chaîne séquentielle uniquement comme protection d’intégration
-  contre les envois concurrents, pas comme second coordinateur de navigation.
+- ne pas créer de chaîne locale ni de second coordinateur de navigation.
 
 ### Demo 4
 
 - améliorer la fixture si nécessaire pour mieux tester les refactorings,
   notamment les répétitions, les retours menu/scène, les fins de séquence et
   les erreurs de transition ;
+- conserver deux conteneurs directs dans `scene-layout` : le slot menu sert
+  directement de conteneur du menu, tandis qu’un conteneur chapitre stable porte
+  les hôtes scène et telco ; le viewport carousel est porté par la racine du
+  layout, sans wrapper intermédiaire ;
+- au retour vers le menu, faire sortir le conteneur chapitre par opacité
+  (`1 → 0`) sans translation horizontale ; le menu entre de bas en haut ; la
+  scène et le telco restent présents dans le conteneur sortant pendant cette
+  transition ;
 - supprimer `emitTelcoEvent()` après migration vers la passerelle commune ;
 - conserver l’observation `onProgress` et la projection d’entrée, qui sont le
   chemin CodPlay prévu pour la progression continue ;
@@ -588,7 +609,7 @@ déjà rattachées à un contrat accepté peuvent être corrigées.
 | Point contrôlé | Référence | Classement |
 | --- | --- | --- |
 | Interface telco unique `CodPlayTelco` portée par `instance.telco` | Plan CodPlay de façade engine/instances/telco ; façade CodPlay actuelle | Conforme ; aucune interface Sighty ou démo concurrente à créer |
-| `instance.events.emit` et l’entrée événementielle CodPlay | Note de découverte CodPlay V2 §3.3 ; plan de façade CodPlay §5 | Conforme côté contrat ; les appels directs des démos restent une divergence d’implémentation à traiter en M4 |
+| `instance.events.emit` et l’entrée événementielle CodPlay | Note de découverte CodPlay V2 §3.3 ; plan de façade CodPlay §5 | Conforme ; Demo 3 délègue maintenant à la passerelle interne et le seul appel d’exécution reste dans `RuntimeSceneEventGateway` |
 | `initialize`, reset logique et `preload` | Note CodPlay V2 §§3.1–3.4 ; plan de reset chaud ; décision acceptée le 2026-09-16 | Contrat sémantique conforme ; `resetNow()` réutilise les occurrences et délègue à `instance.telco.reset()` ; le reset CodPlay efface la session runtime sans effacer les eventimes auteur compilés |
 | `showMode`, `accessBy`, `exitBy`, `scene:end` et `sequence:end` | Spécification Sighty et plan de reconstruction, décisions arrêtées dans la reprise | Conforme documentaire ; à prouver par les tests sans réouvrir les sémantiques |
 | Progression vivante | Plan Sighty de progression `Fini` ; façade `CodPlayTelco.onProgress` | Conforme ; aucun `progress:update` ni événement continu |
@@ -711,8 +732,8 @@ réutilisables indépendamment de l’état de montage.
 
 - introduire la passerelle d’événements ;
 - faire déléguer les chemins runtime existants à cette passerelle ;
-- migrer Demo 4 ; Demo 3 ne sera migrée que si elle reste active après
-  l’évaluation différée ; Demo 1 et Demo 2 ne sont pas dans le chemin critique ;
+- faire passer Demo 4 et Demo 3 par la passerelle interne ; Demo 1 et Demo 2
+  ne sont pas dans le chemin critique ;
 - faire déléguer toutes les commandes à l’interface telco CodPlay canonique ;
 - réduire Sighty au ciblage, à l’admission et à la sérialisation ;
 - aligner la télécommande commune sur ce port unique ;
@@ -742,8 +763,8 @@ comme un reset, ni comme une initialisation interne d’instance.
 ### M6 — nettoyage documentaire et des démos
 
 - supprimer le code mort rendu inatteignable ;
-- ne pas réécrire Demo 1, Demo 2 ou Demo 3 dans le chemin critique ; les
-  évaluer seulement après stabilisation du runtime et de Demo 4 ; pour chaque
+- ne pas réécrire Demo 1 ou Demo 2 dans le chemin critique ; les évaluer
+  seulement après stabilisation du runtime et de Demo 4 ; pour chaque
   démo non garantie, inscrire le marquage deprecated, la retirer du registre
   actif et supprimer ses branches devenues sans consommateur ;
 - supprimer `packages/demos/src/sighty/demo1/page-controls.ts` et la fabrique
@@ -838,12 +859,12 @@ introduire une commande parallèle ou contourner sa coordination.
 | --- | --- | --- |
 | M0 — audit | En cours | matrice de conformité établie ; les divergences sont rattachées aux contrats acceptés et aucune décision nouvelle ne porte le code appliqué |
 | M1 — opérations | En cours | file extraite dans `RuntimeOperationCoordinator` ; dispatch, contexte, reset, mutation et commandes de lecture partagent cette file ; les transitions sont verrouillées dès l’admission et les tentatives concurrentes sont rejetées |
-| M2 — transitions | En cours | plan unique transmis au réconciliateur ; présentation physique séparée de la composition logique et rollback des relations couvertes ; parcours complets à poursuivre |
+| M2 — transitions | En cours | plan unique transmis au réconciliateur ; présentation physique séparée de la composition logique ; `replace` limité à la sortie active de la transition et accès `menu → scène` sans faux remplacement couverts par Demo 4 ; parcours complets à poursuivre |
 | M3 — cycle/reset | En cours | `instance.telco.reset()` est intégré à `showMode` et `runtime.reset()` ; Demo 4 prouve l’identité conservée et le reset de session, les erreurs partielles et validations navigateur restent ouvertes |
-| M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 4 passe par l’action déclarée et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
+| M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 3 et Demo 4 passent par les actions déclarées et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
 | M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; wrappers one-shot sans sémantique supprimés ; revue globale à poursuivre sur les parcours différés |
-| M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée ; le relais direct résiduel de Demo 3 reste explicitement différé et ne bloque pas la fixture prioritaire |
-| M7 — validation | En cours | Sighty : 31 tests ; CodPlay : 651 tests et typecheck ; démos : typecheck et build ; Safari MCP actif a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind et rejet d’une navigation rapide sans warning/error ; la publication/réaction automatique à `sequence:end` est maintenant raccordée au dispatcher CodPlay unique et reste à rejouer dans la validation navigateur complète |
+| M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée, avec hôtes physiques distincts pour le menu et le conteneur chapitre ; Demo 3 ne possède plus de relais direct ni de file locale et passe par l’action déclarée et la passerelle Sighty ; les démos 1 et 2 restent différées |
+| M7 — validation | En cours | Sighty : 31 tests ; CodPlay : 655 tests et typecheck ; démos : typecheck et build ; les régressions Demo 4 vérifient le fade sans translation du conteneur chapitre, la présence simultanée de scène + telco pendant le retour, le `replace` direct entre scènes et l’absence de faux `replace` après retour menu ; Safari MCP a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind, rejet d’une navigation rapide et le retour automatique C → menu sur `sequence:end`, sans warning/error ; la matrice navigateur complète et les démos 1 à 3 restent différées |
 
 Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
 du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.

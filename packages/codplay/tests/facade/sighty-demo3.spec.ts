@@ -17,8 +17,8 @@ class ImmediateImage {
   }
 }
 
-/** Lets the delegated DOM event and Sighty relay complete. */
-function flushDemo3Relay(): Promise<void> {
+/** Lets the delegated DOM event and the shared Sighty operation complete. */
+function flushDemo3Operation(): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, 100))
 }
 
@@ -36,7 +36,7 @@ describe('Sighty data injection demo', () => {
     document.body.replaceChildren()
   })
 
-  it('relays text payloads and injects colors through the regular Sighty path', async () => {
+  it('routes text payloads and colors through the regular Sighty path', async () => {
     vi.stubGlobal('Image', ImmediateImage)
     const stage = document.createElement('div')
     const externalControls = document.createElement('div')
@@ -58,13 +58,13 @@ describe('Sighty data injection demo', () => {
     expect(title.textContent).toBe('Scène A')
 
     contentButtons[0]?.click()
-    await flushDemo3Relay()
+    await flushDemo3Operation()
     expect(title.textContent).toBe(DEMO3_CONTENT_VALUES.first)
     expect(logs.some((message) => message.includes('message sighty-demo3:content:first → sceneA (content)'))).toBe(true)
     expect(logs.some((message) => message.includes('Sighty → sceneA : content injecté'))).toBe(true)
 
     contentButtons[1]?.click()
-    await flushDemo3Relay()
+    await flushDemo3Operation()
     expect(title.textContent).toBe(DEMO3_CONTENT_VALUES.second)
 
     controls = createDemo3Controls({
@@ -76,14 +76,14 @@ describe('Sighty data injection demo', () => {
     expect(colorButtons).toHaveLength(2)
 
     colorButtons[0]?.click()
-    await flushDemo3Relay()
+    await flushDemo3Operation()
     const blueColor = title.style.color
     expect(blueColor).not.toBe('')
 
     colorButtons[1]?.click()
-    await flushDemo3Relay()
+    await flushDemo3Operation()
     expect(title.style.color).not.toBe(blueColor)
-    expect(logs.some((message) => message.includes('event sighty-demo3:color:blue → sceneA (color)'))).toBe(true)
-    expect(logs.some((message) => message.includes('Sighty → sceneA : couleur coral'))).toBe(true)
+    expect(logs.some((message) => message.includes('event sighty-demo3:color:blue → Sighty (color)'))).toBe(true)
+    expect(logs.some((message) => message.includes('Sighty → sceneA : couleur #fda4af'))).toBe(true)
   })
 })

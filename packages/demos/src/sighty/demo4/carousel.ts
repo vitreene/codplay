@@ -48,7 +48,7 @@ function createLayoutCarousel(): AutoCapsuleResult {
       grid: { className: 'demo4-layout-carousel__grid' },
       defaults: {
         introTransitionRef: 'swipe-left',
-        outroTransitionRef: 'swipe-right',
+        outroTransitionRef: 'fade',
       },
     },
     children: distribution.children.map((child, index) => {
@@ -58,7 +58,7 @@ function createLayoutCarousel(): AutoCapsuleResult {
         : { intro: CAROUSEL_EVENT_NAMES.chapterEnter, outro: CAROUSEL_EVENT_NAMES.chapterLeave }
       const refs = itemId === DEMO4_LAYOUT_ITEM_IDS.menu
         ? { intro: 'swipe-down', outro: 'swipe-left' }
-        : { intro: 'swipe-left', outro: 'swipe-right' }
+        : { intro: 'swipe-left', outro: 'fade' }
       return {
         id: child.trackId,
         order: index,
@@ -105,9 +105,7 @@ export const DEMO4_LAYOUT_CAROUSEL_EVENTS = {
 /** Creates one layout perso with direction-aware carousel actions. */
 export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: string): PersoDoc {
   const item = getCarouselItem(itemId)
-  const events = DEMO4_LAYOUT_CAROUSEL_EVENTS[itemId]
   const initialOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '0%' : '100%'
-  const leaveOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '-100%' : '100%'
   const initialState = itemId === DEMO4_LAYOUT_ITEM_IDS.menu
     ? 'demo4-layout__carousel-item--active demo4-layout__carousel-item--front'
     : 'demo4-layout__carousel-item--inactive'
@@ -121,46 +119,89 @@ export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: stri
       style: { x: initialOffset, y: '0%' },
       markup,
     },
-    actions: {
-      [events.enter]: {
-        className: {
-          add: 'demo4-layout__carousel-item--active demo4-layout__carousel-item--front',
-          remove: 'demo4-layout__carousel-item--inactive demo4-layout__carousel-item--leaving',
-        },
-        style: {
-          ...(itemId === DEMO4_LAYOUT_ITEM_IDS.menu
-            ? {
-                x: '0%',
-                y: {
-                  from: '100%',
-                  to: '0%',
-                  duration: CAROUSEL_SLIDE_DURATION_MS,
-                  ease: 'inOutCubic',
-                },
-              }
-            : {
-                x: {
-                  from: initialOffset,
-                  to: '0%',
-                  duration: CAROUSEL_SLIDE_DURATION_MS,
-                  ease: 'inOutCubic',
-                },
-              }),
-        },
+    actions: createCarouselItemActions(itemId),
+  }
+}
+
+/** Creates the shared enter and leave actions for one carousel item. */
+function createCarouselItemActions(itemId: Demo4LayoutItemId): NonNullable<PersoDoc['actions']> {
+  const events = DEMO4_LAYOUT_CAROUSEL_EVENTS[itemId]
+  const initialOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '0%' : '100%'
+  const leaveOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '-100%' : '100%'
+
+  return {
+    [events.enter]: {
+      className: {
+        add: 'demo4-layout__carousel-item--active demo4-layout__carousel-item--front',
+        remove: 'demo4-layout__carousel-item--inactive demo4-layout__carousel-item--leaving',
       },
-      [events.leave]: {
-        className: {
-          add: 'demo4-layout__carousel-item--leaving',
-          remove: 'demo4-layout__carousel-item--active demo4-layout__carousel-item--front',
-        },
-        style: {
-          x: {
-            to: leaveOffset,
-            duration: CAROUSEL_SLIDE_DURATION_MS,
-            ease: 'inOutCubic',
-          },
-        },
+      style: {
+        ...(itemId === DEMO4_LAYOUT_ITEM_IDS.chapter ? { opacity: 1 } : {}),
+        ...(itemId === DEMO4_LAYOUT_ITEM_IDS.menu
+          ? {
+              x: '0%',
+              y: {
+                from: '100%',
+                to: '0%',
+                duration: CAROUSEL_SLIDE_DURATION_MS,
+                ease: 'inOutCubic',
+              },
+            }
+          : {
+              x: {
+                from: initialOffset,
+                to: '0%',
+                duration: CAROUSEL_SLIDE_DURATION_MS,
+                ease: 'inOutCubic',
+              },
+            }),
       },
     },
+    [events.leave]: {
+      className: {
+        add: 'demo4-layout__carousel-item--leaving',
+        remove: 'demo4-layout__carousel-item--active demo4-layout__carousel-item--front',
+      },
+      style: {
+        ...(itemId === DEMO4_LAYOUT_ITEM_IDS.chapter
+          ? {
+              opacity: {
+                from: 1,
+                to: 0,
+                duration: CAROUSEL_SLIDE_DURATION_MS,
+                ease: 'inOutCubic',
+              },
+            }
+          : {
+              x: {
+                to: leaveOffset,
+                duration: CAROUSEL_SLIDE_DURATION_MS,
+                ease: 'inOutCubic',
+              },
+            }),
+      },
+    },
+  }
+}
+
+/** Creates the menu slot as the menu's own carousel container. */
+export function createMenuCarouselSlot(): PersoDoc {
+  const item = getCarouselItem(DEMO4_LAYOUT_ITEM_IDS.menu)
+
+  return {
+    id: 'demo4-layout-menu-slot',
+    name: 'slot-menu',
+    type: 'slot',
+    initial: {
+      tag: 'section',
+      move: { target: DEMO4_LAYOUT_CAROUSEL_VIEWPORT_TARGET },
+      className: `${item.className} demo4-layout__carousel-item--active demo4-layout__carousel-item--front`,
+      style: { x: '0%', y: '0%' },
+      attr: {
+        id: 'demo4-layout-menu-item',
+        'aria-label': 'Sommaire',
+      },
+    },
+    actions: createCarouselItemActions(DEMO4_LAYOUT_ITEM_IDS.menu),
   }
 }

@@ -462,15 +462,19 @@ les sélections conservées, entrantes et sortantes. Les événements des
 sélections sortantes sont invalidés avant toute modification physique. Les
 occurrences sortantes sont mises en pause lorsqu’elles sont encore en lecture.
 Pour un changement de sélection dans le même slot physique, Sighty demande à
-`owner.instances.mount` le remplacement CodPlay lorsque le slot déclare une
-transition `replace`; CodPlay conserve alors la présentation sortante pendant
-le montage de l’entrante. Sans cette transition, l’ancien montage est détaché
-avant le nouveau. Une sortie qui n’a pas d’entrante dans le même host reste
-enregistrée dans la présentation physique ; elle est retirée de la composition
-logique et sa liaison est fermée, mais ses racines restent disponibles pour le
-layout. Le détachement effectif intervient seulement lors d’un conflit de
-host, d’un remplacement, d’une reconstruction physique ou de la destruction
-du runtime.
+`owner.instances.mount` le remplacement CodPlay lorsque la relation qui occupe
+le host appartient encore à une sélection active de la composition précédente
+et sort dans cette même transition. CodPlay conserve alors la présentation
+sortante pendant le montage de l’entrante. Sans cette transition, l’ancien
+montage est détaché avant le nouveau. Une relation conservée après une sortie
+logique antérieure ne constitue pas une sortie active de la transition
+courante : si un nouveau child doit reprendre son host, Sighty détache cette
+relation puis monte l’entrante sans lui appliquer `replace`. Une sortie qui n’a
+pas d’entrante dans le même host reste enregistrée dans la présentation
+physique ; elle est retirée de la composition logique et sa liaison est fermée,
+mais ses racines restent disponibles pour le layout. Le détachement effectif
+intervient donc lors d’un conflit de host, d’un remplacement, d’une
+reconstruction physique ou de la destruction du runtime.
 
 Cette conservation physique n’expose aucun état `active`/`inactive` et ne
 change pas les méthodes d’observation publiques : `getMountedSceneKey`,

@@ -16,12 +16,12 @@ export type SightyDemo4SceneKey =
   | "scene-b"
   | "scene-c"
   | "scene-telco";
-export type SightyDemo4SlotName = "slot-scene" | "slot-telco";
+export type SightyDemo4SlotName = "slot-menu" | "slot-scene" | "slot-telco";
 
 /** Declarative navigation file; scene sources are supplied by the catalogue. */
 export type SightyDemo4File = SightyFileDefinition<SightyDemo4SceneKey, SightyDemo4SlotName>;
 
-const MENU_VIEW_PATH = "view-main/view-summary/slot-scene/view-summary-menu";
+const MENU_VIEW_PATH = "view-main/view-summary/slot-menu/view-summary-menu";
 const RETURN_TO_MENU_ACTION = {
   action: "demo4:return-menu",
   go: { path: MENU_VIEW_PATH },
@@ -65,7 +65,7 @@ export const sightyFile: SightyDemo4File = {
               "view-summary": {
                 view: {
                   slots: {
-                    "slot-scene": {
+                    "slot-menu": {
                       start: "view-summary-menu",
                       views: {
                         "view-summary-menu": { view: { scene: "scene-menu" } },

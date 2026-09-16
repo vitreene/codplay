@@ -1,4 +1,8 @@
 import type { SightyFile as SightyFileDefinition } from '@codplay/sighty'
+import {
+  DEMO3_COLOR_INTENTS,
+  DEMO3_CONTENT_INTENTS,
+} from './messages'
 
 export type SightyDemo3SceneKey = 'layout' | 'sceneA' | 'telco'
 export type SightyDemo3SlotName = 'sceneA' | 'telco'
@@ -18,15 +22,36 @@ export const sightyFile: SightyDemo3File = {
       telco: './scenes/telco-scene',
     },
   },
-  views: [
-    {
-      view: {
-        scene: 'layout',
-        slots: {
-          sceneA: [{ view: { scene: 'sceneA' } }],
-          telco: [{ view: { scene: 'telco' } }],
+  views: {
+    start: 'main',
+    views: {
+      main: {
+        view: {
+          scene: 'layout',
+          slots: {
+            sceneA: {
+              start: 'scene-a',
+              views: {
+                'scene-a': { view: { scene: 'sceneA' } },
+              },
+            },
+            telco: {
+              start: 'telco',
+              views: {
+                telco: {
+                  actions: {
+                    [DEMO3_CONTENT_INTENTS.first]: { action: 'demo3:inject-content' },
+                    [DEMO3_CONTENT_INTENTS.second]: { action: 'demo3:inject-content' },
+                    [DEMO3_COLOR_INTENTS.blue]: { action: 'demo3:set-color' },
+                    [DEMO3_COLOR_INTENTS.coral]: { action: 'demo3:set-color' },
+                  },
+                  view: { scene: 'telco' },
+                },
+              },
+            },
+          },
         },
       },
     },
-  ],
+  },
 }

@@ -10,6 +10,7 @@ import {
 } from '../../../demos/src/sighty/demo4/messages'
 import {
   createLayoutCarouselItem,
+  createMenuCarouselSlot,
   DEMO4_LAYOUT_CAROUSEL,
   DEMO4_LAYOUT_CAROUSEL_EVENTS,
   DEMO4_LAYOUT_ITEM_IDS,
@@ -43,10 +44,7 @@ describe('Sighty graph navigation demo', () => {
   })
 
   it('declares the menu return as a bottom-to-top carousel entry', () => {
-    const menuItem = createLayoutCarouselItem(
-      DEMO4_LAYOUT_ITEM_IDS.menu,
-      '<section id="demo4-layout-test-menu"></section>',
-    )
+    const menuItem = createMenuCarouselSlot()
     const menuArtifact = DEMO4_LAYOUT_CAROUSEL.children.find(
       (child) => child.id === DEMO4_LAYOUT_ITEM_IDS.menu,
     )
@@ -59,6 +57,22 @@ describe('Sighty graph navigation demo', () => {
         y: { from: '100%', to: '0%' },
       },
     })
+    expect((menuItem.initial as { tag?: string } | undefined)?.tag).toBe('section')
+    expect(menuItem.initial?.attr).toMatchObject({ id: 'demo4-layout-menu-item' })
+
+    const chapterItem = createLayoutCarouselItem(
+      DEMO4_LAYOUT_ITEM_IDS.chapter,
+      '<section id="demo4-layout-test-chapter"></section>',
+    )
+    const chapterLeave = chapterItem.actions?.[
+      DEMO4_LAYOUT_CAROUSEL_EVENTS[DEMO4_LAYOUT_ITEM_IDS.chapter].leave
+    ]
+    expect(chapterLeave).toMatchObject({
+      style: {
+        opacity: { from: 1, to: 0 },
+      },
+    })
+    expect(chapterLeave).not.toMatchObject({ style: { x: expect.anything() } })
   })
 
   it('routes menu, directions and sequence end through the authored Sighty graph', async () => {
@@ -74,21 +88,21 @@ describe('Sighty graph navigation demo', () => {
     await composition.initialize()
 
     expect(stage.querySelector('#demo4-layout-root')).not.toBeNull()
-    expect(stage.querySelector('#demo4-layout-carousel')).not.toBeNull()
+    expect(stage.querySelector('#demo4-layout-root')?.classList.contains('demo4-layout-carousel')).toBe(true)
     expect(stage.querySelector('#demo4-layout-menu-item')).not.toBeNull()
     expect(stage.querySelector('#demo4-layout-chapter-item')).not.toBeNull()
     expect(stage.querySelector('#demo4-layout-menu-telco')).toBeNull()
     const menuItem = stage.querySelector<HTMLElement>('#demo4-layout-menu-item')
     if (menuItem === null) throw new Error('Demo 4 menu item is missing.')
     expect(menuItem.children).toHaveLength(1)
-    expect(menuItem.firstElementChild?.classList.contains('demo2-slot')).toBe(true)
+    expect(menuItem.firstElementChild?.classList.contains('ac-scene-root')).toBe(true)
     expect(stage.querySelector('.demo4-layout__carousel-item--active')).not.toBeNull()
     expect(stage.querySelector('.demo4-layout__carousel-item--inactive')).not.toBeNull()
 
     const menuButton = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
     if (menuButton === null) throw new Error('Demo 4 menu controls are missing.')
 
-    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
+    expect(composition.runtime.getMountedSceneKey('slot-menu')).toBe('scene-menu')
     expect(composition.runtime.getMountedSceneKey('slot-telco')).toBeUndefined()
 
     menuButton.click()
@@ -144,13 +158,13 @@ describe('Sighty graph navigation demo', () => {
     }
     await sceneC.events.emit(endEvent, { scope: 'story', storyId: 'main' })
     await flushDemo4Relay()
-    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
+    expect(composition.runtime.getMountedSceneKey('slot-menu')).toBe('scene-menu')
     expect(stage.querySelector('.demo4-menu')).not.toBeNull()
     const chapterItemAfterReturn = stage.querySelector<HTMLElement>('#demo4-layout-chapter-item')
+    expect(chapterItemAfterReturn?.querySelector('.demo4-scene-c')).not.toBeNull()
     expect(chapterItemAfterReturn?.querySelector('.demo4-telco')).not.toBeNull()
     expect(chapterItemAfterReturn?.classList.contains('demo4-layout__carousel-item--leaving')).toBe(true)
     expect(logs.some((message) => message.includes('Sighty → scene-c'))).toBe(true)
-    expect(logs.some((message) => message.includes('Sighty → scene-menu'))).toBe(true)
   })
 
   it('relays the scene telco range to the selected scene only', async () => {
@@ -201,6 +215,35 @@ describe('Sighty graph navigation demo', () => {
     await sceneA.telco.seek(8_000)
     await flushDemo4Relay()
     expect(Number(progress.value)).toBe(500)
+  })
+
+  it('opens a new chapter scene directly after a menu return', async () => {
+    vi.stubGlobal('Image', ImmediateImage)
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new SightyComposition({ stage, onLog: () => undefined })
+    await composition.initialize()
+
+    const menuButtonA = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')
+    if (menuButtonA === null) throw new Error('Demo 4 menu control A is missing.')
+    menuButtonA.click()
+    await flushDemo4Relay()
+
+    const previousButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--previous')
+    if (previousButton === null) throw new Error('Demo 4 previous control is missing.')
+    previousButton.click()
+    await flushDemo4Relay()
+    expect(composition.runtime.getMountedSceneKey('slot-menu')).toBe('scene-menu')
+
+    const menuButtonB = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--b')
+    if (menuButtonB === null) throw new Error('Demo 4 menu control B is missing.')
+    menuButtonB.click()
+    await flushDemo4Relay()
+
+    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
+    expect(stage.querySelector('.sighty-scene-b')).not.toBeNull()
+    expect(stage.querySelector('.sighty-scene-a')).toBeNull()
+    expect(stage.querySelectorAll('[data-codplay-transient]')).toHaveLength(0)
   })
 
   it('rejects a rapid second navigation while keeping one outgoing presentation', async () => {
@@ -290,7 +333,7 @@ describe('Sighty graph navigation demo', () => {
 
     previousButton.click()
     await flushDemo4Relay()
-    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
+    expect(composition.runtime.getMountedSceneKey('slot-menu')).toBe('scene-menu')
     expect(composition.runtime.getMountedSceneKey('slot-telco')).toBeUndefined()
   })
 
@@ -311,7 +354,7 @@ describe('Sighty graph navigation demo', () => {
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-c')
     nextButton.click()
     await flushDemo4Relay()
-    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
+    expect(composition.runtime.getMountedSceneKey('slot-menu')).toBe('scene-menu')
     expect(composition.runtime.getMountedSceneKey('slot-telco')).toBeUndefined()
   })
 
@@ -338,7 +381,7 @@ describe('Sighty graph navigation demo', () => {
 
     nextButton().click()
     await flushDemo4Relay()
-    expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-menu')
+    expect(composition.runtime.getMountedSceneKey('slot-menu')).toBe('scene-menu')
     expect(composition.runtime.getMountedSceneKey('slot-telco')).toBeUndefined()
 
     const menuButtonA = stage.querySelector<HTMLButtonElement>('.demo4-menu__button--a')

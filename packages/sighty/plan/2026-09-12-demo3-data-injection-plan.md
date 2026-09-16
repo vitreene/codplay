@@ -2,23 +2,24 @@
 
 ## Statut
 
-Statut : Différée — première tranche implémentée ; cette démo n’est pas
-prioritaire pour la stabilisation du runtime et de Demo 4. Sa réécriture et sa
-validation navigateur/Safari restent ouvertes et non bloquantes. Si elle ne
-peut pas être garantie sans conserver un circuit obsolète, elle sera marquée
-`deprecated` et retirée du registre actif.
+Statut : Différée — le circuit de la première tranche a été reconstruit sur la
+passerelle Sighty canonique ; cette démo n’est pas prioritaire pour la
+stabilisation du runtime et de Demo 4. Sa validation navigateur/Safari reste
+ouverte et non bloquante. Si son rendu complet ne peut pas être garanti sans
+réintroduire un circuit obsolète, elle sera marquée `deprecated` et retirée du
+registre actif.
 
 Cette démo est un scénario de validation distinct du besoin générique des
 composants. Elle reprend la composition de la démo 2, remplace la scène B par
-la scène A et ajoute deux formes d'émission vers cette scène.
+la scène A et déclare deux familles d’intentions vers cette scène.
 
 ## Parcours retenu
 
 1. `layout` place la scène A au-dessus de la scène de commandes.
 2. Deux boutons de la scène `telco` émettent des événements publics avec un
    payload `{ content }`.
-3. La composition Sighty écoute ces événements, puis les injecte dans
-   l'instance `sceneA` avec `instance.events.emit` et une cible story explicite.
+3. L’action déclarée sur la vue `telco` reçoit ces événements et délègue
+   l’injection à la passerelle Sighty avec une cible story explicite.
 4. Deux contrôles extérieurs à la scène de commandes demandent à Sighty
    d'injecter un événement de couleur dans la même instance `sceneA`.
 5. La scène A applique ces payloads par des actions auteur déclarées à `null`.
@@ -31,7 +32,8 @@ utilise la façade publique de l'instance.
 ## Contrats réutilisés
 
 - événements publics CodPlay observés par Sighty sur la scène `telco` ;
-- injection CodPlay sur `sceneA.events.emit(eventime, { scope: 'story', storyId: 'main' })` ;
+- passerelle Sighty interne vers l’interface eventime CodPlay, avec une cible
+  `{ scope: 'story', storyId: 'main' }` ;
 - fusion canonique de `event.data` dans une action auteur `null` ;
 - service `content` pour le texte et service `style` pour la couleur ;
 - cycle de vie et montage des scènes pris en charge par `Sighty.runtime`.
@@ -59,8 +61,8 @@ du journal et aucun `story.reset()` local ne sont ajoutés.
 | Étape | Statut | Preuve attendue |
 | --- | --- | --- |
 | Déclarer les événements et les quatre contrôles | Effectuée | Deux boutons dans la scène telco et deux contrôles dans la zone optionnelle de la page. |
-| Relayer les payloads de la telco | Effectuée | Clic → événement public → Sighty → `sceneA.events.emit`. |
-| Injecter les couleurs depuis Sighty | Effectuée | Chaque contrôle modifie la couleur du texte par un événement ciblé. |
+| Relayer les payloads de la telco | Effectuée | Clic → événement public → action déclarée → passerelle Sighty → scène A. |
+| Injecter les couleurs depuis Sighty | Effectuée | Chaque contrôle produit une intention hôte admise par Sighty et transmise par la même passerelle. |
 | Étendre la durée de la démo | Effectuée côté test | La scène A de Demo 3 se termine à 20 s ; son animation d'image reste limitée à 10 s. |
 | Réinitialiser la session sans conserver les enregistrements | En cours | Le bouton général doit demander le reset logique CodPlay sur les instances conservées ; la primitive est raccordée, mais le parcours propre à Demo 3 reste à valider. |
 | Vérifier le parcours réel | Effectuée côté test | Test avec les vrais runners, players, montage, événements et teardown. |
@@ -89,10 +91,13 @@ injections de couleur, les messages observables et les contrôles extérieurs.
 Le test du layout partagé devra vérifier que la remise à zéro réinitialise la
 session active sur ses instances conservées, sans appeler `destroy/create` pour
 simuler le reset ; les enregistrements utilisateur sont remis à zéro selon le
-contrat CodPlay. La primitive publique d’occurrence est maintenant disponible
-et ne doit pas être contournée par une recréation Sighty.
+contrat CodPlay. Le montage, le détachement et le reset restent pilotés par le
+runtime à partir du scénario ; aucune primitive publique d’occurrence n’est
+ajoutée à cette démo.
 
-Le 2026-09-12, la suite CodPlay complète passe (102 fichiers, 633 tests), les
-tests Sighty passent (2 tests), les typechecks `codplay`, `@codplay/sighty` et
-`@codplay/demos` passent, et le build Vite des démos produit `sighty.html`.
-La vérification visuelle dans un navigateur et Safari reste à faire.
+La validation automatisée actuelle passe avec les vrais runners : 104 fichiers
+et 655 tests CodPlay, 31 tests Sighty, les typechecks `codplay`,
+`@codplay/sighty` et `@codplay/demos`, ainsi que le build Vite des démos qui
+produit `sighty.html`. Le chemin texte a été rejoué dans Safari MCP ; la
+validation visuelle complète de Demo 3 et Safari reste différée avec cette
+démo non prioritaire.

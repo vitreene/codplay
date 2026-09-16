@@ -44,14 +44,15 @@ spécification et couverts par l’implémentation et les tests ciblés. La
 persistance sérialisée n’appartient pas à cette reprise : elle relève d’une
 intégration hôte ultérieure.
 
-La validation automatisée de cette reprise est verte : 31 tests Sighty, 651
+La validation automatisée de cette reprise est verte : 31 tests Sighty, 655
 tests CodPlay, les trois typechecks concernés et le build Vite des démos. Le
 parcours Safari MCP frais a validé Demo 4 sur menu → scène A, pause/reprise,
 progression vivante, le verrou d’une navigation rapide et la terminalisation
-de la scène C. L’eventime auteur `sequence:end` rejoint maintenant le journal
-et le dispatcher CodPlay standard ; Sighty n’ajoute pas de relais concurrent.
-La validation navigateur de ce nouveau raccord reste à rejouer ; les autres
-gates de reconstruction restent suivies dans les tranches correspondantes.
+de la scène C. Après le correctif CodPlay, le même parcours a été rejoué sur
+scène C : `sequence:end` rejoint le journal et le dispatcher CodPlay standard,
+puis l’action déclarée ramène au menu ; Sighty n’ajoute pas de relais
+concurrent. La matrice navigateur complète et les autres gates de
+reconstruction restent suivies dans les tranches correspondantes.
 
 La première implantation de Sighty est une preuve d’usage et une source de
 constats. Demo 4 reste une fixture d’acceptation ; elle ne définit pas le
@@ -964,13 +965,18 @@ surfaces CodPlay ne permettent pas cette garantie, un plan CodPlay séparé est
 requis.
 
 La première verticale vérifie aussi le cas où deux adresses logiques
-successives désignent le même slot physique : avec `replace`, le nouveau
-montage est demandé avant le détachement géré par CodPlay ; sans `replace`, la
-relation sortante est détachée avant la nouvelle demande. Une sortie sans
-entrante dans son host n’est pas démontée par le seul changement de branche :
-la présentation physique la conserve afin que les layouts, carousels et
-compositions imbriquées restent propriétaires de leur visibilité. Le suivi de
-cette cible physique reste interne à Sighty.
+successives désignent le même slot physique : lorsque la relation sortante est
+encore active dans la composition précédente et sort dans cette transition,
+`replace` demande le nouveau montage avant le détachement géré par CodPlay ;
+sans `replace`, la relation sortante est détachée avant la nouvelle demande.
+Une relation conservée par une sortie précédente n’est pas une sortie active de
+la transition courante : si un nouveau child reprend son host, elle est
+détachée sans `replace`. Une réadmission de la même occurrence réutilise sa
+relation sans remplacement. Une sortie sans entrante dans son host n’est pas
+démontée par le seul changement de branche : la présentation physique la
+conserve afin que les layouts, carousels et compositions imbriquées restent
+propriétaires de leur visibilité. Le suivi de cette cible physique reste
+interne à Sighty.
 
 ### 7.4. Concurrence
 
@@ -1850,8 +1856,8 @@ Ne pas inclure dans la reconstruction de navigation :
 | M7 — données et état vivant | En cours | data/context `entry`/`live` et lecture d’état exécutés ; navigateur restant |
 | M8 — mutations | En cours | mutations versionnées, politiques et rollback exécutés ; versionnement durable à valider |
 | M9 — coupling/telco | En cours | couplage déclaré, occurrences indépendantes et surface telco vérifiés ; autres parcours navigateur à compléter |
-| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 11/11 ; Sighty : 31/31 ; CodPlay : 651/651), progression live, verrou de navigation rapide et terminalisation Safari validés ; le raccord automatique de `sequence:end` au dispatcher CodPlay est implémenté, sa validation navigateur post-correctif reste à exécuter ; les démos 1 à 3 sont différées et non bloquantes |
-| M11 — validation complète | En cours | suites (Sighty 31/31, CodPlay 651/651), typechecks et build à rejouer après le correctif ; smoke Safari Demo 4 antérieur validé le 2026-09-16 ; les preuves post-correctif restantes sont encore à exécuter |
+| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 12/12 ; Sighty : 31/31 ; CodPlay : 655/655), progression live, verrou de navigation rapide, terminalisation et retour automatique C → menu validés dans Safari MCP ; les démos 1 à 3 sont différées et non bloquantes |
+| M11 — validation complète | En cours | suites (Sighty 31/31, CodPlay 655/655), typechecks et build rejoués après le correctif ; le parcours Safari MCP post-correctif de Demo 4 est validé ; la matrice navigateur complète et les démos 1 à 3 restent hors chemin critique |
 | progression | Plan dédié en cours | projection locale CodPlay par `onProgress` et surface `input`, sans `progress:update` |
 
 Ce plan reste En cours tant que les gates et validations correspondantes ne
