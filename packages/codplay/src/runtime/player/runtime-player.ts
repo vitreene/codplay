@@ -524,7 +524,7 @@ export class RuntimePlayer {
 
   /** Starts logical playback without creating a clock or rendering anything. */
   play(): void {
-    if (this.sequenceEnded) this.resetSequenceForReplay()
+    if (this.sequenceEnded) this.resetToInitialState()
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PAUSED)
     const wasReady = this.state === PLAYER_LIFECYCLE_READY
     if (wasReady && !this.invokeSceneLifecycleHook('onStart')) {
@@ -541,8 +541,23 @@ export class RuntimePlayer {
     if (sequenceEndTime !== undefined) this.finalizeSequenceEnd(sequenceEndTime)
   }
 
-  /** Reconstructs the initial V2 presentation before replaying a terminal sequence. */
-  private resetSequenceForReplay(): void {
+  /** Resets the initialized occurrence to its initial logical state in place. */
+  reset(): void {
+    this.requireState(
+      PLAYER_LIFECYCLE_READY,
+      PLAYER_LIFECYCLE_PAUSED,
+      PLAYER_LIFECYCLE_PLAYING,
+    )
+    if (this.state === PLAYER_LIFECYCLE_PLAYING) {
+      this.renderSync.pause()
+      this.state = PLAYER_LIFECYCLE_PAUSED
+      notifyModulePlaybackState(this.moduleServiceInstances, 'paused', this.currentTimeMs)
+    }
+    this.resetToInitialState()
+  }
+
+  /** Reconstructs the initial presentation before a reset or terminal replay. */
+  private resetToInitialState(): void {
     const previousSolvedScene = this.solvedScene
     cancelActiveCaptures(
       this.captureSessions,
@@ -553,10 +568,13 @@ export class RuntimePlayer {
     this.sequenceEndPending = false
     this.idleMonitor.reset()
     this.currentTimeMs = 0
+    this.trackJournal.reset()
     this.trackJournal.reconcileStoryIsolationAt(0)
     this.includePersistOnlyInCurrent = true
+    this.snapshotContribution = undefined
     this.skipNextDelta = true
     this.observedPublicEventIds.clear()
+    this.liveCapturePersoKeys = new Set()
     if (!this.invokeSceneLifecycleHook('init')) {
       throw new Error('RUNTIME_SCENE_LIFECYCLE_FAILED: scene init hook failed during replay.')
     }

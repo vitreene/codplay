@@ -4,7 +4,6 @@ import {
   type CodPlayInstance,
   type CodPlayInstanceHostTarget,
   type CodPlayInstanceMountHandle,
-  type CodPlayOptions,
   type RuntimePreloadMode,
 } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
@@ -89,7 +88,7 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     styles: options.styles ?? [],
     onTrace: options.onTrace,
     onPreloadWarning: options.onPreloadWarning,
-    owner: new CodPlay(createSightyCodPlayOptions(options.codplay)),
+    owner: new CodPlay(options.codplay),
     publicEventChannel,
     instances: new Map(),
     instanceSceneKeys: new Map(),
@@ -119,17 +118,5 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     initialized: false,
     transitioning: false,
     destroyed: false,
-  }
-}
-
-/** Disables inactivity events for Sighty scenes unless the host opts into them. */
-function createSightyCodPlayOptions(options: CodPlayOptions | undefined): CodPlayOptions {
-  const engine = options?.engine
-  return {
-    ...options,
-    engine: {
-      ...(engine ?? {}),
-      idle: engine?.idle ?? false,
-    },
   }
 }

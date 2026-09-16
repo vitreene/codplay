@@ -109,8 +109,7 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
       throw new Error(`L’identifiant d’instance Sighty de la scène ${sceneKey} est absent.`)
     }
     const isLayout = occurrenceKey === this.layoutOccurrenceKey()
-    const isStandby = occurrenceKey.startsWith('standby:')
-    const instanceId = isLayout || isStandby
+    const instanceId = isLayout
       ? baseInstanceId
       : `${baseInstanceId}::${encodeURIComponent(occurrenceKey)}`
     const instance = this.state.owner.instances.create({
@@ -124,27 +123,10 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
     this.observeInstance(instance, sceneKey)
   }
 
-  /** Keeps one unmounted compatibility occurrence for each direct scene. */
-  createStandbyInstances(builds: SightyRuntimeBuilds<SceneKey>): void {
-    for (const [sceneKey, build] of builds) {
-      if (sceneKey === this.state.layout.sceneKey) continue
-      this.createInstance(`standby:${sceneKey}`, sceneKey, build)
-    }
-  }
-
   /** Creates one active occurrence from a build already prepared by the runtime. */
   createSelectionInstance(selection: ActiveSelection<SceneKey, SlotName>): void {
     const occurrenceKey = occurrenceKeyForSelection(selection)
     if (this.state.instances.has(occurrenceKey)) return
-    const standbyKey = `standby:${selection.sceneKey}`
-    const standby = this.state.instances.get(standbyKey)
-    if (standby !== undefined) {
-      this.state.instances.delete(standbyKey)
-      this.state.instances.set(occurrenceKey, standby)
-      this.state.instanceSceneKeys.delete(standbyKey)
-      this.state.instanceSceneKeys.set(occurrenceKey, selection.sceneKey)
-      return
-    }
     const build = this.state.compiledBuilds.get(selection.sceneKey)
     if (build === undefined) {
       throw new Error(`Le build Sighty de la scène ${selection.sceneKey} est absent.`)
@@ -152,18 +134,9 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
     this.createInstance(occurrenceKey, selection.sceneKey, build)
   }
 
-  /** Removes one retained occurrence so the next admission creates a new session. */
-  resetSelectionInstance(selection: ActiveSelection<SceneKey, SlotName>): void {
-    const occurrenceKey = occurrenceKeyForSelection(selection)
-    const keys = [occurrenceKey, `standby:${selection.sceneKey}`]
-    for (const key of keys) {
-      const instance = this.state.instances.get(key)
-      if (instance === undefined) continue
-      this.state.owner.instances.destroy(instance.instanceId)
-      this.state.instances.delete(key)
-      this.state.instanceSceneKeys.delete(key)
-    }
-    this.state.deliveredData.delete(selection.slotAddress)
+  /** Resets every retained CodPlay occurrence without changing its identity. */
+  async resetInstances(): Promise<void> {
+    for (const instance of this.state.instances.values()) await instance.telco.reset()
   }
 
   /** Returns the internal key reserved for the mounted layout occurrence. */
@@ -198,31 +171,12 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
     return instances
   }
 
-  /** Returns every prepared occurrence carrying one authored scene key. */
-  findInstances(sceneKey: SceneKey): readonly CodPlayInstance[] {
-    const instances: CodPlayInstance[] = []
-    for (const [occurrenceKey, instanceSceneKey] of this.state.instanceSceneKeys) {
-      if (instanceSceneKey !== sceneKey) continue
-      const instance = this.state.instances.get(occurrenceKey)
-      if (instance !== undefined) instances.push(instance)
-    }
-    return instances
-  }
-
   /** Connects CodPlay diagnostics to the host trace callback. */
   observeInstance(instance: CodPlayInstance, sceneKey: SceneKey): void {
     const onTrace = this.state.onTrace
     if (onTrace !== undefined) {
       this.state.cleanups.push(instance.diagnostic.onTrace((event) => onTrace(sceneKey, event)))
     }
-  }
-
-  /** Selects synchronously supplied builds so deferred scenes stay lazy after reset. */
-  directCompiledBuilds(): SightyRuntimeBuilds<SceneKey> {
-    return new Map(
-      [...this.state.compiledBuilds.entries()]
-        .filter(([sceneKey]) => this.state.scenario.getScene(sceneKey) !== undefined),
-    )
   }
 
   /** Destroys all current scene occurrences while keeping the CodPlay owner alive. */

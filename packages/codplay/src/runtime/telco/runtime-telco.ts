@@ -202,6 +202,8 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
 
     pause: () => runCommand(pauseTarget),
 
+    reset: () => runCommand(() => target.reset()),
+
     setRate: (rate) => {
       if (destroyed) throw new Error('Runtime telco has been destroyed.')
       if (!Number.isFinite(rate) || rate <= 0) {

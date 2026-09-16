@@ -34,6 +34,7 @@ export type RuntimeTransportTarget = Readonly<{
   subscribe: (listener: () => void) => () => void
   play: () => void
   pause: () => void
+  reset: () => void
   setRate: (rate: number) => void
   seek: (timeMs: number) => Readonly<{ ok: boolean }>
 }>
@@ -54,6 +55,7 @@ export type RuntimeTelco = Readonly<{
   setRate: (rate: number) => void
   play: () => Promise<RuntimeTelcoCommandResult>
   pause: () => Promise<RuntimeTelcoCommandResult>
+  reset: () => Promise<RuntimeTelcoCommandResult>
   togglePlay: () => Promise<RuntimeTelcoCommandResult>
   seek: (targetMs: number) => Promise<RuntimeTelcoCommandResult>
   rewind: () => Promise<RuntimeTelcoCommandResult>

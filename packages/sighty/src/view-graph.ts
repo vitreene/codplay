@@ -4,9 +4,9 @@ import type {
   SightyLegacyView,
   SightyViewGraph,
   SightyViewList,
-  SightyViewListEntry,
   SightyViewMap,
 } from './types'
+import { getAuthoredGraphEntries, isAuthoredViewMap } from './navigation/graph-entries'
 
 /** Identifies one graph node together with its authored path and container. */
 export type SightyGraphEntry<
@@ -24,7 +24,7 @@ export function isSightyViewMap<
   SceneKey extends string = string,
   SlotName extends string = string,
 >(graph: SightyViewGraph<SceneKey, SlotName>): graph is SightyViewMap<SceneKey, SlotName> {
-  return !Array.isArray(graph)
+  return isAuthoredViewMap(graph)
 }
 
 /** Converts the legacy flat placement representation into the recursive graph form. */
@@ -71,10 +71,7 @@ export function getDirectGraphEntries<
   graph: SightyViewGraph<SceneKey, SlotName>,
   basePath = '',
 ): readonly SightyGraphEntry<SceneKey, SlotName>[] {
-  const entries = isSightyViewMap(graph)
-    ? Object.entries(graph.views)
-    : graph.map((view, index) => [getListEntryId(view, index), view] as const)
-  return entries.map(([key, view]) => ({
+  return getAuthoredGraphEntries(graph).map(({ key, view }) => ({
     key,
     path: basePath.length === 0 ? key : `${basePath}/${key}`,
     graph,
@@ -140,13 +137,4 @@ export function findGraphViewByPath<
 ): SightyGraphEntry<SceneKey, SlotName> | undefined {
   const normalizedPath = path.trim().replace(/^\/+|\/+$/g, '')
   return getGraphEntries(graph).find((entry) => entry.path === normalizedPath)
-}
-
-/** Returns the stable authored identifier of one ordered graph entry. */
-function getListEntryId<
-  SceneKey extends string,
-  SlotName extends string,
->(view: SightyViewListEntry<SceneKey, SlotName> | SightyGraphView<SceneKey, SlotName>, index: number): string {
-  const id = (view as Partial<SightyViewListEntry<SceneKey, SlotName>>).id
-  return typeof id === 'string' && id.length > 0 ? id : String(index)
 }

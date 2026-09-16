@@ -81,6 +81,7 @@ export function validateAuthoringResources<
     'setRate',
     'seek',
     'rewind',
+    'reset',
   ])
 
   /** Checks one view node, its nested slots and its route declarations. */

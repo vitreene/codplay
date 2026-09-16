@@ -2,8 +2,11 @@
 
 ## Statut
 
-Statut : En cours — première tranche implémentée ; validation navigateur et
-Safari encore ouvertes.
+Statut : Différée — première tranche implémentée ; cette démo n’est pas
+prioritaire pour la stabilisation du runtime et de Demo 4. Sa réécriture et sa
+validation navigateur/Safari restent ouvertes et non bloquantes. Si elle ne
+peut pas être garantie sans conserver un circuit obsolète, elle sera marquée
+`deprecated` et retirée du registre actif.
 
 Cette démo reprend la scène `sceneB` de la première démo Sighty
 (`sighty-scene-b`). Elle ajoute une scène de commandes et un layout qui les

@@ -23,6 +23,7 @@ function createTelco(): Parameters<typeof createV2DemoTelco>[0] {
     getProgress: () => ({ timelineMs: state.timelineMs, durationMs: state.durationMs }),
     play: async () => undefined,
     pause: async () => undefined,
+    reset: async () => undefined,
     togglePlay: async () => undefined,
     setRate: () => undefined,
     seek: async () => undefined,

@@ -73,6 +73,7 @@ export type SightyTelcoCommand =
   | 'setRate'
   | 'seek'
   | 'rewind'
+  | 'reset'
 
 /** Describes one event-to-telco relation declared by an authored view. */
 export type SightyCouplingDescriptor<SlotName extends string = string> = Readonly<{

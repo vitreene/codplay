@@ -212,7 +212,7 @@ export class SightyComposition {
     this.projectActiveSceneProgress(sceneKey, revision, currentState)
   }
 
-  /** Presents one injected telco event immediately while preserving its transport state. */
+  /** Presents one injected telco event through CodPlay's current event circuit. */
   private emitTelcoEvent(
     eventime: CodPlayEventime,
     isCurrent: () => boolean = () => true,
@@ -221,11 +221,7 @@ export class SightyComposition {
       if (this.destroyed || !isCurrent()) return
       const telco = this.runtime.getInstanceAt(CHAPTER_TELCO_SLOT_ADDRESS)
       if (telco === undefined) return
-      const state = telco.telco.getState()
       await telco.events.emit(eventime, SCENE_TARGET)
-      if (this.destroyed || !isCurrent()) return
-      await telco.telco.seek(state.timelineMs)
-      if (state.status === 'playing' && !state.sequenceEnded) await telco.telco.play()
     })
     this.telcoProjectionChain = task.then(() => undefined, () => undefined)
     return task

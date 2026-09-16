@@ -148,6 +148,21 @@ export class RuntimeTrackJournal {
     return this.activeTrackIds.get(trackId) === true
   }
 
+  /** Clears the runtime session while retaining the compiled track registry. */
+  reset(): void {
+    for (const track of Object.values(this.registry.tracks)) {
+      this.activeTrackIds.set(track.id, track.active)
+    }
+    this.eventsByTrack.clear()
+    this.activationPeriodsByStory.clear()
+    this.currentIsolation = undefined
+    this.eventIds.clear()
+    this.nextEventSeq = 0
+    this.nextActivationId = 0
+    this.nextGeneratedEventId = 0
+    this.revision += 1
+  }
+
   /** Appends one live event to an already declared track. */
   appendLiveEvent(input: AppendRuntimeTrackEventInput): TrackCommandResult<RuntimeTrackEvent> {
     if (!this.registry.tracks[input.trackId]) {

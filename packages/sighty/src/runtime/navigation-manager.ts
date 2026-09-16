@@ -1,6 +1,4 @@
 import type {
-  CodPlayEventime,
-  CodPlayEventimeTarget,
   CodPlayPublicEvent,
 } from 'codplay'
 import {
@@ -20,6 +18,7 @@ import { activeScopePaths, occurrenceKeyForSelection, reportWarning } from './he
 import { RuntimeBindingManager } from './binding-manager'
 import { RuntimeCompositionManager } from './composition-manager'
 import { RuntimeCouplingManager } from './coupling-manager'
+import { RuntimeSceneEventGateway } from './scene-event-gateway'
 import { RuntimeTransitionManager } from './transition-manager'
 import type { SightyRuntimeState } from './state'
 import type { DispatchRequest, SightyRuntimeEvent } from './types'
@@ -31,6 +30,7 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
   private readonly bindings: RuntimeBindingManager<SceneKey, SlotName>
   private readonly couplings: RuntimeCouplingManager<SceneKey, SlotName>
   private readonly transitions: RuntimeTransitionManager<SceneKey, SlotName>
+  private readonly events: RuntimeSceneEventGateway<SceneKey, SlotName>
 
   /** Creates a navigation manager over the shared state and runtime boundaries. */
   constructor(
@@ -39,12 +39,14 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
     bindings: RuntimeBindingManager<SceneKey, SlotName>,
     couplings: RuntimeCouplingManager<SceneKey, SlotName>,
     transitions: RuntimeTransitionManager<SceneKey, SlotName>,
+    events: RuntimeSceneEventGateway<SceneKey, SlotName>,
   ) {
     this.state = state
     this.composition = composition
     this.bindings = bindings
     this.couplings = couplings
     this.transitions = transitions
+    this.events = events
   }
 
   /** Resolves one admitted event and executes its first valid authored action. */
@@ -234,7 +236,7 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
     }
 
     for (const [eventName, values] of valuesByEvent) {
-      await this.sendToBinding(selection, {
+      await this.events.sendToBinding(selection, {
         name: eventName,
         visibility: 'scene',
         data: values as CodPlayPublicEvent['data'],
@@ -262,22 +264,6 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
     }
   }
 
-  /** Sends one event to the binding addressed by a logical slot occurrence. */
-  async sendToBinding(
-    selection: ActiveSelection<SceneKey, SlotName>,
-    eventime: CodPlayEventime,
-  ): Promise<void> {
-    const binding = this.state.activeBindings.get(selection.slotAddress)
-    if (binding === undefined || !this.bindings.isCurrentBinding(binding)) return
-    const instance = this.state.instances.get(occurrenceKeyForSelection(selection))
-    if (instance === undefined) return
-    const currentTimeMs = instance.telco.getProgress().timelineMs
-    const wasPlaying = instance.telco.getState().status === 'playing'
-    await instance.events.emit(eventime, { scope: 'scene' })
-    await instance.telco.seek(currentTimeMs)
-    if (wasPlaying && !instance.telco.getState().sequenceEnded) await instance.telco.play()
-  }
-
   /** Executes one catalogued action after its declared route is active. */
   async executeAction(
     reference: string,
@@ -296,26 +282,7 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
       context: this.state.context,
       state: this.readState(selection),
       updateContext: (patch) => this.applyContextPatch(patch),
-      send: (sceneKey, eventime, target) => this.sendToActiveScene(sceneKey, eventime, target),
+      send: (sceneKey, eventime, target) => this.events.sendToActiveScene(sceneKey, eventime, target),
     })
-  }
-
-  /** Sends one action event only through a uniquely active occurrence. */
-  async sendToActiveScene(
-    sceneKey: SceneKey,
-    eventime: CodPlayEventime,
-    target: CodPlayEventimeTarget,
-  ): Promise<void> {
-    const bindings = this.bindings.findActiveBindings(sceneKey)
-    const binding = bindings.length === 1 ? bindings[0] : undefined
-    if (binding === undefined || !this.bindings.isCurrentBinding(binding)) {
-      if (bindings.length > 1) {
-        throw new Error(`La scène Sighty ${sceneKey} est ambiguë dans la composition active.`)
-      }
-      throw new Error(`La scène Sighty ${sceneKey} n'est pas active dans la composition.`)
-    }
-    const instance = this.state.instances.get(binding.occurrenceKey)
-    if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
-    await instance.events.emit(eventime, target)
   }
 }

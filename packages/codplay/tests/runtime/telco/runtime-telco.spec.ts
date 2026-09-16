@@ -66,6 +66,15 @@ class FakeTransportTarget {
     this.status = PLAYER_LIFECYCLE_PAUSED
   }
 
+  /** Resets the fake target to its initial ready state. */
+  reset(): void {
+    this.calls.push('reset')
+    this.status = PLAYER_LIFECYCLE_READY
+    this.timeMs = 0
+    this.sequenceEnded = false
+    this.notify()
+  }
+
   /** Changes the fake playback rate. */
   setRate(rate: number): void {
     this.calls.push(`rate:${rate}`)
@@ -114,6 +123,26 @@ describe('Runtime telco', () => {
     await telco.rewind()
     expect(target.calls).toEqual(['play', 'pause', 'seek:480', 'seek:0'])
     expect(telco.getState().timelineMs).toBe(0)
+    telco.destroy()
+  })
+
+  it('resets through the target without converting reset into a replay event', async () => {
+    const target = new FakeTransportTarget()
+    const telco = createRuntimeTelco({ target, durationMs: 1000 })
+
+    await telco.play()
+    target.timeMs = 480
+    await telco.reset()
+
+    expect(target.calls).toEqual(['play', 'reset'])
+    expect(target.status).toBe(PLAYER_LIFECYCLE_READY)
+    expect(target.timeMs).toBe(0)
+    expect(target.sequenceEnded).toBe(false)
+    expect(telco.getState()).toMatchObject({
+      status: PLAYER_LIFECYCLE_READY,
+      timelineMs: 0,
+      sequenceEnded: false,
+    })
     telco.destroy()
   })
 

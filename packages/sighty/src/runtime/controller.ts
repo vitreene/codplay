@@ -6,6 +6,8 @@ import { RuntimeCompositionManager } from './composition-manager'
 import { RuntimeCouplingManager } from './coupling-manager'
 import { RuntimeMutationManager } from './mutation-manager'
 import { RuntimeNavigationManager } from './navigation-manager'
+import { RuntimeOperationCoordinator } from './operation-coordinator'
+import { RuntimeSceneEventGateway } from './scene-event-gateway'
 import { RuntimeSceneManager } from './scene-manager'
 import { RuntimeTransitionManager } from './transition-manager'
 import type { SightyRuntimeState } from './state'
@@ -24,7 +26,7 @@ import { diagnosticDetails, reportWarning, uniqueSlotNames } from './helpers'
 class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   implements SightyRuntimeApi<SceneKey, SlotName> {
   private readonly state: SightyRuntimeState<SceneKey, SlotName>
-  private readonly navigationChain: { current: Promise<unknown> } = { current: Promise.resolve() }
+  private readonly operations = new RuntimeOperationCoordinator()
   private readonly scenes: RuntimeSceneManager<SceneKey, SlotName>
   private readonly bindings: RuntimeBindingManager<SceneKey, SlotName>
   private readonly composition: RuntimeCompositionManager<SceneKey, SlotName>
@@ -38,6 +40,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
     this.state = createRuntimeState(options)
     this.scenes = new RuntimeSceneManager(this.state)
     this.bindings = new RuntimeBindingManager(this.state, (request) => this.enqueue(request))
+    const events = new RuntimeSceneEventGateway(this.state, this.bindings)
     this.composition = new RuntimeCompositionManager(
       this.state,
       this.scenes,
@@ -55,6 +58,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       this.bindings,
       this.couplings,
       this.transitions,
+      events,
     )
     this.mutations = new RuntimeMutationManager(
       this.state,
@@ -87,9 +91,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   getInstance(sceneKey: SceneKey) {
     const active = this.scenes.findActiveInstances(sceneKey)
     if (active.length === 1) return active[0]
-    if (active.length > 1) return undefined
-    const prepared = this.scenes.findInstances(sceneKey)
-    return prepared.length === 1 ? prepared[0] : undefined
+    return undefined
   }
 
   /** Returns the live CodPlay instance attached to one exact slot address. */
@@ -116,7 +118,6 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       for (const [sceneKey, build] of builds) this.state.compiledBuilds.set(sceneKey, build)
       await this.scenes.preloadScenes(builds)
       this.scenes.installStyles()
-      this.scenes.createStandbyInstances(builds)
 
       const desired = await this.navigation.resolveAccessibleComposition(undefined, {
         name: 'runtime:initialize',
@@ -145,16 +146,12 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
 
   /** Serializes one navigation request and preserves rejection boundaries. */
   private enqueue(request: DispatchRequest<SceneKey>): Promise<boolean> {
-    const task = this.navigationChain.current.then(() => this.navigation.dispatchNow(request))
-    this.navigationChain.current = task.then(() => undefined, () => undefined)
-    return task
+    return this.operations.enqueue(() => this.navigation.dispatchNow(request))
   }
 
   /** Serializes one non-navigation runtime operation. */
   private enqueueOperation<Result>(operation: () => Promise<Result> | Result): Promise<Result> {
-    const task = this.navigationChain.current.then(operation)
-    this.navigationChain.current = task.then(() => undefined, () => undefined)
-    return task
+    return this.operations.enqueue(operation)
   }
 
   /** Applies a host context patch and refreshes live data. */
@@ -184,13 +181,13 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   /** Mounts one declared child or its start entry in a public slot. */
   mountSlot(slotName: SlotName, childSceneKey?: SceneKey): void {
     this.requireInitialized()
-    this.composition.mountSlot(slotName, childSceneKey)
+    this.transitions.mountSlot(slotName, childSceneKey)
   }
 
   /** Detaches one active slot and all nested active slots. */
   detachSlot(slotName: SlotName): void {
     this.requireInitialized()
-    this.composition.detachSlot(slotName)
+    this.transitions.detachSlot(slotName)
   }
 
   /** Reports whether one public slot has a physical mount. */
@@ -215,16 +212,24 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   }
 
   /** Starts one initialized scene occurrence. */
-  async play(sceneKey: SceneKey): Promise<void> {
+  play(sceneKey: SceneKey): Promise<void> {
+    return this.enqueueOperation(() => this.playNow(sceneKey))
+  }
+
+  /** Starts selected scene occurrences in authored order. */
+  playAll(sceneKeys: readonly SceneKey[] = this.state.authoredSceneKeys): Promise<void> {
+    return this.enqueueOperation(async () => {
+      this.requireInitialized()
+      for (const sceneKey of sceneKeys) await this.playNow(sceneKey)
+    })
+  }
+
+  /** Starts one initialized scene occurrence inside the operation queue. */
+  private async playNow(sceneKey: SceneKey): Promise<void> {
     this.requireInitialized()
     const instance = this.getInstance(sceneKey)
     if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
     await instance.telco.play()
-  }
-
-  /** Starts selected scene occurrences in authored order. */
-  async playAll(sceneKeys: readonly SceneKey[] = this.state.authoredSceneKeys): Promise<void> {
-    for (const sceneKey of sceneKeys) await this.play(sceneKey)
   }
 
   /** Releases mounts, subscriptions, occurrences, resources and the owner. */

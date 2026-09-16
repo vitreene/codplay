@@ -116,6 +116,10 @@ export class RuntimeCouplingManager<SceneKey extends string, SlotName extends st
       await telco.rewind()
       return
     }
+    if (command === 'reset') {
+      await telco.reset()
+      return
+    }
     if (command === 'setRate') {
       telco.setRate(this.readNumericData(data, 'rate'))
       return

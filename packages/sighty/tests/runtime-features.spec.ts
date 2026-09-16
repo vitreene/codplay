@@ -414,24 +414,29 @@ describe('Sighty runtime feature reconstruction', () => {
     expect(document.querySelector('#feature-open-root')?.textContent).toBe('updated')
   })
 
-  it('resets a scene occurrence when its view declares showMode reset', async () => {
-    project = createProject(createFeatureFile({ showMode: 'maintain', openShowMode: 'reset' }))
+  it('resets a readmitted scene on its retained CodPlay instance', async () => {
+    project = createProject(
+      createFeatureFile({ showMode: 'maintain', openShowMode: 'reset' }),
+      { context: { title: 'initial' } },
+    )
 
     await project.runtime.initialize()
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
-    const previousOpen = project.runtime.getInstance('open')
-    if (previousOpen === undefined) throw new Error('La scène open de test est absente.')
-    await previousOpen.telco.pause()
-    await previousOpen.telco.seek(1_500)
+    const open = project.runtime.getInstance('open')
+    if (open === undefined) throw new Error('La scène open de test est absente.')
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
+    await project.runtime.updateContext({ title: 'changed' })
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('changed')
+    await open.telco.pause()
+    await open.telco.seek(1_500)
 
     await project.runtime.dispatch({ name: 'feature:leave-open', sourceSceneKey: 'open' })
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
 
-    const currentOpen = project.runtime.getInstance('open')
-    expect(currentOpen).toBeDefined()
-    expect(currentOpen).not.toBe(previousOpen)
-    expect(currentOpen?.telco.getProgress().timelineMs).toBeLessThan(1_000)
-    expect(currentOpen?.telco.getState().status).toBe('playing')
+    expect(project.runtime.getInstance('open')).toBe(open)
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('changed')
+    expect(open.telco.getProgress().timelineMs).toBeLessThan(1_000)
+    expect(open.telco.getState().status).toBe('playing')
   })
 
   it('maintains a scene occurrence and its paused state when its view declares maintain', async () => {
@@ -470,19 +475,22 @@ describe('Sighty runtime feature reconstruction', () => {
     expect(open.telco.getState().status).toBe('playing')
   })
 
-  it('recreates scene instances and restores the initial context on reset', async () => {
+  it('restores the initial context on reset', async () => {
     project = createProject(createFeatureFile(), { context: { allowed: false } })
 
     await project.runtime.initialize()
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
-    const previousOpen = project.runtime.getInstance('open')
+    const open = project.runtime.getInstance('open')
+    if (open === undefined) throw new Error('La scène open de test est absente.')
     await project.runtime.updateContext({ allowed: true })
     await project.runtime.reset()
 
     expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
-    expect(project.runtime.getInstance('open')).not.toBe(previousOpen)
+    expect(project.runtime.getInstance('open')).toBeUndefined()
+    expect(open.telco.getProgress().timelineMs).toBe(0)
     await project.runtime.dispatch({ name: 'feature:open-locked', sourceSceneKey: 'menu' })
     expect(project.runtime.getMountedSceneKey('main')).toBe('open')
+    expect(project.runtime.getInstance('open')).toBe(open)
   })
 
   it('resolves a lazy scene only when its view is selected', async () => {

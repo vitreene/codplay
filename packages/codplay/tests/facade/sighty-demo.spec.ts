@@ -57,9 +57,17 @@ describe('Sighty A/B demo composition', () => {
       runtime,
       onLog: () => undefined,
     })
+    const sceneAInstance = runtime.getInstance('sceneA')
+    const sceneBInstance = runtime.getInstance('sceneB')
+    if (sceneAInstance === undefined || sceneBInstance === undefined) {
+      throw new Error('Sighty demo 1 scene instances are missing.')
+    }
     const controlHeadings = Array.from(controls.querySelectorAll('h3')).map((heading) => heading.textContent)
     expect(controlHeadings).not.toContain('Instance layout-1')
-    expect(controlHeadings).toEqual(expect.arrayContaining(['Instance scene-a-1', 'Instance scene-b-1']))
+    expect(controlHeadings).toEqual(expect.arrayContaining([
+      `Instance ${sceneAInstance.instanceId}`,
+      `Instance ${sceneBInstance.instanceId}`,
+    ]))
     await runtime.playAll()
 
     const authoringStyle = document.head.querySelector('style[data-codplay-preload-css-slot="sighty-demo-capsule-automation"]')

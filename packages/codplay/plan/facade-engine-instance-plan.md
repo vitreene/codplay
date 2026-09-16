@@ -476,6 +476,7 @@ telco.togglePlay()
 telco.setRate(rate)
 telco.seek(timeMs)
 telco.rewind()
+telco.reset()
 ```
 
 La propriété `telco` est immédiatement disponible sur l'instance et ne
@@ -492,6 +493,19 @@ première matérialisation. Elle ne fait pas partie de `telco`. De même,
 `RuntimePlayer.refresh()` réapplique la scène résolue après un changement de
 contexte du materializer ; ce n'est pas une commande de lecture et il ne fait
 pas partie de `telco`.
+
+`telco.reset()` demande une reconstruction logique à zéro sur le même player,
+le même runner, les mêmes composants et les mêmes services. Il efface les faits
+runtime de la session et rétablit les valeurs compilées ; les eventimes auteur
+restent inchangés. Il ne détruit ni ne recrée l'instance, ne remonte pas sa
+racine et n'émet pas `sequence:end`.
+Cette commande d’occurrence est distincte du reset événementiel
+`listen.reset: true` d’une story : celui-ci conserve le journal et la position
+de lecture selon le contrat du plan de reset de story.
+Lorsqu'un `sequence:end` a été atteint en lecture, `telco.play()` réutilise ce
+même mécanisme interne pour sortir de l'état terminal avant de démarrer ; cela
+ne transforme pas `sequence:end` en alias de reset : l'événement reste traité
+par le circuit auteur et son hook terminal avant cette reprise.
 
 `destroy()` reste une opération de teardown de l'instance et de son
 materializer, pas une commande de lecture de la telco. Elle est donc portée par
@@ -1269,6 +1283,7 @@ telco.togglePlay()
 telco.setRate(rate)
 telco.seek(timeMs)
 telco.rewind()
+telco.reset()
 telco.getState()
 telco.getProgress() // getter optionnel : temps courant et durée
 telco.onChange(listener)
@@ -1402,10 +1417,13 @@ cachées de l'instance.
 - [x] rendre le teardown idempotent : chaque instance et ses materializations sont
   détruites une seule fois.
 
-#### Phase C — pilotage et telco — implémentée
+#### Phase C — pilotage et telco — reset intégré ; validation complémentaire en cours
 
 - [x] regrouper `play`, `pause`, `togglePlay`, `setRate`, `seek` et `rewind` sous
   `instance.telco` ;
+- [x] ajouter `reset` à `instance.telco`, en partageant la reconstruction du
+  rejeu post-`sequence:end` sans déclencher l'événement ni son hook auteur ; le
+  reset efface les faits runtime de la session sans recréer l'instance ;
 - [x] intégrer au même endroit la lecture du progress par `onProgress` et son
   écriture par `seek` ; le getter `getProgress` reste optionnel et fournit le
   temps courant ainsi que la durée, notamment lorsque l'instance est en pause ;

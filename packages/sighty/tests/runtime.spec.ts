@@ -720,6 +720,61 @@ describe('Sighty runtime slot selection', () => {
     expect(events).toHaveLength(1)
   })
 
+  it('inherits the CodPlay engine idle policy without a Sighty override', async () => {
+    const stage = document.createElement('div')
+    const scheduler = createManualFrameScheduler()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0)
+    const events: string[] = []
+    document.body.append(stage)
+    navigationProject = new Sighty({
+      scenario: {
+        file: createNavigationFile(),
+        scenes: {
+          'scene-layout': createNavigationLayoutScene(),
+          'scene-menu': createNavigationScene('scene-menu'),
+          'scene-a': createNavigationScene('scene-a'),
+          'scene-b': createNavigationScene('scene-b'),
+          'scene-c': createNavigationScene('scene-c'),
+          'scene-telco': createNavigationScene('scene-telco'),
+        },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: {
+          'scene-layout': 'idle-layout-1',
+          'scene-menu': 'idle-menu-1',
+          'scene-a': 'idle-a-1',
+          'scene-b': 'idle-b-1',
+          'scene-c': 'idle-c-1',
+          'scene-telco': 'idle-telco-1',
+        },
+        layout: { sceneKey: 'scene-layout', storyId: 'main' },
+        codplay: {
+          frameScheduler: scheduler,
+          pauseOnDocumentHidden: false,
+          engine: {
+            idle: {
+              durationMs: 100,
+              event: { name: 'engine:idle', visibility: 'public' },
+            },
+          },
+        },
+      },
+    })
+    navigationProject.runtime.events.onEvent((event) => events.push(event.name))
+
+    await navigationProject.runtime.initialize()
+    const menu = navigationProject.runtime.getInstance('scene-menu')
+    if (menu === undefined) throw new Error('La scène menu de test est absente.')
+    await menu.telco.play()
+
+    now.mockReturnValue(100)
+    scheduler.flush()
+    await vi.waitFor(() => {
+      expect(events).toContain('engine:idle')
+    })
+  })
+
   it('drops public events emitted by a scene after its binding has ended', async () => {
     const stage = document.createElement('div')
     const events: string[] = []
@@ -753,8 +808,10 @@ describe('Sighty runtime slot selection', () => {
 
     await navigationProject.runtime.initialize()
     await navigationProject.runtime.dispatch({ name: 'navigation:open-a', sourceSceneKey: 'scene-menu' })
+    await navigationProject.runtime.dispatch({ name: 'navigation:next', sourceSceneKey: 'scene-a' })
     const sceneB = navigationProject.runtime.getInstance('scene-b')
     if (sceneB === undefined) throw new Error('La scène B de test est absente.')
+    await navigationProject.runtime.dispatch({ name: 'navigation:previous', sourceSceneKey: 'scene-b' })
     await sceneB.events.emit(
       { name: 'navigation:next', visibility: 'public' },
       { scope: 'story', storyId: 'main' },

@@ -319,6 +319,10 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
       options.runner.pause()
       options.onPlaybackStateChange('paused')
     },
+    reset: () => {
+      options.runner.reset()
+      options.onPlaybackStateChange('paused')
+    },
     setRate: (rate: number) => options.runner.setRate(rate),
     seek: (timeMs: number): Readonly<{ ok: boolean }> => {
       const result = options.runner.seek(timeMs)
@@ -351,6 +355,7 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
     },
     play: () => runTelcoCommand(runtimeTelco.play(), options.diagnostics, options.instanceId),
     pause: () => runTelcoCommand(runtimeTelco.pause(), options.diagnostics, options.instanceId),
+    reset: () => runTelcoCommand(runtimeTelco.reset(), options.diagnostics, options.instanceId),
     togglePlay: () => runTelcoCommand(runtimeTelco.togglePlay(), options.diagnostics, options.instanceId),
     setRate: (rate) => {
       try {

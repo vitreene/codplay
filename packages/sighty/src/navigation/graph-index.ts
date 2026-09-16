@@ -1,8 +1,7 @@
 import type {
-  SightyGraphView,
   SightyViewGraph,
 } from '../types'
-import { isSightyViewMap } from '../view-graph'
+import { getAuthoredGraphEntries, isAuthoredViewMap } from './graph-entries'
 import type {
   IndexedEntry,
   IndexedGraph,
@@ -34,7 +33,7 @@ export function createViewIndex<
       path: graphPath,
       graph,
       entries: [],
-      scope: isSightyViewMap(graph) ? graph : {},
+      scope: isAuthoredViewMap(graph) ? graph : {},
     }
     const graphScopes = [...inheritedScopes, graphScope]
     const directEntries = getDirectEntries(graph, graphPath).map((entry) => ({
@@ -100,11 +99,7 @@ export function getDirectEntries<
   graph: SightyViewGraph<SceneKey, SlotName>,
   graphPath: string,
 ): readonly IndexedEntry<SceneKey, SlotName>[] {
-  const rawEntries = isSightyViewMap(graph)
-    ? Object.entries(graph.views).map(([key, view]) => ({ key, view }))
-    : graph.map((view, index) => ({ key: listEntryId(view, index), view }))
-
-  return rawEntries
+  return getAuthoredGraphEntries(graph)
     .filter(({ view }) => view.hidden !== true)
     .map(({ key, view }, index) => ({
       key,
@@ -129,7 +124,7 @@ export function getStartEntry<
   const graph = index.graphs.get(graphPath)
   if (graph === undefined) return undefined
   const authoredGraph = graph.graph
-  if (!isSightyViewMap(authoredGraph)) return graph.entries[0]
+  if (!isAuthoredViewMap(authoredGraph)) return graph.entries[0]
   return graph.entries.find((entry) => entry.key === authoredGraph.start) ?? graph.entries[0]
 }
 
@@ -149,15 +144,6 @@ export function findContainingSlot<
 /** Checks whether one normalized path contains another path. */
 export function isPathPrefix(prefix: string, path: string): boolean {
   return path === prefix || path.startsWith(`${prefix}/`)
-}
-
-/** Gets the stable key of one ordered entry, with a validation fallback. */
-function listEntryId<
-  SceneKey extends string,
-  SlotName extends string,
->(view: SightyGraphView<SceneKey, SlotName>, index: number): string {
-  const id = (view as { id?: unknown }).id
-  return typeof id === 'string' && id.length > 0 ? id : String(index)
 }
 
 /** Adds an indexed item to a string-keyed multimap. */

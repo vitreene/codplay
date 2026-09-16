@@ -43,7 +43,7 @@ spécification et couverts par l’implémentation et les tests ciblés. La
 persistance sérialisée n’appartient pas à cette reprise : elle relève d’une
 intégration hôte ultérieure.
 
-La validation automatisée de cette reprise est verte : 30 tests Sighty, 648
+La validation automatisée de cette reprise est verte : 31 tests Sighty, 650
 tests CodPlay, les trois typechecks concernés et le build Vite des démos. Le
 parcours Safari MCP frais a validé Demo 4 sur menu → scène A, pause/reprise,
 progression vivante et fin de séquence ; les autres gates de reconstruction
@@ -67,12 +67,14 @@ et les utilitaires de
 `view-graph.ts` sans consommateur ont été supprimés. Ce découpage est interne :
 il ne modifie aucune signature de l’API auteur ou de l’API d’intégration.
 
-Le nettoyage des démos 1 à 4 a supprimé les façades réexportées sans
+Le nettoyage déjà réalisé a supprimé les façades réexportées sans
 consommateur, les alias de types inutilisés et le transport d’occurrence
-abandonné. Les quatre démos restent branchées sur leurs chemins Sighty/CodPlay
-réels et leurs intégrations passent ; Demo 4 conserve le seek discret et
-projette désormais la progression vivante par la surface CodPlay dédiée, sans
-réintroduire de transport `progress:update`.
+abandonné. Demo 4 est la seule fixture actuellement prioritaire pour la
+validation du runtime ; elle conserve le seek discret et projette désormais la
+progression vivante par la surface CodPlay dédiée, sans réintroduire de
+transport `progress:update`. Les démos 1 à 3 restent des références
+secondaires : leur réécriture et leur validation navigateur sont différées et
+ne constituent pas une preuve ou une gate de cette reconstruction.
 
 ## 1. Objet et résultat attendu
 
@@ -941,10 +943,12 @@ publiée. Elle ne devient jamais un journal à rejouer.
     monter les scènes entrantes par les surfaces publiques autorisées ;
 11. publier la nouvelle composition en une seule fois ;
 12. ouvrir les liaisons entrantes ;
-13. livrer les `data` d’entrée ;
-14. finaliser la politique de transport (`maintain`, `rewind` ou `reset`) ;
-15. exécuter les actions déclarées qui concernent les scènes actives ;
-16. terminer l’opération ou publier une erreur cohérente.
+13. demander le reset CodPlay des occurrences conservées dont le
+    `showMode` vaut `reset` ;
+14. livrer les `data` d’entrée ;
+15. finaliser le transport (`maintain`, `rewind` ou démarrage après `reset`) ;
+16. exécuter les actions déclarées qui concernent les scènes actives ;
+17. terminer l’opération ou publier une erreur cohérente.
 
 Une erreur de préparation ne doit jamais publier une composition mixte. Si les
 surfaces CodPlay ne permettent pas cette garantie, un plan CodPlay séparé est
@@ -1004,8 +1008,12 @@ Cette valeur est publique lorsqu’elle est déclarée dans le fichier auteur ou
 dans une option d’intégration prévue par le contrat. La politique effectivement
 résolue pour une liaison reste interne.
 
-- `reset` détruit l’occurrence réadmise et en crée une nouvelle session ; il
-  réinitialise donc l’état logique, les entrées et le journal.
+- `reset` réinitialise l’état logique de l’occurrence réadmise via
+  `instance.telco.reset()`, en conservant la même instance physique ; il ne
+  détruit ni ne recrée l’occurrence pour obtenir l’état initial. Le reset
+  efface les faits runtime de la session, tandis que les eventimes auteur
+  compilés restent attachés à l’instance. Cette remise à zéro suit le contrat
+  CodPlay, et non une implémentation locale Sighty.
 - `maintain` conserve l’occurrence, son état de lecture, sa position, son
   débit et son journal ; une occurrence qui était en pause reste en pause.
 - `rewind` conserve l’occurrence, appelle la capacité publique
@@ -1032,13 +1040,15 @@ Le runtime distingue :
 | conservation | garde la sélection et son état |
 | sortie | invalide, désabonne et détache |
 | rewind | repositionne à zéro sans session neuve |
-| reset | recrée l’état logique ou l’occurrence selon le contrat |
+| reset | réinitialise l’état logique via CodPlay sur l’occurrence conservée |
 | destruction | supprime l’occurrence et libère ses ressources |
 
-La preuve de Reset est fournie par le test de réadmission Sighty ; Demo 4 doit
-déclarer `showMode: 'reset'` pour ses scènes qui ne doivent pas conserver les
-entrées utilisateur. Une séquence destruction/recréation reste limitée à
-l’occurrence de la liaison concernée et respecte la propriété des ressources.
+Demo 4 déclare `showMode: 'reset'` pour ses scènes qui ne doivent pas
+conserver les entrées utilisateur. Son test de réadmission vérifie désormais
+la même identité d’instance, le retour à zéro et l’absence de rejouage des
+faits runtime de la session précédente. Une destruction/recréation appartient
+uniquement à une opération de destruction ou de rechargement explicitement
+déclarée.
 
 ## 9. Fin de vue et fins de parcours
 
@@ -1147,8 +1157,9 @@ Le descripteur indique :
 - quels noms d’événements sont acceptés ;
 - comment le couplage est fermé à la sortie.
 
-La télécommande ne parle pas directement à l’instance de contenu. Sighty
-médiatise le couplage et vérifie la validité du binding avant chaque commande.
+La télécommande utilise l’interface telco CodPlay canonique. Sighty médiatise
+le couplage, vérifie la validité du binding et soumet l’intention à ce port
+avant chaque commande ; il ne crée pas une seconde interface d’exécution.
 
 Lorsque les événements produits par la télécommande doivent être accessibles
 à l’application hôte, ils empruntent la surface publique de souscription
@@ -1161,9 +1172,10 @@ données `{ rate }` et `{ timeMs }`; `seek` accepte aussi la valeur native
 implémentation de la télécommande.
 
 L’intégration hôte conserve l’accès à toute la telco CodPlay via l’instance
-retournée par `runtime.getInstanceAt(slotAddress)` ; ses getters, commandes et
-observations vivantes ne sont pas recopiés par Sighty. Aucun événement
-`progress:update` ne sera introduit pour les traiter.
+retournée par `runtime.getInstanceAt(slotAddress)` ; cette surface est le même
+port canonique, et non une voie concurrente à l’orchestration Sighty. Ses
+getters, commandes et observations vivantes ne sont pas recopiés par Sighty.
+Aucun événement `progress:update` ne sera introduit pour les traiter.
 
 La possibilité d’importer une méthode de telco d’une scène vers une autre sera
 traitée comme un port de commande réutilisable, pas comme une copie de
@@ -1301,10 +1313,11 @@ Règles :
 
 La verticale actuelle exécute ces opérations par `runtime.mutate`. En mode
 `preserve`, elle conserve la sélection encore déclarée et les occurrences
-compatibles ; `rewind` rembobine la composition résultante ; `reset` recrée les
-occurrences depuis l’ancre initiale ; `reload` réacquiert les ressources avant
-ce reset. Une mutation ajoutant une vue inactive ne crée toujours aucune
-occurrence avant sa sélection.
+compatibles ; `rewind` rembobine la composition résultante ; `reset`
+réinitialise les occurrences compatibles via le reset CodPlay en conservant
+leur identité ; `reload` réacquiert explicitement les ressources et ne doit
+pas être déduit d’un reset. Une mutation ajoutant une vue inactive ne crée
+toujours aucune occurrence avant sa sélection.
 
 Si la préparation, le preload, le montage ou la livraison échoue, Sighty
 restaure la version auteur précédente, l’index, la composition et les
@@ -1332,12 +1345,13 @@ SceneKey
 ~~~
 
 La même source doit être utilisée pour le preload et l’acquisition à la
-sélection. Le preload ne doit pas créer un second loader. Ce comportement est
-déjà implémenté dans la verticale actuelle : les scènes directes sont
-compilées et préparées à l’initialisation ; une source différée (lazy) est
-résolue, compilée et préparée uniquement lorsqu’une vue référente entre, puis
-réutilisée depuis le cache du scénario. Cette section ne décrit donc pas une
-fonctionnalité à inventer, mais le contrat à vérifier et à maintenir.
+sélection. Le preload ne doit pas créer un second loader. Les scènes directes
+sont compilées à l’initialisation ; leur préparation de ressources passe par
+le service preload séparé. Une source différée (lazy) est résolue et compilée
+lorsqu’une vue référente entre, puis les ressources nécessaires sont préparées
+par ce même service et réutilisées depuis le cache du scénario. Cette section
+ne décrit donc pas une fonctionnalité à inventer, mais le contrat à vérifier et
+à maintenir.
 
 Sighty conserve les URLs préparées par `SceneKey` et libère les URLs devenues
 inutiles via `owner.preload.release`. Le cache CodPlay porte la propriété par
@@ -1367,9 +1381,14 @@ Une erreur d’acquisition ne publie pas une composition incohérente.
 
 ## 14. Tranches et gates obligatoires
 
-### M0 — validation du modèle
+### M0 — audit du modèle et décisions résiduelles
 
-Fixer et faire valider :
+Comparer les points suivants avec les plans et spécifications déjà acceptés,
+ainsi qu’avec les décisions explicitement arrêtées pour Sighty. Une décision
+déjà acceptée est contrôlée pour conformité et n’est pas revalidée. Chaque
+écart doit être classé comme divergence d’implémentation ou comme décision
+nouvelle ; seule cette dernière catégorie nécessite une validation avant le
+code qui en dépend.
 
 - la séparation entre API auteur, API d’intégration et types internes ;
 - la distinction entre le fichier de déclaration et la vue
@@ -1409,6 +1428,15 @@ Fixer et faire valider :
 - la priorité des portées ;
 - le nom public `showMode`, ses valeurs `reset`, `maintain` et `rewind`, son
   héritage et son défaut `rewind` ;
+- le reset logique CodPlay utilisé par `showMode: 'reset'` et `runtime.reset` :
+  même instance physique, état logique reconstruit, sans `destroy`/`create` ;
+- la correspondance entre remise à zéro des entrées, état de lecture, journal
+  et éventuelles données utilisateur, selon le contrat CodPlay ;
+- la séparation entre registry d’instances conservées, composition active,
+  montage/bindings et destruction effective ;
+- la surface CodPlay exacte qui porte le reset ; Sighty ne doit pas créer une
+  API de remplacement ni une instance à la volée pour compenser une absence
+  d’adaptateur ;
 - la distinction événements/commandes ;
 - les noms et sémantiques canoniques des faits de fin de scène, de fin de
   séquence et de retrait ;
@@ -1419,9 +1447,11 @@ Fixer et faire valider :
 - la politique de saturation et d’annulation ;
 - la politique de Reset.
 
-**Gate :** la spécification Sighty accepte d’abord l’API auteur et sa frontière
-avec les types internes ; les signatures publiques ne contiennent aucun type
-interne ; aucune décision ne reste implicite dans Demo 4.
+**Gate :** la matrice de conformité rattache l’API auteur, sa frontière avec
+les types internes, le reset et l’identité d’instance aux contrats sources ;
+les signatures publiques ne contiennent aucun type interne ; seules les
+décisions nouvelles identifiées doivent être acceptées avant leur
+implémentation ; aucune décision ne reste implicite dans Demo 4.
 
 ### M1 — index et résolveur pur
 
@@ -1484,7 +1514,8 @@ vers scène inactive et destruction.
 
 ### M4 — cycle de vie des scènes
 
-Raccorder le plan logique aux opérations CodPlay autorisées :
+Raccorder le plan logique aux opérations CodPlay autorisées, sans
+réimplémenter le cycle interne de CodPlay :
 
 - entrée ;
 - conservation ;
@@ -1496,22 +1527,29 @@ Raccorder le plan logique aux opérations CodPlay autorisées :
 - maintien des scènes requises ;
 - fin de scène et retrait de séquence, sans les confondre.
 
-**Tests :** scène conservée, scène réinitialisée, journal conservé après
-rewind, reset réellement neuf, sorties répétées et erreurs partielles.
+L’entrée délègue l’initialisation à `owner.instances.create`. Le reset délègue
+le reset logique chaud à l’instance existante. Le preload et la libération des
+ressources restent dans la tranche d’acquisition dédiée ; `reset` ne les
+réexécute pas.
 
-**Gate :** Reset n’est pas simulé par Rewind et aucune opération globale ne
-masque une garantie absente.
+**Tests :** scène conservée, scène réinitialisée sur la même instance, journal
+et entrées selon le contrat CodPlay, absence de destruction/recréation pendant
+reset, sorties répétées et erreurs partielles.
+
+**Gate :** Reset n’est pas simulé par Rewind, ne détruit/recrée pas une
+instance, et aucune opération globale ne masque une garantie absente.
 
 ### M5 — acquisition et propriété des ressources
 
 Consolider et valider la résolution de source, le preload partagé, l’acquisition
 à la demande et la libération contrôlée déjà exécutés par la verticale.
 
-La source directe est préparée à l’initialisation ; la source différée (lazy)
-est résolue une seule fois à sa première sélection, puis son document, son
-build et ses ressources sont réutilisés. Sighty suit les URLs par scène et
-libère celles devenues inutiles ; le cache CodPlay conserve les entrées tant
-qu’un owner les possède encore.
+La source directe est compilée à l’initialisation ; sa préparation de
+ressources relève du service preload séparé. La source différée (lazy) est
+résolue une seule fois à sa première sélection, puis son document, son build et
+ses ressources sont réutilisés. Sighty suit les URLs par scène et libère celles
+devenues inutiles ; le cache CodPlay conserve les entrées tant qu’un owner les
+possède encore.
 
 **Preuves actuelles :** source directe, factory, source lazy, source
 indisponible, preload réutilisé, ressources partagées, annulation et libération
@@ -1520,6 +1558,8 @@ intégration complète et navigateur restent à compléter.
 
 **Gate restante :** préserver une seule source et un seul chemin de
 preload/acquisition, y compris pendant reset, mutation, rollback et destruction.
+Un reset logique ne peut pas devenir une recréation d’instance ou une nouvelle
+acquisition par défaut.
 
 ### M6 — conditions de parcours, fin de vue et erreurs
 
@@ -1582,6 +1622,8 @@ Consolider et valider le descripteur de coupling arrêté en §10 :
 - slot source et slot contrôlé déclarés dans la vue ;
 - événements de commande configurables ;
 - commandes telco complètes et séquences ordonnées ;
+- interface telco CodPlay unique, avec Sighty limité au ciblage, à l’admission
+  et à la sérialisation ;
 - fermeture à la sortie et validation du binding ;
 - accès hôte à l’instance telco complète par slot.
 
@@ -1609,10 +1651,10 @@ Elle ne doit plus conserver :
   rend publics à l’application hôte ;
 - une politique de nettoyage concurrente.
 
-**Gate :** le parcours réel menu → A/B/C → menu → A est conduit par Sighty
-et les scènes réelles ; les événements de navigation, de télécommande et
-d’interaction destinés à l’application hôte passent par la surface publique
-Sighty validée en M0.
+**Gate :** le parcours réel menu → A/B/C → menu → A de Demo 4 est conduit par
+Sighty et les scènes réelles ; les événements de navigation, de télécommande
+et d’interaction destinés à l’application hôte passent par la surface publique
+Sighty validée en M0. Demo 1 à 3 ne sont pas des prérequis de cette gate.
 
 ### M11 — validation complète
 
@@ -1630,6 +1672,7 @@ Exécuter, selon les catégories affectées :
 - surface telco CodPlay complète (`play`, `pause`, `togglePlay`, `setRate`,
   `seek`, `rewind`, `commandInFlight`, `rate`, `getState`, `getProgress`,
   `onChange` et `onProgress`) et répétitions ;
+- absence de toute voie de commande concurrente dans Sighty ou les démos ;
 - redimensionnement si affecté ;
 - typecheck ;
 - suite de tests ;
@@ -1702,7 +1745,9 @@ elle n’est pas affectée.
 
 - Maintain conserve réellement la scène ;
 - Rewind revient à zéro sans être présenté comme un reset ;
-- Reset obtient une session neuve selon une garantie vérifiée ;
+- Reset reconstruit l’état logique par le reset CodPlay sur la même instance ;
+- une occurrence conservée garde son identité physique pendant le reset ;
+- aucune création à la volée ne sert de mécanisme de remise à zéro ;
 - une entrée issue d’une navigation passe par le coordinateur unique, qui
   livre ses données avant de finaliser le comportement `showMode` ;
 - la sortie invalide avant le détachement ;
@@ -1742,7 +1787,8 @@ Il doit vérifier :
 - une seule composition active ;
 - une telco présente uniquement dans la branche prévue ;
 - la conservation de la scène conformément à Maintain ;
-- le reset de la télécommande conformément à sa politique ;
+- le reset de la télécommande conformément à sa politique, avec état logique
+  remis à zéro et identité de l’instance CodPlay conservée ;
 - l’observation par l’application hôte des événements publics de télécommande,
   de navigation et d’interaction via Sighty, sans abonnement direct aux
   instances CodPlay ;
@@ -1783,8 +1829,8 @@ Ne pas inclure dans la reconstruction de navigation :
 | M7 — données et état vivant | En cours | data/context `entry`/`live` et lecture d’état exécutés ; navigateur restant |
 | M8 — mutations | En cours | mutations versionnées, politiques et rollback exécutés ; versionnement durable à valider |
 | M9 — coupling/telco | En cours | couplage déclaré, occurrences indépendantes et surface telco vérifiés ; autres parcours navigateur à compléter |
-| M10 — Demo 4 | En cours | intégrations Demo 2/3/4 et relais Sighty validés (Demo 4 : 10/10 ; CodPlay : 648/648), progression live et smoke Safari Demo 4 validés ; autres parcours à compléter |
-| M11 — validation complète | En cours | suites (Sighty 30/30, CodPlay 648/648), typechecks, build et smoke Safari Demo 4 validés le 2026-09-16 ; les preuves restantes sont encore à exécuter |
+| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 11/11 ; CodPlay : 650/650), progression live et smoke Safari Demo 4 validés ; les démos 1 à 3 sont différées et non bloquantes |
+| M11 — validation complète | En cours | suites (Sighty 31/31, CodPlay 650/650), typechecks, build et smoke Safari Demo 4 validés le 2026-09-16 ; les preuves restantes sont encore à exécuter |
 | progression | Plan dédié en cours | projection locale CodPlay par `onProgress` et surface `input`, sans `progress:update` |
 
 Ce plan reste En cours tant que les gates et validations correspondantes ne

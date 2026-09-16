@@ -47,7 +47,7 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
     const previous = this.state.composition
     const transition = planCompositionTransition(previous.selections, desired)
     if (transition.entered.length === 0 && transition.exited.length === 0) {
-      return this.composition.synchronizeComposition(desired, false)
+      return this.composition.synchronizeComposition(desired, transition, false)
     }
 
     const entryStates = this.captureEntryStates(transition.entered)
@@ -59,10 +59,12 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
       const showModes = options.entryBehavior === 'show'
         ? this.resolveEntryModes(transition.entered)
         : new Map<string, SightyShowMode>()
-      if (options.entryBehavior === 'show') this.resetEntries(transition.entered, showModes)
       await this.scenes.ensureScenesForComposition(desired)
       options.onPrepared?.()
-      const synchronization = this.composition.synchronizeComposition(desired, false, { exitedStates })
+      const synchronization = this.composition.synchronizeComposition(desired, transition, false, { exitedStates })
+      if (options.entryBehavior === 'show') {
+        await this.resetShowModeEntries(synchronization.entered, showModes, entryStates)
+      }
       await options.deliverEnteredData(synchronization.entered)
       if (options.entryBehavior === 'show') {
         await this.applyShowModes(synchronization.entered, showModes, entryStates)
@@ -75,6 +77,35 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
       this.state.transitioning = false
       throw error
     }
+  }
+
+  /** Clears a retained CodPlay session before new entry data is delivered. */
+  private async resetShowModeEntries(
+    selections: readonly ActiveSelection<SceneKey, SlotName>[],
+    modes: ReadonlyMap<string, SightyShowMode>,
+    previousStates: ReadonlyMap<string, MountedState | undefined>,
+  ): Promise<void> {
+    for (const selection of selections) {
+      const occurrenceKey = occurrenceKeyForSelection(selection)
+      if (modes.get(occurrenceKey) !== 'reset' || previousStates.get(occurrenceKey) === undefined) continue
+      const instance = this.scenes.getInstanceForSelection(selection)
+      if (instance === undefined) throw new Error(`L’instance entrante ${selection.sceneKey} est absente.`)
+      await instance.telco.reset()
+    }
+  }
+
+  /** Applies an explicit slot selection through the shared transition planner. */
+  mountSlot(slotName: SlotName, childSceneKey?: SceneKey): void {
+    const desired = this.composition.buildMountedComposition(slotName, childSceneKey)
+    const transition = planCompositionTransition(this.state.composition.selections, desired)
+    this.composition.synchronizeComposition(desired, transition, true)
+  }
+
+  /** Applies an explicit slot detachment through the shared transition planner. */
+  detachSlot(slotName: SlotName): void {
+    const desired = this.composition.buildDetachedComposition(slotName)
+    const transition = planCompositionTransition(this.state.composition.selections, desired)
+    this.composition.synchronizeComposition(desired, transition, true)
   }
 
   /** Captures an existing occurrence before a reset or physical replacement. */
@@ -117,17 +148,6 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
     return modes
   }
 
-  /** Discards only occurrences whose effective policy explicitly requests reset. */
-  private resetEntries(
-    selections: readonly ActiveSelection<SceneKey, SlotName>[],
-    modes: ReadonlyMap<string, SightyShowMode>,
-  ): void {
-    for (const selection of selections) {
-      if (modes.get(occurrenceKeyForSelection(selection)) !== 'reset') continue
-      this.scenes.resetSelectionInstance(selection)
-    }
-  }
-
   /** Applies reset, maintain and rewind without creating a second entry circuit. */
   private async applyShowModes(
     selections: readonly ActiveSelection<SceneKey, SlotName>[],
@@ -144,6 +164,10 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
         continue
       }
       const previous = previousStates.get(occurrenceKey)
+      if (mode === 'reset') {
+        await instance.telco.play()
+        continue
+      }
       if (mode === 'maintain' && previous !== undefined) {
         if (instance.telco.rate !== previous.rate) instance.telco.setRate(previous.rate)
         if (!instance.telco.getState().sequenceEnded) await instance.telco.seek(previous.timelineMs)

@@ -20,6 +20,7 @@ import {
   PLAYER_LIFECYCLE_IDLE,
   PLAYER_LIFECYCLE_PAUSED,
   PLAYER_LIFECYCLE_PLAYING,
+  PLAYER_LIFECYCLE_READY,
 } from '../../../src/runtime/player'
 import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 
@@ -329,7 +330,7 @@ describe('RuntimePlayer', () => {
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_DESTROYED)
   })
 
-  it('applies V1 sequence:end terminal cleanup for authored eventimes and replays from zero', () => {
+  it('applies V1 sequence:end terminal cleanup and resets the runtime session in place', async () => {
     const lifecycleCalls: string[] = []
     const lifecycleOptionsAreCallable: boolean[] = []
     const terminalScene: CompiledScene = {
@@ -343,8 +344,16 @@ describe('RuntimePlayer', () => {
         stories: {
           main: {
             id: 'main',
-            persos: [],
-            listen: [],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { className: 'initial' },
+              actions: {
+                'user:event': { className: { add: 'user' } },
+                'sequence:end': { className: { add: 'ended' } },
+              },
+            }],
+            listen: [{ on: 'user:event' }],
             eventimes: [{ name: 'sequence:end', startAt: 100 }],
           },
         },
@@ -369,6 +378,10 @@ describe('RuntimePlayer', () => {
 
     expect(player.init().ok).toBe(true)
     expect(lifecycleCalls).toEqual(['init'])
+    const userEvent = await player.emit({ name: 'user:event', storyId: 'main' })
+    expect(userEvent.ok).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toContain('user')
+    expect(player.trackJournal.getAllEvents()).toHaveLength(1)
     player.play()
     engine.advance(0)
     engine.advance(200)
@@ -381,11 +394,23 @@ describe('RuntimePlayer', () => {
     expect(() => player.pause()).toThrow('PLAYER_SEQUENCE_ENDED')
     expect(player.seek(0).ok).toBe(false)
 
-    player.play()
+    player.reset()
     expect(player.getCurrentTimeMs()).toBe(0)
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_READY)
+    expect(player.hasSequenceEnded()).toBe(false)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toBe('initial')
+    expect(player.trackJournal.getAllEvents()).toHaveLength(0)
+    expect(lifecycleCalls).toEqual(['init', 'start', 'end', 'init'])
+
+    player.play()
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PLAYING)
     expect(player.hasSequenceEnded()).toBe(false)
     expect(lifecycleCalls).toEqual(['init', 'start', 'end', 'init', 'start'])
+    engine.advance(300)
+    engine.advance(500)
+    expect(player.hasSequenceEnded()).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toContain('ended')
+    expect(lifecycleCalls).toEqual(['init', 'start', 'end', 'init', 'start', 'end'])
     player.destroy()
   })
 

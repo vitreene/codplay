@@ -5,7 +5,7 @@ import {
 } from 'codplay'
 import { getStartEntry, isPathPrefix } from '../navigation/graph-index'
 import { buildComposition, createSelection, resolveInitialAnchor, resolveSceneEntry } from '../navigation/composition'
-import { planCompositionTransition, sameSelection } from '../navigation/transition'
+import { sameSelection, type CompositionTransition } from '../navigation/transition'
 import type {
   ActiveComposition,
   ActiveSelection,
@@ -89,11 +89,11 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
   /** Synchronizes physical mounts and commits one logical composition. */
   synchronizeComposition(
     desired: ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>>,
+    transition: CompositionTransition<SceneKey, SlotName>,
     notify: boolean,
     options: Readonly<{ exitedStates?: ReadonlyMap<string, MountedState> }> = {},
   ): SynchronizationResult<SceneKey, SlotName> {
     const previous = this.state.composition
-    const transition = planCompositionTransition(previous.selections, desired)
     if (transition.entered.length === 0 && transition.exited.length === 0) {
       return {
         entered: [],
@@ -304,8 +304,11 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     }
   }
 
-  /** Mounts one declared child or the start entry in a public slot. */
-  mountSlot(slotName: SlotName, childSceneKey?: SceneKey): void {
+  /** Builds the desired composition for one explicit public slot selection. */
+  buildMountedComposition(
+    slotName: SlotName,
+    childSceneKey?: SceneKey,
+  ): ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>> {
     const slot = this.resolvePublicSlot(slotName)
     const entry = childSceneKey === undefined
       ? getStartEntry<SceneKey, SlotName>(this.state.viewIndex, slot.graphPath)
@@ -320,40 +323,19 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
       entry,
       this.nextGenerationNumber(slot.address),
     )
-    const desired = this.buildDesiredComposition(this.withCurrentGeneration(target))
-    this.synchronizeComposition(desired, true)
+    return this.buildDesiredComposition(this.withCurrentGeneration(target))
   }
 
-  /** Detaches one active slot and every nested slot below it. */
-  detachSlot(slotName: SlotName): void {
+  /** Builds the desired composition after detaching one public slot branch. */
+  buildDetachedComposition(slotName: SlotName): ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>> {
     const slot = this.resolvePublicSlot(slotName)
     const addresses = [...this.state.composition.selections.keys()]
       .filter((address) => address === slot.address || isPathPrefix(slot.address, address))
-    if (addresses.length === 0) return
+    if (addresses.length === 0) return new Map(this.state.composition.selections)
 
-    const previous = this.state.composition
-    const nextSelections = new Map(previous.selections)
-    this.state.transitioning = true
-    this.state.composition = {
-      revision: previous.revision + 1,
-      layoutPath: previous.layoutPath,
-      selections: new Map(),
-    }
-    for (const address of addresses) {
-      this.bindings.closeBinding(address)
-      this.detachMount(address)
-      nextSelections.delete(address)
-    }
-    this.state.composition = {
-      revision: previous.revision + 1,
-      layoutPath: previous.layoutPath,
-      selections: nextSelections,
-    }
-    this.state.transitioning = false
-    for (const address of addresses) {
-      const selection = previous.selections.get(address)
-      if (selection !== undefined) this.notifySlotChange(selection.slotName, undefined)
-    }
+    const desired = new Map(this.state.composition.selections)
+    for (const address of addresses) desired.delete(address)
+    return desired
   }
 
   /** Reports whether one public slot currently has a physical mount. */

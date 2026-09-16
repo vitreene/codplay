@@ -374,6 +374,20 @@ export class HtmlPlayerRunner {
     this.syncInteractionLock()
   }
 
+  /** Resets the logical occurrence in place and suspends the runner-owned ticker. */
+  reset(): void {
+    this.liveFirstLayouts.clear()
+    this.liveCaptureOccurrences.clear()
+    this.motionSystem?.prepareSeek()
+    try {
+      this.player.reset()
+      if (this.ownsEngine) this.engine.pause()
+      this.syncInteractionLock()
+    } finally {
+      this.motionSystem?.completeSeek()
+    }
+  }
+
   /** Advances the shared engine at one deterministic external timestamp. */
   advance(nowMs: number, marginMs = 0): void {
     this.engine.advance(nowMs, marginMs)

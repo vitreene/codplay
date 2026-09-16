@@ -40,9 +40,11 @@ Sighty ne crée pas de markup, ne recherche pas d’élément HTML et ne déplac
 les racines rendues. Il demande les montages au moyen de la façade publique
 CodPlay et conserve seulement les handles nécessaires à leur détachement.
 
-Les démos sont des chemins d’acceptation. Elles fournissent un fichier, un
-catalogue de `SceneDoc` et, lorsque le scénario le demande, des actions de
-présentation. Elles ne recréent pas l’index ni le routeur de Sighty.
+Les démos sont des fixtures de validation non normatives. Elles fournissent un
+fichier, un catalogue de `SceneDoc` et, lorsque le scénario le demande, des
+actions de présentation. Aucune démo ne recrée l’index ni le routeur de
+Sighty. Leur priorité et leur statut de validation sont suivis dans les plans,
+pas dans ce contrat.
 
 ## 2. Entrée publique unique
 
@@ -183,9 +185,11 @@ L’absence d’une déclaration auteur n’empêche donc pas une scène nouvell
 admise de démarrer, tandis qu’une déclaration `maintain` ou `reset` modifie
 explicitement le comportement d’une réadmission.
 
-- `reset` détruit l’occurrence préparée pour cette liaison et en crée une
-  nouvelle ; il remet ainsi à zéro son état logique, ses entrées et son
-  journal CodPlay.
+- `reset` demande le reset logique CodPlay de l’occurrence conservée pour cette
+  liaison ; il ne détruit ni ne recrée l’instance. La remise à zéro de l’état
+  logique et des entrées runtime de la session suit le contrat CodPlay ; les
+  eventimes auteur compilés restent ceux de la scène. Demo 4 ne conserve donc
+  pas les entrées utilisateur d’une réadmission.
 - `maintain` conserve l’occurrence, sa position, son état de lecture, son
   débit et son état logique. Une réadmission reprend uniquement si elle était
   en lecture au moment de sa sortie.
@@ -317,15 +321,20 @@ erreurs d’un observateur ne doivent ni interrompre les autres observateurs ni
 le routage du scénario. La destruction supprime les abonnements et les
 livraisons ultérieures.
 
-`runtime.getInstance(sceneKey)` est conservé comme surface d’intégration
-CodPlay publique pour les contrôles de scène encore nécessaires aux démos,
-notamment la telco, lorsque la scène est unique dans la composition active.
+`runtime.getInstance(sceneKey)` reste un sélecteur d’intégration permettant
+d’atteindre l’instance dont l’interface `CodPlayTelco` est canonique lorsque la
+scène est unique dans la composition active. Ce sélecteur n’est pas une
+seconde API de commande : la telco CodPlay est le seul port d’exécution et
+d’observation, que Sighty ne recopie pas. Les démos ne doivent pas introduire
+une voie de commande concurrente.
+
 `runtime.getInstanceAt(slotAddress)` accepte le chemin auteur dérivé d’un slot
 et permet de viser son occurrence active lorsque la même `SceneKey` apparaît
 plusieurs fois ; l’instance
-retournée expose la surface `instance.telco` complète de CodPlay
+retournée expose la surface `instance.telco` complète de CodPlay, c’est-à-dire
+l’interface `CodPlayTelco` et le port telco unique
 (`commandInFlight`, `rate`, `getState`, `getProgress`, `play`, `pause`,
-`togglePlay`, `setRate`, `seek`, `rewind`, `onChange` et `onProgress`). Le
+`togglePlay`, `setRate`, `seek`, `rewind`, `reset`, `onChange` et `onProgress`). Le
 chemin est dérivé de la déclaration ; il ne
 permet pas de fournir une génération, une liaison ou un handle interne. Ces
 surfaces ne font
@@ -334,23 +343,38 @@ publication Sighty des événements destinés à l’application hôte.
 
 ### 4.4. Montage et pilotage
 
-`runtime.initialize()` valide le fichier, compile les `SceneDoc`, précharge
-les ressources, crée les occurrences et monte la composition initiale. Il ne
+`runtime.initialize()` valide le fichier et compile les `SceneDoc`, puis
+demande à CodPlay de créer et d’initialiser les occurrences nécessaires via
+`owner.instances.create` avant de monter la composition initiale. Il ne
+réimplémente pas l’initialisation du player. Le preload est un service séparé :
+il prépare et enregistre les ressources avant la création lorsqu’il est requis,
+mais ne constitue pas une primitive d’initialisation CodPlay. Le runtime ne
 démarre pas implicitement toutes les telcos ; `runtime.play(sceneKey)` et
 `runtime.playAll()` pilotent le démarrage explicite. `runtime.updateContext`
-met à jour le contexte et réévalue les liaisons `data` live. `runtime.reset`
-recrée les occurrences depuis le départ déclaré et restaure le contexte
-initial. `runtime.mutate` publie une nouvelle version validée du graphe selon
-la politique `preserve`, `rewind`, `reset` ou `reload`.
+met à jour le contexte et réévalue les liaisons `data` live. `runtime.reset()`
+demande le reset logique CodPlay sur les occurrences existantes, restaure le
+contexte initial et réconcilie la composition ; il ne recrée pas les
+occurrences et ne déclenche pas le preload. `runtime.mutate` publie une
+nouvelle version validée du graphe selon la politique `preserve`, `rewind`,
+`reset` ou `reload`.
+
+Le `reset` de `instance.telco` reconstruit l'état logique à zéro dans la même
+instance CodPlay et efface les faits runtime de sa session. Les eventimes auteur
+compilés ne sont pas effacés. Il ne produit pas `sequence:end`, n'exécute pas
+son hook auteur et ne détruit ni ne remonte l'occurrence. Après un
+`sequence:end`, le play CodPlay réutilise cette reconstruction avant de relancer
+la lecture ; les actions auteur et le hook de `sequence:end` restent propres au
+traitement de cet événement terminal.
 
 L’option d’intégration `runtime.showMode` fournit le défaut de l’instance ;
 elle est surchargée par `file.showMode`, puis par les portées auteur selon la
 règle de `showMode` décrite en §3.5.
 
-Sighty désactive par défaut l’inactivité CodPlay pour les scènes qu’il
-orchestre (`runtime.codplay.engine.idle: false`). L’application hôte peut
-réactiver explicitement cette capacité dans la configuration CodPlay ; elle ne
-devient jamais un effet implicite de la telco.
+Sighty transmet `runtime.codplay` à CodPlay sans modifier sa configuration
+d’inactivité. L’option `runtime.codplay.engine.idle` est donc héritée selon le
+contrat CodPlay lorsque l’application hôte la fournit ; l’absence de cette
+option ne devient pas une valeur `false` injectée par Sighty et ne constitue
+jamais un effet implicite de la telco.
 
 `mountSlot` et `detachSlot` sont des aides d’intégration pour le montage
 explicite. Les changements de parcours passent par `dispatch` ou `mutate` ;
@@ -422,6 +446,13 @@ d’une scène absente de la composition est préparée puis traitée par le
 `rewind` est appliqué. En cas d’échec de montage, Sighty restaure la
 composition précédente et ne publie pas la composition partielle.
 
+Lorsque le `showMode` effectif vaut `reset` pour une occurrence conservée, le
+reset CodPlay est demandé après le montage et l’ouverture de la liaison, mais
+avant la livraison des `data` d’entrée. Les données de la nouvelle admission
+ne sont donc pas effacées par le reset de la session précédente. Une occurrence
+nouvelle n’est pas resetée : elle suit directement la livraison d’entrée puis
+le démarrage prévu.
+
 Lorsqu’une mutation échoue après avoir modifié l’exécution, le même principe
 s’étend à la transaction : Sighty restaure le fichier et l’index précédents,
 les occurrences et montages physiques, les liaisons, les ressources détenues
@@ -453,7 +484,11 @@ Le couplage d’une télécommande est une déclaration de vue distincte des
 `data`. `controllerSlot`, lorsqu’il est fourni, désigne le slot source relatif
 à la vue qui porte la déclaration ; `controlledSlot` désigne le slot cible.
 Chaque clé de `commands` est un nom d’événement public CodPlay et sa valeur est
-une commande telco, ou une séquence de commandes telco exécutées dans l’ordre.
+une commande telco, ou une séquence de commandes telco exécutées dans l’ordre
+par l’interface `CodPlayTelco` unique. `SightyTelcoCommand` est uniquement le
+vocabulaire déclaratif du couplage ; Sighty ne fournit pas une interface
+concurrente. Il vérifie la cible et le binding, puis délègue l’exécution à ce
+port.
 Les commandes `setRate` et `seek` lisent respectivement `{ rate }` et
 `{ timeMs }` dans `event.data`. Pour un composant d’entrée CodPlay, `seek`
 accepte également la valeur native `{ value }`, numérique ou textuelle. Sighty
@@ -503,10 +538,11 @@ pas automatiquement une fin de scène en navigation.
 
 ### 7.3. Reset et sources lazy
 
-`runtime.reset()` détruit les occurrences courantes, remet le contexte fourni
-à la construction, repart de l’ancre initiale et recrée les occurrences
-directes requises. Les builds et ressources déjà préparés restent réutilisables
-par le runtime ; le reset n’est donc pas un simple `telco.rewind`.
+`runtime.reset()` remet le contexte fourni à la construction et demande le
+reset logique CodPlay sur les occurrences conservées. Il repart de l’ancre
+initiale et réconcilie la composition sans détruire ni recréer les instances.
+Les builds et ressources déjà préparés restent réutilisables par le runtime ;
+le reset n’est donc ni un simple `telco.rewind` ni une opération de preload.
 
 Une source de scène directe est compilée pendant l’initialisation. Une source
 lazy est résolue une seule fois lorsqu’une vue qui la référence doit entrer,
@@ -524,8 +560,10 @@ modification, le retrait, le masquage et l’affichage d’une vue, ciblés par
 - `preserve` conserve la sélection active encore déclarée et les occurrences
   compatibles ;
 - `rewind` rembobine les occurrences de la composition résultante ;
-- `reset` recrée la composition depuis l’ancre initiale ;
-- `reload` réacquiert les ressources connues avant ce reset.
+- `reset` réconcilie la composition depuis l’ancre initiale après le reset
+  logique CodPlay des occurrences existantes ;
+- `reload` réacquiert explicitement les ressources connues avant cette
+  réconciliation ; il ne doit pas être déduit d’un reset.
 
 Une mutation refusée ou échouée restaure la version précédente et ne laisse ni
 instance, ni montage, ni ressource introduite par la tentative. La persistance
@@ -557,17 +595,17 @@ La tranche actuelle est considérée comme en cours, avec les preuves suivantes 
   quatre politiques de rechargement ;
 - rollback d’une mutation après création d’une occurrence, échec de montage ou
   reconstruction destructive, avec restauration physique de la composition ;
-- validation du descripteur `coupling`, exécution des six commandes telco et
+- validation du descripteur `coupling`, exécution des sept commandes telco et
   invalidation de la source dès sa sortie ;
 - occurrences indépendantes et accès exact par chemin de slot lorsque la même
   `SceneKey` est active plusieurs fois ;
 - abonnement hôte `runtime.events.onEvent`, données publiques et
   désabonnement, avec isolation des erreurs d’observateur ;
-- relais Demo 3 branché sur `runtime.events`, comme les relais Demo 2 et
-  Demo 4, sans abonnement direct aux événements publics de l’instance telco ;
+- relais d’un événement public de scène par `runtime.events`, sans abonnement
+  direct aux événements publics de l’instance telco ;
 - nettoyage des instances, montages, abonnements, ressources et CSS lors d’une
   initialisation partiellement échouée ;
-- typecheck et tests Sighty, ainsi que les intégrations Demo 2, Demo 3 et Demo 4.
+- typecheck, tests de contrat Sighty et intégration du chemin runtime réel.
 
 Restent à réaliser avant une stabilisation : la validation navigateur/Safari et
 la suite complète des vérifications de cycle de vie et de ressources. La

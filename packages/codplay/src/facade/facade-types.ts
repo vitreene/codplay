@@ -242,6 +242,7 @@ export type CodPlayTelco = Readonly<{
   getProgress: () => CodPlayProgress
   play: () => Promise<void>
   pause: () => Promise<void>
+  reset: () => Promise<void>
   togglePlay: () => Promise<void>
   setRate: (rate: number) => void
   seek: (timeMs: number) => Promise<void>

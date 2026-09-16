@@ -74,13 +74,12 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.state.transitioning = false
   }
 
-  /** Recreates initialized occurrences while retaining prepared resources. */
+  /** Resets initialized occurrences in place while retaining prepared resources. */
   async resetNow(): Promise<void> {
     this.state.transitioning = true
     this.bindings.closeAllBindings()
     this.composition.detachAllMounts()
-    for (const cleanup of this.state.cleanups.splice(0)) cleanup()
-    this.scenes.destroyInstances()
+    await this.scenes.resetInstances()
     this.state.deliveredData.clear()
     this.state.generationCounters.clear()
     this.state.context = { ...this.state.initialContext }
@@ -92,8 +91,6 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.state.layoutGeneration = 0
 
     try {
-      const directBuilds = this.scenes.directCompiledBuilds()
-      this.scenes.createStandbyInstances(directBuilds)
       const desired = await this.navigation.resolveAccessibleComposition(undefined, {
         name: 'runtime:reset',
       })
