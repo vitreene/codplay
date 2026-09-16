@@ -59,7 +59,7 @@ export function createStoryFive(): StoryDoc {
       [STORY_FIVE_START_STRAP]: createStoryFiveStartStrap(),
     },
     listen: [
-      { on: storyEvents.enter, active: true, reset: true },
+      { on: storyEvents.enter, active: true, reset: true, straps: [STORY_FIVE_START_STRAP] },
       { on: storyEvents.leave, active: false },
       { on: storyEvents.reset, reset: true },
       { on: POSITION_VIEW_FIVE_INITIALIZE_EVENT, straps: [STORY_FIVE_START_STRAP] },

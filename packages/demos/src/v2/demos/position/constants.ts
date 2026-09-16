@@ -58,6 +58,8 @@ export const POSITION_VIEW_SIX_INITIALIZE_EVENT = `${POSITION_NAMESPACE}:view:6:
 /** Straps owned by the position scene or by its individual stories. */
 export const POSITION_KEYBOARD_NAVIGATION_STRAP = `${POSITION_NAMESPACE}:keyboard:navigate`
 export const POSITION_KEYBOARD_TOGGLE_STRAP = `${POSITION_NAMESPACE}:keyboard:toggle`
+export const POSITION_STORY_ONE_START_STRAP = `${POSITION_NAMESPACE}:view:1:start`
+export const POSITION_STORY_TWO_START_STRAP = `${POSITION_NAMESPACE}:view:2:start`
 export const POSITION_PATH_SELECT_STRAP = `${POSITION_NAMESPACE}:path:select`
 export const POSITION_LIVE_BOUNCE_START_STRAP = `${POSITION_NAMESPACE}:live:start`
 export const POSITION_LIVE_A_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:a:commit`

@@ -1,10 +1,12 @@
 import type { StoryDoc } from 'codplay';
+import type { StrapFunction } from 'codplay/runtime/player';
 import {
 	CAROUSEL_SLIDE_DURATION_MS,
 	CAROUSEL_SLIDE_OFFSET_PX,
 	POSITION_MOVE_DURATION_MS,
 	POSITION_STORY_END_EVENT,
 	POSITION_STORY_TWO_ID,
+	POSITION_STORY_TWO_START_STRAP,
 	POSITION_STORY_VIEW_IDS,
 	POSITION_VIEW_TWO_ITEM_MOVE_EVENT,
 	POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT,
@@ -15,6 +17,7 @@ import {
 	CAROUSEL_EVENTS_BY_STORY_ID,
 	isInitialPositionStory,
 } from './carousel';
+import { planStoryAnimationOccurrences } from './story-animation';
 import type { StoryAnimationOccurrence } from './types';
 
 const STAGE_TARGET = 'position:view-two:stage';
@@ -24,7 +27,12 @@ const STORY_TWO_ANCHOR_SHIFT = 15;
 const STORY_TWO_END_OFFSET_MS = 4_100;
 const STORY_EVENTS = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_TWO_ID];
 
-/** Eventimes used when story 2 is activated in the validation carousel. */
+/** Starts story two through its story-scoped activation rule. */
+const startStoryTwo: StrapFunction = ({ context }) => (
+	planStoryAnimationOccurrences(POSITION_STORY_TWO_ANIMATION_PLAN, POSITION_STORY_TWO_ID, context.planned)
+);
+
+/** Eventimes replayed when story 2 is activated or resumed in the carousel. */
 export const POSITION_STORY_TWO_ANIMATION_PLAN: readonly StoryAnimationOccurrence[] = [
 	{ name: POSITION_VIEW_TWO_SOURCE_SHIFT_EVENT, offsetMs: 450 },
 	{ name: POSITION_VIEW_TWO_TARGET_SHIFT_EVENT, offsetMs: 450 },
@@ -50,8 +58,11 @@ export const POSITION_STORY_TWO_ANIMATION_PLAN: readonly StoryAnimationOccurrenc
 /** Story 2: the visible source and target move while the item changes outlet. */
 export const POSITION_STORY_TWO: StoryDoc = {
 	id: POSITION_STORY_TWO_ID,
+	straps: {
+		[POSITION_STORY_TWO_START_STRAP]: startStoryTwo,
+	},
 	listen: [
-		{ on: STORY_EVENTS.enter, active: true, reset: true },
+		{ on: STORY_EVENTS.enter, active: true, reset: true, straps: [POSITION_STORY_TWO_START_STRAP] },
 		{ on: STORY_EVENTS.leave, active: false },
 		{ on: STORY_EVENTS.reset, reset: true },
 	],

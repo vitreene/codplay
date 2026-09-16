@@ -31,6 +31,10 @@
 
 ## Hard implementation gates
 
+- For every new feature, first verify whether an existing circuit already handles
+  the same concern and use that circuit. Do not create a parallel circuit unless
+  an imperative architectural reason is established, documented in the accepted
+  plan, and covered by an explicit acceptance path.
 - Treat the established V2 specifications and accepted decisions as authoritative. Do not replace them with an interpretation inferred from partial code, a failing demo, or a familiar framework pattern.
 - When porting a V1 capability to V2, preserve the documented V1 behavior unless an explicit V2 decision changes it. Port the semantics across the V2 boundaries; do not recreate a parallel V1 circuit.
 - Before editing code, identify the applicable specification, the accepted plan item, the invariants to preserve, and the acceptance path that will prove the change.

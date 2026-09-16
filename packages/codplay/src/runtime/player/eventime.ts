@@ -23,3 +23,15 @@ export type RuntimePlayerEventimeTarget = Readonly<{
 export type RuntimePlayerEventimeResult = Readonly<{
   events: readonly RuntimeTrackEvent[]
 }> 
+
+/** Creates the stable runtime event identity of one compiled eventime declaration. */
+export function createCompiledEventimeEventId(
+  scope: 'scene' | 'story',
+  trackId: string,
+  storyId: string | undefined,
+  declarationPath: readonly number[],
+): string {
+  const owner = storyId ?? 'scene'
+  const path = declarationPath.join('.')
+  return `compiled:${scope}:${owner}:${trackId}:${path}`
+}

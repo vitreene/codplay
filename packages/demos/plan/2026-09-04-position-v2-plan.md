@@ -39,6 +39,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Le lancement `demo:v2` passe par `src/v2/main.ts` et le layout partagé. Le
   scan de dépendances du serveur Vite est borné à `index.html`, afin que cette
   entrée ne découvre pas les autres pages du paquet.
+- Le layout V2 désactive explicitement l'inactivité CodPlay pour ses démos : la
+  télécommande manuelle reste disponible pendant l'observation d'une scène.
+  Cette configuration de l'hôte ne modifie pas la valeur par défaut du runtime.
 - Les règles CSS produites par `AutoCapsule` restent dans le dossier de la
   démo. Le layout partagé ne connaît ni le carousel `position`, ni ses classes
   de projection.
@@ -50,13 +53,15 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   les tweens courants par événement et relance la séquence visuelle de la vue
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
 - L'ordre de validation courant suit l'ordre initial des stories, de la story 1
-  à la story 6. La story 1 est activée par l'événement initial ; les autres
-  stories sont activées par navigation. Dans la story 2, les deux déplacements
-  d'ancre commencent à `450 ms`, son item est reparenté à `1 350 ms` pendant
-  `2 000 ms`, et sa borne de story arrive à `4 100 ms`. Chaque reparenting
-  d'item utilise cette même durée et un `move` explicite. Les mouvements des
-  vues parcourues ensuite sont ajoutés par le strap de navigation sur le track
-  de la story. La lecture temporelle ne change jamais de vue.
+  à la story 6. Chaque story active son propre plan depuis la règle `enter`
+  (`active: true`, `reset: true`, puis strap story-local). Ainsi,
+  `POSITION_INITIAL_EVENTS` et la navigation utilisent le même circuit
+  `enter` → `listen` de la story → strap de démarrage ; le strap de navigation
+  ne planifie plus lui-même l'animation de la story entrante. Dans la story 2,
+  les deux déplacements d'ancre commencent à `450 ms`, son item est reparenté à
+  `1 350 ms` pendant `2 000 ms`, et sa borne de story arrive à `4 100 ms`.
+  Chaque reparenting d'item utilise cette même durée et un `move` explicite. La
+  lecture temporelle ne change jamais de vue.
 - Chaque plan de story se termine par un eventime ordinaire
   `position:demo:story:end`, positionné à la fin de sa dernière transition.
   Il fixe l'horizon observable utilisé par le seek sans déclencher la borne
@@ -120,6 +125,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   carousel simultanément.
 - La vue initiale de validation est la story 1. Lorsque la story 2 est activée,
   son `move` d'item commence à `1 350 ms` et se termine à `3 350 ms`.
+- Une activation directe de la story 1 lance son premier `move` sans navigation
+  préalable ; une activation par carousel produit le même plan par la même
+  règle `enter`, sans injection scene-level supplémentaire.
 - Les six vues montrent réellement les mouvements/reparentings via les actions
   `move` du runtime V2 ; chaque reparenting dure `2 000 ms` et les
   eventimes ajoutés à la volée contiennent leur payload `move` complet.
@@ -204,6 +212,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   `story-one.ts` à `story-six.ts` portent chacune un `StoryDoc`, et
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
+- Activation consolidée : les six règles `enter` portent leur strap de démarrage
+  story-local. L'ancien démarrage conditionnel `planSelectedStory` du strap de
+  navigation a été supprimé ; les events `initialize` restent réservés aux
+  actions explicites de reprise des stories qui en ont besoin.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle dans
   l'ordre story 1 → story 6, le move de la story 2 à `1 350 ms`, les presets
   cliquables de la vue 3, quatre rebonds de la vue 4, le reparenting imbriqué
@@ -245,10 +257,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   présentation ; `POSITION_STORY_VIEW_IDS` conserve l'identité stable de la
   racine visuelle ; `CAROUSEL_EVENTS_BY_STORY_ID` résout les événements de la
   case occupée par chaque story.
-- `createStoryAnimationPlan` et `planStoryAnimation` sont maintenant indexés
-  par `storyId`. Le plan transmis par une navigation est donc ciblé par la
-  même identité que le document de story, quelle que soit sa position dans le
-  carousel.
+- Le planificateur commun des stories statiques ajoute explicitement le
+  `storyId` aux eventimes produits par le strap de la story. Le même helper est
+  utilisé par les stories 1 et 2 et par leur reprise ; aucune identité de case
+  de carousel ne remplace l'identité de story.
 - L'ordre courant revient à la séquence initiale story 1 → story 2 → story 3 →
   story 4 → story 5 → story 6. Les plans sont ciblés par l'identité de story ;
   le plan statique d'une autre story n'est pas exécuté en arrière-plan avant son
@@ -574,8 +586,10 @@ ne contient ni warning ni erreur.
   demandent toujours `reparent: true`.
 - La préparation quadratique utilise le défaut ACE `arc-length` sans recopier
   une option d’intégration dans la démo.
-- `story-animation` ne référence plus les plans locaux des stories 3 et 6 ;
-  celles-ci démarrent exclusivement par leur événement d’initialisation.
+- Les plans sont possédés par leurs fichiers de story et les six règles
+  `enter` déclenchent leur strap de démarrage. Les events `initialize` des
+  stories 3 à 6 ne servent plus qu'aux reprises explicites ; ils ne doublent
+  pas l'activation du carousel.
 
 Validation : typecheck V2 des démos, build des démos, façade position/story 6
 (`16` tests) et suite CodPlay (`94` fichiers, `604` tests) passent.

@@ -185,7 +185,7 @@ export function createStorySix(): StoryDoc {
       [STORY_SIX_START_STRAP]: createStorySixStartStrap(),
     },
     listen: [
-      { on: storyEvents.enter, active: true, reset: true },
+      { on: storyEvents.enter, active: true, reset: true, straps: [STORY_SIX_START_STRAP] },
       { on: storyEvents.leave, active: false },
       { on: storyEvents.reset, reset: true },
       { on: POSITION_VIEW_SIX_INITIALIZE_EVENT, straps: [STORY_SIX_START_STRAP] },

@@ -159,8 +159,11 @@ export class RuntimeEventDispatcher {
     }
   }
 
-  /** Dispatches one live event through the complete V2 event circuit. */
-  async dispatch(input: RuntimeEventInput): Promise<RuntimeEventDispatchResult> {
+  /** Dispatches one event through the complete V2 event circuit. */
+  async dispatch(
+    input: RuntimeEventInput,
+    existingEvent?: RuntimeTrackEvent,
+  ): Promise<RuntimeEventDispatchResult> {
     const accumulator: DispatchAccumulator = {
       ok: true,
       events: [],
@@ -177,7 +180,12 @@ export class RuntimeEventDispatcher {
       })
       return accumulator
     }
-    await this.route(input, 0, accumulator)
+    if (existingEvent === undefined) {
+      await this.route(input, 0, accumulator)
+    } else {
+      accumulator.events.push(existingEvent)
+      await this.routeAppendedEvent(existingEvent, 0, accumulator)
+    }
     return {
       ...accumulator,
       resetStoryIds: Object.freeze([...new Set(accumulator.resetStoryIds)]),

@@ -72,6 +72,24 @@ La même règle s'applique à une occurrence `sequence:end` compilée dans un tr
 et à une occurrence live ajoutée au journal. Un `seek` qui franchit la borne ne
 la joue pas et ne pose pas le terminal : il ne fait que projeter l'état demandé.
 
+Lorsqu'une occurrence compilée est atteinte en lecture, le player la promeut
+une seule fois dans le `RuntimeTrackJournal` avec son identifiant d'event
+déterministe, puis la fait passer par le `RuntimeEventDispatcher` existant.
+Les règles `listen`, les straps, les émissions déclarées et la reconstruction
+suivent donc le même circuit que pour un event live. La materialisation retire
+la copie compilée déjà promue afin que l'occurrence ne soit pas appliquée deux
+fois. La publication des events `public` précède le nettoyage terminal ; aucun
+flux continu, index d'eventimes ou API de façade supplémentaire n'est ajouté.
+
+L'audit de cette frontière confirme que les façades d'instance et d'engine,
+le monitor `idle` et la fin de capture délèguent tous à `RuntimePlayer.emit()`.
+La materialisation, la timeline structurelle et la préparation motion relisent
+les eventimes pour leurs propres projections ; elles ne dispatchent pas une
+seconde fois l'événement. `compileMotionSchedule()` reste un utilitaire de
+planification motion autonome, non appelé par le player/runner actuel ; sa
+réévaluation éventuelle relève d'une tranche motion distincte et n'est pas
+réintroduite dans le circuit `sequence:end`.
+
 ## Interface de cycle de vie de la scène
 
 La forme V2 de `SceneDoc.init`, `SceneDoc.onStart` et

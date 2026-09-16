@@ -208,6 +208,7 @@ export const POSITION_STORY_THREE: StoryDoc = {
     on: STORY_EVENTS.enter,
     active: true,
     reset: true,
+    straps: [STORY_THREE_START_STRAP],
   }, {
     on: STORY_EVENTS.leave,
     active: false,

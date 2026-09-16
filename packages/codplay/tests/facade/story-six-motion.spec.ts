@@ -11,7 +11,6 @@ import {
 } from '../../../demos/src/v2/demos/position/carousel'
 import {
   POSITION_STORY_SIX_ID,
-  POSITION_VIEW_SIX_INITIALIZE_EVENT,
 } from '../../../demos/src/v2/demos/position/constants'
 import { createScene } from '../../../demos/src/v2/demos/position/main'
 
@@ -30,6 +29,39 @@ describe('story six target availability', () => {
     codplay?.destroy()
     codplay = undefined
     document.body.replaceChildren()
+  })
+
+  it('keeps the Q frame at its source on direct activation', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const instance = codplay.instances.create({
+      instanceId: 'story-six-direct-activation-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    await instance.events.emit(
+      {
+        name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_SIX_ID].enter,
+        visibility: 'story',
+      },
+      { scope: 'story', storyId: POSITION_STORY_SIX_ID },
+    )
+    const qFrame = root.querySelector<HTMLElement>('.position-conclusion-transfer-frame--q')
+    const source = root.querySelector<HTMLElement>('.position-conclusion-node--a')
+    const target = root.querySelector<HTMLElement>('.position-conclusion-node--b')
+    expect(qFrame).not.toBeNull()
+    expect(source?.contains(qFrame)).toBe(true)
+    expect(target?.contains(qFrame)).toBe(false)
   })
 
   it('keeps the first move when its destination is mounted only at LAST', async () => {
@@ -56,10 +88,6 @@ describe('story six target availability', () => {
         name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_SIX_ID].enter,
         visibility: 'story',
       },
-      { scope: 'story', storyId: POSITION_STORY_SIX_ID },
-    )
-    await instance.events.emit(
-      { name: POSITION_VIEW_SIX_INITIALIZE_EVENT, visibility: 'story' },
       { scope: 'story', storyId: POSITION_STORY_SIX_ID },
     )
     await instance.telco.play()
@@ -102,10 +130,6 @@ describe('story six target availability', () => {
           name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_SIX_ID].enter,
           visibility: 'story',
         },
-        { scope: 'story', storyId: POSITION_STORY_SIX_ID },
-      )
-      await runner.player.emitEventime(
-        { name: POSITION_VIEW_SIX_INITIALIZE_EVENT, visibility: 'story' },
         { scope: 'story', storyId: POSITION_STORY_SIX_ID },
       )
       runner.play()

@@ -92,6 +92,7 @@ import { RuntimeTrackJournal } from './pipeline'
 import { collectCompiledEventStartTimes, StructuralTimeline } from './structural-timeline'
 import { reconstructPlayerScene } from './scene'
 import {
+  createCompiledEventimeEventId,
   type RuntimePlayerEventime,
   type RuntimePlayerEventimeTarget,
   type RuntimePlayerEventimeResult,
@@ -150,6 +151,20 @@ type RuntimePlayerSeekTransaction = {
   preparedInstances: ReadonlySet<RuntimeModuleServiceInstance>
   committed: boolean
 }
+
+/** One sequence:end occurrence reached by the playing cursor. */
+type RuntimeSequenceEndOccurrence = Readonly<{
+  kind: 'compiled'
+  event: CompiledEventime
+  applyAtMs: number
+  trackId: string
+  storyId?: string
+  eventId: string
+}> | Readonly<{
+  kind: 'journal'
+  event: RuntimeTrackEvent
+  applyAtMs: number
+}>
 
 /** One compiled-scene runtime instance with one optional materializer boundary. */
 export class RuntimePlayer {
@@ -537,8 +552,13 @@ export class RuntimePlayer {
     }
     this.state = PLAYER_LIFECYCLE_PLAYING
     notifyModulePlaybackState(this.moduleServiceInstances, 'playing', this.currentTimeMs)
-    const sequenceEndTime = this.findSequenceEndAtCurrentTime()
-    if (sequenceEndTime !== undefined) this.finalizeSequenceEnd(sequenceEndTime)
+    const sequenceEnd = this.findSequenceEndAtCurrentTime()
+    if (sequenceEnd !== undefined) {
+      this.currentTimeMs = sequenceEnd.applyAtMs
+      void this.dispatchReachedSequenceEnd(sequenceEnd).catch((error) => {
+        this.reportAutomaticSequenceEndFailure(error)
+      })
+    }
   }
 
   /** Resets the initialized occurrence to its initial logical state in place. */
@@ -737,6 +757,9 @@ export class RuntimePlayer {
     input: RuntimePlayerEmitInput,
     includePersistOnlyOverride?: boolean,
     resetIdle = true,
+    existingEvent?: RuntimeTrackEvent,
+    frame?: EngineFrame,
+    publicEventPreviousTimeMs?: number,
   ): Promise<RuntimeEventDispatchResult> {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
     this.requireSequenceActive('emit')
@@ -758,8 +781,10 @@ export class RuntimePlayer {
       eventIdFactory: () => this.createRuntimeEventId(),
     })
     try {
-      const result = await dispatcher.dispatch(dispatchInput)
-      this.notifyTraceEvents(result.events)
+      const result = await dispatcher.dispatch(dispatchInput, existingEvent)
+      this.notifyTraceEvents(existingEvent === undefined
+        ? result.events
+        : result.events.filter((event) => event.eventId !== existingEvent.eventId))
       if (resetIdle && result.events.length > 0) this.idleMonitor.reset()
       if (includePersistOnlyOverride !== undefined) {
         this.includePersistOnlyInCurrent = includePersistOnlyOverride
@@ -796,8 +821,10 @@ export class RuntimePlayer {
           : { resetStoryIds }),
         ...(isolationClosedStoryIds.length === 0 ? {} : { isolationClosedStoryIds }),
       })
+      if (frame !== undefined) this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
       this.notifyTransportObservers()
       if (this.state === PLAYER_LIFECYCLE_PLAYING && sequenceEndTime !== undefined) {
+        this.notifyPublicEvents(publicEventPreviousTimeMs ?? this.currentTimeMs, this.currentTimeMs)
         this.finalizeSequenceEnd(sequenceEndTime)
       } else {
         this.sequenceEndPending = false
@@ -1021,8 +1048,14 @@ export class RuntimePlayer {
     if (this.idleMonitor.advance(frame.deltaMs)) this.dispatchIdleEvent()
     if (this.sequenceEndPending) return
     this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
-    const sequenceEndTime = this.findSequenceEndBetween(previousTimeMs, this.currentTimeMs)
-    if (sequenceEndTime !== undefined) this.currentTimeMs = sequenceEndTime
+    const sequenceEnd = this.findSequenceEndBetween(previousTimeMs, this.currentTimeMs)
+    if (sequenceEnd !== undefined) {
+      this.currentTimeMs = sequenceEnd.applyAtMs
+      void this.dispatchReachedSequenceEnd(sequenceEnd, frame, previousTimeMs).catch((error) => {
+        this.reportAutomaticSequenceEndFailure(error)
+      })
+      return
+    }
     const frameScene = this.resolveFrameScene(
       previousTimeMs,
       this.currentTimeMs,
@@ -1042,7 +1075,6 @@ export class RuntimePlayer {
     this.notifyPublicEvents(previousSolvedScene?.timeMs ?? this.currentTimeMs, this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
     this.notifyTransportObservers()
-    if (sequenceEndTime !== undefined) this.finalizeSequenceEnd(sequenceEndTime)
   }
 
   /** Emits the configured idle event through the ordinary player event circuit. */
@@ -1072,6 +1104,58 @@ export class RuntimePlayer {
         { context: { eventName: event.name, source: 'idle' } },
       )
     })
+  }
+
+  /** Sends one reached sequence:end through the ordinary event circuit. */
+  private async dispatchReachedSequenceEnd(
+    occurrence: RuntimeSequenceEndOccurrence,
+    frame?: EngineFrame,
+    publicEventPreviousTimeMs?: number,
+  ): Promise<void> {
+    const existingEvent = occurrence.kind === 'journal' ? occurrence.event : undefined
+    const result = await this.emitEvent(
+      occurrence.kind === 'journal'
+        ? {
+          name: occurrence.event.name,
+          applyAtMs: occurrence.event.applyAtMs,
+          eventId: occurrence.event.eventId,
+          trackId: occurrence.event.trackId,
+          storyId: occurrence.event.storyId,
+          data: occurrence.event.data,
+          visibility: occurrence.event.visibility,
+          context: occurrence.event.context,
+          meta: occurrence.event.meta,
+          mode: occurrence.event.mode,
+        }
+        : {
+          name: occurrence.event.name,
+          applyAtMs: occurrence.applyAtMs,
+          eventId: occurrence.eventId,
+          trackId: occurrence.trackId,
+          storyId: occurrence.storyId,
+          data: occurrence.event.data,
+          visibility: occurrence.event.visibility,
+        },
+      undefined,
+      false,
+      existingEvent,
+      frame,
+      publicEventPreviousTimeMs,
+    )
+    if (result.ok) return
+    this.reportAutomaticSequenceEndFailure(
+      new Error(result.issues.map((issue) => issue.message).join(' ') || 'Reached sequence:end was rejected.'),
+    )
+  }
+
+  /** Reports a failure while consuming an automatic sequence:end occurrence. */
+  private reportAutomaticSequenceEndFailure(error: unknown): void {
+    const diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput })
+    diagnostics.error(
+      'RUNTIME_SEQUENCE_END_FAILED',
+      error instanceof Error ? error.message : 'Reached sequence:end failed.',
+      { context: { eventName: RUNTIME_SEQUENCE_END_EVENT_NAME, source: 'playback' } },
+    )
   }
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */
@@ -1199,30 +1283,50 @@ export class RuntimePlayer {
   }
 
   /** Finds a terminal boundary exactly at the current playback cursor. */
-  private findSequenceEndAtCurrentTime(): number | undefined {
+  private findSequenceEndAtCurrentTime(): RuntimeSequenceEndOccurrence | undefined {
     return this.findSequenceEndBetween(undefined, this.currentTimeMs)
   }
 
   /** Finds the earliest active terminal event crossed by one playing frame. */
-  private findSequenceEndBetween(previousTimeMs: number | undefined, currentTimeMs: number): number | undefined {
-    const candidates: number[] = []
-    for (const eventTimeMs of collectSequenceEndTimes(this.compiledScene.scene.eventimes ?? [], 0)) {
-      if (isSequenceEndInRange(eventTimeMs, previousTimeMs, currentTimeMs)) candidates.push(eventTimeMs)
+  private findSequenceEndBetween(
+    previousTimeMs: number | undefined,
+    currentTimeMs: number,
+  ): RuntimeSequenceEndOccurrence | undefined {
+    const candidates: RuntimeSequenceEndOccurrence[] = []
+    if (this.trackJournal.isTrackActive(TRACK_GLOBAL_ID)) {
+      for (const occurrence of collectSequenceEndOccurrences(
+        this.compiledScene.scene.eventimes ?? [],
+        'scene',
+        TRACK_GLOBAL_ID,
+        undefined,
+      )) {
+        if (occurrence.kind !== 'compiled') continue
+        if (this.trackJournal.getEvents(occurrence.trackId)
+          .some((event) => event.eventId === occurrence.eventId)) continue
+        if (isSequenceEndInRange(occurrence.applyAtMs, previousTimeMs, currentTimeMs)) candidates.push(occurrence)
+      }
     }
     for (const story of Object.values(this.compiledScene.scene.stories)) {
       const trackId = resolveStoryTrackId(story)
       if (!this.trackJournal.isTrackActive(trackId)) continue
-      for (const eventTimeMs of collectSequenceEndTimes(story.eventimes ?? [], 0)) {
-        if (isSequenceEndInRange(eventTimeMs, previousTimeMs, currentTimeMs)) candidates.push(eventTimeMs)
+      for (const occurrence of collectSequenceEndOccurrences(story.eventimes ?? [], 'story', trackId, story.id)) {
+        if (occurrence.kind !== 'compiled') continue
+        if (this.trackJournal.getEvents(occurrence.trackId)
+          .some((event) => event.eventId === occurrence.eventId)) continue
+        if (isSequenceEndInRange(occurrence.applyAtMs, previousTimeMs, currentTimeMs)) candidates.push(occurrence)
       }
     }
     for (const event of this.trackJournal.getAllEvents()) {
       if (event.name !== RUNTIME_SEQUENCE_END_EVENT_NAME
         || event.mode === EVENT_INSERT_MODE_PERSIST_ONLY
         || !this.trackJournal.isTrackActive(event.trackId)) continue
-      if (isSequenceEndInRange(event.applyAtMs, previousTimeMs, currentTimeMs)) candidates.push(event.applyAtMs)
+      if (isSequenceEndInRange(event.applyAtMs, previousTimeMs, currentTimeMs)) {
+        candidates.push({ kind: 'journal', event, applyAtMs: event.applyAtMs })
+      }
     }
-    return candidates.length === 0 ? undefined : Math.min(...candidates)
+    return candidates.length === 0
+      ? undefined
+      : candidates.sort(compareSequenceEndOccurrences)[0]
   }
 
   /** Finds a terminal event accepted by one live dispatch at or before the head. */
@@ -1565,18 +1669,44 @@ function shouldDispatchImmediateStoryEventime(
   return scene.scene.stories[target.storyId]?.listen.some((rule) => rule.on === eventime.name) === true
 }
 
-/** Flattens one story's nested eventimes to the absolute sequence:end times. */
-function collectSequenceEndTimes(
+/** Collects one nested sequence:end declaration with its resolved target. */
+function collectSequenceEndOccurrences(
   eventimes: readonly CompiledEventime[],
-  parentStartAt: number,
-): readonly number[] {
-  return eventimes.flatMap((eventime) => {
+  scope: 'scene' | 'story',
+  trackId: string,
+  storyId?: string,
+  parentStartAt = 0,
+  parentPath: readonly number[] = [],
+): readonly RuntimeSequenceEndOccurrence[] {
+  return eventimes.flatMap((eventime, index) => {
     const startAt = parentStartAt + eventime.startAt
+    const declarationPath = [...parentPath, index]
     return [
-      ...(eventime.name === RUNTIME_SEQUENCE_END_EVENT_NAME ? [startAt] : []),
-      ...collectSequenceEndTimes(eventime.events ?? [], startAt),
+      ...(eventime.name === RUNTIME_SEQUENCE_END_EVENT_NAME
+        ? [{
+          kind: 'compiled' as const,
+          event: eventime,
+          applyAtMs: startAt,
+          trackId,
+          ...(storyId === undefined ? {} : { storyId }),
+          eventId: createCompiledEventimeEventId(scope, trackId, storyId, declarationPath),
+        }]
+        : []),
+      ...collectSequenceEndOccurrences(eventime.events ?? [], scope, trackId, storyId, startAt, declarationPath),
     ]
   })
+}
+
+/** Orders terminal occurrences by time and then by their existing runtime order. */
+function compareSequenceEndOccurrences(
+  left: RuntimeSequenceEndOccurrence,
+  right: RuntimeSequenceEndOccurrence,
+): number {
+  if (left.applyAtMs !== right.applyAtMs) return left.applyAtMs - right.applyAtMs
+  if (left.kind === 'journal' && right.kind === 'journal') return left.event.eventSeq - right.event.eventSeq
+  if (left.kind === 'journal') return 1
+  if (right.kind === 'journal') return -1
+  return left.eventId.localeCompare(right.eventId)
 }
 
 /** Applies the play-only boundary rule used for static and live terminal events. */

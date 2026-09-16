@@ -1,4 +1,5 @@
 import type { StoryDoc } from 'codplay'
+import type { StrapFunction } from 'codplay/runtime/player'
 import {
   CAROUSEL_SLIDE_DURATION_MS,
   CAROUSEL_SLIDE_OFFSET_PX,
@@ -6,6 +7,7 @@ import {
   POSITION_MOVE_DURATION_MS,
   POSITION_STORY_END_EVENT,
   POSITION_STORY_ONE_ID,
+  POSITION_STORY_ONE_START_STRAP,
   POSITION_VIEW_ONE_ITEM_MOVE_EVENT,
   POSITION_STORY_VIEW_IDS,
   POSITION_VIEWPORT_TARGET,
@@ -14,6 +16,7 @@ import {
   CAROUSEL_EVENTS_BY_STORY_ID,
   isInitialPositionStory,
 } from './carousel'
+import { planStoryAnimationOccurrences } from './story-animation'
 import type { StoryAnimationOccurrence } from './types'
 
 const SOURCE_CONTAINER = 'position:view-one:source'
@@ -21,11 +24,19 @@ const TARGET_CONTAINER = 'position:view-one:target'
 const STORY_ONE_END_OFFSET_MS = FIRST_VIEW_MOVE_OFFSET_MS + POSITION_MOVE_DURATION_MS
 const STORY_EVENTS = CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_ONE_ID]
 
+/** Starts story one through its story-scoped activation rule. */
+const startStoryOne: StrapFunction = ({ context }) => (
+  planStoryAnimationOccurrences(POSITION_STORY_ONE_ANIMATION_PLAN, POSITION_STORY_ONE_ID, context.planned)
+)
+
 /** Story 1: a stable source and target, with one item reparented between them. */
 export const POSITION_STORY_ONE: StoryDoc = {
   id: POSITION_STORY_ONE_ID,
+  straps: {
+    [POSITION_STORY_ONE_START_STRAP]: startStoryOne,
+  },
   listen: [
-    { on: STORY_EVENTS.enter, active: true, reset: true },
+    { on: STORY_EVENTS.enter, active: true, reset: true, straps: [POSITION_STORY_ONE_START_STRAP] },
     { on: STORY_EVENTS.leave, active: false },
     { on: STORY_EVENTS.reset, reset: true },
   ],
@@ -98,7 +109,7 @@ export const POSITION_STORY_ONE: StoryDoc = {
   ],
 }
 
-/** Eventime appended when navigation activates story 1 again. */
+/** Eventime plan replayed when story 1 is activated or resumed. */
 export const POSITION_STORY_ONE_ANIMATION_PLAN: readonly StoryAnimationOccurrence[] = [{
   name: POSITION_VIEW_ONE_ITEM_MOVE_EVENT,
   offsetMs: FIRST_VIEW_MOVE_OFFSET_MS,

@@ -8,9 +8,11 @@ import {
   POSITION_PATH_INITIALIZE_EVENT,
   POSITION_STORY_PAUSED_EVENT,
   POSITION_STORY_RESUMED_EVENT,
+  POSITION_STORY_ONE_ID,
+  POSITION_STORY_TWO_ID,
+  POSITION_STORY_THREE_ID,
   POSITION_STORY_FIVE_ID,
   POSITION_STORY_SIX_ID,
-  POSITION_STORY_THREE_ID,
   POSITION_TWEEN_STOP_EVENT,
   POSITION_VIEW_STORY_IDS,
   POSITION_VIEW_FIVE_INITIALIZE_EVENT,
@@ -19,53 +21,22 @@ import {
   VIEW_COUNT,
 } from './constants'
 import { CAROUSEL_EVENTS } from './carousel'
-import { planStoryAnimation } from './story-animation'
+import { planStoryAnimationOccurrences } from './story-animation'
+import { POSITION_STORY_ONE_ANIMATION_PLAN } from './story-one'
+import { POSITION_STORY_TWO_ANIMATION_PLAN } from './story-two'
 import { clamp, readFinite, readRecord } from './shared'
 import type { SceneListenRule } from 'codplay/scene/types'
 import type { PlannedStrapHelpers, StrapFunction, StrapReturnValue } from 'codplay/runtime/player'
 
-/** Starts one position story through its own story-scoped event circuit. */
-function planSelectedStory(
-  storyId: typeof POSITION_VIEW_STORY_IDS[number],
+/** Plans the static animation owned by story one or story two for a resume. */
+function planStaticStoryAnimation(
+  storyId: typeof POSITION_STORY_ONE_ID | typeof POSITION_STORY_TWO_ID,
   planned: Pick<PlannedStrapHelpers, 'wait'>,
 ): StrapReturnValue {
-  if (storyId === POSITION_STORY_FOUR_ID) {
-    return {
-      events: [{
-        name: POSITION_LIVE_INITIALIZE_EVENT,
-        storyId,
-        visibility: 'story',
-      }],
-    }
-  }
-  if (storyId === POSITION_STORY_THREE_ID) {
-    return {
-      events: [{
-        name: POSITION_PATH_INITIALIZE_EVENT,
-        storyId,
-        visibility: 'story',
-      }],
-    }
-  }
-  if (storyId === POSITION_STORY_FIVE_ID) {
-    return {
-      events: [{
-        name: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
-        storyId,
-        visibility: 'story',
-      }],
-    }
-  }
-  if (storyId === POSITION_STORY_SIX_ID) {
-    return {
-      events: [{
-        name: POSITION_VIEW_SIX_INITIALIZE_EVENT,
-        storyId,
-        visibility: 'story',
-      }],
-    }
-  }
-  return planStoryAnimation(storyId, planned)
+  const plan = storyId === POSITION_STORY_ONE_ID
+    ? POSITION_STORY_ONE_ANIMATION_PLAN
+    : POSITION_STORY_TWO_ANIMATION_PLAN
+  return planStoryAnimationOccurrences(plan, storyId, planned)
 }
 
 /** Names the scene strap that records the currently visible carousel story. */
@@ -76,7 +47,7 @@ function viewRememberStrap(index: number): string {
 /** Builds the straps that own only the position scene's global carousel state. */
 export function createPositionSceneStraps(): Readonly<Record<string, StrapFunction>> {
   const straps: Record<string, StrapFunction> = {
-    [POSITION_KEYBOARD_NAVIGATION_STRAP]: ({ event, state, context }) => {
+    [POSITION_KEYBOARD_NAVIGATION_STRAP]: ({ event, state }) => {
       const current = clamp(Math.round(readFinite(state.currentView, 0)), 0, VIEW_COUNT - 1)
       const direction = readRecord(event.data)?.direction
       const next = direction === 'previous'
@@ -86,25 +57,24 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
 
       const output: readonly StrapReturnValue[] = [
         {
-            update: { currentView: next },
-            events: [
-              { name: POSITION_TWEEN_STOP_EVENT, visibility: 'scene' },
-              {
-                name: CAROUSEL_EVENTS[current].leave,
-                storyId: POSITION_VIEW_STORY_IDS[current],
-                visibility: 'story',
-              },
-              { name: CAROUSEL_EVENTS[current].reset, visibility: 'scene' },
-              { name: CAROUSEL_EVENTS[current].outro, visibility: 'scene' },
-              {
-                name: CAROUSEL_EVENTS[next].enter,
-                storyId: POSITION_VIEW_STORY_IDS[next],
-                visibility: 'story',
-              },
-              { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
+          update: { currentView: next },
+          events: [
+            { name: POSITION_TWEEN_STOP_EVENT, visibility: 'scene' },
+            {
+              name: CAROUSEL_EVENTS[current].leave,
+              storyId: POSITION_VIEW_STORY_IDS[current],
+              visibility: 'story',
+            },
+            { name: CAROUSEL_EVENTS[current].reset, visibility: 'scene' },
+            { name: CAROUSEL_EVENTS[current].outro, visibility: 'scene' },
+            {
+              name: CAROUSEL_EVENTS[next].enter,
+              storyId: POSITION_VIEW_STORY_IDS[next],
+              visibility: 'story',
+            },
+            { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
           ],
         },
-          planSelectedStory(POSITION_VIEW_STORY_IDS[next], context.planned),
       ]
       return output
     },
@@ -113,25 +83,25 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
       const paused = state.storyPaused === true
       if (paused) {
         const storyId = POSITION_VIEW_STORY_IDS[current]
-        const initialize = storyId === POSITION_STORY_FOUR_ID
-          ? {
-              name: POSITION_LIVE_INITIALIZE_EVENT,
-              storyId,
-              visibility: 'story' as const,
-            }
-          : storyId === POSITION_STORY_FIVE_ID
-            ? {
-                name: POSITION_VIEW_FIVE_INITIALIZE_EVENT,
-                storyId,
-                visibility: 'story' as const,
-              }
-            : storyId === POSITION_STORY_SIX_ID
-              ? {
-                  name: POSITION_VIEW_SIX_INITIALIZE_EVENT,
-                  storyId,
-                  visibility: 'story' as const,
-                }
-            : undefined
+        let initialize: {
+          name: string
+          storyId: typeof POSITION_VIEW_STORY_IDS[number]
+          visibility: 'story'
+        } | undefined
+        switch (storyId) {
+          case POSITION_STORY_THREE_ID:
+            initialize = { name: POSITION_PATH_INITIALIZE_EVENT, storyId, visibility: 'story' }
+            break
+          case POSITION_STORY_FOUR_ID:
+            initialize = { name: POSITION_LIVE_INITIALIZE_EVENT, storyId, visibility: 'story' }
+            break
+          case POSITION_STORY_FIVE_ID:
+            initialize = { name: POSITION_VIEW_FIVE_INITIALIZE_EVENT, storyId, visibility: 'story' }
+            break
+          case POSITION_STORY_SIX_ID:
+            initialize = { name: POSITION_VIEW_SIX_INITIALIZE_EVENT, storyId, visibility: 'story' }
+            break
+        }
         const output: readonly StrapReturnValue[] = [
           {
             update: { storyPaused: false },
@@ -140,7 +110,9 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
               ...(initialize === undefined ? [] : [initialize]),
             ],
           },
-          ...(initialize === undefined ? [planStoryAnimation(storyId, context.planned)] : []),
+          ...(initialize === undefined && (storyId === POSITION_STORY_ONE_ID || storyId === POSITION_STORY_TWO_ID)
+            ? [planStaticStoryAnimation(storyId, context.planned)]
+            : []),
         ]
         return output
       }

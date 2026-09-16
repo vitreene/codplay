@@ -10,7 +10,6 @@ import {
 } from '../../../demos/src/v2/demos/position/carousel'
 import {
   POSITION_STORY_FIVE_ID,
-  POSITION_VIEW_FIVE_INITIALIZE_EVENT,
 } from '../../../demos/src/v2/demos/position/constants'
 import { createScene } from '../../../demos/src/v2/demos/position/main'
 
@@ -46,10 +45,6 @@ describe('story five first move', () => {
         name: CAROUSEL_EVENTS_BY_STORY_ID[POSITION_STORY_FIVE_ID].enter,
         visibility: 'story',
       },
-      { scope: 'story', storyId: POSITION_STORY_FIVE_ID },
-    )
-    await runner.player.emitEventime(
-      { name: POSITION_VIEW_FIVE_INITIALIZE_EVENT, visibility: 'story' },
       { scope: 'story', storyId: POSITION_STORY_FIVE_ID },
     )
     runner.play()

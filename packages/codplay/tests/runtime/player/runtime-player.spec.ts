@@ -34,6 +34,11 @@ const scene: CompiledScene = {
   actionTargetIndex: {},
 }
 
+/** Lets the automatic event circuit finish after an engine frame. */
+async function flushEventDispatch(): Promise<void> {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve()
+}
+
 describe('RuntimePlayer', () => {
   it('journals every transformed event and replays them through seek without rerunning transforms', async () => {
     let transformCalls = 0
@@ -385,6 +390,7 @@ describe('RuntimePlayer', () => {
     player.play()
     engine.advance(0)
     engine.advance(200)
+    await flushEventDispatch()
 
     expect(player.getCurrentTimeMs()).toBe(100)
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PAUSED)
@@ -408,6 +414,7 @@ describe('RuntimePlayer', () => {
     expect(lifecycleCalls).toEqual(['init', 'start', 'end', 'init', 'start'])
     engine.advance(300)
     engine.advance(500)
+    await flushEventDispatch()
     expect(player.hasSequenceEnded()).toBe(true)
     expect(player.getSolvedScene()?.persos['main:root']?.state.className).toContain('ended')
     expect(lifecycleCalls).toEqual(['init', 'start', 'end', 'init', 'start', 'end'])
@@ -423,10 +430,85 @@ describe('RuntimePlayer', () => {
     engine.advance(0)
     await player.emitEventime({ name: 'sequence:end' }, { scope: 'scene' })
     engine.advance(100)
+    await flushEventDispatch()
 
     expect(player.hasSequenceEnded()).toBe(true)
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PAUSED)
     expect(player.getCurrentTimeMs()).toBe(0)
+    player.destroy()
+  })
+
+  it('routes an automatic public sequence:end through the ordinary event circuit once', async () => {
+    const publicEvents: string[] = []
+    const terminalScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        id: 'public-terminal-scene',
+        listen: [{ on: 'sequence:end', emit: [{ name: 'sequence:observed' }] }],
+        stories: {
+          main: {
+            id: 'main',
+            listen: [],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { className: 'initial' },
+              actions: {
+                'sequence:end': { className: { add: 'ended' } },
+                'sequence:observed': { className: { add: 'observed' } },
+              },
+            }],
+          },
+        },
+        eventimes: [{ name: 'sequence:end', startAt: 100, visibility: 'public' }],
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer(
+      'public-terminal-instance',
+      engine,
+      terminalScene,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      {},
+      undefined,
+      (event) => publicEvents.push(event.name),
+    )
+
+    expect(player.init().ok).toBe(true)
+    await player.emitEventime(
+      { name: 'earlier:public', startAt: 50, visibility: 'public' },
+      { scope: 'scene' },
+    )
+    player.play()
+    engine.advance(0)
+    engine.advance(100)
+    await flushEventDispatch()
+
+    expect(publicEvents).toEqual(['earlier:public', 'sequence:end', 'sequence:observed'])
+    expect(player.trackJournal.getAllEvents().map((event) => event.name)).toEqual([
+      'earlier:public',
+      'sequence:end',
+      'sequence:observed',
+    ])
+    expect(player.getSolvedScene()?.persos['main:root']?.actions?.filter(
+      (action) => action.name === 'sequence:end',
+    )).toHaveLength(1)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toContain('observed')
+    expect(player.hasSequenceEnded()).toBe(true)
+    engine.advance(200)
+    await flushEventDispatch()
+    expect(publicEvents).toEqual(['earlier:public', 'sequence:end', 'sequence:observed'])
+    expect(player.trackJournal.getAllEvents().map((event) => event.name)).toEqual([
+      'earlier:public',
+      'sequence:end',
+      'sequence:observed',
+    ])
     player.destroy()
   })
 

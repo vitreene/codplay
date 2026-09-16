@@ -44,14 +44,14 @@ spécification et couverts par l’implémentation et les tests ciblés. La
 persistance sérialisée n’appartient pas à cette reprise : elle relève d’une
 intégration hôte ultérieure.
 
-La validation automatisée de cette reprise est verte : 31 tests Sighty, 650
+La validation automatisée de cette reprise est verte : 31 tests Sighty, 651
 tests CodPlay, les trois typechecks concernés et le build Vite des démos. Le
 parcours Safari MCP frais a validé Demo 4 sur menu → scène A, pause/reprise,
 progression vivante, le verrou d’une navigation rapide et la terminalisation
-de la scène C. Le routage automatique de l’eventime auteur `sequence:end` reste
-ouvert à la frontière CodPlay, car il n’est pas publié par le player actuel ;
-les autres gates de reconstruction restent suivies dans les tranches
-correspondantes.
+de la scène C. L’eventime auteur `sequence:end` rejoint maintenant le journal
+et le dispatcher CodPlay standard ; Sighty n’ajoute pas de relais concurrent.
+La validation navigateur de ce nouveau raccord reste à rejouer ; les autres
+gates de reconstruction restent suivies dans les tranches correspondantes.
 
 La première implantation de Sighty est une preuve d’usage et une source de
 constats. Demo 4 reste une fixture d’acceptation ; elle ne définit pas le
@@ -1850,8 +1850,8 @@ Ne pas inclure dans la reconstruction de navigation :
 | M7 — données et état vivant | En cours | data/context `entry`/`live` et lecture d’état exécutés ; navigateur restant |
 | M8 — mutations | En cours | mutations versionnées, politiques et rollback exécutés ; versionnement durable à valider |
 | M9 — coupling/telco | En cours | couplage déclaré, occurrences indépendantes et surface telco vérifiés ; autres parcours navigateur à compléter |
-| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 11/11 ; Sighty : 31/31 ; CodPlay : 650/650), progression live, verrou de navigation rapide et terminalisation Safari validés ; le routage automatique de `sequence:end` reste ouvert côté CodPlay ; les démos 1 à 3 sont différées et non bloquantes |
-| M11 — validation complète | En cours | suites (Sighty 30/30, CodPlay 650/650), typechecks, build et smoke Safari Demo 4 validés le 2026-09-16 ; les preuves restantes sont encore à exécuter |
+| M10 — Demo 4 | En cours | parcours et relais Sighty de Demo 4 validés (Demo 4 : 11/11 ; Sighty : 31/31 ; CodPlay : 651/651), progression live, verrou de navigation rapide et terminalisation Safari validés ; le raccord automatique de `sequence:end` au dispatcher CodPlay est implémenté, sa validation navigateur post-correctif reste à exécuter ; les démos 1 à 3 sont différées et non bloquantes |
+| M11 — validation complète | En cours | suites (Sighty 31/31, CodPlay 651/651), typechecks et build à rejouer après le correctif ; smoke Safari Demo 4 antérieur validé le 2026-09-16 ; les preuves post-correctif restantes sont encore à exécuter |
 | progression | Plan dédié en cours | projection locale CodPlay par `onProgress` et surface `input`, sans `progress:update` |
 
 Ce plan reste En cours tant que les gates et validations correspondantes ne

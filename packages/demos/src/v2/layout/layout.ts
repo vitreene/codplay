@@ -232,6 +232,8 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
               diagnostic.severity === "warning" ? "warn" : "error",
             );
           },
+          // V2 demos are driven by the shared manual telco, not inactivity.
+          idle: false,
         },
         pauseOnDocumentHidden: false,
       });

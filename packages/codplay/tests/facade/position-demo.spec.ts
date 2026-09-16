@@ -117,6 +117,36 @@ describe('position V2 demo', () => {
     document.body.replaceChildren()
   })
 
+  it('starts story one through the declared initial activation circuit', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'position-demo-direct-initial-activation-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    const trace: string[] = []
+    instance.diagnostic.onTrace((event) => trace.push(event.name))
+
+    const initialEvent = POSITION_INITIAL_EVENTS[0]
+    expect(initialEvent).toBeDefined()
+    if (initialEvent === undefined) return
+    await instance.events.emit(initialEvent.eventime, initialEvent.target)
+    await instance.telco.play()
+    codplay.engine.advance(FIRST_VIEW_MOVE_OFFSET_MS)
+    await flushDomEvent()
+
+    expect(trace).toContain('position:demo:view:1:move')
+  })
+
   it('projects the story-three item with each selected path preset', async () => {
     const root = document.createElement('main')
     document.body.append(root)

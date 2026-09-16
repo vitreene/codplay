@@ -75,7 +75,7 @@ export function createStoryFour(): StoryDoc {
       [POSITION_LIVE_ITEM_MOVE_STATE_STRAP]: createLiveItemMoveStateStrap(),
     },
     listen: [
-      { on: storyEvents.enter, active: true, reset: true },
+      { on: storyEvents.enter, active: true, reset: true, straps: [POSITION_LIVE_BOUNCE_START_STRAP] },
       { on: storyEvents.leave, active: false },
       { on: storyEvents.reset, reset: true },
       {

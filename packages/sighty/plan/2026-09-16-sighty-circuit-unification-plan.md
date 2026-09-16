@@ -641,22 +641,21 @@ le scénario, événements publics émis par la scène telco, accrochage interne
 par Sighty après admission, et signaux `on`/`off` seulement lorsqu’ils sont
 volontairement fournis par la scène.
 
-#### Divergence CodPlay observée pendant la validation — 2026-09-16
+#### Résolution de la divergence CodPlay — 2026-09-16
 
 Le parcours navigateur confirme que la scène C atteint la borne déclarée de
-`10 s` et passe à `sequenceEnded`. L’eventime auteur `sequence:end` de
-visibilité `public` n’est toutefois pas transmis à Sighty :
-`RuntimePlayer.notifyPublicEvents()` parcourt uniquement
-`RuntimeTrackJournal.getAllEvents()`, qui ne contient pas les eventimes
-compilés de la scène. La navigation déclarée au titre de cette fin ne peut
-donc pas se déclencher automatiquement.
+`10 s` et passe à `sequenceEnded`. Le correctif CodPlay promu dans le plan
+player-engine fait maintenant rejoindre l’occurrence compilée `sequence:end`
+au `RuntimeTrackJournal`, puis au `RuntimeEventDispatcher` existant. Les
+règles `listen`, les straps, les émissions déclarées, la reconstruction et la
+publication `public` empruntent ainsi le circuit standard ; la copie compilée
+est écartée lors de la materialisation après sa promotion pour éviter tout
+double traitement.
 
-Il s’agit d’une divergence à la frontière du contrat CodPlay, pas d’un défaut
-du routeur Sighty. Aucun observateur privé de `sequenceEnded` ne doit être
-ajouté pour la masquer, car cela créerait un second circuit de fin. La
-correction éventuelle doit être portée par un plan CodPlay explicitement
-autorisé ; jusqu’à cette décision, la validation Sighty distingue la
-terminalisation automatique observée du routage automatique non disponible.
+Sighty n’ajoute aucun observateur privé de `sequenceEnded`, aucune écoute
+parallèle et aucun transport continu : il reçoit seulement l’event public
+produit par CodPlay. Le terminal reste ensuite traité par les conséquences
+CodPlay prévues, sans destruction implicite de l’occurrence.
 
 ### M1 — coordinateur d’opérations
 
@@ -844,7 +843,7 @@ introduire une commande parallèle ou contourner sa coordination.
 | M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 4 passe par l’action déclarée et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
 | M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; wrappers one-shot sans sémantique supprimés ; revue globale à poursuivre sur les parcours différés |
 | M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée ; le relais direct résiduel de Demo 3 reste explicitement différé et ne bloque pas la fixture prioritaire |
-| M7 — validation | En cours | Sighty : 31 tests ; CodPlay : 650 tests et typecheck ; démos : typecheck et build ; Safari MCP actif a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind et rejet d’une navigation rapide sans warning/error ; la publication/réaction automatique à `sequence:end` reste ouverte à la frontière CodPlay |
+| M7 — validation | En cours | Sighty : 31 tests ; CodPlay : 651 tests et typecheck ; démos : typecheck et build ; Safari MCP actif a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind et rejet d’une navigation rapide sans warning/error ; la publication/réaction automatique à `sequence:end` est maintenant raccordée au dispatcher CodPlay unique et reste à rejouer dans la validation navigateur complète |
 
 Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
 du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.

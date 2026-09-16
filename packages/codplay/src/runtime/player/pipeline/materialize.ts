@@ -9,6 +9,7 @@ import type {
 } from '../../../scene/compiled'
 import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
 import { resolveActionDefinition } from './action-resolution'
+import { createCompiledEventimeEventId } from '../eventime'
 import type { RuntimeStoryResetBoundary, RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
 import type { MaterializedAction, MaterializedMoveOccurrence, MaterializedPerso, MaterializedScene } from './types'
@@ -104,10 +105,25 @@ function materializeSceneAtBoundary(
     )
     const events = [
       ...(trackIsActive(journal, TRACK_GLOBAL_ID, tracks.tracks[TRACK_GLOBAL_ID]?.active ?? true)
-        ? flattenEventimes(scene.scene.eventimes ?? [], TRACK_GLOBAL_ID, tracks.tracks[TRACK_GLOBAL_ID]?.order ?? 0)
+        ? flattenEventimes(
+          scene.scene.eventimes ?? [],
+          TRACK_GLOBAL_ID,
+          tracks.tracks[TRACK_GLOBAL_ID]?.order ?? 0,
+          0,
+          [],
+          'scene',
+        ).filter((event) => !isPromotedCompiledEventime(event, journal))
         : []),
       ...(trackIsActive(journal, trackId, track.active)
-        ? flattenEventimes(story.eventimes ?? [], trackId, track.order)
+        ? flattenEventimes(
+          story.eventimes ?? [],
+          trackId,
+          track.order,
+          0,
+          [],
+          'story',
+          storyId,
+        ).filter((event) => !isPromotedCompiledEventime(event, journal))
         : []),
       ...getLiveEventsForStory(
         journal,
@@ -322,15 +338,35 @@ function flattenEventimes(
   trackOrder: number,
   parentStartAt = 0,
   parentPath: readonly number[] = [],
+  scope: 'scene' | 'story' = 'scene',
+  storyId?: string,
 ): readonly FlattenedEventime[] {
   return eventimes.flatMap((event, index) => {
     const startAt = parentStartAt + event.startAt
     const declarationPath = [...parentPath, index]
     return [
-      { event, startAt, trackId, trackOrder, declarationPath },
-      ...flattenEventimes(event.events ?? [], trackId, trackOrder, startAt, declarationPath),
+      {
+        event,
+        startAt,
+        trackId,
+        trackOrder,
+        declarationPath,
+        ...(event.name === 'sequence:end'
+          ? { eventId: createCompiledEventimeEventId(scope, trackId, storyId, declarationPath) }
+          : {}),
+      },
+      ...flattenEventimes(event.events ?? [], trackId, trackOrder, startAt, declarationPath, scope, storyId),
     ]
   })
+}
+
+/** Omits the static copy of a compiled event already promoted to the journal. */
+function isPromotedCompiledEventime(
+  event: FlattenedEventime,
+  journal: RuntimeTrackJournal | undefined,
+): boolean {
+  if (journal === undefined || event.eventId === undefined) return false
+  return journal.getEvents(event.trackId).some((liveEvent) => liveEvent.eventId === event.eventId)
 }
 
 /** Selects live events for one story and converts them to the common eventime shape. */
