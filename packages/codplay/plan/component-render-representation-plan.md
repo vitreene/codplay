@@ -384,10 +384,15 @@ Pour Play, Seek et `resize()`, l'ordre est le même :
 5. résoudre la `PresentationFrame` à `t` ;
 6. committer la présentation locale ou overlay.
 
-Au seek, l'étape de présentation transitoire est committée directement à `t` sans
-animation ni rejeu d'une transition passée. Si une capture est requise, la
-préparation peut être attendue avant ce commit ; elle ne relit pas le DOM dans la
-boucle de frame. À `LAST`, les slots et ressources transitoires sont retirés ; la
+Au seek, la présentation motion des groupes `move`/`reparent` est committée
+directement à `t`, sans animation ni rejeu d'une transition passée. Les
+présentations possédées par un module, comme `replace`, suivent leur propre
+contrat : le player rejoue leurs frontières de présentation depuis l'état
+initial jusqu'à `t`, sans redispatcher les events ni les callbacks historiques,
+afin que le module puisse reconstruire une transition dont la capture sortante
+est correcte. Cette relecture n'effectue pas de lecture DOM dans la boucle de
+frame. Si une capture est requise, la préparation peut être attendue avant ce
+commit. À `LAST`, les slots et ressources transitoires sont retirés ; la
 materialisation auteur reste la seule représentation.
 
 Ce contrat est limité à la materialisation HTML/DOM et aux moves HTML compilés.

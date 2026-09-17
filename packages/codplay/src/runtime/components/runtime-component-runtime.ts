@@ -149,7 +149,7 @@ export class RuntimeComponentRuntime {
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
       const actions = createStableActionSignature(perso.actions)
-      if (phase !== 'normal'
+      if (phase === 'geometry-capture'
         || force
         || this.hasStateChanged(perso.key, perso.state)
         || !sameRuntimeValue(this.lastActions.get(perso.key), actions)) {

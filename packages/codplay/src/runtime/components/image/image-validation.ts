@@ -46,21 +46,21 @@ function validateImageFields(
 
 /** Validates the simple replacement declaration without adding split semantics to img. */
 function validateImageReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
-  if (value === undefined || value === 'fade') return
+  if (value === undefined || value === 'fade' || value === 'fade-in') return
   if (!isPlainRecord(value)) {
     reportInvalidComponentValue(
       context,
       'AUTHOR_IMAGE_REPLACE_INVALID',
-      'img.replace must be "fade" or an object with transition: "fade".',
+      'img.replace must be "fade", "fade-in", or an object with a supported transition.',
       'replace',
     )
     return
   }
-  if (value.transition !== 'fade') {
+  if (value.transition !== 'fade' && value.transition !== 'fade-in') {
     reportInvalidComponentValue(
       context,
       'AUTHOR_IMAGE_REPLACE_TRANSITION_INVALID',
-      'img.replace.transition must be "fade".',
+      'img.replace.transition must be "fade" or "fade-in".',
       'replace.transition',
     )
   }

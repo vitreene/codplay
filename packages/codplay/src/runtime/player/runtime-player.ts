@@ -519,6 +519,7 @@ export class RuntimePlayer {
           transaction.preparedInstances,
           transaction.moveDeltas,
         )
+        this.replayComponentPresentationForSeek(solvedScene)
         this.materializeScene(solvedScene, {
           previousScene: transaction.previousSolvedScene,
           moveDeltas: transaction.moveDeltas,
@@ -1192,6 +1193,32 @@ export class RuntimePlayer {
         ? context
         : { ...context, motionOccurrences },
     )
+  }
+
+  /** Replays component presentation boundaries so seek-owned effects see their real outgoing state. */
+  private replayComponentPresentationForSeek(targetScene: SolvedScene): void {
+    if (this.componentRuntime === undefined) return
+
+    const initialScene = this.reconstructSceneBeforeBoundary(0, this.includePersistOnlyInCurrent)
+    this.componentRuntime.sync(initialScene, false, { phase: 'geometry-capture' })
+    this.materializer?.materializeScene(initialScene, {
+      moveDeltas: [],
+      phase: 'geometry-capture',
+    })
+
+    for (const timeMs of this.getLogicalEvaluationBoundaries()) {
+      if (timeMs <= 0 || timeMs >= targetScene.timeMs) continue
+      const scene = this.reconstructScene(timeMs, this.includePersistOnlyInCurrent)
+      this.componentRuntime.presentAt(timeMs)
+      this.componentRuntime.sync(scene, false, { phase: 'seek' })
+      this.materializer?.materializeScene(scene, {
+        moveDeltas: [],
+        phase: 'geometry-capture',
+      })
+      this.componentRuntime.presentAt(timeMs)
+    }
+
+    this.componentRuntime.presentAt(targetScene.timeMs)
   }
 
   /** Publishes one logical position update without creating another frame loop. */

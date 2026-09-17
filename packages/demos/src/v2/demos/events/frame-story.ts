@@ -8,9 +8,8 @@ import type {
 } from 'codplay/runtime/player'
 import {
   EVENTS_ACTION_OFFSET_MS,
+  EVENTS_ANIMATION_OFFSET_MS,
   EVENTS_ARROW_OFFSET_MS,
-  EVENTS_BARRIER_STORY_ID,
-  EVENTS_CHANGING,
   EVENTS_DOWN,
   EVENTS_EVENT_OFFSET_MS,
   EVENTS_FRAME_DURATION_MS,
@@ -18,13 +17,14 @@ import {
   EVENTS_FRAME_ONE_ID,
   EVENTS_FRAME_STORY_IDS,
   EVENTS_LIGHT_DELAY_MS,
-  EVENTS_SIGNAL_HIDE_EVENT,
-  EVENTS_SIGNAL_SHOW_EVENT,
-  EVENTS_SIGNAL_STORY_ID,
   EVENTS_UP,
+  createEventsAnimationContexts,
+  type EventsAnimationContext,
+  type EventsAnimationContexts,
   type EventsFrameEventNames,
   type EventsFrameStoryId,
 } from './constants'
+import { createEventsAnimationPersos } from './animation-stories'
 
 type EventsPerso = SceneDoc['stories']['main']['persos'][number]
 type EventsStory = SceneDoc['stories'][string]
@@ -48,6 +48,7 @@ type FrameDefinition = Readonly<{
   number: string
   title: string
   summary: string
+  animation: EventsAnimationContext
   rows: readonly FrameRowDefinition[]
   dispatchMode: FrameDispatchMode
   scheduledUp: boolean
@@ -56,22 +57,31 @@ type FrameDefinition = Readonly<{
 
 /** Returns a simple opacity tween that reveals one authored explanation. */
 function revealAction(): Readonly<Record<string, unknown>> {
-  return { style: { opacity: { from: 0, to: 1, duration: 220, ease: 'outCubic' } } }
+  return { style: { opacity: { from: 0, to: 1, duration: 300, ease: 'outCubic' } } }
 }
 
 /** Returns a simple opacity tween that reveals one frame arrow. */
 function revealArrowAction(): Readonly<Record<string, unknown>> {
-  return { style: { opacity: { from: 0, to: 1, duration: 180, ease: 'outCubic' } } }
+  return {
+    style: {
+      opacity: { from: 0, to: 1, duration: 300, ease: 'outCubic' },
+      translateX: { from: -32, to: 0, duration: 300, ease: 'outCubic' },
+      scaleX: 1.55,
+    },
+  }
 }
 
 /** Creates the four frame definitions consumed by the story factory. */
-export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
+export function createEventsFrameDefinitions(
+  animationContexts: EventsAnimationContexts = createEventsAnimationContexts(),
+): readonly FrameDefinition[] {
   const frameOne = EVENTS_FRAME_EVENTS[EVENTS_FRAME_ONE_ID]
   const frameTwo = EVENTS_FRAME_EVENTS[EVENTS_FRAME_STORY_IDS[1]]
 
   return [
     {
       storyId: EVENTS_FRAME_ONE_ID,
+      animation: animationContexts[EVENTS_FRAME_ONE_ID],
       number: '01',
       title: 'Un event est émis',
       summary: 'Une émission devient le point de départ d’une action.',
@@ -90,7 +100,7 @@ export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
           text: 'event : up',
           tag: 'code',
           textInitialOpacity: 0,
-          textActions: { [EVENTS_UP]: revealAction() },
+          textActions: { [frameOne.eventMessage]: revealAction() },
         },
         {
           id: 'barrier-action',
@@ -106,6 +116,7 @@ export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
     },
     {
       storyId: EVENTS_FRAME_STORY_IDS[1],
+      animation: animationContexts[EVENTS_FRAME_STORY_IDS[1]],
       number: '02',
       title: 'Un event se distribue',
       summary: 'Le même event atteint plusieurs animations.',
@@ -121,18 +132,8 @@ export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
           textActions: { [EVENTS_UP]: revealAction() },
         },
         {
-          id: 'barrier-action',
-          text: 'action up : { rotate: 70deg }',
-          tag: 'code',
-          arrow: 'barrier',
-          textInitialOpacity: 0,
-          arrowInitialOpacity: 0,
-          textActions: { [frameTwo.actionBarrier]: revealAction() },
-          arrowActions: { [frameTwo.arrowBarrier]: revealArrowAction() },
-        },
-        {
           id: 'signal-action',
-          text: 'action up : { color: rouge }',
+          text: 'perso feu — action up : { color: rouge }',
           tag: 'code',
           arrow: 'signal',
           textInitialOpacity: 0,
@@ -140,10 +141,21 @@ export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
           textActions: { [frameTwo.actionSignal]: revealAction() },
           arrowActions: { [frameTwo.arrowSignal]: revealArrowAction() },
         },
+        {
+          id: 'barrier-action',
+          text: 'perso barrière — action up : { rotate: 70deg }',
+          tag: 'code',
+          arrow: 'barrier',
+          textInitialOpacity: 0,
+          arrowInitialOpacity: 0,
+          textActions: { [frameTwo.actionBarrier]: revealAction() },
+          arrowActions: { [frameTwo.arrowBarrier]: revealArrowAction() },
+        },
       ],
     },
     {
       storyId: EVENTS_FRAME_STORY_IDS[2],
+      animation: animationContexts[EVENTS_FRAME_STORY_IDS[2]],
       number: '03',
       title: 'Les boutons émettent les events',
       summary: 'Les contrôles produisent up et down ; les animations écoutent.',
@@ -184,6 +196,7 @@ export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
     },
     {
       storyId: EVENTS_FRAME_STORY_IDS[3],
+      animation: animationContexts[EVENTS_FRAME_STORY_IDS[3]],
       number: '04',
       title: 'Les events peuvent être différés',
       summary: 'Un strap séquence les actions du feu avec un délai d’une seconde.',
@@ -226,8 +239,10 @@ export function createEventsFrameDefinitions(): readonly FrameDefinition[] {
 }
 
 /** Creates all frame stories without changing the shared V2 layout. */
-export function createEventsFrameStories(): Readonly<Record<EventsFrameStoryId, EventsStory>> {
-  return Object.fromEntries(createEventsFrameDefinitions().map((definition) => [
+export function createEventsFrameStories(
+  animationContexts: EventsAnimationContexts = createEventsAnimationContexts(),
+): Readonly<Record<EventsFrameStoryId, EventsStory>> {
+  return Object.fromEntries(createEventsFrameDefinitions(animationContexts).map((definition) => [
     definition.storyId,
     createEventsFrameStory(definition),
   ])) as Record<EventsFrameStoryId, EventsStory>
@@ -255,6 +270,9 @@ function createEventsFrameStory(definition: FrameDefinition): EventsStory {
     ],
     persos: [
       createFrameRootPerso(definition, events),
+      ...createEventsAnimationPersos(definition.animation, {
+        includeSignal: definition.storyId !== EVENTS_FRAME_ONE_ID,
+      }),
       ...createFrameHeaderPersos(definition),
       ...definition.rows.flatMap((row) => createFrameRowPersos(definition, row)),
       ...(definition.buttons ? createButtonPersos(definition.storyId) : []),
@@ -340,8 +358,8 @@ function createFrameMarkup(definition: FrameDefinition): string {
   const prefix = definition.storyId
   const rows = definition.rows.map((row) => `
           <div id="${prefix}-${row.id}-row" class="events-frame__row">
-            <div id="${prefix}-${row.id}-text-slot" data-part="${prefix}:${row.id}:text"></div>
-            <div id="${prefix}-${row.id}-arrow-slot" data-part="${prefix}:${row.id}:arrow"></div>
+            <!-- data-part="${prefix}:${row.id}:text" -->
+            <!-- data-part="${prefix}:${row.id}:arrow" -->
           </div>`).join('')
   const buttons = definition.buttons ? `
           <div id="${prefix}-buttons" class="events-frame__buttons">
@@ -372,7 +390,7 @@ function createFrameRowPersos(
   const textInitialOpacity = row.textInitialOpacity ?? 1
   const arrowInitialOpacity = row.arrowInitialOpacity ?? (row.arrow === undefined ? 0 : 1)
   const textTag = row.tag ?? 'p'
-  const arrowContent = row.arrow === 'barrier' || row.arrow === 'signal' ? '→' : ''
+  const arrowContent = row.arrow === 'barrier' || row.arrow === 'signal' ? '⟶' : ''
   const arrowLabel = row.arrow === 'barrier' ? 'barrière' : row.arrow === 'signal' ? 'feu' : ''
 
   return [
@@ -437,76 +455,86 @@ function createButtonPersos(storyId: EventsFrameStoryId): readonly EventsPerso[]
   ]
 }
 
-/** Plans the explanatory eventime and the optional scheduled up event. */
+/** Plans the explanatory event sequence and the optional scheduled up event. */
 function createFrameStartStrap(
   definition: FrameDefinition,
   events: EventsFrameEventNames,
 ): StrapFunction {
   return ({ context }) => {
-    const resetEvents: readonly StrapEvent[] = [
-      storyEventValue(
-        EVENTS_SIGNAL_STORY_ID,
-        definition.storyId === EVENTS_FRAME_ONE_ID ? EVENTS_SIGNAL_HIDE_EVENT : EVENTS_SIGNAL_SHOW_EVENT,
-      ),
+    const animationEvents: readonly StrapEvent[] = [
+      storyEventValue(definition.storyId, definition.animation.events.barrierShow),
+      ...(definition.storyId === EVENTS_FRAME_ONE_ID
+        ? []
+        : [storyEventValue(definition.storyId, definition.animation.events.signalShow)]),
     ]
     const occurrences: readonly PlannedStrapOccurrence[] = [
       ...(definition.scheduledUp
         ? context.planned.wait(EVENTS_EVENT_OFFSET_MS, [
           storyEvent(definition.storyId, EVENTS_UP),
-          storyEvent(EVENTS_BARRIER_STORY_ID, EVENTS_UP),
-          ...(definition.storyId === EVENTS_FRAME_STORY_IDS[1]
+        ])
+        : []),
+      ...(definition.scheduledUp
+        ? context.planned.wait(
+          EVENTS_ARROW_OFFSET_MS,
+          definition.storyId === EVENTS_FRAME_ONE_ID
+            ? storyEvent(definition.storyId, events.eventMessage)
+            : [
+              storyEvent(definition.storyId, events.actionSignal),
+              storyEvent(definition.storyId, events.arrowSignal),
+            ],
+        )
+        : []),
+      ...(definition.scheduledUp
+        ? context.planned.wait(
+          EVENTS_ACTION_OFFSET_MS,
+          definition.storyId === EVENTS_FRAME_ONE_ID
             ? [
-              storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_UP),
-              storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_SIGNAL_SHOW_EVENT),
+              storyEvent(definition.storyId, events.actionBarrier),
+              storyEvent(definition.storyId, events.arrowBarrier),
             ]
-            : []),
-        ])
+            : [
+              storyEvent(definition.storyId, events.actionBarrier),
+              storyEvent(definition.storyId, events.arrowBarrier),
+            ],
+        )
         : []),
       ...(definition.scheduledUp
-        ? context.planned.wait(EVENTS_ARROW_OFFSET_MS, [
-          storyEvent(definition.storyId, events.arrowBarrier),
-          ...(definition.storyId === EVENTS_FRAME_STORY_IDS[1]
-            ? [storyEvent(definition.storyId, events.arrowSignal)]
-            : []),
-        ])
-        : []),
-      ...(definition.scheduledUp
-        ? context.planned.wait(EVENTS_ACTION_OFFSET_MS, [
-          storyEvent(definition.storyId, events.actionBarrier),
-          ...(definition.storyId === EVENTS_FRAME_STORY_IDS[1]
-            ? [storyEvent(definition.storyId, events.actionSignal)]
-            : []),
-        ])
+        ? context.planned.wait(
+          EVENTS_ANIMATION_OFFSET_MS,
+          storyEvent(definition.storyId, definition.animation.events.up),
+        )
         : []),
       ...context.planned.wait(EVENTS_FRAME_DURATION_MS, storyEvent(definition.storyId, events.end)),
     ]
     return [
-      { events: resetEvents },
+      { events: animationEvents },
       occurrences,
     ]
   }
 }
 
-/** Dispatches one frame command to the reusable barrier and signal stories. */
-function createFrameDispatchStrap(definition: FrameDefinition): StrapFunction {
+/** Dispatches one frame command to its animation persos. */
+function createFrameDispatchStrap(
+  definition: FrameDefinition,
+): StrapFunction {
   return ({ event, context }) => {
+    if (event.name === EVENTS_UP && definition.scheduledUp) {
+      return { events: [] }
+    }
+
     const targetEvents: StrapStep[] = []
     if (event.name === EVENTS_UP) {
-      targetEvents.push(storyEvent(EVENTS_BARRIER_STORY_ID, EVENTS_UP))
-      if (definition.dispatchMode === 'distribution' || definition.dispatchMode === 'interactive') {
-        targetEvents.push(storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_UP))
-      }
+      targetEvents.push(storyEvent(definition.storyId, definition.animation.events.up))
       if (definition.dispatchMode === 'delayed') {
-        targetEvents.push(storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_CHANGING))
+        targetEvents.push(storyEvent(definition.storyId, definition.animation.events.changing))
       }
       if (definition.dispatchMode !== 'barrier') {
-        targetEvents.push(storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_SIGNAL_SHOW_EVENT))
+        targetEvents.push(storyEvent(definition.storyId, definition.animation.events.signalShow))
       }
     }
     if (event.name === EVENTS_DOWN && (definition.dispatchMode === 'interactive' || definition.dispatchMode === 'delayed')) {
-      targetEvents.push(storyEvent(EVENTS_BARRIER_STORY_ID, EVENTS_DOWN))
-      targetEvents.push(storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_DOWN))
-      targetEvents.push(storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_SIGNAL_SHOW_EVENT))
+      targetEvents.push(storyEvent(definition.storyId, definition.animation.events.down))
+      targetEvents.push(storyEvent(definition.storyId, definition.animation.events.signalShow))
     }
 
     const immediate: StrapReturnValue = { events: targetEvents.flatMap((step) => step.event === undefined ? [] : [step.event]) }
@@ -514,12 +542,15 @@ function createFrameDispatchStrap(definition: FrameDefinition): StrapFunction {
 
     return [
       immediate,
-      context.planned.wait(EVENTS_LIGHT_DELAY_MS, storyEvent(EVENTS_SIGNAL_STORY_ID, EVENTS_UP)),
+      context.planned.wait(
+        EVENTS_LIGHT_DELAY_MS,
+        storyEvent(definition.storyId, definition.animation.events.up),
+      ),
     ]
   }
 }
 
-/** Creates one story-targeted event step for a frame or reusable image story. */
+/** Creates one story-targeted event step for the owning frame story. */
 function storyEvent(storyId: string, name: string): StrapStep {
   return {
     event: storyEventValue(storyId, name),

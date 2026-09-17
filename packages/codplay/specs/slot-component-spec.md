@@ -3,7 +3,7 @@
 ## Statut
 
 > Status: En cours — profil auteur, manifeste, surface HTML, module `replace`
-> `fade` et première surface publique de montage implémentés et testés ;
+> `fade`/`fade-in` et première surface publique de montage implémentés et testés ;
 > une première fixture Sighty de montage est testée ; les politiques générales
 > interinstances et de cycle de vie restent à valider ; le pilotage des scènes
 > relève de Sighty.
@@ -161,7 +161,7 @@ des scènes ni un substitut au materializer.
 ## Limites actuelles
 
 - Le module partagé `replace` est raccordé aux hooks V2 pour le profil `slot` et
-  fournit la transition `fade`. La présence de `replace.split` est acceptée
+  fournit les transitions `fade` et `fade-in`. La présence de `replace.split` est acceptée
   pour compatibilité de déclaration puis ignorée ; elle n'active aucune
   stratégie de split.
 - La surface est disponible dans le runtime HTML interne et une première
@@ -178,10 +178,11 @@ des scènes ni un substitut au materializer.
   Pour une scène CodPlay, Sighty possède la décision de créer, piloter,
   démonter ou détruire l'occurrence ; le player CodPlay en exécute les
   opérations.
-- Le clone utilisé par `replace` est un instantané DOM de présentation,
-  possédé temporairement par la surface de présentation HTML et détruit à la
-  fin ou à l'annulation de la transition. Il ne charge, ne pilote et ne
-  détruit aucun contenu foreign et ne prolonge pas la propriété de ses racines.
+- Les clones utilisés par `replace` sont des instantanés DOM de présentation,
+  possédés temporairement par la surface de présentation HTML et détruits à la
+  fin ou à l'annulation de la transition. Ils ne chargent, ne pilotent et ne
+  détruisent aucun contenu foreign et ne prolongent pas la propriété de ses
+  racines.
 - Cet instantané n'est pas une stratégie générique pour toutes les
   représentations foreign : `cloneNode(true)` ne reproduit pas le contexte de
   navigation ni l'état rendu d'une iframe. Le comportement futur d'un
@@ -196,15 +197,36 @@ Le catalogue core déclare `replace` comme module player-scoped requis par le
 type `slot`. Le runtime composant appelle ses hooks génériques
 `beforeComponentUpdate` et `afterComponentUpdate` autour de `component.update()`.
 Le module résout une surface de présentation par `componentId`, capture
-`hostRoot` avant la mise à jour et enregistre une animation `fade` dans le même
-cycle d'horloge que les animations de composant.
+`hostRoot` avant la mise à jour et enregistre une animation `fade` ou `fade-in`
+dans le même cycle d'horloge que les animations de composant.
 
 La surface de présentation HTML est distincte de `foreignContent`. Elle crée
-un instantané DOM marqué transitoire, supprime ses identifiants et handlers
-inline, puis le retire à la fin ou à l'annulation. Elle ne reçoit aucune
-opération de chargement, de pilotage ou de destruction d'une ressource foreign.
-Une mise à jour `seek` ou de capture géométrique annule les sessions et ne
-rejoue pas une transition passée.
+un instantané DOM sortant avant la mise à jour, puis un instantané DOM entrant
+après la mise à jour ; les deux sont marqués transitoires, leurs identifiants
+et handlers inline sont supprimés, puis ils sont retirés à la fin ou à
+l'annulation. Elle ne reçoit aucune opération de chargement, de pilotage ou de
+destruction d'une ressource foreign.
+Une mise à jour `seek` rejoue les frontières de présentation depuis l'état
+initial afin de reconstruire la transition si l'instant demandé se trouve dans
+sa fenêtre. Cette relecture ne redispatche pas les events ni les callbacks
+historiques. Une capture géométrique annule la présentation car elle ne
+constitue pas une présentation utilisateur.
+
+Les deux profils ont des effets distincts :
+
+- `fade` fait varier simultanément l'instantané sortant de `1` à `0` et
+  l'instantané entrant de `0` à `1` ;
+- `fade-in` laisse l'instantané sortant opaque pendant toute la durée, fait
+  varier uniquement l'instantané entrant de `0` à `1`, puis retire les deux
+  instantanés.
+
+La racine persistante reste masquée pendant la transition. Elle redevient
+visible lorsque les deux instantanés sont retirés et porte alors l'état logique
+mis à jour.
+
+Dans ce contrat, une « session » est l'état runtime temporaire qui relie les
+instantanés sortant et entrant, leur animation et leur nettoyage. Ce n'est ni
+un perso, ni une story, ni une donnée d'auteur.
 
 Une seule session de présentation `replace` peut être active pour un hôte à un
 instant donné. Si un nouveau remplacement intervient avant la fin du
@@ -213,7 +235,7 @@ présentation courante comme état sortant du nouveau remplacement. Les deux
 sessions ne se superposent donc pas et la logique de remplacement ne crée pas
 de concurrence visuelle entre plusieurs instantanés.
 
-Pour `slot`, `replace` est limité à `fade` et `replace.split` est un champ de
+Pour `slot`, `replace` est limité à `fade` et `fade-in`, et `replace.split` est un champ de
 compatibilité sans effet. Il est conservé dans la déclaration compilée, ne
 produit aucun diagnostic et n'active jamais un split de la représentation
 opaque. Les profils split de composants spécialisés restent hors de ce
@@ -230,9 +252,9 @@ suite CodPlay existante passent pour cette tranche.
 
 Le test `tests/runtime/capabilities/replace-module.spec.ts` exerce le chemin
 réel `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer` :
-un instantané sortant est animé par `fade`, le nouveau contenu reste porté par
-la surface `foreignContent`, puis l'instantané et ses styles transitoires sont
-supprimés.
+les instantanés sortant et entrant sont animés par `fade`, le nouveau contenu
+reste porté par la surface `foreignContent`, puis les deux instantanés et leurs
+styles transitoires sont supprimés.
 
 Le test `tests/facade/foreign-mount.spec.ts` exerce la première surface publique
 avec deux instances CodPlay réelles : adressage du `slot`, insertion directe de

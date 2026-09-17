@@ -1,4 +1,5 @@
 import type { BaseComponentVisualData } from '../base-component'
+import type { ReplaceTransition } from '../component-surface-types'
 
 /** JSON-compatible reference accepted as opaque foreign content. */
 export type ForeignContentValue =
@@ -24,8 +25,8 @@ export type SlotInitial = SlotState
 export type SlotAction = Partial<SlotState>
 
 /** Replacement request supported by the first slot profile. */
-export type SlotReplace = 'fade' | Readonly<{
-  transition: 'fade'
+export type SlotReplace = ReplaceTransition | Readonly<{
+  transition: ReplaceTransition
   duration?: number
   /** Shared replace compatibility field; the opaque slot deliberately ignores it. */
   split?: 'letter' | 'word' | 'line' | 'cells'

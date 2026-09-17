@@ -1,7 +1,6 @@
 import type { SceneDoc } from 'codplay/scene/types'
 import type { V2DemoEventInjection } from '../../layout/types'
 import {
-  EVENTS_BARRIER_STORY_ID,
   EVENTS_BARRIER_TARGET,
   EVENTS_FRAME_EVENTS,
   EVENTS_FRAME_ONE_ID,
@@ -11,10 +10,9 @@ import {
   EVENTS_KEYBOARD_TARGET,
   EVENTS_MAIN_STORY_ID,
   EVENTS_SCENE_ID,
-  EVENTS_SIGNAL_STORY_ID,
   EVENTS_SIGNAL_TARGET,
+  createEventsAnimationContexts,
 } from './constants'
-import { createBarrierStory, createSignalStory } from './animation-stories'
 import { createEventsFrameStories } from './frame-story'
 import { createEventsRememberStraps, createEventsSceneListenRules, createEventsSceneStraps } from './scene-straps'
 
@@ -31,7 +29,8 @@ export const EVENTS_INITIAL_EVENTS: readonly V2DemoEventInjection[] = [{
 
 /** Creates the new events scene without importing any position demo module. */
 export function createScene(): SceneDoc {
-  const frameStories = createEventsFrameStories()
+  const animationContexts = createEventsAnimationContexts()
+  const frameStories = createEventsFrameStories(animationContexts)
   return {
     id: EVENTS_SCENE_ID,
     state: { currentView: 0 },
@@ -46,8 +45,6 @@ export function createScene(): SceneDoc {
         initial: { move: '@root' },
         persos: [createEventsStagePerso(), createEventsKeyboardPerso()],
       },
-      [EVENTS_BARRIER_STORY_ID]: createBarrierStory(),
-      [EVENTS_SIGNAL_STORY_ID]: createSignalStory(),
       [EVENTS_FRAME_STORY_IDS[0]]: frameStories[EVENTS_FRAME_STORY_IDS[0]],
       [EVENTS_FRAME_STORY_IDS[1]]: frameStories[EVENTS_FRAME_STORY_IDS[1]],
       [EVENTS_FRAME_STORY_IDS[2]]: frameStories[EVENTS_FRAME_STORY_IDS[2]],
@@ -67,8 +64,10 @@ function createEventsStagePerso(): EventsPerso {
       markup: `
         <main id="events-stage-markup" class="events-stage__surface">
           <div id="events-frame-mount" class="events-stage__frame-mount" data-part="${EVENTS_FRAME_TARGET}"></div>
-          <div id="events-barrier-mount" class="events-stage__barrier-mount" data-part="${EVENTS_BARRIER_TARGET}"></div>
-          <div id="events-signal-mount" class="events-stage__signal-mount" data-part="${EVENTS_SIGNAL_TARGET}"></div>
+          <div id="events-illustrations" class="events-stage__illustrations">
+            <div id="events-signal-mount" class="events-stage__signal-mount" data-part="${EVENTS_SIGNAL_TARGET}"></div>
+            <div id="events-barrier-mount" class="events-stage__barrier-mount" data-part="${EVENTS_BARRIER_TARGET}"></div>
+          </div>
           <div id="events-keyboard-mount" class="events-stage__keyboard-mount" data-part="${EVENTS_KEYBOARD_TARGET}"></div>
         </main>
       `,

@@ -68,10 +68,11 @@ describe('V2 shared replace module', () => {
 
     const snapshots = (): HTMLElement[] => Array.from(root.children)
       .filter((child): child is HTMLElement => child.getAttribute('data-codplay-transient') !== null)
-    expect(snapshots()).toHaveLength(1)
-    const snapshot = snapshots()[0]
-    expect(snapshot?.id).toBe('')
-    expect(snapshot?.textContent).toBe('A')
+    expect(snapshots()).toHaveLength(2)
+    const [outgoing, incoming] = snapshots()
+    expect(outgoing?.id).toBe('')
+    expect(outgoing?.textContent).toBe('A')
+    expect(incoming?.id).toBe('')
 
     runner.getComponentSurface('main:host', 'foreignContent')?.attach([foreignB])
     expect(host.children).toHaveLength(1)
@@ -80,7 +81,8 @@ describe('V2 shared replace module', () => {
 
     runner.advance(150)
     expect(snapshots()[0]?.style.opacity).toBe('0.5')
-    expect(host.style.opacity).toBe('0.5')
+    expect(snapshots()[1]?.style.opacity).toBe('0.5')
+    expect(host.style.visibility).toBe('hidden')
 
     runner.advance(200)
     expect(snapshots()).toHaveLength(0)
@@ -89,7 +91,7 @@ describe('V2 shared replace module', () => {
     expect(foreignB.parentNode).toBe(host)
   })
 
-  it('cancels the previous session on interruption and does not replay it on seek', () => {
+  it('cancels the previous session and replays the active transition on seek', () => {
     const root = document.createElement('main')
     document.body.appendChild(root)
     const catalog = createCoreRuntimeCatalog()
@@ -145,9 +147,9 @@ describe('V2 shared replace module', () => {
     runner.player.play()
     runner.advance(0)
     runner.advance(100)
-    expect(snapshots()).toHaveLength(1)
+    expect(snapshots()).toHaveLength(2)
     runner.advance(150)
-    expect(snapshots()).toHaveLength(1)
+    expect(snapshots()).toHaveLength(2)
     expect(snapshots()[0]?.textContent).toBe('B')
 
     runner.getComponentSurface('main:host', 'foreignContent')?.attach([foreignC])
@@ -156,10 +158,20 @@ describe('V2 shared replace module', () => {
     expect(snapshots()).toHaveLength(0)
 
     expect(runner.seek(175).ok).toBe(true)
+    expect(snapshots()).toHaveLength(2)
+    expect(snapshots()[0]?.textContent).toBe('C')
+    expect(snapshots()[0]?.style.opacity).toBe('0.75')
+    expect(snapshots()[1]?.style.opacity).toBe('0.25')
+    expect(host.style.visibility).toBe('hidden')
+    runner.advance(200)
+    runner.advance(225)
+    expect(snapshots()[0]?.style.opacity).toBe('0.5')
+    expect(snapshots()[1]?.style.opacity).toBe('0.5')
+    runner.advance(300)
     expect(snapshots()).toHaveLength(0)
   })
 
-  it('reuses the same fade path for an image component', () => {
+  it('runs the fade-in preset for an image component without fading the outgoing snapshot', () => {
     const root = document.createElement('main')
     document.body.appendChild(root)
     const catalog = createCoreRuntimeCatalog()
@@ -177,7 +189,7 @@ describe('V2 shared replace module', () => {
             actions: {
               swap: {
                 src: '/image-b.png',
-                replace: { transition: 'fade', duration: 100 },
+                replace: { transition: 'fade-in', duration: 100 },
               },
             },
           }],
@@ -209,16 +221,30 @@ describe('V2 shared replace module', () => {
     expect(host.querySelector('img')?.getAttribute('src')).toBe('/image-a.png')
 
     runner.advance(100)
-    expect(snapshots()).toHaveLength(1)
+    expect(snapshots()).toHaveLength(2)
+    expect(root.children[0]).toBe(snapshots()[0])
+    expect(root.children[1]).toBe(snapshots()[1])
     expect(snapshots()[0]?.querySelector('img')?.getAttribute('src')).toBe('/image-a.png')
+    expect(snapshots()[1]?.querySelector('img')?.getAttribute('src')).toBe('/image-b.png')
     expect(host.querySelector('img')?.getAttribute('src')).toBe('/image-b.png')
 
     runner.advance(150)
-    expect(snapshots()[0]?.style.opacity).toBe('0.5')
-    expect(host.style.opacity).toBe('0.5')
+    expect(snapshots()[0]?.style.opacity).toBe('1')
+    expect(snapshots()[1]?.style.opacity).toBe('0.5')
+    expect(host.style.visibility).toBe('hidden')
 
     runner.advance(200)
     expect(snapshots()).toHaveLength(0)
     expect(host.querySelector('img')?.getAttribute('src')).toBe('/image-b.png')
+
+    expect(runner.seek(150).ok).toBe(true)
+    expect(snapshots()).toHaveLength(2)
+    expect(snapshots()[0]?.querySelector('img')?.getAttribute('src')).toBe('/image-a.png')
+    expect(snapshots()[0]?.style.opacity).toBe('1')
+    expect(snapshots()[1]?.querySelector('img')?.getAttribute('src')).toBe('/image-b.png')
+    expect(snapshots()[1]?.style.opacity).toBe('0.5')
+    expect(host.style.visibility).toBe('hidden')
+    expect(runner.seek(300).ok).toBe(true)
+    expect(snapshots()).toHaveLength(0)
   })
 })

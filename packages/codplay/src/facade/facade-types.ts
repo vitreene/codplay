@@ -36,6 +36,7 @@ import type {
   RuntimePreloadStrategy,
 } from '../runtime/preload'
 import type { PlayerLifecycleState } from '../runtime/config/player-lifecycle'
+import type { ReplaceTransition } from '../runtime/components'
 
 /** One group of capability declarations composed while creating an engine. */
 export type CodPlayCapabilityGroup<Definition> = Readonly<{
@@ -312,8 +313,8 @@ export type CodPlayInstanceHostTarget = Readonly<{
 }>
 
 /** Presentation transition requested when an instance replaces another mount. */
-export type CodPlayInstanceMountReplace = 'fade' | Readonly<{
-  transition: 'fade'
+export type CodPlayInstanceMountReplace = ReplaceTransition | Readonly<{
+  transition: ReplaceTransition
   duration?: number
 }>
 

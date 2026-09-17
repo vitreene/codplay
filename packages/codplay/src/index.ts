@@ -124,6 +124,7 @@ export type {
   ForeignContentSurface,
   ReplaceComponentSurface,
   ReplacePresentationSession,
+  ReplaceTransition,
   RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,

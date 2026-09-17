@@ -1,4 +1,5 @@
 import type { BaseComponentVisualData } from '../base-component'
+import type { ReplaceTransition } from '../component-surface-types'
 
 /** Properties targeted at the persistent native image node. */
 export type ImagePartState = BaseComponentVisualData
@@ -19,7 +20,7 @@ export type ImageState = ImageInitial
 export type ImageAction = Partial<ImageInitial>
 
 /** Simple replacement declaration supported by the shared image transition path. */
-export type ImageReplace = 'fade' | Readonly<{
-  transition: 'fade'
+export type ImageReplace = ReplaceTransition | Readonly<{
+  transition: ReplaceTransition
   duration?: number
 }>

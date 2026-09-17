@@ -20,7 +20,7 @@ autre contenu pris en charge par son propriétaire de représentation.
 L'autorisation d'implémenter a été donnée le 2026-09-11. La tranche engagée
 couvre le type auteur `slot`, la validation du `name` racine, le manifeste de
 découverte, la surface HTML qui attache/détache des racines foreign, le module
-partagé `replace` raccordé aux hooks V2 pour le chemin `fade` et une première
+partagé `replace` raccordé aux hooks V2 pour les chemins `fade` et `fade-in` et une première
 surface publique `codplay.instances.mount`. Le profil `slot` accepte
 `replace.split` mais l'ignore. Le montage public attache directement les
 racines matérialisées de l'instance enfant, sans envelope visible ajoutée par
@@ -101,11 +101,11 @@ Pour une scène CodPlay, ce propriétaire est Sighty pour la décision de cycle 
 vie et le player enfant pour ses racines et ressources ; pour une iframe ou un
 flux, c'est le code qui les crée et les détient.
 
-Ce propriétaire n'a pas à déclarer une capacité de clonage. Le clone de
-`replace` est un instantané visuel temporaire créé par le materializer HTML,
-piloté par le module `replace` uniquement via une surface de présentation, et
-détruit par cette même surface. Il ne charge ni ne pilote la représentation
-foreign et ne transfère jamais sa propriété.
+Ce propriétaire n'a pas à déclarer une capacité de clonage. Les clones de
+`replace` sont des instantanés visuels temporaires créés par le materializer
+HTML, pilotés par le module `replace` uniquement via une surface de
+présentation, et détruits par cette même surface. Ils ne chargent ni ne
+pilotent la représentation foreign et ne transfèrent jamais sa propriété.
 
 ## Bases normatives relues
 
@@ -337,7 +337,7 @@ doit permettre au materializer de :
 3. les retirer sans détruire la ressource ou le player qui les possède ;
 4. signaler une disponibilité asynchrone si le support en a besoin ;
 5. offrir au module `replace` une surface de présentation qui peut, si le
-   support HTML le permet, créer un instantané DOM temporaire de la racine
+   support HTML le permet, créer les instantanés DOM temporaires de la racine
    hôte. Cette opération ne clone ni ne pilote une ressource foreign et ne
    demande aucune décision de clonage au propriétaire du contenu.
 
@@ -424,10 +424,10 @@ diagnostic de façade et l'opération est rejetée. La destruction de l'hôte ou
 de l'enfant détache automatiquement la relation, sans détruire l'autre
 instance.
 
-Lors d'un `replace`, la surface de présentation HTML crée un instantané
-temporaire de `hostRoot` et le module le garde visible le temps de sa
-disparition. Cet artefact ne devient ni une racine de l'instance enfant ni un
-perso ; il ne possède aucune ressource et son retrait est séparé du
+Lors d'un `replace`, la surface de présentation HTML crée des instantanés
+temporaires de `hostRoot` et le module les garde visibles le temps de leur
+disparition. Ces artefacts ne deviennent ni une racine de l'instance enfant ni
+un perso ; ils ne possèdent aucune ressource et leur retrait est séparé du
 détachement de la représentation persistante.
 
 ## Rendu et comportement ordinaire
@@ -543,10 +543,11 @@ validation V2 du catalogue :
 
 ```ts
 { replace: 'fade' }
+{ replace: 'fade-in' }
 
 {
   replace: {
-    transition: 'fade',
+    transition: 'fade' | 'fade-in',
     duration?: number,
   },
   content: /* nouvelle valeur */,
@@ -554,8 +555,8 @@ validation V2 du catalogue :
 ```
 
 Cette forme est le profil accepté par le composant `slot` lorsqu'il expose la
-capacité `foreign-content` dans cette version : il ne fournit que
-`replace-simple` avec une transition `fade`. La propriété `replace.split` peut
+capacité `foreign-content` dans cette version : il fournit `replace-simple` avec
+les transitions `fade` et `fade-in`. La propriété `replace.split` peut
 être présente pour conserver une déclaration compatible avec le module partagé,
 mais elle n'a aucune sémantique pour une représentation opaque et est ignorée
 par le profil `slot`, sans diagnostic de rejet. Le runtime normalise alors la
@@ -574,32 +575,41 @@ correspondante.
 Pour un changement de `content` associé à `replace`, le chemin attendu est :
 
 1. **`beforeUpdate`** — le module demande à la surface de présentation HTML un
-   instantané DOM de `hostRoot`. La surface crée par défaut un `cloneNode(true)`
-   temporaire, sans identité logique ; les identifiants et handlers inline en
-   sont retirés, puis la copie est rendue insensible aux events et au
-   placement. La géométrie est capturée dans le parent et la racine réelle est
-   masquée pendant la préparation.
+   instantané DOM sortant de `hostRoot`. La surface crée par défaut un
+   `cloneNode(true)` temporaire, sans identité logique ; les identifiants et
+   handlers inline en sont retirés, puis la copie est rendue insensible aux
+   events et au placement. La géométrie est capturée dans le parent et la
+   racine persistante est masquée pendant la préparation.
 2. **Mise à jour composant** — `ForeignContentComponent.update()` applique les
    services de la racine. Le propriétaire de la représentation peut, par sa
    surface `foreignContent`, détacher les anciennes racines et monter la
    nouvelle représentation ; l'instantané sortant reste figé et ne contient
    pas une seconde instance vivante.
-3. **`afterUpdate`** — le module demande à la surface de présentation d'animer
-   la racine réelle et l'instantané sortant. Il ne charge, ne pilote et ne
-   clone aucun player ou contenu foreign.
+3. **`afterUpdate`** — la surface crée un second `cloneNode(true)` à partir de
+   la racine persistante déjà mise à jour. Ce clone entrant est placé au-dessus
+   du clone sortant ; la racine persistante reste masquée pendant la transition.
+   Le module anime uniquement ces deux représentations temporaires. Il ne
+   charge, ne pilote et ne clone aucun player ou contenu foreign.
 4. **Finalisation** — lorsque le groupe de transitions est terminé, le module
-   supprime le clone temporaire, retire les styles de positionnement, restaure
-   la visibilité de la racine et laisse le nouveau contenu comme représentation
-   active.
+   supprime les deux clones temporaires, retire les styles de positionnement,
+   restaure la visibilité de la racine et laisse le nouveau contenu comme
+   représentation active.
 
-L'instantané de l'ancien hôte est un artefact de présentation appartenant à la
-surface HTML pendant la transition. Il ne gère rien, n'est jamais un perso, ne
-possède ni `perso.id` ni `componentId`, n'entre dans aucun registre et n'a
-aucune existence pérenne. Il est supprimé par `finish`, `cancel`, seek ou
-destruction. La V1 créait aussi une représentation entrante clonée pour
-certaines intros ; cette tranche V2 ne le fait pas : la racine réelle porte le
-nouveau contenu, ce qui évite de confondre une copie visuelle avec une seconde
-instance foreign.
+Le profil `fade` fait varier le clone sortant de `1` à `0` et le clone entrant
+de `0` à `1`. Le profil `fade-in` laisse le clone sortant opaque pendant toute
+la transition ; seul le clone entrant varie de `0` à `1`, puis les deux clones
+sont retirés. L'ancien rendu reste donc présent sous le nouveau rendu pendant
+le `fade-in`, sans faire disparaître l'image de départ par un cross-fade.
+
+Les deux clones sont des artefacts de présentation appartenant à la surface
+HTML pendant la transition. Ils ne gèrent rien, ne sont jamais des persos, ne
+possèdent ni `perso.id` ni `componentId`, n'entrent dans aucun registre et
+n'ont aucune existence pérenne. Ils sont supprimés par `finish`, `cancel`,
+seek ou destruction. La racine persistante reste la seule représentation
+logique et redevient visible à la fin. Cette transposition reprend donc le
+cycle V1 `clone sortant → update → clone entrant`, tout en conservant les
+frontières V2 : hooks génériques, surface de présentation HTML et animation
+pilotée par le player.
 
 Cette mécanique ne peut pas être déduite comme une règle pour tout contenu
 foreign. En particulier, `cloneNode(true)` sur une iframe copie son élément DOM
@@ -622,12 +632,17 @@ du pipeline : il ré-entre par un event technique ou une opération de module
 déterministe, avec l'identité de la cible et la génération de la session. Une
 réponse tardive d'une ancienne session est ignorée ou diagnostiquée.
 
-Au seek, le player reconstruit l'état logique à `t`. Il ne rejoue pas les
-callbacks de remplacement passés. Les clones temporaires sont supprimés ou
-reconstruits selon la fenêtre de présentation demandée ; avant, pendant et
+Au seek, le player reconstruit l'état logique à `t`, puis rejoue les frontières
+de présentation des composants depuis l'état initial jusqu'à `t`. Cette
+relecture permet au module `replace` de capturer le véritable rendu sortant
+avant de reconstruire une transition qui couvre `t`, comme en V1. Elle ne
+redispatche aucun event, ne repasse pas par les callbacks historiques et ne
+relit pas le DOM dans la boucle de frame. Les clones temporaires sont supprimés
+ou reconstruits selon la fenêtre de présentation demandée ; avant, pendant et
 après la transition doivent converger vers la même représentation qu'en Play.
 Un clone n'est jamais conservé dans `CompiledScene`, le journal ou le registre
-des cibles.
+des cibles. La capture géométrique reste une phase technique et ne démarre pas
+de présentation utilisateur.
 
 ## Transposition du module dans l'architecture V2
 
@@ -643,7 +658,7 @@ générique de cette frontière :
 3. le runtime composant diffuse un contexte `beforeUpdate` puis `afterUpdate`
    autour de `component.update()` ;
 4. le materializer publie une surface typée de présentation qui crée et détruit
-   l'instantané DOM temporaire ; la surface `foreignContent` reste séparée et
+   les instantanés DOM temporaires ; la surface `foreignContent` reste séparée et
    conserve la relation avec les racines persistantes ; les écritures
    `appendChild`/`insertBefore` restent dans la frontière HTML ;
 5. le module maintient ses sessions par player et remet ses
@@ -832,8 +847,8 @@ Le cheminement runtime correspondant est le suivant :
    `ViewMap` et remplace sa vue active, Sighty décide de conserver, remplacer ou
    détruire l'instance enfant, puis demande le nouveau montage. Pour une mise à
    jour de contenu déjà exposé, un eventime adressé au parent peut déclencher
-   `replace` ; sa surface de présentation crée seulement l'instantané technique
-   de la représentation sortante pendant la transition.
+   `replace` ; sa surface de présentation crée l'instantané sortant avant la
+   mise à jour et l'instantané entrant après celle-ci pendant la transition.
 ```
 
 Quand une mise à jour doit passer par la scène parent, elle reprend la façade
@@ -862,8 +877,8 @@ pipeline `materialize → resolve → solve → runner` sélectionne alors le pe
 et `ForeignContentComponent.update()` reçoit la valeur. Le materializer fournit
 la surface `foreignContent` au propriétaire de la représentation ; celui-ci
 détache les anciennes racines et demande l'insertion des nouvelles avec
-`appendChild` ou `insertBefore`, puis la présentation `replace` capture
-l'instantané de l'hôte si une transition est demandée. Sighty ne
+`appendChild` ou `insertBefore`, puis la présentation `replace` capture les
+instantanés sortant et entrant de l'hôte si une transition est demandée. Sighty ne
 touche pas au DOM et n'appelle pas le composant par une méthode impérative. Une
 commande adressée à l'enfant utilise un autre `instanceId` : le parent et
 l'enfant ne se parlent pas directement.
@@ -915,11 +930,11 @@ autre scène.
 - Dans cette version, le profil `slot`/`foreign-content` ignore
   `replace.split` : sa présence ne produit pas de diagnostic et n'active jamais
   une logique de split ; la commande est exécutée comme `replace-simple`.
-- À l'arrivée d'un nouveau contenu avec transition, un clone temporaire de la
-  représentation sortante peut disparaître indépendamment de l'instance qui
-  possède le contenu ; comme tout clone d'overlay de `move`, il n'est jamais un
-  perso, une materialisation auteur, une cible d'event ou de placement, ni une
-  ressource persistante.
+- À l'arrivée d'un nouveau contenu avec transition, les clones temporaires des
+  représentations sortante et entrante peuvent disparaître indépendamment de
+  l'instance qui possède le contenu ; comme tout clone d'overlay de `move`, ils
+  ne sont jamais des persos, des materialisations auteur, des cibles d'event ou
+  de placement, ni des ressources persistantes.
 - Les callbacks asynchrones sont réintroduits dans le circuit déterministe et
   ne peuvent pas réanimer une session obsolète.
 - Play, seek, replay, annulation et destruction nettoient les clones et les
@@ -936,7 +951,7 @@ autre scène.
 | 0. Relecture du contrat | **Validée le 2026-09-11** | Le type `slot`, le `name` racine, le manifeste, le diagnostic de découverte, l'absence d'opinion CSS du core et la frontière materializer sont acceptés pour l'ouverture de l'implémentation. Les décisions encore ouvertes restent listées dans les phases suivantes. |
 | 1. Profil et validation | **En cours** | Le type de perso, le défaut structurel `div`, le `name` racine, la référence foreign sérialisable, le manifeste et l'ignorance de `replace.split` sont raccordés au catalogue et au builder. La première fixture exerce la correspondance `view.slots`/`name` ; les diagnostics d'intégration et les variantes de portée restent à compléter. |
 | 2. Surface opaque et materializer | **En cours** | La surface `foreignContent` attache/détache des racines HTML ordonnées dans la racine materialisée du `slot`, avec nettoyage au démontage. La première surface publique attache directement les racines matérialisées de l'enfant, sans envelope visible ; Sighty décide toujours du cycle de vie des occurrences. L'asynchronisme et les représentations multi-racines générales restent à raccorder. |
-| 3. Module `replace` partagé | **En cours** | Module core player-scoped, hooks génériques V2, instantané temporaire de l'ancien hôte, transition `fade`, annulation, finalisation et absence de fuite. `replace.split` est ignoré par le profil `slot`. |
+| 3. Module `replace` partagé | **En cours** | Module core player-scoped, paire d'instantanés temporaires sortant/entrant, hooks génériques V2, profils `fade` et `fade-in`, reconstruction au seek, annulation, finalisation et absence de fuite. `replace.split` est ignoré par le profil `slot`. |
 | 4. Composants compatibles | **En cours** | La même capacité est exercée par `slot` et `img` sans duplication de clone ; `tag` et les autres composants compatibles restent à examiner. |
 | 5. Adressage CodPlay | **En cours — première tentative** | Le chemin façade `codplay.instances.mount` → adresse d'hôte → surface `foreign-content` → racine d'instance enfant est exercé avec deux vrais players. L'insertion et le détachement sont observés au bon `hostRoot`, sans API DOM Sighty ni route interscène parallèle. |
 | 6. Play, seek et lifecycle | **En cours — première fixture** | Sighty pilote déjà le démarrage et le démontage/remontage explicites de A, avec des télécommandes par instance ; CodPlay exécute chaque instance de façon idempotente et les players enfant et hôte gardent leur indépendance. Pause/reprise, replay, interruptions, fins de séquence, ressources et validation navigateur restent à compléter. |
@@ -958,8 +973,9 @@ doit pas être remplacée par un setter local.
    `codplay.instances.mount`, piloter séparément l'hôte et l'enfant, puis
    vérifier que pause, seek, rate et destroy ne traversent pas implicitement la
    frontière.
-4. Remplacer le contenu avec `{ replace: 'fade' }`, vérifier la capture de
-   l'ancien hôte, l'animation, l'absence d'event/target sur le clone et son
+4. Remplacer le contenu avec `{ replace: 'fade' }`, puis avec
+   `{ replace: 'fade-in' }`, vérifier la capture de l'ancien hôte, la différence
+   entre les deux profils, l'absence d'event/target sur le clone et son
    nettoyage final.
 5. Compiler une action `foreign` qui contient `replace.split` et vérifier que le
    builder l'accepte sans diagnostic de rejet, puis que le runtime exécute le
@@ -1023,23 +1039,40 @@ engager` et ne doivent pas être simulés dans la démo.
   `slot` le requiert ; le runtime composant diffuse désormais les hooks V2
   `beforeComponentUpdate` et `afterComponentUpdate` autour de `update()`.
 - `HtmlComponentMaterializer` publie une surface de présentation distincte de
-  `foreignContent`. Elle crée un instantané DOM transitoire, marqué pour être
-  ignoré par la réconciliation structurelle, puis le supprime à la fin, à
-  l'annulation, au seek ou à la destruction. Cet instantané n'est ni une
-  ressource ni une instance foreign.
+  `foreignContent`. Elle crée un instantané sortant avant l'update et un
+  instantané entrant après l'update, marqués pour être ignorés par la
+  réconciliation structurelle, puis les supprime à la fin, à l'annulation, au
+  seek ou à la destruction. Ces instantanés ne sont ni des ressources ni des
+  instances foreign.
 - Le test réel
   `tests/runtime/capabilities/replace-module.spec.ts` vérifie le chemin
   `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer`, le
-  fondu `fade`, le montage d'une nouvelle racine foreign et la disparition de
-  l'instantané. Il vérifie également qu'un `replace.split` est accepté puis
-  exécuté par le chemin simple, ainsi que l'annulation d'une présentation
-  interrompue avant un seek.
+  fondu `fade`, le preset `fade-in`, le montage d'une nouvelle racine foreign
+  et la disparition de l'instantané. Il vérifie également qu'un `replace.split`
+  est accepté puis exécuté par le chemin simple, ainsi que la reconstruction de
+  la présentation pendant un seek.
 - La fixture d'intégration
   `tests/facade/sighty-demo4.spec.ts` vérifie le montage Sighty réel et qu'une
-  navigation rapide conserve une seule présentation sortante pour le slot.
+  navigation rapide conserve la paire de présentations sortante et entrante
+  pour le slot.
 - Le même test exerce le module partagé sur `img` : le wrapper et sa source
   sortante utilisent la même surface de présentation, sans clone spécialisé
   dans `ImageComponent`.
+
+### Alignement V1/V2 de la présentation `replace` (2026-09-17)
+
+- La surface HTML suit maintenant le cycle V1 `clone sortant → update → clone
+  entrant`. Le root persistant reste masqué pendant la transition ; les deux
+  clones sont les seules couches animées, puis sont retirés avant de révéler le
+  root mis à jour.
+- Cette adaptation reste dans les frontières V2 : le module passe par les hooks
+  génériques `beforeComponentUpdate`/`afterComponentUpdate`, la surface du
+  materializer et les `ComponentAnimation` du player. Elle ne modifie ni le
+  preload, ni `ImageComponent`, ni la représentation logique d'un foreign.
+- La suite CodPlay complète passe avec 105 fichiers et 665 tests ; les
+  typechecks CodPlay et démos V2 passent. La transition observée dans Safari
+  contient bien un snapshot vert opaque, un snapshot rouge entrant partiel et
+  un root rouge persistant masqué ; les images observées sont chargées.
 
 Cette tranche ne prouve pas encore l'exercice du module sur `tag`, le raccord
 Sighty complet entre plusieurs vues, la résolution asynchrone du contenu ou

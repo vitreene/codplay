@@ -18,6 +18,90 @@ function manifest(...urls: string[]): CompiledResourceManifest {
 }
 
 describe('RuntimePreload', () => {
+  it('loads every image entry supplied by a compiled resource manifest', async () => {
+    const sources = ['/barrier.webp', '/light-green.webp', '/light-orange.webp', '/light-red.webp']
+    const loadedSources: string[] = []
+    const previousImage = globalThis.Image
+
+    class ImmediateImage {
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      set src(value: string) {
+        loadedSources.push(value)
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+
+    vi.stubGlobal('Image', ImmediateImage)
+    try {
+      const preload = createRuntimePreload()
+      const result = await preload.load({
+        manifest: {
+          entries: sources.map((url) => ({
+            url,
+            type: 'image',
+            policy: { cache: 'default', priority: 'normal' },
+          })),
+        },
+        options: { mode: 'author' },
+      })
+
+      expect(result).toMatchObject({ ok: true, data: { loaded: sources } })
+      expect(loadedSources).toEqual(sources)
+    } finally {
+      vi.stubGlobal('Image', previousImage)
+    }
+  })
+
+  it('waits for an image to finish decoding before reporting it ready', async () => {
+    let resolveDecode: (() => void) | undefined
+    const decoded = new Promise<void>((resolve) => {
+      resolveDecode = resolve
+    })
+    let settled = false
+    const previousImage = globalThis.Image
+
+    class DecodingImage {
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      decode(): Promise<void> {
+        return decoded
+      }
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+
+    vi.stubGlobal('Image', DecodingImage)
+    try {
+      const preload = createRuntimePreload()
+      const resultPromise = preload.load({
+        manifest: {
+          entries: [{
+            url: '/light-red.webp',
+            type: 'image',
+            policy: { cache: 'default', priority: 'normal' },
+          }],
+        },
+        options: { mode: 'author' },
+      })
+      void resultPromise.then(() => { settled = true })
+
+      await new Promise<void>((resolve) => queueMicrotask(resolve))
+      await new Promise<void>((resolve) => queueMicrotask(resolve))
+      expect(settled).toBe(false)
+
+      resolveDecode?.()
+      await expect(resultPromise).resolves.toMatchObject({ ok: true })
+      expect(settled).toBe(true)
+    } finally {
+      vi.stubGlobal('Image', previousImage)
+    }
+  })
+
   it('merges an array of manifests in declaration order and deduplicates by URL', () => {
     expect(mergeRuntimePreloadManifests([manifest('/a', '/b'), manifest('/b', '/c')]).entries.map((entry) => entry.url))
       .toEqual(['/a', '/b', '/c'])

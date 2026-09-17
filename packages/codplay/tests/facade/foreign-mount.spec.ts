@@ -250,14 +250,16 @@ describe('CodPlay instance foreign mount', () => {
 
     const snapshots = (): HTMLElement[] => Array.from(layoutRoot.children)
       .filter((child): child is HTMLElement => child.getAttribute('data-codplay-transient') !== null)
-    expect(snapshots()).toHaveLength(1)
+    expect(snapshots()).toHaveLength(2)
     expect(snapshots()[0]?.textContent).toBe('child')
+    expect(snapshots()[1]?.textContent).toBe('child-b')
     expect(hostRoot.querySelector('article')?.textContent).toBe('child-b')
-    expect(hostRoot.style.opacity).toBe('0')
+    expect(hostRoot.style.visibility).toBe('hidden')
 
     codplay.engine.advance(50)
     expect(snapshots()[0]?.style.opacity).toBe('0.5')
-    expect(hostRoot.style.opacity).toBe('0.5')
+    expect(snapshots()[1]?.style.opacity).toBe('0.5')
+    expect(hostRoot.style.visibility).toBe('hidden')
 
     codplay.engine.advance(100)
     expect(snapshots()).toHaveLength(0)

@@ -41,19 +41,42 @@ export function loadRuntimeImage(url: string, signal: AbortSignal): Promise<Runt
       return
     }
     const image = new globalThis.Image()
+    let settled = false
     const cleanup = (): void => signal.removeEventListener('abort', onAbort)
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve({ type: 'image' })
+    }
+    const fail = (message: string): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error(message))
+    }
     const onAbort = (): void => {
+      if (settled) return
+      settled = true
       cleanup()
       reject(createAbortError())
     }
     signal.addEventListener('abort', onAbort, { once: true })
     image.onload = (): void => {
-      cleanup()
-      resolve({ type: 'image' })
+      const decode = image.decode
+      if (typeof decode !== 'function') {
+        finish()
+        return
+      }
+      Promise.resolve()
+        .then(() => decode.call(image))
+        .then(
+          () => finish(),
+          () => fail(`Failed to decode image: ${url}`),
+        )
     }
     image.onerror = (): void => {
-      cleanup()
-      reject(new Error(`Failed to load image: ${url}`))
+      fail(`Failed to load image: ${url}`)
     }
     image.src = url
   })

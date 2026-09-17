@@ -29,6 +29,9 @@ export type InputComponentSurface = Readonly<{
   setValue: (value: string | number) => void
 }>
 
+/** Named presentation profiles supported by the shared replace capability. */
+export type ReplaceTransition = 'fade' | 'fade-in'
+
 /** Attaches and detaches opaque foreign roots inside one materialized host. */
 export type ForeignContentSurface = Readonly<{
   attach: (roots: readonly unknown[], referenceRoot?: unknown) => void
@@ -37,20 +40,20 @@ export type ForeignContentSurface = Readonly<{
 
 /** One temporary presentation session used by the shared replace capability. */
 export type ReplacePresentationSession = Readonly<{
-  /** Makes the persistent root visible as the incoming representation. */
+  /** Creates the incoming transient representation after the logical update. */
   start: () => void
-  /** Applies one normalized fade progress to the outgoing snapshot and root. */
+  /** Applies one normalized progress to the outgoing and incoming snapshots. */
   sample: (progress: number) => void
-  /** Removes the snapshot and restores the incoming root after completion. */
+  /** Removes both snapshots and reveals the updated persistent root. */
   finish: () => void
-  /** Removes the snapshot and restores the root when the transition is cancelled. */
+  /** Removes both snapshots and restores the root when the transition is cancelled. */
   cancel: () => void
 }>
 
 /** Presentation-only surface; it never owns or controls foreign resources. */
 export type ReplaceComponentSurface = Readonly<{
   /** Captures the current host representation before a component update. */
-  begin: () => ReplacePresentationSession | undefined
+  begin: (transition?: ReplaceTransition) => ReplacePresentationSession | undefined
 }>
 
 /** Type map of substrate-neutral surfaces, extensible by future runtime families. */

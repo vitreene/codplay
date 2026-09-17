@@ -1,15 +1,9 @@
 import type { SceneDoc } from 'codplay/scene/types'
 import {
-  EVENTS_ANIMATIONS_RESET_EVENT,
-  EVENTS_BARRIER_STORY_ID,
+  EVENTS_BARRIER_ROTATION_DURATION_MS,
   EVENTS_BARRIER_TARGET,
-  EVENTS_CHANGING,
-  EVENTS_DOWN,
-  EVENTS_SIGNAL_HIDE_EVENT,
-  EVENTS_SIGNAL_SHOW_EVENT,
-  EVENTS_SIGNAL_STORY_ID,
   EVENTS_SIGNAL_TARGET,
-  EVENTS_UP,
+  type EventsAnimationContext,
 } from './constants'
 
 type EventsPerso = SceneDoc['stories']['main']['persos'][number]
@@ -20,24 +14,30 @@ const SIGNAL_GREEN_IMAGE = '/assets/barrier/feu-rouge-vert.webp'
 const SIGNAL_ORANGE_IMAGE = '/assets/barrier/feu-rouge-orange.webp'
 const SIGNAL_RED_IMAGE = '/assets/barrier/feu-rouge-rouge.webp'
 
-/** Creates the persistent story that owns the barrier pedestal and arm. */
-export function createBarrierStory(): SceneDoc['stories'][string] {
-  return {
-    id: EVENTS_BARRIER_STORY_ID,
-    listen: [{ on: EVENTS_ANIMATIONS_RESET_EVENT, reset: true }],
-    persos: [createPedestalPerso(), createBarrierArmPerso()],
-  }
+/** Creates the image persos owned by one isolated frame story. */
+export function createEventsAnimationPersos(
+  context: EventsAnimationContext,
+  options: Readonly<{ includeSignal?: boolean }> = {},
+): readonly EventsPerso[] {
+  const persos: EventsPerso[] = [
+    createPedestalPerso(context),
+    createBarrierArmPerso(context),
+  ]
+  if (options.includeSignal !== false) persos.push(createSignalPerso(context))
+  return persos
 }
 
 /** Creates the fixed pedestal image used as the barrier rotation reference. */
-function createPedestalPerso(): EventsPerso {
+function createPedestalPerso(context: EventsAnimationContext): EventsPerso {
   return {
-    id: 'events-barrier-pedestal',
+    id: `${context.frameId}-barrier-pedestal`,
     type: 'img',
     initial: {
       src: PEDESTAL_IMAGE,
       alt: 'Borne de la barrière',
-      className: 'events-barrier-pedestal',
+      className: `events-barrier-pedestal events-animation-${context.index}`,
+      style: { opacity: 0 },
+      attr: { 'data-animation-context': String(context.index) },
       img: {
         className: 'events-barrier-pedestal__native',
         style: { width: '100%', height: '100%', objectFit: 'contain' },
@@ -45,20 +45,23 @@ function createPedestalPerso(): EventsPerso {
       },
       move: { target: EVENTS_BARRIER_TARGET },
     },
-    actions: {},
+    actions: {
+      [context.events.barrierShow]: { style: { opacity: 1 } },
+    },
   }
 }
 
 /** Creates the arm image whose transform origin is the gray pivot point. */
-function createBarrierArmPerso(): EventsPerso {
+function createBarrierArmPerso(context: EventsAnimationContext): EventsPerso {
   return {
-    id: 'events-barrier-arm',
+    id: `${context.frameId}-barrier-arm`,
     type: 'img',
     initial: {
       src: BARRIER_IMAGE,
       alt: 'Barrière d’accès fermée',
-      className: 'events-barrier-arm',
-      style: { rotate: 0 },
+      className: `events-barrier-arm events-animation-${context.index}`,
+      style: { rotate: 0, opacity: 0 },
+      attr: { 'data-animation-context': String(context.index) },
       img: {
         className: 'events-barrier-arm__native',
         style: { width: '100%', height: '100%', objectFit: 'contain' },
@@ -67,39 +70,32 @@ function createBarrierArmPerso(): EventsPerso {
       move: { target: EVENTS_BARRIER_TARGET },
     },
     actions: {
-      [EVENTS_UP]: {
+      [context.events.barrierShow]: { style: { opacity: 1 } },
+      [context.events.up]: {
         style: {
-          rotate: { from: 0, to: 70, duration: 1_000, ease: 'inOutCubic' },
+          rotate: { from: 0, to: 70, duration: EVENTS_BARRIER_ROTATION_DURATION_MS, ease: 'inOutBack(1.7)' },
         },
       },
-      [EVENTS_DOWN]: {
+      [context.events.down]: {
         style: {
-          rotate: { from: 70, to: 0, duration: 1_000, ease: 'inOutCubic' },
+          rotate: { from: 70, to: 0, duration: EVENTS_BARRIER_ROTATION_DURATION_MS, ease: 'inOutBack(1.7)' },
         },
       },
     },
   }
 }
 
-/** Creates the persistent story that owns the replaceable traffic-light image. */
-export function createSignalStory(): SceneDoc['stories'][string] {
-  return {
-    id: EVENTS_SIGNAL_STORY_ID,
-    listen: [{ on: EVENTS_ANIMATIONS_RESET_EVENT, reset: true }],
-    persos: [createSignalPerso()],
-  }
-}
-
 /** Creates one image perso whose source represents the current light state. */
-function createSignalPerso(): EventsPerso {
+function createSignalPerso(context: EventsAnimationContext): EventsPerso {
   return {
-    id: 'events-signal-image',
+    id: `${context.frameId}-signal-image`,
     type: 'img',
     initial: {
       src: SIGNAL_GREEN_IMAGE,
       alt: 'Feu de signalisation vert',
-      className: 'events-signal-image',
+      className: `events-signal-image events-animation-${context.index}`,
       style: { opacity: 0 },
+      attr: { 'data-animation-context': String(context.index) },
       img: {
         className: 'events-signal-image__native',
         style: { width: '100%', height: '100%', objectFit: 'contain' },
@@ -108,23 +104,22 @@ function createSignalPerso(): EventsPerso {
       move: { target: EVENTS_SIGNAL_TARGET },
     },
     actions: {
-      [EVENTS_SIGNAL_SHOW_EVENT]: {
-        style: { opacity: 1 },
-      },
-      [EVENTS_SIGNAL_HIDE_EVENT]: {
-        style: { opacity: 0 },
-      },
-      [EVENTS_DOWN]: {
+      [context.events.signalShow]: { style: { opacity: 1 } },
+      [context.events.signalHide]: { style: { opacity: 0 } },
+      [context.events.down]: {
         src: SIGNAL_GREEN_IMAGE,
         alt: 'Feu de signalisation vert',
+        replace: 'fade-in',
       },
-      [EVENTS_CHANGING]: {
+      [context.events.changing]: {
         src: SIGNAL_ORANGE_IMAGE,
         alt: 'Feu de signalisation orange',
+        replace: 'fade-in',
       },
-      [EVENTS_UP]: {
+      [context.events.up]: {
         src: SIGNAL_RED_IMAGE,
         alt: 'Feu de signalisation rouge',
+        replace: 'fade-in',
       },
     },
   }

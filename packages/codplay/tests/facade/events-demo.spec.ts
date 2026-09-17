@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodPlay, type CodPlayFrameScheduler } from '../../src'
 import { EVENTS_INITIAL_EVENTS, createScene } from '../../../demos/src/v2/demos/events/main'
 
@@ -38,6 +38,17 @@ async function flushDomEvent(): Promise<void> {
   await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
 }
 
+/** Selects one frame-specific animation root without confusing hidden contexts. */
+function selectAnimationRoot(
+  root: HTMLElement,
+  selector: string,
+  contextIndex: number,
+): HTMLElement | null {
+  return root.querySelector<HTMLElement>(
+    `${selector}[data-animation-context="${contextIndex}"]:not([data-codplay-transient])`,
+  )
+}
+
 describe('events V2 demo', () => {
   let codplay: CodPlay | undefined
 
@@ -45,6 +56,64 @@ describe('events V2 demo', () => {
     codplay?.destroy()
     codplay = undefined
     document.body.replaceChildren()
+  })
+
+  it('preloads every image source before creating the events instance', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const loadedSources: string[] = []
+    const previousImage = globalThis.Image
+    class ImmediateImage {
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      set src(value: string) {
+        loadedSources.push(value)
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+
+    vi.stubGlobal('Image', ImmediateImage)
+    try {
+      const preload = await codplay.preload.load({
+        manifest: build.compiledScene.resources,
+        options: { mode: 'author' },
+      })
+      expect(preload.ok).toBe(true)
+      if (!preload.ok) return
+      expect(new Set(preload.data.loaded)).toEqual(new Set([
+        '/assets/barrier/barriere.webp',
+        '/assets/barrier/borne.webp',
+        '/assets/barrier/feu-rouge-orange.webp',
+        '/assets/barrier/feu-rouge-rouge.webp',
+        '/assets/barrier/feu-rouge-vert.webp',
+      ]))
+      expect(new Set(loadedSources)).toEqual(new Set([
+        '/assets/barrier/barriere.webp',
+        '/assets/barrier/borne.webp',
+        '/assets/barrier/feu-rouge-orange.webp',
+        '/assets/barrier/feu-rouge-rouge.webp',
+        '/assets/barrier/feu-rouge-vert.webp',
+      ]))
+
+      codplay.resources.register(preload.data)
+      codplay.instances.create({
+        instanceId: 'events-demo-preload-test',
+        compiledScene: build.compiledScene,
+        functions: build.functions,
+        root,
+      })
+    } finally {
+      vi.stubGlobal('Image', previousImage)
+    }
   })
 
   it('runs the scheduled up event through the barrier action story', async () => {
@@ -76,12 +145,33 @@ describe('events V2 demo', () => {
 
     codplay.engine.advance(0)
     await instance.events.emit(EVENTS_INITIAL_EVENTS[0]!.eventime, EVENTS_INITIAL_EVENTS[0]!.target)
+    expect(selectAnimationRoot(root, '.events-barrier-arm', 1)?.style.opacity).toBe('1')
+    expect(selectAnimationRoot(root, '.events-signal-image', 1)).toBeNull()
     await instance.telco.play()
-    codplay.engine.advance(3_000)
+    codplay.engine.advance(2_600)
+    await flushDomEvent()
+    expect(selectAnimationRoot(root, '.events-barrier-arm', 1)?.style.transform).toContain('rotate(0deg)')
+    expect(root.querySelector<HTMLElement>('#events-frame-one-barrier-action-row .events-frame__message')?.style.opacity)
+      .toBe('0')
+    expect(root.querySelector<HTMLElement>('#events-frame-one-barrier-action-row .events-frame__arrow')?.style.opacity)
+      .toBe('0')
+
+    codplay.engine.advance(2_900)
+    await flushDomEvent()
+    expect(root.querySelector<HTMLElement>('#events-frame-one-barrier-action-row .events-frame__message')?.style.opacity)
+      .toBe('1')
+    expect(root.querySelector<HTMLElement>('#events-frame-one-barrier-action-row .events-frame__arrow')?.style.opacity)
+      .toBe('1')
+    expect(root.querySelector<HTMLElement>('#events-frame-one-barrier-action-row .events-frame__arrow')?.style.transform)
+      .toContain('translateX(0px)')
+
+    codplay.engine.advance(3_400)
+    await flushDomEvent()
+    codplay.engine.advance(4_900)
     await flushDomEvent()
 
     expect(trace.map((event) => event.name)).toContain('up')
-    expect(root.querySelector<HTMLElement>('.events-barrier-arm')?.style.transform).toContain('rotate(70deg)')
+    expect(selectAnimationRoot(root, '.events-barrier-arm', 1)?.style.transform).toContain('rotate(70deg)')
   })
 
   it('distributes the second frame up event to the barrier and the signal', async () => {
@@ -107,17 +197,106 @@ describe('events V2 demo', () => {
     await instance.telco.play()
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-vert.webp')
-    expect(root.querySelector<HTMLElement>('.events-signal-image')?.style.opacity).toBe('1')
-    codplay.engine.advance(2_000)
+    expect(selectAnimationRoot(root, '.events-signal-image', 2)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-vert.webp')
+    expect(selectAnimationRoot(root, '.events-signal-image', 2)?.style.opacity).toBe('1')
+    codplay.engine.advance(2_600)
     await flushDomEvent()
 
     expect(root.querySelector<HTMLElement>('.events-frame--visible')?.textContent).toContain('Un event se distribue')
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-rouge.webp')
-    expect(root.querySelector<HTMLElement>('.events-signal-image')?.style.opacity).toBe('1')
+    expect(root.querySelector<HTMLElement>('#events-frame-two-signal-action-row .events-frame__message')?.textContent)
+      .toContain('perso feu')
+    expect(root.querySelector<HTMLElement>('#events-frame-two-barrier-action-row .events-frame__message')?.textContent)
+      .toContain('perso barrière')
+    expect(selectAnimationRoot(root, '.events-signal-image', 2)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-vert.webp')
+
+    codplay.engine.advance(3_400)
+    await flushDomEvent()
+
+    expect(selectAnimationRoot(root, '.events-signal-image', 2)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-rouge.webp')
+
+    codplay.engine.advance(3_700)
+    await flushDomEvent()
+    expect(selectAnimationRoot(root, '.events-signal-image', 2)?.style.opacity).toBe('1')
   })
 
-  it('resets both reusable animations when returning to the first frame', async () => {
+  it('keeps pending animation events on their own frame context', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    registerEventsResources(codplay)
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const instance = codplay.instances.create({
+      instanceId: 'events-demo-animation-context-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    codplay.engine.advance(0)
+    await instance.events.emit(EVENTS_INITIAL_EVENTS[0]!.eventime, EVENTS_INITIAL_EVENTS[0]!.target)
+    await instance.telco.play()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
+
+    codplay.engine.advance(2_000)
+    await flushDomEvent()
+
+    expect(root.querySelector<HTMLElement>('.events-frame--visible')?.textContent)
+      .toContain('Les boutons émettent les events')
+    expect(selectAnimationRoot(root, '.events-barrier-arm', 3)?.style.transform).toContain('rotate(0deg)')
+    expect(selectAnimationRoot(root, '.events-signal-image', 3)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-vert.webp')
+  })
+
+  it('does not apply a previous activation after returning to its frame', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    registerEventsResources(codplay)
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const instance = codplay.instances.create({
+      instanceId: 'events-demo-reentry-isolation-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    codplay.engine.advance(0)
+    await instance.events.emit(EVENTS_INITIAL_EVENTS[0]!.eventime, EVENTS_INITIAL_EVENTS[0]!.target)
+    await instance.telco.play()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
+    codplay.engine.advance(500)
+    await flushDomEvent()
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
+    await flushDomEvent()
+
+    codplay.engine.advance(1_700)
+    await flushDomEvent()
+
+    expect(root.querySelector<HTMLElement>('.events-frame--visible')?.textContent)
+      .toContain('Un event est émis')
+    expect(selectAnimationRoot(root, '.events-barrier-arm', 1)?.style.transform).toContain('rotate(0deg)')
+  })
+
+  it('resets the animation context when returning to the first frame', async () => {
     const root = document.createElement('main')
     document.body.append(root)
     codplay = new CodPlay({
@@ -141,15 +320,15 @@ describe('events V2 demo', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
-    codplay.engine.advance(2_000)
+    codplay.engine.advance(3_400)
     await flushDomEvent()
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-rouge.webp')
+    expect(selectAnimationRoot(root, '.events-signal-image', 2)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-rouge.webp')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
     await flushDomEvent()
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-vert.webp')
-    expect(root.querySelector<HTMLElement>('.events-signal-image')?.style.opacity).toBe('0')
-    expect(root.querySelector<HTMLElement>('.events-barrier-arm')?.style.transform).toContain('rotate(0deg)')
+    expect(selectAnimationRoot(root, '.events-signal-image', 1)).toBeNull()
+    expect(selectAnimationRoot(root, '.events-barrier-arm', 1)?.style.transform).toContain('rotate(0deg)')
   })
 
   it('delays the fourth frame signal transition by one second after a button event', async () => {
@@ -187,14 +366,18 @@ describe('events V2 demo', () => {
     codplay.engine.advance(0)
     await flushDomEvent()
 
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-orange.webp')
+    expect(selectAnimationRoot(root, '.events-signal-image', 4)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-orange.webp')
     codplay.engine.advance(1_000)
     await flushDomEvent()
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-rouge.webp')
+    expect(selectAnimationRoot(root, '.events-signal-image', 4)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-rouge.webp')
 
     await instance.telco.seek(0)
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-orange.webp')
+    expect(selectAnimationRoot(root, '.events-signal-image', 4)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-orange.webp')
     await instance.telco.seek(1_000)
-    expect(root.querySelector<HTMLElement>('.events-signal-image img')?.getAttribute('src')).toContain('feu-rouge-rouge.webp')
+    expect(selectAnimationRoot(root, '.events-signal-image', 4)?.querySelector('img')?.getAttribute('src'))
+      .toContain('feu-rouge-rouge.webp')
   })
 })

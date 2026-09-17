@@ -37,6 +37,21 @@ manifeste(s) fourni(s) par l'éditeur / diffusion
 Le manifeste peut être fourni seul ou sous forme d'un tableau de manifestes. Les
 entrées sont fusionnées et dédupliquées par URL avant le chargement.
 
+Pour une ressource `image`, la stratégie native ne considère pas le chargement
+terminé au seul signal `load` : elle attend aussi `HTMLImageElement.decode()`
+lorsque le navigateur le fournit. Le résultat garantit ainsi que l'image est
+disponible pour la première peinture après l'initialisation, sans créer une
+seconde matérialisation DOM et sans transférer de nœud au composant `img`.
+Les environnements qui ne fournissent pas `decode()` conservent le repli
+compatible fondé sur `load`.
+
+`preload.load()` est une barrière avant lecture : l'hôte doit attendre sa
+promesse avant d'enregistrer les ressources, d'initialiser l'instance et de
+lancer `play()`. En mode `author`, une ressource indisponible produit un échec
+et aucune lecture ne doit démarrer. Le mode `broadcast` reste explicitement
+permissif : il retourne des avertissements pour permettre à son hôte de décider
+de la politique de diffusion.
+
 La diffusion autonome dispose d'une façade `run` qui enchaîne explicitement :
 
 ```text

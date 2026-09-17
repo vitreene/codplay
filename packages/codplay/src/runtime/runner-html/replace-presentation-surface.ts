@@ -1,64 +1,85 @@
 import type {
   ReplaceComponentSurface,
   ReplacePresentationSession,
+  ReplaceTransition,
 } from '../components'
 import { markHtmlTransientNode } from './transient-node'
 
 /** Creates a presentation-only replace surface for one materialized HTML root. */
 export function createHtmlReplacePresentationSurface(root: unknown): ReplaceComponentSurface {
   return {
-    begin: () => createReplaceSession(root),
+    begin: (transition = 'fade') => createReplaceSession(root, transition),
   }
 }
 
-/** Captures one temporary outgoing snapshot without taking ownership of its content. */
-function createReplaceSession(root: unknown): ReplacePresentationSession | undefined {
+/** Captures the outgoing snapshot before the component changes its live content. */
+function createReplaceSession(root: unknown, transition: ReplaceTransition): ReplacePresentationSession | undefined {
   if (!isHtmlElement(root)) return undefined
   const parent = root.parentElement
   if (parent === null) return undefined
 
-  const snapshot = root.cloneNode(true)
-  if (!isHtmlElement(snapshot)) return undefined
+  const outgoingSnapshot = root.cloneNode(true)
+  if (!isHtmlElement(outgoingSnapshot)) return undefined
 
   const originalVisibility = root.style.visibility
   const originalOpacity = root.style.opacity
+  const originalRootPosition = root.style.position
   const originalParentPosition = parent.style.position
   if (originalParentPosition === '' || originalParentPosition === 'static') {
     parent.style.position = 'relative'
   }
+  if (originalRootPosition === '' || originalRootPosition === 'static') {
+    root.style.position = 'relative'
+  }
 
-  sanitizeSnapshot(snapshot)
-  snapshot.style.opacity = originalOpacity || '1'
-  positionSnapshot(snapshot, root, parent)
-  parent.appendChild(snapshot)
+  sanitizeSnapshot(outgoingSnapshot)
+  outgoingSnapshot.style.opacity = originalOpacity || '1'
+  positionSnapshot(outgoingSnapshot, root, parent)
+  parent.insertBefore(outgoingSnapshot, root)
   root.style.visibility = 'hidden'
 
+  let incomingSnapshot: HTMLElement | undefined
   let state: 'prepared' | 'started' | 'finished' | 'cancelled' = 'prepared'
   let restoredOpacity = originalOpacity
 
-  /** Starts the incoming root at zero opacity after its logical update. */
+  /** Creates the incoming presentation clone after the logical component update. */
   const start = (): void => {
     if (state !== 'prepared') return
     restoredOpacity = root.style.opacity
+
+    // Keep the logical root hidden while the V1-compatible incoming clone is
+    // prepared. The component has already applied its new state at this point.
     root.style.visibility = originalVisibility
-    root.style.opacity = '0'
+    const nextSnapshot = root.cloneNode(true)
+    if (!isHtmlElement(nextSnapshot)) {
+      root.style.visibility = 'hidden'
+      return
+    }
+    sanitizeSnapshot(nextSnapshot)
+    nextSnapshot.style.opacity = '0'
+    positionSnapshot(nextSnapshot, root, parent)
+    parent.insertBefore(nextSnapshot, root)
+    incomingSnapshot = nextSnapshot
+    root.style.visibility = 'hidden'
     state = 'started'
   }
 
-  /** Applies the shared fade progress to the two presentation layers. */
+  /** Applies the selected replacement profile to the two temporary layers. */
   const sample = (progress: number): void => {
     if (state !== 'started') return
     const normalized = Math.min(1, Math.max(0, progress))
-    snapshot.style.opacity = String(1 - normalized)
-    root.style.opacity = String(normalized)
+    if (transition === 'fade') outgoingSnapshot.style.opacity = String(1 - normalized)
+    incomingSnapshot?.style.setProperty('opacity', String(normalized))
   }
 
   /** Completes the transition and leaves only the updated persistent root. */
   const finish = (): void => {
     if (state === 'finished' || state === 'cancelled') return
-    removeSnapshot(snapshot, parent)
+    removeSnapshot(outgoingSnapshot, parent)
+    if (incomingSnapshot !== undefined) removeSnapshot(incomingSnapshot, parent)
     root.style.visibility = originalVisibility
     root.style.opacity = restoredOpacity
+    root.style.position = originalRootPosition
     restoreParentPosition(parent, originalParentPosition)
     state = 'finished'
   }
@@ -66,9 +87,11 @@ function createReplaceSession(root: unknown): ReplacePresentationSession | undef
   /** Cancels the transition and removes every presentation-only contribution. */
   const cancel = (): void => {
     if (state === 'finished' || state === 'cancelled') return
-    removeSnapshot(snapshot, parent)
+    removeSnapshot(outgoingSnapshot, parent)
+    if (incomingSnapshot !== undefined) removeSnapshot(incomingSnapshot, parent)
     root.style.visibility = originalVisibility
     root.style.opacity = state === 'started' ? restoredOpacity : originalOpacity
+    root.style.position = originalRootPosition
     restoreParentPosition(parent, originalParentPosition)
     state = 'cancelled'
   }

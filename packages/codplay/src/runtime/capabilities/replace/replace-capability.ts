@@ -3,6 +3,7 @@ import type {
   ComponentAnimation,
   ReplaceComponentSurface,
   ReplacePresentationSession,
+  ReplaceTransition,
 } from '../../components'
 import type {
   RuntimeComponentUpdateContext,
@@ -21,7 +22,7 @@ export const DEFAULT_REPLACE_DURATION_MS = 300
 
 /** Normalized command supported by the first V2 replace profile. */
 export type ReplaceSimpleCommand = Readonly<{
-  transition: 'fade'
+  transition: ReplaceTransition
   duration: number
 }>
 
@@ -67,7 +68,7 @@ export function createReplaceModuleService(
   /** Starts or preserves the presentation session before a logical component update. */
   function beforeComponentUpdate(update: RuntimeComponentUpdateContext): void {
     const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
-    if (update.phase !== 'normal') {
+    if (update.phase === 'geometry-capture') {
       cancelSession(update.componentId)
       if (occurrence !== undefined) handledOccurrences.set(update.componentId, occurrence.key)
       else handledOccurrences.delete(update.componentId)
@@ -84,7 +85,7 @@ export function createReplaceModuleService(
     if (handledOccurrences.get(update.componentId) === occurrence.key) return
 
     cancelSession(update.componentId)
-    const session = getReplaceSurface(update.componentId)?.begin()
+    const session = getReplaceSurface(update.componentId)?.begin(occurrence.command.transition)
     if (session === undefined) return
     handledOccurrences.set(update.componentId, occurrence.key)
     sessions.set(update.componentId, {
@@ -93,11 +94,11 @@ export function createReplaceModuleService(
     })
   }
 
-  /** Finishes the hook pair by registering one player-clocked simple fade. */
+  /** Finishes the hook pair by registering one player-clocked replacement transition. */
   function afterComponentUpdate(update: RuntimeComponentUpdateContext): void {
     const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
     const active = sessions.get(update.componentId)
-    if (update.phase !== 'normal' || occurrence === undefined || active?.key !== occurrence.key) return
+    if (update.phase === 'geometry-capture' || occurrence === undefined || active?.key !== occurrence.key) return
 
     if (active.animation === undefined) {
       active.session.start()
@@ -114,7 +115,7 @@ export function createReplaceModuleService(
     update.registerAnimation(active.animation)
   }
 
-  /** Prepares the same replace fade for a foreign mount initiated outside component update. */
+  /** Prepares the same replacement transition for a foreign mount initiated outside component update. */
   function prepareExternalPresentation(
     request: RuntimeExternalPresentationRequest,
   ): RuntimeExternalPresentation | undefined {
@@ -123,7 +124,7 @@ export function createReplaceModuleService(
     if (command === undefined) return undefined
 
     cancelSession(request.componentId)
-    const session = getReplaceSurface(request.componentId)?.begin()
+    const session = getReplaceSurface(request.componentId)?.begin(command.transition)
     if (session === undefined) return undefined
 
     const sessionId = nextSessionId++
@@ -180,14 +181,16 @@ export function createReplaceModuleService(
   }
 }
 
-/** Normalizes the supported fade form and deliberately discards `split`. */
+/** Normalizes the supported replacement forms and deliberately discards `split`. */
 export function normalizeReplaceSimpleCommand(rawReplace: unknown): ReplaceSimpleCommand | undefined {
-  if (rawReplace === 'fade') return { transition: 'fade', duration: DEFAULT_REPLACE_DURATION_MS }
-  if (!isRecord(rawReplace) || rawReplace.transition !== 'fade') return undefined
+  if (rawReplace === 'fade' || rawReplace === 'fade-in') {
+    return { transition: rawReplace, duration: DEFAULT_REPLACE_DURATION_MS }
+  }
+  if (!isRecord(rawReplace) || !isReplaceTransition(rawReplace.transition)) return undefined
   const duration = rawReplace.duration
-  if (duration === undefined) return { transition: 'fade', duration: DEFAULT_REPLACE_DURATION_MS }
+  if (duration === undefined) return { transition: rawReplace.transition, duration: DEFAULT_REPLACE_DURATION_MS }
   if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) return undefined
-  return { transition: 'fade', duration }
+  return { transition: rawReplace.transition, duration }
 }
 
 /** Selects the latest replace occurrence that also declares a target content change. */
@@ -213,7 +216,7 @@ function createOccurrenceKey(action: ComponentActionOccurrence): string {
   return `${action.eventId ?? action.name}:${action.startAt}`
 }
 
-/** Registers a simple fade whose samples mutate only the presentation surface. */
+/** Registers a replacement transition whose samples mutate only the presentation surface. */
 function createReplaceAnimation(options: Readonly<{
   componentId: string
   key: string
@@ -262,4 +265,9 @@ function hasReplaceTarget(action: Readonly<Record<string, unknown>>): boolean {
 /** Narrows one value to the open record shape used by compiled action payloads. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Checks whether an author payload names one supported replacement profile. */
+function isReplaceTransition(value: unknown): value is ReplaceTransition {
+  return value === 'fade' || value === 'fade-in'
 }

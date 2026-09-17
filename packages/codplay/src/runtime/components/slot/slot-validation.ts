@@ -93,21 +93,21 @@ function isForeignContentValue(value: unknown): value is ForeignContentValue {
 /** Validates the slot replacement profile while deliberately ignoring split. */
 function validateReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
   if (value === undefined) return
-  if (value === 'fade') return
+  if (value === 'fade' || value === 'fade-in') return
   if (!isComponentRecord(value)) {
     reportInvalidComponentValue(
       context,
       'AUTHOR_SLOT_REPLACE_INVALID',
-      'slot.replace must be "fade" or an object with transition: "fade".',
+      'slot.replace must be "fade", "fade-in", or an object with a supported transition.',
       'replace',
     )
     return
   }
-  if (value.transition !== 'fade') {
+  if (value.transition !== 'fade' && value.transition !== 'fade-in') {
     reportInvalidComponentValue(
       context,
       'AUTHOR_SLOT_REPLACE_TRANSITION_INVALID',
-      'slot.replace.transition must be "fade".',
+      'slot.replace.transition must be "fade" or "fade-in".',
       'replace.transition',
     )
   }

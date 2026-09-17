@@ -1,7 +1,6 @@
 import type { SceneListenRule } from 'codplay/scene/types'
 import type { StrapEvent, StrapFunction } from 'codplay/runtime/player'
 import {
-  EVENTS_ANIMATIONS_RESET_EVENT,
   EVENTS_FRAME_EVENTS,
   EVENTS_FRAME_STORY_IDS,
   EVENTS_KEYBOARD_NAVIGATION_EVENT,
@@ -60,7 +59,6 @@ export function createEventsNavigationStrap(): StrapFunction {
 
     const output: readonly StrapEvent[] = [
       sceneEvent(EVENTS_TWEEN_STOP_EVENT),
-      sceneEvent(EVENTS_ANIMATIONS_RESET_EVENT),
       storyEvent(currentStoryId, currentEvents.leave),
       sceneEvent(currentEvents.reset),
       sceneEvent(currentEvents.outro),

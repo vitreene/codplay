@@ -93,10 +93,11 @@ Le root reste un wrapper `<div>`. La prop `img` cible la node interne et les
 services `className`, `style` et `attr` du root ciblent le wrapper.
 
 Le module partagé `replace` peut également cibler ce wrapper lorsque l'action
-change `src` avec `replace: 'fade'` ou sa forme objet. Il capture un snapshot
-temporaire du wrapper et réutilise la même surface de présentation que `slot` ;
-il ne duplique pas la logique de clone dans `ImageComponent`. Cette preuve ne
-préjuge pas du traitement des représentations non clonables comme une iframe.
+change `src` avec `replace: 'fade'`, `replace: 'fade-in'` ou leur forme objet. Il
+capture un snapshot sortant avant l'update, puis un snapshot entrant après
+l'update, via la même surface de présentation que `slot` ; il ne duplique pas
+la logique de clone dans `ImageComponent`. Cette preuve ne préjuge pas du
+traitement des représentations non clonables comme une iframe.
 
 ## Composant `input` et capacite layout
 

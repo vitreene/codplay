@@ -134,8 +134,9 @@ describe('Sighty graph navigation demo', () => {
     await sceneB.telco.seek(1_200)
     expect(sceneB.telco.getProgress().timelineMs).toBeGreaterThan(1_000)
     const transitionSnapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-transient]'))
-    expect(transitionSnapshots).toHaveLength(1)
+    expect(transitionSnapshots).toHaveLength(2)
     expect(transitionSnapshots[0]?.textContent).toContain('Scène A')
+    expect(transitionSnapshots[1]?.textContent).toContain('SCÈNE B')
 
     previousButton.click()
     await flushDemo4Relay()
@@ -246,7 +247,7 @@ describe('Sighty graph navigation demo', () => {
     expect(stage.querySelectorAll('[data-codplay-transient]')).toHaveLength(0)
   })
 
-  it('rejects a rapid second navigation while keeping one outgoing presentation', async () => {
+  it('rejects a rapid second navigation while keeping the two presentation copies', async () => {
     vi.stubGlobal('Image', ImmediateImage)
     const stage = document.createElement('div')
     document.body.append(stage)
@@ -272,8 +273,9 @@ describe('Sighty graph navigation demo', () => {
 
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
     const snapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-transient]'))
-    expect(snapshots).toHaveLength(1)
+    expect(snapshots).toHaveLength(2)
     expect(snapshots[0]?.textContent).toContain('Scène A')
+    expect(snapshots[1]?.textContent).toContain('SCÈNE B')
     expect(errors).toEqual([])
   })
 

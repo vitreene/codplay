@@ -71,6 +71,7 @@ export type {
   MediaComponentSurface,
   ReplaceComponentSurface,
   ReplacePresentationSession,
+  ReplaceTransition,
   RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,

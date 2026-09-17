@@ -133,11 +133,11 @@ function formatNames(names: readonly string[]): string {
 /** Reads the validated slot replacement declaration without interpreting foreign content. */
 function readSlotReplace(initial: Readonly<Record<string, unknown>> | undefined): SlotReplace | undefined {
   const value = initial?.replace
-  if (value === 'fade') return value
-  if (!isRecord(value) || value.transition !== 'fade') return undefined
-  if (value.duration === undefined) return { transition: 'fade' }
+  if (value === 'fade' || value === 'fade-in') return value
+  if (!isRecord(value) || (value.transition !== 'fade' && value.transition !== 'fade-in')) return undefined
+  if (value.duration === undefined) return { transition: value.transition }
   if (typeof value.duration !== 'number' || !Number.isFinite(value.duration) || value.duration < 0) return undefined
-  return { transition: 'fade', duration: value.duration }
+  return { transition: value.transition, duration: value.duration }
 }
 
 /** Narrows a slot profile value to a plain record before reading its transition. */
