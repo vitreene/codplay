@@ -152,6 +152,23 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       };
     },
   },
+  {
+    id: "events",
+    path: "?demo=events",
+    title: "Events — comment ça fonctionne",
+    description: "Émission, distribution, écoute et délai autour d’une barrière d’accès.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/events/main"),
+        import("./demos/events/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        initialEvents: module.EVENTS_INITIAL_EVENTS,
+      };
+    },
+  },
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */
