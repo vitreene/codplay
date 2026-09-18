@@ -32,6 +32,100 @@ function createCatalogForFixtures(): RuntimeCapabilityCatalog {
 }
 
 describe('SceneBuilder', () => {
+  it('compiles an immutable relation separately and ignores relation action patches', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'relation-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'geometry',
+            type: 'tag',
+            initial: {
+              rel: { target: { scene: 'relation-scene' } },
+            },
+            actions: {
+              retarget: {
+                rel: { target: { scene: 'other' } },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const perso = result.compiledScene.scene.stories.main?.persos[0]
+    expect(perso?.rel).toEqual({ target: { scene: 'relation-scene' } })
+    expect(perso?.initial.rel).toBeUndefined()
+    expect(perso?.actions.retarget).toEqual({})
+    expect(Object.isFrozen(perso?.rel)).toBe(true)
+    expect(result.diagnostics.warnings.map((diagnostic) => diagnostic.code)).toContain('AUTHOR_REL_ACTION_IGNORED')
+  })
+
+  it('warns about unknown relation identities without blocking scene construction', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'relation-target-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'geometry',
+            type: 'tag',
+            initial: {
+              rel: { target: { scene: 'other-scene' } },
+            },
+          }],
+        },
+        secondary: {
+          id: 'secondary',
+          persos: [{
+            id: 'consumer',
+            type: 'tag',
+            initial: {
+              rel: { target: { scene: 'relation-target-scene', perso: 'missing' } },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.diagnostics.warnings.map((diagnostic) => diagnostic.code)).toEqual([
+      'AUTHOR_REL_TARGET_SCENE_UNKNOWN',
+      'AUTHOR_REL_TARGET_PERSO_UNKNOWN',
+    ])
+  })
+
+  it('keeps an invalid relation non-blocking and does not compile a target from it', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'invalid-relation-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'geometry',
+            type: 'tag',
+            initial: {
+              rel: { target: { scene: '' } },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const perso = result.compiledScene.scene.stories.main?.persos[0]
+    expect(perso?.rel).toBeUndefined()
+    expect(result.diagnostics.warnings.map((diagnostic) => diagnostic.code)).toContain('AUTHOR_REL_INVALID')
+  })
+
   it('preserves a story reset listen capability in the compiled scene', () => {
     const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
     const result = builder.build({
@@ -599,6 +693,58 @@ describe('SceneBuilder', () => {
       expect(result.compiledScene.requirements.modules).toEqual(['markup'])
       const layout = result.compiledScene.scene.stories.main?.persos[0]
       expect(layout?.initial.markup).toBe('<section><main data-part="page-layout:content"></main></section>')
+    }
+  })
+
+  it('derives engine library requirements from component declarations', () => {
+    const catalog = createCoreRuntimeCatalog()
+    catalog.registerLibrary({ id: 'three', load: () => undefined })
+    catalog.registerComponent({
+      type: 'three-host',
+      component: TagComponent,
+      modules: [],
+      libraries: ['three'],
+      validateInitial: () => undefined,
+    })
+
+    const result = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'three-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'host', type: 'three-host', initial: {} }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.compiledScene.requirements.libraries).toEqual(['three'])
+  })
+
+  it('warns without blocking when a component names an undeclared engine library', () => {
+    const catalog = createCoreRuntimeCatalog()
+    catalog.registerComponent({
+      type: 'unavailable-host',
+      component: TagComponent,
+      modules: [],
+      libraries: ['missing-library'],
+      validateInitial: () => undefined,
+    })
+
+    const result = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'missing-library-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'host', type: 'unavailable-host', initial: {} }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.compiledScene.requirements.libraries).toEqual(['missing-library'])
+      expect(result.diagnostics.warnings.map((diagnostic) => diagnostic.code)).toContain('AUTHOR_LIBRARY_UNKNOWN')
     }
   })
 

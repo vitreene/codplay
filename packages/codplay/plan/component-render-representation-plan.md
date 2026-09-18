@@ -4,7 +4,8 @@
 
 Status: Fixe pour la materialisation HTML/DOM V2
 CodPlay version: V2 foundation  
-Review: frontière HTML/DOM et composants à contexte interne relus le 2026-08-26
+Review: frontière HTML/DOM fixe ; pont des projections tierces `A relire` dans
+le plan du 2026-09-18
 
 La frontière composant/materializer reste fixe. La préparation géométrique
 conditionnelle d'un groupe `move`/`reparent` pendant Play ou Seek relève de
@@ -290,18 +291,26 @@ rejouer une animation FLIP passée. Lorsque la cible traverse une frontière
 capture nécessaire avant la publication de la frame, puis réutilise ses poses
 pour la résolution absolue.
 
-## Composant hybride et substrat interne
+## Composant hôte et projection tierce
 
-Le cas d'un composant specialise comme `avatar3d` est precise dans
+Le cas d'un composant hôte Three.js est repris dans
 [`2026-08-01-composants-hybrides-threejs-v2.md`](./notes/2026-08-01-composants-hybrides-threejs-v2.md).
-Son rendu auteur fournit l'hote DOM, par exemple un template contenant un `canvas`.
-Le materializer DOM materialise et monte cet hote ; le composant possede ensuite
-directement son substrat interne, par exemple `WebGLRenderer`, `THREE.Scene` et
-`THREE.Camera`.
+Son rendu auteur fournit l'hote DOM, par exemple un template contenant un
+`canvas`. Le materializer DOM materialise et monte cet hote ; le composant
+possede ensuite sa projection interne et son materializer spécialisé.
 
-La regle de writer unique est appliquee par couche : le materializer ecrit l'hote DOM,
-le composant ecrit sa scene Three.js privee. Le coeur CodPlay ne decompose ni ne
-manipule les objets internes Three.js.
+La regle de writer unique est appliquee par couche : le materializer HTML ecrit
+l'hote DOM ; le materializer possédé par l'hôte réconcilie les objets de sa
+projection. Le coeur CodPlay ne decompose ni ne manipule les objets internes
+Three.js.
+
+La direction ne se limite plus à une scène privée monolithique. Des persos
+spécialisés peuvent être reliés à l'hôte ou à un autre perso par un `rel`
+initial et immuable. L'intégration type et normalise cette relation, puis le
+pont remet au composant de feature sa cible native déjà résolue. Ce pont reste
+`A relire` dans
+[`2026-09-18-third-party-render-target-codplay-plan.md`](./2026-09-18-third-party-render-target-codplay-plan.md)
+et ne modifie pas le contrat HTML fixe de ce plan.
 
 ### Media et ressources internes V1
 
@@ -396,9 +405,10 @@ commit. À `LAST`, les slots et ressources transitoires sont retirés ; la
 materialisation auteur reste la seule représentation.
 
 Ce contrat est limité à la materialisation HTML/DOM et aux moves HTML compilés.
-Canvas et Three.js peuvent exister comme contexte interne d'un composant attaché
-à un nœud HTML, mais ne sont pas des materializers CodPlay ni des options de la
-façade. Le runtime JSX reste hors contrat.
+Canvas, Three.js, Rive ou Lottie peuvent exister dans une projection possédée
+par un composant hôte attaché à un nœud HTML. Leur materializer reste local à
+l'hôte et n'est pas une option de la façade. Le pont de composants projetés est
+un chantier séparé, encore `A relire`. Le runtime JSX reste hors contrat.
 
 ## Hors contrat actuel
 

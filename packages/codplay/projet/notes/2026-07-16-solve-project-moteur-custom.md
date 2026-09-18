@@ -1,5 +1,12 @@
 # Codplay V2 — cahier des charges émergent
 
+> **Correction du 2026-09-18.** L'hypothèse S8 d'un substrat global déclaré,
+> interchangeable avec le DOM pour toute une instance, est abandonnée. Elle ne
+> doit plus être utilisée comme direction V2. Le modèle actuel conserve le
+> matérialiseur HTML/DOM et confie les projections Three.js, Rive ou Lottie à
+> des composants hôtes. Voir
+> [`2026-07-29-projection-substrat-de-rendu.md`](./2026-07-29-projection-substrat-de-rendu.md).
+
 > **Résumé des points clés (2026-07-26).** Cette discussion projet a fait converger plusieurs
 > réflexions vers ce qui ressemble au cahier des charges d'une **codplay V2**. Les points clés, avant
 > le détail (S1-S8 ci-dessous) :
@@ -19,11 +26,10 @@
 > 4. **Un seul écrivain, un seul état, un seul `set`** — le gain premier est **architectural** :
 >    codplay fait aujourd'hui deux fois la même chose ; la V2 retire la redondance, elle n'ajoute pas
 >    de puissance.
-> 5. **La Projection : cible de rendu déclarée** (S8). Le substrat (DOM) cesse d'être implicite. Une
->    Projection expose des capacités abstraites — `set` / `measure` / `mount` — dont les composants
->    dépendent. Le DOM devient *une* Projection ; canvas et multi-cibles deviennent possibles.
->    Concept **codplay**, pas ed2. Généralise le `move backend` de `move-separation-policy` à toutes
->    les propriétés.
+> 5. **Projections tierces hébergées** (correction de S8). Le matérialiseur
+>    HTML/DOM reste celui de l'instance. Un composant hôte peut posséder une
+>    projection Three.js, Rive, Lottie ou Canvas et son matérialiseur local ;
+>    des composants spécialisés y sont reliés par un `rel` initial et immuable.
 > 6. **`measure` est irréductible** : la position réelle d'un node n'est pas toujours le produit propre
 >    des matrices logiques (overflow/reflow non prédictibles). `measure` reste le recours d'exactitude
 >    au pixel — cas limite du **seek FLIP sous ancêtres mobiles**
@@ -40,14 +46,11 @@
 >    side-effect** restent un rejeu filtré (rares, isolés). **C'est *moins* d'état, pas un store** ;
 >    faisabilité = un **inventaire** (events rejoués → fenêtre-de-validité vs effet irréductible), pas
 >    un pari. Détail : `2026-07-26-etat-fonction-de-t.md`.
-> 9. **Portabilité = conséquence de la V2, et contrainte de rédaction.** Cœur agnostique / composants
->    sur mesure : un portage (cas concret Flutter) devient « cœur inchangé + composants réécrits + une
->    `FlutterProjection` » — les obstacles au portage SONT les points V2 (nodes dans le player →
->    Projection ; impératif → f(t)/déclaratif ; cqw/anime web → Projection/moteur custom). Surtout :
->    tenir la contrainte de portage **discipline le code TS présent** (interdit à l'écriture les fuites
->    de plateforme — les cicatrices web sont ces fuites). Chantier **typage** mûr : les `unknown`
->    étaient de l'indétermination, les cas d'usage l'ont résolue → remontée des cas vers types, pas
->    invention. Détail : `2026-07-26-portabilite-contrainte-redaction.md`.
+> 9. **Portabilité comme contrainte de rédaction.** Le cœur logique refuse les
+>    fuites de plateforme, tandis que les composants restent écrits pour leur
+>    environnement concret. Un portage demande des hôtes et composants adaptés ;
+>    il ne se réduit pas à fournir un matérialiseur global interchangeable.
+>    Détail corrigé : `2026-07-26-portabilite-contrainte-redaction.md`.
 >
 > Ce document dit **quoi construire** (S1-S9 ci-dessous). Le **comment mener** le chantier (réécriture
 > franche, tests-oracle, structuration, façade multi-canaux, rien-en-dur, revue I/O) est dans
@@ -333,115 +336,21 @@ d'anime sans big-bang — **déjà tracée** là où `resolveContainerQueryValue
 
 ---
 
-## S8. La Projection — cible de rendu déclarée (concept manquant)
+## S8. Hypothèse abandonnée — matérialiseur global alternatif
 
-Deux problèmes, une seule cause : **le substrat de rendu n'est pas un concept déclaré** dans codplay
-(le DOM est implicite, câblé en dur). Les nommer ensemble : **la Projection**.
+Cette hypothèse a été retirée du corpus actif. Le modèle retenu conserve le
+matérialiseur HTML/DOM de l'instance et introduit un composant hôte qui possède
+sa projection tierce et son matérialiseur local. Les composants spécialisés
+sont reliés à une scène ou à un perso par un `rel` initial, immuable et typé par
+l'intégration.
 
-### Problème A — `project` n'est pas toujours un `set` : certains solves ont besoin de *mesurer* le substrat
+La mesure HTML reste traitée par les contrats HTML qui en ont besoin. Elle ne
+justifie plus une interface de substrat universelle.
 
-S7 décrivait `project` comme « écrire l'état natif sur le substrat ». Faux pour une famille de modules
-qui **lisent le substrat pour *calculer* l'intention**, pas pour l'écrire :
-- **FLIP** — mesure les rects avant/après mutation pour le delta (`getBoundingClientRect` × 2).
-- **DnD** — mesure la géométrie live à chaque `pointermove` pour décider l'index de drop (hit-testing).
-- **`replace` / auto-size texte** — mesure le texte rendu pour décider découpage / taille de police.
+Voir :
 
-Ce **n'est pas** une violation du sens unique (S1) : ils ne relisent pas le node pour reconstruire une
-*description* d'auteur. Ils font une **lecture de mesure** (jetable, re-dérivable — comme le
-hit-testing timeline ou `referenceWidthPx`, déjà autorisés), pas une lecture de vérité. Le code le
-dit déjà : le FLIP prend `nodeRef` via une interface `MeasurableNode = { getBoundingClientRect() }`
-(`create-flip-engine.ts:26,61`) — **il ne dépend pas du DOM, il dépend d'une capacité de mesure.**
-Correction à S7 : `solve` n'est pas « pur sans substrat » mais **« sans *écriture* substrat, avec accès
-à une *mesure* substrat abstraite »**. La mesure est une **entrée** du solve, fournie par la Projection.
-
-**La mesure est irréductible, pas juste une commodité** (nuance posée par l'auteur, 2026-07-26). On
-pourrait croire que toute géométrie composée (ex. la chaîne d'ancêtres d'un FLIP) est *dérivable* du
-`PersoState` des ancêtres, donc que `measure` serait éliminable. **Faux** : la position réelle d'un
-node n'est pas toujours le produit propre des matrices logiques — overflow, repaint, resize, reflow
-produisent des effets **non prédictibles depuis l'état**. La seule façon de connaître la position
-*réelle* reste de la **mesurer**. `measure` n'est donc pas un pis-aller transitoire ; c'est le recours
-d'exactitude au pixel que l'abstraction ne peut pas fournir. Cas limite qui le démontre — seek d'un
-FLIP sous ancêtres mobiles : voir `2026-07-26-seek-flip-ancetres-mobiles.md`.
-
-### Problème B — un « composant canvas » est le mauvais niveau
-
-Aujourd'hui : le DOM est une projection **implicite et unique**, jamais déclarée. Vouloir un canvas en
-faisant un *composant* canvas (frère de `TextComponent`) est le mauvais niveau : le canvas n'est pas un
-composant, c'est une **cible dont TOUS les composants dépendent** — comme ils dépendent tous du DOM
-aujourd'hui sans le dire. Un composant canvas obligerait à résoudre par des méthodes ad hoc ce que le
-DOM fait par composants. Il manque une **déclaration** : « tout ce que je projette va sur cette cible ».
-
-### Le concept — Projection (nom provisoire ; alt. `RenderTarget` / `Surface`)
-
-> Une **Projection** est une **cible de rendu déclarée** qui fournit aux composants les **capacités de
-> substrat** dont ils ont besoin. Le DOM devient *une* Projection parmi d'autres, non plus le substrat
-> implicite.
-
-Trois capacités (au moins) :
-- **`set(el, state)`** — écrire un état résolu (l'étape 6 `project`).
-- **`measure(el) → rect`** — mesurer une géométrie (résout le problème A ; ce que FLIP/DnD/auto-size
-  demandent).
-- **`mount / unmount`** — structurer (attacher/détacher un élément de la cible).
-
-```
-   5 solve ──► PersoState @ t ──► 6 project ──► 7 render
-        │                             │
-        │ measure(el)                 │ set(el,state)
-        ▼                             ▼
-   ┌──────────────────────────────────────────────┐
-   │            PROJECTION (déclarée)              │
-   │   set · measure · mount   — capacités abstraites │
-   ├──────────────────────────────────────────────┤
-   │  DomProjection │ CanvasProjection │ …          │
-   └──────────────────────────────────────────────┘
-         ▲            ▲            ▲
-   plusieurs cibles SIMULTANÉES possibles (dom + canvas-A + canvas-B…)
-```
-
-Ce que ça résout d'un coup :
-- **A disparaît** : `set` et `measure` sont deux capacités de la MÊME Projection. FLIP appelle
-  `projection.measure(el)` sans savoir si c'est `getBoundingClientRect` DOM ou une bbox canvas.
-  « Interaction forte avec le DOM » devient « interaction forte avec la Projection », abstraite.
-- **B est résolu par construction** : un composant ne connaît que `this.projection`, jamais `document`
-  ni `getBoundingClientRect`. Changer de substrat = changer de Projection, pas réécrire les composants.
-- `resolveContainerQueryValue` (le cqw) devient `DomProjection.resolveUnit` — le cqw est une capacité
-  *DOM* ; un canvas résoudrait ses unités autrement. (Ferme aussi le `containerQueryRootNode`
-  module-level global signalé fragile en §5.5 : la résolution d'unité devient par-Projection.)
-
-### Périmètre — la Projection appartient à codplay, pas à ed2
-
-**Point cadré par l'auteur (2026-07-26).** La Projection est un concept **runtime codplay**, pas ed2.
-Corollaires :
-- **ed2 n'est PAS le lieu de sa déclaration.** La question « où la déclarer dans le document ed2
-  (capsule ? `SceneMeta` ? table `projections` ?) » était **mal posée** — hors périmètre ed2. ed2 est
-  un client parmi d'autres de codplay. Le **côté canvas appellera de tout autres éditeurs** (gérer la
-  forme projetée en canvas n'est pas le métier de l'éditeur DOM actuel). Ne pas chercher l'ancrage
-  Projection dans le modèle-document ed2.
-- Point d'entrée existant côté codplay : `mountTarget` (`player.init()`) est **déjà** une déclaration
-  de cible — unique, non nommée, impérative. La Projection la généralise en cible(s) nommée(s), mais
-  reste de **nature exécution** (une cible concrète — un `Element`/`Canvas` réel — n'existe qu'au
-  runtime, jamais dans le `CompiledScene` immuable ; au plus le document porterait un *rôle*
-  symbolique résolu à l'init, patron `rootToken`/`@root`).
-
-### Deux limites posées (ne PAS formaliser maintenant)
-
-- **FLIP / move inter-projections** : la structure abstraite `Perso` l'**autorise** (propriété
-  heureuse de l'abstraction, pas un problème à résoudre) — mais **cette complexité n'est pas
-  formalisée à ce stade**. Capacité latente, pas un chantier. (Ne pas re-proposer « interdire le move
-  cross-projection » comme décision : ni interdit ni formalisé, juste hors sujet pour l'instant.)
-- **Nature de la Projection** (mode de rendu vs cadre spatial autonome, coordonnées, unités propres) :
-  relève du **côté canvas et de ses éditeurs futurs**, pas du concept de Projection ici. Non tranché,
-  volontairement.
-
-### Lien avec l'existant — la Projection généralise le `move backend`
-
-Ce n'est pas hors-sol : `docs/formalisation/v1-move-separation-policy-state-backend-dom.md` a déjà posé
-la moitié du concept sous le nom **`move backend`** (« DOM aujourd'hui, canvas demain ; traduit un delta
-logique en mutation de support et transitions visuelles »). **La Projection est la généralisation du
-`move backend` à TOUTES les propriétés**, pas seulement `move` — exactement comme solve/project
-généralise à tout la séparation que `move-separation-policy` faisait pour `move`. Le `move backend`,
-c'est la Projection vue depuis `move`. L'architecture converge déjà vers ce concept sans l'avoir nommé
-au niveau global.
+- [`2026-07-29-projection-substrat-de-rendu.md`](./2026-07-29-projection-substrat-de-rendu.md) ;
+- [`../../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../../plan/2026-09-18-third-party-render-target-codplay-plan.md).
 
 ---
 

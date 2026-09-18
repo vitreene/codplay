@@ -1,4 +1,16 @@
 export { CodPlay } from './facade'
+export { BaseComponent, BaseHTMLComponent } from './runtime/components'
+export type { ValidationContext, ValidationFunction } from './services'
+export type {
+  ComponentActionOccurrence,
+  ComponentAnimation,
+  ComponentAnimationFrame,
+  ComponentAnimationPresentationPhase,
+  ComponentInput,
+  ComponentServices,
+  ComponentUpdateInput,
+  MaterializedPart,
+} from './runtime/components'
 export type {
   CodPlayApi,
   CodPlayCapabilityGroup,
@@ -30,6 +42,7 @@ export type {
   CodPlayInstanceMountRequest,
   CodPlayInstanceOptions,
   CodPlayModules,
+  CodPlayLibraries,
   CodPlayOptions,
   CodPlayProjectionApi,
   CodPlayProjectionResult,
@@ -74,11 +87,21 @@ export type {
   RuntimeComponentServiceFactory,
   RuntimeComponentServiceInstance,
   RuntimeModuleServiceDefinition,
+  RuntimeLibraryDefinition,
 } from './runtime/catalog'
+export type {
+  RuntimeComponentTargetProvider,
+  RuntimeTargetIdentity,
+  RuntimeTargetPublication,
+  RuntimeTargetRegistration,
+  RuntimeTargetScope,
+} from './runtime/targets'
 export type { CompiledFunctionCollection } from './scene/compiled'
 export type {
   CompiledResourceManifest,
   CompiledLengthValue,
+  CompiledRel,
+  CompiledRelTarget,
   CompiledRecord,
   CompiledStrapCollection,
   CompiledStrapDeclarations,
@@ -88,10 +111,13 @@ export type {
 export type {
   AuthorListenEvent,
   AuthorListenTransform,
+  PersoInitialCommon,
   AuthorStrapCollection,
   AuthorStrapDeclarations,
   CorePersoType,
   CustomPersoDoc,
+  Rel,
+  RelTarget,
   Move,
   MoveObject,
   MoveResize,

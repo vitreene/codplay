@@ -1,5 +1,11 @@
 # Conduite de chantier V2 — comment mener la réécriture
 
+> **Correction du 2026-09-18.** Les mentions d'une `Projection` sélectionnée
+> comme substrat global de l'instance sont obsolètes. Le matérialiseur global
+> reste HTML/DOM ; les bibliothèques tierces sont pilotées dans une projection
+> possédée par un composant hôte. Le contrat courant est développé dans les
+> plans du 2026-09-18.
+
 Note de réflexion (2026-07-26). Le document V2 (`2026-07-16-solve-project-moteur-custom.md`) dit **quoi
 construire** ; celle-ci dit **comment le mener**. Aucun code — trace des principes de conduite décidés
 en discussion. Périmètre codplay.
@@ -103,7 +109,8 @@ cœur V2. **Écartée.**
    éclate selon ces frontières.
 2. **Injection unifiée.** Il existe aujourd'hui DEUX mécanismes non unifiés : `options.animationAdapter`
    (niveau player) et `host.registries.*` (niveau module). La V2 reformalise **un seul patron
-   d'injection**, dont l'adapter d'animation, la Projection (S8) et les registries sont des instances.
+   d'injection** au niveau engine. Les projections tierces y déclarent leur unité d'intégration, puis
+   restent possédées par leurs composants hôtes.
 3. **Module / service — DÉJÀ SPÉCIFIÉS, à respecter (pas un trou).** Voir `docs/formalisation/v1-module-api.md`
    et `v1-component-api.md`. Le modèle est posé et **déjà dans l'esprit V2** : le runtime **ne connaît
    pas le nom métier** d'un module — il annonce des **phases** (`beforeUpdate`/`afterUpdate`/
@@ -258,9 +265,9 @@ Principe auteur : **codplay est basé sur des conventions ; ne rien référencer
 - **Structuré par domaine** (dossier `config/` ou config par module composée), **PAS un fichier
   géant** — sinon on recrée le fourre-tout ailleurs. `RUNTIME_CONFIG` montre la voie (structuré
   `.move.rootToken`, pas plat). Respecte à la fois « rien en dur » et « rôles = dossiers distincts ».
-- **Lien** : rien-en-dur = condition de l'**injection** (surcharger un défaut = fournir une config) ET
-  du **portage** (les conventions de plateforme se déclarent en config, comme la Projection —
-  `DomProjection` sa config, `FlutterProjection` la sienne).
+- **Lien** : rien-en-dur = condition de l'**injection**. Les conventions propres
+  à une bibliothèque tierce sont fournies par son unité d'intégration, dont le
+  type et le normaliseur de `rel`, et non par une projection globale configurée.
 
 ## 9. Injection de librairies tierces — acquis à PRÉSERVER et vérifier
 
@@ -271,9 +278,9 @@ composants + renderAdapter tiers)**, `renderAdapters`, hooks (`onTimelineEvent`/
 
 - **Les intégrations tierces existantes doivent continuer à fonctionner en V2** — acquis à préserver
   (`preserve-validated-acquis`), à **gate-tester**, pas à réinventer.
-- **Distinguer deux niveaux** : le **mécanisme** d'injection (« je fournis mes composants/adapters à
-  `create-player` ») doit **survivre tel quel** (contrat externe) ; le **contrat de ce qui est
-  injecté** (forme du renderAdapter) **migre** avec la V2 (renderAdapter → Projection/`project`).
+- **Distinguer deux niveaux** : le **mécanisme** d'injection doit survivre dans
+  l'unité déclarée à l'engine ; le contrat injecté regroupe bibliothèque,
+  composants, services, modules, preload et pont possédé par le composant hôte.
 - **Question ouverte à vérifier (pas supposer)** : les intégrations tierces se re-câblent-elles
   automatiquement, ou demandent-elles une migration de leur contrat ? Documenter la migration
   éventuelle. **Ne pas casser silencieusement une intégration qui marche.**
@@ -285,9 +292,8 @@ présence d'un canal I/O n'est PAS un manque ; seul l'est un canal dont le trait
 modèle V2. Lire avant de conclure (une déduction hâtive avait faussement listé le média comme trou).
 
 **Déjà couverts** par les concepts V2 : `animationAdapter`/`animeImplementation` (moteur custom) ;
-substrat/nodes (Projection) ; `components`/`bindings`/`renderAdapters` (injection tierce §9, Projection) ;
-`emit` / authoring / telco / observation (façade multi-canaux §6) ; unités cqw + mesure (Projection,
-`measure`).
+substrat/nodes HTML (materializer courant) ; `components`/`bindings`/`renderAdapters` (injection tierce §9) ;
+`emit` / authoring / telco / observation (façade multi-canaux §6) ; unités cqw + mesure HTML.
 
 **Les 5 canaux passés en revue** (verdict après lecture/clarification auteur) :
 
@@ -295,15 +301,14 @@ substrat/nodes (Projection) ; `components`/`bindings`/`renderAdapters` (injectio
 |---|---|---|
 | 1 | média / horloge | **Déjà résolu — acquis à PRÉSERVER.** `media-sync.ts` : master sélectionnable (`isMaster` + ordre de piste), sync par **correction de dérive** (`syncMasterToTimeline`, seuil 80ms) — la timeline reste maîtresse, le média est réaligné dessus ; `durationSource: 'audio-primary'` permet l'inverse (le master cale la scène). Le `MediaSyncRuntime` est **pur** (in-memory, déterministe, retourne des opérations). Vis-à-vis de `f(t)` : le média = **effet à side-effect corrigé** (case « irréductible filtré » déjà prévue), PAS une entrée temporelle qui casserait l'évaluation. C'est au temps ce que `measure` est à l'espace. La V2 préserve ce patron, ne le réinvente pas. |
 | 2 | preload / injection CSS | **Cadré — preload est une capacité externalisée et distincte.** L'appelant fournit un manifeste ou un tableau de manifestes et choisit quand précharger. `RuntimePreload` fournit le chargement, le cache partagé et les stratégies ; Sighty, l'éditeur et la diffusion autonome utilisent la même capacité, sans loader concurrent. La façade `run` de diffusion enchaîne explicitement `preload → init → play`. L'injection CSS reste une stratégie liée au materializer qui la consomme ; elle ne transforme pas preload en étape du player ni en service auteur. |
-| 3 | viewport / resize | **À traiter — DANS la Projection (seul apport neuf).** Deux couches : (a) **passif** (cq*), privilégié, sans event — la Projection résout les unités adaptatives, tout l'enjeu de cq* ; (b) **actif** : les valeurs **unitless** resize-sensibles (une mesure px donnée unitless = de facto sensible, la forme porte la sensibilité, §8), recalculées **hors scale** au render. Modèle : cadre unitless fixe (ex. `160×90`), ratio calculé au lancement, resize = le `scale` bouge (pas le ratio), whitelist déclarée en config, **couverture partielle assumée** (jamais 100%, échec propre par scale global). Ratio + whitelist = **capacité de Projection**, à concevoir abstrait dès le départ (jamais câblé sur `ResizeObserver`). **Détail complet : `2026-07-26-unitless-resize-resolution.md`.** |
+| 3 | viewport / resize | **Séparé par frontière.** Le materializer HTML traite les unités et mesures HTML. Un composant hôte adapte la projection tierce à sa boîte matérialisée. Aucun matérialiseur global alternatif n'est introduit. **Détail HTML : `2026-07-26-unitless-resize-resolution.md`.** |
 | 4 | hooks de sortie fine (`onTimelineEvent`/`onRuntimeEmit`/`onLiveCapture`) | **Vérifié : AUCUN consommateur externe aujourd'hui.** `onTimelineEvent`/`onRuntimeEmit` ne sont branchés par personne (ni démos, ni éditeur, ni tests) ; `onLiveCapture` n'a qu'un chemin interne (renderer→create-element). Ce sont des **points de sortie potentiels, posés en prévision, jamais exercés** — pas des canaux de debug avérés ni de production éprouvés. **Décision V2 : ne PAS les porter par défaut.** Les (re)créer dans le bon canal **quand un consommateur réel apparaît** — le canal se déduira de *qui* consomme (édition → authoring ; hôte de diffusion observant → observation ; système réagissant → interception), pas d'un choix a priori. Cohérent avec « ne pas reconduire une surface non exercée » / « inventaire, pas pari ». Intuition (non tranchée) : si un besoin ressurgit, probablement côté trace/inspection (debug/atelier). |
 | 5 | telco comme transport réseau/distant | **Noté, HORS axe V2 actuel.** Très tentant (pilotage à distance, télécommande, multi-instances) mais éloigné pour le moment. Porte à ne pas condamner, pas un axe de développement. |
 
-**Bilan** : aucun des 5 n'est un trou conceptuel. #1 déjà résolu, #2 est une capacité
-externalisée et #3 reste une capacité de
-Projection (#3 apporte la convention unitless=resize-sensible + l'interception sélective), #4 se range
-dans la façade, #5 est hors axe. La V2 (Projection + façade + config + f(t)) **absorbe** les 5 sans
-nouveau concept — signe de complétude du cahier des charges.
+**Bilan** : aucun des 5 n'est un trou conceptuel. #1 est déjà résolu, #2 est une
+capacité externalisée, #3 se répartit entre le materializer HTML et le composant
+hôte, #4 se range dans la façade et #5 est hors axe. La V2 les absorbe sans
+matérialiseur global alternatif.
 
 ## 11. La matrice des intentions — invariants directeurs
 

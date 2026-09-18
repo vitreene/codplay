@@ -6,6 +6,7 @@ import {
   type CompiledResourceManifest,
   type RuntimePreloadManifestInput,
 } from "codplay";
+import { createThreejsIntegration } from "@codplay/component-v2";
 import { createV2DemoTelco } from "./telco";
 
 import type { V2DemoDefinition } from "../registry";
@@ -222,8 +223,10 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     const scene = module.createScene();
     let codplay: CodPlay;
     try {
+      const threejs = createThreejsIntegration();
       codplay = new CodPlay({
         engine: {
+          ...threejs.engine,
           diagnosticOutput: (diagnostic) => {
             if (!V2_DEMO_LOG_ENABLED) return;
             console.log("[CodPlay V2 diagnostic]", diagnostic);
@@ -244,6 +247,14 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     const build = codplay.build({ scene });
     if (!build.ok) {
       if (build.diagnostics.errors.length === 0) log("SceneDoc build failed.", "error");
+      codplay.destroy();
+      return;
+    }
+
+    try {
+      await codplay.engine.prepareScene(build.compiledScene);
+    } catch (error) {
+      log(`Bibliothèque de scène indisponible : ${error instanceof Error ? error.message : String(error)}`, "error");
       codplay.destroy();
       return;
     }

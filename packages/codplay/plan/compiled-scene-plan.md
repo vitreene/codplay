@@ -71,13 +71,17 @@ de toutes les stories actives :
 - les types de composants dans `requirements.components` ;
 - les services déclarés par ces composants dans `requirements.services` ;
 - les modules nécessaires à leur exécution dans `requirements.modules` ;
+- les bibliothèques d'exécution déclarées par ces composants dans
+  `requirements.libraries` ;
 - les ressources réellement référencées dans `requirements.resources` et le
   manifeste `resources`.
 
 Le builder vérifie les profils avec le snapshot du catalogue avant de produire
 l'artefact. Le validateur sémantique vérifie ensuite la cohérence interne des
-références compilées, puis l'engine confronte les requirements au catalogue
-disponible avant l'initialisation du player. Les validateurs, factories et
+références compilées, puis l'engine prépare les bibliothèques requises et
+confronte les autres requirements au catalogue disponible avant l'initialisation
+du player. Un ID de bibliothèque absent du catalogue produit un warning auteur
+non bloquant au build ; le player ne recalcule pas ce warning. Les validateurs, factories et
 classes runtime ne sont pas sérialisés dans `CompiledScene` : ils restent dans
 le catalogue de l'instance. Les références de fonctions restent, elles aussi,
 des références externes séparées de l'artefact JSON.

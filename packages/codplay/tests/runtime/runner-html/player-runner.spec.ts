@@ -5,7 +5,9 @@ import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
 import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
-import type { Ticker } from '../../../src/runtime/engine'
+import { RuntimeEngine, type Ticker } from '../../../src/runtime/engine'
+import { TagComponent } from '../../../src/runtime/components'
+import type { RuntimePreloadApi } from '../../../src/runtime/preload'
 import { createDragCaptureScene, s6Straps } from '../../fixtures/drag-scene'
 
 class FakeNode {
@@ -601,6 +603,61 @@ afterEach(() => {
 })
 
 describe('HtmlPlayerRunner', () => {
+  it('prepares the scene library before starting resource preload', async () => {
+    installFakeDom()
+    const order: string[] = []
+    const catalog = createCoreRuntimeCatalog()
+    catalog.registerLibrary({
+      id: 'three',
+      load: async () => { order.push('library') },
+    })
+    catalog.registerComponent({
+      type: 'three-host',
+      component: TagComponent,
+      modules: [],
+      libraries: ['three'],
+      validateInitial: () => undefined,
+    })
+    const build = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'library-runner',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'host',
+            type: 'three-host',
+            initial: { move: '@root', tag: 'section', content: 'host' },
+          }],
+        },
+      },
+    })
+    if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+
+    const preload: RuntimePreloadApi = {
+      load: vi.fn(async () => {
+        order.push('resources')
+        return { ok: true as const, data: { loaded: [], skipped: [], metadata: {} } }
+      }),
+      css: { set: () => undefined, clear: () => undefined },
+      state: { status: 'idle', loadedCount: 0, totalCount: 0 },
+      cancel: () => undefined,
+      release: () => undefined,
+      registerStrategy: () => undefined,
+    }
+    const runner = new HtmlPlayerRunner({
+      id: 'library-runner',
+      compiledScene: build.compiledScene,
+      root: new FakeElement() as unknown as HTMLElement,
+      catalog,
+      engine: new RuntimeEngine(catalog),
+    })
+
+    const result = await runner.run({ preload })
+    expect(result.ok).toBe(true)
+    expect(order).toEqual(['library', 'resources'])
+    runner.destroy()
+  })
+
   it('preserves a detached perso node and component across seek until final destroy', () => {
     installFakeDom()
     const root = new FakeElement()

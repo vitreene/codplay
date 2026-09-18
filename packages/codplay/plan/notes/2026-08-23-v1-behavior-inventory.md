@@ -230,7 +230,8 @@ imposée par le catalogue. Elle reste injectée par le runtime, mais son contrat
 est substrat-neutre ; chaque composant déclare les noms qu'il emploie et le
 materializer fournit les implementations adaptées.
 
-Le contrat vise est desormais le suivant :
+Le contrat implémenté pour la tranche HTML et la direction retenue pour les
+projections tierces se lisent désormais ainsi :
 
 ```text
 BaseComponent
@@ -239,20 +240,25 @@ BaseComponent
 BaseHTMLComponent
   -> template markup, node et parts/outlets
 
-BaseCanvasComponent / BaseThreeComponent / BaseRiveComponent / ...
-  -> contrat de projection propre au materializer et au substrat concerne
+Composant hôte HTML
+  -> élément d'accueil + projection tierce + materializer local
+
+Composant projeté
+  -> BaseComponent ou factory d'intégration
+  -> cible native résolue depuis un rel immuable
 ```
 
 `BaseComponent` ne declare donc ni node, ni part, ni forme de rendu. Il reçoit
 seulement `ComponentServices`, dont le contrat ne contient aucune opération DOM.
 `render(): string`, la node et la materialisation des parts restent dans
-`BaseHTMLComponent`. Les composants Three.js, Rive, Canvas et autres materializers
-peuvent donc heriter de la base generique ou d'une base specialisee sans recevoir
-une API DOM par defaut.
+`BaseHTMLComponent`. Les composants Three.js, Rive ou Lottie ne reçoivent pas
+une API DOM par défaut. Ils ne constituent pas pour autant des matérialiseurs
+globaux alternatifs : ils sont raccordés à une projection possédée par un hôte
+HTML, selon le plan tiers du 2026-09-18.
 
 Cette correction implique le contrat `ComponentInput`, le catalogue de classes,
-le materializer et les tests de frontiere. Elle est maintenant couverte avant
-tout nouveau composant de substrat specialise.
+le materializer et les tests de frontiere. La tranche HTML est couverte ; le
+pont vers les projections possédées par un hôte reste `A relire`.
 
 La reprise V2 de cette frontière est maintenant implémentée sans créer de
 second catalogue.
@@ -289,7 +295,7 @@ Cette correction conserve les décisions V2 :
 - le composant contrôle sa liste et l'ordre d'application ;
 - l'accès individuel permet une orchestration spécifique dans `update()` ;
 - un service spécialisé, comme `orbit`, est résolu par le même catalogue et
-  reçoit l'adapter du materializer sélectionné ;
+  reçoit l'adapter de la frontière de matérialisation concernée ;
 - aucune déclaration HTML n'est imposée à un composant destiné à un autre
   substrat.
 
@@ -298,7 +304,7 @@ Le flux implémenté est :
 ```text
 composant -> declare les services abstraits
           -> catalogue de l'instance resout les noms
-          -> materializer fournit les implementations adaptees
+          -> frontière de materialisation fournit les implementations adaptees
 ```
 
 La compilation lit la déclaration statique du type pour vérifier les services

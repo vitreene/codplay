@@ -92,6 +92,7 @@ Le socle V2 impose une seule methode obligatoire. La tranche HTML ajoute
 abstract class BaseComponent<Initial extends Record<string, unknown>> {
   protected readonly perso: ComponentInput<Initial>['perso']
   protected readonly services: ComponentServices
+  initialize(): void
   abstract update(input: ComponentUpdateInput): void
 }
 
@@ -107,12 +108,20 @@ abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
 ```
 
 `BaseComponent` ne connait ni template ni DOM. Il conserve `perso`, reçoit une
-facade de services abstraite et impose l'application de l'etat resolu. Les
-services ne prescrivent aucun substrat : leur implementation est fournie par le
-materializer choisi. Les metadonnees de preload restent dans `ComponentInput`
-pour les composants qui en ont besoin. `BaseHTMLComponent` ajoute uniquement la
-tranche markup actuelle ; les materializers Canvas, Three.js, Rive ou autres
-peuvent utiliser la même frontière de services avec leurs propres adapters.
+facade de services abstraite, offre une phase `initialize()` facultative après
+la matérialisation et impose l'application de l'état résolu. Les
+services ne prescrivent aucun substrat : leur implementation est fournie par la
+frontière de matérialisation concernée. Les metadonnees de preload restent dans
+`ComponentInput` pour les composants qui en ont besoin. `BaseHTMLComponent`
+ajoute uniquement la tranche markup actuelle.
+
+Cette neutralité n'implique plus la sélection d'un matérialiseur Canvas,
+Three.js ou Rive pour toute l'instance. La direction à spécifier est celle d'un
+composant hôte HTML qui possède une projection tierce et son matérialiseur
+local. Des composants spécialisés, dérivés de `BaseComponent` ou d'une factory
+d'intégration, y reçoivent une cible déjà résolue par un `rel` initial et
+immuable. Voir le
+[plan du pont tiers](../2026-09-18-third-party-render-target-codplay-plan.md).
 
 `BaseHTMLComponent.render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.

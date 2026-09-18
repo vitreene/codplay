@@ -63,6 +63,8 @@ type RuntimeInstance = Readonly<{
 export class RuntimeEngine {
   private readonly catalog: RuntimeCapabilityCatalog
   private readonly resources = new Set<string>()
+  private readonly preparedLibraries = new Set<string>()
+  private readonly loadingLibraries = new Map<string, Promise<void>>()
   private readonly instances = new Map<string, RuntimeInstance>()
   private readonly idle: ResolvedRuntimeIdleOptions | false
   private lastNowMs: number | undefined
@@ -86,11 +88,24 @@ export class RuntimeEngine {
     for (const resource of resources) this.resources.add(resource)
   }
 
+  /**
+   * Prepares every library required by a scene before any player can mount it.
+   *
+   * The definition owns the foreign library and may keep its value in a
+   * package-local factory closure. The engine only guarantees ordering,
+   * de-duplicates concurrent preparation, and records readiness for init().
+   */
+  async prepareScene(scene: CompiledScene): Promise<void> {
+    this.assertUsable()
+    await Promise.all((scene.requirements.libraries ?? []).map((id) => this.prepareLibrary(id)))
+  }
+
   /** Reports compiled requirements unavailable from this engine. */
   validateRequirements(requirements: CompiledRequirements, diagnostics: DiagnosticCollector): void {
     reportMissingCapabilities('component', requirements.components, new Set(this.catalog.getComponents().map((definition) => definition.type)), diagnostics)
     reportMissingCapabilities('service', requirements.services, new Set(this.catalog.getServices().map((definition) => definition.name)), diagnostics)
     reportMissingCapabilities('module', requirements.modules, new Set(this.catalog.getModules().map((definition) => definition.id)), diagnostics)
+    reportMissingCapabilities('library', requirements.libraries ?? [], this.preparedLibraries, diagnostics)
     reportMissingCapabilities('resource', requirements.resources, this.resources, diagnostics)
   }
 
@@ -312,7 +327,34 @@ export class RuntimeEngine {
     this.stop()
     this.instances.clear()
     this.resources.clear()
+    for (const id of this.preparedLibraries) this.catalog.getLibrary(id)?.release?.()
+    this.preparedLibraries.clear()
+    this.loadingLibraries.clear()
     this.destroyed = true
+  }
+
+  /** Starts or reuses preparation for one engine library. */
+  private prepareLibrary(id: string): Promise<void> {
+    if (this.preparedLibraries.has(id)) return Promise.resolve()
+    const existing = this.loadingLibraries.get(id)
+    if (existing !== undefined) return existing
+
+    const definition = this.catalog.getLibrary(id)
+    if (definition === undefined) {
+      return Promise.reject(new Error(`Runtime library is not registered: ${id}`))
+    }
+
+    const loading = Promise.resolve()
+      .then(() => definition.load())
+      .then(() => {
+        this.preparedLibraries.add(id)
+      })
+      .catch((error) => {
+        this.loadingLibraries.delete(id)
+        throw error
+      })
+    this.loadingLibraries.set(id, loading)
+    return loading
   }
 
   /** Rejects operations after the engine-owned runtime has been destroyed. */

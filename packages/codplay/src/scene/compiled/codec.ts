@@ -4,6 +4,7 @@ import { isPlainRecord } from '../../shared'
 import { SCENE_BUILD_CONFIG } from '../config/scene-build'
 import type {
   CompiledListenRule,
+  CompiledRel,
   CompiledPerso,
   CompiledRecord,
   CompiledScene,
@@ -171,17 +172,32 @@ function isValidEventime(value: unknown): boolean {
 
 /** Checks one compiled perso payload. */
 function isValidPerso(value: unknown): value is CompiledPerso {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['id', 'name', 'type', 'initial', 'actions', 'list', 'emit'])) {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['id', 'name', 'type', 'initial', 'rel', 'actions', 'list', 'emit'])) {
     return false
   }
   return typeof value.id === 'string'
     && (value.name === undefined || typeof value.name === 'string')
     && typeof value.type === 'string'
     && isCompiledRecord(value.initial)
+    && (value.rel === undefined || isCompiledRel(value.rel))
     && isCompiledRecord(value.actions)
     && Object.values(value.actions).every(isCompiledValue)
     && (value.list === undefined || isCompiledRecord(value.list))
     && (value.emit === undefined || isCompiledEmitDeclaration(value.emit))
+}
+
+/** Checks one compiled relation while leaving library-specific fields opaque. */
+function isCompiledRel(value: unknown): value is CompiledRel {
+  if (!isPlainRecord(value) || !isPlainRecord(value.target)) return false
+  if (!Object.keys(value.target).every((key) => key === 'scene' || key === 'perso')) return false
+  if (!isNonEmptyString(value.target.scene)) return false
+  if (value.target.perso !== undefined && !isNonEmptyString(value.target.perso)) return false
+  return Object.entries(value).every(([key, entry]) => key === 'target' || isCompiledValue(entry))
+}
+
+/** Checks one non-empty relation identifier at the serialized boundary. */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 /** Checks one compiled emit declaration and its nested capture references. */
@@ -274,11 +290,12 @@ function isValidResources(value: unknown): boolean {
 
 /** Checks the declared capability arrays of one compiled scene. */
 function isValidRequirements(value: unknown): boolean {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['components', 'services', 'modules', 'resources'])) return false
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['components', 'services', 'modules', 'resources', 'libraries'])) return false
   return isStringArray(value.components)
     && isStringArray(value.services)
     && isStringArray(value.modules)
     && isStringArray(value.resources)
+    && (value.libraries === undefined || isStringArray(value.libraries))
 }
 
 /** Checks one compiled recursive value without accepting runtime objects. */

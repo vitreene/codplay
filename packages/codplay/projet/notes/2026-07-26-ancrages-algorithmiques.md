@@ -1,5 +1,9 @@
 # Ancrages algorithmiques — à quels modèles établis les processus V2 se rattachent
 
+> **Correction du 2026-09-18.** L'ancrage « backend abstrait sélectionné pour
+> toute l'instance » est abandonné. Le modèle retenu emploie un matérialiseur
+> HTML/DOM global et des projections tierces possédées par des composants hôtes.
+
 Note de réflexion (2026-07-26). Recul théorique : rattacher les processus conçus *ad hoc* pour la V2
 (`2026-07-16-solve-project-moteur-custom.md`) à des algorithmes/modèles informatiques établis. Double
 but : **valider** que les intuitions ne sont pas isolées (elles ont un nom, une littérature), et
@@ -18,7 +22,7 @@ des lourdeurs que la conception V2 évite déjà intelligemment.
 | **Fenêtres de validité** + seek réversible | **Interval/segment trees** (`O(log n)` « quel intervalle contient t ») ; **step functions** ; **temporal/bitemporal databases** (validity intervals) | Interval tree = structure directe pour interroger toute dimension discrète à `t` ; bitemporel (valid-time vs transaction-time) = réponse toute faite au cas seek-back/invalidation |
 | **Solve hiérarchique** (parents→enfants) | **Scene graph traversal** (matrices le long de l'arbre) ; **tri topologique** ; **dirty-flagging / incremental computation** | Le dirty-flagging est LA version établie de « ne recomposer que ce qui bouge » — le mécanisme de coupe-par-reflow du seek-FLIP en est une réinvention partielle |
 | **Solve/project** (calcul ≠ rendu) | **Retained mode vs immediate mode** ; **virtual DOM / reconciler** (React/Flutter/Elm/SwiftUI) ; **ECS** (Entity-Component-System) | Le reconciler/diffing s'applique directement à `project` (ne muter que le changé) ; l'ECS = modèle mûr pour « plusieurs producteurs écrivent un état, un système le rend » (→ écrivains multiples du PersoState : solve/capture/geste) |
-| **Projection** (substrat abstrait) | **Adapter/Bridge (GoF)** ; **backend abstraction / HAL** ; **tagless-final / interpréteurs** | *Capability negotiation* : un backend déclare ce qu'il sait faire → confirme « measure optionnel par substrat » |
+| **Pont de projection tierce** | **Adapter/Bridge (GoF)** ; graphe de dépendances ; injection de dépendances typée | Une intégration type et normalise `rel`, résout une cible opaque et masque la connexion au composant de feature |
 | **Scrubbing** (debounce + cache segment) | **Debounce/throttle** ; **LOD temporel** (approché en mouvement, précis à l'arrêt) ; mémoïsation à invalidation par intervalle | Le LOD a des heuristiques éprouvées pour *quand* basculer approché↔précis (étage lourd debouncé) |
 | **Straps async / materialize / seek** | **Event sourcing** ; **CQRS** ; **actor model** | Gisement le plus riche — voir ci-dessous |
 | **Moteur solve pur** (interpolation) | Courbes de Bézier/Penner ; keyframe interpolation ; splines | Déjà emprunté à anime (algos purs) |
@@ -134,13 +138,12 @@ vocabulaire et invariants, **pas le moteur FRP**. Même règle que partout.
 
 **Codplay V2 ne se superpose à AUCUNE référence — il occupe un croisement que peu de projets habitent.**
 Ce n'est pas un signe qu'il réinvente la roue : c'est le signe qu'il adresse un objet — *une scène
-spatio-temporelle animée, interactive, éditable ET rejouable frame-exacte, portable multi-substrat* —
+spatio-temporelle animée, interactive, éditable ET rejouable frame-exacte, capable d'héberger des projections tierces* —
 qu'aucune lib mono-facette ne couvre.
 
 ### La formule
 
-> **Codplay V2 = le modèle de rendu de Flutter** (retained-mode, substrat abstrait, composants par
-> plateforme = la Projection) **+ le modèle temporel de l'event-sourcing** (état = projection d'un log
+> **Codplay V2 = un modèle de rendu réconcilié** (état logique séparé de sa présentation) **+ le modèle temporel de l'event-sourcing** (état = projection d'un log
 > d'events, seek = replay, `f(t)`) **+ la réactivité de la FRP** (behaviors continus / events discrets
 > typés) — **appliqués à la scène animée et interactive.** Aucune des trois briques n'est neuve ; leur
 > **assemblage sur le même objet** est rare.
@@ -160,10 +163,10 @@ référence en occupe *une facette* ; codplay les compose parce que son objet l'
 
 ### Le parent technique vs le parent spirituel
 
-- **Parent technique le plus proche : Flutter.** Même architecture de rendu (retained-mode), même
-  frontière cœur/plateforme, même composants-par-substrat = Projection. **Modèle à étudier pour
-  l'implémentation de solve/project et de la Projection.** Différence : Flutter n'a pas le temps de 1er
-  ordre — codplay ajoute l'axe temporel que Flutter n'a pas.
+- **Référence technique utile : les reconcilers retained-mode.** Flutter, React
+  ou Elm éclairent la séparation état/présentation et l'ordre de mise à jour.
+  Ils ne prescrivent ni un matérialiseur global interchangeable, ni le pont
+  tiers de CodPlay. Ils n'ont pas non plus le temps de premier ordre de CodPlay.
 - **Parent spirituel : Elm + event-sourcing.** L'obsession de la pureté, du « moins d'état », de la
   reproductibilité déterministe, de « l'état dérivé jamais accumulé » — c'est l'ADN Elm/event-sourcing
   plus que React (qui a hooks, état local mutable, effets). La réticence aux stores, « `f(t)` = moins

@@ -19,3 +19,4 @@ export type {
   ServiceValidationDefinition,
   ValidationFunction,
 } from './runtime-capability-catalog'
+export type { RuntimeLibraryDefinition } from '../libraries'

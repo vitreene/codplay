@@ -91,6 +91,7 @@ export type HtmlPlayerRunOptions = Readonly<{
 /** Result of one standalone diffusion run. */
 export type HtmlPlayerRunResult =
   | Readonly<{ ok: true; phase: 'run'; preload: RuntimePreloadSuccess; init: Extract<PlayerInitResult, { ok: true }> }>
+  | Readonly<{ ok: false; phase: 'library'; error: string }>
   | Readonly<{ ok: false; phase: 'preload'; preload: RuntimePreloadFailure }>
   | Readonly<{ ok: false; phase: 'init'; preload: RuntimePreloadSuccess; init: Extract<PlayerInitResult, { ok: false }> }>
 
@@ -318,6 +319,17 @@ export class HtmlPlayerRunner {
 
   /** Preloads the supplied manifest, initializes the runner, and starts playback. */
   async run(options: HtmlPlayerRunOptions): Promise<HtmlPlayerRunResult> {
+    try {
+      // Library preparation is the first scene-loading gate. No resource
+      // preload, component init, or playback can begin before it completes.
+      await this.engine.prepareScene(this.player.compiledScene)
+    } catch (error) {
+      return {
+        ok: false,
+        phase: 'library',
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
     const manifest = options.manifest ?? this.player.compiledScene.resources
     const preload = await options.preload.load({
       manifest,

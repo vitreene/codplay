@@ -10,6 +10,11 @@ document cité fait foi.
 > Les decisions de packages V2 et la note engine/instance ont ete deplacees dans
 > `packages/codplay/plan/`. Cette carte conserve leur classement historique ; les specifications de
 > `CompiledScene` et du runtime font foi.
+>
+> **Correction du 2026-09-18.** L'ancien choix d'un substrat Canvas ou Flutter
+> remplaçant le DOM pour toute l'instance est abandonné. Les projections tierces
+> sont possédées par des composants hôtes HTML et reçoivent leurs consommateurs
+> par un `rel` initial et immuable.
 
 ## L'articulation — engine, SceneDoc, player, render
 
@@ -64,7 +69,7 @@ déplaçable — elle peut vivre ailleurs que dans le bundle de diffusion, quest
 | **engine** | Le **catalogue** des capacités (types de perso, modules, services, adapters, bindings tiers) et les **ressources partagées** : horloge, ordre de tick, cache de preload, styles injectés. Il **fournit** ce que les scènes déclarent, aux N players. | Ne joue aucune scène, ne rend rien, ne décide d'aucune orchestration, ne lit pas le `SceneDoc`. |
 | **SceneDoc → CompiledScene** | L'œuvre telle qu'écrite, sérialisable. Le **builder** est le lieu de **résolution et de validation** : il tourne une fois, hors chemin chaud, garantit un artefact propre, et en **dérive les besoins** que l'engine devra fournir. | Ne porte pas la cible de montage, ne s'exécute pas, ne consulte pas le catalogue pour compiler. |
 | **player** | La **matérialisation** des events et l'**évaluation** de l'état à `t` : `materialize → resolve → solve`. Il calcule un état perso. | Ne touche pas au substrat, ne se défend pas contre ses entrées (le builder l'a fait). |
-| **render** | La **Projection** : `project → render`, seul écrivain vers le substrat, via des capacités déclarées (`set`, `measure`, `mount`). Le DOM en est *une*. | N'interprète pas la scène, ne remonte jamais vers le perso. |
+| **render** | Le matérialiseur HTML/DOM présente la scène ; un composant hôte peut posséder une projection tierce et son matérialiseur local. | N'interprète pas la scène et ne relit pas le rendu comme intention auteur. |
 
 Trois règles traversent cette chaîne :
 
@@ -74,7 +79,8 @@ Trois règles traversent cette chaîne :
 - **Ce qui est partagé s'arrête à l'engine.** Tout le reste — scène, état, racine de mesure, modules
   instanciés — appartient à une instance.
 
-Développement : `2026-07-16-solve-project-moteur-custom.md` (le flux, la Projection),
+Développement : `2026-07-16-solve-project-moteur-custom.md` (le flux),
+`2026-07-29-projection-substrat-de-rendu.md` (projections tierces hébergées),
 `2026-07-28-decoupage-engine-instances-pilotage.md` (l'engine et les instances),
 `conduite-chantier-v2.md` §4.7 (le partage builder / player sur la robustesse).
 
@@ -129,14 +135,14 @@ ne faut pas reproduire — non des défauts à corriger.
 | **Flux du player** | `v1-player-api.md` | `materialize → resolve → solve → project → render`. Le player calcule un **état**, les composants le projettent. | `2026-07-16-solve-project-moteur-custom.md` S5/S7 (points 1, 4) |
 | **Projection `item → perso → node`** | `v1-perso-spec.md` | Sens unique, jamais inversée. Toute capture lit l'**état logique**, jamais le node. | idem, S1 (point 2) |
 | **Moteur d'interpolation** | `v1-tween-action-spec.md` | Retrait d'anime.js : algos purs empruntés, runtime à état rejeté. `solve(from,to,ease,t)` pure. | idem, S2-S4/S6 (point 3) |
-| **Substrat de rendu** | `v1-render-adapter-spec.md`, `v1-component-api.md` | La **Projection** : cible de rendu déclarée, exposant `set`/`measure`/`mount`. Le DOM devient *une* Projection. | idem, S8 (point 5) |
+| **Projection tierce** | `v1-render-adapter-spec.md`, `v1-component-api.md` | Le DOM reste le matérialiseur de l'instance ; un composant hôte possède la projection tierce et son matérialiseur, tandis que `rel` désigne les fournisseurs. | `2026-07-29-projection-substrat-de-rendu.md` ; plans du 2026-09-18 |
 | **Seek** | `v1-seek-spec.md` | D'un rejeu à une **évaluation** de `f(scène, t)`, donc **synchrone** et réversible. | `2026-07-26-etat-fonction-de-t.md` ; `2026-07-26-portabilite-contrainte-redaction.md` (synchronicité) |
 | **Capture** | `v1-capture-spec.md` | Troisième **producteur d'état perso** (à côté de solve), à prévoir dès la conception du `PersoState` ; cesse de se greffer sur le canal d'animation. | `conduite-chantier-v2.md` §4ter |
 | **Façade du player** | `v1-player-api.md`, `v1-author-api-spec.md` | De façade plate à **canaux typés à droits différenciés** : telco / injection / authoring / cycle de vie / observation. | `conduite-chantier-v2.md` §6 |
 | **Canal de pilotage** | `v1-player-api.md` | Les **events comme contrat primaire** ; authoring hors protocole ; règle de sérialisabilité. | `2026-07-28-decoupage-engine-instances-pilotage.md` §4 |
 | **Registres** | `v1-registry-api.md` | Les capacités deviennent un **catalogue déclaré par l'engine**, plus un câblage par instance. | idem §2, §3 |
 | **Preload** | `v1-preload-api.md` | **Capacité externalisée et distincte du player.** `RuntimePreload` accepte un manifeste ou un tableau de manifestes, partage le cache et les stratégies entre diffusion, Sighty et éditeur. Le choix du manifeste et du moment revient à l'appelant ; `run` enchaîne `preload → init → play` pour la diffusion autonome. | `conduite-chantier-v2.md` §10 #2 ; `2026-07-28-decoupage…` §2 |
-| **Viewport / resize** | — | Résolu **dans la Projection** : cq* passif, unitless resize-sensible avec cadre fixe et whitelist en config. | `2026-07-26-unitless-resize-resolution.md` ; `conduite-chantier-v2.md` §10 #3 |
+| **Viewport / resize** | — | Le resize HTML reste dans sa frontière actuelle ; un hôte tiers adapte son contexte interne à la boîte matérialisée. | `2026-07-26-unitless-resize-resolution.md` ; plans du 2026-09-18 |
 | **Sources d'émission** | `v1-event-spec.md`, `v1-capture-spec.md` | `endEmit` **libéré de `endOn`** : émettre sur la transition d'une phase déclarée. Émetteur = capacité déclarée. | `2026-07-27-emetteurs-et-events-user-complexes.md` ; `2026-07-28-decoupage…` §4 |
 | **Portée d'un event** | `v1-event-spec.md` | `cascade: boolean` (story / scene) devient une **échelle nommée**, extensible d'un cran « sort de la scène » — qui *est* la déclaration de surface publique. Ce cran n'a pas de destinataire : les scènes ne communiquent pas entre elles, seul Sighty le fait. **Noms provisoires**, à fixer du côté de la visibilité et non du transport ; proposition non tranchée : `visibility: 'story' \| 'scene' \| 'public'`. | `2026-07-28-decoupage…` §4 |
 | **Perso hôte** | `v1-perso-spec.md` | Un perso dont le contenu n'est pas fonction de son `t` : flux direct, instance imbriquée, composant tiers. | `2026-07-27-emetteurs…` §6 ; `2026-07-28-decoupage…` §5 |
@@ -150,7 +156,7 @@ ne faut pas reproduire — non des défauts à corriger.
 
 | Domaine | Spec V1 | Remarque |
 |---|---|---|
-| **Layout** | `v1-layout-spec.md` | Touché indirectement par la Projection (positionnement, mesure) sans être revisé en propre. |
+| **Layout** | `v1-layout-spec.md` | Conserve le placement HTML du perso hôte ; les relations `rel` des consommateurs tiers n'en font pas partie. |
 | **Listes** | `v1-list-spec.md`, `v1-list-dnd-spec.md` | La liste suit ses mécanismes sous-jacents (capture, `move`, FLIP), tous revus ; son propre concept n'est pas discuté. |
 | **Horizon** | `v1-horizon-spec.md` | Non abordé par le corpus V2, alors que `f(t)` et les fenêtres de validité le touchent de près. Le multi-scénario ne l'entame pas : déjà traité en pratique, rien à modifier (`2026-07-28-decoupage…` §4). |
 | **Runtime policy** | `v1-runtime-policy-spec.md` | Non abordé. |

@@ -8,6 +8,7 @@ import {
 import { PERSO_VALIDATION_PATHS } from '../config/perso-validation'
 import { VALIDATION_TARGET_INITIAL } from '../../services/service-validation-types'
 import { reportMissingValidator } from './validation-warnings'
+import { validateRelAction, validateRelInitial } from './rel-validation'
 import type {
   CapabilityValidationSnapshot,
   PersoValidationInput,
@@ -49,6 +50,23 @@ export function validatePersoWithCapabilities(
 
   const payloads = createPersoValidationPayloads(perso)
   for (const payload of payloads) {
+    if (payload.target === VALIDATION_TARGET_INITIAL) {
+      validateRelInitial(payload.value, createValidationContext(
+        payload.target,
+        joinPersoValidationPath(payload.path),
+        refs,
+        diagnostics,
+        payload.actionName,
+      ))
+    } else {
+      validateRelAction(payload.value, createValidationContext(
+        payload.target,
+        joinPersoValidationPath(payload.path),
+        refs,
+        diagnostics,
+        payload.actionName,
+      ))
+    }
     const validator = payload.target === VALIDATION_TARGET_INITIAL ? component.validateInitial : component.validateAction
     validateComponentPayload(validator, payload, refs, diagnostics)
   }
@@ -78,6 +96,22 @@ export function validatePersoWithCapabilities(
     for (const payload of payloads) {
       validateServicePayload(service, payload, refs, diagnostics)
     }
+  }
+
+  for (const libraryId of component.libraries ?? []) {
+    if (catalog.libraries.has(libraryId)) continue
+    diagnostics.warning(
+      'AUTHOR_LIBRARY_UNKNOWN',
+      `No engine library is registered for "${libraryId}".`,
+      {
+        refs,
+        context: {
+          library: libraryId,
+          component: perso.type,
+          path: `${perso.validationPath ?? `persos.${perso.id}`}.libraries`,
+        },
+      },
+    )
   }
 }
 

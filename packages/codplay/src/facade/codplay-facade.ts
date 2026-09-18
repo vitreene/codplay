@@ -8,6 +8,7 @@ import type {
   CodPlayEvents,
   CodPlayInstances,
   CodPlayModules,
+  CodPlayLibraries,
   CodPlayOptions,
   CodPlayResources,
   CodPlayServices,
@@ -22,6 +23,7 @@ export class CodPlay implements CodPlayApi {
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules
+  readonly libraries: CodPlayLibraries
   readonly resources: CodPlayResources
   readonly events: CodPlayEvents
   readonly engine: CodPlayEngine
@@ -45,9 +47,11 @@ export class CodPlay implements CodPlayApi {
     this.components = capabilityRegistries.components
     this.services = capabilityRegistries.services
     this.modules = capabilityRegistries.modules
+    this.libraries = capabilityRegistries.libraries
     this.resources = engine.createResourceRegistry()
     this.events = engine.createEventRegistry()
     this.engine = {
+      prepareScene: (scene) => engine.prepareScene(scene),
       start: () => engine.start(),
       pause: () => engine.pause(),
       stop: () => engine.stop(),

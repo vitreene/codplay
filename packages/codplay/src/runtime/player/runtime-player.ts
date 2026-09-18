@@ -181,6 +181,7 @@ export class RuntimePlayer {
   readonly componentRuntime: RuntimeComponentRuntime | undefined
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
+  private discoveredDurationMs = 0
   private rate = 1
   private skipNextDelta = false
   private solvedScene: SolvedScene | undefined
@@ -269,16 +270,17 @@ export class RuntimePlayer {
     return this.sequenceEnded
   }
 
-  /** Returns the open playback horizon discovered from the head and recorded events. */
+  /** Returns the largest open playback horizon discovered by the head or events. */
   getDiscoveredDurationMs(): number {
-    let durationMs = Math.max(0, this.currentTimeMs)
+    let durationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
     for (const timeMs of collectCompiledEventStartTimes(this.compiledScene)) {
       durationMs = Math.max(durationMs, timeMs)
     }
     for (const timeMs of this.trackJournal.getEventTimes()) {
       durationMs = Math.max(durationMs, timeMs)
     }
-    return durationMs
+    this.discoveredDurationMs = durationMs
+    return this.discoveredDurationMs
   }
 
   /** Subscribes to logical position updates produced by the shared engine circuit. */
@@ -500,6 +502,7 @@ export class RuntimePlayer {
         this.includePersistOnlyInCurrent = true
         this.synchronizeStateStoreFromScene(this.solvedScene)
         this.currentTimeMs = timeMs
+        this.recordCurrentTimeAsDiscovered()
         this.trackJournal.reconcileStoryIsolationAt(timeMs)
         this.skipNextDelta = true
         transaction.moveDeltas = moveDeltas
@@ -556,6 +559,7 @@ export class RuntimePlayer {
     const sequenceEnd = this.findSequenceEndAtCurrentTime()
     if (sequenceEnd !== undefined) {
       this.currentTimeMs = sequenceEnd.applyAtMs
+      this.recordCurrentTimeAsDiscovered()
       void this.dispatchReachedSequenceEnd(sequenceEnd).catch((error) => {
         this.reportAutomaticSequenceEndFailure(error)
       })
@@ -589,6 +593,7 @@ export class RuntimePlayer {
     this.sequenceEndPending = false
     this.idleMonitor.reset()
     this.currentTimeMs = 0
+    this.discoveredDurationMs = 0
     this.trackJournal.reset()
     this.trackJournal.reconcileStoryIsolationAt(0)
     this.includePersistOnlyInCurrent = true
@@ -1049,9 +1054,11 @@ export class RuntimePlayer {
     if (this.idleMonitor.advance(frame.deltaMs)) this.dispatchIdleEvent()
     if (this.sequenceEndPending) return
     this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
+    this.recordCurrentTimeAsDiscovered()
     const sequenceEnd = this.findSequenceEndBetween(previousTimeMs, this.currentTimeMs)
     if (sequenceEnd !== undefined) {
       this.currentTimeMs = sequenceEnd.applyAtMs
+      this.recordCurrentTimeAsDiscovered()
       void this.dispatchReachedSequenceEnd(sequenceEnd, frame, previousTimeMs).catch((error) => {
         this.reportAutomaticSequenceEndFailure(error)
       })
@@ -1218,7 +1225,11 @@ export class RuntimePlayer {
       this.componentRuntime.presentAt(timeMs)
     }
 
-    this.componentRuntime.presentAt(targetScene.timeMs)
+    // The target scene is synchronized by the enclosing materializeScene call.
+    // Presenting it here would let a host commit before target consumers have
+    // registered their animations; the subsequent consumer update would then
+    // change the native representation without another host commit because the
+    // host already saw the same time value.
   }
 
   /** Publishes one logical position update without creating another frame loop. */
@@ -1383,6 +1394,7 @@ export class RuntimePlayer {
     this.liveCapturePersoKeys = new Set()
     this.idleMonitor.reset()
     this.currentTimeMs = Math.max(0, Math.min(this.currentTimeMs, sequenceEndMs))
+    this.recordCurrentTimeAsDiscovered()
     this.renderSync.pause()
     this.state = PLAYER_LIFECYCLE_PAUSED
     notifyModulePlaybackState(this.moduleServiceInstances, 'paused', this.currentTimeMs)
@@ -1662,6 +1674,11 @@ export class RuntimePlayer {
       this.observedPublicEventIds.add(event.eventId)
       this.publicEventListener(event)
     }
+  }
+
+  /** Retains the largest logical head reached during the current open session. */
+  private recordCurrentTimeAsDiscovered(): void {
+    this.discoveredDurationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
   }
 }
 

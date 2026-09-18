@@ -2,7 +2,7 @@
 
 Note de réflexion (2026-07-26), dont le statut a été réévalué le 2026-08-02 : ce cas est désormais
 un **contrat de base du FLIP HTML V2**, pas seulement un cas limite. Il stresse-teste le flux
-`solve/project` (`2026-07-16-solve-project-moteur-custom.md` S5-S8) et révèle une tension que le
+`solve/project` (`2026-07-16-solve-project-moteur-custom.md` S5-S7) et révèle une tension que le
 reste du cadre n'expose pas. La note conserve le raisonnement ; l'implémentation de base est suivie
 dans `packages/codplay/plan/runner-flip-integration-study.md`.
 
@@ -122,7 +122,7 @@ scrub(progress) → t :
 
 - **`solve` est hiérarchique** : composition racine→feuille, pas un passage plat. La chaîne d'ancêtres
   vient du **move-state** logique, pas de `parentNode` DOM.
-- **`measure` (S8) est irréductible** — recours d'exactitude au pixel là où l'abstraction ne suffit
+- **La mesure HTML est irréductible** — recours d'exactitude au pixel là où l'état logique ne suffit
   pas (maillons layout). L'algorithme ci-dessus **minimise** les mesures (coupe par reflow, cache),
   il ne les élimine pas.
 - **Régime asymétrique play/seek** : reflows en cascade acceptables en seek (ponctuel, debouncé),
@@ -138,6 +138,6 @@ scrub(progress) → t :
 la mesure historique déléguée au host et le cache par capture/ancêtre/epoch/instant sont désormais
 le socle du FLIP HTML V2. Le scrubbing corrigé et les mesures repositionnées complètes restent à
 implémenter. Lié :
-`2026-07-16-solve-project-moteur-custom.md` (S5 solve hiérarchique, S8 `measure`), mémoire
+`2026-07-16-solve-project-moteur-custom.md` (S5 solve hiérarchique), mémoire
 `project-item-perso-node-one-way-projection` (la mesure ≠ le rétro-flux interdit — ici la mesure
 sert la position réelle, elle ne reconstruit pas une description d'auteur).

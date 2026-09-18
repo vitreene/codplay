@@ -9,6 +9,9 @@ import type { PolygonAction, PolygonInitial } from '../runtime/components/polygo
 import type { TagAction, TagInitial } from '../runtime/components/tag'
 import type { SlotAction, SlotInitial } from '../runtime/components/slot'
 import type { MoveOrderMode } from '../runtime/config/move'
+import type { Rel } from './rel'
+
+export type { Rel, RelTarget } from './rel'
 
 /** Function value allowed in authoring data before compilation extracts it. */
 export type AuthorFunction = (...args: readonly unknown[]) => unknown
@@ -67,8 +70,9 @@ export type Move = string | MoveObject
 type PersoPlacement = Move
 
 /** Common initial fields supplied by the scene boundary rather than a component. */
-type PersoInitialCommon = Readonly<{
+export type PersoInitialCommon = Readonly<{
   move?: PersoPlacement
+  rel?: Rel
 }>
 
 /** Common action fields supplied by the scene boundary rather than a component. */

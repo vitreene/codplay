@@ -56,11 +56,16 @@ export type ComponentAnimationFrame = Readonly<{
   apply: () => void
 }>
 
+/** Orders component presentation streams within one logical frame. */
+export type ComponentAnimationPresentationPhase = 'content' | 'commit'
+
 /** One player-clocked presentation stream registered by a component update. */
 export type ComponentAnimation = Readonly<{
   id: string
   startAt: number
   endAt: number
+  /** Commit streams run after content streams, typically to paint the final host output. */
+  presentationPhase?: ComponentAnimationPresentationPhase
   sample: (timeMs: number) => ComponentAnimationFrame | undefined
 }>
 
@@ -68,6 +73,8 @@ export type ComponentAnimation = Readonly<{
 export type ComponentUpdateInput<State extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
   state: State
   timeMs: number
+  /** Opaque target resolved from the perso's immutable relation, when available. */
+  target?: unknown
   /** Active authored occurrences available to components with deterministic temporal behavior. */
   activeActions?: readonly ComponentActionOccurrence[]
   /** Registers component-owned presentation streams for this logical update. */

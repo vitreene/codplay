@@ -268,6 +268,7 @@ function validateRequirements(
   validateUniqueNames(scene.requirements.services, 'services', scene, diagnostics)
   validateUniqueNames(scene.requirements.modules, 'modules', scene, diagnostics)
   validateUniqueNames(scene.requirements.resources, 'resources', scene, diagnostics)
+  validateUniqueNames(scene.requirements.libraries ?? [], 'libraries', scene, diagnostics)
 
   const requiredComponents = new Set(scene.requirements.components)
   if (!sameSet(requiredComponents, componentTypes)) {

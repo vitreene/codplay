@@ -75,6 +75,17 @@ export interface CompiledRecord {
   readonly [key: string]: CompiledValue
 }
 
+/** Serializable target identity extracted from one immutable relation. */
+export type CompiledRelTarget = Readonly<{
+  scene: string
+  perso?: string
+}>
+
+/** Serializable relation retained separately from runtime target handles. */
+export type CompiledRel = CompiledRecord & Readonly<{
+  target: CompiledRelTarget
+}>
+
 /** One compiled listen declaration after function extraction. */
 export type CompiledListenRule = Readonly<{
   on: string
@@ -93,6 +104,7 @@ export type CompiledPerso = Readonly<{
   name?: string
   type: string
   initial: CompiledRecord
+  rel?: CompiledRel
   actions: Readonly<Record<string, CompiledValue>>
   list?: CompiledRecord
   emit?: CompiledEmitDeclaration
@@ -163,6 +175,8 @@ export type CompiledRequirements = Readonly<{
   services: readonly string[]
   modules: readonly string[]
   resources: readonly string[]
+  /** Optional for compatibility with artifacts produced before library requirements. */
+  libraries?: readonly string[]
 }>
 
 /** One target identity indexed from an already compiled action declaration. */

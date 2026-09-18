@@ -36,7 +36,7 @@ Les briques internes existent. L’assemblage public est engagé dans
 
 | Brique | Rôle actuel | Limite actuelle |
 |---|---|---|
-| `RuntimeCapabilityCatalog` | registre unique des composants, services et modules | reste interne ; sa composition passe par la configuration de la façade |
+| `RuntimeCapabilityCatalog` | registre unique des composants, services, modules et bibliothèques | reste interne ; sa composition passe par la configuration de la façade |
 | `RuntimeEngine` | ressources, horloge et ordre des instances ; transaction interne des seeks | est adapté par `EngineFacadeImpl` |
 | `RuntimePlayer` | une scène compilée, lifecycle, events, capture et reconstruction | est adapté par `InstanceFacadeImpl` |
 | `RuntimeMaterializer` | frontière interne de materialisation consommée par le runner HTML | n'est pas exposé dans les options d'instance et n'est pas sélectionnable par l'hôte |
@@ -592,10 +592,12 @@ dernier état de progress ; `play` reste disponible pour le replay normal.
 Le concept V1 d’horizon ouvert s’applique lorsqu’aucun média ni track borné ne
 fournit de durée autoritative. V2 ne reçoit pas de durée lors de la création de
 l’instance : le player continue d’avancer avec les ticks et expose comme durée
-le maximum entre la tête courante et les événements compilés ou enregistrés dans
-le journal. Un eventime ajouté au journal étend donc
-immédiatement l’horizon observable, tandis qu’un média ou une track bornée
-conserve la durée fixe fournie par son circuit dédié.
+le maximum entre l’horizon déjà découvert, la tête courante et les événements
+compilés ou enregistrés dans le journal. Un eventime ajouté au journal étend
+donc immédiatement l’horizon observable. Un seek arrière ne peut pas réduire
+ce qui a déjà été découvert ; un reset efface cet horizon de session, tandis
+qu’un média ou une track bornée conserve la durée fixe fournie par son circuit
+dédié.
 
 Cette durée ouverte n’empêche pas la fin technique : lorsque le player reçoit
 ou atteint un event `sequence:end` en lecture, il expose `sequenceEnded: true`,
@@ -1707,6 +1709,7 @@ type CodPlayEngineOptions = Readonly<{
   components?: CodPlayCapabilityGroup<RuntimeComponentDefinition>
   services?: CodPlayCapabilityGroup<RuntimeComponentServiceDefinition>
   modules?: CodPlayCapabilityGroup<RuntimeModuleServiceDefinition>
+  libraries?: CodPlayCapabilityGroup<RuntimeLibraryDefinition>
   resources?: CodPlayResourceRegistration
   diagnosticOutput?: DiagnosticOutput
 }>
@@ -1714,7 +1717,7 @@ type CodPlayEngineOptions = Readonly<{
 
 Décisions à commenter avant modification du code :
 
-- `build`, les registres `components`, `services`, `modules`,
+- `build`, les registres `components`, `services`, `modules`, `libraries`,
   `resources` et `events` remontent sur `CodPlay` sans créer de second
   circuit ;
 - `codplay.instances` reste le seul registre public de création, adressage et
@@ -1802,6 +1805,7 @@ type CodPlayRegistry<Definition> = Readonly<{
 type CodPlayComponents = CodPlayRegistry<RuntimeComponentDefinition>
 type CodPlayServices = CodPlayRegistry<RuntimeComponentServiceDefinition>
 type CodPlayModules = CodPlayRegistry<RuntimeModuleServiceDefinition>
+type CodPlayLibraries = CodPlayRegistry<RuntimeLibraryDefinition>
 
 type CodPlayResources = Readonly<{
   register: (registration: CodPlayResourceRegistration) => void
@@ -1846,6 +1850,7 @@ type CodPlayApi = Readonly<{
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules
+  readonly libraries: CodPlayLibraries
   readonly resources: CodPlayResources
   readonly instances: CodPlayInstances
   readonly events: CodPlayEvents

@@ -9,6 +9,8 @@ export type {
   CompiledFunctionReference,
   CompiledListenRule,
   CompiledLengthValue,
+  CompiledRel,
+  CompiledRelTarget,
   CompiledPerso,
   CompiledPrimitive,
   CompiledRecord,
@@ -53,3 +55,4 @@ export {
 export { compileMovePath } from './move-path-compiler'
 export { compileEmitDeclaration } from './capture-compiler'
 export { validateCompiledSceneSemantics } from './semantic-validator'
+export { validateCompiledRelTargets } from './rel-target-validation'

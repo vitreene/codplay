@@ -3,11 +3,13 @@ import type { DiagnosticCollector } from '../../diagnostics'
 const CAPABILITY_COMPONENT = 'component' as const
 const CAPABILITY_SERVICE = 'service' as const
 const CAPABILITY_MODULE = 'module' as const
+const CAPABILITY_LIBRARY = 'library' as const
 const CAPABILITY_RESOURCE = 'resource' as const
 type CapabilityKind =
   | typeof CAPABILITY_COMPONENT
   | typeof CAPABILITY_SERVICE
   | typeof CAPABILITY_MODULE
+  | typeof CAPABILITY_LIBRARY
   | typeof CAPABILITY_RESOURCE
 
 /** Reports every required capability absent from the shared engine. */

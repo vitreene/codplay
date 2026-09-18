@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import {
+  BaseComponent,
+  RuntimeComponentRuntime,
+  type ComponentUpdateInput,
+} from '../../../src/runtime/components'
+import {
   createMarkupModuleServiceDefinition,
   type MarkupModuleServiceInstance,
 } from '../../../src/runtime/capabilities/markup'
@@ -32,6 +37,54 @@ const scene: CompiledScene = {
   rootNodeIds: [],
   requirements: { components: [], services: [], modules: [], resources: [] },
   actionTargetIndex: {},
+}
+
+/** Records the content and final host commits used by the seek presentation regression. */
+class SeekPresentationComponent extends BaseComponent<Record<string, unknown>> {
+  static readonly declaredServices = [] as const
+  static readonly applied: string[] = []
+
+  update(input: ComponentUpdateInput<Record<string, unknown>>): void {
+    const isHost = this.perso.id === 'host'
+    if (!isHost && (input.activeActions?.length ?? 0) === 0) return
+    input.registerAnimation?.({
+      id: this.perso.id,
+      startAt: 0,
+      endAt: Number.MAX_SAFE_INTEGER,
+      presentationPhase: isHost ? 'commit' : 'content',
+      sample: (timeMs) => ({
+        value: timeMs,
+        apply: () => SeekPresentationComponent.applied.push(`${this.perso.id}:${timeMs}`),
+      }),
+    })
+  }
+}
+
+/** Creates the smallest scene that reproduces target content registration during seek. */
+function seekPresentationScene(): CompiledScene {
+  return {
+    ...scene,
+    scene: {
+      ...scene.scene,
+      id: 'seek-presentation-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [
+            { id: 'host', type: 'seek-presentation-host', initial: {}, actions: {} },
+            { id: 'grid', type: 'seek-presentation-grid', initial: {}, actions: { 'grid:start': { animate: true } } },
+          ],
+          listen: [],
+          eventimes: [{ name: 'grid:start', startAt: 0 }],
+        },
+      },
+      eventimes: [],
+    },
+    requirements: {
+      ...scene.requirements,
+      components: ['seek-presentation-host', 'seek-presentation-grid'],
+    },
+  }
 }
 
 /** Lets the automatic event circuit finish after an engine frame. */
@@ -983,6 +1036,46 @@ describe('RuntimePlayer', () => {
     player.destroy()
 
     expect(materializedTimes).toEqual([0, 100, -1])
+  })
+
+  it('commits the host after target consumers are registered during seek replay', () => {
+    const catalog = new RuntimeCapabilityCatalog()
+    for (const type of ['seek-presentation-host', 'seek-presentation-grid']) {
+      catalog.registerComponent({
+        type,
+        component: SeekPresentationComponent,
+        modules: [],
+        validateInitial: () => undefined,
+        mountableParts: [],
+      })
+    }
+    const materializer = {
+      id: 'seek-presentation-materializer',
+      context: {},
+      materializeComponent: () => ({ destroy: () => undefined }),
+      materializeScene: () => undefined,
+    }
+    const componentRuntime = new RuntimeComponentRuntime({ catalog, materializer })
+    const player = new RuntimePlayer(
+      'seek-presentation-player',
+      new RuntimeEngine(catalog),
+      seekPresentationScene(),
+      undefined,
+      undefined,
+      undefined,
+      [],
+      materializer,
+      componentRuntime,
+    )
+
+    SeekPresentationComponent.applied.length = 0
+    expect(player.init().ok).toBe(true)
+    SeekPresentationComponent.applied.length = 0
+
+    expect(player.seek(1_000).ok).toBe(true)
+    expect(SeekPresentationComponent.applied.slice(-2)).toEqual(['grid:1000', 'host:1000'])
+
+    player.destroy()
   })
 
   it('resolves list order from the same structural timeline used by materialization', () => {

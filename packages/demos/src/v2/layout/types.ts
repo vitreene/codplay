@@ -23,7 +23,7 @@ export type V2DemoPlayback = Readonly<{
 
 /** Scene module and its lazily loaded, instance-scoped stylesheet. */
 export type V2DemoModule = Readonly<{
-  createScene: () => SceneDoc
+  createScene: () => SceneDoc<string>
   stylesheetUrl: string
   /** Events sent through the public facade after the instance is ready. */
   initialEvents?: readonly V2DemoEventInjection[]

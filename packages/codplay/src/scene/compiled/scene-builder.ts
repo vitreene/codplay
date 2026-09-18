@@ -42,6 +42,8 @@ import type {
 } from './types'
 import { qualifyStructuredLengthStyles } from './length'
 import { validateCompiledSceneSemantics } from './semantic-validator'
+import { validateCompiledRelTargets } from './rel-target-validation'
+import { isRel } from '../rel'
 
 /** Options controlling one deterministic scene compilation. */
 export type SceneBuilderOptions = Readonly<{
@@ -111,6 +113,7 @@ export class SceneBuilder {
         storyActivationIndex: deriveStoryActivationIndex(compiledData),
       }
       validateCompiledSceneSemantics(compiledScene, diagnostics)
+      validateCompiledRelTargets(compiledScene, diagnostics)
       if (diagnostics.hasErrors()) {
         return { ok: false, diagnostics: diagnostics.report() }
       }
@@ -233,25 +236,29 @@ function compilePerso(
   validationEngine: CompiledSceneValidationEngine,
 ): CompiledPerso {
   const sanitizedInitial = validationEngine.sanitizeInitial(perso.type, perso.initial)
+  const relationFreeInitial = removeRelFromInitial(sanitizedInitial)
   const compiledInitial = qualifyStructuredLengthStyles(
     extractCompiledRecord(
-      compileMovePath(sanitizedInitial, `${scope}.initial`) as Record<string, unknown>,
+      compileMovePath(relationFreeInitial, `${scope}.initial`) as Record<string, unknown>,
       `${scope}.initial`,
       state,
     ) ?? {},
   ) as CompiledRecord
+  const compiledRel = compileRel(sanitizedInitial.rel, `${scope}.initial.rel`, state)
   return {
     id: perso.id,
     name: perso.name,
     type: perso.type,
     initial: compiledInitial,
+    rel: compiledRel,
     actions: Object.fromEntries(
       Object.entries(perso.actions).map(([name, value]) => {
         const sanitizedValue = isPlainRecord(value)
           ? validationEngine.sanitizeAction(perso.type, value)
           : value
+        const immutableValue = removeRelFromAction(sanitizedValue)
         const compiledValue = extractCompiledValue(
-          compileMovePath(sanitizedValue, `${scope}.actions.${name}`),
+          compileMovePath(immutableValue, `${scope}.actions.${name}`),
           `${scope}.actions.${name}`,
           state,
         )
@@ -261,6 +268,38 @@ function compilePerso(
     list: extractCompiledRecord(perso.list, `${scope}.list`, state),
     emit: compileEmitDeclaration(perso.emit, `${scope}.emit`, state),
   }
+}
+
+/** Extracts one valid relation without allowing native runtime values into the artifact. */
+function compileRel(
+  value: unknown,
+  scope: string,
+  state: ReturnType<typeof createExtractionState>,
+): CompiledPerso['rel'] {
+  if (!isRel(value)) return undefined
+  return extractCompiledRecord(value as Record<string, unknown>, scope, state) as CompiledPerso['rel']
+}
+
+/** Removes the common relation before the component-specific initial reaches the artifact. */
+function removeRelFromInitial(value: Record<string, unknown>): Record<string, unknown> {
+  if (!('rel' in value)) return value
+  const { rel: _ignored, ...withoutRel } = value
+  return withoutRel
+}
+
+/** Removes the reserved relation field from one action or action sequence. */
+function removeRelFromAction(value: unknown): unknown {
+  if (isPlainRecord(value)) {
+    if (!('rel' in value)) return value
+    const { rel: _ignored, ...withoutRel } = value
+    return withoutRel
+  }
+  if (!Array.isArray(value)) return value
+  return value.map((step) => {
+    if (!isPlainRecord(step) || !isPlainRecord(step.action) || !('rel' in step.action)) return step
+    const { rel: _ignored, ...withoutRel } = step.action
+    return { ...step, action: withoutRel }
+  })
 }
 
 /** Compiles one listen rule and extracts all transform functions in declaration order. */
@@ -315,7 +354,7 @@ function hasRootPlacement(value: Record<string, unknown>): boolean {
   return isPlainRecord(value.move) && value.move.target === SCENE_BUILD_CONFIG.rootToken
 }
 
-/** Derives required component, service, module, and resource capability names. */
+/** Derives required component, service, module, library, and resource names. */
 function deriveRequirements(
   scene: CanonicalSceneDoc,
   validationEngine: CompiledSceneValidationEngine,
@@ -323,6 +362,7 @@ function deriveRequirements(
   const components = new Set<string>()
   const services = new Set<string>()
   const modules = new Set<string>()
+  const libraries = new Set<string>()
   for (const story of Object.values(scene.stories)) {
     for (const perso of story.persos) {
       components.add(perso.type)
@@ -332,12 +372,16 @@ function deriveRequirements(
       for (const moduleService of validationEngine.modulesFor(perso.type)) {
         modules.add(moduleService)
       }
+      for (const library of validationEngine.librariesFor(perso.type)) {
+        libraries.add(library)
+      }
     }
   }
   return {
     components: [...components],
     services: [...services],
     modules: [...modules],
+    libraries: [...libraries],
     resources: deriveResourceUrls(scene),
   }
 }

@@ -14,6 +14,7 @@ import type {
   RuntimeComponentDefinition,
   RuntimeComponentServiceDefinition,
   RuntimeModuleServiceDefinition,
+  RuntimeLibraryDefinition,
 } from '../runtime/catalog'
 import type { RuntimeEventInsertMode } from '../runtime/config/event-insertion'
 import type { StrapCollections } from '../runtime/player/pipeline'
@@ -64,6 +65,7 @@ export type CodPlayEngineOptions = Readonly<{
   components?: CodPlayCapabilityGroup<RuntimeComponentDefinition>
   services?: CodPlayCapabilityGroup<RuntimeComponentServiceDefinition>
   modules?: CodPlayCapabilityGroup<RuntimeModuleServiceDefinition>
+  libraries?: CodPlayCapabilityGroup<RuntimeLibraryDefinition>
   resources?: CodPlayResourceRegistration
   diagnosticOutput?: DiagnosticOutput
   /** Default inactivity policy inherited by every created instance. */
@@ -145,6 +147,9 @@ export type CodPlayServices = CodPlayRegistry<RuntimeComponentServiceDefinition>
 
 /** Public player-module definition registry. */
 export type CodPlayModules = CodPlayRegistry<RuntimeModuleServiceDefinition>
+
+/** Public engine-library definition registry. */
+export type CodPlayLibraries = CodPlayRegistry<RuntimeLibraryDefinition>
 
 /** Options for one independent public preload service. */
 export type CodPlayPreloadOptions = Readonly<{
@@ -453,8 +458,10 @@ export type CodPlayEvents = Readonly<{
   onEvent: (listener: CodPlayEventListener) => () => void
 }>
 
-/** Public engine boundary for advanced clock control only. */
+/** Public engine boundary for preparation and shared clock control. */
 export type CodPlayEngine = Readonly<{
+  /** Prepares the libraries required by a compiled scene before instance creation. */
+  prepareScene: (scene: CompiledScene) => Promise<void>
   start: () => void
   pause: () => void
   stop: () => void
@@ -473,6 +480,7 @@ export type CodPlayApi = Readonly<{
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules
+  readonly libraries: CodPlayLibraries
   readonly resources: CodPlayResources
   readonly events: CodPlayEvents
   readonly engine: CodPlayEngine

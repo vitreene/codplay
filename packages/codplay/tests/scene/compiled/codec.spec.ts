@@ -14,6 +14,70 @@ const artifact: CompiledScene = {
 }
 
 describe('CompiledSceneCodec', () => {
+  it('round-trips a compiled relation without introducing a native handle', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const value: CompiledScene = {
+      ...artifact,
+      scene: {
+        ...artifact.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{
+              id: 'geometry',
+              type: 'threejs-geometry',
+              initial: {},
+              rel: { target: { scene: 'scene-a', perso: 'geometry' } },
+              actions: { geometry: null },
+            }],
+            listen: [],
+          },
+        },
+      },
+      requirements: {
+        ...artifact.requirements,
+        components: ['threejs-geometry'],
+      },
+      actionTargetIndex: {
+        geometry: [{ storyId: 'main', persoId: 'geometry' }],
+      },
+    }
+
+    const decoded = codec.decode(codec.encode(value))
+
+    expect(decoded.ok).toBe(true)
+    if (decoded.ok) {
+      expect(decoded.value.scene.stories.main?.persos[0]?.rel).toEqual({
+        target: { scene: 'scene-a', perso: 'geometry' },
+      })
+    }
+  })
+
+  it('rejects a compiled relation with an invalid target identity', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const invalid = {
+      ...artifact,
+      scene: {
+        ...artifact.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{
+              id: 'geometry',
+              type: 'threejs-geometry',
+              initial: {},
+              rel: { target: { scene: '' } },
+              actions: {},
+            }],
+            listen: [],
+          },
+        },
+      },
+    }
+
+    expect(codec.decode(JSON.stringify(invalid))).toMatchObject({ ok: false })
+  })
+
   it('round-trips and freezes a valid compiled envelope', () => {
     const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
     const decoded = codec.decode(codec.encode(artifact))

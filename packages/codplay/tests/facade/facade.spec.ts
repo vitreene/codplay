@@ -833,6 +833,31 @@ describe('CodPlay facade', () => {
     codplay.destroy()
   })
 
+  it('prepares an engine library before a scene instance is created', async () => {
+    const diagnostics: string[] = []
+    const load = vi.fn(async () => undefined)
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+        libraries: {
+          register: [{ id: 'three', load }],
+        },
+      },
+    })
+    const requirements: CompiledScene['requirements'] = {
+      ...emptyRequirements,
+      libraries: ['three'],
+    }
+
+    expect(() => createInstance(codplay.instances, 'library-before-load', scene(requirements))).toThrow()
+    expect(diagnostics).toContain('RUNTIME_LIBRARY_UNAVAILABLE')
+
+    await codplay.engine.prepareScene(scene(requirements))
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(createInstance(codplay.instances, 'library-after-load', scene(requirements))).toBeDefined()
+    codplay.destroy()
+  })
+
   it('treats skipped preload resources as already available', () => {
     const diagnostics: string[] = []
     const codplay = createCodPlay({

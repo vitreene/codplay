@@ -23,6 +23,11 @@ export abstract class BaseComponent<Initial extends Record<string, unknown>> {
     this.services = input.services
   }
 
+  /** Prepares component-owned substrate state after materialization and before the first update. */
+  initialize(): void {
+    // Components without a setup phase keep the default no-op lifecycle.
+  }
+
   /** Applies one resolved state through the component-specific projection. */
   abstract update(input: ComponentUpdateInput): void
 

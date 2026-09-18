@@ -1,109 +1,100 @@
 # Portabilité — le portage comme contrainte de rédaction
 
-Note de réflexion (2026-07-26). Chapitre du cahier des charges V2
-(`2026-07-16-solve-project-moteur-custom.md`). Part de l'intention : **codplay ignore la plateforme où
-il joue** ; ce sont les **composants** qui font le relais vers la plateforme. Conséquence testée sur un
-cas concret — un portage vers **Flutter**. Aucun code — trace de la réflexion.
+Note de réflexion corrigée le 2026-09-18.
 
-## L'intention (pas un « test », une ligne de conception)
+> **Correction.** Cette note proposait auparavant un `FlutterProjection` ou un
+> autre substrat sélectionné à la place du DOM pour une instance entière. Cette
+> conception est abandonnée. La portabilité reste une discipline du cœur et des
+> données, pas la promesse d'un matérialiseur global interchangeable.
 
-Cœur **agnostique**, composants **écrits sur mesure pour la plateforme visée** — « on ne peut pas y
-échapper » : aucun degré d'abstraction ne rend un `<video>` HTML et un `video_player` Flutter
-interchangeables sans code par plateforme. La frontière cœur/composants **n'est pas un défaut à
-réduire** : c'est la ligne de conception. La Projection (S8) et les composants ne *contournent* pas
-cette frontière — ils la **matérialisent** : tout ce qui est plateforme est d'un côté, nommément ; le
-cœur ignore l'autre.
+## Intention conservée
 
-## Constat de code — l'hypothèse tient largement
+CodPlay sépare :
 
-Vérifié : **builder et track-manager n'ont AUCUNE dépendance web** (portables tels quels). Le **cœur
-du player** ne touche le web qu'en une **poignée** d'endroits (`mountTarget`, `replaceChildren`,
-`childNodes`, `style.pointerEvents`, `elementsFromPoint` — `player.ts`). Les **composants** touchent la
-plateforme, mais c'est **leur rôle** — leur non-portabilité est voulue, pas un défaut.
+- les données auteur, le temps, les events et la résolution logique ;
+- les composants qui réalisent cet état dans un environnement concret ;
+- les intégrations optionnelles qui connectent une bibliothèque à ces
+  composants.
 
-## Les obstacles d'un portage Flutter — et ce qui les résout
+Une plateforme différente demande nécessairement des composants adaptés. Un
+`<video>` HTML et un lecteur Flutter ne sont pas interchangeables sans code de
+plateforme. Cette limite est normale et doit rester visible.
 
-| Obstacle | Nature | Résolu par |
-|---|---|---|
-| Le player tient encore des nodes DOM | Fuite de substrat dans le cœur | **Projection (S8)** — une `FlutterProjection` fournit `mount`/`set`/`measure`/`hitTest` ; le player ne touche plus un node |
-| Impératif/mutatif vs déclaratif | Paradigme | **`f(t)` + solve/project (V2)** — « état(t)=f(scène,t), les composants projettent l'état » EST la boucle `build(context)` de Flutter |
-| Unités cqw / mesure web-spécifiques | Résolution de plateforme | **Projection** — `resolveUnit` par cible ; le cqw reste une *intention*, chaque Projection la résout |
-| Interpolation = anime.js (web) | Moteur de plateforme | **Moteur custom (V2)** — `solve(from,to,ease,t)→valeur` pur, tourne en Dart comme en TS |
-| Composants riches (texte, média, SVG, DnD) | **Irréductible** | Réécriture par composant — **attendue** (les composants font le relais) |
+## Discipline du cœur
 
-**Le point qui boucle la V2** : les quatre premiers obstacles sont résolus par des points de la V2 déjà
-posés. Le portage Flutter n'est donc **pas un chantier séparé** — c'est un **révélateur** qui confirme
-la V2 par un autre angle. Chaque fuite que Flutter exposerait (nodes dans le player, cqw web, anime
-web, mutation impérative) correspond exactement à un point V2. Si la V2 est faite, Flutter devient :
-**cœur inchangé + composants réécrits + une `FlutterProjection`.** « Aisé » au sens fort — un portage
-d'adaptateurs, pas de logique. Le seul irréductible (composants riches) est déjà assumé par l'intention.
+La portabilité reste un critère de relecture utile : le cœur logique ne doit pas
+lire `document`, `window` ou un objet Three.js pour décider de l'état d'une
+scène. Il produit des données résolues ; la frontière de présentation les
+applique.
 
-## Le point de fond — le portage discipline le code TS lui-même
+Cette discipline interdit notamment :
 
-Le plus important, et c'est une **règle d'écriture**, pas seulement une propriété d'architecture :
+- d'employer un nœud rendu comme source de vérité auteur ;
+- de faire entrer un type de bibliothèque tierce dans le solveur ;
+- de dépendre d'une horloge ou d'un cache de moteur graphique ;
+- de confondre une valeur structurée avec sa représentation CSS ;
+- de placer la logique d'une feature dans un raccourci propre à une démo.
 
-> Se tenir à la contrainte « ce cœur doit pouvoir tourner sur une autre plateforme » **oblige un style
-> de code**, y compris dans la version TS où aucun portage n'est prévu. Elle interdit *à l'écriture*
-> les commodités qui *marchent* en TS/web mais sont des fuites de plateforme.
+La mesure réelle reste une entrée de présentation légitime lorsqu'elle est
+nécessaire au mouvement, au hit-testing ou au resize. Elle ne reconstruit pas
+l'intention auteur depuis le rendu.
 
-Elle rejette, dès l'écriture : lire `document`/`window`/un global de plateforme depuis le cœur ;
-supposer une string CSS là où une valeur structurée suffit ; muter un node quand on peut produire un
-état ; s'appuyer sur une particularité de moteur (cache transform d'anime, comportement de reflow).
-Ce sont exactement les **cicatrices** trouvées en discussion (`resolveContainerQueryValue` parsant
-contre `margin-left`, le hack `"Npx"`, `stripIdentityTransforms`) : des concessions à la plateforme
-faites *dans le cœur*. La contrainte de portage les aurait **interdites à l'écriture**, pas corrigées
-après coup. Le portage n'a pas besoin d'être *fait* pour être utile — il suffit qu'il soit le **critère
-de relecture** présent : « cette ligne suppose-t-elle le web ? si oui, elle est mal placée ». C'est le
-pendant *actif* de « codplay ignore sa plateforme » : non « il l'ignore par chance », mais « on écrit
-chaque ligne du cœur en refusant de la connaître ». Sans cette discipline, le cœur re-fuite ligne après
-ligne (comme il l'a fait — les nodes dans le player) ; avec elle, chaque fuite est visible à l'écriture.
+## Modèle retenu pour les bibliothèques tierces
 
-## Curseur de rigueur — au-delà de la plateforme, la rigueur interne
+Le runtime public V2 conserve son matérialiseur HTML/DOM. Un composant hôte HTML
+peut posséder une projection Three.js, Rive, Lottie ou Canvas et un
+matérialiseur local. Des composants spécialisés y écrivent par un pont fourni
+par l'intégration.
 
-La contrainte de portage a un cran supérieur : viser un cœur **rigoureux en soi**, indépendamment de
-toute cible. Deux qualités internes qu'un portage exigeant révèle (et que la version TS gagne à avoir
-de toute façon) :
+```text
+cœur logique
+  -> composant hôte HTML
+       -> projection et matérialiseur de la bibliothèque
+            -> composants spécialisés
+```
 
-- **Typage exhaustif** — pas de `unknown`/`Record<string, unknown>` qui traversent le cœur. Toute
-  cible sérieuse l'exige (Flutter/Dart y compris : sound typing, sealed classes). Voir chantier ci-dessous.
-- **Pas de mutation d'état partagé floue** — un état produit plutôt que muté, des dépendances sans
-  cycles (l'orchestrateur ↔ composants ↔ registries actuels, et `create-player.ts` à 2500 lignes,
-  sont les points à assainir). `solve/project` + `f(t)` y aident directement (moins d'état mutable,
-  « produire une valeur » plutôt que « muter un node »).
+La relation `rel`, initiale et immuable, désigne la scène ou le perso ciblé. Sa
+forme TypeScript peut varier selon la bibliothèque ; l'intégration la normalise
+vers une identité résoluble. Le cœur ne connaît ni la forme native de la cible,
+ni les conventions d'accès de la bibliothèque.
 
-« Rigoureux en soi » et « portable » sont la même exigence vue de deux angles : un cœur qu'on écrit
-comme s'il devait être porté est un cœur plus rigoureux **même en TS**.
+Cette organisation ne prétend pas qu'un composant Three.js fonctionne sur
+Flutter. Elle préserve en revanche la scène logique, les événements, les
+straps, les profils de données et les règles temporelles qui ne dépendent pas de
+la plateforme.
 
-## Chantier V2 mûr — resserrer le typage (les `unknown` se dissipent)
+## Portage vers une autre plateforme
 
-Les `unknown`/`Record<string, unknown>` de codplay n'étaient **pas de la paresse** : c'était de
-l'**indétermination légitime** au moment de l'écriture (on ne savait pas encore quelles formes les
-données prendraient). Aujourd'hui le projet contient **de nombreux cas réels** qui cernent l'usage et
-l'emploi des données — l'indétermination qui justifiait le `unknown` **s'est résolue** (même mouvement
-que « l'interaction résout l'indétermination » du modèle `f(t)` : le `unknown` *était* l'indétermination,
-les cas d'usage l'ont résolue en types nommables).
+Un portage complet ne consiste plus à fournir une unique projection universelle.
+Il demande :
 
-Conséquence : **mieux cerner les types est un chantier V2 mûr, pas spéculatif** — sa matière existe
-(les cas). C'est le pendant côté typage de « la faisabilité de `f(t)` est un inventaire, pas un pari » :
-la faisabilité du typage fort est une **remontée des cas existants vers des types**, pas une invention
-*a priori*. Démonstratif.
+- un hôte et une frontière de présentation adaptés à la plateforme ;
+- des composants adaptés pour les médias et interactions propres à cette
+  plateforme ;
+- les intégrations des bibliothèques effectivement disponibles ;
+- la conservation des contrats logiques qui restent pertinents.
 
-## Correction — le seek V2 est SYNCHRONE (l'async est une dette V1, pas un obstacle de portage)
+La difficulté du portage mesure ainsi les fuites de plateforme dans le cœur,
+sans imposer une abstraction artificielle à tous les composants.
 
-Point à ne pas laisser traîner (contradiction relevée par l'auteur). Le `seek()` actuel est `async`
-(`await replayDueTimelineEventsForSeek`, `create-player.ts`) — **mais cet async vient du REJEU**
-(rejouer les events un par un prend du temps, d'où l'`await`). Le modèle `f(t)`
-(`2026-07-26-etat-fonction-de-t.md`) **supprime le rejeu** : le seek devient une **évaluation**
-(interroger la scène à `t`), donc **synchrone**. `f(t)` ne rend pas seulement le seek réversible — il le
-rend **synchrone**, en retirant la raison même de son asynchronie. L'async n'est donc **pas** un
-obstacle de portage : c'est une **dette V1 que la V2 solde**. (Cohérent avec la décision antérieure :
-seek synchrone/déterministe, `seek ≡ play` ; l'async debouncé ne concerne que la *correction de mesure*
-du cas rare ancêtres-mobiles, jamais le seek de l'état — `2026-07-26-seek-flip-ancetres-mobiles.md`.)
+## Typage
+
+Les définitions TypeScript ont un rôle central : elles rendent explicites les
+données portables et les données propres à une intégration. Pour les projections
+tierces, elles guident notamment :
+
+- le profil `initial` ;
+- les actions ;
+- la forme de `rel` ;
+- les ressources exigées ;
+- les cibles natives remises au composant de feature.
+
+Le core consomme uniquement les résultats normalisés dont il a besoin. Il ne
+généralise pas les types de toutes les bibliothèques.
 
 ## Statut
 
-Portabilité = **conséquence de la V2**, pas chantier séparé. Le portage (Flutter comme cas concret) est
-un **révélateur** qui confirme le cahier des charges, et surtout une **contrainte de rédaction** du code
-TS présent. Chantier typage : **mûr** (adossé aux cas existants). Aucun code écrit. Lié :
-`2026-07-16-solve-project-moteur-custom.md` (V2 : Projection, solve/project, moteur custom),
-`2026-07-26-etat-fonction-de-t.md` (f(t) → seek synchrone).
+Décision corrigée : l'ancien matérialiseur global alternatif est abandonné. La
+portabilité comme discipline de rédaction est conservée. Le pont des projections
+tierces est suivi dans
+[`../../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../../plan/2026-09-18-third-party-render-target-codplay-plan.md).

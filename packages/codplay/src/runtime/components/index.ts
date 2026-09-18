@@ -107,6 +107,7 @@ export type {
   ComponentActionOccurrence,
   ComponentAnimation,
   ComponentAnimationFrame,
+  ComponentAnimationPresentationPhase,
   HTMLComponentInput,
   HTMLComponentServices,
   ComponentUpdateInput,

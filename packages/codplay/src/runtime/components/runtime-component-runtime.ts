@@ -1,4 +1,5 @@
 import type { SolvedScene } from '../player/pipeline'
+import type { CompiledRel } from '../../scene/compiled'
 import type {
   RuntimeComponentUpdateContext,
   RuntimeComponentUpdatePhase,
@@ -24,10 +25,13 @@ import type {
   RuntimeComponentSurfaceMap,
   RuntimeComponentSurfaceResolver,
 } from './component-surface-types'
+import { RuntimeTargetRegistry } from '../targets'
+import type { RuntimeTargetRegistration } from '../targets'
+import { BaseHTMLComponent } from './base-html-component'
 
 export type { RuntimeComponentIdentity } from '../catalog'
 
-/** Final cleanup returned after one component has been materialized. */
+/** Final cleanup returned when a component owns a materialized representation. */
 export type RuntimeComponentHandle = Readonly<{
   destroy: () => void
 }>
@@ -48,9 +52,11 @@ export type RuntimeComponentSyncOptions = Readonly<{
 type MountedComponent = Readonly<{
   identity: RuntimeComponentIdentity
   persoId: string
+  relation?: CompiledRel
   component: BaseComponent<Record<string, unknown>>
-  handle: RuntimeComponentHandle
+  handle?: RuntimeComponentHandle
   surfaces: Partial<RuntimeComponentSurfaceMap>
+  targetRegistration?: RuntimeTargetRegistration
 }>
 
 type StableComponentAction = Readonly<Omit<ComponentActionOccurrence, 'elapsedMs'>>
@@ -66,14 +72,23 @@ type ActiveExternalComponentAnimation = ActiveComponentAnimation & Readonly<{
   presentation: RuntimeExternalPresentation
 }>
 
+type ActivePresentationEntry = Readonly<{
+  componentId: string
+  active: ActiveComponentAnimation
+  external: boolean
+  registrationOrder: number
+}>
+
 /** Synchronizes compiled solved persos with a player-local component host. */
 export class RuntimeComponentRuntime {
   private readonly mounted = new Map<string, MountedComponent>()
   private readonly stateRevisions = new Map<string, number>()
   private readonly lastStates = new Map<string, Readonly<Record<string, unknown>>>()
   private readonly lastActions = new Map<string, readonly StableComponentAction[]>()
+  private readonly lastTargets = new Map<string, unknown>()
   private readonly animations = new Map<string, ActiveComponentAnimation[]>()
   private readonly externalAnimations = new Map<string, ActiveExternalComponentAnimation>()
+  private readonly targetRegistry = new RuntimeTargetRegistry()
   private readonly options: RuntimeComponentRuntimeOptions
   private moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance> = new Map()
 
@@ -146,30 +161,72 @@ export class RuntimeComponentRuntime {
   sync(scene: SolvedScene, force = false, options: RuntimeComponentSyncOptions = {}): void {
     const phase = options.phase ?? 'normal'
     if (phase !== 'normal') this.cancelAllExternalPresentations()
-    for (const perso of Object.values(scene.persos)) {
-      const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
+    const persos = Object.values(scene.persos)
+    for (const perso of persos) {
+      if (!this.mounted.has(perso.key)) this.mountComponent(scene, perso.key)
+    }
+    for (const perso of persos) {
+      const mounted = this.mounted.get(perso.key)
+      if (mounted === undefined) continue
+      mounted.targetRegistration?.setAvailable(perso.placement.mounted)
+    }
+    for (const perso of persos) {
+      const mounted = this.mounted.get(perso.key)
+      if (mounted === undefined) continue
       const actions = createStableActionSignature(perso.actions)
+      const target = this.resolveTarget(mounted)
+      const targetChanged = this.hasTargetChanged(perso.key, target)
       if (phase === 'geometry-capture'
         || force
         || this.hasStateChanged(perso.key, perso.state)
-        || !sameRuntimeValue(this.lastActions.get(perso.key), actions)) {
+        || !sameRuntimeValue(this.lastActions.get(perso.key), actions)
+        || targetChanged) {
         this.applyComponentUpdate(mounted, perso.key, {
           state: perso.state,
           timeMs: scene.timeMs,
+          target,
           activeActions: perso.actions,
         }, phase)
         this.lastActions.set(perso.key, actions)
         this.recordStateRevision(perso.key, perso.state)
       }
+      this.lastTargets.set(perso.key, target)
     }
   }
 
   /** Presents component-owned animation samples at one player-clocked time. */
   presentAt(timeMs: number): void {
-    const componentIds = new Set([...this.animations.keys(), ...this.externalAnimations.keys()])
-    for (const componentId of componentIds) {
-      this.presentAnimations(componentId, timeMs)
-      this.presentExternalAnimations(componentId, timeMs)
+    const entries: ActivePresentationEntry[] = []
+    let registrationOrder = 0
+    for (const [componentId, active] of this.animations) {
+      for (const animation of active) {
+        entries.push({ componentId, active: animation, external: false, registrationOrder })
+        registrationOrder += 1
+      }
+    }
+    for (const [componentId, active] of this.externalAnimations) {
+      entries.push({ componentId, active, external: true, registrationOrder })
+      registrationOrder += 1
+    }
+
+    entries.sort((left, right) => {
+      const phaseOrder = presentationPhaseOrder(left.active.animation)
+        - presentationPhaseOrder(right.active.animation)
+      return phaseOrder === 0
+        ? left.registrationOrder - right.registrationOrder
+        : phaseOrder
+    })
+
+    for (const entry of entries) {
+      this.presentAnimationEntries([entry.active], timeMs)
+      if (entry.external) {
+        const current = this.externalAnimations.get(entry.componentId)
+        if (current === entry.active
+          && current.lastTimeMs !== undefined
+          && current.lastTimeMs >= current.animation.endAt) {
+          this.externalAnimations.delete(entry.componentId)
+        }
+      }
     }
   }
 
@@ -182,7 +239,11 @@ export class RuntimeComponentRuntime {
     const mounted = this.mounted.get(persoKey)
     if (mounted === undefined) throw new Error(`Runtime component is not mounted: ${persoKey}`)
     if (!this.hasStateChanged(persoKey, state)) return
-    this.applyComponentUpdate(mounted, persoKey, { state, timeMs }, 'normal')
+    this.applyComponentUpdate(mounted, persoKey, {
+      state,
+      timeMs,
+      target: this.lastTargets.get(persoKey),
+    }, 'normal')
     this.recordStateRevision(persoKey, state)
   }
 
@@ -190,13 +251,16 @@ export class RuntimeComponentRuntime {
   destroy(): void {
     this.cancelAllExternalPresentations()
     for (const mounted of this.mounted.values()) {
+      mounted.targetRegistration?.release()
       mounted.component.destroy()
-      mounted.handle.destroy()
+      mounted.handle?.destroy()
     }
     this.mounted.clear()
     this.stateRevisions.clear()
     this.lastStates.clear()
     this.lastActions.clear()
+    this.lastTargets.clear()
+    this.targetRegistry.clear()
     this.animations.clear()
     this.externalAnimations.clear()
   }
@@ -250,13 +314,6 @@ export class RuntimeComponentRuntime {
           : { ...previous, animation }
       }),
     )
-  }
-
-  /** Applies only changed samples from the player-clocked component streams. */
-  private presentAnimations(componentId: string, timeMs: number): void {
-    const active = this.animations.get(componentId)
-    if (active === undefined) return
-    this.presentAnimationEntries(active, timeMs)
   }
 
   /** Applies and retires one externally prepared presentation stream. */
@@ -325,6 +382,17 @@ export class RuntimeComponentRuntime {
     return previous === undefined || !sameRuntimeValue(previous, state)
   }
 
+  /** Detects target availability or replacement without inspecting opaque values. */
+  private hasTargetChanged(componentId: string, target: unknown): boolean {
+    return !this.lastTargets.has(componentId) || !Object.is(this.lastTargets.get(componentId), target)
+  }
+
+  /** Resolves the relation of one mounted component through this player-local target registry. */
+  private resolveTarget(mounted: MountedComponent): unknown | undefined {
+    if (mounted.relation === undefined) return undefined
+    return this.targetRegistry.resolve(mounted.relation.target)
+  }
+
   /** Creates one component instance from its compiled scene declaration. */
   private mountComponent(scene: SolvedScene, persoKey: string): MountedComponent {
     const perso = scene.persos[persoKey]
@@ -352,36 +420,65 @@ export class RuntimeComponentRuntime {
       this.options.materializer,
       this.moduleServices,
     )
-    const handle = this.options.materializer.materializeComponent(
-      component,
-      identity,
-      compiledPerso.initial,
-      this.options.catalog.getMountablePartIds(perso.type, identity),
-      this.moduleServices,
-    )
+    let handle: RuntimeComponentHandle | undefined
     let surfaces: Partial<RuntimeComponentSurfaceMap>
+    let targetRegistration: RuntimeTargetRegistration | undefined
     try {
+      // Only HTML components own a representation in the global HTML
+      // materializer. A substrate-neutral component keeps its own lifecycle
+      // and must not cross this boundary through empty markup or a synthetic
+      // handle.
+      if (component instanceof BaseHTMLComponent) {
+        handle = this.options.materializer.materializeComponent(
+          component,
+          identity,
+          compiledPerso.initial,
+          this.options.catalog.getMountablePartIds(perso.type, identity),
+          this.moduleServices,
+        )
+      }
+      component.initialize()
       const componentSurfaces = this.options.catalog.getComponentSurfaces(
         perso.type,
         component,
         identity,
         this.options.materializer,
       )
-      const replaceSurface = this.options.materializer.getReplaceSurface?.(perso.key)
+      const replaceSurface = component instanceof BaseHTMLComponent
+        ? this.options.materializer.getReplaceSurface?.(perso.key)
+        : undefined
       surfaces = replaceSurface === undefined
         ? componentSurfaces
         : { ...componentSurfaces, replace: replaceSurface }
+      const targetPublication = this.options.catalog.getComponentTargetPublication(
+        perso.type,
+        component,
+        identity,
+        this.options.materializer,
+      )
+      if (targetPublication !== undefined) {
+        targetRegistration = this.targetRegistry.publish(
+          targetPublication.scope === 'scene'
+            ? { scene: scene.scene.scene.id }
+            : { scene: scene.scene.scene.id, perso: perso.persoId },
+          targetPublication.value,
+        )
+        targetRegistration.setAvailable(perso.placement.mounted)
+      }
     } catch (error) {
-      handle.destroy()
+      targetRegistration?.release()
+      handle?.destroy()
       component.destroy()
       throw error
     }
     const mounted: MountedComponent = {
       identity,
       persoId: perso.persoId,
+      relation: compiledPerso.rel,
       component,
       surfaces,
       handle,
+      targetRegistration,
     }
     this.mounted.set(perso.key, mounted)
     return mounted
@@ -401,6 +498,11 @@ function createStableActionSignature(
   actions: readonly ComponentActionOccurrence[] | undefined,
 ): readonly StableComponentAction[] {
   return (actions ?? []).map(({ elapsedMs, ...stableAction }) => stableAction)
+}
+
+/** Places the final host commit after component-owned content presentation. */
+function presentationPhaseOrder(animation: ComponentAnimation): number {
+  return animation.presentationPhase === 'commit' ? 1 : 0
 }
 
 /** Compares compiled component state without serializing it on every frame. */

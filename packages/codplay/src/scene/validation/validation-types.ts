@@ -22,6 +22,7 @@ export type ComponentValidationDefinition = Readonly<{
   type: string
   services: readonly string[]
   modules?: readonly string[]
+  libraries?: readonly string[]
   validateInitial: ValidationFunction
   validateAction?: ValidationFunction
   validatePerso?: PersoValidationFunction
@@ -51,4 +52,6 @@ export type PersoValidationFunction = (
 export type CapabilityValidationSnapshot = Readonly<{
   components: ReadonlyMap<string, ComponentValidationDefinition>
   services: ReadonlyMap<string, ServiceValidationDefinition>
+  /** IDs declared by the engine, exposed only for author-time diagnostics. */
+  libraries: ReadonlySet<string>
 }>

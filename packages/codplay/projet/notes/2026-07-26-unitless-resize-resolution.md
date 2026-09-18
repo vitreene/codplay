@@ -72,6 +72,7 @@ qui viserait 100% produirait un bug invisible dès le premier cas raté.
 ## Statut
 
 Cas de la revue I/O V2 (#3) détaillé, non tranché dans ses valeurs (le ratio par défaut, le contenu
-exact de la whitelist restent à convenir). Capacité de Projection (ratio + whitelist par substrat).
-Aucun code. Lié : `2026-07-26-conduite-chantier-v2.md` §10 #3,
-`2026-07-16-solve-project-moteur-custom.md` (S6 project, S8 Projection).
+exact de la whitelist restent à convenir). Cette note concerne la frontière HTML ; un composant hôte
+tierce adapte séparément sa projection interne à la boîte matérialisée. Aucun code. Lié :
+`2026-07-26-conduite-chantier-v2.md` §10 #3 et
+`2026-07-16-solve-project-moteur-custom.md` S6.

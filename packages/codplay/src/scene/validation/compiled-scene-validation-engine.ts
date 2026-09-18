@@ -44,6 +44,11 @@ export class CompiledSceneValidationEngine {
     return this.catalog.components.get(type)?.modules ?? []
   }
 
+  /** Returns the engine libraries declared by one registered component type. */
+  librariesFor(type: string): readonly string[] {
+    return this.catalog.components.get(type)?.libraries ?? []
+  }
+
   /** Sanitizes one validated initial component profile before compilation. */
   sanitizeInitial(type: string, value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
     return this.sanitizeServices(type, this.sanitize(type, 'sanitizeInitial', value))

@@ -170,6 +170,30 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     expect(diagnostics.report().errors).toEqual([])
   })
 
+  it('warns without blocking when rel is invalid or attempted in an action', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
+      id: 'relation-title',
+      type: 'tag',
+      initial: { rel: { target: { scene: '' } } },
+      actions: {
+        retarget: { rel: { target: { scene: 'other' } } },
+      },
+    }, diagnostics)
+
+    expect(diagnostics.report().errors).toEqual([])
+    expect(diagnostics.report().warnings.map((entry) => entry.code)).toEqual([
+      'AUTHOR_REL_INVALID',
+      'AUTHOR_REL_ACTION_IGNORED',
+    ])
+    expect(diagnostics.report().warnings.map((entry) => entry.details?.context?.path)).toEqual([
+      'initial.rel',
+      'actions.retarget.rel',
+    ])
+  })
+
   it('accepts string and numeric content through the content service at the compiled boundary', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
     const runtimeCatalog = catalog()

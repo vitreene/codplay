@@ -1,161 +1,128 @@
-# CodPlay V2 - composants hybrides et acces Three.js
+# CodPlay V2 — composant hôte et projection Three.js
 
 ## Statut
 
-Status: En cours  
-CodPlay version: V2 foundation  
-Review: required before future hybrid component implementation; current HTML base boundary relue le 2026-08-24
+Statut : **En cours** — direction validée, implémentation suivie par les plans
+du pont runtime et des composants externes
 
-Le contrat commun des composants est defini dans
-[`2026-08-01-composant-v2-contract.md`](./2026-08-01-composant-v2-contract.md).
-Cette note ne traite que de l'extension necessaire a `avatar3d`.
+Version CodPlay : V2
 
-## Decision de conception
+Révision : modèle corrigé le 2026-09-18
 
-Un composant V2 peut etre specialise pour une materialisation qui possede un substrat
-interne propre. Le cas `avatar3d` est hybride :
+Cette note décrit la direction du composant hôte. Le contrat détaillé et son
+ordre d'implémentation sont suivis dans :
 
-- son hote externe est un node DOM, ici un `canvas` ;
-- son contenu interne est une scene Three.js possedee par le composant ;
-- le composant accede directement aux objets Three.js qu'il a crees ;
-- aucun composant generique DOM ne doit connaitre cette scene interne.
+- [`2026-09-18-third-party-render-target-analysis.md`](./2026-09-18-third-party-render-target-analysis.md) ;
+- [`../2026-09-18-third-party-render-target-codplay-plan.md`](../2026-09-18-third-party-render-target-codplay-plan.md) ;
+- [`../2026-09-18-third-party-components-v2-plan.md`](../2026-09-18-third-party-components-v2-plan.md).
 
-Le composant declare son canvas dans son template. Apres materialisation, il recupere
-ce node dans son cycle de vie et possede directement sa materialisation Three.js. Les
-meshes, les bones, les morphs, la camera et les materiaux restent des ressources
-internes du composant.
+## Décision corrigée
 
-```text
-BaseHTMLComponent.render()
-    -> template string contenant le canvas
-    -> Materializer materialise et monte le template
-    -> composant recupere le canvas materialise
-    -> composant initialise Three.js
-    -> composant applique les etats resolus aux objets Three.js
-```
+La première version de cette note décrivait un composant `avatar3d`
+monolithique : il possédait le canvas, la scène, l'avatar, la caméra, le lipsync
+et toutes les animations.
 
-## Propriete des couches
-
-Le Materializer DOM possede le parentage de la materialisation externe :
-
-- montage, detachement et parentage ;
-- coordination du cycle de vie du node retourne.
-
-Le composant avatar possede la configuration de son canvas, car ce canvas est le
-support direct de sa materialisation particuliere. La creation et le parentage du node
-restent assures par le chemin de template et le Materializer.
-
-Le composant `avatar3d` possede sa materialisation interne :
-
-- `WebGLRenderer` ;
-- `THREE.Scene` ;
-- camera ;
-- modele charge et objets du modele ;
-- runtime avatar, morphs, bones et animations.
-
-La regle de writer unique reste vraie par couche. Le composant est l'unique writer
-de son canvas et de sa scene Three.js interne ; le Materializer est l'unique writer du
-parentage DOM. Le coeur CodPlay ne recoit ni le contexte WebGL ni les objets
-Three.js.
-
-L'acces direct du composant n'est pas un handle public. Il s'agit d'un acces prive
-aux ressources que le composant a creees pour sa materialisation.
-
-## Cycle de vie
-
-Le cycle V2 attendu est le suivant :
-
-1. `render()` retourne un template string qui contient le canvas.
-2. Le Materializer parse, materialise et monte le template.
-3. Le composant recupere le canvas materialise et initialise Three.js dessus.
-4. Le player remet au composant un etat resolu et le temps CodPlay.
-5. Le composant applique directement cet etat a ses objets Three.js.
-6. Le composant rend la scene avec son `WebGLRenderer`.
-Le composant ne possede pas d'horloge. Les animations et les transitions sont
-evaluees a partir du temps fourni par CodPlay.
-
-## Extrait de composant V2
-
-L'extrait suivant montre la frontiere semantique. Les noms `init` et `update`
-sont illustratifs tant que le contrat executable des composants V2 n'est
-pas gele ; l'acces direct a Three.js et la propriete des couches sont les decisions
-visees.
-
-```ts
-type Avatar3DState = Readonly<{
-  viseme: string | null
-  motion: string | null
-  camera: {
-    fov: number
-    position: { x: number; y: number; z: number }
-  }
-}>
-
-class Avatar3DComponent extends BaseHTMLComponent {
-  private canvas: HTMLCanvasElement | null = null
-  private renderer: WebGLRenderer | null = null
-  private scene: THREE.Scene | null = null
-  private camera: THREE.PerspectiveCamera | null = null
-  private avatar: AvatarEngine | null = null
-
-  /** Declares the canvas host through the component template. */
-  render(): string {
-    return `
-      <canvas class="avatar3d-host"></canvas>
-    `
-  }
-
-  /** Initializes the private Three.js materialization on the materialized canvas. */
-  init(): void {
-    this.canvas = this.node as HTMLCanvasElement
-    this.renderer = new WebGLRenderer({ canvas: this.canvas })
-    this.scene = new THREE.Scene()
-    this.camera = new THREE.PerspectiveCamera()
-    this.avatar = createAvatarEngine(this.scene)
-  }
-
-  /** Applies one resolved avatar state directly to the private Three.js scene. */
-  update(state: Avatar3DState, timelineMs: number): void {
-    if (!this.renderer || !this.scene || !this.camera || !this.avatar) return
-
-    this.avatar.setViseme(state.viseme)
-    this.avatar.setMotion(state.motion)
-    this.camera.fov = state.camera.fov
-    this.camera.position.set(
-      state.camera.position.x,
-      state.camera.position.y,
-      state.camera.position.z,
-    )
-    this.avatar.evaluate(timelineMs)
-    this.renderer.render(this.scene, this.camera)
-  }
-
-}
-```
-
-Le point important est la direction de l'appel :
+Cette forme reste techniquement possible pour un média autonome, mais ce n'est
+plus le modèle du chantier V2. Le projet vise une projection composable :
 
 ```text
-SolvedPerso.state
-    -> Avatar3DComponent.update(state, timelineMs)
-    -> this.avatar / this.camera / this.scene
-    -> this.renderer.render(this.scene, this.camera)
+perso hôte HTML
+  -> canvas + renderer + scène + matérialiseur Three.js
+       -> perso caméra
+       -> perso lumière
+       -> perso géométrie
+       -> perso avatar
+            -> perso lipsync
 ```
 
-Le template ne decrit que le canvas hote. Il ne decrit pas les meshes Three.js ;
-l'API Three.js est l'implementation interne du composant specialise.
+Le matérialiseur HTML reste l'unique matérialiseur global de l'instance. Le
+matérialiseur Three.js appartient au composant hôte et ne devient pas une option
+de la façade.
 
-## Ce que cette decision n'autorise pas
+## Propriété des couches
 
-- Le coeur CodPlay ne manipule pas `THREE.Object3D`.
-- Le player ne cherche pas le canvas avec un selector DOM.
-- Le composant ne reconstruit pas son etat logique en lisant le canvas ou la scene.
-- Un composant DOM generique ne recoit pas une scene Three.js.
-- Le composant ne cree pas une horloge independante de CodPlay.
+Le matérialiseur HTML possède la représentation externe :
 
-## Hors contrat executable actuel
+- création et montage du canvas ou de l'élément d'accueil ;
+- placement du perso hôte dans la scène HTML ;
+- services HTML déclarés par l'hôte ;
+- démontage de cette représentation.
 
-- interface V2 finale du cycle `render/init/update` ;
-- injection de l'hote materialise vers le composant ;
-- adaptation runtime des `PersoState` vers le type `Avatar3DState` ;
-- Materializer DOM et Materializer Three.js de production.
+Le composant hôte possède la projection interne :
+
+- renderer et scène Three.js ;
+- adaptation du viewport ;
+- matérialiseur Three.js local ;
+- registre de handles isolé ;
+- commit unique du rendu ;
+- destruction du contexte et de ses ressources.
+
+Les composants spécialisés possèdent seulement leur feature et les ressources
+qu'elle crée. Le core ne reçoit aucun `THREE.Object3D`.
+
+## Relation `rel`
+
+Un composant spécialisé désigne sa scène ou son perso fournisseur par `rel`.
+Cette relation :
+
+- appartient à `initial` ;
+- est immuable ;
+- porte une cible commune `{ scene, perso? }` ;
+- peut être enrichie, typée et validée par l'intégration ;
+- n'est jamais résolue manuellement par le composant de feature.
+
+`move` continue de placer le perso hôte dans le DOM. Il ne sert pas
+automatiquement de relation de contrôle entre un lipsync et un avatar.
+
+## Cycle de vie visé
+
+1. L'engine rend disponible l'unité Three.js et ses dépendances.
+2. Le matérialiseur HTML monte l'hôte.
+3. L'hôte crée sa projection et publie sa cible.
+4. Le pont publie les cibles montées avant de livrer les `rel` aux consommateurs.
+5. Les composants spécialisés créent ou mettent à jour leurs objets natifs.
+6. Les contributions visant un même objet sont composées.
+7. L'hôte rend une seule image.
+8. Le démontage détruit consommateurs, objets, contexte puis hôte selon l'ordre
+   spécifié.
+
+Ce cycle doit être identique pour Play, Seek, reset et resize. Aucun composant
+tiers ne possède sa propre horloge.
+
+## Frontière auteur
+
+Le perso reste une déclaration de données. Le composant de feature définit son
+profil, ses actions et l'application de l'état résolu. Les straps peuvent
+préparer les données sérialisables.
+
+La base ou la factory d'intégration masque :
+
+- chargement de la bibliothèque ;
+- validation de `rel` ;
+- résolution des cibles ;
+- registre des handles ;
+- phase de publication avant mise à jour ;
+- commit du rendu.
+
+Une identité de relation inconnue n'interrompt pas la construction ou la
+lecture de la scène. `SceneBuilder` produit un warning auteur non bloquant,
+silencieux en diffusion, et le composant reste sans cible. Le core ne vérifie
+pas la compatibilité native et ne construit pas de graphe récursif ; ces
+responsabilités appartiennent à l'intégration. Une cible valide temporairement
+non montée est mise en attente sans warning et peut être résolue à son prochain
+montage.
+
+Le cas d'un contrôleur comme `lipsync`, qui contribue à un avatar sans créer une
+représentation autonome, reste provisoirement modélisé comme un perso. Cette
+tension doit être évaluée pendant le chantier avatar ; elle peut révéler une
+primitive distincte.
+
+## Hors contrat actuel
+
+- forme TypeScript définitive des relations de chaque intégration ;
+- règles de résolution de `rel.target` ;
+- API du matérialiseur possédé par l'hôte ;
+- factory destinée aux composants de feature ;
+- composition des contributions avatar.
+
+Aucun de ces points ne doit être fixé opportunistement dans une démo.

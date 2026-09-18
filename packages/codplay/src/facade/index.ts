@@ -30,6 +30,7 @@ export type {
   CodPlayInstanceMountRequest,
   CodPlayInstanceOptions,
   CodPlayModules,
+  CodPlayLibraries,
   CodPlayOptions,
   CodPlayProjectionApi,
   CodPlayProjectionResult,

@@ -61,4 +61,33 @@ describe('polygon V2 open duration', () => {
     await instance.telco.seek(2_000)
     expect(instance.telco.getProgress()).toEqual({ timelineMs: 2_000, durationMs: 2_500 })
   })
+
+  it('keeps the discovered horizon when the head seeks backward', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const instance = codplay.instances.create({
+      instanceId: 'polygon-open-duration-backward-seek-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    codplay.engine.advance(1_500)
+
+    await instance.telco.seek(500)
+    expect(instance.telco.getProgress()).toEqual({ timelineMs: 500, durationMs: 1_500 })
+
+    await instance.telco.seek(0)
+    expect(instance.telco.getProgress()).toEqual({ timelineMs: 0, durationMs: 1_500 })
+  })
 })

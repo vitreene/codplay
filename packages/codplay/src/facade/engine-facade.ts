@@ -28,6 +28,7 @@ import type {
   CodPlayInstanceMountRequest,
   CodPlayInstanceOptions,
   CodPlayModules,
+  CodPlayLibraries,
   CodPlayPublicEvent,
   CodPlayTraceListener,
   CodPlayRegistryError,
@@ -52,9 +53,10 @@ type CapabilityRegistries = Readonly<{
   components: CodPlayComponents
   services: CodPlayServices
   modules: CodPlayModules
+  libraries: CodPlayLibraries
 }>
 
-type CapabilityFamily = 'component' | 'service' | 'module'
+type CapabilityFamily = 'component' | 'service' | 'module' | 'library'
 type RegistryOperation = 'register' | 'override'
 
 type ManagedInstanceMount = Readonly<{
@@ -89,6 +91,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
     this.diagnostics = new DiagnosticChannel(config.diagnosticOutput)
     try {
       this.catalog = createCoreRuntimeCatalog()
+      applyLibraryCapabilities(this.catalog, config.libraries)
       applyComponentCapabilities(this.catalog, config.components)
       applyServiceCapabilities(this.catalog, config.services)
       applyModuleCapabilities(this.catalog, config.modules)
@@ -105,7 +108,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
     }
   }
 
-  /** Creates the three direct capability registries over this engine's catalog. */
+  /** Creates the direct capability registries over this engine's catalog. */
   createCapabilityRegistries(): CapabilityRegistries {
     return {
       components: {
@@ -148,6 +151,20 @@ export class EngineFacadeImpl implements CodPlayEngine {
           'override',
           definition.id,
           () => this.catalog.overrideModule(definition, 'foreign'),
+        ),
+      },
+      libraries: {
+        register: (definition) => this.applyCapability(
+          'library',
+          'register',
+          definition.id,
+          () => this.catalog.registerLibrary(definition, 'foreign'),
+        ),
+        override: (definition) => this.applyCapability(
+          'library',
+          'override',
+          definition.id,
+          () => this.catalog.overrideLibrary(definition, 'foreign'),
         ),
       },
     }
@@ -208,6 +225,26 @@ export class EngineFacadeImpl implements CodPlayEngine {
       const diagnostics = collector.report()
       this.diagnostics.publishReport(diagnostics)
       return { ok: false, diagnostics }
+    }
+  }
+
+  /** Prepares every library required by one compiled scene before mounting. */
+  async prepareScene(scene: import('../scene/compiled').CompiledScene): Promise<void> {
+    if (this.destroyed) {
+      const error = new Error('CodPlay engine has been destroyed.')
+      publishFacadeError(this.diagnostics, 'CODPLAY_ENGINE_PREPARE_SCENE_FAILED', error, {
+        sceneId: scene.scene.id,
+      })
+      throw error
+    }
+    try {
+      this.lockCatalog()
+      await this.runtimeEngine.prepareScene(scene)
+    } catch (error) {
+      publishFacadeError(this.diagnostics, 'CODPLAY_ENGINE_PREPARE_SCENE_FAILED', error, {
+        sceneId: scene.scene.id,
+      })
+      throw error instanceof Error ? error : new Error(String(error))
     }
   }
 
@@ -709,6 +746,15 @@ function applyModuleCapabilities(
 ): void {
   for (const definition of group?.register ?? []) catalog.registerModule(definition, 'foreign')
   for (const definition of group?.override ?? []) catalog.overrideModule(definition, 'foreign')
+}
+
+/** Registers library additions and overrides before any component can be used. */
+function applyLibraryCapabilities(
+  catalog: RuntimeCapabilityCatalog,
+  group: EngineFacadeConfig['libraries'],
+): void {
+  for (const definition of group?.register ?? []) catalog.registerLibrary(definition, 'foreign')
+  for (const definition of group?.override ?? []) catalog.overrideLibrary(definition, 'foreign')
 }
 
 /** Extracts every URL available after one preload transfer. */

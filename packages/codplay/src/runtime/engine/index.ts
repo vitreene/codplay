@@ -18,4 +18,5 @@ export type {
   RuntimeStructuralOrder,
   RuntimeStructuralOrderResolver,
 } from './module-service-types'
+export type { RuntimeLibraryDefinition } from '../libraries'
 export type { Ticker } from '../time'

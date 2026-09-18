@@ -5,8 +5,44 @@ import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import { TagComponent } from '../../../src/runtime/components'
 import type { TickPayload, Ticker } from '../../../src/runtime/time'
+import type { CompiledScene } from '../../../src/scene/compiled'
 
 describe('RuntimeEngine', () => {
+  it('prepares each required library once and exposes readiness to init validation', async () => {
+    const load = vi.fn(async () => undefined)
+    const release = vi.fn()
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerLibrary({ id: 'three', load, release })
+    const engine = new RuntimeEngine(catalog)
+    const requirements: CompiledScene['requirements'] = {
+      components: [], services: [], modules: [], resources: [], libraries: ['three'],
+    }
+    const scene = { requirements } as unknown as CompiledScene
+
+    const before = new DiagnosticCollector({ output: vi.fn() })
+    engine.validateRequirements(requirements, before)
+    expect(before.report().errors.map((entry) => entry.code)).toEqual(['RUNTIME_LIBRARY_UNAVAILABLE'])
+
+    await Promise.all([engine.prepareScene(scene), engine.prepareScene(scene)])
+    expect(load).toHaveBeenCalledTimes(1)
+
+    const after = new DiagnosticCollector({ output: vi.fn() })
+    engine.validateRequirements(requirements, after)
+    expect(after.report().errors).toEqual([])
+
+    engine.destroy()
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails scene preparation when a required library is not registered', async () => {
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const scene = {
+      requirements: { components: [], services: [], modules: [], resources: [], libraries: ['missing'] },
+    } as unknown as CompiledScene
+
+    await expect(engine.prepareScene(scene)).rejects.toThrow('Runtime library is not registered: missing')
+  })
+
   it('reports unavailable compiled capabilities', () => {
     const catalog = new RuntimeCapabilityCatalog()
     catalog.registerComponent({

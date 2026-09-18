@@ -24,11 +24,16 @@ import type {
   RuntimeComponentSurfaceMap,
   RuntimeComponentSurfaceProvider,
 } from '../components/component-surface-types'
+import type {
+  RuntimeComponentTargetProvider,
+  RuntimeTargetPublication,
+} from '../targets'
 import type { RuntimeMaterializer } from '../materializer'
 import type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from '../engine/module-service-types'
+import type { RuntimeLibraryDefinition } from '../libraries'
 export { HTML_MATERIALIZER_ID } from '../materializer/materializer-ids'
 
 /** Origin of one capability definition in a CodPlay instance. */
@@ -63,6 +68,8 @@ export type RuntimeComponentDefinition = Readonly<{
   type: string
   component: RuntimeComponentFactory
   modules: readonly string[]
+  /** Engine libraries that must be prepared before this component is mounted. */
+  libraries?: readonly string[]
   /** Validates the complete author-facing initial profile before compilation. */
   validateInitial: ValidationFunction
   validateAction?: ValidationFunction
@@ -74,6 +81,8 @@ export type RuntimeComponentDefinition = Readonly<{
   sanitizeAction?: ComponentSanitizer
   /** Publishes typed substrate-neutral operations for a mounted instance. */
   surfaces?: RuntimeComponentSurfaceProvider
+  /** Publishes one opaque target for consumers connected through immutable rel. */
+  targetProvider?: RuntimeComponentTargetProvider
   /** Lists the template zones usable as targets; `all` means every data-part. */
   mountableParts?: readonly string[] | 'all'
   /** Resolves the template zones for an instance when their IDs are dynamic. */
@@ -93,6 +102,7 @@ export class RuntimeCapabilityCatalog {
   private readonly components = new Map<string, RuntimeComponentDefinition>()
   private readonly services = new Map<string, RuntimeComponentServiceDefinition>()
   private readonly modules = new Map<string, RuntimeModuleServiceDefinition>()
+  private readonly libraries = new Map<string, RuntimeLibraryDefinition>()
   private locked = false
 
   /** Registers one component definition before the instance is locked. */
@@ -151,6 +161,26 @@ export class RuntimeCapabilityCatalog {
     this.modules.set(definition.id, { ...definition, origin })
   }
 
+  /** Registers one engine-scoped library before the catalog is locked. */
+  registerLibrary(definition: RuntimeLibraryDefinition, origin: RuntimeCapabilityOrigin = 'foreign'): void {
+    this.assertOpen()
+    assertLibraryDefinition(definition)
+    if (this.libraries.has(definition.id)) {
+      throw new Error(`Runtime library already registered: ${definition.id}`)
+    }
+    this.libraries.set(definition.id, { ...definition, origin })
+  }
+
+  /** Replaces one existing engine-scoped library before the catalog is locked. */
+  overrideLibrary(definition: RuntimeLibraryDefinition, origin: RuntimeCapabilityOrigin = 'foreign'): void {
+    this.assertOpen()
+    assertLibraryDefinition(definition)
+    if (!this.libraries.has(definition.id)) {
+      throw new Error(`Runtime library is not registered: ${definition.id}`)
+    }
+    this.libraries.set(definition.id, { ...definition, origin })
+  }
+
   /** Prevents capability changes after the CodPlay instance starts using the catalog. */
   lock(): void {
     this.locked = true
@@ -176,6 +206,16 @@ export class RuntimeCapabilityCatalog {
     return this.components.get(type)?.surfaces?.(component, identity, materializer) ?? {}
   }
 
+  /** Resolves the target publication declared by one component definition. */
+  getComponentTargetPublication(
+    type: string,
+    component: BaseComponent<Record<string, unknown>>,
+    identity: RuntimeComponentIdentity,
+    materializer: RuntimeMaterializer,
+  ): RuntimeTargetPublication | undefined {
+    return this.components.get(type)?.targetProvider?.(component, identity, materializer)
+  }
+
   /** Returns one service definition by its data namespace. */
   getService(name: string): RuntimeComponentServiceDefinition | undefined {
     return this.services.get(name)
@@ -184,6 +224,11 @@ export class RuntimeCapabilityCatalog {
   /** Returns one module definition by its capability ID. */
   getModule(id: string): RuntimeModuleServiceDefinition | undefined {
     return this.modules.get(id)
+  }
+
+  /** Returns one engine-scoped library definition by its stable ID. */
+  getLibrary(id: string): RuntimeLibraryDefinition | undefined {
+    return this.libraries.get(id)
   }
 
   /** Reports whether one component type is available. */
@@ -210,6 +255,11 @@ export class RuntimeCapabilityCatalog {
     return this.modules.has(id)
   }
 
+  /** Reports whether one engine-scoped library is available. */
+  hasLibrary(id: string): boolean {
+    return this.libraries.has(id)
+  }
+
   /** Returns definitions in deterministic registration order for diagnostics and setup. */
   getComponents(): readonly RuntimeComponentDefinition[] {
     return [...this.components.values()]
@@ -225,6 +275,11 @@ export class RuntimeCapabilityCatalog {
     return [...this.modules.values()]
   }
 
+  /** Returns library definitions in deterministic registration order. */
+  getLibraries(): readonly RuntimeLibraryDefinition[] {
+    return [...this.libraries.values()]
+  }
+
   /** Creates the pure validation view consumed by SceneBuilder. */
   validationSnapshot(): CapabilityValidationSnapshot {
     return {
@@ -232,6 +287,7 @@ export class RuntimeCapabilityCatalog {
         type: definition.type,
         services: [...definition.component.declaredServices],
         modules: [...definition.modules],
+        libraries: [...(definition.libraries ?? [])],
         validateInitial: definition.validateInitial,
         validateAction: definition.validateAction,
         validatePerso: definition.validatePerso,
@@ -239,6 +295,7 @@ export class RuntimeCapabilityCatalog {
         sanitizeAction: definition.sanitizeAction,
       }])),
       services: new Map([...this.services.entries()].map(([name, definition]) => [name, toValidationDefinition(definition)])),
+      libraries: new Set(this.libraries.keys()),
     }
   }
 
@@ -327,6 +384,19 @@ function assertComponentValidator(definition: RuntimeComponentDefinition): void 
   }
   if (new Set(definition.component.declaredServices).size !== definition.component.declaredServices.length) {
     throw new Error(`Runtime component "${definition.type}" declares a service more than once.`)
+  }
+}
+
+/** Rejects an engine library declaration that cannot participate in preparation. */
+function assertLibraryDefinition(definition: RuntimeLibraryDefinition): void {
+  if (definition.id.trim().length === 0) {
+    throw new Error('Runtime library id must not be empty.')
+  }
+  if (typeof definition.load !== 'function') {
+    throw new Error(`Runtime library "${definition.id}" must declare load.`)
+  }
+  if (definition.release !== undefined && typeof definition.release !== 'function') {
+    throw new Error(`Runtime library "${definition.id}" must declare a callable release.`)
   }
 }
 

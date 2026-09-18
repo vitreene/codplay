@@ -1,0 +1,15 @@
+:scope.v2-demo-scene-slot:has([data-codplay-threejs="scene"]) {
+  display: grid;
+  place-items: center;
+  min-height: 70vh;
+  padding: 2rem;
+  background: #020617;
+}
+
+:scope > [data-codplay-threejs="scene"] {
+  display: block;
+  width: min(100%, 720px);
+  height: auto;
+  border-radius: 1rem;
+  box-shadow: 0 24px 80px rgb(15 23 42 / 45%);
+}

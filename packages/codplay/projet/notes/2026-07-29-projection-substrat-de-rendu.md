@@ -1,310 +1,302 @@
-# Espace désigné et substrat de rendu canvas
-
-Note de réflexion (2026-07-29). Cette page circonscrit le problème et inventorie les moyens.
-
-> **Réserve de terme.** Le mot **« Projection » est retiré de cette désignation** : le concept n'y est
-> plus, et le terme est réservé au haut niveau, pour la communication publique, où il aura un autre sens.
-> Ce qui reste se dit avec des mots ordinaires — un composant qui héberge, une cible de rendu, un
-> substrat. « Substrat » est un mot de travail, pas un nom retenu. Le terme demeure employé ailleurs dans
-> le corpus V2 ; l'y reprendre est une décision distincte, non engagée ici (§8).
-
-**Ce sujet est une extension de codplay, pas son cœur.** Le moteur tourne très bien sans. C'est la
-première chose à tenir : rien de ce qui suit ne conditionne la V2.
-
-**Deux usages du même mot, très inégalement pressants :**
-
-| usage | horizon | où |
-|---|---|---|
-| **l'espace désigné** dans une scène — un emplacement où un contenu se projette | **direct, prototypé aujourd'hui** | §0 |
-| **le substrat de rendu** — une cible canvas qui remplace le DOM | **v2.5 / v3**, après certitude que la V2 fonctionne parfaitement | §1 à §8 |
-
-Le second est consigné pour n'être pas réinstruit plus tard, pas pour être traité maintenant. Deux
-précisions le concernant : l'usage visé en pratique, ce sont les **effets de décor**, et à ce niveau
-**aucune gestion avancée des conflits de rendu n'est requise avant une V3 au minimum** — ce qui commande
-la lecture du §1 (il pose le problème général, l'usage ne l'atteint pas) et du §3 (il répond au besoin
-différé ; voir §4, où l'usage tranche).
-
-## 0. L'espace désigné — l'usage direct
-
-Un **espace désigné dans une scène** : un emplacement déclaré où un contenu vient se projeter, un peu
-comme un emplacement qui autorise l'import d'une scène. C'est l'usage immédiat, et il ne
-demande aucun substrat de rendu nouveau.
-
-### 0.1 Pas un concept neuf — un hôte de plus, derrière la même interface
-
-L'analogie est directe et suffit : **un layout héberge d'autres persos ; un composant qui porte un
-environnement de rendu aussi.**
-L'`outlet` n'est pas un concept parallèle à étendre — c'est la face *déclaration du perso*, celle qui dit
-où il va.
-
-**`move` reste l'interface.** Un perso s'y monte comme il se monte dans un layout, par la même propriété. Le prototype le fait déjà : `move: { parentId: 'threejs-stage' }`.
-
-*Détail à résoudre* : un composant de ce genre peut avoir une constitution interne — par exemple un `div`
-encadrant un canvas. `move` doit alors se résoudre vers la bonne cible, qui n'est pas nécessairement un
-nœud DOM. Le précédent existe : un composant layout expose déjà des points de montage internes, un par
-partie.
-
-**Ce qui change, ce sont les valeurs — pas l'interface.** Placer un perso dans un environnement three.js
-demande des valeurs relatives à cet environnement. C'est du **vocabulaire du contexte**, porté par l'hôte
-et non par codplay.
-
-**Et ce vocabulaire n'appelle pas davantage de mécanisme neuf.** Un **composant déclare ses capacités et
-un type TS**, auquel le perso est lié — le perso étant l'objet descriptif du comportement du composant.
-Le vocabulaire de placement propre à un environnement three arrive par là, comme toute autre propriété
-d'un type de composant.
-
-**Où se place-t-elle ? Comme tout perso** : c'est sa boîte, résolue par le layout ordinaire. « Un canvas
-sur toute la surface » et « une portion » ne sont pas deux cas, ce sont deux dimensionnements du même
-perso. Plusieurs de ces espaces dans une scène se placent donc comme n'importe quoi d'autre.
-
-Une seule chose reste ouverte, et ce n'est pas une question de déclaration : **la frontière de mesure**.
-La boîte de l'hôte relève de la cible de rendu ambiante, son contenu du substrat — deux régimes de mesure se
-rencontrent exactement là.
-
-### 0.2 Le prototype existant, et ce qu'il fait à la main
-
-`threejs-anime-grid-scene.ts` (repris par la démo mashup) tient déjà la forme :
-
-- `threejs-stage`, type `tag` — l'espace, un simple `div` dimensionné ;
-- `threejs-grid`, type `threejs` — le contenu, monté dedans par `move: { parentId: 'threejs-stage' }`.
-
-Ce qui est écrit à la main n'est pas un strap mais **deux fonctions passées en données** : `build`, qui
-construit la scène three.js, et `simulate`, qui l'anime image par image. **Les paramètres de la grille y
-sont enfouis** — nombre de cubes, espacement, délai depuis le centre, facteur d'expansion — au lieu d'être
-déclarés.
-
-Et l'espace n'est qu'un `div` incident : rien ne le désigne comme un espace de rendu.
-
-### 0.3 La direction
-
-**Un composant grille paramétré comme tout perso**, qui se projette dans **un composant qui porte
-l'environnement**.
-Autrement dit : sortir les paramètres des fonctions `build`/`simulate` pour les déclarer sur le perso, et
-faire de l'espace une chose déclarée plutôt qu'un `div` qui se trouve là.
-
-C'est le même geste que partout ailleurs dans le corpus — déclarer plutôt qu'inférer — appliqué à un cas
-où le contenu n'est pas du DOM.
-
-## 1. Le DOM masque le problème
-
-Ce que le DOM apporte, et que le canvas n'a pas, n'est pas une meilleure API de dessin : c'est un **arbre
-retenu** (*retained mode* — une structure de nœuds qui persiste entre deux images, porte des propriétés
-mutables, et qu'un moteur recompose). Le canvas est en **mode immédiat** : on peint, et il ne reste rien à
-interroger ni à réordonner.
-
-C'est cet arbre qui résout les conflits de rendu — ordre d'empilement, recouvrement, régions à repeindre,
-composition. Un composant peut construire quelques primitives à la main ; dès que le rendu visé dépasse
-ces primitives, il faut confier la résolution des conflits à un moteur, comme le DOM le fait.
-
-**Le critère de choix n'est donc pas « quelle bibliothèque dessine bien »**, mais **« laquelle tient un
-arbre retenu au-dessus du canvas »**.
-
-**Mais ce problème n'est pas celui de la V2.** Des effets de décor ne mettent pas en concurrence un grand
-nombre d'objets adressables : il n'y a pas d'arbitrage d'empilement à déléguer. Le §1 décrit le problème
-tel qu'il se posera **quand la cible canvas portera du contenu adressable** — V3 au minimum. Ce qui suit
-distingue donc systématiquement ce qui répond au besoin V2 (effets) de ce qui répond au besoin différé
-(arbre retenu).
-
-## 2. Skia n'est jamais la couche que codplay adresse
-
-Point pivot, et il vaut réponse à la question « en Flutter, l'argument tient-il encore, puisqu'il adresse
-directement le canvas ? ».
-
-| cible | couche retenue que codplay adresse | rastériseur, jamais adressé |
-|---|---|---|
-| navigateur, DOM | le DOM | Blink → Skia |
-| Flutter | l'arbre de RenderObjects (widgets → RenderObjects → arbre de calques) | Skia, et Impeller selon les plateformes |
-| **navigateur, canvas** | **aucune — c'est le trou** | Skia, via Canvas2D ou WebGL |
-
-Flutter **est** déjà la couche retenue : une cible de rendu Flutter adresserait son arbre, jamais le canvas
-ni Skia. Le besoin d'une bibliothèque tierce est donc **propre à la cible canvas dans un navigateur** — le
-seul cas où rien ne s'interpose entre la cible de rendu et le rastériseur.
-
-Conséquence pratique : ce choix de bibliothèque n'engage pas le portage. Il comble un trou local, il ne
-fixe pas un modèle que Flutter devrait ensuite reproduire.
-
-**Et ça écarte une famille tentante.** CanvasKit (Skia compilé en WASM, le moteur même de Chrome et de
-Flutter) séduit doublement, puisque ce serait le moteur de la cible Flutter. Mais Skia est une API de
-dessin en mode immédiat : elle donne un rendu de meilleure qualité, pas la résolution des conflits. Elle ne
-répond pas à la question posée, et coûte plusieurs Mo de WASM. Même verdict pour les couches minces sur
-WebGL (OGL, regl) et pour three.js, dont le modèle est 3D et qu'il faudrait tordre.
-
-## 3. Les candidats qui qualifient — inventaire du besoin différé
-
-**Cet inventaire répond à l'arbre retenu, donc au besoin V3.** Il est consigné ici pour n'être pas
-réinstruit plus tard, non pour être choisi maintenant.
-
-| | modèle | résolution des conflits | surface hors rendu |
-|---|---|---|---|
-| **PixiJS** | arbre retenu, WebGL / WebGPU | ordre dans le graphe, *batching*, *culling* | large : horloge, chargeur, filtres, interaction |
-| **Konva** | arbre retenu, Canvas2D | **calques** — chacun est un canvas séparé | modérée : détection de survol, events, drag |
-| **Two.js** | arbre retenu, backends SVG / Canvas2D / WebGL | ordre simple | faible — c'est son intérêt |
-| **Fabric.js** | arbre retenu, Canvas2D | ordre | orientée éditeur (poignées, sélection) |
-
-Le modèle de **Konva** est le plus proche du DOM : un calque est un canvas distinct, donc l'équivalent d'un
-contexte d'empilement ; la résolution des conflits y est structurelle et lisible plutôt qu'un tri interne.
-Il fournit en outre une détection de cible réelle (canvas de détection séparé), ce dont une cible de rendu
-a besoin pour router les events.
-
-**Trois contraintes du corpus tranchent plus que ce tableau :**
-
-- **Pas de RAF propre** — codplay est l'unique source d'avancement temporel. Se règle partout de la même
-  façon : Pixi par son `Renderer` appelé à la main plutôt que par son `Application` qui possède l'horloge ;
-  Konva par le dessin explicite d'un calque ; Two.js par sa mise à jour manuelle. C'est la discipline déjà
-  appliquée à rive et lottie, transposable sans invention.
-- **`measure`** — c'est là que la cible canvas se jouera, et le corpus le classe déjà comme
-  irréductible. Les métriques de texte sont ce que le DOM donne gratuitement et que le canvas fait payer.
-  À éprouver tôt, pas à découvrir tard.
-- **Portabilité** — un arbre retenu de transformations et de peintures se transpose bien ; les quatre
-  candidats partagent ce modèle, ce critère ne départage pas.
-
-## 4. Le critère retenu aujourd'hui : l'accès à WebGPU
-
-**Décision d'orientation, s'il fallait choisir maintenant** : l'accès à WebGPU en priorité, parce que les
-possibilités de rendu qu'il ouvre sont **très distinctes de celles du DOM et le complètent**. Ce n'est pas
-un critère de performance mais de **complémentarité** — faire ce que le DOM ne sait pas faire.
-
-Parmi les candidats, **PixiJS est le seul à viser WebGPU** ; Konva est Canvas2D, Two.js a un backend WebGL.
-Ce critère sélectionne donc Pixi.
-
-**Deux motifs qui ne pointent pas au même endroit :**
-
-- « résoudre les conflits de rendu » demande **plus** d'abstraction retenue ;
-- « faire ce que le DOM ne peut pas » demande souvent **moins** d'abstraction, puisque c'est elle qui
-  s'interpose entre l'auteur et le shader.
-
-**L'usage tranche, et il tranche pour le second.** Puisque la V2 vise des effets de décor sans gestion
-avancée des conflits, l'abstraction retenue n'a rien à porter : elle serait du poids sans emploi. La
-priorité va donc à l'accès direct — une couche mince sur WebGPU, ou Pixi employé étroitement pour son
-`Renderer` et ses shaders, sans son graphe.
-
-Ce qui déplace la nature du travail : la cible canvas de V2 n'a pas à **choisir une bibliothèque d'arbre
-retenu**, elle a à **définir sa notion** et à l'expérimenter sur des effets. Le §3 redevient
-pertinent le jour où la cible canvas devra porter du contenu adressable.
-
-Bénéfice secondaire de Pixi, sur un point que le corpus a déjà relevé : il possède un module
-d'accessibilité qui projette les objets interactifs en éléments DOM superposés — donc une couverture
-partielle là où le corpus écrit qu'une cible canvas n'a rien, faute de document.
-
-## 5. `html-to-canvas` — la piste qui refermerait le trou
-
-À tester dans une démo (horizon v2.5).
-
-Deux choses distinctes portent ce nom, et elles n'ont pas la même portée :
-
-- une **bibliothèque** qui réimplémente le rendu CSS vers un canvas — partielle et coûteuse par
-  construction, puisqu'elle refait le travail du navigateur ;
-- une **capacité native expérimentale** du navigateur, qui dessinerait un sous-arbre DOM vivant dans un
-  canvas.
-
-C'est la seconde qui compte ici, et pour une raison structurelle : elle **refermerait le trou du §2**. La
-cible canvas hériterait de l'arbre retenu du DOM au lieu d'avoir à s'en fabriquer un, et toute la question
-de la bibliothèque changerait de forme.
-
-*Réserve* : l'état, le nom exact de l'API et la disponibilité de cette capacité sont à vérifier avant d'en
-faire un appui — la présente note ne les affirme pas.
-
-## 6. Deux modèles pour une même bibliothèque
-
-**Toute bibliothèque tierce est potentiellement un substrat de rendu** — et c'est le point qui commande le
-reste. La distinction n'oppose pas des bibliothèques entre elles, elle oppose **deux façons d'adresser la
-même bibliothèque**.
-
-Three.js le montre en un seul exemple :
-
-- **en média** — un composant embarque une scène three.js, comme un composant embarque une vidéo. La
-  bibliothèque est la ressource de rendu d'**un seul** perso. C'est l'usage actuel, celui de l'avatar ;
-- **en substrat** — l'espace three.js **est** la cible de rendu. Les persos deviennent caméra, cube, lumière,
-  et codplay adresse cet espace par `set`, `measure`, `mount`.
-
-**Ce qui sépare les deux n'est pas un degré de complexité, c'est le sens de la possession de l'arbre.**
-En média, la bibliothèque possède son arbre interne et codplay n'adresse qu'un nœud — le perso hôte. En
-substrat, **codplay possède l'arbre** et la bibliothèque le réalise. Le contrôle s'inverse ; ce n'est
-pas la même intégration poussée plus loin.
-
-**Faut-il deux modèles ? Oui, et il faut disposer des deux.** Ce sont deux échelles de besoin
-différentes : le mode média traite une bibliothèque comme un **média**, au même titre que la vidéo et le
-son — c'est ce que fait la doctrine d'injection de tiers aujourd'hui. Le mode substrat va beaucoup plus
-loin, au prix d'une complexité bien supérieure. Aucun ne remplace l'autre, et rien n'interdit qu'une même
-bibliothèque serve dans les deux modes au sein d'un même projet.
-
-Conséquence sur la dépendance : une bibliothèque employée en média se remplace comme toute dépendance de
-composant ; employée en substrat de rendu, beaucoup moins.
-
-**Attention à ne pas transporter ça sur le perso hôte.** Le corpus définit le perso hôte comme « un perso
-dont le contenu **n'est pas fonction de son `t`** » — flux direct, instance imbriquée, composant tiers. Un
-perso qui héberge d'autres **persos** n'en est pas un : son contenu est pleinement `f(t)`. Le prototype
-actuel, lui, en est un — son contenu vient de `build`/`simulate`, étrangers à la timeline. La distinction
-tient au contenu, jamais au fait d'héberger.
-
-**Plusieurs scènes peuvent partager une même cible de rendu.** C'est le cas du DOM, et c'est valable pour
-toutes. Ça la range dans la famille de l'engine — « il fournit les instances, ne lit pas la
-scène » : une ressource déclarée que N consommateurs revendiquent, soit l'invariant #4 (catalogue déclaré /
-consommateurs qui revendiquent / arrangement au-dessus). Elle cesse d'appartenir à une scène.
-
-Ce que le partage force à trancher, et qui ne se pose pas pour une cible exclusive : `measure` et
-`mount` s'exercent alors dans un espace commun — deux scènes qui mesurent et montent au même endroit se
-voient. Question ouverte.
-
-**Et le partage entre en tension avec le placement.** Un substrat placé par un perso d'une scène, mais
-employé aussi par une autre scène : qui le place ? Non tranché.
-
-## 7. La greffe d'un substrat — ce qui ne se déduit pas du modèle tiers
-
-**Ne concerne que l'usage substrat.** Pour l'espace désigné (§0), il n'y a rien à greffer : un composant
-three.js s'enregistre déjà par le binding tiers ordinaire, et c'est tout.
-
-Le modèle des bibliothèques tierces (`v1-third-party-runtime-spec.md`) s'applique **intégralement et sans
-amendement** — déclaration unique par factory, interdictions normatives et besoin extrait par le Builder.
-Une stratégie de type tierce peut être enregistrée auprès de la capacité `RuntimePreload`, mais le
-chargement du manifeste reste externalisé et ne devient pas une étape du binding ou du materializer.
-Inutile de le recopier ici. Ne restent que les points qu'il ne couvre pas :
-
-- **La nature de la contribution.** Un binding tiers fournit des `components` ; un binding de substrat
-  fournit l'implémentation de `set`, `measure`, `mount`. Autre nature, pas une entrée de plus dans le même
-  champ — d'où la conséquence du §6 sur la dépendance.
-- **Le grain du hub de rendu.** Pour des composants, l'adapter délègue à N instances ; pour un substrat, il
-  y aurait **une passe par cible de rendu**, partagée entre scènes comme elle. *Déduction à confirmer : le
-  corpus n'a pas de cas antérieur d'adapter partagé entre scènes.*
-- **Qui résout la disponibilité.** L'auteur, en maîtrise ; le composant **aide** en signifiant son besoin.
-  Deux voies non départagées — l'identification, ou le chargement conditionnel des composants selon la
-  disponibilité du substrat. L'implémentation réelle départagera. Dans les deux cas, « à la demande » ≠ « au
-  dernier moment » : le besoin est statique, extrait par le Builder, chargé avant montage.
-- **Le DOM reste hors critère.** Un composant DOM ne déclare rien, et cette absence n'est pas une omission :
-  le DOM est le défaut autonome (invariant #1). Ça évite de faire payer à tout le corpus existant une
-  déclaration qui n'a de sens que devant un substrat non ambiant.
-
-## 8. Le terme « Projection » est retiré d'ici
-
-**Décision.** Le mot est **réservé au haut niveau**, pour la communication publique, où il aura un sens
-différent. Il ne désigne plus rien dans cette page : le concept s'y est dégonflé, et ce qui reste se dit
-avec des mots ordinaires — un composant qui héberge, une cible de rendu, un substrat.
-
-Deux conséquences à connaître :
-
-- **« substrat » est un mot de travail, pas un nom retenu.** Il tient la place en attendant, sans plus.
-- **Le terme reste employé ailleurs dans le corpus V2** — une centaine d'occurrences, dont « Projection
-  (cible de rendu déclarée) » parmi les points-clés de `2026-07-16-solve-project-moteur-custom.md`. Les y
-  reprendre est une décision distincte, non engagée ici.
-
-## Statut
-
-Non normatif.
-
-**Le sujet se dégonfle, et c'est le résultat principal.** C'est une **extension**, pas le cœur —
-codplay tourne sans. Et son usage direct **se range comme un élément de scène ordinaire** : un composant
-qui héberge des persos comme un layout, `move` pour interface, capacités et type TS pour vocabulaire.
-**Rien de nouveau n'est demandé au moteur — seulement des composants** (§0). Le travail réel sur le
-prototype est du travail de composant : sortir les paramètres enfouis dans `build`/`simulate`.
-
-**Acté, pour l'usage substrat** — différé en v2.5 / v3, après certitude que la V2 fonctionne parfaitement :
-effets de décor, sans gestion avancée des conflits avant une V3 au minimum ; orientation vers l'accès à
-WebGPU pour la complémentarité avec le DOM ; le modèle tiers s'applique sans amendement.
-
-**Acté, transversal** : **deux modèles coexistent** (§6) — une même bibliothèque s'adresse en média ou en
-substrat, selon le sens de possession de l'arbre. Il faut disposer des deux.
-
-**Ouvert** : la frontière de mesure hôte/substrat (§0.1) ; le partage d'une cible de rendu entre scènes et
-qui la place (§6) ; qui résout la disponibilité d'un substrat, identification ou chargement conditionnel (§7) ;
-le grain du hub de rendu (§7, déduction à confirmer) ; le nom (§8) ; l'état réel de `html-to-canvas`
-natif (§5). **Différé** : le choix d'une bibliothèque à arbre retenu (§3).
+# Projection tierce hébergée par un composant
+
+Note de réflexion corrigée le 2026-09-18.
+
+> Statut : **orientation retenue, contrat à spécifier**.
+>
+> Cette note remplace l'ancienne hypothèse d'un substrat Canvas, Three.js ou
+> Flutter sélectionné à la place du DOM pour toute une instance CodPlay. Cette
+> hypothèse est abandonnée. La tranche publique V2 conserve un matérialiseur
+> HTML/DOM unique.
+
+## 1. Intention
+
+CodPlay doit pouvoir piloter des objets qui ne sont pas des éléments HTML : une
+scène Three.js, un avatar, une articulation de bouche, un artboard Rive ou une
+composition Lottie.
+
+La solution retenue ne consiste pas à donner un nouveau substrat global au
+player. Elle consiste à placer dans la scène un **perso hôte HTML** qui :
+
+- matérialise l'élément d'accueil, généralement un `canvas` ou un conteneur ;
+- crée et possède le contexte de la bibliothèque tierce ;
+- possède un matérialiseur adapté à cette bibliothèque ;
+- publie la cible dans laquelle ses persos descendants seront réalisés ;
+- présente une image lorsque tous ses descendants ont été réconciliés.
+
+Les persos spécialisés sont ensuite des connecteurs entre l'état logique
+CodPlay et les objets natifs de cette projection. Ils ne produisent pas de DOM.
+
+```text
+matérialiseur HTML/DOM de l'instance
+  -> perso hôte Three.js
+       -> canvas + renderer + scène + matérialiseur Three.js
+            -> perso caméra
+            -> perso lumière
+            -> perso avatar
+                 -> perso lipsync
+```
+
+Le même modèle doit pouvoir accueillir Rive et Lottie sans que le core connaisse
+leurs types.
+
+## 2. Décision abandonnée
+
+Les formulations suivantes ne décrivent plus le projet :
+
+- sélectionner `DomProjection`, `CanvasProjection` ou `FlutterProjection` pour
+  une instance complète ;
+- remplacer le matérialiseur HTML public par un matérialiseur Canvas ou
+  Three.js ;
+- faire de `set`, `measure` et `mount` une interface universelle qui rendrait
+  tous les composants interchangeables entre les plateformes ;
+- considérer le canvas comme une racine concurrente du DOM au niveau du
+  player.
+
+Le cœur logique reste indépendant du DOM autant que ses responsabilités le
+permettent. Cette indépendance n'implique pas un choix public de matérialiseur
+global. Les bibliothèques tierces sont hébergées par des composants et restent
+locales à ces composants.
+
+## 3. Une liaison déclarative distincte du placement
+
+Le perso spécialisé doit désigner la scène ou le perso dont il consomme la
+cible. Cette relation établit d'abord une **liaison** entre un consommateur et
+un fournisseur ; elle ne décrit pas nécessairement un placement visuel.
+
+`move` sait aujourd'hui désigner une cible et construire un parentage. Il peut
+donc contribuer à certains cas, mais son emploi comme mécanisme général n'est
+pas retenu à ce stade : déplacer un élément et relier un contrôleur à un objet
+sont deux intentions différentes.
+
+Exemples de relations :
+
+```text
+geometry --rel--> three-scene
+avatar   --rel--> three-scene
+lipsync  --rel--> avatar
+```
+
+`rel` nomme cette relation. Elle appartient à `initial` et reste immuable pendant
+la vie du perso : une action ne peut ni la remplacer, ni la retargeter. Le
+composant `geometry` ne lit pas cette déclaration. Le composant `lipsync` ne
+recherche pas lui-même un avatar. Le pipeline CodPlay résout la liaison, puis le
+pont de matérialisation remet à chaque composant sa cible native déjà résolue.
+
+`rel` identifie la scène et, si nécessaire, le perso auquel le consommateur se
+réfère. La forme commune reste volontairement simple :
+
+```ts
+type Rel = Readonly<{
+  target: Readonly<{
+    scene: string
+    perso?: string
+  }>
+}>
+```
+
+`scene` désigne la scène ciblée. `perso` est omis lorsque la relation vise la
+scène elle-même et présent lorsqu'elle vise un perso de cette scène.
+
+Une intégration peut enrichir `rel` avec les conventions d'accès propres à sa
+bibliothèque. Ses définitions TypeScript guident alors la déclaration et son
+validateur contrôle les champs supplémentaires. Le core ne lit que `target` et
+n'ajoute aucun identifiant abstrait de compatibilité.
+
+Cette séparation permet deux usages avec le même champ :
+
+- le perso hôte, qui est HTML, peut être placé dans un layout avec `move` et
+  recevoir les services HTML tels que `style` et `attr` ;
+- un perso spécialisé peut être lié à une cible native sans recevoir `style`,
+  `attr` ou une API DOM ;
+- lorsqu'une liaison implique aussi un parentage natif, le runtime réconcilie
+  les deux intentions sans obliger l'auteur à les recoder dans le composant.
+
+Le runtime doit produire une vue réconciliée des dépendances et des placements.
+Il ne faut pas construire un registre de liaison parallèle dans le package
+Three.js.
+
+L'immutabilité simplifie cette réconciliation : la relation de dépendance est
+établi lors de la préparation du perso et ne varie pas avec `t`. La disponibilité
+de la cible peut varier avec le montage des stories ; son identité, elle, reste
+fixe.
+
+Une relation inconnue, incompatible ou cyclique ne doit pas empêcher l'auteur
+de construire ou de lire sa scène. Elle produit un warning dans le contexte
+auteur, mais reste silencieuse en diffusion. Le consommateur ne reçoit alors
+aucune cible et sa contribution reste sans effet. Un fournisseur valide mais
+temporairement non monté n'est pas une erreur : le consommateur attend qu'il
+redevienne disponible et sera réconcilié à ce moment-là.
+
+## 4. Réconciliation d'une hiérarchie mixte
+
+Le graphe de scène doit être parcouru parent avant enfant.
+
+1. Le matérialiseur HTML monte le perso hôte.
+2. L'hôte crée son contexte et publie sa cible native.
+3. Le pont résout la cible et, lorsqu'il existe, le parent natif de chaque
+   descendant à partir des relations déjà résolues.
+4. Le matérialiseur possédé par l'hôte crée, met à jour, déplace ou détruit les
+   objets natifs.
+5. Les contrôleurs spécialisés, comme `lipsync`, contribuent à la cible publiée
+   par leur parent.
+6. L'hôte présente une seule image après la réconciliation complète de son
+   sous-arbre.
+
+Un seek, un reset ou un retour de story doit parcourir cette même frontière. Il
+ne doit ni relire l'objet natif comme source de vérité, ni dépendre du nombre de
+frames déjà rendues.
+
+## 5. Trois responsabilités distinctes
+
+### Engine
+
+L'engine déclare et rend disponible l'unité tierce : bibliothèque, composants,
+services, modules et stratégie de preload associés. La bibliothèque n'est pas
+chargée dans le constructeur ou dans `update()` d'un composant.
+
+Les ressources de scène, comme un modèle GLB, une texture, un fichier `.riv` ou
+un JSON Lottie, restent des ressources de preload. Elles sont distinctes de la
+bibliothèque qui sait les interpréter.
+
+### Hôte de projection
+
+Le composant hôte possède :
+
+- son élément HTML ;
+- le contexte mutable de la bibliothèque ;
+- son matérialiseur spécialisé ;
+- les ressources natives partagées par son sous-arbre ;
+- le commit de présentation et la destruction de ce qu'il a créé.
+
+Deux hôtes dans un même player possèdent deux contextes distincts. Deux players
+partageant un engine ne partagent pas une scène Three.js mutable.
+
+### Composant spécialisé
+
+Un composant spécialisé matérialise une seule responsabilité : caméra,
+lumière, géométrie, avatar, lipsync, expression ou geste. Il reçoit les events
+de ses actions comme tout autre perso, puis applique l'état résolu à la cible
+native qui lui a été remise.
+
+Il ne possède ni la recherche de cible, ni l'ordre du graphe, ni l'horloge, ni
+le commit partagé du rendu.
+
+## 6. Frontière provisoire entre perso, composant et strap
+
+Un perso reste principalement une déclaration de données : profil initial,
+actions et relations. Le code nécessaire à une feature se répartit selon sa
+responsabilité :
+
+- les straps transforment des données et produisent des events ou d'autres
+  données sérialisables ;
+- le composant matérialise l'état résolu dans le contexte de rendu qui lui est
+  remis ;
+- le perso relie ces déclarations sans contenir lui-même le code métier ou le
+  code de connexion.
+
+La quantité de code n'est donc pas le critère qui sépare un strap d'un
+composant. Le critère actuel est la frontière de matérialisation : un strap ne
+reçoit pas de handle natif et ne possède aucun cycle de vie de rendu ; un
+composant peut appliquer une contribution à une cible native.
+
+Le cas `lipsync` met toutefois cette définition sous tension. Il ne crée pas
+nécessairement une représentation autonome : il contribue à la matérialisation
+d'un avatar existant. Le conserver comme perso est une décision provisoire,
+faute d'un concept plus juste, justifiée par le fait qu'il possède des données,
+des actions et un état temporel adressables comme ceux des autres persos.
+
+Cette convention ne ferme pas le modèle. Si les contrôleurs sans
+matérialisation propre se multiplient et réclament un cycle ou des invariants
+différents, ils pourront faire émerger une nouvelle primitive. Le premier
+chantier doit relever cette distinction au lieu de redéfinir implicitement la
+notion de perso autour du seul cas `lipsync`.
+
+## 7. Connexion opaque pour l'auteur de composants
+
+Le raccordement doit être implémenté une fois dans le pont générique et dans le
+package d'intégration de la bibliothèque.
+
+L'auteur d'une feature doit seulement définir :
+
+- le profil de données qu'elle accepte ;
+- ses actions ;
+- la création de sa représentation native ;
+- l'application d'un état résolu ;
+- la libération des ressources qu'elle possède.
+
+Il ne doit pas écrire à nouveau :
+
+- la résolution des liaisons ou de `move` ;
+- un registre `perso -> objet natif` ;
+- le tri parent/enfant ;
+- la détection du composant hôte ;
+- l'ordonnancement Play/Seek ;
+- le chargement de la bibliothèque ;
+- l'appel final au renderer.
+
+Une base ou une factory spécialisée peut masquer ces opérations. Sa forme
+publique reste à spécifier, mais cette opacité est un critère d'acceptation du
+premier chantier, pas une optimisation ultérieure.
+
+## 8. Composants ciblant d'autres composants
+
+Le cas `scene -> avatar -> lipsync` montre que la cible n'est pas toujours le
+conteneur visuel direct de la bibliothèque.
+
+- `avatar` est réalisé dans la scène Three.js et publie le handle nécessaire à
+  ses contrôleurs ;
+- `lipsync` cible l'avatar et contribue seulement aux canaux de bouche ;
+- une expression ou un geste peut cibler le même avatar avec une autre
+  responsabilité.
+
+Le pont doit donc savoir transmettre la cible publiée par un parent projeté,
+pas uniquement la racine publiée par l'hôte HTML. La composition des
+contributions concurrentes appartient à l'intégration de l'avatar ; l'ordre
+d'itération des composants ne doit pas décider silencieusement du résultat.
+
+## 9. Vocabulaire des propriétés
+
+Le perso hôte est un composant HTML. Il peut recevoir les propriétés communes
+de placement et les services HTML déclarés par son type.
+
+Les composants projetés ne connaissent qu'un sous-ensemble explicite des
+propriétés de leur bibliothèque. Un composant Three.js peut par exemple
+accepter `position`, `rotation`, `scale`, `color` ou `intensity`, selon son
+profil. Il ne reçoit pas automatiquement les propriétés HTML et n'accepte pas
+un chemin natif arbitraire.
+
+Les déclarations structurelles et de liaison restent à part : elles sont
+traitées avant le composant et ne deviennent pas des propriétés appliquées à
+l'objet Three.js.
+
+## 10. Premier chantier
+
+Le premier parcours vertical reprend la grille Three.js de la démo V1 :
+
+- un perso hôte crée le canvas, le renderer et la scène ;
+- un perso géométrie crée la grille de pavés dans la cible remise par le pont ;
+- `initial` décrit la géométrie ;
+- les actions pilotent son animation ;
+- Play, Seek, reset, resize et destruction empruntent le vrai runtime V2 ;
+- le renderer n'est appelé qu'après la mise à jour de tout le sous-arbre.
+
+Cette preuve doit d'abord valider le pont générique. Elle ne doit pas cacher un
+manque du runtime dans un registre ou un callback propre à la démo.
+
+## 11. Questions encore ouvertes
+
+Les points suivants doivent être fixés dans la spécification avant le code :
+
+- la forme générique d'une cible native publiée par un hôte ou un objet ;
+- la résolution exacte de `rel.target` et sa relation avec le graphe de `move` ;
+- le critère qui confirmerait qu'un contrôleur contributeur reste un perso ou
+  justifierait une nouvelle primitive ;
+- les hooks minimaux de création, mise à jour, déplacement et destruction ;
+- la règle de reparentage entre deux hôtes de bibliothèques différentes ;
+- la composition de plusieurs contrôleurs visant le même avatar ;
+- le raccord exact entre l'unité tierce déclarée à l'engine et le chargement de
+  sa bibliothèque.
+
+Ces questions portent sur le pont. Elles ne rouvrent pas l'ancien choix d'un
+matérialiseur global alternatif au DOM.

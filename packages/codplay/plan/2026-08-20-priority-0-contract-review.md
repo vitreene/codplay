@@ -95,7 +95,7 @@ extensions correspondantes :
 
 | Décision | État | Ouverture bloquée |
 |---|---|---|
-| Factory/catalogue réellement indépendant du substrate HTML | À spécifier avant une factory Canvas, Three.js ou Rive ; le catalogue actuel reste la tranche HTML | materializers et familles de composants non HTML |
+| Pont des projections tierces possédées par un hôte HTML | `A relire` dans le plan du 2026-09-18 : modèle comparatif Three.js/Rive/Lottie/avatar, `rel` immuable, nouvelles structures du core à spécifier et réécriture partielle admise plutôt qu'un patch HTML | composants Three.js, Rive, Lottie et avatar composable |
 | Parsing HTML et dépendances de materialization | Le markup reste une chaîne du `CompiledScene`; le runner HTML utilise les API DOM du navigateur, tandis que les services conservent leurs normalisations de données | séparation entre validation des données et materialization HTML |
 | Surface typée entre modules runtime et composants | Fixée le 2026-08-24 : registre de surfaces déclaré par le catalogue, résolveur typé dans le contexte module, aucune classe exposée | nouvelles surfaces à ajouter à la map de contrats |
 

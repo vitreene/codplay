@@ -169,6 +169,22 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       };
     },
   },
+  {
+    id: "threejs-grid",
+    path: "?demo=threejs-grid",
+    title: "Three.js — grille procédurale",
+    description: "Scène, caméra, lumières et géométrie sont des persos reliés par rel, puis rendus en une seule projection.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/threejs-grid/main"),
+        import("./demos/threejs-grid/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */

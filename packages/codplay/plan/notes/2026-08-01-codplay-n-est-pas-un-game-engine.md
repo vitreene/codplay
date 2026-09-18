@@ -9,7 +9,8 @@ Decision de cadrage active. CodPlay V2.
 CodPlay partage certains concepts avec les game engines : scene graph, temps,
 hierarchie, projection, etat derive et boucle de rendu. Cette proximite ne definit
 pas son domaine. CodPlay est un systeme declaratif de scenes spatio-temporelles,
-interactives, rejouables et projetables vers plusieurs substrats.
+interactives et rejouables, dont des composants hôtes peuvent posséder une
+projection tierce.
 
 Le runtime V1 reste une reference normative pour les comportements a conserver,
 les contrats, les invariants et les tests-oracles. V2 est une reecriture distincte :
@@ -29,11 +30,11 @@ Quel est l'etat visuel et interactif de cette scene a l'instant t ?
 ```
 
 Cette reponse doit rester compatible avec le play, le pause, le seek, le replay,
-la capture et plusieurs substrats de projection.
+la capture et les projections tierces hébergées.
 
 CodPlay n'a pas pour objectif de simuler un monde physique. Une integration avec un
-game engine externe reste possible, mais ce moteur serait alors un service ou un
-substrat externe, pas l'identite de CodPlay.
+game engine externe reste possible, mais ce moteur serait alors piloté par une
+intégration possédée par un composant hôte, pas l'identite de CodPlay.
 
 ## Pourquoi un Perso n'est pas une Entity ECS
 
@@ -92,10 +93,12 @@ peuvent utiliser la meme logique.
 `SceneDoc` exprime l'intention auteur. `CompiledScene` constitue l'artefact
 canonique. Le runtime materialise, resout et projette sans reparser la declaration.
 
-### Multi-substrat
+### Projections tierces hébergées
 
-Une meme scene logique peut etre projetee vers le DOM, le canvas, une capture ou un
-outil de diagnostic. Le substrat ne devient pas la source de verite de l'etat.
+Une scène logique peut contenir un hôte HTML qui possède une projection Canvas,
+Three.js, Rive ou Lottie. Cette projection n'est pas un substrat global
+alternatif : des composants spécialisés y contribuent par le pont de l'hôte.
+La représentation native ne devient jamais la source de vérité de l'état.
 
 ### Interactions rejouables
 
@@ -128,6 +131,6 @@ diagnostics, les snapshots, les comparaisons V1/V2 et les tests a instants nomme
 
 CodPlay peut partager des algorithmes avec les game engines sans devenir un game
 engine. Sa valeur est de combiner une scene declarative, un temps de premier ordre,
-des comportements interactifs, une evaluation deterministe et une projection
-multi-substrat. L'ECS est une source ponctuelle d'idees d'organisation, pas le
+des comportements interactifs, une evaluation deterministe et des projections
+tierces hébergées. L'ECS est une source ponctuelle d'idees d'organisation, pas le
 modele d'execution de CodPlay.

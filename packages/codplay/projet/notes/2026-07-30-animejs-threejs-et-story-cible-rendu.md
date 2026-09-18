@@ -1,330 +1,223 @@
-# Anime.js, Three.js et une story de cible de rendu
+# Three.js : propriété, animation et cible résolue
 
-Note de réflexion (2026-07-30). Elle examine l'adaptateur Three.js d'Anime.js et
-en tire un principe pour codplay. Elle ne prescrit aucune API ni aucun chantier.
+Note de réflexion corrigée le 2026-09-18.
 
-> **Statut.** Non normatif. Le sujet du substrat canvas reste une extension
-> v2.5/v3, après validation de la V2. Le mot « Projection » est réservé au haut
-> niveau dans le corpus : les noms `threejs-projection` employés dans l'exemple
-> sont des noms de rôle provisoires, pas une proposition de vocabulaire public.
+> Statut : **orientation retenue, API à spécifier**.
+>
+> Cette note applique à Three.js le modèle de
+> [projection tierce hébergée](./2026-07-29-projection-substrat-de-rendu.md).
+> Elle ne propose plus un matérialiseur Three.js sélectionnable pour toute
+> l'instance.
 
-## 1. Le mécanisme d'Anime.js
+## 1. Ce que l'adaptateur Three.js d'Anime.js apprend
 
-L'adaptateur Three.js d'Anime.js (depuis 4.5) est chargé par un import à effet de
-bord :
+L'adaptateur Three.js d'Anime.js traduit un vocabulaire d'animation vers des
+écritures natives : une rotation auteur devient une rotation Three.js, une
+couleur devient un `THREE.Color`, une propriété d'instance est mise en lot avant
+le rendu.
 
-```ts
-import 'animejs/adapters/three'
-```
+Cette idée est utile à CodPlay : un composant peut exposer un sous-ensemble
+strict de propriétés de la bibliothèque et les convertir à la frontière de
+matérialisation.
 
-Il enregistre un adaptateur global dont le moteur Anime se sert lorsqu'il reçoit
-une cible. L'adaptateur ne construit pas une scène et ne rend pas une image. Son
-seul rôle est de traduire un nom de propriété exposé à l'auteur en une lecture et
-une écriture sur l'objet Three.js réel.
+Ce qui n'est pas repris :
 
-```text
-animate(mesh, { rotateY: 60, opacity: 0.5 })
-             │
-             ▼
-  resolveAdapterEntry(mesh, 'rotateY')
-             │
-             ▼
-  get: mesh.rotation.y (radians -> degrés)
-  set: mesh.rotation.y (degrés -> radians)
-```
+- une timeline Anime.js autonome ;
+- la lecture d'une valeur Three.js comme source de vérité logique ;
+- des chemins de propriété arbitraires ;
+- la recherche magique de `mesh.material` ;
+- un appel à `renderer.render()` depuis chaque composant.
 
-Il procède en trois étages :
-
-1. **Détection de cible.** Un garde léger reconnaît les objets Three.js par leurs
-   marqueurs (`isObject3D`, `isMaterial`, `isTexture`, `isColor`, `isVector*`,
-   etc.), sans importer de type applicatif.
-2. **Mappings statiques par classe.** `Object3D` reçoit par exemple `x/y/z`,
-   `rotateX/Y/Z`, `scale`, `opacity`, `color`, `visible`; les caméras et lumières
-   reçoivent leurs propriétés propres.
-3. **Résolveurs dynamiques.** Lorsque le mapping n'est pas statique, Anime peut
-   reconnaître à l'exécution une couleur, un axe de vecteur, un uniforme GLSL ou
-   un slot TSL. Pour un mesh, il essaie aussi `mesh.material` si le mesh ne porte
-   pas lui-même la propriété.
-
-Le moteur Anime utilise ensuite ces getters/setters pour lire une valeur initiale,
-interpoler à chaque frame, puis écrire le résultat. Par exemple :
-
-```ts
-animate(mesh, {
-  x: 100,           // mesh.position.x
-  rotateY: 60,      // mesh.rotation.y, API auteur en degrés
-  opacity: 0.5,     // mesh.material.opacity
-  uTint: '#0080ff', // mesh.material.uniforms.uTint.value
-})
-```
-
-L'adaptateur prend aussi en charge les instances de `InstancedMesh` et
-`BatchedMesh`. Il donne un proxy par instance, accumule les matrices modifiées,
-puis les écrit en lot juste avant le rendu. C'est une optimisation de projection
-utile, pas un mécanisme temporel.
-
-### Ce qu'il ne fait pas
-
-- Il ne monte ni ne démonte d'objets dans une scène.
-- Il ne possède ni le renderer, ni le canvas, ni la caméra.
-- Il n'appelle pas `renderer.render(scene, camera)` : l'application le fait dans
-  son propre callback de frame.
-- Il ne définit pas de système de coordonnées, de mesure ou de hit-testing.
-- Il ne règle pas les conflits de propriété entre auteurs ou composants.
-- Il ne garantit pas qu'un état soit reconstructible à un instant donné : son
-  modèle usuel part d'une valeur native courante et la fait évoluer.
-
-Sources : [documentation Three.js](https://animejs.com/documentation/adapters/threejs-adapter),
-[registre d'adaptateurs](https://github.com/juliangarnier/anime/blob/master/src/adapters/registry.js),
-[résolveurs Three.js](https://github.com/juliangarnier/anime/blob/master/src/adapters/three/resolvers.js),
-[instances](https://github.com/juliangarnier/anime/blob/master/src/adapters/three/instance.js).
-
-## 2. Ce qui est transférable à codplay
-
-Le transfert pertinent n'est pas « employer Anime pour animer Three.js ». C'est
-le patron suivant : **un vocabulaire déclaré est converti, à la frontière du
-substrat, en écritures natives ciblées**.
-
-Dans codplay, le sens doit être inversé par rapport à Anime :
+CodPlay calcule l'état à `t`. L'intégration Three.js réalise cet état.
 
 ```text
-temps et événements
-       │
-       ▼
-solve(scene, t)
-       │
-       ▼
-PersoState @ t, en unités d'auteur
-       │
-       ▼
-project vers les handles Three.js
-       │
-       ▼
-flush de la cible, puis un render partagé
+events et temps CodPlay
+  -> état résolu du perso
+  -> composant Three.js spécialisé
+  -> objet natif déjà ciblé
+  -> commit unique du perso hôte
 ```
 
-`PersoState @ t` est la vérité. Three.js est la réalisation mutable de cette
-vérité. La cible ne lit donc jamais `mesh.position` pour décider de la prochaine
-pose ou pour reconstruire un seek; elle reçoit et écrit la pose résolue. Une
-lecture native ne reste justifiée que pour une capacité de mesure, donnée
-jetable et re-dérivable, jamais pour relire une intention d'auteur.
+## 2. Possession des objets
 
-Le sous-ensemble à reprendre est :
+Le perso hôte possède le canvas, le renderer, la scène et le matérialiseur
+Three.js local. Chaque composant spécialisé possède uniquement les objets ou
+ressources qu'il crée dans cette scène.
 
-- une table de mappings explicites entre propriétés auteur et propriétés natives;
-- des codecs locaux au substrat : degrés vers radians, couleur auteur vers
-  `THREE.Color`, coordonnées de l'hôte vers espace Three.js;
-- un handle opaque par objet réalisé;
-- un batching spécifique aux instances, flushé avant l'unique rendu de la cible;
-- une passe de rendu unique, partagée par tous les persos utilisant la même
-  surface.
+Exemples :
 
-Le sous-ensemble à ne pas reprendre est :
+- le composant caméra possède sa caméra ;
+- le composant lumière possède sa lumière ;
+- le composant géométrie possède son mesh et, selon le profil retenu, sa
+  géométrie et son matériau ;
+- le composant avatar possède son modèle mutable ;
+- le composant lipsync ne possède ni scène ni avatar : il contribue aux canaux
+  publiés par l'avatar ciblé.
 
-- les getters natifs comme source de la valeur de départ;
-- l'introspection générale des propriétés et les chemins magiques vers
-  `mesh.material`;
-- les timelines Anime et leur horloge;
-- un `renderer.render()` depuis chaque composant;
-- les raccourcis qui cachent une propriété partagée, en particulier
-  `mesh.opacity -> material.opacity`.
+Le pont conserve l'association entre l'identité du perso et son handle natif.
+Cette association n'est ni globale, ni recréée par chaque composant.
 
-La réflexion permissive d'Anime est nécessaire à une bibliothèque qui accepte
-n'importe quel objet muté par du code tiers. Codplay peut être plus strict : un
-composant sait le type de handle qu'il projette et le vocabulaire qu'il autorise.
+## 3. Liaison et hiérarchie Three.js
 
-## 3. Deux intégrations distinctes
-
-La même bibliothèque Three.js recouvre deux modèles qui ne doivent pas être
-fusionnés.
-
-| Modèle | Possession de l'arbre Three.js | Usage |
-| --- | --- | --- |
-| Média / composant hôte | Le composant Three.js construit et possède sa scène interne. Codplay ne connaît que le perso hôte. | Usage direct actuel : avatar, grille, effet autonome. |
-| Cible de rendu | Codplay possède l'arbre logique; la cible réalise les persos en `Object3D`, matériau, caméra, lumière, etc. | Usage différé : contenu Three.js adressable par plusieurs persos. |
-
-Le prototype `threejs` actuel relève du premier modèle : `build()` construit une
-scène libre, `refs` expose des objets internes et `simulate()` les modifie. La
-démo `threejs-anime-grid` calcule déjà une pose à partir du temps absolu, mais
-reste une scène interne d'un seul composant.
-
-Une cible de rendu ne s'obtient donc pas en ouvrant progressivement `build`,
-`refs` et `simulate` à d'autres persos. Il faut un second contrat : le montage,
-la destruction et la projection des objets relèvent de la cible partagée, pas de
-fonctions arbitraires enfermées dans un perso.
-
-## 4. Capacités minimales d'une cible Three.js
-
-La forme reste à concevoir lorsque le besoin V3 existera. Le rôle minimal se lit
-néanmoins ainsi :
+L'auteur de scène place l'hôte HTML avec `move`, puis relie les composants
+spécialisés à leur fournisseur avec `rel`. Cette relation est déclarée dans
+`initial` et reste immuable. `target.scene` désigne la scène ;
+`target.perso` désigne éventuellement un perso de cette scène. L'intégration
+peut typer des champs supplémentaires lorsque sa bibliothèque l'exige.
 
 ```ts
-type ThreejsRenderTarget<Handle, State> = {
-  mount(parent: Handle | null, description: unknown): Handle
-  unmount(handle: Handle): void
-  project(handle: Handle, state: State): void
-  measure?(handle: Handle): Rect
-  render(): void
+const threeScene = {
+  id: 'three-scene',
+  type: 'three-scene-host',
+  initial: {
+    move: '@root',
+    style: { width: '100%', height: '100%' },
+  },
+}
+
+const geometry = {
+  id: 'grid',
+  type: 'three-instanced-grid',
+  initial: {
+    rel: { target: { scene: 'three-scene' } },
+    columns: 15,
+    rows: 9,
+    spacing: 0.12,
+  },
+}
+
+const avatar = {
+  id: 'guide',
+  type: 'three-avatar',
+  initial: {
+    rel: { target: { scene: 'three-scene' } },
+    src: '/assets/guide.glb',
+  },
+}
+
+const lipsync = {
+  id: 'guide-lipsync',
+  type: 'avatar-lipsync',
+  initial: {
+    rel: { target: { scene: 'three-scene', perso: 'guide' } },
+  },
 }
 ```
 
-Cette forme est intentionnelle, non une signature à adopter :
+Une action ne modifie pas `rel`. Les définitions TypeScript des intégrations
+précisent les éventuels champs supplémentaires.
 
-- `mount` traduit la structure des persos vers le graphe Three.js;
-- `project` reçoit une pose complète et résolue, sans durée ni progression;
-- `measure` peut fournir une bounding box ou une géométrie de hit-testing, sans
-  remonter une description d'auteur;
-- `render` n'est appelé qu'après la projection de tous les handles de la cible;
-- la cible possède le cycle de vie GPU et dispose chaque ressource une seule fois.
+Si une relation est inconnue, incompatible ou cyclique, le composant reste
+sans cible et sa contribution est sans effet. Cela ne bloque ni la construction
+ni la lecture de la scène : l'auteur reçoit un warning, tandis que la diffusion
+reste silencieuse. Une cible valide mais non montée est simplement attendue et
+ne produit pas de warning.
 
-La cible peut aussi intégrer les **définitions statiques** qu'elle réalise :
-géométries, matériaux, textures, shaders, sources GLB et sous-arbres immuables.
-Elles sont préparées une fois au montage de la cible et peuvent être référencées
-par plusieurs persos. Les persos restent responsables de leurs états variables :
-transformation, visibilité, intensité de lumière, sélection d'une pose, ou toute
-autre valeur qui dépend de `t`.
+Le host applique `style` à son élément HTML. Les autres composants ne voient
+pas `style` et ne traitent directement ni la liaison ni `move`. Le runtime leur
+fournit respectivement la scène Three.js ou la cible d'avatar résolue.
 
-Les matériaux, géométries et textures sont des ressources à identité propre. Une
-spécification future devra donc dire quand une ressource est partagée, clonée ou
-possédée par un seul perso. Sans cela, le raccourci `opacity` peut modifier
-silencieusement plusieurs figures partageant le même matériau.
+## 4. Réconciliation et rendu
 
-## 5. Story illustrative : surface, caméra et cube
+Pour une frame à `t`, le pont doit :
 
-L'exemple ci-dessous montre la **forme sémantique** attendue d'une story où trois
-persos s'adressent à la même cible Three.js : une surface, une caméra et un cube.
+1. parcourir le graphe résolu parent avant enfant ;
+2. monter l'hôte HTML et préparer son contexte si nécessaire ;
+3. créer ou retrouver chaque handle natif sous le parent résolu ;
+4. appliquer les états des composants spécialisés ;
+5. composer les contributions de contrôleurs visant un même objet ;
+6. flusher les écritures groupées, notamment les matrices d'instances ;
+7. rendre chaque scène Three.js une seule fois.
 
-Ce n'est pas du TypeScript exécutable et ce n'est pas une proposition de syntaxe
-V2. En particulier, la forme des trajectoires et des actions est encore un point
-bloquant du noyau `solve`; les clés `to` et `transition` ci-dessous servent
-uniquement à rendre l'intention lisible. Les noms de type sont provisoires.
+Le même ordre s'applique à Play, Seek, reset et resize. Three.js ne lance pas de
+RAF et n'accumule pas un delta privé.
 
-```ts
-const cubeStory = {
-  id: 'threejs-cube-story',
-  initial: { move: '@root' },
-  persos: [
-    {
-      id: 'three-stage',
-      type: 'threejs-projection', // Nom de rôle provisoire : la cible canvas.
-      initial: {
-        move: '@root',
-        surface: {
-          width: 960,
-          height: 540,
-          pixelRatio: 'device',
-          background: '#101827',
-        },
-        // Ressources définies une fois, immuables pendant cette story.
-        definitions: {
-          geometries: {
-            heroCube: { kind: 'box', width: 1, height: 1, depth: 1 },
-          },
-          materials: {
-            heroBlue: { kind: 'standard', color: '#38bdf8', roughness: 0.3, metalness: 0.1 },
-          },
-          assets: {
-            // Exemple d'une ressource possible pour une autre figure statique.
-            environment: { kind: 'glb', src: '/assets/studio.glb' },
-          },
-        },
-      },
-      actions: {},
-    },
-    {
-      id: 'main-camera',
-      type: 'threejs-perspective-camera',
-      initial: {
-        // `move` exprime l'appartenance au graphe de la cible, comme pour un layout.
-        move: { parentId: 'three-stage' },
-        fov: 45,
-        near: 0.1,
-        far: 100,
-        position: { x: 0, y: 1.5, z: 7 },
-        lookAt: { x: 0, y: 0, z: 0 },
-        active: true,
-      },
-      actions: {
-        'camera:approach': {
-          to: { position: { z: 4.5 } },
-          transition: { duration: 1200, ease: 'inOutQuad' },
-        },
-      },
-    },
-    {
-      id: 'hero-cube',
-      type: 'threejs-cube',
-      initial: {
-        move: { parentId: 'three-stage' },
-        geometry: { ref: 'three-stage/geometries/heroCube' },
-        material: { ref: 'three-stage/materials/heroBlue' },
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 }, // Degrés dans le vocabulaire auteur.
-        scale: { x: 1, y: 1, z: 1 },
-      },
-      actions: {
-        'cube:enter': {
-          to: {
-            position: { y: 0 },
-            rotation: { y: 360 },
-            scale: { x: 1, y: 1, z: 1 },
-          },
-          from: {
-            position: { y: -2 },
-            rotation: { y: 0 },
-            scale: { x: 0.2, y: 0.2, z: 0.2 },
-          },
-          transition: { duration: 900, ease: 'outBack' },
-        },
-      },
-    },
-  ],
-  eventimes: [
-    { name: 'cube:enter', startAt: 0 },
-    { name: 'camera:approach', startAt: 600 },
-  ],
-}
-```
+## 5. Vocabulaire strict
 
-La story ne contient ni `THREE.Scene`, ni `WebGLRenderer`, ni `Object3D`, ni
-callback `simulate`. Elle ne décrit que des persos, leur parenté et leur état
-animable. À l'exécution, la cible réaliserait par exemple :
+Les composants Three.js ne connaissent pas une action générique `move` au sens
+d'une propriété native. Ils acceptent uniquement les propriétés déclarées par
+leur profil.
+
+Exemples possibles :
+
+| Composant | Propriétés de feature possibles |
+| --- | --- |
+| caméra | `position`, `rotation`, `fov`, `near`, `far`, `active` |
+| lumière | `position`, `color`, `intensity` |
+| objet | `position`, `rotation`, `scale`, `visible` |
+| matériau | `color`, `opacity`, `roughness`, `metalness` |
+| avatar | animation globale, regard ou paramètres explicitement retenus |
+| lipsync | visèmes ou données phonétiques |
+
+Les relations de placement et de liaison restent orthogonales au vocabulaire
+Three.js : CodPlay les a consommées avant l'appel du composant.
+
+## 6. ACE et moteurs natifs
+
+ACE convient aux valeurs que CodPlay peut résoudre directement : position,
+rotation, échelle, couleur, intensité ou autres scalaires déclarés.
+
+Le moteur Three.js peut rester nécessaire pour un clip squelettique, un mixer,
+des morphs ou une synchronisation labiale. Dans ce cas, l'intégration doit poser
+son état depuis le temps CodPlay et les occurrences actives. Elle ne peut pas
+dépendre du nombre de frames déjà jouées.
+
+L'égalité visée reste :
 
 ```text
-three-stage  -> WebGLRenderer + Scene + canvas + registre de ressources statiques
-main-camera  -> PerspectiveCamera ajouté à Scene
-hero-cube    -> Mesh qui référence la géométrie et le matériau de three-stage
+état observé après play(t) = état observé après seek(t)
 ```
 
-À un instant `t`, le moteur produit les deux états résolus de la caméra et du
-cube. La cible applique leurs codecs : `rotation.y: 180` devient `Math.PI` dans
-Three.js; puis elle rend une seule image de la scène. Les définitions de la cible
-ne sont ni recalculées ni animées. Un seek à `t` calcule et projette directement
-les mêmes états, sans rejouer `cube:enter` ni dépendre de la pose actuelle du
-mesh.
+pour toute action déclarée comme reconstructible.
 
-## 6. Questions à résoudre avant toute API
+## 7. Ressources et bibliothèque
 
-1. **Grain de la cible.** Une surface est-elle toujours exclusive à une story,
-   ou plusieurs stories peuvent-elles y monter leurs persos ? Le partage impose
-   des règles d'ordre, de mesure et de destruction.
-2. **Vocabulaire auteur.** Les composants déclarent-ils des propriétés strictes
-   (`position`, `rotation`, `material.color`) ou un adaptateur générique
-   accepte-t-il un dictionnaire de propriétés ? La première option est cohérente avec le
-   contrat strict V2.
-3. **Coordonnées et unités.** Comment une boîte DOM qui héberge la surface se
-   convertit-elle en viewport, caméra et unités Three.js ? Cette frontière doit
-   rester dans la cible, jamais dans `solve`.
-4. **Ressources.** Géométrie, matériau, texture et shader sont-ils des détails
-   de composant, des persos, ou des ressources de cible partageables ?
-5. **Interactions et accessibilité.** Le hit-testing et l'éventuelle couche DOM
-   accessible sont des capacités propres à cette cible; elles ne doivent pas être
-   supposées par le coeur.
+Three.js est déclaré et chargé par l'engine avec son unité d'intégration. Les
+modèles, textures et environnements de la scène passent par le preload de
+ressources et sont disponibles avant la création des objets qui les emploient.
 
-## Synthèse
+Le composant ne lance pas un import dynamique ou un chargement réseau dans sa
+méthode de mise à jour. Il reçoit les dépendances préparées par l'intégration.
 
-Anime.js valide qu'une même API d'animation peut adresser des objets Three.js au
-moyen de petits codecs de propriétés. Pour codplay, cette idée s'arrête à la
-frontière d'écriture : le moteur calcule l'état, la cible le projette et le player
-ordonne le rendu. Les deux modèles Three.js - composant média immédiat et cible
-de rendu différée - doivent rester explicitement séparés.
+## 8. Première preuve : grille de pavés
+
+La première preuve reprend le résultat de
+`packages/demos/src/v1/scenes/threejs-anime-grid-scene.ts`, sans reprendre son
+API `build`/`simulate` comme contrat.
+
+- `three-scene-host` crée l'environnement ;
+- `three-instanced-grid` crée la grille dans la cible résolue ;
+- les dimensions, l'espacement et la loi de décalage deviennent des données
+  validées ;
+- les actions produisent les poses à partir du temps absolu ;
+- l'hôte rend après la mise à jour de la grille ;
+- Seek, retour, reset et destruction ne dupliquent aucun objet.
+
+Cette verticale doit prouver le pont générique avant le travail avatar.
+
+## 9. Étape suivante : avatar composable
+
+La hiérarchie de référence est :
+
+```text
+three-scene-host
+  -> avatar
+       -> lipsync
+       -> expression
+       -> gesture
+```
+
+Chaque contrôleur reçoit ses propres events et matérialise une responsabilité.
+L'avatar publie les canaux nécessaires et compose les contributions avant le
+rendu. Une animation absente peut rester sans effet et produire un warning
+dans le contexte auteur si Three.js ou TalkingHead permet de la détecter
+proprement ; ce cas reste silencieux en diffusion.
+
+`lipsync`, `expression` et `gesture` sont maintenus provisoirement comme persos :
+ils portent des données, des actions et un état temporel, mais leur composant
+contribue à un avatar au lieu de créer une représentation autonome. Le premier
+chantier devra vérifier si cette différence reste une simple variante de
+matérialisation ou fait apparaître une primitive distincte.
+
+TalkingHead reste la référence fonctionnelle. Le composant V1 constitue un
+retour d'expérience, pas une structure normative à recopier.
