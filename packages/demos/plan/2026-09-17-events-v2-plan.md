@@ -27,10 +27,12 @@ de la démo `position` sans importer sa scène, ses stories ou ses constantes.
   « Lever » et « Baisser ». La factory les traduit vers les commandes internes
   propres à chaque contexte (`up1`, `down1`, `up2`, `down2`, etc.).
 - Les couleurs `vert`, `orange` et `rouge` sont des valeurs explicatives dans
-  les messages. Les actions du perso feu sont respectivement `down`,
-  `changing` et `up`.
-- À l'entrée de la deuxième story-cadre, le feu affiche immédiatement son
-  état initial vert (`down`) avant l'event `up` planifié.
+  les messages. Pour les trois premiers cadres, les actions du perso feu sont
+  respectivement `up`, `changing` et `down`; le quatrième utilise `red` pour
+  l'état rouge afin de séparer la descente de la barrière.
+- À l'entrée des deuxième et troisième story-cadres, les feux affichent
+  immédiatement leur état initial rouge. Les events `up2` et `up3` les font
+  passer au vert.
 - À chaque changement de vue, la story-cadre sortante est réinitialisée et la
   story-cadre entrante est activée avec `reset: true`; la factory rend visible
   uniquement le contexte entrant. Le feu est masqué uniquement dans le premier
@@ -52,9 +54,13 @@ de la démo `position` sans importer sa scène, ses stories ou ses constantes.
   `1000ms`, `1800ms` et `2600ms` ; les flèches apparaissent avec leur message
   d'action en glissant de gauche à droite, puis l'animation commence à
   `3400ms`. Les textes et les flèches se révèlent sur `300ms`.
-- Dans la quatrième vue, `up` lance la barrière et la séquence du feu :
-  `changing` pendant 1 seconde, puis `up`. Les actions différées passent par
-  les helpers `planned` du strap, sans timer de démo.
+- Dans la quatrième vue, l’état initial est `up` : la barrière est levée et le
+  feu est vert. `down` lance `changing` vers le feu immédiatement, `down` vers
+  la barrière après le fade orange de `300ms`, puis `red` vers le feu à
+  `1800ms`. La barrière dure `2100ms` ; cette modification ne décale pas
+  l'event rouge. Les
+  actions différées passent par les helpers `planned` du strap, sans timer de
+  démo.
 - Les événements temporels des cadres sont des faits planifiés et ciblés vers
   leur story-cadre propriétaire ; ils ne repassent pas artificiellement par
   `listen` au moment où ils sont matérialisés. Les boutons, eux, exercent le
@@ -104,7 +110,8 @@ de la démo `position` sans importer sa scène, ses stories ou ses constantes.
   leurs faits planifiés ciblés vers leurs propres stories-cadres propriétaires ;
 - un événement planifié d'un cadre précédent ne modifie pas le contexte du cadre
   courant lors d'un changement rapide de vue ;
-- `changing` est produit par le strap du quatrième cadre, puis `up` est
-  planifié à +1 s et rejoué par Seek sans circuit parallèle ;
+- `changing` est produit immédiatement par le strap du quatrième cadre lors de
+  `down`, puis `down` à +300 ms et `red` à +1800 ms sont rejoués par Seek sans
+  circuit parallèle ; la barrière dure 2100 ms et atteint 0° à +2400 ms ;
 - le statut reste `En cours` tant que la validation navigateur complète n'est
   pas effectuée.

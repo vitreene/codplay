@@ -25,9 +25,14 @@ le circuit DOM `Perso.emit -> listen -> strap` déjà utilisé par la démo
 - Chaque story-cadre possède la borne et la barrière de son contexte ; les
   cadres avec feu possèdent aussi leur signal. `upN` anime la rotation de
   `0deg` à `70deg` autour du point gris de l'image.
-- `downN` affiche le feu vert, `changingN` le feu orange et `upN` le feu rouge.
-  À l'entrée de la deuxième story-cadre, le contexte deux affiche d'abord son
-  état initial vert avant l'event `up2` planifié.
+- Pour les trois premiers cadres, `upN` affiche le feu vert, `changingN` le
+  feu orange et `downN` le feu rouge. À l'entrée des deuxième et troisième
+  story-cadres, les contextes affichent d'abord leur état initial rouge. Les
+  events `up2` et `up3` les font passer au vert.
+- Dans le quatrième cadre, `changing4` lance le passage à l'orange. Quand ce
+  fade de `300ms` est terminé, `down4` démarre la descente de la barrière.
+  `red4` reste émis après `1800ms`. La durée de rotation de la barrière est
+  portée à `2100ms`, sans modifier le planning de cet event.
 - `events-frame-one` à `events-frame-four` possèdent les textes, les messages,
   les flèches, les boutons et les persos image de leur cadre courant.
 
@@ -45,7 +50,7 @@ Les cadres 1 et 2 planifient leurs messages et flèches à `1000ms`, `1800ms` et
 à `1000ms`, puis le strap planifie l'action de la barrière à `3400ms` ; sa
 rotation dure `1500ms` et se termine donc à `4900ms`. Dans le deuxième cadre,
 le message du `perso feu` apparaît à `1800ms`, celui du `perso barrière` à
-`2600ms`, puis le feu reste vert jusqu'à `3400ms`, quand l'event distribué
+`2600ms`, puis le feu reste rouge jusqu'à `3400ms`, quand l'event distribué
 atteint la barrière et le feu. Les faits temporels ciblent directement leur
 story-cadre, qui est aussi le propriétaire isolé des persos image ; leur
 matérialisation ne repasse pas artificiellement par `listen`.
@@ -54,9 +59,11 @@ Les boutons `Lever` et `Baisser` émettent respectivement `up` et `down` avec
 une visibilité story. Le story-cadre courant écoute ces events et son strap
 dispatch les commandes uniques de son contexte.
 
-Dans le quatrième cadre, `up` dispatch immédiatement `changing` vers le feu,
-puis planifie `up` avec `context.planned.wait(1000, ...)`. Le délai est donc
-rejouable par le player et par Seek, sans timer local à la démo.
+Dans le quatrième cadre, l’état initial est `up` : la barrière est levée et
+le feu est vert. `down` dispatch immédiatement `changing` vers le feu, puis
+planifie `down` après le fade de l'orange (`300ms`) et `red` à `1800ms`.
+La rotation de la barrière dure `2100ms` et se termine à `2400ms`. Le délai
+reste rejouable par le player et par Seek, sans timer local à la démo.
 
 ## Presentation invariants
 
@@ -83,6 +90,8 @@ Les messages ne sont pas enfermés dans des cartes et les lignes de séparation
 sont absentes. La barrière reste en bas à droite et le feu en haut à droite.
 Les textes, flèches et persos d'animation sont dédiés au contexte du cadre ;
 les contextes non courants restent masqués dans le stage. Chaque changement
-de vue réinitialise la story-cadre sortante et active la suivante : barrière
-fermée et feu vert. Les règles `enter` et `reset` de la story-cadre portent
-cette isolation.
+de vue réinitialise la story-cadre sortante et active la suivante dans son état
+initial déclaré : barrière fermée et feu vert pour le cadre 1, barrière fermée
+et feu rouge pour les cadres 2 et 3, barrière levée et feu vert pour le cadre
+4. Les règles `enter` et `reset` de la
+story-cadre portent cette isolation.

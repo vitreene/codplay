@@ -10,13 +10,15 @@ import {
   EVENTS_ACTION_OFFSET_MS,
   EVENTS_ANIMATION_OFFSET_MS,
   EVENTS_ARROW_OFFSET_MS,
+  EVENTS_DELAYED_BARRIER_ROTATION_DURATION_MS,
+  EVENTS_DELAYED_RED_EVENT_OFFSET_MS,
   EVENTS_DOWN,
   EVENTS_EVENT_OFFSET_MS,
   EVENTS_FRAME_DURATION_MS,
   EVENTS_FRAME_EVENTS,
   EVENTS_FRAME_ONE_ID,
   EVENTS_FRAME_STORY_IDS,
-  EVENTS_LIGHT_DELAY_MS,
+  EVENTS_SIGNAL_TRANSITION_DURATION_MS,
   EVENTS_UP,
   createEventsAnimationContexts,
   type EventsAnimationContext,
@@ -49,6 +51,10 @@ type FrameDefinition = Readonly<{
   title: string
   summary: string
   animation: EventsAnimationContext
+  initialBarrierState?: 'up' | 'down'
+  barrierRotationDurationMs?: number
+  initialSignalState?: 'green' | 'orange' | 'red'
+  signalRedEvent?: 'down' | 'red'
   rows: readonly FrameRowDefinition[]
   dispatchMode: FrameDispatchMode
   scheduledUp: boolean
@@ -58,6 +64,14 @@ type FrameDefinition = Readonly<{
 /** Returns a simple opacity tween that reveals one authored explanation. */
 function revealAction(): Readonly<Record<string, unknown>> {
   return { style: { opacity: { from: 0, to: 1, duration: 300, ease: 'outCubic' } } }
+}
+
+/** Returns one content replacement that reveals its message with the event. */
+function revealContentAction(content: string): Readonly<Record<string, unknown>> {
+  return {
+    content,
+    style: { opacity: { from: 0, to: 1, duration: 300, ease: 'outCubic' } },
+  }
 }
 
 /** Returns a simple opacity tween that reveals one frame arrow. */
@@ -121,6 +135,7 @@ export function createEventsFrameDefinitions(
       title: 'Un event se distribue',
       summary: 'Le même event atteint plusieurs animations.',
       dispatchMode: 'distribution',
+      initialSignalState: 'red',
       scheduledUp: true,
       buttons: false,
       rows: [
@@ -133,7 +148,7 @@ export function createEventsFrameDefinitions(
         },
         {
           id: 'signal-action',
-          text: 'perso feu — action up : { color: rouge }',
+          text: 'perso feu — action up : { color: vert }',
           tag: 'code',
           arrow: 'signal',
           textInitialOpacity: 0,
@@ -160,6 +175,7 @@ export function createEventsFrameDefinitions(
       title: 'Les boutons émettent les events',
       summary: 'Les contrôles produisent up et down ; les animations écoutent.',
       dispatchMode: 'interactive',
+      initialSignalState: 'red',
       scheduledUp: false,
       buttons: true,
       rows: [
@@ -173,23 +189,35 @@ export function createEventsFrameDefinitions(
           },
         },
         {
+          id: 'signal-action',
+          text: 'action up / down : { color: vert / rouge }',
+          tag: 'code',
+          arrow: 'signal',
+          textInitialOpacity: 0,
+          arrowInitialOpacity: 0,
+          textActions: {
+            [EVENTS_UP]: revealContentAction('action up : { color: vert }'),
+            [EVENTS_DOWN]: revealContentAction('action down : { color: rouge }'),
+          },
+          arrowActions: {
+            [EVENTS_UP]: revealArrowAction(),
+            [EVENTS_DOWN]: revealArrowAction(),
+          },
+        },
+        {
           id: 'barrier-action',
           text: 'action up / down : { rotate: 70deg / 0deg }',
           tag: 'code',
           arrow: 'barrier',
+          textInitialOpacity: 0,
+          arrowInitialOpacity: 0,
           textActions: {
-            [EVENTS_UP]: { content: 'action up : { rotate: 70deg }' },
-            [EVENTS_DOWN]: { content: 'action down : { rotate: 0deg }' },
+            [EVENTS_UP]: revealContentAction('action up : { rotate: 70deg }'),
+            [EVENTS_DOWN]: revealContentAction('action down : { rotate: 0deg }'),
           },
-        },
-        {
-          id: 'signal-action',
-          text: 'action up / down : { color: rouge / vert }',
-          tag: 'code',
-          arrow: 'signal',
-          textActions: {
-            [EVENTS_UP]: { content: 'action up : { color: rouge }' },
-            [EVENTS_DOWN]: { content: 'action down : { color: vert }' },
+          arrowActions: {
+            [EVENTS_UP]: revealArrowAction(),
+            [EVENTS_DOWN]: revealArrowAction(),
           },
         },
       ],
@@ -199,18 +227,37 @@ export function createEventsFrameDefinitions(
       animation: animationContexts[EVENTS_FRAME_STORY_IDS[3]],
       number: '04',
       title: 'Les events peuvent être différés',
-      summary: 'Un strap séquence les actions du feu avec un délai d’une seconde.',
+      summary: 'Un strap séquence le feu avec la durée de descente de la barrière.',
       dispatchMode: 'delayed',
+      initialBarrierState: 'up',
+      barrierRotationDurationMs: EVENTS_DELAYED_BARRIER_ROTATION_DURATION_MS,
+      signalRedEvent: 'red',
       scheduledUp: false,
       buttons: true,
       rows: [
         {
           id: 'event',
-          text: 'event : up',
+          text: 'event : en attente',
           tag: 'code',
           textActions: {
-            [EVENTS_UP]: revealAction(),
+            [EVENTS_UP]: { content: 'event : up' },
             [EVENTS_DOWN]: { content: 'event : down' },
+          },
+        },
+        {
+          id: 'signal-action',
+          text: 'action up / down : { color: vert / rouge }',
+          tag: 'code',
+          arrow: 'signal',
+          textInitialOpacity: 0,
+          arrowInitialOpacity: 0,
+          textActions: {
+            [EVENTS_UP]: revealContentAction('action up : { color: vert }'),
+            [EVENTS_DOWN]: revealContentAction('action changing → red : { color: orange → rouge }'),
+          },
+          arrowActions: {
+            [EVENTS_UP]: revealArrowAction(),
+            [EVENTS_DOWN]: revealArrowAction(),
           },
         },
         {
@@ -218,19 +265,15 @@ export function createEventsFrameDefinitions(
           text: 'action up / down : { rotate: 70deg / 0deg }',
           tag: 'code',
           arrow: 'barrier',
+          textInitialOpacity: 0,
+          arrowInitialOpacity: 0,
           textActions: {
-            [EVENTS_UP]: { content: 'action up : { rotate: 70deg }' },
-            [EVENTS_DOWN]: { content: 'action down : { rotate: 0deg }' },
+            [EVENTS_UP]: revealContentAction('action up : { rotate: 70deg }'),
+            [EVENTS_DOWN]: revealContentAction('action down : { rotate: 0deg }'),
           },
-        },
-        {
-          id: 'signal-action',
-          text: 'action down → changing → up',
-          tag: 'code',
-          arrow: 'signal',
-          textActions: {
-            [EVENTS_UP]: { content: 'action changing → up : { color: orange → rouge }' },
-            [EVENTS_DOWN]: { content: 'action down : { color: vert }' },
+          arrowActions: {
+            [EVENTS_UP]: revealArrowAction(),
+            [EVENTS_DOWN]: revealArrowAction(),
           },
         },
       ],
@@ -272,6 +315,10 @@ function createEventsFrameStory(definition: FrameDefinition): EventsStory {
       createFrameRootPerso(definition, events),
       ...createEventsAnimationPersos(definition.animation, {
         includeSignal: definition.storyId !== EVENTS_FRAME_ONE_ID,
+        initialBarrierState: definition.initialBarrierState,
+        barrierRotationDurationMs: definition.barrierRotationDurationMs,
+        initialSignalState: definition.initialSignalState,
+        signalRedEvent: definition.signalRedEvent,
       }),
       ...createFrameHeaderPersos(definition),
       ...definition.rows.flatMap((row) => createFrameRowPersos(definition, row)),
@@ -363,8 +410,8 @@ function createFrameMarkup(definition: FrameDefinition): string {
           </div>`).join('')
   const buttons = definition.buttons ? `
           <div id="${prefix}-buttons" class="events-frame__buttons">
-            <div id="${prefix}-up-button-slot" data-part="${prefix}:button:up"></div>
             <div id="${prefix}-down-button-slot" data-part="${prefix}:button:down"></div>
+            <div id="${prefix}-up-button-slot" data-part="${prefix}:button:up"></div>
           </div>` : ''
 
   return `
@@ -427,19 +474,6 @@ function createButtonPersos(storyId: EventsFrameStoryId): readonly EventsPerso[]
   const prefix = storyId
   return [
     {
-      id: `${prefix}-button-up`,
-      type: 'tag',
-      initial: {
-        tag: 'button',
-        content: 'Lever',
-        className: 'events-frame__button events-frame__button--up',
-        attr: { type: 'button', 'aria-label': 'Lever' },
-        move: { target: `${prefix}:button:up` },
-      },
-      emit: { click: [{ event: { name: EVENTS_UP, visibility: 'story' } }] },
-      actions: {},
-    },
-    {
       id: `${prefix}-button-down`,
       type: 'tag',
       initial: {
@@ -450,6 +484,19 @@ function createButtonPersos(storyId: EventsFrameStoryId): readonly EventsPerso[]
         move: { target: `${prefix}:button:down` },
       },
       emit: { click: [{ event: { name: EVENTS_DOWN, visibility: 'story' } }] },
+      actions: {},
+    },
+    {
+      id: `${prefix}-button-up`,
+      type: 'tag',
+      initial: {
+        tag: 'button',
+        content: 'Lever',
+        className: 'events-frame__button events-frame__button--up',
+        attr: { type: 'button', 'aria-label': 'Lever' },
+        move: { target: `${prefix}:button:up` },
+      },
+      emit: { click: [{ event: { name: EVENTS_UP, visibility: 'story' } }] },
       actions: {},
     },
   ]
@@ -525,26 +572,31 @@ function createFrameDispatchStrap(
     const targetEvents: StrapStep[] = []
     if (event.name === EVENTS_UP) {
       targetEvents.push(storyEvent(definition.storyId, definition.animation.events.up))
-      if (definition.dispatchMode === 'delayed') {
-        targetEvents.push(storyEvent(definition.storyId, definition.animation.events.changing))
-      }
       if (definition.dispatchMode !== 'barrier') {
         targetEvents.push(storyEvent(definition.storyId, definition.animation.events.signalShow))
       }
     }
     if (event.name === EVENTS_DOWN && (definition.dispatchMode === 'interactive' || definition.dispatchMode === 'delayed')) {
-      targetEvents.push(storyEvent(definition.storyId, definition.animation.events.down))
+      if (definition.dispatchMode === 'delayed') {
+        targetEvents.push(storyEvent(definition.storyId, definition.animation.events.changing))
+      } else {
+        targetEvents.push(storyEvent(definition.storyId, definition.animation.events.down))
+      }
       targetEvents.push(storyEvent(definition.storyId, definition.animation.events.signalShow))
     }
 
     const immediate: StrapReturnValue = { events: targetEvents.flatMap((step) => step.event === undefined ? [] : [step.event]) }
-    if (definition.dispatchMode !== 'delayed' || event.name !== EVENTS_UP) return immediate
+    if (definition.dispatchMode !== 'delayed' || event.name !== EVENTS_DOWN) return immediate
 
     return [
       immediate,
       context.planned.wait(
-        EVENTS_LIGHT_DELAY_MS,
-        storyEvent(definition.storyId, definition.animation.events.up),
+        EVENTS_SIGNAL_TRANSITION_DURATION_MS,
+        storyEvent(definition.storyId, definition.animation.events.down),
+      ),
+      context.planned.wait(
+        EVENTS_DELAYED_RED_EVENT_OFFSET_MS,
+        storyEvent(definition.storyId, definition.animation.events.red),
       ),
     ]
   }

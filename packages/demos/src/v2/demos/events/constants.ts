@@ -25,6 +25,7 @@ export type EventsAnimationEventNames = Readonly<{
   up: string
   down: string
   changing: string
+  red: string
   barrierShow: string
   signalShow: string
   signalHide: string
@@ -52,6 +53,7 @@ export function createEventsAnimationContexts(): EventsAnimationContexts {
         up: `up${suffix}`,
         down: `down${suffix}`,
         changing: `changing${suffix}`,
+        red: `red${suffix}`,
         barrierShow: `barrier-show${suffix}`,
         signalShow: `signal-show${suffix}`,
         signalHide: `signal-hide${suffix}`,
@@ -126,8 +128,12 @@ export const EVENTS_ARROW_OFFSET_MS = EVENTS_EVENT_OFFSET_MS + EVENTS_MESSAGE_ST
 export const EVENTS_ACTION_OFFSET_MS = EVENTS_ARROW_OFFSET_MS + EVENTS_MESSAGE_STEP_MS
 export const EVENTS_ANIMATION_OFFSET_MS = EVENTS_ACTION_OFFSET_MS + EVENTS_MESSAGE_STEP_MS
 export const EVENTS_FRAME_DURATION_MS = 5_500
-export const EVENTS_LIGHT_DELAY_MS = 1_000
+export const EVENTS_SIGNAL_TRANSITION_DURATION_MS = 300
 export const EVENTS_BARRIER_ROTATION_DURATION_MS = 1_500
+export const EVENTS_DELAYED_BARRIER_ROTATION_DURATION_MS =
+  EVENTS_BARRIER_ROTATION_DURATION_MS + EVENTS_SIGNAL_TRANSITION_DURATION_MS * 2
+export const EVENTS_DELAYED_RED_EVENT_OFFSET_MS =
+  EVENTS_BARRIER_ROTATION_DURATION_MS + EVENTS_SIGNAL_TRANSITION_DURATION_MS
 
 /** Number shown in the heading of each explanatory frame. */
 export const EVENTS_FRAME_NUMBERS: Readonly<Record<EventsFrameStoryId, string>> = {
