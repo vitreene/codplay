@@ -361,6 +361,20 @@ générique ou fallback défensif n'est ajouté dans le builder.
 barrières de reset avant et après construction ; Play et Seek restent
 identiques sur `position`, Qa/K et `flip-stress`.
 
+### Découpage structurel de `motion-graph` — 2026-09-19
+
+Le fichier plat `src/runtime/motion/motion-graph.ts` a été supprimé et remplacé
+par le dossier `src/runtime/motion/motion-graph/`. Son entrée publique reste
+inchangée via `index.ts`. Le code est réparti selon quatre responsabilités
+directes : types internes, construction et indexation du graphe, résolution des
+poses, puis finalisation et reset.
+
+Ce changement ne crée ni API, ni circuit motion, ni comportement de présentation
+supplémentaire. Il conserve les appels existants de `runtime/motion/index.ts` et
+de `motion-system.ts`. Le typecheck et la suite complète CodPlay valident la
+compatibilité ; le plan de découverte ciblée reste toutefois `En cours` pour
+ses étapes fonctionnelles encore ouvertes.
+
 ### 4. Finaliser la préparation ciblée et le Seek synchrone — première passe réalisée
 
 - Préparer et capturer le groupe requis dans la même tâche synchrone.
