@@ -46,6 +46,18 @@ Les briques internes existent. L’assemblage public est engagé dans
 `packages/demos/src/v2/layout/layout.ts` passe maintenant par la façade publique.
 Il ne construit plus de catalogue et n'accède plus au runner.
 
+### Découpage structurel de `EngineFacadeImpl` — 2026-09-19
+
+Status: Fini pour cette tranche.
+
+Le fichier plat `src/facade/engine-facade.ts` est supprimé. Le point d'entrée
+reste `src/facade/engine-facade/index.ts` et l'orchestration est répartie entre
+des contrôleurs internes spécialisés : catalogue et compilation, ressources,
+horloge, events, instances et mounts. `EngineFacadeImpl` conserve uniquement
+la composition des dépendances, l'exposition des registres et l'ordre du
+teardown. Aucun nouveau circuit runtime ni aucune nouvelle surface publique
+n'est introduit.
+
 ## Références V2
 
 - [`codplay-v2-plan.md`](./codplay-v2-plan.md) : catalogue composé à
