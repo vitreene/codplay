@@ -9,9 +9,9 @@ import type {
   ScheduledMotionIntent,
 } from '../../motion'
 import { createScheduledMotionIntent } from '../../motion'
+import { captureHtmlLayoutSnapshot } from '../layout-snapshot'
 import { HtmlMotionPresentationHost } from '../motion-presentation-host'
 import {
-  captureCurrentHtmlMotionLayout,
   captureHtmlLiveMotionBoundary,
   captureHtmlMotionBoundaries,
   createMotionFirstSnapshotKey,
@@ -159,7 +159,7 @@ export class HtmlPlayerMotionController {
       itemIds: [persoKey],
       ...(storyId === undefined ? {} : { storyIds: [storyId] }),
     })
-    const snapshot = captureCurrentHtmlMotionLayout(
+    const snapshot = captureHtmlLayoutSnapshot(
       motionContainer.element,
       this.context.nodes.persoNodes,
       before,
@@ -218,7 +218,7 @@ export class HtmlPlayerMotionController {
         ...(liveStoryId === undefined ? {} : { storyId: liveStoryId }),
       })
       this.context.presentSceneForGeometryCapture(first.before)
-      firstSnapshot = captureCurrentHtmlMotionLayout(
+      firstSnapshot = captureHtmlLayoutSnapshot(
         liveContainer.element,
         this.context.nodes.persoNodes,
         first.before,
@@ -346,7 +346,7 @@ export class HtmlPlayerMotionController {
           ...(storyIds.length === 0 ? {} : { storyIds }),
         })
         this.context.presentSceneForGeometryCapture(beforeScene)
-        const snapshot = captureCurrentHtmlMotionLayout(
+        const snapshot = captureHtmlLayoutSnapshot(
           motionContainer.element,
           this.context.nodes.persoNodes,
           beforeScene,

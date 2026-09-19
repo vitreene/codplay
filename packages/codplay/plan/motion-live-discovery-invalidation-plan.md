@@ -375,6 +375,19 @@ de `motion-system.ts`. Le typecheck et la suite complète CodPlay valident la
 compatibilité ; le plan de découverte ciblée reste toutefois `En cours` pour
 ses étapes fonctionnelles encore ouvertes.
 
+### Découpage structurel de `motion-capture` — 2026-09-19
+
+Le fichier plat `src/runtime/runner-html/motion-capture.ts` a été supprimé et
+remplacé par le dossier `src/runtime/runner-html/motion-capture/`. L’entrée
+publique reste inchangée via `index.ts`. La capture est répartie entre
+l’orchestration des frontières, la résolution des intentions et endpoints, et
+la construction/fusion des snapshots et sélections.
+
+Le découpage retire aussi l’alias sans traitement `captureCurrentHtmlMotionLayout`
+au profit de `captureHtmlLayoutSnapshot`, ainsi que deux duplications présentes
+dans le fichier source. Aucun circuit de capture, contrat de boundary ou
+comportement de Play/Seek n’est ajouté ; le plan reste `En cours`.
+
 ### 4. Finaliser la préparation ciblée et le Seek synchrone — première passe réalisée
 
 - Préparer et capturer le groupe requis dans la même tâche synchrone.
