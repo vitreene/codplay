@@ -188,11 +188,11 @@ function isValidPerso(value: unknown): value is CompiledPerso {
 
 /** Checks one compiled relation while leaving library-specific fields opaque. */
 function isCompiledRel(value: unknown): value is CompiledRel {
-  if (!isPlainRecord(value) || !isPlainRecord(value.target)) return false
-  if (!Object.keys(value.target).every((key) => key === 'scene' || key === 'perso')) return false
-  if (!isNonEmptyString(value.target.scene)) return false
-  if (value.target.perso !== undefined && !isNonEmptyString(value.target.perso)) return false
-  return Object.entries(value).every(([key, entry]) => key === 'target' || isCompiledValue(entry))
+  if (!isPlainRecord(value) || !isNonEmptyString(value.host)) return false
+  if (value.target !== undefined && !isNonEmptyString(value.target)) return false
+  return Object.entries(value).every(([key, entry]) => (
+    key === 'host' || key === 'target' || isCompiledValue(entry)
+  ))
 }
 
 /** Checks one non-empty relation identifier at the serialized boundary. */

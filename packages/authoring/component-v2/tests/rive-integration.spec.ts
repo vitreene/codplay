@@ -54,7 +54,7 @@ describe('Rive V2 integration', () => {
     component.destroy()
   })
 
-  it('drives a state machine attached to the host target and maps one viseme input', () => {
+  it('drives a state machine attached to the host target and applies named inputs', () => {
     const artboard = createArtboard()
     const runtime = createRuntime(artboard)
     registerRiveResource('/state-machine.riv', { runtime, file: createFile(artboard) })
@@ -63,11 +63,11 @@ describe('Rive V2 integration', () => {
       services: emptyServices(),
       runtime: { getLibrary: () => runtime },
       perso: {
-        id: 'lip-sync',
+        id: 'state-machine',
         storyId: 'main',
         initial: {
           stateMachine: 'Coach machine',
-          lipSyncInput: 'lips sync id',
+          inputs: { blend: 0 },
         },
         actions: { start: { broadcast: { type: 'START' } } },
       },
@@ -80,7 +80,7 @@ describe('Rive V2 integration', () => {
       target: document.getTarget(),
       activeActions: [
         { name: 'start', startAt: 0, elapsedMs: 0, action: { broadcast: { type: 'START' } } },
-        { name: 'viseme', startAt: 0, elapsedMs: 0, action: { viseme: 'PP' } },
+        { name: 'input', startAt: 0, elapsedMs: 0, action: { inputs: { blend: 2 } } },
       ],
       registerAnimation: (animation) => animations.push(animation),
     })
@@ -174,7 +174,6 @@ type TestRiveArtboard = RiveArtboard & {
   lastStateMachineInput: {
     name: string
     value: number | boolean | undefined
-    asNumber(): TestRiveArtboard['lastStateMachineInput']
   }
   lastStateMachineAdvance: (seconds: number) => unknown
 }
@@ -182,9 +181,8 @@ type TestRiveArtboard = RiveArtboard & {
 function createArtboard(): TestRiveArtboard {
   const stateMachineByName = vi.fn(() => ({ id: 'state-machine' }))
   const lastStateMachineInput = {
-    name: 'lips sync id',
+    name: 'blend',
     value: 0 as number | boolean | undefined,
-    asNumber: vi.fn(function () { return lastStateMachineInput }),
   }
   const lastStateMachineAdvance = vi.fn(() => true)
   return {

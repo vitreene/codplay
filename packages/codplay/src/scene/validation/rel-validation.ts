@@ -9,7 +9,7 @@ export function validateRelInitial(value: unknown, context: ValidationContext): 
 
   context.diagnostics.warning(
     'AUTHOR_REL_INVALID',
-    'initial.rel must contain a target with a non-empty scene id and an optional perso id.',
+    'initial.rel must contain a non-empty host id and an optional target id.',
     {
       refs: context.refs,
       context: { path: `${context.path}.rel` },

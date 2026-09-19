@@ -32,7 +32,7 @@ export const RIVE_COMPONENTS: readonly RuntimeComponentDefinition[] = [
     validateAction: validateRiveAction,
     targetProvider: (component) => {
       if (!(component instanceof RiveDocumentComponent)) return undefined
-      return { value: component.getTarget(), scope: 'perso' }
+      return { value: component.getTarget(), scope: 'host' }
     },
   },
   {

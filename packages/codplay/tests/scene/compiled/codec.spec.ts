@@ -27,7 +27,7 @@ describe('CompiledSceneCodec', () => {
               id: 'geometry',
               type: 'threejs-geometry',
               initial: {},
-              rel: { target: { scene: 'scene-a', perso: 'geometry' } },
+              rel: { host: 'three-scene', target: 'geometry' },
               actions: { geometry: null },
             }],
             listen: [],
@@ -48,7 +48,8 @@ describe('CompiledSceneCodec', () => {
     expect(decoded.ok).toBe(true)
     if (decoded.ok) {
       expect(decoded.value.scene.stories.main?.persos[0]?.rel).toEqual({
-        target: { scene: 'scene-a', perso: 'geometry' },
+        host: 'three-scene',
+        target: 'geometry',
       })
     }
   })
@@ -66,7 +67,7 @@ describe('CompiledSceneCodec', () => {
               id: 'geometry',
               type: 'threejs-geometry',
               initial: {},
-              rel: { target: { scene: '' } },
+              rel: { host: '' },
               actions: {},
             }],
             listen: [],

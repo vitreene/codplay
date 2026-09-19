@@ -67,7 +67,7 @@ Cette relation :
 
 - appartient à `initial` ;
 - est immuable ;
-- porte une cible commune `{ scene, perso? }` ;
+- porte une cible commune `{ host, target? }` ;
 - peut être enrichie, typée et validée par l'intégration ;
 - n'est jamais résolue manuellement par le composant de feature.
 

@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours — orchestration runtime existante à migrer vers l'identité
+> Status: En cours — orchestration runtime migrée vers l'identité
 > `host`/`target` ; les responsabilités propres aux intégrations restent
-> séparées.
+> séparées et la validation transverse demeure ouverte.
 > CodPlay version: V2 foundation
 > Décision: 2026-09-18
 > Plan: [`../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../plan/2026-09-18-third-party-render-target-codplay-plan.md)
@@ -67,7 +67,9 @@ portée `host` expose le contexte de rendu ; une publication de portée `target`
 expose une capacité sélectionnable par `rel.target`. Pour la première
 verticale Three, cette clé correspond à l'identité auteur du composant publié
 (`grid`, `avatar1`, etc.) ; elle ne correspond jamais à un nœud interne du
-modèle. Le core ne parcourt jamais la valeur native.
+modèle. Le core ne parcourt jamais la valeur native. Lorsque `scope` est omis,
+la publication est traitée comme une cible attachée au host de la relation du
+composant ; un host déclare explicitement la portée `host`.
 
 ## Cycle de vie d'une instance
 
@@ -161,10 +163,10 @@ préchargement propres à Three.js, Rive, Lottie ou TalkingHead. Ces éléments
 seront ajoutés dans leurs unités externes après validation de leur contrat
 engine ; aucun composant tiers n'est introduit pour les simuler.
 
-## Vérification à reprendre après migration
+## Vérification restante
 
-Les tests de la tranche existante couvrent le même cycle avec l'ancien format
-`scene`/`perso`. Ils devront être migrés et couvrir :
+Les tests du pont couvrent le cycle avec l'identité `host`/`target` et doivent
+continuer à couvrir :
 
 - l'isolation des identités host/target ;
 - l'isolation entre deux players ;

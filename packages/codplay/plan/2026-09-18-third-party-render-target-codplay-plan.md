@@ -277,12 +277,13 @@ contrats de bibliothèque et de preload restent dans leurs tranches externes.
 - Le core compilé ne contient aucun type de bibliothèque.
 - Le `CompiledScene` reste sérialisable et ne contient aucun handle natif.
 
-### État au 18 septembre 2026
+### État au 19 septembre 2026
 
-La forme commune, la validation non bloquante, l'extraction compilée séparée,
-l'exclusion de `rel` des actions et le codec sont implémentés et couverts par
-les tests ciblés. La déclaration d'une unité engine et la dérivation de ses
-besoins propres à une bibliothèque restent dans les tranches du pont runtime.
+La forme commune `host`/`target`, la validation non bloquante, l'extraction
+compilée séparée, l'exclusion de `rel` des actions et le codec sont implémentés
+et couverts par les tests ciblés. La déclaration d'une unité engine et la
+dérivation de ses besoins propres à une bibliothèque restent dans les tranches
+du pont runtime.
 
 ## 8. Tranche B — orchestration et résolution des cibles
 
@@ -312,7 +313,7 @@ besoins propres à une bibliothèque restent dans les tranches du pont runtime.
 - Le chemin HTML existant conserve ses invariants sans connaître les types des
   bibliothèques tierces.
 
-### État d'implémentation au 18 septembre 2026
+### État d'implémentation au 19 septembre 2026
 
 La première partie de la tranche est engagée et couverte par la
 [spécification du pont runtime](../specs/third-party-target-bridge-spec.md) :
@@ -332,9 +333,11 @@ La première partie de la tranche est engagée et couverte par la
 
 La tranche B est fermée pour le core : les diagnostics d'identité sont émis par
 `SceneBuilder`, la résolution reste une recherche directe player-local et la
-compatibilité native n'est pas une responsabilité du core. Le code existant
-porte encore l'ancien format de relation ; sa migration vers `host/target`
-reste à réaliser. Aucun diagnostic de diffusion n'est ajouté pour ces cas.
+compatibilité native n'est pas une responsabilité du core. Le registre porte
+maintenant l'identité `{ host, target? }` ; les providers publient dans la
+portée `host` ou `target`, sans réintroduire une identité de scène logique.
+Aucun diagnostic de diffusion n'est ajouté pour ces cas. La validation réelle
+des intégrations et des cycles complets reste ouverte.
 
 ## 9. Tranche C — réconciliation des relations
 

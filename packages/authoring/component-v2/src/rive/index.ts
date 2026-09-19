@@ -19,6 +19,8 @@ export type {
 export type {
   RiveActionPayload,
   RiveClassName,
+  RiveInputValue,
+  RiveInputValues,
   RiveInitial,
   RiveStateMachineActionPayload,
   RiveStateMachineInitial,

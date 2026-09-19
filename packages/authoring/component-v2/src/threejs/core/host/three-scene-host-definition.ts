@@ -16,6 +16,6 @@ export const THREE_SCENE_HOST_DEFINITION: RuntimeComponentDefinition = {
   targetProvider: (component) => {
     if (!(component instanceof ThreeSceneHostComponent)) return undefined
     const target = component.getSceneTarget()
-    return target === undefined ? undefined : { value: target, scope: 'scene' }
+    return target === undefined ? undefined : { value: target, scope: 'host' }
   },
 }

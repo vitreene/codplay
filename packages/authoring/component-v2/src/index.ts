@@ -54,6 +54,8 @@ export type {
   RiveDocumentTarget,
   RiveFile,
   RiveFitName,
+  RiveInputValue,
+  RiveInputValues,
   RiveInitial,
   RiveRenderer,
   RiveResource,

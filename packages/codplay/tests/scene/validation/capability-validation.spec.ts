@@ -177,9 +177,9 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
       id: 'relation-title',
       type: 'tag',
-      initial: { rel: { target: { scene: '' } } },
+      initial: { rel: { host: '' } },
       actions: {
-        retarget: { rel: { target: { scene: 'other' } } },
+        retarget: { rel: { host: 'other', target: 'target' } },
       },
     }, diagnostics)
 

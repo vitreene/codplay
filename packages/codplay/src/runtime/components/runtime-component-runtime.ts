@@ -27,7 +27,11 @@ import type {
   RuntimeComponentSurfaceResolver,
 } from './component-surface-types'
 import { RuntimeTargetRegistry } from '../targets'
-import type { RuntimeTargetRegistration } from '../targets'
+import type {
+  RuntimeTargetIdentity,
+  RuntimeTargetRegistration,
+  RuntimeTargetScope,
+} from '../targets'
 import { BaseHTMLComponent } from './base-html-component'
 
 export type { RuntimeComponentIdentity } from '../catalog'
@@ -393,7 +397,7 @@ export class RuntimeComponentRuntime {
   /** Resolves the relation of one mounted component through this player-local target registry. */
   private resolveTarget(mounted: MountedComponent): unknown | undefined {
     if (mounted.relation === undefined) return undefined
-    return this.targetRegistry.resolve(mounted.relation.target)
+    return this.targetRegistry.resolve(mounted.relation)
   }
 
   /** Creates one component instance from its compiled scene declaration. */
@@ -461,13 +465,15 @@ export class RuntimeComponentRuntime {
         this.options.materializer,
       )
       if (targetPublication !== undefined) {
-        targetRegistration = this.targetRegistry.publish(
-          targetPublication.scope === 'scene'
-            ? { scene: scene.scene.scene.id }
-            : { scene: scene.scene.scene.id, perso: perso.persoId },
-          targetPublication.value,
+        const targetIdentity = resolvePublicationIdentity(
+          compiledPerso.rel,
+          perso.persoId,
+          targetPublication.scope,
         )
-        targetRegistration.setAvailable(perso.placement.mounted)
+        if (targetIdentity !== undefined) {
+          targetRegistration = this.targetRegistry.publish(targetIdentity, targetPublication.value)
+          targetRegistration.setAvailable(perso.placement.mounted)
+        }
       }
     } catch (error) {
       targetRegistration?.release()
@@ -495,6 +501,19 @@ export class RuntimeComponentRuntime {
     this.lastStates.set(componentId, state)
     this.stateRevisions.set(componentId, (this.stateRevisions.get(componentId) ?? 0) + 1)
   }
+}
+
+/** Maps one provider scope to the host/target identity used by the player registry. */
+function resolvePublicationIdentity(
+  relation: CompiledRel | undefined,
+  componentId: string,
+  scope: RuntimeTargetScope | undefined,
+): RuntimeTargetIdentity | undefined {
+  if ((scope ?? 'target') === 'host') {
+    return { host: componentId }
+  }
+  if (relation?.host === undefined) return undefined
+  return { host: relation.host, target: componentId }
 }
 
 /** Removes per-frame elapsed time while retaining the action identity and payload. */

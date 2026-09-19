@@ -20,15 +20,14 @@ composants et des intégrations tierces :
   modifient.
 
 La migration Avatar est explicitement hors périmètre. Elle fera l'objet d'un
-plan séparé, fondé sur TalkingHead et l'adaptation V1, puis soumis à
-validation avant toute implémentation.
+plan séparé, fondé sur TalkingHead, puis soumis à validation avant toute
+implémentation.
 
 ## 2. Références et constat actuel
 
 [TalkingHead](https://github.com/met4citizen/TalkingHead) reste la référence
-fonctionnelle du futur chantier Avatar. L'adaptation V1 montre les
-comportements à préserver, mais son regroupement des accès au modèle, du
-renderer et des contrôleurs ne doit pas être repris comme découpage V2.
+fonctionnelle du futur chantier Avatar. Son regroupement des accès au modèle,
+du renderer et des contrôleurs ne doit pas être repris comme découpage V2.
 
 Le socle V2 possède déjà des circuits à réutiliser :
 
@@ -227,17 +226,16 @@ doit pas transformer une convention Three.js en règle du core.
 
 ### Résultat intermédiaire Rive
 
-Le port V2 de la démo Rive V1 confirme le découpage suivant : le composant
-`rive` est le host matérialisé qui possède le canvas, le document, l’artboard,
-les animations linéaires et le commit ; `rive-state-machine` est un composant
-logique attaché à ce host. Le lip-sync est l’identifiant de ce composant state
-machine, et non un accès direct à un nœud du document.
+Le module Rive sépare le host matérialisé `rive` du composant logique
+`rive-state-machine`. Ce dernier expose une capacité générique : appliquer des
+valeurs nommées aux inputs de n’importe quelle state machine. Il ne connaît ni
+lip-sync, ni visèmes, ni émotion.
 
-La démo conserve le document, l’audio, les cues Rhubarb, la conversion des
-visèmes, la caption et le parcours de lecture V1. Les tests du composant
-utilisent des fixtures natives propres et ne prennent pas les valeurs de la
-démo comme oracle. La présence des inputs et les correspondances internes
-restent des conventions du module et de la ressource Rive préparée.
+Une application peut employer cette capacité pour un lip-sync, une expression
+ou une autre animation. La conversion de ses données vers les noms et valeurs
+du document Rive reste dans cette application et dans ses données préparées.
+Les tests du composant utilisent leurs propres fixtures natives et ne prennent
+pas les valeurs d'une démo comme oracle.
 
 ## 10. Points à décider avant tout code supplémentaire
 
@@ -258,11 +256,11 @@ restent des conventions du module et de la ressource Rive préparée.
 1. relire et valider cette note d'évolution ;
 2. transformer les décisions retenues en plan de migration des composants de
    base et des modules tiers ;
-3. réaliser la validation réelle sur les hôtes Three.js, le port Rive V1 et
+3. réaliser la validation réelle sur les hôtes Three.js, l’intégration Rive et
    l’hôte Lottie minimal ;
-4. rédiger ensuite un plan Avatar séparé, incluant l'analyse détaillée de la
-   V1 et de TalkingHead, puis le soumettre à validation avant toute migration.
+4. rédiger ensuite un plan Avatar séparé, incluant l'analyse détaillée de
+   TalkingHead, puis le soumettre à validation avant toute migration.
 
-Le mapping de visèmes du module Rive sert uniquement le port V1 de cette
-intégration. Aucune implémentation Avatar, geste ou expression ne doit être
+Le mapping de visèmes appartient uniquement à l'application Rive qui connaît
+son document. Aucune implémentation Avatar, geste ou expression ne doit être
 engagée au titre de cette note.

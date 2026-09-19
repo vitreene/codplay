@@ -221,8 +221,8 @@ ouverte selon les gates indiquées ci-dessus.
 - `src/runtime/player/pipeline/runtime-event-dispatcher.ts` porte le routage
   scene/story, la réinjection des sorties immédiates de straps, transforms et
   émissions déclarées bornées, ainsi que l'append journal;
-- `src/runtime/player/runtime-player.ts` expose `emit()` et reconcilie l'etat
-  depuis le journal;
+- `src/runtime/player/runtime-player/runtime-player.ts` expose `emit()` et
+  reconcilie l'etat depuis le journal;
 - `HtmlPlayerRunner` reçoit les occurrences motion et capture sur les mêmes
   materialisations auteur persistantes ; aucun player ni arbre DOM de mesure
   séparé n'est créé.

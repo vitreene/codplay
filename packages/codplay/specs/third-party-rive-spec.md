@@ -1,6 +1,6 @@
 # Spécification Rive V2 — host, document et state machine
 
-> Statut : **En cours — port V1 réalisé, chemin lip-sync validé dans Safari, validation complète ouverte**.
+> Statut : **En cours — host, document et state machine générique implémentés ; validation complète ouverte**.
 
 ## Rôle
 
@@ -48,32 +48,28 @@ Le composant accepte `START`, `PAUSE` et `STOP`.
 
 ```ts
 {
-  id: 'lip-sync',
+  id: 'state-machine',
   type: 'rive-state-machine',
   initial: {
     stateMachine: 'State Machine 1',
-    lipSyncInput: 'lips sync id',
-    emotionInput: 'emotion',
-    rel: { target: { scene: 'rive-scene', perso: 'avatar' } },
+    rel: { host: 'avatar' },
   },
   actions: {
     start: { broadcast: { type: 'START' } },
-    viseme: { viseme: 'PP' },
-    emotion: { emotion: 1 },
+    setMood: { inputs: { mood: 1 } },
   },
 }
 ```
 
-La relation cible le `perso` host qui publie le document. Dans le vocabulaire
-de l’architecture, ce `perso` est le host ; le champ `scene` de la forme
-relationnelle actuelle est seulement l’identifiant de la scène compilée. Le
-composant state machine ne reçoit pas `move`.
+La relation cible directement le host qui publie le document. `target` reste
+disponible lorsqu’un host publie plusieurs capacités nommées ; il ne désigne
+jamais un nœud interne du document Rive. Le composant state machine ne reçoit
+pas `move`.
 
-Le lip-sync est l’identifiant du composant state machine (`lip-sync` dans
-l’exemple), pas une propriété du document générique. `lipSyncInput` et
-`emotionInput` désignent des inputs natifs du document fourni par l’auteur.
-Le composant ne garantit pas que ces conventions internes existent ; il les
-utilise lorsque le host les expose.
+Les noms d’inputs et leurs valeurs sont des conventions du document fourni par
+l’auteur. Le composant state machine transmet uniquement les entrées nommées
+par l’auteur ; il ne connaît aucune sémantique de lip-sync, de visème ou
+d’émotion.
 
 ## Propriété des ressources et du rendu
 
@@ -93,30 +89,30 @@ utilise lorsque le host les expose.
 Le runtime ne charge pas de ressource dans un constructeur ou dans `update()`.
 Le host lit uniquement une ressource déjà préparée par le preload.
 
-## Port de la démo Rive V1
+## Application Rive de démonstration
 
-La démo V2 `packages/demos/src/v2/demos/rive/` reprend le parcours V1 complet
-avec le même document `/avatars/coach.riv`, le même audio
+La démo `packages/demos/src/v2/demos/rive/` exerce le host, la state machine,
+le même document `/avatars/coach.riv`, le même audio
 `/assets/1_7b_e.mp3`, le même artboard et la même state machine :
 
-- les cues Rhubarb sont convertis en noms de visèmes attendus par l'action
-  `avatar:viseme` lors de la construction des eventimes ;
-- les eventimes `avatar:viseme` portent directement ces noms jusqu'au composant
-  `lip-sync`, qui les projette sur l'input numérique Rive ;
+- les cues sont convertis par l'application en valeurs de l'input nommé du
+  document lors de la construction des eventimes ;
+- les eventimes portent ensuite des patches `inputs` génériques jusqu'au
+  composant state machine ;
 - les mots sont affichés dans le composant `tag` de caption ;
-- `audio`, `avatar` et `lip-sync` démarrent à l’eventime zéro ;
+- `audio`, `avatar` et la state machine démarrent à l’eventime zéro ;
 - la séquence conserve sa fin à `18_500` ms.
 
-Les données de cues et leur conversion sont portées dans la démo V2 sans
-importer le runtime V1. La relation entre l'avatar et les inputs internes du document reste
+Les données de cues et leur conversion sont portées dans l'application de
+démonstration. La relation entre l'avatar et les inputs internes du document reste
 une convention du fichier Rive choisi pour cette démonstration ; CodPlay ne
 cherche pas à inventer ou valider les nœuds internes du modèle.
 
 ## Validation
 
 La validation du module porte sur la forme minimale des profils et actions :
-`src`, `stateMachine`, les noms d’inputs, les broadcasts, `viseme` et
-`emotion`. Elle ne tente pas d’inspecter un fichier Rive ni son artboard.
+`src`, `stateMachine`, les patches `inputs` et les broadcasts. Elle ne tente
+pas d’inspecter un fichier Rive ni son artboard.
 
 Les tests d’intégration du package utilisent leurs propres artboards, runtime
 et state machines synthétiques. Ils ne lisent pas la scène de démonstration et

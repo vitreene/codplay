@@ -75,15 +75,10 @@ export interface CompiledRecord {
   readonly [key: string]: CompiledValue
 }
 
-/** Serializable target identity extracted from one immutable relation. */
-export type CompiledRelTarget = Readonly<{
-  scene: string
-  perso?: string
-}>
-
 /** Serializable relation retained separately from runtime target handles. */
 export type CompiledRel = CompiledRecord & Readonly<{
-  target: CompiledRelTarget
+  host: string
+  target?: string
 }>
 
 /** One compiled listen declaration after function extraction. */

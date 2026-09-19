@@ -55,23 +55,31 @@ export function validateRiveStateMachineInitial(value: unknown, context: Validat
   if (typeof value.stateMachine !== 'string' || value.stateMachine.length === 0) {
     reportInvalidComponentValue(context, 'AUTHOR_RIVE_STATE_MACHINE_NAME_INVALID', 'stateMachine must be a non-empty string.', 'stateMachine')
   }
-  if (value.lipSyncInput !== undefined && typeof value.lipSyncInput !== 'string') {
-    reportInvalidComponentValue(context, 'AUTHOR_RIVE_LIP_SYNC_INPUT_INVALID', 'lipSyncInput must be a string.', 'lipSyncInput')
-  }
-  if (value.emotionInput !== undefined && typeof value.emotionInput !== 'string') {
-    reportInvalidComponentValue(context, 'AUTHOR_RIVE_EMOTION_INPUT_INVALID', 'emotionInput must be a string.', 'emotionInput')
-  }
+  validateRiveInputValues(value.inputs, context, 'inputs')
 }
 
-/** Validates the small input protocol projected onto a Rive state machine. */
+/** Validates one generic named-input patch projected onto a Rive state machine. */
 export function validateRiveStateMachineAction(value: unknown, context: ValidationContext): void {
   validateRiveAction(value, context)
   if (!isComponentRecord(value)) return
-  if (value.viseme !== undefined && value.viseme !== null && typeof value.viseme !== 'string') {
-    reportInvalidComponentValue(context, 'AUTHOR_RIVE_VISEME_INVALID', 'viseme must be a string or null.', 'viseme')
+  validateRiveInputValues(value.inputs, context, 'inputs')
+}
+
+/** Validates optional named input values without inspecting native Rive data. */
+function validateRiveInputValues(
+  value: unknown,
+  context: ValidationContext,
+  property: string,
+): void {
+  if (value === undefined) return
+  if (!isComponentRecord(value)) {
+    reportInvalidComponentValue(context, 'AUTHOR_RIVE_INPUTS_INVALID', `${property} must be a plain object.`, property)
+    return
   }
-  if (value.emotion !== undefined && typeof value.emotion !== 'number') {
-    reportInvalidComponentValue(context, 'AUTHOR_RIVE_EMOTION_INVALID', 'emotion must be a number.', 'emotion')
+  for (const [name, inputValue] of Object.entries(value)) {
+    if ((typeof inputValue !== 'number' || !Number.isFinite(inputValue)) && typeof inputValue !== 'boolean') {
+      reportInvalidComponentValue(context, 'AUTHOR_RIVE_INPUT_VALUE_INVALID', `${property}.${name} must be a finite number or boolean.`, `${property}.${name}`)
+    }
   }
 }
 

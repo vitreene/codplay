@@ -45,14 +45,16 @@ export type RiveActionPayload = Readonly<{
   }>
 }>
 
+export type RiveInputValue = number | boolean
+
+export type RiveInputValues = Readonly<Record<string, RiveInputValue>>
+
 export type RiveStateMachineInitial = PersoInitialCommon &
   Readonly<{
     stateMachine: string
-    lipSyncInput?: string
-    emotionInput?: string
+    inputs?: RiveInputValues
   }>
 
 export type RiveStateMachineActionPayload = RiveActionPayload & Readonly<{
-  viseme?: string | null
-  emotion?: number
+  inputs?: RiveInputValues
 }>

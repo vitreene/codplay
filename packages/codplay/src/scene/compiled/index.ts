@@ -10,7 +10,6 @@ export type {
   CompiledListenRule,
   CompiledLengthValue,
   CompiledRel,
-  CompiledRelTarget,
   CompiledPerso,
   CompiledPrimitive,
   CompiledRecord,

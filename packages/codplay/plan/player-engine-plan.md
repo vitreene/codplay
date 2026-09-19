@@ -11,9 +11,11 @@
 
 ### Nettoyage structurel de `RuntimePlayer` — 2026-09-19
 
-La façade publique reste dans `runtime-player.ts` et conserve les contrats
-Engine/Player. Les responsabilités internes déjà présentes sont isolées dans
-`src/runtime/player/runtime-player/` :
+Status: Fini pour cette tranche structurelle.
+
+Le fichier plat `src/runtime/player/runtime-player.ts` est supprimé. Le dossier
+`src/runtime/player/runtime-player/` est désormais l'unique emplacement de
+l'implémentation et conserve les contrats Engine/Player via son `index.ts` :
 
 - `scene-state.ts` reconstruit l'état logique, la timeline structurelle et les
   synchronisations du store de straps ;
@@ -23,16 +25,24 @@ Engine/Player. Les responsabilités internes déjà présentes sont isolées dan
   les mises à jour d'état transitoires ;
 - `seek-controller.ts` possède la transaction de seek et ses phases de
   validation, commit, présentation et rollback ;
+- `lifecycle-controller.ts` possède l'initialisation, les transitions de
+  cycle de vie, le transport, le seek et la destruction ;
+- `event-controller.ts` possède le dispatch live, les eventimes, l'avancement
+  de frame et la borne terminale ;
+- `snapshot-controller.ts` possède les snapshots, projections et reconstructions
+  historiques ;
+- `presentation-controller.ts` possède les commandes de refresh, de capture
+  géométrique et de présentation externe ;
+- `player-state.ts` ne contient que l'état mutable partagé ;
 - les modules purs `eventime-routing.ts`, `motion-occurrences.ts`,
   `sequence-end.ts` et `snapshot-values.ts` portent uniquement leurs calculs
   spécialisés.
 
 Le découpage ne crée ni second player, ni second journal, ni circuit de
-présentation. `RuntimePlayer` reste l'orchestrateur de l'horloge, du journal,
-du lifecycle et des appels publics. Les valeurs et contrats n'ont pas été
-modifiés ; la validation repose sur la suite runtime existante, indépendante
-des démos. Le nettoyage reste rattaché au statut `En cours` tant que les
-responsabilités restantes du player n'ont pas fait l'objet d'une revue dédiée.
+présentation. `RuntimePlayer` ne conserve que le câblage des contrôleurs et la
+délégation de l'API publique. Les valeurs et contrats n'ont pas été modifiés.
+Validation effectuée : typecheck du package et suite runtime complète, 106
+fichiers et 688 tests passés.
 
 ## Frontiere
 

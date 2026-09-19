@@ -1,7 +1,7 @@
 import type { SceneDoc } from 'codplay';
 
 const THREE_GRID_SCENE_ID = 'threejs-grid';
-const THREE_GRID_TARGET = { scene: THREE_GRID_SCENE_ID };
+const THREE_GRID_HOST_ID = 'three-scene';
 const THREE_GRID_ANIMATION_DURATION_MS = 8_000;
 const THREE_GRID_CAMERA_DURATION_MS = 7_000;
 
@@ -57,7 +57,7 @@ export function createScene(): SceneDoc<string> {
 				id: 'main',
 				persos: [
 					{
-						id: 'scene',
+						id: THREE_GRID_HOST_ID,
 						type: 'three-scene-host',
 						initial: {
 							move: '@root',
@@ -70,8 +70,7 @@ export function createScene(): SceneDoc<string> {
 						id: 'camera',
 						type: 'three-camera',
 						initial: {
-							move: '@root',
-							rel: { target: THREE_GRID_TARGET },
+							rel: { host: THREE_GRID_HOST_ID },
 							kind: 'perspective',
 							position: [0, 0, 6],
 							lookAt: [0, 0, 0],
@@ -91,8 +90,7 @@ export function createScene(): SceneDoc<string> {
 						id: 'ambient-light',
 						type: 'three-light',
 						initial: {
-							move: '@root',
-							rel: { target: THREE_GRID_TARGET },
+							rel: { host: THREE_GRID_HOST_ID },
 							kind: 'ambient',
 							color: '#0000ff',
 							intensity: 1,
@@ -109,8 +107,7 @@ export function createScene(): SceneDoc<string> {
 						id: 'point-light',
 						type: 'three-light',
 						initial: {
-							move: '@root',
-							rel: { target: THREE_GRID_TARGET },
+							rel: { host: THREE_GRID_HOST_ID },
 							kind: 'point',
 							color: '#dbeafe',
 							intensity: 5.5,
@@ -130,8 +127,7 @@ export function createScene(): SceneDoc<string> {
 						id: 'grid',
 						type: 'three-instanced-grid',
 						initial: {
-							move: '@root',
-							rel: { target: THREE_GRID_TARGET },
+							rel: { host: THREE_GRID_HOST_ID },
 							gridSize: 4,
 							cellSize: 0.5,
 							expansion: 4,

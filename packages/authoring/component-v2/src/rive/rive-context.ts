@@ -48,7 +48,6 @@ export type RiveAnimationInstance = {
 export type RiveStateMachineInput = {
   name: string
   value: number | boolean | undefined
-  asNumber(): RiveStateMachineInput
 }
 
 export type RiveStateMachineInstance = {

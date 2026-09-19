@@ -61,9 +61,10 @@ Cette association n'est ni globale, ni recréée par chaque composant.
 
 L'auteur de scène place l'hôte HTML avec `move`, puis relie les composants
 spécialisés à leur fournisseur avec `rel`. Cette relation est déclarée dans
-`initial` et reste immuable. `target.scene` désigne la scène ;
-`target.perso` désigne éventuellement un perso de cette scène. L'intégration
-peut typer des champs supplémentaires lorsque sa bibliothèque l'exige.
+`initial` et reste immuable. `rel.host` désigne le host qui possède le contexte
+de rendu ; `rel.target` désigne éventuellement une capacité publiée dans ce
+contexte. L'intégration peut typer des champs supplémentaires lorsque sa
+bibliothèque l'exige.
 
 ```ts
 const threeScene = {
@@ -79,7 +80,7 @@ const geometry = {
   id: 'grid',
   type: 'three-instanced-grid',
   initial: {
-    rel: { target: { scene: 'three-scene' } },
+    rel: { host: 'three-scene' },
     columns: 15,
     rows: 9,
     spacing: 0.12,
@@ -90,7 +91,7 @@ const avatar = {
   id: 'guide',
   type: 'three-avatar',
   initial: {
-    rel: { target: { scene: 'three-scene' } },
+    rel: { host: 'three-scene' },
     src: '/assets/guide.glb',
   },
 }
@@ -99,7 +100,7 @@ const lipsync = {
   id: 'guide-lipsync',
   type: 'avatar-lipsync',
   initial: {
-    rel: { target: { scene: 'three-scene', perso: 'guide' } },
+    rel: { host: 'three-scene', target: 'guide' },
   },
 }
 ```

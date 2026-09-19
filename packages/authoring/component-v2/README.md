@@ -42,7 +42,7 @@ const build = codplay.build({
             id: 'camera',
             type: 'three-camera',
             initial: {
-              rel: { target: { scene: 'three-grid', perso: 'three-scene' } },
+              rel: { host: 'three-scene' },
               position: [0, 0, 6],
             },
           },
@@ -50,7 +50,7 @@ const build = codplay.build({
             id: 'light',
             type: 'three-light',
             initial: {
-              rel: { target: { scene: 'three-grid', perso: 'three-scene' } },
+              rel: { host: 'three-scene' },
               kind: 'ambient',
               intensity: 1,
             },
@@ -59,7 +59,7 @@ const build = codplay.build({
             id: 'grid',
             type: 'three-instanced-grid',
             initial: {
-              rel: { target: { scene: 'three-grid', perso: 'three-scene' } },
+              rel: { host: 'three-scene' },
               gridSize: 4,
             },
             actions: { start: { animate: true } },
@@ -84,8 +84,9 @@ const instance = codplay.instances.create({
 await instance.telco.play()
 ```
 
-La relation `rel.target` relie la caméra, la lumière et la grille à la cible
-publiée par le host Three. Le host Three est le seul composant matérialisé et
+La relation `rel.host` relie la caméra, la lumière et la grille au contexte
+publié par le host Three. `rel.target` peut ensuite sélectionner une capacité
+publiée dans ce contexte. Le host Three est le seul composant matérialisé et
 le seul à recevoir `move` ; la scène Three.js et le renderer restent propres à
 chaque instance. Pour ajouter un composant sur mesure, consultez
 [`src/threejs/README.md`](src/threejs/README.md).
@@ -108,6 +109,7 @@ const codplay = new CodPlay({
 
 Le document se déclare avec `type: 'rive'`, un `src` `.riv` et, si besoin, un
 nom d’artboard. La state machine se déclare séparément avec
-`type: 'rive-state-machine'` et une relation vers le `perso` host. Le lip-sync
-désigne l’identifiant de ce composant state machine.
+`type: 'rive-state-machine'` et une relation `rel.host` vers le host. Un lip-sync,
+une expression ou toute autre fonctionnalité d’application peut utiliser les
+valeurs nommées de ce composant pour piloter les inputs de la state machine.
 Voir [`src/rive/README.md`](src/rive/README.md).

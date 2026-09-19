@@ -43,11 +43,11 @@ describe('SceneBuilder', () => {
             id: 'geometry',
             type: 'tag',
             initial: {
-              rel: { target: { scene: 'relation-scene' } },
+              rel: { host: 'geometry', target: 'grid' },
             },
             actions: {
               retarget: {
-                rel: { target: { scene: 'other' } },
+                rel: { host: 'other', target: 'other-grid' },
               },
             },
           }],
@@ -58,7 +58,7 @@ describe('SceneBuilder', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const perso = result.compiledScene.scene.stories.main?.persos[0]
-    expect(perso?.rel).toEqual({ target: { scene: 'relation-scene' } })
+    expect(perso?.rel).toEqual({ host: 'geometry', target: 'grid' })
     expect(perso?.initial.rel).toBeUndefined()
     expect(perso?.actions.retarget).toEqual({})
     expect(Object.isFrozen(perso?.rel)).toBe(true)
@@ -72,13 +72,20 @@ describe('SceneBuilder', () => {
       stories: {
         main: {
           id: 'main',
-          persos: [{
-            id: 'geometry',
-            type: 'tag',
-            initial: {
-              rel: { target: { scene: 'other-scene' } },
+          persos: [
+            {
+              id: 'geometry',
+              type: 'tag',
+              initial: {},
             },
-          }],
+            {
+              id: 'known-host-consumer',
+              type: 'tag',
+              initial: {
+                rel: { host: 'geometry', target: 'opaque-target' },
+              },
+            },
+          ],
         },
         secondary: {
           id: 'secondary',
@@ -86,7 +93,7 @@ describe('SceneBuilder', () => {
             id: 'consumer',
             type: 'tag',
             initial: {
-              rel: { target: { scene: 'relation-target-scene', perso: 'missing' } },
+              rel: { host: 'missing-host', target: 'opaque-target' },
             },
           }],
         },
@@ -96,8 +103,7 @@ describe('SceneBuilder', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.diagnostics.warnings.map((diagnostic) => diagnostic.code)).toEqual([
-      'AUTHOR_REL_TARGET_SCENE_UNKNOWN',
-      'AUTHOR_REL_TARGET_PERSO_UNKNOWN',
+      'AUTHOR_REL_HOST_UNKNOWN',
     ])
   })
 
@@ -112,7 +118,7 @@ describe('SceneBuilder', () => {
             id: 'geometry',
             type: 'tag',
             initial: {
-              rel: { target: { scene: '' } },
+              rel: { host: '' },
             },
           }],
         },

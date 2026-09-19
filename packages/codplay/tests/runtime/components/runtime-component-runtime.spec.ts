@@ -217,7 +217,93 @@ function solvedTargetScene(hostMounted: boolean): SolvedScene {
                 id: 'consumer',
                 type: 'target-consumer',
                 initial: {},
-                rel: { target: { scene: 'scene', perso: 'host' } },
+                rel: { host: 'host' },
+                actions: {},
+              },
+              {
+                id: 'host',
+                type: 'target-host',
+                initial: {},
+                actions: {},
+              },
+            ],
+            listen: [],
+          },
+        },
+        listen: [],
+        tracks: {},
+      },
+    } as unknown as SolvedScene['scene'],
+    timeMs: 0,
+    sceneState: {},
+    storyStates: {},
+    persos,
+    graph: buildSolvedGraph(persos),
+    moveIssues: [],
+  }
+}
+
+function solvedPublishedTargetScene(): SolvedScene {
+  const persos = {
+    'main:consumer': {
+      key: 'main:consumer',
+      storyId: 'main',
+      persoId: 'consumer',
+      type: 'target-consumer',
+      state: {},
+      placement: { kind: MOUNT_PLACEMENT_OFF, mounted: false },
+      moveIssues: [],
+    },
+    'main:target': {
+      key: 'main:target',
+      storyId: 'main',
+      persoId: 'target',
+      type: 'target-object',
+      state: {},
+      placement: {
+        kind: MOUNT_PLACEMENT_ROOT,
+        mounted: true,
+        targetId: 'root',
+        target: { id: 'root', kind: 'root' as const, storyId: 'main' },
+      },
+      moveIssues: [],
+    },
+    'main:host': {
+      key: 'main:host',
+      storyId: 'main',
+      persoId: 'host',
+      type: 'target-host',
+      state: {},
+      placement: {
+        kind: MOUNT_PLACEMENT_ROOT,
+        mounted: true,
+        targetId: 'root',
+        target: { id: 'root', kind: 'root' as const, storyId: 'main' },
+      },
+      moveIssues: [],
+    },
+  }
+
+  return {
+    scene: {
+      scene: {
+        id: 'scene',
+        stories: {
+          main: {
+            id: 'main',
+            persos: [
+              {
+                id: 'consumer',
+                type: 'target-consumer',
+                initial: {},
+                rel: { host: 'host', target: 'target' },
+                actions: {},
+              },
+              {
+                id: 'target',
+                type: 'target-object',
+                initial: {},
+                rel: { host: 'host' },
                 actions: {},
               },
               {
@@ -418,7 +504,7 @@ describe('RuntimeComponentRuntime', () => {
       component: TargetHostComponent,
       modules: [],
       validateInitial: () => undefined,
-      targetProvider: () => ({ value: hostTarget }),
+      targetProvider: () => ({ value: hostTarget, scope: 'host' }),
     })
     catalog.registerComponent({
       type: 'target-consumer',
@@ -475,7 +561,7 @@ describe('RuntimeComponentRuntime', () => {
       validateInitial: () => undefined,
       targetProvider: (component) => {
         const initialized = component as InitializedTargetHostComponent
-        return initialized.initialized ? { value: initialized.target } : undefined
+        return initialized.initialized ? { value: initialized.target, scope: 'host' } : undefined
       },
     })
 
@@ -492,5 +578,45 @@ describe('RuntimeComponentRuntime', () => {
     runtime.sync(solvedScene(0, true, {}, 'initialized-target-host'))
 
     expect(host?.initialized).toBe(true)
+  })
+
+  it('resolves a target published by a component attached to a host', () => {
+    const catalog = new RuntimeCapabilityCatalog()
+    const publishedTarget = { kind: 'published-target' }
+    TargetConsumerComponent.instances.length = 0
+    catalog.registerComponent({
+      type: 'target-host',
+      component: TargetHostComponent,
+      modules: [],
+      validateInitial: () => undefined,
+      targetProvider: () => ({ value: { kind: 'host-target' }, scope: 'host' }),
+    })
+    catalog.registerComponent({
+      type: 'target-object',
+      component: TargetHostComponent,
+      modules: [],
+      validateInitial: () => undefined,
+      targetProvider: () => ({ value: publishedTarget, scope: 'target' }),
+    })
+    catalog.registerComponent({
+      type: 'target-consumer',
+      component: TargetConsumerComponent,
+      modules: [],
+      validateInitial: () => undefined,
+    })
+
+    const runtime = new RuntimeComponentRuntime({
+      catalog,
+      materializer: {
+        id: 'test',
+        context: {},
+        materializeComponent: () => { throw new Error('These components are substrate-neutral.') },
+        materializeScene: () => undefined,
+      },
+    })
+
+    runtime.sync(solvedPublishedTargetScene())
+
+    expect(TargetConsumerComponent.instances[0]?.receivedTargets).toEqual([publishedTarget])
   })
 })

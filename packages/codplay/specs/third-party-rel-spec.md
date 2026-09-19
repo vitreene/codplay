@@ -2,8 +2,8 @@
 
 ## Statut
 
-> Status: En cours — forme `host`/`target` décidée ; migration du core à faire
-> avant de déclarer la résolution commune fixe.
+> Status: En cours — forme `host`/`target` et migration du core implémentées ;
+> validation transverse du pont encore ouverte.
 > CodPlay version: V2 foundation
 > Décision: 2026-09-18
 > Plan: [`../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../plan/2026-09-18-third-party-render-target-codplay-plan.md)
@@ -78,9 +78,8 @@ modifier la relation et ne donne à l'auteur aucun accès au registre interne.
 
 ## Vérification
 
-La forme `host`/`target` est décidée, mais la tranche d'implémentation n'est
-pas encore migrée. Les tests de relation existants portent encore l'ancien
-format et doivent être adaptés avec le core :
+La forme `host`/`target` est implémentée. Les tests de relation couvrent
+maintenant la séparation, la résolution directe et le codec :
 
 - `tests/scene/validation/capability-validation.spec.ts` pour les warnings
   non bloquants et leurs chemins auteur ;

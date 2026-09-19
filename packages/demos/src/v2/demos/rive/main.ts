@@ -5,6 +5,7 @@ import {
 } from '@codplay/component-v2'
 import { MOUTH_CUES, phraseWordsFR } from './avatar-data/phrase-fr'
 import { RHUBARB_TO_TALKING_HEAD_VISEME } from './avatar-data/rhubarb-viseme-map'
+import { RIVE_COACH_INPUT_BY_VISEME } from './avatar-data/rive-viseme-map'
 
 const RIVE_SCENE_ID = 'rive-coach'
 const SCENE_END_MS = 18_500
@@ -14,16 +15,23 @@ export const RIVE_COACH_SRC = '/avatars/coach.riv'
 export const RIVE_COACH_ARTBOARD = 'Coach model'
 export const RIVE_COACH_STATE_MACHINE = 'State Machine 1'
 
-/** Converts the V1 Rhubarb cues into actions consumed by the Rive state machine. */
+/** Converts speech cues into generic named-input actions for the state machine. */
 export function buildRiveCoachVisemeEventimes() {
+  const inputName = 'lips sync id'
   return MOUTH_CUES.map((cue) => ({
     name: 'avatar:viseme',
     startAt: Math.round(cue.start * 1000),
-    data: { viseme: RHUBARB_TO_TALKING_HEAD_VISEME[cue.value] },
+    data: {
+      inputs: {
+        [inputName]: RIVE_COACH_INPUT_BY_VISEME[
+          RHUBARB_TO_TALKING_HEAD_VISEME[cue.value] ?? ''
+        ] ?? 0,
+      },
+    },
   }))
 }
 
-/** Converts the V1 word timings into subtitle eventimes. */
+/** Converts the authored word timings into subtitle eventimes. */
 export function buildRiveCoachWordEventimes() {
   return phraseWordsFR.map((word) => ({
     name: 'subtitle:word',
@@ -32,7 +40,7 @@ export function buildRiveCoachWordEventimes() {
   }))
 }
 
-/** Creates the complete V2 port of the V1 Rive coach scene. */
+/** Creates the Rive coach scene used by the demonstration. */
 export function createScene(): SceneDoc<string> {
   return {
     id: RIVE_SCENE_ID,
@@ -107,9 +115,7 @@ export function createScene(): SceneDoc<string> {
             type: 'rive-state-machine',
             initial: {
               stateMachine: RIVE_COACH_STATE_MACHINE,
-              lipSyncInput: 'lips sync id',
-              emotionInput: 'emotion',
-              rel: { target: { scene: RIVE_SCENE_ID, perso: 'avatar' } },
+              rel: { host: 'avatar' },
             },
             actions: {
               'avatar:start': { broadcast: { type: 'START' } },

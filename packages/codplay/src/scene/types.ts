@@ -11,7 +11,7 @@ import type { SlotAction, SlotInitial } from '../runtime/components/slot'
 import type { MoveOrderMode } from '../runtime/config/move'
 import type { Rel } from './rel'
 
-export type { Rel, RelTarget } from './rel'
+export type { Rel } from './rel'
 
 /** Function value allowed in authoring data before compilation extracts it. */
 export type AuthorFunction = (...args: readonly unknown[]) => unknown

@@ -9,7 +9,7 @@ type TargetEntry = {
   available: boolean
 }
 
-/** Stores live opaque targets for one player without sharing component surfaces. */
+/** Stores live opaque host targets for one player without sharing component surfaces. */
 export class RuntimeTargetRegistry {
   private readonly entries = new Map<string, TargetEntry>()
 
@@ -51,13 +51,13 @@ export class RuntimeTargetRegistry {
 
 /** Rejects malformed internal identities before they can alias one another. */
 function assertTargetIdentity(identity: RuntimeTargetIdentity): void {
-  if (identity.scene.trim().length === 0) throw new Error('Runtime target scene identity must not be empty.')
-  if (identity.perso !== undefined && identity.perso.trim().length === 0) {
-    throw new Error('Runtime target perso identity must not be empty.')
+  if (identity.host.trim().length === 0) throw new Error('Runtime target host identity must not be empty.')
+  if (identity.target !== undefined && identity.target.trim().length === 0) {
+    throw new Error('Runtime target identity must not be empty.')
   }
 }
 
-/** Serializes the two identity fields without using a second lookup registry. */
+/** Serializes the host and optional target without using a second lookup registry. */
 function serializeTargetIdentity(identity: RuntimeTargetIdentity): string {
-  return JSON.stringify([identity.scene, identity.perso ?? null])
+  return JSON.stringify([identity.host, identity.target ?? null])
 }

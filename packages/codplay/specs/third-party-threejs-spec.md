@@ -3,8 +3,8 @@
 ## Statut
 
 > En cours — déclaration core, hôte, caméra, lumières et grille procédurale
-> implémentés ; le passage de la relation `scene/perso` vers `host/target` et
-> le retrait de `move` des composants Three logiques restent à réaliser. Le
+> implémentés ; la relation `host/target` et le retrait de `move` des
+> composants Three logiques sont alignés. Le
 > calcul temporel de la grille, le rejeu de présentation au Seek et l'ordre de
 > commit de l'hôte sont couverts par des tests déterministes. Le cycle complet
 > de destruction reste à valider.

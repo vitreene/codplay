@@ -12,8 +12,8 @@ import type {
   RiveStateMachineInput,
   RiveStateMachineInstance,
 } from './rive-context'
-import { VISEME_TO_RIVE_ID } from './rive-viseme-map'
 import type {
+  RiveInputValues,
   RiveStateMachineActionPayload,
   RiveStateMachineInitial,
 } from './rive-types'
@@ -28,8 +28,6 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
   private readonly initialPlayback: RivePlayback
   private target: RiveDocumentTarget | undefined
   private stateMachine: RiveStateMachineInstance | undefined
-  private lipSyncInput: RiveStateMachineInput | undefined
-  private emotionInput: RiveStateMachineInput | undefined
   private targetRevision = -1
   private instanceRevision = 0
   private playback: RivePlayback
@@ -44,7 +42,7 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
     this.playback = this.initialPlayback
   }
 
-  /** Applies broadcast commands and the latest state-machine input actions. */
+  /** Applies broadcasts and generic named input values to the state machine. */
   public update(input: ComponentUpdateInput): void {
     const target = input.target as RiveDocumentTarget | undefined
     if (!this.ensureStateMachine(target)) return
@@ -106,10 +104,7 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
       }
 
       if (this.playback === 'paused' || this.playback === 'stopped') continue
-      if ('viseme' in action) this.applyViseme(action.viseme)
-      if ('emotion' in action && typeof action.emotion === 'number') {
-        if (this.emotionInput) this.emotionInput.value = action.emotion
-      }
+      this.applyInputValues(this.resolveActionInputs(action))
     }
   }
 
@@ -145,9 +140,8 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
     this.stateMachine = this.createStateMachine(target, artboard)
     this.targetRevision = target.getRevision()
     this.instanceRevision += 1
+    this.applyInputValues(this.initial.inputs)
     this.needsInputReplay = true
-    this.lipSyncInput = this.resolveInput(this.initial.lipSyncInput)
-    this.emotionInput = this.resolveInput(this.initial.emotionInput)
   }
 
   /** Ensures that the component points at the currently published host artboard. */
@@ -166,9 +160,8 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
     this.stateMachine = this.createStateMachine(target, artboard)
     this.instanceRevision += 1
     this.lastTimeMs = 0
+    this.applyInputValues(this.initial.inputs)
     this.needsInputReplay = true
-    this.lipSyncInput = this.resolveInput(this.initial.lipSyncInput)
-    this.emotionInput = this.resolveInput(this.initial.emotionInput)
     return true
   }
 
@@ -182,26 +175,33 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
     return new StateMachineInstance(reference, artboard)
   }
 
-  /** Resolves one optional named numeric input from the native state machine. */
+  /** Resolves one named input from the native state machine. */
   private resolveInput(name: string | undefined): RiveStateMachineInput | undefined {
     if (name === undefined || this.stateMachine === undefined) return undefined
     for (let index = 0; index < this.stateMachine.inputCount(); index += 1) {
       const input = this.stateMachine.input(index)
-      if (input.name === name) return input.asNumber()
+      if (input.name === name) return input
     }
     return undefined
   }
 
-  /** Projects one author viseme name onto the native numeric lip-sync input. */
-  private applyViseme(viseme: string | null | undefined): void {
-    if (!this.lipSyncInput) return
-    this.lipSyncInput.value = viseme === null || viseme === undefined
-      ? 0
-      : VISEME_TO_RIVE_ID[viseme] ?? 0
+  /** Returns the native input patch represented by one state-machine action. */
+  private resolveActionInputs(action: RiveStateMachineActionPayload): RiveInputValues | undefined {
+    return action.inputs
+  }
+
+  /** Applies named author values to matching native state-machine inputs. */
+  private applyInputValues(values: RiveInputValues | undefined): void {
+    if (values === undefined) return
+    for (const [name, value] of Object.entries(values)) {
+      const input = this.resolveInput(name)
+      if (input !== undefined) input.value = value
+    }
   }
 
   /** Reapplies active inputs after the host replaces its artboard. */
   private replayInputs(): void {
+    this.applyInputValues(this.initial.inputs)
     let acceptsInputs = this.initialPlayback === 'playing'
     for (const occurrence of this.activeActions) {
       const action = occurrence.action as RiveStateMachineActionPayload
@@ -209,10 +209,7 @@ export class RiveStateMachineComponent extends BaseComponent<RiveStateMachineIni
       if (broadcast === 'START') acceptsInputs = true
       if (broadcast === 'PAUSE' || broadcast === 'STOP') acceptsInputs = false
       if (!acceptsInputs) continue
-      if ('viseme' in action) this.applyViseme(action.viseme)
-      if ('emotion' in action && typeof action.emotion === 'number' && this.emotionInput) {
-        this.emotionInput.value = action.emotion
-      }
+      this.applyInputValues(this.resolveActionInputs(action))
     }
   }
 

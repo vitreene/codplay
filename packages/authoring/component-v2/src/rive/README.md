@@ -3,7 +3,8 @@
 Le module Rive V2 fournit deux composants complémentaires :
 
 - `rive` est le host HTML qui possède le canvas, le document et l’artboard ;
-- `rive-state-machine` est un composant logique relié à ce host par `rel`.
+- `rive-state-machine` est un composant logique relié à ce host par `rel` et
+  capable d'appliquer des valeurs nommées aux inputs de la state machine.
 
 Le host est le seul composant Rive qui reçoit `move`. Le composant state
 machine ne produit pas de DOM : il reçoit la cible publiée par le host et
@@ -38,15 +39,14 @@ const scene = {
           },
         },
         {
-          id: 'lip-sync',
+          id: 'state-machine',
           type: 'rive-state-machine',
           initial: {
             stateMachine: 'State Machine 1',
-            lipSyncInput: 'lips sync id',
-            rel: { target: { scene: 'rive-scene', perso: 'avatar' } },
+            rel: { host: 'avatar' },
           },
           actions: {
-            speak: { viseme: 'PP' },
+            setMood: { inputs: { mood: 1 } },
           },
         },
       ],
@@ -57,5 +57,6 @@ const scene = {
 
 Le nom de state machine et les noms d’inputs sont des conventions du document
 Rive fourni par l’auteur. CodPlay ne prétend pas inspecter la structure
-interne du fichier. Le module convertit les noms de visèmes connus en valeurs
-numériques pour l’input Rive sélectionné.
+interne du fichier. Le composant state machine transmet uniquement les valeurs
+nommées demandées par l’auteur ; une application peut ainsi piloter n’importe
+quel input sans imposer une sémantique métier au module.

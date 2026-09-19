@@ -2,18 +2,19 @@ import type { BaseComponent } from '../components/base-component'
 import type { RuntimeComponentIdentity } from '../catalog/runtime-capability-catalog'
 import type { RuntimeMaterializer } from '../materializer/materializer-types'
 
-/** Identifies one runtime target without describing its native representation. */
+/** Identifies one host and, optionally, one target published by that host. */
 export type RuntimeTargetIdentity = Readonly<{
-  scene: string
-  perso?: string
+  host: string
+  target?: string
 }>
 
-/** Selects the identity published by one component target provider. */
-export type RuntimeTargetScope = 'scene' | 'perso'
+/** Selects whether a provider publishes its own host or a host-local target. */
+export type RuntimeTargetScope = 'host' | 'target'
 
 /** Opaque target published by one mounted component definition. */
 export type RuntimeTargetPublication = Readonly<{
   value: unknown
+  /** Defaults to `target`; hosts declare `host` explicitly. */
   scope?: RuntimeTargetScope
 }>
 
