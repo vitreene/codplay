@@ -1,7 +1,15 @@
 import { InstancedMesh, Matrix4, Scene } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { ComponentAnimation, ComponentServices, ComponentUpdateInput } from 'codplay'
-import { createThreejsIntegration } from '../src'
+import type { CompiledScene } from 'codplay/scene/compiled'
+import { RuntimeCapabilityCatalog } from 'codplay/runtime/catalog'
+import { RuntimeEngine } from 'codplay/runtime/engine'
+import {
+  THREE_INSTANCED_GRID_DEFINITION,
+  THREEJS_CORE_COMPONENTS,
+  THREEJS_CORE_ENGINE,
+  THREE_LIBRARY,
+} from '../src'
 
 /** Supplies the empty service facade used by substrate-only test components. */
 function emptyServices(): ComponentServices {
@@ -13,76 +21,95 @@ function emptyServices(): ComponentServices {
 }
 
 describe('Three.js V2 integration', () => {
-  it('exposes one engine library and four related component definitions', () => {
-    const integration = createThreejsIntegration()
-
-    expect(integration.library.id).toBe('three')
-    expect(integration.components.map((definition) => definition.type)).toEqual([
+  it('declares generic core components separately from the specialized grid', () => {
+    expect(THREE_LIBRARY.id).toBe('three')
+    expect(THREEJS_CORE_COMPONENTS.map((definition) => definition.type)).toEqual([
       'three-scene-host',
       'three-camera',
       'three-light',
-      'three-instanced-grid',
     ])
-    expect(integration.components.every((definition) => definition.libraries?.includes('three'))).toBe(true)
-    expect(integration.engine.libraries?.register).toEqual([integration.library])
+    expect(THREE_INSTANCED_GRID_DEFINITION.type).toBe('three-instanced-grid')
+    expect(THREEJS_CORE_ENGINE.libraries?.register).toEqual([THREE_LIBRARY])
+    expect(THREEJS_CORE_COMPONENTS.every((definition) => definition.libraries?.includes('three'))).toBe(true)
   })
 
-  it('does not create native geometry before engine library preparation', async () => {
-    const integration = createThreejsIntegration()
-    const definition = integration.components.find((candidate) => candidate.type === 'three-instanced-grid')!
-    const component = new definition.component({
+  it('uses the engine-injected runtime when creating native geometry', async () => {
+    const engine = await createPreparedEngine()
+    const component = new THREE_INSTANCED_GRID_DEFINITION.component({
       services: emptyServices(),
+      runtime: engine.getComponentRuntimeContext(),
       perso: { id: 'grid', storyId: 'main', initial: { gridSize: 2 } },
     } as never)
     const target = createTarget()
     const input = createGridUpdate(target, [])
 
-    expect(() => component.update(input)).toThrow('Three.js has not been prepared')
-    await integration.library.load()
-    component.update(input)
-    expect(target.scene.children).toHaveLength(1)
-    expect(target.scene.children[0]).toBeInstanceOf(InstancedMesh)
-    component.destroy()
-    expect(target.scene.children).toHaveLength(0)
-    integration.library.release?.()
+    try {
+      component.update(input)
+      expect(target.scene.children).toHaveLength(1)
+      expect(target.scene.children[0]).toBeInstanceOf(InstancedMesh)
+      component.destroy()
+      expect(target.scene.children).toHaveLength(0)
+    } finally {
+      engine.destroy()
+    }
   })
 
   it('registers a reconstructible pulse from CodPlay absolute time', async () => {
-    const integration = createThreejsIntegration()
-    const definition = integration.components.find((candidate) => candidate.type === 'three-instanced-grid')!
-    const component = new definition.component({
+    const engine = await createPreparedEngine()
+    const component = new THREE_INSTANCED_GRID_DEFINITION.component({
       services: emptyServices(),
+      runtime: engine.getComponentRuntimeContext(),
       perso: { id: 'grid', storyId: 'main', initial: { gridSize: 2 } },
     } as never)
-    await integration.library.load()
-    const target = createTarget()
-    const animations: ComponentAnimation[] = []
-    component.update(createGridUpdate(target, animations))
-    expect(animations).toHaveLength(1)
-    const first = animations[0]!.sample(0)
-    const later = animations[0]!.sample(1_000)
-    expect(first?.value).toBe(0)
-    expect(later?.value).toBe(1_000)
-    const mesh = target.scene.children[0] as InstancedMesh
-    first?.apply()
-    const firstRotationY = mesh.rotation.y
-    const firstMatrix = new Matrix4()
-    mesh.getMatrixAt(0, firstMatrix)
-    later?.apply()
-    const laterRotationY = mesh.rotation.y
-    const laterMatrix = new Matrix4()
-    mesh.getMatrixAt(0, laterMatrix)
-    expect(laterRotationY).not.toBe(firstRotationY)
-    expect(laterMatrix.elements).not.toEqual(firstMatrix.elements)
+    try {
+      const target = createTarget()
+      const animations: ComponentAnimation[] = []
+      component.update(createGridUpdate(target, animations))
+      expect(animations).toHaveLength(1)
+      const first = animations[0]!.sample(0)
+      const later = animations[0]!.sample(1_000)
+      expect(first?.value).toBe(0)
+      expect(later?.value).toBe(1_000)
+      const mesh = target.scene.children[0] as InstancedMesh
+      first?.apply()
+      const firstRotationY = mesh.rotation.y
+      const firstMatrix = new Matrix4()
+      mesh.getMatrixAt(0, firstMatrix)
+      later?.apply()
+      const laterRotationY = mesh.rotation.y
+      const laterMatrix = new Matrix4()
+      mesh.getMatrixAt(0, laterMatrix)
+      expect(laterRotationY).not.toBe(firstRotationY)
+      expect(laterMatrix.elements).not.toEqual(firstMatrix.elements)
 
-    later?.apply()
-    const repeatedLaterMatrix = new Matrix4()
-    mesh.getMatrixAt(0, repeatedLaterMatrix)
-    expect(repeatedLaterMatrix.elements).toEqual(laterMatrix.elements)
-    component.destroy()
-    integration.library.release?.()
+      later?.apply()
+      const repeatedLaterMatrix = new Matrix4()
+      mesh.getMatrixAt(0, repeatedLaterMatrix)
+      expect(repeatedLaterMatrix.elements).toEqual(laterMatrix.elements)
+      component.destroy()
+    } finally {
+      engine.destroy()
+    }
   })
 })
+
+/** Prepares Three.js through the same engine boundary used by a player. */
+async function createPreparedEngine(): Promise<RuntimeEngine> {
+  const catalog = new RuntimeCapabilityCatalog()
+  catalog.registerLibrary(THREE_LIBRARY)
+  const engine = new RuntimeEngine(catalog)
+  const scene = {
+    requirements: {
+      components: [],
+      services: [],
+      modules: [],
+      resources: [],
+      libraries: ['three'],
+    },
+  } as unknown as CompiledScene
+  await engine.prepareScene(scene)
+  return engine
+}
 
 /** Builds the opaque scene target consumed by the feature component. */
 function createTarget(): {

@@ -1,24 +1,40 @@
-export { createThreejsIntegration } from './threejs/create-threejs-integration'
-export type { ThreejsIntegration } from './threejs/create-threejs-integration'
-export type { ThreeRuntime, ThreeRuntimeAccess } from './threejs/threejs-runtime'
-export { isThreeSceneTarget } from './threejs/threejs-target'
+export {
+  THREE_CAMERA_DEFINITION,
+  THREE_LIGHT_DEFINITION,
+  THREE_SCENE_HOST_DEFINITION,
+  THREEJS_CORE_COMPONENTS,
+  THREEJS_CORE_ENGINE,
+  THREE_LIBRARY,
+  BaseThreeComponent,
+  BaseThreeHTMLComponent,
+  ThreeCameraComponent,
+  ThreeLightComponent,
+  ThreeSceneHostComponent,
+} from './threejs/core'
+export {
+  THREE_INSTANCED_GRID_DEFINITION,
+  ThreeInstancedGridComponent,
+  sanitizeThreeInstancedGridInitial,
+  validateThreeInstancedGrid,
+} from './threejs/instanced-grid'
+export type {
+  ThreeInstancedGridAction,
+  ThreeInstancedGridInitial,
+} from './threejs/instanced-grid'
+export type { ThreeRuntime } from './threejs/core'
 export type {
   ThreeCameraAction,
   ThreeCameraInitial,
-  ThreeColorValue,
-  ThreeInstancedGridAction,
-  ThreeInstancedGridInitial,
   ThreeLightAction,
   ThreeLightInitial,
   ThreeRendererInitial,
   ThreeSceneHostInitial,
+  ThreeColorValue,
   ThreeSceneTarget,
-} from './threejs/threejs-types'
+} from './threejs/core'
 export {
-  sanitizeThreeInstancedGridInitial,
   sanitizeThreeSceneHostInitial,
   validateThreeCamera,
-  validateThreeInstancedGrid,
   validateThreeLight,
   validateThreeSceneHostInitial,
-} from './threejs/threejs-validation'
+} from './threejs/core/threejs-validation'

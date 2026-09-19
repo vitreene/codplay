@@ -102,6 +102,7 @@ export {
 } from './polygon'
 export type {
   ComponentService,
+  ComponentRuntimeContext,
   ComponentServices,
   ComponentInput,
   ComponentActionOccurrence,

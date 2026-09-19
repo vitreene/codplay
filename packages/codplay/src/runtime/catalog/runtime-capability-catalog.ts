@@ -54,19 +54,19 @@ export type RuntimeComponentServiceDefinition = ServiceRuntimeDefinition & Reado
   origin?: RuntimeCapabilityOrigin
 }>
 
-/** Constructor that creates one V2 component and exposes its own service declaration. */
-export type RuntimeComponentFactory = {
+/** Class that implements one V2 component and exposes its own service declaration. */
+export type RuntimeComponentClass = {
   new (input: never): BaseComponent<Record<string, unknown>>
   readonly declaredServices: readonly string[]
 }
 
 /** Input retained as a named alias for code that describes component construction. */
-export type RuntimeComponentFactoryInput = ComponentInput<Record<string, unknown>>
+export type RuntimeComponentClassInput = ComponentInput<Record<string, unknown>>
 
 /** Unified declaration of one runtime component type. */
 export type RuntimeComponentDefinition = Readonly<{
   type: string
-  component: RuntimeComponentFactory
+  component: RuntimeComponentClass
   modules: readonly string[]
   /** Engine libraries that must be prepared before this component is mounted. */
   libraries?: readonly string[]

@@ -6,7 +6,10 @@ import {
   type CompiledResourceManifest,
   type RuntimePreloadManifestInput,
 } from "codplay";
-import { createThreejsIntegration } from "@codplay/component-v2";
+import {
+  THREE_INSTANCED_GRID_DEFINITION,
+  THREEJS_CORE_ENGINE,
+} from "@codplay/component-v2";
 import { createV2DemoTelco } from "./telco";
 
 import type { V2DemoDefinition } from "../registry";
@@ -223,10 +226,15 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     const scene = module.createScene();
     let codplay: CodPlay;
     try {
-      const threejs = createThreejsIntegration();
       codplay = new CodPlay({
         engine: {
-          ...threejs.engine,
+          ...THREEJS_CORE_ENGINE,
+          components: {
+            register: [
+              ...(THREEJS_CORE_ENGINE.components?.register ?? []),
+              THREE_INSTANCED_GRID_DEFINITION,
+            ],
+          },
           diagnosticOutput: (diagnostic) => {
             if (!V2_DEMO_LOG_ENABLED) return;
             console.log("[CodPlay V2 diagnostic]", diagnostic);

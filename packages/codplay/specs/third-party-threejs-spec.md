@@ -2,7 +2,7 @@
 
 ## Statut
 
-> En cours — hôte, caméra, lumières et grille procédurale implémentés ; le
+> En cours — déclaration core, hôte, caméra, lumières et grille procédurale implémentés ; le
 > calcul temporel de la grille, le rejeu de présentation au Seek et l'ordre
 > de commit de l'hôte sont couverts par des tests déterministes. Le chemin
 > réel de la démo a été exercé dans Safari pour Play, pause, Seek
@@ -13,18 +13,23 @@ pas le core en matérialiseur Three.js et ne réutilise pas le runtime V1.
 
 ## Composition
 
-`createThreejsIntegration()` crée une unité liée à un engine :
+Le core Three.js fournit une déclaration d’engine réutilisable :
 
 - une définition de bibliothèque `three`, chargée par `engine.prepareScene()` ;
 - le composant HTML `three-scene-host`, qui possède le canvas, le renderer, la
   scène et le rendu final ;
-- les composants `three-camera`, `three-light` et
-  `three-instanced-grid`, qui reçoivent leur cible par `rel` ;
-- les validateurs et les types de données de ces composants.
+- les composants génériques `three-camera` et `three-light`, qui reçoivent leur
+  cible par `rel` ;
+- les validateurs et les types propres à ces composants.
 
-La factory garde la namespace Three.js dans une closure propre à l’intégration.
-Le core ne reçoit aucun type Three.js et ne conserve aucun handle natif dans
-`CompiledScene`.
+La grille `three-instanced-grid` est une déclaration spécialisée séparée. Elle
+peut être ajoutée explicitement à la liste `engine.components.register` de
+l'application qui l'emploie, sans faire partie du core Three.js.
+
+Les composants sont des classes directement référencées par leurs définitions.
+L'engine prépare Three.js et injecte sa valeur opaque dans leur contexte de
+construction ; aucune factory ne fabrique une classe de composant et aucun
+handle natif n'entre dans `CompiledScene`.
 
 ## Cible et responsabilités
 

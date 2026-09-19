@@ -2,8 +2,9 @@
 
 ## Statut
 
-> En cours — barrière engine/preparation implémentée ; première intégration
-> Three.js à construire.
+> En cours — barrière engine/preparation et injection du runtime préparé dans
+> les classes de composants implémentées ; la déclaration core Three.js et ses
+> composants spécialisés sont maintenant séparés.
 
 Cette spécification décrit uniquement le chargement préalable de la
 bibliothèque qui pilote un composant tiers. Elle ne décrit ni Three.js, ni
@@ -30,11 +31,11 @@ Une bibliothèque est déclarée par son package d'intégration :
 const threeLibrary: RuntimeLibraryDefinition = {
   id: 'three',
   async load() {
-    // Le package prépare Three.js dans sa propre closure.
-    await loadThreeRuntime()
+    return await loadThreeRuntime()
   },
-  release() {
+  release(runtime) {
     // Optionnel : libérer une ressource réellement possédée par cet engine.
+    void runtime
   },
 }
 ```
@@ -52,9 +53,10 @@ const threeSceneHost: RuntimeComponentDefinition = {
 ```
 
 Le builder dérive alors `requirements.libraries` dans le `CompiledScene`.
-Le core ne sérialise ni le module Three.js ni une valeur native : la factory
-du package conserve son accès à la bibliothèque, tandis que CodPlay ne garde
-que l'ID et l'état de préparation.
+Le core ne sérialise ni le module Three.js ni une valeur native. Après
+préparation, l'engine conserve la valeur opaque et l'injecte aux classes qui
+la réclament via le contexte runtime du composant. Une classe ne charge donc
+jamais la bibliothèque et ne consulte aucun état global.
 
 Si un composant référence un ID absent du catalogue engine, le build produit
 `AUTHOR_LIBRARY_UNKNOWN` comme warning auteur non bloquant. Le codec et le
@@ -96,6 +98,6 @@ restent, elles, sous la responsabilité du composant et de son intégration.
 
 ## Limites actuelles
 
-Cette tranche ne fournit pas encore la déclaration groupée d'une unité
-Three.js/Rive/Lottie ni le composant hôte correspondant. Elle fournit la
-barrière engine commune sur laquelle ces unités pourront être enregistrées.
+Cette spécification ne décrit pas les composants propres à Three.js, Rive ou
+Lottie. Chaque package d'intégration fournit ses classes et ses définitions,
+en s'appuyant sur la barrière engine décrite ici.

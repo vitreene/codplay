@@ -20,9 +20,22 @@ export type ComponentServices = Readonly<{
   apply: (node: unknown, patch: Record<string, unknown>) => void
 }>
 
+/**
+ * Engine-owned runtime dependencies made available to one component class.
+ *
+ * The component declares the library ID in its runtime definition. The
+ * engine prepares that library and injects its opaque value here; components
+ * never load a library or reach into a global runtime registry themselves.
+ */
+export type ComponentRuntimeContext = Readonly<{
+  getLibrary: <Runtime = unknown>(id: string) => Runtime
+}>
+
 /** Authoring data and services supplied to one V2 component instance. */
 export type ComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
   services: ComponentServices
+  /** Engine-prepared dependencies required by non-HTML component classes. */
+  runtime?: ComponentRuntimeContext
   perso: Readonly<{
     id: string
     storyId: string

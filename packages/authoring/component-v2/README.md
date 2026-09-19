@@ -1,16 +1,31 @@
 # Composants Three.js V2
 
-Ce package ajoute à CodPlay une première unité Three.js V2. Il fournit un hôte
-HTML, une caméra, des lumières et une grille de pavés animée par le temps
-CodPlay.
+Ce package fournit les composants génériques nécessaires à une scène Three.js
+V2 : un hôte HTML, une caméra et une lumière. Il fournit aussi des composants
+sur mesure, comme `three-instanced-grid`, qui sont enregistrés séparément.
+
+L'engine prépare Three.js avant de créer les composants. Les classes reçoivent
+ensuite le runtime préparé ; elles ne chargent pas la bibliothèque et ne
+possèdent pas de boucle de rendu privée.
 
 ```ts
 import { CodPlay } from 'codplay'
-import { createThreejsIntegration } from '@codplay/component-v2'
+import {
+  THREE_INSTANCED_GRID_DEFINITION,
+  THREEJS_CORE_ENGINE,
+} from '@codplay/component-v2'
 
-const three = createThreejsIntegration()
-const codplay = new CodPlay({ engine: three.engine })
+const engine = {
+  ...THREEJS_CORE_ENGINE,
+  components: {
+    register: [
+      ...(THREEJS_CORE_ENGINE.components?.register ?? []),
+      THREE_INSTANCED_GRID_DEFINITION,
+    ],
+  },
+}
 
+const codplay = new CodPlay({ engine })
 const build = codplay.build({
   scene: {
     id: 'three-grid',
@@ -70,6 +85,5 @@ await instance.telco.play()
 ```
 
 `rel` relie la caméra, la lumière et la grille à l’hôte. La scène Three.js et
-le renderer restent propres à chaque instance. L’engine charge Three.js avant
-la création de l’instance ; la grille est ensuite mise à jour par le temps
-CodPlay et l’hôte effectue le rendu final.
+le renderer restent propres à chaque instance. Pour ajouter un composant sur
+mesure, consultez [`src/threejs/README.md`](src/threejs/README.md).

@@ -9,7 +9,8 @@ import type { CompiledScene } from '../../../src/scene/compiled'
 
 describe('RuntimeEngine', () => {
   it('prepares each required library once and exposes readiness to init validation', async () => {
-    const load = vi.fn(async () => undefined)
+    const runtime = { name: 'prepared-three-runtime' }
+    const load = vi.fn(async () => runtime)
     const release = vi.fn()
     const catalog = new RuntimeCapabilityCatalog()
     catalog.registerLibrary({ id: 'three', load, release })
@@ -25,6 +26,7 @@ describe('RuntimeEngine', () => {
 
     await Promise.all([engine.prepareScene(scene), engine.prepareScene(scene)])
     expect(load).toHaveBeenCalledTimes(1)
+    expect(engine.getComponentRuntimeContext().getLibrary<typeof runtime>('three')).toBe(runtime)
 
     const after = new DiagnosticCollector({ output: vi.fn() })
     engine.validateRequirements(requirements, after)

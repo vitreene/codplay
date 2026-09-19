@@ -20,6 +20,7 @@ import type {
   ComponentAnimation,
   ComponentUpdateInput,
 } from './component-types'
+import type { ComponentRuntimeContext } from './component-types'
 import type {
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,
@@ -40,6 +41,8 @@ export type RuntimeComponentHandle = Readonly<{
 export type RuntimeComponentRuntimeOptions = Readonly<{
   catalog: RuntimeCapabilityCatalog
   materializer: RuntimeMaterializer
+  /** Engine-prepared dependencies passed unchanged to component classes. */
+  runtime?: ComponentRuntimeContext
   resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
   resourceMedia?: ReadonlyMap<string, RuntimePreloadMediaHandle>
 }>
@@ -92,7 +95,7 @@ export class RuntimeComponentRuntime {
   private readonly options: RuntimeComponentRuntimeOptions
   private moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance> = new Map()
 
-  /** Creates the runtime host from its factory and materialization callbacks. */
+  /** Creates the runtime host from its registered component class and materialization callbacks. */
   constructor(options: RuntimeComponentRuntimeOptions) {
     this.options = options
   }
@@ -415,6 +418,7 @@ export class RuntimeComponentRuntime {
         },
         resourceMetadata: this.options.resourceMetadata,
         resourceMedia: this.options.resourceMedia,
+        runtime: this.options.runtime,
       },
       identity,
       this.options.materializer,

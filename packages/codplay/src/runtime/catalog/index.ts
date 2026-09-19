@@ -6,8 +6,8 @@ export { createCoreRuntimeCatalog } from './create-core-runtime-catalog'
 export type {
   RuntimeCapabilityOrigin,
   RuntimeComponentDefinition,
-  RuntimeComponentFactory,
-  RuntimeComponentFactoryInput,
+  RuntimeComponentClass,
+  RuntimeComponentClassInput,
   RuntimeComponentIdentity,
   RuntimeComponentServiceContext,
   RuntimeComponentServiceDefinition,

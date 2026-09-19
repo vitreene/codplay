@@ -171,7 +171,7 @@ et refuse un composant qui n'est pas un `BaseHTMLComponent`.
 - Les packages `packages/authoring/components/threejs` et `rive` sont des
   implémentations V1 : ils importent `codplay-v1`, utilisent le contrat V1 de
   `RenderAdapter` et ne peuvent pas être branchés tels quels sur V2.
-- V2 sait déjà enregistrer une factory étrangère dans son catalogue, mais cette
+- V2 sait déjà enregistrer une classe étrangère dans son catalogue, mais cette
   déclaration est fournie directement à l'engine ; la préparation générique de
   la bibliothèque est maintenant en place, tandis que le chemin unifié de
   binding reste à construire.
@@ -365,7 +365,8 @@ connaît pas.
 
 ### Travail
 
-- Fournir une base ou une factory qui masque le raccordement.
+- Fournir une base de composant et le contexte runtime injecté par l'engine,
+  sans fabriquer dynamiquement les classes de composants.
 - Limiter le composant de feature à ses hooks de création, application d'état
   (`initialize`, `update`) et destruction.
 - Ne remettre au composant que la cible native typée et ses données résolues.

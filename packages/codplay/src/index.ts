@@ -7,6 +7,7 @@ export type {
   ComponentAnimationFrame,
   ComponentAnimationPresentationPhase,
   ComponentInput,
+  ComponentRuntimeContext,
   ComponentServices,
   ComponentUpdateInput,
   MaterializedPart,
@@ -79,8 +80,8 @@ export type {
 export type {
   RuntimeCapabilityOrigin,
   RuntimeComponentDefinition,
-  RuntimeComponentFactory,
-  RuntimeComponentFactoryInput,
+  RuntimeComponentClass,
+  RuntimeComponentClassInput,
   RuntimeComponentIdentity,
   RuntimeComponentServiceContext,
   RuntimeComponentServiceDefinition,

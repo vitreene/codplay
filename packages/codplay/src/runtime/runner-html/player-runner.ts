@@ -241,6 +241,7 @@ export class HtmlPlayerRunner {
       materializer,
       this.resourceMetadata,
       this.resourceMedia,
+      this.engine,
     )
     this.player = new RuntimePlayer(
       options.id,
@@ -1211,10 +1212,12 @@ function createComponentRuntime(
   materializer: RuntimeMaterializer,
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>,
   resourceMedia: ReadonlyMap<string, RuntimePreloadMediaHandle>,
+  engine: RuntimeEngine,
 ): RuntimeComponentRuntime {
   return new RuntimeComponentRuntime({
     catalog,
     materializer,
+    runtime: engine.getComponentRuntimeContext(),
     resourceMetadata,
     resourceMedia,
   })

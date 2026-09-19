@@ -12,6 +12,7 @@ import type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from './module-service-types'
+import type { ComponentRuntimeContext } from '../components/component-types'
 
 /** Optional engine resources supplied beside the unified capability catalog. */
 export type RuntimeEngineOptions = Readonly<{
@@ -63,10 +64,13 @@ type RuntimeInstance = Readonly<{
 export class RuntimeEngine {
   private readonly catalog: RuntimeCapabilityCatalog
   private readonly resources = new Set<string>()
-  private readonly preparedLibraries = new Set<string>()
+  private readonly preparedLibraries = new Map<string, unknown>()
   private readonly loadingLibraries = new Map<string, Promise<void>>()
   private readonly instances = new Map<string, RuntimeInstance>()
   private readonly idle: ResolvedRuntimeIdleOptions | false
+  private readonly componentRuntimeContext: ComponentRuntimeContext = {
+    getLibrary: <Runtime>(id: string): Runtime => this.requirePreparedLibrary<Runtime>(id),
+  }
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
   private running = false
@@ -91,13 +95,18 @@ export class RuntimeEngine {
   /**
    * Prepares every library required by a scene before any player can mount it.
    *
-   * The definition owns the foreign library and may keep its value in a
-   * package-local factory closure. The engine only guarantees ordering,
-   * de-duplicates concurrent preparation, and records readiness for init().
+   * The definition returns the foreign runtime value. The engine owns its
+   * preparation boundary, de-duplicates concurrent preparation, and injects
+   * the prepared value into component classes during player initialization.
    */
   async prepareScene(scene: CompiledScene): Promise<void> {
     this.assertUsable()
     await Promise.all((scene.requirements.libraries ?? []).map((id) => this.prepareLibrary(id)))
+  }
+
+  /** Returns the engine-scoped dependency context injected into component classes. */
+  getComponentRuntimeContext(): ComponentRuntimeContext {
+    return this.componentRuntimeContext
   }
 
   /** Reports compiled requirements unavailable from this engine. */
@@ -105,7 +114,7 @@ export class RuntimeEngine {
     reportMissingCapabilities('component', requirements.components, new Set(this.catalog.getComponents().map((definition) => definition.type)), diagnostics)
     reportMissingCapabilities('service', requirements.services, new Set(this.catalog.getServices().map((definition) => definition.name)), diagnostics)
     reportMissingCapabilities('module', requirements.modules, new Set(this.catalog.getModules().map((definition) => definition.id)), diagnostics)
-    reportMissingCapabilities('library', requirements.libraries ?? [], this.preparedLibraries, diagnostics)
+    reportMissingCapabilities('library', requirements.libraries ?? [], new Set(this.preparedLibraries.keys()), diagnostics)
     reportMissingCapabilities('resource', requirements.resources, this.resources, diagnostics)
   }
 
@@ -327,7 +336,7 @@ export class RuntimeEngine {
     this.stop()
     this.instances.clear()
     this.resources.clear()
-    for (const id of this.preparedLibraries) this.catalog.getLibrary(id)?.release?.()
+    for (const [id, runtime] of this.preparedLibraries) this.catalog.getLibrary(id)?.release?.(runtime)
     this.preparedLibraries.clear()
     this.loadingLibraries.clear()
     this.destroyed = true
@@ -346,8 +355,8 @@ export class RuntimeEngine {
 
     const loading = Promise.resolve()
       .then(() => definition.load())
-      .then(() => {
-        this.preparedLibraries.add(id)
+      .then((runtime) => {
+        this.preparedLibraries.set(id, runtime)
       })
       .catch((error) => {
         this.loadingLibraries.delete(id)
@@ -355,6 +364,14 @@ export class RuntimeEngine {
       })
     this.loadingLibraries.set(id, loading)
     return loading
+  }
+
+  /** Reads one prepared library for the component runtime context. */
+  private requirePreparedLibrary<Runtime>(id: string): Runtime {
+    if (!this.preparedLibraries.has(id)) {
+      throw new Error(`Runtime library is not prepared: ${id}`)
+    }
+    return this.preparedLibraries.get(id) as Runtime
   }
 
   /** Rejects operations after the engine-owned runtime has been destroyed. */

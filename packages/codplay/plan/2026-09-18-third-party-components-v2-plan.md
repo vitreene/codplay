@@ -49,6 +49,11 @@ ni preload, ni horloge, ni circuit d'events alternatif.
 - Aucun RAF ou timer de simulation privé.
 - Aucun chargement de bibliothèque ou de ressource dans le constructeur ou
   `update()`.
+- Les définitions de composants référencent directement des classes ; aucune
+  factory ne fabrique une classe pour fermer une dépendance runtime.
+- L'engine prépare les bibliothèques et injecte leurs valeurs opaques dans le
+  contexte de construction des classes. Cette injection est distincte de
+  l'injection player-local de `rel` vers `ComponentUpdateInput.target`.
 - La préparation du contexte possédé par un composant passe par sa phase
   `initialize()`, appelée après la matérialisation éventuelle et avant le
   premier `update()` ; elle ne lance aucun chargement.
@@ -76,7 +81,7 @@ Créer l'unité enregistrée auprès de l'engine. Elle regroupe :
 - le composant hôte HTML ;
 - le matérialiseur Three.js possédé par cet hôte ;
 - les types et validateurs de `rel` ;
-- la base ou la factory destinée aux composants de feature ;
+- le contexte runtime injecté aux classes de composants ;
 - les services, modules et stratégies de preload nécessaires.
 
 Cette unité masque la connexion. Un nouveau composant Three.js ne doit pas
@@ -89,8 +94,12 @@ une séquence et les commandes `play` et `pause` pilotées par CodPlay.
 
 ### État au 18 septembre 2026
 
-`@codplay/component-v2` fournit maintenant la factory d'unité, la déclaration
-engine de Three.js et les quatre définitions externes de la première verticale.
+`@codplay/component-v2` fournit maintenant la déclaration engine générique de
+Three.js, ses classes de core et la déclaration spécialisée séparée de la
+grille procédurale.
+Le test d'intégration prépare désormais Three.js par `RuntimeEngine` et
+vérifie que la classe spécialisée reçoit le runtime par le contexte injecté ;
+il ne fabrique plus ce contexte dans le test.
 Le calcul à partir du temps absolu et le commit final de l'hôte sont couverts
 par des tests déterministes. Le chemin réel de la démo V2 a été exercé dans
 Safari pour la préparation de la bibliothèque, Play/pause, Seek arrière/reprise
@@ -105,7 +114,7 @@ et resize. La validation du cycle complet de destruction reste ouverte.
 - L'hôte minimal peut être lancé, mis en pause et repris sans créer de
   géométrie de feature.
 
-Les types, la factory, la préparation de bibliothèque et l'isolation des
+Les types, les classes, la préparation de bibliothèque et l'isolation des
 géométries sont couverts par les tests du package. L'acceptation navigateur et
 la commande publique complète restent à exécuter.
 

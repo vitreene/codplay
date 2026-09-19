@@ -1,8 +1,6 @@
-import {
-  BaseComponent,
-  type ComponentAnimation,
-  type ComponentInput,
-  type ComponentUpdateInput,
+import type {
+  ComponentAnimation,
+  ComponentUpdateInput,
 } from 'codplay'
 import type {
   BufferGeometry,
@@ -11,9 +9,9 @@ import type {
   Object3D,
   Scene,
 } from 'three'
-import type { ThreeRuntimeAccess } from '../threejs-runtime'
-import { isThreeSceneTarget } from '../threejs-target'
-import type { ThreeInstancedGridInitial } from '../threejs-types'
+import { BaseThreeComponent } from '../core/threejs-component'
+import type { ThreeSceneTarget } from '../core/threejs-core-types'
+import type { ThreeInstancedGridInitial } from './three-instanced-grid-types'
 
 type GridPoint = Readonly<{ x: number; y: number; z: number }>
 
@@ -27,113 +25,101 @@ type GridState = ThreeInstancedGridInitial & Readonly<{
   animate?: boolean
 }>
 
-/** Creates the procedural grid component class bound to one Three.js runtime. */
-export function createThreeInstancedGridComponent(
-  runtimeAccess: ThreeRuntimeAccess,
-): {
-  new (input: ComponentInput<Record<string, unknown>>): ThreeInstancedGridComponentInstance
-  readonly declaredServices: readonly []
-} {
-  return class ThreeInstancedGridComponentImpl extends BaseComponent<Record<string, unknown>> {
-    static readonly declaredServices = [] as const
+/** Owns one procedural instanced grid attached to a related Three.js scene. */
+export class ThreeInstancedGridComponent extends BaseThreeComponent<ThreeInstancedGridInitial> {
+  static readonly declaredServices = [] as const
 
-    private mesh: InstancedMesh | undefined
-    private geometry: BufferGeometry | undefined
-    private material: Material | undefined
-    private scratch: Object3D | undefined
-    private layout: GridLayout | undefined
-    private signature: string | undefined
-    private attachedScene: Scene | undefined
+  private mesh: InstancedMesh | undefined
+  private geometry: BufferGeometry | undefined
+  private material: Material | undefined
+  private scratch: Object3D | undefined
+  private layout: GridLayout | undefined
+  private signature: string | undefined
+  private attachedScene: Scene | undefined
 
-    /** Creates or updates the grid and registers its CodPlay-time animation. */
-    update(input: ComponentUpdateInput<Record<string, unknown>>): void {
-      const target = isThreeSceneTarget(input.target) ? input.target : undefined
-      if (target === undefined) {
-        this.detach()
-        return
-      }
-      if (this.attachedScene !== undefined && this.attachedScene !== target.scene) this.detach()
+  /** Creates or updates the grid and registers its CodPlay-time animation. */
+  update(input: ComponentUpdateInput<ThreeInstancedGridInitial>): void {
+    const target = input.target as ThreeSceneTarget
+    if (this.attachedScene !== undefined && this.attachedScene !== target.scene) this.detach()
 
-      const state = input.state as GridState
-      const nextSignature = createGridSignature(state)
-      if (this.mesh === undefined || this.signature !== nextSignature) {
-        this.disposeMesh()
-        this.createMesh(state)
-        this.signature = nextSignature
-      }
-      if (this.mesh === undefined || this.layout === undefined || this.scratch === undefined) return
-      if (this.mesh.parent !== target.scene) target.scene.add(this.mesh)
-      this.attachedScene = target.scene
-
-      const animationAction = resolveAnimationAction(input)
-      const startAt = animationAction?.startAt ?? input.timeMs
-      if (animationAction === undefined) {
-        applyGridPose(this.mesh, this.layout, 0, state, this.scratch)
-        return
-      }
-
-      const animation: ComponentAnimation = {
-        id: 'three-instanced-grid-animation',
-        startAt,
-        endAt: Number.MAX_SAFE_INTEGER,
-        sample: (timeMs) => ({
-          value: timeMs,
-          apply: () => {
-            if (this.mesh !== undefined && this.layout !== undefined && this.scratch !== undefined) {
-              applyGridPose(this.mesh, this.layout, Math.max(0, timeMs - startAt), state, this.scratch)
-            }
-          },
-        }),
-      }
-      input.registerAnimation?.(animation)
-    }
-
-    /** Releases the geometry and material created by this grid component. */
-    destroy(): void {
-      this.detach()
+    const state = input.state as GridState
+    const nextSignature = createGridSignature(state)
+    if (this.mesh === undefined || this.signature !== nextSignature) {
       this.disposeMesh()
-      this.layout = undefined
-      this.scratch = undefined
+      this.createMesh(state)
+      this.signature = nextSignature
+    }
+    if (this.mesh === undefined || this.layout === undefined || this.scratch === undefined) return
+    if (this.mesh.parent !== target.scene) target.scene.add(this.mesh)
+    this.attachedScene = target.scene
+
+    const animationAction = resolveAnimationAction(input)
+    const startAt = animationAction?.startAt ?? input.timeMs
+    if (animationAction === undefined) {
+      applyGridPose(this.mesh, this.layout, 0, state, this.scratch)
+      return
     }
 
-    /** Removes the grid from its current scene without disposing it. */
-    private detach(): void {
-      if (this.mesh !== undefined && this.attachedScene !== undefined) this.attachedScene.remove(this.mesh)
-      this.attachedScene = undefined
+    const animation: ComponentAnimation = {
+      id: 'three-instanced-grid-animation',
+      startAt,
+      endAt: Number.MAX_SAFE_INTEGER,
+      sample: (timeMs) => ({
+        value: timeMs,
+        apply: () => {
+          if (this.mesh !== undefined && this.layout !== undefined && this.scratch !== undefined) {
+            applyGridPose(this.mesh, this.layout, Math.max(0, timeMs - startAt), state, this.scratch)
+          }
+        },
+      }),
     }
+    input.registerAnimation?.(animation)
+  }
 
-    /** Builds the native instanced mesh from validated serializable data. */
-    private createMesh(state: GridState): void {
-      const runtime = runtimeAccess.require()
-      const gridSize = resolveGridSize(state.gridSize)
-      const cellSize = resolvePositive(state.cellSize, 0.5)
-      const geometry = new runtime.BoxGeometry(cellSize, cellSize, cellSize)
-      const material = new runtime.MeshLambertMaterial({
-        color: state.color ?? '#64748b',
-        transparent: true,
-        opacity: resolveOpacity(state.opacity),
-      })
-      const mesh = new runtime.InstancedMesh(geometry, material, gridSize ** 3)
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      this.geometry = geometry
-      this.material = material
-      this.mesh = mesh
-      this.layout = createGridLayout(gridSize, resolvePositive(state.delayMaxMs, 500))
-      this.scratch = new runtime.Object3D()
-      applyGridPose(mesh, this.layout, 0, state, this.scratch)
-    }
+  /** Releases the geometry and material created by this grid component. */
+  destroy(): void {
+    this.detach()
+    this.disposeMesh()
+    this.layout = undefined
+    this.scratch = undefined
+  }
 
-    /** Disposes the component-owned native resources and clears references. */
-    private disposeMesh(): void {
-      this.mesh?.parent?.remove(this.mesh)
-      this.geometry?.dispose()
-      this.material?.dispose()
-      this.mesh = undefined
-      this.geometry = undefined
-      this.material = undefined
-      this.signature = undefined
-    }
+  /** Removes the grid from its current scene without disposing it. */
+  private detach(): void {
+    if (this.mesh !== undefined && this.attachedScene !== undefined) this.attachedScene.remove(this.mesh)
+    this.attachedScene = undefined
+  }
+
+  /** Builds the native instanced mesh from validated serializable data. */
+  private createMesh(state: GridState): void {
+    const gridSize = resolveGridSize(state.gridSize)
+    const cellSize = resolvePositive(state.cellSize, 0.5)
+    const geometry = new this.runtime.BoxGeometry(cellSize, cellSize, cellSize)
+    const material = new this.runtime.MeshLambertMaterial({
+      color: state.color ?? '#64748b',
+      transparent: true,
+      opacity: resolveOpacity(state.opacity),
+    })
+    const mesh = new this.runtime.InstancedMesh(geometry, material, gridSize ** 3)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    this.geometry = geometry
+    this.material = material
+    this.mesh = mesh
+    this.layout = createGridLayout(gridSize, resolvePositive(state.delayMaxMs, 500))
+    this.scratch = new this.runtime.Object3D()
+    applyGridPose(mesh, this.layout, 0, state, this.scratch)
+  }
+
+  /** Disposes the component-owned native resources and clears references. */
+  private disposeMesh(): void {
+    this.mesh?.parent?.remove(this.mesh)
+    this.geometry?.dispose()
+    this.material?.dispose()
+    this.mesh = undefined
+    this.geometry = undefined
+    this.material = undefined
+    this.signature = undefined
   }
 }
 
@@ -252,6 +238,3 @@ function resolveOpacity(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value)) return 0.35
   return Math.max(0, Math.min(1, value))
 }
-
-/** Public instance shape used by the integration's runtime type declarations. */
-export type ThreeInstancedGridComponentInstance = BaseComponent<Record<string, unknown>>
