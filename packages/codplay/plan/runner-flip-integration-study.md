@@ -12,6 +12,27 @@ les passages qui prescrivaient un catalogue à `init()`, un rebuild dans la
 présentation normale, `flipMode` ou des barrières de reset sont remplacés par la
 révision ci-dessous.
 
+### Découpage structurel de `HtmlPlayerRunner` — 2026-09-19
+
+Status: Fini pour cette tranche.
+
+Le fichier plat `src/runtime/runner-html/player-runner.ts` est supprimé. Le
+point d'entrée reste `src/runtime/runner-html/player-runner/index.ts` et
+l'implémentation est répartie entre :
+
+- `runtime-runner.ts`, qui conserve le câblage du host, l'API runner et les
+  commandes publiques ;
+- `motion-controller.ts`, qui possède la capture géométrique déclenchée par
+  occurrence, les graphes de présentation, les seeks et le cycle de vie motion ;
+- `runner-types.ts`, qui porte les contrats d'entrée et les types de frontière.
+
+Le circuit reste unique : le runner utilise le même `RuntimePlayer`, le même
+materializer et les mêmes materialisations DOM persistantes. Aucun second
+player, catalogue, journal ou chemin de capture n'a été introduit.
+Les adaptations ponctuelles sans responsabilité propre restent inline ; les
+helpers conservés correspondent à une normalisation ou à un fallback partagé
+par le flux du runner.
+
 ## Objet unique
 
 Cette tranche fournit le déplacement d'un élément entre des sources et cibles
@@ -197,7 +218,8 @@ leur timing au groupe.
 Fichiers :
 
 - `src/runtime/runner-html/layout-snapshot.ts` ;
-- `src/runtime/runner-html/player-runner.ts`.
+- `src/runtime/runner-html/player-runner/runtime-runner.ts` et
+  `src/runtime/runner-html/player-runner/motion-controller.ts`.
 
 La capture géométrique lit les nodes auteur persistants du scope du groupe. Elle
 ne crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
