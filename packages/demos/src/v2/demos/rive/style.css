@@ -1,0 +1,21 @@
+:scope.v2-demo-scene-slot:has(#rive-coach-stage) {
+  display: grid;
+  place-items: center;
+  min-height: 70vh;
+  padding: 1rem;
+  background: #111827;
+}
+
+#rive-coach-stage {
+  display: block;
+  width: min(100%, 600px);
+  height: min(100%, 600px);
+  border-radius: 0.5rem;
+  box-shadow: 0 24px 80px rgb(17 24 39 / 45%);
+}
+
+#rive-coach-stage [data-codplay-rive="document"] {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

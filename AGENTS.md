@@ -3,6 +3,7 @@
 ## Code style and structure
 
 - Write code that is easy to read and extend later.
+- Apply KISS and DRY: prefer the simplest implementation that satisfies the established contract, reuse existing logic, and avoid speculative abstractions, wrappers, and duplicated circuits.
 - Use English for function names and variable names.
 - Use kebab-case for file names.
 - Isolate each feature in its own dedicated folder.
@@ -43,6 +44,7 @@
 - Do not implement a plan item whose plan or decision is marked `A relire`. A plan is not a contract until it has been validated.
 - Do not invent missing contracts, APIs, services, event phases, runtime actions, or data paths. Mark the gap and ask for clarification when the specification does not decide it.
 - Demos are validation fixtures. They must exercise the real runtime path and must not introduce duplicate catalogs, duplicate remotes, alternate event circuits, or behavior that exists only to make the demo appear functional.
+- Tests must own their fixtures and values; they must not depend on demo scenes, timings, assets, or expected values, and behavioral tests must not be added to demos.
 - In `packages/demos/src/v2`, `layout/` owns the complete shared page: header, title, selector, remote, journal, engine/instance lifecycle, and scene host. Each `demos/<demo-id>/` module only constructs and returns its scene; it must not render a page or recreate those shared services.
 - Any unavoidable temporary bridge must be explicitly named or documented as `temp`, have a stated scope and removal condition, and must not be presented as a V2 contract.
 - A passing isolated unit test, typecheck, or build does not validate an integration. For browser-facing behavior, test the actual event, player, materializer, seek, replay, and lifecycle boundaries involved.

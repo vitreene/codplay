@@ -1,8 +1,10 @@
 import type {
   CompiledResourceManifest,
+  CodPlayEngineOptions,
   CodPlayEventime,
   CodPlayEventimeTarget,
   RuntimePreloadMode,
+  RuntimePreloadStrategy,
   SceneDoc,
 } from 'codplay'
 
@@ -31,6 +33,10 @@ export type V2DemoModule = Readonly<{
   preloadManifest?: CompiledResourceManifest
   /** Selects whether unavailable demo resources block the mount. */
   preloadMode?: RuntimePreloadMode
+  /** Adds foreign capabilities while the shared layout retains engine ownership. */
+  engineCapabilities?: Pick<CodPlayEngineOptions, 'components' | 'services' | 'modules' | 'libraries'>
+  /** Strategies consumed by the shared V2 preload service. */
+  preloadStrategies?: Readonly<Record<string, RuntimePreloadStrategy>>
   /** Optional external eventime sequence exposed by the common telco. */
   playback?: V2DemoPlayback
 }>

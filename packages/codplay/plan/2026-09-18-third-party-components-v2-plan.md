@@ -236,10 +236,10 @@ La forme de cette capacité et de son animation reste à définir après
 l'inventaire détaillé des besoins ; aucune API supplémentaire n'est introduite
 dans cette tranche.
 
-## 8. Tranche 5 — hôtes Rive et Lottie simples
+## 8. Tranche 5 — hôte Rive composé et hôte Lottie simple
 
-Après la première verticale Three.js, créer une première implémentation minimale
-pour chacune de ces bibliothèques. Elle doit rester comparable à un composant
+Après la première verticale Three.js, créer une implémentation initiale pour
+chacune de ces bibliothèques. Le host Rive reste comparable à un composant
 media du point de vue auteur :
 
 - une ressource préchargée ;
@@ -247,29 +247,33 @@ media du point de vue auteur :
 - une séquence unique ;
 - les commandes `play` et `pause` pilotées par CodPlay.
 
-Leur API auteur ne comprend que `play` et `pause`. Leurs parcours vérifient
-toutefois les frontières communes du runtime — engine, preload, horloge,
-pause/reprise, Seek lorsqu'il s'applique, commit et destruction — sans exposer
-les mécanismes avancés de la bibliothèque. Ils ne comprennent pas encore les
-state machines et inputs Rive, ni les segments, marqueurs, layers ou cibles
-internes Lottie.
+L'API du host reste limitée à `START`, `PAUSE` et `STOP`. Le module Rive ajoute
+toutefois le composant logique `rive-state-machine`, relié au host par `rel`,
+car le port V2 de la démo Rive V1 doit conserver son comportement de lip-sync.
+Le composant state machine possède l'instance native, ses inputs et la
+conversion des visèmes ; il ne reçoit pas `move` et ne matérialise pas de DOM.
 
-Le cas Rive avancé déjà disponible dans V1 reste toutefois un modèle de
-déploiement pour une tranche ultérieure :
-[`rive-coach-demo.ts`](../../demos/src/v1/codplay/rive-coach-demo.ts) et son
-[`VisemeLipSyncService`](../../authoring/components/rive/src/services/viseme-lipsync-service.ts)
-montrent le cas d'un composant Rive spécialisé qui applique des visèmes à une
-entrée de state machine. Il ne doit pas être incorporé au contrat de l'hôte
-minimal, mais ses besoins doivent rester couverts par la direction du pont pour
-que cette feature puisse être portée ensuite.
+Lottie reste limitée à son host simple dans cette tranche : ses segments,
+marqueurs, layers et cibles internes restent hors périmètre. Un concept propre
+à Rive ou Lottie reste dans son package et ne conduit pas à un second circuit
+dans le core.
 
-Les options avancées sont recensées pour la tranche suivante. Elles ne doivent
-pas être ajoutées par anticipation ni conduire à un second circuit dans le
-core. Si l'implémentation simple révèle une structure core incorrecte, la Gate 2
-est rouverte au lieu d'ajouter un adapter de compensation. Un concept propre à
-Rive ou Lottie reste dans son package.
+### État Rive — port V1 dans V2
 
-## 9. Avatar, lipsync, expressions et gestes — reportés
+`@codplay/component-v2` fournit maintenant le composant `rive`, le composant
+logique `rive-state-machine`, leur bibliothèque engine et la stratégie de
+preload. Le host possède le document, l’artboard et le commit ; la state
+machine reçoit la cible publiée par le host et pilote ses inputs sans produire
+de DOM. La démo V2 `rive` reprend le document `/avatars/coach.riv`, l’audio V1,
+les cues Rhubarb traduits lors de la construction des eventimes, la caption et
+la séquence de 18,5 secondes.
+
+La relation interne entre l’avatar et ses inputs reste une convention de la
+ressource Rive. Le port ne prétend pas rendre cette structure générique ni
+valider des nœuds de modèle ; l’enrichissement Avatar fera toujours l’objet
+d’un plan séparé.
+
+## 9. Avatar, expressions et gestes — reportés
 
 Ces composants sont explicitement retirés du périmètre de ce plan. Leur
 migration depuis TalkingHead et l'adaptation V1 fera l'objet d'un plan Avatar
@@ -277,8 +281,10 @@ distinct, avec analyse des comportements, découpage du core Avatar, dépendance
 et parcours d'acceptation. Ce plan sera soumis à validation avant toute
 modification de code.
 
-Aucun composant Avatar, lipsync, expression ou geste ne doit être implémenté
-au titre de cette tranche.
+Le composant state machine Rive et son mapping de visèmes servent le port de la
+démo Rive ; ils ne constituent pas encore la migration du lipsync Avatar.
+Aucun composant Avatar, expression ou geste ne doit être implémenté au titre de
+cette tranche.
 
 ## 12. Validation complète
 
@@ -290,7 +296,8 @@ validation comprend :
 - Play, pause, rate, Seek avant/arrière, reset et replay ;
 - resize, montage, démontage, retour de story et destruction ;
 - preload des bibliothèques, modèles, textures et données ;
-- hôtes Rive et Lottie simples conformes au périmètre play/pause ;
+- host Rive, state machine et port V1 conformes au parcours Play/Seek ;
+- host Lottie simple conforme au périmètre play/pause ;
 - contre-épreuves futures conformes aux cas avancés Rive et Lottie ; les cas
   Avatar/TalkingHead relèveront du plan séparé ;
 - absence de RAF et de chargement tardif ;

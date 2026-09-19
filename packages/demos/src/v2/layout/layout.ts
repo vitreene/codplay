@@ -1,5 +1,6 @@
 import {
   CodPlay,
+  type CodPlayCapabilityGroup,
   type CodPlayInstance,
   type CodPlayPublicEvent,
   type CodPlayTraceEvent,
@@ -229,12 +230,18 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       codplay = new CodPlay({
         engine: {
           ...THREEJS_CORE_ENGINE,
-          components: {
-            register: [
-              ...(THREEJS_CORE_ENGINE.components?.register ?? []),
-              THREE_INSTANCED_GRID_DEFINITION,
-            ],
-          },
+          components: mergeCapabilityGroup(
+            {
+              register: [
+                ...(THREEJS_CORE_ENGINE.components?.register ?? []),
+                THREE_INSTANCED_GRID_DEFINITION,
+              ],
+            },
+            module.engineCapabilities?.components,
+          ),
+          services: mergeCapabilityGroup(undefined, module.engineCapabilities?.services),
+          modules: mergeCapabilityGroup(undefined, module.engineCapabilities?.modules),
+          libraries: mergeCapabilityGroup(THREEJS_CORE_ENGINE.libraries, module.engineCapabilities?.libraries),
           diagnosticOutput: (diagnostic) => {
             if (!V2_DEMO_LOG_ENABLED) return;
             console.log("[CodPlay V2 diagnostic]", diagnostic);
@@ -247,6 +254,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
           idle: false,
         },
         pauseOnDocumentHidden: false,
+        preload: { strategies: module.preloadStrategies },
       });
     } catch (error) {
       log(`Engine creation failed: ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -351,4 +359,16 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       if (logFlushScheduled) logFlushScheduled = false;
     },
   };
+}
+
+/** Composes demo capabilities without moving engine ownership into a scene module. */
+function mergeCapabilityGroup<Definition>(
+  base: CodPlayCapabilityGroup<Definition> | undefined,
+  extra: CodPlayCapabilityGroup<Definition> | undefined,
+): CodPlayCapabilityGroup<Definition> | undefined {
+  if (base === undefined && extra === undefined) return undefined
+  return {
+    register: [...(base?.register ?? []), ...(extra?.register ?? [])],
+    override: [...(base?.override ?? []), ...(extra?.override ?? [])],
+  }
 }

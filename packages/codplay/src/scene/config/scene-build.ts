@@ -6,6 +6,7 @@ export const SCENE_BUILD_CONFIG = {
   /** Logical unit used for structured numeric geometry at the compilation boundary. */
   logicalLengthUnit: 'cqw',
   resourceTypeByExtension: {
+    '.riv': 'rive',
     '.mp4': 'video',
     '.webm': 'video',
     '.ogv': 'video',

@@ -185,6 +185,24 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       };
     },
   },
+  {
+    id: "rive",
+    path: "?demo=rive",
+    title: "Rive lip-sync",
+    description: "Le document Rive V1 est porté par un host et une state machine V2 distincte.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/rive/main"),
+        import("./demos/rive/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        engineCapabilities: module.engineCapabilities,
+        preloadStrategies: module.preloadStrategies,
+      };
+    },
+  },
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */

@@ -42,7 +42,7 @@ const build = codplay.build({
             id: 'camera',
             type: 'three-camera',
             initial: {
-              rel: { host: 'three-scene' },
+              rel: { target: { scene: 'three-grid', perso: 'three-scene' } },
               position: [0, 0, 6],
             },
           },
@@ -50,7 +50,7 @@ const build = codplay.build({
             id: 'light',
             type: 'three-light',
             initial: {
-              rel: { host: 'three-scene' },
+              rel: { target: { scene: 'three-grid', perso: 'three-scene' } },
               kind: 'ambient',
               intensity: 1,
             },
@@ -59,7 +59,7 @@ const build = codplay.build({
             id: 'grid',
             type: 'three-instanced-grid',
             initial: {
-              rel: { host: 'three-scene' },
+              rel: { target: { scene: 'three-grid', perso: 'three-scene' } },
               gridSize: 4,
             },
             actions: { start: { animate: true } },
@@ -84,9 +84,30 @@ const instance = codplay.instances.create({
 await instance.telco.play()
 ```
 
-`rel.host` relie la caméra, la lumière et la grille au host. Le host Three est
-le seul composant matérialisé et le seul à recevoir `move` ; la scène Three.js
-et le renderer restent propres à chaque instance. Pour viser une cible publiée
-dans le host, ajoutez `target`, par exemple
-`rel: { host: 'three-scene', target: 'grid' }`. Pour ajouter un composant sur
-mesure, consultez [`src/threejs/README.md`](src/threejs/README.md).
+La relation `rel.target` relie la caméra, la lumière et la grille à la cible
+publiée par le host Three. Le host Three est le seul composant matérialisé et
+le seul à recevoir `move` ; la scène Three.js et le renderer restent propres à
+chaque instance. Pour ajouter un composant sur mesure, consultez
+[`src/threejs/README.md`](src/threejs/README.md).
+
+## Rive
+
+Le module fournit un host `rive` qui charge et joue un document Rive, ainsi
+qu’un composant logique `rive-state-machine` pour piloter une state machine
+attachée au host. Le package fournit les capacités et la stratégie de preload :
+
+```ts
+import { CodPlay } from 'codplay'
+import { RIVE_ENGINE, RIVE_PRELOAD_STRATEGIES } from '@codplay/component-v2'
+
+const codplay = new CodPlay({
+  engine: RIVE_ENGINE,
+  preload: { strategies: RIVE_PRELOAD_STRATEGIES },
+})
+```
+
+Le document se déclare avec `type: 'rive'`, un `src` `.riv` et, si besoin, un
+nom d’artboard. La state machine se déclare séparément avec
+`type: 'rive-state-machine'` et une relation vers le `perso` host. Le lip-sync
+désigne l’identifiant de ce composant state machine.
+Voir [`src/rive/README.md`](src/rive/README.md).

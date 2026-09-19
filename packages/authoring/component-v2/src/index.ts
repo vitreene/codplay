@@ -38,3 +38,28 @@ export {
   validateThreeLight,
   validateThreeSceneHostInitial,
 } from './threejs/core/threejs-validation'
+export {
+  RIVE_COMPONENTS,
+  RIVE_ENGINE,
+  RIVE_LIBRARY,
+  RiveDocumentComponent,
+  RiveStateMachineComponent,
+  RIVE_PRELOAD_STRATEGIES,
+} from './rive'
+export type {
+  RiveActionPayload,
+  RiveAlignmentName,
+  RiveArtboard,
+  RiveClassName,
+  RiveDocumentTarget,
+  RiveFile,
+  RiveFitName,
+  RiveInitial,
+  RiveRenderer,
+  RiveResource,
+  RiveRuntime,
+  RiveStateMachineActionPayload,
+  RiveStateMachineInitial,
+  RiveStateMachineInput,
+  RiveStateMachineInstance,
+} from './rive'

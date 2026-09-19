@@ -225,6 +225,20 @@ préchargement, l'application de l'état, le commit, le reset, le seek, la
 destruction et la possibilité de contributions multiples. La comparaison ne
 doit pas transformer une convention Three.js en règle du core.
 
+### Résultat intermédiaire Rive
+
+Le port V2 de la démo Rive V1 confirme le découpage suivant : le composant
+`rive` est le host matérialisé qui possède le canvas, le document, l’artboard,
+les animations linéaires et le commit ; `rive-state-machine` est un composant
+logique attaché à ce host. Le lip-sync est l’identifiant de ce composant state
+machine, et non un accès direct à un nœud du document.
+
+La démo conserve le document, l’audio, les cues Rhubarb, la conversion des
+visèmes, la caption et le parcours de lecture V1. Les tests du composant
+utilisent des fixtures natives propres et ne prennent pas les valeurs de la
+démo comme oracle. La présence des inputs et les correspondances internes
+restent des conventions du module et de la ressource Rive préparée.
+
 ## 10. Points à décider avant tout code supplémentaire
 
 - la forme finale et la portée exacte de `rel.host` et `rel.target` ;
@@ -244,10 +258,11 @@ doit pas transformer une convention Three.js en règle du core.
 1. relire et valider cette note d'évolution ;
 2. transformer les décisions retenues en plan de migration des composants de
    base et des modules tiers ;
-3. réaliser la validation réelle sur les hôtes Three.js, Rive et Lottie
-   minimaux ;
+3. réaliser la validation réelle sur les hôtes Three.js, le port Rive V1 et
+   l’hôte Lottie minimal ;
 4. rédiger ensuite un plan Avatar séparé, incluant l'analyse détaillée de la
    V1 et de TalkingHead, puis le soumettre à validation avant toute migration.
 
-Aucune implémentation Avatar, lipsync, geste ou expression ne doit être
+Le mapping de visèmes du module Rive sert uniquement le port V1 de cette
+intégration. Aucune implémentation Avatar, geste ou expression ne doit être
 engagée au titre de cette note.
