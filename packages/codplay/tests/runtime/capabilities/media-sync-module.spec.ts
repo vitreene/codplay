@@ -431,6 +431,40 @@ describe('V2 media-sync module service', () => {
     expect(videoCalls).toEqual(['stop:5890'])
   })
 
+  it('replays media when the terminal timeline returns to its initial time', () => {
+    let paused = true
+    let currentMs = 0
+    const calls: string[] = []
+    const component = {
+      seekTo: (value: number) => { calls.push(`seek:${value}`); currentMs = value },
+      play: () => { calls.push('play'); paused = false },
+      pause: () => { calls.push('pause'); paused = true },
+      stopAt: (value: number) => { calls.push(`stop:${value}`); currentMs = value; paused = true },
+      getCurrentTimeMs: () => currentMs,
+      getDurationMs: () => 1_200,
+      isPaused: () => paused,
+    }
+    const service = createMediaSyncModuleService({
+      playerId: 'terminal-replay',
+      compiledScene,
+      componentSurfaces: componentSurfaces(() => component),
+    })
+
+    service.initializeScene?.(solved(0))
+    service.onScenePresented?.(solved(0), 'paused')
+    service.onScenePresented?.(solved(200), 'playing')
+    currentMs = 1_200
+    paused = true
+    service.onScenePresented?.(solved(1_200), 'playing')
+    calls.length = 0
+
+    service.onScenePresented?.(solved(0), 'playing')
+
+    expect(calls).toEqual(['pause', 'seek:0', 'play'])
+    expect(currentMs).toBe(0)
+    expect(paused).toBe(false)
+  })
+
   it('falls back to the ticker while the master media is paused', () => {
     const service: RuntimeModuleServiceInstance = createMediaSyncModuleService({
       playerId: 'test-player',

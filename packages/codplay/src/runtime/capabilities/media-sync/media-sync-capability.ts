@@ -50,6 +50,7 @@ export function createMediaSyncModuleService(
   let nextActivationOrder = 1
   let forceResync = false
   let replayBroadcastsOnNextPresentation = false
+  let lastPresentedTimeMs: number | undefined
 
   const service: RuntimeModuleServiceInstance = {
     initializeScene: (scene) => initializeMediaStates(scene, mediaById),
@@ -58,6 +59,9 @@ export function createMediaSyncModuleService(
       const occurrences = collectBroadcastOccurrences(scene)
       const nextSignature = createSceneSignature(scene, occurrences)
       const nextOccurrenceKeys = new Set(occurrences.map(createBroadcastOccurrenceKey))
+      if (lastPresentedTimeMs !== undefined && scene.timeMs < lastPresentedTimeMs) {
+        replayBroadcastsOnNextPresentation = true
+      }
       const fullReplayRequested = sceneSignature === undefined || replayBroadcastsOnNextPresentation
       if (fullReplayRequested) {
         nextActivationOrder = 1
@@ -81,6 +85,7 @@ export function createMediaSyncModuleService(
       }
       sceneSignature = nextSignature
       broadcastOccurrenceKeys = nextOccurrenceKeys
+      lastPresentedTimeMs = scene.timeMs
       if (forceResync) {
         for (const state of mediaById.values()) state.needsResync = true
         forceResync = false
@@ -127,6 +132,7 @@ export function createMediaSyncModuleService(
       broadcastOccurrenceKeys = new Set()
       nextActivationOrder = 1
       replayBroadcastsOnNextPresentation = false
+      lastPresentedTimeMs = undefined
     },
   }
 
