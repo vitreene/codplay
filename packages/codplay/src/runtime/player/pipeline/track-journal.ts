@@ -37,6 +37,9 @@ export type RuntimeTrackEvent = Readonly<{
   visibility?: CompiledEventime['visibility']
 }>
 
+/** Runtime event context that may also describe a compiled event reached during playback. */
+export type RuntimeTraceEvent = Omit<RuntimeTrackEvent, 'eventSeq'> & Partial<Pick<RuntimeTrackEvent, 'eventSeq'>>
+
 /** One story reset boundary retained by the runtime journal. */
 export type RuntimeStoryResetBoundary = Readonly<{
   applyAtMs: number

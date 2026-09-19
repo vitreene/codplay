@@ -10,6 +10,7 @@ export const THREE_INSTANCED_GRID_DEFINITION: RuntimeComponentDefinition = {
   type: 'three-instanced-grid',
   component: ThreeInstancedGridComponent,
   modules: [],
+  runtimeProfile: 'attached',
   libraries: ['three'],
   validateInitial: validateThreeInstancedGrid,
   validateAction: validateThreeInstancedGrid,

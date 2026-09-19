@@ -65,3 +65,32 @@ export type {
   RiveStateMachineInput,
   RiveStateMachineInstance,
 } from './rive'
+export {
+  AVATAR_COMPONENTS,
+  AVATAR_DEFINITION,
+  AVATAR_ENGINE,
+  AVATAR_GESTURE_DEFINITION,
+  AVATAR_IDLE_DEFINITION,
+  AVATAR_LIP_SYNC_DEFINITION,
+  AVATAR_MOOD_DEFINITION,
+  AVATAR_PRELOAD_STRATEGIES,
+  AvatarComponent,
+  AvatarCoordinator,
+  AvatarFeatureComponent,
+  AvatarGestureComponent,
+  AvatarIdleComponent,
+  AvatarLipSyncComponent,
+  AvatarMoodComponent,
+  AVATAR_VISEME_PROFILES,
+  createAvatarBlinkSchedule,
+  preloadAvatarModel,
+} from './avatar'
+export type {
+  AvatarGestureInitial,
+  AvatarIdleInitial,
+  AvatarInitial,
+  AvatarLipSyncInitial,
+  AvatarMoodInitial,
+  AvatarMorphs,
+  AvatarTarget,
+} from './avatar'

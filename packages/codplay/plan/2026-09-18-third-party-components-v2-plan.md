@@ -248,10 +248,10 @@ media du point de vue auteur :
 - les commandes `play` et `pause` pilotées par CodPlay.
 
 L'API du host reste limitée à `START`, `PAUSE` et `STOP`. Le module Rive ajoute
-toutefois le composant logique `rive-state-machine`, relié au host par `rel`,
-car le port V2 de la démo Rive V1 doit conserver son comportement de lip-sync.
-Le composant state machine possède l'instance native, ses inputs et la
-conversion des visèmes ; il ne reçoit pas `move` et ne matérialise pas de DOM.
+toutefois le composant logique `rive-state-machine`, relié au host par `rel`.
+Le composant state machine possède l'instance native et applique des valeurs
+nommées à ses inputs ; il ne connaît ni visèmes, ni lip-sync, ne reçoit pas
+`move` et ne matérialise pas de DOM.
 
 Lottie reste limitée à son host simple dans cette tranche : ses segments,
 marqueurs, layers et cibles internes restent hors périmètre. Un concept propre
@@ -273,18 +273,17 @@ ressource Rive. Le port ne prétend pas rendre cette structure générique ni
 valider des nœuds de modèle ; l’enrichissement Avatar fera toujours l’objet
 d’un plan séparé.
 
-## 9. Avatar, expressions et gestes — reportés
+## 9. Avatar, expressions et gestes — plan dédié engagé
 
-Ces composants sont explicitement retirés du périmètre de ce plan. Leur
-migration depuis TalkingHead et l'adaptation V1 fera l'objet d'un plan Avatar
-distinct, avec analyse des comportements, découpage du core Avatar, dépendances
-et parcours d'acceptation. Ce plan sera soumis à validation avant toute
-modification de code.
+Ces composants restent hors du périmètre de ce plan. Leur migration depuis
+TalkingHead et l'adaptation V1 est maintenant suivie dans le
+[plan Avatar dédié](./2026-09-19-avatar-components-v2-plan.md), avec analyse
+des comportements, découpage du core Avatar, dépendances et parcours
+d'acceptation.
 
-Le composant state machine Rive et son mapping de visèmes servent le port de la
-démo Rive ; ils ne constituent pas encore la migration du lipsync Avatar.
-Aucun composant Avatar, expression ou geste ne doit être implémenté au titre de
-cette tranche.
+Le composant state machine Rive et les données de l'application Rive ne
+constituent pas la migration du lip-sync Avatar. Aucun composant Avatar,
+expression ou geste ne doit être implémenté au titre de cette tranche.
 
 ## 12. Validation complète
 

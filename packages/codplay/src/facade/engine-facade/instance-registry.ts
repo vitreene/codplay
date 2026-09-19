@@ -1,7 +1,7 @@
 import type { Diagnostic } from '../../diagnostics'
 import type { RuntimeCapabilityCatalog } from '../../runtime/catalog'
 import type { RuntimeEngine } from '../../runtime/engine'
-import type { RuntimeTrackEvent } from '../../runtime/player/pipeline'
+import type { RuntimeTraceEvent, RuntimeTrackEvent } from '../../runtime/player/pipeline'
 import type {
   CodPlayEventInput,
   CodPlayEventListener,
@@ -200,7 +200,7 @@ export class InstanceRegistry {
     instanceId: string,
     traceListeners: Set<CodPlayTraceListener>,
     diagnostics: DiagnosticChannel,
-    event: RuntimeTrackEvent,
+    event: RuntimeTraceEvent,
   ): void {
     const traceEvent = toTraceEvent(instanceId, event)
     for (const listener of [...traceListeners]) {

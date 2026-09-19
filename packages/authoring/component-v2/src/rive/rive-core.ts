@@ -40,6 +40,7 @@ export const RIVE_COMPONENTS: readonly RuntimeComponentDefinition[] = [
     component: RiveStateMachineComponent,
     modules: [],
     libraries: ['rive'],
+    runtimeProfile: 'attached',
     validateInitial: validateRiveStateMachineInitial,
     validateAction: validateRiveStateMachineAction,
   },

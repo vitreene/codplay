@@ -175,7 +175,9 @@ export class RuntimeComponentRuntime {
     for (const perso of persos) {
       const mounted = this.mounted.get(perso.key)
       if (mounted === undefined) continue
-      mounted.targetRegistration?.setAvailable(perso.placement.mounted)
+      mounted.targetRegistration?.setAvailable(
+        this.options.catalog.resolveComponentAvailability(perso.type, perso.placement.mounted),
+      )
     }
     for (const perso of persos) {
       const mounted = this.mounted.get(perso.key)
@@ -472,7 +474,9 @@ export class RuntimeComponentRuntime {
         )
         if (targetIdentity !== undefined) {
           targetRegistration = this.targetRegistry.publish(targetIdentity, targetPublication.value)
-          targetRegistration.setAvailable(perso.placement.mounted)
+          targetRegistration.setAvailable(
+            this.options.catalog.resolveComponentAvailability(perso.type, perso.placement.mounted),
+          )
         }
       }
     } catch (error) {

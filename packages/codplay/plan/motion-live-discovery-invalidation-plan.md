@@ -388,6 +388,20 @@ au profit de `captureHtmlLayoutSnapshot`, ainsi que deux duplications présentes
 dans le fichier source. Aucun circuit de capture, contrat de boundary ou
 comportement de Play/Seek n’est ajouté ; le plan reste `En cours`.
 
+### Découpage structurel de `motion-presentation-host` — 2026-09-19
+
+Le fichier plat `src/runtime/runner-html/motion-presentation-host.ts` a été
+supprimé et remplacé par le dossier `src/runtime/runner-html/motion-presentation-host/`.
+La façade `HtmlMotionPresentationHost` reste l'entrée publique via `index.ts` ;
+les contributions locales et les ressources overlay sont maintenant isolées
+dans leurs contrôleurs respectifs.
+
+L'ordre du commit est conservé : préparation des ressources overlay, préparation
+et application des poses locales, puis écriture et révélation des ghosts. Les
+méthodes publiques, les invariants d'exclusivité source/ghost et le cycle
+capture/seek/destroy restent inchangés. Typecheck et suite complète CodPlay
+passent après ce découpage.
+
 ### 4. Finaliser la préparation ciblée et le Seek synchrone — première passe réalisée
 
 - Préparer et capturer le groupe requis dans la même tâche synchrone.

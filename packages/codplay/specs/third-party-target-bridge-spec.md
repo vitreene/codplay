@@ -71,6 +71,12 @@ modèle. Le core ne parcourt jamais la valeur native. Lorsque `scope` est omis,
 la publication est traitée comme une cible attachée au host de la relation du
 composant ; un host déclare explicitement la portée `host`.
 
+La définition engine porte aussi un profil runtime interne, absent de la
+surface auteur : `placed` (valeur par défaut) suit la disponibilité du
+placement résolu, tandis que `attached` décrit un composant logique rattaché
+à un host et ne recevant pas `move`. Ce profil détermine la disponibilité de
+sa publication sans ajouter un cas particulier pour une intégration.
+
 ## Cycle de vie d'une instance
 
 Le runtime distingue la logique d'un composant de la représentation qu'il
@@ -83,7 +89,7 @@ possède :
 4. les composants `BaseComponent` qui n'ont pas de représentation HTML ne
    traversent pas ce matérialiseur ;
 5. les fournisseurs publient leur valeur opaque et indiquent sa disponibilité
-   selon `placement.mounted` ;
+   selon le profil runtime de leur définition ;
 6. les mises à jour sont distribuées, avec la cible résolue dans
    `ComponentUpdateInput.target` ;
 7. au teardown, la publication est libérée, puis le composant et sa
@@ -101,10 +107,12 @@ la façon de créer ce contexte appartient à son intégration, pas au core.
 ## Disponibilité
 
 Une cible publiée reste enregistrée avec son identité lorsque le fournisseur
-est temporairement absent de la projection courante. Elle devient simplement
-indisponible tant que `placement.mounted` vaut `false`. Lorsqu'elle redevient
-montée, le consommateur reçoit de nouveau la même valeur opaque et `rel` n'est
-pas modifié.
+est temporairement absent de la projection courante. Pour le profil `placed`,
+elle devient indisponible tant que `placement.mounted` vaut `false`. Pour le
+profil `attached`, elle reste disponible dès que l'instance logique est
+présente dans la scène, sans exiger de placement DOM. Lorsqu'une publication
+redevient disponible, le consommateur reçoit de nouveau la même valeur opaque
+et `rel` n'est pas modifié.
 
 La publication est protégée par un jeton interne : une ancienne instance ne
 peut pas libérer la publication plus récente qui aurait repris la même

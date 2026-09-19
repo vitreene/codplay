@@ -16,7 +16,7 @@ export type InstanceHostOptions = Readonly<{
   resourceMedia: ReadonlyMap<string, RuntimePreloadMediaResources[string]>
   instance: CodPlayInstanceOptions
   onPublicEvent: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
-  onTrace: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
+  onTrace: (event: import('../runtime/player/pipeline').RuntimeTraceEvent) => void
   onEmitDiagnostic: (diagnostic: Diagnostic) => void
   onResizeError: (error: unknown) => void
 }>

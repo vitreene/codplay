@@ -17,10 +17,12 @@ import {
 } from '../modules'
 import type { RuntimePlayerEmitInput } from '../capture'
 import {
+  collectCompiledEventOccurrences,
   resolveStoryTrackId,
   RuntimeEventDispatcher,
   type RuntimeEventDispatchResult,
   type RuntimeStateStore,
+  type RuntimeTraceEvent,
   type RuntimeTrackEvent,
   type RuntimeTrackJournal,
   type StrapCollections,
@@ -67,7 +69,7 @@ export type RuntimePlayerEventControllerContext = Readonly<{
   idleMonitor: RuntimeIdleMonitor
   diagnosticOutput: DiagnosticOutput | undefined
   publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
-  traceEventListener: ((event: RuntimeTrackEvent) => void) | undefined
+  traceEventListener: ((event: RuntimeTraceEvent) => void) | undefined
   journalChangeListener: (() => void) | undefined
   notifyTransportObservers: () => void
   requireState: (...allowed: PlayerLifecycleState[]) => void
@@ -81,17 +83,23 @@ export type RuntimePlayerEventControllerContext = Readonly<{
 /** Owns live events, reached eventimes, frame progression and terminal cleanup. */
 export class RuntimePlayerEventController {
   private readonly context: RuntimePlayerEventControllerContext
+  private readonly compiledTraceEvents: readonly RuntimeTraceEvent[]
+  private nextCompiledTraceIndex = 0
   private nextRuntimeEventId = 0
   private readonly observedPublicEventIds = new Set<string>()
+  private readonly observedTraceEventIds = new Set<string>()
 
   /** Creates the event boundary for one player instance. */
   constructor(context: RuntimePlayerEventControllerContext) {
     this.context = context
+    this.compiledTraceEvents = collectCompiledEventOccurrences(context.compiledScene)
   }
 
   /** Resets public-event observation when playback is rebuilt from time zero. */
   resetForReplay(): void {
     this.observedPublicEventIds.clear()
+    this.observedTraceEventIds.clear()
+    this.nextCompiledTraceIndex = 0
   }
 
   /** Routes one public live event through the player journal. */
@@ -351,6 +359,7 @@ export class RuntimePlayerEventController {
       previousScene: previousSolvedScene,
       moveDeltas,
     })
+    this.notifyReachedCompiledEvents(previousTimeMs, state.currentTimeMs)
     this.notifyPublicEvents(
       previousSolvedScene?.timeMs ?? state.currentTimeMs,
       state.currentTimeMs,
@@ -370,6 +379,10 @@ export class RuntimePlayerEventController {
     frame?: EngineFrame,
     publicEventPreviousTimeMs?: number,
   ): Promise<void> {
+    this.notifyReachedCompiledEvents(
+      publicEventPreviousTimeMs ?? occurrence.applyAtMs,
+      occurrence.applyAtMs,
+    )
     const existingEvent = occurrence.kind === 'journal' ? occurrence.event : undefined
     const result = await this.emitEvent(
       occurrence.kind === 'journal'
@@ -603,17 +616,35 @@ export class RuntimePlayerEventController {
   }
 
   /** Forwards successfully journaled live events without affecting playback. */
-  private notifyTraceEvents(events: readonly RuntimeTrackEvent[]): void {
-    if (this.context.traceEventListener === undefined) {
+  private notifyTraceEvents(events: readonly RuntimeTraceEvent[]): void {
+    const listener = this.context.traceEventListener
+    if (listener === undefined) {
       return
     }
     for (const event of events) {
+      if (this.observedTraceEventIds.has(event.eventId)) continue
+      this.observedTraceEventIds.add(event.eventId)
       try {
-        this.context.traceEventListener(event)
+        listener(event)
       } catch {
         // Trace observers are diagnostic consumers and must not break dispatch.
       }
     }
+  }
+
+  /** Traces compiled eventimes reached by playback without replaying them on seek. */
+  private notifyReachedCompiledEvents(previousTimeMs: number, currentTimeMs: number): void {
+    const reached: RuntimeTraceEvent[] = []
+    while (this.nextCompiledTraceIndex < this.compiledTraceEvents.length) {
+      const event = this.compiledTraceEvents[this.nextCompiledTraceIndex]!
+      if (event.applyAtMs > currentTimeMs) break
+      this.nextCompiledTraceIndex += 1
+      if (event.applyAtMs < previousTimeMs
+        || event.name === RUNTIME_SEQUENCE_END_EVENT_NAME
+        || !this.context.trackJournal.isTrackActive(event.trackId)) continue
+      reached.push(event)
+    }
+    this.notifyTraceEvents(reached)
   }
 
   /** Publishes newly reached public eventime occurrences without replaying seeks. */

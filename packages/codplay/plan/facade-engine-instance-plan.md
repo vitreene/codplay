@@ -907,7 +907,7 @@ code actuel ne porte pas encore ce marqueur et `flattenAnchoredEventimes()` ne
 le conserve pas ; ces deux points font partie de la migration prévue. Les
 transforms ne modifient pas la portée d'un eventime.
 
-### Extension acceptée le 2026-08-29 : contexte runtime sous `diagnostic`
+### Extension du trace runtime — 2026-09-20
 
 Le besoin du journal commun des démos est une observation des events runtime,
 pas un strap de scène et pas une nouvelle sortie d'event public. La façade
@@ -922,16 +922,20 @@ instance.diagnostic.onTrace(listener)      // events runtime enregistrés
 `onTrace` ne publie pas un `Diagnostic` et ne modifie pas la sémantique de
 `onDiagnostic`. Il reçoit une ligne pour chaque `RuntimeTrackEvent` accepté et
 ajouté au journal par le circuit live : event source, event produit par un
-transform ou un strap, et eventime injecté par l'hôte. La ligne expose le nom
-et le contexte déjà porté par l'event (`instanceId`, identifiants, temps,
-track, story, portée, données, contexte, métadonnées et mode d'insertion).
+transform ou un strap, et eventime injecté par l'hôte. Il reçoit aussi une ligne
+pour chaque eventime compilé lorsque la tête de lecture atteint sa borne pendant
+`play`. La ligne expose le nom et le contexte déjà porté par l'event
+(`instanceId`, identifiants, temps, track, story, portée, données, contexte,
+métadonnées et mode d'insertion). Une occurrence compilée n'a pas de séquence
+de journal ; `eventSeq` est donc optionnel sur le trace public.
 
-L'observation est faite après l'append réussi, une seule fois par occurrence.
-Elle ne réexécute aucun `listen`, transform ou strap et ne produit rien lors
-d'une reconstruction `seek`. Les erreurs d'abonnement restent publiées par le
-canal diagnostic normal. Le layout peut donc s'abonner après la création de
-l'instance et afficher le nom de chaque event sans modifier la `SceneDoc`, ses
-tracks ou son routage.
+L'observation est faite une seule fois par occurrence et ne réexécute aucun
+`listen`, transform ou strap. Elle ne produit rien lors d'une reconstruction
+`seek`; le reset complet d'une instance réarme l'observation pour une nouvelle
+lecture. Les erreurs d'abonnement restent publiées par le canal diagnostic
+normal. Le layout peut donc s'abonner après la création de l'instance et
+afficher les events atteints sans modifier la `SceneDoc`, ses tracks ou son
+routage.
 
 ## 7. Preload, telco et diffusion
 
@@ -1492,7 +1496,8 @@ cachées de l'instance.
   `instance.telco` et l'observation des events de portée `public` sous
   `instance.events` ;
 - [x] exposer `instance.diagnostic.onTrace` pour les events live ajoutés au
-  journal, sans strap attrape-tout ni journal parallèle ;
+  journal et les eventimes compilés atteints pendant `play`, sans strap
+  attrape-tout ni journal parallèle ;
 - [x] raccorder l'assemblage HTML/DOM core par défaut à la façade sans exposer
   `HtmlPlayerRunner` ni le catalogue ;
 - [x] exposer `codplay.preload -> RuntimePreloadApi` depuis le propriétaire

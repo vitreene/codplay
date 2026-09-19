@@ -63,11 +63,16 @@ export type RuntimeComponentClass = {
 /** Input retained as a named alias for code that describes component construction. */
 export type RuntimeComponentClassInput = ComponentInput<Record<string, unknown>>
 
+/** Selects whether a component follows authored placement or stays attached to a host. */
+export type RuntimeComponentProfile = 'placed' | 'attached'
+
 /** Unified declaration of one runtime component type. */
 export type RuntimeComponentDefinition = Readonly<{
   type: string
   component: RuntimeComponentClass
   modules: readonly string[]
+  /** Keeps logical host-attached components independent from DOM placement. */
+  runtimeProfile?: RuntimeComponentProfile
   /** Engine libraries that must be prepared before this component is mounted. */
   libraries?: readonly string[]
   /** Validates the complete author-facing initial profile before compilation. */
@@ -194,6 +199,12 @@ export class RuntimeCapabilityCatalog {
   /** Returns one component definition by its compiled type. */
   getComponent(type: string): RuntimeComponentDefinition | undefined {
     return this.components.get(type)
+  }
+
+  /** Resolves target availability from the component profile and solved placement. */
+  resolveComponentAvailability(type: string, placementMounted: boolean): boolean {
+    const profile = this.components.get(type)?.runtimeProfile ?? 'placed'
+    return componentProfileAvailability[profile](placementMounted)
   }
 
   /** Resolves the typed surfaces published by one component declaration. */
@@ -372,6 +383,11 @@ export class RuntimeCapabilityCatalog {
   private assertOpen(): void {
     if (this.locked) throw new Error('Runtime capability catalog is locked.')
   }
+}
+
+const componentProfileAvailability: Record<RuntimeComponentProfile, (placementMounted: boolean) => boolean> = {
+  placed: (placementMounted) => placementMounted,
+  attached: () => true,
 }
 
 /** Rejects a component declaration that cannot validate its initial profile. */

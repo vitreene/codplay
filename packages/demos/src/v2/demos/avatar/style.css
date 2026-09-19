@@ -1,0 +1,10 @@
+.v2-demo-scene-slot:has([data-codplay-threejs="scene"]) {
+  align-items: center;
+}
+
+[data-codplay-threejs="scene"] {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+

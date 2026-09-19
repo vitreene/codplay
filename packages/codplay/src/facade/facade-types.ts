@@ -198,7 +198,8 @@ export type CodPlayPublicEvent = Readonly<{
 export type CodPlayTraceEvent = Readonly<{
   instanceId: string
   eventId: string
-  eventSeq: number
+  /** Journal sequence for live events; compiled eventimes have no journal sequence. */
+  eventSeq?: number
   name: string
   timeMs: number
   trackId: string
@@ -231,7 +232,7 @@ export type CodPlayProgress = Readonly<{
 /** Listener for one public event. */
 export type CodPlayEventListener = (event: CodPlayPublicEvent) => void
 
-/** Listener for one event recorded by the runtime event circuit. */
+/** Listener for one live or compiled event reached by the runtime event circuit. */
 export type CodPlayTraceListener = (event: CodPlayTraceEvent) => void
 
 /** Listener for one instance telco state snapshot. */

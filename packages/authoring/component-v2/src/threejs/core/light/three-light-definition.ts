@@ -7,6 +7,7 @@ export const THREE_LIGHT_DEFINITION: RuntimeComponentDefinition = {
   type: 'three-light',
   component: ThreeLightComponent,
   modules: [],
+  runtimeProfile: 'attached',
   libraries: ['three'],
   validateInitial: validateThreeLight,
   validateAction: validateThreeLight,

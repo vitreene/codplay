@@ -39,6 +39,7 @@ import {
   type RuntimeSnapshotPatch,
   type RuntimeSnapshotSetResult,
   type RuntimeStateStore,
+  type RuntimeTraceEvent,
   type RuntimeTrackEvent,
   type SolvedScene,
   type StrapCollections,
@@ -114,7 +115,7 @@ export class RuntimePlayer {
     diagnosticOutput?: DiagnosticOutput,
     publicEventListener?: (event: RuntimeTrackEvent) => void,
     idle?: RuntimeIdleOptions,
-    traceEventListener?: (event: RuntimeTrackEvent) => void,
+    traceEventListener?: (event: RuntimeTraceEvent) => void,
     journalChangeListener?: () => void,
   ) {
     this.id = id

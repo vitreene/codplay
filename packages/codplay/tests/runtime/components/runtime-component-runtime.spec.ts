@@ -329,6 +329,23 @@ function solvedPublishedTargetScene(): SolvedScene {
   }
 }
 
+function solvedAttachedTargetScene(): SolvedScene {
+  const scene = solvedTargetScene(false)
+  const host = scene.persos['main:host']!
+  const persos = {
+    ...scene.persos,
+    'main:host': {
+      ...host,
+      placement: { kind: 'unspecified' as const, mounted: false },
+    },
+  }
+  return {
+    ...scene,
+    persos,
+    graph: buildSolvedGraph(persos),
+  }
+}
+
 function solvedPresentationOrderScene(): SolvedScene {
   const persos = {
     'main:host': {
@@ -544,6 +561,40 @@ describe('RuntimeComponentRuntime', () => {
 
     runtime.sync(solvedTargetScene(true))
     expect(consumer.receivedTargets).toEqual([hostTarget, undefined, hostTarget])
+  })
+
+  it('keeps an attached target available without authored placement', () => {
+    const catalog = new RuntimeCapabilityCatalog()
+    const hostTarget = { kind: 'attached-target' }
+    TargetConsumerComponent.instances.length = 0
+    catalog.registerComponent({
+      type: 'target-host',
+      component: TargetHostComponent,
+      modules: [],
+      runtimeProfile: 'attached',
+      validateInitial: () => undefined,
+      targetProvider: () => ({ value: hostTarget, scope: 'host' }),
+    })
+    catalog.registerComponent({
+      type: 'target-consumer',
+      component: TargetConsumerComponent,
+      modules: [],
+      validateInitial: () => undefined,
+    })
+
+    const runtime = new RuntimeComponentRuntime({
+      catalog,
+      materializer: {
+        id: 'test',
+        context: {},
+        materializeComponent: () => { throw new Error('These components are substrate-neutral.') },
+        materializeScene: () => undefined,
+      },
+    })
+
+    runtime.sync(solvedAttachedTargetScene())
+
+    expect(TargetConsumerComponent.instances[0]?.receivedTargets).toEqual([hostTarget])
   })
 
   it('initializes a component before asking it to publish a target', () => {

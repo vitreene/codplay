@@ -203,6 +203,25 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       };
     },
   },
+  {
+    id: "avatar",
+    path: "?demo=avatar",
+    title: "Avatar — composants spécialisés",
+    description: "Un avatar Three.js reçoit séparément les contributions de mood, lip-sync et geste.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/avatar/main"),
+        import("./demos/avatar/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        engineCapabilities: module.engineCapabilities,
+        preloadManifest: module.preloadManifest,
+        preloadStrategies: module.preloadStrategies,
+      };
+    },
+  },
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */

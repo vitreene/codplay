@@ -119,8 +119,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   }>) => void
   /** Forwards public eventimes to the enclosing facade without another journal. */
   onPublicEvent?: (event: import('../../player/pipeline').RuntimeTrackEvent) => void
-  /** Forwards every successfully journaled live event to the enclosing facade. */
-  onTrace?: (event: import('../../player/pipeline').RuntimeTrackEvent) => void
+  /** Forwards live events and compiled eventimes reached during playback. */
+  onTrace?: (event: import('../../player/pipeline').RuntimeTraceEvent) => void
 }>
 
 /** Dependencies for the runner-owned motion controller. */

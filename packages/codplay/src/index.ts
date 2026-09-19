@@ -83,6 +83,7 @@ export type {
   RuntimeComponentClass,
   RuntimeComponentClassInput,
   RuntimeComponentIdentity,
+  RuntimeComponentProfile,
   RuntimeComponentServiceContext,
   RuntimeComponentServiceDefinition,
   RuntimeComponentServiceFactory,

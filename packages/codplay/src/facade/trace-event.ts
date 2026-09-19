@@ -1,8 +1,8 @@
-import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
+import type { RuntimeTraceEvent } from '../runtime/player/pipeline'
 import type { CodPlayTraceEvent } from './facade-types'
 
 /** Adapts one internal runtime event to the public diagnostic trace context. */
-export function toTraceEvent(instanceId: string, event: RuntimeTrackEvent): CodPlayTraceEvent {
+export function toTraceEvent(instanceId: string, event: RuntimeTraceEvent): CodPlayTraceEvent {
   return {
     instanceId,
     eventId: event.eventId,

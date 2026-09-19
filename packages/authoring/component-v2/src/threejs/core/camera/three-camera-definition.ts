@@ -7,6 +7,7 @@ export const THREE_CAMERA_DEFINITION: RuntimeComponentDefinition = {
   type: 'three-camera',
   component: ThreeCameraComponent,
   modules: [],
+  runtimeProfile: 'attached',
   libraries: ['three'],
   validateInitial: validateThreeCamera,
   validateAction: validateThreeCamera,

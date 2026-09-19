@@ -8,7 +8,7 @@
 
 ## 1. Périmètre de cette note
 
-Avant de traiter Avatar, il faut fixer le fonctionnement général des
+Avant de transposer Avatar, il faut conserver le fonctionnement général des
 composants et des intégrations tierces :
 
 - le rôle minimal d'un composant de base ;
@@ -19,9 +19,9 @@ composants et des intégrations tierces :
 - la place des composants qui créent une représentation et de ceux qui la
   modifient.
 
-La migration Avatar est explicitement hors périmètre. Elle fera l'objet d'un
-plan séparé, fondé sur TalkingHead, puis soumis à validation avant toute
-implémentation.
+La migration complète d'Avatar reste traitée par un plan séparé, fondé sur
+TalkingHead. La première transposition V2 est maintenant engagée dans ce plan
+dédié ; elle ne modifie pas le core CodPlay sans obstacle démontré et autorisé.
 
 ## 2. Références et constat actuel
 
@@ -38,9 +38,10 @@ Le socle V2 possède déjà des circuits à réutiliser :
 - le preload des ressources au niveau player ;
 - les actions et l'évaluation à partir du temps absolu CodPlay.
 
-Le code actuel des relations et de la résolution runtime n'est pas migré vers
-la forme `host` / `target`. Cette migration appartient à un plan accepté ; la
-présente note fixe seulement la direction à examiner.
+Le socle V2 utilise désormais la forme `host` / `target` pour les composants
+qui publient ou consomment une capacité. La portée exacte de ces deux champs
+est fixée à la section suivante ; les extensions propres à chaque module
+restent dans leurs plans dédiés.
 
 ## 3. Modèle général à éprouver
 
@@ -71,7 +72,7 @@ Un composant logique :
 - applique les mises à jour de sa responsabilité et libère uniquement ses
   propres ressources.
 
-La direction de relation à examiner est donc :
+La forme retenue de la relation est donc :
 
 ```ts
 rel: {
@@ -86,6 +87,13 @@ pas un mesh, un os, un morph target, ni un autre détail interne d'un modèle.
 La relation entre une capacité comme `avatar1` et les éléments réels du
 modèle appartient à l'intégration tierce et à ses données préparées ; CodPlay
 n'a pas à garantir la présence de ces éléments.
+
+La portée est fixée : `rel.host` contient l'identifiant du host de projection
+et `rel.target`, lorsqu'il est présent, contient l'identifiant du composant qui
+publie la capacité visée dans ce host. Pour Avatar, le core `avatar` vise le
+host Three ; les composants `avatar-mood`, `avatar-lip-sync` et
+`avatar-gesture` visent ce même host avec `target` égal à l'identifiant du
+composant `avatar`. Aucun de ces composants ne reçoit `move`.
 
 ## 4. Familles de composants de base
 
@@ -113,10 +121,12 @@ fournie.
 
 ### Application spécialisée
 
-Avatar sera une application avancée composée d'un core et de dépendances
-spécialisées. Ce découpage, les accès TalkingHead, le lipsync, les gestes et
-les expressions ne sont pas décidés par cette note. Ils seront traités dans un
-plan Avatar distinct et validé.
+Avatar est une application avancée composée d'un core et de dépendances
+spécialisées. Le core charge et initialise l'objet 3D conforme, puis publie une
+capacité opaque. Les composants de geste, lip-sync et mood contribuent chacun
+leur état ; un coordonnateur Avatar compose ces contributions et les applique
+au modèle. La scène auteur ne construit pas ces opérations natives : elle
+transmet les données et les événements.
 
 ## 5. Fonctionnement général d'un module tiers
 
@@ -216,8 +226,8 @@ décrit pour :
 - Three.js : host, scène ou ressource, puis composants caméra/lumière/objet ;
 - Rive : host, ressource, artboard et séquence simple ;
 - Lottie : host, composition, renderer et temps de lecture ;
-- une future intégration Avatar, uniquement comme contrainte à reporter dans
-  son plan dédié.
+- Avatar : host Three, composant central et contributions spécialisées, selon
+  le [plan dédié](../2026-09-19-avatar-components-v2-plan.md).
 
 Pour chaque famille, il faut comparer le propriétaire du contexte, le mode de
 préchargement, l'application de l'état, le commit, le reset, le seek, la
@@ -237,19 +247,19 @@ du document Rive reste dans cette application et dans ses données préparées.
 Les tests du composant utilisent leurs propres fixtures natives et ne prennent
 pas les valeurs d'une démo comme oracle.
 
-## 10. Points à décider avant tout code supplémentaire
+## 10. Points encore ouverts avant tout code supplémentaire
 
-- la forme finale et la portée exacte de `rel.host` et `rel.target` ;
 - la migration du format actuel sans modifier le core opportunément ;
-- la façon dont un composant publie une capacité publique ;
-- la distinction entre host disponible et cible logique disponible ;
 - l'API minimale commune (`initialize`, mise à jour, destruction, et
   éventuellement publication/commit) ;
 - la séparation bibliothèque, ressource et service player-scoped ;
 - la surface auteur des attributs et animations portés par chaque composant ;
-- l'ordre de composition de plusieurs contributions ;
 - les parcours minimaux Rive et Lottie qui valideront le caractère générique
   du modèle.
+
+La forme de `rel.host` et `rel.target`, ainsi que l'ordre de composition des
+contributions Avatar, ne sont plus des points ouverts : ils sont appliqués par
+le plan Avatar dédié.
 
 ## 11. Suite prévue
 
@@ -258,8 +268,9 @@ pas les valeurs d'une démo comme oracle.
    base et des modules tiers ;
 3. réaliser la validation réelle sur les hôtes Three.js, l’intégration Rive et
    l’hôte Lottie minimal ;
-4. rédiger ensuite un plan Avatar séparé, incluant l'analyse détaillée de
-   TalkingHead, puis le soumettre à validation avant toute migration.
+4. poursuivre la transposition Avatar et sa validation dans le
+   [plan dédié](../2026-09-19-avatar-components-v2-plan.md) ; la première
+   démo V2 est désormais enregistrée sur le chemin réel.
 
 Le mapping de visèmes appartient uniquement à l'application Rive qui connaît
 son document. Aucune implémentation Avatar, geste ou expression ne doit être

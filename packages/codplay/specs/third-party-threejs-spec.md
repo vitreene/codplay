@@ -50,6 +50,11 @@ Le composant consommateur ne recherche pas l’hôte et ne reçoit pas de montag
 DOM. Le runtime résout `rel` et livre la cible opaque dans
 `ComponentUpdateInput.target`.
 
+Les composants Three logiques déclarent le profil runtime `attached` dans leur
+définition engine. Ils peuvent donc ne pas avoir de `move` tout en restant
+disponibles pour le host et les composants qui leur sont rattachés. Le host
+conserve le profil `placed` par défaut.
+
 Lorsqu’un composant doit viser un objet ou une capacité publiée dans le host,
 il ajoute `target`, par exemple `rel: { host: 'three-scene', target: 'grid' }`.
 Cette clé désigne une publication de l’intégration ; elle ne désigne pas un
