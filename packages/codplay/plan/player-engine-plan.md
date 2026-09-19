@@ -9,6 +9,31 @@
 > préparation géométrique synchrone par occurrence définie dans
 > [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
+### Nettoyage structurel de `RuntimePlayer` — 2026-09-19
+
+La façade publique reste dans `runtime-player.ts` et conserve les contrats
+Engine/Player. Les responsabilités internes déjà présentes sont isolées dans
+`src/runtime/player/runtime-player/` :
+
+- `scene-state.ts` reconstruit l'état logique, la timeline structurelle et les
+  synchronisations du store de straps ;
+- `presentation.ts` coordonne la présentation composant/module/materializer,
+  les occurrences de move et le replay de présentation du seek ;
+- `capture-controller.ts` possède les sessions de capture, les actions live et
+  les mises à jour d'état transitoires ;
+- `seek-controller.ts` possède la transaction de seek et ses phases de
+  validation, commit, présentation et rollback ;
+- les modules purs `eventime-routing.ts`, `motion-occurrences.ts`,
+  `sequence-end.ts` et `snapshot-values.ts` portent uniquement leurs calculs
+  spécialisés.
+
+Le découpage ne crée ni second player, ni second journal, ni circuit de
+présentation. `RuntimePlayer` reste l'orchestrateur de l'horloge, du journal,
+du lifecycle et des appels publics. Les valeurs et contrats n'ont pas été
+modifiés ; la validation repose sur la suite runtime existante, indépendante
+des démos. Le nettoyage reste rattaché au statut `En cours` tant que les
+responsabilités restantes du player n'ont pas fait l'objet d'une revue dédiée.
+
 ## Frontiere
 
 Cette tranche pose uniquement la frontiere de consommation de `CompiledScene`.

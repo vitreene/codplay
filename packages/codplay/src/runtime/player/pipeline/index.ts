@@ -19,6 +19,7 @@ export { resolveActionDefinition } from './action-resolution'
 export { resolveStyleTweenTiming, type StyleTweenTiming } from './style-timing'
 export {
   collectLogicalEvaluationBoundaries,
+  hasEventBoundaryBetween,
   hasActiveTimeDependentStateActions,
 } from './scene-evaluation'
 export { executeListenPipeline, propagateListenEvent } from './listen'

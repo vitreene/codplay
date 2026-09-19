@@ -38,6 +38,16 @@ export function hasActiveTimeDependentStateActions(
     isActiveTimeDependentAction(action.action, action.elapsedMs)))
 }
 
+/** Reports whether one advancing frame crosses a known logical event boundary. */
+export function hasEventBoundaryBetween(
+  boundaries: readonly number[],
+  previousTimeMs: number,
+  currentTimeMs: number,
+): boolean {
+  if (currentTimeMs <= previousTimeMs) return currentTimeMs < previousTimeMs
+  return boundaries.some((boundary) => boundary > previousTimeMs && boundary <= currentTimeMs)
+}
+
 /** Checks the core action forms whose resolved state changes with elapsed time. */
 function isActiveTimeDependentAction(action: CompiledRecord, elapsedMs: number): boolean {
   if (isTweenAction(action as unknown as CompiledValue)) {

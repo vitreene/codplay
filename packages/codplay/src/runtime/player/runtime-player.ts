@@ -2,8 +2,6 @@ import type { DiagnosticOutput, DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
 import type {
   CompiledFunctionCollection,
-  CompiledRecord,
-  CompiledEventime,
   CompiledScene,
 } from '../../scene/compiled'
 import { qualifyStructuredLengthStyle } from '../../scene/compiled'
@@ -14,14 +12,13 @@ import {
   RuntimeEngine,
   type RuntimeModuleServiceInstance,
   type RuntimeExternalPresentationHandle,
-  type RuntimeModuleServiceSeekHandle,
 } from '../engine'
 import {
   resolveRuntimeIdleOptions,
   RuntimeIdleMonitor,
   type RuntimeIdleOptions,
 } from '../idle'
-import { diffSolvedScenes, type MoveStateDelta } from '../move'
+import { diffSolvedScenes } from '../move'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -30,20 +27,12 @@ import {
   PLAYER_LIFECYCLE_READY,
   type PlayerLifecycleState,
 } from '../config/player-lifecycle'
-import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
 import { EVENT_INSERT_MODE_PERSIST_ONLY } from '../config/event-insertion'
 import { TRACK_GLOBAL_ID } from '../config/track'
-import {
-  TRACK_EVENT_ACTIVATE,
-  TRACK_EVENT_DEACTIVATE,
-  TRACK_EVENT_TOGGLE,
-} from '../config/track-events'
 import { RenderSync } from './render-sync'
-import type { RuntimeMaterializer, RuntimeMaterializerSceneContext, RuntimeMoveOccurrence } from '../materializer'
+import type { RuntimeMaterializer } from '../materializer'
 import type { RuntimeComponentRuntime } from '../components'
 import {
-  RuntimeCaptureSession,
-  resolveCompiledCaptureDeclaration,
   type RuntimeCaptureBeginInput,
   type RuntimeCaptureBeginResult,
   type RuntimeCaptureFailure,
@@ -55,25 +44,11 @@ import {
 } from '../capture'
 import {
   collectSolvedMoveDiagnostics,
-  createEmptyDiagnosticReport,
-  createSolvedMoveDiagnostics,
 } from './diagnostics'
 import {
-  applyCaptureStateUpdate,
-  applyLiveCaptureActions,
-  cancelActiveCaptures,
-  indexCompiledCaptureActionTargets,
-  reapplyLiveCaptureStateUpdates,
-  type ActiveCaptureAction,
-  type CaptureActionTarget,
-  type RuntimeCaptureSessionEntry,
   type RuntimePlayerEmitInput,
 } from './capture'
 import {
-  materializeScene,
-  collectLogicalEvaluationBoundaries,
-  hasActiveTimeDependentStateActions,
-  RuntimeStateStore,
   resolveStoryTrackId,
   validateStrapCollections,
   RuntimeEventDispatcher,
@@ -87,26 +62,48 @@ import {
   type RuntimeSnapshotContributionPatch,
   type RuntimeSnapshotPatch,
   type RuntimeSnapshotSetResult,
+  type RuntimeStateStore,
 } from './pipeline'
 import { RuntimeTrackJournal } from './pipeline'
-import { collectCompiledEventStartTimes, StructuralTimeline } from './structural-timeline'
-import { reconstructPlayerScene } from './scene'
+import { collectCompiledEventStartTimes } from './structural-timeline'
 import {
-  createCompiledEventimeEventId,
   type RuntimePlayerEventime,
   type RuntimePlayerEventimeTarget,
   type RuntimePlayerEventimeResult,
 } from './eventime'
 import {
-  abortPendingModuleSeek,
+  isImmediateTrackControlEvent,
+  normalizeRuntimeEventime,
+  resolveEventimeTarget,
+  shouldDispatchImmediateStoryEventime,
+} from './runtime-player/eventime-routing'
+import {
+  collectSequenceEndOccurrences,
+  compareSequenceEndOccurrences,
+  isSequenceEndInRange,
+  RUNTIME_SEQUENCE_END_EVENT_NAME,
+  type RuntimeSequenceEndOccurrence,
+} from './runtime-player/sequence-end'
+import {
+  freezeSnapshotRecord,
+  isSnapshotValueRecord,
+} from './runtime-player/snapshot-values'
+import {
   initializeModuleServices,
   notifyModuleMoveDeltas,
   notifyModulePlaybackState,
   notifyModuleRateChange,
-  notifyModuleScenePresented,
   resolveModuleTimeline,
-  resolveStructuralOrder,
 } from './modules'
+import {
+  RuntimePlayerSceneState,
+  type RuntimePlayerSceneStateContext,
+} from './runtime-player/scene-state'
+import {
+  RuntimePlayerPresentation,
+} from './runtime-player/presentation'
+import { RuntimePlayerCaptureController } from './runtime-player/capture-controller'
+import { RuntimePlayerSeekController } from './runtime-player/seek-controller'
 import {
   projectInputValue,
   type RuntimeInputProjectionResult,
@@ -115,18 +112,9 @@ import {
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
-const RUNTIME_SEQUENCE_END_EVENT_NAME = 'sequence:end' as const
-
 /** Controls whether a refresh re-emits the currently active move occurrences. */
 export type RuntimePlayerRefreshOptions = Readonly<{
   emitMotionOccurrences?: boolean
-}>
-
-/** Adds player-local materialization controls without expanding the materializer contract. */
-type RuntimePlayerMaterializationContext = RuntimeMaterializerSceneContext & Readonly<{
-  forceMotionOccurrences?: boolean
-  /** Controls whether component module presentation hooks may start effects. */
-  componentPhase?: 'normal' | 'seek' | 'geometry-capture'
 }>
 
 /** Result returned by player initialization. */
@@ -140,31 +128,6 @@ export type PlayerSeekResult = Readonly<
   | { ok: true; timeMs: number; diagnostics: DiagnosticReport }
   | { ok: false; timeMs: number; diagnostics: DiagnosticReport }
 >
-
-/** State retained while one player participates in a grouped seek transaction. */
-type RuntimePlayerSeekTransaction = {
-  previousSolvedScene: SolvedScene | undefined
-  previousTimeMs: number
-  previousIncludePersistOnly: boolean
-  previousSkipNextDelta: boolean
-  moveDeltas: readonly MoveStateDelta[]
-  preparedInstances: ReadonlySet<RuntimeModuleServiceInstance>
-  committed: boolean
-}
-
-/** One sequence:end occurrence reached by the playing cursor. */
-type RuntimeSequenceEndOccurrence = Readonly<{
-  kind: 'compiled'
-  event: CompiledEventime
-  applyAtMs: number
-  trackId: string
-  storyId?: string
-  eventId: string
-}> | Readonly<{
-  kind: 'journal'
-  event: RuntimeTrackEvent
-  applyAtMs: number
-}>
 
 /** One compiled-scene runtime instance with one optional materializer boundary. */
 export class RuntimePlayer {
@@ -186,25 +149,12 @@ export class RuntimePlayer {
   private skipNextDelta = false
   private solvedScene: SolvedScene | undefined
   private snapshotContribution: RuntimeSnapshotContribution | undefined
-  private pendingSolvedScene: SolvedScene | undefined
-  private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
   private includePersistOnlyInCurrent = true
-  private structuralTimeline: StructuralTimeline | undefined
-  private structuralTimelineRevision = -1
-  private structuralTimelineIncludesPersistOnly = true
-  private logicalEvaluationBoundariesRevision = -1
-  private logicalEvaluationBoundaries: readonly number[] = []
-  private moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
-  private pendingModuleSeekHandles: Array<{
-    instance: RuntimeModuleServiceInstance
-    handle: RuntimeModuleServiceSeekHandle
-  }> = []
-  private seekTransaction: RuntimePlayerSeekTransaction | undefined
-  private readonly captureSessions = new Map<string, RuntimeCaptureSessionEntry>()
-  private readonly activeCaptureActions = new Map<string, ActiveCaptureAction>()
-  private readonly liveCaptureStateUpdates = new Map<string, CompiledRecord>()
-  private liveCapturePersoKeys = new Set<string>()
-  private readonly compiledCaptureActionTargets: ReadonlyMap<string, readonly CaptureActionTarget[]>
+  private readonly sceneState: RuntimePlayerSceneState
+  private readonly presentation: RuntimePlayerPresentation
+  private readonly captureController: RuntimePlayerCaptureController
+  private readonly seekController: RuntimePlayerSeekController
+  private readonly moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
   private nextRuntimeEventId = 0
   private readonly diagnosticOutput: DiagnosticOutput | undefined
   private readonly publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
@@ -244,8 +194,73 @@ export class RuntimePlayer {
     this.mountTargets = mountTargets
     this.materializer = materializer
     this.componentRuntime = componentRuntime
-    this.stateStore = new RuntimeStateStore(compiledScene)
-    this.compiledCaptureActionTargets = indexCompiledCaptureActionTargets(compiledScene)
+    this.captureController = new RuntimePlayerCaptureController({
+      compiledScene,
+      functions,
+      getStateStore: () => this.stateStore,
+      componentRuntime,
+      getCurrentTimeMs: () => this.currentTimeMs,
+      getSolvedScene: () => this.solvedScene,
+      synchronizeState: () => this.sceneState.synchronize(
+        this.currentTimeMs,
+        this.includePersistOnlyInCurrent,
+      ),
+      requireCaptureState: () => this.requireState(
+        PLAYER_LIFECYCLE_READY,
+        PLAYER_LIFECYCLE_PLAYING,
+        PLAYER_LIFECYCLE_PAUSED,
+      ),
+      emitEvent: (input, includePersistOnlyOverride) => this.emitEvent(
+        input,
+        includePersistOnlyOverride,
+      ),
+    })
+    const sceneStateContext: RuntimePlayerSceneStateContext = {
+      compiledScene,
+      functions,
+      trackJournal: this.trackJournal,
+      mountTargets,
+      moduleServiceInstances: this.moduleServiceInstances,
+      liveCaptureStateUpdates: this.captureController.liveCaptureStateUpdates,
+      captureSessions: this.captureController.captureSessions,
+    }
+    this.sceneState = new RuntimePlayerSceneState(sceneStateContext)
+    this.stateStore = this.sceneState.stateStore
+    this.presentation = new RuntimePlayerPresentation({
+      componentRuntime,
+      materializer,
+      moduleServiceInstances: this.moduleServiceInstances,
+      sceneState: this.sceneState,
+      getLifecycleState: () => this.state,
+      getIncludePersistOnly: () => this.includePersistOnlyInCurrent,
+      getSnapshotContribution: () => this.snapshotContribution,
+      applyLiveCaptureActions: (scene) => this.captureController.applyLiveCaptureActions(scene),
+    })
+    this.seekController = new RuntimePlayerSeekController({
+      getLifecycleState: () => this.state,
+      requireSequenceActive: (operation) => this.requireSequenceActive(operation),
+      getCurrentTimeMs: () => this.currentTimeMs,
+      setCurrentTimeMs: (timeMs) => { this.currentTimeMs = timeMs },
+      getDiscoveredDurationMs: () => this.discoveredDurationMs,
+      setDiscoveredDurationMs: (timeMs) => { this.discoveredDurationMs = timeMs },
+      getIncludePersistOnly: () => this.includePersistOnlyInCurrent,
+      setIncludePersistOnly: (includePersistOnly) => {
+        this.includePersistOnlyInCurrent = includePersistOnly
+      },
+      getSkipNextDelta: () => this.skipNextDelta,
+      setSkipNextDelta: (skip) => { this.skipNextDelta = skip },
+      getSolvedScene: () => this.solvedScene,
+      setSolvedScene: (scene) => { this.solvedScene = scene },
+      getSnapshotContribution: () => this.snapshotContribution,
+      trackJournal: this.trackJournal,
+      sceneState: this.sceneState,
+      moduleServiceInstances: this.moduleServiceInstances,
+      presentation: this.presentation,
+      renderSync: this.renderSync,
+      engine: this.engine,
+      cancelCaptures: () => this.captureController.cancelAll(),
+      notifyTransportObservers: () => this.notifyTransportObservers(),
+    })
     this.diagnosticOutput = diagnosticOutput
     this.publicEventListener = publicEventListener
     this.traceEventListener = traceEventListener
@@ -297,7 +312,7 @@ export class RuntimePlayer {
   /** Returns the resolved logical frame without any active preview contribution. */
   getSnapshot(): RuntimeSnapshot | undefined {
     if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) return undefined
-    const scene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent, false)
+    const scene = this.sceneState.reconstruct(this.currentTimeMs, this.includePersistOnlyInCurrent)
     return {
       timeMs: scene.timeMs,
       states: Object.freeze(Object.values(scene.persos).map((perso) => Object.freeze({
@@ -333,7 +348,7 @@ export class RuntimePlayer {
     if (this.state === PLAYER_LIFECYCLE_IDLE || this.solvedScene === undefined) {
       return { ok: false, code: 'TIME_NOT_PRESENTED' }
     }
-    const baseScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent, false)
+    const baseScene = this.sceneState.reconstruct(this.currentTimeMs, this.includePersistOnlyInCurrent)
     const normalized: RuntimeSnapshotContributionPatch[] = []
     for (const patch of patches) {
       if (!Number.isFinite(patch.timeMs) || patch.timeMs !== this.currentTimeMs) {
@@ -364,9 +379,13 @@ export class RuntimePlayer {
       ? undefined
       : { timeMs: this.currentTimeMs, patches: Object.freeze(normalized) }
     try {
-      const nextScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      const nextScene = this.sceneState.reconstruct(
+        this.currentTimeMs,
+        this.includePersistOnlyInCurrent,
+        this.snapshotContribution,
+      )
       this.solvedScene = nextScene
-      this.materializeScene(nextScene, { previousScene, moveDeltas: [] })
+      this.presentation.present(nextScene, { previousScene, moveDeltas: [] })
       return { ok: true }
     } catch (error) {
       this.snapshotContribution = previousContribution
@@ -382,9 +401,9 @@ export class RuntimePlayer {
     const previousScene = this.solvedScene
     this.snapshotContribution = undefined
     try {
-      const nextScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent, false)
+      const nextScene = this.sceneState.reconstruct(this.currentTimeMs, this.includePersistOnlyInCurrent)
       this.solvedScene = nextScene
-      this.materializeScene(nextScene, { previousScene, moveDeltas: [] })
+      this.presentation.present(nextScene, { previousScene, moveDeltas: [] })
     } catch (error) {
       this.snapshotContribution = previousContribution
       this.solvedScene = previousScene
@@ -394,12 +413,12 @@ export class RuntimePlayer {
 
   /** Reconstructs one solved scene for a historical host presentation. */
   resolveSceneAt(timeMs: number, includePersistOnly = true): SolvedScene {
-    return this.reconstructScene(timeMs, includePersistOnly)
+    return this.sceneState.reconstruct(timeMs, includePersistOnly, this.snapshotContribution)
   }
 
   /** Reconstructs the exact logical state immediately before one event boundary. */
   resolveSceneBeforeBoundary(timeMs: number, includePersistOnly = true): SolvedScene {
-    return this.reconstructSceneBeforeBoundary(timeMs, includePersistOnly)
+    return this.sceneState.reconstructBeforeBoundary(timeMs, includePersistOnly)
   }
 
   /** Returns whether the current presentation head includes persisted-only facts. */
@@ -415,12 +434,7 @@ export class RuntimePlayer {
     if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
       throw new Error('Geometry capture requires an initialized runtime player.')
     }
-    this.componentRuntime?.sync(scene, false, { phase: 'geometry-capture' })
-    this.componentRuntime?.presentAt?.(scene.timeMs)
-    this.materializer?.materializeScene(scene, {
-      moveDeltas: [],
-      phase: 'geometry-capture',
-    })
+    this.presentation.presentForGeometryCapture(scene)
   }
 
   /** Prepares a module-owned presentation around an external host operation. */
@@ -455,12 +469,14 @@ export class RuntimePlayer {
     this.engine.validateRequirements(this.compiledScene.requirements, diagnostics)
     if (diagnostics.hasErrors()) return { ok: false, diagnostics: diagnostics.report() }
     try {
-      this.moduleServiceInstances = new Map(this.engine.createModuleServiceInstances(
+      const moduleServiceInstances = this.engine.createModuleServiceInstances(
         this.id,
         this.compiledScene,
         this.compiledScene.requirements.modules,
         { componentSurfaces: this.componentRuntime?.getComponentSurfaces() },
-      ))
+      )
+      this.moduleServiceInstances.clear()
+      for (const [id, instance] of moduleServiceInstances) this.moduleServiceInstances.set(id, instance)
     } catch (error) {
       diagnostics.error('RUNTIME_MODULE_INIT_FAILED', error instanceof Error ? error.message : 'Runtime module initialization failed.')
       return { ok: false, diagnostics: diagnostics.report() }
@@ -469,73 +485,22 @@ export class RuntimePlayer {
     if (!this.invokeSceneLifecycleHook('init', diagnostics)) {
       return { ok: false, diagnostics: diagnostics.report() }
     }
-    const initialSolvedScene = this.reconstructBaseScene(0)
+    const initialSolvedScene = this.sceneState.reconstructBase(0)
     this.componentRuntime?.sync(initialSolvedScene)
-    const resolvedInitialScene = this.reconstructBaseScene(0)
-    initializeModuleServices(this.moduleServiceInstances, resolvedInitialScene)
+    initializeModuleServices(this.moduleServiceInstances, initialSolvedScene)
     notifyModuleRateChange(this.moduleServiceInstances, this.rate)
-    this.rebuildStructuralTimeline()
-    this.solvedScene = this.reconstructScene(0)
-    this.synchronizeStateStoreFromScene(this.solvedScene)
-    this.materializeScene(this.solvedScene, { moveDeltas: [] })
+    this.solvedScene = this.sceneState.reconstruct(0)
+    this.sceneState.synchronizeFromScene(this.solvedScene)
+    this.presentation.present(this.solvedScene, { moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
-      validateSeek: (timeMs) => this.validateSeek(timeMs),
-      getSeekDiagnostics: () => this.pendingSeekDiagnostics,
-      abortSeek: () => this.abortSeekTransaction(),
+      validateSeek: (timeMs) => this.seekController.validate(timeMs),
+      getSeekDiagnostics: () => this.seekController.getDiagnostics(),
+      abortSeek: () => this.seekController.abort(),
       prepareSeek: () => this.renderSync.prepareSeek(),
-      commitSeek: (timeMs) => {
-        if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
-          throw new Error('Player seek reconstruction is missing.')
-        }
-        const transaction = this.seekTransaction
-        if (transaction === undefined) throw new Error('Player seek transaction is missing.')
-        const previousSolvedScene = transaction.previousSolvedScene
-        const moveDeltas = previousSolvedScene === undefined
-          ? []
-          : diffSolvedScenes(previousSolvedScene, this.pendingSolvedScene)
-        const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
-        if (this.pendingModuleSeekHandles.length > 0) {
-          for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
-        }
-        this.solvedScene = this.pendingSolvedScene
-        this.includePersistOnlyInCurrent = true
-        this.synchronizeStateStoreFromScene(this.solvedScene)
-        this.currentTimeMs = timeMs
-        this.recordCurrentTimeAsDiscovered()
-        this.trackJournal.reconcileStoryIsolationAt(timeMs)
-        this.skipNextDelta = true
-        transaction.moveDeltas = moveDeltas
-        transaction.preparedInstances = preparedInstances
-        transaction.committed = true
-      },
-      presentSeek: () => {
-        const transaction = this.seekTransaction
-        if (transaction === undefined || !transaction.committed) {
-          throw new Error('Player seek commit is missing.')
-        }
-        const solvedScene = this.solvedScene
-        if (solvedScene === undefined) throw new Error('Player seek scene is missing.')
-        this.notifyModuleMoveDeltas(
-          transaction.previousSolvedScene,
-          solvedScene,
-          transaction.preparedInstances,
-          transaction.moveDeltas,
-        )
-        this.replayComponentPresentationForSeek(solvedScene)
-        this.materializeScene(solvedScene, {
-          previousScene: transaction.previousSolvedScene,
-          moveDeltas: transaction.moveDeltas,
-          componentPhase: 'seek',
-        })
-        this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
-        this.pendingSolvedScene = undefined
-        this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
-        this.pendingModuleSeekHandles = []
-        this.seekTransaction = undefined
-        this.notifyTransportObservers()
-      },
-      rollbackSeek: () => this.rollbackSeekTransaction(),
+      commitSeek: (timeMs) => this.seekController.commit(timeMs),
+      presentSeek: () => this.seekController.present(),
+      rollbackSeek: () => this.seekController.rollback(),
     })
     this.state = PLAYER_LIFECYCLE_READY
     return { ok: true, diagnostics: diagnostics.report() }
@@ -556,10 +521,10 @@ export class RuntimePlayer {
     }
     this.state = PLAYER_LIFECYCLE_PLAYING
     notifyModulePlaybackState(this.moduleServiceInstances, 'playing', this.currentTimeMs)
-    const sequenceEnd = this.findSequenceEndAtCurrentTime()
+    const sequenceEnd = this.findSequenceEndBetween(undefined, this.currentTimeMs)
     if (sequenceEnd !== undefined) {
       this.currentTimeMs = sequenceEnd.applyAtMs
-      this.recordCurrentTimeAsDiscovered()
+      this.discoveredDurationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
       void this.dispatchReachedSequenceEnd(sequenceEnd).catch((error) => {
         this.reportAutomaticSequenceEndFailure(error)
       })
@@ -584,11 +549,7 @@ export class RuntimePlayer {
   /** Reconstructs the initial presentation before a reset or terminal replay. */
   private resetToInitialState(): void {
     const previousSolvedScene = this.solvedScene
-    cancelActiveCaptures(
-      this.captureSessions,
-      this.activeCaptureActions,
-      this.liveCaptureStateUpdates,
-    )
+    this.captureController.cancelAll()
     this.sequenceEnded = false
     this.sequenceEndPending = false
     this.idleMonitor.reset()
@@ -600,19 +561,18 @@ export class RuntimePlayer {
     this.snapshotContribution = undefined
     this.skipNextDelta = true
     this.observedPublicEventIds.clear()
-    this.liveCapturePersoKeys = new Set()
     if (!this.invokeSceneLifecycleHook('init')) {
       throw new Error('RUNTIME_SCENE_LIFECYCLE_FAILED: scene init hook failed during replay.')
     }
 
-    const nextSolvedScene = this.reconstructScene(0)
-    this.synchronizeStateStoreFromScene(nextSolvedScene)
+    const nextSolvedScene = this.sceneState.reconstruct(0)
+    this.sceneState.synchronizeFromScene(nextSolvedScene)
     const moveDeltas = previousSolvedScene === undefined
       ? []
       : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
     notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
-    this.materializeScene(nextSolvedScene, {
+    this.presentation.present(nextSolvedScene, {
       previousScene: previousSolvedScene,
       moveDeltas,
       componentPhase: 'seek',
@@ -651,12 +611,10 @@ export class RuntimePlayer {
   seek(timeMs: number): PlayerSeekResult {
     const diagnostics = new DiagnosticCollector({ output: () => undefined })
     try {
-      this.pendingSolvedScene = undefined
       const engineResult = this.engine.seek([{ instanceId: this.id, timeMs }])
       this.idleMonitor.reset()
       return { ok: true, timeMs, diagnostics: engineResult.diagnostics[this.id] ?? diagnostics.report() }
     } catch (error) {
-      this.pendingSolvedScene = undefined
       diagnostics.error(
         'RUNTIME_SEEK_FAILED',
         error instanceof Error ? error.message : 'Runtime seek failed.',
@@ -669,7 +627,7 @@ export class RuntimePlayer {
   refresh(options: RuntimePlayerRefreshOptions = {}): void {
     if (this.solvedScene === undefined) throw new Error('Player has not been initialized.')
     this.componentRuntime?.sync(this.solvedScene, true)
-    this.materializeScene(this.solvedScene, {
+    this.presentation.present(this.solvedScene, {
       previousScene: this.solvedScene,
       moveDeltas: [],
       ...(options.emitMotionOccurrences === true ? { forceMotionOccurrences: true } : {}),
@@ -693,22 +651,8 @@ export class RuntimePlayer {
     this.requireSequenceActive('emitEventime')
     const normalized = normalizeRuntimeEventime(eventime, true)
     const resolvedTarget = resolveEventimeTarget(this.compiledScene, target)
-    if (shouldDispatchImmediateStoryEventime(this.compiledScene, eventime, target)) {
-      const dispatched = await this.emitEvent({
-        name: eventime.name,
-        applyAtMs: this.currentTimeMs,
-        trackId: resolvedTarget.trackId,
-        storyId: resolvedTarget.storyId,
-        visibility: normalized.eventime.visibility,
-        data: normalized.eventime.data,
-        mode: normalized.mode,
-      })
-      if (!dispatched.ok) {
-        throw new Error(dispatched.issues.map((issue) => issue.message).join(' '))
-      }
-      return { events: dispatched.events }
-    }
-    if (isImmediateTrackControlEvent(eventime)) {
+    if (shouldDispatchImmediateStoryEventime(this.compiledScene, eventime, target)
+      || isImmediateTrackControlEvent(eventime)) {
       const dispatched = await this.emitEvent({
         name: eventime.name,
         applyAtMs: this.currentTimeMs,
@@ -734,7 +678,7 @@ export class RuntimePlayer {
     this.idleMonitor.reset()
     this.includePersistOnlyInCurrent = normalized.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
     if (normalized.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
-      this.synchronizeStateStore(this.currentTimeMs, false)
+      this.sceneState.synchronize(this.currentTimeMs, false)
     }
     this.notifyTraceEvents(appended.data.events)
     this.journalChangeListener?.()
@@ -743,12 +687,16 @@ export class RuntimePlayer {
       : this.resolvePresentedResetStoryIds(appended.data.events)
     if (resetStoryIds.length > 0 && this.solvedScene !== undefined) {
       const previousSolvedScene = this.solvedScene
-      const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      const nextSolvedScene = this.sceneState.reconstruct(
+        this.currentTimeMs,
+        this.includePersistOnlyInCurrent,
+        this.snapshotContribution,
+      )
       const moveDeltas = diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-      this.synchronizeStateStoreFromScene(nextSolvedScene)
+      this.sceneState.synchronizeFromScene(nextSolvedScene)
       notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
       this.solvedScene = nextSolvedScene
-      this.materializeScene(nextSolvedScene, {
+      this.presentation.present(nextSolvedScene, {
         previousScene: previousSolvedScene,
         moveDeltas,
         resetStoryIds,
@@ -777,7 +725,7 @@ export class RuntimePlayer {
       && dispatchInput.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
       && dispatchInput.name === RUNTIME_SEQUENCE_END_EVENT_NAME
     if (waitsForTerminalDispatch) this.sequenceEndPending = true
-    this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
+    this.sceneState.synchronize(this.currentTimeMs, this.includePersistOnlyInCurrent)
     const dispatcher = new RuntimeEventDispatcher({
       scene: this.compiledScene,
       journal: this.trackJournal,
@@ -797,7 +745,7 @@ export class RuntimePlayer {
       } else if (dispatchInput.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
         this.includePersistOnlyInCurrent = false
       }
-      this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      this.sceneState.synchronize(this.currentTimeMs, this.includePersistOnlyInCurrent)
       // A persist-only event is recorded for later reconstruction, but it is
       // deliberately outside the current playback head. In particular, do not
       // reconstruct or materialize here: the source may still be presenting the
@@ -810,7 +758,11 @@ export class RuntimePlayer {
       if (this.state === PLAYER_LIFECYCLE_PLAYING && sequenceEndTime !== undefined) {
         this.currentTimeMs = Math.min(this.currentTimeMs, sequenceEndTime)
       }
-      const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      const nextSolvedScene = this.sceneState.reconstruct(
+        this.currentTimeMs,
+        this.includePersistOnlyInCurrent,
+        this.snapshotContribution,
+      )
       const previousSolvedScene = this.solvedScene
       const moveDeltas = previousSolvedScene === undefined
         ? []
@@ -819,7 +771,7 @@ export class RuntimePlayer {
       const isolationClosedStoryIds = result.isolationClosedStoryIds ?? []
       notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
       this.solvedScene = nextSolvedScene
-      this.materializeScene(nextSolvedScene, {
+      this.presentation.present(nextSolvedScene, {
         previousScene: previousSolvedScene,
         moveDeltas,
         ...(resetStoryIds.length === 0
@@ -844,99 +796,17 @@ export class RuntimePlayer {
 
   /** Opens one source-agnostic capture session against the current player state. */
   beginCapture(input: RuntimeCaptureBeginInput): RuntimeCaptureBeginResult {
-    this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
-    if (input.captureId.trim().length === 0) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_ID_INVALID',
-        message: 'Capture id must not be empty.',
-      }
-    }
-    if (this.captureSessions.has(input.captureId)) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_DUPLICATE',
-        message: `Capture session is already open: ${input.captureId}`,
-      }
-    }
-    const stateScope = input.declaration.stateScope ?? 'story'
-    const state = stateScope === 'scene'
-      ? this.stateStore.snapshot(STRAP_SCOPE_SCENE)
-      : this.stateStore.snapshot(STRAP_SCOPE_STORY, input.storyId)
-    const opened = RuntimeCaptureSession.open({
-      declaration: input.declaration,
-      state,
-      startedAtMs: this.currentTimeMs,
-    })
-    if (!opened.ok) return opened
-    this.captureSessions.set(input.captureId, {
-      storyId: input.storyId,
-      stateScope,
-      session: opened.session,
-    })
-    return {
-      ok: true,
-      captureId: input.captureId,
-      captureState: opened.session.getCaptureState(),
-    }
+    return this.captureController.begin(input)
   }
 
   /** Resolves a compiled capture declaration before opening the runtime session. */
   beginCompiledCapture(input: RuntimeCompiledCaptureBeginInput): RuntimeCaptureBeginResult {
-    let declaration: RuntimeCaptureBeginInput['declaration']
-    try {
-      declaration = resolveCompiledCaptureDeclaration(input.declaration, this.functions)
-    } catch (error) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_FUNCTION_UNAVAILABLE',
-        message: error instanceof Error ? error.message : 'Capture function is not available.',
-      }
-    }
-    return this.beginCapture({
-      captureId: input.captureId,
-      storyId: input.storyId,
-      declaration,
-    })
+    return this.captureController.beginCompiled(input)
   }
 
   /** Forwards one source sample to an existing capture without journal writes. */
   trackCapture(captureId: string, sample: RuntimeCaptureSample): RuntimeCaptureTrackResult {
-    const entry = this.captureSessions.get(captureId)
-    if (entry === undefined) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_UNKNOWN',
-        message: `Capture session is not open: ${captureId}`,
-      }
-    }
-    const tracked = entry.session.track(sample)
-    if (!tracked.ok) return tracked
-    if (tracked.action === undefined) {
-      this.activeCaptureActions.delete(captureId)
-    } else {
-      const previous = this.activeCaptureActions.get(captureId)
-      const targets = previous?.action.actionName === tracked.action.actionName
-        ? previous.targets
-        : this.compiledCaptureActionTargets.get(tracked.action.actionName) ?? []
-      this.activeCaptureActions.set(captureId, { action: tracked.action, targets })
-    }
-    if (tracked.updateState !== undefined) {
-      const previous = this.liveCaptureStateUpdates.get(captureId) ?? {}
-      const merged = { ...previous, ...tracked.updateState }
-      this.liveCaptureStateUpdates.set(captureId, merged)
-      this.applyCaptureStateUpdate(entry, tracked.updateState)
-    }
-    try {
-      this.applyLiveCaptureActions()
-    } catch (error) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_LIVE_APPLY_FAILED',
-        message: error instanceof Error ? error.message : 'Live capture application failed.',
-      }
-    }
-    return tracked
+    return this.captureController.track(captureId, sample)
   }
 
   /** Closes one capture and routes each declared end event through RuntimePlayer.emit(). */
@@ -945,94 +815,21 @@ export class RuntimePlayer {
     meta: Readonly<Record<string, unknown>> = {},
     captureStateOverride?: RuntimeCaptureState,
   ): Promise<RuntimeCapturePlayerEndResult | RuntimeCaptureFailure> {
-    const entry = this.captureSessions.get(captureId)
-    if (entry === undefined) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_UNKNOWN',
-        message: `Capture session is not open: ${captureId}`,
-      }
-    }
-    const state = entry.stateScope === 'scene'
-      ? this.stateStore.snapshot(STRAP_SCOPE_SCENE)
-      : this.stateStore.snapshot(STRAP_SCOPE_STORY, entry.storyId)
-    const ended = entry.session.end(state, meta, this.currentTimeMs, captureStateOverride)
-    this.activeCaptureActions.delete(captureId)
-    if (!ended.ok) {
-      this.captureSessions.delete(captureId)
-      this.liveCaptureStateUpdates.delete(captureId)
-      this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
-      return ended
-    }
-
-    const dispatchResults: RuntimeEventDispatchResult[] = []
-    const hasPersistOnlyEndCaptureEvents = ended.endCaptureEvents.length > 0
-    try {
-      for (const event of ended.endCaptureEvents) {
-        dispatchResults.push(await this.emitEvent({
-          name: event.name,
-          applyAtMs: event.applyAtMs,
-          storyId: event.cascade === true ? undefined : entry.storyId,
-          data: event.data,
-          mode: event.mode,
-          meta,
-        }, false))
-      }
-      if (ended.endEmitEvent !== undefined) {
-        const event = ended.endEmitEvent
-        dispatchResults.push(await this.emitEvent({
-          name: event.name,
-          applyAtMs: event.applyAtMs,
-          storyId: event.cascade === true ? undefined : entry.storyId,
-          data: event.data,
-          mode: event.mode,
-          meta,
-        }, hasPersistOnlyEndCaptureEvents || event.mode === EVENT_INSERT_MODE_PERSIST_ONLY
-          ? false
-          : undefined))
-      }
-    } finally {
-      this.captureSessions.delete(captureId)
-      this.liveCaptureStateUpdates.delete(captureId)
-      this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
-      // Removing the live action must not immediately reset the materialized
-      // component. The persist-only boundary leaves the last live pose visible
-      // until the next ordinary materialization; applyLiveCaptureActions() is
-      // therefore intentionally deferred to that boundary.
-    }
-    return { ...ended, dispatchResults }
+    return this.captureController.end(captureId, meta, captureStateOverride)
   }
 
   /** Cancels one open capture without producing an event or state update. */
   cancelCapture(captureId: string): Readonly<{ ok: true } | RuntimeCaptureFailure> {
-    const entry = this.captureSessions.get(captureId)
-    if (entry === undefined) {
-      return {
-        ok: false,
-        code: 'RUNTIME_CAPTURE_UNKNOWN',
-        message: `Capture session is not open: ${captureId}`,
-      }
-    }
-    entry.session.cancel()
-    this.captureSessions.delete(captureId)
-    this.activeCaptureActions.delete(captureId)
-    this.liveCaptureStateUpdates.delete(captureId)
-    this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
-    this.applyLiveCaptureActions()
-    return { ok: true }
+    return this.captureController.cancel(captureId)
   }
 
   /** Detaches the player from the engine and closes its lifecycle. */
   destroy(): void {
     if (this.state === PLAYER_LIFECYCLE_DESTROYED) return
-    cancelActiveCaptures(
-      this.captureSessions,
-      this.activeCaptureActions,
-      this.liveCaptureStateUpdates,
-    )
+    this.captureController.cancelAll()
+    this.seekController.abort()
     for (const instance of this.moduleServiceInstances.values()) instance.destroy?.()
     this.moduleServiceInstances.clear()
-    abortPendingModuleSeek(this.pendingModuleSeekHandles)
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
     this.materializer?.destroy?.()
@@ -1054,20 +851,22 @@ export class RuntimePlayer {
     if (this.idleMonitor.advance(frame.deltaMs)) this.dispatchIdleEvent()
     if (this.sequenceEndPending) return
     this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
-    this.recordCurrentTimeAsDiscovered()
+    this.discoveredDurationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
     const sequenceEnd = this.findSequenceEndBetween(previousTimeMs, this.currentTimeMs)
     if (sequenceEnd !== undefined) {
       this.currentTimeMs = sequenceEnd.applyAtMs
-      this.recordCurrentTimeAsDiscovered()
+      this.discoveredDurationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
       void this.dispatchReachedSequenceEnd(sequenceEnd, frame, previousTimeMs).catch((error) => {
         this.reportAutomaticSequenceEndFailure(error)
       })
       return
     }
-    const frameScene = this.resolveFrameScene(
+    const frameScene = this.sceneState.resolveFrame(
       previousTimeMs,
       this.currentTimeMs,
       this.includePersistOnlyInCurrent,
+      this.solvedScene,
+      this.snapshotContribution,
     )
     const nextSolvedScene = frameScene.scene
     const previousSolvedScene = this.solvedScene
@@ -1075,11 +874,11 @@ export class RuntimePlayer {
       ? diffSolvedScenes(previousSolvedScene, nextSolvedScene)
       : []
     if (frameScene.reconstructed) {
-      this.synchronizeStateStoreFromScene(nextSolvedScene)
+      this.sceneState.synchronizeFromScene(nextSolvedScene)
       notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     }
     this.solvedScene = nextSolvedScene
-    this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.presentation.present(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.notifyPublicEvents(previousSolvedScene?.timeMs ?? this.currentTimeMs, this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
     this.notifyTransportObservers()
@@ -1166,72 +965,6 @@ export class RuntimePlayer {
     )
   }
 
-  /** Materializes one scene while keeping authored writes inside the render boundary. */
-  private materializeScene(scene: SolvedScene, context: RuntimePlayerMaterializationContext): void {
-    this.componentRuntime?.sync(scene, false, {
-      phase: context.componentPhase
-        ?? (context.phase === 'geometry-capture' ? 'geometry-capture' : 'normal'),
-    })
-    notifyModuleScenePresented(
-      this.moduleServiceInstances,
-      scene,
-      this.state === PLAYER_LIFECYCLE_PLAYING ? 'playing' : 'paused',
-    )
-    this.applyLiveCaptureActions(scene)
-    this.componentRuntime?.presentAt?.(scene.timeMs)
-    const motionOccurrences = context.phase === 'geometry-capture'
-      ? []
-      : collectMoveOccurrences(
-        context.previousScene,
-        scene,
-        context.forceMotionOccurrences === true
-          ? {
-            forceActive: true,
-            resolveBeforeScene: (timeMs) => this.resolveSceneBeforeBoundary(
-              timeMs,
-              this.includePersistOnlyInCurrent,
-            ),
-          }
-          : undefined,
-      )
-    this.materializer?.materializeScene(
-      scene,
-      motionOccurrences.length === 0
-        ? context
-        : { ...context, motionOccurrences },
-    )
-  }
-
-  /** Replays component presentation boundaries so seek-owned effects see their real outgoing state. */
-  private replayComponentPresentationForSeek(targetScene: SolvedScene): void {
-    if (this.componentRuntime === undefined) return
-
-    const initialScene = this.reconstructSceneBeforeBoundary(0, this.includePersistOnlyInCurrent)
-    this.componentRuntime.sync(initialScene, false, { phase: 'geometry-capture' })
-    this.materializer?.materializeScene(initialScene, {
-      moveDeltas: [],
-      phase: 'geometry-capture',
-    })
-
-    for (const timeMs of this.getLogicalEvaluationBoundaries()) {
-      if (timeMs <= 0 || timeMs >= targetScene.timeMs) continue
-      const scene = this.reconstructScene(timeMs, this.includePersistOnlyInCurrent)
-      this.componentRuntime.presentAt(timeMs)
-      this.componentRuntime.sync(scene, false, { phase: 'seek' })
-      this.materializer?.materializeScene(scene, {
-        moveDeltas: [],
-        phase: 'geometry-capture',
-      })
-      this.componentRuntime.presentAt(timeMs)
-    }
-
-    // The target scene is synchronized by the enclosing materializeScene call.
-    // Presenting it here would let a host commit before target consumers have
-    // registered their animations; the subsequent consumer update would then
-    // change the native representation without another host commit because the
-    // host already saw the same time value.
-  }
-
   /** Publishes one logical position update without creating another frame loop. */
   private notifyTransportObservers(): void {
     for (const listener of [...this.transportListeners]) listener()
@@ -1261,18 +994,6 @@ export class RuntimePlayer {
       }
     }
     return [...storyIds]
-  }
-
-  /** Reapplies active capture actions through the normal component update path. */
-  private applyLiveCaptureActions(scene = this.solvedScene): void {
-    if (scene === undefined || this.componentRuntime === undefined) return
-    this.liveCapturePersoKeys = applyLiveCaptureActions(
-      scene,
-      this.componentRuntime,
-      this.activeCaptureActions,
-      this.liveCapturePersoKeys,
-      this.functions,
-    )
   }
 
   /** Enforces one valid lifecycle transition. */
@@ -1318,11 +1039,6 @@ export class RuntimePlayer {
       )
       return false
     }
-  }
-
-  /** Finds a terminal boundary exactly at the current playback cursor. */
-  private findSequenceEndAtCurrentTime(): RuntimeSequenceEndOccurrence | undefined {
-    return this.findSequenceEndBetween(undefined, this.currentTimeMs)
   }
 
   /** Finds the earliest active terminal event crossed by one playing frame. */
@@ -1386,275 +1102,15 @@ export class RuntimePlayer {
     if (this.sequenceEnded) return
     this.sequenceEndPending = false
     this.sequenceEnded = true
-    cancelActiveCaptures(
-      this.captureSessions,
-      this.activeCaptureActions,
-      this.liveCaptureStateUpdates,
-    )
-    this.liveCapturePersoKeys = new Set()
+    this.captureController.cancelAll()
     this.idleMonitor.reset()
     this.currentTimeMs = Math.max(0, Math.min(this.currentTimeMs, sequenceEndMs))
-    this.recordCurrentTimeAsDiscovered()
+    this.discoveredDurationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
     this.renderSync.pause()
     this.state = PLAYER_LIFECYCLE_PAUSED
     notifyModulePlaybackState(this.moduleServiceInstances, 'paused', this.currentTimeMs)
     this.invokeSceneLifecycleHook('onSequenceEnd')
     this.notifyTransportObservers()
-  }
-
-  /** Validates one local seek before the engine enters a group transaction. */
-  private validateSeek(timeMs: number): void {
-    this.requireSequenceActive('seek')
-    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
-      throw new Error(`Player cannot seek from ${this.state} state.`)
-    }
-    if (!Number.isFinite(timeMs) || timeMs < 0) {
-      throw new Error('Player seek time must be a finite positive number.')
-    }
-    if (this.seekTransaction !== undefined) {
-      throw new Error('Player seek transaction is already active.')
-    }
-    this.seekTransaction = {
-      previousSolvedScene: this.solvedScene,
-      previousTimeMs: this.currentTimeMs,
-      previousIncludePersistOnly: this.includePersistOnlyInCurrent,
-      previousSkipNextDelta: this.skipNextDelta,
-      moveDeltas: [],
-      preparedInstances: new Set(),
-      committed: false,
-    }
-    cancelActiveCaptures(
-      this.captureSessions,
-      this.activeCaptureActions,
-      this.liveCaptureStateUpdates,
-    )
-    for (const instance of this.moduleServiceInstances.values()) {
-      instance.beforeSeek?.(this.currentTimeMs)
-    }
-    this.pendingSolvedScene = this.reconstructScene(timeMs)
-    this.pendingSeekDiagnostics = createSolvedMoveDiagnostics(this.pendingSolvedScene)
-    this.pendingModuleSeekHandles = []
-    try {
-      for (const instance of this.moduleServiceInstances.values()) {
-        const handle = instance.prepareSeek?.(this.pendingSolvedScene)
-        if (handle !== undefined) this.pendingModuleSeekHandles.push({ instance, handle })
-      }
-    } catch (error) {
-      abortPendingModuleSeek(this.pendingModuleSeekHandles)
-      throw error
-    }
-  }
-
-  /** Aborts a seek that failed before any participant commit. */
-  private abortSeekTransaction(): void {
-    abortPendingModuleSeek(this.pendingModuleSeekHandles)
-    this.restoreSeekTransaction(false)
-  }
-
-  /** Rolls back a seek whose logical state or presentation was already committed. */
-  private rollbackSeekTransaction(): void {
-    abortPendingModuleSeek(this.pendingModuleSeekHandles)
-    this.restoreSeekTransaction(true)
-  }
-
-  /** Restores the previous player snapshot after a failed grouped seek. */
-  private restoreSeekTransaction(represent: boolean): void {
-    const transaction = this.seekTransaction
-    if (transaction === undefined) return
-    const currentSolvedScene = this.solvedScene
-    try {
-      this.solvedScene = transaction.previousSolvedScene
-      this.pendingSolvedScene = undefined
-      this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
-      this.currentTimeMs = transaction.previousTimeMs
-      this.trackJournal.reconcileStoryIsolationAt(this.currentTimeMs)
-      this.includePersistOnlyInCurrent = transaction.previousIncludePersistOnly
-      this.skipNextDelta = transaction.previousSkipNextDelta
-      if (this.solvedScene !== undefined) {
-        this.synchronizeStateStoreFromScene(this.solvedScene)
-      } else {
-        this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
-      }
-      if (represent && this.solvedScene !== undefined) {
-        const moveDeltas = currentSolvedScene === undefined
-          ? []
-          : diffSolvedScenes(currentSolvedScene, this.solvedScene)
-        this.materializeScene(this.solvedScene, {
-          previousScene: currentSolvedScene,
-          moveDeltas,
-          componentPhase: 'seek',
-        })
-        this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
-      }
-    } finally {
-      this.pendingSolvedScene = undefined
-      this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
-      this.pendingModuleSeekHandles = []
-      this.seekTransaction = undefined
-    }
-  }
-
-  /** Sends seek move deltas through the same module boundary as normal frames. */
-  private notifyModuleMoveDeltas(
-    previousScene: SolvedScene | undefined,
-    nextScene: SolvedScene | undefined,
-    preparedInstances: ReadonlySet<RuntimeModuleServiceInstance>,
-    moveDeltas: readonly MoveStateDelta[],
-  ): void {
-    if (nextScene === undefined) return
-    notifyModuleMoveDeltas(
-      this.moduleServiceInstances,
-      previousScene,
-      nextScene,
-      preparedInstances,
-      moveDeltas,
-    )
-  }
-
-  /** Rebuilds one logical scene without replaying straps or render effects. */
-  private reconstructScene(
-    timeMs: number,
-    includePersistOnly = true,
-    includeSnapshot = true,
-  ): SolvedScene {
-    this.ensureStructuralTimeline(includePersistOnly)
-    const structural = this.structuralTimeline?.resolveAt(timeMs)
-    return this.reconstructBaseScene(
-      timeMs,
-      structural?.childrenByTarget,
-      true,
-      includePersistOnly,
-      includeSnapshot ? this.snapshotContribution : undefined,
-    )
-  }
-
-  /** Reuses the last logical scene when the current frame has no state boundary. */
-  private resolveFrameScene(
-    previousTimeMs: number,
-    timeMs: number,
-    includePersistOnly: boolean,
-  ): Readonly<{ scene: SolvedScene; reconstructed: boolean }> {
-    const current = this.solvedScene
-    if (current === undefined || this.shouldReconstructFrameScene(previousTimeMs, timeMs, includePersistOnly)) {
-      return {
-        scene: this.reconstructScene(timeMs, includePersistOnly),
-        reconstructed: true,
-      }
-    }
-    return {
-      scene: current.timeMs === timeMs ? current : { ...current, timeMs },
-      reconstructed: false,
-    }
-  }
-
-  /** Decides whether one advancing frame can reuse the previous logical state. */
-  private shouldReconstructFrameScene(
-    previousTimeMs: number,
-    timeMs: number,
-    includePersistOnly: boolean,
-  ): boolean {
-    const current = this.solvedScene
-    if (current === undefined) return true
-    if (timeMs < current.timeMs) return true
-    if (includePersistOnly !== this.includePersistOnlyInCurrent) return true
-    if (this.snapshotContribution !== undefined && this.snapshotContribution.timeMs !== timeMs) return true
-    if (this.structuralTimelineRevision !== this.trackJournal.getRevision()) return true
-    if (hasActiveTimeDependentStateActions(current)) return true
-    return hasEventBoundaryBetween(this.getLogicalEvaluationBoundaries(), previousTimeMs, timeMs)
-  }
-
-  /** Returns cached logical boundaries and refreshes them after journal changes. */
-  private getLogicalEvaluationBoundaries(): readonly number[] {
-    const revision = this.trackJournal.getRevision()
-    if (this.logicalEvaluationBoundariesRevision !== revision) {
-      this.logicalEvaluationBoundaries = collectLogicalEvaluationBoundaries(this.compiledScene, this.trackJournal)
-      this.logicalEvaluationBoundariesRevision = revision
-    }
-    return this.logicalEvaluationBoundaries
-  }
-
-  /** Resolves the left side of one event boundary with the preceding structural order. */
-  private reconstructSceneBeforeBoundary(timeMs: number, includePersistOnly = true): SolvedScene {
-    this.ensureStructuralTimeline(includePersistOnly)
-    const structural = this.structuralTimeline?.resolveBefore(timeMs)
-    return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, false, includePersistOnly)
-  }
-
-  /** Rebuilds the canonical structural timeline from compiled and runtime facts. */
-  private rebuildStructuralTimeline(includePersistOnly = true): void {
-    for (const instance of this.moduleServiceInstances.values()) instance.resetStructuralOrder?.()
-    this.structuralTimeline = new StructuralTimeline(
-      this.compiledScene,
-      (timeMs) => this.reconstructBaseScene(timeMs, undefined, true, includePersistOnly, undefined, false),
-      (timeMs) => this.reconstructBaseScene(timeMs, undefined, false, includePersistOnly, undefined, false),
-      (previousOrder, scene, deltas) => resolveStructuralOrder(
-        this.moduleServiceInstances,
-        previousOrder,
-        scene,
-        deltas,
-      ),
-      this.trackJournal.getEventTimes(),
-    )
-    this.structuralTimelineRevision = this.trackJournal.getRevision()
-    this.structuralTimelineIncludesPersistOnly = includePersistOnly
-  }
-
-  /** Rebuilds runtime structural boundaries lazily after a journal append. */
-  private ensureStructuralTimeline(includePersistOnly = true): void {
-    if (this.structuralTimeline === undefined
-      || this.structuralTimelineRevision !== this.trackJournal.getRevision()
-      || this.structuralTimelineIncludesPersistOnly !== includePersistOnly) {
-      this.rebuildStructuralTimeline(includePersistOnly)
-    }
-  }
-
-  /** Resolves one scene without consulting the structural timeline being built. */
-  private reconstructBaseScene(
-    timeMs: number,
-    childrenByTarget?: Readonly<Record<string, readonly string[]>>,
-    includeBoundary = true,
-    includePersistOnly = true,
-    snapshotContribution?: RuntimeSnapshotContribution,
-    includeMoveOccurrences = true,
-  ): SolvedScene {
-    return reconstructPlayerScene({
-      compiledScene: this.compiledScene,
-      functions: this.functions,
-      trackJournal: this.trackJournal,
-      mountTargets: this.mountTargets,
-      moduleServiceInstances: this.moduleServiceInstances,
-    }, timeMs, childrenByTarget, includeBoundary, includePersistOnly, snapshotContribution, includeMoveOccurrences)
-  }
-
-  /** Reconciles the mutable strap input snapshot from one solved evaluation. */
-  private synchronizeStateStoreFromScene(scene: Pick<SolvedScene, 'sceneState' | 'storyStates'>): void {
-    this.stateStore.replace(STRAP_SCOPE_SCENE, scene.sceneState)
-    for (const [storyId, state] of Object.entries(scene.storyStates)) {
-      this.stateStore.replace(STRAP_SCOPE_STORY, state, storyId)
-    }
-    this.reapplyLiveCaptureStateUpdates()
-  }
-
-  /** Reconciles the mutable strap input snapshot from the journal state. */
-  private synchronizeStateStore(timeMs: number, includePersistOnly = true): void {
-    const materialized = materializeScene(this.compiledScene, timeMs, this.trackJournal, { includePersistOnly })
-    this.synchronizeStateStoreFromScene(materialized)
-  }
-
-  /** Reapplies non-journaled capture state so active straps see its live value. */
-  private reapplyLiveCaptureStateUpdates(): void {
-    reapplyLiveCaptureStateUpdates(this.stateStore, this.liveCaptureStateUpdates, this.captureSessions)
-  }
-
-  /** Applies one trackCommand state patch to its declared live scope only. */
-  private applyCaptureStateUpdate(
-    entry: Readonly<{
-      storyId: string
-      stateScope: 'scene' | 'story'
-    }>,
-    update: CompiledRecord,
-  ): void {
-    applyCaptureStateUpdate(this.stateStore, entry, update)
   }
 
   /** Allocates one player-scoped identity for every live event dispatch. */
@@ -1676,260 +1132,4 @@ export class RuntimePlayer {
     }
   }
 
-  /** Retains the largest logical head reached during the current open session. */
-  private recordCurrentTimeAsDiscovered(): void {
-    this.discoveredDurationMs = Math.max(this.discoveredDurationMs, this.currentTimeMs)
-  }
-}
-
-/** Resolves the declared story or scene target for one eventime insertion. */
-function resolveEventimeTarget(
-  scene: CompiledScene,
-  target: RuntimePlayerEventimeTarget,
-): Readonly<{ trackId: string; storyId?: string }> {
-  if (target.scope === 'scene') {
-    if (target.storyId !== undefined) throw new Error('Scene eventime target must not contain storyId.')
-    return { trackId: target.trackId ?? TRACK_GLOBAL_ID }
-  }
-  if (target.storyId === undefined) throw new Error('Story eventime target requires storyId.')
-  const story = scene.scene.stories[target.storyId]
-  if (story === undefined) throw new Error(`Eventime story is not declared: ${target.storyId}`)
-  return {
-    trackId: target.trackId ?? story.trackId ?? story.id,
-    storyId: story.id,
-  }
-}
-
-/** Sends an immediate targeted event through listen so it can wake its story. */
-function shouldDispatchImmediateStoryEventime(
-  scene: CompiledScene,
-  eventime: RuntimePlayerEventime,
-  target: RuntimePlayerEventimeTarget,
-): boolean {
-  if (target.scope !== 'story' || target.storyId === undefined) return false
-  if (eventime.startAt !== undefined && eventime.startAt !== 0) return false
-  if (eventime.events !== undefined && eventime.events.length > 0) return false
-  if (eventime.visibility === 'scene' || eventime.visibility === 'public') return false
-  return scene.scene.stories[target.storyId]?.listen.some((rule) => rule.on === eventime.name) === true
-}
-
-/** Collects one nested sequence:end declaration with its resolved target. */
-function collectSequenceEndOccurrences(
-  eventimes: readonly CompiledEventime[],
-  scope: 'scene' | 'story',
-  trackId: string,
-  storyId?: string,
-  parentStartAt = 0,
-  parentPath: readonly number[] = [],
-): readonly RuntimeSequenceEndOccurrence[] {
-  return eventimes.flatMap((eventime, index) => {
-    const startAt = parentStartAt + eventime.startAt
-    const declarationPath = [...parentPath, index]
-    return [
-      ...(eventime.name === RUNTIME_SEQUENCE_END_EVENT_NAME
-        ? [{
-          kind: 'compiled' as const,
-          event: eventime,
-          applyAtMs: startAt,
-          trackId,
-          ...(storyId === undefined ? {} : { storyId }),
-          eventId: createCompiledEventimeEventId(scope, trackId, storyId, declarationPath),
-        }]
-        : []),
-      ...collectSequenceEndOccurrences(eventime.events ?? [], scope, trackId, storyId, startAt, declarationPath),
-    ]
-  })
-}
-
-/** Orders terminal occurrences by time and then by their existing runtime order. */
-function compareSequenceEndOccurrences(
-  left: RuntimeSequenceEndOccurrence,
-  right: RuntimeSequenceEndOccurrence,
-): number {
-  if (left.applyAtMs !== right.applyAtMs) return left.applyAtMs - right.applyAtMs
-  if (left.kind === 'journal' && right.kind === 'journal') return left.event.eventSeq - right.event.eventSeq
-  if (left.kind === 'journal') return 1
-  if (right.kind === 'journal') return -1
-  return left.eventId.localeCompare(right.eventId)
-}
-
-/** Applies the play-only boundary rule used for static and live terminal events. */
-function isSequenceEndInRange(
-  eventTimeMs: number,
-  previousTimeMs: number | undefined,
-  currentTimeMs: number,
-): boolean {
-  if (eventTimeMs > currentTimeMs) return false
-  if (previousTimeMs === undefined) return eventTimeMs === currentTimeMs
-  return eventTimeMs >= previousTimeMs
-}
-
-/** Collects move actions that became relevant at one normal presentation boundary. */
-function collectMoveOccurrences(
-  previousScene: SolvedScene | undefined,
-  scene: SolvedScene,
-  options: Readonly<{
-    forceActive?: boolean
-    resolveBeforeScene?: (timeMs: number) => SolvedScene
-  }> = {},
-): readonly RuntimeMoveOccurrence[] {
-  const occurrences: RuntimeMoveOccurrence[] = []
-  const previousTimeMs = previousScene?.timeMs
-  const movingBackward = previousTimeMs !== undefined && scene.timeMs < previousTimeMs
-  const currentMoves = scene.moveOccurrences ?? []
-  const previousMoves = previousScene?.moveOccurrences ?? []
-  const forceActive = options.forceActive === true
-  // A forward frame that only advances a time-dependent action reuses the same
-  // materialized move list. A backward seek is different: the target graph may
-  // have been physically partitioned by a reset, so the active move must be
-  // offered again even when materialization reused the same action array.
-  if (previousScene !== undefined && previousMoves === currentMoves && !movingBackward && !forceActive) return []
-  const previousKeys = new Set(previousMoves.map(({ action }) => actionOccurrenceKey(action)))
-
-  for (const { itemId, action } of currentMoves) {
-    const key = actionOccurrenceKey(action)
-    const newlyVisible = forceActive
-      ? isMoveActiveAt(action.action.move, action.startAt, scene.timeMs)
-      : previousScene === undefined
-      ? action.startAt === scene.timeMs
-      : movingBackward
-        ? isMoveActiveAt(action.action.move, action.startAt, scene.timeMs)
-        : (action.startAt > (previousTimeMs ?? Number.NEGATIVE_INFINITY)
-          && action.startAt <= scene.timeMs) || !previousKeys.has(key)
-    if (!newlyVisible) continue
-    const beforeScene = options.resolveBeforeScene?.(action.startAt) ?? previousScene ?? scene
-    const beforeStoryIds = resolveMotionStoryIds(beforeScene, itemId)
-    const afterStoryIds = resolveMotionStoryIds(scene, itemId)
-    occurrences.push(Object.freeze({
-      itemId,
-      startAt: action.startAt,
-      ...(action.eventId === undefined ? {} : { eventId: action.eventId }),
-      ...(action.eventSeq === undefined ? {} : { eventSeq: action.eventSeq }),
-      declarationPath: Object.freeze([...action.declarationPath]),
-      action,
-      beforeStoryIds,
-      afterStoryIds,
-    }))
-  }
-
-  return Object.freeze(occurrences)
-}
-
-/** Collects the logical stories touched by one item's current placement. */
-function resolveMotionStoryIds(scene: SolvedScene, itemId: string): readonly string[] {
-  const perso = scene.persos[itemId]
-  if (perso === undefined) return Object.freeze([])
-  const storyIds = new Set<string>([perso.storyId])
-  const targetStoryId = perso.placement.target?.storyId
-  if (targetStoryId !== undefined) storyIds.add(targetStoryId)
-  const parentStoryId = perso.placement.parentKey === undefined
-    ? undefined
-    : scene.persos[perso.placement.parentKey]?.storyId
-  if (parentStoryId !== undefined) storyIds.add(parentStoryId)
-  return Object.freeze([...storyIds])
-}
-
-/** Identifies one materialized action occurrence across adjacent scenes. */
-function actionOccurrenceKey(action: Readonly<{
-  name: string
-  startAt: number
-  eventId?: string
-  declarationPath: readonly number[]
-}>): string {
-  return `${action.eventId ?? action.name}:${action.startAt}:${action.declarationPath.join('.')}`
-}
-
-/** Reports whether a move transition is active at a backward seek target. */
-function isMoveActiveAt(moveValue: unknown, startAt: number, timeMs: number): boolean {
-  if (!isPlainRecord(moveValue) || !isPlainRecord(moveValue.transition)) return false
-  const transition = moveValue.transition
-  const duration = transition.duration
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return false
-  const delay = transition.delay
-  const delayMs = delay === undefined ? 0 : typeof delay === 'number' && Number.isFinite(delay) && delay >= 0 ? delay : 0
-  // The captured FIRST must also cover the delay hold before interpolation.
-  return timeMs >= startAt && timeMs <= startAt + delayMs + duration
-}
-
-/** Reports whether one advancing frame crosses a known logical event boundary. */
-function hasEventBoundaryBetween(
-  boundaries: readonly number[],
-  previousTimeMs: number,
-  currentTimeMs: number,
-): boolean {
-  if (currentTimeMs <= previousTimeMs) return currentTimeMs < previousTimeMs
-  return boundaries.some((boundary) => boundary > previousTimeMs && boundary <= currentTimeMs)
-}
-
-/** Normalizes one external eventime tree without mutating the caller's value. */
-function normalizeRuntimeEventime(
-  eventime: RuntimePlayerEventime,
-  root: boolean,
-): Readonly<{ eventime: CompiledEventime; mode?: RuntimePlayerEventime['mode'] }> {
-  if (eventime.name.trim().length === 0) throw new Error('Eventime name must not be empty.')
-  const startAt = eventime.startAt ?? (root ? 0 : undefined)
-  if (startAt === undefined || !Number.isFinite(startAt) || startAt < 0) {
-    throw new Error('Eventime startAt must be finite and non-negative; only the root may omit it.')
-  }
-  if (eventime.visibility !== undefined
-    && eventime.visibility !== 'story'
-    && eventime.visibility !== 'scene'
-    && eventime.visibility !== 'public') {
-    throw new Error(`Eventime visibility is invalid: ${eventime.visibility}`)
-  }
-  const children = eventime.events?.map((child) => normalizeRuntimeEventime(child, false).eventime)
-  return {
-    eventime: {
-      name: eventime.name,
-      startAt,
-      visibility: eventime.visibility,
-      data: eventime.data === undefined ? undefined : cloneRecord(eventime.data),
-      events: children,
-    },
-    mode: eventime.mode,
-  }
-}
-
-/** Identifies an immediate public command that must change track activity now. */
-function isImmediateTrackControlEvent(eventime: RuntimePlayerEventime): boolean {
-  return eventime.startAt === undefined
-    && (eventime.events === undefined || eventime.events.length === 0)
-    && (eventime.name === TRACK_EVENT_ACTIVATE
-      || eventime.name === TRACK_EVENT_DEACTIVATE
-      || eventime.name === TRACK_EVENT_TOGGLE)
-}
-
-/** Clones and deeply freezes one logical snapshot record before exposing it. */
-function freezeSnapshotRecord(record: CompiledRecord): CompiledRecord {
-  for (const value of Object.values(record)) freezeSnapshotValue(value)
-  return Object.freeze({ ...record })
-}
-
-/** Freezes nested snapshot values without retaining caller-owned references. */
-function freezeSnapshotValue(value: unknown): void {
-  if (Array.isArray(value)) {
-    for (const item of value) freezeSnapshotValue(item)
-    Object.freeze(value)
-    return
-  }
-  if (isPlainRecord(value)) {
-    for (const item of Object.values(value)) freezeSnapshotValue(item)
-    Object.freeze(value)
-  }
-}
-
-/** Checks the JSON-compatible values allowed inside a snapshot style patch. */
-function isSnapshotValueRecord(value: unknown): value is CompiledRecord {
-  if (!isPlainRecord(value)) return false
-  return Object.values(value).every(isSnapshotValue)
-}
-
-/** Checks one recursively serializable snapshot value. */
-function isSnapshotValue(value: unknown): boolean {
-  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return true
-  }
-  if (Array.isArray(value)) return value.every(isSnapshotValue)
-  if (isPlainRecord(value)) return Object.values(value).every(isSnapshotValue)
-  return false
 }
