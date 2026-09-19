@@ -2,8 +2,8 @@
 
 ## Statut
 
-> Status: Fixe pour la déclaration et la résolution commune ; les conventions
-> propres aux bibliothèques restent externes
+> Status: En cours — forme `host`/`target` décidée ; migration du core à faire
+> avant de déclarer la résolution commune fixe.
 > CodPlay version: V2 foundation
 > Décision: 2026-09-18
 > Plan: [`../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../plan/2026-09-18-third-party-render-target-codplay-plan.md)
@@ -20,21 +20,28 @@ de matérialisation des bibliothèques tierces restent dans leurs packages.
 ```ts
 initial: {
   rel: {
-    target: {
-      scene: '#scene-id',
-      perso: '#perso-id',
-    },
+    host: 'three-scene',
+    target: 'avatar1',
   },
 }
 ```
 
-`target.scene` est obligatoire et identifie la scène. `target.perso` est
-facultatif ; lorsqu'il est absent, la relation désigne la scène elle-même.
-Les identifiants sont des chaînes non vides.
+`host` est obligatoire et désigne le host qui possède le contexte de rendu.
+`target` est facultatif : lorsqu'il est absent, le composant est simplement
+attaché au host ; lorsqu'il est présent, il désigne une cible publiée par ce
+host ou par un composant qui lui est attaché. Les deux identifiants sont des
+chaînes non vides.
+
+`host` ne désigne pas la scène logique CodPlay. `target` ne désigne pas un
+nœud Three interne tel qu'un mesh, un os ou un morph target. Il désigne une
+capacité publiée par l'intégration, par exemple un avatar identifié par
+`avatar1`. Le mapping entre cette capacité et la structure réelle du modèle
+reste externe à CodPlay.
 
 Une intégration peut ajouter des champs propres à sa bibliothèque au niveau de
-`rel`. Le core ne les interprète pas. Le champ `target` conserve uniquement la
-forme commune `scene` / `perso`.
+`rel`. Le core ne les interprète pas. Le champ `rel` conserve uniquement la
+forme commune `host` / `target`. Les conventions de publication propres à une
+bibliothèque restent dans son package.
 
 ## Immutabilité
 
@@ -71,13 +78,15 @@ modifier la relation et ne donne à l'auteur aucun accès au registre interne.
 
 ## Vérification
 
-La tranche est couverte par :
+La forme `host`/`target` est décidée, mais la tranche d'implémentation n'est
+pas encore migrée. Les tests de relation existants portent encore l'ancien
+format et doivent être adaptés avec le core :
 
 - `tests/scene/validation/capability-validation.spec.ts` pour les warnings
   non bloquants et leurs chemins auteur ;
 - `tests/scene/compiled/scene-builder.spec.ts` pour la séparation et
   l'immutabilité de la relation ;
-- `tests/scene/compiled/scene-builder.spec.ts` pour les warnings non bloquants
-  des identités scène/perso inconnues ;
+- `tests/scene/compiled/scene-builder.spec.ts` pour le warning non bloquant
+  d'une identité de host inconnue ;
 - `tests/scene/compiled/codec.spec.ts` pour la sérialisation et le rejet d'une
   identité compilée invalide.

@@ -34,7 +34,7 @@ const build = codplay.build({
         id: 'main',
         persos: [
           {
-            id: 'scene',
+            id: 'three-scene',
             type: 'three-scene-host',
             initial: { move: '@root', width: 640, height: 480 },
           },
@@ -42,7 +42,7 @@ const build = codplay.build({
             id: 'camera',
             type: 'three-camera',
             initial: {
-              rel: { target: { scene: 'three-grid' } },
+              rel: { host: 'three-scene' },
               position: [0, 0, 6],
             },
           },
@@ -50,7 +50,7 @@ const build = codplay.build({
             id: 'light',
             type: 'three-light',
             initial: {
-              rel: { target: { scene: 'three-grid' } },
+              rel: { host: 'three-scene' },
               kind: 'ambient',
               intensity: 1,
             },
@@ -59,7 +59,7 @@ const build = codplay.build({
             id: 'grid',
             type: 'three-instanced-grid',
             initial: {
-              rel: { target: { scene: 'three-grid' } },
+              rel: { host: 'three-scene' },
               gridSize: 4,
             },
             actions: { start: { animate: true } },
@@ -84,6 +84,9 @@ const instance = codplay.instances.create({
 await instance.telco.play()
 ```
 
-`rel` relie la caméra, la lumière et la grille à l’hôte. La scène Three.js et
-le renderer restent propres à chaque instance. Pour ajouter un composant sur
+`rel.host` relie la caméra, la lumière et la grille au host. Le host Three est
+le seul composant matérialisé et le seul à recevoir `move` ; la scène Three.js
+et le renderer restent propres à chaque instance. Pour viser une cible publiée
+dans le host, ajoutez `target`, par exemple
+`rel: { host: 'three-scene', target: 'grid' }`. Pour ajouter un composant sur
 mesure, consultez [`src/threejs/README.md`](src/threejs/README.md).

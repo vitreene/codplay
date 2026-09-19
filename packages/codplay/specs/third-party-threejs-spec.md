@@ -2,11 +2,12 @@
 
 ## Statut
 
-> En cours — déclaration core, hôte, caméra, lumières et grille procédurale implémentés ; le
-> calcul temporel de la grille, le rejeu de présentation au Seek et l'ordre
-> de commit de l'hôte sont couverts par des tests déterministes. Le chemin
-> réel de la démo a été exercé dans Safari pour Play, pause, Seek
-> arrière/reprise et resize. Le cycle complet de destruction reste à valider.
+> En cours — déclaration core, hôte, caméra, lumières et grille procédurale
+> implémentés ; le passage de la relation `scene/perso` vers `host/target` et
+> le retrait de `move` des composants Three logiques restent à réaliser. Le
+> calcul temporel de la grille, le rejeu de présentation au Seek et l'ordre de
+> commit de l'hôte sont couverts par des tests déterministes. Le cycle complet
+> de destruction reste à valider.
 
 Cette spécification décrit la première unité Three.js externe. Elle ne change
 pas le core en matérialiseur Three.js et ne réutilise pas le runtime V1.
@@ -38,14 +39,21 @@ La caméra et les lumières sont des persos distincts : elles ne sont pas
 absorbées par l’hôte. La géométrie est également un perso distinct.
 
 La relation d’une caméra, d’une lumière ou d’une géométrie suit la forme
-commune :
+commune et désigne le host Three :
 
 ```ts
-rel: { target: { scene: 'three-grid' } }
+rel: { host: 'three-scene' }
 ```
 
-Le composant consommateur ne recherche pas l’hôte. Le runtime résout `rel` et
-livre la cible dans `ComponentUpdateInput.target`.
+Le host est le seul composant Three matérialisé et le seul à recevoir `move`.
+Le composant consommateur ne recherche pas l’hôte et ne reçoit pas de montage
+DOM. Le runtime résout `rel` et livre la cible opaque dans
+`ComponentUpdateInput.target`.
+
+Lorsqu’un composant doit viser un objet ou une capacité publiée dans le host,
+il ajoute `target`, par exemple `rel: { host: 'three-scene', target: 'grid' }`.
+Cette clé désigne une publication de l’intégration ; elle ne désigne pas un
+nœud interne Three que CodPlay devrait découvrir.
 
 ## Temps et rendu
 
@@ -63,6 +71,22 @@ Le même calcul est donc utilisé par Play et Seek. La grille possède et libèr
 sa géométrie, son matériau et son `InstancedMesh`. L’hôte possède et libère le
 renderer et la scène, mais ne détruit pas les ressources appartenant aux
 consommateurs.
+
+## États pilotés par les actions
+
+La caméra accepte les mises à jour d’état de `position` et `lookAt`. Une lumière
+accepte notamment `position`, `color` et `intensity`. Une mise à jour de ces
+champs est appliquée à l’objet Three.js déjà possédé par le composant ; elle ne
+recrée pas l’objet tant que son `kind` ne change pas.
+
+Ces composants ne fabriquent pas chacun un flux d’animation concurrent. Une
+action discrète produit un nouvel état, tandis qu’un `TweenAction` auteur
+retourne un patch d’état à chaque temps logique. Le runtime résout alors le
+patch, rappelle `update()` avec la nouvelle position ou couleur, puis l’hôte
+effectue le rendu dans son commit final. La démo `threejs-grid` vérifie ce
+parcours avec un recul puis une avancée de caméra sur une durée distincte des
+rotations de la grille, le déplacement d’une lumière ponctuelle et la variation
+des couleurs ambiante et ponctuelle.
 
 La démo utilise un horizon ouvert : elle ne déclare pas de `sequence:end` pour
 fabriquer une durée. La télécommande découvre l’horizon au fur et à mesure que

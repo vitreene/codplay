@@ -1,11 +1,13 @@
-import { InstancedMesh, Matrix4, Scene } from 'three'
+import { InstancedMesh, Matrix4, Scene, type Camera } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { ComponentAnimation, ComponentServices, ComponentUpdateInput } from 'codplay'
 import type { CompiledScene } from 'codplay/scene/compiled'
 import { RuntimeCapabilityCatalog } from 'codplay/runtime/catalog'
 import { RuntimeEngine } from 'codplay/runtime/engine'
 import {
+  THREE_CAMERA_DEFINITION,
   THREE_INSTANCED_GRID_DEFINITION,
+  THREE_LIGHT_DEFINITION,
   THREEJS_CORE_COMPONENTS,
   THREEJS_CORE_ENGINE,
   THREE_LIBRARY,
@@ -91,6 +93,72 @@ describe('Three.js V2 integration', () => {
       engine.destroy()
     }
   })
+
+  it('applies camera position and light position/color updates', async () => {
+    const engine = await createPreparedEngine()
+    const cameraState: { current: Camera | null } = { current: null }
+    const target = createTarget((camera) => {
+      cameraState.current = camera
+    })
+    const cameraComponent = new THREE_CAMERA_DEFINITION.component({
+      services: emptyServices(),
+      runtime: engine.getComponentRuntimeContext(),
+      perso: { id: 'camera', storyId: 'main', initial: { kind: 'perspective' } },
+    } as never)
+    const lightComponent = new THREE_LIGHT_DEFINITION.component({
+      services: emptyServices(),
+      runtime: engine.getComponentRuntimeContext(),
+      perso: { id: 'light', storyId: 'main', initial: { kind: 'point' } },
+    } as never)
+
+    try {
+      cameraComponent.update({
+        state: { kind: 'perspective', position: [0, 0, 6], lookAt: [0, 0, 0] },
+        timeMs: 0,
+        target,
+        activeActions: [],
+      } as never)
+      const initialCamera = cameraState.current
+      if (initialCamera === null) throw new Error('The camera component did not publish a camera.')
+      expect(initialCamera.position.toArray()).toEqual([0, 0, 6])
+
+      cameraComponent.update({
+        state: { kind: 'perspective', position: [2, -1, 4], lookAt: [0, 0, 0] },
+        timeMs: 4_000,
+        target,
+        activeActions: [],
+      } as never)
+      const updatedCamera = cameraState.current
+      if (updatedCamera === null) throw new Error('The camera component removed its camera.')
+      expect(updatedCamera.position.toArray()).toEqual([2, -1, 4])
+
+      lightComponent.update({
+        state: { kind: 'point', color: '#ff0000', position: [1, 2, 3], intensity: 2 },
+        timeMs: 0,
+        target,
+        activeActions: [],
+      } as never)
+      const pointLight = target.scene.children[0] as unknown as {
+        position: { toArray: () => number[] }
+        color: { getHex: () => number }
+      }
+      expect(pointLight.position.toArray()).toEqual([1, 2, 3])
+      expect(pointLight.color.getHex()).toBe(0xff0000)
+
+      lightComponent.update({
+        state: { kind: 'point', color: '#00ff00', position: [4, 5, 6], intensity: 2 },
+        timeMs: 4_000,
+        target,
+        activeActions: [],
+      } as never)
+      expect(pointLight.position.toArray()).toEqual([4, 5, 6])
+      expect(pointLight.color.getHex()).toBe(0x00ff00)
+    } finally {
+      cameraComponent.destroy()
+      lightComponent.destroy()
+      engine.destroy()
+    }
+  })
 })
 
 /** Prepares Three.js through the same engine boundary used by a player. */
@@ -112,17 +180,17 @@ async function createPreparedEngine(): Promise<RuntimeEngine> {
 }
 
 /** Builds the opaque scene target consumed by the feature component. */
-function createTarget(): {
-  scene: Scene
-  renderer: never
-  setCamera: () => void
-  resize: () => void
-  render: () => void
+function createTarget(setCamera: (camera: Camera | null) => void = () => undefined): {
+	scene: Scene
+	renderer: never
+	setCamera: (camera: Camera | null) => void
+	resize: () => void
+	render: () => void
 } {
   return {
     scene: new Scene(),
     renderer: {} as never,
-    setCamera: () => undefined,
+		setCamera,
     resize: () => undefined,
     render: () => undefined,
   }

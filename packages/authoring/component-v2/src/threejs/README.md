@@ -45,8 +45,7 @@ export type ThreeRingAction = Readonly<{
 ```
 
 `rel` n'est pas redéfini dans chaque type : il fait partie des données
-initiales communes. L'auteur de la scène l'utilise pour désigner la scène
-Three.js cible.
+initiales communes. L'auteur l'utilise pour désigner le host Three cible.
 
 ## 2. Écrire la classe
 
@@ -191,7 +190,8 @@ disponible que dans les scenes qui l'enregistrent explicitement.
 
 ## 5. Utiliser le composant dans une scène
 
-L'hôte et l'objet animé sont deux persos distincts :
+L'hôte et l'objet animé sont deux persos distincts. Le host est le seul à
+recevoir `move` et l'objet y est attaché par `rel` :
 
 ```ts
 {
@@ -203,7 +203,7 @@ L'hôte et l'objet animé sont deux persos distincts :
   id: 'ring',
   type: 'three-ring',
   initial: {
-    rel: { target: { scene: 'three-scene' } },
+    rel: { host: 'three-scene' },
     radius: 0.8,
     color: '#38bdf8',
   },

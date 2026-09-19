@@ -2,8 +2,9 @@
 
 ## Statut
 
-> Status: En cours — orchestration runtime et diagnostics d'identité
-> implémentés ; les responsabilités propres aux intégrations sont séparées
+> Status: En cours — orchestration runtime existante à migrer vers l'identité
+> `host`/`target` ; les responsabilités propres aux intégrations restent
+> séparées.
 > CodPlay version: V2 foundation
 > Décision: 2026-09-18
 > Plan: [`../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../plan/2026-09-18-third-party-render-target-codplay-plan.md)
@@ -36,16 +37,15 @@ La scène porte la relation immuable séparément de l'initial du composant :
 
 ```ts
 type CompiledRel = {
-  target: {
-    scene: string
-    perso?: string
-  }
+  host: string
+  target?: string
 }
 ```
 
 Le registre runtime stocke uniquement cette identité structurée. Il ne
-transforme pas `scene` ou `perso` en sélecteur DOM et ne déduit aucune classe
-native à partir de leur nom. La valeur associée reste `unknown` pour le core.
+transforme pas `host` ou `target` en sélecteur DOM et ne déduit aucune classe
+native, aucun nœud Three et aucun élément de modèle à partir de leur nom. La
+valeur associée reste `unknown` pour le core.
 
 Une déclaration de composant peut fournir un `targetProvider` à son unité
 engine :
@@ -57,14 +57,17 @@ targetProvider?: (
   materializer: RuntimeMaterializer,
 ) => {
   value: unknown
-  scope?: 'scene' | 'perso'
+  scope?: 'host' | 'target'
 } | undefined
 ```
 
 Cette fonction décrit ce que l'instance publie ; elle ne recherche pas ses
-consommateurs et ne manipule pas le registre directement. Par défaut, la
-publication vise le perso identifié par `scene` et `perso`. Une publication
-de portée `scene` vise la scène elle-même.
+consommateurs et ne manipule pas le registre directement. Une publication de
+portée `host` expose le contexte de rendu ; une publication de portée `target`
+expose une capacité sélectionnable par `rel.target`. Pour la première
+verticale Three, cette clé correspond à l'identité auteur du composant publié
+(`grid`, `avatar1`, etc.) ; elle ne correspond jamais à un nœud interne du
+modèle. Le core ne parcourt jamais la valeur native.
 
 ## Cycle de vie d'une instance
 
@@ -109,17 +112,17 @@ identité.
 
 ### Références inconnues
 
-`SceneBuilder` vérifie les identités communes d'une relation dans le contexte
-auteur : `target.scene` doit désigner la scène compilée et `target.perso`, s'il
-est présent, doit désigner un perso de cette scène. Une identité inconnue
-produit respectivement `AUTHOR_REL_TARGET_SCENE_UNKNOWN` ou
-`AUTHOR_REL_TARGET_PERSO_UNKNOWN`.
+La validation auteur vérifie la forme et les identités de host connues par la
+scène. `target`, lorsqu'il est présent, reste une clé opaque de l'intégration :
+le core ne vérifie pas qu'un avatar, un mesh, un os ou un morph target interne
+porte cette clé. Une identité de host inconnue produit un warning auteur
+non bloquant.
 
 Ces warnings ne bloquent pas la construction. Ils ne sont pas recalculés par le
 codec ni par le player : une scène diffusée ne réémet donc pas ce diagnostic.
-L'absence d'un `targetProvider` sur le perso désigné n'est pas une référence
-invalide ; la compatibilité de la valeur opaque appartient à l'intégration qui
-la publie et à celle qui la consomme.
+L'absence d'une publication `target` n'est pas une erreur de structure ; la
+compatibilité de la valeur opaque appartient à l'intégration qui la publie et à
+celle qui la consomme.
 
 ### Dépendances et cycles
 
@@ -129,8 +132,8 @@ valeur opaque n'est jamais parcourue par CodPlay. Il n'existe donc pas de
 cycle `rel` à détecter dans le core, et aucune tranche ne doit ajouter un
 registre de graphe parallèle.
 
-Une intégration peut organiser ses propres objets internes — par exemple une
-scène, un avatar et plusieurs contrôleurs — mais cette organisation reste
+Une intégration peut organiser ses propres objets internes — par exemple un
+host, un avatar et plusieurs contrôleurs — mais cette organisation reste
 derrière le `targetProvider` et le composant concerné.
 
 ### Présentation native et bibliothèques
@@ -158,16 +161,16 @@ préchargement propres à Three.js, Rive, Lottie ou TalkingHead. Ces éléments
 seront ajoutés dans leurs unités externes après validation de leur contrat
 engine ; aucun composant tiers n'est introduit pour les simuler.
 
-## Vérification actuelle
+## Vérification à reprendre après migration
 
-Les tests couvrent :
+Les tests de la tranche existante couvrent le même cycle avec l'ancien format
+`scene`/`perso`. Ils devront être migrés et couvrir :
 
-- l'isolation des identités scène/perso ;
+- l'isolation des identités host/target ;
 - l'isolation entre deux players ;
 - l'invalidation et la réactivation d'une publication ;
 - la protection contre la libération d'une publication remplacée ;
-- les warnings auteur non bloquants pour une scène ou un perso de relation
-  inconnus ;
+- le warning auteur non bloquant pour un host de relation inconnu ;
 - le montage en deux phases lorsque le consommateur est déclaré avant son
   fournisseur ;
 - la transmission de la cible opaque et sa disparition/réapparition lorsque

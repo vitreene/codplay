@@ -1,6 +1,7 @@
 # Analyse V2 — pont vers les projections tierces
 
-> Statut : **En cours — tranche A validée, résolution runtime à relire**.
+> Statut : **En cours — modèle TalkingHead relu, migration `host`/`target` à
+> réaliser**.
 >
 > Cette note analyse le besoin. Elle n'autorise aucune modification du core.
 
@@ -12,12 +13,12 @@ sans transformer ces bibliothèques en matérialiseurs globaux de l'instance.
 Le modèle retenu est local au composant :
 
 - l'instance conserve son matérialiseur HTML/DOM ;
-- un perso hôte HTML crée un `canvas` ou un autre élément d'accueil ;
+- un host HTML crée un `canvas` ou un autre élément d'accueil ;
 - cet hôte possède le contexte et le matérialiseur de la bibliothèque ;
-- des persos spécialisés écrivent dans les cibles natives publiées par l'hôte
-  ou par un autre perso spécialisé ;
-- une relation immuable `rel.target` désigne la scène et éventuellement le
-  perso fournisseur de cette cible.
+- des composants spécialisés écrivent dans les cibles natives publiées par le
+  host ou par un composant qui lui est attaché ;
+- une relation immuable `rel: { host, target? }` désigne le host et, si besoin,
+  une cible publiée dans ce host.
 
 Le premier chantier doit construire ce pont de manière générique. La grille
 Three.js de la V1 sera sa première preuve, pas son architecture.
@@ -46,6 +47,13 @@ actuelles doit être remplacée.
 - [composant Three.js V1](../../../authoring/components/threejs/src/threejs-base-component.ts) ;
 - [composant avatar V1](../../../authoring/components/avatar3d/src/avatar3d-base-component.ts) ;
 - [moteur avatar adapté de TalkingHead](../../../authoring/components/avatar-engine/src/avatar-engine.ts).
+
+La référence amont est [TalkingHead](https://github.com/met4citizen/TalkingHead).
+Son mode `avatarOnly` permet d'attacher l'avatar à une scène et une caméra
+externes. La V1 CodPlay n'expose pas complètement cette séparation : elle
+regroupe encore une partie du contexte Three et des contrôleurs sémantiques
+dans `avatar3d`. Cette adaptation sert à comparer les comportements, pas à
+déduire le contrat V2.
 
 La V1 prouve les comportements et révèle les limites du composant monolithique.
 Elle ne fixe pas la structure V2.
@@ -87,27 +95,28 @@ native de la bibliothèque demeure dans la closure du package d'intégration.
 ### `rel` est immuable
 
 `rel` appartient aux données initiales du perso. Une action ne la modifie pas.
-Sa cible commune reste simple :
+Sa forme commune reste simple :
 
 ```ts
-type RelTarget = Readonly<{
-  scene: string
-  perso?: string
+type Rel = Readonly<{
+  host: string
+  target?: string
 }>
 ```
 
-`scene` identifie la scène. `perso` est omis pour viser la scène elle-même et
-présent pour viser un perso de cette scène. Une intégration peut ajouter à
-`rel` les conventions d'accès dont sa bibliothèque a besoin. Ses définitions
-TypeScript et son validateur guident ces champs ; le core ne lit que `target`.
+`host` identifie le host de projection, pas la scène logique. `target` est omis
+pour rattacher un composant au host ; lorsqu'il est présent, il sélectionne une
+capacité publiée, par exemple `grid` ou `avatar1`. Il ne désigne pas un mesh,
+un os, un morph target ou un autre nœud interne. Une intégration peut ajouter à
+`rel` ses conventions propres ; le core ne lit que `host` et `target`.
 
 ### Échec non bloquant d'une relation
 
 La résolution de `rel` aide l'auteur sans l'empêcher de construire sa scène.
-`SceneBuilder` vérifie les identités communes : la scène cible doit être la
-scène compilée et le perso cible, s'il est indiqué, doit exister dans cette
-scène. Une référence inconnue produit un warning auteur non bloquant et reste
-silencieuse en diffusion.
+La validation vérifie la forme et le host déclaré. `target` reste une clé
+opaque de l'intégration : CodPlay ne garantit pas la présence d'un élément
+interne du modèle. Une référence de host inconnue produit un warning auteur
+non bloquant et reste silencieuse en diffusion.
 
 Tant que la relation n'est pas résolue, le composant concerné ne reçoit aucun
 handle et sa contribution est sans effet. Le core ne vérifie pas la
@@ -190,7 +199,7 @@ frontières :
 | Three.js | première tranche : hôte, scène ou ressource préparée, séquence play/pause ; puis renderer et scène de la verticale V1 | caméra, objets, lumières, géométries | confondre relation et parentage d'`Object3D` |
 | Rive | première tranche : hôte, ressource et artboard, séquence play/pause | plus tard : state machine, entrées, contributions, modèle V1 de lipsync par visèmes | supposer que chaque perso crée un objet autonome |
 | Lottie | renderer et composition | première tranche : séquence play/pause ; plus tard : temps, segments, marqueurs ou éléments adressables | imposer une hiérarchie que la bibliothèque n'expose pas |
-| avatar/TalkingHead | avatar placé dans une scène Three.js | lipsync, expression et geste | assimiler une contribution à une représentation |
+| avatar/TalkingHead | avatar initialisé dans le contexte Three du host | lipsync, expression et geste | assimiler une contribution à une représentation |
 
 ### Premiers constats documentés
 
@@ -217,10 +226,10 @@ Les références disponibles donnent déjà des contraintes concrètes :
   mais la première implémentation reste limitée à une séquence pilotée par
   play/pause. Le pont ne doit donc pas supposer que toute bibliothèque possède
   une hiérarchie d'objets native comparable à Three.js.
-- TalkingHead/avatar-engine sépare déjà la gestion de la scène Three.js et la
-  logique de l'avatar : le caller possède scène, caméra et renderer, tandis que
-  l'avatar fournit un groupe et des contributions de morphs, gestes et os. Cela
-  confirme le cas du perso contributeur sans représentation autonome.
+- TalkingHead propose un mode autonome et un mode `avatarOnly` : le caller peut
+  posséder la scène, la caméra et le renderer tandis que l'avatar est fourni
+  comme objet intégrable. Cela confirme le cas du perso avatar attaché au host,
+  sans imposer que les contrôleurs spécialisés possèdent une représentation.
 
 Pour cette phase, un hôte Rive ou Lottie est comparable à un composant media
 du point de vue auteur : une ressource préchargée, une séquence et les commandes
@@ -428,6 +437,21 @@ pour les clips, os, morphs ou visèmes, à condition de dépendre du temps CodPl
 et de préserver le résultat de `play(t) = seek(t)` pour les actions annoncées
 comme reconstructibles.
 
+### Orientation future des composants de feature
+
+La démo Three.js utilise actuellement `TweenAction` pour construire les patches
+d'état dans la scène. Ce circuit est techniquement juste et constitue une
+preuve utile du temps logique, mais il place la description de l'animation dans
+la scène plutôt que dans le composant.
+
+La vocation à préserver pour les composants de feature est plus riche : ils
+doivent progressivement faciliter les opérations courantes qui relèvent de
+leur responsabilité, par exemple déplacer une caméra ou changer la couleur et
+les attributs d'une lumière. La capacité d'animation correspondante devra donc
+être étudiée comme une évolution du profil du composant, sans inventer pour
+l'instant une forme d'API ou un second circuit runtime. Cette orientation reste
+ouverte jusqu'à l'inventaire détaillé des capacités attendues.
+
 ## 11. Circuits V2 déjà utiles
 
 Le runtime possède déjà plusieurs éléments à réemployer :
@@ -451,7 +475,7 @@ Ils forment la première tranche du pont demandé :
 
 - `rel` est maintenant compilé séparément de `initial` et une définition de
   composant peut déclarer un `targetProvider` ;
-- `RuntimeTargetRegistry` résout les identités `scene`/`perso` dans la portée
+- `RuntimeTargetRegistry` doit résoudre les identités `host`/`target` dans la portée
   d'un player, sans se confondre avec le catalogue des capacités, les surfaces
   de composants ou le registre de placement ;
 - le runtime monte les instances avant d'activer les publications et de livrer
@@ -483,7 +507,7 @@ orchestration :
 - la phase `initialize()` entre la matérialisation éventuelle et le premier
   `update()` pour préparer un contexte possédé par le composant ;
 - la livraison d'une cible opaque par `ComponentUpdateInput.target` ;
-- la validation auteur des identités communes, sans placer de données natives
+- la validation auteur de l'identité du host, sans placer de données natives
   dans le `CompiledScene` ;
 - la frontière de présentation du player, sans transaction native imposée par
   le core.
@@ -497,7 +521,7 @@ autant de classes ou de registres. Les composants externes peuvent maintenant
 La grille Three.js V1 fournit le cas d'acceptation initial :
 
 - un hôte HTML possède la scène et son matérialiseur ;
-- un composant géométrie est relié à cette scène par un `rel` immuable ;
+- un composant géométrie est relié à ce host par un `rel` immuable ;
 - `initial` décrit la grille ;
 - les actions l'animent à partir du temps CodPlay ;
 - le rendu survient après la réconciliation du sous-arbre ;
@@ -511,8 +535,8 @@ ne sont pas montées par une solution cachée dans la démo.
 ## 14. Suite du chantier externe
 
 - Les identités compilées sont résolues par `RuntimeTargetRegistry` à partir de
-  `scene` et `perso` ; elles ne sont pas interprétées comme des sélecteurs DOM.
-  Les diagnostics d'une identité inconnue sont ceux de `SceneBuilder` et ne
+  `host` et `target` ; elles ne sont pas interprétées comme des sélecteurs DOM.
+  Les diagnostics d'un host inconnu sont ceux de la validation auteur et ne
   sont pas rejoués par le player.
 - Quelles données doivent être préparées au build, lesquelles appartiennent au
   player et lesquelles appartiennent exclusivement à l'hôte ?

@@ -55,8 +55,10 @@ du pont.
   build produit un warning auteur non bloquant et n'est pas réémis par le
   codec/player.
 - `rel` est une donnée initiale immuable ; aucune action ne la modifie.
-- `rel.target.scene` identifie la scène et `rel.target.perso` identifie
-  éventuellement un perso de cette scène.
+- `rel.host` identifie le host qui possède la projection native.
+- `rel.target`, lorsqu'il est présent, identifie une cible publiée par ce host
+  ou par un composant qui lui est attaché. Il ne désigne ni la scène logique,
+  ni un nœud interne de modèle.
 - L'intégration peut typer et valider des champs supplémentaires dans `rel`.
 - Une identité de relation inconnue ne bloque ni la construction de la scène
   ni sa lecture. Elle produit un warning au build et reste silencieuse en
@@ -83,8 +85,9 @@ du pont.
 
 ## 4. Gate 0 — construire le modèle comparatif
 
-Avant de choisir les structures du core, décrire le même parcours avec au moins
-les quatre familles suivantes :
+Avant de choisir les structures du core, décrire le même parcours avec les
+familles tierces de la tranche de base. Avatar/TalkingHead reste une contrainte
+future à conserver en note, sans engager sa migration ici :
 
 - Three.js : la première implémentation est un hôte comparable à un composant
   media, avec une scène ou ressource préparée, une séquence et seulement
@@ -99,9 +102,8 @@ les quatre familles suivantes :
   son renderer et expose seulement le pilotage play/pause de la séquence ; les
   segments, marqueurs, layers et cibles adressables sont réservés à une tranche
   ultérieure ;
-- avatar/TalkingHead : `scene -> avatar -> lipsync/expression/gesture` combine
-  création d'un objet, publication d'une cible secondaire et contributions
-  multiples sans représentation autonome.
+- Avatar/TalkingHead : contrainte future seulement ; son découpage fera l'objet
+  d'un plan séparé soumis à validation.
 
 Pour chaque famille, relever :
 
@@ -118,9 +120,10 @@ Pour chaque famille, relever :
 
 - Une matrice sépare les invariants communs des conventions propres à chaque
   bibliothèque.
-- La matrice documente au minimum les quatre cycles : scène Three.js et objets,
-  artboards/state machines Rive, composition/renderer/temps Lottie et
-  avatar/TalkingHead contributeur.
+- La matrice documente d'abord les trois cycles de la tranche de base : scène
+  Three.js et objets, artboards/state machines Rive et
+  composition/renderer/temps Lottie. Les contraintes Avatar/TalkingHead sont
+  conservées pour le plan séparé.
 - La première implémentation Three.js reste limitée à un hôte et à une
   séquence pilotée par `play`/`pause`; la démo V1 citée est identifiée comme
   l'intermédiaire de validation avant les features Three.js avancées.
@@ -209,8 +212,8 @@ registre et de la résolution runtime restent à relire avant les tranches
 suivantes.
 
 - le rôle de `rel` et son emplacement exclusif dans `initial` ;
-- la forme commune `target: { scene, perso? }` ;
-- les règles de résolution de ces deux identifiants ;
+- la forme commune `{ host, target? }` ;
+- les règles de résolution du host et de la cible publiée ;
 - la représentation compilée et sérialisable de la relation, distincte des
   handles runtime ;
 - la résolution directe de `rel`, distincte du graphe de placement issu de
@@ -226,9 +229,9 @@ suivantes.
 - la manière dont une intégration enrichit le type TypeScript de `rel` et
   déclare son validateur ;
 - le contrat de publication et de résolution d'une cible native ;
-- les warnings auteur pour une identité de scène ou de perso inconnue et leur
-  silence en diffusion ; la compatibilité native et les cycles internes restent
-  propres à l'intégration ;
+- les warnings auteur pour une identité de host inconnue et leur silence en
+  diffusion ; la compatibilité native et les cycles internes restent propres à
+  l'intégration ;
 - la distinction entre une référence invalide et une cible valide
   temporairement non montée ;
 - le cycle de vie du fournisseur et de ses consommateurs ;
@@ -250,7 +253,7 @@ contrats de bibliothèque et de preload restent dans leurs tranches externes.
 
 ### Travail
 
-- Définir la forme commune `rel.target: { scene, perso? }`.
+- Définir la forme commune `rel: { host, target? }`.
 - Permettre à une intégration d'enrichir le type de relation de ses composants.
 - Relier ce type au profil `initial`, à sa validation et à la compilation.
 - Extraire une représentation structurelle immuable utilisable sans relire
@@ -288,16 +291,18 @@ besoins propres à une bibliothèque restent dans les tranches du pont runtime.
 - Définir le handle opaque publié par un hôte ou un objet spécialisé.
 - Mettre en place les nouvelles structures retenues par la Gate 2 au lieu de
   les simuler dans le matérialiseur HTML.
-- Permettre au pont de résoudre une scène ou un perso par son identité compilée.
+- Permettre au pont de résoudre un host puis, si elle est indiquée, une cible
+  publiée dans ce host.
 - Isoler tous les handles et registres par player et par hôte.
-- Définir le comportement lorsque le fournisseur n'est pas monté.
+- Définir le comportement lorsque le host ou le fournisseur de la cible n'est
+  pas monté.
 
 ### Acceptation
 
 - Un hôte publie une cible sans exposer sa classe au core.
 - Un objet publié par cet hôte peut lui-même fournir une cible à un contrôleur.
 - Deux players ne partagent aucun handle mutable.
-- Une identité de cible inconnue produit un warning auteur non bloquant,
+- Une identité de host ou de cible inconnue produit un warning auteur non bloquant,
   reste silencieuse en diffusion et rend la contribution concernée inerte.
 - Le core transmet une valeur opaque sans tenter de vérifier sa compatibilité
   native ; cette vérification est propre à l'intégration.
@@ -327,8 +332,9 @@ La première partie de la tranche est engagée et couverte par la
 
 La tranche B est fermée pour le core : les diagnostics d'identité sont émis par
 `SceneBuilder`, la résolution reste une recherche directe player-local et la
-compatibilité native n'est pas une responsabilité du core. Aucun diagnostic
-de diffusion n'est ajouté pour ces cas.
+compatibilité native n'est pas une responsabilité du core. Le code existant
+porte encore l'ancien format de relation ; sa migration vers `host/target`
+reste à réaliser. Aucun diagnostic de diffusion n'est ajouté pour ces cas.
 
 ## 9. Tranche C — réconciliation des relations
 
@@ -340,7 +346,7 @@ opaque. Le runtime monte les composants, publie les cibles disponibles, puis
 réalise les mises à jour ; l'ordre de déclaration ne constitue pas une
 dépendance récursive.
 
-Si une intégration doit composer `scene -> avatar -> lipsync`, elle garde cette
+Si une intégration doit composer `host -> avatar -> lipsync`, elle garde cette
 composition dans ses composants et ses services. Elle ne crée pas un registre
 global et ne demande pas au core de détecter un cycle dans des objets qu'il ne
 connaît pas.
@@ -354,7 +360,7 @@ connaît pas.
 
 ### Acceptation
 
-- `scene -> avatar -> lipsync` est une composition d'intégration, et non un
+- `host -> avatar -> lipsync` est une composition d'intégration, et non un
   graphe résolu par le core.
 - Deux consommateurs peuvent viser la même cible.
 - Un retour de story ne duplique ni handle ni contribution.
@@ -451,15 +457,15 @@ composition d'une unité réelle reste à faire.
 La validation comprend :
 
 - tests TypeScript des formes `rel` propres aux intégrations ;
-- validation et résolution des références scène/perso ;
+- validation et résolution des références host/target ;
 - isolation multi-engine, multi-player et multi-hôte ;
-- cible inconnue, cible temporairement non montée et destruction, avec warnings
+- host ou cible inconnus, cible temporairement non montée et destruction, avec warnings
   auteur mais silence en diffusion ;
 - Play, pause, rate, Seek avant/arrière, reset et replay ;
 - resize et perte éventuelle du contexte ;
 - preload, erreur et annulation ;
-- cas contractuels Three.js, Rive, Lottie et avatar/TalkingHead issus de la
-  matrice comparative ;
+- cas contractuels Three.js, Rive et Lottie issus de la matrice comparative ;
+  les cas Avatar/TalkingHead relèvent du plan séparé ;
 - typecheck, tests et build ;
 - vraie intégration Three.js dans le navigateur, dont Safari et un second
   navigateur.
@@ -469,10 +475,11 @@ grille Three.js doit exercer build, engine, preload, player, events, solve,
 composants, pont et rendu réels.
 
 Le pont ne peut pas être qualifié de générique à partir de la seule grille
-Three.js. Avant stabilisation, les cas Rive, Lottie et contributeur d'avatar
-doivent avoir exercé les structures du core retenues, au minimum par des
-intégrations contractuelles fidèles à leurs cycles réels. Les implémentations
-visuelles complètes restent suivies dans le plan des composants externes.
+Three.js. Avant stabilisation, les cas Rive et Lottie doivent avoir exercé les
+structures du core retenues, au minimum par des intégrations contractuelles
+fidèles à leurs cycles réels. Le contributeur d'avatar sera traité et validé
+dans le plan Avatar séparé. Les implémentations visuelles complètes restent
+suivies dans le plan des composants externes.
 
 ## 14. Documentation et statut
 

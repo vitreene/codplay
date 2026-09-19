@@ -1,18 +1,28 @@
-# Plan V2 — composants tiers Three.js et avatar
+# Plan V2 — composants tiers et composants de base
 
 > Statut : **En cours**.
 >
 > Ce plan porte sur les composants externes de
 > `packages/authoring/component-v2/`. Il dépend du
 > [plan du pont CodPlay](./2026-09-18-third-party-render-target-codplay-plan.md).
+>
+> Cette tranche commence par les composants de base et les modules tiers
+> minimaux. La migration Avatar est hors périmètre et fera l'objet d'un plan
+> séparé, à valider avant implémentation.
 
 ## 1. Objectif
 
 Créer d'abord des hôtes Three.js, Rive et Lottie minimaux, composables et
 comparables à un composant media du point de vue auteur. Une verticale Three.js
 intermédiaire reprend ensuite la projection de la démo V1 citée, avant les
-composants de feature plus riches. Le second parcours construit la hiérarchie
-`scene -> avatar -> lipsync`, puis les expressions et les gestes.
+composants de feature plus riches. Cette tranche doit d'abord établir les
+primitives communes ; elle ne construit pas encore Avatar.
+
+TalkingHead est la référence fonctionnelle amont. L'adaptation V1 est une
+transposition contrainte par CodPlay et ne fixe pas la structure V2. Le mode
+`avatarOnly` de TalkingHead confirme le cas d'un avatar fourni à une scène et
+une caméra externes ; V2 doit conserver cette séparation tout en répartissant
+l'API auteur entre le core Avatar et ses composants spécialisés.
 
 Three.js est la première preuve, mais son hôte initial reste volontairement
 simple. Le pont reste conçu pour permettre ensuite les intégrations Rive et
@@ -25,8 +35,9 @@ le choix des structures de données.
 L'implémentation attend :
 
 1. la validation de l'analyse du 18 septembre ;
-2. la validation de la comparaison Three.js, Rive, Lottie et avatar/TalkingHead
-   de la Gate 0 du plan CodPlay ;
+2. la validation de la comparaison Three.js, Rive et Lottie de la Gate 0 du
+   plan CodPlay ; les contraintes TalkingHead seront reprises dans le plan
+   Avatar séparé ;
 3. l'audit des circuits existants demandé par la Gate 1 ;
 4. la validation des structures du core et de leur migration demandée par la
    Gate 2 ;
@@ -35,7 +46,7 @@ L'implémentation attend :
 7. la décision concernant caméra et lumières dans la première verticale.
 
 La décision de la première verticale est prise : la caméra et les lumières sont
-des persos Three.js distincts, reliés à la scène hôte par `rel`. L'hôte reste
+des persos Three.js distincts, reliés au host par `rel`. L'hôte reste
 responsable du renderer, de la scène de projection et du rendu final ; il ne
 absorbe pas les responsabilités de ces persos.
 
@@ -58,8 +69,11 @@ ni preload, ni horloge, ni circuit d'events alternatif.
   `initialize()`, appelée après la matérialisation éventuelle et avant le
   premier `update()` ; elle ne lance aucun chargement.
 - `rel` appartient à `initial` et reste immuable.
-- La cible commune de `rel` suit `{ scene, perso? }` ; l'intégration peut
-  enrichir son type TypeScript.
+- La relation commune suit `{ host, target? }` : `host` désigne le host de
+  projection et `target` désigne, lorsqu'il est présent, une cible publiée par
+  ce host ou par un composant qui lui est attaché.
+- Seul le host Three matérialisé reçoit `move`. Les composants Three logiques
+  sont rattachés par `rel` et ne sont pas placés dans le DOM.
 - Les composants de feature ne résolvent pas eux-mêmes leur cible.
 - Un composant projeté ne produit aucun markup factice pour franchir le chemin
   HTML.
@@ -80,7 +94,7 @@ Créer l'unité enregistrée auprès de l'engine. Elle regroupe :
 - l'accès préparé à Three.js ;
 - le composant hôte HTML ;
 - le matérialiseur Three.js possédé par cet hôte ;
-- les types et validateurs de `rel` ;
+- les types et validateurs de `rel.host` et `rel.target` ;
 - le contexte runtime injecté aux classes de composants ;
 - les services, modules et stratégies de preload nécessaires.
 
@@ -138,6 +152,10 @@ caméra, les lumières, les objets et les animations spécialisées sont réserv
 à la verticale intermédiaire puis aux tranches de feature ; ils ne gonflent pas
 le contrat initial de l'hôte.
 
+Le host est le seul composant Three matérialisé dans le DOM et le seul à
+recevoir `move`. Une caméra, une lumière, une géométrie ou un avatar sont
+attachés au host par `rel`; leur montage Three.js n'est pas un montage DOM.
+
 ### Acceptation
 
 - Deux hôtes dans un player sont isolés.
@@ -156,7 +174,7 @@ caché dans la démo n'est accepté.
 
 Le composant géométrie :
 
-- porte une relation Three.js immuable vers la scène ;
+- porte une relation Three.js immuable vers le host ;
 - crée la géométrie, le matériau et l'`InstancedMesh` de la grille ;
 - expose les dimensions, le nombre de pavés, l'espacement, l'amplitude et la loi
   de décalage comme données validées ;
@@ -187,7 +205,7 @@ rendu unique clôt la transaction.
 La première acceptation isole Three.js :
 
 1. hôte et géométrie sont des persos distincts ;
-2. `rel` relie la géométrie à la scène ;
+2. `rel.host` relie la géométrie au host ;
 3. les events déclenchent les actions de la grille ;
 4. la télécommande V2 pilote Play, pause et Seek ;
 5. le preload bloque le lancement jusqu'à disponibilité des dépendances ;
@@ -195,6 +213,28 @@ La première acceptation isole Three.js :
 
 Rive et le quiz peuvent être réintroduits ensuite pour vérifier la coexistence
 des intégrations dans une même instance.
+
+### État de validation — caméra et couleurs
+
+La démo `threejs-grid` exerce maintenant le chemin des `TweenAction` jusqu'aux
+composants Three.js : la caméra recule puis avance sur une durée distincte des
+rotations de la grille, la lumière ponctuelle reçoit une position et une
+couleur variables, et les deux lumières changent de couleur. Le test de démo
+vérifie les deux phases de la caméra ; le
+test d'intégration du package vérifie l'application de ces états aux objets
+Three.js natifs. Le contrôle visuel navigateur de ce nouveau scénario reste à
+faire ; le typecheck et le build Vite passent.
+
+### Orientation de conception à préserver
+
+Le `TweenAction` utilisé par cette preuve reste le circuit logique valide de la
+tranche actuelle, mais ne constitue pas encore la surface auteur finale des
+composants Three.js. Les composants devront progressivement porter les
+opérations courantes de leur responsabilité — déplacement, couleur et autres
+attributs — afin que la scène n'ait pas à construire elle-même ces opérations.
+La forme de cette capacité et de son animation reste à définir après
+l'inventaire détaillé des besoins ; aucune API supplémentaire n'est introduite
+dans cette tranche.
 
 ## 8. Tranche 5 — hôtes Rive et Lottie simples
 
@@ -229,67 +269,16 @@ core. Si l'implémentation simple révèle une structure core incorrecte, la Gat
 est rouverte au lieu d'ajouter un adapter de compensation. Un concept propre à
 Rive ou Lottie reste dans son package.
 
-## 9. Tranche 6 — avatar
+## 9. Avatar, lipsync, expressions et gestes — reportés
 
-Le composant avatar :
+Ces composants sont explicitement retirés du périmètre de ce plan. Leur
+migration depuis TalkingHead et l'adaptation V1 fera l'objet d'un plan Avatar
+distinct, avec analyse des comportements, découpage du core Avatar, dépendances
+et parcours d'acceptation. Ce plan sera soumis à validation avant toute
+modification de code.
 
-- porte une relation immuable vers une scène Three.js ;
-- consomme un modèle préparé par le preload ;
-- crée l'objet avatar dans la scène ;
-- applique ses animations globales ;
-- publie une cible typée pour ses contrôleurs ;
-- compose leurs contributions avant le rendu.
-
-TalkingHead reste la référence fonctionnelle. Les composants V1 servent à
-identifier les comportements et les limites, pas à imposer la structure.
-
-### Acceptation
-
-- Deux avatars coexistent dans une scène.
-- Leurs états mutables restent isolés.
-- Une animation absente est sans effet, produit au plus un warning auteur et
-  reste silencieuse en diffusion.
-- Play, Seek, reset et destruction sont validés avec un vrai modèle.
-
-## 10. Tranche 7 — lipsync
-
-Le lipsync reste provisoirement un perso. Il :
-
-- porte une relation d'avatar immuable ;
-- reçoit les events de ses actions ;
-- transforme ses données temporelles en contribution de bouche ;
-- ne possède ni scène, ni renderer, ni modèle ;
-- ne recherche jamais l'avatar par lui-même.
-
-La logique pure de transformation peut résider dans des straps. L'application
-aux morphs appartient au composant et au pont d'avatar. La répartition est
-guidée par les responsabilités, pas par la taille du code.
-
-### Acceptation
-
-- Deux lipsync pilotent deux avatars distincts.
-- Une relation ne change pas pendant la lecture.
-- L'absence d'un morph attendu ne bloque pas la lecture, produit au plus un
-  warning auteur et reste silencieuse en diffusion.
-- Les visèmes reconstructibles sont identiques en Play et Seek.
-- La destruction de l'avatar invalide sa cible.
-
-Cette tranche doit conclure explicitement si le contrôleur contributeur reste
-une variante cohérente du perso ou révèle une primitive distincte.
-
-## 11. Tranche 8 — expressions et gestes
-
-Créer les composants seulement à partir de cas auteur réels : expression,
-regard, geste ou clip corporel.
-
-Pour chacun, définir :
-
-- ses données et ses actions ;
-- son type TypeScript de relation ;
-- les canaux auxquels il contribue ;
-- la composition avec les autres contrôleurs ;
-- sa fidélité au Seek ;
-- le comportement face à un clip, os ou morph absent.
+Aucun composant Avatar, lipsync, expression ou geste ne doit être implémenté
+au titre de cette tranche.
 
 ## 12. Validation complète
 
@@ -302,8 +291,8 @@ validation comprend :
 - resize, montage, démontage, retour de story et destruction ;
 - preload des bibliothèques, modèles, textures et données ;
 - hôtes Rive et Lottie simples conformes au périmètre play/pause ;
-- contre-épreuves futures conformes aux cas avancés Rive, Lottie et
-  avatar/TalkingHead de la matrice comparative ;
+- contre-épreuves futures conformes aux cas avancés Rive et Lottie ; les cas
+  Avatar/TalkingHead relèveront du plan séparé ;
 - absence de RAF et de chargement tardif ;
 - typecheck, tests et build ;
 - validation réelle dans Safari et un second navigateur.

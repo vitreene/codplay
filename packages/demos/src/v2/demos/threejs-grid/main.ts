@@ -2,6 +2,51 @@ import type { SceneDoc } from 'codplay';
 
 const THREE_GRID_SCENE_ID = 'threejs-grid';
 const THREE_GRID_TARGET = { scene: THREE_GRID_SCENE_ID };
+const THREE_GRID_ANIMATION_DURATION_MS = 8_000;
+const THREE_GRID_CAMERA_DURATION_MS = 7_000;
+
+type ThreeTweenInput = Readonly<{
+	progress: number;
+}>;
+
+/** Interpolates one color channel and returns the resulting CSS color. */
+function interpolateColor(
+	from: readonly [number, number, number],
+	to: readonly [number, number, number],
+	progress: number,
+): string {
+	return `#${from
+		.map((channel, index) =>
+			Math.round(channel + (to[index] - channel) * progress)
+				.toString(16)
+				.padStart(2, '0'),
+		)
+		.join('')}`;
+}
+
+/** Produces a camera dolly that recedes and then advances on its own period. */
+function resolveCameraFrame({ progress }: ThreeTweenInput): Readonly<Record<string, unknown>> {
+	const distance = Math.sin(progress * Math.PI) * 12.5;
+	return {
+		position: [0, 0, 6 + distance],
+	};
+}
+
+/** Produces one ambient-light color for the logical Three.js tween. */
+function resolveAmbientLightFrame({ progress }: ThreeTweenInput): Readonly<Record<string, unknown>> {
+	return {
+		color: interpolateColor([0, 0, 255], [255, 64, 128], progress),
+	};
+}
+
+/** Produces one point-light position and color for the logical Three.js tween. */
+function resolvePointLightFrame({ progress }: ThreeTweenInput): Readonly<Record<string, unknown>> {
+	const angle = progress * Math.PI * 2;
+	return {
+		position: [Math.cos(angle) * 3, 3 + Math.sin(angle * 2), 6 + Math.sin(angle) * 2],
+		color: interpolateColor([219, 234, 254], [255, 138, 76], progress),
+	};
+}
 
 /** Creates the first V2 Three.js vertical with separate scene, camera, lights and grid persos. */
 export function createScene(): SceneDoc<string> {
@@ -29,9 +74,17 @@ export function createScene(): SceneDoc<string> {
 							rel: { target: THREE_GRID_TARGET },
 							kind: 'perspective',
 							position: [0, 0, 6],
+							lookAt: [0, 0, 0],
 							fov: 50,
 							near: 0.1,
 							far: 100,
+						},
+						actions: {
+							'camera:move': {
+								duration: THREE_GRID_CAMERA_DURATION_MS,
+								ease: 'linear',
+								fn: resolveCameraFrame,
+							},
 						},
 					},
 					{
@@ -43,6 +96,13 @@ export function createScene(): SceneDoc<string> {
 							kind: 'ambient',
 							color: '#0000ff',
 							intensity: 1,
+						},
+						actions: {
+							'ambient:color': {
+								duration: THREE_GRID_ANIMATION_DURATION_MS,
+								ease: 'linear',
+								fn: resolveAmbientLightFrame,
+							},
 						},
 					},
 					{
@@ -57,6 +117,13 @@ export function createScene(): SceneDoc<string> {
 							distance: 20,
 							decay: 0.4,
 							position: [3, 3, 6],
+						},
+						actions: {
+							'point:move-and-color': {
+								duration: THREE_GRID_ANIMATION_DURATION_MS,
+								ease: 'linear',
+								fn: resolvePointLightFrame,
+							},
 						},
 					},
 					{
@@ -81,7 +148,12 @@ export function createScene(): SceneDoc<string> {
 						},
 					},
 				],
-				eventimes: [{ name: 'grid:start', startAt: 0 }],
+				eventimes: [
+					{ name: 'grid:start', startAt: 0 },
+					{ name: 'camera:move', startAt: 0 },
+					{ name: 'ambient:color', startAt: 0 },
+					{ name: 'point:move-and-color', startAt: 0 },
+				],
 			},
 		},
 	};
