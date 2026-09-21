@@ -10,6 +10,8 @@ export type ThreeColorValue = string | number
 export type ThreeSceneTarget = Readonly<{
   scene: Scene
   renderer: WebGLRenderer
+  /** Returns the camera currently selected by the host, if one exists. */
+  getCamera: () => Camera | null
   setCamera: (camera: Camera | null) => void
   resize: (width: number, height: number) => void
   render: () => void

@@ -111,7 +111,7 @@ export function createScene(): SceneDoc<string> {
             },
           },
           {
-            id: 'lip-sync',
+            id: 'avatar:viseme',
             type: 'rive-state-machine',
             initial: {
               stateMachine: RIVE_COACH_STATE_MACHINE,
@@ -119,7 +119,6 @@ export function createScene(): SceneDoc<string> {
             },
             actions: {
               'avatar:start': { broadcast: { type: 'START' } },
-              'avatar:viseme': {},
             },
           },
           {

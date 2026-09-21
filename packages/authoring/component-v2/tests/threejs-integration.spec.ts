@@ -121,6 +121,7 @@ describe('Three.js V2 integration', () => {
       const initialCamera = cameraState.current
       if (initialCamera === null) throw new Error('The camera component did not publish a camera.')
       expect(initialCamera.position.toArray()).toEqual([0, 0, 6])
+      expect(target.getCamera()).toBe(initialCamera)
 
       cameraComponent.update({
         state: { kind: 'perspective', position: [2, -1, 4], lookAt: [0, 0, 0] },
@@ -131,6 +132,7 @@ describe('Three.js V2 integration', () => {
       const updatedCamera = cameraState.current
       if (updatedCamera === null) throw new Error('The camera component removed its camera.')
       expect(updatedCamera.position.toArray()).toEqual([2, -1, 4])
+      expect(target.getCamera()).toBe(updatedCamera)
 
       lightComponent.update({
         state: { kind: 'point', color: '#ff0000', position: [1, 2, 3], intensity: 2 },
@@ -156,6 +158,7 @@ describe('Three.js V2 integration', () => {
     } finally {
       cameraComponent.destroy()
       lightComponent.destroy()
+      expect(target.getCamera()).toBeNull()
       engine.destroy()
     }
   })
@@ -183,17 +186,23 @@ async function createPreparedEngine(): Promise<RuntimeEngine> {
 function createTarget(setCamera: (camera: Camera | null) => void = () => undefined): {
 	scene: Scene
 	renderer: never
+	getCamera: () => Camera | null
 	setCamera: (camera: Camera | null) => void
 	resize: () => void
 	render: () => void
 } {
-  return {
-    scene: new Scene(),
-    renderer: {} as never,
-		setCamera,
-    resize: () => undefined,
-    render: () => undefined,
-  }
+	let currentCamera: Camera | null = null
+	return {
+		scene: new Scene(),
+		renderer: {} as never,
+		getCamera: () => currentCamera,
+		setCamera: (camera) => {
+			currentCamera = camera
+			setCamera(camera)
+		},
+		resize: () => undefined,
+		render: () => undefined,
+	}
 }
 
 /** Builds one grid update with an active animation occurrence. */

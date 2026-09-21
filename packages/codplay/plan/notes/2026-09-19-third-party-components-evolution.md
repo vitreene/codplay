@@ -275,3 +275,89 @@ le plan Avatar dédié.
 Le mapping de visèmes appartient uniquement à l'application Rive qui connaît
 son document. Aucune implémentation Avatar, geste ou expression ne doit être
 engagée au titre de cette note.
+
+## 12. Reprise Avatar — transposition TalkingHead
+
+L'objectif de l'Avatar V2 est de transposer les comportements de TalkingHead,
+pas de réutiliser son moteur monolithique ni son cycle temps-réel. TalkingHead
+reste donc la référence fonctionnelle explicite ; les responsabilités doivent
+être redistribuées entre le host Three, les composants Avatar et les services
+déjà possédés par CodPlay.
+
+La comparaison a mis en évidence le mécanisme déterminant qui manque encore :
+TalkingHead possède une pose sémantique centrale, fait jouer le clip Three.js,
+puis applique les deltas dans un ordre fixe. Son modèle évite qu'un geste, un
+clip et une correction de regard reprennent successivement la même articulation
+sans coordination. Son code ne peut toutefois pas être copié : il évolue avec
+des deltas de frame, des minuteries et un état mutable, alors que CodPlay doit
+pouvoir évaluer la même scène à une date absolue en lecture et en seek.
+
+La transposition V2 à préparer est donc un composeur interne Avatar, et non un
+nouveau composant auteur :
+
+- les composants existants décrivent leurs contributions sémantiques à une
+  date donnée (idle, geste, mood, regard et visèmes) ;
+- le lecteur Three.js échantillonne le clip externe à cette même date ;
+- le composeur calcule une unique pose squelettique finale, avec une règle
+  séparée pour la translation racine ;
+- une seule écriture finale atteint les os avant le commit du host Three.
+
+Three.js reste la bibliothèque qui lit les clips et interpole les quaternions.
+Ses cross-fades ne suffisent pas seuls ici : ils mélangent deux
+`AnimationAction`, tandis qu'une pose Avatar sémantique n'est pas une action.
+Le composeur ne remplace donc pas Three.js ; il définit l'ordre et la
+propriété des couches Avatar autour de ses échantillons.
+
+Cette tranche remplace les tentatives actuelles de relâchement local du clip.
+Le défaut observé (cassure de pose, double geste et différence Play/Seek) est
+structurel tant que `GestureEngine`, `AnimationMixer` et le lecteur de release
+écrivent tous directement les mêmes os. La section correspondante du plan
+Avatar reste `A relire` jusqu'à l'acceptation d'un plan détaillé ; cette note
+n'autorise pas son implémentation.
+
+### Ce qui reste à transposer ou à décider
+
+Les capacités déjà engagées — chargement et retargeting du modèle, visèmes,
+moods, gestes, idle, regard et animations externes — ne sont pas à remplacer.
+Elles doivent passer par le composeur afin de devenir cohérentes. Il reste à
+traiter, dans cet ordre :
+
+1. la pose centrale et la composition déterministe clip / pose / release,
+   incluant la conservation de la translation racine ;
+2. la sémantique exacte de `rescale` du catalogue MotionEngine : elle répartit
+   le temps supplémentaire d'un geste, elle n'est pas une intensité de morph ;
+3. les tests de poses synthétiques et la validation intégrée réelle de la
+   démo, notamment lecture, pause, seek, reprise et enchaînement de gestes.
+
+TalkingHead contient aussi des capacités qui ne doivent pas être absorbées par
+le composant Avatar central. Elles doivent être classées avant toute future
+transposition :
+
+- renderer, éclairage, vues de caméra et contrôles : responsabilités du host
+  Three et des composants Three dédiés ;
+- file de parole, TTS, décodage, audio streaming et sous-titres : données et
+  composants audio/caption de scène ; Avatar reçoit les événements déjà
+  temporisés, notamment les visèmes ;
+- réaction du visage et de la tête au volume audio : future contribution
+  Avatar, à condition qu'elle puisse être échantillonnée à temps absolu ;
+- Dynamic Bones et le rééquilibrage physique : option liée au modèle qui ne
+  peut pas être portée telle quelle, car l'algorithme amont dépend du delta de
+  frame ; son besoin, ses entrées et sa règle de seek restent à décider ;
+- statistiques, callbacks de diagnostic et interface autonome TalkingHead :
+  hors responsabilité Avatar ; le layout de démo et les outils CodPlay les
+  remplacent lorsqu'ils sont utiles.
+
+La transposition est donc complète dans son intention, mais elle ne signifie
+pas importer chaque service de TalkingHead dans Avatar. Chaque comportement
+est conservé lorsqu'il relève d'Avatar, puis placé à la frontière V2 qui en
+possède déjà le contexte et le cycle de vie.
+
+### Conditions de reprise
+
+Avant le code du composeur, le plan détaillé devra fixer les couches, leur
+ordre, le traitement des os non couverts par un clip, la propriété de la
+translation racine et la conversion du catalogue MotionEngine. Son acceptation
+devra prévoir des fixtures squelettiques autonomes qui comparent la pose à des
+dates identiques en Play et en Seek, puis une validation navigateur réelle de
+la scène Avatar. Les valeurs de la démo ne seront pas utilisées comme oracles
+de test.

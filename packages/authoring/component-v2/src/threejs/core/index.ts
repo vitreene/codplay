@@ -1,5 +1,10 @@
 export { THREEJS_CORE_ENGINE, THREEJS_CORE_COMPONENTS, THREE_LIBRARY } from './threejs-core'
 export { BaseThreeComponent, BaseThreeHTMLComponent } from './threejs-component'
+export {
+  getThreeBinaryResource,
+  preloadThreeBinaryResource,
+  THREE_PRELOAD_STRATEGIES,
+} from './threejs-preload'
 
 export { THREE_CAMERA_DEFINITION, ThreeCameraComponent } from './camera'
 export type { ThreeCameraAction, ThreeCameraInitial } from './camera'

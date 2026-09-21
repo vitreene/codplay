@@ -3,12 +3,10 @@ import type {
   ComponentAnimation,
   ComponentUpdateInput,
 } from 'codplay'
-import type { MoodName } from '@codplay/avatar-engine'
+import { MOOD_BASELINES, type MoodName } from '../mood/expression-engine'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarTarget } from './avatar-coordinator'
+import type { AvatarMorphs, AvatarTarget } from '../runtime/avatar-target'
 import type { AvatarMoodInitial } from './avatar-types'
-import type { AvatarMorphs } from './avatar-types'
-import { createAvatarMoodMorphs, isAvatarMoodName } from './avatar-mood-profile'
 
 type MoodTransition = Readonly<{
   from: AvatarMorphs
@@ -16,6 +14,8 @@ type MoodTransition = Readonly<{
   startAt: number
   endAt: number
 }>
+
+const MOOD_ACTION_PREFIX = 'avatar:mood:'
 
 /** Converts ordinary mood eventimes into timeline-driven baseline transitions. */
 export class AvatarMoodComponent extends AvatarFeatureComponent<AvatarMoodInitial> {
@@ -27,21 +27,25 @@ export class AvatarMoodComponent extends AvatarFeatureComponent<AvatarMoodInitia
   /** Starts one component with the authored initial mood as its baseline. */
   constructor(input: ConstructorParameters<typeof AvatarFeatureComponent<AvatarMoodInitial>>[0]) {
     super(input)
-    this.appliedMood = createAvatarMoodMorphs(this.perso.initial.mood ?? 'neutral')
+    this.appliedMood = { ...MOOD_BASELINES[this.perso.initial.mood ?? 'neutral'] }
   }
 
   /** Resolves the latest mood event and registers its local baseline transition. */
   protected contribute(target: AvatarTarget, input: ComponentUpdateInput<AvatarMoodInitial>): void {
     if (this.lastTimeMs !== undefined && input.timeMs < this.lastTimeMs) {
-      this.appliedMood = createAvatarMoodMorphs(this.perso.initial.mood ?? 'neutral')
+      this.appliedMood = { ...MOOD_BASELINES[this.perso.initial.mood ?? 'neutral'] }
     }
     this.lastTimeMs = input.timeMs
 
     const occurrence = resolveLatestMoodOccurrence(input.activeActions)
-    const mood = resolveMood(occurrence?.action, input.state.mood, this.perso.initial.mood)
+    const mood = resolveMood(
+      occurrence?.name,
+      input.state.mood,
+      this.perso.initial.mood,
+    )
     const transition = createMoodTransition(
       this.appliedMood,
-      createAvatarMoodMorphs(mood),
+      { ...MOOD_BASELINES[mood] },
       occurrence?.startAt ?? input.timeMs,
       resolveDuration(occurrence?.action?.durationMs, input.state.durationMs, this.perso.initial.durationMs),
     )
@@ -63,20 +67,28 @@ function resolveLatestMoodOccurrence(
 ): ComponentActionOccurrence | undefined {
   let latest: ComponentActionOccurrence | undefined
   for (const occurrence of actions ?? []) {
-    if (!Object.prototype.hasOwnProperty.call(occurrence.action, 'mood')) continue
+    if (!isMoodAction(occurrence)) continue
     if (latest === undefined || occurrence.startAt >= latest.startAt) latest = occurrence
   }
   return latest
 }
 
-/** Resolves the supported mood carried by an ordinary event or state update. */
+/** Identifies a declared mood action by its stable action name. */
+function isMoodAction(occurrence: ComponentActionOccurrence): boolean {
+  return occurrence.name.startsWith(MOOD_ACTION_PREFIX)
+}
+
+/** Resolves the supported mood carried by the action name or component state. */
 function resolveMood(
-  action: Record<string, unknown> | undefined,
+  actionName: string | undefined,
   stateMood: MoodName | undefined,
   initialMood: MoodName | undefined,
 ): MoodName {
-  if (action !== undefined && isAvatarMoodName(action.mood)) return action.mood
-  if (isAvatarMoodName(stateMood)) return stateMood
+  if (actionName?.startsWith(MOOD_ACTION_PREFIX)) {
+    const mood = actionName.slice(MOOD_ACTION_PREFIX.length)
+    if (mood in MOOD_BASELINES) return mood as MoodName
+  }
+  if (stateMood !== undefined && stateMood in MOOD_BASELINES) return stateMood
   return initialMood ?? 'neutral'
 }
 
@@ -138,7 +150,8 @@ function sampleTransition(transition: MoodTransition, timeMs: number): AvatarMor
   const progress = Math.max(0, Math.min(1, (timeMs - transition.startAt) / durationMs))
   const eased = progress * progress * (3 - 2 * progress)
   const morphs: Record<string, number> = {}
-  for (const name of Object.keys(transition.to)) {
+  const names = new Set([...Object.keys(transition.from), ...Object.keys(transition.to)])
+  for (const name of names) {
     const from = transition.from[name] ?? 0
     const to = transition.to[name] ?? 0
     morphs[name] = from + (to - from) * eased

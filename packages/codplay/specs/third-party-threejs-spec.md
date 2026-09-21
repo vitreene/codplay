@@ -21,6 +21,8 @@ Le core Three.js fournit une déclaration d’engine réutilisable :
   scène et le rendu final ;
 - les composants génériques `three-camera` et `three-light`, qui reçoivent leur
   cible par `rel` ;
+- la stratégie `THREE_PRELOAD_STRATEGIES`, qui prépare les ressources binaires
+  Three.js avec le `FileLoader` ;
 - les validateurs et les types propres à ces composants.
 
 La grille `three-instanced-grid` est une déclaration spécialisée séparée. Elle
@@ -34,7 +36,8 @@ handle natif n'entre dans `CompiledScene`.
 
 ## Cible et responsabilités
 
-L’hôte publie une cible opaque contenant la scène et les opérations de rendu.
+L’hôte publie une cible opaque contenant la scène, la caméra courante et les
+opérations de rendu.
 La caméra et les lumières sont des persos distincts : elles ne sont pas
 absorbées par l’hôte. La géométrie est également un perso distinct.
 
@@ -50,6 +53,13 @@ Le composant consommateur ne recherche pas l’hôte et ne reçoit pas de montag
 DOM. Le runtime résout `rel` et livre la cible opaque dans
 `ComponentUpdateInput.target`.
 
+La cible du host expose `getCamera()` en lecture seule. Cette opération permet
+à un composant rattaché au host — par exemple une capacité Avatar — de
+consommer la caméra sélectionnée par `three-camera`. Elle ne donne pas au
+consommateur la responsabilité de créer, remplacer ou rendre la caméra ;
+`setCamera()` reste l'opération du composant caméra et le host reste
+propriétaire du commit de rendu.
+
 Les composants Three logiques déclarent le profil runtime `attached` dans leur
 définition engine. Ils peuvent donc ne pas avoir de `move` tout en restant
 disponibles pour le host et les composants qui leur sont rattachés. Le host
@@ -59,6 +69,26 @@ Lorsqu’un composant doit viser un objet ou une capacité publiée dans le host
 il ajoute `target`, par exemple `rel: { host: 'three-scene', target: 'grid' }`.
 Cette clé désigne une publication de l’intégration ; elle ne désigne pas un
 nœud interne Three que CodPlay devrait découvrir.
+
+## Ressources binaires Three.js
+
+Le module Three.js fournit les stratégies de preload `three-glb` et `three-fbx`.
+Elles utilisent le `FileLoader` de Three.js pour charger les octets et relient
+le `AbortSignal` du preload à l'abandon du loader. Le résultat reste dans le
+cache de l'intégration Three.js, indexé par l'URL ; le core CodPlay ne connaît
+ni ces formats, ni `ArrayBuffer`, ni les loaders natifs.
+
+Le composant spécialisé consomme cette ressource préparée. Avatar remet les
+octets à `GLTFLoader.parse` afin de construire une scène indépendante par
+instance et de conserver la topologie de squelette nécessaire au retargeting.
+Pour une animation externe, il remet les octets à `FBXLoader` ou
+`GLTFLoader`, puis associe le clip au modèle Avatar déclaré. Il ne fait donc ni
+`fetch`, ni cache de modèle ou d'animation, ni second circuit d'import.
+
+Les types `three-glb` et `three-fbx` sont déclarés dans le manifeste de preload
+de l'application ou du module qui utilise Three.js. Le builder générique ne
+déduit pas un type Three.js à partir d'une extension et ne crée ainsi pas de
+dépendance implicite envers une intégration externe.
 
 ## Temps et rendu
 
@@ -102,7 +132,9 @@ capture visuelle, mais sur le calcul du composant et le test d'ordre du runtime.
 
 ## Limites de cette tranche
 
-Les modèles, textures, avatars, mixers natifs et contrôleurs de features ne
-sont pas encore inclus. La caméra et les lumières disposent d’un profil simple.
+Les composants génériques ne décrivent pas les modèles, textures, avatars,
+mixers natifs ou contrôleurs de features. Le preload binaire appartient à
+l'intégration Three.js ; Avatar porte ensuite sa logique spécialisée. La caméra
+et les lumières disposent d’un profil simple.
 La validation du cycle de destruction et d’un second navigateur doit encore
 compléter cette tranche.

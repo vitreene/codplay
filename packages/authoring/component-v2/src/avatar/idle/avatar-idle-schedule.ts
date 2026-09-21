@@ -1,4 +1,19 @@
-import type { BlinkScheduleFn } from '@codplay/avatar-engine'
+/** Per-frame head drift produced by the idle capability. */
+export type HeadDriftFn = (args: { elapsed: number }) => {
+  bodyRotateX?: number
+  bodyRotateY?: number
+  bodyRotateZ?: number
+  headRotateX?: number
+  headRotateY?: number
+} | null | void
+
+/** Per-frame blink value produced by the idle capability. */
+export type BlinkScheduleFn = (args: { elapsed: number }) => { eyesClosed: number } | null | void
+
+/** One-shot breathing trigger produced by the idle capability. */
+export type BreathTriggerFn = (args: { elapsed: number }) => { triggerBreath: true } | null | void
+
+/** Deterministic idle schedules shared by Avatar components and the coordinator. */
 
 const SINGLE_BLINK_PROBABILITY = 0.85
 const SINGLE_DELAY_MIN_MS = 1_000
@@ -12,6 +27,43 @@ const DOUBLE_HOLD_MAX_MS = 200
 const DOUBLE_GAP_MIN_MS = 10
 const DOUBLE_GAP_MAX_MS = 400
 const OPEN_MS = 100
+const BREATH_PERIOD_MS = 4_000
+
+/**
+ * Creates the slow, visible-but-contained idle drift used while the Avatar is resting.
+ * The elapsed-time formulation keeps the movement deterministic after a seek.
+ */
+export function createAvatarHeadDrift(): HeadDriftFn {
+  return ({ elapsed }) => ({
+    bodyRotateX: Math.sin(elapsed * 0.00032) * 0.045 + Math.sin(elapsed * 0.00071) * 0.015,
+    bodyRotateY: Math.sin(elapsed * 0.00051) * 0.075 + Math.sin(elapsed * 0.00087) * 0.025,
+    bodyRotateZ: Math.sin(elapsed * 0.00027) * 0.025 + Math.sin(elapsed * 0.00061) * 0.01,
+    headRotateX: Math.sin(elapsed * 0.00032) * 0.032 + Math.sin(elapsed * 0.00071) * 0.012,
+    headRotateY: Math.sin(elapsed * 0.00051) * 0.05 + Math.sin(elapsed * 0.00087) * 0.02,
+  })
+}
+
+/** Creates a deterministic one-shot breathing trigger for the idle cycle. */
+export function createAvatarBreathTrigger(seed = 0): BreathTriggerFn {
+  let lastEpoch = -1
+  let previousElapsed = -1
+
+  return ({ elapsed }) => {
+    if (!Number.isFinite(elapsed) || elapsed < 0) return null
+    if (elapsed < previousElapsed) lastEpoch = -1
+    previousElapsed = elapsed
+
+    const epoch = Math.floor(elapsed / BREATH_PERIOD_MS)
+    if (epoch <= lastEpoch) return null
+
+    const offset = BREATH_PERIOD_MS * (0.1 + epochRandom(seed, epoch) * 0.5)
+    const elapsedInEpoch = elapsed - epoch * BREATH_PERIOD_MS
+    if (elapsedInEpoch < offset) return null
+
+    lastEpoch = epoch
+    return { triggerBreath: true }
+  }
+}
 
 type BlinkSegment = Readonly<{
   startAt: number
@@ -140,6 +192,12 @@ function createRandomSource(seed: number): RandomSource {
     state ^= state + Math.imul(state ^ (state >>> 7), state | 61)
     return ((state ^ (state >>> 14)) >>> 0) / 0x1_0000_0000
   }
+}
+
+/** Produces one stable random value for one absolute breathing epoch. */
+function epochRandom(seed: number, epoch: number): number {
+  const random = createRandomSource(Math.imul(seed ^ 0x4f1bbcdc, epoch ^ 0x9e3779b9))
+  return random()
 }
 
 /** Returns an inclusive integer from the supplied deterministic random source. */

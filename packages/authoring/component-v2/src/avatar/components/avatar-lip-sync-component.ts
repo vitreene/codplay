@@ -4,8 +4,7 @@ import type {
   ComponentUpdateInput,
 } from 'codplay'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarTarget } from './avatar-coordinator'
-import type { AvatarMorphs } from './avatar-types'
+import type { AvatarMorphs, AvatarTarget } from '../runtime/avatar-target'
 import type { AvatarLipSyncInitial } from './avatar-types'
 
 /** Stable native morph and intensity correspondence for canonical visemes. */

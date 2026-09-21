@@ -4,14 +4,13 @@ import {
   type ComponentUpdateInput,
 } from 'codplay'
 import type { Group, Object3D, Scene } from 'three'
-import {
-  createAvatarEngine,
-  getModelEntry,
-} from '@codplay/avatar-engine'
-import { BaseThreeComponent } from '../threejs/core'
-import type { ThreeSceneTarget } from '../threejs/core'
-import { AvatarCoordinator, type AvatarTarget } from './avatar-coordinator'
+import { createAvatarEngine } from '../runtime/avatar-engine'
+import { BaseThreeComponent, getThreeBinaryResource } from '../../threejs/core'
+import type { ThreeSceneTarget } from '../../threejs/core'
+import { AvatarCoordinator } from '../runtime/avatar-coordinator'
+import type { AvatarTarget } from '../runtime/avatar-target'
 import type { AvatarInitial } from './avatar-types'
+import { parseAvatarAnimation } from '../model/animation-loader'
 
 /** Loads one prepared 3D avatar and attaches it to an existing Three host. */
 export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
@@ -34,18 +33,15 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     this.target = this.coordinator
   }
 
-  /** Starts parsing the bytes prepared by the Avatar preload strategy. */
+  /** Starts parsing the bytes prepared by the Three.js preload strategy. */
   initialize(): void {
-    const entry = getModelEntry(this.initial.src)
-    if (entry?.status !== 'ready' || entry.buffer === undefined) {
-      throw new Error(`Avatar resource is not ready: ${this.initial.src}`)
-    }
-    void this.loadModel(entry.buffer)
+    void this.loadModel(getThreeBinaryResource(this.initial.src))
   }
 
   /** Attaches the model and registers the coordinator's absolute-time stream. */
   update(input: ComponentUpdateInput<AvatarInitial>): void {
     this.sceneTarget = input.target as ThreeSceneTarget | undefined
+    this.syncGazeCamera()
     this.attachModel()
 
     if (input.registerAnimation !== undefined) {
@@ -77,7 +73,7 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
       endAt: Number.POSITIVE_INFINITY,
       sample: (timeMs) => ({
         value: `${timeMs}:${this.modelRevision}:${this.coordinator.getRevision()}`,
-        apply: () => this.coordinator.applyAt(timeMs),
+        apply: () => this.applyAt(timeMs),
       }),
     }
   }
@@ -89,7 +85,10 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
       morphPrefix: this.initial.morphPrefix,
       retarget: this.initial.retarget,
     })
+    await this.loadAnimations(engine)
     result.scene.rotation.y = this.initial.modelRotationY ?? 0
+    const position = this.initial.position ?? [0, 0, 0]
+    result.scene.position.set(position[0], position[1], position[2])
     result.scene.updateMatrixWorld(true)
 
     if (this.destroyed) {
@@ -103,6 +102,18 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     this.attachModel()
   }
 
+  /** Parses and registers the animation resources associated with this Avatar. */
+  private async loadAnimations(engine: ReturnType<typeof createAvatarEngine>): Promise<void> {
+    for (const [name, source] of Object.entries(this.initial.animations ?? {})) {
+      const clip = await parseAvatarAnimation(
+        getThreeBinaryResource(source.src),
+        source,
+        name,
+      )
+      engine.registerAnimation(name, clip, source.mode ?? 'animation')
+    }
+  }
+
   /** Adds the model to the current host scene without resolving any target. */
   private attachModel(): void {
     const scene = this.sceneTarget?.scene
@@ -113,6 +124,17 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     if (scene !== undefined && this.model !== undefined && this.model.parent !== scene) {
       scene.add(this.model)
     }
+  }
+
+  /** Forwards the host's current camera without exposing it to feature components. */
+  private syncGazeCamera(): void {
+    this.coordinator.setGazeCamera(this.sceneTarget?.getCamera() ?? null)
+  }
+
+  /** Applies the Avatar layers after refreshing the host camera reference. */
+  private applyAt(timeMs: number): void {
+    this.syncGazeCamera()
+    this.coordinator.applyAt(timeMs)
   }
 
   /** Detaches the model while keeping the host scene alive. */

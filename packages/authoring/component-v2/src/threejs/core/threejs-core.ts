@@ -6,11 +6,20 @@ import type {
 import { THREE_CAMERA_DEFINITION } from './camera'
 import { THREE_LIGHT_DEFINITION } from './light'
 import { THREE_SCENE_HOST_DEFINITION } from './host'
+import type { ThreeRuntime } from './threejs-core-types'
+
+let runtimePromise: Promise<ThreeRuntime> | undefined
+
+/** Loads the Three.js namespace shared by the engine and its resource loaders. */
+export function getThreeRuntime(): Promise<ThreeRuntime> {
+  runtimePromise ??= import('three')
+  return runtimePromise
+}
 
 /** Engine-owned Three.js library declaration. */
 export const THREE_LIBRARY: RuntimeLibraryDefinition = {
   id: 'three',
-  load: () => import('three'),
+  load: getThreeRuntime,
   origin: 'foreign',
 }
 

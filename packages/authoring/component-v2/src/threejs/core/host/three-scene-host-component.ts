@@ -54,6 +54,7 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
     this.target = {
       scene,
       renderer,
+      getCamera: () => this.camera,
       setCamera: (camera) => this.setCamera(camera),
       resize: (nextWidth, nextHeight) => this.resize(nextWidth, nextHeight),
       render: () => this.renderFrame(),

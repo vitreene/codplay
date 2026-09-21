@@ -2,7 +2,7 @@ import {
   BaseComponent,
   type ComponentUpdateInput,
 } from 'codplay'
-import type { AvatarTarget } from './avatar-coordinator'
+import type { AvatarTarget } from '../runtime/avatar-target'
 
 /** Shared target handoff for logical Avatar feature components. */
 export abstract class AvatarFeatureComponent<Initial extends Record<string, unknown>>
@@ -20,4 +20,3 @@ export abstract class AvatarFeatureComponent<Initial extends Record<string, unkn
     input: ComponentUpdateInput<Initial>,
   ): void
 }
-

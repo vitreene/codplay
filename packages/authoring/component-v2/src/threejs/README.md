@@ -10,6 +10,34 @@ Les composants génériques de l'intégration se trouvent dans `threejs/core` :
 - `three-camera` et `three-light` ajoutent leurs objets à cette scène ;
 - l'hôte effectue le rendu final après la mise à jour de ses composants.
 
+Les ressources binaires passent par `THREE_PRELOAD_STRATEGIES` (`three-glb` ou
+`three-fbx`). Cette stratégie utilise le `FileLoader` de Three.js ; un
+composant spécialisé consomme ensuite les octets préparés et peut les remettre
+au loader Three.js approprié pour créer sa propre instance.
+
+```ts
+import { CodPlay } from 'codplay'
+import {
+  THREEJS_CORE_ENGINE,
+  THREE_PRELOAD_STRATEGIES,
+} from '@codplay/component-v2'
+
+const codplay = new CodPlay({
+  engine: THREEJS_CORE_ENGINE,
+  preload: { strategies: THREE_PRELOAD_STRATEGIES },
+})
+
+await codplay.preload.load({
+  manifest: {
+    entries: [{
+      url: '/avatars/example.glb',
+      type: 'three-glb',
+      policy: { cache: 'default', priority: 'normal' },
+    }],
+  },
+})
+```
+
 Un composant spécialisé possède son propre dossier. La grille procédurale est
 un exemple : `threejs/instanced-grid`.
 

@@ -1,8 +1,12 @@
 import type { ComponentUpdateInput } from 'codplay'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarTarget } from './avatar-coordinator'
+import type { AvatarTarget } from '../runtime/avatar-target'
 import type { AvatarIdleInitial } from './avatar-types'
-import { createAvatarBlinkSchedule } from './avatar-idle-schedule'
+import {
+  createAvatarBlinkSchedule,
+  createAvatarBreathTrigger,
+  createAvatarHeadDrift,
+} from '../idle/avatar-idle-schedule'
 
 /** Installs the non-event-driven idle behavior selected for one Avatar. */
 export class AvatarIdleComponent extends AvatarFeatureComponent<AvatarIdleInitial> {
@@ -18,7 +22,16 @@ export class AvatarIdleComponent extends AvatarFeatureComponent<AvatarIdleInitia
     const schedule = this.perso.initial.blink === false
       ? null
       : createAvatarBlinkSchedule(resolveSeed(this.perso.initial.blinkSeed, this.perso.id))
+    const headDrift = this.perso.initial.headDrift === false
+      ? null
+      : createAvatarHeadDrift()
+    const breath = this.perso.initial.breathe === false
+      ? null
+      : createAvatarBreathTrigger(stableSeed(`${this.perso.id}:breath`))
     target.setBlinkSchedule(schedule)
+    target.setHeadDrift(headDrift)
+    target.setBreathTrigger(breath)
+    target.setPose(this.perso.initial.pose ?? 'neutral')
     this.configuredTarget = target
     this.configured = true
   }

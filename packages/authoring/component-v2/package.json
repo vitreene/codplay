@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@rive-app/canvas": "^2.38.3",
-    "@codplay/avatar-engine": "*",
     "codplay": "*",
     "three": "^0.185.0"
   },

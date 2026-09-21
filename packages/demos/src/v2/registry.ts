@@ -207,7 +207,7 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
     id: "avatar",
     path: "?demo=avatar",
     title: "Avatar — composants spécialisés",
-    description: "Un avatar Three.js reçoit séparément les contributions de mood, lip-sync et geste.",
+    description: "Un avatar Three.js reçoit séparément les contributions de mood, lip-sync, geste et regard.",
     load: async () => {
       const [module, stylesheet] = await Promise.all([
         import("./demos/avatar/main"),
