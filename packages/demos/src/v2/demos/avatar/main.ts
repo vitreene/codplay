@@ -12,10 +12,6 @@ const AVATAR_STAGE_ID = 'avatar-stage';
 const AVATAR_HOST_ID = 'avatar-three-host';
 const AVATAR_ID = 'avatar';
 const SCENE_END_MS = 18_500;
-// The walk clip advances Hips by 1.62 local z-units. With the avatar's
-// three-quarter rotation, this is the host-space offset that brings its last
-// frame back to the host origin.
-const AVATAR_ENTRY_POSITION = [-0.354, 0, -1.581] as const;
 
 const AVATAR_MOOD_ACTIONS = Object.fromEntries(AVATAR_MOOD_MOTION_NAMES.map((name) => [`avatar:mood:${name}`, {}]));
 
@@ -28,7 +24,6 @@ const AVATAR_GESTURE_ACTIONS = Object.fromEntries([
 ]);
 
 export const AVATAR_SRC = '/avatars/avatarsdk.glb';
-export const AVATAR_WALK_SRC = '/avatars/hero-walk.fbx';
 
 /** Builds the Avatar V2 scene from data-only author declarations. */
 export function createScene(): SceneDoc<string> {
@@ -124,30 +119,8 @@ export function createScene(): SceneDoc<string> {
 							},
 							mood: 'neutral',
 							modelRotationY: 0.22,
-							position: AVATAR_ENTRY_POSITION,
-							animations: {
-								walk: {
-									src: AVATAR_WALK_SRC,
-									format: 'fbx',
-									mode: 'animation',
-								},
-							},
 						},
 						actions: {},
-					},
-					{
-						id: 'avatar-motion',
-						type: 'avatar-motion',
-						initial: {
-							rel: { host: AVATAR_HOST_ID, target: AVATAR_ID },
-							motion: 'walk',
-							speed: 0.75,
-							loop: false,
-						},
-						actions: {
-							'avatar:motion:walk': {},
-							'avatar:motion:release': {},
-						},
 					},
 					{
 						id: 'avatar-mood',
@@ -243,12 +216,10 @@ export function createScene(): SceneDoc<string> {
 						actions: { 'subtitle:word': {} },
 					},
 				],
-				eventimes: [
+					 eventimes: [
 					{ name: 'scene:start', startAt: 0 },
-					{ name: 'audio:start', startAt: 0 },
-					{ name: 'avatar:motion:walk', startAt: 0, data: { speed: 0.75, loop: false } },
-					{ name: 'avatar:motion:release', startAt: 2_000 },
-					{ name: 'avatar:gesture:nod_yes', startAt: 3_900, data: { durationMs: 1_200 } },
+						{ name: 'audio:start', startAt: 0 },
+						{ name: 'avatar:gesture:nod_yes', startAt: 3_900, data: { durationMs: 1_200 } },
 					{ name: 'avatar:gesture:release', startAt: 5_400 },
 					{ name: 'avatar:gesture:wave_left', startAt: 5_700, data: { durationMs: 2_200 } },
 					{ name: 'avatar:gesture:release', startAt: 8_300 },
@@ -307,11 +278,6 @@ export const preloadManifest: CompiledResourceManifest = {
 			url: AVATAR_SRC,
 			type: 'three-glb',
 			policy: { cache: 'default', priority: 'high' },
-		},
-		{
-			url: AVATAR_WALK_SRC,
-			type: 'three-fbx',
-			policy: { cache: 'default', priority: 'normal' },
 		},
 	],
 };

@@ -267,16 +267,19 @@ spontanée du personnage. Il transmet au coordonnateur :
 - la pose de repos (`neutral` par défaut), appliquée dès que le modèle est
   disponible ;
 - le scheduler de clignement existant ;
-- un déclencheur de respiration déterministe, joué par l'animation native de
-  l'engine et désactivable par `breathe: false` ; il anime le torse via
-  `chestInhale` et conserve la réponse faciale associée ;
-- une dérive déterministe contenue mais perceptible, inspirée de l'animation
-  idle de TalkingHead, qui combine les rotations du corps et de la tête.
+- le profil idle TalkingHead, qui active ou désactive le canal de respiration
+  via `breathe` et le canal de mouvement de tête via `headDrift` ; ces canaux
+  sont échantillonnés par le sampler idle commun, avec les morphes et les
+  poses du modèle natif ;
+- la configuration de parole, des changements de pose et de la graine
+  déterministe du profil.
 
-La dérive est une fonction de l'horloge absolue. Elle est réinstallée après un
-seek et appliquée après la pose corporelle afin que le mouvement ne soit pas
-écrasé par la transition de pose. Aucun composant `avatar-pose` séparé n'est
-créé et aucun changement du core CodPlay n'est requis.
+Le sampler est une fonction de l'horloge absolue. Il est reconstruit après un
+seek et appliqué après la pose corporelle afin que le mouvement ne soit pas
+écrasé par la transition de pose. Aucun scheduler de dérive ou déclencheur de
+respiration séparé n'est conservé : il n'y a qu'un chemin idle TalkingHead.
+Aucun composant `avatar-pose` séparé n'est créé et aucun changement du core
+CodPlay n'est requis.
 
 Les tests autonomes couvrent la transmission de la pose, des schedulers de
 clignement et de respiration, ainsi que la reproductibilité de la dérive. La
@@ -324,9 +327,9 @@ répertoire `engine/` regroupant des traitements sans lien direct :
 - `components/` porte les classes de composants, les types auteur, les
   validations et les définitions d'enregistrement ;
 - `runtime/` porte uniquement la composition : `AvatarCoordinator` recueille
-  les contributions des composants, `avatar-target.ts` définit la capacité
-  échangée, et `AvatarEngine` expose la façade de cycle de vie, de lecture et
-  de synchronisation vers Three.js ;
+  les contributions des composants, `avatar-types.ts` définit le contrat de la
+  capacité échangée, et `AvatarEngine` expose la façade de cycle de vie, de
+  lecture et de synchronisation vers Three.js ;
 - `model/` porte le parsing d'une instance GLB et le retargeting du modèle ;
 - `morph/` porte l'état, l'application des morph targets et leur binding vers
   les os Three.js ;
@@ -639,21 +642,25 @@ sa valeur ni ajouter de chemin runtime.
 
 ## 26. Sémantique de `rescale` — 20 septembre 2026
 
-> Statut : **A relire**.
+> Statut : **Fixe**.
 
 L'hypothèse selon laquelle `rescale` était une courbe d'intensité est
 invalidée par la source de MotionEngine : ce tableau répartit le temps ajouté
 lorsqu'un geste reçoit une durée plus longue que sa durée native. Pour une
 durée plus courte, les segments sont mis à l'échelle uniformément.
 
-La transposition qui multiplie les canaux de morph par `rescale`, ainsi que sa
-régression associée, ne peut donc pas être considérée correcte. Aucune nouvelle
-modification de code ne sera effectuée sur cette base avant la validation de la
-tranche de transition ci-dessous.
+La transposition qui multipliait les canaux de morph par `rescale` a été
+supprimée. Le lecteur répartit désormais le temps supplémentaire sur les
+segments déclarés, ou compresse uniformément les temps lorsque la durée
+demandée est plus courte. Les valeurs des morphes restent celles des templates
+TH ; `rescale` ne change jamais leur intensité.
 
-## 27. Diagnostic de la transition clip / pose Avatar — 20 septembre 2026
+Les tests autonomes du catalogue couvrent la durée native, la durée étendue,
+la durée raccourcie et la conservation des valeurs de morphes.
 
-> Statut : **A relire**.
+## 27. Composition déterministe clip / pose Avatar — 21 septembre 2026
+
+> Statut : **En cours**.
 
 Le retour visuel de la démo invalide la tentative de la section 25. Le défaut
 ne relève pas d'une durée de release : il manque un propriétaire unique de la
@@ -670,9 +677,564 @@ pose squelettique finale.
   entre Play et Seek.
 
 Three.js sait croiser deux `AnimationAction` du même `AnimationMixer`, mais
-une pose sémantique écrite directement sur les os n'est pas une action et ne
-peut pas participer à ce mélange. La prochaine tranche devra définir une
-composition unique et échantillonnable à temps absolu : pose sémantique,
-échantillon du clip, règle distincte de translation racine, puis écriture
-unique des os. Cette décision et son plan de migration doivent être validés
-avant toute nouvelle implémentation.
+une pose sémantique n'est pas une action et ne peut pas participer directement
+à ce mélange. La décision validée est donc de reprendre le principe de pose
+centrale de TalkingHead, dans une forme compatible avec l'horloge absolue de
+CodPlay.
+
+La tranche crée un composeur interne Avatar, sans nouvelle surface auteur :
+
+1. `GestureEngine` résout une pose sémantique à une date absolue sans écrire
+   les os ; les transitions de pose et de geste partent de leur pose précédente
+   et utilisent une même courbe ease-out ;
+2. `AvatarAnimationPlayer` emploie `AnimationMixer` pour échantillonner le
+   clip à cette date, mais remet un échantillon de transform au composeur au
+   lieu de conserver l'écriture native du mixer comme état final ;
+3. les contributions osseuses de l'idle, des morphs et des overlays sont des
+   deltas remis au même composeur ; le regard calcule sa correction après une
+   première pose temporaire, puis remet son delta au composeur ;
+4. le composeur applique la pose finale une seule fois : le clip remplace les
+   canaux qu'il couvre, la release interpole vers la pose sémantique et garde
+   séparément la translation atteinte.
+
+L'acceptation comporte des fixtures squelettiques autonomes pour une pose, un
+clip, une release, une translation et une même date reconstruite par lecture
+et seek. La démo Avatar vérifiera ensuite les enchaînements réels ; elle ne
+fournira aucune valeur d'oracle aux tests. La sémantique de `rescale` demeure
+à la section 26 et reste hors de cette tranche.
+
+L'implémentation répartit désormais ces rôles entre `pose/avatar-pose.ts`,
+`gesture/gesture-engine.ts`, `motion/avatar-animation-player.ts` et les
+adaptateurs internes existants. Le mixer Three.js ne conserve plus une écriture
+concurrente : il échantillonne le clip, le composeur combine cet échantillon à
+la pose et aux deltas, puis il écrit la pose finale une seule fois.
+
+Validations exécutées le 21 septembre : typecheck et 44 tests autonomes de
+`@codplay/component-v2`, typecheck et build de `@codplay/demos`, puis
+`git diff --check`. La validation visuelle Play/Seek reste à faire dans
+Safari : dans la session MCP actuelle, le preload audio de la démo reste
+bloqué après sa requête `HEAD`, donc la scène ne matérialise aucun canvas.
+Aucun correctif Avatar, démo ou core n'est déduit de cette limite
+d'exécution.
+
+### Décision complémentaire — animation d'entrée à root motion
+
+Une animation d'entrée ne réclame pas un asset `walk-in`. Une ressource
+déclare statiquement `rootMotion: 'arrival'` lorsqu'elle porte une translation
+racine destinée à mener l'avatar vers sa position de référence. Cette position
+reste `avatar.initial.position` : l'auteur place donc l'avatar là où il doit se
+tenir après l'entrée, sans calculer son point de départ ni fournir de donnée de
+position à l'eventime.
+
+Le composant Avatar extrait au chargement la translation horizontale de la
+piste racine canonique `Hips`. Il applique sa trajectoire au groupe Three
+interne de présentation, décalée de son delta terminal ; la dernière frame
+ramène ainsi ce groupe à `[0, 0, 0]` sous la position de référence. Le clip
+échantillonné par le squelette ne porte plus cette translation horizontale :
+elle ne peut donc pas être appliquée deux fois. Les rotations et les variations
+verticales du squelette restent celles du clip.
+
+Une entrée `arrival` est non bouclée. Sa fin naturelle est déduite de la durée
+du clip et de sa vitesse ; elle engage alors la transition existante depuis la
+pose terminale de cycle vers la pose Avatar persistante. Un
+`avatar:motion:release` antérieur reste une interruption : il conserve la
+position atteinte à cette date au lieu de faire glisser l'avatar jusqu'à la
+position de référence.
+
+Le calcul est une fonction du temps absolu CodPlay. Play, Pause et Seek
+échantillonnent donc la même position de présentation et la même pose ; aucun
+déplacement n'est accumulé entre les frames et aucune donnée de timeline ou du
+runtime core n'est modifiée. L'extraction d'une rotation racine cumulée reste
+hors de cette tranche : `hero-walk.fbx` ne la requiert pas.
+
+L'acceptation comporte des fixtures squelettiques autonomes pour le départ, le
+milieu et l'arrivée, l'absence de double translation, une interruption, puis
+l'égalité Play/Seek. La démo Avatar n'utilise finalement pas cette animation
+d'entrée : elle conserve seulement le modèle et les composants d'expression,
+de geste, de regard et de lip-sync. Le root motion reste couvert par les
+fixtures autonomes jusqu'à la reprise d'une scène d'animation dédiée.
+
+### Implémentation et état de validation
+
+`avatar-motion` applique maintenant cette décision sans étendre sa surface
+d'event : `rootMotion: 'arrival'` appartient à la ressource déclarée par le
+perso Avatar. La forme objet de `rootMotion` permet à une scène de sélectionner
+`easing: 'ease-out'` et une durée `transitionMs` pour cette ressource précise.
+`root-motion.ts` prépare une copie de clip où les axes horizontaux de
+`Hips.position` sont plats et remet séparément l'offset de présentation ;
+l'easing ralentit le temps du clip complet afin de conserver la synchronisation
+des os et du déplacement. `AvatarComponent` possède le groupe de présentation
+interne qui reçoit cet offset ; `AvatarPoseComposer` reste le seul écrivain des
+os.
+
+La démo ne charge plus le FBX d'entrée, n'enregistre plus `avatar-motion` et
+n'envoie plus `avatar:motion:walk`. Les tests autonomes couvrent néanmoins
+l'arrivée, l'absence de double translation, l'interruption, l'easing de scène et
+l'équivalence Play/Seek. Les 44 tests de `@codplay/component-v2`, les
+typechecks `component-v2` et `demos`, le build des démos et `git diff --check`
+passent.
+
+La vérification Safari réelle reste **En cours**. La requête du GLB réussit,
+mais le preload de `/assets/1_7b_e.mp3` reste bloqué après `HEAD` et la scène
+Avatar ne matérialise donc aucun canvas dans cette session. Aucun contournement
+local de la démo n'est ajouté ; les composants restants doivent être observés
+dès que le chemin audio réel délivre la scène.
+
+## 28. Fidélité des mécanismes TalkingHead — 22 septembre 2026
+
+> Statut : **En cours**.
+
+La transposition doit restituer les mécanismes qui produisent le mouvement de
+l'avatar, pas seulement exposer les noms d'actions. La frontière retenue est
+la suivante :
+
+- les templates TH sont échantillonnés sur le temps absolu CodPlay ; leurs
+  délais, segments, alternatives, distributions gaussiennes, valeurs de base,
+  boucles et conversions des yeux sont conservés ;
+- le clignement, la respiration, les micro-mouvements du visage, les poses
+  d'attente, le regard caméra et les changements d'état idle/parole restent
+  dans la capacité Avatar ; ils ne deviennent pas des événements spéciaux du
+  core ;
+- les gestes de mains parlantes utilisent le même principe TH : une cible
+  aléatoire stable, résolue par CCD-IK, puis une arrivée et un retour
+  interpolés. Le composeur Avatar reste le seul écrivain des os ;
+- DynamicBones conserve les cinq types TH, l'intégration velocity-Verlet, les
+  forces du parent et des enfants, les offsets locaux et monde, les pivots,
+  limites et exclusions, avec une sortie remise au composeur ;
+- le chargement respecte `modelRoot` pour sélectionner l'armature déclarée par
+  le modèle, et la capacité gaze restitue `lookAhead` lorsque la caméra est
+  ignorée ; un événement de regard futur ne modifie pas la cible avant son
+  `startAt`, puis interpole la direction sur sa durée ; le chemin emoji
+  restitue également le contact caméra temporaire de TalkingHead ;
+- les morphes présents sur toute géométrie Three.js portant un dictionnaire de
+  blend shapes sont enregistrés, et les vues rapprochées appliquent la
+  micro-variation faciale de TH sur le temps absolu ; le culling est désactivé
+  sur toute l'instance afin que les parties animées restent visibles ;
+- les animations et poses externes passent par les loaders Three.js et le
+  lecteur absolu déjà établis. Aucun importateur, cache ou circuit parallèle
+  n'est créé dans Avatar ;
+- l'audio, le DOM, le renderer et le scheduler RAF propres à l'application
+  TalkingHead restent des responsabilités du host CodPlay. Avatar reçoit les
+  visèmes et autres événements ordinaires déjà présents dans la scène.
+
+L'acceptation est indépendante de la démo : tests autonomes pour les templates,
+le CCD-IK, les dynamiques, la reconstruction Play/Seek et la composition des
+couches, le mode `lookAhead` sans caméra, l'interpolation de cible, la variation
+des vues rapprochées et le choix de `modelRoot` ; puis vérification navigateur
+sur la scène réelle. La démo ne fournit aucune valeur d'oracle.
+
+Les mécanismes TH qui appartiennent à une autre frontière restent hors de cette
+capacité : `setView` et l'éclairage relèvent du host Three, la lecture audio,
+le TTS, le streaming, les sous-titres et l'analyseur de volume relèvent des
+composants média/caption, et les callbacks de diagnostic relèvent du layout.
+Avatar reçoit leurs événements ordinaires lorsqu'ils existent. Aucun circuit
+CodPlay supplémentaire n'est créé pour les reproduire.
+
+### Complément implémenté — mouvements spontanés et clips — 22 septembre 2026
+
+La tranche Avatar porte maintenant les trois comportements TH qui manquaient
+à la lecture des composants :
+
+- `avatar-idle` active `speakWithHands` par défaut, comme l'appel natif de TH
+  pendant la parole ; la désactivation explicite reste possible avec
+  `speakWithHands: false` ;
+- le sampler idle reconstruit le task `headmove` de TH à partir de son délai,
+  ses quatre segments, sa probabilité et sa cible déterministe. Il est évalué
+  sur le temps absolu et ajoute ses rotations au même composeur que le reste
+  de l'Avatar ; le cas avec contact visuel vise `-bodyRotateY`, le cas sans
+  contact reprend la direction des yeux et neutralise les morphes de regard,
+  en conservant le premier segment d'attente du template natif ;
+- `avatar-motion` n'agit pas avant son `startAt`, rend naturellement la pose
+  aux couches Avatar lorsqu'une animation non bouclée atteint sa durée, et
+  interpole l'entrée d'un clip depuis la pose sémantique courante. La durée
+  d'entrée vaut `1_000 ms` pour une animation et `2_000 ms` pour une pose, ou
+  `entryTransitionMs` sur la ressource.
+
+Les tests autonomes couvrent le démarrage absolu, l'entrée de clip, le retour
+automatique d'une animation non bouclée, la reproductibilité du `headmove` et
+le défaut des mains parlantes. Le package `@codplay/component-v2` passe son
+typecheck et ses 73 tests ; le typecheck et le build des démos passent aussi.
+
+La scène réelle a été jouée dans Safari : le GLB se charge, l'avatar est rendu,
+le journal reçoit les visèmes, les sous-titres, les moods, les gestes et les
+changements de regard, puis la séquence atteint `sequence:end`. Une tentative
+de retour au début après cette fin est refusée par le contrat core actuel
+(`PLAYER_SEQUENCE_ENDED`) ; aucun correctif core n'est introduit dans cette
+tranche Avatar. La validation Play/Seek après fin reste donc ouverte au plan
+runtime concerné.
+
+### Diagnostic de la régression de transition des gestes — 22 septembre 2026
+
+La correction précédente, qui ne changeait que l'instant transmis lors de la
+release d'un geste natif, ne corrigeait pas la cassure d'entrée observée vers
+`6000 ms`. Elle est donc retirée de l'état de référence : le test ajouté ne
+vérifiait que les arguments d'un mock `setGesture` et ne prouvait aucune pose
+Three.js.
+
+La reproduction autonome avec un vrai `GestureEngine`, un vrai
+`AvatarPoseComposer` et un squelette synthétique reproduit la panne : après la
+contribution `handup` à `6000 ms`, la présentation suivante à `6016 ms`
+réappelle `setPose` alors que la pose de base n'a pas changé. L'écart de
+quaternion du bras atteint alors `0,297 rad` au lieu de rester au début de la
+transition. Le problème est donc une réinitialisation de la transition, pas une
+durée de geste trop courte.
+
+La cause localisée est l'invalidation inconditionnelle de `appliedPose` dans
+`AvatarCoordinator.applyGestureMotion()` et `setGesture()`. La frame centrale
+suivante entre alors dans `applyPoseLayer()`, sélectionne à nouveau `neutral`
+et appelle `AvatarEngine.setPose(neutral, 0)`. `GestureEngine.setBodyPose()`
+reconstruit une transition complète depuis cet instant ancien ; son target
+contient pourtant déjà la gesture native active. À `6000 ms`, la montée est
+ainsi remplacée par une pose presque immédiatement terminée.
+
+Le chemin réel explique pourquoi le défaut apparaît à cet endroit : dans
+l'ancien montage, le flux `avatar-coordinate` était enregistré avant le flux
+`avatar-gesture`, donc la première contribution du geste arrivait après la
+composition de `6000 ms`. La frame suivante était la première où
+l'invalidation de pose pouvait écraser la transition nouvellement créée. Ce
+flux a ensuite été supprimé au profit du commit natif du host Three décrit
+plus bas.
+
+TalkingHead ne présente pas cette régression : `playGesture()` date les
+propriétés du geste avec l'horloge courante, tandis que `updatePoseBase()` les
+interpole indépendamment de la pose corporelle. Quand une pose est reconstruite,
+le geste actif est réinjecté dans la cible avec ses propres timestamps. La
+transposition V2 doit conserver cette séparation : pose corporelle, geste actif
+et overlays ne doivent pas partager une invalidation de transition.
+
+La première correction ciblée conserve maintenant `appliedPose` lorsque seule
+la contribution du geste, de ses morphes ou de son overlay change. Une pose de
+base n'est invalidée que si la contribution de pose elle-même change. Le
+parcours reste dans Avatar V2 et ne touche ni la timeline ni le core CodPlay.
+Le test autonome `avatar-coordinator.spec.ts` compose un squelette réel avec
+`GestureEngine` et `AvatarPoseComposer`, reproduit l'ordre `6000 → contribution
+du geste → 6016`, puis vérifie l'entrée et la release depuis la pose présentée.
+
+Le diagnostic initial signalait que les tests de cette tranche validaient
+surtout des appels de mock et ne couvraient pas l'ordre
+`6000 → contribution du geste → 6016`. La régression squelettique a depuis été
+ajoutée dans `avatar-coordinator.spec.ts`. La rupture distincte de `celebrate`
+et son test de catalogue sont consignés à la section suivante ; la séparation
+complète des transitions de pose et de geste, ainsi que la validation
+navigateur globale, restent **En cours**.
+
+### Suppression du chemin idle dupliqué — 22 septembre 2026
+
+Le remplacement par le sampler TalkingHead est désormais complet. Le
+paramètre `thAnimation`, les fonctions `createAvatarHeadDrift` et
+`createAvatarBreathTrigger`, `BreathAnimator` et les callbacks correspondants
+de `AvatarEngine` et `AvatarTarget` ont été retirés. `avatar-idle` configure
+uniquement `setIdleProfile` et le scheduler de clignement ; `breathe` et
+`headDrift` sélectionnent les canaux du profil TH au même endroit. Les tests
+ne valident donc plus un mécanisme supprimé et le contrat public ne conserve
+aucun second chemin de respiration ou de dérive.
+
+La même règle est appliquée à la pose initiale : `avatar-idle` ne transmet plus
+la même pose par `setIdleProfile({ pose })` et par un second `setPose()`. La
+capacité publiée aux composants ne contient plus `setPose`; le coordonnateur
+reprend cette valeur depuis le profil idle et conserve son entrée interne pour
+les transitions de pose réellement nécessaires. Aucun chemin de composition
+utile n'a été supprimé.
+
+Validation courante : le typecheck et les 73 tests autonomes de
+`@codplay/component-v2` passent.
+
+### Suppression du double chemin mood — 22 septembre 2026
+
+Le baseline mood était auparavant écrit par deux propriétaires :
+`ExpressionEngine` dans `AvatarEngine`, puis `AvatarCoordinator` pendant la
+composition des couches. Cette duplication rendait une transition auteur
+fragile : `setMood()` pouvait poser immédiatement le nouveau baseline avant
+que l'animation `avatar-mood` n'applique son échantillon temporel.
+
+`ExpressionEngine` et `mood/expression-engine.ts` sont supprimés. Les données
+partagées résident dans `mood/mood-baselines.ts`; le coordonnateur est le seul
+chemin qui applique les baselines de mood. `AvatarEngine.setMood()` ne pose
+plus de morphes : il conserve seulement l'état mood utilisé par le scheduler
+de clignement, tandis que `AvatarCoordinator.applyMood()` reste responsable
+de la valeur temporelle présentée.
+
+Le typecheck et les 73 tests autonomes passent. Aucun circuit core CodPlay ni
+aucune timeline ne sont modifiés.
+
+## 29. Rupture au début du mouvement interne `celebrate` — 22 septembre 2026
+
+> Statut : **Fixe pour cette cause**.
+
+La rupture visible autour de `16 000 ms` ne correspondait pas à un nouvel
+événement auteur. Elle se produisait pendant `avatar:gesture:celebrate`, dont
+le marqueur interne `handup` est posé vers `14 675 ms`. Le catalogue
+`motions.json` contient ensuite un créneau `null` vers `15 408 ms`. Dans le
+format TalkingHead, ce `null` ne signifie pas « relâcher le geste » : il
+signifie qu'aucune nouvelle commande n'est émise pour ce canal. Le relâchement
+est une opération distincte (`stopGesture`) ou intervient à la fin de l'action.
+
+L'adaptateur V2 interprétait auparavant ce créneau comme une commande de
+relâchement. `handup` revenait donc vers la pose corporelle au milieu de
+`celebrate`, ce qui produisait la cassure observée au début de ce retour,
+autour de `16 000 ms`.
+
+La correction est limitée au catalogue Avatar :
+
+- `sampleGestureMarker()` conserve le dernier marqueur non nul jusqu'à la fin
+  réelle de l'action ; un créneau `null` ne remplace plus ce marqueur ;
+- `released` ne devient vrai qu'après la durée active et sa courte transition
+  de sortie ;
+- l'événement auteur `avatar:gesture:release` reste le moyen explicite de
+  demander un relâchement anticipé ;
+- le composant Avatar s'enregistre comme contribution du commit natif du host
+  Three, après les animations de contenu et juste avant le renderer ; aucune
+  animation `avatar-coordinate` parallèle ne reste nécessaire.
+
+Le temps CodPlay, les eventimes et le runtime core restent inchangés. La
+régression est testée dans une suite autonome qui ne dépend d'aucune valeur de
+la démo : `celebrate` conserve `handup` à `1 600 ms` et ne le libère qu'à la
+fin de son action. Le navigateur Safari a rendu la scène réelle et les
+échantillons du framebuffer autour de `15 800–16 200 ms` restent continus
+après le correctif.
+
+Validations exécutées :
+
+- `@codplay/component-v2` : 73 tests et typecheck réussis ;
+- test ciblé catalogue + coordonnateur + moteur de geste : 4 tests réussis ;
+- `@codplay/demos` : typecheck et build réussis ;
+- `git diff --check` réussi ;
+- Safari MCP : scène Avatar rendue sur le chemin réel, avec contrôle de la
+  plage temporelle autour de `16 000 ms`.
+
+Le plan Avatar global reste **En cours** pour les autres mécanismes TH et
+leurs validations intégrées.
+
+## 30. Centralisation des types Avatar — 22 septembre 2026
+
+Les contrats partagés de l'Avatar V2 sont maintenant définis dans
+`packages/authoring/component-v2/src/avatar/avatar-types.ts`. Cela regroupe la
+surface auteur, les cibles Avatar, les poses, les animations, les morphs, les
+configurations DynamicBones, les capacités gaze/geste/idle et les contrats du
+chargeur. Les modules `pose`, `model`, `gesture`, `idle`, `morph`, `motion` et
+`runtime` ne conservent que leur logique. Les anciens réexports de types et le
+module type-only `runtime/avatar-target.ts` ont été supprimés ; les
+consommateurs passent directement par `avatar-types.ts`. Les types privés
+propres à un algorithme restent locaux.
+
+Le typecheck et les 74 tests autonomes de `@codplay/component-v2` passent. La
+démo n'est pas utilisée comme oracle de cette réorganisation.
+
+## 31. Suppression du chemin de sélection directe des gestes — 22 septembre 2026
+
+La sélection directe `AvatarTarget.setGesture()` constituait un second chemin
+pour les mêmes gestes que ceux déjà représentés par une
+`AvatarGestureFrame`. Elle servait aux gestes natifs, au relâchement et au
+fallback des noms non catalogués, tandis que `applyGestureMotion()` portait
+déjà le nom, le seed, le miroir, l'instant de départ et l'état `released`.
+
+Ce chemin est supprimé :
+
+- `AvatarGestureComponent` transforme maintenant une sélection native ou un
+  relâchement en frame ordinaire ;
+- `AvatarTarget` et `AvatarCoordinator` n'exposent plus `setGesture()` ;
+- `AvatarTarget.getAnimation()` et le getter `AvatarEngine.gestureEngine`, qui
+  n'avaient aucun consommateur, sont également supprimés ; la vérification des
+  clips embarqués reste portée par `AvatarEngine.getAnimation()` dans le
+  composant central ;
+- `AvatarEngine.playGesture()` et `releaseGesture()` restent internes : ils
+  sont appelés par le coordonnateur pour composer le marqueur de la frame avec
+  `GestureEngine`, et ne constituent pas une seconde API composant ;
+- les tests de composants vérifient désormais les frames produites et leurs
+  dates absolues, sans dépendre de la démo.
+
+Cette suppression ne modifie ni les actions auteur, ni les eventimes, ni la
+timeline CodPlay. Elle retire uniquement la voie interne redondante après la
+centralisation des gestes dans `applyGestureMotion()`. Le typecheck et les 74
+tests autonomes de `@codplay/component-v2` passent.
+
+## 32. Pertes de fluidité dans les motions — 22 septembre 2026
+
+> Statut : **Fixe pour cette cause**.
+
+La rupture observée autour de `6 800 ms` venait du sampler interne des motions,
+et non d'une perte d'eventime ou d'un défaut de la timeline CodPlay. Le sampler
+avançait au segment suivant sans mémoriser la valeur atteinte par le segment
+précédent. Dès qu'une motion dépassait sa première frame, les canaux qui
+portaient une valeur unique (`mouthSmile`, `eyeSquint*`, etc.) redevenaient
+indéfinis ; la frame suivante les retirait donc de la couche de geste. Les
+mouvements semblaient interrompus avant leur cible.
+
+Le correctif applique la convention TalkingHead utilisée par le sampler idle :
+la dernière valeur numérique atteinte est conservée pendant les créneaux
+`null` et jusqu'à la fin de la motion. Une valeur `null` ne constitue pas une
+commande de relâchement. Le relâchement reste produit par la fin réelle de la
+motion ou par `avatar:gesture:release`.
+
+Un second écart réduisait aussi la durée utile de la transition native : la
+première commande `gesture` du catalogue était datée de la fin de sa première
+frame, alors que TalkingHead l'active à l'eventime de la motion. Le composant
+Avatar transmet désormais le début de l'occurrence comme origine de la
+transition ; seul l'échantillon explicitement libéré reprend sa date courante.
+
+La correction reste dans `component-v2` : aucun eventime, aucune timeline et
+aucun fichier du core CodPlay n'est modifié. Les tests autonomes vérifient la
+conservation d'un morph jusqu'à sa cible, l'activation du geste dès le début de
+la motion et la reconstruction déterministe du geste. Les 76 tests et le
+typecheck de `@codplay/component-v2`, ainsi que le typecheck et le build des
+démos V2, passent. Safari a vérifié le chemin réel par Seek à `6 000`, `6 800`
+et `7 000 ms` ; l'avatar reste rendu et la motion conserve sa main et son
+expression au lieu de retomber à zéro. Le bouton Play de cette session Safari
+reste bloqué à `0 ms` par le problème indépendant de progression audio déjà
+consigné ; cette limite ne concerne pas le chemin de présentation échantillonné
+par Seek.
+
+## 33. Fracture de frame autour de 2 940 ms — correctif annulé
+
+> Cette piste a été annulée : elle introduisait un circuit de commit Three
+> supplémentaire et ne constitue pas une explication retenue.
+
+## 34. Transposition des transitions `talkinghands` — 22 septembre 2026
+
+> Statut : **En cours**.
+
+La première adaptation de `talkinghands` conservait un delta de rotation
+calculé au début de la phrase, puis le multipliait pendant la montée et le
+retour. Ce n'est pas le mécanisme de TalkingHead : celui-ci crée deux cibles
+`moveto` datées, une cible de geste puis une cible de retour, et laisse le
+composeur interpoler chaque propriété depuis la pose effectivement présentée.
+
+Le planner Avatar V2 conserve maintenant une cible absolue par phrase. À
+chaque échantillon, il la réconcilie avec la pose sémantique courante avant de
+produire le delta final ; la pose de base peut donc changer pendant le geste
+sans réutiliser un delta calculé sur une ancienne pose. La durée de montée
+reste `1 000 ms` et celle du retour `2 000 ms`, conformément au template TH.
+Le changement est limité à `component-v2/src/avatar/gesture/talking-hands.ts`.
+
+Le test autonome `avatar-th-idle.spec.ts` vérifie qu'un changement de pose
+pendant le retour produit un delta différent, recalculé depuis cette nouvelle
+pose. La suite component-v2 passe avec 76 tests et le typecheck du package
+passe. La validation navigateur de la scène autour de `2 940 ms` reste à
+refaire ; aucune conclusion visuelle n'est portée par cette correction tant
+qu'elle n'a pas été observée sur le parcours réel.
+
+## 35. Durée automatique des animations externes — 22 septembre 2026
+
+> Statut : **En cours**.
+
+La lecture des ressources `avatar-motion` reprend maintenant le comportement
+de `playAnimation(..., dur)` et `playPose(..., dur)` de TalkingHead : une
+animation ou une pose reçoit une durée active, garde sa dernière pose, puis
+rend progressivement la main à la pose Avatar. Une animation en boucle joue
+au moins un cycle complet avant ce retour. La durée peut être fournie par
+`data.durationMs` sur l'action de motion, par l'état initial du composant ou
+prendre les valeurs par défaut de TalkingHead (`10 000 ms` pour une animation,
+`5 000 ms` pour une pose). Sur `avatar:motion:release`, le même champ reste
+réservé à la durée du hand-off explicite.
+
+Le contrat et la sélection sont portés par `avatar-motion-component.ts` ; le
+calcul de fin et l'échantillonnage Three restent dans
+`avatar-animation-player.ts`. La timeline CodPlay, le ticker et le core ne
+sont pas modifiés.
+
+La vérification autonome couvre une animation Three en boucle, une ressource
+de type pose et la propagation de la durée depuis l'API auteur. Les deux
+fichiers de test ciblés et le typecheck du package passent. La présentation
+navigateur de cette tranche reste à effectuer avant de la marquer **Fixe**.
+
+## 36. Profils TH de regard dans les templates idle — 22 septembre 2026
+
+> Statut : **En cours**.
+
+La comparaison avec `animTemplateEyes` de TalkingHead a confirmé que la
+hiérarchie `speaking`, `body` et `view` était déjà transposée. Le manque réel
+était plus étroit : les probabilités `avatarIdleEyeContact`,
+`avatarIdleHeadMove`, `avatarSpeakingEyeContact` et
+`avatarSpeakingHeadMove` n'étaient pas transmises au sélecteur V2 ; les
+alternatives restaient donc figées à `0.2` et `0.5`.
+
+`AvatarCoordinator` fournit maintenant le profil du mode courant au sampler
+idle. Celui-ci remplace uniquement les probabilités des alternatives et le
+marqueur `headMove`; les délais, les valeurs, les transitions et le temps
+absolu restent ceux des templates TH. Quand aucun template ne demande le
+contact ou le mouvement, la contribution de regard est nulle pour cet
+échantillon, comme dans la boucle TH.
+
+Le test autonome échantillonne la même animation avec profils `0` et `1` et
+vérifie respectivement l'absence et la présence du contact et du mouvement.
+Les tests idle/composants/gaze et le typecheck passent. La scène navigateur
+reste à vérifier avant de clore cette tranche.
+
+## 37. Suspension des mains parlantes pendant une motion externe — 22 septembre 2026
+
+> Statut : **En cours**.
+
+TalkingHead ne fait pas jouer son comportement automatique de mains parlantes
+pendant qu'une animation externe possède le squelette. Le chemin V2 applique
+la même règle dans `AvatarEngine` : pendant le clip et sa transition de sortie,
+`GestureEngine` suspend uniquement les mains parlantes automatiques. Les
+gestes explicites et les cibles de mains envoyés par l'auteur restent actifs.
+Quand la transition de sortie est terminée, les mains parlantes reprennent au
+temps courant.
+
+La correction reste dans `component-v2` et ne modifie ni la timeline ni le
+core CodPlay. Le test autonome du moteur vérifie l’absence de delta pendant la
+motion et sa reprise après suspension. Le typecheck et les 82 tests du package
+passent. Une observation navigateur reste nécessaire avant de marquer cette
+tranche **Fixe**.
+
+## 38. Unification de la présentation Avatar autour du ticker — 23 septembre 2026
+
+> Statut : **En cours**.
+
+La régression de seek ne venait pas d'un nouveau ticker caché dans Avatar. Elle
+venait de plusieurs chemins de présentation concurrents : le coordonnateur
+appliquait certains setters Three au moment de la synchronisation des
+composants, tandis que `avatar-coordinate` composait ensuite une autre frame
+sur le temps CodPlay. Le modèle pouvait donc conserver une expression, un
+regard ou une sélection de geste installés avant le seek, puis recevoir la
+composition attendue après celui-ci.
+
+La frontière est maintenant unique dans `component-v2` :
+
+- `avatar-mood`, `avatar-lip-sync`, `avatar-gaze` et `avatar-gesture` déposent
+  une timeline absolue auprès de `AvatarCoordinator` ; ils n'enregistrent plus
+  de flux runtime séparé et n'écrivent plus l'engine pendant `update()` ;
+- les setters du coordonnateur ne font que mémoriser l'état auteur ;
+- `AvatarComponent` enregistre un seul flux `avatar-coordinate` ;
+- ce flux échantillonne toutes les timelines, réinitialise les couches
+  temporelles lors d'un retour en arrière ou lorsqu'une nouvelle
+  synchronisation arrive au même `timeMs`, puis configure, anime et compose
+  l'engine Three dans le même passage ;
+- le chargement asynchrone du GLB ne présente plus directement une frame à
+  `timeMs = 0` hors du passage du player.
+
+La timeline CodPlay, le ticker et le core ne sont pas modifiés. Les tests
+autonomes component-v2 vérifient la composition et la reconstruction après
+seek ; le typecheck passe. La démo et la validation navigateur restent
+nécessaires pour établir que les ruptures visuelles et la persistance du mood
+ont disparu sur le parcours réel avant de marquer cette tranche **Fixe**.
+
+## 39. Easing TH des morphs de geste — 23 septembre 2026
+
+> Statut : **En cours**.
+
+Le diagnostic des mouvements de tête et de la dernière salutation a identifié
+une rupture dans la transposition de `MorphEngine` : les échantillons de geste
+étaient envoyés par `AvatarCoordinator` à `snapFixed()`. Chaque changement de
+frame, y compris l'entrée et la sortie d'un geste, annulait donc l'easing
+accumulé par le moteur TH. `reapplyFixed()` réécrivait en plus la cible au lieu
+de la valeur effectivement atteinte.
+
+La correction reste dans `component-v2` et réutilise le circuit déjà présent :
+
+- `AvatarCoordinator.applyFixedLayer()` transmet les cibles avec `setFixed()` ;
+- `MorphEngine.update(deltaMs)` fait l'approche progressive sur le ticker
+  CodPlay, y compris lorsque `avatar:gesture:release` retire la cible fixe ;
+- `reapplyFixed()` réapplique la valeur courante et interpolée (`applied`),
+  afin que la composition Three ne l'écrase pas ;
+- `snapAll()` reste le chemin instantané réservé à la reconstruction après
+  seek.
+
+Aucune timeline, aucun eventime, aucune scène et aucun fichier du core CodPlay
+ne sont modifiés. Le test autonome de fidélité vérifie l'approche d'une cible
+de rotation de tête et la conservation de sa valeur interpolée. Les 84 tests
+component-v2, son typecheck, le typecheck V2 des démos et leur build passent.
+Le parcours Avatar a aussi été rejoué dans Safari sur les gestes de tête et la
+séquence finale ; la tranche reste **En cours** jusqu'à une confirmation
+visuelle complète des enchaînements par l'auteur.

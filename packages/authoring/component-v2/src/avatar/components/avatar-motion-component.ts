@@ -3,8 +3,7 @@ import type {
   ComponentUpdateInput,
 } from 'codplay'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarMotionInitial, AvatarMotionAction } from './avatar-types'
-import type { AvatarTarget } from '../runtime/avatar-target'
+import type { AvatarMotionAction, AvatarMotionInitial, AvatarTarget } from '../avatar-types'
 
 const MOTION_ACTION_PREFIX = 'avatar:motion:'
 const RELEASE_ACTION = `${MOTION_ACTION_PREFIX}release`
@@ -48,6 +47,7 @@ function createMotionSelection(
   startAt: number
   speed: number
   loop?: boolean
+  durationMs?: number
   releaseAt?: number
   transitionMs?: number
 } {
@@ -70,6 +70,9 @@ function createMotionSelection(
   const startAt = occurrence?.startAt ?? 0
   const releaseAction = releaseOccurrence?.action as AvatarMotionAction | undefined
   const releaseAt = releaseOccurrence?.startAt
+  const durationMs = releaseAt === undefined
+    ? resolveActiveDuration(action?.durationMs, state.durationMs, initial.durationMs)
+    : undefined
   const transitionMs = releaseAt === undefined
     ? undefined
     : resolveTransitionDuration(releaseAction?.durationMs)
@@ -79,6 +82,7 @@ function createMotionSelection(
     startAt,
     speed,
     loop: loopOverride,
+    ...(durationMs === undefined ? {} : { durationMs }),
     ...(releaseAt === undefined ? {} : { releaseAt, transitionMs }),
   }
 }
@@ -128,6 +132,18 @@ function resolveSpeed(
 function resolveTransitionDuration(value: number | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 400
   return Math.max(0, value)
+}
+
+/** Resolves the optional active duration without imposing an artificial range. */
+function resolveActiveDuration(
+  actionDuration: number | undefined,
+  stateDuration: number | undefined,
+  initialDuration: number | undefined,
+): number | undefined {
+  for (const value of [actionDuration, stateDuration, initialDuration]) {
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value)
+  }
+  return undefined
 }
 
 /** Resolves loop behavior, falling back to the resource's declared mode. */

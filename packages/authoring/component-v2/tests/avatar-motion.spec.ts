@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ComponentAnimation, ComponentServices } from 'codplay'
+import type { ComponentServices } from 'codplay'
+import { AvatarGestureComponent } from '../src/avatar/components/avatar-gesture-component'
+import { AvatarMotionComponent } from '../src/avatar/components/avatar-motion-component'
 import {
   AVATAR_GESTURE_MOTION_NAMES,
   AVATAR_MOOD_MOTION_NAMES,
-  AvatarGestureComponent,
-  AvatarMotionComponent,
-} from '../src'
-import {
   AVATAR_MOTION_CATALOG,
   getAvatarActionMotion,
+  getAvatarEmojiMotion,
   getAvatarMoodBaseline,
 } from '../src/avatar/gesture/motion-catalog'
+import type { AvatarTimeline } from '../src/avatar/avatar-types'
 
 function emptyServices(): ComponentServices {
   return {
@@ -38,18 +38,21 @@ describe('Avatar semantic motion catalogue', () => {
 
     expect(first).toBeDefined()
     expect(first?.sample(1_000)).toEqual(replayed?.sample(1_000))
+    expect(first?.sample(0).gesture).toBe('handup')
     expect(first?.sample(1_000).gesture).toBe('handup')
     expect(first?.sample(1_000).mirror).toBe(true)
     expect(first?.sample(1_000).overlay).not.toBeNull()
+    expect(first?.sample(1_000).morphs.mouthSmile).toBeCloseTo(0.6)
     expect(first?.sample(first?.durationMs ?? 0).gesture).toBeNull()
     expect(first?.sample(first?.durationMs ?? 0).morphs.mouthSmile).toBe(0)
   })
 
-  it('keeps reserved channels out of gesture ownership', () => {
+  it('keeps control channels out while retaining expressive mouth channels', () => {
     const motion = getAvatarActionMotion('kiss', 41)
     const frame = motion?.sample(800)
 
-    expect(frame?.morphs.viseme_U).toBeUndefined()
+    expect(frame?.morphs.viseme_U).toBeDefined()
+    expect(frame?.morphs.viseme_U).toBeGreaterThan(0)
     expect(frame?.morphs.headMove).toBeUndefined()
     expect(frame?.morphs.eyeContact).toBeUndefined()
   })
@@ -64,34 +67,61 @@ describe('Avatar semantic motion catalogue', () => {
     expect(baseline?.browDownLeft).toBeDefined()
   })
 
-  it('uses rescale as a motion envelope without changing the source timeline', () => {
+  it('keeps the native TalkingHead emoji template tasks', () => {
+    const neutral = getAvatarEmojiMotion('😐', 41)
+    const thinking = getAvatarEmojiMotion('🤔', 41)
+    const waving = getAvatarEmojiMotion('✋', 41)
+
+    expect(neutral?.sample(300).pose).toBe('straight')
+    expect(thinking?.sample(500).handTargets).toMatchObject([{
+      side: 'Right',
+      position: { x: 0.1, y: 0.1, z: 0.1 },
+      release: false,
+      durationMs: 1_000,
+    }])
+    expect(thinking?.sample(2_000).handTargets).toMatchObject([{
+      side: 'Right',
+      release: true,
+      durationMs: 1_000,
+    }])
+    expect(waving?.sample(300)).toMatchObject({ gesture: 'handup', mirror: true })
+  })
+
+  it('recreates TalkingHead camera contact around an emoji gesture', () => {
+    const smile = getAvatarEmojiMotion('🙂', 41)
+
+    expect(smile?.sample(0).gazeTarget).toBe('camera')
+    expect(smile?.sample(500).gazeTarget).toBe('camera')
+    expect(smile?.sample(501).gazeTarget).toBeNull()
+  })
+
+  it('uses rescale only to allocate extra presentation time', () => {
     const bow = getAvatarActionMotion('bow', 41)
+    const extended = getAvatarActionMotion('bow', 41, 4_000)
 
     expect(bow?.durationMs).toBe(2_750)
-    expect(bow?.sample(600).morphs.bodyRotateX).toBe(0)
-    expect(bow?.sample(1_300).morphs.bodyRotateX).toBeCloseTo(0.125)
+    expect(bow?.sample(600).morphs.bodyRotateX).toBeCloseTo(0.2)
+    expect(bow?.sample(1_300).morphs.bodyRotateX).toBeCloseTo(0.25)
     expect(bow?.sample(1_700).morphs.bodyRotateX).toBeCloseTo(0.25)
     expect(bow?.sample(2_500).morphs.bodyRotateX).toBe(0)
+    expect(extended?.durationMs).toBe(4_250)
+    expect(extended?.sample(1_300).morphs.bodyRotateX).toBeCloseTo(0.25)
+    expect(extended?.sample(3_600).morphs.bodyRotateX).toBeCloseTo(0.125)
   })
 
   it('lets avatar-gesture register a simple named action without exposing frames', () => {
     const applyGestureMotion = vi.fn()
-    const setGesture = vi.fn()
+    let timeline: AvatarTimeline | undefined
     const target = {
+      setTimeline: (_slot: 'gesture', value: AvatarTimeline) => { timeline = value },
       applyMood: vi.fn(),
       applyMorphs: vi.fn(),
       applyGestureMotion,
-      setGesture,
-      setPose: vi.fn(),
       setBlinkSchedule: vi.fn(),
-      setBreathTrigger: vi.fn(),
-      setHeadDrift: vi.fn(),
       setGaze: vi.fn(),
-      getAnimation: vi.fn(() => 'animation' as const),
       setAnimation: vi.fn(),
       releaseAnimation: vi.fn(),
     }
-    const animations: ComponentAnimation[] = []
     const component = new AvatarGestureComponent({
       services: emptyServices(),
       perso: { id: 'gesture', storyId: 'main', initial: {} },
@@ -108,14 +138,14 @@ describe('Avatar semantic motion catalogue', () => {
         eventId: 'motion-1',
       }],
       target,
-      registerAnimation: (animation) => animations.push(animation),
     })
 
-    expect(setGesture).not.toHaveBeenCalled()
-    expect(animations).toHaveLength(1)
-    animations[0]?.sample(1_500)?.apply()
+    expect(timeline).toBeDefined()
+    timeline?.sample(1_500)?.apply()
     expect(applyGestureMotion).toHaveBeenCalled()
     expect(applyGestureMotion.mock.calls[0]?.[0]).toMatchObject({ gesture: 'handup', mirror: true })
+    expect(applyGestureMotion.mock.calls[0]?.[2]).toBe(1_000)
+    expect(applyGestureMotion.mock.calls[0]?.[3]).toBe(1_000)
   })
 
   it('lets avatar-motion play a registered resource without exposing Three.js', () => {
@@ -125,11 +155,7 @@ describe('Avatar semantic motion catalogue', () => {
       applyMood: vi.fn(),
       applyMorphs: vi.fn(),
       applyGestureMotion: vi.fn(),
-      setGesture: vi.fn(),
-      setPose: vi.fn(),
       setBlinkSchedule: vi.fn(),
-      setBreathTrigger: vi.fn(),
-      setHeadDrift: vi.fn(),
       setGaze: vi.fn(),
       setAnimation,
       releaseAnimation,
@@ -153,10 +179,30 @@ describe('Avatar semantic motion catalogue', () => {
     })
 
     expect(setAnimation).toHaveBeenCalledWith({
+        name: 'walk',
+        startAt: 1_000,
+        speed: 1.5,
+        loop: true,
+      })
+
+    component.update({
+      state: {},
+      timeMs: 1_000,
+      activeActions: [{
+        name: 'avatar:motion:walk',
+        startAt: 1_000,
+        elapsedMs: 0,
+        action: { durationMs: 2_400 },
+        eventId: 'motion-duration',
+      }],
+      target,
+    })
+    expect(setAnimation).toHaveBeenLastCalledWith({
       name: 'walk',
       startAt: 1_000,
-      speed: 1.5,
-      loop: true,
+      speed: 1,
+      loop: false,
+      durationMs: 2_400,
     })
 
     component.update({
@@ -258,7 +304,7 @@ describe('Avatar semantic motion catalogue', () => {
       perso: {
         id: 'motion',
         storyId: 'main',
-        initial: { motion: 'walk', speed: 0.75, loop: false },
+      initial: { motion: 'walk', speed: 0.75, loop: false },
       },
     } as never)
 
@@ -274,6 +320,33 @@ describe('Avatar semantic motion catalogue', () => {
       startAt: 0,
       speed: 0.75,
       loop: false,
+    })
+  })
+
+  it('uses the initial duration when no motion action overrides it', () => {
+    const setAnimation = vi.fn()
+    const target = { setAnimation, releaseAnimation: vi.fn() }
+    const component = new AvatarMotionComponent({
+      services: emptyServices(),
+      perso: {
+        id: 'motion',
+        storyId: 'main',
+        initial: { motion: 'walk', durationMs: 3_200 },
+      },
+    } as never)
+
+    component.update({
+      state: {},
+      timeMs: 0,
+      activeActions: [],
+      target,
+    })
+
+    expect(setAnimation).toHaveBeenCalledWith({
+      name: 'walk',
+      startAt: 0,
+      speed: 1,
+      durationMs: 3_200,
     })
   })
 })

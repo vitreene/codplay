@@ -1,11 +1,15 @@
 import type {
   ComponentActionOccurrence,
-  ComponentAnimation,
   ComponentUpdateInput,
 } from 'codplay'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarMorphs, AvatarTarget } from '../runtime/avatar-target'
-import type { AvatarLipSyncInitial } from './avatar-types'
+import type {
+  AvatarLipSyncInitial,
+  AvatarMorphs,
+  AvatarTarget,
+  AvatarTimeline,
+} from '../avatar-types'
+import { sampleTalkingHeadEasing } from '../avatar-easing.js'
 
 /** Stable native morph and intensity correspondence for canonical visemes. */
 export const AVATAR_VISEME_PROFILES: Readonly<Record<string, Readonly<{
@@ -29,51 +33,47 @@ export const AVATAR_VISEME_PROFILES: Readonly<Record<string, Readonly<{
   sil: { morph: 'viseme_sil', intensity: 0.6 },
 }
 
-type MorphTransition = Readonly<{
-  from: AvatarMorphs
-  to: AvatarMorphs
-  startAt: number
+/** Fallback cue duration used when an author sends only a punctual viseme. */
+export const DEFAULT_VISEME_DURATION_MS = 150
+
+type VisemeCue = Readonly<{
+  morph: string
+  value: number
+  attackAt: number
+  peakAt: number
   endAt: number
+  order: number
 }>
 
-/** Converts each ordinary viseme event into a component-owned morph transition. */
+/** Converts ordinary viseme events into an absolute-time morph stream. */
 export class AvatarLipSyncComponent extends AvatarFeatureComponent<AvatarLipSyncInitial> {
   static readonly declaredServices = [] as const
 
-  private appliedMorphs: AvatarMorphs = createEmptyMorphs()
-
-  /** Reads the latest event and registers its transition on the CodPlay clock. */
+  /** Projects all due viseme events onto the current Avatar morph frame. */
   protected contribute(target: AvatarTarget, input: ComponentUpdateInput<AvatarLipSyncInitial>): void {
-    const occurrence = resolveLatestVisemeOccurrence(input.activeActions)
-    const action = occurrence?.action
-    const viseme = resolveViseme(action, input.state.viseme)
-    const weight = resolveNumber(action?.weight, input.state.weight, 1)
-    const durationMs = resolveDuration(
-      action?.durationMs,
-      input.state.durationMs,
-      this.perso.initial.durationMs,
+    const cues = resolveVisemeCues(
+      input.activeActions,
+      input.state.durationMs ?? this.perso.initial.durationMs,
+      input.state.weight ?? this.perso.initial.weight,
     )
-    const transition = createMorphTransition(
-      this.appliedMorphs,
-      resolveVisemeMorphs(viseme, weight),
-      occurrence?.startAt ?? input.timeMs,
-      durationMs,
+    const latest = resolveLatestVisemeOccurrence(input.activeActions)
+    const fallbackViseme = latest === undefined
+      ? resolveViseme(undefined, input.state.viseme ?? this.perso.initial.viseme)
+      : null
+    const fallbackMorphs = resolveVisemeMorphs(
+      fallbackViseme,
+      resolveNumber(input.state.weight, this.perso.initial.weight, 1),
     )
+    const modeViseme = latest === undefined
+      ? fallbackViseme
+      : resolveViseme(latest.action, null)
+    target.setGazeMode?.(modeViseme === null || modeViseme === 'sil' ? 'idle' : 'speaking')
 
-    const animation = createAnimation(transition, target, (morphs) => {
-      this.appliedMorphs = morphs
-    })
-    if (input.registerAnimation !== undefined) {
-      input.registerAnimation(animation)
-      return
-    }
-
-    const frame = animation.sample(input.timeMs)
-    frame?.apply()
+    target.setTimeline('lip-sync', createAnimation(cues, fallbackMorphs, target))
   }
 }
 
-/** Selects the latest ordinary viseme occurrence without replaying a cue list. */
+/** Selects the latest ordinary viseme occurrence for the speech interaction mode. */
 function resolveLatestVisemeOccurrence(
   actions: readonly ComponentActionOccurrence[] | undefined,
 ): ComponentActionOccurrence | undefined {
@@ -85,7 +85,43 @@ function resolveLatestVisemeOccurrence(
   return latest
 }
 
-/** Resolves the canonical viseme carried by one ordinary event. */
+/** Resolves every punctual viseme event into its independent TH envelope. */
+function resolveVisemeCues(
+  actions: readonly ComponentActionOccurrence[] | undefined,
+  defaultDuration: number | undefined,
+  defaultWeight: number | undefined,
+): readonly VisemeCue[] {
+  const cues: VisemeCue[] = []
+  let order = 0
+  for (const occurrence of actions ?? []) {
+    if (!Object.prototype.hasOwnProperty.call(occurrence.action, 'viseme')) continue
+    const viseme = resolveViseme(occurrence.action, null)
+    const profile = viseme === null ? undefined : AVATAR_VISEME_PROFILES[viseme]
+    if (profile === undefined) {
+      order += 1
+      continue
+    }
+
+    const duration = resolveDuration(
+      occurrence.action.durationMs,
+      undefined,
+      defaultDuration,
+    )
+    const startAt = occurrence.startAt
+    cues.push({
+      morph: profile.morph,
+      value: profile.intensity * resolveNumber(occurrence.action.weight, defaultWeight, 1),
+      attackAt: startAt - (2 * duration) / 3,
+      peakAt: startAt + duration / 2,
+      endAt: startAt + duration + duration / 2,
+      order,
+    })
+    order += 1
+  }
+  return cues
+}
+
+/** Resolves the canonical viseme carried by one ordinary event or state. */
 function resolveViseme(
   action: Record<string, unknown> | undefined,
   stateViseme: string | null | undefined,
@@ -96,13 +132,17 @@ function resolveViseme(
   return typeof stateViseme === 'string' ? stateViseme : null
 }
 
-/** Resolves the transition duration from event data, component state or initial data. */
+/** Resolves one optional duration without imposing a policy on its scale. */
 function resolveDuration(
   actionDuration: unknown,
   stateDuration: number | undefined,
   initialDuration: number | undefined,
 ): number {
-  return resolveNumber(actionDuration, stateDuration, initialDuration ?? 0)
+  return Math.max(0, resolveNumber(
+    actionDuration,
+    stateDuration,
+    initialDuration ?? DEFAULT_VISEME_DURATION_MS,
+  ))
 }
 
 /** Resolves one finite author number without imposing an artificial range. */
@@ -123,7 +163,7 @@ function resolveVisemeMorphs(viseme: string | null, weight: number): AvatarMorph
   return morphs
 }
 
-/** Creates the zero-valued morph layer used as the transition baseline. */
+/** Creates the zero-valued morph layer used when no viseme is active. */
 function createEmptyMorphs(): Record<string, number> {
   const morphs: Record<string, number> = {}
   for (const profile of Object.values(AVATAR_VISEME_PROFILES)) {
@@ -132,56 +172,61 @@ function createEmptyMorphs(): Record<string, number> {
   return morphs
 }
 
-/** Creates one absolute-time transition from the currently applied morphs. */
-function createMorphTransition(
-  from: AvatarMorphs,
-  to: AvatarMorphs,
-  startAt: number,
-  durationMs: number,
-): MorphTransition {
-  return {
-    from: { ...from },
-    to: { ...to },
-    startAt,
-    endAt: startAt + Math.max(0, durationMs),
-  }
-}
-
-/** Registers the component-owned transition and forwards each sample to Avatar Three. */
+/** Creates one seekable stream consumed by Avatar's central presentation. */
 function createAnimation(
-  transition: MorphTransition,
+  cues: readonly VisemeCue[],
+  fallbackMorphs: AvatarMorphs,
   target: AvatarTarget,
-  remember: (morphs: AvatarMorphs) => void,
-): ComponentAnimation {
+): AvatarTimeline {
   return {
     id: 'avatar-lip-sync',
-    startAt: transition.startAt,
-    endAt: transition.endAt,
+    startAt: 0,
+    endAt: Number.POSITIVE_INFINITY,
     sample: (timeMs) => {
-      const morphs = sampleTransition(transition, timeMs)
+      const morphs = sampleVisemeCues(cues, fallbackMorphs, timeMs)
       return {
         value: morphs,
-        apply: () => {
-          remember(morphs)
-          target.applyMorphs(morphs)
-        },
+        apply: () => target.applyMorphs(morphs),
       }
     },
   }
 }
 
-/** Samples a linear transition from the previous morph state to the new state. */
-function sampleTransition(transition: MorphTransition, timeMs: number): AvatarMorphs {
-  const durationMs = transition.endAt - transition.startAt
-  if (durationMs === 0) return { ...transition.to }
+/** Samples independent TH envelopes without keeping a mutable cue queue. */
+function sampleVisemeCues(
+  cues: readonly VisemeCue[],
+  fallbackMorphs: AvatarMorphs,
+  timeMs: number,
+): AvatarMorphs {
+  const morphs: Record<string, number> = { ...fallbackMorphs }
+  const latestByMorph = new Map<string, VisemeCue>()
+  for (const cue of cues) {
+    if (timeMs < cue.attackAt) continue
+    const previous = latestByMorph.get(cue.morph)
+    if (previous === undefined || cue.order >= previous.order) latestByMorph.set(cue.morph, cue)
+  }
 
-  const progress = Math.max(0, Math.min(1, (timeMs - transition.startAt) / durationMs))
-  const morphs: Record<string, number> = {}
-  const names = new Set([...Object.keys(transition.from), ...Object.keys(transition.to)])
-  for (const name of names) {
-    const from = transition.from[name] ?? 0
-    const to = transition.to[name] ?? 0
-    morphs[name] = from + (to - from) * progress
+  for (const [name, cue] of latestByMorph) {
+    morphs[name] = sampleVisemeCue(cue, timeMs)
   }
   return morphs
+}
+
+/** Samples one TalkingHead attack, hold and release envelope. */
+function sampleVisemeCue(cue: VisemeCue, timeMs: number): number {
+  if (cue.peakAt === cue.attackAt) return timeMs < cue.attackAt ? 0 : cue.value
+  if (timeMs <= cue.attackAt) return 0
+  if (timeMs <= cue.peakAt) {
+    const progress = sampleTalkingHeadEasing(
+      (timeMs - cue.attackAt) / (cue.peakAt - cue.attackAt),
+    )
+    return cue.value * progress
+  }
+  if (timeMs <= cue.endAt) {
+    const progress = sampleTalkingHeadEasing(
+      (timeMs - cue.peakAt) / (cue.endAt - cue.peakAt),
+    )
+    return cue.value * (1 - progress)
+  }
+  return 0
 }

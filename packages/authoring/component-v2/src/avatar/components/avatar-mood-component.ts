@@ -1,12 +1,17 @@
 import type {
   ComponentActionOccurrence,
-  ComponentAnimation,
   ComponentUpdateInput,
 } from 'codplay'
-import { MOOD_BASELINES, type MoodName } from '../mood/expression-engine'
+import { MOOD_BASELINES } from '../mood/mood-baselines'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarMorphs, AvatarTarget } from '../runtime/avatar-target'
-import type { AvatarMoodInitial } from './avatar-types'
+import type {
+  AvatarMoodInitial,
+  AvatarMorphs,
+  AvatarTarget,
+  AvatarTimeline,
+  MoodName,
+} from '../avatar-types'
+import { sampleTalkingHeadEasing } from '../avatar-easing'
 
 type MoodTransition = Readonly<{
   from: AvatarMorphs
@@ -21,53 +26,40 @@ const MOOD_ACTION_PREFIX = 'avatar:mood:'
 export class AvatarMoodComponent extends AvatarFeatureComponent<AvatarMoodInitial> {
   static readonly declaredServices = [] as const
 
-  private appliedMood: AvatarMorphs
-  private lastTimeMs: number | undefined
-
-  /** Starts one component with the authored initial mood as its baseline. */
-  constructor(input: ConstructorParameters<typeof AvatarFeatureComponent<AvatarMoodInitial>>[0]) {
-    super(input)
-    this.appliedMood = { ...MOOD_BASELINES[this.perso.initial.mood ?? 'neutral'] }
-  }
-
-  /** Resolves the latest mood event and registers its local baseline transition. */
+  /** Resolves the mood history into one pure absolute-time transition. */
   protected contribute(target: AvatarTarget, input: ComponentUpdateInput<AvatarMoodInitial>): void {
-    if (this.lastTimeMs !== undefined && input.timeMs < this.lastTimeMs) {
-      this.appliedMood = { ...MOOD_BASELINES[this.perso.initial.mood ?? 'neutral'] }
-    }
-    this.lastTimeMs = input.timeMs
-
     const occurrence = resolveLatestMoodOccurrence(input.activeActions)
+    const previous = resolveLatestMoodOccurrence(input.activeActions, occurrence?.startAt)
     const mood = resolveMood(
       occurrence?.name,
       input.state.mood,
       this.perso.initial.mood,
     )
+    const previousMood = resolveMood(
+      previous?.name,
+      undefined,
+      this.perso.initial.mood,
+    )
+    target.setMood?.(mood)
     const transition = createMoodTransition(
-      this.appliedMood,
+      { ...MOOD_BASELINES[previousMood] },
       { ...MOOD_BASELINES[mood] },
       occurrence?.startAt ?? input.timeMs,
       resolveDuration(occurrence?.action?.durationMs, input.state.durationMs, this.perso.initial.durationMs),
     )
-    const animation = createAnimation(transition, target, (morphs) => {
-      this.appliedMood = morphs
-    })
-    if (input.registerAnimation !== undefined) {
-      input.registerAnimation(animation)
-      return
-    }
-
-    animation.sample(input.timeMs)?.apply()
+    target.setTimeline('mood', createAnimation(transition, target))
   }
 }
 
 /** Selects the latest ordinary mood occurrence without creating a cue store. */
 function resolveLatestMoodOccurrence(
   actions: readonly ComponentActionOccurrence[] | undefined,
+  beforeStartAt = Number.POSITIVE_INFINITY,
 ): ComponentActionOccurrence | undefined {
   let latest: ComponentActionOccurrence | undefined
   for (const occurrence of actions ?? []) {
     if (!isMoodAction(occurrence)) continue
+    if (occurrence.startAt >= beforeStartAt) continue
     if (latest === undefined || occurrence.startAt >= latest.startAt) latest = occurrence
   }
   return latest
@@ -119,12 +111,11 @@ function createMoodTransition(
   }
 }
 
-/** Registers a component-owned mood stream and forwards each sample to Three. */
+/** Creates a mood stream consumed by Avatar's central presentation. */
 function createAnimation(
   transition: MoodTransition,
   target: AvatarTarget,
-  remember: (morphs: AvatarMorphs) => void,
-): ComponentAnimation {
+): AvatarTimeline {
   return {
     id: 'avatar-mood',
     startAt: transition.startAt,
@@ -134,7 +125,6 @@ function createAnimation(
       return {
         value: morphs,
         apply: () => {
-          remember(morphs)
           target.applyMood(morphs)
         },
       }
@@ -142,13 +132,13 @@ function createAnimation(
   }
 }
 
-/** Samples a smoothstep mood transition at one absolute CodPlay time. */
+/** Samples a TalkingHead-eased mood transition at one absolute CodPlay time. */
 function sampleTransition(transition: MoodTransition, timeMs: number): AvatarMorphs {
   const durationMs = transition.endAt - transition.startAt
   if (durationMs === 0) return { ...transition.to }
 
   const progress = Math.max(0, Math.min(1, (timeMs - transition.startAt) / durationMs))
-  const eased = progress * progress * (3 - 2 * progress)
+  const eased = sampleTalkingHeadEasing(progress)
   const morphs: Record<string, number> = {}
   const names = new Set([...Object.keys(transition.from), ...Object.keys(transition.to)])
   for (const name of names) {

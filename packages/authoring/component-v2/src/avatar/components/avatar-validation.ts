@@ -1,7 +1,7 @@
 /** Authoring validation for the public Avatar component definitions. */
 import type { ValidationFunction } from 'codplay'
 import { isComponentRecord, reportInvalidComponentValue } from 'codplay/runtime/components/component-validation'
-import { MOOD_BASELINES } from '../mood/expression-engine'
+import { MOOD_BASELINES } from '../mood/mood-baselines'
 
 type ValidationContext = Parameters<ValidationFunction>[1]
 
@@ -17,13 +17,29 @@ export const validateAvatarInitial: ValidationFunction = (value, context) => {
   if (value.morphPrefix !== undefined && typeof value.morphPrefix !== 'string') {
     reportInvalidComponentValue(context, 'AUTHOR_AVATAR_MORPH_PREFIX_INVALID', 'morphPrefix must be a string.', 'morphPrefix')
   }
+  if (value.modelRoot !== undefined && typeof value.modelRoot !== 'string') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_MODEL_ROOT_INVALID', 'modelRoot must be a string.', 'modelRoot')
+  }
   validateMood(value.mood, context, 'mood')
+  validateBaseline(value.baseline, context)
+  if (value.body !== undefined && value.body !== 'M' && value.body !== 'F') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_BODY_INVALID', 'body must be "M" or "F".', 'body')
+  }
+  if (value.view !== undefined
+    && value.view !== 'full'
+    && value.view !== 'mid'
+    && value.view !== 'upper'
+    && value.view !== 'head') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_VIEW_INVALID', 'view must be "full", "mid", "upper" or "head".', 'view')
+  }
+  validateFiniteNumber(value.modelMovementFactor, context, 'modelMovementFactor')
   if (value.modelRotationY !== undefined
     && (typeof value.modelRotationY !== 'number' || !Number.isFinite(value.modelRotationY))) {
     reportInvalidComponentValue(context, 'AUTHOR_AVATAR_ROTATION_INVALID', 'modelRotationY must be a finite number.', 'modelRotationY')
   }
   validatePosition(value.position, context)
   validateAnimationSources(value.animations, context)
+  validateDynamicBones(value.dynamicBones, context)
 }
 
 /** Validates a mood contribution without inspecting model morphs. */
@@ -54,6 +70,9 @@ export const validateAvatarGesture: ValidationFunction = (value, context) => {
   }
   validateFiniteNumber(value.seed, context, 'seed')
   validateFiniteNumber(value.durationMs, context, 'durationMs')
+  if (value.mirror !== undefined && typeof value.mirror !== 'boolean') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_GESTURE_MIRROR_INVALID', 'mirror must be a boolean.', 'mirror')
+  }
 }
 
 /** Validates the optional idle controls without inspecting the Avatar model. */
@@ -73,6 +92,13 @@ export const validateAvatarIdle: ValidationFunction = (value, context) => {
   if (value.headDrift !== undefined && typeof value.headDrift !== 'boolean') {
     reportInvalidComponentValue(context, 'AUTHOR_AVATAR_HEAD_DRIFT_INVALID', 'headDrift must be a boolean.', 'headDrift')
   }
+  if (value.poseChanges !== undefined && typeof value.poseChanges !== 'boolean') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_POSE_CHANGES_INVALID', 'poseChanges must be a boolean.', 'poseChanges')
+  }
+  if (value.speakWithHands !== undefined && typeof value.speakWithHands !== 'boolean') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_SPEAK_WITH_HANDS_INVALID', 'speakWithHands must be a boolean.', 'speakWithHands')
+  }
+  validateFiniteNumber(value.speakWithHandsProbability, context, 'speakWithHandsProbability')
 }
 
 /** Validates the generic camera-contact controls without inspecting the model. */
@@ -83,7 +109,17 @@ export const validateAvatarGaze: ValidationFunction = (value, context) => {
     reportInvalidComponentValue(context, 'AUTHOR_AVATAR_GAZE_ENABLED_INVALID', 'enabled must be a boolean.', 'enabled')
   }
   if (value.contact !== undefined && value.contact !== null) {
-    validateFiniteNumber(value.contact, context, 'contact')
+  validateFiniteNumber(value.contact, context, 'contact')
+  }
+  validateFiniteNumber(value.headMove, context, 'headMove')
+  validateFiniteNumber(value.idleContact, context, 'idleContact')
+  validateFiniteNumber(value.idleHeadMove, context, 'idleHeadMove')
+  validateFiniteNumber(value.speakingContact, context, 'speakingContact')
+  validateFiniteNumber(value.speakingHeadMove, context, 'speakingHeadMove')
+  validateFiniteNumber(value.listeningContact, context, 'listeningContact')
+  validateFiniteNumber(value.listeningHeadMove, context, 'listeningHeadMove')
+  if (value.ignoreCamera !== undefined && typeof value.ignoreCamera !== 'boolean') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_IGNORE_CAMERA_INVALID', 'ignoreCamera must be a boolean.', 'ignoreCamera')
   }
   validateFiniteNumber(value.durationMs, context, 'durationMs')
 }
@@ -117,8 +153,23 @@ function validateAnimationSources(
     if (source.mode !== undefined && source.mode !== 'animation' && source.mode !== 'pose') {
       reportInvalidComponentValue(context, 'AUTHOR_AVATAR_ANIMATION_MODE_INVALID', `animations.${name}.mode must be "animation" or "pose".`, `animations.${name}.mode`)
     }
+    validateRootMotion(source.rootMotion, context, `animations.${name}.rootMotion`)
+    validateFiniteNumber(source.entryTransitionMs, context, `animations.${name}.entryTransitionMs`)
     validateFiniteNumber(source.scale, context, `animations.${name}.scale`)
   }
+}
+
+/** Validates the optional scene-local arrival timing controls. */
+function validateRootMotion(value: unknown, context: ValidationContext, property: string): void {
+  if (value === undefined || value === 'arrival') return
+  if (!isComponentRecord(value) || value.type !== 'arrival') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_ANIMATION_ROOT_MOTION_INVALID', `${property} must be "arrival" or an arrival options object.`, property)
+    return
+  }
+  if (value.easing !== undefined && value.easing !== 'ease-out') {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_ANIMATION_ROOT_EASING_INVALID', `${property}.easing must be "ease-out".`, `${property}.easing`)
+  }
+  validateFiniteNumber(value.transitionMs, context, `${property}.transitionMs`)
 }
 
 /** Validates the initial playback controls of the Avatar motion component. */
@@ -157,6 +208,34 @@ function validatePosition(value: unknown, context: ValidationContext): void {
   if (value === undefined) return
   if (!Array.isArray(value) || value.length !== 3 || value.some((item) => typeof item !== 'number' || !Number.isFinite(item))) {
     reportInvalidComponentValue(context, 'AUTHOR_AVATAR_POSITION_INVALID', 'position must contain three finite numbers.', 'position')
+  }
+}
+
+/** Validates a model-provided morph baseline without inspecting its model. */
+function validateBaseline(value: unknown, context: ValidationContext): void {
+  if (value === undefined) return
+  if (!isComponentRecord(value)) {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_BASELINE_INVALID', 'baseline must be a plain object.', 'baseline')
+    return
+  }
+  for (const [name, baseline] of Object.entries(value)) {
+    if (typeof baseline !== 'number' || !Number.isFinite(baseline)) {
+      reportInvalidComponentValue(context, 'AUTHOR_AVATAR_BASELINE_VALUE_INVALID', `baseline.${name} must be a finite number.`, `baseline.${name}`)
+    }
+  }
+}
+
+/** Checks only the structural part of optional DynamicBones definitions. */
+function validateDynamicBones(value: unknown, context: ValidationContext): void {
+  if (value === undefined) return
+  if (!Array.isArray(value)) {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_DYNAMIC_BONES_INVALID', 'dynamicBones must be an array.', 'dynamicBones')
+    return
+  }
+  for (const [index, item] of value.entries()) {
+    if (!isComponentRecord(item) || typeof item.bone !== 'string' || item.bone.length === 0) {
+      reportInvalidComponentValue(context, 'AUTHOR_AVATAR_DYNAMIC_BONE_INVALID', `dynamicBones[${index}].bone must be a non-empty string.`, `dynamicBones[${index}].bone`)
+    }
   }
 }
 

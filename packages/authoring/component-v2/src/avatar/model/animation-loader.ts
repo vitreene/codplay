@@ -1,7 +1,8 @@
+import { Euler, Quaternion, QuaternionKeyframeTrack } from 'three'
 import type { AnimationClip, Group } from 'three'
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import type { AvatarAnimationSource } from '../components/avatar-types.js'
+import type { AvatarAnimationSource } from '../avatar-types.js'
 
 type FbxAnimationRoot = Group & Readonly<{
   animations?: readonly AnimationClip[]
@@ -56,21 +57,46 @@ function selectClip(
 }
 
 /** Clones one clip and adapts common Mixamo names and source units. */
-function normalizeClip(
+export function normalizeClip(
   sourceClip: AnimationClip,
   format: 'glb' | 'fbx',
   scale: number | undefined,
 ): AnimationClip {
   const clip = sourceClip.clone()
+  const normalizedTracks = [] as typeof clip.tracks
   const positionScale = scale ?? (format === 'fbx' ? 0.01 : 1)
 
   for (const track of clip.tracks) {
     track.name = track.name.replace(/^mixamorig:?/, '')
-    if (!track.name.endsWith('.position') || positionScale === 1) continue
-    for (let index = 0; index < track.values.length; index += 1) {
-      track.values[index] = (track.values[index] ?? 0) * positionScale
+    if (track.name.endsWith('.rotation') && track.getValueSize() === 3) {
+      const values: number[] = []
+      const euler = new Euler()
+      const quaternion = new Quaternion()
+      for (let index = 0; index < track.values.length; index += 3) {
+        euler.set(
+          track.values[index] ?? 0,
+          track.values[index + 1] ?? 0,
+          track.values[index + 2] ?? 0,
+          'XYZ',
+        )
+        quaternion.setFromEuler(euler).normalize()
+        values.push(quaternion.x, quaternion.y, quaternion.z, quaternion.w)
+      }
+      normalizedTracks.push(new QuaternionKeyframeTrack(
+        track.name.replace(/\.rotation$/, '.quaternion'),
+        track.times,
+        values,
+      ))
+      continue
     }
+    if (track.name.endsWith('.position') && positionScale !== 1) {
+      for (let index = 0; index < track.values.length; index += 1) {
+        track.values[index] = (track.values[index] ?? 0) * positionScale
+      }
+    }
+    normalizedTracks.push(track)
   }
 
+  clip.tracks = normalizedTracks
   return clip
 }

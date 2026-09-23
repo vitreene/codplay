@@ -95,6 +95,7 @@ const avatar = {
         src: '/avatars/hero-walk.fbx',
         format: 'fbx',
         mode: 'animation',
+        rootMotion: 'arrival',
       },
     },
   },
@@ -109,9 +110,13 @@ Propriétés de `avatar` :
 | `src` | URL du modèle GLB préparé. Obligatoire. |
 | `mood` | Expression présente dès l'affichage. `neutral` par défaut. |
 | `morphPrefix` | Préfixe des morphs du modèle, uniquement si le modèle en utilise un. |
+| `modelRoot` | Nom du nœud Three.js qui porte l'armature à utiliser pour les poses, l'équilibrage et les dynamiques. Sans cette propriété, le loader utilise `Armature`, puis le premier os trouvé. |
 | `retarget` | Ajustements propres à un modèle dont le squelette doit être adapté. |
+| `body` | Variante de corps utilisée pour choisir les poses de repos natives : `M` ou `F`. |
+| `view` | Cadrage logique utilisé par les poses de repos et les micro-expressions : `full`, `mid`, `upper` ou `head`. Le cadrage de caméra reste celui du host Three. |
+| `modelMovementFactor` | Limite l'amplitude des mouvements corporels des poses debout. `1` conserve l'amplitude native. |
 | `modelRotationY` | Rotation initiale autour de l'axe vertical, en radians. |
-| `position` | Position locale initiale du modèle dans le host Three. |
+| `position` | Position locale de référence du modèle dans le host Three. Une animation d'entrée y termine. |
 | `animations` | Ressources d'animation nommées et liées à cet avatar. Elles sont préchargées par Three.js. |
 
 Les composants qui ajoutent un comportement utilisent cette relation :
@@ -125,7 +130,7 @@ rel: { host: hostId, target: avatarId }
 ## Ajouter les comportements
 
 Il faut ajouter uniquement les composants nécessaires. Le bloc suivant active
-les six comportements disponibles autour de l'avatar :
+les sept comportements disponibles autour de l'avatar :
 
 ```ts
 const avatarMood = {
@@ -249,6 +254,11 @@ initial: {
       src: '/avatars/hero-walk.fbx',
       format: 'fbx',
       mode: 'animation',
+      rootMotion: {
+        type: 'arrival',
+        easing: 'ease-out',
+        transitionMs: 800,
+      },
     },
     bow: {
       src: '/avatars/hero-bow.glb',
@@ -265,7 +275,11 @@ initial: {
 | `src` | URL du fichier binaire déclaré dans le preload. Obligatoire. |
 | `format` | `glb` ou `fbx`. Si absent, `.fbx` est détecté ; les autres URLs sont traitées comme GLB. |
 | `clip` | Nom du clip ou index à utiliser lorsqu'un fichier en contient plusieurs. |
-| `mode` | `animation` boucle par défaut ; `pose` conserve la dernière frame. |
+| `mode` | `animation` boucle par défaut ; `pose` prend la première pose du clip et la conserve. |
+| `rootMotion` | `arrival` transforme un clip de marche en entrée. La forme objet permet de régler le ralentissement final et la transition de sortie pour cette ressource. |
+| `rootMotion.easing` | `ease-out` ralentit le clip complet à l'approche de sa dernière frame. Les os et le déplacement restent synchronisés. |
+| `rootMotion.transitionMs` | Durée de la transition entre la dernière pose de l'entrée et la pose courante de l'Avatar. Elle ne vaut que pour cette ressource. |
+| `entryTransitionMs` | Durée de l'entrée depuis la pose courante vers le clip. `1_000` ms par défaut pour une animation et `2_000` ms pour une pose, comme dans TalkingHead. `0` désactive cette entrée. |
 | `scale` | Facteur optionnel appliqué aux translations du clip. Les translations FBX utilisent `0.01` par défaut. |
 
 Puis déclarez les actions réellement utilisées par la scène :
@@ -300,24 +314,84 @@ const eventimes = [
 | `motion` | Nom de la ressource jouée au démarrage, ou `null`. |
 | `speed` | Vitesse par défaut. `1` est la vitesse normale. |
 | `loop` | Boucle par défaut pour les événements. |
+| `durationMs` | Durée active par défaut avant le retour progressif à la pose de l'Avatar. |
 | `data.speed` | Vitesse de cette occurrence uniquement. |
 | `data.loop` | Boucle de cette occurrence uniquement. |
-| `data.durationMs` | Durée de la transition vers la pose Avatar lors d'un `release`. |
+| `data.durationMs` sur une motion | Durée active de cette occurrence avant le retour à la pose Avatar. |
+| `data.durationMs` sur `avatar:motion:release` | Durée de la transition vers la pose Avatar. |
 
 Le mode de la ressource fournit la valeur par défaut de `loop` :
 
 - `mode: 'animation'` boucle par défaut ;
-- `mode: 'pose'` joue une fois et conserve la dernière frame.
+- `mode: 'pose'` prend la première pose du clip et la conserve jusqu'à une autre pose ou un `release`.
+
+Une animation dispose par défaut de `10_000` ms d'activité et une pose de
+`5_000` ms, comme dans TalkingHead. Pour choisir une autre durée, envoyez
+`data.durationMs` avec l'action de motion, ou définissez `durationMs` dans
+l'état initial de `avatar-motion`. À la fin de cette durée, le composant garde
+la dernière pose du clip puis la transmet progressivement à la pose courante
+de l'Avatar. Une animation en boucle joue au moins un cycle complet avant ce
+retour ; une animation sans boucle s'arrête à sa dernière frame si elle
+l'atteint avant la durée demandée.
+
+Une ressource `rootMotion: 'arrival'` est une entrée jouée une seule fois, même
+si une valeur de boucle est fournie. Pour régler cette entrée dans une scène,
+utilisez la forme objet : `easing: 'ease-out'` ralentit la marche vers sa fin
+et `transitionMs` règle la reprise de la pose courante. Ces valeurs restent
+attachées à cette ressource ; elles ne changent pas les autres mouvements.
+
+Déclarez simplement la position où l'avatar doit rester après la marche, puis
+envoyez l'action au début de la scène :
+
+```ts
+const avatar = {
+  id: 'avatar1',
+  type: 'avatar',
+  initial: {
+    rel: { host: hostId },
+    src: '/avatars/hero.glb',
+    position: [0, 0, 0],
+    animations: {
+      walk: {
+        src: '/avatars/hero-walk.fbx',
+        format: 'fbx',
+        mode: 'animation',
+        rootMotion: {
+          type: 'arrival',
+          easing: 'ease-out',
+          transitionMs: 800,
+        },
+      },
+    },
+  },
+  actions: {},
+}
+
+const eventimes = [
+  { name: 'avatar:motion:walk', startAt: 0 },
+]
+```
+
+Le composant trouve lui-même le point de départ et la trajectoire du clip. À
+la dernière frame, l'avatar est à `position`, puis il rejoint sa pose de repos.
+N'ajoutez ni coordonnées ni calcul de déplacement aux données de l'événement.
 
 `avatar:motion:release` rend progressivement la pose aux autres composants
 Avatar (`avatar-gesture`, `avatar-idle`, `avatar-mood`, etc.) tout en
-conservant la position atteinte. La transition dure 400 ms par défaut ;
-`data.durationMs` permet de choisir une autre durée pour cette occurrence.
+conservant la position atteinte. `data.durationMs` permet de choisir une autre
+durée pour une occurrence explicite et prend alors le dessus sur
+`rootMotion.transitionMs`.
 Elle utilise une interpolation rapide au début et ralentie à la fin. La
 timeline CodPlay et le `startAt` de l'event ne sont pas modifiés. Les formats
 `glb` et `fbx` sont acceptés. Le clip doit utiliser un squelette compatible
 avec le modèle ; les noms d'os Mixamo usuels et leurs unités sont adaptés par
 le composant.
+
+Lorsqu'un clip commence, Avatar interpole d'abord la pose courante vers la
+première pose échantillonnée du clip. Cette transition est indépendante de la
+durée de lecture et reste reconstructible après un seek. Réglez
+`entryTransitionMs` sur la ressource si ce mouvement doit être plus court,
+plus long ou supprimé.
 
 ## Expressions : `avatar-mood`
 
@@ -400,10 +474,11 @@ Ils décrivent une cible visuelle : le composant ne déduit pas le visème à
 partir du texte ou de l'audio.
 
 `weight` contrôle facultativement l'intensité et vaut `1` par défaut.
-`durationMs` contrôle facultativement la durée de la transition ; sans cette
-donnée, le visème est appliqué immédiatement. Pour un alignement qui fournit
-`start` et `end`, envoyez `start` comme `startAt` et `end - start` comme
-`durationMs`.
+`durationMs` contrôle facultativement la durée de l'enveloppe. Sans cette
+donnée, Avatar utilise `150` ms. Le visème atteint son intensité au milieu de
+cette durée puis revient vers la forme précédente ; il n'est donc jamais
+appliqué comme un saut de valeur. Pour un alignement qui fournit `start` et
+`end`, envoyez `start` comme `startAt` et `end - start` comme `durationMs`.
 
 Exemple avec ces deux options :
 
@@ -477,6 +552,24 @@ Les gestes courts suivants sont aussi disponibles :
 handup  index  point  ok  thumbup  thumbdown  side  shrug  namaste
 ```
 
+Les animations expressives de TalkingHead peuvent aussi être demandées
+directement par leur emoji ou leur alias textuel. L'action porte le choix ; la
+pose, le visage, le geste de main et le bref contact caméra restent internes au
+composant :
+
+```ts
+actions: {
+  'avatar:gesture:🙂': {},
+  'avatar:gesture:👋': {},
+  'avatar:gesture:yes': {},
+  'avatar:gesture:no': {},
+}
+```
+
+`yes` produit un hochement et `no` un mouvement négatif. La liste complète des
+aliases est disponible dans `TH_EMOJI_MOTION_NAMES` si l'application veut
+générer ses déclarations.
+
 Pour déclarer tout le catalogue dans un composant :
 
 ```ts
@@ -511,6 +604,9 @@ initial: {
 | `blinkSeed` | Reproductibilité du rythme des clignements | dérivé de l'identifiant |
 | `breathe` | Respiration naturelle du torse et du visage, sans allonger le corps | `true` |
 | `headDrift` | Léger balancement de la tête et du corps | `true` |
+| `poseChanges` | Autorise les changements différés de pose prévus par le mood | `true` |
+| `speakWithHands` | Autorise les phrases de mains pendant la parole | `true` |
+| `speakWithHandsProbability` | Probabilité d'une phrase de mains pendant une période de parole | `0.5` |
 
 Poses disponibles : `neutral`, `straight` (alias), `side`, `hip`, `turn` et `wide`.
 
@@ -531,12 +627,56 @@ demande le contact complet. La tête et les yeux se répartissent le mouvement
 et restent dans leurs limites naturelles ; l'avatar ne force pas une rotation
 impossible.
 
+Les profils automatiques de TalkingHead peuvent être réglés séparément :
+
+| Propriété | Effet | Valeur par défaut |
+| --- | --- | --- |
+| `idleContact` | Probabilité de choisir une séquence idle avec contact visuel | `0.2` |
+| `idleHeadMove` | Probabilité de lancer un mouvement de tête pendant l'idle | `0.5` |
+| `speakingContact` | Probabilité de choisir le contact visuel pendant la parole | `0.5` |
+| `speakingHeadMove` | Probabilité de lancer un mouvement de tête pendant la parole | `0.5` |
+| `listeningContact` | Profil de contact pendant l'écoute | `0.5` |
+| `listeningHeadMove` | Profil de mouvement pendant l'écoute | `0.5` |
+
+Ces profils changent la sélection des templates internes ; ils ne créent pas
+de nouveaux événements dans la scène.
+
 Pour activer ou désactiver le contact pendant la scène :
 
 ```ts
 { name: 'avatar:gaze:off', startAt: 5_000 }
 { name: 'avatar:gaze:on', startAt: 8_000, data: { contact: 0.7 } }
 ```
+
+Pour demander le comportement `lookAhead` de TalkingHead, c'est-à-dire un
+regard vers l'avant indépendant de la caméra :
+
+```ts
+const avatarGaze = {
+  id: 'avatar-gaze',
+  type: 'avatar-gaze',
+  initial: {
+    rel: { host: hostId, target: avatarId },
+    enabled: true,
+    ignoreCamera: true,
+  },
+  actions: {
+    'avatar:gaze:look-ahead': {},
+    'avatar:gaze:camera': {},
+  },
+}
+
+const eventimes = [
+  { name: 'avatar:gaze:look-ahead', startAt: 0 },
+  { name: 'avatar:gaze:camera', startAt: 4_000, data: { durationMs: 750 } },
+]
+```
+
+`ignoreCamera: true` sélectionne `lookAhead` par défaut ; il ne coupe pas les
+yeux. `avatar:gaze:camera` revient explicitement au suivi de la caméra et
+`avatar:gaze:look-ahead` fait l'opération inverse. Les actions `on`, `off`,
+`idle`, `speaking` et `listening` restent disponibles pour le contact et ses
+profils TH.
 
 `durationMs` permet une transition progressive :
 
@@ -550,6 +690,51 @@ Pour activer ou désactiver le contact pendant la scène :
 
 Le composant utilise la caméra courante du host. Il ne faut donc pas lui
 envoyer une caméra ou une référence Three.js.
+
+## Dynamiques de modèle : `dynamicBones`
+
+Les cheveux, vêtements et accessoires qui utilisent le mécanisme DynamicBones
+de TalkingHead se déclarent sur `avatar.initial`. Le composant installe le
+simulateur sur l'armature du modèle et compose son résultat avec les poses et
+les animations ; l'auteur n'a pas à manipuler les os.
+
+```ts
+const avatar = {
+  id: avatarId,
+  type: 'avatar',
+  initial: {
+    rel: { host: hostId },
+    src: '/avatars/hero.glb',
+    modelRoot: 'Armature',
+    dynamicBones: [
+      {
+        bone: 'HairFront',
+        type: 'full',
+        stiffness: 60,
+        damping: 12,
+        external: 1,
+        pivot: true,
+        limits: [[-0.25, 0.25], [-0.2, 0.2], [-0.25, 0.25], null],
+      },
+    ],
+    dynamicBoneOptions: {
+      warmupMs: 2_000,
+      sensitivityFactor: 1,
+      movementFactor: 1,
+      isPivots: true,
+      isLimits: true,
+      isExcludes: true,
+    },
+  },
+  actions: {},
+}
+```
+
+Un élément `dynamicBones` peut utiliser `point`, `link`, `mix1`, `mix2` ou
+`full`, ainsi que `stiffness`, `damping`, `external`, `movementFactor`,
+`deltaLocal`, `deltaWorld`, `pivot`, `limits` et `excludes`. Ces propriétés
+reprennent les réglages TH ; elles ne sont nécessaires que pour les éléments
+qui doivent réellement suivre une dynamique.
 
 ## Exemple de scène complet
 

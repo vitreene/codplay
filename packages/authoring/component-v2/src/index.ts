@@ -90,8 +90,6 @@ export {
   AvatarMotionComponent,
   AVATAR_VISEME_PROFILES,
   createAvatarBlinkSchedule,
-  createAvatarBreathTrigger,
-  createAvatarHeadDrift,
 } from './avatar'
 export type {
   AvatarGestureFrame,

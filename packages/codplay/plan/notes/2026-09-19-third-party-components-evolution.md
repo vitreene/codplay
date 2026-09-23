@@ -340,9 +340,12 @@ transposition :
   temporisés, notamment les visèmes ;
 - réaction du visage et de la tête au volume audio : future contribution
   Avatar, à condition qu'elle puisse être échantillonnée à temps absolu ;
-- Dynamic Bones et le rééquilibrage physique : option liée au modèle qui ne
-  peut pas être portée telle quelle, car l'algorithme amont dépend du delta de
-  frame ; son besoin, ses entrées et sa règle de seek restent à décider ;
+- Dynamic Bones et le rééquilibrage physique : option liée au modèle, portée
+  dans Avatar V2 par un simulateur interne à sortie additive pour le composeur.
+  Les cinq modes TH, l'intégration velocity-Verlet, les forces parent/enfants,
+  les offsets, pivots, limites et exclusions sont disponibles ; le scheduler
+  CodPlay fournit le delta et `prepareSeek` réinitialise l'état de la
+  simulation ;
 - statistiques, callbacks de diagnostic et interface autonome TalkingHead :
   hors responsabilité Avatar ; le layout de démo et les outils CodPlay les
   remplacent lorsqu'ils sont utiles.

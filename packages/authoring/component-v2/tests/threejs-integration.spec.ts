@@ -162,6 +162,7 @@ describe('Three.js V2 integration', () => {
       engine.destroy()
     }
   })
+
 })
 
 /** Prepares Three.js through the same engine boundary used by a player. */

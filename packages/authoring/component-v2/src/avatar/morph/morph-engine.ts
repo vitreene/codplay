@@ -4,63 +4,26 @@
  * Derived from TalkingHead by Mika Suominen (met4citizen), MIT licence.
  * Source: https://github.com/met4citizen/TalkingHead
  *
- * Simplified for data-driven use in CodPlay:
- * - Only two value channels: fixed (event-driven) and baseline (mood).
- * - No animation queue (system/realtime/newvalue channels removed).
+ * Adapted for data-driven use in CodPlay:
+ * - fixed is event-driven, system is reserved for gaze and other runtime
+ *   constraints, ambient is the deterministic Avatar animation layer, and
+ *   baseline is the mood/model resting value.
+ * - The mutable animation queue is replaced by absolute-time component
+ *   samples; realtime and newvalue are therefore not separate public layers.
  * - Bone-driven morphs (bodyRotate*, headRotate*, handFist*, chestInhale)
  *   dispatch to an optional onBone callback instead of writing to ms[].
  * - seek: snapAll() applies values instantly, bypassing easing.
  */
-
-/** One Three.js SkinnedMesh morphTargetInfluences array + the index within it. */
-export type MorphSlot = { influences: number[]; index: number }
-
-export type BoneMorphName =
-  | 'bodyRotateX' | 'bodyRotateY' | 'bodyRotateZ'
-  | 'headRotateX' | 'headRotateY' | 'headRotateZ'
-  | 'handFistLeft' | 'handFistRight'
-  | 'chestInhale'
-
-export type MorphEntry = {
-  /** CodPlay event-set override. null = not overridden. */
-  fixed: number | null
-  /** Mood resting value. null = use 0. */
-  baseline: number | null
-  /** Current eased value. */
-  value: number
-  /** Last value written to Three.js. */
-  applied: number
-  /** Current velocity (per ms). */
-  v: number
-  needsUpdate: boolean
-  /** Acceleration per ms (from TH: 0.01/1000 standard, 0.1/1000 for eyeBlink/eyeLook). */
-  acc: number
-  /** Max velocity per ms (from TH: 5/1000 standard, 1/1000 for bodyRotate). */
-  maxv: number
-  min: number
-  max: number
-  /** Applied value limiter — used for eyelid/brow interdependency. */
-  limit: ((v: number) => number) | null
-  /** Called when value changes — used for needsUpdate propagation. */
-  onchange: ((v: number) => void) | null
-  /** Three.js influence arrays hosting this morph (one per mesh that owns it). */
-  slots: MorphSlot[]
-  /** Set for bone-driven morphs — no slots, uses onBone callback instead. */
-  boneName?: BoneMorphName
-}
-
-/** Aliases that fan out to multiple real morphs (from TH mtExtras). */
-export type MorphAlias = {
-  targets: { name: string; factor: number }[]
-}
-
-export type BoneCallback = (name: BoneMorphName, value: number) => void
+import type {
+  BoneCallback,
+  BoneMorphName,
+  MorphAlias,
+  MorphEntry,
+  MorphSlot,
+} from '../avatar-types.js'
 
 const STD_ACC = 0.01 / 1000
 const FAST_ACC = 0.1 / 1000
-// Fast easing: ~22 % progress per 60 fps frame — visible in 2-3 frames, smooth crossfade.
-// Used for eyeBlink (150 ms window) and viseme (needs to track phoneme tempo).
-const LIVE_ACC = 1 / 1000
 const STD_MAXV = 5 / 1000
 const SLOW_MAXV = 1 / 1000
 
@@ -70,16 +33,19 @@ function defaultEntry(name: string): Omit<MorphEntry, 'slots'> {
   const isHeadRotate = name.startsWith('headRotate')
   const isEyeBlink   = name.startsWith('eyeBlink')
   const isEyeLook    = name.startsWith('eyeLook')
-  const isViseme     = name.startsWith('viseme_')
-
+  const isEyesDirection = name === 'eyesLookDown' || name === 'eyesLookUp'
   return {
     fixed: null,
-    baseline: isBodyRotate || isEyeLook ? null : 0,
+    system: null,
+    ambient: null,
+    baseline: isBodyRotate || isEyeLook || isEyesDirection ? null : 0,
     value: 0,
     applied: 0,
     v: 0,
     needsUpdate: false,
-    acc: isEyeBlink || isViseme ? LIVE_ACC : isEyeLook || isHeadRotate ? FAST_ACC : STD_ACC,
+    // TalkingHead accelerates only eyelids and eye direction. Visemes and
+    // head/body rotations use the standard morph response.
+    acc: isEyeBlink || isEyeLook ? FAST_ACC : STD_ACC,
     maxv: isBodyRotate ? SLOW_MAXV : STD_MAXV,
     min: isBodyRotate || isHeadRotate ? -1 : 0,
     max: 1,
@@ -97,6 +63,15 @@ export const MORPH_ALIASES: Record<string, MorphAlias> = {
   eyesLookDown: { targets: [{ name: 'eyeLookDownLeft', factor: 1 }, { name: 'eyeLookDownRight', factor: 1 }] },
 }
 
+/** Synthetic blend shapes TalkingHead adds when an ARKit model lacks them. */
+export const TH_MIXED_MORPHS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
+  mouthOpen: { jawOpen: 0.5 },
+  mouthSmile: { mouthSmileLeft: 0.8, mouthSmileRight: 0.8 },
+  eyesClosed: { eyeBlinkLeft: 1, eyeBlinkRight: 1 },
+  eyesLookUp: { eyeLookUpLeft: 1, eyeLookUpRight: 1 },
+  eyesLookDown: { eyeLookDownLeft: 1, eyeLookDownRight: 1 },
+}
+
 /** Bone-driven "morphs" — values are forwarded to onBone, not to ms[]. */
 export const BONE_MORPH_NAMES: BoneMorphName[] = [
   'bodyRotateX', 'bodyRotateY', 'bodyRotateZ',
@@ -105,13 +80,41 @@ export const BONE_MORPH_NAMES: BoneMorphName[] = [
   'chestInhale',
 ]
 
+/** Removes model baselines that TalkingHead reserves for runtime pose control. */
+export function filterAvatarModelBaseline(
+  baseline: Readonly<Record<string, number>> = {},
+): Readonly<Record<string, number>> {
+  const result: Record<string, number> = {}
+  for (const [name, value] of Object.entries(baseline)) {
+    if (name.startsWith('head') || name.startsWith('body') || name.startsWith('eyeBlink')) continue
+    result[name] = value
+  }
+  return result
+}
+
 export class MorphEngine {
   /** All tracked morphs (blend shape + bone). */
   readonly morphs = new Map<string, MorphEntry>()
   /** Alias definitions (read-only after init). */
   readonly aliases: typeof MORPH_ALIASES = MORPH_ALIASES
 
+  private readonly modelLimitBaseline: Readonly<Record<string, number>>
   private onBone: BoneCallback | null = null
+
+  /** Creates one morph registry with the model baseline used by TH limits. */
+  constructor(modelBaseline: Readonly<Record<string, number>> = {}) {
+    this.modelLimitBaseline = { ...modelBaseline }
+  }
+
+  /** Reads the currently resolved value of one registered morph channel. */
+  getValue(name: string): number {
+    return this.readValue(name)
+  }
+
+  /** Reads the resting value used by one registered morph channel. */
+  getBaseline(name: string): number {
+    return this.morphs.get(name)?.baseline ?? 0
+  }
 
   /**
    * Register a blend-shape morph after discovering it in a GLB.
@@ -123,7 +126,10 @@ export class MorphEngine {
     if (existing) {
       existing.slots.push(slot)
     } else {
-      this.morphs.set(name, { ...defaultEntry(name), slots: [slot] })
+      const entry = { ...defaultEntry(name), slots: [slot] }
+      entry.limit = this.createLimit(name)
+      entry.onchange = this.createOnChange(name)
+      this.morphs.set(name, entry)
     }
   }
 
@@ -142,6 +148,11 @@ export class MorphEngine {
    * Supports aliases (fanout to real morphs with factor scaling).
    */
   setFixed(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._setFixed(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._setFixed(target, next))) return
     const alias = this.aliases[name]
     if (alias) {
       for (const { name: target, factor } of alias.targets) {
@@ -159,12 +170,135 @@ export class MorphEngine {
     mt.needsUpdate = true
   }
 
+  /** Sets one runtime constraint without replacing an authored fixed value. */
+  setSystem(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._setSystem(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._setSystem(target, next))) return
+    const alias = this.aliases[name]
+    if (alias) {
+      for (const { name: target, factor } of alias.targets) {
+        this._setSystem(target, value === null ? null : value * factor)
+      }
+      return
+    }
+    this._setSystem(name, value)
+  }
+
+  /** Stores one runtime constraint while retaining the current eased value. */
+  private _setSystem(name: string, value: number | null): void {
+    const mt = this.morphs.get(name)
+    if (!mt) return
+    mt.system = value
+    mt.needsUpdate = true
+  }
+
+  /** Set one automatic Avatar animation value without replacing an event value. */
+  setAmbient(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._setAmbient(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._setAmbient(target, next))) return
+    const alias = this.aliases[name]
+    if (alias) {
+      for (const { name: target, factor } of alias.targets) {
+        this._setAmbient(target, value === null ? null : value * factor)
+      }
+      return
+    }
+    this._setAmbient(name, value)
+  }
+
+  /** Stores one automatic value while retaining the current eased value. */
+  private _setAmbient(name: string, value: number | null): void {
+    const mt = this.morphs.get(name)
+    if (!mt) return
+    mt.ambient = value
+    mt.needsUpdate = true
+  }
+
+  /** Applies one automatic Avatar value immediately at an absolute sample. */
+  snapAmbient(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._snapAmbient(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._snapAmbient(target, next))) return
+    const alias = this.aliases[name]
+    if (alias) {
+      for (const { name: target, factor } of alias.targets) {
+        this._snapAmbient(target, value === null ? null : value * factor)
+      }
+      return
+    }
+    this._snapAmbient(name, value)
+  }
+
+  /** Snaps an automatic value without disturbing a fixed event override. */
+  private _snapAmbient(name: string, value: number | null): void {
+    const mt = this.morphs.get(name)
+    if (!mt) return
+    mt.ambient = value
+    if (mt.fixed !== null) return
+    const target = value !== null ? value : resolveTarget(mt)
+    const limited = mt.limit !== null ? mt.limit(target) : target
+    const clamped = Math.max(mt.min, Math.min(mt.max, limited))
+    mt.value = clamped
+    mt.applied = clamped
+    mt.v = 0
+    mt.needsUpdate = false
+    this.applyEntry(mt, clamped)
+    mt.onchange?.(clamped)
+  }
+
+  /** Applies one runtime constraint immediately without disturbing fixed input. */
+  snapSystem(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._snapSystem(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._snapSystem(target, next))) return
+    const alias = this.aliases[name]
+    if (alias) {
+      for (const { name: target, factor } of alias.targets) {
+        this._snapSystem(target, value === null ? null : value * factor)
+      }
+      return
+    }
+    this._snapSystem(name, value)
+  }
+
+  /** Snaps one runtime constraint while preserving an authored fixed value. */
+  private _snapSystem(name: string, value: number | null): void {
+    const mt = this.morphs.get(name)
+    if (!mt) return
+    mt.system = value
+    if (mt.fixed !== null) return
+    const target = value !== null ? value : resolveTarget(mt)
+    const limited = mt.limit !== null ? mt.limit(target) : target
+    const clamped = Math.max(mt.min, Math.min(mt.max, limited))
+    mt.value = clamped
+    mt.applied = clamped
+    mt.v = 0
+    mt.needsUpdate = false
+    this.applyEntry(mt, clamped)
+    mt.onchange?.(clamped)
+  }
+
   /**
    * Set the fixed override and immediately snap to the target — no easing.
    * Use for speech visemes, which must track the audio timing exactly.
    * Supports aliases.
    */
   snapFixed(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._snapFixed(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._snapFixed(target, next))) return
     const alias = this.aliases[name]
     if (alias) {
       for (const { name: target, factor } of alias.targets) {
@@ -179,7 +313,7 @@ export class MorphEngine {
     const mt = this.morphs.get(name)
     if (!mt) return
     mt.fixed = value
-    const target = value !== null ? value : (mt.baseline ?? 0)
+    const target = value !== null ? value : resolveTarget(mt)
     const limited = mt.limit !== null ? mt.limit(target) : target
     const clamped = Math.max(mt.min, Math.min(mt.max, limited))
     mt.value = clamped
@@ -193,13 +327,19 @@ export class MorphEngine {
         slot.influences[slot.index] = clamped
       }
     }
+    mt.onchange?.(clamped)
   }
 
   /**
-   * Set the mood baseline for a morph (typically set by ExpressionEngine).
+   * Set the mood/model baseline for a morph.
    * Supports aliases (fanout to real morphs with factor scaling).
    */
   setBaseline(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._setBaseline(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._setBaseline(target, next))) return
     const alias = this.aliases[name]
     if (alias) {
       for (const { name: target, factor } of alias.targets) {
@@ -222,7 +362,7 @@ export class MorphEngine {
     for (const [, o] of this.morphs) {
       if (!o.needsUpdate) continue
 
-      const target = o.fixed !== null ? o.fixed : (o.baseline ?? 0)
+      const target = resolveTarget(o)
 
       let newvalue: number
       const diff = target - o.value
@@ -252,23 +392,15 @@ export class MorphEngine {
       if (clamped === o.applied) continue
       o.applied = clamped
 
-      if (o.boneName !== undefined) {
-        this.onBone?.(o.boneName, clamped)
-      } else {
-        for (const slot of o.slots) {
-          slot.influences[slot.index] = clamped
-        }
-      }
+      this.applyEntry(o, clamped)
     }
   }
 
-  /** Rewrites fixed channels after another animation layer touched the bones. */
+  /** Rewrites the currently eased fixed channels after another layer touched bones. */
   reapplyFixed(): void {
     for (const entry of this.morphs.values()) {
       if (entry.fixed === null) continue
-      const limited = entry.limit !== null ? entry.limit(entry.fixed) : entry.fixed
-      const clamped = Math.max(entry.min, Math.min(entry.max, limited))
-      entry.applied = clamped
+      const clamped = entry.applied
       if (entry.boneName !== undefined) {
         this.onBone?.(entry.boneName, clamped)
         continue
@@ -285,7 +417,7 @@ export class MorphEngine {
    */
   snapAll(): void {
     for (const o of this.morphs.values()) {
-      const target = o.fixed !== null ? o.fixed : (o.baseline ?? 0)
+      const target = resolveTarget(o)
       const limited = o.limit !== null ? o.limit(target) : target
       const clamped = Math.max(o.min, Math.min(o.max, limited))
       o.value = target
@@ -293,13 +425,7 @@ export class MorphEngine {
       o.v = 0
       o.needsUpdate = false
 
-      if (o.boneName !== undefined) {
-        this.onBone?.(o.boneName, clamped)
-      } else {
-        for (const slot of o.slots) {
-          slot.influences[slot.index] = clamped
-        }
-      }
+      this.applyEntry(o, clamped)
     }
   }
 
@@ -310,7 +436,110 @@ export class MorphEngine {
   resetToBaselines(): void {
     for (const o of this.morphs.values()) {
       o.fixed = null
+      o.system = null
+      o.ambient = null
     }
     this.snapAll()
   }
+
+  /** Writes one clamped value to either the bone binding or mesh slots. */
+  private applyEntry(entry: MorphEntry, value: number): void {
+    if (entry.boneName !== undefined) {
+      this.onBone?.(entry.boneName, value)
+      return
+    }
+    for (const slot of entry.slots) {
+      slot.influences[slot.index] = value
+    }
+  }
+
+  /** Installs TH's eyelid dependency rules on one discovered ARKit morph. */
+  private createLimit(name: string): ((value: number) => number) | null {
+    if (name !== 'eyeBlinkLeft' && name !== 'eyeBlinkRight') return null
+    const brow = name.endsWith('Left') ? 'browDownLeft' : 'browDownRight'
+    return (value) => {
+      const baseline = this.modelLimitBaseline[name]
+      const lookDown = this.readValue('eyesLookDown')
+      const browDown = this.readValue(brow)
+      const closed = this.readApplied('eyesClosed')
+      return Math.max(value, (baseline === undefined ? 1 : baseline)
+        * (lookDown + browDown) / 2) - closed
+    }
+  }
+
+  /** Marks eyelids dirty when the TH dependency morphs change. */
+  private createOnChange(name: string): ((value: number) => void) | null {
+    if (name !== 'eyesLookDown'
+      && name !== 'eyeLookDownLeft'
+      && name !== 'eyeLookDownRight'
+      && name !== 'browDownLeft'
+      && name !== 'browDownRight') return null
+    return () => {
+      const left = this.morphs.get('eyeBlinkLeft')
+      const right = this.morphs.get('eyeBlinkRight')
+      if (left !== undefined) left.needsUpdate = true
+      if (right !== undefined) right.needsUpdate = true
+    }
+  }
+
+  /** Reads the applied value of an actual morph or one of the TH aliases. */
+  private readApplied(name: string): number {
+    const entry = this.morphs.get(name)
+    if (entry !== undefined) return entry.applied
+    const alias = this.aliases[name]
+    if (alias === undefined || alias.targets.length === 0) return 0
+    let total = 0
+    for (const target of alias.targets) {
+      total += (this.morphs.get(target.name)?.applied ?? 0) * target.factor
+    }
+    return total / alias.targets.length
+  }
+
+  /** Reads the eased dependency value used by TalkingHead's eyelid limiter. */
+  private readValue(name: string): number {
+    if (name === 'eyesRotateX') {
+      return this.readValue('eyesLookDown') - this.readValue('eyesLookUp')
+    }
+    if (name === 'eyesRotateY') {
+      return this.readValue('eyeLookOutLeft') - this.readValue('eyeLookInLeft')
+    }
+    const entry = this.morphs.get(name)
+    if (entry !== undefined) return entry.value
+    const alias = this.aliases[name]
+    if (alias === undefined || alias.targets.length === 0) return 0
+    let total = 0
+    for (const target of alias.targets) {
+      total += (this.morphs.get(target.name)?.value ?? 0) * target.factor
+    }
+    return total / alias.targets.length
+  }
+
+  /** Expands TH's signed eye rotation channels into ARKit direction channels. */
+  private setDirectional(
+    name: string,
+    value: number | null,
+    setter: (target: string, next: number | null) => void,
+  ): boolean {
+    if (name === 'eyesRotateX') {
+      setter('eyesLookDown', value === null ? null : Math.max(0, value))
+      setter('eyesLookUp', value === null ? null : Math.max(0, -value))
+      return true
+    }
+    if (name === 'eyesRotateY') {
+      setter('eyeLookOutLeft', value === null ? null : Math.max(0, value))
+      setter('eyeLookInLeft', value === null ? null : Math.max(0, -value))
+      setter('eyeLookOutRight', value === null ? null : Math.max(0, -value))
+      setter('eyeLookInRight', value === null ? null : Math.max(0, value))
+      return true
+    }
+    return false
+  }
+}
+
+/** Resolves the priority order used by TH's fixed/system/baseline channels. */
+function resolveTarget(entry: MorphEntry): number {
+  if (entry.fixed !== null) return entry.fixed
+  if (entry.system !== null) return entry.system
+  if (entry.ambient !== null) return entry.ambient
+  return entry.baseline ?? 0
 }

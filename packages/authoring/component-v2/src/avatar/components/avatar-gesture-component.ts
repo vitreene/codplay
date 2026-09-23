@@ -1,13 +1,12 @@
 import type {
   ComponentActionOccurrence,
-  ComponentAnimation,
   ComponentUpdateInput,
 } from 'codplay'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarTarget } from '../runtime/avatar-target'
-import type { AvatarGestureInitial } from './avatar-types'
-import { getAvatarActionMotion } from '../gesture/motion-catalog'
-import type { AvatarGestureFrame } from '../gesture/motion-catalog'
+import type { AvatarGestureInitial, AvatarTarget, AvatarTimeline } from '../avatar-types'
+import { getAvatarActionMotion, getAvatarEmojiMotion } from '../gesture/motion-catalog'
+import type { AvatarGestureFrame } from '../avatar-types'
+import { hasGestureTemplate } from '../gesture/gesture-definitions'
 
 const GESTURE_ACTION_PREFIX = 'avatar:gesture:'
 const RELEASE_ACTION = `${GESTURE_ACTION_PREFIX}release`
@@ -21,29 +20,70 @@ export class AvatarGestureComponent extends AvatarFeatureComponent<AvatarGesture
     const occurrence = resolveLatestGestureOccurrence(input.activeActions)
     const gesture = resolveGestureName(occurrence?.name, input.state.gesture, this.perso.initial.gesture)
     const seed = input.state.seed ?? stableSeed(occurrence?.eventId ?? gesture)
+    const mirror = resolveMirror(occurrence?.action, input.state.mirror, this.perso.initial.mirror)
     if (gesture === null) {
-      target.setGesture(null)
+      target.setTimeline('gesture', createNativeGestureAnimation(
+        null,
+        seed,
+        mirror,
+        occurrence?.startAt ?? input.timeMs,
+        0,
+        target,
+      ))
       return
     }
 
-    const motion = getAvatarActionMotion(
+    const motion = resolveMotion(
       gesture,
       seed,
       resolveDuration(occurrence?.action.durationMs, input.state.durationMs, this.perso.initial.durationMs),
     )
     if (motion === undefined) {
-      target.setGesture(gesture, seed)
+      if (hasGestureTemplate(gesture)) {
+        const startAt = occurrence?.startAt ?? 0
+        const durationMs = resolveNativeDuration(
+          occurrence?.action.durationMs,
+          input.state.durationMs,
+          this.perso.initial.durationMs,
+        )
+        const animation = createNativeGestureAnimation(
+          gesture,
+          seed,
+          mirror,
+          startAt,
+          durationMs,
+          target,
+        )
+        target.setTimeline('gesture', animation)
+        return
+      }
+      target.setTimeline('gesture', createNativeGestureAnimation(
+        gesture,
+        seed,
+        mirror,
+        occurrence?.startAt ?? input.timeMs,
+        0,
+        target,
+      ))
       return
     }
 
     const startAt = occurrence?.startAt ?? 0
     const animation = createMotionAnimation(motion.sample, startAt, motion.durationMs, target, seed)
-    if (input.registerAnimation !== undefined) {
-      input.registerAnimation(animation)
-      return
-    }
-    animation.sample(input.timeMs)?.apply()
+    target.setTimeline('gesture', animation)
   }
+}
+
+/** Resolves a normal semantic gesture or one of TalkingHead's emoji aliases. */
+function resolveMotion(
+  name: string,
+  seed: number,
+  duration: number | undefined,
+) {
+  if (name.startsWith('emoji:')) {
+    return getAvatarEmojiMotion(name.slice('emoji:'.length), seed, duration)
+  }
+  return getAvatarEmojiMotion(name, seed, duration) ?? getAvatarActionMotion(name, seed, duration)
 }
 
 /** Selects the latest declared gesture action without reading static data from its event. */
@@ -83,14 +123,54 @@ function resolveDuration(
   return undefined
 }
 
-/** Registers one component-owned semantic gesture stream on the CodPlay clock. */
+/** Resolves the native TH hand-gesture hold, defaulting to three seconds. */
+function resolveNativeDuration(
+  actionDuration: unknown,
+  stateDuration: number | undefined,
+  initialDuration: number | undefined,
+): number {
+  return resolveDuration(actionDuration, stateDuration, initialDuration) ?? 3_000
+}
+
+/** Resolves the optional mirror flag without changing the gesture identity. */
+function resolveMirror(
+  action: Record<string, unknown> | undefined,
+  stateMirror: boolean | undefined,
+  initialMirror: boolean | undefined,
+): boolean {
+  if (typeof action?.mirror === 'boolean') return action.mirror
+  if (typeof stateMirror === 'boolean') return stateMirror
+  return initialMirror === true
+}
+
+/** Sends one native gesture selection through the common sampled-frame path. */
+function applyNativeGestureFrame(
+  target: AvatarTarget,
+  name: string | null,
+  seed: number,
+  startAt: number,
+  timeMs: number,
+  mirror: boolean,
+): void {
+  target.applyGestureMotion({
+    morphs: {},
+    gesture: name,
+    gestureStartMs: 0,
+    mirror,
+    overlay: null,
+    handTargets: [],
+    released: name === null,
+  }, seed, name === null ? timeMs : startAt, startAt)
+}
+
+/** Creates one semantic gesture stream for Avatar's central presentation. */
 function createMotionAnimation(
   sample: (timeMs: number) => AvatarGestureFrame,
   startAt: number,
   durationMs: number,
   target: AvatarTarget,
   seed: number,
-): ComponentAnimation {
+): AvatarTimeline {
   return {
     id: 'avatar-gesture-motion',
     startAt,
@@ -99,7 +179,43 @@ function createMotionAnimation(
       const frame = sample(timeMs - startAt)
       return {
         value: frame,
-        apply: () => target.applyGestureMotion(frame, seed),
+        apply: () => target.applyGestureMotion(frame, seed, resolveGestureStartAt(frame, startAt), startAt),
+      }
+    },
+  }
+}
+
+/** Starts a native gesture at the motion occurrence, except when releasing. */
+function resolveGestureStartAt(frame: AvatarGestureFrame, actionStartAt: number): number {
+  return frame.released ? actionStartAt + frame.gestureStartMs : actionStartAt
+}
+
+/** Holds a native TH hand gesture, then returns control to the active pose. */
+function createNativeGestureAnimation(
+  name: string | null,
+  seed: number,
+  mirror: boolean,
+  startAt: number,
+  durationMs: number,
+  target: AvatarTarget,
+): AvatarTimeline {
+  const endAt = startAt + durationMs
+  return {
+    id: 'avatar-native-gesture',
+    startAt,
+    endAt: endAt + 1_000,
+    sample: (timeMs) => {
+      const active = timeMs < endAt
+      return {
+        value: { name: active ? name : null, startAt, mirror },
+        apply: () => applyNativeGestureFrame(
+          target,
+          active ? name : null,
+          seed,
+          startAt,
+          timeMs,
+          mirror,
+        ),
       }
     },
   }

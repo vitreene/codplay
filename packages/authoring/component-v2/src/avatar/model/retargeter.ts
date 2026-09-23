@@ -15,9 +15,7 @@ import {
   type Group,
   type Skeleton,
 } from 'three'
-
-/** Bone name → { x?, y?, z?, rx?, ry?, rz? } plus reserved keys. */
-export type RetargetConfig = Record<string, unknown>
+import type { RetargetConfig } from '../avatar-types.js'
 
 const HIPS_HEIGHT_M = 1.037
 const EYE_HEIGHT_M = 1.634

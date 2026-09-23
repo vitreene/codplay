@@ -1,92 +1,79 @@
+/**
+ * Avatar animation player — samples Three.js clips on CodPlay's absolute clock.
+ *
+ * The mixer is used only to obtain a native clip sample. AvatarPoseComposer,
+ * not the mixer, owns the persistent skeletal pose written for the frame.
+ */
 import {
   AnimationMixer,
   LoopOnce,
   LoopRepeat,
-  Quaternion,
 } from 'three'
 import type { AnimationAction, AnimationClip, Object3D } from 'three'
-
-/** Playback mode associated with one Avatar animation resource. */
-export type AvatarAnimationMode = 'animation' | 'pose'
+import type {
+  ActiveAnimation,
+  AvatarAnimationLayer,
+  AvatarAnimationMode,
+  AvatarAnimationPlayer,
+  AvatarPose,
+  AvatarPoseTransform,
+  AvatarVector3,
+  ArrivalRootMotion,
+} from '../avatar-types.js'
+import { prepareArrivalRootMotion } from './root-motion.js'
+import { sampleTalkingHeadEasing } from '../avatar-easing.js'
 
 type RegisteredAnimation = Readonly<{
   clip: AnimationClip
   mode: AvatarAnimationMode
+  arrivalRootMotion?: ArrivalRootMotion
+  entryTransitionMs?: number
 }>
 
-/** Absolute-time playback state selected by the Avatar motion component. */
-export type ActiveAnimation = Readonly<{
-  name: string
-  startAt: number
-  speed: number
-  loop?: boolean
-  /** Absolute time at which the clip hands its pose back to Avatar layers. */
-  releaseAt?: number
-  /** Duration of the eased hand-off after release. */
-  transitionMs?: number
-}>
-
-/** Controls preloaded clips on one Avatar model with absolute-time sampling. */
-export type AvatarAnimationPlayer = Readonly<{
-  register: (name: string, clip: AnimationClip, mode: AvatarAnimationMode) => void
-  get: (name: string) => AvatarAnimationMode | undefined
-  set: (animation: ActiveAnimation | null) => void
-  prepareSeek: () => void
-  applyAt: (timeMs: number) => void
-  dispose: () => void
-}>
-
-type PositionValue = {
-  x: number
-  y: number
-  z: number
+type MutablePoseTransform = {
+  position?: AvatarVector3
+  quaternion?: Readonly<{ x: number; y: number; z: number; w: number }>
+  scale?: AvatarVector3
 }
 
-type QuaternionValue = {
-  x: number
-  y: number
-  z: number
-  w: number
-}
-
-type TransformValue = {
-  position?: PositionValue
-  quaternion?: QuaternionValue
-  scale?: PositionValue
-}
-
-type TransformSnapshot = ReadonlyMap<Object3D, TransformValue>
-
-type ReleasePose = Readonly<{
-  releaseAt: number
-  durationMs: number
-  source: TransformSnapshot
-  destination: TransformSnapshot
-}>
+type AvatarTransformProperty = 'position' | 'quaternion' | 'rotation' | 'scale'
 
 const DEFAULT_RELEASE_TRANSITION_MS = 400
+const DEFAULT_ANIMATION_ENTRY_TRANSITION_MS = 1_000
+const DEFAULT_POSE_ENTRY_TRANSITION_MS = 2_000
+const DEFAULT_ANIMATION_DURATION_MS = 10_000
+const DEFAULT_POSE_DURATION_MS = 5_000
 
-/** Creates one independent Three.js animation player for one Avatar scene. */
+/** Creates one independent Three.js clip sampler for one Avatar model. */
 export function createAvatarAnimationPlayer(root: Object3D): AvatarAnimationPlayer {
   const mixer = new AnimationMixer(root)
   const registered = new Map<string, RegisteredAnimation>()
-  const positionBaselines = new Map<Object3D, PositionValue>()
+  const positionBaselines = new Map<Object3D, AvatarVector3>()
+  const positionAnchors = new Map<Object3D, AvatarVector3>()
+  const retainedTranslations = new Map<Object3D, AvatarPoseTransform>()
+  let retainedRootMotionOffset: AvatarVector3 | undefined
+  let sampledRootMotionOffset: AvatarVector3 | undefined
   let active: ActiveAnimation | null = null
   let action: AnimationAction | undefined
   let actionName: string | undefined
   let actionLoop: boolean | undefined
   let actionStartAt: number | undefined
   let actionSpeed: number | undefined
-  let releasePose: ReleasePose | undefined
 
   return {
-    register(name, clip, mode) {
-      registered.set(name, { clip, mode })
-      capturePositionBaselines(root, clip, positionBaselines)
-      if (active?.name === name) {
-        releasePose = undefined
-        stopAction()
-      }
+    register(name, clip, mode, rootMotion, entryTransitionMs) {
+      const arrivalRootMotion = rootMotion === undefined
+        ? undefined
+        : prepareArrivalRootMotion(clip, rootMotion === 'arrival' ? undefined : rootMotion)
+      const preparedClip = arrivalRootMotion?.clip ?? clip
+      registered.set(name, {
+        clip: preparedClip,
+        mode,
+        arrivalRootMotion,
+        ...(entryTransitionMs === undefined ? {} : { entryTransitionMs }),
+      })
+      capturePositionBaselines(root, preparedClip, positionBaselines)
+      if (active?.name === name) clearAction()
     },
 
     get(name) {
@@ -95,169 +82,174 @@ export function createAvatarAnimationPlayer(root: Object3D): AvatarAnimationPlay
 
     set(animation) {
       if (sameAnimation(active, animation)) return
+      if (animation === null) {
+        retainCurrentTranslations()
+        retainedRootMotionOffset = sampledRootMotionOffset
+        active = null
+        clearAction()
+        return
+      }
+
+      const registration = registered.get(animation.name)
+      if (registration !== undefined) {
+        capturePositionAnchors(registration.clip)
+      }
+      retainedTranslations.clear()
+      retainedRootMotionOffset = undefined
+      sampledRootMotionOffset = undefined
       active = animation
-      releasePose = undefined
+      clearAction()
     },
 
     prepareSeek() {
-      stopAction()
-      restorePositionBaselines(positionBaselines)
+      clearAction()
+      positionAnchors.clear()
+      retainedTranslations.clear()
+      retainedRootMotionOffset = undefined
+      sampledRootMotionOffset = undefined
+      restorePositions(positionBaselines)
     },
 
-    applyAt(timeMs) {
-      if (active === null) {
-        releasePose = undefined
-        stopAction()
-        return
-      }
-
+    sampleAt(timeMs) {
+      if (active === null) return retainedTranslationLayer()
+      if (timeMs < active.startAt) return retainedTranslationLayer()
       const registration = registered.get(active.name)
-      if (registration === undefined) return
+      if (registration === undefined) return retainedTranslationLayer()
 
-      if (active.releaseAt !== undefined && timeMs >= active.releaseAt) {
-        applyReleasedAnimation(registration, active, timeMs)
-        return
+      const loop = resolveLoop(active, registration)
+      const handoffAt = resolveHandoffAt(active, registration, loop)
+      const sampleAt = handoffAt !== undefined && timeMs >= handoffAt
+        ? handoffAt
+        : timeMs
+      const transforms = sampleClip(registration, active, sampleAt, loop)
+      if (transforms === null) return retainedTranslationLayer()
+
+      const rootMotionOffset = resolveRootMotionOffset(registration, active, sampleAt, loop)
+      sampledRootMotionOffset = rootMotionOffset
+      if (handoffAt === undefined || timeMs < handoffAt) {
+        const entryProgress = resolveEntryProgress(registration, active, timeMs)
+        return rootMotionOffset === undefined
+          ? { transforms, ...(entryProgress === undefined ? {} : { entryProgress }) }
+          : {
+              transforms,
+              ...(entryProgress === undefined ? {} : { entryProgress }),
+              rootMotionOffset,
+            }
       }
-
-      releasePose = undefined
-      applyActiveAnimation(registration, active, timeMs)
+      return rootMotionOffset === undefined ? {
+        transforms,
+        releaseProgress: resolveReleaseProgress(
+          active.transitionMs ?? registration.arrivalRootMotion?.transitionMs,
+          handoffAt,
+          timeMs,
+        ),
+      } : {
+        transforms,
+        releaseProgress: resolveReleaseProgress(
+          active.transitionMs ?? registration.arrivalRootMotion?.transitionMs,
+          handoffAt,
+          timeMs,
+        ),
+        rootMotionOffset,
+      }
     },
 
     dispose() {
       active = null
-      releasePose = undefined
-      stopAction()
+      clearAction()
       mixer.uncacheRoot(root)
       registered.clear()
       positionBaselines.clear()
+      positionAnchors.clear()
+      retainedTranslations.clear()
+      retainedRootMotionOffset = undefined
+      sampledRootMotionOffset = undefined
     },
   }
 
-  /** Applies one ordinary clip on the absolute CodPlay timeline. */
-  function applyActiveAnimation(
+  /** Samples one active native action then restores the semantic pose it replaced. */
+  function sampleClip(
     registration: RegisteredAnimation,
     animation: ActiveAnimation,
     timeMs: number,
-  ): void {
-    const loop = resolveLoop(animation, registration.mode)
-    if (needsNewAction(animation, loop)) {
-      stopAction()
-      action = mixer.clipAction(createRelativePositionClip(registration.clip, root))
-      actionName = animation.name
-      actionLoop = loop
-      actionStartAt = animation.startAt
-      actionSpeed = animation.speed
-      action.reset()
-      action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1)
-      action.clampWhenFinished = true
-      action.play()
-    }
+    loop: boolean,
+  ): AvatarPose | null {
+    ensureAction(registration, animation, loop)
+    if (action === undefined) return null
 
-    if (action === undefined) return
+    const previous = captureTransformSnapshot(action.getClip(), root)
     const elapsedSeconds = getElapsedSeconds(animation, timeMs)
-    const sampleTime = resolveSampleTime(elapsedSeconds, registration.clip.duration, loop)
+    const sampleTime = resolveClipTime(registration, elapsedSeconds, loop)
     action.enabled = true
     action.paused = false
     mixer.setTime(sampleTime)
-    if (!loop && elapsedSeconds >= registration.clip.duration) {
-      action.time = sampleTime
-      action.paused = true
-    }
+    const sample = captureTransformSnapshot(action.getClip(), root)
+    restoreTransforms(previous)
+    return sample
   }
 
-  /** Samples and applies the deterministic hand-off from a clip to Avatar layers. */
-  function applyReleasedAnimation(
+  /** Creates or reuses the action matching one logical Avatar animation. */
+  function ensureAction(
     registration: RegisteredAnimation,
     animation: ActiveAnimation,
-    timeMs: number,
+    loop: boolean,
   ): void {
-    if (releasePose === undefined) {
-      releasePose = createReleasePose(registration, animation)
-      stopAction()
-    }
-
-    applyReleaseTranslation(releasePose.source)
-    const elapsed = timeMs - releasePose.releaseAt
-    const progress = releasePose.durationMs === 0
-      ? 1
-      : clamp(elapsed / releasePose.durationMs, 0, 1)
-
-    // Once the hand-off is complete, the semantic Avatar layers own rotations
-    // again. The released translation remains the only persistent motion layer.
-    if (progress >= 1) return
-
-    const eased = easeOutCubic(progress)
-    interpolateReleaseRotation(releasePose.source, releasePose.destination, eased)
+    const matchesSelection = action !== undefined
+      && actionName === animation.name
+      && actionLoop === loop
+      && actionStartAt === animation.startAt
+      && actionSpeed === animation.speed
+    if (matchesSelection) return
+    clearAction()
+    const clip = createRelativePositionClip(registration.clip, root, positionAnchors)
+    action = mixer.clipAction(clip)
+    actionName = animation.name
+    actionLoop = loop
+    actionStartAt = animation.startAt
+    actionSpeed = animation.speed
+    action.reset()
+    action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1)
+    action.clampWhenFinished = true
+    action.play()
   }
 
-  /** Builds the source and destination poses used by one release transition. */
-  function createReleasePose(
-    registration: RegisteredAnimation,
-    animation: ActiveAnimation,
-  ): ReleasePose {
-    const destination = captureTransformSnapshot(registration.clip, root)
-    const sourceClip = action !== undefined && actionName === animation.name
-      ? action.getClip()
-      : createRelativePositionClip(registration.clip, root, positionBaselines)
-    const sampleTime = resolveSampleTime(
-      getElapsedSeconds(animation, animation.releaseAt ?? animation.startAt),
-      registration.clip.duration,
-      resolveLoop(animation, registration.mode),
-    )
-    if (action !== undefined) stopAction()
-    const source = sampleClipSnapshot(sourceClip, sampleTime)
+  /** Records the current composed translation as the next clip's local origin. */
+  function capturePositionAnchors(clip: AnimationClip): void {
+    positionAnchors.clear()
+    for (const track of clip.tracks) {
+      const target = resolveTransformTarget(root, track.name, 'position')
+      if (target !== null && !positionAnchors.has(target)) {
+        positionAnchors.set(target, readVector(target.position))
+      }
+    }
+  }
 
+  /** Keeps current translations when the motion component removes its selection. */
+  function retainCurrentTranslations(): void {
+    retainedTranslations.clear()
+    for (const target of positionAnchors.keys()) {
+      retainedTranslations.set(target, { position: readVector(target.position) })
+    }
+  }
+
+  /** Returns held translations after a direct animation release. */
+  function retainedTranslationLayer(): AvatarAnimationLayer | null {
+    if (retainedTranslations.size === 0 && retainedRootMotionOffset === undefined) return null
     return {
-      releaseAt: animation.releaseAt ?? animation.startAt,
-      durationMs: Math.max(0, animation.transitionMs ?? DEFAULT_RELEASE_TRANSITION_MS),
-      source,
-      destination,
+      transforms: new Map(retainedTranslations),
+      releaseProgress: 1,
+      ...(retainedRootMotionOffset === undefined ? {} : { rootMotionOffset: retainedRootMotionOffset }),
     }
   }
 
-  /** Samples one clip into a transform snapshot without retaining a mixer action. */
-  function sampleClipSnapshot(clip: AnimationClip, timeSeconds: number): TransformSnapshot {
-    const sampledClip = clip.clone()
-    const temporaryAction = mixer.clipAction(sampledClip)
-    temporaryAction.reset()
-    temporaryAction.setLoop(LoopOnce, 1)
-    temporaryAction.clampWhenFinished = true
-    temporaryAction.play()
-
-    mixer.setTime(timeSeconds)
-    const snapshot = captureTransformSnapshot(sampledClip, root)
-
-    temporaryAction.stop()
-    mixer.uncacheAction(sampledClip, root)
-    restorePositionBaselines(positionBaselines)
-    return snapshot
-  }
-
-  /** Determines whether the current native action matches one logical motion. */
-  function needsNewAction(animation: ActiveAnimation, loop: boolean): boolean {
-    return action === undefined
-      || actionName !== animation.name
-      || actionLoop !== loop
-      || actionStartAt !== animation.startAt
-      || actionSpeed !== animation.speed
-  }
-
-  /** Stops the native action while preserving its current translated location. */
-  function stopAction(): void {
-    if (action === undefined) {
-      actionName = undefined
-      actionLoop = undefined
-      actionStartAt = undefined
-      actionSpeed = undefined
-      return
+  /** Releases the cached mixer action without preserving its temporary transform write. */
+  function clearAction(): void {
+    if (action !== undefined) {
+      const clip = action.getClip()
+      action.stop()
+      mixer.uncacheAction(clip, root)
+      action = undefined
     }
-
-    const currentPositions = captureActionPositions(action, root)
-    const clip = action.getClip()
-    action.stop()
-    mixer.uncacheAction(clip, root)
-    restorePositions(currentPositions)
-    action = undefined
     actionName = undefined
     actionLoop = undefined
     actionStartAt = undefined
@@ -266,17 +258,19 @@ export function createAvatarAnimationPlayer(root: Object3D): AvatarAnimationPlay
 }
 
 /** Resolves the default loop mode declared by the resource. */
-function resolveLoop(animation: ActiveAnimation, mode: AvatarAnimationMode): boolean {
-  return animation.loop ?? mode === 'animation'
+function resolveLoop(animation: ActiveAnimation, registration: RegisteredAnimation): boolean {
+  if (registration.arrivalRootMotion !== undefined) return false
+  return animation.loop ?? registration.mode === 'animation'
 }
 
-/** Compares two animation selections without serializing their native state. */
+/** Compares two logical selections without serializing native mixer state. */
 function sameAnimation(left: ActiveAnimation | null, right: ActiveAnimation | null): boolean {
   if (left === null || right === null) return left === right
   return left.name === right.name
     && left.startAt === right.startAt
     && left.speed === right.speed
     && left.loop === right.loop
+    && left.durationMs === right.durationMs
     && left.releaseAt === right.releaseAt
     && left.transitionMs === right.transitionMs
 }
@@ -292,170 +286,196 @@ function resolveSampleTime(elapsedSeconds: number, duration: number, loop: boole
   return loop ? elapsedSeconds % duration : Math.min(elapsedSeconds, duration)
 }
 
-/** Records each position track's model state before any animation is played. */
+/** Applies a scene-selected arrival easing to the complete clip clock. */
+function resolveClipTime(
+  registration: RegisteredAnimation,
+  elapsedSeconds: number,
+  loop: boolean,
+): number {
+  if (registration.mode === 'pose') return 0
+  const duration = registration.clip.duration
+  if (duration === 0) return 0
+  if (registration.arrivalRootMotion?.decelerate && !loop) {
+    const progress = clamp(elapsedSeconds / duration)
+    return easeOutQuadratic(progress) * duration
+  }
+  return resolveSampleTime(elapsedSeconds, duration, loop)
+}
+
+/** Resolves the clip-to-semantic hand-off progress at one timeline position. */
+function resolveHandoffAt(
+  animation: ActiveAnimation,
+  registration: RegisteredAnimation,
+  loop: boolean,
+): number | undefined {
+  const requested = animation.releaseAt
+  const natural = registration.mode === 'pose' || animation.speed <= 0
+    ? undefined
+    : animation.startAt + (registration.clip.duration * 1_000) / animation.speed
+  if (requested === undefined) {
+    if (animation.speed <= 0) return undefined
+    const durationMs = animation.durationMs
+      ?? (registration.mode === 'pose'
+        ? DEFAULT_POSE_DURATION_MS
+        : DEFAULT_ANIMATION_DURATION_MS)
+    const requestedEnd = animation.startAt + durationMs / animation.speed
+    if (!loop) return natural === undefined ? requestedEnd : Math.min(requestedEnd, natural)
+    return Math.max(requestedEnd, natural ?? requestedEnd)
+  }
+  if (natural === undefined) return requested
+  return Math.min(requested, natural)
+}
+
+/** Resolves the native TH entry transition from the current semantic pose. */
+function resolveEntryProgress(
+  registration: RegisteredAnimation,
+  animation: ActiveAnimation,
+  timeMs: number,
+): number | undefined {
+  const durationMs = registration.entryTransitionMs
+    ?? (registration.mode === 'pose'
+      ? DEFAULT_POSE_ENTRY_TRANSITION_MS
+      : DEFAULT_ANIMATION_ENTRY_TRANSITION_MS)
+  if (durationMs <= 0 || timeMs >= animation.startAt + durationMs) return undefined
+  return sampleTalkingHeadEasing((timeMs - animation.startAt) / durationMs)
+}
+
+/** Resolves the clip-to-semantic hand-off progress at one timeline position. */
+function resolveReleaseProgress(transitionMs: number | undefined, releaseAt: number, timeMs: number): number {
+  const durationMs = Math.max(0, transitionMs ?? DEFAULT_RELEASE_TRANSITION_MS)
+  if (durationMs === 0) return 1
+  const linear = clamp((timeMs - releaseAt) / durationMs)
+  return easeOutQuadratic(linear)
+}
+
+/** Eases toward the destination without tripling the initial sample rate. */
+function easeOutQuadratic(progress: number): number {
+  return 1 - Math.pow(1 - progress, 2)
+}
+
+/** Samples the presentation offset for an arrival clip at the same absolute date as its pose. */
+function resolveRootMotionOffset(
+  registration: RegisteredAnimation,
+  animation: ActiveAnimation,
+  timeMs: number,
+  loop: boolean,
+): AvatarVector3 | undefined {
+  const rootMotion = registration.arrivalRootMotion
+  if (rootMotion === undefined) return undefined
+  const elapsedSeconds = getElapsedSeconds(animation, timeMs)
+  const sampleTime = resolveClipTime(registration, elapsedSeconds, loop)
+  return rootMotion.offsetAt(sampleTime)
+}
+
+/** Records each position track's model state before any animation is sampled. */
 function capturePositionBaselines(
   root: Object3D,
   clip: AnimationClip,
-  baselines: Map<Object3D, PositionValue>,
+  baselines: Map<Object3D, AvatarVector3>,
 ): void {
   for (const track of clip.tracks) {
     const target = resolveTransformTarget(root, track.name, 'position')
     if (target === null || baselines.has(target)) continue
-    baselines.set(target, readPosition(target))
+    baselines.set(target, readVector(target.position))
   }
 }
 
-/** Creates a clip whose position tracks begin at the selected model location. */
+/** Creates a clip whose position tracks start from the selected Avatar location. */
 function createRelativePositionClip(
   source: AnimationClip,
   root: Object3D,
-  anchors?: ReadonlyMap<Object3D, PositionValue>,
+  anchors: ReadonlyMap<Object3D, AvatarVector3>,
 ): AnimationClip {
   const clip = source.clone()
   for (const track of clip.tracks) {
     const target = resolveTransformTarget(root, track.name, 'position')
     if (target === null || track.getValueSize() !== 3) continue
-
-    const values = track.values
-    const anchor = anchors?.get(target) ?? readPosition(target)
+    const anchor = anchors.get(target) ?? readVector(target.position)
     const offset = {
-      x: anchor.x - (values[0] ?? 0),
-      y: anchor.y - (values[1] ?? 0),
-      z: anchor.z - (values[2] ?? 0),
+      x: anchor.x - (track.values[0] ?? 0),
+      y: anchor.y - (track.values[1] ?? 0),
+      z: anchor.z - (track.values[2] ?? 0),
     }
-    for (let index = 0; index < values.length; index += 3) {
-      values[index] = (values[index] ?? 0) + offset.x
-      values[index + 1] = (values[index + 1] ?? 0) + offset.y
-      values[index + 2] = (values[index + 2] ?? 0) + offset.z
+    for (let index = 0; index < track.values.length; index += 3) {
+      track.values[index] = (track.values[index] ?? 0) + offset.x
+      track.values[index + 1] = (track.values[index + 1] ?? 0) + offset.y
+      track.values[index + 2] = (track.values[index + 2] ?? 0) + offset.z
     }
   }
   return clip
 }
 
-/** Captures all transform properties written by one clip at the current time. */
-function captureTransformSnapshot(clip: AnimationClip, root: Object3D): TransformSnapshot {
-  const values = new Map<Object3D, TransformValue>()
+/** Captures transform channels currently written by one clip. */
+function captureTransformSnapshot(clip: AnimationClip, root: Object3D): AvatarPose {
+  const result = new Map<Object3D, AvatarPoseTransform>()
   for (const track of clip.tracks) {
     const property = resolveTransformProperty(track.name)
     if (property === null) continue
     const target = resolveTransformTarget(root, track.name, property)
     if (target === null) continue
-
-    const current = values.get(target) ?? {}
-    if (property === 'position') current.position = readPosition(target)
-    if (property === 'quaternion') current.quaternion = readQuaternion(target)
-    if (property === 'scale') current.scale = readScale(target)
-    values.set(target, current)
+    const current: MutablePoseTransform = { ...(result.get(target) ?? {}) }
+    if (property === 'position') current.position = readVector(target.position)
+    if (property === 'quaternion' || property === 'rotation') current.quaternion = readQuaternion(target)
+    if (property === 'scale') current.scale = readVector(target.scale)
+    result.set(target, current)
   }
-  return values
+  return result
 }
 
-/** Resolves the supported local transform property from one track name. */
-function resolveTransformProperty(trackName: string): 'position' | 'quaternion' | 'scale' | null {
+/** Restores the semantic transforms temporarily replaced while sampling the mixer. */
+function restoreTransforms(snapshot: AvatarPose): void {
+  for (const [target, transform] of snapshot) {
+    if (transform.position !== undefined) {
+      target.position.set(transform.position.x, transform.position.y, transform.position.z)
+    }
+    if (transform.quaternion !== undefined) {
+      target.quaternion.set(
+        transform.quaternion.x,
+        transform.quaternion.y,
+        transform.quaternion.z,
+        transform.quaternion.w,
+      )
+    }
+    if (transform.scale !== undefined) {
+      target.scale.set(transform.scale.x, transform.scale.y, transform.scale.z)
+    }
+  }
+}
+
+/** Restores deterministic position baselines before a seek replay. */
+function restorePositions(positions: ReadonlyMap<Object3D, AvatarVector3>): void {
+  for (const [target, position] of positions) {
+    target.position.set(position.x, position.y, position.z)
+  }
+}
+
+/** Resolves the supported transform channel named by one Three.js track. */
+function resolveTransformProperty(trackName: string): AvatarTransformProperty | null {
   if (trackName.endsWith('.position')) return 'position'
   if (trackName.endsWith('.quaternion')) return 'quaternion'
+  if (trackName.endsWith('.rotation')) return 'rotation'
   if (trackName.endsWith('.scale')) return 'scale'
   return null
 }
 
-/** Resolves one named Three object for a supported transform property. */
+/** Resolves one named Three object for a supported local transform track. */
 function resolveTransformTarget(
   root: Object3D,
   trackName: string,
-  property: 'position' | 'quaternion' | 'scale',
+  property: AvatarTransformProperty,
 ): Object3D | null {
   if (!trackName.endsWith(`.${property}`)) return null
-  const targetName = trackName.slice(0, -`.${property}`.length)
-  return root.getObjectByName(targetName) ?? null
+  const name = trackName.slice(0, -`.${property}`.length)
+  return root.getObjectByName(name) ?? null
 }
 
-/** Captures the current positions touched by the animation being stopped. */
-function captureActionPositions(action: AnimationAction, root: Object3D): Map<Object3D, PositionValue> {
-  const positions = new Map<Object3D, PositionValue>()
-  for (const track of action.getClip().tracks) {
-    const target = resolveTransformTarget(root, track.name, 'position')
-    if (target !== null && !positions.has(target)) positions.set(target, readPosition(target))
-  }
-  return positions
+/** Reads an immutable three-axis value from a native vector. */
+function readVector(value: Readonly<{ x: number; y: number; z: number }>): AvatarVector3 {
+  return { x: value.x, y: value.y, z: value.z }
 }
 
-/** Applies the translations captured at the release boundary. */
-function applyReleaseTranslation(snapshot: TransformSnapshot): void {
-  for (const [target, value] of snapshot) {
-    if (value.position !== undefined) target.position.set(value.position.x, value.position.y, value.position.z)
-  }
-}
-
-/** Interpolates rotations and scales from the clip pose to the semantic pose. */
-function interpolateReleaseRotation(
-  source: TransformSnapshot,
-  destination: TransformSnapshot,
-  progress: number,
-): void {
-  const sourceQuaternion = new Quaternion()
-  const destinationQuaternion = new Quaternion()
-  for (const [target, sourceValue] of source) {
-    const destinationValue = destination.get(target)
-    if (sourceValue.quaternion !== undefined) {
-      sourceQuaternion.set(
-        sourceValue.quaternion.x,
-        sourceValue.quaternion.y,
-        sourceValue.quaternion.z,
-        sourceValue.quaternion.w,
-      )
-      const destinationValueQuaternion = destinationValue?.quaternion
-      if (destinationValueQuaternion !== undefined) {
-        destinationQuaternion.set(
-          destinationValueQuaternion.x,
-          destinationValueQuaternion.y,
-          destinationValueQuaternion.z,
-          destinationValueQuaternion.w,
-        )
-        target.quaternion.slerpQuaternions(
-          sourceQuaternion,
-          destinationQuaternion,
-          progress,
-        )
-      } else {
-        target.quaternion.copy(sourceQuaternion)
-      }
-    }
-    if (sourceValue.scale !== undefined) {
-      const destinationScale = destinationValue?.scale
-      if (destinationScale === undefined) {
-        target.scale.set(sourceValue.scale.x, sourceValue.scale.y, sourceValue.scale.z)
-      } else {
-        target.scale.set(
-          lerp(sourceValue.scale.x, destinationScale.x, progress),
-          lerp(sourceValue.scale.y, destinationScale.y, progress),
-          lerp(sourceValue.scale.z, destinationScale.z, progress),
-        )
-      }
-    }
-  }
-}
-
-/** Restores positions after Three.js releases an animation binding. */
-function restorePositions(positions: ReadonlyMap<Object3D, PositionValue>): void {
-  for (const [target, position] of positions) target.position.set(position.x, position.y, position.z)
-}
-
-/** Restores the model positions used as deterministic seek origins. */
-function restorePositionBaselines(baselines: ReadonlyMap<Object3D, PositionValue>): void {
-  restorePositions(baselines)
-}
-
-/** Reads one local Three.js position without retaining a mutable vector. */
-function readPosition(target: Object3D): PositionValue {
-  return {
-    x: target.position.x,
-    y: target.position.y,
-    z: target.position.z,
-  }
-}
-
-/** Reads one local Three.js quaternion without retaining a mutable object. */
-function readQuaternion(target: Object3D): QuaternionValue {
+/** Reads an immutable quaternion from one native Three object. */
+function readQuaternion(target: Object3D): Readonly<{ x: number; y: number; z: number; w: number }> {
   return {
     x: target.quaternion.x,
     y: target.quaternion.y,
@@ -464,27 +484,7 @@ function readQuaternion(target: Object3D): QuaternionValue {
   }
 }
 
-/** Reads one local Three.js scale without retaining a mutable vector. */
-function readScale(target: Object3D): PositionValue {
-  return {
-    x: target.scale.x,
-    y: target.scale.y,
-    z: target.scale.z,
-  }
-}
-
-/** Clamps one transition progress value to its valid interval. */
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value))
-}
-
-/** Applies the requested fast-start, slow-end transition curve. */
-function easeOutCubic(progress: number): number {
-  const remaining = 1 - progress
-  return 1 - remaining * remaining * remaining
-}
-
-/** Interpolates two scalar transform values. */
-function lerp(start: number, end: number, progress: number): number {
-  return start + (end - start) * progress
+/** Clamps one normalized interpolation factor. */
+function clamp(value: number): number {
+  return Math.max(0, Math.min(1, value))
 }

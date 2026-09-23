@@ -16,43 +16,25 @@
  * Attribution: morph discovery logic derived from TalkingHead by Mika Suominen (met4citizen), MIT.
  * Source: https://github.com/met4citizen/TalkingHead
  */
-import type { Group, Object3D } from 'three'
+import { Float32BufferAttribute } from 'three'
+import type { AnimationClip, BufferAttribute, Group, Object3D } from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { MorphEngine } from '../morph/morph-engine.js'
-import { BONE_MORPH_NAMES } from '../morph/morph-engine.js'
+import { BONE_MORPH_NAMES, TH_MIXED_MORPHS } from '../morph/morph-engine.js'
 import { retarget } from './retargeter.js'
-import type { RetargetConfig } from './retargeter.js'
+import type { LoadedModel, ModelLoaderOptions } from '../avatar-types.js'
 
-export type ModelLoaderOptions = {
-  /**
-   * Prefix stripped from raw morph target names in the GLB.
-   * ReadyPlayerMe models: "Wolf3D_Head_" or "Wolf3D_Teeth_"
-   * Pure ARKIT models: "" (no prefix)
-   *
-   * The strip regex removes all characters up to and including
-   * the matched prefix: e.g. "Wolf3D_Head_mouthSmileLeft" → "mouthSmileLeft".
-   * If morphs are already in ARKit format, leave undefined or "".
-   */
-  morphPrefix?: string | RegExp
-  /**
-   * Mixamo retarget config applied after loading (bone adjustments + scale + origin).
-   * See RetargetConfig for the full shape. Example:
-   *   { Neck: { z: -0.01, rx: -0.15 }, scaleToEyesLevel: 1.0, origin: { y: -0.1 } }
-   */
-  retarget?: RetargetConfig
-}
-
-export type { RetargetConfig }
-
-export type LoadedModel = {
-  /** Root Three.js group (GLTF scene). */
-  scene: Group
-  /** Skeleton root (first bone found). */
-  armature: Object3D | null
-  /** Morph names found in the model (canonical, after prefix strip). */
-  morphNames: string[]
-  /** All named nodes in the scene, keyed by node name. */
-  boneMap: Map<string, Object3D>
+type MorphMesh = Object3D & {
+  isSkinnedMesh?: boolean
+  frustumCulled?: boolean
+  geometry?: {
+    morphAttributes: {
+      position?: BufferAttribute[]
+      normal?: BufferAttribute[]
+    }
+  }
+  morphTargetDictionary?: Record<string, number>
+  morphTargetInfluences?: number[]
 }
 
 function stripPrefix(name: string, prefix: string | RegExp | undefined): string {
@@ -80,44 +62,37 @@ export async function buildModelInstance(
   opts: ModelLoaderOptions = {},
 ): Promise<LoadedModel> {
   const loader = new GLTFLoader()
-  const gltf = await new Promise<{ scene: Group }>((resolve, reject) => {
+  const gltf = await new Promise<{ scene: Group; animations: readonly AnimationClip[] }>((resolve, reject) => {
     loader.parse(buffer, '', resolve, reject)
   })
   const scene = gltf.scene
 
-  let armature: Object3D | null = null
+  let detectedArmature: Object3D | null = null
   const morphNames = new Set<string>()
   const boneMap = new Map<string, Object3D>()
+  const morphMeshes: MorphMesh[] = []
 
   scene.traverse((node: Object3D) => {
     if (node.name) boneMap.set(node.name, node)
+    // TalkingHead disables culling for every model node so animated parts are
+    // not dropped when a pose moves them outside their bind-pose bounds.
+    node.frustumCulled = false
     // Find skeleton root (first Bone or Object3D named "Armature")
-    if (!armature) {
+    if (!detectedArmature) {
       const asAny = node as { isBone?: boolean }
       if (asAny.isBone || node.name.toLowerCase() === 'armature') {
-        armature = node
+        detectedArmature = node
       }
     }
 
     // Register morph targets from SkinnedMesh
-    const mesh = node as {
-      isSkinnedMesh?: boolean
-      frustumCulled?: boolean
-      morphTargetDictionary?: Record<string, number>
-      morphTargetInfluences?: number[]
-    }
-
-    if (!mesh.isSkinnedMesh) {
-      return
-    }
-
-    // Skinned mesh bounds are static in Three.js; animated limbs can otherwise
-    // disappear when gestures move hands outside the initial bounding volume.
-    mesh.frustumCulled = false
+    const mesh = node as MorphMesh
 
     if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) {
       return
     }
+
+    morphMeshes.push(mesh)
 
     const influences = mesh.morphTargetInfluences
 
@@ -132,14 +107,112 @@ export async function buildModelInstance(
     }
   })
 
+  registerTalkingHeadMixedMorphs(morphMeshes, engine, morphNames, opts.morphPrefix)
+
   if (opts.retarget) {
     retarget(scene, opts.retarget)
   }
 
   return {
     scene,
-    armature,
+    armature: opts.modelRoot === undefined
+      ? detectedArmature
+      : scene.getObjectByName(opts.modelRoot) ?? detectedArmature,
     morphNames: Array.from(morphNames),
     boneMap,
+    animations: gltf.animations,
   }
+}
+
+/** Adds the ARKit convenience shapes that TalkingHead synthesizes per model. */
+function registerTalkingHeadMixedMorphs(
+  meshes: readonly MorphMesh[],
+  engine: MorphEngine,
+  morphNames: Set<string>,
+  morphPrefix: string | RegExp | undefined,
+): void {
+  for (const [name, sources] of Object.entries(TH_MIXED_MORPHS)) {
+    for (const mesh of meshes) {
+      const index = addMixedMorphTarget(mesh, name, sources, morphPrefix)
+      if (index === undefined || mesh.morphTargetInfluences === undefined) continue
+      engine.registerBlendMorph(name, { influences: mesh.morphTargetInfluences, index })
+      morphNames.add(name)
+    }
+  }
+}
+
+/** Creates one relative Three.js morph target from the available source shapes. */
+export function addMixedMorphTarget(
+  mesh: MorphMesh,
+  name: string,
+  sources: Readonly<Record<string, number>>,
+  morphPrefix?: string | RegExp,
+): number | undefined {
+  const dictionary = mesh.morphTargetDictionary
+  const geometry = mesh.geometry
+  if (
+    dictionary === undefined
+    || geometry === undefined
+    || resolveMorphIndex(dictionary, name, morphPrefix) !== undefined
+  ) return undefined
+
+  const positions = geometry.morphAttributes.position
+  if (positions === undefined) return undefined
+
+  let mixedPosition: Float32BufferAttribute | undefined
+  let mixedNormal: Float32BufferAttribute | undefined
+  for (const [sourceName, factor] of Object.entries(sources)) {
+    const sourceIndex = resolveMorphIndex(dictionary, sourceName, morphPrefix)
+    const position = sourceIndex === undefined ? undefined : positions[sourceIndex]
+    if (position === undefined) continue
+
+    mixedPosition ??= new Float32BufferAttribute(position.count * 3, 3)
+    for (let index = 0; index < position.count; index += 1) {
+      mixedPosition.setXYZ(
+        index,
+        mixedPosition.getX(index) + position.getX(index) * factor,
+        mixedPosition.getY(index) + position.getY(index) * factor,
+        mixedPosition.getZ(index) + position.getZ(index) * factor,
+      )
+    }
+
+    const normal = sourceIndex === undefined
+      ? undefined
+      : geometry.morphAttributes.normal?.[sourceIndex]
+    if (normal !== undefined) {
+      mixedNormal ??= new Float32BufferAttribute(normal.count * 3, 3)
+      for (let index = 0; index < normal.count; index += 1) {
+        mixedNormal.setXYZ(
+          index,
+          mixedNormal.getX(index) + normal.getX(index) * factor,
+          mixedNormal.getY(index) + normal.getY(index) * factor,
+          mixedNormal.getZ(index) + normal.getZ(index) * factor,
+        )
+      }
+    }
+  }
+
+  if (mixedPosition === undefined || mesh.morphTargetInfluences === undefined) return undefined
+  positions.push(mixedPosition)
+  if (mixedNormal !== undefined) geometry.morphAttributes.normal?.push(mixedNormal)
+  const index = positions.length - 1
+  mesh.morphTargetInfluences[index] = 0
+  dictionary[name] = index
+  return index
+}
+
+/** Finds one canonical morph in a Three.js dictionary, including prefixed names. */
+function resolveMorphIndex(
+  dictionary: Readonly<Record<string, number>>,
+  canonicalName: string,
+  morphPrefix: string | RegExp | undefined,
+): number | undefined {
+  const direct = dictionary[canonicalName]
+  if (direct !== undefined) return direct
+
+  for (const [rawName, index] of Object.entries(dictionary)) {
+    if (stripPrefix(rawName, morphPrefix) === canonicalName) return index
+  }
+
+  return undefined
 }

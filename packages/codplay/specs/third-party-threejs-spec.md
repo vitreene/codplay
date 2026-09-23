@@ -98,9 +98,17 @@ les matrices correspondant à `t` ; le test vérifie qu'une autre valeur de `t`
 produit une autre pose et que le même `t` la reproduit.
 
 L’hôte enregistre une animation de présentation persistante en phase
-`commit`. Le runtime applique d’abord les animations de contenu, puis cette
-phase finale de l’hôte. Le rendu utilise donc la pose que les consommateurs
-ont effectivement écrite pour la frame courante, y compris après un Seek.
+`commit`. Le runtime applique d’abord les animations de contenu, puis le rendu
+utilise l’état natif que les consommateurs ont écrit pour la frame courante.
+
+Une capacité composite comme Avatar reste du côté composant : ses capacités
+spécialisées peuvent préparer des timelines absolues, mais elles ne présentent
+pas chacune leur propre animation et n'écrivent pas l'engine pendant
+`update()`. Un seul flux de contenu rattaché à l'hôte échantillonne ces
+contributions, reconstruit l'état lors d'un seek, puis effectue la composition
+Three dans le passage du ticker CodPlay. Une resynchronisation au même temps
+logique est également traitée comme une reconstruction, afin qu'une première
+présentation provisoire ne puisse pas laisser une couche précédente en place.
 
 Le même calcul est donc utilisé par Play et Seek. La grille possède et libère
 sa géométrie, son matériau et son `InstancedMesh`. L’hôte possède et libère le

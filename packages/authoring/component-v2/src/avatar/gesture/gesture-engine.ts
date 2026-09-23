@@ -1,337 +1,679 @@
 /**
- * Gesture behavior — applies body poses and gesture overrides with easing.
+ * Gesture behavior — resolves body poses and gesture transitions at absolute time.
  *
- * The pose and gesture catalogs live in gesture-definitions.ts. This module
- * only owns the mutable state and the operations that consume those catalogs.
+ * This module never writes a Three.js bone. AvatarPoseComposer owns that final
+ * write after it has combined the semantic pose with a native animation clip.
  */
 import { Euler, Quaternion } from 'three'
 import type { Object3D } from 'three'
-import { GESTURE_TEMPLATES, POSE_TEMPLATES } from './gesture-definitions.js'
-import type { RotationValue } from './gesture-definitions.js'
-import type { AvatarGestureOverlay } from './motion-catalog.js'
+import {
+  GESTURE_TEMPLATES,
+  POSE_FLAGS,
+  POSE_TEMPLATES,
+} from './gesture-definitions.js'
+import type {
+  AvatarGestureOverlay,
+  AvatarHandTarget,
+  AvatarPose,
+  AvatarPoseDelta,
+  AvatarPoseFlags,
+  AvatarPoseTransform,
+  AvatarVector3,
+  Rng,
+  ResolvedPose,
+  RotationValue,
+  TalkingHandsOptions,
+} from '../avatar-types.js'
+import {
+  TalkingHandsPlanner,
+} from './talking-hands.js'
+import { sampleTalkingHeadEasing } from '../avatar-easing.js'
 
-/** Minimal PRNG interface — provide a seeded instance. */
-export type Rng = { random(): number }
-
-/** Resolved pose: boneName → resolved Euler angles plus optional position deltas. */
-export type ResolvedPose = Map<string, { x: number; y: number; z: number; px?: number; py?: number; pz?: number }>
-
-type BoneState = {
+type BoneState = Readonly<{
   bone: Object3D
-  /** Rest rotation captured at construction (post-retarget). */
-  rx: number; ry: number; rz: number
-  /** Rest position captured at construction (post-retarget). */
-  px: number; py: number; pz: number
-  /** Current body-pose baseline. Gestures release back to these values. */
-  bx: number; by: number; bz: number
-  /** Current eased rotation (written to bone.rotation). */
-  x: number; y: number; z: number
-  /** Target rotation. */
-  tx: number; ty: number; tz: number
-  /**
-   * An axis becomes gesture-owned the first time some template defines it for
-   * this bone. Unowned axes stay with the morph binding, such as Head/Neck
-   * x/y driven by head drift and gaze.
-   */
-  poseX: boolean; poseY: boolean; poseZ: boolean
-  gestureX: boolean; gestureY: boolean; gestureZ: boolean
-}
+  restPosition: AvatarVector3
+  restScale: AvatarVector3
+  restRotation: Readonly<{ x: number; y: number; z: number }>
+}>
 
-// RC-filter easing: tau ≈ 330 ms → ~95 % of target reached in ~1 s.
-const GESTURE_EASE = 0.003
+type BoneAngles = Readonly<{
+  x?: number
+  y?: number
+  z?: number
+  px?: number
+  py?: number
+  pz?: number
+}>
 
-/** Samples a rotation value using TalkingHead's random-distribution shape. */
+type PoseTransition = Readonly<{
+  startAt: number
+  durationMs: number
+  source: AvatarPose
+  target: AvatarPose
+  intermediate?: Readonly<{
+    pose: AvatarPose
+    durationMs: number
+  }>
+}>
+
+type GestureTransition = PoseTransition & Readonly<{
+  bones: ReadonlySet<Object3D>
+}>
+
+const DEFAULT_GESTURE_TRANSITION_MS = 1_000
+const DEFAULT_POSE_TRANSITION_MS = 2_000
+const INTERMEDIATE_POSE_TRANSITION_MS = 1_000
+const MOVEMENT_LIMITED_BONES = new Set([
+  'Hips', 'Spine', 'Spine1', 'Spine2', 'Neck',
+  'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg',
+])
+
+/** Samples a rotation value using TalkingHead's deterministic range shape. */
 function sampleValue(value: RotationValue, rng: Rng): number {
   if (typeof value === 'number') return value
-  const [min, max, skewFrom, skewTo] = value.length === 4
-    ? value
-    : [value[0], value[1], 1, 1]
-  const random = rng.random()
-  const power = skewFrom + (skewTo - skewFrom) * random
-  return min + (max - min) * Math.pow(random, 1 / Math.max(0.001, power))
+  const min = value[0] ?? 0
+  const max = value[1] ?? min
+  const skew = value.length >= 3 ? value[2] ?? 1 : 1
+  const samples = Math.max(1, Math.round(value.length >= 4 ? value[3] ?? 5 : 5))
+  let total = 0
+  for (let index = 0; index < samples; index += 1) total += rng.random()
+  return min + Math.pow(total / samples, skew) * (max - min)
 }
 
-/** Returns the active baseline value for one axis. */
-function baseX(state: BoneState): number { return state.poseX ? state.bx : state.rx }
-function baseY(state: BoneState): number { return state.poseY ? state.by : state.ry }
-function baseZ(state: BoneState): number { return state.poseZ ? state.bz : state.rz }
-
+/** Resolves semantic body and hand poses without taking ownership of Three bones. */
 export class GestureEngine {
   private readonly state = new Map<string, BoneState>()
+  private bodyPose = new Map<string, BoneAngles>()
+  private gesturePose = new Map<string, BoneAngles>()
+  private overlay: AvatarPoseDelta = new Map()
+  private readonly talkingHands: TalkingHandsPlanner
+  private explicitHandTargets: readonly AvatarHandTarget[] = []
+  private talkingHandsOptions: TalkingHandsOptions = {
+    enabled: false,
+    probability: 0.5,
+    seed: 0,
+  }
+  private bodyTransition: PoseTransition | null = null
+  private gestureTransition: GestureTransition | null = null
+  private bodyPoseName = 'neutral'
+  private readonly modelMovementFactor: number
 
-  /** Captures the model rest state used by pose and gesture transitions. */
-  constructor(boneMap: Map<string, Object3D>) {
+  /** Captures the model and the TH standing-motion restraint used by its poses. */
+  constructor(boneMap: ReadonlyMap<string, Object3D>, modelMovementFactor = 1) {
+    this.modelMovementFactor = clamp(modelMovementFactor)
+    this.talkingHands = new TalkingHandsPlanner(boneMap)
     for (const [name, bone] of boneMap) {
-      const { x, y, z } = bone.rotation as Euler
-      const position = bone.position
       this.state.set(name, {
         bone,
-        rx: x,
-        ry: y,
-        rz: z,
-        px: position.x,
-        py: position.y,
-        pz: position.z,
-        bx: x,
-        by: y,
-        bz: z,
-        x,
-        y,
-        z,
-        tx: x,
-        ty: y,
-        tz: z,
-        poseX: false,
-        poseY: false,
-        poseZ: false,
-        gestureX: false,
-        gestureY: false,
-        gestureZ: false,
+        restPosition: readVector(bone.position),
+        restScale: readVector(bone.scale),
+        restRotation: {
+          x: bone.rotation.x,
+          y: bone.rotation.y,
+          z: bone.rotation.z,
+        },
       })
     }
   }
 
-  /** Advances easing without touching axes owned by the morph binding. */
-  update(deltaMs: number): void {
-    const alpha = 1 - Math.exp(-GESTURE_EASE * deltaMs)
-    for (const state of this.state.values()) {
-      if (!hasActiveAxis(state)) continue
-      const rotation = state.bone.rotation as Euler
-      if (state.poseX || state.gestureX) {
-        state.x = approach(state.x, state.tx, alpha)
-        rotation.x = state.x
-      }
-      if (state.poseY || state.gestureY) {
-        state.y = approach(state.y, state.ty, alpha)
-        rotation.y = state.y
-      }
-      if (state.poseZ || state.gestureZ) {
-        state.z = approach(state.z, state.tz, alpha)
-        rotation.z = state.z
-      }
-    }
-  }
-
-  /** Starts an eased transition to a named body-pose baseline. */
-  setBodyPose(name: string): boolean {
+  /** Starts a semantic body-pose transition at one absolute timeline position. */
+  setBodyPose(name: string, startAt = 0, durationMs = DEFAULT_POSE_TRANSITION_MS): boolean {
     const template = POSE_TEMPLATES[name]
-    if (!template) return false
-
-    this.releaseBodyPoseAxes()
-    for (const [key, boneRotation] of Object.entries(template)) {
-      const target = this.state.get(boneNameFromKey(key))
-      if (target === undefined || propertyFromKey(key) !== 'rotation') continue
-      if (boneRotation.x !== undefined) this.setPoseAxis(target, 'x', boneRotation.x)
-      if (boneRotation.y !== undefined) this.setPoseAxis(target, 'y', boneRotation.y)
-      if (boneRotation.z !== undefined) this.setPoseAxis(target, 'z', boneRotation.z)
-    }
+    if (template === undefined) return false
+    const source = this.sampleAt(startAt)
+    const flags = POSE_FLAGS[name]
+    const previousFlags = POSE_FLAGS[this.bodyPoseName]
+    this.bodyPose = resolveTemplate(template, this.state, { random: () => 0.5 }, false, flags, this.modelMovementFactor)
+    const target = this.buildBodyPose()
+    const intermediate = isStandingLyingChange(previousFlags, flags)
+      ? resolveIntermediatePose(this.state, this.modelMovementFactor)
+      : undefined
+    this.bodyTransition = createTransition(source, target, startAt, durationMs, intermediate)
+    this.bodyPoseName = name
+    this.retargetGestureTransition(target)
     return true
   }
 
-  /** Snaps active body-pose axes to their current baseline. */
-  snapToBodyPose(): void {
-    for (const state of this.state.values()) {
-      const rotation = state.bone.rotation as Euler
-      if (state.poseX && !state.gestureX) {
-        state.x = state.bx; state.tx = state.bx; rotation.x = state.bx
-      }
-      if (state.poseY && !state.gestureY) {
-        state.y = state.by; state.ty = state.by; rotation.y = state.by
-      }
-      if (state.poseZ && !state.gestureZ) {
-        state.z = state.bz; state.tz = state.bz; rotation.z = state.bz
-      }
-    }
-  }
-
-  /** Applies a fully resolved semantic pose without easing. */
-  applyResolvedSemanticPose(pose: ResolvedPose): void {
-    for (const [boneName, state] of this.state) {
-      const target = pose.get(boneName)
-      const rotation = state.bone.rotation as Euler
-      if (target !== undefined) {
-        applyResolvedAxis(state, 'x', target.x, rotation)
-        applyResolvedAxis(state, 'y', target.y, rotation)
-        applyResolvedAxis(state, 'z', target.z, rotation)
-        state.bone.position.x = state.px + (target.px ?? 0)
-        state.bone.position.y = state.py + (target.py ?? 0)
-        state.bone.position.z = state.pz + (target.pz ?? 0)
-        continue
-      }
-      if (!hasActiveAxis(state)) continue
-      resetState(state, rotation)
-    }
-  }
-
-  /** Starts an eased transition to a named gesture and returns its resolved pose. */
-  applyGesture(name: string, rng: Rng, mirror = false): ResolvedPose | null {
+  /** Starts a gesture transition and returns the target pose used by that transition. */
+  applyGesture(
+    name: string,
+    rng: Rng,
+    mirror = false,
+    startAt = 0,
+    durationMs = DEFAULT_GESTURE_TRANSITION_MS,
+  ): ResolvedPose | null {
     const template = GESTURE_TEMPLATES[name]
-    if (!template) return null
-
-    this.releaseGestureAxes()
-    const pose: ResolvedPose = new Map()
-    for (const [key, boneRotation] of Object.entries(template)) {
-      const sourceBoneName = boneNameFromKey(key)
-      const boneName = mirror ? mirrorBoneName(sourceBoneName) : sourceBoneName
-      const state = this.state.get(boneName)
-      if (state === undefined || propertyFromKey(key) !== 'rotation') continue
-
-      const x = boneRotation.x === undefined ? baseX(state) : sampleValue(boneRotation.x, rng)
-      const y = boneRotation.y === undefined ? baseY(state) : sampleValue(boneRotation.y, rng)
-      const z = boneRotation.z === undefined ? baseZ(state) : sampleValue(boneRotation.z, rng)
-      const target = mirror ? mirrorRotation(x, y, z, state.bone.rotation.order) : { x, y, z }
-      pose.set(boneName, target)
-      if (boneRotation.x !== undefined) { state.gestureX = true; state.tx = target.x }
-      if (boneRotation.y !== undefined) { state.gestureY = true; state.ty = target.y }
-      if (boneRotation.z !== undefined) { state.gestureZ = true; state.tz = target.z }
+    if (template === undefined) return null
+    const source = this.sampleAt(startAt)
+    const affectedBones = this.currentGestureBones()
+    this.gesturePose = resolveTemplate(template, this.state, rng, mirror)
+    for (const name of this.gesturePose.keys()) {
+      const bone = this.state.get(name)?.bone
+      if (bone !== undefined) affectedBones.add(bone)
     }
-    return pose
+    const target = this.buildTargetPose()
+    this.gestureTransition = createGestureTransition(
+      source,
+      target,
+      startAt,
+      durationMs,
+      affectedBones,
+    )
+    return target
   }
 
-  /** Applies one sampled procedural overlay on top of the current gesture pose. */
-  applyOverlay(overlay: AvatarGestureOverlay | null, scale = 1): void {
-    if (overlay === null) return
-    for (const [boneName, delta] of Object.entries(overlay)) {
-      const bone = this.state.get(boneName)?.bone
+  /** Starts the return from the selected gesture to the current body pose. */
+  releaseGesture(
+    startAt = 0,
+    durationMs = DEFAULT_GESTURE_TRANSITION_MS,
+  ): void {
+    const source = this.sampleAt(startAt)
+    const affectedBones = this.currentGestureBones()
+    this.gesturePose = new Map()
+    if (affectedBones.size === 0) {
+      this.gestureTransition = null
+      return
+    }
+    this.gestureTransition = createGestureTransition(
+      source,
+      this.buildBodyPose(),
+      startAt,
+      durationMs,
+      affectedBones,
+    )
+  }
+
+  /** Stores the procedural overlay contributed by the current semantic motion frame. */
+  setOverlay(overlay: AvatarGestureOverlay | null): void {
+    const result = new Map<Object3D, {
+      rotation?: AvatarVector3
+      position?: AvatarVector3
+    }>()
+    for (const [name, value] of Object.entries(overlay ?? {})) {
+      const bone = this.state.get(name)?.bone
       if (bone === undefined) continue
-      if (delta.rotation !== undefined) {
-        bone.rotation.x += delta.rotation.x * scale
-        bone.rotation.y += delta.rotation.y * scale
-        bone.rotation.z += delta.rotation.z * scale
-      }
-      if (delta.position !== undefined) {
-        bone.position.x += delta.position.x * scale
-        bone.position.y += delta.position.y * scale
-        bone.position.z += delta.position.z * scale
-      }
+      result.set(bone, {
+        ...(value.rotation === undefined ? {} : { rotation: { ...value.rotation } }),
+        ...(value.position === undefined ? {} : { position: { ...value.position } }),
+      })
     }
+    this.overlay = result
   }
 
-  /** Starts the eased return of active gesture axes to their baselines. */
-  resetPose(): void {
-    this.releaseGestureAxes()
+  /** Selects the internal TalkingHead speaking-hands behavior. */
+  setTalkingHands(options: TalkingHandsOptions): void {
+    this.talkingHandsOptions = { ...options }
   }
 
-  /** Replays a resolved gesture instantly after a seek. */
-  applyPose(pose: ResolvedPose): void {
-    for (const [boneName, target] of pose) {
-      const state = this.state.get(boneName)
+  /** Stores the explicit hand IK tasks emitted by the active Avatar motion. */
+  setExplicitHandTargets(targets: readonly AvatarHandTarget[]): void {
+    this.explicitHandTargets = targets.map((target) => ({
+      ...target,
+      position: { ...target.position },
+    }))
+  }
+
+  /** Resolves the semantic skeletal pose at one absolute timeline position. */
+  sampleAt(timeMs: number): AvatarPose {
+    const body = this.bodyTransition === null
+      ? this.buildBodyPose()
+      : sampleTransition(this.bodyTransition, timeMs)
+    const gesture = this.gestureTransition
+    if (gesture === null) return body
+
+    const result = clonePose(body)
+    const sampledGesture = sampleTransition(gesture, timeMs)
+    for (const bone of gesture.bones) {
+      const transform = sampledGesture.get(bone)
+      if (transform !== undefined) result.set(bone, cloneTransform(transform))
+    }
+    return result
+  }
+
+  /** Returns procedural bone deltas while optionally suspending speaking hands. */
+  getOverlay(timeMs = 0, pose?: AvatarPose, suspendTalkingHands = false): AvatarPoseDelta {
+    const sampledPose = pose ?? this.sampleAt(timeMs)
+    const speakingHands = !suspendTalkingHands
+      && this.bodyPoseNameIsStanding()
+      && this.gesturePose.size === 0
+      ? this.talkingHands.sample(timeMs, sampledPose, this.talkingHandsOptions)
+      : new Map()
+    const explicitHands = this.talkingHands.sampleExplicitTargets(
+      timeMs,
+      sampledPose,
+      this.explicitHandTargets,
+    )
+    return mergePoseDeltas(this.overlay, mergePoseDeltas(speakingHands, explicitHands))
+  }
+
+  /** Clears transient semantic state before a seek reconstruction. */
+  reset(): void {
+    this.bodyPose = new Map()
+    this.gesturePose = new Map()
+    this.overlay = new Map()
+    this.explicitHandTargets = []
+    this.bodyTransition = null
+    this.gestureTransition = null
+    this.bodyPoseName = 'neutral'
+  }
+
+  /** Checks the same standing-only precondition used by TalkingHead. */
+  private bodyPoseNameIsStanding(): boolean {
+    return POSE_FLAGS[this.bodyPoseName]?.standing === true
+  }
+
+  /** Builds the body layer without allowing an active gesture to enter it. */
+  private buildBodyPose(): Map<Object3D, AvatarPoseTransform> {
+    return buildPoseFromAngles(this.bodyPose, this.state)
+  }
+
+  /** Builds the current body target and overlays the active gesture values. */
+  private buildTargetPose(): AvatarPose {
+    const result = this.buildBodyPose()
+    for (const [name, values] of this.gesturePose) {
+      const state = this.state.get(name)
       if (state === undefined) continue
-      state.x = target.x; state.tx = target.x
-      state.y = target.y; state.ty = target.y
-      state.z = target.z; state.tz = target.z
-      state.gestureX = true; state.gestureY = true; state.gestureZ = true
-      const rotation = state.bone.rotation as Euler
-      rotation.x = target.x; rotation.y = target.y; rotation.z = target.z
+      applyAngles(result, state, values)
+    }
+    return result
+  }
+
+  /** Returns every bone still owned by the current or in-flight gesture. */
+  private currentGestureBones(): Set<Object3D> {
+    const result = new Set(this.gestureTransition?.bones ?? [])
+    for (const name of this.gesturePose.keys()) {
+      const bone = this.state.get(name)?.bone
+      if (bone !== undefined) result.add(bone)
+    }
+    return result
+  }
+
+  /** Keeps gesture-owned channels aligned with a newly selected body target. */
+  private retargetGestureTransition(bodyTarget: AvatarPose): void {
+    const transition = this.gestureTransition
+    if (transition === null) return
+    const target = this.buildTargetPoseFromBody(bodyTarget)
+    this.gestureTransition = {
+      ...transition,
+      target: selectPose(target, transition.bones),
     }
   }
 
-  /** Snaps all active axes to the model rest pose. */
-  snapToRest(): void {
-    for (const state of this.state.values()) {
-      if (!hasActiveAxis(state)) continue
-      resetActiveAxes(state, state.bone.rotation as Euler)
+  /** Builds a target from an explicitly supplied body pose during retargeting. */
+  private buildTargetPoseFromBody(body: AvatarPose): AvatarPose {
+    const result = clonePose(body)
+    for (const [name, values] of this.gesturePose) {
+      const state = this.state.get(name)
+      if (state === undefined) continue
+      applyAngles(result, state, values)
     }
+    return result
   }
+}
 
-  /** Snaps the current gesture targets after a seek replay. */
-  snapToTargets(): void {
-    for (const state of this.state.values()) {
-      if (state.x === state.tx && state.y === state.ty && state.z === state.tz) continue
-      state.x = state.tx; state.y = state.ty; state.z = state.tz
-      const rotation = state.bone.rotation as Euler
-      rotation.x = state.tx; rotation.y = state.ty; rotation.z = state.tz
+/** Resolves one catalog template to concrete, model-local Euler values. */
+function resolveTemplate(
+  template: Readonly<Record<string, Readonly<{ x?: RotationValue; y?: RotationValue; z?: RotationValue }>>>,
+  state: ReadonlyMap<string, BoneState>,
+  rng: Rng,
+  mirror: boolean,
+  flags?: AvatarPoseFlags,
+  modelMovementFactor = 1,
+): Map<string, BoneAngles> {
+  const result = new Map<string, BoneAngles>()
+  for (const [key, values] of Object.entries(template)) {
+    const property = propertyFromKey(key)
+    const sourceName = boneNameFromKey(key)
+    const name = mirror ? mirrorBoneName(sourceName) : sourceName
+    const bone = state.get(name)
+    if (bone === undefined) continue
+    if (property === 'position') {
+      result.set(name, {
+        px: values.x === undefined ? bone.restPosition.x : sampleValue(values.x, rng),
+        py: values.y === undefined ? bone.restPosition.y : sampleValue(values.y, rng),
+        pz: values.z === undefined ? bone.restPosition.z : sampleValue(values.z, rng),
+      })
+      continue
     }
-  }
-
-  private releaseBodyPoseAxes(): void {
-    for (const state of this.state.values()) {
-      if (state.poseX) { state.poseX = false; state.bx = state.rx; if (!state.gestureX) state.tx = state.rx }
-      if (state.poseY) { state.poseY = false; state.by = state.ry; if (!state.gestureY) state.ty = state.ry }
-      if (state.poseZ) { state.poseZ = false; state.bz = state.rz; if (!state.gestureZ) state.tz = state.rz }
+    if (property !== 'rotation') continue
+    const source = {
+      x: values.x === undefined ? bone.restRotation.x : sampleValue(values.x, rng),
+      y: values.y === undefined ? bone.restRotation.y : sampleValue(values.y, rng),
+      z: values.z === undefined ? bone.restRotation.z : sampleValue(values.z, rng),
     }
+    const rotation = mirror
+      ? mirrorRotation(source.x, source.y, source.z, bone.bone.rotation.order)
+      : source
+    const restrained = flags?.standing === true && modelMovementFactor < 1 && MOVEMENT_LIMITED_BONES.has(sourceName)
+      ? restrainRotation(rotation, sourceName, state, mirror, modelMovementFactor)
+      : rotation
+    result.set(name, {
+      ...(values.x === undefined ? {} : { x: restrained.x }),
+      ...(values.y === undefined ? {} : { y: restrained.y }),
+      ...(values.z === undefined ? {} : { z: restrained.z }),
+    })
   }
+  return result
+}
 
-  private releaseGestureAxes(): void {
-    for (const state of this.state.values()) {
-      if (state.gestureX) { state.gestureX = false; state.tx = baseX(state) }
-      if (state.gestureY) { state.gestureY = false; state.ty = baseY(state) }
-      if (state.gestureZ) { state.gestureZ = false; state.tz = baseZ(state) }
+/** Detects the standing/lying boundary where TH uses the one-knee waypoint. */
+function isStandingLyingChange(
+  previous: AvatarPoseFlags | undefined,
+  next: AvatarPoseFlags | undefined,
+): boolean {
+  return previous !== undefined
+    && next !== undefined
+    && ((previous.standing === true && next.lying === true)
+      || (previous.lying === true && next.standing === true))
+}
+
+/** Resolves TH's intermediate kneeling pose without mutating the semantic state. */
+function resolveIntermediatePose(
+  state: ReadonlyMap<string, BoneState>,
+  modelMovementFactor: number,
+): AvatarPose {
+  return buildPoseFromAngles(
+    resolveTemplate(
+      POSE_TEMPLATES.oneknee ?? {},
+      state,
+      { random: () => 0.5 },
+      false,
+      POSE_FLAGS.oneknee,
+      modelMovementFactor,
+    ),
+    state,
+  )
+}
+
+/** Moves a standing pose toward TH's straight reference by the configured factor. */
+function restrainRotation(
+  rotation: { x: number; y: number; z: number },
+  sourceName: string,
+  state: ReadonlyMap<string, BoneState>,
+  mirror: boolean,
+  movementFactor: number,
+): { x: number; y: number; z: number } {
+  const bone = state.get(sourceName)
+  const reference = POSE_TEMPLATES.straight?.[`${sourceName}.rotation`]
+  if (bone === undefined || reference === undefined) return rotation
+  const referenceAngles = {
+    x: typeof reference.x === 'number' ? reference.x : bone.restRotation.x,
+    y: typeof reference.y === 'number' ? reference.y : bone.restRotation.y,
+    z: typeof reference.z === 'number' ? reference.z : bone.restRotation.z,
+  }
+  const target = mirror
+    ? mirrorRotation(referenceAngles.x, referenceAngles.y, referenceAngles.z, bone.bone.rotation.order)
+    : referenceAngles
+  const currentQuaternion = new Quaternion().setFromEuler(new Euler(
+    rotation.x,
+    rotation.y,
+    rotation.z,
+    bone.bone.rotation.order,
+  ))
+  const targetQuaternion = new Quaternion().setFromEuler(new Euler(
+    target.x,
+    target.y,
+    target.z,
+    bone.bone.rotation.order,
+  ))
+  currentQuaternion.rotateTowards(targetQuaternion, (1 - movementFactor) * currentQuaternion.angleTo(targetQuaternion))
+  const restrained = new Euler().setFromQuaternion(currentQuaternion, bone.bone.rotation.order)
+  return { x: restrained.x, y: restrained.y, z: restrained.z }
+}
+
+/** Builds a complete pose from resolved local angles and positions. */
+function buildPoseFromAngles(
+  angles: ReadonlyMap<string, BoneAngles>,
+  state: ReadonlyMap<string, BoneState>,
+): Map<Object3D, AvatarPoseTransform> {
+  const result = new Map<Object3D, AvatarPoseTransform>()
+  for (const [name, boneState] of state) {
+    const values = angles.get(name)
+    const rotation = {
+      x: values?.x ?? boneState.restRotation.x,
+      y: values?.y ?? boneState.restRotation.y,
+      z: values?.z ?? boneState.restRotation.z,
     }
+    const quaternion = new Quaternion().setFromEuler(new Euler(
+      rotation.x,
+      rotation.y,
+      rotation.z,
+      boneState.bone.rotation.order,
+    ))
+    result.set(boneState.bone, {
+      position: {
+        x: values?.px ?? boneState.restPosition.x,
+        y: values?.py ?? boneState.restPosition.y,
+        z: values?.pz ?? boneState.restPosition.z,
+      },
+      quaternion: readQuaternion(quaternion),
+      scale: { ...boneState.restScale },
+    })
   }
+  return result
+}
 
-  private setPoseAxis(state: BoneState, axis: 'x' | 'y' | 'z', value: RotationValue): void {
-    const sampled = sampleValue(value, { random: () => 0.5 })
-    if (axis === 'x') {
-      state.poseX = true
-      state.bx = sampled
-      if (!state.gestureX) state.tx = sampled
-    } else if (axis === 'y') {
-      state.poseY = true
-      state.by = sampled
-      if (!state.gestureY) state.ty = sampled
-    } else {
-      state.poseZ = true
-      state.bz = sampled
-      if (!state.gestureZ) state.tz = sampled
+/** Applies one partial catalog transform on top of a complete pose. */
+function applyAngles(
+  pose: Map<Object3D, AvatarPoseTransform>,
+  state: BoneState,
+  values: BoneAngles,
+): void {
+  const current = pose.get(state.bone) ?? readTransform(state.bone)
+  const currentQuaternion = current.quaternion ?? readQuaternion(state.bone)
+  const euler = new Euler().setFromQuaternion(
+    new Quaternion(
+      currentQuaternion.x,
+      currentQuaternion.y,
+      currentQuaternion.z,
+      currentQuaternion.w,
+    ),
+    state.bone.rotation.order,
+  )
+  if (values.x !== undefined) euler.x = values.x
+  if (values.y !== undefined) euler.y = values.y
+  if (values.z !== undefined) euler.z = values.z
+
+  const position = current.position ?? state.restPosition
+  pose.set(state.bone, {
+    ...current,
+    position: {
+      x: values.px ?? position.x,
+      y: values.py ?? position.y,
+      z: values.pz ?? position.z,
+    },
+    quaternion: readQuaternion(new Quaternion().setFromEuler(euler)),
+  })
+}
+
+/** Clones a semantic pose without retaining mutable transform values. */
+function clonePose(source: AvatarPose): Map<Object3D, AvatarPoseTransform> {
+  const result = new Map<Object3D, AvatarPoseTransform>()
+  for (const [bone, transform] of source) {
+    result.set(bone, cloneTransform(transform))
+  }
+  return result
+}
+
+/** Clones one semantic transform. */
+function cloneTransform(value: AvatarPoseTransform): AvatarPoseTransform {
+  return {
+    ...(value.position === undefined ? {} : { position: { ...value.position } }),
+    ...(value.quaternion === undefined ? {} : { quaternion: { ...value.quaternion } }),
+    ...(value.scale === undefined ? {} : { scale: { ...value.scale } }),
+  }
+}
+
+/** Creates an absolute semantic transition without retaining a mutable frame state. */
+function createTransition(
+  source: AvatarPose,
+  target: AvatarPose,
+  startAt: number,
+  durationMs: number,
+  intermediate?: AvatarPose,
+): PoseTransition {
+  return {
+    source,
+    target,
+    startAt,
+    durationMs: Math.max(0, durationMs),
+    ...(intermediate === undefined ? {} : {
+      intermediate: {
+        pose: intermediate,
+        durationMs: INTERMEDIATE_POSE_TRANSITION_MS,
+      },
+    }),
+  }
+}
+
+/** Creates a transition limited to the bones owned by a gesture layer. */
+function createGestureTransition(
+  source: AvatarPose,
+  target: AvatarPose,
+  startAt: number,
+  durationMs: number,
+  bones: ReadonlySet<Object3D>,
+): GestureTransition {
+  return {
+    ...createTransition(
+      selectPose(source, bones),
+      selectPose(target, bones),
+      startAt,
+      durationMs,
+    ),
+    bones: new Set(bones),
+  }
+}
+
+/** Selects and clones only the transforms owned by one semantic layer. */
+function selectPose(pose: AvatarPose, bones: ReadonlySet<Object3D>): AvatarPose {
+  const result = new Map<Object3D, AvatarPoseTransform>()
+  for (const bone of bones) {
+    const transform = pose.get(bone)
+    if (transform !== undefined) result.set(bone, cloneTransform(transform))
+  }
+  return result
+}
+
+/** Samples one absolute transition, including the TH kneeling waypoint. */
+function sampleTransition(transition: PoseTransition, timeMs: number): AvatarPose {
+  const intermediate = transition.intermediate
+  if (intermediate !== undefined) {
+    const intermediateEnd = transition.startAt + intermediate.durationMs
+    if (timeMs < intermediateEnd) {
+      const progress = clamp((timeMs - transition.startAt) / intermediate.durationMs)
+      return interpolatePose(
+        transition.source,
+        intermediate.pose,
+        sampleTalkingHeadEasing(progress),
+      )
     }
+    const progress = resolveTransitionProgress({
+      ...transition,
+      startAt: intermediateEnd,
+    }, timeMs)
+    if (progress >= 1) return clonePose(transition.target)
+    return interpolatePose(
+      intermediate.pose,
+      transition.target,
+      sampleTalkingHeadEasing(progress),
+    )
+  }
+  const progress = resolveTransitionProgress(transition, timeMs)
+  if (progress >= 1) return clonePose(transition.target)
+  return interpolatePose(
+    transition.source,
+    transition.target,
+    sampleTalkingHeadEasing(progress),
+  )
+}
+
+/** Resolves the linear progress of one absolute semantic transition. */
+function resolveTransitionProgress(transition: PoseTransition, timeMs: number): number {
+  if (transition.durationMs === 0) return 1
+  return clamp((timeMs - transition.startAt) / transition.durationMs)
+}
+
+/** Interpolates every bone transform between two semantic snapshots. */
+function interpolatePose(source: AvatarPose, target: AvatarPose, progress: number): AvatarPose {
+  const result = new Map<Object3D, AvatarPoseTransform>()
+  const bones = new Set([...source.keys(), ...target.keys()])
+  for (const bone of bones) {
+    const from = source.get(bone) ?? readTransform(bone)
+    const to = target.get(bone) ?? from
+    result.set(bone, {
+      position: interpolateVector(from.position, to.position, progress),
+      quaternion: interpolateQuaternion(from.quaternion, to.quaternion, progress),
+      scale: interpolateVector(from.scale, to.scale, progress),
+    })
+  }
+  return result
+}
+
+/** Interpolates one optional vector while retaining the available source value. */
+function interpolateVector(
+  source: AvatarVector3 | undefined,
+  target: AvatarVector3 | undefined,
+  progress: number,
+): AvatarVector3 | undefined {
+  if (source === undefined) return target === undefined ? undefined : { ...target }
+  if (target === undefined) return { ...source }
+  return {
+    x: source.x + (target.x - source.x) * progress,
+    y: source.y + (target.y - source.y) * progress,
+    z: source.z + (target.z - source.z) * progress,
   }
 }
 
-/** Returns whether one state has an axis owned by pose or gesture behavior. */
-function hasActiveAxis(state: BoneState): boolean {
-  return state.poseX || state.poseY || state.poseZ || state.gestureX || state.gestureY || state.gestureZ
+/** Spherically interpolates one optional quaternion. */
+function interpolateQuaternion(
+  source: Readonly<{ x: number; y: number; z: number; w: number }> | undefined,
+  target: Readonly<{ x: number; y: number; z: number; w: number }> | undefined,
+  progress: number,
+): Readonly<{ x: number; y: number; z: number; w: number }> | undefined {
+  if (source === undefined) return target === undefined ? undefined : { ...target }
+  if (target === undefined) return { ...source }
+  const quaternion = new Quaternion(source.x, source.y, source.z, source.w)
+  quaternion.slerp(new Quaternion(target.x, target.y, target.z, target.w), progress)
+  return readQuaternion(quaternion)
 }
 
-/** Moves one value toward its target using the current easing factor. */
-function approach(current: number, target: number, alpha: number): number {
-  const difference = target - current
-  return Math.abs(difference) < 1e-4 ? target : current + difference * alpha
+/** Reads a native vector into an immutable Avatar value. */
+function readVector(value: Readonly<{ x: number; y: number; z: number }>): AvatarVector3 {
+  return { x: value.x, y: value.y, z: value.z }
 }
 
-/** Applies one resolved axis and marks it as a semantic pose axis. */
-function applyResolvedAxis(state: BoneState, axis: 'x' | 'y' | 'z', value: number, rotation: Euler): void {
-  if (axis === 'x') {
-    state.poseX = true; state.gestureX = false; state.bx = value; state.x = value; state.tx = value; rotation.x = value
-  } else if (axis === 'y') {
-    state.poseY = true; state.gestureY = false; state.by = value; state.y = value; state.ty = value; rotation.y = value
-  } else {
-    state.poseZ = true; state.gestureZ = false; state.bz = value; state.z = value; state.tz = value; rotation.z = value
+/** Reads an Object3D or Quaternion into an immutable Avatar quaternion. */
+function readQuaternion(value: Readonly<{ quaternion?: Quaternion; x?: number; y?: number; z?: number; w?: number }>): Readonly<{ x: number; y: number; z: number; w: number }> {
+  const quaternion = value.quaternion ?? value
+  return {
+    x: quaternion.x ?? 0,
+    y: quaternion.y ?? 0,
+    z: quaternion.z ?? 0,
+    w: quaternion.w ?? 1,
   }
 }
 
-/** Restores one bone state when a semantic pose no longer contains it. */
-function resetState(state: BoneState, rotation: Euler): void {
-  state.poseX = false; state.gestureX = false; state.bx = state.rx; state.x = state.rx; state.tx = state.rx; rotation.x = state.rx
-  state.poseY = false; state.gestureY = false; state.by = state.ry; state.y = state.ry; state.ty = state.ry; rotation.y = state.ry
-  state.poseZ = false; state.gestureZ = false; state.bz = state.rz; state.z = state.rz; state.tz = state.rz; rotation.z = state.rz
-  state.bone.position.set(state.px, state.py, state.pz)
-}
-
-/** Restores only the axes currently owned by pose or gesture behavior. */
-function resetActiveAxes(state: BoneState, rotation: Euler): void {
-  if (state.poseX || state.gestureX) {
-    state.poseX = false; state.gestureX = false; state.bx = state.rx; state.x = state.rx; state.tx = state.rx; rotation.x = state.rx
-  }
-  if (state.poseY || state.gestureY) {
-    state.poseY = false; state.gestureY = false; state.by = state.ry; state.y = state.ry; state.ty = state.ry; rotation.y = state.ry
-  }
-  if (state.poseZ || state.gestureZ) {
-    state.poseZ = false; state.gestureZ = false; state.bz = state.rz; state.z = state.rz; state.tz = state.rz; rotation.z = state.rz
+/** Captures one complete native transform as a fallback semantic value. */
+function readTransform(bone: Object3D): AvatarPoseTransform {
+  return {
+    position: readVector(bone.position),
+    quaternion: readQuaternion(bone),
+    scale: readVector(bone.scale),
   }
 }
 
-/** Splits a catalog key into its bone name. */
+/** Splits one catalog key into its bone name. */
 function boneNameFromKey(key: string): string {
   return key.slice(0, key.lastIndexOf('.'))
 }
 
-/** Splits a catalog key into its property name. */
+/** Splits one catalog key into its property name. */
 function propertyFromKey(key: string): string {
   return key.slice(key.lastIndexOf('.') + 1)
 }
 
-/** Swaps the left/right side of a TalkingHead bone name for mirrored gestures. */
+/** Swaps left and right in one TalkingHead bone name. */
 function mirrorBoneName(name: string): string {
   return name
     .replaceAll('Left', '__MIRROR_RIGHT__')
@@ -339,7 +681,7 @@ function mirrorBoneName(name: string): string {
     .replaceAll('__MIRROR_RIGHT__', 'Right')
 }
 
-/** Mirrors a resolved Euler pose using the quaternion convention used by TH. */
+/** Mirrors a template rotation with TalkingHead's quaternion convention. */
 function mirrorRotation(
   x: number,
   y: number,
@@ -351,4 +693,53 @@ function mirrorRotation(
   quaternion.w *= -1
   const mirrored = new Euler().setFromQuaternion(quaternion, order)
   return { x: mirrored.x, y: mirrored.y, z: mirrored.z }
+}
+
+/** Clamps one normalized transition ratio. */
+function clamp(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+/** Merges two additive bone layers without allowing either to write bones. */
+function mergePoseDeltas(
+  first: AvatarPoseDelta,
+  second: AvatarPoseDelta,
+): AvatarPoseDelta {
+  if (second.size === 0) return first
+  const result = new Map<Object3D, {
+    rotation?: AvatarVector3
+    position?: AvatarVector3
+    scale?: AvatarVector3
+  }>()
+  for (const [bone, value] of [...first, ...second]) {
+    const current = result.get(bone)
+    if (current === undefined) {
+      result.set(bone, {
+        ...(value.rotation === undefined ? {} : { rotation: { ...value.rotation } }),
+        ...(value.position === undefined ? {} : { position: { ...value.position } }),
+        ...(value.scale === undefined ? {} : { scale: { ...value.scale } }),
+      })
+      continue
+    }
+    result.set(bone, {
+      rotation: addVector(current.rotation, value.rotation),
+      position: addVector(current.position, value.position),
+      scale: addVector(current.scale, value.scale),
+    })
+  }
+  return result
+}
+
+/** Adds two optional vectors while keeping absent channels absent. */
+function addVector(
+  first: AvatarVector3 | undefined,
+  second: AvatarVector3 | undefined,
+): AvatarVector3 | undefined {
+  if (first === undefined) return second === undefined ? undefined : { ...second }
+  if (second === undefined) return { ...first }
+  return {
+    x: first.x + second.x,
+    y: first.y + second.y,
+    z: first.z + second.z,
+  }
 }

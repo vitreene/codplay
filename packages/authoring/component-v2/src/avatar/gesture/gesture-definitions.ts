@@ -1,117 +1,41 @@
 /**
- * Gesture definitions — TH body poses and procedural gesture templates.
+ * TalkingHead body poses and native gesture templates.
  *
- * Templates are adapted from TalkingHead by Mika Suominen (met4citizen), MIT.
- * Source: https://github.com/met4citizen/TalkingHead
- *
- * Each template entry is either:
- *   { boneName.rotation: { x, y, z } }  where each value is either:
- *     - a fixed number
- *     - [min, max]                  → uniform random in [min, max]
- *     - [min, max, skewFrom, skewTo] → power-law-weighted random (TH rndDist)
- *
- * The runtime consumes these definitions for exponential-smoothing transitions
- * and deterministic seek reconstruction.
+ * The pose data is copied from TalkingHead's public poseTemplates. It remains
+ * Avatar data: no TalkingHead runtime is imported or executed.
  */
-export type RotationValue = number | [number, number] | [number, number, number, number]
-type BoneRotation = { x?: RotationValue; y?: RotationValue; z?: RotationValue }
-/** Template: boneName.rotation → axis values */
-export type GestureTemplate = Record<string, BoneRotation>
-export type BodyPoseTemplate = Record<string, BoneRotation>
+import { TH_POSE_TEMPLATES } from './th-pose-data.js'
+import type {
+  AvatarPoseDefinition,
+  AvatarPoseFlags,
+  BodyPoseTemplate,
+  GestureTemplate,
+} from '../avatar-types.js'
 
-/** Relaxed neutral stance used as the Avatar's default resting pose. */
-const RELAXED_NEUTRAL_POSE: BodyPoseTemplate = {
-  'Hips.rotation': { x: 0.025, y: 0.015, z: 0.02 },
-  'Spine.rotation': { x: -0.11, y: -0.015, z: 0.015 },
-  'Spine1.rotation': { x: -0.02, y: -0.02, z: 0.02 },
-  'Spine2.rotation': { x: 0.055, y: -0.01, z: 0.018 },
-  'Neck.rotation': { x: 0.035, y: -0.005, z: 0.015 },
-  'Head.rotation': { x: 0.035, y: -0.015, z: -0.01 },
-  'LeftShoulder.rotation': { x: 1.58, y: -0.14, z: -1.57 },
-  'LeftArm.rotation': { x: 1.24, y: 0.5, z: -0.08 },
-  'LeftForeArm.rotation': { x: 0, y: 0, z: 0.28 },
-  'LeftHand.rotation': { x: -0.18, y: -0.13, z: 0.09 },
-  'RightShoulder.rotation': { x: 1.57, y: 0.05, z: 1.49 },
-  'RightArm.rotation': { x: 1.27, y: -0.38, z: 0.12 },
-  'RightForeArm.rotation': { x: 0, y: 0, z: -0.29 },
-  'RightHand.rotation': { x: -0.13, y: -0.58, z: -0.17 },
-}
+/** Complete native pose definitions, with the neutral author name mapped to TH side. */
+export const POSE_DEFINITIONS = {
+  ...TH_POSE_TEMPLATES,
+  neutral: TH_POSE_TEMPLATES.side,
+} as const
 
-/**
- * Major-bone body poses adapted from TH poseTemplates.
- * These are the missing TH background poses: gestures are temporary overrides
- * layered above them, not replacements for a human rest stance.
- */
-export const POSE_TEMPLATES: Record<string, BodyPoseTemplate> = {
-  neutral: RELAXED_NEUTRAL_POSE,
-  /** Kept as an alias for authored scenes that used the former neutral name. */
-  straight: RELAXED_NEUTRAL_POSE,
-  side: {
-    'Hips.rotation': { x: -0.003, y: -0.017, z: 0.1 },
-    'Spine.rotation': { x: -0.103, y: -0.002, z: -0.063 },
-    'Spine1.rotation': { x: 0.042, y: -0.02, z: -0.069 },
-    'Spine2.rotation': { x: 0.131, y: -0.012, z: -0.065 },
-    'Neck.rotation': { x: 0.027, y: 0.006, z: 0 },
-    'Head.rotation': { x: 0.077, y: -0.065, z: 0 },
-    'LeftShoulder.rotation': { x: 1.599, y: 0.084, z: -1.77 },
-    'LeftArm.rotation': { x: 1.364, y: 0.052, z: -0.044 },
-    'LeftForeArm.rotation': { x: 0.002, y: -0.007, z: 0.331 },
-    'LeftHand.rotation': { x: 0.104, y: -0.067, z: -0.174 },
-    'RightShoulder.rotation': { x: 1.541, y: 0.192, z: 1.775 },
-    'RightArm.rotation': { x: 1.273, y: -0.352, z: -0.067 },
-    'RightForeArm.rotation': { x: -0.011, y: -0.031, z: -0.357 },
-    'RightHand.rotation': { x: -0.008, y: 0.312, z: -0.028 },
-  },
-  hip: {
-    'Hips.rotation': { x: -0.036, y: 0.09, z: 0.135 },
-    'Spine.rotation': { x: 0.076, y: -0.035, z: 0.01 },
-    'Spine1.rotation': { x: -0.096, y: 0.013, z: -0.094 },
-    'Spine2.rotation': { x: -0.014, y: 0.002, z: -0.097 },
-    'Neck.rotation': { x: 0.034, y: -0.051, z: -0.075 },
-    'Head.rotation': { x: 0.298, y: -0.1, z: 0.154 },
-    'LeftShoulder.rotation': { x: 1.694, y: 0.011, z: -1.68 },
-    'LeftArm.rotation': { x: 1.343, y: 0.177, z: -0.153 },
-    'LeftForeArm.rotation': { x: -0.049, y: 0.134, z: 0.351 },
-    'LeftHand.rotation': { x: 0.057, y: -0.189, z: -0.026 },
-    'RightShoulder.rotation': { x: 1.597, y: 0.012, z: 1.816 },
-    'RightArm.rotation': { x: 0.618, y: -1.274, z: -0.266 },
-    'RightForeArm.rotation': { x: -0.395, y: -0.097, z: -1.342 },
-    'RightHand.rotation': { x: -0.816, y: -0.057, z: -0.976 },
-  },
-  turn: {
-    'Hips.rotation': { x: -0.07, y: -0.604, z: -0.004 },
-    'Spine.rotation': { x: -0.007, y: 0.003, z: 0.071 },
-    'Spine1.rotation': { x: -0.053, y: 0.024, z: -0.06 },
-    'Spine2.rotation': { x: 0.074, y: 0.013, z: -0.068 },
-    'Neck.rotation': { x: 0.03, y: 0.186, z: -0.077 },
-    'Head.rotation': { x: 0.045, y: 0.243, z: -0.086 },
-    'LeftShoulder.rotation': { x: 1.717, y: -0.085, z: -1.761 },
-    'LeftArm.rotation': { x: 1.314, y: 0.07, z: -0.057 },
-    'LeftForeArm.rotation': { x: -0.151, y: 0.714, z: 0.302 },
-    'LeftHand.rotation': { x: -0.069, y: 0.003, z: -0.118 },
-    'RightShoulder.rotation': { x: 1.605, y: 0.17, z: 1.625 },
-    'RightArm.rotation': { x: 1.574, y: -0.655, z: 0.388 },
-    'RightForeArm.rotation': { x: -0.36, y: -0.849, z: -0.465 },
-    'RightHand.rotation': { x: 0.114, y: 0.416, z: -0.069 },
-  },
-  wide: {
-    'Hips.rotation': { x: 0.064, y: -0.048, z: 0.059 },
-    'Spine.rotation': { x: -0.123, y: 0, z: -0.018 },
-    'Spine1.rotation': { x: 0.014, y: 0.003, z: -0.006 },
-    'Spine2.rotation': { x: 0.04, y: 0.003, z: -0.007 },
-    'Neck.rotation': { x: 0.101, y: 0.007, z: -0.035 },
-    'Head.rotation': { x: -0.091, y: -0.049, z: 0.105 },
-    'RightShoulder.rotation': { x: 1.831, y: 0.017, z: 1.731 },
-    'RightArm.rotation': { x: -1.673, y: -1.102, z: -3.132 },
-    'RightForeArm.rotation': { x: 0.265, y: 0.23, z: -0.824 },
-    'RightHand.rotation': { x: -0.52, y: 0.345, z: -0.061 },
-    'LeftShoulder.rotation': { x: 1.83, y: -0.063, z: -1.808 },
-    'LeftArm.rotation': { x: -1.907, y: 1.228, z: -2.959 },
-    'LeftForeArm.rotation': { x: -0.159, y: 0.268, z: 0.572 },
-    'LeftHand.rotation': { x: 0.069, y: -0.498, z: -0.025 },
-  },
-}
+/** Pose properties consumed by the semantic pose resolver. */
+export const POSE_TEMPLATES: Record<string, BodyPoseTemplate> = Object.fromEntries(
+  Object.entries(POSE_DEFINITIONS).map(([name, definition]) => [name, definition.props]),
+)
 
+/** Pose classification consumed by the transition resolver. */
+export const POSE_FLAGS: Record<string, AvatarPoseFlags> = Object.fromEntries(
+  Object.entries(POSE_DEFINITIONS).map(([name, definition]) => {
+    const pose = definition as AvatarPoseDefinition
+    return [name, {
+      standing: pose.standing,
+      sitting: pose.sitting,
+      bend: pose.bend,
+      kneeling: pose.kneeling,
+      lying: pose.lying,
+    }]
+  }),
+) as Record<string, AvatarPoseFlags>
 /**
  * Gesture templates from TH gestureTemplates.
  * Arrays are random ranges; scalars are fixed.
@@ -265,9 +189,8 @@ export const GESTURE_TEMPLATES: Record<string, GestureTemplate> = {
     'LeftHandPinky3.rotation': { x: 0.501, y: -0.013, z: -0.049 },
   },
   shrug: {
-    // Neck.z: morph bone callback only writes .x (headRotateX), never .z — no conflict.
-    'Neck.rotation': { z: 0.08 },
-    'Head.rotation': { z: 0.04 },
+    'Neck.rotation': { x: [-0.3, 0.3, 1, 2], y: [-0.3, 0.3, 1, 2], z: [-0.1, 0.1] },
+    'Head.rotation': { x: [-0.3, 0.3], y: [-0.3, 0.3], z: [-0.1, 0.1] },
     'RightShoulder.rotation': { x: 1.732, y: -0.058, z: 1.407 },
     'RightArm.rotation': { x: 1.305, y: 0.46, z: 0.118 },
     'RightForeArm.rotation': { x: [0,2.0], y: [-1,0.2], z: -1.637 },
@@ -347,4 +270,9 @@ export const GESTURE_TEMPLATES: Record<string, GestureTemplate> = {
     'LeftHandPinky2.rotation': { x: 0.012, y: 0.001, z: 0.07 },
     'LeftHandPinky3.rotation': { x: 0.002, y: 0, z: 0 },
   },
+}
+
+/** Returns whether a name is one of TalkingHead's native hand gestures. */
+export function hasGestureTemplate(name: string): boolean {
+  return GESTURE_TEMPLATES[name] !== undefined
 }

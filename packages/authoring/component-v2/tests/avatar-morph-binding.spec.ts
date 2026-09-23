@@ -10,7 +10,7 @@ function createBone(name: string, rotation = { x: 0, y: 0, z: 0 }): Object3D {
 }
 
 describe('Avatar bone morph binding', () => {
-  it('applies values relative to the captured rest pose', () => {
+  it('contributes values without writing the captured bones directly', () => {
     const head = createBone('Head', { x: 0.2, y: -0.1, z: 0.05 })
     const neck = createBone('Neck', { x: -0.3, y: 0.4, z: 0 })
     const spine = createBone('Spine', { x: 0, y: 0.1, z: -0.2 })
@@ -25,27 +25,32 @@ describe('Avatar bone morph binding', () => {
       [hips.name, hips],
     ])
 
-    const applyBoneMorph = createBoneMorphBinding(bones)
-    applyBoneMorph('headRotateX', 0.5)
-    applyBoneMorph('bodyRotateY', 0.4)
+    const binding = createBoneMorphBinding(bones)
+    binding('headRotateX', 0.5)
+    binding('bodyRotateY', 0.4)
+    binding('chestInhale', 1)
+    const delta = binding.getDelta()
 
-    expect(head.rotation.x).toBeCloseTo(0.7)
-    expect(neck.rotation.x).toBeCloseTo(-0.15)
-    expect(head.rotation.y).toBeCloseTo(0.3)
-    expect(spine1.rotation.y).toBeCloseTo(0.2)
-    expect(spine.rotation.y).toBeCloseTo(0.3)
-    expect(hips.rotation.y).toBeCloseTo(0.1)
-
-    applyBoneMorph('chestInhale', 1)
-    expect(spine1.scale.x).toBeCloseTo(2.04)
-    expect(spine1.scale.y).toBeCloseTo(3)
-    expect(spine1.scale.z).toBeCloseTo(4.08)
+    expect(delta.get(head)?.rotation).toMatchObject({ x: 0.5, y: 0.4 })
+    expect(delta.get(neck)?.rotation).toBeUndefined()
+    expect(delta.get(spine1)?.rotation).toMatchObject({ y: 0.2 })
+    expect(delta.get(spine)?.rotation).toMatchObject({ y: 0.2 })
+    expect(delta.get(hips)?.rotation).toMatchObject({ y: 0.1 })
+    expect(delta.get(spine1)?.scale).toEqual({ x: 1.05, y: 1.025, z: 1.15 })
+    expect(delta.get(neck)?.scale).toEqual({
+      x: 1 / 1.05,
+      y: 1 / 1.025,
+      z: 1 / 1.15,
+    })
+    expect(head.rotation.x).toBeCloseTo(0.2)
+    expect(spine1.scale.x).toBeCloseTo(2)
   })
 
   it('ignores bone morphs that the loaded model does not provide', () => {
-    const applyBoneMorph = createBoneMorphBinding(new Map())
+    const binding = createBoneMorphBinding(new Map())
 
-    expect(() => applyBoneMorph('handFistLeft', 1)).not.toThrow()
-    expect(() => applyBoneMorph('chestInhale', 1)).not.toThrow()
+    expect(() => binding('handFistLeft', 1)).not.toThrow()
+    expect(() => binding('chestInhale', 1)).not.toThrow()
+    expect(binding.getDelta()).toEqual(new Map())
   })
 })
