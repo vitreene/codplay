@@ -26,17 +26,16 @@ export const DEMO_REGISTRY: DemoEntry[] = [
 ];
 
 /**
- * Subset of DEMO_REGISTRY exposed on the "fame" page (fame.html), a separate
- * entry point that showcases a curated selection of demos.
+ * Subset of DEMO_REGISTRY exposed on the V1 Fame page (fame-v1.html).
  */
 export const FAME_REGISTRY: DemoEntry[] = [
-  { id: "quiz", label: "Quiz compteur", href: "fame.html?demo=quiz" },
-  { id: "quiz-series", label: "Quiz Série", href: "fame.html?demo=quiz-series" },
-  { id: "Flip", label: "Flip", href: "fame.html?demo=codplay-poc" },
-  { id: "chrono", label: "Chronomètre", href: "fame.html?demo=chrono" },
-  { id: "polygon", label: "Polygon", href: "fame.html?demo=polygon" },
-  { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "fame.html?demo=mashup-rive-three-quiz" },
-  { id: "stroke-path", label: "Stroke Path", href: "fame.html?demo=stroke-path" },
+  { id: "quiz", label: "Quiz compteur", href: "fame-v1.html?demo=quiz" },
+  { id: "quiz-series", label: "Quiz Série", href: "fame-v1.html?demo=quiz-series" },
+  { id: "Flip", label: "Flip", href: "fame-v1.html?demo=codplay-poc" },
+  { id: "chrono", label: "Chronomètre", href: "fame-v1.html?demo=chrono" },
+  { id: "polygon", label: "Polygon", href: "fame-v1.html?demo=polygon" },
+  { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "fame-v1.html?demo=mashup-rive-three-quiz" },
+  { id: "stroke-path", label: "Stroke Path", href: "fame-v1.html?demo=stroke-path" },
 ];
 
 export function buildDemoLinksMarkup(activeId: string | undefined, entries: DemoEntry[] = DEMO_REGISTRY): string {

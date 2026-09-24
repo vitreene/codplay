@@ -12,6 +12,7 @@ import {
   THREEJS_CORE_ENGINE,
 } from "@codplay/component-v2";
 import { createV2DemoTelco } from "./telco";
+import { V2_DEMO_PAGE_MARKUP } from "./page-markup";
 
 import type { V2DemoDefinition } from "../registry";
 import type { V2DemoLogLevel, V2DemoModule, V2DemoPlayback } from "./types";
@@ -32,8 +33,9 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   mount: (module: V2DemoModule) => Promise<void>;
   destroy: () => void;
 } {
+  options.app.innerHTML = V2_DEMO_PAGE_MARKUP;
   const layoutRoot = options.app.querySelector<HTMLElement>("[data-v2-demo-layout]");
-  if (layoutRoot === null) throw new Error("Expected the V2 demo layout in index.html.");
+  if (layoutRoot === null) throw new Error("Expected the V2 demo layout in the app root.");
 
   const title = layoutRoot.querySelector<HTMLElement>(".v2-demo-title")!;
   const description = layoutRoot.querySelector<HTMLElement>(".v2-demo-description")!;
@@ -45,6 +47,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   const logOutput = layoutRoot.querySelector<HTMLPreElement>(".v2-demo-log-output")!;
   const logCopy = layoutRoot.querySelector<HTMLButtonElement>(".v2-demo-log-copy")!;
   const logClose = layoutRoot.querySelector<HTMLButtonElement>(".v2-demo-log-close")!;
+  sceneSlot.inert = true;
 
   function readLogPanelOpen(): boolean {
     try {
@@ -89,6 +92,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   let logFlushScheduled = false;
   let telcoControls: ReturnType<typeof createV2DemoTelco> | null = null;
   let telcoPlaybackCleanup: (() => void) | null = null;
+  let sceneInteractionCleanup: (() => void) | null = null;
   let traceCleanup: (() => void) | null = null;
   let publicEventCleanup: (() => void) | null = null;
   let sceneCleanup: (() => void) | null = null;
@@ -192,6 +196,8 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
 
   /** Releases the current runner, telco and scene-specific stage state. */
   const unmountScene = (): void => {
+    sceneInteractionCleanup?.();
+    sceneInteractionCleanup = null;
     sceneCleanup?.();
     sceneCleanup = null;
     traceCleanup?.();
@@ -205,6 +211,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     telcoControls = null;
     telcoSlot.replaceChildren();
     sceneSlot.className = "v2-demo-scene-slot";
+    sceneSlot.inert = true;
     sceneSlot.removeAttribute("aria-label");
     sceneSlot.removeAttribute("data-codplay-scope");
     sceneSlot.replaceChildren();
@@ -340,6 +347,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         log(formatPublicEvent(event));
       });
     }
+    sceneInteractionCleanup = lockSceneInputUntilFirstPlay(sceneSlot, instance.telco);
     installTelco(instance.telco, instance, module.playback, () => mount(module));
     for (const injection of module.initialEvents ?? []) {
       await instance.events.emit(injection.eventime, injection.target);
@@ -358,6 +366,27 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       unmountScene();
       if (logFlushScheduled) logFlushScheduled = false;
     },
+  };
+}
+
+/** Keeps scene DOM input inert until this instance has started playback once. */
+function lockSceneInputUntilFirstPlay(
+  sceneHost: HTMLElement,
+  telco: CodPlayInstance["telco"],
+): () => void {
+  let hasStarted = false;
+
+  /** Opens scene input permanently for this mount after the first real start. */
+  function sync(state: ReturnType<typeof telco.getState> = telco.getState()): void {
+    if (state.status === "playing") hasStarted = true;
+    sceneHost.inert = !hasStarted;
+  }
+
+  sync();
+  const stopOnChange = telco.onChange(sync);
+  return () => {
+    stopOnChange();
+    sceneHost.inert = true;
   };
 }
 

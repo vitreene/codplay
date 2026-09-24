@@ -15,12 +15,13 @@ rename, not a mass rewrite of the planning corpus or the compiled
 V2 conserve le module V1 comme point d'extension, mais separe quatre niveaux :
 
 1. une definition de module enregistree dans le `RuntimeCapabilityCatalog` compose a l'initialisation ;
-2. une instance de module creee par player ;
+2. une instance de module creee pour chaque `RuntimePlayer` ;
 3. un etat pur et testable porte par cette instance ;
 4. une interface `Materializer` ou un adaptateur de materialisation eventuel.
 
 Le module n'est donc ni un composant unique, ni un singleton de module. Une capacite
-peut etre fournie par plusieurs implementations et instanciee une fois par player.
+peut etre fournie par plusieurs implementations et instanciee une fois par
+`RuntimePlayer`.
 
 ## List
 
@@ -39,7 +40,7 @@ du move core et porte les politiques `reorderOnMove`, `reorderOnAdd` et
 La tranche list implementee :
 
 - declarer la capacite `list` au catalogue engine ;
-- creer une instance par player ;
+- creer une instance par `RuntimePlayer` ;
 - enregistrer les cibles list et leurs configurations V1 ;
 - consommer les deltas de placement via une politique structurelle pure ;
 - laisser `SolvedGraph` et `StructuralTimeline` produire l'ordre complet ;
@@ -71,7 +72,7 @@ partielle n'est ajoutée au seek.
 ## Suite
 
 `RuntimeCapabilityCatalog`, `RuntimeModuleServiceDefinition` et la creation/destruction des
-instances par player sont maintenant en place. L'initialisation depuis le snapshot
+instances par `RuntimePlayer` sont maintenant en place. L'initialisation depuis le snapshot
 solve, le routage des deltas, la reconciliation staged de seek et la politique
 structurelle list sont egalement en place. La derivation de
 `CompiledRequirements.modules` vient des declarations de capacites des

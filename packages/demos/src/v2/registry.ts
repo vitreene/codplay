@@ -68,6 +68,24 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
     },
   },
   {
+    id: "stroke-path",
+    path: "?demo=stroke-path",
+    title: "Stroke Path — capture live",
+    description: "Capture V2 en continu et accumulation de tracés SVG (fixture expérimentale non normative).",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/stroke-path/main"),
+        import("./demos/stroke-path/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        initialEvents: module.createInitialEvents(),
+        engineCapabilities: module.engineCapabilities,
+      };
+    },
+  },
+  {
     id: "preload-media",
     path: "?demo=preload-media",
     title: "Preload média",
@@ -224,7 +242,36 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
   },
 ];
 
-/** Resolves one selected V2 demo and falls back to the first registered entry. */
-export function resolveV2Demo(id: string | null): V2DemoDefinition {
-  return V2_DEMO_REGISTRY.find((demo) => demo.id === id) ?? V2_DEMO_REGISTRY[0]!;
+/** Ordered V2 demo IDs shown by the curated Fame page. */
+const V2_FAME_DEMO_IDS = [
+  "components",
+  "events",
+  "position",
+  "quiz-series",
+  "polygon",
+  "preload-media",
+  "chrono",
+  "threejs-grid",
+  "rive",
+  "stroke-path",
+] as const;
+
+/** Resolves an ordered list of IDs through the single V2 demo registry. */
+function selectV2Demos(ids: readonly string[]): readonly V2DemoDefinition[] {
+  return ids.map((id) => {
+    const demo = V2_DEMO_REGISTRY.find((candidate) => candidate.id === id);
+    if (demo === undefined) throw new Error(`V2 demo registry is missing ${id}.`);
+    return demo;
+  });
+}
+
+/** Curated selection shown by the V2 Fame page. */
+export const V2_FAME_DEMO_REGISTRY = selectV2Demos(V2_FAME_DEMO_IDS);
+
+/** Resolves a selected demo and falls back to the first entry in its list. */
+export function resolveV2Demo(
+  id: string | null,
+  demos: readonly V2DemoDefinition[] = V2_DEMO_REGISTRY,
+): V2DemoDefinition {
+  return demos.find((demo) => demo.id === id) ?? demos[0]!;
 }
