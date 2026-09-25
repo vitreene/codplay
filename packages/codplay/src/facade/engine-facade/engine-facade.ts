@@ -85,6 +85,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
         runtimeEngine: this.runtimeEngine,
         resources: this.resources,
         diagnostics: this.diagnostics,
+        sourceAdapterFactories: config.htmlHost?.sourceAdapterFactories,
         lockCatalog: () => this.capabilities.lock(),
         isDestroyed: () => this.destroyed,
         mounts: this.mounts,

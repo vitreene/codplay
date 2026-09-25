@@ -1,5 +1,6 @@
 import type { DiagnosticCollector } from '../../diagnostics'
-import type { CompiledScene, CompiledStory } from './types'
+import { isPlainRecord } from '../../shared'
+import type { CompiledScene, CompiledScrollObservation, CompiledStory } from './types'
 
 /** Validates the internal relationships of one structurally valid CompiledScene. */
 export function validateCompiledSceneSemantics(
@@ -17,8 +18,43 @@ export function validateCompiledSceneSemantics(
 
   validateRootNodeIds(scene, persoIds, diagnostics)
   validateActionTargetIndex(scene, diagnostics)
+  validateScrollObservationLiveActions(scene, diagnostics)
   validateRequirements(scene, componentTypes, diagnostics)
   validateResources(scene, diagnostics)
+}
+
+/** Keeps each observation live action bound to one declared TweenAction target. */
+function validateScrollObservationLiveActions(scene: CompiledScene, diagnostics: DiagnosticCollector): void {
+  for (const story of Object.values(scene.scene.stories)) {
+    for (const perso of story.persos) {
+      const rawObservation = perso.emit?.observe
+      if (rawObservation === undefined || Array.isArray(rawObservation)) continue
+      const observation = rawObservation as CompiledScrollObservation
+      if (observation.liveAction === undefined) continue
+      const action = perso.actions[observation.liveAction]
+      const targets = scene.actionTargetIndex[observation.liveAction] ?? []
+      const isOnlyTarget = targets.length === 1
+        && targets[0]?.storyId === story.id
+        && targets[0]?.persoId === perso.id
+      if (!isOnlyTarget || !isCompiledTweenAction(action)) {
+        diagnostics.error(
+          'COMPILED_SCROLL_OBSERVATION_LIVE_ACTION_INVALID',
+          `Compiled emit.observe.liveAction must identify only a TweenAction on its observed perso: ${observation.liveAction}.`,
+          { context: { sceneId: scene.scene.id, storyId: story.id, persoId: perso.id, actionName: observation.liveAction } },
+        )
+      }
+    }
+  }
+}
+
+/** Checks the compiled function reference and duration of one TweenAction. */
+function isCompiledTweenAction(value: unknown): boolean {
+  if (!isPlainRecord(value) || !isPlainRecord(value.fn)) return false
+  return typeof value.fn.ref === 'string'
+    && value.fn.ref.length > 0
+    && typeof value.duration === 'number'
+    && Number.isFinite(value.duration)
+    && value.duration > 0
 }
 
 /** Validates scene-level isolation declarations and the compiled wake index. */

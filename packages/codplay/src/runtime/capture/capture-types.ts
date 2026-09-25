@@ -10,7 +10,7 @@ export type RuntimeCaptureState = CompiledRecord
 
 /** Selects one action already declared in the target compiled persos. */
 export type RuntimeCaptureAction = Readonly<{
-  actionName: string
+  name: string
   data?: CompiledRecord
 }>
 
@@ -51,7 +51,7 @@ export type RuntimeCaptureTrackInput = Readonly<{
 
 /** Live result returned by one capture sample. */
 export type RuntimeCaptureTrackOutput = Readonly<{
-  action?: RuntimeCaptureAction
+  actions?: readonly RuntimeCaptureAction[]
   captureState?: RuntimeCaptureState
   updateState?: CompiledRecord
 }>
@@ -157,7 +157,7 @@ export type RuntimeCaptureOpenResult =
 /** Result of one live sample submission. */
 export type RuntimeCaptureTrackResult = Readonly<{
   ok: true
-  action?: RuntimeCaptureAction
+  actions?: readonly RuntimeCaptureAction[]
   captureState: RuntimeCaptureState
   updateState?: CompiledRecord
   sampleCount: number

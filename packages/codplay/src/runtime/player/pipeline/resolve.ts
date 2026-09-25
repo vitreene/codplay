@@ -48,8 +48,8 @@ export function resolveScene(
   }
 }
 
-/** Resolves one capture action against a current perso state without journaling it. */
-export function resolveLiveCaptureActionState(
+/** Resolves one compiled live action against a current perso state without journaling it. */
+export function resolveLiveActionState(
   baseState: CompiledRecord,
   actionValue: CompiledValue | undefined,
   eventData: CompiledRecord | undefined,

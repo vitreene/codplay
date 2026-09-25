@@ -14,6 +14,9 @@ export type ActiveCaptureAction = Readonly<{
   targets: readonly CaptureActionTarget[]
 }>
 
+/** Ordered live actions returned by one active capture session. */
+export type ActiveCaptureActions = readonly ActiveCaptureAction[]
+
 /** Player event input whose application time defaults to the current player time. */
 export type RuntimePlayerEmitInput = Omit<RuntimeEventInput, 'applyAtMs'> & Readonly<{
   applyAtMs?: number

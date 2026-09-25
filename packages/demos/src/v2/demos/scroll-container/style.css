@@ -1,0 +1,78 @@
+.scroll-container {
+  box-sizing: border-box;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 1rem;
+  background: #10151d;
+  scrollbar-color: #91a9c8 #1a222e;
+}
+
+.scroll-container__progress-track {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  height: 0.45rem;
+  margin: 0 0 1rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #293545;
+}
+
+.scroll-container__progress-meter {
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #66d9ad, #82b9ff);
+}
+
+.scroll-container__title {
+  margin: 1.5rem auto 1rem;
+  color: #eff6ff;
+  font-size: clamp(1.6rem, 5vw, 2.3rem);
+  line-height: 1.15;
+}
+
+.scroll-container__passage {
+  max-width: 42rem;
+  margin: 0 auto 1.25rem;
+  color: #d5dfec;
+  font-size: 1.05rem;
+  line-height: 1.75;
+}
+
+.scroll-container__image-frame {
+  display: block;
+  width: min(100%, 36rem);
+  aspect-ratio: 640 / 420;
+  margin: 2rem auto;
+  overflow: hidden;
+  border: 1px solid #596c83;
+  border-radius: 1rem;
+  background: #14213d;
+  box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 24%);
+}
+
+.scroll-container__image-slide {
+  display: block;
+  width: 100%;
+}
+
+.scroll-container__chapter {
+  max-width: 42rem;
+  margin: 0 auto 4rem;
+}
+
+.scroll-container__chapter-title {
+  position: sticky;
+  z-index: 0;
+  top: 1.45rem;
+  display: grid;
+  min-height: 6rem;
+  margin: 0 0 1.25rem;
+  padding: 1.5rem;
+  align-items: center;
+  border: 1px solid #374456;
+  border-radius: 0.8rem;
+  color: #eff6ff;
+  font-size: 1.35rem;
+}

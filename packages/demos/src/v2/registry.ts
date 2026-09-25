@@ -240,6 +240,24 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       };
     },
   },
+  {
+    id: "scroll-container",
+    path: "?demo=scroll-container",
+    title: "Scroll-container — texte, image et visibilité",
+    description: "En faisant défiler le récit, l’image glisse dans la page puis se rétracte au retour ; le journal montre les événements enter/leave.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/scroll-container/main"),
+        import("./demos/scroll-container/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        engineCapabilities: module.engineCapabilities,
+        sourceAdapterFactories: module.sourceAdapterFactories,
+      };
+    },
+  },
 ];
 
 /** Ordered V2 demo IDs shown by the curated Fame page. */

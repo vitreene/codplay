@@ -12,8 +12,8 @@
  *    aux champs d'une lettre (`{t,n,u,o,d,s}`) pour éviter les allocations, la décomposition
  *    ayant lieu à chaque image. Ici elle a lieu **à la préparation**, hors chemin chaud : la
  *    contrainte tombe, la lisibilité prime.
- * 2. **Les couleurs sont normalisées avant ACE.** Cette décomposition les signale pour empêcher
- *    qu'une chaîne CSS couleur soit traitée comme une chaîne composée ordinaire.
+ * 2. **Les couleurs sont normalisées à la préparation ACE.** Cette décomposition les signale
+ *    pour empêcher qu'une chaîne CSS couleur soit traitée comme une chaîne composée ordinaire.
  */
 
 /** Ce qu'une valeur d'auteur peut être, une fois reconnue. */

@@ -3,6 +3,7 @@ import type { Ticker } from '../../runtime/time'
 import type {
   CodPlayComponents,
   CodPlayEngineOptions,
+  CodPlayHtmlHostOptions,
   CodPlayInstanceHostTarget,
   CodPlayLibraries,
   CodPlayModules,
@@ -13,6 +14,7 @@ import type { InstanceFacadeImpl } from '../instance-facade'
 /** Configuration consumed by the internal engine facade adapter. */
 export type EngineFacadeConfig = CodPlayEngineOptions & Readonly<{
   ticker?: Ticker
+  htmlHost?: CodPlayHtmlHostOptions
 }>
 
 /** Public capability registries created over one engine-owned catalog. */

@@ -43,6 +43,7 @@ import type {
 import { qualifyStructuredLengthStyles } from './length'
 import { validateCompiledSceneSemantics } from './semantic-validator'
 import { validateCompiledRelTargets } from './rel-target-validation'
+import { validateAuthoredScrollDeclarations } from './scroll-observation-validation'
 import { isRel } from '../rel'
 
 /** Options controlling one deterministic scene compilation. */
@@ -88,6 +89,7 @@ export class SceneBuilder {
     this.guardEngine.validate(canonical, diagnostics)
 
     const activeScene = withoutDisabledStories(canonical)
+    validateAuthoredScrollDeclarations(activeScene, diagnostics)
     this.validationEngine.validate(
       {
         persos: listPersoValidationInputs(activeScene),

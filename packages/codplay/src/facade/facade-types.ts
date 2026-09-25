@@ -38,6 +38,7 @@ import type {
 } from '../runtime/preload'
 import type { PlayerLifecycleState } from '../runtime/config/player-lifecycle'
 import type { ReplaceTransition } from '../runtime/components'
+import type { HtmlSourceAdapterFactory } from '../runtime/runner-html'
 
 /** One group of capability declarations composed while creating an engine. */
 export type CodPlayCapabilityGroup<Definition> = Readonly<{
@@ -78,9 +79,15 @@ export type CodPlayFrameScheduler = Readonly<{
   cancel: (requestId: number) => void
 }>
 
+/** HTML-host options kept separate from runtime capability registration. */
+export type CodPlayHtmlHostOptions = Readonly<{
+  sourceAdapterFactories?: readonly HtmlSourceAdapterFactory[]
+}>
+
 /** Options for the single public CodPlay facade instance. */
 export type CodPlayOptions = Readonly<{
   engine?: CodPlayEngineOptions
+  htmlHost?: CodPlayHtmlHostOptions
   frameScheduler?: CodPlayFrameScheduler
   pauseOnDocumentHidden?: boolean
   /** Retained until the preload interface is reviewed as a separate contract. */

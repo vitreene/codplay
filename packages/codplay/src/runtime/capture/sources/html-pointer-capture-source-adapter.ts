@@ -3,6 +3,8 @@ import type {
   CompiledEmitRule,
   CompiledScene,
 } from '../../../scene/compiled'
+
+type CompiledCaptureEmitRule = Extract<CompiledEmitRule, { capture: CompiledCaptureDeclaration }>
 import type { RuntimePlayer } from '../../player'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture-types'
 import { isFiniteNumber } from '../../../shared'
@@ -47,7 +49,7 @@ export type HtmlPointerCaptureSourceAdapterOptions = Readonly<{
 
 type CaptureRule = Readonly<{
   storyId: string
-  rule: CompiledEmitRule
+  rule: CompiledCaptureEmitRule
   declaration: CompiledCaptureDeclaration
 }>
 
@@ -66,7 +68,7 @@ type PendingCaptureStart = {
   captureId: string
   persoKey: string
   storyId: string
-  rule: CompiledEmitRule
+  rule: CompiledCaptureEmitRule
   declaration: CompiledCaptureDeclaration
   pointerId?: number
   trackOn: ReadonlySet<string>
@@ -161,7 +163,7 @@ export class HtmlPointerCaptureSourceAdapter {
   private indexCaptureRules(): void {
     for (const [storyId, story] of Object.entries(this.compiledScene.scene.stories)) {
       for (const perso of story.persos) {
-        const rules = normalizeRules(perso.emit?.pointerdown)
+        const rules = normalizeRules(perso.emit?.pointerdown as CompiledEmitRule | readonly CompiledEmitRule[] | undefined)
           .flatMap((rule) => rule.capture === undefined
             ? []
             : [{ storyId, rule, declaration: rule.capture }])
@@ -218,7 +220,7 @@ export class HtmlPointerCaptureSourceAdapter {
     captureId: string
     persoKey: string
     storyId: string
-    rule: CompiledEmitRule
+    rule: CompiledCaptureEmitRule
     declaration: CompiledCaptureDeclaration
     pointerId: number | undefined
   }>): Promise<void> {
@@ -273,7 +275,7 @@ export class HtmlPointerCaptureSourceAdapter {
   }
 
   /** Emits the ordinary start event through RuntimePlayer's single event circuit. */
-  private async emitStartEvent(rule: CompiledEmitRule, storyId: string): Promise<void> {
+  private async emitStartEvent(rule: CompiledCaptureEmitRule, storyId: string): Promise<void> {
     const event = rule.event
     try {
       const result = await this.player.emit({

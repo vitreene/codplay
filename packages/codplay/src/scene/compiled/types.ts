@@ -31,6 +31,11 @@ export type CompiledEmitEvent = Readonly<{
   mode?: 'apply-now' | 'persist-only'
 }>
 
+/** Compiled observation output with an optional player-lifetime once guard. */
+export type CompiledScrollObservationEvent = CompiledEmitEvent & Readonly<{
+  once?: true
+}>
+
 /** Serializable capture declaration with functions held as external references. */
 export type CompiledCaptureDeclaration = Readonly<{
   trackOn?: readonly string[]
@@ -42,18 +47,48 @@ export type CompiledCaptureDeclaration = Readonly<{
   endCaptureRef?: CompiledFunctionReference
 }>
 
-/** Serializable emit rule containing the optional capture declaration. */
-export type CompiledEmitRule = Readonly<{
+/** Serializable IntersectionObserver options accepted by a scroll observation. */
+export type CompiledScrollObservationZone = Readonly<{
+  rootMargin?: string
+  scrollMargin?: string
+  threshold?: number | readonly number[]
+  trackVisibility?: boolean
+}>
+
+/** Serializable enter/leave rule carried by the perso that is observed. */
+export type CompiledScrollObservation = Readonly<{
+  root?: string
+  liveAction?: string
+  zone?: CompiledScrollObservationZone
+  enter?: readonly CompiledScrollObservationEvent[]
+  leave?: readonly CompiledScrollObservationEvent[]
+}>
+
+/** Shared metadata retained for one source declaration. */
+type CompiledEmitRuleBase = Readonly<{
   ref?: string
   keyCode?: string
   preventDefault?: boolean
-  event: CompiledEmitEvent
   data?: CompiledRecord
-  capture?: CompiledCaptureDeclaration
 }>
 
+/** Serializable native-event or capture rule. */
+export type CompiledEmitRule = CompiledEmitRuleBase & (
+  | Readonly<{
+    event: CompiledEmitEvent
+    capture?: undefined
+  }>
+  | Readonly<{
+    event: CompiledEmitEvent
+    capture: CompiledCaptureDeclaration
+  }>
+)
+
 /** Emit declarations indexed by the source trigger understood by an adapter. */
-export type CompiledEmitDeclaration = Readonly<Record<string, CompiledEmitRule | readonly CompiledEmitRule[]>>
+export type CompiledEmitDeclaration = Readonly<Record<
+  string,
+  CompiledEmitRule | readonly CompiledEmitRule[] | CompiledScrollObservation
+>>
 
 /** Explicit logical length retained until the materializer projection boundary. */
 export type CompiledLengthValue = Readonly<{

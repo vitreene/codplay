@@ -51,6 +51,7 @@ export type { RuntimeEventInsertMode } from '../config/event-insertion'
 export {
   RenderSync,
 } from './render-sync'
+export type { RuntimeLiveAction } from './live-actions'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
 export {
   PLAYER_LIFECYCLE_DESTROYED,

@@ -40,6 +40,7 @@ export class CodPlay implements CodPlayApi {
     const engine = new EngineFacadeImpl({
       ...engineOptions,
       ticker,
+      htmlHost: options.htmlHost,
     })
     this.#engineOwner = engine
     const capabilityRegistries = engine.createCapabilityRegistries()

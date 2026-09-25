@@ -50,9 +50,23 @@ describe('prepareInterval', () => {
     expect(() => prepareInterval(0, '50px')).toThrow(/meme unite/)
   })
 
-  it('rejette une chaine CSS couleur non normalisee', () => {
-    expect(() => prepareInterval('#f00', '#00f')).toThrow(/couleur doit etre normalisee/)
-    expect(() => prepareInterval('oklch(60% .2 30)', 'oklch(70% .2 60)')).toThrow(/couleur doit etre normalisee/)
+  it('normalise les couleurs CSS prises en charge pendant la preparation', () => {
+    expect(resolveInterval(prepareInterval('#f00', '#00f'), 0.5)).toEqual({
+      kind: 'color',
+      space: 'srgb',
+      coords: [0.5, 0, 0.5],
+      alpha: 1,
+    })
+    expect(prepareInterval('oklch(60% .2 30)', 'oklch(70% .2 60)')).toMatchObject({
+      kind: 'color',
+      space: 'oklch',
+    })
+    expect(resolveInterval(prepareInterval('red', 'blue'), 0.5)).toEqual({
+      kind: 'color',
+      space: 'srgb',
+      coords: [0.5, 0, 0.5],
+      alpha: 1,
+    })
   })
 })
 

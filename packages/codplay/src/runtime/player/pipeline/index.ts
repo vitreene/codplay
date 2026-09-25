@@ -1,7 +1,11 @@
 export { materializeScene, materializeSceneBeforeBoundary } from './materialize'
 export type { MaterializeOptions } from './materialize'
 export { collectCompiledEventOccurrences } from './compiled-eventimes'
-export { resolveLiveCaptureActionState, resolveScene } from './resolve'
+export {
+  resolveLiveActionState,
+  resolveLiveActionState as resolveLiveCaptureActionState,
+  resolveScene,
+} from './resolve'
 export { applyRuntimeSnapshotContribution } from './snapshot'
 export { solveScene } from './solve'
 export {

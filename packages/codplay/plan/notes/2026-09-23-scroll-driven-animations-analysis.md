@@ -1,6 +1,9 @@
 # Animations scroll-driven — étude d'intégration CodPlay V2
 
-> Statut : étude exploratoire — aucune API ni modification du core n'est décidée par ce document.
+> Statut : **Obsolète** — les décisions actives sont portées par
+> [`2026-09-23-scroll-container-integration-plan.md`](../2026-09-23-scroll-container-integration-plan.md)
+> et [`scroll-container-spec.md`](../../specs/scroll-container-spec.md). Ce
+> document ne fait plus autorité pour l’implémentation.
 >
 > Date : 2026-09-23
 >

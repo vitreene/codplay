@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
+import type { HtmlSourceAdapterContext } from '../../../src/runtime/runner-html'
 import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
@@ -344,10 +345,10 @@ function pointerCaptureCompiledScene(): Readonly<{
   functions: CompiledFunctionCollection
 }> {
   const trackCommand = ({ sample }: { sample: Readonly<Record<string, unknown>> }) => ({
-    action: {
-      actionName: 'drag',
+    actions: [{
+      name: 'drag',
       data: { style: { x: typeof sample.clientX === 'number' ? sample.clientX : 0 } },
-    },
+    }],
   })
   const scene: SceneDoc = {
     id: 'html-runner-pointer-capture',
@@ -603,6 +604,73 @@ afterEach(() => {
 })
 
 describe('HtmlPlayerRunner', () => {
+  it('keeps optional source adapters behind bounded HTML-host ports and runner lifecycle', () => {
+    installFakeDom()
+    const lifecycle: string[] = []
+    let sourceContext: HtmlSourceAdapterContext | undefined
+    const runner = new HtmlPlayerRunner({
+      id: 'source-adapter-runner',
+      compiledScene: continuousCompiledScene(),
+      root: new FakeElement('main') as unknown as HTMLElement,
+      catalog: runtimeCatalog(),
+      sourceAdapterFactories: [(context) => {
+        sourceContext = context
+        return {
+          attach: () => lifecycle.push('attach'),
+          onScenePresented: () => lifecycle.push('presented'),
+          onPlaybackStateChange: (state) => lifecycle.push(`state:${state}`),
+          beforeSeek: () => lifecycle.push('before-seek'),
+          afterSeek: (_scene, result) => lifecycle.push(`after-seek:${result?.ok}`),
+          destroy: () => lifecycle.push('destroy'),
+        }
+      }],
+    })
+
+    expect(sourceContext).toBeDefined()
+    expect(Object.keys(sourceContext!).sort()).toEqual([
+      'commands',
+      'compiledScene',
+      'getCurrentTimeMs',
+      'getLifecycleState',
+      'getSolvedScene',
+      'reportDiagnostic',
+      'resolvePersoElement',
+    ])
+    expect(Object.keys(sourceContext!.commands).sort()).toEqual([
+      'beginCompiledCapture',
+      'cancelCapture',
+      'emit',
+      'endCapture',
+      'trackCapture',
+    ])
+    expect(sourceContext).not.toHaveProperty('runner')
+    expect(sourceContext).not.toHaveProperty('catalog')
+    expect(sourceContext!.resolvePersoElement('main:item')).toBeUndefined()
+
+    expect(runner.init().ok).toBe(true)
+    const item = runner.getPersoNode('main:item') as FakeElement
+    Object.defineProperty(item, 'ownerDocument', { value: {} })
+    Object.defineProperty(item, 'getBoundingClientRect', {
+      value: () => ({ width: 100, height: 100 }),
+    })
+    expect(sourceContext!.resolvePersoElement('main:item')).toBeInstanceOf(FakeElement)
+    runner.play(ticker())
+    runner.pause()
+    expect(runner.seek(150).ok).toBe(true)
+    runner.destroy()
+
+    expect(lifecycle).toEqual([
+      'attach',
+      'state:ready',
+      'state:playing',
+      'state:paused',
+      'before-seek',
+      'after-seek:true',
+      'presented',
+      'destroy',
+    ])
+  })
+
   it('prepares the scene library before starting resource preload', async () => {
     installFakeDom()
     const order: string[] = []

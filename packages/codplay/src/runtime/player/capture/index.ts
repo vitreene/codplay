@@ -7,6 +7,7 @@ export {
 export { applyLiveCaptureActions } from './live-capture-actions'
 export type {
   ActiveCaptureAction,
+  ActiveCaptureActions,
   CaptureActionTarget,
   RuntimeCaptureSessionEntry,
   RuntimePlayerEmitInput,

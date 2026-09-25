@@ -1,5 +1,6 @@
 import type { Diagnostic } from '../../diagnostics'
 import type {
+  CompiledEmitEvent,
   CompiledEmitRule,
   CompiledScene,
   CompiledRecord,
@@ -32,7 +33,7 @@ type IndexedEmitRule = Readonly<{
   persoId: string
   persoKey: string
   trigger: string
-  rule: CompiledEmitRule
+  rule: Extract<CompiledEmitRule, { event: CompiledEmitEvent; capture?: undefined }>
 }>
 
 /**
@@ -89,8 +90,10 @@ export class HtmlPersoEmitSourceAdapter {
       for (const perso of story.persos) {
         const persoKey = `${storyId}:${perso.id}`
         for (const [trigger, value] of Object.entries(perso.emit ?? {})) {
-          for (const rule of normalizeRules(value)) {
+          if (trigger === 'observe') continue
+          for (const rule of normalizeRules(value as CompiledEmitRule | readonly CompiledEmitRule[])) {
             if (rule.capture !== undefined) continue
+            if (rule.event === undefined) continue
             const indexed: IndexedEmitRule = {
               storyId,
               persoId: perso.id,
@@ -251,14 +254,15 @@ function normalizeRules(
 }
 
 /** Resolves V2 named visibility for one ordinary emit rule. */
-function resolveVisibility(rule: CompiledEmitRule): 'story' | 'scene' | 'public' {
+function resolveVisibility(rule: IndexedEmitRule['rule']): 'story' | 'scene' | 'public' {
   return rule.event.visibility ?? 'story'
 }
 
 /** Builds the raw authored event payload and the native input value, when present. */
 function createEmitData(entry: IndexedEmitRule, nativeEvent: Event): CompiledRecord {
+  const event = entry.rule.event
   const data = {
-    ...(entry.rule.event.data ?? {}),
+    ...(event.data ?? {}),
     ...(entry.rule.data ?? {}),
   } as Record<string, unknown>
   const input = readInputData(nativeEvent.target)

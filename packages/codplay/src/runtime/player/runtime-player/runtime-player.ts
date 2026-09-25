@@ -52,6 +52,7 @@ import type {
   RuntimePlayerEventimeTarget,
 } from '../eventime'
 import { RuntimePlayerCaptureController } from './capture-controller'
+import { RuntimePlayerLiveActionController, type RuntimeLiveAction } from '../live-actions'
 import { RuntimePlayerEventController } from './event-controller'
 import { RuntimePlayerLifecycleController } from './lifecycle-controller'
 import { RuntimePlayerPresentation } from './presentation'
@@ -90,6 +91,7 @@ export class RuntimePlayer {
   private readonly state = new RuntimePlayerState()
   private readonly sceneState: RuntimePlayerSceneState
   private readonly presentation: RuntimePlayerPresentation
+  private readonly liveActionController: RuntimePlayerLiveActionController
   private readonly captureController: RuntimePlayerCaptureController
   private readonly seekController: RuntimePlayerSeekController
   private readonly eventController: RuntimePlayerEventController
@@ -132,13 +134,17 @@ export class RuntimePlayer {
       idle === undefined ? engine.getIdleOptions() : resolveRuntimeIdleOptions(idle),
     )
 
-    this.captureController = new RuntimePlayerCaptureController({
+    this.liveActionController = new RuntimePlayerLiveActionController({
       compiledScene,
+      componentRuntime,
+      functions,
+      getSolvedScene: () => this.state.solvedScene,
+    })
+    this.captureController = new RuntimePlayerCaptureController({
       functions,
       getStateStore: () => this.stateStore,
-      componentRuntime,
+      liveActions: this.liveActionController,
       getCurrentTimeMs: () => this.state.currentTimeMs,
-      getSolvedScene: () => this.state.solvedScene,
       synchronizeState: () => this.sceneState.synchronize(
         this.state.currentTimeMs,
         this.state.includePersistOnlyInCurrent,
@@ -168,7 +174,7 @@ export class RuntimePlayer {
       getLifecycleState: () => this.state.lifecycle,
       getIncludePersistOnly: () => this.state.includePersistOnlyInCurrent,
       getSnapshotContribution: () => this.state.snapshotContribution,
-      applyLiveCaptureActions: (scene) => this.captureController.applyLiveCaptureActions(scene),
+      applyLiveActions: (scene) => this.liveActionController.reapply(scene),
     })
     this.seekController = new RuntimePlayerSeekController({
       getLifecycleState: () => this.state.lifecycle,
@@ -437,9 +443,15 @@ export class RuntimePlayer {
     return this.captureController.cancel(captureId)
   }
 
+  /** Replaces one browser or capture source's transient compiled actions. */
+  setLiveActions(sourceId: string, actions: readonly RuntimeLiveAction[] | undefined): void {
+    this.liveActionController.setLiveActions(sourceId, actions)
+  }
+
   /** Detaches the player from the engine and closes its lifecycle. */
   destroy(): void {
     this.lifecycleController.destroy()
+    this.liveActionController.clear()
     this.transportListeners.clear()
   }
 

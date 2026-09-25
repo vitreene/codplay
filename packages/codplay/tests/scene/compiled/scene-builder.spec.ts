@@ -758,7 +758,7 @@ describe('SceneBuilder', () => {
     const initCaptureState = ({ state }: { state: Readonly<Record<string, unknown>> }) => ({
       value: state.value,
     })
-    const trackCommand = () => ({ action: { actionName: 'drag' } })
+    const trackCommand = () => ({ actions: [{ name: 'drag' }] })
     const endCapture = () => ({ events: [{ name: 'drag:stored', mode: 'persist-only' as const }] })
     const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
 

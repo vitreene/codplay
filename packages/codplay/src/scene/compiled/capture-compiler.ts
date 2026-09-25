@@ -4,6 +4,8 @@ import type {
   AuthorEmitEvent,
   AuthorEmitDeclaration,
   AuthorEmitRule,
+  AuthorScrollObservationDeclaration,
+  AuthorScrollObservationEvent,
 } from '../capture'
 import {
   extractCompiledRecord,
@@ -16,6 +18,7 @@ import type {
   CompiledEmitEvent,
   CompiledEmitDeclaration,
   CompiledEmitRule,
+  CompiledScrollObservation,
 } from './types'
 
 type ExtractionState = Parameters<typeof extractFunction>[2]
@@ -28,12 +31,18 @@ export function compileEmitDeclaration(
 ): CompiledEmitDeclaration | undefined {
   if (declaration === undefined) return undefined
   return Object.fromEntries(
-    Object.entries(declaration).map(([trigger, rule]) => [
-      trigger,
-      Array.isArray(rule)
-        ? rule.map((entry, index) => compileEmitRule(entry as AuthorEmitRule, `${scope}.${trigger}[${index}]`, state))
-        : compileEmitRule(rule as AuthorEmitRule, `${scope}.${trigger}`, state),
-    ]),
+    Object.entries(declaration).map(([trigger, rule]) => {
+      if (trigger === 'observe') {
+        if (Array.isArray(rule)) throw new Error('emit.observe accepts one declaration.')
+        return [trigger, compileScrollObservation(rule as AuthorScrollObservationDeclaration, `${scope}.observe`, state)]
+      }
+      return [
+        trigger,
+        Array.isArray(rule)
+          ? rule.map((entry, index) => compileEmitRule(entry as AuthorEmitRule, `${scope}.${trigger}[${index}]`, state))
+          : compileEmitRule(rule as AuthorEmitRule, `${scope}.${trigger}`, state),
+      ]
+    }),
   )
 }
 
@@ -43,6 +52,7 @@ function compileEmitRule(
   scope: string,
   state: ExtractionState,
 ): CompiledEmitRule {
+  if (!('event' in rule)) throw new Error(`Scroll observation must be declared directly as emit.observe: ${scope}`)
   const base = {
     ...(rule.ref === undefined ? {} : { ref: rule.ref }),
     ...(rule.keyCode === undefined ? {} : { keyCode: rule.keyCode }),
@@ -59,6 +69,37 @@ function compileEmitRule(
     ...base,
     event: compileCaptureEvent(rule.event, `${scope}.event`, state),
     capture: compileCaptureDeclaration(rule.capture, `${scope}.capture`, state),
+  }
+}
+
+/** Compiles a geometric observation while keeping its outputs as ordinary events. */
+function compileScrollObservation(
+  declaration: AuthorScrollObservationDeclaration,
+  scope: string,
+  state: ExtractionState,
+): CompiledScrollObservation {
+  return {
+    ...(declaration.root === undefined ? {} : { root: declaration.root }),
+    ...(declaration.liveAction === undefined ? {} : { liveAction: declaration.liveAction }),
+    ...(declaration.zone === undefined ? {} : { zone: { ...declaration.zone } }),
+    ...(declaration.enter === undefined ? {} : {
+      enter: declaration.enter.map((event, index) => compileScrollObservationEvent(event, `${scope}.enter[${index}]`, state)),
+    }),
+    ...(declaration.leave === undefined ? {} : {
+      leave: declaration.leave.map((event, index) => compileScrollObservationEvent(event, `${scope}.leave[${index}]`, state)),
+    }),
+  }
+}
+
+/** Compiles one observation event and retains its once-only policy. */
+function compileScrollObservationEvent(
+  event: AuthorScrollObservationEvent,
+  scope: string,
+  state: ExtractionState,
+): CompiledEmitEvent & Readonly<{ once?: true }> {
+  return {
+    ...compileEmitEvent(event, scope, state),
+    ...(event.once === true ? { once: true as const } : {}),
   }
 }
 

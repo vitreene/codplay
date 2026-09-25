@@ -1,6 +1,16 @@
 import type { ColorValue } from '../interval'
 import { NAMED_COLORS } from './named-colors'
 
+const CSS_COLOR_CANDIDATE_PATTERN = /^(?:#|rgba?\(|hsla?\(|hwb\(|lab\(|lch\(|oklab\(|oklch\(|color\()/i
+
+/** Identifies CSS color inputs that ACE can normalize or explicitly reject. */
+export function isColorCandidate(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'transparent'
+    || Object.prototype.hasOwnProperty.call(NAMED_COLORS, normalized)
+    || CSS_COLOR_CANDIDATE_PATTERN.test(normalized)
+}
+
 /** Parses supported CSS color author values into the ACE color intermediate form. */
 export function parseColor(value: string): ColorValue {
   const normalized = value.trim().toLowerCase()

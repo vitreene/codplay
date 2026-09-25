@@ -1,5 +1,5 @@
-import type { CompiledFunctionCollection, CompiledRecord, CompiledScene } from '../../../scene/compiled'
-import type { RuntimeComponentRuntime } from '../../components'
+import type { CompiledFunctionCollection, CompiledRecord } from '../../../scene/compiled'
+import type { RuntimePlayerLiveActionController } from '../live-actions'
 import {
   RuntimeCaptureSession,
   resolveCompiledCaptureDeclaration,
@@ -11,7 +11,6 @@ import {
   type RuntimeCaptureState,
   type RuntimeCaptureTrackResult,
   type RuntimeCompiledCaptureBeginInput,
-  type RuntimeCaptureAction,
 } from '../../capture'
 import {
   EVENT_INSERT_MODE_PERSIST_ONLY,
@@ -20,27 +19,20 @@ import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import type {
   RuntimeEventDispatchResult,
   RuntimeStateStore,
-  SolvedScene,
 } from '../pipeline'
 import {
   applyCaptureStateUpdate,
-  applyLiveCaptureActions,
   cancelActiveCaptures,
-  indexCompiledCaptureActionTargets,
-  type ActiveCaptureAction,
-  type CaptureActionTarget,
   type RuntimeCaptureSessionEntry,
   type RuntimePlayerEmitInput,
 } from '../capture'
 
 /** Dependencies required to coordinate live capture without owning playback. */
 export type RuntimePlayerCaptureControllerContext = Readonly<{
-  compiledScene: CompiledScene
   functions: CompiledFunctionCollection
   getStateStore: () => RuntimeStateStore
-  componentRuntime: RuntimeComponentRuntime | undefined
+  liveActions: RuntimePlayerLiveActionController
   getCurrentTimeMs: () => number
-  getSolvedScene: () => SolvedScene | undefined
   synchronizeState: () => void
   requireCaptureState: () => void
   emitEvent: (
@@ -53,15 +45,11 @@ export type RuntimePlayerCaptureControllerContext = Readonly<{
 export class RuntimePlayerCaptureController {
   readonly captureSessions = new Map<string, RuntimeCaptureSessionEntry>()
   readonly liveCaptureStateUpdates = new Map<string, CompiledRecord>()
-  private readonly activeCaptureActions = new Map<string, ActiveCaptureAction>()
-  private readonly compiledCaptureActionTargets: ReadonlyMap<string, readonly CaptureActionTarget[]>
   private readonly context: RuntimePlayerCaptureControllerContext
-  private liveCapturePersoKeys = new Set<string>()
 
   /** Creates the capture boundary for one player instance. */
   constructor(context: RuntimePlayerCaptureControllerContext) {
     this.context = context
-    this.compiledCaptureActionTargets = indexCompiledCaptureActionTargets(context.compiledScene)
   }
 
   /** Opens one source-agnostic capture session against the current player state. */
@@ -129,7 +117,6 @@ export class RuntimePlayerCaptureController {
     if (entry === undefined) return unknownCapture(captureId)
     const tracked = entry.session.track(sample)
     if (!tracked.ok) return tracked
-    this.updateActiveAction(captureId, tracked.action)
     if (tracked.updateState !== undefined) {
       const previous = this.liveCaptureStateUpdates.get(captureId) ?? {}
       const merged = { ...previous, ...tracked.updateState }
@@ -137,7 +124,7 @@ export class RuntimePlayerCaptureController {
       applyCaptureStateUpdate(this.context.getStateStore(), entry, tracked.updateState)
     }
     try {
-      this.applyLiveCaptureActions()
+      this.context.liveActions.setLiveActions(captureId, tracked.actions)
     } catch (error) {
       return {
         ok: false,
@@ -166,7 +153,7 @@ export class RuntimePlayerCaptureController {
       this.context.getCurrentTimeMs(),
       captureStateOverride,
     )
-    this.activeCaptureActions.delete(captureId)
+    this.context.liveActions.setLiveActions(captureId, undefined)
     if (!ended.ok) {
       this.removeCapture(captureId)
       this.context.synchronizeState()
@@ -213,48 +200,22 @@ export class RuntimePlayerCaptureController {
     entry.session.cancel()
     this.removeCapture(captureId)
     this.context.synchronizeState()
-    this.applyLiveCaptureActions()
     return { ok: true }
   }
 
   /** Cancels every open capture before seek, reset, terminal stop or destroy. */
   cancelAll(): void {
+    this.context.liveActions.removeSources(this.captureSessions.keys())
     cancelActiveCaptures(
       this.captureSessions,
-      this.activeCaptureActions,
       this.liveCaptureStateUpdates,
     )
-    this.liveCapturePersoKeys = new Set()
-  }
-
-  /** Reapplies currently active capture actions through the component runtime. */
-  applyLiveCaptureActions(scene?: SolvedScene): void {
-    this.liveCapturePersoKeys = applyLiveCaptureActions(
-      scene ?? this.context.getSolvedScene(),
-      this.context.componentRuntime,
-      this.activeCaptureActions,
-      this.liveCapturePersoKeys,
-      this.context.functions,
-    )
-  }
-
-  /** Updates the resolved component targets for one tracked action. */
-  private updateActiveAction(captureId: string, action: RuntimeCaptureAction | undefined): void {
-    if (action === undefined) {
-      this.activeCaptureActions.delete(captureId)
-      return
-    }
-    const previous = this.activeCaptureActions.get(captureId)
-    const targets = previous !== undefined && previous.action.actionName === action.actionName
-      ? previous.targets
-      : this.compiledCaptureActionTargets.get(action.actionName) ?? []
-    this.activeCaptureActions.set(captureId, { action, targets })
   }
 
   /** Removes every transient value associated with one capture id. */
   private removeCapture(captureId: string): void {
     this.captureSessions.delete(captureId)
-    this.activeCaptureActions.delete(captureId)
+    this.context.liveActions.setLiveActions(captureId, undefined)
     this.liveCaptureStateUpdates.delete(captureId)
   }
 }

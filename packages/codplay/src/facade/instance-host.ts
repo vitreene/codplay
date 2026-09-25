@@ -2,6 +2,7 @@ import { RuntimeEngine } from '../runtime/engine'
 import type { Diagnostic } from '../diagnostics'
 import { RuntimePlayer, type PlayerInitResult } from '../runtime/player'
 import { HtmlPlayerRunner } from '../runtime/runner-html'
+import type { HtmlSourceAdapterFactory } from '../runtime/runner-html'
 import type {
   RuntimePreloadMediaResources,
   RuntimePreloadMetadata,
@@ -19,6 +20,7 @@ export type InstanceHostOptions = Readonly<{
   onTrace: (event: import('../runtime/player/pipeline').RuntimeTraceEvent) => void
   onEmitDiagnostic: (diagnostic: Diagnostic) => void
   onResizeError: (error: unknown) => void
+  sourceAdapterFactories?: readonly HtmlSourceAdapterFactory[]
 }>
 
 /** One runtime player and the single teardown that owns its host resources. */
@@ -49,6 +51,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     onPublicEvent: options.onPublicEvent,
     onTrace: options.onTrace,
     onEmitDiagnostic: options.onEmitDiagnostic,
+    sourceAdapterFactories: options.sourceAdapterFactories,
   })
   let stopResizeObservation = (): void => undefined
   try {

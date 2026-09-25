@@ -23,6 +23,11 @@ export type AuthorEmitEvent = Readonly<{
   mode?: CaptureEventMode
 }>
 
+/** One observation output that may be emitted once or at every transition. */
+export type AuthorScrollObservationEvent = AuthorEmitEvent & Readonly<{
+  once?: true
+}>
+
 /** Read-only state supplied to the capture initializer. */
 export type AuthorCaptureInitInput = Readonly<{
   state: Readonly<Record<string, unknown>>
@@ -42,13 +47,13 @@ export type AuthorCaptureTrackInput = Readonly<{
 
 /** Logical action returned by a live capture sample. */
 export type AuthorCaptureAction = Readonly<{
-  actionName: string
+  name: string
   data?: Record<string, unknown>
 }>
 
 /** Result returned by one live capture sample. */
 export type AuthorCaptureTrackOutput = Readonly<{
-  action?: AuthorCaptureAction
+  actions?: readonly AuthorCaptureAction[]
   captureState?: Record<string, unknown>
   updateState?: Record<string, unknown>
 }>
@@ -89,6 +94,25 @@ export type AuthorCaptureDeclaration = Readonly<{
   endCapture?: AuthorCaptureEndFunction
 }>
 
+/** Native IntersectionObserver options allowed for one declared scroll zone. */
+export type AuthorScrollObservationZone = Readonly<{
+  rootMargin?: string
+  scrollMargin?: string
+  threshold?: number | readonly number[]
+  trackVisibility?: boolean
+}>
+
+/** Discrete enter and leave events declared by one observed perso. */
+export type AuthorScrollObservationDeclaration = Readonly<{
+  /** Logical id of an ancestor scroll-container used to disambiguate the root. */
+  root?: string
+  /** Compiled TweenAction on this perso, updated with the visible ratio. */
+  liveAction?: string
+  zone?: AuthorScrollObservationZone
+  enter?: readonly AuthorScrollObservationEvent[]
+  leave?: readonly AuthorScrollObservationEvent[]
+}>
+
 /** Common authoring fields shared by ordinary and captured emit rules. */
 type AuthorEmitRuleBase = Readonly<{
   /** Optional materialized part reference used by the DOM source adapter. */
@@ -102,14 +126,19 @@ type AuthorEmitRuleBase = Readonly<{
 }>
 
 /** Ordinary V2 `Perso.emit` rule with named event visibility. */
-export type AuthorEmitRule = (AuthorEmitRuleBase & Readonly<{
-  event: AuthorEmitEvent
-  capture?: undefined
-}>) | (AuthorEmitRuleBase & Readonly<{
-  /** The existing source-agnostic capture declaration keeps its own event shape. */
-  event: AuthorCaptureEvent
-  capture: AuthorCaptureDeclaration
-}>)
+export type AuthorEmitRule =
+  | (AuthorEmitRuleBase & Readonly<{
+    event: AuthorEmitEvent
+    capture?: undefined
+    observe?: undefined
+  }>)
+  | (AuthorEmitRuleBase & Readonly<{
+    /** The existing source-agnostic capture declaration keeps its own event shape. */
+    event: AuthorCaptureEvent
+    capture: AuthorCaptureDeclaration
+    observe?: undefined
+  }>)
+  | AuthorScrollObservationDeclaration
 
 /** Emit declarations indexed by the source trigger understood by an adapter. */
 export type AuthorEmitDeclaration = Record<string, AuthorEmitRule | readonly AuthorEmitRule[]>

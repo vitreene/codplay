@@ -19,6 +19,7 @@ import { toTraceEvent } from '../trace-event'
 import type { EngineResourceRegistry } from './resource-registry'
 import type { InstanceMountRegistry } from './mount-registry'
 import type { ManagedInstance } from './engine-types'
+import type { HtmlSourceAdapterFactory } from '../../runtime/runner-html'
 
 type InstanceRegistryOptions = Readonly<{
   catalog: RuntimeCapabilityCatalog
@@ -31,6 +32,7 @@ type InstanceRegistryOptions = Readonly<{
   onPublicEvent: (event: CodPlayPublicEvent) => void
   onPlaybackStateChange: (instanceId: string, state: 'playing' | 'paused') => void
   onInstanceDestroyed: (instanceId: string) => void
+  sourceAdapterFactories?: readonly HtmlSourceAdapterFactory[]
 }>
 
 /** Owns public instance creation, addressing, event input and teardown. */
@@ -87,6 +89,7 @@ export class InstanceRegistry {
         engine: this.options.runtimeEngine,
         resourceMetadata: this.options.resources.metadataSnapshot(),
         resourceMedia: this.options.resources.mediaSnapshot(),
+        sourceAdapterFactories: this.options.sourceAdapterFactories,
         instance: instanceOptions,
         onPublicEvent: (event) => this.forwardPublicEvent(instanceOptions.instanceId, eventListeners, event),
         onTrace: (event) => this.forwardTraceEvent(

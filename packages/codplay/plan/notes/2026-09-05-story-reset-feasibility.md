@@ -211,3 +211,25 @@ n’est pas applicable par le seul appel de `refresh()`, par
 `resetSequenceForReplay()`, par un nettoyage DOM ou par un remount de la démo.
 Ces voies changeraient respectivement une présentation, toute la séquence, le
 mauvais niveau de vérité ou le cycle de vie extérieur au contrat demandé.
+
+## Amélioration possible — rejouer un événement après la remise à zéro d'une story
+
+Dans CodPlay, un `scroll-container` est un élément de scène qui défile. Un
+perso peut y déclarer `emit.observe` pour produire un événement quand il entre
+ou sort de la zone visible. Avec `once: true`, l'événement choisi ne peut se
+produire qu'une fois pendant la vie de l'instance CodPlay, même si le perso
+sort puis revient dans cette zone.
+
+Une story est une partie nommée de la scène. La remettre à zéro restaure son
+état initial sans détruire l'instance CodPlay. Une amélioration possible
+serait de rendre à nouveau émissibles les événements `once: true` déclarés
+par les persos de cette story. Les autres stories ne seraient pas concernées.
+
+La remise à zéro elle-même ne devrait pas compter comme une entrée ou une
+sortie de la zone visible. Il faudra donc décider comment reprendre le suivi
+de la visibilité actuelle des persos sans produire d'événement au moment de
+la remise à zéro. Les entrées et sorties réelles qui surviennent ensuite
+pourraient de nouveau produire leurs événements.
+
+Cette amélioration n'appartient pas au contrat actuel de `scroll-container`.
+Il faudra la décider et la décrire dans un plan avant de l'implémenter.

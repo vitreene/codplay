@@ -23,7 +23,7 @@ export type RuntimePlayerPresentationContext = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
   getIncludePersistOnly: () => boolean
   getSnapshotContribution: () => RuntimeSnapshotContribution | undefined
-  applyLiveCaptureActions: (scene: SolvedScene) => void
+  applyLiveActions: (scene: SolvedScene) => void
 }>
 
 /** Owns component, module and materializer presentation of one solved scene. */
@@ -38,16 +38,17 @@ export class RuntimePlayerPresentation {
   /** Presents one solved scene through the component and materializer boundaries. */
   present(scene: SolvedScene, materialization: RuntimePlayerMaterializationContext): void {
     const { componentRuntime, materializer } = this.context
+    const componentPhase = materialization.componentPhase
+      ?? (materialization.phase === 'geometry-capture' ? 'geometry-capture' : 'normal')
     componentRuntime?.sync(scene, false, {
-      phase: materialization.componentPhase
-        ?? (materialization.phase === 'geometry-capture' ? 'geometry-capture' : 'normal'),
+      phase: componentPhase,
     })
     notifyModuleScenePresented(
       this.context.moduleServiceInstances,
       scene,
       this.context.getLifecycleState() === 'playing' ? 'playing' : 'paused',
     )
-    this.context.applyLiveCaptureActions(scene)
+    if (componentPhase === 'normal') this.context.applyLiveActions(scene)
     componentRuntime?.presentAt?.(scene.timeMs)
     const motionOccurrences = materialization.phase === 'geometry-capture'
       ? []

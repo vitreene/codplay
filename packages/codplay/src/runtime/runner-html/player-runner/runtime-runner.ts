@@ -1,3 +1,4 @@
+import type { Diagnostic } from '../../../diagnostics'
 import type { CompiledScene } from '../../../scene/compiled'
 import type { RuntimeMaterializer } from '../../materializer'
 import {
@@ -24,7 +25,13 @@ import {
   type PlayerLifecycleState,
   type PlayerSeekResult,
   type RuntimeEventDispatchResult,
+  type SolvedScene,
 } from '../../player'
+import type {
+  HtmlSourceAdapter,
+  HtmlSourceAdapterContext,
+} from '../source-adapter'
+import { isMeasurableHtmlElement } from '../element-guards'
 import {
   HtmlComponentMaterializer,
   type HtmlMaterializerRuntimeContext,
@@ -76,6 +83,12 @@ export class HtmlPlayerRunner {
   private readonly resourceMetadata = new Map<string, RuntimePreloadMetadata[string]>()
   private readonly resourceMedia = new Map<string, RuntimePreloadMediaHandle>()
   private readonly stopTerminalObservation: () => void
+  private readonly sourceAdapters: readonly HtmlSourceAdapter[]
+  private sourceAdaptersAttached = false
+  private seeking = false
+  private lastSourcePlaybackState: PlayerLifecycleState | undefined
+  private readonly reportSourceDiagnostic: (diagnostic: Diagnostic) => void
+  private sourceAdaptersDestroyed = false
 
   /** Keeps the established internal motion probe path during decomposition. */
   get motionSystem(): ReturnType<HtmlPlayerMotionController['getMotionSystem']> {
@@ -89,6 +102,7 @@ export class HtmlPlayerRunner {
 
   /** Creates one visible author host and one optional motion presentation host. */
   constructor(options: HtmlPlayerRunnerOptions) {
+    this.reportSourceDiagnostic = options.onEmitDiagnostic ?? (() => undefined)
     this.defaultTicker = options.ticker
     this.interactionRoot = options.root
     this.mountContainer = options.root
@@ -163,7 +177,7 @@ export class HtmlPlayerRunner {
       componentRuntime,
       options.functions,
       undefined,
-      options.onPublicEvent,
+      (event) => this.forwardPublicEvent(event, options.onPublicEvent),
       options.idle,
       options.onTrace,
     )
@@ -172,6 +186,13 @@ export class HtmlPlayerRunner {
         this.engine.pause()
       }
       this.syncInteractionLock()
+      if (!this.seeking) {
+        this.notifySourcePlaybackState()
+        const scene = this.player.getSolvedScene()
+        if (scene !== undefined) {
+          this.notifySourceAdapters('scene-presented', (adapter) => adapter.onScenePresented?.(scene))
+        }
+      }
     })
     const eventTarget = options.captureEventTarget ?? resolveCaptureEventTarget(options.root)
     this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
@@ -203,6 +224,9 @@ export class HtmlPlayerRunner {
       eventTarget,
       onDiagnostic: options.onEmitDiagnostic,
     })
+    this.sourceAdapters = (options.sourceAdapterFactories ?? []).map((factory) => (
+      factory(this.createSourceAdapterContext(options))
+    ))
   }
 
   /** Initializes the visible player without preparing unseen motion groups. */
@@ -216,8 +240,10 @@ export class HtmlPlayerRunner {
       this.syncInteractionLock()
       this.captureSourceAdapter.attach()
       this.emitSourceAdapter.attach()
+      this.attachSourceAdapters()
       return visible
     } catch (error) {
+      this.destroySourceAdapters()
       this.motionController.destroy()
       this.player.destroy()
       return {
@@ -265,6 +291,7 @@ export class HtmlPlayerRunner {
       this.engine.start(ticker)
     }
     this.syncInteractionLock()
+    this.notifySourcePlaybackState()
   }
 
   /** Sets preload metadata explicitly before or after player initialization. */
@@ -302,6 +329,7 @@ export class HtmlPlayerRunner {
       this.engine.pause()
     }
     this.syncInteractionLock()
+    this.notifySourcePlaybackState()
   }
 
   /** Resets the logical occurrence in place and suspends the runner ticker. */
@@ -313,6 +341,7 @@ export class HtmlPlayerRunner {
         this.engine.pause()
       }
       this.syncInteractionLock()
+      this.notifySourcePlaybackState()
     } finally {
       this.motionController.endReset()
     }
@@ -325,19 +354,37 @@ export class HtmlPlayerRunner {
 
   /** Reconstructs and presents one complete logical target transactionally. */
   seek(timeMs: number): PlayerSeekResult {
-    const motionState = this.motionController.prepareSeek(timeMs)
+    this.seeking = true
+    this.notifySourceAdapters('before-seek', (adapter) => adapter.beforeSeek?.())
+    let motionState: ReturnType<HtmlPlayerMotionController['prepareSeek']> | undefined
+    let result: PlayerSeekResult | undefined
+    let motionPrepared = false
     try {
-      const result = this.player.seek(timeMs)
+      const preparedMotionState = this.motionController.prepareSeek(timeMs)
+      motionState = preparedMotionState
+      motionPrepared = true
+      result = this.player.seek(timeMs)
       if (!result.ok) {
-        this.motionController.restoreSeek(motionState)
+        this.motionController.restoreSeek(preparedMotionState)
       }
       this.syncInteractionLock()
       return result
     } catch (error) {
-      this.motionController.restoreSeek(motionState)
+      if (motionPrepared) {
+        this.motionController.restoreSeek(motionState!)
+      }
       throw error
     } finally {
-      this.motionController.completeSeek()
+      if (motionPrepared) {
+        this.motionController.completeSeek()
+      }
+      this.seeking = false
+      const scene = this.player.getSolvedScene()
+      this.notifySourceAfterSeek(scene, result)
+      if (scene !== undefined) {
+        this.notifySourceAdapters('scene-presented-after-seek', (adapter) => adapter.onScenePresented?.(scene))
+      }
+      this.notifySourcePlaybackState()
     }
   }
 
@@ -449,6 +496,7 @@ export class HtmlPlayerRunner {
 
   /** Releases visual, component and clock resources. */
   destroy(): void {
+    this.destroySourceAdapters()
     if (this.ownsEngine) {
       this.engine.stop()
     }
@@ -462,6 +510,119 @@ export class HtmlPlayerRunner {
     this.nodes.targetNodes.clear()
     this.motionContainerResolver.clear()
     this.restoreInteractionLock()
+  }
+
+  /** Creates the restricted browser-source context without exposing runner-owned registries. */
+  private createSourceAdapterContext(
+    options: HtmlPlayerRunnerOptions,
+  ): HtmlSourceAdapterContext {
+    return {
+      compiledScene: options.compiledScene,
+      getSolvedScene: () => this.player.getSolvedScene(),
+      getLifecycleState: () => this.player.getLifecycleState(),
+      getCurrentTimeMs: () => this.player.getCurrentTimeMs(),
+      resolvePersoElement: (persoKey) => resolveMaterializedElement(this.nodes.persoNodes.get(persoKey)),
+      commands: {
+        emit: (input) => this.player.emit(input),
+        beginCompiledCapture: (input) => this.player.beginCompiledCapture(input),
+        trackCapture: (captureId, sample) => this.player.trackCapture(captureId, sample),
+        endCapture: (captureId, meta) => this.player.endCapture(captureId, meta),
+        cancelCapture: (captureId) => this.player.cancelCapture(captureId),
+        setLiveActions: (sourceId, actions) => this.player.setLiveActions(sourceId, actions),
+      },
+      reportDiagnostic: this.reportSourceDiagnostic,
+    }
+  }
+
+  /** Attaches browser sources only after the initial logical scene is materialized. */
+  private attachSourceAdapters(): void {
+    if (this.sourceAdaptersDestroyed || this.sourceAdaptersAttached) {
+      return
+    }
+    this.sourceAdaptersAttached = true
+    this.lastSourcePlaybackState = undefined
+    this.notifySourceAdapters('attach', (adapter) => adapter.attach())
+    this.notifySourcePlaybackState()
+  }
+
+  /** Delivers one host-owned lifecycle notification to each active source. */
+  private notifySourceAdapters(
+    phase: string,
+    notify: (adapter: HtmlSourceAdapter) => void,
+  ): void {
+    if (!this.sourceAdaptersAttached || this.sourceAdaptersDestroyed) {
+      return
+    }
+    this.sourceAdapters.forEach((adapter, adapterIndex) => {
+      try {
+        notify(adapter)
+      } catch (error) {
+        this.reportSourceAdapterFailure(phase, adapterIndex, error)
+      }
+    })
+  }
+
+  /** Reports one adapter callback failure through the existing HTML diagnostic port. */
+  private reportSourceAdapterFailure(phase: string, adapterIndex: number, error: unknown): void {
+    this.reportSourceDiagnostic({
+      severity: 'error',
+      code: 'RUNTIME_HTML_SOURCE_ADAPTER_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      details: {
+        refs: { sceneId: this.player.compiledScene.scene.id },
+        context: { phase, adapterIndex },
+      },
+    })
+  }
+
+  /** Announces lifecycle changes while keeping playback state owned by the player. */
+  private notifySourcePlaybackState(): void {
+    if (!this.sourceAdaptersAttached || this.sourceAdaptersDestroyed) {
+      return
+    }
+    const state = this.player.getLifecycleState()
+    if (state === this.lastSourcePlaybackState) {
+      return
+    }
+    this.lastSourcePlaybackState = state
+    this.notifySourceAdapters('playback-state-change', (adapter) => (
+      adapter.onPlaybackStateChange?.(state)
+    ))
+  }
+
+  /** Lets sources cancel transient work before the player finalizes sequence:end. */
+  private forwardPublicEvent(
+    event: import('../../player/pipeline').RuntimeTrackEvent,
+    onPublicEvent: HtmlPlayerRunnerOptions['onPublicEvent'],
+  ): void {
+    if (event.name === 'sequence:end') {
+      this.notifySourceAdapters('sequence-end', (adapter) => adapter.onSequenceEnd?.(event))
+    }
+    onPublicEvent?.(event)
+  }
+
+  /** Suspends scroll and observer work around one transactional seek. */
+  private notifySourceAfterSeek(
+    scene: SolvedScene | undefined,
+    result: PlayerSeekResult | undefined,
+  ): void {
+    this.notifySourceAdapters('after-seek', (adapter) => adapter.afterSeek?.(scene, result))
+  }
+
+  /** Destroys optional sources before built-in adapters and the player are torn down. */
+  private destroySourceAdapters(): void {
+    if (this.sourceAdaptersDestroyed) {
+      return
+    }
+    this.sourceAdaptersDestroyed = true
+    this.sourceAdaptersAttached = false
+    this.sourceAdapters.forEach((adapter, adapterIndex) => {
+      try {
+        adapter.destroy()
+      } catch (error) {
+        this.reportSourceAdapterFailure('destroy', adapterIndex, error)
+      }
+    })
   }
 
   /** Stores preload metadata in the runner-owned resource boundary. */
@@ -548,6 +709,11 @@ function materializedRootNodes(root: unknown): readonly unknown[] {
     return []
   }
   return Array.isArray(root) ? root : [root]
+}
+
+/** Resolves the first measurable HTML root without exposing the materialization registry. */
+function resolveMaterializedElement(root: unknown): Element | undefined {
+  return materializedRootNodes(root).find(isMeasurableHtmlElement)
 }
 
 /** Derives instance-local root targets from the compiled scene manifest. */

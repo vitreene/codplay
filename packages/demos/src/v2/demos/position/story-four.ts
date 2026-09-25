@@ -172,12 +172,12 @@ function createAnchorCapture(anchorId: AnchorId): Readonly<{
     const x = clamp(readFinite(captureState.x, 0) + readFinite(sample.movementX, 0), -170, 170)
     const y = clamp(readFinite(captureState.y, 0) + readFinite(sample.movementY, 0), -105, 105)
     return {
-      action: {
-        actionName,
+      actions: [{
+        name: actionName,
         data: {
           style: createPixelPositionStyle(x, y),
         },
-      },
+      }],
       captureState: { x, y },
       updateState: { [xKey]: x, [yKey]: y },
     }

@@ -260,6 +260,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
           // V2 demos are driven by the shared manual telco, not inactivity.
           idle: false,
         },
+        htmlHost: { sourceAdapterFactories: module.sourceAdapterFactories },
         pauseOnDocumentHidden: false,
         preload: { strategies: module.preloadStrategies },
       });

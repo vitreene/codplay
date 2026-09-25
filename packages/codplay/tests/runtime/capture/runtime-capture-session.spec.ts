@@ -14,7 +14,10 @@ describe('runtime capture session', () => {
           const value = typeof sample.value === 'number' ? sample.value : 0
           return {
             captureState: { value },
-            action: { actionName: 'drag', data: { value: captureState.value } },
+            actions: [
+              { name: 'drag', data: { value: captureState.value } },
+              { name: 'progress', data: { value: typeof sample.value === 'number' ? sample.value : 0 } },
+            ],
           }
         },
         endEmit: {
@@ -30,6 +33,10 @@ describe('runtime capture session', () => {
     const tracked = opened.session.track({ value: 42 })
     expect(tracked).toMatchObject({ ok: true, sampleCount: 1 })
     if (!tracked.ok) return
+    expect(tracked.actions).toEqual([
+      { name: 'drag', data: { value: 10 } },
+      { name: 'progress', data: { value: 42 } },
+    ])
 
     const ended = opened.session.end({ value: 42 }, {}, 140)
     expect(ended).toMatchObject({ ok: true })

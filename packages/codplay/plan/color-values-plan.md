@@ -2,15 +2,18 @@
 
 ## Statut
 
-> Status: Fini
+> Status: En cours — la preparation ACE accepte directement les couleurs CSS
+> prises en charge ; validation ciblee restante. Decision confirmee le 2026-09-25.
 > CodPlay version: V2 foundation
 > Review: tranche sRGB/OKLCH validée le 2026-08-24; aucun default universel
 
 La table de transcription des noms CSS vers les canaux RGB est isolee dans
 `src/ace/adapters/named-colors.ts`. La normalisation pure des noms CSS, formes
-hexadecimales, `rgb/rgba` et `oklch` vers `ColorValue` est en place. Le service `style` branche cette normalisation
-sur ses proprietes couleur declarees avant l'extraction de `CompiledScene`.
-Le player ne reparse donc pas les chaines CSS sur le chemin chaud.
+hexadecimales, `rgb/rgba` et `oklch` vers `ColorValue` est en place. Le service
+`style` normalise les proprietes couleur declarees avant l'extraction de
+`CompiledScene`. La preparation publique d'un intervalle ACE accepte aussi ces
+couleurs CSS directement et les convertit une seule fois en `ColorValue` ; le
+player ne reparse aucune chaine couleur sur le chemin chaud.
 
 Les couleurs sont traitees comme des valeurs intermediaires, distinctes des
 chaines CSS et distinctes des proprietes de transformation. Leur preparation doit
@@ -29,10 +32,10 @@ type ColorValue = {
 }
 ```
 
-Les adapters normalisent les couleurs CSS avant la preparation d'un intervalle.
-La preparation froide peut signaler une utilisation incorrecte d'une chaine brute;
-le chemin chaud d'ACE interpole uniquement des `ColorValue` deja prepares et ne
-revalide pas la syntaxe CSS.
+La preparation d'un intervalle ACE accepte un `ColorValue` deja normalise ou une
+couleur CSS prise en charge. Une chaine couleur est convertie par le parseur ACE
+avant la preparation de l'intervalle. La resolution interpole uniquement des
+`ColorValue` prepares et ne revalide pas la syntaxe CSS.
 
 ## Entrees a normaliser
 
@@ -86,3 +89,11 @@ leur valeur.
 4. Termine : tester l'interpolation `ColorValue` deja fournie par ACE.
 5. Termine pour la fondation V2 : aucun default de couleur universel n'est
    declare; un default eventuel reste du ressort du contrat de sa propriete.
+6. Code en place, validation ciblee restante : `prepareInterval` et `prepareTween`
+   recoivent directement les couleurs CSS prises en charge, dont `#rgb` et
+   `#rrggbb`, sans `parseColor` explicite dans le code appelant. La resolution
+   et la materialisation conservent leur circuit `ColorValue` existant.
+
+Acceptance : un tween ACE construit avec deux chaines hexadecimales se prepare
+et s'interpole. La demo `scroll-container` garde ses bornes hexadecimales brutes,
+monte dans le vrai player HTML et applique la couleur par son action ACE.

@@ -186,10 +186,10 @@ const trackStroke: AuthorCaptureTrackFunction = ({ sample, captureState }) => {
 
   return {
     captureState: nextCaptureState,
-    action: {
-      actionName: 'stroke_tracking',
+    actions: [{
+      name: 'stroke_tracking',
       data: { liveStroke: { d: buildSmoothPath(points), color: state.color } },
-    },
+    }],
   }
 }
 

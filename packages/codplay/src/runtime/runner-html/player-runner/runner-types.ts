@@ -17,6 +17,7 @@ import type {
   SolvedScene,
   StrapCollections,
 } from '../../player'
+import type { HtmlSourceAdapterFactory } from '../source-adapter'
 import type { RuntimeMoveOccurrence } from '../../materializer'
 import type {
   RuntimePreloadApi,
@@ -97,6 +98,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   onCaptureError?: (error: unknown) => void
   /** Receives structured diagnostics emitted by the generic DOM event source. */
   onEmitDiagnostic?: (diagnostic: Diagnostic) => void
+  /** Optional browser sources composed at the HTML host boundary. */
+  sourceAdapterFactories?: readonly HtmlSourceAdapterFactory[]
   /** Observes one completed HTML capture sample for a materializer-specific preview. */
   onCaptureTrack?: (input: Readonly<{
     captureId: string

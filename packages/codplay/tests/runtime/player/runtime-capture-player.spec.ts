@@ -204,13 +204,19 @@ describe('RuntimePlayer capture facade', () => {
                 id: 'first',
                 type: 'tag',
                 initial: { style: { opacity: 0 } },
-                actions: { drag: { style: { opacity: 0.25 } } },
+                actions: {
+                  drag: { style: { opacity: 0.25 } },
+                  progress: { style: { opacity: 0.5 } },
+                },
               },
               {
                 id: 'second',
                 type: 'tag',
                 initial: { style: { opacity: 0 } },
-                actions: { drag: { style: { opacity: 0.25 } } },
+                actions: {
+                  drag: { style: { opacity: 0.25 } },
+                  progress: { style: { opacity: 0.5 } },
+                },
               },
             ],
           },
@@ -218,6 +224,10 @@ describe('RuntimePlayer capture facade', () => {
       },
       actionTargetIndex: {
         drag: [
+          { storyId: 'main', persoId: 'first' },
+          { storyId: 'main', persoId: 'second' },
+        ],
+        progress: [
           { storyId: 'main', persoId: 'first' },
           { storyId: 'main', persoId: 'second' },
         ],
@@ -251,10 +261,10 @@ describe('RuntimePlayer capture facade', () => {
       declaration: {
         trackCommand: ({ sample }) => sample.active === true
           ? {
-            action: {
-              actionName: 'drag',
-              data: { style: { opacity: 0.75 } },
-            },
+            actions: [
+              { name: 'drag', data: { style: { opacity: 0.75, x: 12 } } },
+              { name: 'progress', data: { style: { opacity: 0.9, y: 7 } } },
+            ] as const,
           }
           : undefined,
       },
@@ -262,7 +272,11 @@ describe('RuntimePlayer capture facade', () => {
 
     expect(player.trackCapture('drag-live', { active: true })).toMatchObject({ ok: true })
     expect(liveUpdates.map(({ persoKey }) => persoKey)).toEqual(['main:first', 'main:second'])
-    expect(liveUpdates.map(({ state }) => (state.style as Record<string, unknown>).opacity)).toEqual([0.75, 0.75])
+    expect(liveUpdates.map(({ state }) => (state.style as Record<string, unknown>).opacity)).toEqual([0.9, 0.9])
+    expect(liveUpdates.map(({ state }) => state.style)).toEqual([
+      { opacity: 0.9, x: 12, y: 7 },
+      { opacity: 0.9, x: 12, y: 7 },
+    ])
     expect(player.trackCapture('drag-live', { active: false })).toMatchObject({ ok: true })
     expect(liveUpdates.slice(-2).map(({ state }) => (state.style as Record<string, unknown>).opacity)).toEqual([0, 0])
     player.destroy()
@@ -312,7 +326,7 @@ describe('RuntimePlayer capture facade', () => {
       captureId: 'drag-persist-live',
       storyId: 'main',
       declaration: {
-        trackCommand: () => ({ action: { actionName: 'drag' } }),
+        trackCommand: () => ({ actions: [{ name: 'drag' }] }),
         endCapture: () => ({ events: [{ name: 'capture:stored' }] }),
       },
     }).ok).toBe(true)

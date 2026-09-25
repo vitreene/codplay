@@ -347,3 +347,108 @@ nom d’artboard. La state machine se déclare séparément avec
 une expression ou toute autre fonctionnalité d’application peut utiliser les
 valeurs nommées de ce composant pour piloter les inputs de la state machine.
 Voir [`src/rive/README.md`](src/rive/README.md).
+
+## Scroll container
+
+Enregistrez le composant et son module dans l’engine, puis ajoutez la source
+HTML au host pour activer les observations :
+
+```ts
+import { CodPlay } from 'codplay'
+import {
+  SCROLL_CONTAINER_COMPONENT_DEFINITION,
+  SCROLL_CONTAINER_MODULE_DEFINITION,
+  createScrollContainerSourceAdapter,
+} from '@codplay/component-v2'
+
+const codplay = new CodPlay({
+  engine: {
+    components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
+    modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
+  },
+  htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
+})
+
+const build = codplay.build({
+  scene: {
+    id: 'chapters',
+    stories: {
+      main: {
+        id: 'main',
+        initial: { move: '@root' },
+        persos: [
+          {
+            id: 'chapter-scroll',
+            type: 'scroll-container',
+            initial: {
+              tag: 'section',
+              attr: { id: 'chapter-scroll' },
+              style: { height: '24rem', overflowY: 'auto' },
+              move: { target: '@root' },
+            },
+          },
+          {
+            id: 'chapter-card',
+            type: 'tag',
+            initial: {
+              tag: 'article',
+              content: 'Introduction',
+              move: { target: 'chapter-scroll' },
+            },
+            emit: {
+              observe: {
+                enter: [{ name: 'chapter:appear', once: true }],
+                leave: [{ name: 'chapter:leave' }],
+              },
+            },
+          },
+        ],
+      },
+    },
+  },
+})
+
+if (!build.ok) throw new Error('The scene is invalid.')
+```
+
+By default, an observation uses the closest ancestor scroll container. Add
+`root: 'chapter-scroll'` to `emit.observe` to choose a particular ancestor.
+Events repeat at each enter or leave transition unless that event declares
+`once: true`.
+
+To drive a card's own ACE color from its visible proportion, name one of its
+TweenActions with `liveAction`. Its function reads `input.data.ratio` from 0 to
+1; `zone.threshold` controls how often the browser supplies a new ratio. This
+live update does not create a journal event.
+
+```ts
+import { prepareTween, resolveTween } from 'ace'
+
+const cardColor = prepareTween({
+  from: '#1b2633',
+  to: '#286b57',
+  duration: 1,
+  ease: 'linear',
+})
+
+function colorByVisibility({ data }: { data: Record<string, unknown> }) {
+  return {
+    style: {
+      backgroundColor: resolveTween(cardColor, data.ratio as number),
+    },
+  }
+}
+
+emit: {
+  observe: {
+    liveAction: 'chapter-card:visibility',
+    zone: { threshold: [0, 0.25, 0.5, 0.75, 1] },
+  },
+},
+actions: {
+  'chapter-card:visibility': {
+    duration: 1,
+    fn: colorByVisibility,
+  },
+}
+```

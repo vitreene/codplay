@@ -202,7 +202,8 @@ function isNonEmptyString(value: unknown): value is string {
 
 /** Checks one compiled emit declaration and its nested capture references. */
 function isCompiledEmitDeclaration(value: unknown): boolean {
-  return isPlainRecord(value) && Object.values(value).every((entry) => {
+  return isPlainRecord(value) && Object.entries(value).every(([trigger, entry]) => {
+    if (trigger === 'observe') return isCompiledScrollObservation(entry)
     if (Array.isArray(entry)) return entry.every(isCompiledEmitRule)
     return isCompiledEmitRule(entry)
   })
@@ -217,6 +218,41 @@ function isCompiledEmitRule(value: unknown): boolean {
   if (value.data !== undefined && !isCompiledRecord(value.data)) return false
   if (value.capture === undefined) return isCompiledEmitEvent(value.event)
   return isCompiledCaptureEvent(value.event) && isCompiledCaptureDeclaration(value.capture)
+}
+
+/** Checks one geometric observation without admitting browser objects or callbacks. */
+function isCompiledScrollObservation(value: unknown): boolean {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['root', 'liveAction', 'zone', 'enter', 'leave'])) return false
+  if (value.root !== undefined && typeof value.root !== 'string') return false
+  if (value.liveAction !== undefined && (typeof value.liveAction !== 'string' || value.liveAction.trim().length === 0)) return false
+  if (value.zone !== undefined) {
+    if (!isPlainRecord(value.zone) || !hasOnlyKeys(value.zone, ['rootMargin', 'scrollMargin', 'threshold', 'trackVisibility'])) return false
+    if (value.zone.rootMargin !== undefined && typeof value.zone.rootMargin !== 'string') return false
+    if (value.zone.scrollMargin !== undefined && typeof value.zone.scrollMargin !== 'string') return false
+    if (value.zone.threshold !== undefined) {
+      const thresholds = Array.isArray(value.zone.threshold) ? value.zone.threshold : [value.zone.threshold]
+      if (!thresholds.every((threshold) => (
+        typeof threshold === 'number'
+        && Number.isFinite(threshold)
+        && threshold >= 0
+        && threshold <= 1
+      ))) return false
+    }
+    if (value.zone.trackVisibility !== undefined && typeof value.zone.trackVisibility !== 'boolean') return false
+  }
+  return (value.enter === undefined || Array.isArray(value.enter) && value.enter.every(isCompiledScrollObservationEvent))
+    && (value.leave === undefined || Array.isArray(value.leave) && value.leave.every(isCompiledScrollObservationEvent))
+}
+
+/** Validates one output event from a scroll observation declaration. */
+function isCompiledScrollObservationEvent(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ['name', 'data', 'visibility', 'mode', 'once'])
+    && typeof value.name === 'string'
+    && (value.data === undefined || isCompiledRecord(value.data))
+    && (value.visibility === undefined || value.visibility === 'story' || value.visibility === 'scene' || value.visibility === 'public')
+    && (value.mode === undefined || value.mode === 'apply-now' || value.mode === 'persist-only')
+    && (value.once === undefined || value.once === true)
 }
 
 /** Checks one ordinary V2 event carried by a non-capture emit rule. */

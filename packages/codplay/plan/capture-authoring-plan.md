@@ -2,9 +2,10 @@
 
 ## Statut
 
-`Fini` — ce document porte uniquement le mécanisme core de capture
-continue, indépendant de sa source et de sa materialisation. Il doit être
-validé avant toute modification de `src/`.
+Le mécanisme core source-agnostique est `Fini`. L’amendement du 2026-09-24
+fixant la sortie live de `trackCommand` en collection ordonnée `actions` est
+`Fixe` ; son implémentation et sa non-régression restent `En cours` dans le
+[plan scroll-container](./2026-09-23-scroll-container-integration-plan.md).
 
 La validation d’une fixture HTML et de la telco est décrite séparément dans
 [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md). Elle ne
@@ -46,7 +47,8 @@ Ce plan ne définit pas :
   une entrée du journal, ni une valeur rejouée au seek.
 - `trackCommand` reçoit le sample courant, le cumul brut et le dernier
   `captureState`.
-- `trackCommand` peut retourner une `CaptureAction`, un remplacement de
+- `trackCommand` peut retourner une collection ordonnée `actions` de
+  `CaptureAction`, un remplacement de
   `captureState` et une mise à jour partielle `updateState` du scope lu par la
   capture. `updateState` n’entre pas dans le journal et n’est pas rejouée au
   seek ; le résultat seek-safe passe par une sortie de fin et un strap. Aucun
@@ -54,8 +56,11 @@ Ce plan ne définit pas :
 
 ### Actions live
 
-- Une `CaptureAction` sélectionne une action déjà déclarée dans
-  `CompiledPerso.actions` par `actionName`.
+- Chaque `CaptureAction` sélectionne une action déjà déclarée dans
+  `CompiledPerso.actions` par `name` et peut fournir ses données dans `data`.
+- Les actions live d’un sample sont appliquées dans l’ordre retourné par
+  `trackCommand`; une collection absente ou vide retire toutes les actions live
+  précédentes de cette session.
 - Elle ne crée jamais d’action au runtime et n’est jamais ajoutée au journal.
 - Les cibles sont préparées lors de la compilation ou de l’initialisation du
   player à partir de l’index compilé ; aucune recherche de cible n’est faite
@@ -217,3 +222,18 @@ la fixture S5 peut être branchée sans ajouter de sémantique au mécanisme cor
   `59` fichiers, `365` tests passants au 2026-08-22 ;
 - [x] validation S5 HTML/telco, suivie exclusivement dans
   [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md).
+
+### Amendement multi-actions live — 2026-09-24
+
+Le contrat auteur et runtime de `trackCommand` utilise désormais
+`actions: readonly { name, data? }[]`. Cet amendement conserve les frontières
+source-agnostiques de capture ; il ne produit aucun event continu et ne change
+ni `captureState`, ni `updateState`, ni `endEmit`, ni `endCapture`, ni le journal
+ou le seek. Les consommateurs V2 existants doivent employer la nouvelle forme.
+
+- [x] types auteur, compilés et runtime alignés sur les actions ordonnées ;
+- [x] capture session et player appliquent plusieurs actions live et retirent
+      toutes les sorties précédentes si la nouvelle collection est absente ;
+- [x] démos V2 `position/story-four.ts` et `stroke-path/main.ts` adaptées ;
+- [ ] régressions de capture validées avec les tests existants et les nouveaux
+      tests de frontière du plan scroll.

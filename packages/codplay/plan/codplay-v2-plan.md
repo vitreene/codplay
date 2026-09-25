@@ -153,7 +153,8 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |
 | ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md), [`notes/2026-08-23-v1-behavior-inventory.md`](./notes/2026-08-23-v1-behavior-inventory.md) | Fixe, circuit logique unique en place; inventaire V1 des candidats Behavior consigné |
 | Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | Capture core et placement list validés ; le seek de la démo reste ouvert et la démo n'est pas encore clôturée |
-| Scroll-container et observation | [`2026-09-23-scroll-container-integration-plan.md`](./2026-09-23-scroll-container-integration-plan.md) | A relire : bêta raccordée au contrat `capture` existant par un pont temporaire ; aucune modification du core capture avant validation |
+| Scroll-container et observation | [`2026-09-23-scroll-container-integration-plan.md`](./2026-09-23-scroll-container-integration-plan.md) | Décisions Fixes ; implémentation en cours, validations runtime et navigateur restantes |
+| Relevé du fonctionnement du projet et documentation | [`2026-09-25-releve-fonctionnement-projet-plan.md`](./2026-09-25-releve-fonctionnement-projet-plan.md) | À venir après la finalisation du composant scroll et de ses capacités associées |
 
 ## Modeles algorithmiques
 

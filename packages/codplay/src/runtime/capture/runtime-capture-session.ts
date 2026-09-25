@@ -117,7 +117,7 @@ export class RuntimeCaptureSession {
       if (output?.captureState !== undefined) this.captureState = cloneRecord(output.captureState)
       return {
         ok: true,
-        action: output?.action === undefined ? undefined : cloneAction(output.action),
+        actions: output?.actions === undefined ? undefined : output.actions.map(cloneAction),
         updateState: output?.updateState === undefined ? undefined : cloneRecord(output.updateState),
         captureState: this.getCaptureState(),
         sampleCount: this.samples.length,
@@ -273,7 +273,7 @@ function cloneEvent(event: RuntimeCaptureEvent): RuntimeCaptureEvent {
 /** Copies one logical live action and its optional payload. */
 function cloneAction(action: RuntimeCaptureAction): RuntimeCaptureAction {
   return {
-    actionName: action.actionName,
+    name: action.name,
     data: action.data === undefined ? undefined : cloneRecord(action.data),
   }
 }

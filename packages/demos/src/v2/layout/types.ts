@@ -7,6 +7,7 @@ import type {
   RuntimePreloadStrategy,
   SceneDoc,
 } from 'codplay'
+import type { HtmlSourceAdapterFactory } from 'codplay/runtime/runner-html'
 
 /** Severity used by the non-blocking V2 demo log panel. */
 export type V2DemoLogLevel = 'info' | 'warn' | 'error'
@@ -35,6 +36,8 @@ export type V2DemoModule = Readonly<{
   preloadMode?: RuntimePreloadMode
   /** Adds foreign capabilities while the shared layout retains engine ownership. */
   engineCapabilities?: Pick<CodPlayEngineOptions, 'components' | 'services' | 'modules' | 'libraries'>
+  /** Adds optional browser sources at the shared HTML-host boundary. */
+  sourceAdapterFactories?: readonly HtmlSourceAdapterFactory[]
   /** Strategies consumed by the shared V2 preload service. */
   preloadStrategies?: Readonly<Record<string, RuntimePreloadStrategy>>
   /** Optional external eventime sequence exposed by the common telco. */

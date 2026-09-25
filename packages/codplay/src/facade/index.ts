@@ -20,6 +20,7 @@ export type {
   CodPlayEvents,
   CodPlayEventListener,
   CodPlayFrameScheduler,
+  CodPlayHtmlHostOptions,
   CodPlayInstances,
   CodPlayInstance,
   CodPlayInstanceDiagnostic,

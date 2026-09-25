@@ -4,6 +4,12 @@ export {
   type HtmlPlayerRunOptions,
   type HtmlPlayerRunResult,
 } from './player-runner'
+export type {
+  HtmlSourceAdapter,
+  HtmlSourceAdapterContext,
+  HtmlSourceAdapterFactory,
+  HtmlSourceAdapterPlayerPort,
+} from './source-adapter'
 export {
   HtmlComponentMaterializer,
   type HtmlComponentMaterializerNodes,
