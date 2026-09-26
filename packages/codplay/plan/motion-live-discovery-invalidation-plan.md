@@ -239,8 +239,12 @@ Le transport des occurrences et les comportements de temps absolu et de capture
 vérifiés sont décrits dans la [spécification motion](../specs/motion-frame-v2-spec.md).
 Le plan ne garde que les gates d’application encore ouvertes :
 
-- [ ] Prouver qu’une présentation sans occurrence move ne déclenche ni
-      capture géométrique ni construction du graphe de positions.
+- [x] Prouver qu’une présentation sans occurrence move ne déclenche ni
+      capture géométrique ni construction du graphe de positions. Vérifié le
+      2026-09-26 par la présentation HTML runner d’une scène à animation de
+      styles seule : aucun snapshot géométrique, aucune lecture de rectangle et
+      aucun graphe motion n’est créé ; voir
+      [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts).
 - [ ] Vérifier que les occurrences compilées, live et reconstruites par Seek
       empruntent le même chemin de préparation.
 - [ ] Achever et valider la partition des groupes par toutes les stories
@@ -260,8 +264,6 @@ une seule fois.
 
 Les validations restantes doivent établir que :
 
-- aucun événement sans occurrence `move` ne déclenche de capture géométrique
-  ni de construction du graphe `move`/`reparent` ;
 - les événements compilés, live et reconstruits par Seek transmettent les
   occurrences au même chemin de préparation ;
 - le reset retire les groupes touchés sans capture, et le resize invalide les

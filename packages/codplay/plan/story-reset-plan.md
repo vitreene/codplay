@@ -59,6 +59,10 @@ restent cohérents autour d'un ou plusieurs resets, y compris à temps égal.
 
 ## Validation restante
 
+- [x] Sur le chemin facade HTML, un reset retire l’overlay et le segment actif
+      d’un move/reparent de la story ; Seek avant la frontière les restaure et
+      Seek sur la frontière les retire de nouveau. Vérifié par
+      [`facade.spec.ts`](../tests/facade/facade.spec.ts) le 2026-09-26.
 - move local et reparent avant, pendant et après le reset ;
 - groupe motion qui touche plusieurs stories ;
 - Seek à froid et après capture, de part et d'autre de la frontière ;

@@ -7,7 +7,6 @@ informations de placement ou de présentation qu’elle transmet au runtime. Les
 validations complètes des cycles Play/Seek, reset, replay, retarget et capture
 restent suivies par les [plans motion](../plan/motion-live-discovery-invalidation-plan.md),
 [move vers une cible dépendante](../plan/move-target-dependency-plan.md),
-[acceptance capture S5](../plan/capture-s5-validation-plan.md) et
 [Seek DnD/capture S6](../plan/drag-capture-list-s6-validation-plan.md).
 
 ## Déclaration auteur

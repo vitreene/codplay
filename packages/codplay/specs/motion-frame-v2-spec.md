@@ -25,6 +25,17 @@ Ils ne certifient pas l’acceptation complète des sources compilées, live et
 Seek, ni la partition des groupes au reset et au resize ; ces gates restent au
 [plan de préparation motion](../plan/motion-live-discovery-invalidation-plan.md).
 
+Une présentation runner sans occurrence `move` ne capture pas de snapshot
+géométrique et ne construit pas le système ni le graphe motion. Le test runner
+exerce un événement qui ne change que des styles et vérifie l’absence de lecture
+géométrique et d’appel au constructeur de graphe.
+
+Sur le chemin facade HTML, un reset de story arrivé à la tête du player retire
+l’overlay et le segment actif du move/reparent de cette story. Un Seek avant la
+frontière rétablit les deux ; un Seek sur la frontière les retire à nouveau.
+Cette preuve couvre une story et un segment actif, pas le retrait des groupes
+inter-story ni l’ordre avec une préparation concurrente.
+
 ## Frame au temps absolu
 
 Le graphe motion produit la même frame pour un même temps absolu, quel que soit
@@ -59,6 +70,12 @@ cadre dans le contexte de destination, et ne crée pas de retarget parasite.
 - [motion-system.spec.ts](../tests/runtime/runner-html/motion-system.spec.ts)
   vérifie que la présentation utilise les frontières fournies sans capture
   naturelle à chaque frame.
+- [player-runner.spec.ts](../tests/runtime/runner-html/player-runner.spec.ts)
+  vérifie qu’une présentation de style sans occurrence `move` n’effectue pas
+  de capture géométrique et ne construit pas le graphe motion.
+- [facade.spec.ts](../tests/facade/facade.spec.ts) vérifie au reset d’une story
+  le retrait de l’overlay et du segment actif, puis leur restauration et leur
+  retrait en repassant la frontière avec Seek.
 - [motion-capture.spec.ts](../tests/runtime/runner-html/motion-capture.spec.ts)
   vérifie les snapshots FIRST, après-start, keyframes et LAST.
 - [story-six-motion.spec.ts](../tests/facade/story-six-motion.spec.ts) vérifie

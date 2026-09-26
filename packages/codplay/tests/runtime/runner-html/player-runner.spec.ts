@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import * as motionGraph from '../../../src/runtime/motion/motion-graph'
 import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
 import type { HtmlSourceAdapterContext } from '../../../src/runtime/runner-html'
+import * as layoutSnapshot from '../../../src/runtime/runner-html/layout-snapshot'
 import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
@@ -1027,6 +1029,59 @@ describe('HtmlPlayerRunner', () => {
 
     runner.pause()
     runner.destroy()
+  })
+
+  it('does not capture geometry or build a motion graph without a move occurrence', () => {
+    installFakeDom()
+    vi.stubGlobal('HTMLElement', FakeElement)
+    const root = new FakeElement('main')
+    const rect = {
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 100,
+      width: 100,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect
+    const rootGeometryRead = vi.fn(() => rect)
+    Object.defineProperty(root, 'ownerDocument', { configurable: true, value: {} })
+    Object.defineProperty(root, 'getBoundingClientRect', { configurable: true, value: rootGeometryRead })
+
+    const runner = new HtmlPlayerRunner({
+      id: 'style-only-motion-runner',
+      compiledScene: continuousCompiledScene(),
+      root: root as unknown as HTMLElement,
+      catalog: runtimeCatalog(),
+    })
+    const captureLayout = vi.spyOn(layoutSnapshot, 'captureHtmlLayoutSnapshot')
+    const buildMotionGraph = vi.spyOn(motionGraph, 'buildMotionGraphPreparation')
+
+    try {
+      expect(runner.init().ok).toBe(true)
+      expect(runner.player.getSolvedScene()?.moveOccurrences ?? []).toEqual([])
+      expect(runner.motionSystem).toBeUndefined()
+
+      const item = runner.getPersoNode('main:item') as FakeElement
+      const itemGeometryRead = vi.fn(() => rect)
+      Object.defineProperty(item, 'ownerDocument', { configurable: true, value: {} })
+      Object.defineProperty(item, 'getBoundingClientRect', { configurable: true, value: itemGeometryRead })
+
+      expect(runner.seek(600).ok).toBe(true)
+      expect(runner.player.getSolvedScene()?.moveOccurrences ?? []).toEqual([])
+      expect(captureLayout).not.toHaveBeenCalled()
+      expect(rootGeometryRead).not.toHaveBeenCalled()
+      expect(itemGeometryRead).not.toHaveBeenCalled()
+      expect(buildMotionGraph).not.toHaveBeenCalled()
+      expect(runner.motionSystem).toBeUndefined()
+      expect(runner.presentationMotionBoundaries).toEqual([])
+    } finally {
+      runner.destroy()
+      captureLayout.mockRestore()
+      buildMotionGraph.mockRestore()
+    }
   })
 
   it('projects cqw values through the real runner and reprojects them after resize', () => {

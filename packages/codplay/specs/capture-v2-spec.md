@@ -3,9 +3,8 @@
 ## Périmètre vérifié
 
 Cette spécification décrit le cycle source-agnostique, le tracking live, les
-sorties de fin et le routage par visibilité implémentés et vérifiés. Les
-validations navigateur encore ouvertes pour S5 et S6 sont suivies dans leurs
-[plans dédiés](../plan/capture-s5-validation-plan.md) et
+sorties de fin et le routage par visibilité implémentés et vérifiés. La
+validation navigateur Seek S6 qui reste ouverte est suivie dans le
 [plan S6](../plan/drag-capture-list-s6-validation-plan.md).
 
 Cette spécification définit le cycle de capture V2 indépendant de sa source.
@@ -175,5 +174,8 @@ y compris seek et teardown.
 Le 2026-09-26, la suite CodPlay (108 fichiers, 710 tests) et la suite
 `component-v2` (12 fichiers, 47 tests), les typechecks CodPlay,
 `component-v2` et démos V2, ainsi que le build des démos V2 ont réussi. Les
-validations navigateur S5 et Seek S6 encore ouvertes restent suivies dans
-leurs plans dédiés.
+validations source-agnostiques et l’intégration du circuit source sont
+couvertes par ces tests. L’utilisateur a confirmé le 2026-09-26 le parcours
+navigateur du runtime de capture CodPlay exercé avec la fixture `stroke-path`,
+ce qui clôt S5. Seule l’acceptance Seek navigateur S6 reste ouverte dans son
+plan dédié.

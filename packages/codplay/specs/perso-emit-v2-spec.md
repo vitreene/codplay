@@ -5,8 +5,7 @@
 Cette spécification couvre le sous-ensemble vérifié des événements DOM
 déclarés par `Perso.emit` sans `capture`, lorsqu'ils sont raccordés à un
 `HtmlPlayerRunner`. Les sorties et les entrées continues de capture relèvent de
-la [spécification capture](./capture-v2-spec.md) et du
-[plan S5](../plan/capture-s5-validation-plan.md).
+la [spécification capture](./capture-v2-spec.md).
 Les comportements DOM non encore validés restent au
 [plan `Perso.emit`](../plan/perso-emit-v2-portage-plan.md).
 

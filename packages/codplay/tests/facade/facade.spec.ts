@@ -573,6 +573,8 @@ describe('CodPlay facade', () => {
     await instance.telco.play()
     codplay.engine.advance(1)
     expect(findTestOverlayLayer(root)).not.toBeUndefined()
+    expect(instance.presentation.get()?.items.find((item) => item.itemId === 'main:item')?.activeSegmentId)
+      .toBeDefined()
 
     await instance.events.emit(
       { name: 'navigation:reset' },
@@ -580,13 +582,19 @@ describe('CodPlay facade', () => {
     )
 
     expect(findTestOverlayLayer(root)).toBeUndefined()
+    expect(instance.presentation.get()?.items.find((item) => item.itemId === 'main:item')?.activeSegmentId)
+      .toBeUndefined()
     expect(instance.telco.getProgress().timelineMs).toBe(1)
 
     await instance.telco.seek(0)
     expect(findTestOverlayLayer(root)).not.toBeUndefined()
+    expect(instance.presentation.get()?.items.find((item) => item.itemId === 'main:item')?.activeSegmentId)
+      .toBeDefined()
 
     await instance.telco.seek(1)
     expect(findTestOverlayLayer(root)).toBeUndefined()
+    expect(instance.presentation.get()?.items.find((item) => item.itemId === 'main:item')?.activeSegmentId)
+      .toBeUndefined()
     codplay.destroy()
   })
 

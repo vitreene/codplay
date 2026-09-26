@@ -35,7 +35,7 @@ celui-ci ne remplace pas les spécifications ou plans actifs.
 | Projection des transformations | [Canaux de transformation](../specs/transform-properties-v2-spec.md) | [Plan transform](./transform-properties-plan.md) |
 | Move, retarget et présentation motion | [Move](../specs/move-v2-spec.md), [dépendance à la cible](../specs/move-target-dependency-v2-spec.md), [frontières motion](../specs/motion-frame-v2-spec.md) | [Dimensions de liste](./list-dimension-interpolation-plan.md), [retarget](./move-target-dependency-plan.md), [préparation motion](./motion-live-discovery-invalidation-plan.md), [intégration runner](./runner-flip-integration-study.md) |
 | Capacités list et glisser-déposer | [List](../specs/list-capability-v2-spec.md), [DnD/list](../specs/list-dnd-v2-spec.md) | [Validation DnD/capture S6](./drag-capture-list-s6-validation-plan.md) |
-| Capture continue | [Capture](../specs/capture-v2-spec.md) | [Validation S5](./capture-s5-validation-plan.md) |
+| Capture continue | [Capture](../specs/capture-v2-spec.md) | — |
 | Observation par scroll | [Scroll-container](../specs/scroll-container-spec.md) | — |
 
 ## Dette d'architecture différée à V2.5 — DnD et FLIP
