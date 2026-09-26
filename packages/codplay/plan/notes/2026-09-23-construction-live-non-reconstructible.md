@@ -74,7 +74,7 @@ cette construction.
 ## Références lues
 
 - `packages/codplay/plan/player-engine-plan.md` ;
-- `packages/codplay/plan/facade-engine-instance-plan.md` ;
+- `packages/codplay/specs/facade-v2-spec.md` ;
 - `packages/codplay/src/runtime/player/runtime-player/event-controller.ts` ;
 - `packages/codplay/src/runtime/player/pipeline/runtime-event-dispatcher.ts` ;
 - `packages/codplay/src/runtime/player/pipeline/track-journal.ts` ;

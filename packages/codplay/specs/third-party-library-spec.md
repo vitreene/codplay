@@ -1,10 +1,13 @@
 # CodPlay V2 — préparation des bibliothèques tierces
 
-## Statut
+## Périmètre vérifié
 
-> En cours — barrière engine/preparation et injection du runtime préparé dans
-> les classes de composants implémentées ; la déclaration core Three.js et ses
-> composants spécialisés sont maintenant séparés.
+Cette spécification fixe le contrat de préparation des bibliothèques tierces
+par l'engine. Les vérifications de dérivation, préparation, disponibilité,
+libération et ordre runner sont couvertes par les tests du builder, de
+`RuntimeEngine` et de `HtmlPlayerRunner`. L'acceptation des intégrations est
+décrite dans le
+[plan du pont tiers](../plan/2026-09-18-third-party-render-target-codplay-plan.md).
 
 Cette spécification décrit uniquement le chargement préalable de la
 bibliothèque qui pilote un composant tiers. Elle ne décrit ni Three.js, ni
@@ -98,6 +101,6 @@ restent, elles, sous la responsabilité du composant et de son intégration.
 
 ## Limites actuelles
 
-Cette spécification ne décrit pas les composants propres à Three.js, Rive ou
-Lottie. Chaque package d'intégration fournit ses classes et ses définitions,
-en s'appuyant sur la barrière engine décrite ici.
+Cette spécification ne décrit pas les composants propres à Three.js, Rive,
+Lottie ou Avatar. Chaque package d'intégration fournit ses classes et ses
+définitions, en s'appuyant sur la barrière engine décrite ici.

@@ -10,7 +10,7 @@
 
 - **Mécanisme CSS = `@container (orientation: landscape | portrait)`** (descripteur standard de container query, vérifié MDN 2026-07-11). L'orientation est évaluée sur la **propre boîte du conteneur** (ratio width/height), pas sur le viewport — c'est ce qui résout « CSS ne gère pas l'orientation d'un élément ». CSS pur, aucun JS pour le rendu réel. Baseline largement disponible depuis février 2023.
 - **Donnée de variante = structurée**, jamais encodée dans un nom de classe. Une zone garde son **id** stable ; sa définition devient une table de surfaces par contrainte. Le **nom** est un libellé par ordre (`z-01`, `z-02`…), qui n'est qu'un intermédiaire vers la classe CSS générée.
-- **La double définition est l'exception** : tant que l'auteur ne définit pas de position particulière pour la seconde orientation, la classe reste **unique et sans contexte** (règle déjà posée, `2026-07-03-selection-frame-variantes-plan.md`). La duplication de règles ne concerne que les zones/grilles réellement variées.
+- **La double définition est l'exception** : tant que l'auteur ne définit pas de position particulière pour la seconde orientation, la classe reste **unique et sans contexte**. Le modèle `createZoneEditor()` édite une surface à la fois ; l'éditeur hôte porte l'association entre la zone et ses surfaces par contrainte, selon le [plan zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md). La duplication de règles ne concerne que les zones/grilles réellement variées.
 - **La classe métier (`AutoCapsule`) génère le CSS** — placement conditionnel des zones ET forme de grille conditionnelle. Elle produit déjà le placement par lignes mono-surface ; la génération *conditionnelle* est l'ajout de ce chantier.
 - **Rendu réel = CSS pur** via `@container (orientation:)`. **Simulation/forçage = une classe sur la racine**, poussée par une ligne JS (rôle minimal, modèle validé). La classe de simulation l'emporte quand présente ; sinon le `@container` réel s'applique.
 - **Portée** : variantes d'orientation sur les **zones** (placement) et sur la **grille de capsule** (forme, paramètres générateurs d'enfants — inversion rows/cols au moins). **Hors périmètre** : les sous-grilles internes d'un conteneur variables par orientation (extension latérale, pas ce raisonnement).
@@ -36,7 +36,7 @@ Codplay est un séquenceur d'événements aveugle à son contexte de lecture ; l
 
 ## Lien avec les autres documents
 
-- `docs/plans/2026-07-03-selection-frame-variantes-plan.md` — § « Surfaces et contraintes » : vocabulaire (surface, contrainte, une seule active par contrainte ; le module d'édition n'édite qu'une surface à la fois, l'association `zone → {contrainte: surface}` vit dans la data).
+- [Spec zone-editor](../../../authoring/selection-frame/specs/zone-editor-spec.md) — état d'une surface éditée par le module ; [plan zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md) — transfert de la sélection des surfaces à l'éditeur hôte.
 - `2026-07-08-capsule-spec.md` §10 (`CapsulePatch.grid`), §11 (zones `card`) — les valeurs qui deviennent variables par orientation.
 - `2026-07-08-dedit-zonedef-migration-plan.md` — la migration `ZoneDef` doit tenir compte de la table de surfaces (pas seulement `id`).
 - La spec du modèle ed2 (à écrire) référence ce chantier pour la forme data des variantes ; l'app ne garde qu'un **élément d'interface de bascule d'orientation de la scène** (aperçu auteur).

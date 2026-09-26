@@ -170,7 +170,7 @@ prisma + sqlite. Remplace l'implémentation de l'acteur de persistance de l'éta
 ## Hors périmètre
 
 - Le décor : dedit lui-même (module existant, ici intégré), migration `ZoneDef` dedit, refonte UI dedit.
-- L'intégration cs↔zones du plan selection-frame.
+- L'intégration cs↔zones du [plan zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md).
 - Le texte (module dédié, chantier propre), les ressources tierces (registre de composants), whisper — chantiers nommés, non ouverts ici.
 - Le mini-éditeur audio (multipiste, volume, clip) — `modules/2026-07-11-sequence-editor-representation.md`.
 - Les variantes d'orientation — `modules/2026-07-11-zone-orientation-variants-plan.md`.

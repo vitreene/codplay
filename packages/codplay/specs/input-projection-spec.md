@@ -1,10 +1,9 @@
 # CodPlay V2 — projection vivante des composants `input`
 
-## Statut
+## Périmètre vérifié
 
-> Status: Fini pour la projection scalaire des `input` dans CodPlay V2
-> CodPlay version: V2 foundation
-> Décision d'implémentation: 2026-09-15
+Cette spécification décrit le contrat vérifié de projection scalaire vivante
+vers un composant `input` déjà monté.
 
 Cette spécification décrit la frontière utilisée lorsqu'une observation vivante
 doit atteindre un contrôle déjà matérialisé, notamment la progression d'une

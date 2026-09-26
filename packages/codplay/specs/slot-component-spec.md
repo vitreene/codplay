@@ -1,15 +1,11 @@
 # CodPlay V2 — hôte de contenu foreign (`slot`)
 
-## Statut
+## Périmètre vérifié
 
-> Status: En cours — profil auteur, manifeste, surface HTML, module `replace`
-> `fade`/`fade-in` et première surface publique de montage implémentés et testés ;
-> une première fixture Sighty de montage est testée ; les politiques générales
-> interinstances et de cycle de vie restent à valider ; le pilotage des scènes
-> relève de Sighty.
-> CodPlay version: V2 foundation
-> Décision d'ouverture: 2026-09-11
-> Plan: [`../plan/foreign-scene-component-plan.md`](../plan/foreign-scene-component-plan.md)
+Cette spécification décrit la tranche vérifiée du profil `slot` : manifeste,
+surface HTML, remplacements `fade`/`fade-in`, première surface publique de
+montage et fixture Sighty A/B. Le suivi des décisions d'extension est dans le
+[plan foreign](../plan/foreign-scene-component-plan.md).
 
 ## Rôle
 
@@ -164,12 +160,11 @@ des scènes ni un substitut au materializer.
   fournit les transitions `fade` et `fade-in`. La présence de `replace.split` est acceptée
   pour compatibilité de déclaration puis ignorée ; elle n'active aucune
   stratégie de split.
-- La surface est disponible dans le runtime HTML interne et une première
-  façade `codplay.instances.mount` l'exerce pour les racines matérialisées
-  directes d'un enfant, sans enveloppe visible supplémentaire.
-  L'intégration Sighty, les remontages et les représentations multi-racines
-  restent à valider. Le pilotage du cycle de vie des scènes appartient à Sighty
-  et ne fait pas partie du composant `slot`.
+- La surface est disponible dans le runtime HTML interne et la façade
+  `codplay.instances.mount` l'exerce pour les racines matérialisées directes
+  d'un enfant, sans enveloppe visible supplémentaire. Le composant ne pilote
+  pas le cycle de vie des scènes ; ce pilotage appartient au propriétaire des
+  instances.
 - Le code qui possède la représentation foreign conserve ses racines, ses
   ressources et son chargement. Dans la V2 actuelle, ce code n'est pas une
   classe core d'adaptation : c'est le propriétaire ou fournisseur de la
@@ -183,13 +178,8 @@ des scènes ni un substitut au materializer.
   fin ou à l'annulation de la transition. Ils ne chargent, ne pilotent et ne
   détruisent aucun contenu foreign et ne prolongent pas la propriété de ses
   racines.
-- Cet instantané n'est pas une stratégie générique pour toutes les
-  représentations foreign : `cloneNode(true)` ne reproduit pas le contexte de
-  navigation ni l'état rendu d'une iframe. Le comportement futur d'un
-  `replace` sur une iframe devra choisir entre un remplacement immédiat sans
-  transition et un élément visuel de substitution par défaut. Cette décision
-  reste ouverte et aucun de ces deux comportements n'est implémenté dans la
-  présente tranche.
+- Cet instantané est une présentation DOM temporaire ; il ne définit pas la
+  représentation ni le cycle de vie du contenu foreign.
 
 ## Raccord V2 de `replace`
 

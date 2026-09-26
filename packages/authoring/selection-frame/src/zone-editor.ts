@@ -1,13 +1,13 @@
 /**
- * Éditeur de zones (`2026-07-03-selection-frame-variantes-plan.md` §Variante B). Un gabarit
- * ENRICHI du gabarit du cs (§Dispositifs communs) : même accrochage (`authorApi.subscribeToNode`),
- * même calibration overlay-world (`overlay-pose.ts`), même géométrie de pistes mesurée
- * (`grid-geometry.ts`), même mécanique de session de geste (`gesture-session.ts`, dont le docstring
- * cite déjà ce module).
+ * Éditeur interactif de zones sur la grille d'un conteneur. Son contrat vérifié
+ * est décrit dans ../specs/zone-editor-spec.md ; les raccords hôte encore ouverts
+ * sont suivis dans ../plan/zone-editor-plan.md. Il partage avec selection-frame
+ * l'ancrage du nœud, la calibration overlay, la mesure des pistes et les sessions
+ * de geste.
  *
  * RENDU DE GRILLE — jamais un nœud DOM par cellule. Une première version en créait un par cellule
- * (voire un par macro-cellule au-delà du seuil de finesse) : à l'échelle visée par le plan
- * (« jusqu'à ~160×90 cellules »), même 1200 nœuds stylés (bordures pointillées, un repaint coûteux
+ * (voire un par macro-cellule au-delà du seuil de finesse) : à l'échelle visée
+ * (jusqu'à ~160×90 cellules), même 1200 nœuds stylés (bordures pointillées, un repaint coûteux
  * par nœud) a suffi à geler le navigateur entier — pas juste ralentir, geler. Le fond de grille est
  * maintenant UN SEUL élément, dessiné par `repeating-linear-gradient` (coût de rendu constant,
  * indépendant du nombre de pistes — 4 ou 14400, aucune différence). Les ZONES restent de vrais
@@ -17,7 +17,7 @@
  * la seconde moitié du même bug. Quelle cellule est sous le pointeur se résout par calcul de piste
  * (`trackIndexAtPx`, déjà utilisé pour les gestes), jamais par hit-test DOM sur une cellule.
  *
- * Le survol pleine résolution (plan §Affichage de la grille) suit la même logique : plus de
+ * Le survol d'une cellule suit la même logique : plus de
  * macro-cellules DOM à écouter, un seul `pointermove` sur le fond de grille calcule la cellule fine
  * survolée et matérialise un feedback visuel LÉGER borné à un voisinage — jamais un lot de nœuds
  * par macro-cellule.
@@ -47,9 +47,9 @@ const DEFAULT_FINE_DISPLAY_THRESHOLD = 40
 
 /**
  * Below this rendered cell size (in local px, at the grid's own scale), cell placement itself is
- * disabled — plan's own "grille ultra-fine = mode zone imposé" ("un seuil en px, configurable —
+ * disabled — documented as "grille ultra-fine = mode zone imposé" ("un seuil en px, configurable —
  * même esprit que minSizePx du cs"). Not enforced by rendering — surfaced through
- * `isCellPlacementAvailable()` for the editor's own UI, per the plan's own wording.
+ * `isCellPlacementAvailable()` for the editor's own UI; see the zone-editor specification.
  */
 const DEFAULT_MIN_CELL_SIZE_PX = 6
 
@@ -73,13 +73,13 @@ export type ZoneEditorHandle = {
   addZone(area: { row: number; col: number; rowSpan: number; colSpan: number }, name?: string): string
   removeZone(name: string): void
   renameZone(name: string, next: string): void
-  /** Always a 2-way split on ONE axis — "diviser en 2" is the founding signal (design doc §Cycle de vie). Defaults to `'col'` when omitted. */
+  /** Divides a zone into two cells on one axis; defaults to `'col'`. */
   divideZone(name: string, axis?: Axis): void
-  /** Adjusts one axis' own division count on an existing container (design doc §API). */
+  /** Adjusts one axis of a divided zone and regenerates its child cells. */
   resizeContainerAxis(name: string, axis: Axis, count: number): void
-  /** Breaks ONE container — relative→absolute, figée. Never applied in bulk (design doc §API). */
+  /** Converts one divided zone's children to standalone zones. */
   breakContainer(name: string): string[]
-  /** Read-only listing of every named zone (leaves and container children) — for the attachment context (design doc §API). */
+  /** Read-only listing of zones and computed child names. */
   listAllZoneNames(): Array<{ id: string; name: string; kind: 'leaf' | 'container-child'; containerId?: string }>
   mergeZones(names: string[], name?: string): string
   select(names: string[]): void
@@ -137,7 +137,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   editorRoot.appendChild(gridBackground)
 
   /**
-   * Single lightweight highlight for the hovered fine cell (plan's own "survol pleine résolution")
+   * Single lightweight highlight for the hovered fine cell
    * — one node, repositioned via inline style on every `pointermove`, never created/destroyed per
    * cell like the previous macro-cell-detail approach did.
    */
@@ -290,8 +290,8 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   /**
    * A small text label naming a zone/cell — purely visual, `pointerEvents:'none'` so it never
    * steals a click from the zone/cell it sits on top of. Independently togglable via
-   * `setPartVisibility('labels', visible)` (design doc: labels and zones themselves are two
-   * separate visibility toggles, requested explicitly by the user, 2026-07-11).
+   * `setPartVisibility('labels', visible)`; labels and zones have separate
+   * visibility controls.
    */
   function createLabelNode(text: string): HTMLElement {
     const label = doc.createElement('div')
@@ -310,13 +310,13 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   }
 
   /**
-   * A zone's own `container` inner grid — REAL, autonomous `display:grid` (design doc §Rendu):
+   * A zone's own `container` inner grid — a local `display:grid`:
    * `gridTemplateColumns/Rows`/`gap` resolved from `zone.container.grid`, children posed with real
    * `gridRow`/`gridColumn` — never inherited via `subgrid` (ruled out: this module always renders
    * in a separate overlay, never a true DOM descendant of a real grid parent) and never the main
    * fine grid's own gradient/percent mechanism (a container's own track count is bounded to one
    * division, generally 2 to a few dozen — never the ~14400-track scale that forced that rewrite).
-   * Purely visual for now — no gesture on a child individually (design doc §Nommage des enfants:
+   * Purely visual for now — no gesture on a child individually (zone-editor spec:
    * a container child has no editable identity before the container is broken). Each cell gets its
    * own computed-name label (`computeContainerChildName` — same formula `breakContainer` itself
    * uses, so the label shows exactly what a break would produce).
@@ -446,13 +446,12 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   }
 
   /**
-   * Applies a default `container.grid.gap` aligned with the MAIN grid's own track size (design
-   * doc §Rendu — Valeur de gap par défaut: "sa valeur doit s'aligner avec les cellules de la grille
-   * PRINCIPALE... pas un nombre de pixels arbitraire"), same principle the old « faux gap » was
-   * meant to express, now backed by a real measurement instead of a hand-rolled unit. Silently a
+   * Attempts to apply a default `container.grid.gap` aligned with the main
+   * grid's track size. Its browser behavior is still awaiting validation in the
+   * zone-editor plan. Silently a
    * no-op when the main grid isn't measurable yet (jsdom, node not yet mounted) — this default is
    * a legibility nicety, never load-bearing for `divideZone`'s own correctness. Must live here,
-   * not in `zone-model.ts`, which stays pure/DOM-free — the design doc is explicit on this split.
+   * not in `zone-model.ts`, which stays pure and DOM-free.
    */
   function withDefaultGapIfMeasurable(next: ZoneEditorState, name: string): ZoneEditorState {
     const zone = next.zones.find((z) => z.name === name)
@@ -556,7 +555,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     currentArea: { row: number; col: number; rowSpan: number; colSpan: number }
     /**
      * Every OTHER selected zone's own starting geometry — dragging one zone that's part of a
-     * multi-selection moves the whole group by the same delta (plan's own multi-selection intent,
+     * multi-selection moves the whole group by the same delta (zone-editor interaction contract,
      * mirrors the cs's own `createMultiSelectionFrame`: one drag broadcasts the same diff to every
      * selected target). Empty when `zoneName` isn't part of a multi-selection, or is the only
      * member of it — a plain single-zone move.
@@ -687,7 +686,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
         actor.send({ type: 'MOVE_END' })
         if (!apply || !session.moved) {
           // A click without a drag is a SELECTION, not a no-op move — mirrors
-          // the plan's own "sélectionner : clic sur une zone ; Shift+clic pour
+          // the documented "select: click a zone; Shift+click to
           // la multi-sélection".
           if (apply && event !== null) {
             const next = event.shiftKey
@@ -811,14 +810,12 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     })
   }
 
-  // ── geste clavier : ajuster rows/cols de la zone sélectionnée (design doc §Focus clavier) ──
+  // ── keyboard gesture: adjust rows/cols on the selected zone ───────────────
 
   /**
    * Global listener on `document`, filtered by selection — no DOM focus concept, active as soon
    * as exactly one zone is selected AND it carries `container`, regardless of which element
-   * actually has focus. Zero host-side prerequisite for the keyboard to work (same decision
-   * already made for the package's own zone-editor, before the design doc's `container`
-   * refactor). ←→ adjusts `cols` (→ grows, ← shrinks), ↑↓ adjusts `rows` (↑ grows, ↓ shrinks —
+   * actually has focus. ←→ adjusts `cols` (→ grows, ← shrinks), ↑↓ adjusts `rows` (↑ grows, ↓ shrinks —
    * "haut = plus, bas = moins", user, 2026-07-11) — one step per keypress (`resizeContainerAxis`'s
    * own floor of 2 already rejects going below it; no ceiling yet).
    *

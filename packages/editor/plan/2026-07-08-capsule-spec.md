@@ -1,6 +1,6 @@
 # Spec — Capsule (ed2)
 
-**Périmètre** : point d'entrée unique pour le concept de capsule dans ed2, fusionnant ce qui était réparti entre `2026-06-12-capsule-distribution-spec.md` (`packages/authoring/scene-factory/`), `2026-07-07-dedit-spec.md` §8 (`docs/formalisation/`), `2026-06-11-sequence-editor-grid-spec.md` (`docs/formalisation/`), le package `packages/authoring/capsule-automation/` et `2026-07-03-selection-frame-variantes-plan.md` (`docs/plans/`). Ces documents restent la référence de détail sur leur périmètre propre (grid-editor, dedit, capsule-automation) ; le pourquoi des arbitrages qui suivent est conservé dans `notes/2026-07-08-capsule-spec-deliberation.md`.
+**Périmètre** : point d'entrée unique pour le concept de capsule dans ed2, fusionnant ce qui était réparti entre `2026-06-12-capsule-distribution-spec.md` (`packages/authoring/scene-factory/`), `2026-07-07-dedit-spec.md` §8 (`docs/formalisation/`), `2026-06-11-sequence-editor-grid-spec.md` (`docs/formalisation/`), le package `packages/authoring/capsule-automation/` et les contrats de selection-frame : [mode création](../../authoring/selection-frame/specs/creation-mode-spec.md), [modèle zone-editor](../../authoring/selection-frame/specs/zone-editor-spec.md) et [plan d'intégration zone-editor](../../authoring/selection-frame/plan/zone-editor-plan.md). Ces documents restent la référence sur leur périmètre propre (grid-editor, dedit, capsule-automation, selection-frame) ; le pourquoi des arbitrages capsule reste dans `notes/2026-07-08-capsule-spec-deliberation.md`.
 
 Capsule est une notion **inconnue de Codplay** — c'est un concept d'authoring ed2 qui se résout, au build, en perso Codplay ordinaire.
 
@@ -19,7 +19,7 @@ Capsule est une notion **inconnue de Codplay** — c'est un concept d'authoring 
 | **clip capsule** | capsule-distribution-spec | Paire intro/outro de la capsule — quand elle apparaît dans la scène |
 | **enfant locké / libre** | capsule-distribution-spec | Locké = au moins un kf réel sur une borne ; libre = bornes entièrement virtuelles |
 | **`CapsulePatch`** | dedit-spec §8 | Réglages par défaut de la capsule, éditables (`behavior`, `sequencing`, `staggerMs`, `grid`…) |
-| **zone** | plan zones (selection-frame) | Emprise nommée sur la grille de base d'une capsule : `{name,row,col,rowSpan,colSpan}` |
+| **zone** | selection-frame zone-editor | Modèle vérifié `{id,name,row,col,rowSpan,colSpan}` ; les règles de `container` sont dans la [spec zone-editor](../../authoring/selection-frame/specs/zone-editor-spec.md), et l'intégration dedit reste ouverte dans son [plan](../../authoring/selection-frame/plan/zone-editor-plan.md). |
 | **card** | dedit-spec §7 + `CapsuleKind` | Sous-type de capsule portant un ensemble de zones nommées (`ZoneDef`), éventuellement vide (chaque enfant résout alors vers la zone fantôme, §3/§11) ou enregistré comme preset réutilisable (titre/corps/footer) d'une capsule à l'autre. Même donnée, deux angles de vue : la table de zones et le sous-type de capsule qui la porte. Couvre aussi l'usage autrefois nommé `position` (fond layout sans zone) |
 | **`CAPSULE_TYPE`** | capsule-automation | Registre de types capsule-automation, mêmes 5 valeurs que `CapsuleKind` (`legacy`, repli technique jamais sélectionnable par l'auteur, retiré) — voir §3 |
 | **`GRID_MODE`** | capsule-automation | Mode de calcul de la grille d'une instance : `manual`/`forced`/`derived`/`list`, un par sous-type — voir §3/§4 |
@@ -158,7 +158,7 @@ Panneau UI inexistant à ce jour (mécaniquement câblé côté dedit, zéro ren
 
 ## 11. Zones
 
-Une capsule de sous-type `card` porte des zones nommées (`ZoneDef{name,row,col,rowSpan,colSpan}`) — cf `2026-07-03-selection-frame-variantes-plan.md` et `2026-07-08-dedit-zonedef-migration-plan.md`. Une zone est référencée par nom par les enfants (`DecorPatch.zone: string | null`).
+Une capsule de sous-type `card` porte des zones ; le modèle vérifié de `createZoneEditor()` est décrit dans la [spécification zone-editor](../../authoring/selection-frame/specs/zone-editor-spec.md), et sa conversion vers les placements de capsule reste au [plan d'intégration zone-editor](../../authoring/selection-frame/plan/zone-editor-plan.md). L'éditeur dedit utilise encore des coordonnées cqw et `DecorPatch.zone: string | null` par nom. Le passage aux coordonnées de pistes, l'`id` stable et la clé d'attache doivent être réconciliés dans le [plan de migration ZoneDef](./modules/2026-07-08-dedit-zonedef-migration-plan.md) avant d'en faire un contrat intégré.
 
 **Zone fantôme** : chaque `card` porte en plus une zone implicite, plein cadre, jamais nommée ni listée dans l'éditeur de zones — c'est elle que résout un enfant dont `DecorPatch.zone` vaut `null` (§3). Ce n'est pas un cas d'erreur : un enfant peut rester dans cet état indéfiniment, y compris aux côtés d'enfants placés dans de vraies zones (auquel cas il les recouvre).
 

@@ -31,8 +31,8 @@ Vérifié dans l'historique git (branche `ed2`) — ce plan restaure, il ne con�
   `2026-07-16-rebuild-ordering-execution-plan.md`) demandait « remplacement ordonné », pas « aucun
   remplacement » — c'est une déviation d'implémentation, jamais écrite dans un plan validé.
 - **Commit en fin de phase** : jamais câblé correctement — le débounce 250 ms est né avec le pont
-  (`b35c07f`) et n'a jamais été remplacé par la cadence que `docs/plans/2026-06-09-selection-frame-
-  plan.md` et `2026-07-16-gesture-rebuild-ordering-plan.md` §6 décrivent (« décision de l'éditeur »,
+  (`b35c07f`) et n'a jamais été remplacé par la cadence que
+  `2026-07-16-gesture-rebuild-ordering-plan.md` §6 décrit (« décision de l'éditeur »,
   pas un minuteur fixe). Le patron existe déjà, testé, dans `sequence-editor/mount.ts`
   (`pointerup` → `dragEnd`), cité par le §6 comme modèle à répliquer.
 - **Props intouchées dans l'écart offset** : le commit de la pose **complète** (translate + w/h +

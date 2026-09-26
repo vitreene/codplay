@@ -2,15 +2,22 @@
 
 ## Statut
 
-> Status: En cours — migration de l’architecture de découverte motion autorisée.
+> Status: En cours — direction de migration acceptée ; application et gates
+> d'acceptation restent ouvertes.
 > CodPlay version: V2 foundation
 
-Ce plan remplace la stratégie de découverte globale précédemment décrite dans
-ce fichier. La note de cadrage
+La note de cadrage
 [`2026-09-07-motion-reparent-event-driven-preparation.md`](./notes/2026-09-07-motion-reparent-event-driven-preparation.md)
-en conserve les constats et le raisonnement. La première tranche de migration
-est en cours dans le code V2 ; les étapes encore ouvertes restent listées dans
-la mise en œuvre ordonnée et ne sont pas présentées comme terminées.
+conserve le motif de cette direction. Ce plan ne garde que l'architecture
+acceptée qui reste à appliquer et les gates ouvertes ; le comportement déjà
+implémenté et vérifié est dans les spécifications citées ci-dessous.
+
+Les comportements vérifiés sur le temps absolu et la capture des frontières
+sont décrits dans la [spécification motion](../specs/motion-frame-v2-spec.md) ;
+la dépendance à une target déplacée est décrite dans sa
+[spécification retarget](../specs/move-target-dependency-v2-spec.md). Ce plan
+garde la préparation par occurrence, la partition des ressources et les
+validations motion qui ne sont pas encore acceptées.
 
 ## But et limites
 
@@ -20,13 +27,9 @@ visuelle. Il ne doit ni anticiper les moves futurs sans dépendance de capture,
 ni rescanner le journal à chaque présentation normale. Une fermeture locale
 des ancêtres nécessaires au LAST d’une occurrence déjà résolue reste autorisée.
 
-Cette migration conserve le contrat structurel de `move` et ses capacités
-existantes : destination, ordre, `reorder`, montage, démontage, transition,
-easing, path, retarget et sorties de capture. Aucune méthode ni capacité de
-déplacement n’est supprimée. La forme auteur remplace `flipMode` par `reparent`
-et retire les deux paramètres d’intégration du path ; le compilateur fixe leurs
-valeurs internes à `arc-length` et `center`. La forme cible est définie dans
-[`move-contract-plan.md`](./move-contract-plan.md).
+La forme auteur et les capacités structurelles de `move` sont définies dans la
+[spécification `move`](../specs/move-v2-spec.md). Ce plan porte sur la
+préparation motion déclenchée par occurrence et ses validations runtime.
 
 Le plan ne crée ni second player, ni second journal, ni API de visibilité de
 story. Les démos restent des fixtures de validation : elles révèlent les cas que
@@ -221,465 +224,56 @@ une recapture immédiate de tous les moves. Les groupes devenus invalides sont
 recapturés lorsqu’ils doivent à nouveau être présentés par Play ou Seek. Une
 destruction finale libère leurs ressources comme aujourd’hui.
 
-### Dépendance d’une trajectoire à sa target — implémentation en cours
-
-Le retarget déclenché par le déplacement d’une cible est détaillé dans
-[`move-target-dependency-plan.md`](./move-target-dependency-plan.md). La
-frontière capturée depuis une occurrence `move` conserve l’identité de la target
-montée résolue dans l’attachement `LAST` dont elle dépend. Lorsqu’un nouvel événement
-résout un `move` qui modifie cette target pendant la
-trajectoire, le chemin normal de conflit traite le nouveau `move`, puis le
-runner retargete les segments dépendants dans la même transaction : pose
-visuelle courante de l’item en `FIRST`, projection post-move de la target en
-`LAST`. Le déplacement continu ne recapture rien ; le relâchement produit un
-`move` normal. Si ce relâchement produit également un nouveau `move` pour
-l’item en trajectoire, ce segment direct repart de la pose visible et sa durée
-est réduite au temps restant jusqu’à l’`endAt` initial ; il ne réutilise ni la
-pose initiale ni la pose provisoire du segment futur. Cette règle est validée
-pour implémentation ; elle ne constitue pas encore une modification normative
-du contrat `move` tant que les
-validations d’acceptation du plan dédié ne sont pas terminées.
-
-## Migration de la propriété auteur
-
-La migration de `move` est atomique à l’échelle des types, compilation,
-résolution, payloads runtime, démos et tests :
-
-```ts
-type MoveObject = {
-  target: string
-  mode?: MoveOrderMode
-  reparent?: boolean
-  reorder?: boolean
-  transition?: MoveTransition
-}
-```
-
-`mode` conserve exclusivement l’ordre de placement. `reparent: true` force la
-présentation overlay ; un changement structurel de parent ou de cible impose
-toujours ce régime. L’absence de `reparent`, ou `false`, ne peut pas annuler un
-reparent structurel. `flipMode` est remplacé par cette propriété ;
-`traversal` et `pathAnchor` ne sont plus acceptés dans le payload auteur et sont
-fixés respectivement à `arc-length` et `center` dans le pipeline interne. Aucune
-autre capacité de `move` n’est retirée et aucun alias de syntaxe auteur ne
-subsiste après la migration. Les anciens alias de types conservés sur des
-sous-chemins internes servent uniquement à éviter une suppression d’API ; ils
-ne rendent pas les anciennes propriétés acceptées. `mode` ne change donc ni de
-nom ni de domaine pendant cette migration.
-
-## Mise en œuvre ordonnée
-
-### 1. Stabiliser le contrat et les interfaces internes — première passe réalisée
-
-- Mettre à jour le type auteur, les validateurs, le compilateur, les résolveurs
-  et les payloads de tests pour `reparent?: boolean`.
-- Définir le transport runner-local de l’occurrence résolue, sans l’exposer dans
-  les façades ou le journal.
-- Définir la clé de groupe, les stories touchées et le choix de scope avant de
-  modifier la capture.
-
-La forme `Move`/`MoveObject`, la validation `reparent`, les defaults internes du
-path et le transport interne `RuntimeMoveOccurrence` sont en place. L'occurrence
-transporte l'action complète après résolution des données d'événement, son
-ordre, ainsi que les stories source et destination ; la résolution locale ou
-racine de ce scope est maintenant portée jusqu'à la capture. L'indexation
-persistante des groupes reste à finaliser avec le reset chaud.
-
-**Gate :** aucun appel d’auteur ne perd `target`, `mode`, `reorder` ou les
-propriétés de `transition`.
-
-### 2. Émettre l’occurrence depuis le circuit player réel — première passe réalisée
-
-- Raccorder la même émission aux événements compilés, live, cascades et à la
-  reconstruction de Seek.
-- Grouper les occurrences à une frontière sans modifier leur ordre logique.
-- Ne préparer à froid que les groupes nécessaires à la frame demandée.
-
-La matérialisation canonique identifie maintenant les actions `move` actives et
-les transporte avec la scène résolue pour les frontières compilées, les
-événements live et les seeks. En présentation normale, le runner fabrique
-directement l'intention à partir de cette occurrence — y compris les données
-dynamiques du payload — sans recompiler le planning ni rescanner le journal.
-La compilation globale du planning n’est plus utilisée par le runner motion.
-La fermeture live `endEmit` réutilise maintenant l'occurrence conservée
-par la materialisation normale : elle ne reconstruit plus le planning depuis le
-journal et ne remplace que le FIRST visible dans le groupe live. Les
-reconstructions utilisées uniquement par la timeline d'ordre omettent cette
-métadonnée de présentation.
-
-**Gate :** le runner ne lit pas le journal pour redécouvrir une occurrence déjà
-résolue par le player.
-
-### 3. Remplacer la découverte générale par une préparation ciblée — en cours
-
-- Retirer la construction motion forcée de `HtmlPlayerRunner.init()`.
-- Retirer l’appel de découverte `move`/`reparent` de `presentMotion()` et de
-  toute présentation normale ; conserver le traitement propre des actions de
-  pose explicitement reconnues par un autre contrat.
-- Extraire du code actuel la sélection, la capture et la construction du delta
-  d’un seul groupe, en conservant les contrats de FIRST, LAST, keyframes et
-  retarget.
-- Réunir l’affectation des frontières et du graphe dans un seul commit du
-  système HTML.
-
-`init()` et la présentation normale ne lancent plus de découverte générale. La
-capture ciblée reçoit directement l'intention résolue et choisit désormais le
-conteneur à partir de toutes les stories touchées. La fermeture `endEmit` suit
-le même transport pour son FIRST live. `HtmlMotionSystem.commit()` réunit
-désormais frontières et partition de reset dans une seule reconstruction
-immutable ; la partition durable complète des groupes reste à valider.
-
-**Gate :** un événement sans `move` ne provoque aucune lecture géométrique ni
-construction du graphe de positions `move`/`reparent`.
-
-### 3 bis. Réduire le coût de construction du graphe — première passe réalisée
-
-- Construire le graphe dans une représentation de travail mutable, privée à la
-  transaction, sans snapshot intermédiaire par boundary ou par opération.
-- Remplacer les copies complètes de `replaceMotionSegment()` par une mise à jour
-  du track concerné.
-- Finaliser les segments, attachments, keyframes, retargets et collections une
-  seule fois lorsque le graphe devient visible par le système de présentation.
-- Produire la timeline naturelle une seule fois et la transmettre à
-  `HtmlMotionSystem`, sans modifier l'API de `buildMotionGraph()`.
-- Indexer les segments par identifiant dans chaque track de travail ; cet index
-  reste privé et disparaît lors de la finalisation du graphe.
-- Calculer une seule fois par boundary les identifiants directs, la première
-  intention de chaque item, les exclusions `targetReflow: false`, les items
-  modifiés et la portée de composition.
-- Conserver pour cette tranche le format de `MotionGraph.revision`, mais ne le
-  calculer qu'à la finalisation. Le remplacement futur par un identifiant court
-  reste une décision séparée, car il modifierait une donnée interne observée
-  par certains tests.
-
-Cette réécriture ne change ni l'ordre des opérations, ni les règles de
-FIRST/LAST, ni le retarget, ni les resets. Le graphe de travail n'est jamais
-exposé ; l'ancien graphe reste donc présent jusqu'au commit final. Aucun guard
-générique ou fallback défensif n'est ajouté dans le builder.
-
-**Gate :** mêmes frames, poses, représentations, keyframes, retargets et
-barrières de reset avant et après construction ; Play et Seek restent
-identiques sur `position`, Qa/K et `flip-stress`.
-
-### Découpage structurel de `motion-graph` — 2026-09-19
-
-Le fichier plat `src/runtime/motion/motion-graph.ts` a été supprimé et remplacé
-par le dossier `src/runtime/motion/motion-graph/`. Son entrée publique reste
-inchangée via `index.ts`. Le code est réparti selon quatre responsabilités
-directes : types internes, construction et indexation du graphe, résolution des
-poses, puis finalisation et reset.
-
-Ce changement ne crée ni API, ni circuit motion, ni comportement de présentation
-supplémentaire. Il conserve les appels existants de `runtime/motion/index.ts` et
-de `motion-system.ts`. Le typecheck et la suite complète CodPlay valident la
-compatibilité ; le plan de découverte ciblée reste toutefois `En cours` pour
-ses étapes fonctionnelles encore ouvertes.
-
-### Découpage structurel de `motion-capture` — 2026-09-19
-
-Le fichier plat `src/runtime/runner-html/motion-capture.ts` a été supprimé et
-remplacé par le dossier `src/runtime/runner-html/motion-capture/`. L’entrée
-publique reste inchangée via `index.ts`. La capture est répartie entre
-l’orchestration des frontières, la résolution des intentions et endpoints, et
-la construction/fusion des snapshots et sélections.
-
-Le découpage retire aussi l’alias sans traitement `captureCurrentHtmlMotionLayout`
-au profit de `captureHtmlLayoutSnapshot`, ainsi que deux duplications présentes
-dans le fichier source. Aucun circuit de capture, contrat de boundary ou
-comportement de Play/Seek n’est ajouté ; le plan reste `En cours`.
-
-### Découpage structurel de `motion-presentation-host` — 2026-09-19
-
-Le fichier plat `src/runtime/runner-html/motion-presentation-host.ts` a été
-supprimé et remplacé par le dossier `src/runtime/runner-html/motion-presentation-host/`.
-La façade `HtmlMotionPresentationHost` reste l'entrée publique via `index.ts` ;
-les contributions locales et les ressources overlay sont maintenant isolées
-dans leurs contrôleurs respectifs.
-
-L'ordre du commit est conservé : préparation des ressources overlay, préparation
-et application des poses locales, puis écriture et révélation des ghosts. Les
-méthodes publiques, les invariants d'exclusivité source/ghost et le cycle
-capture/seek/destroy restent inchangés. Typecheck et suite complète CodPlay
-passent après ce découpage.
-
-### 4. Finaliser la préparation ciblée et le Seek synchrone — première passe réalisée
-
-- Préparer et capturer le groupe requis dans la même tâche synchrone.
-- Ne publier aucune frame intermédiaire et ne faire avancer aucune horloge.
-- Restaurer la présentation et le graphe précédents si le Seek échoue.
-
-**Gate :** aucune frame partielle, aucun saut à l’entrée du move, aucune
-progression accumulée pendant le calcul.
-
-### 5. Partitionner les ressources de présentation et traiter le reset — en cours
-
-- Porter les stories source/destination sur chaque frontière et indexer les
-  groupes par ce scope — première passe réalisée.
-- Retirer au reset les groupes concernés, leurs dépendances mesurées et leurs
-  ressources HTML — première passe réalisée.
-- Appliquer les trois scopes d’overlay définis plus haut, sans modifier le repli
-  multi-racines de `flip-stress`.
-- Remplacer les barrières `resetTimesByItem` par la suppression des groupes
-  concernés au reset et sur les seeks qui traversent un reset ; le chemin
-  `forceAll` n’est plus utilisé par `resize`.
-- Rendre le resize invalide sans recapture anticipée et recapturer paresseusement
-  le groupe requis. Les poses retenues sont supprimées, puis seules les
-  occurrences actives de la scène courante sont réémises ; les groupes
-  historiques et futurs attendent un Play ou un Seek qui les rende nécessaires.
-
-**Gate :** un reset ne lance pas de capture et un groupe inter-story est retiré
-en entier lorsque l’une de ses stories est réinitialisée.
-
-### 6. Migrer les fixtures, spécifications et validation — en cours
-
-- Remplacer la propriété auteur dans les scènes, les payloads live et les tests.
-- Mettre à jour les contrats et le suivi du plan une fois le circuit exécuté et vérifié.
-- Garder `position` et `flip-stress` sur le chemin runtime réel, sans
-  contournement spécifique.
-
-**Gate :** aucun document de contrat ne mélange `flipMode` et `reparent` comme
-deux options auteur permanentes.
-
-## Validation requise
-
-La validation doit traverser le player, le materializer, le runner HTML et le
-navigateur réel. Une suite isolée n’est pas suffisante.
-
-- **Absence de travail inutile :** init puis événements sans `move`, statiques ou
-  live, n’exécutent ni découverte du journal, ni mesure, ni création d’overlay
-  pour le graphe `move`/`reparent`.
-- **Moves :** local transitionnel avec `className`/`style` (FIRST/LAST sans
-  overlay), tween de style, reparent structurel, `reparent: true`,
-  montage/démontage, parent/enfant, reflow, retarget, événements simultanés,
-  `endEmit` et `persist-only` conservent leur comportement.
-- **Scopes :** overlay story-local, reparent inter-story à la racine, et repli
-  multi-racines de `flip-stress` avec son ordre d’empilement à FIRST, MIDDLE et
-  LAST.
-- **Temps :** Play et Seek froid/chaud aux frontières et au milieu du segment,
-  avec transaction synchrone, rollback, plusieurs instances et événements en
-  attente.
-- **Cycle :** resize, reset avant/pendant/après move, persistence, replay,
-  lifecycle et destruction.
-- **Navigateurs :** parcours réel de `position` et de `flip-stress`, incluant
-  Safari, sans erreur console ni circuit parallèle de démo.
-
-## Observation de performance
-
-L’instrumentation distingue au minimum la résolution d’occurrence, la
-préparation synchrone, la capture, le commit de graphe et les lectures de
-journal. Elle ne mesure pas seulement `getBoundingClientRect`.
-
-Le relevé navigateur ciblé du 2026-09-08 utilise Safari MCP sur `position`.
-Après remount, remise à zéro des compteurs, puis Seek de `0` à `1500 ms`, le
-parcours a produit `30` appels `getBoundingClientRect`, `31` lectures de style
-calculé, `33` ajouts DOM, aucun retrait DOM et aucune `requestAnimationFrame`.
-Sur le même circuit, un Play de `1200 ms` a produit `30` appels
-`getBoundingClientRect`, `31` lectures de style calculé et `242`
-`requestAnimationFrame`. Les mesures géométriques ne progressent donc plus avec
-les frames ordinaires ; le Seek calcule et présente sans frame intermédiaire.
-
-Un profilage complémentaire sous Node/jsdom, avec le `HtmlPlayerRunner` réel,
-sépare `resolvePresentationFrame`, `host.commit` et leur chemin combiné. Sur
-600 échantillons, la story six de `position` (12 items) donne environ
-`0,051 ms` pour la résolution, `0,048–0,051 ms` pour le commit et
-`0,101–0,108 ms` pour le chemin combiné ; `flip-stress` (16 items) donne
-`0,044–0,045 ms`, `0,047–0,048 ms` et `0,085–0,099 ms`. Le proxy heap est
-respectivement d’environ `43 KB` et `51 KB` par résolution sous jsdom, sans
-croissance retenue après GC. Firefox headless terminant par `exit 134` avant le
-chargement direct, le Firefox DevTools MCP relancé a permis une vérification
-navigateur. Sur `1,2 s` de Play après chargement frais, `position` a produit
-`9` lectures `getBoundingClientRect`, `9` lectures de style, `75` RAF,
-`47` ajouts et `9` retraits DOM ; `flip-stress` a produit respectivement
-`72`, `73`, `77`, `61` et `21`. Un Seek à `1500 ms`, puis un Reset à `0`, a
-été exécuté sur `position` et l’instance est restée `ready`. Ces compteurs
-ne remplacent pas une mesure isolée de `resolvePresentationFrame` ou de
-`host.commit`, et ne motivent pas à eux seuls une nouvelle réécriture de cette
-fonction. La différence `9`/`72` n’est pas une comparaison à temps logique
-égal : `position` était à `1190 ms`, avant `exchange-qa` (`1200 ms`), alors que
-`flip-stress` était à `1230 ms`. À `1,5 s`, `position` donne `81` lectures de
-géométrie et `82` de style, contre `78` et `79` pour `flip-stress` à `1520 ms`.
-La hausse correspond à la capture FIRST/LAST et à la fermeture d’ancêtres du
-move structurel nouvellement matérialisé.
-
-## Relecture de cohérence — 2026-09-08
-
-Les plans dépendants ont été relus contre cette cible :
-
-- `mode` reste l’ordre de placement ; `flipMode` est remplacé par `reparent` et
-  `traversal`/`pathAnchor` sortent de la surface auteur, avec les defaults
-  internes `arc-length`/`center` ; les capacités de `move` sont conservées ;
-- une occurrence résolue de `move` déclenche la préparation du groupe concerné ;
-  un événement sans `move` ne fournit aucune condition de visibilité et n’ouvre
-  pas ce chemin ; les actions de pose relevant d’un autre contrat gardent leur
-  traitement ; un `move` local transitionnel (`duration > 0`) capture FIRST/LAST,
-  et les `className`/`style` de la même action sont appliqués avant les mesures ;
-- la sélection, la topologie et les poses publiées sont préparées dans une même
-  opération synchrone ; la dernière présentation engagée reste en place jusqu’au
-  commit ;
-- l’overlay reste dans le conteneur de story par défaut, utilise le repli racine
-  déjà requis par `flip-stress` pour les stories multi-racines et ne monte à la
-  racine que pour un reparent inter-story ;
-- un reset est chaud, conserve le journal et retire les groupes et ressources
-  qui touchent sa story ; un Seek antérieur les reconstruit seulement s’il doit
-  présenter le move correspondant.
-Les plans `player-engine`, `runner-flip-integration-study` et `story-reset`
-restent `En cours` pour leurs propres validations. Le contrat auteur
-`move-contract` est clôturé ; le code et les fixtures V2 suivent déjà
-`reparent`, les defaults internes, la capture par occurrence et le Seek
-synchrone atomique. La préparation multi-frame et l’attente groupée ne font
-plus partie du contrat.
-
-## Reprise d’intégration — 2026-09-08
-
-La première intégration du transport d’occurrence est vérifiée sur le circuit
-réel : `RuntimeMoveOccurrence` conserve l’action résolue, l’identité et l’ordre
-de l’événement, ainsi que les stories avant/après ; le runner fabrique alors
-directement l’intention et la capture ciblée choisit le host local ou la racine
-selon ce scope. Les tests couvrent le payload complet de l’occurrence et les
-trois résolutions de conteneur (story unique, stories multiples, racines
-multiples). La fermeture `captureLiveFirstLayout` de `endEmit` reste un chemin
-spécial pour la pose FIRST, mais elle réutilise maintenant l’occurrence déjà
-transportée et ne relit plus le calendrier du journal.
-
-Validation exécutée :
-
-- suite V2 CodPlay : 90 fichiers, 574 tests passés (`npm test --workspace=codplay`) ;
-- typecheck CodPlay et `@codplay/scene-factory` passés (`npm run typecheck --workspace=codplay` et
-  `npm run typecheck --workspace=@codplay/scene-factory`) ;
-- suite V1 historique : 69 fichiers, 342 tests passés (`npm test`) ;
-- build des démos V2 passé (`npm run build --workspace=@codplay/demos`) ;
-- `git diff --check` passé ;
-
-La résolution provenait du graphe TypeScript : les démos V2 réimportent les
-sources de `scene-factory` dans le programme `codplay`, dont le `tsconfig` ne
-déclarait pas les alias `codplay-v1` et n’incluait pas le shim de type
-`typed-om-polyfill` suivi par `player/strap-types`. Les deux configurations
-incluent maintenant ces éléments ; aucun pont runtime V1/V2 n’est ajouté.
-
-La validation navigateur ciblée de `position` et le relevé d’appels sont
-maintenant consignés ci-dessus. Le reset chaud partitionné, l’invalidation lazy
-du resize et la transaction Seek synchrone atomique sont implémentés dans le
-runner ; les validations de corpus indépendantes de `flip-stress` restent
-suivies dans leurs plans propres.
-
-## Reprise d’intégration — 2026-09-08 — fermeture live et reset partitionné
-
-La fermeture `endEmit` ne compile plus le calendrier motion après le retour de
-`RuntimePlayer.endCapture()`. Pendant la materialisation de l’événement, le
-runner associe l’occurrence résolue au capture id qui a fourni FIRST ; la
-fermeture réutilise ensuite cette donnée, restaure explicitement la scène `after`
-avant de mesurer LAST et remplace la frontière de présentation live. Le chemin
-de relecture `persist-only` reste distinct et conserve sa capture rejouable.
-
-Les frontières capturées portent désormais les `storyIds` source/destination
-du groupe. Lorsqu’un reset franchit la tête de présentation, le runner retire
-les groupes qui touchent la story réinitialisée — y compris leurs dépendances
-mesurées — libère leurs ressources HTML et reconstruit le graphe de présentation
-avec les groupes restants. Le même filtrage physique est appliqué avant un Seek
-vers une position située après un reset. Un resize invalide maintenant toutes
-les poses retenues dans le runner, vide le graphe et réémet seulement les moves
-actifs de la scène courante ; il ne compile donc plus le calendrier historique
-et ne prépare pas les moves futurs. `HtmlMotionSystem.commit()` échange les
-frontières et la partition de reset dans une seule reconstruction. Le Seek
-synchrone atomique est implémenté ; la validation Safari MCP de `position` et
-le relevé d’appels sont consignés dans l’observation de performance.
-
-Validation ciblée de cette reprise : tests runner/facade motion passés, avec
-recapture du move actif après resize ; le cas S6 réel couvre la fermeture
-`endEmit`, le commit de liste et le seek de relecture. Le test de reset couvre
-aussi un Seek vers l’instant antérieur : le player retransporte une occurrence
-active lors d’un Seek arrière même lorsque la materialisation réutilise le même
-tableau d’actions, et la capture borne son endpoint avant le reset invalidant.
-
-## Reprise d’intégration — 2026-09-08 — commit unique et resize paresseux
-
-Le système HTML expose maintenant un commit interne unique pour remplacer les
-frontières capturées et la partition de reset avant de reconstruire le graphe.
-Les chemins de Seek, reset chaud et fermeture live l’emploient afin de ne pas
-publier un état intermédiaire entre deux reconstructions cohérentes.
-
-Après un resize, le runner libère les ressources de présentation et invalide
-les frontières replay/presentation retenues. Il demande ensuite au player de
-réémettre les occurrences `move` encore actives sur la scène courante ; la
-capture ciblée se fait dans ce seul groupe. Une occurrence future n’est pas
-préparée par ce refresh et sera capturée lorsqu’elle atteindra réellement la
-présentation. La résolution de la scène source reste logique et ne constitue
-pas une redécouverte du calendrier motion.
-
-Le Seek est désormais documenté comme une transaction synchrone atomique : le
-runner calcule la cible, capture les groupes requis, commit le graphe et ne
-présente qu’après cette préparation. La démo `position` a été contrôlée dans
-Safari MCP : le Seek à `1500 ms` n’a produit aucune frame intermédiaire et le
-relevé d’appels est consigné dans l’observation de performance.
-
-## Réexamen d'intégration — 2026-09-08 — trajectoire de la story 2
-
-La précédente attribution de la régression à `layout-snapshot.ts` n'est pas
-confirmée pour cette démo. Le test de parent mis à l'échelle couvre une
-frontière géométrique distincte ; dans Safari MCP, le root de la story 2 n'a
-ni transformation ni échelle CSS et l'overlay est bien présenté dans ce root.
-
-Le relevé dans l'onglet Safari MCP existant donne, relativement au root de la
-story, une pose de départ `(157.21875, 221.70874)` à `1 350 ms` et une pose
-d'arrivée `(756.203125, 67.022476)` à `3 350 ms`. Les poses intermédiaires
-restent collinéaires avec ces deux points : le calcul spatial n'ajoute donc pas
-de soulèvement ni de courbe.
-
-La non-linéarité observée était temporelle et correspondait à l'easing auteur
-`inOutQuint` déclaré par le `move` de la story 2. À `1 800 ms`, l'overlay restait
-presque au départ ; à `2 500 ms`, il avait déjà parcouru environ `77,8 %` de la
-distance alors que `57,5 %` de la durée s'était écoulée. Les déplacements
-`translateY` indépendants des ancres expliquent en plus le déplacement vertical
-avant `1 350 ms` et après `3 350 ms`.
-
-La validation précédente limitée au début, au milieu et à la fin était donc
-insuffisante : elle ne distinguait pas une interpolation linéaire d'une easing
-symétrique. La story 2 ne déclare maintenant plus d'easing pour son item ; cela
-retire `inOutQuint` de la démo sans modifier les tweens verticaux des ancres.
-La correction de la capture d'ascendance reste une frontière distincte et n'est
-pas utilisée pour expliquer ce symptôme. Le parcours Safari MCP après correction
-confirme le départ horizontal : `x=157,219` à `1 350 ms`, `186,794` à
-`1 400 ms`, `243,697` à `1 500 ms` et `323,437` à `1 650 ms`, sans warning ni
-erreur console. L'absence du champ auteur laisse inchangé le défaut global du
-runtime ; elle retire seulement l'easing explicite de cette démo.
-
-## Régression de préparation FIRST/LAST avec ancêtre de destination tardif — 2026-09-09
-
-La migration de la découverte globale vers la préparation par occurrence avait
-perdu une capacité déjà couverte par le contrat `move` : lorsqu'un déplacement
-atteint une destination dont un ancêtre n'est pas monté au FIRST mais est monté
-avant le LAST, la boundary de cet ancêtre doit être disponible au moment de la
-construction du graphe. Dans la story 6, `Qa` commence à `1 200 ms`, tandis que
-le cadre de `K` ne commence son transfert qu'à `2 000 ms`. Sans cette boundary,
-le LAST de `Qa` était attaché à la branche statique de `C` et son premier trajet
-partait dans la mauvaise direction. Un seek ultérieur fonctionnait parce que le
-passage à `2 000 ms` avait alors déjà préparé le mouvement de `K`.
-
-La capture rétablit cette sémantique sans revenir à une compilation globale :
-elle résout la scène endpoint déjà nécessaire au FIRST/LAST courant, puis ajoute
-seulement les occurrences `move` futures qui appartiennent à la chaîne
-d'ancêtres de la destination et dont le début tombe strictement dans l'intervalle
-du move courant. Ces occurrences réutilisent leur identité et leur action
-résolue ; la fermeture peut être récursive, mais elle ne lit ni le catalogue
-complet ni le journal pour anticiper des moves sans dépendance. Les intentions
-à temps négatif restent exclues comme dans le regroupement de capture.
-
-Cette correction est une restauration de la feature FIRST/LAST existante, pas une
-nouvelle sémantique auteur. Les moves futurs sans relation avec la destination,
-les occurrences `repeat` non encore résolues et les événements sans `move`
-restent paresseux.
-
-## Validation des passes du builder — 2026-09-10
-
-- CodPlay : `94` fichiers, `604` tests passés ; typecheck `packages/codplay`
-  passé.
-- Après l'indexation des segments et la métadonnée par boundary : tests motion
-  ciblés `52/52` passés et typecheck CodPlay passé.
-- `flip-stress-motion.spec.ts` passé.
-- Typecheck éditeur passé et build `@codplay/demos` passé.
-- Un test éditeur sur le rendu d’un path attend `translate(...)` mais reçoit
-  `matrix(...)`. Le même échec est reproduit sur l’état précédent de la branche ;
-  il n’est pas introduit par cette réécriture et reste à traiter séparément.
-
-La validation navigateur complète de `position` et `flip-stress` reste requise
-avant de modifier le statut global du plan.
+### Dépendance d’une trajectoire à sa target
+
+Le sous-ensemble vérifié du retarget du graphe est normatif dans la
+[spécification dédiée](../specs/move-target-dependency-v2-spec.md). Le plan
+[d'acceptation target](./move-target-dependency-plan.md) garde les validations
+runner, Play/Seek et cycle de vie encore ouvertes. Ce plan traite seulement le
+raccord de ces occurrences au regroupement et à la préparation motion ; il ne
+réouvre ni ne reformule le contrat déjà certifié.
+
+## Travail restant
+
+Le transport des occurrences et les comportements de temps absolu et de capture
+vérifiés sont décrits dans la [spécification motion](../specs/motion-frame-v2-spec.md).
+Le plan ne garde que les gates d’application encore ouvertes :
+
+- [ ] Prouver qu’une présentation sans occurrence move ne déclenche ni
+      capture géométrique ni construction du graphe de positions.
+- [ ] Vérifier que les occurrences compilées, live et reconstruites par Seek
+      empruntent le même chemin de préparation.
+- [ ] Achever et valider la partition des groupes par toutes les stories
+      touchées : un reset retire entièrement les groupes concernés et leurs
+      ressources ; un Seek antérieur ne les reconstruit que si la frame le
+      requiert.
+- [ ] Valider l’invalidation paresseuse après resize : ne recapturer que les
+      groupes requis par la frame active et conserver les occurrences futures
+      pour leur présentation.
+
+L’acceptation intégrée sur position et flip-stress — Play/Seek, reset,
+resize, persistance, lifecycle, destruction et Safari — reste au
+[plan runner HTML](./runner-flip-integration-study.md), qui porte cette matrice
+une seule fois.
+
+## Validation ciblée restante
+
+Les validations restantes doivent établir que :
+
+- aucun événement sans occurrence `move` ne déclenche de capture géométrique
+  ni de construction du graphe `move`/`reparent` ;
+- les événements compilés, live et reconstruits par Seek transmettent les
+  occurrences au même chemin de préparation ;
+- le reset retire les groupes touchés sans capture, et le resize invalide les
+  poses pour une recapture paresseuse.
+
+Le retarget ciblé suit sa
+[spécification](../specs/move-target-dependency-v2-spec.md) et son plan
+d'acceptation. Les tests intégrés parent/enfant, Play/Seek, reset, resize,
+persistance, lifecycle et navigateur sont centralisés dans le
+[plan runner HTML](./runner-flip-integration-study.md).
+
+## Clôture
+
+Retirer ce plan quand ces gates sont closes et que la spécification motion
+couvre les comportements nouvellement implémentés et vérifiés.

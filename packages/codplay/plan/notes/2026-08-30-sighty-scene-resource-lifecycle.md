@@ -1,71 +1,28 @@
-# Cycle de vie des ressources de scène pour Sighty
+# Rationale — cycle de vie des occurrences Sighty et CodPlay
 
-**Statut : note de contexte — Sighty n’est pas encore raccordé.**  
-**Version visée : CodPlay V2.**  
-**Portée : futur hôte Sighty ; cette note ne modifie pas le chantier éditeur.**
+## Rôle
 
-## Exigence
+Cette note conserve la frontière de propriété entre CodPlay et son consommateur
+Sighty ; elle ne crée pas de contrat pour l'un ou l'autre. Sighty consomme
+désormais la façade publique CodPlay. Son comportement et ses validations sont suivis par
+sa [spécification](../../../sighty/specs/authoring-library-spec.md) et son
+[plan actif](../../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
 
-La fin temporelle d’une scène ne suffit pas à déclencher son nettoyage : une
-scène peut atteindre sa dernière frame tout en restant montée pour être rejouée
-ou réutilisée. En revanche, lorsqu’elle est effectivement démontée, Sighty doit
-libérer les ressources qui appartiennent à cette occurrence de scène.
+## Frontière de propriété
 
-La priorité concerne la feuille CSS générée pour la scène. Elle est installée
-dans un slot CSS propre à l’occurrence via le canal direct de preload ; le
-démontage doit vider ce slot, notamment avec la primitive existante :
+Une fin de lecture n'entraîne pas à elle seule la destruction d'une occurrence.
+L'hôte décide si elle est conservée ou démontée ; CodPlay reste propriétaire de
+l'instance, de son player et de son teardown. Le montage `slot` attache des
+racines matérialisées et ne pilote pas le player enfant. Ces responsabilités
+correspondent aux surfaces décrites par les spécifications CodPlay de
+[façade](../../specs/facade-v2-spec.md) et de
+[slot](../../specs/slot-component-spec.md).
 
-```ts
-codplay.preload.css.clear(sceneCssSlot)
-```
-
-Le nettoyage doit intervenir avant ou pendant le teardown du host, afin que le
-service ne conserve pas de slot ou de nœud de style devenu inaccessible. Il
-doit être idempotent : un démontage répété ne doit ni lever d’erreur ni toucher
-une autre scène.
-
-## Ressources concernées
-
-- **CSS de scène** : un slot stable et propre à chaque montage ; seul ce slot
-  est vidé au démontage.
-- **Médias et autres URLs preloadées** : libération des URLs détenues par cette
-  scène avec le mécanisme de release du preload ; une ressource partagée reste
-  en cache tant qu’un autre propriétaire l’utilise.
-- **Ressources de l’instance et de sa materialization** : destruction par le
-  cycle de vie de l’instance, sans seconde logique de nettoyage propre à
-  Sighty.
-
-Le chemin CSS reste donc distinct du chemin média : la CSS éphémère est gérée
-par son slot immédiat, tandis que les médias suivent le cache et le comptage de
-propriétaires du preload.
-
-## Décision de frontière et première tranche (2026-09-11)
-
-Sighty pilote le cycle de vie des occurrences de scènes : création, montage,
-démarrage, pause/reprise, seek, démontage, remontage et destruction. CodPlay
-exécute les opérations de chaque instance et son player reste propriétaire de
-son état, de sa materialization et de son teardown. Le composant `slot` ne
-pilote aucun player enfant ; sa surface ne fait qu'attacher ou détacher la
-représentation foreign.
-
-La première tranche est la composition fixe A/B décrite dans la note Sighty du
-modèle déclaratif. Elle sera exercée avec le runtime réel, puis utilisée pour
-affiner les détails de cycle de vie. Une fin de lecture ne déclenche pas
-implicitement une destruction ; la décision de conserver, remonter ou détruire
-reste une décision explicite de Sighty.
-
-## Points à affiner avec Sighty et la démo
-
-Cette note ne crée pas encore d’API Sighty et ne fige pas l'ordre final des
-opérations. Le contrat devra préciser, à partir des observations de la
-première démo :
-
-- l’identité d’une occurrence de scène et la dérivation de son slot CSS ;
-- les ressources URL effectivement possédées par cette occurrence ;
-- l’ordre entre arrêt des mises à jour, nettoyage CSS, release média,
-  destruction de l’instance et retrait du host ;
-- le comportement en cas de démontage partiel ou d’échec pendant le teardown.
-
-Le principe à conserver est néanmoins fixé : **pas de clear automatique à la
-fin de lecture ; clear et release explicites lors du démontage effectif, limités
-aux ressources appartenant à la scène démontée.**
+Le preload distingue le canal CSS par slot des ressources partagées par URL.
+La [spécification preload](../../specs/preload-v2-spec.md) certifie le compteur
+de références du cache partagé, la libération d'une lease vidéo avant adoption
+et le nettoyage des slots CSS. Le nettoyage complet des handles après adoption
+reste au [plan média CodPlay](../../plan/media-preload-plan.md). L'identité d'un
+slot propre à une occurrence Sighty, l'ordre de son nettoyage avec la libération
+des URLs et les échecs de teardown relèvent de l'acceptation Sighty ; cette note
+ne les présente pas comme un comportement CodPlay vérifié.

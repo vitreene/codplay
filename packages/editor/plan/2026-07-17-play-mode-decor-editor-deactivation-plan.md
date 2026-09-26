@@ -3,7 +3,7 @@
 > **Révision V2 du 2026-09-03.** Le mécanisme décrit ci-dessous reste l'autorité pour la
 > suspension/réactivation de dedit et pour les rendez-vous du contrôleur, mais son ancien
 > remplacement d'instance à l'entrée de `playing` est supersédé par
-> [`2026-09-02-motion-editor-v2-plan.md`](../2026-09-02-motion-editor-v2-plan.md) : un simple
+> [`2026-09-02-motion-editor-v2-plan.md`](./2026-09-02-motion-editor-v2-plan.md) : un simple
 > Play/Seek conserve l'instance et réapplique la pose courante par le seek de présentation. Une
 > reconstruction n'est autorisée qu'après un document réellement committé (ou un chargement,
 > revert, redimensionnement nécessitant cette opération).

@@ -1,13 +1,13 @@
 # CodPlay V2 — pont runtime des cibles `rel`
 
-## Statut
+## Périmètre vérifié
 
-> Status: En cours — orchestration runtime migrée vers l'identité
-> `host`/`target` ; les responsabilités propres aux intégrations restent
-> séparées et la validation transverse demeure ouverte.
-> CodPlay version: V2 foundation
-> Décision: 2026-09-18
-> Plan: [`../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../plan/2026-09-18-third-party-render-target-codplay-plan.md)
+Cette spécification fixe le raccordement runtime de l'identité compilée à une
+cible opaque. Les tests du registre et du runtime de composants couvrent
+l'isolation player-local, la publication après montage, la disponibilité,
+l'invalidation et le passage de cible sans matérialisation HTML factice. Les
+critères d'acceptation de l'intégration sont décrits dans le
+[plan du pont](../plan/2026-09-18-third-party-render-target-codplay-plan.md).
 
 Cette spécification décrit le raccordement interne entre une relation compilée
 et une cible runtime opaque. Elle ne définit ni Three.js, ni Rive, ni Lottie,
@@ -29,7 +29,7 @@ relation `rel`.
 
 Le catalogue décrit donc un fournisseur ; il ne devient pas le registre des
 instances publiées. Le registre runtime est créé par
-`RuntimeComponentRuntime`, donc isolé par player, et il est vidé au teardown.
+`RuntimeComponentRuntime`, donc isolé par player.
 
 ## Donnée compilée et identité runtime
 
@@ -91,9 +91,7 @@ possède :
 5. les fournisseurs publient leur valeur opaque et indiquent sa disponibilité
    selon le profil runtime de leur définition ;
 6. les mises à jour sont distribuées, avec la cible résolue dans
-   `ComponentUpdateInput.target` ;
-7. au teardown, la publication est libérée, puis le composant et sa
-   représentation éventuelle sont détruits.
+   `ComponentUpdateInput.target`.
 
 L'ordre de déclaration n'est donc pas utilisé pour résoudre une cible. Un
 consommateur peut apparaître avant son fournisseur dans `scene.persos`, car la
@@ -101,8 +99,8 @@ publication n'est rendue disponible qu'après la phase de montage de tous les
 composants.
 
 Un composant non HTML ne reçoit ni markup vide ni handle de matérialisation
-factice. Il peut posséder un contexte natif et le libérer dans `destroy()` ;
-la façon de créer ce contexte appartient à son intégration, pas au core.
+factice. La création et la destruction d'un contexte natif appartiennent à son
+intégration, pas au core.
 
 ## Disponibilité
 
@@ -128,11 +126,9 @@ le core ne vérifie pas qu'un avatar, un mesh, un os ou un morph target interne
 porte cette clé. Une identité de host inconnue produit un warning auteur
 non bloquant.
 
-Ces warnings ne bloquent pas la construction. Ils ne sont pas recalculés par le
-codec ni par le player : une scène diffusée ne réémet donc pas ce diagnostic.
-L'absence d'une publication `target` n'est pas une erreur de structure ; la
-compatibilité de la valeur opaque appartient à l'intégration qui la publie et à
-celle qui la consomme.
+Ces warnings ne bloquent pas la construction. L'absence d'une publication
+`target` n'est pas une erreur de structure ; la compatibilité de la valeur
+opaque appartient à l'intégration qui la publie et à celle qui la consomme.
 
 ### Dépendances et cycles
 
@@ -164,25 +160,21 @@ jamais une bibliothèque depuis `create`, `update` ou `targetProvider`. Le
 contrat complet est décrit dans
 [`third-party-library-spec.md`](./third-party-library-spec.md).
 
-## Limites explicitement hors de ce contrat
+## Frontière avec les intégrations
 
-Le pont ne définit toujours pas les types, les conventions de rendu ni le
-préchargement propres à Three.js, Rive, Lottie ou TalkingHead. Ces éléments
-seront ajoutés dans leurs unités externes après validation de leur contrat
-engine ; aucun composant tiers n'est introduit pour les simuler.
+Cette spécification ne définit pas les profils, les conventions de rendu ni le
+préchargement propres aux bibliothèques. Les sous-ensembles vérifiés Three.js,
+Rive et Avatar sont décrits dans leurs spécifications dédiées. Le périmètre
+Lottie et les composants TalkingHead restant à classer sont suivis
+respectivement dans le
+[plan des composants tiers](../plan/2026-09-18-third-party-components-v2-plan.md)
+et le [plan Avatar](../plan/2026-09-19-avatar-components-v2-plan.md).
 
-## Vérification restante
+## Preuves du contrat
 
-Les tests du pont couvrent le cycle avec l'identité `host`/`target` et doivent
-continuer à couvrir :
-
-- l'isolation des identités host/target ;
-- l'isolation entre deux players ;
-- l'invalidation et la réactivation d'une publication ;
-- la protection contre la libération d'une publication remplacée ;
-- le warning auteur non bloquant pour un host de relation inconnu ;
-- le montage en deux phases lorsque le consommateur est déclaré avant son
-  fournisseur ;
-- la transmission de la cible opaque et sa disparition/réapparition lorsque
-  le fournisseur est démonté puis remonté ;
-- l'absence de passage des composants non HTML par le matérialiseur HTML.
+- `tests/runtime/targets/runtime-target-registry.spec.ts` couvre l'identité
+  host/target, l'isolation player-local, l'indisponibilité, l'invalidation et
+  la protection contre une libération obsolète ;
+- `tests/runtime/components/runtime-component-runtime.spec.ts` couvre la
+  publication après montage, les profils `attached`, les cibles publiées par
+  les composants et l'absence de matérialisation HTML factice.

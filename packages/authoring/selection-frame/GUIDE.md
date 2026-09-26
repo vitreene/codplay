@@ -37,9 +37,16 @@ overlay neutre de move/resize auquel des **modifieurs de capacité** sont monté
 - le commit, l'abandon et la conversion px ↔ valeur logique restent sous la responsabilité de
   `decor-editor` et de son bridge d'application.
 
-Le cadre V2 ne mesure donc pas un item player et n'écrit pas dans son DOM. Les autres entrées du
-package restent disponibles pour les modules non encore migrés ; elles ne font pas partie du
-circuit V2 de l'éditeur.
+Le cadre V2 ne mesure donc pas un item player et n'écrit pas dans son DOM. Les entrées racine
+fondées sur `AuthorApi` V1 restent présentes dans le package, mais leur périmètre de maintien et
+leur acceptation intégrée sont encore à trancher au [plan V1](plan/selection-frame-v1-plan.md).
+Elles ne font pas partie du circuit V2 de l'éditeur.
+
+Les comportements vérifiés des entrées racine sont dans la [spec de selection-frame V1](specs/selection-frame-v1-spec.md),
+la [spec du mode création](specs/creation-mode-spec.md) et la [spec de l'éditeur de zones](specs/zone-editor-spec.md).
+Le périmètre de maintien de l'entrée racine et son acceptation intégrée restent au [plan V1](plan/selection-frame-v1-plan.md).
+Les raccords de zones à l'éditeur hôte, notamment les attaches par `id` et le drop du cadre, restent au
+[plan zone-editor](plan/zone-editor-plan.md).
 
 ### Modifieurs V2
 

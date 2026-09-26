@@ -641,6 +641,7 @@ describe('HtmlPlayerRunner', () => {
       'cancelCapture',
       'emit',
       'endCapture',
+      'setLiveActions',
       'trackCapture',
     ])
     expect(sourceContext).not.toHaveProperty('runner')

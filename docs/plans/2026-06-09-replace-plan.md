@@ -196,7 +196,7 @@ Ces fichiers sont le **point d'entrée auteur** : formatés pour être lus, modi
 
 **Utilitaires partagés disponibles :**
 
-`src/runtime/modules/list-flip/engine/dom-matrix.ts` (extrait — étape 1 ✓ du plan selection-frame) expose :
+`src/runtime/modules/list-flip/engine/dom-matrix.ts` (utilisé par SelectionFrame V1) expose :
 - `captureCombinedMatrixForNode` — matrice cumulée des transforms parents
 - `worldDeltaToLocalDelta` — conversion viewport → espace local
 - `worldSizeToLocalSize` — conversion dimensions viewport → local

@@ -1,10 +1,8 @@
 /**
- * Pure state + operations for the zone editor's data model — no DOM, no gesture, testable in
- * isolation (`2026-07-10-zone-container-design.md`, superseding `2026-07-03-selection-frame-variantes-plan.md`
- * §Éditeur de zones' own original split model). A zone's `{row,col,rowSpan,colSpan}` shares the
- * exact vocabulary of capsule-automation's own `AutoCapsuleChildPlacementInput` (1-based indices,
- * `number` span counts) — no translation layer needed between what this module produces and what
- * capsule-automation resolves into CSS.
+ * Pure state + operations for the zone editor — no DOM or gestures. The verified model contract
+ * and its tests are documented in ../specs/zone-editor-spec.md. A zone's
+ * `{row,col,rowSpan,colSpan}` uses 1-based track indices and shares the field names accepted by
+ * capsule-automation's `AutoCapsuleChildPlacementInput`.
  */
 
 export type ZoneGridModel = {
@@ -17,11 +15,10 @@ export type ZoneGridModel = {
 
 /**
  * `id` is stable and persistent — never reassigned, not even by `renameZone`. `name` is the
- * displayed/renamable label. Any future attachment (a capsule child bound to a specific zone)
- * references `id`, never `name` — a rename never breaks an existing attachment (design doc
- * §Identifiant stable).
+ * displayed/renamable label. A future persistent attachment is planned to reference `id`, never
+ * `name`; host integration remains open in ../plan/zone-editor-plan.md.
  *
- * `container`, when present, means this SAME zone has been divided (design doc §`container` —
+ * `container`, when present, means this SAME zone has been divided (zone-editor spec —
  * propriété optionnelle de `ZoneDef`) — never a separate entity in a separate list: "container est
  * une propriété d'une zone... pas de raison d'en faire une entité à part" (user, 2026-07-11). Its
  * own `row`/`col`/`rowSpan`/`colSpan` never change because of `container` — that's still where the
@@ -38,12 +35,12 @@ export type ZoneDef = {
 }
 
 /**
- * A persistent division structure carried by one `ZoneDef.container` (design doc §`container` —
+ * A persistent division structure carried by one `ZoneDef.container` (zone-editor spec —
  * interne au zone-editor: never a capsule, never resolved through capsule-automation). Born from
  * `divideZone` (always 2 children on one axis — "diviser en 2" is the founding signal, never an
  * arbitrary rows×cols chosen upfront), grown via `resizeContainerAxis`, and dissolved via
  * `breakContainer` (relative→absolute transposition, figée). Rendered as a real, AUTONOMOUS
- * `display:grid` inside the zone's own DOM node (design doc §Rendu) — never inherited via
+ * `display:grid` inside the zone's own DOM node — never inherited via
  * `subgrid` (ruled out: this module always renders zones in a separate overlay, never a true DOM
  * descendant of a real grid parent), and never the grid-fine-principale's own per-cell rendering
  * mechanism (bounded to one division's own rows×cols, generally 2 to a few dozen — never the
@@ -56,8 +53,8 @@ export type ZoneContainerData = {
 
 /**
  * One child of a `ZoneContainerData`, in coordinates RELATIVE to its own local grid (1-based, same
- * vocabulary as `ZoneDef`). No `name` of its own — a container child has no editable identity
- * before the container is broken (design doc §Nommage des enfants): its displayed name is computed
+ * vocabulary as `ZoneDef`). No `name` of its own — a container child has no editable name before
+ * the container is broken (zone-editor spec): its displayed name is computed
  * from the owning zone's own `name` + row/col, never stored. `id` is the only stable reference
  * available before a break — an attachment made against this `id` survives both later container
  * edits (axis resize) and the eventual break itself (the `id` carries over unchanged onto the
@@ -79,18 +76,16 @@ export type ZoneEditorState = {
 
 /**
  * A saved card IS a complete `ZoneEditorState` — explicit alias documenting the intent in code
- * rather than by implicit convention (design doc §Card — contrat de type dédié). A future
+ * rather than by implicit convention. A future
  * host-project UI saves one via `getState(): ZoneCard`, applies one via `setState(card: ZoneCard)`
  * — both already exist on `ZoneEditorHandle`, nothing new needed here. `container` is one tool
- * among others to build a card's own zone collection, never the definition of what a card is
- * (design doc §Rapport à « card »).
+ * among others to build a card's own zone collection, never the definition of what a card is.
  */
 export type ZoneCard = ZoneEditorState
 
 /**
- * Above this many rows/cols on either axis, CSS `gap` is disallowed by this model (plan §Affichage
- * de la grille : "grilles fines n'utilisent pas de gap CSS" — visual gaps become reserved tracks
- * instead). Below it, `gap` stays a normal CSS property.
+ * Above this many rows/cols on either axis, CSS `gap` is disallowed by this model. Below it,
+ * `gap` stays a normal CSS property; see the zone-editor specification.
  */
 export const MAX_GAP_ROWS_COLS_FOR_CSS_GAP = 32
 
@@ -100,8 +95,8 @@ export type ZoneModelValidationError = {
 }
 
 /**
- * A grid this fine must express visual spacing as reserved tracks (`reserveTracksForGap`), never
- * CSS `gap` — enforced here rather than left to the caller to remember.
+ * A grid this fine cannot express visual spacing with CSS `gap` — enforced here rather than left
+ * to the caller to remember.
  */
 export function validateZoneGridModel(grid: ZoneGridModel): ZoneModelValidationError[] {
   if (!grid.gap) return []
@@ -118,8 +113,7 @@ export function validateZoneGridModel(grid: ZoneGridModel): ZoneModelValidationE
 /**
  * Every zone-editor-scoped name currently in use — one list now that `container` lives on
  * `ZoneDef` itself (a zone with `container` is still just one entry here). Container children's
- * computed names are NOT included, since they carry no name of their own to collide with (design
- * doc §Nommage des enfants).
+ * computed names are NOT included, since they carry no name of their own to collide with.
  */
 function namesOf(state: ZoneEditorState): Set<string> {
   return new Set(state.zones.map((z) => z.name))
@@ -127,8 +121,8 @@ function namesOf(state: ZoneEditorState): Set<string> {
 
 /**
  * Every zone `id` currently in use — every `ZoneDef`'s own `id`, AND every container child's own
- * `id` (children do carry a real, stable `id` even without a `name` of their own — design doc
- * §Identifiant stable). Used only to keep freshly generated ids collision-free within one state;
+ * `id` (children do carry a real, stable `id` even without a `name` of their own). Used only to
+ * keep freshly generated ids collision-free within one state;
  * never exposed.
  */
 function idsOf(state: ZoneEditorState): Set<string> {
@@ -141,8 +135,7 @@ function idsOf(state: ZoneEditorState): Set<string> {
 }
 
 /**
- * Lowest unused `z{n}` — the plan's own default-naming convention (§Gestes d'édition: "nom par
- * défaut (z1, z2, … premier libre)").
+ * Lowest unused `z{n}` — the default naming convention for added zones.
  */
 function firstFreeName(existingNames: ReadonlySet<string>, base = 'z'): string {
   for (let n = 1; n < 100_000; n += 1) {
@@ -153,12 +146,8 @@ function firstFreeName(existingNames: ReadonlySet<string>, base = 'z'): string {
 }
 
 /**
- * Lowest unused `id{n}` — id generation is explicitly unnormed by the design doc (any scheme is
- * fine); this one is deterministic and collision-checked against the CURRENT state only, which is
- * simple to reason about and to test. Not claimed to survive a remove-then-re-add at the same
- * position (design doc §Génération de l'id notes that possibility as a non-normative nicety, only
- * worth taking if it falls out for free — a counter scoped to "what exists right now" does not
- * provide it, and this module does not attempt to).
+ * Lowest unused `id{n}`; allocation is collision-checked against identifiers in the current state.
+ * The generated value is an implementation detail, not a stable naming scheme.
  */
 function firstFreeId(existingIds: ReadonlySet<string>): string {
   for (let n = 1; n < 100_000; n += 1) {
@@ -184,7 +173,7 @@ export function removeZone(state: ZoneEditorState, name: string): ZoneEditorStat
   return { ...state, zones: state.zones.filter((z) => z.name !== name) }
 }
 
-/** Any zone by `name` — `id` never changes; a container child has no name of its own to rename (design doc §Nommage des enfants). */
+/** Renames a zone by `name` while preserving its `id`; children have no editable name before a break. */
 export function renameZone(state: ZoneEditorState, name: string, next: string): ZoneEditorState {
   if (name === next) return state
   if (namesOf(state).has(next)) {
@@ -233,9 +222,9 @@ export type Axis = 'row' | 'col'
 
 /**
  * Adds `container` to an existing zone — the SAME `ZoneDef` gains the field, never removed from
- * `zones`, never a new entry created (design doc §`container` — propriété optionnelle de `ZoneDef`:
+ * `zones`, never a new entry created (zone-editor spec:
  * "container est une propriété d'une zone... pas de raison d'en faire une entité à part"). ALWAYS
- * a 2-way split on ONE axis — "diviser en 2" is the founding signal (design doc §Cycle de vie),
+ * a 2-way split on ONE axis — "diviser en 2" is the founding signal,
  * never an arbitrary rows×cols chosen upfront. `axis` defaults to `'col'` (vertical split, 2
  * columns) when the host UI has no explicit setting — an explicit user decision, never derived
  * from a heuristic (zone size, aspect ratio, etc.). The zone's own `row`/`col`/`rowSpan`/`colSpan`
@@ -263,7 +252,7 @@ export function divideZone(state: ZoneEditorState, name: string, axis: Axis = 'c
 
 /**
  * Adjusts one axis' own division count on an existing container — the same function for both a
- * keyboard-driven adjustment and a direct API call (design doc §API). "Les zones-enfants
+ * keyboard-driven adjustment and a direct API call. "Les zones-enfants
  * correspondent aux cellules d'une grille" (user, 2026-07-11) — this is a real grid, not an
  * abstract rows×cols counter: `children` is REGENERATED to exactly match `rows×cols`, one 1×1
  * child per cell, every time the count changes. Cells that existed before keep their own `id`
@@ -302,9 +291,10 @@ export function resizeContainerAxis(state: ZoneEditorState, name: string, axis: 
 }
 
 /**
- * Breaks ONE zone's own `container` — relative→absolute transposition, figée (design doc §Cycle
- * de vie: the geometry is exactly what was displayed at the moment of the call, never recomputed
- * later). The SOURCE zone (the one carrying `container`) is removed from `zones`, replaced by one
+ * Breaks ONE zone's own `container` — relative→absolute transposition by equal fractions of the
+ * parent zone's row and column spans. Local CSS gaps are not included in this calculation; the
+ * gap and non-divisible-span behavior remains open in ../plan/zone-editor-plan.md. The SOURCE zone
+ * (the one carrying `container`) is removed from `zones`, replaced by one
  * `ZoneDef` per child. Each child gains a real `name` (computed here, now persisted) built from
  * the source zone's own `name` + its local row/col; its `id` carries over unchanged (an
  * attachment already bound to that `id` survives the break). Never applied in bulk across every
@@ -334,17 +324,16 @@ export function breakContainer(state: ZoneEditorState, name: string): { state: Z
   }
 }
 
-/** Computed display name of one container child — never stored (design doc §Nommage des enfants). */
+/** Computes a container child's display name; the value is not stored before a break. */
 export function computeContainerChildName(zoneName: string, row: number, col: number): string {
   return `${zoneName}.${row}.${col}`
 }
 
 /**
  * Read-only listing of EVERY named zone in the scene — every `ZoneDef` (feuille ou portant
- * `container`) AND every container child — for the attachment context (design doc §API: a future
- * item-attachment UI needs "toutes les zones... accessibles (pas d'édition dans ce contexte)").
+ * `container`) AND every container child — for a future attachment context.
  * Never used for editing itself — renaming or removing an individual container child stays
- * impossible before a break (§Nommage des enfants).
+ * impossible before a break.
  */
 export function listAllZoneNames(state: ZoneEditorState): Array<{ id: string; name: string; kind: 'leaf' | 'container-child'; containerId?: string }> {
   const zones = state.zones.map((z) => ({ id: z.id, name: z.name, kind: 'leaf' as const }))
@@ -362,7 +351,7 @@ export function listAllZoneNames(state: ZoneEditorState): Array<{ id: string; na
 }
 
 /**
- * Reserved-track adjustment for a fine grid that needs visual gaps (plan §Affichage de la grille:
+ * Reserved-track adjustment for a fine grid that needs visual gaps:
  * `n × pas + (n − 1) × gapUnits` doesn't generally land exactly on the fine grid's own row/col
  * count — e.g. 16 macro-cells at step 10 + 15 reserved tracks = 175, not 160). Picks the
  * `macroCount` nearest to `preferredMacroCount` for which the reserved layout fits within

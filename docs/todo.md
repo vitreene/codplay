@@ -22,7 +22,7 @@ spec pause/telco a reprendre plus tard :
 [ ] etudier un namespace ou une famille de tracks dediee au mode pause/suspension
 
 spec inactivite user :
-[x] garde-fou configurable du player, actif par defaut a 30 s et desactivable par `idle: false` (voir `packages/codplay/plan/idle-inactivity-plan.md`)
+[x] garde-fou configurable du player, actif par defaut a 30 s et desactivable par `idle: false` (voir `packages/codplay/specs/idle-monitor-v2-spec.md`)
 [x] idle core fonde sur les emissions externes recues par le player ; les signaux globaux (souris, clavier) restent du ressort d'un adaptateur hote
 [x] un seuil idle produit l'event configure, `sequence:end` par defaut
 [x] l'event idle passe par le circuit normal du player et son journal

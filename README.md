@@ -3,6 +3,9 @@
 CodPlay sert à créer des scènes interactives : des éléments peuvent apparaître,
 changer d'état, se déplacer et répondre aux événements d'un utilisateur.
 
+Pour écrire une scène avec le runtime V2, commencez par le
+[guide CodPlay V2](packages/codplay/README.md).
+
 ## Démarrer les exemples
 
 ```bash

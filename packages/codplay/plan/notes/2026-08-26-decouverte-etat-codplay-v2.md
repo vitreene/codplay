@@ -1,692 +1,98 @@
-# CodPlay V2 — découverte et état de référence
-
-> Statut : Référence de travail pour les agents
-> Version : CodPlay V2 foundation
-> Date de l'état : 2026-08-27
-
-### Mise à jour du 2026-09-08 — mouvement
-
-La stratégie de préparation motion fait désormais l’objet de
-[`motion-live-discovery-invalidation-plan.md`](../motion-live-discovery-invalidation-plan.md),
-marqué `En cours`. Le plan remplace la découverte globale à `init()` et lors
-des présentations ordinaires par une occurrence `move` résolue, une capture
-finale cohérente et un commit atomique. La première tranche de code applique
-déjà le transport par occurrence et la capture ciblée ; le reset chaud et les
-autres étapes restent ouverts. Le contrat auteur cible remplace uniquement
-`flipMode` par `reparent`; `mode` garde l’ordre et les autres propriétés de
-`move` restent disponibles.
-
-Cette mise à jour ne constitue pas une spécification. Les modifications du core
-engagées suivent le plan central et restent `En cours` jusqu’aux gates de
-validation prévues.
-
-### Mise à jour du 2026-09-08 — résolution TypeScript
-
-Le typecheck du workspace `codplay` réimporte les sources de `scene-factory`
-depuis les fixtures V2. Les alias `codplay-v1` et la déclaration locale de
-`typed-om-polyfill` sont maintenant inclus dans les programmes TypeScript de
-`codplay` et de `scene-factory`. Les imports historiques restent des imports de
-types explicites ; aucun circuit runtime V1 n’est introduit. Les deux
-typechecks passent.
-
-Ce document est le point d'entrée pour reprendre CodPlay V2. Il décrit où se
-trouve chaque responsabilité, ce qui est fixé, ce qui est effectivement
-implémenté et ce qui reste ouvert. Il évite de redécouvrir les mêmes décisions
-à partir d'une démo ou d'un symptôme visuel.
-
-### Mises à jour des 2026-08-30 et 2026-09-01
-
-La façade V2 expose `instance.snapshot` (`get`, `set`, `clear`) et la
-configuration de longueur logique `cqw`. Les nombres `unitless` des quatre
-champs structurés de position/taille sont qualifiés une seule fois dans
-CodPlay ; les patches de preview suivent le même chemin. L'interpolation
-combinée d'une couleur et d'une géométrie est couverte par un test de frontière
-et par le parcours éditeur.
-
-La première verticale authoring de l'éditeur est désormais raccordée :
-`decor-editor-bridge` lit le snapshot, projette `x/y/width/height` en pixels
-locaux avec la largeur de sa racine de scène, et compose le cadre V2 dans cette
-même racine. Le runner conserve ses captures internes pour FLIP/reparent ;
-elles ne sont pas promues en API d'authoring. Aucun accès au node du player ni
-aucune façade de mesure supplémentaire ne fait partie de cette verticale.
-
-Le plan d'organisation de l'éditeur du 2026-09-01 consigne le raccordement de
-la façade de commandes, du bridge de coordination, de `sequence-editor`, de
-`decor-editor` et du Selection Frame. Les zones, les grilles et les cas de
-géométrie intrinsèque restent postérieurs et devront avoir leur propre tranche.
-
-Il ne remplace pas les spécifications ni les plans. En cas de conflit, l'ordre
-d'autorité est celui de la section 1. Une affirmation de ce document ne crée
-jamais une API ou une règle absente des contrats cités.
-
-### Mise à jour du 2026-09-11 — première tranche de l'hôte foreign
-
-La première tranche autorisée du composant core d'hébergement de contenu foreign
-est engagée. Le catalogue CodPlay V2 enregistre le type auteur `slot`, dont le
-perso porte un `name` racine requis et immuable. Sa racine HTML est un `div` par
-défaut, ses services sont limités à `className`, `style` et `attr`, et son champ
-`initial.content` reste une référence sérialisable opaque ; il n'est pas envoyé
-au service textuel `content` de `TagComponent`.
-
-Le materializer HTML publie une surface interne `foreignContent`. Elle écrit les
-racines fournies par le propriétaire de la représentation dans le `hostRoot` par `appendChild` ou
-`insertBefore`, puis retire uniquement la relation qu'elle possède au démontage
-ou à la destruction. Sighty ne manipule pas le DOM. Le helper d'authoring
-`slotManifest`/`resolveSlotManifestEntry` découvre les noms et produit les
-diagnostics d'absence ou d'ambiguïté.
-
-La spécification ciblée et le suivi détaillé sont :
-
-- [`slot-component-spec.md`](../../specs/slot-component-spec.md) pour le
-  contrat actuellement implémenté ;
-- [`foreign-scene-component-plan.md`](../foreign-scene-component-plan.md) pour
-  les phases, les gates et les limites ;
-- [`2026-09-11-slot-foreign-reprise-report.md`](../2026-09-11-slot-foreign-reprise-report.md)
-  pour le point de reprise factuel.
-
-Le module partagé `replace`, ses hooks V2 et son instantané de présentation
-HTML sont traités dans la mise à jour ci-dessous. Une première surface publique
-de montage entre instances est maintenant consommée par une fixture Sighty A/B
-séparée. Cette fixture compile trois scènes, utilise un seul propriétaire
-CodPlay, résout les slots par le manifeste et exerce le montage, le démontage et
-le remontage. Les tests CodPlay, les typechecks CodPlay et démos V2 et le build
-des démos passent pour la tranche correspondante ; la validation navigateur
-reste ouverte.
-
-Décision de frontière ajoutée le 2026-09-11 : Sighty pilote le cycle de vie des
-occurrences de scènes (création, montage, pilotage, démontage et destruction).
-CodPlay fournit les opérations d'instance et l'exécution runtime ; `slot` ne
-prend aucune décision de survie sur le player enfant. Une première tranche de
-composition A/B peut donc être engagée et affinée par la démo, sans transformer
-ses choix particuliers en contrat générique du composant.
-
-### Mise à jour du 2026-09-11 — raccord V2 de `replace`
-
-Le module partagé `replace` est maintenant enregistré dans le catalogue core et
-requis par `slot`. Le runtime composant diffuse des hooks génériques avant et
-après `component.update()` ; la surface de présentation HTML crée l'instantané
-DOM temporaire du host et le détruit à la fin, à l'annulation, au seek ou à la
-destruction. Ce snapshot ne possède ni contenu foreign, ni player, ni ressource.
-
-Le propriétaire de la représentation foreign reste le code qui détient ses
-racines et son chargement. Il consomme la surface `foreignContent`; aucune
-classe core nommée « adaptateur » n'est introduite. Dans le profil `slot`,
-`replace.split` est accepté pour compatibilité de déclaration puis ignoré, et
-le chemin `replace-simple`/`fade` est utilisé. Le test
-`tests/runtime/capabilities/replace-module.spec.ts` couvre le parcours runtime
-réel et la mise en place d'une nouvelle racine foreign pendant la transition.
-
-Le raccord interinstances Sighty, les contenus asynchrones et l'extension du
-module aux autres composants restent ouverts ; une première surface publique
-de montage est maintenant tentée et couverte par un test core.
-
-La gate de réutilisation du module `replace` est partiellement avancée : le
-composant core `img` exerce maintenant le même chemin `fade` et la même surface
-de présentation que `slot`, avec les URLs déclarées par le runtime. `tag`, les
-contenus non clonables comme les iframes et l'intégration Sighty restent hors
-implémentation de cette reprise.
-
-### Mise à jour du 2026-09-11 — première tentative de montage public
-
-La façade `codplay.instances` expose maintenant une tentative minimale de
-composition :
-
-```ts
-codplay.instances.mount({
-  host: { instanceId, storyId, persoId },
-  childInstanceId,
-})
-```
-
-CodPlay résout le `slot` hôte et attache directement les racines matérialisées
-de l'instance enfant via `ForeignContentSurface`. Si aucun `root` n'est fourni,
-CodPlay conserve seulement un conteneur interne détaché. Le handle `detach` est
-idempotent. Le montage ne pilote ni le temps ni la destruction de l'enfant.
-La destruction d'une instance nettoie la relation avant son teardown. Le test
-`tests/facade/foreign-mount.spec.ts` couvre deux vrais players, un seek de part
-et d'autre, le détachement et la destruction indépendante.
-
-Cette tentative n'ajoute aucune envelope visible par instance enfant. La
-fixture Sighty A/B séparée (`packages/demos/sighty.html` et
-`packages/demos/src/sighty/demo1/`) l'exerce depuis le fichier `view.slots` réel,
-avec trois instances publiques et des commandes de cycle de vie portées par
-Sighty. Les représentations multi-racines, le remontage automatique, l'ordre
-général du cycle Sighty et la validation navigateur restent ouverts.
-
-## 1. Ordre de lecture et sources d'autorité
-
-Avant toute modification :
-
-1. lire [`AGENTS.md`](../../../../AGENTS.md) ;
-2. lire le [plan général V2](../codplay-v2-plan.md) ;
-3. lire le plan détaillé du domaine touché ;
-4. vérifier le chemin de code réel et les tests existants ;
-5. utiliser les démos uniquement comme fixtures de validation.
-
-Les plans de référence sont :
-
-- [façade engine/instance](../facade-engine-instance-plan.md) ;
-- [engine et player](../player-engine-plan.md) ;
-- [CompiledScene](../compiled-scene-plan.md) ;
-- [materialize, resolve, solve](../materialize-resolve-solve-plan.md) ;
-- [contrat `move`](../move-contract-plan.md) ;
-- [capture](../capture-authoring-plan.md) ;
-- [mouvement HTML et FLIP](../runner-flip-integration-study.md) ;
-- [DnD et capacité `list`](../list-dnd-integration-plan.md) ;
-- [media et preload](../media-preload-plan.md).
-
-Un document `README.md` est un guide utilisateur d'une feature ou d'un package :
-il en explique le but en langage simple et montre au moins un exemple concret
-de son usage. Il ne définit pas les contrats internes et ne porte ni
-architecture, ni statut d'implémentation, ni plan, ni suivi de validation. Les
-notes historiques servent à retrouver une décision, pas à inventer une nouvelle
-API.
-
-Les références V1 ne servent qu'à comparer le comportement à préserver : le
-runtime V2 n'importe pas le runtime V1 et ne crée pas de pont implicite vers
-lui. Les spécifications V1 utiles à cette comparaison sont notamment
-[`v1-preload-api.md`](../../../../docs/formalisation/v1-preload-api.md),
-[`v1-perso-spec.md`](../../../../docs/formalisation/v1-perso-spec.md) et
-[`v1-author-api-spec.md`](../../../../docs/formalisation/v1-author-api-spec.md).
-
-Une démo qui fonctionne ne prouve pas que CodPlay est correct. Une démo qui
-échoue révèle un point à analyser dans le contrat ou le runtime ; elle ne doit
-pas être contournée par du code spécial à la démo.
-
-## 2. Modèle mental du runtime
-
-Le flux à conserver est :
-
-```text
-SceneDoc auteur
-  -> build, validation et sanitation
-  -> CompiledScene sérialisable
-  -> engine : catalogue, horloge, ressources et ordre des instances
-  -> player : journal, materialize, resolve et solve
-  -> état logique des composants
-  -> RuntimeMaterializer
-  -> runner HTML/DOM
-  -> présentation visible
-```
-
-Le modèle logique est la source de vérité. Le DOM est une sortie de
-présentation ; il ne sert pas à reconstruire l'état logique.
-
-Le catalogue de capacités est unique pour un engine. Les composants déclarent
-les services qu'ils utilisent ; le catalogue compose et verrouille ces
-déclarations avant l'exécution. Une démo ne crée donc pas de catalogue local,
-ne construit pas de player parallèle et n'appelle pas directement les
-constructeurs internes.
-
-La façade publique masque `RuntimeEngine`, `RuntimePlayer`, le catalogue, le
-materializer et le runner. Le chemin normal d'une démo V2 est :
-
-```text
-const codplay = new CodPlay(options)
-codplay.build({ scene })
-codplay.preload
-codplay.resources
-  -> codplay.instances.create(...)
-  -> codplay.instances.mount({ host, childInstanceId })
-  -> instance.telco / instance.events / instance.diagnostic
-```
-
-La materialisation V2 retenue est HTML/DOM. Les éléments SVG produits par un
-composant passent par ce même DOM et ce même runner ; il n'existe pas de
-materializer SVG séparé. Canvas, Three.js et les autres supports de rendu ne sont
-pas une materialisation CodPlay de cette tranche. Un composant externe peut
-posséder son propre contexte de rendu interne, sans que ce contexte devienne
-une nouvelle API de materialisation du moteur.
-
-## 3. Contrats publics V2 déjà fixés
-
-### 3.1 Façade CodPlay
-
-La surface publique actuelle est :
-
-```text
-new CodPlay(options)
-codplay.build({ scene })
-codplay.engine
-codplay.resources
-codplay.instances
-codplay.preload
-```
-
-L'engine expose uniquement le contrôle avancé de l'horloge :
-
-```text
-engine.start()
-engine.pause()
-engine.stop()
-engine.advance(nowMs, marginMs?)
-```
-
-La compilation, les ressources et les émissions d'eventimes appartiennent
-directement au propriétaire `CodPlay` :
-
-```text
-codplay.resources.register(resources)
-codplay.instances.create(options)
-codplay.preload.load({ manifest, options })
-codplay.preload.css.set({ slot, cssText, container })
-codplay.events.emit(input)
-codplay.events.onEvent(listener)
-```
-
-Le propriétaire `CodPlay` expose le registre des instances :
-
-```text
-codplay.instances.create(options)
-codplay.instances.get(instanceId)
-codplay.instances.destroy(instanceId)
-```
-
-Il n'y a pas de `engine.seek()`. Le seek public passe par l'instance qui doit
-être déplacée : `instance.telco.seek(timeMs)`. `engine.advance()` sert au mode
-où l'hôte fournit les frames ; dans le mode normal, l'engine possède et pilote
-son ticker. Ces deux modes ne doivent pas être utilisés simultanément.
-
-`engine.pause()` suspend la propagation et conserve l'état logique présenté.
-`engine.stop()` cesse d'employer la machine et ne promet pas une remise à zéro
-automatique. `codplay.destroy()` effectue le teardown final des instances et
-des ressources. Ces opérations ne constituent pas des variantes de player
-créées par la démo.
-
-Une erreur de compilation peut être représentée par le résultat de compilation
-prévu par le contrat (`ok: false` et diagnostics). Les commandes runtime ne
-doivent pas recevoir une enveloppe d'erreur inventée ; les problèmes passent
-par le canal de diagnostics V2, en `warning` lorsqu'ils sont non bloquants et
-en `error` lorsqu'ils interrompent l'opération.
-
-### 3.2 Instance et telco
-
-Une instance expose actuellement :
-
-```text
-instance.instanceId
-instance.telco
-instance.events
-instance.diagnostic
-instance.snapshot
-```
-
-La propriété `telco` regroupe le pilotage local :
-
-```text
-telco.getState()
-telco.getProgress()
-telco.play()
-telco.pause()
-telco.togglePlay()
-telco.setRate(rate)
-telco.seek(timeMs)
-telco.rewind()
-telco.onChange(listener)
-telco.onProgress(listener)
-```
-
-Le progress expose le temps logique et la durée. Le pourcentage est une
-présentation de la télécommande, pas une donnée du contrat CodPlay. Le
-progress lit et écrit par le même circuit : `onProgress` observe et `seek`
-écrit. La telco ne possède ni ticker, ni logique de scène, ni recherche de
-cibles, ni accès direct au runner.
-
-Il n'y a pas actuellement de `instance.capture()` public, de `instance.init()`
-ou de `instance.refresh()` dans la telco, ni d'accès générique de l'éditeur au
-DOM. `instance.snapshot` est le port logique authoring direct validé ; pour la
-première verticale, l'application éditeur fournit elle-même le repère px avec
-la racine de scène. Une géométrie player dédiée ne sera étudiée que pour les
-cas hors périmètre actuels.
-
-### 3.3 Eventimes et ciblage
-
-`instance.events.emit(eventime, target)` et `codplay.events.emit(input)`
-aboutissent au même point d'entrée du player. `codplay.events.emit` ne crée pas
-un journal ou un dispatcher parallèle : il adresse l'instance puis délègue au
-circuit normal.
-
-La forme externe reste celle d'un eventime déclarable : nom, données, enfants
-éventuels, visibilité et `startAt` lorsque nécessaire. La forme interne
-`CompiledEventime` ne sort pas de la frontière publique.
-
-Les règles temporelles fixées sont :
-
-- un eventime racine sans `startAt` est enregistré immédiatement et présenté
-  au prochain tick normal ;
-- les `startAt` des eventimes imbriqués sont des offsets relatifs à leur parent
-  ou à l'ancrage de la racine ;
-- l'eventime est ajouté au journal puis lu lorsque la tête de lecture atteint
-  son temps ;
-- `applyAtMs` est interne et ne doit pas être exposé ;
-- la syntaxe `startAt: "+200"` n'est pas un contrat V2 ;
-- la cible est séparée de l'eventime et porte l'instance puis la portée
-  `scene` ou `story`, avec la track éventuelle ;
-- l'observation sortante concerne les events de visibilité `public` ;
-- la notion de `cascade` n'est pas réintroduite : la portée nommée du contrat
-  V2 est utilisée.
-
-Les sorties `persist-only` de capture restent distinctes de la remise live
-`endEmit`. Un événement `persist-only` n'est pas présenté par la tête de
-lecture comme un effet supplémentaire au moment de `endCapture` ; il sert à la
-trajectoire persistante qui sera relue. Il n'existe qu'un circuit d'events dans
-le player.
-
-### 3.4 Preload et ressources
-
-`preload` est un service externalisé :
-
-```text
-codplay.preload
-  -> preload.load(manifest ou manifestes)
-  -> codplay.resources.register(result)
-  -> création de l'instance puis initialisation après validation
-```
-
-Le preload peut être appelé à tout moment par un hôte. En revanche, une scène
-ne commence pas avant que ses ressources requises aient été enregistrées comme
-disponibles. `init()` du player ne déclenche pas un preload implicite. Il n'y a
-pas de duplication d'éléments dans le DOM pour précharger une ressource.
-
-Le plan conserve un éventuel raccourci `run()` pour la diffusion autonome ; il
-ne fait pas partie de la surface `CodPlay` actuellement exposée. Tant
-qu'une interface dédiée n'est pas publiée, il ne faut pas l'utiliser comme une
-API V2 ni l'ajouter dans une démo. Lorsqu'il sera construit, il devra enchaîner
-le preload explicite, l'initialisation puis la lecture, sans redéfinir le
-service preload ni créer une seconde façon de lire une scène.
-
-## 4. Responsabilités par dossier
-
-| Dossier | Responsabilité | Ne doit pas faire |
-|---|---|---|
-| `src/facade` | Surface publique CodPlay et délégation vers le runtime | Exposer les classes internes ou créer un second runtime |
-| `src/runtime/catalog` | Catalogue unique des composants, services et modules | Être recréé par une démo |
-| `src/runtime/engine` | Horloge, ressources partagées, ordre et propriété des instances | Résoudre les règles de scène à la place du player |
-| `src/runtime/player` | Journal, reconstruction, materialize, resolve, solve et cycle de vie d'une instance | Lire l'état depuis le DOM |
-| `src/runtime/components` | Composants logiques et leurs services déclarés | Imposer un materializer concurrent |
-| `src/runtime/materializer` | Contrat abstrait de materialisation interne | Devenir une option publique de substrate en V2 foundation |
-| `src/runtime/runner-html` | Présentation HTML/DOM, géométrie d'endpoints, FLIP et preview DnD HTML | Créer un second player, une seconde scène logique ou un arbre de mesure permanent |
-| intégration authoring éditeur | L'éditeur lit `snapshot` et projette la verticale position/taille dans la racine de scène ; son cadre reste un overlay local | Ajouter un accès au node, réutiliser une pose FLIP comme état auteur ou ouvrir une API core non validée |
-| `src/runtime/motion` | Poses, graphes temporels et interpolation pure | Lire la géométrie DOM à chaque frame |
-| `src/runtime/capture` | Session de capture générique et sorties du contrat capture | Connaître les listes, le DOM ou le hit-test |
-| `src/runtime/capabilities/list` | Ordre, placement et réordonnancement d'une liste | Créer un pipeline d'animation distinct |
-| `src/runtime/capabilities/media-sync` | Synchronisation des médias dans le circuit player | Corriger le master ou faire un seek par frame |
-| `src/runtime/preload` | Chargement, cache, manifestes et stratégies | Créer des nodes DOM de mesure ou des clones de médias |
-| `packages/demos/src/v2/layout` | Page commune : titre, sélection, scène, remote, journal et cycle facade | Être contourné par chaque démo |
-| `packages/demos/src/v2/demos/<id>` | Construction de la `SceneDoc` et données propres à la scène | Construire une page, une telco, un journal ou un catalogue |
-| `packages/demos/src/v2/registry.ts` | Une définition par démo : id, chemin, titre, description et chargement | Être dupliqué dans chaque page |
-
-Le layout est le consommateur commun de la façade. Une démo ne doit pas
-réinventer `new CodPlay`, la telco ou le journal pour « simplifier »
-son montage. Le titre affiché et le titre de la liste viennent de la même
-entrée du registry ; le choix du texte appartient à l'auteur du projet, pas à
-un helper de layout.
-
-Les anciens fichiers V2 qui appellent encore directement
-`createCoreRuntimeCatalog` ou des constructeurs internes ne sont pas des
-modèles à suivre. S'ils ne sont plus enregistrés, ils constituent du code à
-retirer dans le chantier de nettoyage des démos ; s'ils doivent rester, ils
-doivent être migrés par un plan explicite. On ne leur ajoute pas un nouvel
-adaptateur parallèle.
-
-## 5. Mouvement HTML : point d'entrée
-
-Le détail normatif du graphe, des contextes parent/enfant, des bornes FIRST/LAST
-et de la capture sans DOM d'analyse appartient au module de présentation HTML :
-
-- [plan d'intégration FLIP](../runner-flip-integration-study.md) porte le
-  contrat, les invariants et le suivi de validation.
-
-Ce document n'en recopie pas le détail. Pour l'état courant, il suffit de
-retenir que le runner utilise les materialisations auteur persistantes, capture
-la géométrie uniquement aux bornes nécessaires et résout le graphe conservé
-dans la boucle de présentation. Le cas de non-régression suivi ici est celui
-d'une cible ou d'un ancêtre absent au FIRST mais disponible au LAST d'un move.
-Il est verrouillé par un test de frontière et doit rester visible dans la
-fixture `flip-stress`. Pour l'overlay, l'ordre remonte toute la chaîne des
-parents, y compris les intermédiaires sans ghost ; un enfant indépendant est
-donc inséré après sa frame et reste peint au-dessus d'elle en cas de
-recouvrement.
-
-## 6. Mouvement, liste et capture
-
-Le `move` est une action logique générale. La capacité `list` fournit les
-règles d'ordre et de placement ; elle ne possède pas une animation concurrente.
-Le DnD HTML fournit seulement la partie propre au pointeur, au hit-test et au
-ghost, puis remet un résultat abstrait au circuit normal.
-
-À la fermeture d'un DnD :
-
-- la pose live du relâchement va dans `endEmit` et appartient à la fin du
-  geste ; elle n'est pas la trajectoire historique relue par Seek ;
-- le commit de placement produit un seul événement `persist-only` ;
-- la trajectoire persistante est source -> cible, avec la position source
-  réelle de l'item au moment du move ;
-- le ghost suit le point d'insertion sous la souris et ne réordonne pas les
-  nodes auteur pendant la preview ;
-- Play et Seek utilisent le même journal, les mêmes frontières et le même
-  calcul de `move`.
-
-Le core capture ne connaît ni liste, ni DOM, ni géométrie. La source HTML et la
-capacité `list` se branchent sur les hooks existants ; elles ne créent pas de
-dispatcher ou de journal DnD séparé.
-
-## 7. Médias et synchronisation
-
-La synchronisation média reste dans le player :
-
-- un media déclaré `master` fournit le temps de référence lorsqu'il est actif
-  et n'est jamais corrigé par la timeline ;
-- les autres médias qui possèdent leur propre timeline native peuvent être
-  corrigés seulement en cas de dérive notable ;
-- les médias déjà pilotés par le ticker restent dans le circuit normal et ne
-  reçoivent pas un traitement différent ;
-- aucun `currentTime` n'est réécrit à chaque frame ;
-- un seek met en pause les médias natifs concernés, reconstruit la position,
-  puis reprend si nécessaire ;
-- le garde de dérive est une optimisation finale, après la validation de la
-  lecture, du seek, du lancement et de la pause ; il ne concerne jamais le
-  master.
-
-Le preload et la synchronisation sont deux capacités distinctes. La présence
-d'un service preload ne doit pas créer un deuxième élément vidéo ou audio dans
-le DOM. L'anomalie connue reste l'écran noir de la vidéo dans Safari dans la
-démo `preload-media` : le transport et les contrôles peuvent indiquer une
-lecture alors que la surface reste noire. Sa cause n'est pas tranchée ; elle
-doit être analysée avec les événements média, `readyState`, `currentTime`, les
-dimensions et le rendu observé, sans l'attribuer sans preuve au preload ou au
-FLIP.
-
-## 8. État du projet au 2026-08-27
-
-| Domaine | État constaté | Ce que cela autorise / interdit |
-|---|---|---|
-| Façade CodPlay | Plan de façade, code et tests présents | Utiliser la surface publique. Ne pas ajouter `engine.seek`, `instance.capture` ou des méthodes non planifiées. |
-| Cohérence documentaire de la façade | Le plan détaillé dit `Fini`, le plan général la laisse encore `En cours` | Écart documentaire à résoudre ; ne pas en déduire une API manquante. |
-| Engine, player, telco, catalogue | Code présent, tests ciblés présents | Fondation utilisable, mais ne pas marquer les modules `Fini` sans leur preuve propre. |
-| CompiledScene et validation | Tranche initiale présente ; plans encore `En cours` | Toute extension doit être spécifiée et compilée, pas déduite du DOM. |
-| Capture core | Plan capture et validation S5 marqués `Fini`; tests présents | Ne pas ajouter une capacité `instance.capture` pour la démo. |
-| Runner HTML et motion | Corrections de l'endpoint FIRST/LAST, de la source pré-frontière du retarget et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless rejoué sur `flip-stress`, matrice Safari complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, conserve le mover et ses ancêtres dans le bon repère temporel, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
-| List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
-| Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
-| Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `runner`, `flip-nested` et `preload-media` passent par le layout commun ; chantier encore `En cours` | Les démos retenues utilisent la façade et le layout commun ; la démo `player` n'est pas retenue et les fixtures de test vivent sous `codplay/tests/fixtures`. |
-| Authoring éditeur | `snapshot` direct est présent ; la première verticale position/taille lit ce snapshot et projette localement dans la racine de scène via le bridge V2 | Ne pas inventer d'accès au node ou d'API core de géométrie pour cette verticale. Les besoins de grille, taille intrinsèque et repères transformés restent des tranches distinctes. |
-
-Le code de démonstration historique encore présent sous `packages/demos/src/v2`
-doit être évalué par rapport au registry. Un fichier non enregistré qui importe
-le catalogue interne n'est pas une preuve de l'architecture publique et ne
-doit pas être réintroduit dans le chemin officiel.
-
-## 9. Preuves disponibles et limites de preuve
-
-La vérification automatisée exécutée après cette mise à jour est :
-
-```text
-npm test --workspace=codplay       73 fichiers, 473 tests passés
-npm run typecheck --workspace=codplay
-npm run build --workspace=@codplay/demos
-git diff --check
-```
-
-Ces résultats prouvent la cohérence de compilation et la couverture automatisée
-de la correction. Ils ne prouvent pas :
-
-- le comportement de la démo après changement indépendant des horaires ;
-- la résolution visuelle de toutes les combinaisons Play, Seek, resize,
-  parent/enfant, reparentage et persistance ;
-- la lecture de la vidéo dans Safari ; cette passe Safari concernait
-  `flip-stress`, pas `preload-media`.
-
-Les tests de graphe et de runner couvrent déjà les parents en mouvement, les
-descendants, les overlays, les recouvrements, l'absence de lecture DOM par
-frame et, après cette passe, la frontière cible absente au FIRST mais disponible
-au LAST ainsi que l'ordre d'un enfant après son ancêtre à travers un
-intermédiaire non présenté. Ils ne remplacent pas la matrice visuelle complète
-de la démo.
-
-La vérification Safari après rechargement de `http://localhost:5173/?demo=flip-list`
-a confirmé les ordres `transfer-q-frame → Qb` à `2200 ms` et
-`transfer-k-frame → Kb` à `2700 ms`. Chaque item contrôlé ne possède alors
-qu'une représentation visible. La capture Safari reste une vérification
-ponctuelle, pas une preuve de toutes les combinaisons de calendrier.
-
-Une passe Firefox 154.0.1 headless a ensuite contrôlé les seeks exacts autour
-de `1200`, `1700`, `2200` et `2700 ms`, puis Play aux frontières correspondantes.
-À `1700 ms`, Q conserve `Qb, Qc, Qd, Qe, Qf, Ka` ; à `2200 ms`, Qb n'est
-retiré de Q et ajouté à K qu'à sa propre frontière ; à `2700 ms`, Kb n'entre
-dans Q qu'à sa propre frontière. Les temps Play observés étaient `1204`,
-`1712`, `2208` et `2715 ms`, avec une seule représentation visible par item
-contrôlé. Cette preuve confirme le découplage `afterStart`/LAST et le ciblage
-direct du mover, sans clôturer la matrice navigateur complète. Aucun code n'a
-été modifié pendant la passe.
-
-La perturbation signalée autour de `3670–3700 ms` a été reproduite dans
-Firefox 154.0.1 headless. Elle provenait de deux divergences structurelles : le
-retarget lisait le `before` brut au lieu du layout naturel immédiatement
-pré-frontière, et la pose d'une liste sans piste propre ignorait le segment de
-son frame ancêtre déjà mobile. `NaturalLayoutTimeline` conserve maintenant le
-snapshot pré-frontière par boundary ; le graphe l'utilise pour le FIRST réel et
-résout le parent cible par toute sa chaîne active. Les tests ajoutés couvrent le
-slot `afterStart`, le source pré-frontière et l'ancêtre indirect en mouvement.
-
-Une nouvelle passe Seek sur `flip-stress` a contrôlé tous les items aux
-frontières `1700`, `2700`, `3700`, `4700`, `5700` et `6700 ms`. Tous restent
-présents et continus ; le maximum observé sur un pas de `1 ms` est `2.172 px`
-sur `Qa` à `1700 ms`, et `Qc` mesure `1.710 px` à `3700 ms`, sans la rupture
-précédente de plus de `40 px`. Play a traversé `3700 ms` de `3698` à `3715 ms`
-avec la vitesse normale de la trajectoire. La suite complète est à `73` fichiers
-et `473` tests passés ; typecheck, build des démos et `git diff --check` passent.
-La validation Safari du nouveau graphe, ainsi que la matrice complète resize,
-persistance et changements de calendrier, restent ouvertes. Le statut reste
-`En cours`.
-
-La vérification courante ajoute le cas `afterStart` différent de LAST : un
-mover structurel conserve son attachement `segment.to` jusqu'à la fin, tandis
-que les frères continuent d'utiliser les slots `afterStart`. Le test dédié et
-la passe Safari sur `flip-nested` confirment l'absence de saut à la disparition
-de l'overlay. La suite actuelle compte `73` fichiers et `475` tests passés.
-
-La passe suivante a raccordé les démos retenues au registry V2. Les anciennes
-pages autonomes ont été retirées : les scènes sont chargées par le registry et
-`runner` expose ses deux scènes (`runner` et `flip-nested`). Le layout commun compile, précharge,
-enregistre les ressources auprès de l'engine, puis crée l'instance publique ;
-aucun de ces modules ne construit désormais de catalogue, de player, de runner,
-de telco ou de page locale.
-
-Le build Vite et le typecheck V2 passent après cette migration. La vérification
-historique Firefox 154.0.1 headless avait monté successivement `?demo=player`,
-`?demo=runner` et `?demo=runner-overlay` : remote commun présent, scène montée,
-anciennes pages absentes et aucun diagnostic runtime. Ces routes ont depuis été
-retirées ou renommées par le registry V2 ; la vérification actuelle porte sur
-les routes enregistrées. Le typecheck global de `packages/demos` reste non
-concluant à cause d'erreurs historiques dans `src/v1`, sans erreur signalée
-dans `src/v2`.
-
-La surface a ensuite été resserrée pour conserver la frontière de construction
-de V1 : `new CodPlay(options)` est l'unique entrée publique. Le layout injecte
-son `frameScheduler` au constructeur ; `CodPlay` construit le `TimeTicker`
-interne et expose seulement `engine`, `instances`, `preload` et `destroy`. `Ticker`, les
-factories de ticker et les adaptateurs `EngineFacadeImpl`/`InstanceFacadeImpl`
-ne sortent plus des modules publics. Les tests de façade couvrent l'injection
-du scheduler ainsi que les modes ticker possédé et frames externes ; le build,
-le typecheck, les 473 tests V2 et la passe Firefox headless des trois routes
-registry restent passants.
-
-## 10. Procédure obligatoire pour éviter les régressions tournantes
-
-Pour tout prochain changement :
-
-1. citer le plan ou la spécification applicable ;
-2. écrire le comportement attendu aux bornes, avec les éléments absents et
-   présents explicitement ;
-3. vérifier le chemin réel de code et les tests qui le couvrent déjà ;
-4. ajouter d'abord un test de non-régression au niveau de la frontière réelle,
-   pas seulement un test d'interpolation abstrait ;
-5. couvrir les voisins concernés : parent/enfant, chaîne d'ancêtres,
-   reparentage, cible absente FIRST / présente LAST, même cible, recouvrement,
-   Play, Seek, resize, persistance et lifecycle ;
-6. vérifier qu'aucune lecture DOM systématique ni création DOM continue n'a été
-   introduite ;
-   les appels directs à `getBoundingClientRect()` sont interdits dans le
-   circuit FLIP/DND V2, y compris pendant la capture des frontières ; ils
-   doivent passer par `captureHtmlPose()`. L'appel interne de cette primitive
-   est le point navigateur autorisé et son contexte en mémorise le résultat ;
-7. exécuter test, typecheck, build et `git diff --check`, puis la validation
-   navigateur nécessaire ;
-8. mettre à jour le plan, la spécification ciblée et le statut avant de dire
-   « corrigé » ou « fini ».
-
-Si le comportement attendu n'est pas décidé dans un plan ou une spec, on
-s'arrête à l'analyse et on demande une décision. Si le comportement est déjà
-décidé, on écrit le test qui le prouve et on modifie le circuit existant ; on
-ne crée pas une branche de démo, une API miroir ou un fallback destiné à cacher
-le défaut.
-
-## 11. Ordre de reprise
-
-L'ordre de travail restant est :
-
-1. exécuter la matrice de non-régression FLIP complète et conserver
-   `flip-stress` comme repère visuel ;
-2. terminer la validation Seek de `list`/DnD ;
-3. reprendre l'écran noir Safari de `preload-media` avec des observations média
-   concrètes ;
-4. conserver `snapshot` et `cqw` comme frontières suffisantes pour la première verticale éditeur ; étudier séparément les besoins de grille, de taille intrinsèque et de repères transformés ;
-5. nettoyer les anciennes démos et références internes selon un plan séparé.
-
-La correction FLIP ne modifie aucun contrat de façade. La reprise authoring et
-le nettoyage des anciennes démos restent des chantiers séparés ; ils ne doivent
-pas être mélangés au pilotage telco ni servir à contourner un défaut du core.
-
-## 12. État de la démo `flip imbriqué` au 2026-08-27
-
-La fixture utilise une seule scène `SceneDoc` et le layout commun. Son cas
-spécifique est volontaire : l'outlet cible de Q est vide au FIRST et devient
-plus haut lorsque Q y est monté au LAST. La hauteur de P doit donc être mesurée
-à chacune des bornes et interpolée par le même graphe que sa position. Le
-runner ne doit pas remplacer LAST par `afterStart` pour le mover direct ; cette
-régression est couverte par le test de graphe correspondant.
-
-Le layout commun possède aussi un mode compact pour les fenêtres courtes. La
-vérification Safari effectuée avec une fenêtre demandée de `500 × 300` (soit
-`500 × 196 CSS px` exposés à la page) donne une page sans débordement, une scène
-de `80 px` et des items visibles dans `runner` et `flip-nested`. Cette règle ne
-change ni la scène logique ni le contrat du runner ; elle évite seulement que
-les dimensions décoratives de la fixture consomment toute la zone centrale.
-
-La petite largeur a ensuite révélé un second cas de présentation : le minimum
-de `3rem` prévu pour l'outlet LAST faisait grandir Q au lieu de le réduire,
-et le rembourrage du Q cible s'ajoutait à cette taille. La règle responsive de
-`runner/style.css` utilise désormais `clamp(1rem, 5cqw, 2.375rem)` et retire
-ce rembourrage. Safari mesure alors Q à `19,19 px` au FIRST et `16,86 px` au
-LAST dans une fenêtre demandée de `360 × 500` (`360 × 396 CSS px` exposés).
-
-À hauteur courte, le parent P était contracté à `10 px` par le flex layout
-alors que son contenu demandait `33 px`; son débordement masquait Q au LAST.
-Le mode compact donne à l'outlet la hauteur disponible et conserve P à sa
-hauteur naturelle. L'endpoint compact de Q est `0,75rem`, contre `1rem` au
-FIRST : la variation de P reste donc observable et interpolable. Dans une
-fenêtre demandée de `500 × 300` (`500 × 196 CSS px` exposés), P passe de
-`37,38 px` à `33,38 px`, Q de `16 px` à `12 px`, et B/C restent visibles. Il
-s'agit d'une correction de la fixture responsive, sans changement du runner
-ou du graphe FLIP.
+# Guide de reprise CodPlay V2
+
+> État documentaire : 2026-09-26. Ce guide dirige la lecture ; les
+> spécifications et plans détaillés portent les contrats et statuts courants.
+
+## Ordre de lecture
+
+1. Lire les [règles du dépôt](../../../../AGENTS.md).
+2. Identifier le [plan détaillé](../codplay-v2-plan.md) qui couvre le sujet.
+3. Lire le présent guide, puis la spécification du comportement vérifié.
+4. Lire le plan actif du domaine, s'il existe, pour les décisions non prises,
+   les décisions acceptées mais non appliquées et leur parcours d'acceptation.
+5. Vérifier les fichiers de code et de test cités par ces documents.
+
+La [carte de fonctionnement](../../projet/notes/2026-09-25-carte-fonctionnement-v2.md)
+repère les dépendances, les circuits et les propriétaires dans le code. Le
+[registre d’audit achevé](../../projet/notes/2026-09-26-audit-contradictions-doublons-methodes.md)
+archive les constats et fichiers de preuve ; les spécifications et plans
+détaillés restent les sources de référence.
+
+## Règle d'autorité
+
+- Une spécification décrit seulement les comportements implémentés, vérifiés
+  et normatifs.
+- Un plan conserve les décisions à prendre ou acceptées mais non appliquées,
+  avec leurs gates et critères d'acceptation.
+- Une note explique le contexte utile ; elle ne crée pas de contrat.
+- Un plan exécuté est retiré quand la spécification couvre sa feature et
+  qu'aucune décision ou validation ne reste.
+
+## État actuel de quelques frontières
+
+- **Engine et Player** : le cycle, l'horloge et le Seek groupé vérifiés sont
+  dans la [spécification](../../specs/engine-player-v2-spec.md). Le contrat de
+  `schedule`, le redémarrage direct de `RuntimePlayer.play()` depuis l'état
+  `sequence:end` avec ses effets de cycle, la réutilisation logique, la
+  politique de `rate`, la lecture arrière éventuelle et la préparation motion
+  restent au [plan Player](../player-engine-plan.md). Le chemin façade
+  `instance.telco.play()` après une fin d'inactivité est vérifié séparément.
+- **Actions temporelles** : les comportements `ActionSequence` et
+  `TweenAction` couverts sont dans leur [spécification](../../specs/action-sequence-tween-v2-spec.md).
+  Les extensions auteur ACE et les cas d'acceptation manquants restent au
+  [plan associé](../action-sequence-tween-plan.md) ; les primitives ACE seules
+  ne définissent pas une API `Behavior`.
+- **Façade** : le contrat public vérifié est dans
+  [`facade-v2-spec.md`](../../specs/facade-v2-spec.md). Son plan ne conserve que
+  la décision non prise sur une éventuelle observation des changements de
+  `snapshot`.
+- **Capture** : la [spécification capture](../../specs/capture-v2-spec.md)
+  décrit les comportements vérifiés. La migration vers la portée V2
+  `visibility` et sa revalidation restent dans le
+  [plan core capture](../capture-authoring-plan.md) et le
+  [plan S5](../capture-s5-validation-plan.md).
+- **Scroll-container** : la capacité a été validée par l'utilisateur et son
+  contrat vérifié est dans la [spécification scroll](../../specs/scroll-container-spec.md).
+- **Source DOM `Perso.emit`** : le sous-ensemble compilé et intégré est dans la
+  [spécification](../../specs/perso-emit-v2-spec.md). Les portées non-story,
+  les modes, l'ordre des actions et les parcours Seek/reparent restent au
+  [plan d'acceptation](../perso-emit-v2-portage-plan.md) ; la migration capture
+  reste suivie séparément.
+- **Isolation des stories** : l'activation ciblée, le reset et la projection
+  d'actions vérifiés sont décrits par la
+  [spécification](../../specs/story-isolation-spec.md). Les occurrences
+  différées et motion, la suppression des autres effets `listen`, le cycle
+  Play/Seek/resize/persistence/lifecycle et l'acceptation navigateur restent au
+  [plan d'acceptation](../story-isolation-plan.md).
+- **Mouvement** : la forme auteur et sa compilation vérifiées sont dans la
+  [spécification `move`](../../specs/move-v2-spec.md). Les snapshots de
+  frontière et l'évaluation au temps absolu sont décrits par la
+  [spécification motion](../../specs/motion-frame-v2-spec.md) ; le retarget vers
+  une target déplacée par sa
+  [spécification dédiée](../../specs/move-target-dependency-v2-spec.md). La
+  préparation et les validations complètes Play/Seek restent aux plans
+  [motion](../motion-live-discovery-invalidation-plan.md),
+  [runner](../runner-flip-integration-study.md) et
+  [retarget](../move-target-dependency-plan.md).
+- **CompiledScene** : la [spec d'authoring](../../specs/scene-authoring-spec.md)
+  et la [spec codec](../../specs/compiled-codec-v2-spec.md) décrivent les
+  frontières vérifiées. `SceneDoc.defaults` et la preuve d'intégration des
+  `rootNodeIds` restent au [plan CompiledScene](../compiled-scene-plan.md).
+- **Preload et médias** : les comportements vérifiés sont dans les
+  [specifications preload](../../specs/preload-v2-spec.md) et
+  [media-sync](../../specs/media-sync-v2-spec.md). Leurs preuves restantes,
+  `run()` et le parcours Safari sont au [plan média](../media-preload-plan.md).
+  La règle acceptée pour une source directe — temps réel, sans rewind,
+  buffering ni contrôle par `rate` — reste non appliquée ; sa déclaration et
+  son cycle de vie sont encore à décider dans ce même plan.
+
+Pour les autres domaines, utiliser l'index du [plan général V2](../codplay-v2-plan.md)
+et suivre les plans d'acceptation reliés depuis chaque spécification.
+
+## Circuit CodPlay
+
+Le [guide auteur](../../README.md) montre un exemple d'usage. La carte de
+fonctionnement détaille le chemin `SceneDoc → build → CompiledScene → instance`
+et le raccord entre player, journal, solveur, composants et runner HTML. Les
+contrats du runtime restent séparés par domaine ; une démo est une fixture qui
+exerce ces contrats, jamais leur source d'autorité.

@@ -10,7 +10,7 @@ Extension (2026-07-10) : pour les grilles, définir aussi **les paramètres qui 
 
 ## Où c'était amorcé (repo, 2026-07-10)
 
-- **spec ouverte** = `docs/plans/2026-07-03-selection-frame-variantes-plan.md`, § « Surfaces et contraintes » : **surface** = réalisation géométrique d'une zone sous une contrainte ; **contrainte** = règle CSS/condition d'environnement sélectionnant la surface active ; « une zone peut avoir plusieurs surfaces, une seule active par contrainte ». Point capital : le module d'édition n'édite **qu'une surface à la fois** ; l'association `zone → { contrainte: surface }` vit dans la **data éditeur/modèle**, pas dans le module. La feature est donc côté modèle + classe métier, pas selection-frame.
+- **Décision retenue, encore à intégrer au modèle hôte** : une **surface** est la réalisation géométrique d'une zone sous une contrainte ; une **contrainte** (orientation ou breakpoint) sélectionne la surface active. Une zone peut avoir plusieurs surfaces, une seule active par contrainte. `createZoneEditor()` édite **une surface à la fois** ; l'association `zone → { contrainte: surface }` vit dans les données de l'éditeur, pas dans le module. Le raccordement est suivi dans le [plan zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md).
 - **dedit** : embryon `ZoneDef` en deux formes dont `{ name; contexts: Record<OrientationContext, ZoneCoords> }`, `OrientationContext = 'horizontal' | 'vertical'` — multi-surface par orientation, mais coords cqw (ancien modèle), pas réconcilié avec l'id stable.
 
 ## Mécanisme CSS — vérifié MDN (2026-07-11)

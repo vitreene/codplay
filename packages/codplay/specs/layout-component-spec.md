@@ -1,14 +1,10 @@
 # CodPlay V2 — parts de layout et points d'ancrage
 
-## Statut
+## Périmètre vérifié
 
-> Status: En cours
-> CodPlay version: V2 foundation
-> Première tranche: 2026-09-12
-
-Cette spécification décrit l'enrichissement du markup d'un composant `layout`
-par des points d'accès sans conteneur. Elle complète la capacité `markup`
-existante et ne modifie pas le contrat du composant `slot`.
+Le contrat ci-dessous décrit les points `anchor` et `outlet` découverts dans
+le markup d'un composant `layout`. Le parcours d'acceptation de la tranche est
+décrit dans le [plan associé](../plan/layout-part-marker-plan.md).
 
 ## Rôle
 
@@ -41,19 +37,12 @@ Deux formes appartiennent au même espace d'identifiants de parts :
   le contient. Il n'est pas transformé en élément et ne peut pas devenir le
   parent DOM d'un autre perso.
 
-Le nom de l'attribut de commentaire est configurable par un préfixe placé avant
-le token `part` :
-
-```ts
-new HtmlPlayerRunner({
-  // ...
-  partMarkerPrefix: '__',
-})
-```
-
-La valeur par défaut est `data-`. La configuration ci-dessus reconnaît donc
-`<!-- __part="scene-b" -->`. Le marqueur élémentaire reste `data-part`, qui est
-la forme explicite conservée dans les démos.
+Le parseur de template accepte un préfixe configurable avant le token `part` ;
+sa valeur par défaut est `data-`. Le test unitaire vérifie directement que le
+préfixe `__` reconnaît `<!-- __part="scene-b" -->`. Le transport de cette option
+depuis `HtmlPlayerRunner` et la façade d'instance n'a pas encore de test dédié ;
+il reste une gate du [plan](../plan/layout-part-marker-plan.md). Le marqueur
+élémentaire reste `data-part`, forme conservée dans les démos.
 
 ## Placement d'un ancrage
 
@@ -89,10 +78,26 @@ Tout élément parent écrit dans un markup auteur doit porter un `id` explicite
 Un point d'ancrage est l'exception de structure attendue : il s'écrit comme un
 commentaire précisément parce qu'il ne doit pas introduire un conteneur anonyme.
 
-## Validation
+## Preuves du contrat
 
-La première tranche est couverte par les tests du parseur, de la capacité
-`markup`, du solveur, du materializer structurel et de la démo 1. La suite
-complète CodPlay, le typecheck CodPlay, le typecheck V2 des démos et leur build
-passent. La validation navigateur et les cas de composition plus larges restent
-à effectuer ; le statut de la spécification demeure donc `En cours`.
+- `tests/runtime/runner-html/template-materializer.spec.ts` vérifie la
+  découverte des deux marqueurs, leur ordre, la conservation du commentaire et
+  le préfixe configurable ;
+- `tests/runtime/capabilities/markup-capability.spec.ts` et
+  `tests/runtime/player/pipeline.spec.ts` vérifient le type `anchor` et sa
+  résolution ;
+- `tests/runtime/player/html-component-materializer-scene.spec.ts` vérifie
+  l'insertion des racines avant le commentaire sans enveloppe générée ;
+- `tests/facade/sighty-demo.spec.ts` couvre la fixture de démonstration.
+
+Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
+
+```text
+node ../../node_modules/vitest/vitest.mjs run \
+  tests/runtime/runner-html/template-materializer.spec.ts \
+  tests/runtime/capabilities/markup-capability.spec.ts \
+  tests/runtime/player/pipeline.spec.ts \
+  tests/runtime/player/html-component-materializer-scene.spec.ts \
+  tests/facade/sighty-demo.spec.ts
+5 fichiers, 49 tests réussis
+```

@@ -6,9 +6,12 @@
 > Date : 2026-09-05
 > Version CodPlay : V2 foundation
 
-Cette note fige les observations faites dans Safari avant toute nouvelle
-analyse de la correction motion. Elle ne propose aucun patch et ne transforme
-pas une observation DOM en mécanisme runtime.
+Cette note conserve un relevé Safari historique : elle ne propose aucun patch
+et ne transforme pas une observation DOM en mécanisme runtime. Le scénario
+multi-story sert de contexte au [plan d'isolation des stories](../story-isolation-plan.md).
+Les suites à donner au reset appartiennent au
+[plan de reset](../story-reset-plan.md) ; les mesures ci-dessous ne prouvent
+pas son résultat.
 
 ## Protocole
 
@@ -131,13 +134,8 @@ instance décrit l’état de cette démo au moment du relevé ; ce n’est pas 
 validation du modèle d’architecture cible. Le modèle à examiner est celui de
 démos préconstruites isolées par duplication d’instances.
 
-## Points à reprendre après `story.reset()`
+## Lien avec les validations actuelles
 
-- savoir quelles projections temporaires sont encore actives au moment du
-  reset ;
-- vérifier que le reset retire le ghost et la couche temporaire sans démonter
-  les nœuds auteur ;
-- vérifier que la story de démo courante (ici la cellule 02) revient à son
-  état initial ; ce relevé ne définit pas un reset de la story `main` ;
-- comparer un relevé avant/après reset, au même temps logique, puis après
-  seek et replay.
+Ce relevé décrit l'état avant reset. Il ne certifie ni le retrait des ghosts au
+reset, ni le retour de la story à son état initial, ni la cohérence d'un replay.
+Ces validations restent dans le [plan de reset](../story-reset-plan.md).

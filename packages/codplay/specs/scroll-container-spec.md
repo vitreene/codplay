@@ -1,10 +1,8 @@
 # CodPlay V2 — scroll-container
 
-## Statut
+## Périmètre vérifié
 
-> Contrat : Fixe — décisions validées le 2026-09-25.
-> Implémentation et validation : En cours, suivies dans
-> [`2026-09-23-scroll-container-integration-plan.md`](../plan/2026-09-23-scroll-container-integration-plan.md).
+Le contrat de la capacité scroll-container a été validé le 2026-09-25.
 
 Cette spécification définit la capacité optionnelle `scroll-container` de
 CodPlay V2 : une source de progress géométrique, les observations
@@ -269,9 +267,32 @@ du player. Les options natives non supportées produisent un diagnostic runtime
 et ne créent pas un circuit alternatif. Les formes inconnues, dont `delay`,
 sont refusées.
 
+## Fichiers de preuve et portée
+
+- Le contrôle des déclarations auteur dans CodPlay est
+  [`scroll-observation-validation.ts`](../src/scene/compiled/scroll-observation-validation.ts).
+  La validation et l’adaptation du composant sont dans
+  [`scroll-container-validation.ts`](../../authoring/component-v2/src/scroll-container/scroll-container-validation.ts),
+  [`scroll-container-component.ts`](../../authoring/component-v2/src/scroll-container/scroll-container-component.ts)
+  et [`scroll-container-source-adapter.ts`](../../authoring/component-v2/src/scroll-container/scroll-container-source-adapter.ts).
+- [`scroll-container-providers.spec.ts`](../../authoring/component-v2/tests/scroll-container-providers.spec.ts)
+  vérifie le cycle de vie des providers, le calcul et la coalescence du
+  progress, ainsi que l’ordre des transitions d’observation.
+- La scène réelle de validation est
+  [`main.ts`](../../demos/src/v2/demos/scroll-container/main.ts). La validation
+  navigateur de la feature a été confirmée par l’utilisateur ; ce constat ne
+  prétend pas que le test unitaire couvre à lui seul le parcours navigateur ou
+  chaque diagnostic de déclaration.
+
 ## Validation d’implémentation
 
-L’ordre des tranches, les tests de frontière, les validations navigateur et
-leur état sont définis dans le [plan d’intégration](../plan/2026-09-23-scroll-container-integration-plan.md).
-La capacité n’est considérée `Fini` qu’après validation du vrai chemin
-runtime, la mise à jour de ce contrat et la clôture du suivi du plan.
+Le 2026-09-25, les suites `codplay` (107 fichiers, 691 tests) et
+`component-v2` (10 fichiers, 44 tests), les tests ciblés capture/player/runner
+HTML/compilation/position (6 fichiers, 41 tests), les trois typechecks et le
+build des démos ont réussi. Safari automatisé a monté la démo et observé le
+défilement, mais sa page était masquée et n’a pas validé le cycle Play/Seek
+complet. L’utilisateur a confirmé la validation navigateur du comportement
+scroll.
+
+Ces vérifications et la confirmation utilisateur clôturent la capacité scroll
+décrite ici.

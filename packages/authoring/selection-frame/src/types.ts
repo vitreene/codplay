@@ -171,7 +171,7 @@ export type SelectionFrameOptions = {
   minSizePx?: number
   /**
    * Activates create mode: the cs is traced into existence instead of
-   * attaching to an existing item. See docs/plans/2026-07-03-selection-frame-variantes-plan.md.
+   * attaching to an existing item. See ../specs/creation-mode-spec.md.
    */
   creation?: SelectionFrameCreationOptions
   /**

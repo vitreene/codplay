@@ -1,6 +1,11 @@
 # Spécification Rive V2 — host, document et state machine
 
-> Statut : **En cours — host, document et state machine générique implémentés ; validation complète ouverte**.
+## Périmètre vérifié
+
+Le contrat ci-dessous décrit le host Rive et le composant state machine
+exercés par les tests d'intégration avec un runtime synthétique. La validation
+complète de la démo et du cycle de vie est décrite dans le
+[plan des composants tiers](../plan/2026-09-18-third-party-components-v2-plan.md).
 
 ## Rôle
 
@@ -78,35 +83,15 @@ d’émotion.
   cache du package ;
 - `RiveDocumentComponent` possède le renderer, l’artboard et les instances
   d’animations linéaires ;
-- `RiveStateMachineComponent` possède son instance native et la libère ;
+- `RiveStateMachineComponent` possède son instance native ;
 - le host publie une cible opaque stable dont la révision change lorsqu’il
   reconstruit son artboard ;
 - le host avance et dessine en phase `commit`, après les contributions logiques
   de la state machine ;
-- un retour temporel reconstruit l’artboard et l’instance state machine ;
-- `destroy()` libère chaque ressource par son propriétaire.
+- un retour temporel reconstruit l’artboard.
 
 Le runtime ne charge pas de ressource dans un constructeur ou dans `update()`.
 Le host lit uniquement une ressource déjà préparée par le preload.
-
-## Application Rive de démonstration
-
-La démo `packages/demos/src/v2/demos/rive/` exerce le host, la state machine,
-le même document `/avatars/coach.riv`, le même audio
-`/assets/1_7b_e.mp3`, le même artboard et la même state machine :
-
-- les cues sont convertis par l'application en valeurs de l'input nommé du
-  document lors de la construction des eventimes ;
-- les eventimes portent ensuite des patches `inputs` génériques jusqu'au
-  composant state machine ;
-- les mots sont affichés dans le composant `tag` de caption ;
-- `audio`, `avatar` et la state machine démarrent à l’eventime zéro ;
-- la séquence conserve sa fin à `18_500` ms.
-
-Les données de cues et leur conversion sont portées dans l'application de
-démonstration. La relation entre l'avatar et les inputs internes du document reste
-une convention du fichier Rive choisi pour cette démonstration ; CodPlay ne
-cherche pas à inventer ou valider les nœuds internes du modèle.
 
 ## Validation
 
@@ -114,8 +99,10 @@ La validation du module porte sur la forme minimale des profils et actions :
 `src`, `stateMachine`, les patches `inputs` et les broadcasts. Elle ne tente
 pas d’inspecter un fichier Rive ni son artboard.
 
-Les tests d’intégration du package utilisent leurs propres artboards, runtime
-et state machines synthétiques. Ils ne lisent pas la scène de démonstration et
-ne déduisent pas leurs valeurs de ses timings. La démo V2 est réservée à la
-validation réelle du chemin navigateur engine → preload → host → state machine
-→ audio/captions → play/seek/destroy.
+[`rive-integration.spec.ts`](../../authoring/component-v2/tests/rive-integration.spec.ts)
+vérifie l'avancement sur le temps CodPlay, le commit, les inputs nommés, les
+broadcasts, le rebuild au Seek et la stabilité de la cible.
+[`rive-preload.spec.ts`](../../authoring/component-v2/tests/rive-preload.spec.ts)
+vérifie le passage du document par la frontière de preload. Ces fixtures
+possèdent leurs artboards, runtime et state machines synthétiques ; elles ne
+lisent pas la scène de démonstration.

@@ -1,17 +1,13 @@
 # CodPlay V2 — relation immuable des composants projetés
 
-## Statut
+## Périmètre vérifié
 
-> Status: En cours — forme `host`/`target` et migration du core implémentées ;
-> validation transverse du pont encore ouverte.
-> CodPlay version: V2 foundation
-> Décision: 2026-09-18
-> Plan: [`../plan/2026-09-18-third-party-render-target-codplay-plan.md`](../plan/2026-09-18-third-party-render-target-codplay-plan.md)
-
-Cette spécification fixe la donnée de relation et son passage dans la scène
-compilée. La résolution runtime commune est décrite dans la
-[spécification du pont](./third-party-target-bridge-spec.md) ; les conventions
-de matérialisation des bibliothèques tierces restent dans leurs packages.
+Cette spécification fixe la forme auteur et compilée de `rel` ainsi que son
+immutabilité. Ces comportements sont couverts par les tests de validation,
+builder et codec. La résolution runtime relève de la
+[spécification du pont](./third-party-target-bridge-spec.md) ; son acceptation
+transverse est décrite dans le
+[plan CodPlay](../plan/2026-09-18-third-party-render-target-codplay-plan.md).
 
 ## Déclaration auteur
 
@@ -52,8 +48,8 @@ action qui contient `rel` est ignorée et produit le warning auteur
 
 Une relation initiale invalide produit le warning auteur `AUTHOR_REL_INVALID`.
 La scène reste constructible et le perso est compilé sans relation. Ces
-warnings sont émis dans le contexte auteur et restent silencieux en diffusion,
-selon le contrat général des diagnostics non bloquants.
+warnings sont émis dans le contexte auteur selon le contrat des diagnostics
+non bloquants.
 
 ## Représentation compilée
 

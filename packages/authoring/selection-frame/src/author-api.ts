@@ -42,10 +42,10 @@ export type AuthorApi = {
    * (`"oklch(...)"`), a length outside anime's own pose vocabulary comes back px-suffixed
    * (`"8.52px"`) — no `Number()` coercion, unlike `getNodePose`.
    *
-   * NOT gesture-safe: while a CS gesture is active on this node, `LibreAdapter` writes pose
-   * directly to the node, bypassing `utils.set` — anime's cache (what this reads) is stale until
-   * the next rebuild. Callers must gate on `session.isGestureActive()` themselves, same as
-   * `offset-editor-bridge.ts::readLiveGestureNodePose` already does for pose.
+   * Selection-frame pose gestures write through `AuthorApi.setNodePose`, keeping anime.js's pose
+   * values current. This method still reads anime.js's own bookkeeping rather than arbitrary DOM
+   * writes; callers requesting properties written directly by another adapter must account for
+   * that adapter's source of truth.
    */
   getNodeSnapshot: (persoId: string, props: readonly string[]) => Record<string, string | number> | null
   /**

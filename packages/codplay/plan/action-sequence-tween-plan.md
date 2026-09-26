@@ -1,85 +1,66 @@
-# CodPlay V2 - ActionSequence et TweenAction
+# Plan d'acceptation — ActionSequence et TweenAction V2
 
 ## Statut
 
-> Status: Fixe
+> Status: En cours — le comportement partiellement vérifié est décrit dans la
+> [spécification](../specs/action-sequence-tween-v2-spec.md) ; les cas
+> d'acceptation restants ci-dessous ne sont pas certifiés.
 > CodPlay version: V2 foundation
-> Review: required before continuous renderer integration
 
-## Contrat V2
+## Travail restant sur le contrat logique
 
-Les deux primitives restent dans le circuit logique unique :
+- [ ] Vérifier les offsets `startAt` et la durée implicite d'un `TweenAction`
+      dans une `ActionSequence` ; vérifier que `durationMs` remplace cette
+      durée implicite et que le pas suivant est chaîné sur la durée retenue.
+- [ ] Vérifier le remplacement d'un pas séquencé contenant une `TweenAction`.
+- [ ] Vérifier `tween:stop` lorsqu'il rencontre une `TweenAction` dans une
+      séquence. Le test actuel intitulé « direct and sequenced » n'exerce que le
+      cas direct.
+- [ ] Fixer et valider le contrat des fonctions qui retournent `undefined`, un
+      payload invalide ou qui lèvent une exception ; le résolveur contient déjà
+      des branches pour ces résultats, mais les tests ciblés ne les établissent
+      pas encore.
+- [ ] Vérifier que l'expansion d'une séquence reste dérivée de l'occurrence
+      source sans ajouter d'événement au journal.
 
-```text
-CompiledScene + RuntimeTrackJournal + time
-    -> materialize source events
-    -> expand ActionSequence as derived actions
-    -> resolve static actions and TweenAction(fn, progress)
-    -> solve
-```
+La validation ciblée existante est donnée dans la spécification. Compléter ces
+cas par des tests du pipeline et du player avant d'étendre la portée de la
+spécification ou de marquer cette tranche `Fini`.
 
-`materialize` ne pousse jamais de continuation dans le journal. Les steps d'une
-sequence sont des faits dérivés du même event déclencheur à chaque évaluation.
-Cela supprime tout état d'idempotence séparé entre Play et Seek.
+## Extensions non décidées
 
-## ActionSequence
+Ces sujets ne font pas partie de l'acceptation de la tranche logique actuelle.
+Avant une intégration de rendu continu, décider explicitement :
 
-Une valeur d'action est une sequence si elle est un tableau non vide de
-`{ action: CompiledRecord, durationMs?, startAt? }`. Les offsets sont planifiés
-avec une primitive pure : `startAt` fixe un offset absolu, sinon le step démarre
-à la fin du précédent; une durée absente vaut la durée implicite d'un
-`TweenAction`, sinon zéro.
+- si `TweenAction` suffit comme surface auteur ou si un type public `Behavior`
+  est nécessaire ;
+- si les options temporelles ACE `loop`, `loopDelay`, `reversed` et
+  `alternate` sont acceptées sur un comportement auteur, et comment vérifier
+  leur reconstruction de scène aux frontières Play/Seek ;
+- si un chemin préparé doit être disponible aux `TweenAction` auteur. Le chemin
+  de `move` est déjà couvert par sa spécification ; cette décision concerne
+  uniquement les tweens continus autonomes ;
+- si `spring`, les keyframes explicites ou les coordonnées polaires ont une
+  surface auteur V2. Leurs primitives ACE testées isolément ne leur donnent pas
+  ce statut ; définir aussi le raccord éventuel entre durée de stabilisation
+  du ressort et durée du tween ;
+- comment plusieurs actions continues composent leur présentation et si un
+  mode pondéré/additif est nécessaire. `blend`, ses poids et ses modes ne sont
+  pas un contrat V2 adopté ; fixer la règle avant toute intégration qui en
+  dépend ;
+- où passe la frontière entre l'évaluation logique et la matérialisation pour
+  HTML, SVG et les projections natives ;
+- si un scheduler, `context.live` ou des hooks d'annulation/lifecycle ont une
+  place dans ce contrat V2.
 
-L'expansion est ciblée par le perso qui porte la clé d'action. Chaque step devient
-une `MaterializedAction` directe avec son propre `startAt`, sans clé d'event
-artificielle ni second routeur. Un fait ultérieur sur la même clé invalide les
-steps différés de la sequence précédente à partir de sa date; les steps statiques
-déjà échus restent des faits appliqués, tandis qu'un `TweenAction` remplacé est
-retiré de la reconstruction à la cible. L'ordre des faits (`trackOrder`,
-déclaration, `eventSeq`) tranche les égalités.
+Aucune de ces extensions n'est décrite comme comportement V2 certifié. Leur
+acceptation devra préserver le chemin logique Play/Seek spécifié et être reliée
+à ses preuves runtime. Les calculs ACE vérifiés isolément sont décrits dans la
+[spécification ACE](../specs/ace-calculation-v2-spec.md). L'inventaire des cas
+V1 et le contexte de ces questions restent dans la
+[note Behavior](./notes/2026-08-23-v1-behavior-inventory.md) ; elle n'ajoute
+aucune API V2.
 
-## TweenAction
-
-Une action compilée portant `{ fn: { ref }, duration: number > 0, ease? }` est
-évaluée dans `resolveScene` avec la collection de fonctions du build :
-
-```text
-progress = ease(clamp(elapsedMs / duration, 0, 1))
-payload  = fn({ progress, data: action })
-```
-
-La fonction est pure, ne lit ni DOM ni état mutable et son résultat est appliqué
-comme un payload d'action ordinaire. Une référence absente ou un résultat invalide
-est une erreur explicite de résolution. L'easing par défaut est `linear` pour
-respecter le contrat TweenAction, indépendamment du défaut des tweens ACE de
-style.
-
-`tween:stop` est une frontière logique réservée : il retire les `TweenAction`
-antérieures de la reconstruction visée dans la même portée de story. Le stop ne
-devient pas une action de perso, ne réexécute aucun effet et ne modifie pas le
-journal.
-
-## Invariants
-
-- aucun append runtime pendant `materialize` ou `resolve`;
-- les steps sont dérivés des mêmes events pour Play et Seek;
-- une sequence ne crée pas de doublon d'event dans le journal;
-- les fonctions de TweenAction sont appelées uniquement pendant la résolution
-  pure, jamais par `seek` comme strap ou listener;
-- les actions statiques et les payloads produits par TweenAction passent par la
-  même application de state;
-- les trajectoires continues n'introduisent pas de deuxième horloge V2.
-
-## Validation
-
-La tranche est couverte par les tests de pipeline, de compilation des scènes et
-du player. Ils vérifient le chaînage, l'invalidation par remplacement, les
-frontières `tween:stop`, la résolution de fonctions compilées, la préparation des
-paths imbriqués et l'absence d'appel de strap pendant une reconstruction.
-
-## Hors périmètre de cette tranche
-
-- interpolation DOM ou moteur de rendu continu;
-- composition additive entre deux TweenAction indépendantes;
-- `context.live` et scheduler de frames;
-- hooks `onAbort` ou lifecycle applicatif.
+La rationale de séparation entre valeurs temporelles et occurrences planifiées,
+ainsi que la question non décidée d'un cycle `context.live`, est conservée dans
+la [note dédiée](./notes/2026-08-01-context-live-evolution.md).

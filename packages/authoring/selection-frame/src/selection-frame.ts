@@ -54,7 +54,7 @@ const DENSE_GRID_STEP = 10
  * Places one visual selection frame (cs) over the DOM element of one player
  * perso and turns pointer gestures into raw diffs handed to the editor-owned
  * CsValueAdapter. Emission is continuous: the element follows the gesture
- * live. See docs/plans/2026-06-09-selection-frame-plan.md.
+ * live. See ../specs/selection-frame-v1-spec.md.
  */
 export function createSelectionFrame(options: SelectionFrameOptions): SelectionFrameHandle {
   const doc = options.sceneRoot.ownerDocument
@@ -580,7 +580,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   // ── creation (trace the cs into existence) ───────────────────────────────
   // Same devices as the regular cs: subscribeToNode-style container tracking,
   // overlay-world pose + calibration, measured track geometry. No separate
-  // module — this IS selection-frame, per docs/plans/2026-07-03-selection-frame-variantes-plan.md.
+  // module — this IS selection-frame, per ../specs/creation-mode-spec.md.
 
   const minTraceSizePx = creation?.minTraceSizePx ?? 4
 

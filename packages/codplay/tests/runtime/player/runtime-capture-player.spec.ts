@@ -282,7 +282,7 @@ describe('RuntimePlayer capture facade', () => {
     player.destroy()
   })
 
-  it('keeps the final live pose visible across a persist-only capture close', async () => {
+  it('removes the live pose after a persist-only close without endEmit', async () => {
     const liveScene: CompiledScene = {
       ...scene,
       scene: {
@@ -336,8 +336,8 @@ describe('RuntimePlayer capture facade', () => {
 
     const ended = await player.endCapture('drag-persist-live')
     expect(ended.ok).toBe(true)
-    expect(liveUpdates).toHaveLength(updateCountAtEnd)
-    expect(liveUpdates.at(-1)?.state.style).toEqual({ opacity: 0.75 })
+    expect(liveUpdates).toHaveLength(updateCountAtEnd + 1)
+    expect(liveUpdates.at(-1)?.state.style).toEqual({ opacity: 0 })
     player.destroy()
   })
 })

@@ -518,7 +518,7 @@ Trilogie qui se dessine, trois responsabilités d'édition séparées (même bar
 - **réglages capsule** → `Item.capsule` (`CapsuleDef`), panneau dédié, statique ;
 - **contenu** → `Content`, **assigné à la création**, gestes dédiés (ci-dessous).
 
-**Correction (utilisateur, 2026-07-12) — PAS le mécanisme Eddy (clic → item par défaut projeté).** ed2 a un mécanisme **plus intuitif et unifié** : un bouton ouvre un **mode « création de… »**, et l'utilisateur **trace d'abord un rectangle sur la scène**, puis renseigne le contenu. On **trace toujours d'abord, on renseigne ensuite** — plus de « projeter un élément par défaut ». C'est le mode création de selection-frame (tracer → générer un item depuis la géométrie, `onCreate`/`attachItem`, `docs/plans/2026-07-03-selection-frame-variantes-plan.md`), **généralisé à tous les types**.
+**Correction (utilisateur, 2026-07-12) — le parcours ed2 commence par un tracé.** Un bouton ouvre un mode de création ; l'utilisateur trace un rectangle sur la scène, puis renseigne le contenu ou les paramètres. Le [mode création vérifié de selection-frame](../../../authoring/selection-frame/specs/creation-mode-spec.md) fournit le cycle `onCreate`/`attachItem` pour ce cadre. Sa généralisation à tous les types relève du plan de construction de l'app.
 
 **Les voies de création** :
 

@@ -63,7 +63,7 @@ Patron de montage démontré (`selection-frame-demo.ts`) : `new Player(options)`
 
 `Player.init()` remonte entièrement la scène (nœuds DOM détruits/recréés, schedulers réinitialisés) — ce n'est pas un patch incrémental. C'est le même mécanisme que le cycle dedit « preview→debounce→commit→full rebuild », déjà décidé et chiffré : un rebuild coûteux-mais-debounced est un coût accepté, pas une question ouverte. Le pont `scenePlayer` (§3.3) rebuild donc à chaque `sceneCommitted`, exactement comme dedit — pas de restriction au premier montage.
 
-**Mesuré en conditions réelles (Safari, harnais jetable, scène minimale — un item texte)** : rebuild à 17–28ms à froid, puis 2–3ms sur les rebuilds suivants — négligeable à cette échelle. Le tag `<style>` injecté (Blob CSS, `extraResources`) n'est jamais diffé ni nettoyé (chaque rebuild en ajoute un nouveau, même à contenu identique) — défaut réel côté `Player`, hors mandat ici, consigné dans `docs/evolution/lots/backlog.md`.
+**Mesuré en conditions réelles (Safari, harnais jetable, scène minimale — un item texte)** : rebuild à 17–28ms à froid, puis 2–3ms sur les rebuilds suivants — négligeable à cette échelle. Le tag `<style>` injecté (Blob CSS, `extraResources`) n'est jamais diffé ni nettoyé (chaque rebuild en ajoute un nouveau, même à contenu identique) — défaut réel côté `Player` V1, hors mandat ici, suivi au §6 de ce plan.
 
 Comportement média (chargement, position de lecture) sous rebuild répété : déjà démontré correct par les démos `codplay` existantes (`preload-media-demo`, etc.) — pas un point à revérifier ici, l'objectif de ce plan n'est pas de tester `codplay`.
 
@@ -217,6 +217,6 @@ Chaque étape validée (test + rendu Safari) avant la suivante.
 - `packages/codplay` — non lu, non modifié. Contrainte de travail générale pour ce plan.
 - Vocabulaire d'intentions plus fin que « une scène remplace l'autre » pour `onCommand` — évolution possible si l'historien (étape 4 du plan général) en a besoin.
 - Rebuild incrémental/partiel du player — le rebuild complet (§2.1) est le mécanisme accepté ; un chemin incrémental n'est pas un besoin identifié aujourd'hui.
-- Correction de l'accumulation de tags `<style>` côté `Player`/`extraResources` — défaut réel (§2.1) mais chantier `codplay`, pas de ce plan ; consigné dans `docs/evolution/lots/backlog.md`.
+- Correction de l'accumulation de tags `<style>` côté `Player`/`extraResources` — défaut réel V1 (§2.1), hors de ce plan ; sa reprise exige un plan dédié si le runtime V1 reste concerné.
 - Régions menu/chutier/telco.
 - Choix d'adapter selon zone vs position libre (`createFlexAdapter`, `createGridPlacementAdapter`) — l'embryon minimal n'a pas de zones.

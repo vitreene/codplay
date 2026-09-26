@@ -1,170 +1,72 @@
-# Plan — reset événementiel chaud d’une story
+# Plan — invalidation de présentation au reset d'une story
 
-## Statut
-
-> Status: En cours — coordination du reset avec la migration motion déclenchée
-> par occurrence autorisée.
+> Status: En cours — le reset logique est spécifié et vérifié ; les gates de
+> présentation motion restent ouvertes.
 > CodPlay version: V2 foundation
-> Référence d’exécution :
-> [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
+> Spécification logique: [`event-pipeline-v2-spec.md`](../specs/event-pipeline-v2-spec.md)
+> Coordination motion: [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md)
 
-Le reset logique déjà établi conserve son journal et reconstruit l’état de story
-à partir de son initial compilé. Ce plan précise la conséquence attendue pour la
-présentation motion. Il ne crée ni cycle de vie de story, ni règle fondée sur une
-visibilité de démo.
+Ce plan suit uniquement l'invalidation de présentation liée au reset d'une
+story. Le dispatch, la frontière de projection, la conservation du journal et
+le comportement logique au Seek sont définis dans la spécification
+[événementielle](../specs/event-pipeline-v2-spec.md). Ils ne sont pas redéfinis
+ici.
 
-## Objectif
+## Décisions retenues, application à fermer
 
-Un événement intercepté par une story avec `listen.reset: true` produit un reset
-à l’horloge courante qui :
+- Un reset logique ne déclenche ni mesure ni capture motion ; l'état restauré
+  est présenté sans transition depuis l'ancienne pose.
+- Les groupes motion portent les stories qu'ils touchent. Un reset retire les
+  groupes concernés, leurs frontières, leurs dépendances géométriques et leurs
+  ressources overlay. Un groupe inter-story est retiré en entier si l'une des
+  stories qu'il touche est réinitialisée.
+- Une préparation motion en cours qui touche la story réinitialisée ne peut pas
+  être committée après le reset. Elle est annulée ou ordonnée avant lui et ses
+  ressources provisoires sont libérées.
+- Après invalidation, Seek reconstruit un groupe antérieur seulement lorsqu'il
+  doit présenter le move correspondant. Resize invalide les poses capturées et
+  laisse la recapture au prochain besoin ; il ne relance pas une découverte
+  globale du calendrier.
 
-- ajoute un fait ordonné dans l’unique `RuntimeTrackJournal` ;
-- restaure les valeurs initiales compilées de cette story, puis applique les
-  faits postérieurs à sa frontière ;
-- conserve les faits antérieurs pour un Seek vers un instant précédent ;
-- préserve l’horloge, la lecture, les autres stories et l’instance existante ;
-- retire les ressources de présentation motion devenues invalides ;
-- ne remonte ni ne recrée les nœuds auteur, composants, services, player ou
-  runner.
+## Travail et gates restants
 
-## Hors périmètre
+### 1. Fermer le retrait par groupe
 
-- effacer, réécrire ou compacter la timeline logique ;
-- réinitialiser l’horloge ou appeler une commande de transport ;
-- modifier les règles de placement, `tween:stop` ou la sémantique de `move` ;
-- déduire un reset depuis le DOM ou une propriété visuelle ;
-- ajouter une API de story visible, active ou inactive ;
-- créer un parcours particulier à une démo.
+La première passe transporte les stories source et destination et retire les
+groupes concernés. Vérifier que le graphe et le host ne conservent aucune
+géométrie, frontière ou ressource d'un groupe supprimé.
 
-## Contrat logique conservé
+**Gate :** un groupe local et un groupe inter-story sont entièrement retirés
+lorsqu'une story qu'ils touchent est réinitialisée.
 
-### Événement et portée
+### 2. Fermer l'ordre avec une préparation motion
 
-`listen.reset: true` appartient à la règle d’interception de la story. Le reset
-est donc produit par le circuit normal `listen -> transform -> straps -> emit ->
-persos`, avec la portée de la story qui a intercepté l’événement. Il ne demande
-ni champ `target` ajouté à l’eventime, ni méthode de façade spéciale.
+Raccorder la frontière de reset au runner transactionnel. Vérifier qu'une
+préparation concurrente concernant la story ne peut ni publier sa capture ni
+committer son graphe après le reset ; libérer les ressources provisoires.
 
-Le record de reset porte son temps, son ordre et son identité de fait comme tout
-autre append. Il augmente la révision du journal mais ne supprime aucun fait.
-Les événements reçus ensuite continuent de passer par l’interception normale.
+**Gate :** reset pendant un move ou un reparent sans ghost, masque, capture
+tardive ou segment résiduel.
 
-### Reconstruction chaude
+### 3. Fermer Seek, resize et cycle de vie
 
-Pour une story et un temps donnés, le player trouve la dernière frontière de
-reset applicable, repart de l’état compilé de cette story, puis applique les
-faits autorisés après cette frontière dans leur ordre. Un Seek avant la frontière
-reconstruit les faits antérieurs comme auparavant.
+Vérifier que Seek avant et après le reset utilise la même instance et ne
+réutilise pas un graphe supprimé. Vérifier que resize invalide les poses sans
+recapture anticipée et que les ressources restantes sont détruites au teardown.
 
-Cette reconstruction applique les valeurs dans les mêmes materialisations. Un
-Seek ne devient jamais une source de création d'instances ou de composants.
+**Gate :** Play, Seek, replay, resize, persistence, lifecycle et destruction
+restent cohérents autour d'un ou plusieurs resets, y compris à temps égal.
 
-## Contrat de présentation motion cible
+## Validation restante
 
-### Retrait réel des groupes capturés
+- move local et reparent avant, pendant et après le reset ;
+- groupe motion qui touche plusieurs stories ;
+- Seek à froid et après capture, de part et d'autre de la frontière ;
+- absence de mesure ou capture déclenchée par le reset seul ;
+- parcours navigateur réel, y compris Safari, sans remount ni ressource overlay
+  résiduelle. Le [relevé Safari de la scène position](./notes/2026-09-05-position-scene-measures.md)
+  est un état de référence avant reset ; il ne prouve pas le résultat après reset.
 
-Le reset ne génère ni transition de l’ancienne pose vers la pose initiale, ni
-capture géométrique. Le runner présente l’état initial restauré immédiatement.
-
-Les groupes motion sont indexés par leur identité et l’ensemble des stories
-qu’ils touchent. À un reset de story, le runner :
-
-1. libère les ressources locales et overlay de chaque groupe qui touche cette
-   story ;
-2. retire ces groupes, leurs frontières et leurs données géométriques du graphe
-   de présentation ;
-3. conserve les groupes des stories non touchées ;
-4. retire entièrement un groupe inter-story si l’une de ses stories est
-   réinitialisée.
-
-Cette règle remplace le masquage de segments avec `resetTimesByItem`. Une
-barrière temporelle qui conserve géométrie et dépendances est incompatible avec
-le reset chaud visé : le graphe doit réellement oublier les poses invalidées.
-
-### Seek et reset
-
-Le journal reste la seule histoire logique. Après un reset, un Seek vers le passé
-réutilise la même instance, rétablit l’état logique correspondant et prépare un
-groupe `move` uniquement lorsqu’il doit le présenter. Il ne récupère pas un
-graphe précédemment supprimé seulement parce qu’il a été capturé avant le reset.
-
-Le reset lui-même ne produit pas une occurrence `move`, ne déclenche aucune
-découverte de journal et ne demande aucune mesure DOM.
-
-### Ordre avec une transaction motion
-
-Si un reset atteint une story pendant la préparation d’un groupe motion, le
-reset est ordonné par le même circuit d’instance. Le groupe en préparation ne
-peut pas être committé après le reset s’il touche cette story : sa transaction
-est annulée, ses ressources provisoires sont libérées et l’état initial est
-présenté. Les autres instances conservent leur propre ordre et leur progression.
-
-## Mise en œuvre ordonnée
-
-### 1. Conserver le journal et la reconstruction existants
-
-- Vérifier que le record de reset reste dans `RuntimeTrackJournal` avec son ordre
-  aux temps identiques.
-- Vérifier la projection depuis l’état initial suivi des faits postérieurs.
-- Conserver l’isolation des autres stories et l’absence de remount.
-
-**Gate :** reset, replay et Seek avant/après la frontière donnent les états
-logiques attendus sans deuxième journal.
-
-### 2. Introduire le retrait par groupe dans le système motion
-
-- Faire porter à chaque groupe capturé ses stories touchées et ses ressources de
-  présentation — première passe réalisée.
-- Ajouter l’opération interne qui retire un groupe et restaure ses ressources
-  auteur sans écrire une animation de sortie — première passe réalisée.
-- Remplacer l’application séparée de barrières de reset et de frontières par un
-  commit unique de graphe — commit interne réalisé ; la coordination avec une
-  préparation asynchrone reste à compléter.
-
-**Gate :** aucune géométrie d’un groupe supprimé ne reste accessible au graphe
-ou au host HTML.
-
-### 3. Raccorder le reset au runner transactionnel
-
-- Transmettre la portée sémantique du reset après la reconstruction réelle.
-- Annuler ou sérialiser toute préparation de groupe qui touche la story.
-- Ne lancer aucune préparation motion en réponse au reset seul.
-
-**Gate :** un reset pendant un reparent ne laisse ni ghost, ni masque, ni segment
-résiduel.
-
-### 4. Adapter Seek et resize
-
-- Faire reconstruire un groupe passé seulement lorsqu’il est nécessaire à la
-  frame visée par Seek.
-- Marquer les poses invalides après resize sans recapture anticipée.
-- Préserver la destruction finale des ressources temporaires.
-
-La première passe du runner retire les frontières invalidées au reset et au Seek
-post-reset. `resize` vide les poses capturées puis réémet uniquement les moves
-actifs de la scène courante ; il ne relance pas de compilation globale du
-calendrier.
-
-**Gate :** Seek ne recrée pas d’instance et resize ne redémarre pas une découverte
-globale de moves.
-
-## Validation requise
-
-- reset seul : journal conservé, état initial présenté, aucune mesure ni capture
-  motion ;
-- plusieurs resets et événements au même temps ;
-- isolation entre stories et conservation de l’horloge, play/pause et vitesse ;
-- reset avant, pendant et après un move local ou reparent ;
-- groupe reparent inter-story retiré lorsqu’une story concernée est réinitialisée ;
-- Seek avant et après reset, à froid puis après un groupe capturé ;
-- replay, persistence, resize, lifecycle et destruction ;
-- vérification navigateur réelle, y compris Safari, sans remount ni ressources
-  overlay résiduelles.
-
-## Critère de sortie
-
-Ce plan ne passe à `Fini` qu’après la mise à jour de la spécification du reset,
-les tests des frontières player/runner, les parcours navigateur réels et la
-validation complète de la migration motion correspondante. Les résultats des
-anciennes suites qui reposent sur des barrières de reset ne valident pas ce
-nouveau contrat de présentation.
+Le plan reste `En cours` jusqu'à fermeture de ces gates et transfert des seuls
+comportements démontrés dans une spécification motion ciblée. La spécification
+du reset logique demeure dans `event-pipeline-v2-spec.md`.

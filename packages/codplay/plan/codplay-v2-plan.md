@@ -1,300 +1,63 @@
-# CodPlay V2 - plan general
+# CodPlay V2 — feuille de route générale
 
-## Statut et autorite
+## Rôle du document
 
-Ce document est le plan general de CodPlay V2. Il ordonne les domaines a construire, leurs dependances, leurs
-jalons de validation et les questions qui doivent etre tranchees avant le code concerne.
+Les spécifications sont les références normatives des comportements certifiés.
+Les plans détaillés conservent les décisions à prendre, les décisions acceptées
+mais non appliquées, les actions et leurs critères de vérification. Ce document
+indexe les deux ; il ne répète ni les contrats ni l'avancement détaillé.
 
-Les parties complexes disposent d'un plan detaille distinct, reference depuis ce document. Un plan de partie
-detaille l'execution d'un domaine sans redefinir l'architecture generale, les dependances ou les invariants V2.
+Un domaine sans décision ni validation résiduelle est référencé par sa
+spécification seule. Une case « — » dans l'index des spécifications indique
+qu'aucun plan de partie n'est ouvert.
 
-Les contrats V2 sont l'autorité active du chantier. Les plans de partie sont
-colocalisés dans `packages/codplay/plan/` et les notes de `plan/notes/`
-expliquent les décisions; ils ne doivent pas contredire ce plan général. Les
-démos V2 sont des fixtures de validation : elles révèlent des défauts et des
-cas limites, mais ne définissent ni les conditions du core ni un circuit
-runtime parallèle.
+Les règles de travail sont dans [AGENTS.md](../../../AGENTS.md). Les constats
+et preuves de l'audit documentaire du 2026-09-26 sont archivés dans le
+[registre d'audit](../projet/notes/2026-09-26-audit-contradictions-doublons-methodes.md) ;
+celui-ci ne remplace pas les spécifications ou plans actifs.
 
-## Invariants de construction
+## Index des spécifications et plans
 
-- V2 est une base autonome : aucune compatibilité avec une ancienne implémentation
-  n'est construite dans le runtime.
-- Aucun jalon ne cree de mini-DSL, de sous-format `CompiledScene`, de fallback ou de branche speciale de
-  demo. Une capacite absente est explicitement hors de la tranche.
-- Le flux V2 reste : `SceneDoc -> build -> CompiledScene -> materialize -> resolve -> solve -> composant`.
-- Le builder applique les normalisations des composants/services ; le player
-  ne porte pas de garde defensive sur son chemin chaud. Le markup est parsé par
-  le materializer HTML avec les API DOM du navigateur.
-- L'etat logique ne se reconstruit jamais depuis le DOM. Un composant est l'unique ecrivain de l'etat qui
-  lui est remis.
-- Les materialisations auteur sont persistantes pendant toute la sequence/player :
-  `mount`, `unmount`, detach, reparentage, reorder et seek ne detruisent ni ne
-  recreent les elements deja materialises. Leur destruction intervient uniquement
-  au teardown final ; les overlays FLIP et le DOM de mesure sont des ressources
-  techniques transitoires distinctes.
-- Les roles metier sont des classes petites et testables; les dossiers suivent les frontieres du flux.
-- Tout nouveau code est TypeScript strict. Les API publiques, classes, methodes publiques et variables de
-  domaine importantes ont un JSDoc. Les constantes auteur ou produit sont documentees dans `config/`.
-- Lorsqu'un sous-systeme utilise une machine d'etats, son plan/spec declare son role, ses etats, ses
-  transitions, ses declencheurs et la raison du choix.
-
-## Architecture et artefacts
-
-```text
-codplay
-  src/ace                calcul pur prepare et resolu
-  src/diagnostics        collecte structuree, console.log par defaut et sorties adaptables
-  src/shared             utilitaires purs communs aux domaines V2
-  src/services           services nommes, contrats, validation, defaults et operations d'update
-  src/scene              SceneDoc, build, validation, diagnostics et exports
-  src/scene/compiled     contrat versionne et serialisable de l'artefact de lecture
-  src/runtime/catalog    catalogue runtime unifie des composants, services et modules
-  src/runtime/engine     ressources partagees, horloge et ordre des instances
-  src/runtime/materializer interface de materialisation par substrat
-  src/runtime/player     une instance, materialize, resolve et solve
-```
-
-## Identité des packages et résolution des imports
-
-Le package officiel du runtime V2 est `codplay`, situé dans
-`packages/codplay`. Le runtime historique V1 est séparé dans
-`packages/codplay-v1` et se consomme sous le nom `codplay-v1`.
-
-Dans le code V2, les imports de premier niveau utilisent les alias suivants :
-
-- `codplay` et `codplay/*` pour les exports et sous-domaines V2 ;
-- `ace` et `ace/*` pour le noyau de calcul pur V2.
-
-Ces alias sont déclarés à la fois dans `packages/codplay/tsconfig.json` et
-`packages/codplay/vite.config.ts`, afin d'être résolus par TypeScript et par
-Vite/Vitest. Les imports du runtime V1 restent explicitement préfixés par
-`codplay-v1`.
-
-Le markup auteur est conservé dans `CompiledScene`. La capacité runtime `markup`
-conserve les parts/outlets et le runner HTML délègue le parsing et la
-materialization aux API DOM du navigateur. Les services portent leurs contrats
-et validations pures ; leurs bindings de materializer sont assemblés dans
-l'adapter runtime concerné.
-
-`CompiledScene` possède son enveloppe V2 : `schemaVersion`, `createdAt`, `scene`,
-`resources`, `rootNodeIds`, `requirements` et, lorsque nécessaire, les index
-dérivés du contrat compilé comme `actionTargetIndex`. Toute extension doit correspondre
-à une capacité V2 spécifiée; aucune ne sert seulement à faire fonctionner une
-demo.
-
-Une scene auteur peut contenir des fonctions. Avant diffusion, le build les extrait systematiquement dans
-une collection externe et les remplace par des references nommees dans la donnee compilee. L'extraction
-préserve l'ordre sémantique de chaque position. L'extraction est une étape V2
-explicite, à généraliser à toutes les positions de fonctions.
-
-Un lecteur de diffusion consomme un `CompiledScene` et sa collection de fonctions, mais pas `SceneDoc` ni
-le builder. Un export d'intention consomme `SceneDoc`; un export fidele consomme `CompiledScene`; aucun
-export ne passe par engine ou player.
-
-Les composants sont enregistres avec une classe de capacite pure, construite lors de l'instanciation de CodPlay.
-La classe declare elle-même les services qu'elle consomme, dans leur ordre
-d'application. Le `RuntimeCapabilityCatalog` conserve le registre unique des
-services, leur validation et leurs adapters de materializer ; il ne porte pas
-une seconde liste de services imposée au composant. Le build reçoit le snapshot
-de validation produit par ce catalogue et `CompiledScene` l'utilise sans
-instancier de composant ni de service runtime. L'absence d'un validateur de
-composant est autorisee au debut et produit un warning detaille; les validateurs
-des services courants sont la premiere couverture commune.
-
-## Position actuelle
-
-| Element | Position | Consequence |
+| Domaine | Spécification(s) normative(s) | Suivi actif |
 |---|---|---|
-| Chantier | Fondation V2 relue | Le flux `SceneDoc -> CompiledScene` et la première verticale runtime sont gelés sur leur périmètre actuel. |
-| Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
-| Partie active | Unification runtime V2 | Le catalogue unique, la validation dérivée, les services séparés et l'unique materializer HTML/DOM core, fourni par défaut, sont en place ; les éléments SVG relèvent de ce même DOM ; Canvas/Three.js et les familles non encore portées restent hors tranche. |
-| Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | Contrat par composant, intégration obligatoire | Les classes de composants déclarent leurs services ; `RuntimeCapabilityCatalog.validationSnapshot()` expose cette déclaration au build tout en restant la source unique des définitions de services et de leurs validateurs. Chaque composant, core ou externe, doit fournir son profil d’entrée, son validateur de profil initial et, lorsque nécessaire, ses validateurs d’actions, de racine et callbacks de sanitation. Les services peuvent également normaliser leurs namespaces avant `CompiledScene`; `style` couvre ses couleurs déclarées en sRGB/OKLCH. Les formes core de `style`, `className`, `attr` et `content` ainsi que les contrats de `tag`, `layout`, `list`, `media`, `img`, `input`, `polygon` et `slot` sont couverts. |
-| Composants | Base générique et base HTML séparées, tranche HTML/DOM implémentée ; pont tiers en cours | `BaseComponent` est indépendant du DOM et reçoit une facade de services abstraite ; `BaseHTMLComponent`, les huit composants core (`LayoutComponent`, `TagComponent`, `ListComponent`, `MediaComponent`, `ImageComponent`, `InputComponent`, `PolygonComponent`, `ForeignContentComponent`), leurs profils, classes runtime, parts/outlets et materialisation template string — y compris les fragments et SVG — sont couverts par l'unique `RuntimeMaterializer` HTML/DOM. Les projections Three.js, Rive ou Lottie restent possédées par un hôte HTML et le pont tiers fournit maintenant la première résolution player-local de cibles `rel`; elles ne sont pas sélectionnées comme matérialiseur global. |
-| Surfaces de composants | Registre typé initial implémenté | Les déclarations peuvent publier une surface via `RuntimeComponentSurfaceProvider`; le runtime la conserve par instance montée et les modules la résolvent par `RuntimeComponentSurfaceResolver`; `media-sync` consomme `media` sans classe concrète ni duck typing. Les nouvelles surfaces restent à ajouter à la map contractuelle. |
-| Utilitaires partagés | Sous-dossiers spécialisés en cours | `shared/values`, `shared/ordering` et `shared/numbers` centralisent le clonage structuré, la comparaison de chemins et la garde numérique ; `runtime/runner-html/element-guards.ts` centralise la garde de mesurabilité DOM ; les différences de contrat des pointeurs et des matrices HTML restent locales. |
-| Découpage des points chauds | Fini pour la tranche interne du 2026-08-24 | `runtime/player`, `runtime/runner-html` et `runtime/capabilities/media-sync` sont découpés par responsabilités dans des dossiers spécialisés ; les façades publiques, le circuit runtime et les contrats V2 restent inchangés. |
-| ACE | Contrat de valeurs, couleurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes, la normalisation sRGB/OKLCH et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
-| Mouvement HTML | Migration événementielle en cours | Le runner prépare un groupe seulement lorsqu'une occurrence `move` le nécessite, conserve FIRST avant `startAt` et capture LAST à `startAt + delay + duration`; Seek calcule sa cible et présente une seule fois dans une transaction synchrone. La validation visuelle de `position` et `flip-stress` reste à exécuter sur ce circuit. |
-| Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence. `index.html` expose le registre complet, qui inclut la fixture expérimentale non normative `stroke-path` suivie dans [`2026-09-23-stroke-path-v2-plan.md`](../../demos/plan/2026-09-23-stroke-path-v2-plan.md) ; `fame.html` expose la sélection ordonnée définie par [`fame-v2-spec.md`](../../demos/specs/fame-v2-spec.md). Les deux entrées réutilisent le même point d'entrée et le même layout V2, dont le verrou d'interaction avant le premier Play est suivi dans [`2026-09-23-v2-layout-launch-gate-plan.md`](../../demos/plan/2026-09-23-v2-layout-launch-gate-plan.md). L'entrée V1 est conservée sous `fame-v1.html`. Les fixtures de test sont hors du registre. |
+| Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Plan CompiledScene](./compiled-scene-plan.md) |
+| Reconstruction, engine et player | [Reconstruction logique](../specs/runtime-reconstruction-v2-spec.md), [Engine/Player](../specs/engine-player-v2-spec.md) | [Plan Player](./player-engine-plan.md) |
+| Façade et instances | [Façade](../specs/facade-v2-spec.md) | [Plan façade](./facade-engine-instance-plan.md) |
+| Diagnostics structurés | [Diagnostics](../specs/diagnostics-v2-spec.md) | — |
+| Événements, straps, stories et source DOM | [Pipeline événementiel](../specs/event-pipeline-v2-spec.md), [straps](../specs/strap-execution-v2-spec.md), [isolation des stories](../specs/story-isolation-spec.md), [Perso.emit](../specs/perso-emit-v2-spec.md) | [Straps](./strap-execution-plan.md), [isolation](./story-isolation-plan.md), [reset](./story-reset-plan.md), [Perso.emit](./perso-emit-v2-portage-plan.md) |
+| Inactivité du player | [Monitor d'inactivité](../specs/idle-monitor-v2-spec.md) | — |
+| Préchargement et synchronisation média | [Preload](../specs/preload-v2-spec.md), [media-sync](../specs/media-sync-v2-spec.md) | [Plan média](./media-preload-plan.md) |
+| Composants HTML, layout et projection input | [Matérialisation](../specs/component-materialization-v2-spec.md), [layout](../specs/layout-component-spec.md), [projection input](../specs/input-projection-spec.md), [image](../specs/image-component-v2-spec.md), [input](../specs/input-component-v2-spec.md), [polygon](../specs/polygon-component-v2-spec.md) | [Représentation des composants](./component-render-representation-plan.md), [layout](./layout-part-marker-plan.md), [image/input/polygon/SVG](./components-image-input-polygon-svg-plan.md) |
+| Relation et cibles de bibliothèques tierces | [Relation rel](../specs/third-party-rel-spec.md), [pont de cibles](../specs/third-party-target-bridge-spec.md), [bibliothèques](../specs/third-party-library-spec.md), [Three.js](../specs/third-party-threejs-spec.md), [Rive](../specs/third-party-rive-spec.md), [Avatar](../specs/third-party-avatar-spec.md) | [Pont CodPlay](./2026-09-18-third-party-render-target-codplay-plan.md), [intégrations](./2026-09-18-third-party-components-v2-plan.md), [Avatar](./2026-09-19-avatar-components-v2-plan.md) |
+| Contenu foreign et slot | [Slot](../specs/slot-component-spec.md), [pont de cibles](../specs/third-party-target-bridge-spec.md) | [Plan foreign](./foreign-scene-component-plan.md) |
+| Calculs ACE et actions temporelles | [Calculs ACE](../specs/ace-calculation-v2-spec.md), [ActionSequence/TweenAction](../specs/action-sequence-tween-v2-spec.md) | [Plan ActionSequence/TweenAction](./action-sequence-tween-plan.md) |
+| Valeurs couleur et unités | [Couleurs](../specs/color-values-v2-spec.md), [unités](../specs/unit-values-v2-spec.md) | [Couleurs](./color-values-plan.md), [unités](./unit-values-plan.md) |
+| Projection des transformations | [Canaux de transformation](../specs/transform-properties-v2-spec.md) | [Plan transform](./transform-properties-plan.md) |
+| Move, retarget et présentation motion | [Move](../specs/move-v2-spec.md), [dépendance à la cible](../specs/move-target-dependency-v2-spec.md), [frontières motion](../specs/motion-frame-v2-spec.md) | [Dimensions de liste](./list-dimension-interpolation-plan.md), [retarget](./move-target-dependency-plan.md), [préparation motion](./motion-live-discovery-invalidation-plan.md), [intégration runner](./runner-flip-integration-study.md) |
+| Capacités list et glisser-déposer | [List](../specs/list-capability-v2-spec.md), [DnD/list](../specs/list-dnd-v2-spec.md) | [Validation DnD/capture S6](./drag-capture-list-s6-validation-plan.md) |
+| Capture continue | [Capture](../specs/capture-v2-spec.md) | [Plan core capture](./capture-authoring-plan.md), [validation S5](./capture-s5-validation-plan.md) |
+| Observation par scroll | [Scroll-container](../specs/scroll-container-spec.md) | — |
 
-Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
-phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
-sortie et la decision de promotion ou de retrait; elle ne devient pas une regle implicite de V2.
+## Dette d'architecture différée à V2.5 — DnD et FLIP
 
-## Diagnostics transversaux
-
-`DiagnosticCollector` est une brique de tout le runtime V2, partagee par le builder, les guards, le codec,
-l'engine, le player, les composants et les modules. Il conserve des entrees `warning` ou `error`, les deduplicate
-par code et references, et fournit un rapport structure. La politique decide au point d'appel si un cas devient
-warning ou error; en mode auteur, les warnings sont exposes. La sortie par defaut est `console.log`; une sortie
-injectable permet ensuite de diversifier vers un log structure, une console dediee ou le viewport.
-
-Le contrat est partage, mais la duree de vie est locale : un collector appartient a une compilation, une instance
-de player ou une operation determinee. La facade configure la sortie; aucun singleton global ne melange les
-diagnostics de plusieurs compilations, instances ou scenes.
-
-## Plans de parties
-
-| Partie | Plan detaille | Etat |
-|---|---|---|
-| Revue priorité 0 des contrats | [`2026-08-20-priority-0-contract-review.md`](./2026-08-20-priority-0-contract-review.md) | Fixe |
-| Contrats Engine / Player | [`player-engine-plan.md`](./player-engine-plan.md) | En cours : transaction synchrone atomique de Seek, sémantique logique inchangée |
-| Façade engine, instances et pilotage | [`facade-engine-instance-plan.md`](./facade-engine-instance-plan.md) | En cours : contrat validé le 2026-08-26, implémentation engagée |
-| Inactivité du player | [`idle-inactivity-plan.md`](./idle-inactivity-plan.md) | Fini pour le monitor core V2 ; l’adaptateur d’inactivité de fenêtre reste hors cœur |
-| CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
-| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fini : migration unique `flipMode` → `reparent`, toutes les autres propriétés conservées |
-| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | En cours : préparation par occurrence, capture finale cohérente et commit atomique |
-| Découverte motion et reset chaud | [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md), [`story-reset-plan.md`](./story-reset-plan.md) | En cours : suppression de la découverte globale et retrait réel des groupes reset |
-| Dépendance d’un `move` à sa target | [`move-target-dependency-plan.md`](./move-target-dependency-plan.md) | En cours : implémentation validée, retarget déclenché par une nouvelle frontière qui modifie la target, sans recalcul pendant le déplacement continu |
-| Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md), [`2026-09-18-third-party-render-target-codplay-plan.md`](./2026-09-18-third-party-render-target-codplay-plan.md), [`notes/2026-09-19-third-party-components-evolution.md`](./notes/2026-09-19-third-party-components-evolution.md), [`specs/third-party-rive-spec.md`](../specs/third-party-rive-spec.md) | Tranche HTML fixe ; pont vers les projections possédées par un composant hôte `En cours`. La note d'évolution cadre d'abord les composants de base et les modules tiers minimaux. `BaseHTMLComponent` seul traverse le matérialiseur HTML ; les composants logiques restent hors de cette représentation et reçoivent les cibles `rel` via le runtime player-local. La relation tierce est cadrée et implémentée par `host/target` ; la validation navigateur complète et les cycles d'intégration restent ouverts. La migration Avatar est traitée par le [plan dédié](./2026-09-19-avatar-components-v2-plan.md), actuellement `En cours`. Le module Rive fournit son host, son preload et sa state machine générique ; la validation navigateur complète reste ouverte. |
-| Contenu foreign et hôte HTML | [`foreign-scene-component-plan.md`](./foreign-scene-component-plan.md) | En cours : profil `slot`, manifeste, surface HTML et première surface `codplay.instances.mount` engagés ; une fixture Sighty A/B l'exerce désormais ; asynchronisme, multi-racines, politiques de cycle et navigateur restent à valider |
-| Démo standard runner | [`../../demos/plan/2026-09-04-position-v2-plan.md`](../../demos/plan/2026-09-04-position-v2-plan.md) | Fixe comme gabarit de validation |
-| Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |
-| ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md), [`notes/2026-08-23-v1-behavior-inventory.md`](./notes/2026-08-23-v1-behavior-inventory.md) | Fixe, circuit logique unique en place; inventaire V1 des candidats Behavior consigné |
-| Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | Capture core et placement list validés ; le seek de la démo reste ouvert et la démo n'est pas encore clôturée |
-| Scroll-container et observation | [`2026-09-23-scroll-container-integration-plan.md`](./2026-09-23-scroll-container-integration-plan.md) | Décisions Fixes ; implémentation en cours, validations runtime et navigateur restantes |
-| Relevé du fonctionnement du projet et documentation | [`2026-09-25-releve-fonctionnement-projet-plan.md`](./2026-09-25-releve-fonctionnement-projet-plan.md) | À venir après la finalisation du composant scroll et de ses capacités associées |
-
-## Modeles algorithmiques
-
-| Domaine | Modele applique | Regle de code |
-|---|---|---|
-| Materialize et seek | Event sourcing / CQRS | Les events sont materialises comme faits; le seek ne reexecute jamais un strap. |
-| Etat continu | FRP Behavior | ACE evalue la valeur a tout instant. |
-| Etat discret | FRP Event puis behavior en escalier | Un fait date ouvre une plage de validite interrogeable a `t`. |
-| Placement | Scene graph, tri topologique, dirty flags | Le graphe se resout parent avant enfant; les optimisations ne changent pas sa semantique. |
-| Etat applique | Reconciler | Le composant applique les deltas et reste le seul ecrivain. |
-| Mouvement visuel HTML | Graphe temporel par item, préparation par occurrence et capture finale cohérente | Play et Seek évaluent la même frame à `t`; une occurrence `move` prépare uniquement son groupe, puis la présentation réutilise les poses committées sans lecture DOM dans la boucle de frame. |
-
-Ces modeles commandent les types, signatures, classes et tests. Ils ne justifient aucun framework importe.
-
-## Elements a construire
-
-| Domaine | Element V2 a construire | Statut et dependances |
-|---|---|---|
-| Glossaire, invariants, configuration | Invariants V2 explicites, conventions et `config/` par domaine | Fondation de toutes les tranches. |
-| Diagnostics | Collecteur structure transversal, deduplication, rapport warnings/erreurs et sorties futures | `src/diagnostics`; contrat commun a toutes les couches V2. |
-| Validation et erreurs | Sanitizer du builder, diagnostics auteur et catalogue d'erreurs/warnings | Avant tout player; le player fait confiance au compile. |
-| SceneDoc, builder et exports | Build, validation, normalisation, derivation des ressources/besoins, extraction des fonctions, exports | `src/scene`; ne depend pas d'engine ou player. |
-| CompiledScene | Enveloppe, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; artefact de lecture interne. |
-| Engine | `RuntimeCapabilityCatalog` unifie des composants, services, modules, bibliothèques et déclarations `foreign`; cache, styles, horloge et ordre de tick | Le catalogue est composé à l'initialisation puis verrouillé avant l'exécution. L'engine consomme cette source unique, prépare les bibliothèques requises avant le preload/initialisation, et ne lit pas `SceneDoc`. |
-| Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Play et Seek résolvent le même état et la même frame absolue. |
-| Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, straps locaux par scène/story par défaut, références réutilisables explicites en exception, ordre stable, events comme contrat primaire | Dispatcher runtime unique en place : append source, sélection story/scene, résolution des deux formes vers la même collection, straps séquentiels et attendus, outputs sur tracks déclarées, émissions déclarées bornées et relecture journalisée ; la portée nommée remplace le booléen V1 `cascade`; l'invalidation des résultats asynchrones est reportée à V3 et les helpers live restent hors tranche. |
-| Helpers de straps et schedule | `wait`, `delay`, `repeat`, `stagger`, `sequence` | Plan Temporel Declaratif fini; `planned.loop` et tout contrat live restent exclus de V2. |
-| Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime, controles d'activation et tracks dediees aux outputs de straps en place; l'invalidation par génération des résultats asynchrones est reportée à V3. |
-| Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick, transforms scalaires et graphe parent/enfant en place; les mesures dépendantes du materializer et les extensions de diagnostic restent dans leurs tranches dédiées, tandis que les politiques de liste sont portées par la capacité `list`. |
-| Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | `RuntimeCapabilityCatalog` déclare les types et conserve le registre des services ; chaque classe de composant déclare les services qu'elle emploie. Le `RuntimeMaterializer` matérialise les composants et leur structure, chaque player instancie ses composants. |
-| Familles de composants | Composants core et composants externes déclarés | Chaque composant ajouté reçoit son profil de données, son validateur, sa classe runtime avec sa déclaration de services, et les fixtures nécessaires ; aucune capacité ne devient un patch générique de `style`. |
-| Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
-| Move / List | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach, diagnostics de seek et politiques `reorderOnMove/Add/Remove` fournies par la capacite list en place; le move core reste independant de la capacite. |
-| Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Migration à relire : le mode local est inféré pour une target inchangée, un changement de target/parent impose l'overlay reparent, et `reparent: true` le force ; `mode` reste l'ordre de placement. La préparation est déclenchée par l'occurrence nécessaire. |
-| Replace | Module de remplacement, instantanés transitoires et exposition de contenu foreign | [`foreign-scene-component-plan.md`](./foreign-scene-component-plan.md) fixe la transposition V2 du module partagé : hooks génériques, surface de présentation HTML et chemin `replace-simple`/`fade`/`fade-in` pour `slot` et `img`; `replace.split` y est ignoré pour `slot`. `tag`, les contenus asynchrones et l'intégration Sighty restent à valider. |
-| ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Expansion pure dans materialize, fonctions compilées dans resolve et frontière `tween:stop` en place; renderer continu, composition additive et live restent hors tranche. |
-| Capture continue core | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Plan V2 `Fini` : contrat source-agnostique, session, sorties de fin, application live, journal et seek ; aucune source HTML ni démo dans ce périmètre. |
-| Validation capture S5 | [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md) | Plan V2 `Fini` : fixture HTML classique, adaptateur pointer, telco et tests d’intégration ; aucune nouvelle sémantique core. |
-| Seek, horizon, rate | Evaluation logique synchrone, cibles locales par membre, préparation et commit de présentation uniques, diagnostics par instance, segments, fenêtres, policies seek-back, rate et lecture arrière éventuelle | La frontière engine et les rapports structurés par instance sont en place; l’horizon ouvert transposé du concept V1 est raccordé à la telco et reste à valider dans la tranche façade; la préparation motion synchrone est suivie par le plan central, tandis que conversion globale Sighty, horizon master, rate et straps live demandent encore leurs tranches dédiées. |
-| Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | `sequence:end` est terminal en play dans `RuntimePlayer` : l'occurrence compilée atteinte rejoint une seule fois le journal et le dispatcher normal, puis le player nettoie les captures, met les modules en pause, invoque le hook de scène et permet le replay par `play()` ; le cleanup média complet dépend encore de sa capacité dédiée. |
-| Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Preload externalisé et façade autonome `run` validés. Socle `media-sync` player-scoped, option `initial.master`, fallback ticker, seek persistant et `node-per-src` en cours de validation ; la correction de dérive reste une optimisation finale ; bindings tiers et renderer de production restent hors tranche. |
-| Tiers, modules et services | Déclarations `foreign` du catalogue, bibliothèques d'engine, stratégies preload et ModuleServices player-scoped | `RuntimeCapabilityCatalog`, dérivation des requirements depuis les composants, warning auteur non bloquant pour une bibliothèque absente, préparation dédupliquée par engine et barrière runner avant preload sont en place. Les surfaces typées, l'initialisation solve, le routage des deltas, le seek reconciliation et le cycle de vie sont en place. Une extension `foreign` n'est ajoutée qu'avec une capacité concrète ; aucun binding tiers générique ni adapter hub n'est défini. |
-| Authoring éditeur | [`2026-07-12-app-controller-definition.md`](../../editor/plan/app/2026-07-12-app-controller-definition.md), [`facade-engine-instance-plan.md`](./facade-engine-instance-plan.md) §8 et plan d'organisation éditeur | L'accès authoring V2 reste externe au cœur métier : lecture par `snapshot`, écriture d'un état temporaire `{ storyId, persoId, timeMs, state }` avant materialisation, puis projection locale par le bridge de l'éditeur dans la racine de scène. `setDecor(decorId, patch)` reste le canal de persistance éditeur. Aucun accès au nœud ni API de géométrie player n'est ajouté pour cette première verticale. |
-| Diffusion, broadcast et telco | Lecteur autonome de `CompiledScene`, codec JSON interne et telco locale sérialisable | La façade telco locale de validation et le codec JSON sont en place. Aucun protocole de transport distant n'est défini dans V2 ; ne pas déduire une architecture réseau de cette tranche. |
-| Tests | Fixtures, horloge déterministe, traces, assertions de paradigme et baselines DOM/géométriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |
-
-## Ordre de construction
-
-### 1. Fondation de contrats
-
-Ecrire et tester les invariants, config, validation, `CompiledScene`, extraction des fonctions, catalogue
-engine et contrats player/composant. Les interfaces exactes sont définies par
-les contrats V2 et les décisions déjà écrites; aucun nouveau concept n'est
-ajouté pour raccourcir cette phase.
-
-### 2. Verticale de validite
-
-Creer d'abord sous `packages/codplay/tests/runtime/` une verticale de test qui traverse le flux entier avec
-un `RuntimeMaterializer` de test branche sur la meme interface que le runner HTML.
-Les démos V2 ne sont pas une dépendance de cette verticale et celle-ci ne doit
-pas ouvrir le renderer de production. Elle couvre :
-
-La démo courante est unique et remplace la précédente lorsqu'une nouvelle
-tranche doit être présentée, sauf demande explicite de conservation. La démo
-FLIP de `packages/demos/src/v2/demos/runner` est consignée ; elle reste séparée de la démo
-courante et ne doit pas être dupliquée sous une autre entrée.
-
-- un composant racine fixe;
-- un event materialise;
-- un changement discret de classe lu par plage de validite;
-- un behavior continu prepare par ACE;
-- des seeks nommes avant, pendant et apres les changements.
-
-Cette verticale de test ne couvre pas `move`, FLIP, containers, media, persos hotes, preload partagé ou seek
-multi-instance. Les capacités non ouvertes restent absentes de ses types et fixtures, sans imitation.
-
-### 3. Validation mouvement/list
-
-La démo compacte dans `packages/demos/src/v2/demos/runner/` valide les
-contrats local et reparent avec deux scénarios lisibles. La fixture
-`packages/demos/src/v2/demos/flip-stress/` en est le gabarit de stress et la
-base de reprise pour les démos standard : elle ajoute plusieurs
-conteneurs mobiles, des listes imbriquées, des trajectoires, des transitions
-chevauchées et le redimensionnement responsive.
-
-Ces démos restent des surfaces de validation, pas des implémentations
-alternatives du runtime. Elles doivent conserver une `SceneDoc` déclarative,
-le cycle de vie possédé par `HtmlPlayerRunner`, la télécommande commune et les
-points de seek FIRST / boundary / middle / LAST utilisés pour la validation,
-ainsi que la comparaison Play/Seek au même temps. Les
-paramètres de stress peuvent être réduits pour une démo standard, mais le
-circuit de résolution et les points d'observation restent identiques.
-
-Le seek reconstruit l'etat logique puis évalue le même graphe de mouvement et la
-même frame de présentation que Play au temps demandé. Il ne rejoue pas les
-événements et ne dépend pas des temps visités auparavant. Les baselines visuelles
-existantes `player-poc` et `overlay-world-seek-baseline` restent un corpus à
-adapter, mais les invariants numériques Play/Seek du plan de restructuration
-sont normatifs.
-
-### 4. Cadre de validation V2
-
-Lors de l'adaptation progressive des démos existantes, construire le cadre de
-tests V2 : fixtures communes, horloge déterministe, traces d'état à instants
-nommés, baselines DOM/géométriques et assertions propres à V2 (writer unique,
-absence de rejeu de strap, dépendances interdites et ordre de solve).
-
-### 5. Tranches de capacites
-
-Poursuivre par dépendances : reprise de l'authoring uniquement lors de la reprise de l'éditeur, puis ouverture de capacités concrètes identifiées. La capture core et le placement list sont validés pour la tranche de validation ; le seek list et la validation media restent ouverts. Le preload reste externalisé et n'est pas une étape imposée au player.
-Chaque tranche commence par le contrat V2, puis sa démo et ses tests.
-
-### Dette d'architecture reportée à V2.5 — DnD et FLIP
+> Statut : différée à V2.5 ; aucune migration DnD/FLIP n'est ouverte dans la
+> tranche V2 actuelle.
 
 La tranche V2 conserve DnD et FLIP/motion comme sous-systèmes de présentation
-HTML. Ce choix est limité à la fondation actuelle et ne constitue pas la cible
-d'architecture : le sous-système HTML est couplé au module `list` par le circuit
-de placement, d'ordre et de transition. Une dépendance d'un sous-système de
-présentation vers un module métier réduit la substituabilité des modules et
-rend la frontière HTML difficile à porter vers un autre materializer.
+HTML. Le circuit de placement, d'ordre et de transition couple encore cette
+présentation au module métier list, ce qui limite la substituabilité des
+modules et le portage vers un materializer non HTML.
 
-La mise à jour V2.5 devra spécifier et implémenter :
+Lorsqu'une tranche V2.5 sera ouverte, son plan devra décider et valider :
 
-- un module runtime DnD et un module runtime FLIP/motion, enregistrés et
-  instanciés par le catalogue comme les autres capacités ;
-- des contrats abstraits de capture, placement, trajectoire et composition,
-  séparés des opérations DOM ;
+- des modules runtime DnD et FLIP/motion enregistrés et instanciés par le
+  catalogue comme les autres capacités ;
+- des contrats de capture, placement, trajectoire et composition séparés des
+  opérations DOM ;
 - une frontière explicite entre ces modules et les runners/materializers HTML ;
-- une direction de dépendance où le runner HTML adapte les contrats des modules
-  sans dépendre directement d'un module concret, notamment `list` ;
-- les dépendances déclarées, le cycle de vie par player et les ports nécessaires
-  aux futurs materializers non HTML ;
-- des tests d'architecture prouvant qu'un changement de materializer ou de
+- une direction de dépendance où le runner HTML adapte les contrats sans
+  dépendre directement d'un module métier, notamment list ;
+- les dépendances déclarées, le cycle de vie par player et les ports des futurs
+  materializers non HTML ;
+- des tests d'architecture montrant qu'un changement de materializer ou de
   module ne reconstruit pas un circuit HTML parallèle.
-
-Aucun rétrofit DnD/FLIP n'est ouvert dans la fondation V2 par cette note.
-
-## Sources de reference V2
-
-- `docs/projet/codplay-v2/notes/2026-07-26-conduite-chantier-v2.md`.
-- `docs/projet/codplay-v2/notes/2026-07-26-ancrages-algorithmiques.md`.
-- `docs/projet/codplay-v2/notes/2026-07-26-etat-fonction-de-t.md`.
-- `plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md`.

@@ -1,417 +1,64 @@
-# CodPlay V2 - materializer des composants
-
-## Statut
-
-Status: Fixe pour la materialisation HTML/DOM V2
-CodPlay version: V2 foundation  
-Review: frontière HTML/DOM fixe ; pont des projections tierces `A relire` dans
-le plan du 2026-09-18
-
-La frontière composant/materializer reste fixe. La préparation géométrique
-conditionnelle d'un groupe `move`/`reparent` pendant Play ou Seek relève de
-l'extension actuellement `En cours` dans
-[`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md) ;
-elle ne change ni le writer unique ni la persistance des materialisations auteur.
-
-## Contrat auteur
-
-Le contrat de `BaseHTMLComponent.render()` est deja fixe dans
-[`2026-08-01-composant-v2-contract.md`](./notes/2026-08-01-composant-v2-contract.md).
-Ce plan ne le redéfinit pas et n'ouvre aucune décision sur le rôle de `render()`.
-
-Le présent plan traite uniquement de la frontière située après le composant : la
-prise en charge de son résultat par le `Materializer`. Le composant auteur ne
-parse pas son résultat, ne crée pas les ressources du substrat et ne porte pas la
-décomposition technique de celles-ci.
-
-## Frontiere Materializer
-
-`BaseHTMLComponent` est la couche auteur HTML en entree du rendu. Il expose une
-méthode `render()` et recoit les etats resolus; il cible uniquement le
-`Materializer`, jamais le DOM directement. `BaseComponent` reste la base
-substrat-neutre et n'impose pas de rendu markup.
-
-Le `Materializer` est ici la frontière interne de materialisation HTML/DOM. Il
-reçoit le résultat de `render()` et les mises à jour du composant, crée ou met à
-jour les nœuds DOM et conserve les références nécessaires. Le cycle de vie
-runtime déclenche ensuite leur retrait ; le materializer exécute le nettoyage
-prévu par ce cycle. Le composant ne connaît pas les détails DOM.
-
-`HtmlComponentMaterializer` est l'unique implementation de cette frontière.
-Un template peut contenir une racine SVG : elle est alors créée dans le
-namespace SVG par le parsing HTML du template, mais elle reste une partie de la
-materialisation HTML/DOM. Il n'existe pas de `SvgComponentMaterializer` ni de
-sélection de materializer SVG.
-Elle expose à la fois la materialisation d'un composant et la materialisation
-structurelle d'une scène ; aucune interface structurelle distincte ou catalogue
-local parallèle n'est utilisé. Le composant déclare les services abstraits qu'il
-emploie ; `RuntimeCapabilityCatalog` les résout vers les adapters compatibles avec
-le materializer courant. Le materializer ne construit pas de catalogue local.
-
-L'exposition d'un contenu foreign dans une racine HTML relève du plan du
-[`composant core de contenu foreign`](./foreign-scene-component-plan.md). Le
-materializer HTML y fournit la résolution du nœud et, dans la tranche engagée,
-le montage/démontage de la représentation opaque ; la capture d'un clone
-transitoire reste liée au module `replace` à construire. Il ne possède ni le
-player du contenu ni sa durée de vie. Un layout peut fournir la cible structurelle
-qui contient ce composant, mais il ne fait pas partie de son contrat.
-
-## Du template au substrat
-
-La tranche HTML V2 suit cette chaine, sans redefinir le contrat de `render()` :
-
-```text
-BaseHTMLComponent.render() -> template string -> Materializer HTML -> DOM
-```
-
-Le composant fournit son resultat au materializer. Il ne le parse pas, ne le compare
-pas avec une version precedente et ne cree pas les nodes.
-
-### Template string
-
-Le template string est recu par le materializer HTML :
-
-```text
-BaseHTMLComponent.render()
-  -> HtmlComponentMaterializer
-  -> lecture, assainissement et normalisation
-  -> creation du DOM et conservation des references vers les nœuds internes
-```
-
-La politique de lecture et d'assainissement appartient au materializer et à ses
-services. Elle valide les balises et attributs autorisés, conserve les marqueurs
-structurels internes et laisse le parsing DOM établir le namespace SVG des
-éléments SVG présents dans le template.
-
-### Materialisation initiale
-
-Le `Materializer` recoit le template, la cible de montage et les services necessaires :
-
-```text
-template string + mount target
-  -> materializer.readAndSanitize(template)
-  -> materializer.createResources()
-  -> materializer.attach()
-  -> references internes vers les nœuds désignés
-```
-
-Les appels DOM sont internes à l'implementation du materializer. Le composant ne
-connaît ni `createElement`, ni `createElementNS`, ni la structure des ressources
-produites.
-
-Le materializer ne preclasse pas les proprietes SVG. Une propriete SVG generique
-est partagee uniquement lorsqu'un service existant la couvre ; une propriete ou
-une operation specialisee est introduite avec le composant qui en a besoin, son
-service, sa validation et sa destination de materialisation. Aucun inventaire
-global des proprietes SVG n'est donc requis pour ouvrir l'interface materializer.
-
-Un resultat comportant plusieurs noeuds forme un fragment : le materializer
-conserve les noeuds reels dans leur ordre et ne genere aucun element enveloppe.
-Dans la verticale HTML, une materialisation porte donc soit un noeud reel, soit
-la collection ordonnee des noeuds reels du fragment ; cette collection reste
-persistante et est parcourue pour le montage, le detach et la capture des cibles.
-Le fragment n'est pas une cible de service. Les services s'appliquent uniquement
-aux noeuds reels designes par le composant. Pour `list`, l'appartenance et l'ordre
-sont traites par la structure resolue. Pour `layout`, les parts/outlets designes
-sont les seules cibles dynamiques ; les autres noeuds du template restent
-statiques et ne recoivent pas de mise a jour.
-
-## Persistance des materialisations auteur
-
-La materialisation d'un perso est persistante pendant toute la duree de vie de
-la sequence/player. Une fois ses elements et ses ressources materialises, leur
-identite est conservee qu'ils soient montes ou non dans le DOM.
-
-- un `unmount`, un detach ou un changement de target modifie uniquement le
-  parentage et l'ordre structurels ; il ne detruit pas la materialisation auteur ;
-- un seek conserve les memes instances de composant et les memes elements ; il
-  applique l'etat cible, le parentage et l'ordre sans rerendre ni recreer les
-  elements deja materialises ;
-- le `RuntimeComponentHandle.destroy()` n'est appele qu'au teardown final de la
-  sequence/player, jamais pour rendre un perso absent ou non monte a un instant
-  donne ;
-- la destruction finale libere les ressources auteur, y compris les ressources
-  media, et retire les references et les elements conserves ;
-- les clones d'overlay FLIP et le DOM de mesure sont des ressources techniques
-  temporaires distinctes des materialisations auteur. Cet invariant vaut pour
-  tous les clones de présentation CodPlay : un clone est une copie temporaire
-  destinée à l'effet visuel, jamais un perso, une nouvelle instance de composant
-  ou une materialisation persistante.
-
-Cette persistance est notamment requise pour les composants media : un seek ou un
-detachement ne doit pas recreer l'element ni recharger sa source.
-
-Cette regle reprend la decision V1 documentee dans
-[`2026-06-25-image-node-per-src-plan.md`](../../../docs/plans/2026-06-25-image-node-per-src-plan.md) :
-les nodes media sont conservees, detachees et rattachees selon l'etat cible ; la
-source n'est assignee qu'a la creation de la node correspondante. Les tests V1
-[`seek-media-src.spec.ts`](../../codplay-v1/tests/v1/seek-media-src.spec.ts) et
-[`seek-no-detach.spec.ts`](../../codplay-v1/tests/v1/seek-no-detach.spec.ts) couvrent
-respectivement la conservation par source et l'absence de churn DOM au seek.
-
-## Mise a jour du rendu
-
-Lorsque `SolvedPerso.state` change, le runtime appelle le composant puis transmet
-son resultat au materializer :
-
-```text
-SolvedPerso.state
-  -> Component.update(state, time)
-  -> services et materializer
-  -> substrat mis a jour
-```
-
-La fondation V2 ne fixe pas de reconciliation generique de markup dynamique.
-Le materializer conserve les ressources qu'il a creees et applique les mises a
-jour autorisees par le contrat du composant. Les regles de remplacement, de
-destruction et de remise en ordre sont propres au materializer concerne.
-
-Le composant ne reconstruit jamais son etat logique a partir du substrat.
-
-## Application des proprietes
-
-Pendant `update()`, le composant fournit l'etat resolu aux services du
-materializer. Ces services fournissent les operations d'application adaptees au
-substrat :
-
-```text
-style value      -> materializer.style.apply(node, value)
-className value  -> materializer.className.apply(node, value)
-attr value       -> materializer.attr.apply(node, value)
-```
-
-Le composant ne connait pas les APIs natives du substrat (`style.setProperty`,
-`classList`, `setAttribute`, etc.). Ces operations appartiennent au materializer
-et a ses services de substrat.
-
-Dans la tranche HTML, ces references sont des references vers les nœuds DOM reels.
-La racine sert au parentage et a l'ordre ; les parts/outlets publies servent aux
-cibles de placement ; une presentation FLIP reçoit l'`HTMLElement` reel de la
-cible qu'elle anime. Ce ne sont ni une structure de rendu abstraite ni une API
-publique du composant. La destruction n'est pas une reference supplementaire :
-elle relève du cycle de vie du runtime et du nettoyage du materializer.
-
-## Reparenting et FLIP
-
-Le composant ne decide pas d'un changement de parent logique. `MoveStateDelta` et
-la capacite list produisent une demande de placement. Le materializer DOM peut
-alors :
-
-1. retrouver les nœuds reels concernes ;
-2. appliquer le reparenting et l'ordre ;
-3. mettre a jour les ressources materialisees ;
-4. mesurer le nouvel emplacement ;
-5. appliquer FLIP.
-
-Au seek, les memes operations de materialisation structurelle sont effectuees
-sans rejouer une animation passée. Si la frame cible dépend d'un groupe
-`move`/`reparent` absent, le runner prépare et capture ce groupe dans la
-transaction synchrone définie par
-[`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md),
-puis committer directement la frame demandée. Cette capture n'ajoute pas une
-animation visible au seek.
-
-## Exemple layout
-
-L'auteur peut ecrire un layout dont la propriete `markup` fournit la representation
-HTML necessaire :
-
-```ts
-class LayoutComponent extends BaseHTMLComponent {
-  render() {
-    return this.perso.initial.markup
-  }
-}
-```
-
-Le template peut contenir ses marqueurs structurels internes :
-
-```html
-<section class="layout-frame">
-  <main data-part="content"></main>
-</section>
-```
-
-Le materializer HTML :
-
-- lit, valide et assainit le template selon le contrat du composant ;
-- decouvre les parts/outlets presents dans le template ;
-- enregistre les references vers ces nœuds avec leurs IDs opaques ;
-- ne demande pas a l'auteur de fournir un tableau `id + selector`.
-
-Le composant core `layout` publie toutes les parts découvertes. Ce choix
-reproduit le comportement V1 sans demander à chaque démo d'énumérer ses zones.
-Un autre composant peut publier seulement certaines parts si les autres restent
-internes à son fonctionnement.
-
-Le selector n'est donc pas un contrat auteur separe. Si le materializer DOM utilise
-un selector interne, il reste un detail d'implementation du materializer.
-
-## Chaine de rendu et de mutation
-
-La chaine de mutation est :
-
-```text
-SolvedPerso.state
-  -> Component.update(state, time)
-  -> Materializer
-  -> nœuds HTML/DOM (y compris les nœuds SVG)
-```
-
-Le composant peut declarer ou demander les changements d'etat prevus par ses
-services. Il ne decide pas le parentage, ne mute pas les ressources d'un autre
-composant et ne reconstruit pas l'etat logique depuis le substrat.
-Les services `style`, `className` et `attr` restent les operations d'application
-standard du composant.
-
-La reference de materialisation reste une cible d'application :
-
-`PersoState(t) -> Component.update(state, t) -> Materializer HTML/DOM -> nœuds DOM`
-
-La materialisation ne doit pas lire le DOM pour reconstruire `PersoState(t)`
-ni dependre d'une accumulation de mutations precedentes.
-
-## Move et FLIP
-
-`move` cible une cible logique opaque produite par le registre interne. La
-materialisation peut publier des parts/outlets internes, mais le composant ne
-decide pas la politique de parentage.
-
-La capacite list calcule l'ensemble affecte. Le materializer DOM fournit les
-nœuds HTML reels que le runner mesure pour le contrat de mouvement défini dans
-`runner-flip-integration-study.md` ; l’interpolation de `width` et `height` de
-la liste est suivie séparément dans `list-dimension-interpolation-plan.md`.
-
-## Seek
-
-Au seek, le resultat de `render()` est materialise directement vers l'etat cible.
-Le materializer nettoie ses transitions et materialise l'etat cible sans
-rejouer une animation FLIP passée. Lorsque la cible traverse une frontière
-`move`/`reparent` dont le groupe n'est pas encore préparé, le runner effectue la
-capture nécessaire avant la publication de la frame, puis réutilise ses poses
-pour la résolution absolue.
-
-## Composant hôte et projection tierce
-
-Le cas d'un composant hôte Three.js est repris dans
-[`2026-08-01-composants-hybrides-threejs-v2.md`](./notes/2026-08-01-composants-hybrides-threejs-v2.md).
-Son rendu auteur fournit l'hote DOM, par exemple un template contenant un
-`canvas`. Le materializer DOM materialise et monte cet hote ; le composant
-possede ensuite sa projection interne et son materializer spécialisé.
-
-La regle de writer unique est appliquee par couche : le materializer HTML ecrit
-l'hote DOM ; le materializer possédé par l'hôte réconcilie les objets de sa
-projection. Le coeur CodPlay ne decompose ni ne manipule les objets internes
-Three.js.
-
-La direction ne se limite plus à une scène privée monolithique. Des persos
-spécialisés peuvent être reliés à l'hôte ou à un autre perso par un `rel`
-initial et immuable. L'intégration type et normalise cette relation, puis le
-pont remet au composant de feature sa cible native déjà résolue. Ce pont reste
-`A relire` dans
-[`2026-09-18-third-party-render-target-codplay-plan.md`](./2026-09-18-third-party-render-target-codplay-plan.md)
-et ne modifie pas le contrat HTML fixe de ce plan.
-
-### Media et ressources internes V1
-
-Le composant `media` suit la même séparation qu'un composant spécialisé V1 : sa
-racine wrapper est fournie par `render()` et montée par le Materializer, tandis
-que les nodes vidéo internes restent privées au composant. Le composant conserve
-une node par `src`, assigne la source à sa création puis ne fait que détacher ou
-rattacher la node active. Ces nodes ne sont ni des persos ni des outlets de
-montage.
-
-La tranche V2 actuelle vérifie cette persistance et le changement de source. Elle
-n'ouvre pas encore `media-sync`, le preload partagé ou le pilotage de lecture.
-
-## Dialogue Materializer / FLIP — contrat HTML runner
-
-Le dialogue est maintenant fixe pour la verticale HTML. Il ne passe pas par un
-échange direct entre le composant et FLIP :
-
-```text
-SolvedScene
-  -> RuntimeComponentRuntime.sync()
-  -> RuntimeMaterializer HTML
-       -> racines, parts, parentage et ordre des racines
-  -> HtmlMotionPresentationHost
-       -> présentation locale ou représentation overlay
-```
-
-### Responsabilités
-
-Le `RuntimePlayer` synchronise les composants une fois avant l'appel au
-materializer. Le `HtmlComponentMaterializer` :
-
-- appelle `component.render()` et materialise son résultat ;
-- conserve le noeud reel unique ou les noeuds reels du fragment dans le registre
-  interne des persos ;
-- n'ajoute aucun element d'enveloppement pour representer un fragment ;
-- publie uniquement les parts autorisées par la définition runtime du composant ;
-- detache les noeuds reels lors d'un retrait structurel et conserve leurs
-  references jusqu'au teardown final.
-
-La même instance applique aussi le parentage et l'ordre produits par `SolvedScene`.
-Elle ne reconstruit ni l'état du composant ni la structure depuis le DOM. Pour la
-présentation motion, `MotionMaterializer` décore cette interface et délègue la
-materialisation HTML avant d'appeler le résolveur de frame ; il ne constitue pas
-un second circuit de composants ou de structure.
-
-Le `HtmlMotionPresentationHost` reçoit seulement un résolveur
-`itemId -> HTMLElement` et une `PresentationFrame`. Il :
-
-- écrit les dimensions et matrices transitoires sur la racine réelle en mode local ;
-- crée ou réutilise une représentation de la materialisation courante dans
-  l'overlay en mode reparent ;
-- masque la source pendant la représentation overlay ;
-- synchronise une représentation existante sans créer de nœuds lorsque sa
-  structure reste identique ;
-- retire les contributions transitoires et détruit les clones lorsque la frame ne
-  les demande plus.
-
-Le clone est autorisé comme représentation temporaire d'un `reparent`, mais le
-basculement de visibilité est atomique. La source est masquée avant l'insertion
-ou la révélation du clone. Le clone reste masqué pendant sa synchronisation et
-l'écriture de sa pose ; il n'est révélé qu'une fois cette préparation terminée.
-Lorsqu'il est retiré, le clone est supprimé avant que la source soit révélée.
-Une source et son clone ne peuvent donc jamais être visibles ensemble.
-
-FLIP ne demande donc pas au composant de se rerendre et n'appelle aucun service
-auteur. Les services du composant ont déjà appliqué l'état courant avant la mesure
-ou la création d'un clone. La couche transitoire conserve les propriétés auteur et
-les restaure à sa destruction.
-
-### Ordre d'une frame
-
-Pour Play, Seek et `resize()`, l'ordre est le même :
-
-1. résoudre l'état logique à `t` ;
-2. synchroniser les composants et leurs services ;
-3. appliquer le parentage et l'ordre structurels ;
-4. préparer ou réutiliser la géométrie du seul groupe `move`/`reparent` requis,
-   ou le traitement propre d'une action de pose reconnue ;
-5. résoudre la `PresentationFrame` à `t` ;
-6. committer la présentation locale ou overlay.
-
-Au seek, la présentation motion des groupes `move`/`reparent` est committée
-directement à `t`, sans animation ni rejeu d'une transition passée. Les
-présentations possédées par un module, comme `replace`, suivent leur propre
-contrat : le player rejoue leurs frontières de présentation depuis l'état
-initial jusqu'à `t`, sans redispatcher les events ni les callbacks historiques,
-afin que le module puisse reconstruire une transition dont la capture sortante
-est correcte. Cette relecture n'effectue pas de lecture DOM dans la boucle de
-frame. Si une capture est requise, la préparation peut être attendue avant ce
-commit. À `LAST`, les slots et ressources transitoires sont retirés ; la
-materialisation auteur reste la seule représentation.
-
-Ce contrat est limité à la materialisation HTML/DOM et aux moves HTML compilés.
-Canvas, Three.js, Rive ou Lottie peuvent exister dans une projection possédée
-par un composant hôte attaché à un nœud HTML. Leur materializer reste local à
-l'hôte et n'est pas une option de la façade. Le pont de composants projetés est
-un chantier séparé, encore `A relire`. Le runtime JSX reste hors contrat.
-
-## Hors contrat actuel
-
-- JSX runtime V2 ;
-- profils complets de sanitizer SVG/CSS et politiques de ressources ;
-- implementations de production pour Canvas ou Three.js ;
+# Relecture restante — représentation des composants V2
+
+> Status: A relire — les comportements HTML/DOM vérifiés sont dans la
+> [spécification de matérialisation](../specs/component-materialization-v2-spec.md).
+> Le plan garde une frontière d'état à confirmer, une décision de sanitation et
+> deux preuves d'acceptation manquantes.
+> CodPlay version: V2 foundation
+
+Ce plan ne porte plus les contrats des composants, des services HTML, des
+parts, des fragments ou du parentage structurel. Leur périmètre vérifié est
+dans la spécification de matérialisation ; les composants spécialisés et le
+mouvement ont leurs propres spécifications et plans.
+
+## Décisions et preuves restantes
+
+- [ ] Confirmer par une preuve représentative que l'état résolu transmis à
+      `update()` est la source de présentation et que la racine DOM reste une
+      cible de matérialisation, pas une source de reconstruction. Le contrat
+      historique le posait comme invariant `f(t)`, mais les tests cités par la
+      spécification ne couvrent pas ce point général ; le player garde par
+      ailleurs sa propre gate sur la réutilisation de l'état logique.
+- [ ] Décider si les templates fournis par `BaseHTMLComponent.render()` doivent
+      être filtrés avant parsing. Le texte antérieur exigeait un
+      `readAndSanitize(template)` qui valide les balises et attributs. Le chemin
+      runtime examiné affecte le markup à `template.innerHTML`, consomme les
+      marqueurs `data-part` et conserve les nœuds. Le test
+      [`template-materializer.spec.ts`](../tests/runtime/runner-html/template-materializer.spec.ts)
+      couvre le parsing et les parts, pas une politique de sanitation. Ne pas
+      certifier cette politique ni modifier le cœur avant décision.
+- [ ] Vérifier si le contrat voulu est que `render()` ne soit appelé qu'une
+      fois par instance pendant toute sa durée de vie. La spécification vérifie
+      l'identité des instances et leur teardown, mais pas le nombre d'appels à
+      `render()`.
+
+## Décisions différées
+
+- Le runtime JSX autonome et une méthode `init()` d'authoring sont hors du
+  contrat V2 foundation ; la note antérieure les reportait à V2.5. Les reprendre
+  dans un plan dédié avant toute conception ou implémentation.
+
+## Contrats suivis ailleurs
+
+- Bases, services déclarés, cycle d'instance et matérialisation HTML :
+  [spécification composant](../specs/component-materialization-v2-spec.md).
+- `layout`, marqueurs et outlets :
+  [spécification layout](../specs/layout-component-spec.md) et plan de
+  validation navigateur [`layout-part-marker-plan.md`](./layout-part-marker-plan.md).
+- `img`, `input` et `polygon` : [spécifications par composant](../specs/image-component-v2-spec.md),
+  [input](../specs/input-component-v2-spec.md), [polygon](../specs/polygon-component-v2-spec.md)
+  et [plan d'acceptation partagé](./components-image-input-polygon-svg-plan.md).
+- Media, preload et conservation des nœuds :
+  [plan média](./media-preload-plan.md) et spécifications associées.
+- Contenu foreign et projections tierces :
+  [plan foreign](./foreign-scene-component-plan.md) et
+  [plan de cibles tierces](./2026-09-18-third-party-render-target-codplay-plan.md).
+- Move, FLIP, reparent et Seek : plans
+  [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) et
+  [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md).
+
+## Clôture
+
+Relire les gates ci-dessus et respecter le report V2.5. Transférer toute
+décision certifiée dans la spécification, puis retirer ce plan si aucune action
+propre à la représentation HTML ne reste ouverte.

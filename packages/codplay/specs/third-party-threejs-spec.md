@@ -1,13 +1,11 @@
 # CodPlay V2 — première unité Three.js
 
-## Statut
+## Périmètre vérifié
 
-> En cours — déclaration core, hôte, caméra, lumières et grille procédurale
-> implémentés ; la relation `host/target` et le retrait de `move` des
-> composants Three logiques sont alignés. Le
-> calcul temporel de la grille, le rejeu de présentation au Seek et l'ordre de
-> commit de l'hôte sont couverts par des tests déterministes. Le cycle complet
-> de destruction reste à valider.
+Cette spécification décrit la première unité Three.js exercée par les tests
+d'intégration du package et par la démo V2 `threejs-grid`. L'acceptation
+complète de l'intégration est décrite dans le
+[plan des composants tiers](../plan/2026-09-18-third-party-components-v2-plan.md).
 
 Cette spécification décrit la première unité Three.js externe. Elle ne change
 pas le core en matérialiseur Three.js et ne réutilise pas le runtime V1.
@@ -102,10 +100,10 @@ L’hôte enregistre une animation de présentation persistante en phase
 phase finale de l’hôte. Le rendu utilise donc la pose que les consommateurs
 ont effectivement écrite pour la frame courante, y compris après un Seek.
 
-Le même calcul est donc utilisé par Play et Seek. La grille possède et libère
-sa géométrie, son matériau et son `InstancedMesh`. L’hôte possède et libère le
-renderer et la scène, mais ne détruit pas les ressources appartenant aux
-consommateurs.
+Le même calcul est donc utilisé par Play et Seek. La grille possède sa
+géométrie, son matériau et son `InstancedMesh`. L’hôte possède le renderer et
+la scène, tandis que les ressources des consommateurs restent sous leur
+responsabilité.
 
 ## États pilotés par les actions
 
@@ -123,18 +121,9 @@ parcours avec un recul puis une avancée de caméra sur une durée distincte des
 rotations de la grille, le déplacement d’une lumière ponctuelle et la variation
 des couleurs ambiante et ponctuelle.
 
-La démo utilise un horizon ouvert : elle ne déclare pas de `sequence:end` pour
-fabriquer une durée. La télécommande découvre l’horizon au fur et à mesure que
-la tête de lecture avance et conserve le plus grand horizon déjà découvert
-lorsqu’un Seek revient en arrière. Le transport Safari a été exercé après deux
-Seek arrière puis une reprise ; la preuve de la pose ne repose pas sur une
-capture visuelle, mais sur le calcul du composant et le test d'ordre du runtime.
-
 ## Limites de cette tranche
 
 Les composants génériques ne décrivent pas les modèles, textures, avatars,
 mixers natifs ou contrôleurs de features. Le preload binaire appartient à
 l'intégration Three.js ; Avatar porte ensuite sa logique spécialisée. La caméra
 et les lumières disposent d’un profil simple.
-La validation du cycle de destruction et d’un second navigateur doit encore
-compléter cette tranche.

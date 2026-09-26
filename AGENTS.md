@@ -22,7 +22,7 @@
 
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
-- Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only when the contract or decision itself has been explicitly agreed and documenting that change is part of the task.
+- Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only for behavior that has been implemented and verified; keep decisions that are open or agreed but unapplied in the active plan.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.
@@ -36,7 +36,7 @@
   the same concern and use that circuit. Do not create a parallel circuit unless
   an imperative architectural reason is established, documented in the accepted
   plan, and covered by an explicit acceptance path.
-- Treat the established V2 specifications and accepted decisions as authoritative. Do not replace them with an interpretation inferred from partial code, a failing demo, or a familiar framework pattern.
+- Treat verified V2 specifications as authoritative for certified behavior. Keep decisions that are open or agreed but unapplied in the active plan; do not present them as verified contracts or infer replacements from partial code, a failing demo, or a familiar framework pattern.
 - When porting a V1 capability to V2, preserve the documented V1 behavior unless an explicit V2 decision changes it. Port the semantics across the V2 boundaries; do not recreate a parallel V1 circuit.
 - Before editing code, identify the applicable specification, the accepted plan item, the invariants to preserve, and the acceptance path that will prove the change.
 - Do not edit code while the relevant plan is marked `A relire`. Every code change must map to an accepted plan item.
@@ -52,20 +52,24 @@
 - V2 demos are pre-release validation references, not disposable bug fixtures. A fix in a complex component must not be accepted from one visual symptom or one passing scenario.
 - Before declaring such a fix stable, record the causal analysis and run the complete relevant validation set: focused regression tests for the failing boundary, non-regression tests for affected parent/child and reparent cases, and the applicable Play, Seek, resize, persistence, lifecycle, typecheck, test, build, and Safari checks. Omit categories only when the analysis explicitly proves they are not affected.
 - If this evidence is incomplete, keep the implementation `En cours` or `A relire`; do not present it as stabilized and do not modify the demo to hide the defect.
-- A `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It is not the authority for internal contracts. Stable contracts belong in the applicable specifications; plans track implementation work and validation status.
+- A `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It is not the authority for internal contracts. Verified, stable contracts belong in the applicable specifications; plans track implementation work, validation status, and decisions that are open or agreed but unapplied.
 - Keep the specification, plan, implementation status, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
 
 ## Documentation and implementation tracking
 
 - Documentation roles are exclusive and must not be mixed:
-  - `notes/` records project elaboration, exploration, rationale, and open questions;
-  - `plan/` records actions to perform, their order, gates, status, and acceptance path;
-  - specifications record what has been implemented, normalized, and made normative;
+  - `notes/` records project elaboration, exploration, and rationale; open decisions for an active feature stay in its plan;
+  - `plan/` records actions to perform, their order, gates, status, acceptance path, and decisions that are open or agreed but unapplied;
+  - specifications record only behavior that has been implemented and verified;
   - `README.md` records only simple user-facing usage, with an illustrated concrete example; it must not contain internal contracts, architecture, implementation status, plans, or validation tracking.
 - A `*-reprise-report.md` is a handoff report, not a living documentation surface. Do not append project elaboration, implementation specification, or user instructions to it. Put each new content in the one appropriate category above; if an action must be retained, record it in the applicable plan, not in the report.
 - Keep plans and implementation tracking up to date until the corresponding work is complete.
 - Keep resolved situations that explain the current design; do not keep investigation history merely for its chronology.
 - Once a concept is implemented, maintain a focused specification for future agents: its role, contract, invariants, decisions, and how to understand it without rereading the entire implementation.
+- Specifications are authoritative for interpreting a feature's verified behavior. Plans retain decisions that are open or agreed but unapplied, plus their implementation and acceptance work; notes record exploration and rationale. A plan does not override verified behavior in a specification.
+- **Disposition dated 2026-09-26 — spec-first code understanding and maintenance:** For future CodPlay work, use the applicable specification first and canonically to understand verified behavior and identify its established circuit and owner; read the active plan for decisions and work that remain open or unapplied. Do not reread code already covered by a specification merely to rediscover its contract. Consult implementation, callers/adapters, and tests when resolving a gap the specification leaves open, investigating a concrete signal of divergence, or validating an accepted plan item. Extend the identified circuit instead of creating a parallel one. For every accepted improvement, update the owning specification in the same task to reflect the behavior implemented and verified, with links to its evidence; update the plan with any acceptance work that remains. Do not close the task until the specification, implementation, tests, and plan agree. If the specification is incomplete, a decision remains open, or a divergence is found, record the evidence and unresolved point in the owning plan and stop dependent implementation until the contract is clarified. This disposition does not authorize core code changes; the existing authorization and accepted-plan gates still apply.
+- Remove preparatory notes when the plan they support is complete. Transfer verified behavior and acceptance evidence into the relevant specification; keep any open or agreed-but-unapplied decision in an active plan before removing the note.
+- Remove a completed plan when a specification covers its feature. Before removal, transfer verified behavior and acceptance evidence into the specification and update incoming links and status indexes. A plan with an agreed but unapplied decision is not complete.
 - At the end of each task, update the relevant specification and implementation tracking before closing temporary notes or provisional guardrails.
 - Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
 
@@ -73,7 +77,7 @@
 
 - Module status belongs in the applicable plans and implementation tracking, not in README files.
 - `En cours` means design or implementation is active; proposals are not contracts.
-- `Fixe` means the module contract and decisions are stable, even if implementation remains.
+- `Fixe` means design decisions are accepted and stable. Any part not yet applied stays in the plan; the specification records it only after implementation and verification.
 - `A relire` marks a module or decision that requires explicit review before dependent work.
 - `Fini` means the module is implemented, tested, documented, and complete for the stated CodPlay version.
 - Never mark a module `Fini` to make a prototype appear complete; change the status back when a new gap is found.

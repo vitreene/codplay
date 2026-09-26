@@ -1,8 +1,8 @@
 /**
  * Shared pointer-gesture session wiring, reused by every drag/resize/rotate/
  * pivot/trace gesture across selection-frame and its creation/zone-editor
- * variants. Encapsulates the "Robustesse des gestes" rules (v1 plan,
- * docs/plans/2026-06-09-selection-frame-plan.md): only the primary button
+ * variants. The full acceptance of its pointer-button and release rules
+ * remains in ../plan/selection-frame-v1-plan.md: only the primary button
  * starts a session; pointer capture is released BEFORE any risky call; a
  * session ends on pointerup, pointercancel, lostpointercapture, or a
  * pointermove arriving with buttons === 0 (missed release) — without this, a

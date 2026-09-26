@@ -28,7 +28,7 @@
 
 Deux panneaux identifiés comme mécaniquement câblés mais **sans aucune UI existante**, à concevoir en même temps que la bascule shadcn plutôt qu'après :
 - **Panneau capsule** (`CapsulePatch` — `behavior`/`defaultTransition`/`sequencing`/`staggerMs`/`grid`) — aujourd'hui, un item capsule reçoit les mêmes panneaux qu'image/média dans `dedit-demo.ts`. Cf `2026-07-08-capsule-spec.md` §5.
-- **Panneau zones** — `zoneMode`/`setZones`/`onZonesChange` existent côté machine/contrôleur, `render.ts` ne les lit jamais. Dépend de `createZoneEditor` (`docs/plans/2026-07-03-selection-frame-variantes-plan.md`, Phase 2, pas commencée) pour avoir quelque chose de réel à afficher — panneau nommage/sélection de zones côté dedit, tracé/géométrie côté `createZoneEditor`.
+- **Panneau zones** — `zoneMode`/`setZones`/`onZonesChange` existent côté machine/contrôleur, `render.ts` ne les lit jamais. Le module `createZoneEditor()` existe et son modèle/gestes sont couverts par la [spécification vérifiée](../../../authoring/selection-frame/specs/zone-editor-spec.md). Le branchement à dedit, l'identité de référence, les cards et le drop restent ouverts dans le [plan d'intégration zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md) ; le panneau nommage/sélection reste à concevoir côté dedit.
 - Le raccordement du cadre de sélection ne relève pas de ce plan visuel ; il est traité dans le plan V2 actif par `decor-editor-bridge` et l'entrée `selection-frame/v2`.
 
 ## 4. Ordre proposé
@@ -38,6 +38,6 @@ Deux panneaux identifiés comme mécaniquement câblés mais **sans aucune UI ex
 3. Remplacement 1:1 des panneaux existants (`shape`/`typo`/`dimensions`/`custom`/`presets`) en composants shadcn — pas de nouveau comportement, juste le rendu.
 4. Panneau capsule (§3) — nouveau, pas un remplacement.
 5. Pont position (§3) — câblage vers selection-frame.
-6. Panneau zones (§3) — dépend de la Phase 2 zones (chantier séparé).
+6. Panneau zones (§3) — dépend de la réconciliation du modèle et de l'intégration décrites dans le plan zone-editor.
 
 **Les détails de présentation (disposition, styles shadcn précis, choix de composants base-ui) seront donnés par l'utilisateur au fil de cette bascule — ne pas anticiper de choix visuels ici.**

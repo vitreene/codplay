@@ -1,7 +1,7 @@
 # Plan — Migration `ZoneDef` (dedit) vers la forme grille
 
 **Périmètre** : `packages/editor/src/decor-editor/types.ts` (`ZoneCoords`, `ZoneDef`, `ZoneTable`, `ZoneCard`) et `zones.ts`.
-**Dépend de / s'aligne sur** : `docs/plans/2026-07-03-selection-frame-variantes-plan.md` (plan zones déjà arbitré, module `createZoneEditor` à construire séparément dans selection-frame).
+**Dépend de / s'aligne sur** : la [spécification zone-editor](../../../authoring/selection-frame/specs/zone-editor-spec.md) pour le modèle vérifié, son [plan d'intégration](../../../authoring/selection-frame/plan/zone-editor-plan.md) pour les raccords non appliqués, et le [plan des variantes d'orientation](2026-07-11-zone-orientation-variants-plan.md) pour la responsabilité des surfaces côté éditeur.
 
 ---
 
@@ -10,42 +10,33 @@
 Deux types nommés `ZoneDef`, incompatibles, existent déjà dans deux packages :
 
 - **dedit** (`packages/editor/src/decor-editor/types.ts`) : `ZoneDef = {name, coords:{x,y,width,height}}` (ou variante `contexts`) — rectangle en **cqw**.
-- **plan zones / selection-frame** (déjà arbitré) : `ZoneDef = {name, row, col, rowSpan, colSpan}` — **adresse de cellule de grille**.
+- **selection-frame** (`packages/authoring/selection-frame/src/zone-model.ts`) : chaque zone a un `id` stable, un `name` et `row`, `col`, `rowSpan`, `colSpan`, avec éventuellement une division `container` — **adresse de cellule de grille**.
 
-Le second est celui qui sera réellement produit par `createZoneEditor` (tracé aimanté aux pistes mesurées) et consommé par capsule-automation (classes CSS `grid-row`/`grid-column`, déjà fonctionnelles pour ce chemin). dedit doit migrer vers cette forme — c'est elle qui fait foi.
+Le second est le modèle vérifié produit par `createZoneEditor`. dedit doit passer des rectangles cqw aux coordonnées de pistes. L'identité stable `id` doit aussi être intégrée avant de brancher les attaches persistantes. Le nom reste nécessaire comme libellé dans selection-frame, tandis que le plan d'orientation propose un nom par ordre : cette différence doit être arbitrée avec les consommateurs avant de figer la forme dedit.
 
 ## 2. Forme cible
 
-```ts
-// dedit/types.ts — après migration
-export interface ZoneCellCoords {
-  row: number; col: number         // 1-based
-  rowSpan: number; colSpan: number
-}
+La forme cible doit conserver l'identité et la responsabilité retenues, sans figer ici un discriminant non arbitré :
 
-export type ZoneDef =
-  | { name: string; coords: ZoneCellCoords }
-  | { name: string; contexts: Record<OrientationContext, ZoneCellCoords> }
-
-export type ZoneTable = ZoneDef[]
-export interface ZoneCard { name: string; zones: ZoneTable }   // inchangé
-```
-
-La structure externe (`name` + `coords`/`contexts` par `OrientationContext`) ne change pas — seul le contenu de `coords` change de rectangle cqw à adresse de cellule. Le plan zones lui-même ne gère qu'une seule surface à la fois (§« Surfaces et contraintes ») ; le découpage par `OrientationContext` reste une responsabilité dedit, pas du module `createZoneEditor`.
+- un `id` stable, distinct du `name` modifiable, pour les attaches persistantes ;
+- une ou plusieurs géométries en pistes (`row`, `col`, `rowSpan`, `colSpan`) ;
+- si plusieurs surfaces sont présentes, leur sélection reste une responsabilité de l'éditeur, tandis que `createZoneEditor()` reçoit l'état d'une seule surface ;
+- le nommage et le lien entre `DecorPatch.zone`, la table des zones et `ZoneCard` restent à réconcilier avec les contrats de capsule et d'orientation avant l'implémentation.
 
 ## 3. Impact sur `zones.ts`
 
-`orientationFromRatio`, `coordsForContext`, `updateZoneCoords` sont génériques — elles manipulent la structure `name`/`coords`/`contexts` sans jamais lire les champs internes de `coords`. **Migration attendue : renommage de type seul, aucun changement de logique.** À vérifier concrètement à l'implémentation (les tests existants, `decor-editor-zones.spec.ts`, doivent passer après le seul changement de type + adaptation des fixtures de test).
+`orientationFromRatio`, `coordsForContext`, `updateZoneCoords` lisent actuellement la structure `name`/`coords`/`contexts`. Vérifier à l'implémentation quelles opérations restent valides avec les `id` et les coordonnées de pistes ; ne pas présumer que la migration est un renommage de type seul. Les tests `decor-editor-zones.spec.ts` doivent couvrir l'identité stable et la mise à jour d'une surface sans altérer les autres.
 
 ## 4. Résolution zone → placement (Builder)
 
-Quand un enfant référence une zone par nom (`DecorPatch.zone: string`), le Builder résout : `zone = capsule.zones.find(z => z.name === decorPatch.zone)` → `coordsForContext(zone, currentContext)` → pose directement `{row, col, rowSpan, colSpan}` sur `AutoCapsuleChildInput.placement` (le chemin `row/col/rowSpan/colSpan` de capsule-automation, qui génère déjà du CSS correctement).
+Le contrat actuel de l'éditeur utilise `DecorPatch.zone: string | null` comme référence par nom. Le modèle selection-frame retient l'`id` stable pour une attache persistante. Le Builder et dedit doivent adopter une même clé avant d'implémenter la résolution zone → placement ; aucune recherche par nom n'est prescrite ici tant que cette divergence reste ouverte.
 
-**Ne pas utiliser `AutoCapsuleChildPlacementInput.area`** pour cette résolution : ce champ existe dans les types mais ne génère aujourd'hui aucune règle CSS (`cssRules: []`, confirmé à l'audit) — il est réservé par le plan zones pour une étape d'intégration finale et distincte (drop live du cadre de sélection directement par référence de zone, §« Lien avec le cs » du plan zones, étape 9 de sa séquence d'implémentation). Résoudre le nom en `row/col/rowSpan/colSpan` côté Builder évite cette dépendance non prête.
+Les coordonnées plates en pistes (`row/col/rowSpan/colSpan`) sont le chemin existant à valider pour le placement CSS. Ne pas utiliser `AutoCapsuleChildPlacementInput.area` sans avoir vérifié la génération CSS de ce champ. Le drop live du cadre reste un parcours distinct, suivi dans le [plan zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md).
 
 ## 5. Ordre
 
-1. Renommer les types (`ZoneCoords` → `ZoneCellCoords`, champs `x/y/width/height` → `row/col/rowSpan/colSpan`) dans `types.ts`.
-2. Adapter les fixtures de `decor-editor-zones.spec.ts` à la nouvelle forme ; confirmer qu'aucune logique de `zones.ts` ne change (§3).
-3. Implémenter la résolution zone → placement côté Builder (§4), une fois le Builder et capsule-automation en place (dépend de `2026-07-08-builder-plan.md`).
-4. Pas de dépendance dure sur `createZoneEditor` lui-même (Phase 2 du plan selection-frame) pour cette migration de type — mais le champ n'aura de vraies valeurs à afficher/éditer qu'une fois ce module construit.
+1. Arbitrer identité, nommage, surfaces et format de `ZoneCard` à partir des plans d'orientation, de capsule et de zone-editor.
+2. Migrer les coordonnées cqw vers les coordonnées de pistes et ajouter l'`id` stable dans `types.ts`.
+3. Adapter et compléter `decor-editor-zones.spec.ts` ; vérifier la résolution des contextes et la conservation des identifiants.
+4. Implémenter et intégrer la résolution zone → placement côté Builder avec le chemin CSS de capsule-automation vérifié.
+5. Valider l'attache par `id` après renommage et cassure d'une division ; coordonner le drop live avec le [plan zone-editor](../../../authoring/selection-frame/plan/zone-editor-plan.md).
