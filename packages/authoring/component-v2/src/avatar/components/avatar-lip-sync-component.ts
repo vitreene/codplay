@@ -36,17 +36,21 @@ export const AVATAR_VISEME_PROFILES: Readonly<Record<string, Readonly<{
 /** Fallback cue duration used when an author sends only a punctual viseme. */
 export const DEFAULT_VISEME_DURATION_MS = 150
 
+/** Shortest visible attack and release for an event that cannot be anticipated. */
+const MIN_VISEME_RAMP_MS = 60
+
 type VisemeCue = Readonly<{
   morph: string
   value: number
   attackAt: number
   peakAt: number
   endAt: number
-  order: number
 }>
 
 /** Converts ordinary viseme events into an absolute-time morph stream. */
 export class AvatarLipSyncComponent extends AvatarFeatureComponent<AvatarLipSyncInitial> {
+  /** temp: Lip-sync is the first active feature in the staged Avatar investigation. */
+  protected readonly tempEnabled = true
   static readonly declaredServices = [] as const
 
   /** Projects all due viseme events onto the current Avatar morph frame. */
@@ -92,15 +96,11 @@ function resolveVisemeCues(
   defaultWeight: number | undefined,
 ): readonly VisemeCue[] {
   const cues: VisemeCue[] = []
-  let order = 0
   for (const occurrence of actions ?? []) {
     if (!Object.prototype.hasOwnProperty.call(occurrence.action, 'viseme')) continue
     const viseme = resolveViseme(occurrence.action, null)
     const profile = viseme === null ? undefined : AVATAR_VISEME_PROFILES[viseme]
-    if (profile === undefined) {
-      order += 1
-      continue
-    }
+    if (profile === undefined) continue
 
     const duration = resolveDuration(
       occurrence.action.durationMs,
@@ -108,15 +108,15 @@ function resolveVisemeCues(
       defaultDuration,
     )
     const startAt = occurrence.startAt
+    const rampMs = Math.max(MIN_VISEME_RAMP_MS, duration / 2)
+    const peakAt = startAt + rampMs
     cues.push({
       morph: profile.morph,
       value: profile.intensity * resolveNumber(occurrence.action.weight, defaultWeight, 1),
-      attackAt: startAt - (2 * duration) / 3,
-      peakAt: startAt + duration / 2,
-      endAt: startAt + duration + duration / 2,
-      order,
+      attackAt: startAt,
+      peakAt,
+      endAt: Math.max(startAt + duration, peakAt) + rampMs,
     })
-    order += 1
   }
   return cues
 }
@@ -192,29 +192,22 @@ function createAnimation(
   }
 }
 
-/** Samples independent TH envelopes without keeping a mutable cue queue. */
+/** Samples overlapping cue envelopes without cutting off an earlier release. */
 function sampleVisemeCues(
   cues: readonly VisemeCue[],
   fallbackMorphs: AvatarMorphs,
   timeMs: number,
 ): AvatarMorphs {
   const morphs: Record<string, number> = { ...fallbackMorphs }
-  const latestByMorph = new Map<string, VisemeCue>()
   for (const cue of cues) {
-    if (timeMs < cue.attackAt) continue
-    const previous = latestByMorph.get(cue.morph)
-    if (previous === undefined || cue.order >= previous.order) latestByMorph.set(cue.morph, cue)
-  }
-
-  for (const [name, cue] of latestByMorph) {
-    morphs[name] = sampleVisemeCue(cue, timeMs)
+    if (timeMs < cue.attackAt || timeMs > cue.endAt) continue
+    morphs[cue.morph] = Math.max(morphs[cue.morph] ?? 0, sampleVisemeCue(cue, timeMs))
   }
   return morphs
 }
 
-/** Samples one TalkingHead attack, hold and release envelope. */
+/** Samples the easing of one event from its observable start to its release. */
 function sampleVisemeCue(cue: VisemeCue, timeMs: number): number {
-  if (cue.peakAt === cue.attackAt) return timeMs < cue.attackAt ? 0 : cue.value
   if (timeMs <= cue.attackAt) return 0
   if (timeMs <= cue.peakAt) {
     const progress = sampleTalkingHeadEasing(

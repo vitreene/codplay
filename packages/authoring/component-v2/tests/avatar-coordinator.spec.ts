@@ -4,6 +4,7 @@ import type { AvatarEngine, AvatarGestureOverlay, AvatarTimeline, Rng } from '..
 import { AvatarCoordinator } from '../src/avatar/runtime/avatar-coordinator'
 import { GestureEngine } from '../src/avatar/gesture/gesture-engine'
 import { AvatarPoseComposer } from '../src/avatar/pose/avatar-pose'
+import { MorphEngine } from '../src/avatar/morph/morph-engine'
 
 describe('AvatarCoordinator pose ownership', () => {
   it('does not write a mood baseline through the mood selector', () => {
@@ -78,6 +79,60 @@ describe('AvatarCoordinator pose ownership', () => {
     expect(fixture.engine.prepareSeek).toHaveBeenCalledTimes(1)
     expect(fixture.engine.commitSeek).toHaveBeenCalledWith(1_000)
     expect(fixture.engine.animate).toHaveBeenCalledTimes(1)
+  })
+
+  it('presents short speech cues at full sampled strength while easing a gesture', () => {
+    const fixture = createPoseFixture()
+    const morphEngine = new MorphEngine()
+    const mouthInfluence = [0]
+    const headInfluence = [0]
+    morphEngine.registerBlendMorph('viseme_O', { influences: mouthInfluence, index: 0 })
+    morphEngine.registerBlendMorph('headRotateX', { influences: headInfluence, index: 0 })
+    Object.assign(fixture.engine, {
+      morphEngine,
+      animate: (deltaMs: number) => morphEngine.update(deltaMs),
+      prepareSeek: () => morphEngine.resetToBaselines(),
+      commitSeek: () => morphEngine.snapAll(),
+    })
+    const coordinator = new AvatarCoordinator()
+    coordinator.attachEngine(fixture.engine)
+
+    coordinator.applyMorphs({ viseme_O: 0.6 })
+    coordinator.applyAt(0)
+    expect(mouthInfluence[0]).toBe(0.6)
+
+    coordinator.applyGestureMotion({ ...gestureFrame(null), morphs: { headRotateX: 0.5 } })
+    coordinator.applyMorphs({ viseme_O: 0.2 })
+    coordinator.applyAt(16)
+    expect(mouthInfluence[0]).toBe(0.2)
+    expect(headInfluence[0]).toBeGreaterThan(0)
+    expect(headInfluence[0]).toBeLessThan(0.5)
+
+    coordinator.applyMorphs({})
+    coordinator.applyAt(32)
+    expect(mouthInfluence[0]).toBe(0)
+
+    coordinator.applyMorphs({ viseme_O: 0.4 })
+    coordinator.applyAt(8)
+    expect(mouthInfluence[0]).toBe(0.4)
+  })
+
+  it('lets speech override a shared gesture morph and returns it to gesture easing', () => {
+    const fixture = createPoseFixture()
+    const coordinator = new AvatarCoordinator()
+    coordinator.attachEngine(fixture.engine)
+    coordinator.applyGestureMotion({ ...gestureFrame(null), morphs: { viseme_O: 0.2 } })
+    coordinator.applyMorphs({ viseme_O: 0.6 })
+
+    coordinator.applyAt(0)
+    expect(fixture.morphEngine.snapFixed).toHaveBeenCalledWith('viseme_O', 0.6)
+    expect(fixture.morphEngine.setFixed).not.toHaveBeenCalledWith('viseme_O', 0.2)
+
+    coordinator.applyMorphs({ viseme_O: 0.2 })
+    coordinator.applyAt(8)
+    coordinator.applyMorphs({})
+    coordinator.applyAt(16)
+    expect(fixture.morphEngine.setFixed).toHaveBeenCalledWith('viseme_O', 0.2)
   })
 })
 

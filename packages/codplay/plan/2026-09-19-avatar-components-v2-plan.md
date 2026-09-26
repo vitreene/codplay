@@ -1223,7 +1223,8 @@ de la valeur effectivement atteinte.
 
 La correction reste dans `component-v2` et réutilise le circuit déjà présent :
 
-- `AvatarCoordinator.applyFixedLayer()` transmet les cibles avec `setFixed()` ;
+- `AvatarCoordinator.applyFixedLayer()` transmet les cibles de geste avec
+  `setFixed()` ; les visèmes restent appliqués immédiatement ;
 - `MorphEngine.update(deltaMs)` fait l'approche progressive sur le ticker
   CodPlay, y compris lorsque `avatar:gesture:release` retire la cible fixe ;
 - `reapplyFixed()` réapplique la valeur courante et interpolée (`applied`),
@@ -1238,3 +1239,132 @@ component-v2, son typecheck, le typecheck V2 des démos et leur build passent.
 Le parcours Avatar a aussi été rejoué dans Safari sur les gestes de tête et la
 séquence finale ; la tranche reste **En cours** jusqu'à une confirmation
 visuelle complète des enchaînements par l'auteur.
+
+## 40. Isolation temporaire des composants Avatar — 26 septembre 2026
+
+> Statut : **En cours**. Instrument de diagnostic `temp`, à retirer une fois les
+> contributions réintroduites et leurs frontières validées.
+
+L'auteur demande de repartir du comportement existant et d'isoler les causes
+des ruptures en réactivant les composants Avatar un par un. La correction de
+pose initiale tentée avant cette décision est retirée : elle n'a pas été
+validée avec les autres contributions et ne doit pas être tenue pour stable.
+
+La première étape conserve le composant central `avatar` et active seulement
+`avatar-lip-sync` parmi les composants Avatar spécialisés. `avatar-mood`,
+`avatar-gesture`, `avatar-idle`, `avatar-gaze` et `avatar-motion` restent
+enregistrés et reçoivent leurs mises à jour, mais leur contribution est
+temporairement suspendue au point commun des composants. La scène, ses
+eventimes, l'audio, le layout et le core CodPlay restent sur leur circuit réel.
+Ce filtre n'est pas un contrat V2 ; sa portée est limitée à l'investigation
+Avatar et sa condition de retrait est la réactivation et la validation des
+composants concernés.
+
+L'acceptation de cette première étape vérifie le lip-sync sur le modèle chargé
+dans Safari TP, avec les visèmes reçus par le journal et les morphs effectivement
+visibles aux dates de parole, puis le retour par Seek. Les tests du composant
+lip-sync, le typecheck et le build des démos accompagnent cette observation.
+La progression Play doit être vérifiée sur le chemin audio réel ; si elle reste
+bloquée, cette limite est consignée sans modifier la scène pour la masquer.
+Chaque composant sera ensuite réactivé seul, puis avec les précédents, en
+réexécutant les frontières qui lui appartiennent avant toute correction de
+comportement.
+
+### Diagnostic et correction de la première étape — amplitude
+
+Le filtre `temp` est en place au niveau de `AvatarFeatureComponent.update()` ;
+seul `avatar-lip-sync` contribue parmi les composants spécialisés. Dans Safari
+TP, le journal reçoit les eventimes `avatar:viseme`, la cible `viseme_O` vaut
+environ `0,57` à `550 ms` sur les deux meshes du modèle, et l'image de la bouche
+diffère de celle du silence à `3150 ms`. Le Seek active donc bien la chaîne
+eventime → composant → coordonnateur → morph du GLB. Les deux tests ciblés
+visème passent, ainsi que les typechecks `component-v2` et démos et le build
+démos. L'auteur constate cependant que l'articulation en Play est trop faible
+par rapport au réglage initial.
+
+La cause est au raccord des couches fixes du coordonnateur. La tranche 39 a
+remplacé `snapFixed()` par `setFixed()` pour rétablir l'easing des gestes, mais
+elle a appliqué le même lissage aux visèmes courts. Une sonde du `MorphEngine`
+dans Safari TP donne, pour une cible de visème `0,6`, seulement `0,015` après
+`64 ms` et `0,031` après `96 ms` avec `setFixed()` ; `snapFixed()` donne `0,6`
+immédiatement. L'état antérieur du coordonnateur utilisait `snapFixed()` pour
+la couche commune. Le symptôme est donc reproductible sans modifier la scène
+ni supposer une perte d'eventimes.
+
+> Décision de correction validée par l'auteur. Séparer au coordonnateur les morphs de
+> parole, appliqués immédiatement à chaque échantillon temporel, des morphs de
+> geste, qui conservent `setFixed()` et leur easing. Préserver la priorité de la
+> parole sur un morph commun et la reconstruction par `snapAll()` au Seek. La
+> validation requiert un test autonome des visèmes courts en Play, la
+> non-régression du lissage des gestes, puis Play, Seek et reprise dans Safari
+> TP avec l'audio réel.
+
+Le coordonnateur sépare désormais la parole (`snapFixed()`) des gestes
+(`setFixed()`). Un morph partagé reste sous priorité parole, puis revient à
+l'easing du geste lorsque la parole le libère. Les tests des frontières
+coordonnateur, fidélité TH et binding morph passent (14 tests), ainsi que trois
+tests ciblés du composant. Les typechecks des deux packages et le build des
+démos passent. Dans Safari TP, le Play réel suit l'audio : `viseme_O` atteint
+`0,567` vers `550 ms` et `viseme_U` atteint `0,599` vers `820 ms`. Le Seek
+`550 → 3150 → 550 ms` reproduit `viseme_O = 0,571 → 0 → 0,571` et remet
+l'audio aux mêmes dates. Un nouveau `Play` après `sequence:end` relance la
+scène. Le bouton de retour au début utilise `seek`, que le contrat du player
+refuse après la fin terminale ; son rejet observé ne signale pas une panne
+du média.
+
+L'isolation `temp` maintient les autres composants spécialisés inactifs. Leurs
+tests de contribution ne sont donc pas une validation possible à cette étape ;
+le plan Avatar reste **En cours**. Le changement de routage des morphs n'affecte
+ni placement, ni reparent, ni taille, ni persistance.
+
+## 41. Assouplissement des transitions de visèmes — 26 septembre 2026
+
+> Statut : **En cours**. La première validation d'amplitude est conservée.
+
+L'auteur constate maintenant des ouvertures et fermetures de bouche trop
+brusques. Le composant construit une enveloppe dont l'attaque commence aux
+deux tiers de la durée avant `occurrence.startAt`, comme TalkingHead lorsque
+tous les visèmes sont déjà connus. Dans CodPlay, un événement ordinaire ne
+devient disponible qu'à `startAt` : son premier échantillon apparaît donc déjà
+avancé dans cette attaque. L'application immédiate du morph rend ce saut
+visible. Pour deux occurrences successives du même morph, choisir seulement
+la dernière enveloppe peut aussi couper net la sortie de la précédente.
+
+La correction reste dans `avatar-lip-sync` et dans le circuit de timeline
+absolue existant : l'attaque commence à la date de l'événement reçu, avec une
+montée d'au moins `60 ms` ; la sortie dispose d'au moins `60 ms` après la fin
+nominale. Les enveloppes simultanées du même morph se composent par leur
+maximum, comme dans le contrôleur V1, afin que l'arrivée d'une occurrence
+n'efface pas la fin de la précédente. Les intensités de pic restent celles de
+la première correction et le Seek échantillonne la même courbe que Play.
+
+L'acceptation vérifie les valeurs au tout début d'un visème court, son pic,
+sa sortie, la continuité entre deux occurrences du même morph, puis Play,
+Seek et replay dans Safari TP avec l'audio réel. Aucun changement de la scène
+ou du core CodPlay n'est impliqué.
+
+L'enveloppe causale et le recouvrement sont implémentés dans le composant.
+Le test autonome vérifie une ouverture `0 → 0,3 → 0,6`, une sortie progressive
+et l'absence de saut à l'arrivée d'une seconde occurrence du même morph. Les
+quatre tests ciblés du composant passent avec le typecheck. Dans Safari TP,
+le Play réel montre `viseme_O = 0` avant l'événement vers `490 ms`, puis
+`0,303` vers `520 ms` et `0,595` vers `540 ms`, avec un maximum mesuré de
+`0,599`. Il redescend à `0,092` vers `590 ms` et à zéro ensuite. Le Seek
+avant, pendant et après la cue, puis le retour depuis `3150 ms`, reproduisent
+la même courbe. La spécification ciblée est
+[`avatar-lip-sync-spec.md`](../specs/avatar-lip-sync-spec.md).
+
+L'auteur juge l'amplitude correcte mais les transitions encore trop rapides.
+Le seuil minimal des deux rampes passe de `40` à `60 ms` ; les durées de
+`120 ms` ou plus conservent leur enveloppe, et le pic nominal reste inchangé.
+Les quatre tests ciblés du composant et les neuf tests coordonnateur et binding
+morph passent. Les typechecks `component-v2` et démos et le build démos passent.
+Dans Safari TP, le Play avec audio montre `viseme_O = 0` vers `490 ms`, une
+montée jusqu'à `0,592` vers `550 ms`, puis `0,139` vers `600 ms` et zéro après
+`630 ms`. Le Seek à `490 → 500 → 530 → 560 → 590 → 630 → 3150 → 560 ms`
+reproduit respectivement `0 → 0 → 0,3 → 0,6 → 0,404 → 0 → 0 → 0,6` sur le morph
+du modèle. La suite complète des composants conserve les échecs attendus des
+composants temporairement désactivés, notamment le profil `avatar-idle`.
+
+La validation visuelle par l'auteur et la réintroduction des autres
+composants restent ouvertes ; cette étape demeure **En cours**.

@@ -84,6 +84,7 @@ export class AvatarCoordinator {
   private appliedMoodMorphs: AvatarMorphs | undefined
   private appliedAmbientMorphs: AvatarMorphs | undefined
   private appliedFixedMorphs: AvatarMorphs | undefined
+  private appliedSpeechMorphs: AvatarMorphs | undefined
   private appliedGestureKey: string | undefined
   private appliedPose: string | undefined
   private lastTimeMs: number | undefined
@@ -122,6 +123,7 @@ export class AvatarCoordinator {
     this.appliedMoodMorphs = undefined
     this.appliedAmbientMorphs = undefined
     this.appliedFixedMorphs = undefined
+    this.appliedSpeechMorphs = undefined
     this.appliedGestureKey = undefined
     this.appliedPose = undefined
     this.lastTimeMs = undefined
@@ -137,6 +139,7 @@ export class AvatarCoordinator {
     this.appliedMoodMorphs = undefined
     this.appliedAmbientMorphs = undefined
     this.appliedFixedMorphs = undefined
+    this.appliedSpeechMorphs = undefined
     this.appliedGestureKey = undefined
     this.gestureActionStartAt = undefined
     this.gestureEyeContact = undefined
@@ -400,6 +403,7 @@ export class AvatarCoordinator {
       this.appliedMoodMorphs = undefined
       this.appliedAmbientMorphs = undefined
       this.appliedFixedMorphs = undefined
+      this.appliedSpeechMorphs = undefined
       this.appliedGestureKey = undefined
       this.appliedPose = undefined
       this.lastTimeMs = 0
@@ -555,20 +559,32 @@ export class AvatarCoordinator {
     return target === 'camera' && this.gazeProfiles.ignoreCamera === true ? 'ahead' : target
   }
 
-  /** Applies fixed morph targets and leaves playback easing to MorphEngine. */
+  /** Snaps speech to its cue while leaving gesture morphs to the native easing. */
   private applyFixedLayer(): void {
     const engine = this.engine
     const fixedMorphs = { ...this.gestureMorphs, ...this.speechMorphs }
-    if (engine === undefined || sameMorphs(this.appliedFixedMorphs, fixedMorphs)) return
+    if (engine === undefined || (
+      sameMorphs(this.appliedFixedMorphs, fixedMorphs)
+      && sameMorphs(this.appliedSpeechMorphs, this.speechMorphs)
+    )) return
 
     const names = new Set([
       ...Object.keys(this.appliedFixedMorphs ?? {}),
       ...Object.keys(fixedMorphs),
     ])
     for (const name of names) {
-      engine.morphEngine.setFixed(name, fixedMorphs[name] ?? null)
+      const speechOwns = Object.prototype.hasOwnProperty.call(this.speechMorphs, name)
+      const gestureOwns = Object.prototype.hasOwnProperty.call(this.gestureMorphs, name)
+      const speechReleased = !gestureOwns
+        && Object.prototype.hasOwnProperty.call(this.appliedSpeechMorphs ?? {}, name)
+      if (speechOwns || speechReleased) {
+        engine.morphEngine.snapFixed(name, fixedMorphs[name] ?? null)
+      } else {
+        engine.morphEngine.setFixed(name, fixedMorphs[name] ?? null)
+      }
     }
     this.appliedFixedMorphs = { ...fixedMorphs }
+    this.appliedSpeechMorphs = { ...this.speechMorphs }
   }
 
   /** Applies the current native gesture selection once per change or replay. */

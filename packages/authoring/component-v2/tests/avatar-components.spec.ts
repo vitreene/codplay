@@ -55,8 +55,8 @@ describe('Avatar V2 components', () => {
       0,
     )
     expect(engine.animate).toHaveBeenLastCalledWith(200)
-    expect(engine.morph.setFixed).toHaveBeenCalledWith('viseme_aa', 0.48)
-    expect(engine.morph.setFixed).toHaveBeenCalledWith('viseme_PP', 0)
+    expect(engine.morph.snapFixed).toHaveBeenCalledWith('viseme_aa', 0.48)
+    expect(engine.morph.snapFixed).toHaveBeenCalledWith('viseme_PP', 0)
 
     coordinator.applyAt(50)
     expect(engine.prepareSeek).toHaveBeenCalledTimes(1)
@@ -267,10 +267,12 @@ describe('Avatar V2 components', () => {
     const lipSyncAnimation = timelines.get('lip-sync')
     expect(lipSyncAnimation).toBeDefined()
     lipSyncAnimation?.sample(100)?.apply()
-    expect(lastMorphValue(coordinator.applyMorphs, 'viseme_O')).toBeCloseTo(0.4042033065, 8)
-    lipSyncAnimation?.sample(150)?.apply()
+    expect(lastMorphValue(coordinator.applyMorphs, 'viseme_O')).toBe(0)
+    lipSyncAnimation?.sample(130)?.apply()
+    expect(lastMorphValue(coordinator.applyMorphs, 'viseme_O')).toBeCloseTo(0.3, 8)
+    lipSyncAnimation?.sample(160)?.apply()
     expect(lastMorphValue(coordinator.applyMorphs, 'viseme_O')).toBeCloseTo(0.6, 8)
-    lipSyncAnimation?.sample(250)?.apply()
+    lipSyncAnimation?.sample(260)?.apply()
     expect(lastMorphValue(coordinator.applyMorphs, 'viseme_O')).toBe(0)
 
     lipSync.update({
@@ -441,6 +443,49 @@ describe('Avatar V2 components', () => {
       viseme_O: 0,
       viseme_aa: 0,
     })
+  })
+
+  it('opens a short viseme smoothly and carries its release into a repeated cue', () => {
+    let timeline: AvatarTimeline | undefined
+    const component = new AvatarLipSyncComponent({
+      services: emptyServices(),
+      perso: { id: 'lip-sync', storyId: 'main', initial: {} },
+    } as never)
+    const target = {
+      setTimeline: (_slot: 'lip-sync', value: AvatarTimeline) => { timeline = value },
+      applyMorphs: vi.fn(),
+    } as unknown as AvatarTarget
+    const first = {
+      name: 'avatar:viseme',
+      startAt: 100,
+      elapsedMs: 0,
+      action: { viseme: 'O', durationMs: 80 },
+      eventId: 'first-o',
+    }
+
+    component.update({ state: {}, timeMs: 100, activeActions: [first], target })
+    expect((timeline?.sample(100)?.value as Record<string, number>).viseme_O).toBe(0)
+    expect((timeline?.sample(130)?.value as Record<string, number>).viseme_O).toBeCloseTo(0.3)
+    expect((timeline?.sample(160)?.value as Record<string, number>).viseme_O).toBeCloseTo(0.6)
+    const beforeSecond = (timeline?.sample(179)?.value as Record<string, number>).viseme_O
+
+    component.update({
+      state: {},
+      timeMs: 180,
+      activeActions: [first, {
+        name: 'avatar:viseme',
+        startAt: 180,
+        elapsedMs: 0,
+        action: { viseme: 'O', durationMs: 80 },
+        eventId: 'second-o',
+      }],
+      target,
+    })
+    const atSecond = (timeline?.sample(180)?.value as Record<string, number>).viseme_O
+    expect(Math.abs(atSecond - beforeSecond)).toBeLessThan(0.05)
+    expect((timeline?.sample(240)?.value as Record<string, number>).viseme_O).toBeCloseTo(0.6)
+    expect((timeline?.sample(280)?.value as Record<string, number>).viseme_O).toBeCloseTo(0.3)
+    expect((timeline?.sample(320)?.value as Record<string, number>).viseme_O).toBe(0)
   })
 
   it('applies look-ahead at the gaze event time', () => {

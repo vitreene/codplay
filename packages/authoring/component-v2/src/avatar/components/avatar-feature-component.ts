@@ -7,8 +7,12 @@ import type { AvatarTarget } from '../avatar-types'
 /** Shared target handoff for logical Avatar feature components. */
 export abstract class AvatarFeatureComponent<Initial extends Record<string, unknown>>
   extends BaseComponent<Initial> {
+  /** temp: Limits this Avatar integration investigation to the enabled feature. Remove after staged validation. */
+  protected readonly tempEnabled: boolean = false
+
   /** Applies one feature contribution to the Avatar capability selected by rel. */
   update(input: ComponentUpdateInput<Initial>): void {
+    if (!this.tempEnabled) return
     const target = input.target as AvatarTarget | undefined
     if (target === undefined) return
     this.contribute(target, input)
