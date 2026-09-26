@@ -120,6 +120,9 @@ usages qui ne nécessitent pas de reconstruction au seek restent valides.
 
 ```text
 source continue
+  → RuntimeCaptureSourceCircuit
+  → règle compilée (storyId, persoId, source)
+  → event de départ via RuntimePlayer.emit()
   → session player de capture
   → trackCommand
   → actions compilées → component.update() → services → materializer
@@ -129,24 +132,48 @@ endEmit / événements endCapture
   → journal → materialize → resolve → solve
 ```
 
-Le core ne connaît ni l’événement natif ni le substrat de présentation. Les
-adaptateurs alimentent la session par les ports de capture existants. Le
-`scroll-container` réutilise ces ports via son adaptateur HTML ; ses règles de
-progression et d’observation sont définies dans la
+[`RuntimeCaptureSourceCircuit`](../src/runtime/capture/capture-source-circuit.ts)
+est le circuit player-scoped commun aux sources continues. Il indexe les
+déclarations compilées par identité du perso et nom de source. Une ouverture
+résout ensemble la règle, l’event de départ et la déclaration de capture ; le
+circuit émet cet event via `RuntimePlayer.emit()` et ne démarre la session que
+si l’émission réussit. Il met en attente les samples reçus pendant cette
+émission, puis conduit tracking, fermeture et annulation par le contrôleur de
+capture existant. Il ne connaît ni les événements DOM, ni les nodes, ni le
+journal.
+
+Les sources utilisent le port borné `RuntimeCaptureSourcePort`. L’adaptateur
+pointeur garde l’association des événements natifs aux persos et la conversion
+des samples ; il utilise le même circuit. Un composant peut aussi recevoir ce
+port player-scoped et ouvrir sa source à partir de son identité compilée. Pour
+le scroll, `ScrollContainerComponent.initialize()` attache les listeners à la
+racine matérialisée et demande au circuit la règle `scroll` de ce perso. La
+factory HTML `scroll-container` reste propriétaire des observations de
+descendants ; elle ne résout ni le scrollport ni ses captures. Le contexte de
+factory n’expose aucune opération de capture bas niveau. Les contrats propres
+au scroll sont dans la
 [spécification scroll-container](./scroll-container-spec.md).
 
 ## Vérification des comportements documentés
 
 Le [contrôleur de capture](../src/runtime/player/runtime-player/capture-controller.ts),
+le [circuit des sources](../src/runtime/capture/capture-source-circuit.ts),
 les [déclarations auteur](../src/scene/capture/authoring-types.ts), le
 [validateur](../src/scene/compiled/capture-event-validation.ts), le
 [résolveur de cible](../src/runtime/capture/capture-event-target.ts) et le
 [codec](../src/scene/compiled/codec.ts) portent le contrat. Les tests de
 [session](../tests/runtime/capture/runtime-capture-session.spec.ts),
 [player](../tests/runtime/player/runtime-capture-player.spec.ts),
-[adaptateur HTML](../tests/runtime/capture/html-pointer-capture-source-adapter.spec.ts)
+[circuit source](../tests/runtime/capture/capture-source-circuit.spec.ts),
+[adaptateur pointeur](../tests/runtime/capture/html-pointer-capture-source-adapter.spec.ts)
 et [codec](../tests/scene/compiled/codec.spec.ts) couvrent les frontières
-source-agnostiques et leurs portées. Le 2026-09-26, les 107 fichiers de tests
-CodPlay ont réussi (706 tests) ; les typechecks CodPlay, component-v2 et démos
-V2 ont réussi. La validation navigateur S5 et l’acceptance Seek navigateur S6
-restent ouvertes dans leurs plans respectifs.
+source-agnostiques et leurs portées. Le test d’intégration scroll avec le vrai
+[`HtmlPlayerRunner`](../../authoring/component-v2/tests/scroll-container-player-integration.spec.ts)
+vérifie le passage du node matérialisé au circuit, au contrôleur et au journal,
+y compris seek et teardown.
+
+Le 2026-09-26, la suite CodPlay (108 fichiers, 710 tests) et la suite
+`component-v2` (12 fichiers, 47 tests), les typechecks CodPlay,
+`component-v2` et démos V2, ainsi que le build des démos V2 ont réussi. Les
+validations navigateur S5 et Seek S6 encore ouvertes restent suivies dans
+leurs plans dédiés.

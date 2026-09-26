@@ -10,6 +10,7 @@ import type {
 } from '../engine'
 import type { BaseComponent } from './base-component'
 import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../catalog'
+import type { RuntimeCaptureSourcePort } from '../capture'
 import type { RuntimeMaterializer } from '../materializer'
 import type {
   RuntimePreloadMediaHandle,
@@ -45,6 +46,8 @@ export type RuntimeComponentHandle = Readonly<{
 export type RuntimeComponentRuntimeOptions = Readonly<{
   catalog: RuntimeCapabilityCatalog
   materializer: RuntimeMaterializer
+  /** Shared player-owned capture circuit injected into mounted components. */
+  captureSources?: RuntimeCaptureSourcePort
   /** Engine-prepared dependencies passed unchanged to component classes. */
   runtime?: ComponentRuntimeContext
   resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
@@ -274,6 +277,26 @@ export class RuntimeComponentRuntime {
     this.externalAnimations.clear()
   }
 
+  /** Suspends mounted component sources before a transactional player seek. */
+  beforeSeek(): void {
+    for (const mounted of this.mounted.values()) mounted.component.beforeSeek()
+  }
+
+  /** Resumes mounted component sources after a transactional player seek. */
+  afterSeek(): void {
+    for (const mounted of this.mounted.values()) mounted.component.afterSeek()
+  }
+
+  /** Delivers the terminal sequence boundary before the player finalizes it. */
+  onSequenceEnd(): void {
+    for (const mounted of this.mounted.values()) mounted.component.onSequenceEnd()
+  }
+
+  /** Reattaches mounted component sources after an explicit player reset. */
+  onReset(): void {
+    for (const mounted of this.mounted.values()) mounted.component.onReset()
+  }
+
   /** Delivers one logical state update and replaces its component-owned animations. */
   private applyComponentUpdate(
     mounted: MountedComponent,
@@ -425,6 +448,7 @@ export class RuntimeComponentRuntime {
         resourceMetadata: this.options.resourceMetadata,
         resourceMedia: this.options.resourceMedia,
         runtime: this.options.runtime,
+        captureSources: this.options.captureSources,
       },
       identity,
       this.options.materializer,

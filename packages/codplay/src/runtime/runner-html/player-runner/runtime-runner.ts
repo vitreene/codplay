@@ -17,6 +17,7 @@ import type {
 import { RuntimeCapabilityCatalog } from '../../catalog'
 import {
   HtmlPointerCaptureSourceAdapter,
+  RuntimeCaptureSourceCircuit,
 } from '../../capture'
 import {
   PLAYER_LIFECYCLE_PLAYING,
@@ -69,6 +70,7 @@ export class HtmlPlayerRunner {
   }
   private readonly motionController: HtmlPlayerMotionController
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
+  private readonly captureSourceCircuit: RuntimeCaptureSourceCircuit
   private readonly emitSourceAdapter: HtmlPersoEmitSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
   private readonly materializer: RuntimeMaterializer & { invalidateStructure?: () => void }
@@ -158,12 +160,36 @@ export class HtmlPlayerRunner {
       (scene, context) => this.motionController.presentMotion(scene, context),
     )
     this.materializer = materializer
+    this.captureSourceCircuit = new RuntimeCaptureSourceCircuit({
+      compiledScene: options.compiledScene,
+      player: {
+        getCurrentTimeMs: () => this.player.getCurrentTimeMs(),
+        emit: (input) => this.player.emit(input),
+        beginCompiledCapture: (input) => this.player.beginCompiledCapture(input),
+        trackCapture: (captureId, sample) => this.player.trackCapture(captureId, sample),
+        endCapture: (captureId, meta, captureState) => this.player.endCapture(captureId, meta, captureState),
+        cancelCapture: (captureId) => this.player.cancelCapture(captureId),
+      },
+      onError: ({ error, storyId, persoId, source }) => {
+        options.onCaptureError?.(error)
+        this.reportSourceDiagnostic({
+          severity: 'error',
+          code: source === 'scroll' ? 'RUNTIME_SCROLL_CAPTURE_FAILED' : 'RUNTIME_CAPTURE_SOURCE_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+          details: {
+            refs: { sceneId: options.compiledScene.scene.id, storyId, persoId },
+            context: { source },
+          },
+        })
+      },
+    })
     const componentRuntime = createComponentRuntime(
       options.catalog,
       materializer,
       this.resourceMetadata,
       this.resourceMedia,
       this.engine,
+      this.captureSourceCircuit,
     )
     this.player = new RuntimePlayer(
       options.id,
@@ -196,11 +222,9 @@ export class HtmlPlayerRunner {
     })
     const eventTarget = options.captureEventTarget ?? resolveCaptureEventTarget(options.root)
     this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
-      player: this.player,
-      compiledScene: options.compiledScene,
+      captureSources: this.captureSourceCircuit,
       nodes: this.nodes,
       eventTarget,
-      onError: options.onCaptureError,
       onCaptureTrack: options.onCaptureTrack,
       resolveEndCaptureState: (input) => {
         const captureState = options.resolveEndCaptureState?.(input)
@@ -244,6 +268,7 @@ export class HtmlPlayerRunner {
       return visible
     } catch (error) {
       this.destroySourceAdapters()
+      this.captureSourceCircuit.destroy()
       this.motionController.destroy()
       this.player.destroy()
       return {
@@ -337,6 +362,8 @@ export class HtmlPlayerRunner {
     this.motionController.beginReset()
     try {
       this.player.reset()
+      this.captureSourceCircuit.resume()
+      this.player.componentRuntime?.onReset()
       if (this.ownsEngine) {
         this.engine.pause()
       }
@@ -355,6 +382,8 @@ export class HtmlPlayerRunner {
   /** Reconstructs and presents one complete logical target transactionally. */
   seek(timeMs: number): PlayerSeekResult {
     this.seeking = true
+    this.captureSourceCircuit.suspend()
+    this.player.componentRuntime?.beforeSeek()
     this.notifySourceAdapters('before-seek', (adapter) => adapter.beforeSeek?.())
     let motionState: ReturnType<HtmlPlayerMotionController['prepareSeek']> | undefined
     let result: PlayerSeekResult | undefined
@@ -379,6 +408,8 @@ export class HtmlPlayerRunner {
         this.motionController.completeSeek()
       }
       this.seeking = false
+      this.captureSourceCircuit.resume()
+      this.player.componentRuntime?.afterSeek()
       const scene = this.player.getSolvedScene()
       this.notifySourceAfterSeek(scene, result)
       if (scene !== undefined) {
@@ -497,6 +528,7 @@ export class HtmlPlayerRunner {
   /** Releases visual, component and clock resources. */
   destroy(): void {
     this.destroySourceAdapters()
+    this.captureSourceCircuit.destroy()
     if (this.ownsEngine) {
       this.engine.stop()
     }
@@ -524,10 +556,6 @@ export class HtmlPlayerRunner {
       resolvePersoElement: (persoKey) => resolveMaterializedElement(this.nodes.persoNodes.get(persoKey)),
       commands: {
         emit: (input) => this.player.emit(input),
-        beginCompiledCapture: (input) => this.player.beginCompiledCapture(input),
-        trackCapture: (captureId, sample) => this.player.trackCapture(captureId, sample),
-        endCapture: (captureId, meta) => this.player.endCapture(captureId, meta),
-        cancelCapture: (captureId) => this.player.cancelCapture(captureId),
         setLiveActions: (sourceId, actions) => this.player.setLiveActions(sourceId, actions),
       },
       reportDiagnostic: this.reportSourceDiagnostic,
@@ -596,6 +624,8 @@ export class HtmlPlayerRunner {
     onPublicEvent: HtmlPlayerRunnerOptions['onPublicEvent'],
   ): void {
     if (event.name === 'sequence:end') {
+      this.player.componentRuntime?.onSequenceEnd()
+      this.captureSourceCircuit.suspend()
       this.notifySourceAdapters('sequence-end', (adapter) => adapter.onSequenceEnd?.(event))
     }
     onPublicEvent?.(event)
@@ -676,6 +706,7 @@ function createComponentRuntime(
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>,
   resourceMedia: ReadonlyMap<string, RuntimePreloadMediaHandle>,
   engine: RuntimeEngine,
+  captureSources: RuntimeCaptureSourceCircuit,
 ): RuntimeComponentRuntime {
   return new RuntimeComponentRuntime({
     catalog,
@@ -683,6 +714,7 @@ function createComponentRuntime(
     runtime: engine.getComponentRuntimeContext(),
     resourceMetadata,
     resourceMedia,
+    captureSources,
   })
 }
 

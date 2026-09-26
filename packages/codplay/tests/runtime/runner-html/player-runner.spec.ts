@@ -637,12 +637,8 @@ describe('HtmlPlayerRunner', () => {
       'resolvePersoElement',
     ])
     expect(Object.keys(sourceContext!.commands).sort()).toEqual([
-      'beginCompiledCapture',
-      'cancelCapture',
       'emit',
-      'endCapture',
       'setLiveActions',
-      'trackCapture',
     ])
     expect(sourceContext).not.toHaveProperty('runner')
     expect(sourceContext).not.toHaveProperty('catalog')

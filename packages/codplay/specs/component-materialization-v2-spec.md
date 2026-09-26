@@ -17,6 +17,19 @@ générique : elle ne déclare pas `render()`. La spécialisation
 confirme qu’un composant générique peut être mis à jour sans représentation
 markup et que le composant HTML conserve `node === null` avant matérialisation.
 
+Le runtime appelle `BaseComponent.initialize()` après la matérialisation de la
+racine HTML et avant le premier update logique. Les composants qui possèdent une
+source continue peuvent y attacher leurs listeners à cette racine. Le runtime
+leur fournit alors, si nécessaire, le port player-scoped optionnel
+`captureSources` ; le contrat du port partagé est décrit dans la
+[spécification capture](./capture-v2-spec.md).
+
+Le runtime transmet aussi aux composants les frontières `beforeSeek()`,
+`afterSeek()`, `onSequenceEnd()` et `onReset()` pour suspendre, reprendre ou
+retirer leurs sources selon le cycle du player. `destroy()` libère leurs
+ressources au teardown. Le test d’intégration du scroll vérifie ces frontières
+avec un vrai `HtmlPlayerRunner` et une racine DOM matérialisée.
+
 Le test du runtime composant confirme que les instances sont conservées pendant
 les synchronisations de snapshots et détruites au teardown final. Un échantillon
 de présentation temporelle peut être appliqué par `presentAt()` sans répéter
@@ -107,8 +120,11 @@ ensemble.
 - [`base-component.spec.ts`](../tests/runtime/components/base-component.spec.ts)
   vérifie les deux frontières de base.
 - [`runtime-component-runtime.spec.ts`](../tests/runtime/components/runtime-component-runtime.spec.ts)
-  vérifie la persistance des instances, le teardown et l’échantillonnage de
+  vérifie la persistance des instances, le teardown et l'échantillonnage de
   présentation sans nouvel update logique.
+- [`scroll-container-player-integration.spec.ts`](../../authoring/component-v2/tests/scroll-container-player-integration.spec.ts)
+  vérifie l’initialisation d’une source sur la racine matérialisée et ses
+  frontières seek, fin de séquence, reset et teardown dans le runner réel.
 - [`runtime-capability-catalog.spec.ts`](../tests/runtime/catalog/runtime-capability-catalog.spec.ts)
   vérifie les services déclarés, leur compatibilité avec le materializer et le
   snapshot partagé par le build et le runtime.

@@ -56,8 +56,10 @@ détaillés restent les sources de référence.
 - **Source DOM `Perso.emit`** : le sous-ensemble compilé et intégré est dans la
   [spécification](../../specs/perso-emit-v2-spec.md). Les portées non-story,
   les modes, l'ordre des actions et les parcours Seek/reparent restent au
-  [plan d'acceptation](../perso-emit-v2-portage-plan.md) ; la migration capture
-  reste suivie séparément.
+  [plan d'acceptation](../perso-emit-v2-portage-plan.md). Le contrat source
+  continu partagé, dont le raccord au scroll, est décrit dans les
+  spécifications [capture](../../specs/capture-v2-spec.md) et
+  [scroll-container](../../specs/scroll-container-spec.md).
 - **Isolation des stories** : l'activation ciblée, le reset et la projection
   d'actions vérifiés sont décrits par la
   [spécification](../../specs/story-isolation-spec.md). Les occurrences

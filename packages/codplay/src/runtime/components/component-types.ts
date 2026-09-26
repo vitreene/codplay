@@ -2,6 +2,7 @@ import type {
   RuntimePreloadMediaHandle,
   RuntimePreloadResourceMetadata,
 } from '../preload'
+import type { RuntimeCaptureSourcePort } from '../capture'
 
 /** One component-scoped service implementation supplied by a materializer. */
 export type ComponentService = Readonly<{
@@ -34,6 +35,8 @@ export type ComponentRuntimeContext = Readonly<{
 /** Authoring data and services supplied to one V2 component instance. */
 export type ComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
   services: ComponentServices
+  /** Player-scoped access to compiled capture rules for a component-owned source. */
+  captureSources?: RuntimeCaptureSourcePort
   /** Engine-prepared dependencies required by non-HTML component classes. */
   runtime?: ComponentRuntimeContext
   perso: Readonly<{

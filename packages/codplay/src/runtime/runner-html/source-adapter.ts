@@ -1,12 +1,6 @@
 import type { Diagnostic } from '../../diagnostics'
 import type { CompiledScene } from '../../scene/compiled'
 import type {
-  RuntimeCaptureBeginResult,
-  RuntimeCaptureFailure,
-  RuntimeCapturePlayerEndResult,
-  RuntimeCaptureSample,
-  RuntimeCaptureTrackResult,
-  RuntimeCompiledCaptureBeginInput,
   PlayerLifecycleState,
   PlayerSeekResult,
   RuntimeEventDispatchResult,
@@ -19,10 +13,6 @@ import type {
 /** Commands a browser source may use without receiving the player instance. */
 export type HtmlSourceAdapterPlayerPort = Readonly<{
   emit: (input: Omit<RuntimeEventInput, 'applyAtMs'> & Readonly<{ applyAtMs?: number }>) => Promise<RuntimeEventDispatchResult>
-  beginCompiledCapture: (input: RuntimeCompiledCaptureBeginInput) => RuntimeCaptureBeginResult
-  trackCapture: (captureId: string, sample: RuntimeCaptureSample) => RuntimeCaptureTrackResult
-  endCapture: (captureId: string, meta?: Readonly<Record<string, unknown>>) => Promise<RuntimeCapturePlayerEndResult | RuntimeCaptureFailure>
-  cancelCapture: (captureId: string) => Readonly<{ ok: true } | RuntimeCaptureFailure>
   setLiveActions: (sourceId: string, actions: readonly RuntimeLiveAction[] | undefined) => void
 }>
 

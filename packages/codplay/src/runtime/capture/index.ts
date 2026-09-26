@@ -6,6 +6,18 @@ export {
 export type { RuntimeCaptureSessionOptions } from './runtime-capture-session'
 export { resolveCompiledCaptureDeclaration } from './compiled-capture'
 export { resolveCaptureEventTarget } from './capture-event-target'
+export { RuntimeCaptureSourceCircuit } from './capture-source-circuit'
+export type {
+  RuntimeCaptureSourceCallbacks,
+  RuntimeCaptureSourceClose,
+  RuntimeCaptureSourceErrorHandler,
+  RuntimeCaptureSourceInput,
+  RuntimeCaptureSourcePlayerPort,
+  RuntimeCaptureSourcePort,
+  RuntimeCaptureSourceRouteInput,
+  RuntimeCaptureSourceSession,
+  RuntimeCaptureSourceTrack,
+} from './capture-source-circuit'
 export type {
   RuntimeCaptureAction,
   RuntimeCaptureBeginInput,
