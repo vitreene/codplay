@@ -6,6 +6,7 @@ import type {
   CompiledScrollObservationEvent,
   CompiledScrollObservation,
 } from 'codplay/scene/compiled'
+import { resolveCaptureEventTarget } from 'codplay/runtime/capture'
 import type { Diagnostic } from 'codplay/diagnostics'
 import {
   PLAYER_LIFECYCLE_PLAYING,
@@ -331,7 +332,7 @@ class ScrollContainerSourceAdapter implements HtmlSourceAdapter {
       const emitted = await this.context.commands.emit({
         name: event.name,
         applyAtMs: this.context.getCurrentTimeMs(),
-        storyId: event.cascade === true ? undefined : definition.storyId,
+        ...resolveCaptureEventTarget(event, definition.storyId),
         data: event.data,
         mode: event.mode,
         context: {

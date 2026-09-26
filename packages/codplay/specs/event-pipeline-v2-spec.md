@@ -6,8 +6,8 @@ Cette spécification décrit le dispatch runtime des événements, le pipeline
 `listen → transform → straps → emit`, leur inscription au journal et les
 frontières de reset d’une story. Les règles d’isolation `active` ont leur
 [spécification dédiée](./story-isolation-spec.md). La déclaration et les
-sorties de capture sont couvertes par la [spécification capture](./capture-v2-spec.md) ;
-leur migration de portée reste au [plan capture](../plan/capture-authoring-plan.md).
+sorties de capture sont couvertes par la [spécification capture](./capture-v2-spec.md),
+qui utilise les mêmes valeurs `visibility` et le même routage.
 L'appel ordonné des straps et leurs helpers planifiés sont décrits par la
 [spécification straps](./strap-execution-v2-spec.md).
 

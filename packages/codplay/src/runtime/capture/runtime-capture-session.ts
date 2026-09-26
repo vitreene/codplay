@@ -50,6 +50,17 @@ export class RuntimeCaptureSession {
 
   /** Opens a session and runs its initialization exactly once. */
   static open(options: RuntimeCaptureSessionOptions): RuntimeCaptureOpenResult {
+    const endEmitIssue = options.declaration.endEmit === undefined
+      ? undefined
+      : validateRuntimeCaptureEvent(options.declaration.endEmit)
+    if (endEmitIssue !== undefined) {
+      return {
+        ok: false,
+        code: 'RUNTIME_CAPTURE_EVENT_INVALID',
+        message: endEmitIssue,
+      }
+    }
+
     const initialState = cloneRecord(options.state)
     let captureState: RuntimeCaptureState = {}
     if (options.declaration.initCaptureState !== undefined) {
@@ -165,7 +176,15 @@ export class RuntimeCaptureSession {
           error instanceof Error ? error.message : 'Capture end failed.',
         )
       }
-      endCaptureEvents = output?.events ?? []
+      const returnedEvents: unknown = output?.events === undefined ? [] : output.events
+      if (!Array.isArray(returnedEvents)) {
+        return this.failure('RUNTIME_CAPTURE_END_EVENT_INVALID', 'Capture end events must be an array.')
+      }
+      for (const event of returnedEvents) {
+        const issue = validateRuntimeCaptureEvent(event)
+        if (issue !== undefined) return this.failure('RUNTIME_CAPTURE_END_EVENT_INVALID', issue)
+      }
+      endCaptureEvents = returnedEvents as readonly RuntimeCaptureEvent[]
       duration = output?.duration
       durationMode = output?.durationMode
     }
@@ -223,6 +242,19 @@ export class RuntimeCaptureSession {
 /** Opens one capture session through the public factory. */
 export function openRuntimeCaptureSession(options: RuntimeCaptureSessionOptions): RuntimeCaptureOpenResult {
   return RuntimeCaptureSession.open(options)
+}
+
+/** Checks one runtime capture event before it enters the shared dispatcher. */
+function validateRuntimeCaptureEvent(value: unknown): string | undefined {
+  if (!isPlainRecord(value)) return 'Capture event must be a plain object.'
+  if (Object.hasOwn(value, 'cascade')) return 'Capture events use named visibility; cascade is not supported.'
+  if (value.visibility !== undefined
+    && value.visibility !== 'story'
+    && value.visibility !== 'scene'
+    && value.visibility !== 'public') {
+    return 'Capture event visibility must be story, scene, or public.'
+  }
+  return undefined
 }
 
 /** Normalizes one event returned by `endCapture` at the resolved persist-only boundary. */

@@ -58,7 +58,7 @@ function pointerEvent(
 }
 
 /** Builds the smallest compiled scene containing one classic pointer capture. */
-function compiledScene(): CompiledScene {
+function compiledScene(visibility?: 'story' | 'scene' | 'public'): CompiledScene {
   return {
     schemaVersion: 'codplay.v2.scene.v1',
     createdAt: '2026-08-21T00:00:00.000Z',
@@ -77,7 +77,7 @@ function compiledScene(): CompiledScene {
             actions: {},
             emit: {
               pointerdown: {
-                event: { name: 'drag:start' },
+                event: { name: 'drag:start', visibility },
                 capture: {
                   trackOn: ['pointermove'],
                   endOn: ['pointerup'],
@@ -204,6 +204,43 @@ describe('HtmlPointerCaptureSourceAdapter', () => {
       eventType: 'pointerup',
     }, {})
   })
+
+  it.each(['story', 'scene', 'public'] as const)(
+    'routes a capture start with %s visibility through RuntimePlayer.emit',
+    async (visibility) => {
+      const eventTarget = new TestEventTarget()
+      const node = new TestNode()
+      const player = {
+        getCurrentTimeMs: vi.fn(() => 120),
+        emit: vi.fn(async () => ({ ok: true, events: [], straps: [], issues: [] })),
+        beginCompiledCapture: vi.fn(() => ({ ok: true, captureId: 'capture', captureState: {} })),
+        trackCapture: vi.fn(() => ({ ok: true, captureState: {}, sampleCount: 1 })),
+        endCapture: vi.fn(async () => ({ ok: true })),
+      } as unknown as RuntimePlayer
+      const adapter = new HtmlPointerCaptureSourceAdapter({
+        player,
+        compiledScene: compiledScene(visibility),
+        nodes: { persoNodes: new Map([['main:item', node]]) },
+        eventTarget,
+      })
+
+      adapter.attach()
+      eventTarget.dispatchEvent(pointerEvent('pointerdown', node))
+      await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+      expect(player.emit).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'drag:start',
+        visibility,
+        applyAtMs: 120,
+      }))
+      if (visibility === 'story') {
+        expect(player.emit).toHaveBeenCalledWith(expect.objectContaining({ storyId: 'main' }))
+      } else {
+        expect(player.emit).not.toHaveBeenCalledWith(expect.objectContaining({ storyId: 'main' }))
+      }
+      adapter.destroy()
+    },
+  )
 
   it('observes samples and resolves the final capture state once at pointerup', async () => {
     const eventTarget = new TestEventTarget()

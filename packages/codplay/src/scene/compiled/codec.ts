@@ -268,10 +268,10 @@ function isCompiledEmitEvent(value: unknown): boolean {
 /** Checks one compiled event carried by an existing capture declaration. */
 function isCompiledCaptureEvent(value: unknown): boolean {
   return isPlainRecord(value)
-    && hasOnlyKeys(value, ['name', 'data', 'cascade', 'mode'])
+    && hasOnlyKeys(value, ['name', 'data', 'visibility', 'mode'])
     && typeof value.name === 'string'
     && (value.data === undefined || isCompiledRecord(value.data))
-    && (value.cascade === undefined || typeof value.cascade === 'boolean')
+    && (value.visibility === undefined || value.visibility === 'story' || value.visibility === 'scene' || value.visibility === 'public')
     && (value.mode === undefined || value.mode === 'apply-now' || value.mode === 'persist-only')
 }
 

@@ -11,7 +11,7 @@ export type CaptureEndDurationMode = 'value' | 'default' | 'capture'
 export type AuthorCaptureEvent = Readonly<{
   name: string
   data?: Record<string, unknown>
-  cascade?: boolean
+  visibility?: EventVisibility
   mode?: CaptureEventMode
 }>
 

@@ -92,7 +92,7 @@ function makeItemPerso(id: string, label: string, background: string): PersoDoc 
     },
     emit: {
       pointerdown: {
-        event: { name: 'item:drag:start', cascade: true },
+        event: { name: 'item:drag:start', visibility: 'scene' },
         capture: {
           stateScope: 'story',
           initCaptureState: initListDndCaptureState,

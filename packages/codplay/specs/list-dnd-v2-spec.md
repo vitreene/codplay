@@ -8,7 +8,7 @@ contrat générique de capture est dans la
 [spécification capture](./capture-v2-spec.md), le placement auteur `move` dans
 sa [spécification](./move-v2-spec.md), et les règles d'ordre dans la
 [spécification de capacité `list`](./list-capability-v2-spec.md). L'acceptation
-du seek navigateur et la migration de portée restent au
+du seek navigateur reste au
 [plan DnD/capture S6](../plan/drag-capture-list-s6-validation-plan.md).
 
 ## Preview HTML
@@ -38,11 +38,11 @@ La fixture S6 compile une déclaration de capture ordinaire. À la fermeture,
 l'état des listes et les compteurs. Le placement utilise un `move` compilé et
 la capacité `list`, sans journal ni moteur de DnD parallèles.
 
-Le test HTML runner vérifie la résolution finale du drop, le déplacement de
-l'item vers la liste cible, la mise à jour logique de son appartenance et sa
-reconstruction par Seek. La portée de l'événement de départ n'est pas certifiée
-ici : la fixture porte encore `cascade` et sa migration est suivie au
-[plan capture](../plan/capture-authoring-plan.md).
+L'événement de départ de la fixture déclare `visibility: 'scene'`, qui conserve
+son routage global dans le vocabulaire V2. Le test HTML runner vérifie cet
+événement sur la track globale ainsi que la résolution finale du drop, le
+déplacement de l'item vers la liste cible, la mise à jour logique de son
+appartenance et sa reconstruction par Seek.
 
 ## Preuves
 
@@ -56,13 +56,13 @@ ici : la fixture porte encore `cascade` et sa migration est suivie au
   vérifie l'intégration du runner HTML, le commit list et le Seek de la fixture
   S6 avec le chemin runtime réel.
 
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
+Validation ciblée exécutée le 2026-09-26 depuis la racine du dépôt :
 
 ```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/runner-html/list-dnd-preview.spec.ts \
-  tests/scene/compiled/drag-capture-scene.spec.ts \
-  tests/runtime/runner-html/player-runner.spec.ts
+node node_modules/vitest/vitest.mjs run --config packages/codplay/vite.config.ts \
+  packages/codplay/tests/runtime/runner-html/list-dnd-preview.spec.ts \
+  packages/codplay/tests/scene/compiled/drag-capture-scene.spec.ts \
+  packages/codplay/tests/runtime/runner-html/player-runner.spec.ts
 3 fichiers, 24 tests réussis
 ```
 
@@ -77,7 +77,6 @@ la preview et le placement visuel ; elle ne valide pas le seek navigateur S6.
 ## Limites
 
 Le seek navigateur S6 n'est pas encore accepté ; sa commande telco a été
-rejetée pendant le parcours de la démo. La mise à jour `cascade` → `visibility`
-requiert en outre de rejouer la capture S6 sur le dispatcher réel. Ces deux
-gates sont suivies au [plan DnD/capture S6](../plan/drag-capture-list-s6-validation-plan.md)
-et au [plan capture](../plan/capture-authoring-plan.md).
+rejetée pendant le parcours de la démo. Le chemin runner et le routage de départ
+ont été rejoués après la migration ; seule l'acceptance navigateur reste au
+[plan DnD/capture S6](../plan/drag-capture-list-s6-validation-plan.md).

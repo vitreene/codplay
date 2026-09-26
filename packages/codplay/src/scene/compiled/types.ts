@@ -1,4 +1,5 @@
 import type { LogicalLengthUnit } from '../config/scene-build'
+import type { EventVisibility } from '../capture/authoring-types'
 
 /** JSON-compatible primitive accepted by the compiled artifact. */
 export type CompiledPrimitive = string | number | boolean | null
@@ -18,11 +19,11 @@ export type CompiledStrapDeclarations = CompiledStrapCollection | readonly strin
 export type CompiledCaptureEvent = Readonly<{
   name: string
   data?: CompiledRecord
-  cascade?: boolean
+  visibility?: EventVisibility
   mode?: 'apply-now' | 'persist-only'
 }>
 
-/** Shared compiled event representation; the codec applies the ordinary/capture shape rule. */
+/** Shared event shape retained by ordinary V2 emit consumers. */
 export type CompiledEmitEvent = Readonly<{
   name: string
   data?: CompiledRecord
@@ -79,7 +80,7 @@ export type CompiledEmitRule = CompiledEmitRuleBase & (
     capture?: undefined
   }>
   | Readonly<{
-    event: CompiledEmitEvent
+    event: CompiledCaptureEvent
     capture: CompiledCaptureDeclaration
   }>
 )

@@ -759,7 +759,7 @@ describe('SceneBuilder', () => {
       value: state.value,
     })
     const trackCommand = () => ({ actions: [{ name: 'drag' }] })
-    const endCapture = () => ({ events: [{ name: 'drag:stored', mode: 'persist-only' as const }] })
+    const endCapture = () => ({ events: [{ name: 'drag:stored', visibility: 'story' as const }] })
     const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
 
     const result = builder.build({
@@ -774,13 +774,13 @@ describe('SceneBuilder', () => {
             initial: {},
             emit: {
               pointerdown: {
-                event: { name: 'drag:start' },
+                event: { name: 'drag:start', visibility: 'scene' },
                 capture: {
                   trackOn: ['pointermove'],
                   endOn: ['pointerup'],
                   initCaptureState,
                   trackCommand,
-                  endEmit: { name: 'drag:end', data: { source: 'author' } },
+                  endEmit: { name: 'drag:end', data: { source: 'author' }, visibility: 'public' },
                   endCapture,
                 },
               },
@@ -794,11 +794,11 @@ describe('SceneBuilder', () => {
     if (!result.ok) return
     const capture = result.compiledScene.scene.stories.main?.persos[0]?.emit?.pointerdown
     expect(capture).toMatchObject({
-      event: { name: 'drag:start' },
+      event: { name: 'drag:start', visibility: 'scene' },
       capture: {
         trackOn: ['pointermove'],
         endOn: ['pointerup'],
-        endEmit: { name: 'drag:end', data: { source: 'author' } },
+        endEmit: { name: 'drag:end', data: { source: 'author' }, visibility: 'public' },
       },
     })
     if (capture === undefined || !('event' in capture)) return
@@ -809,6 +809,73 @@ describe('SceneBuilder', () => {
     expect(result.functions[compiledCapture!.initCaptureStateRef!.ref]).toBe(initCaptureState)
     expect(result.functions[compiledCapture!.trackCommandRef!.ref]).toBe(trackCommand)
     expect(result.functions[compiledCapture!.endCaptureRef!.ref]).toBe(endCapture)
+  })
+
+  it('rejects cascade on capture start and end events', () => {
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const legacyScene = {
+      id: 'legacy-capture-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'item',
+            type: 'text',
+            initial: {},
+            emit: {
+              pointerdown: {
+                event: { name: 'drag:start', cascade: true },
+                capture: {
+                  endEmit: { name: 'drag:end', cascade: false },
+                },
+              },
+            },
+          }],
+        },
+      },
+    } as unknown as SceneDoc<string>
+
+    const result = builder.build(legacyScene)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostics.errors.map((diagnostic) => diagnostic.code)).toEqual([
+        'AUTHOR_CAPTURE_EVENT_SCOPE_LEGACY',
+        'AUTHOR_CAPTURE_EVENT_SCOPE_LEGACY',
+      ])
+    }
+  })
+
+  it('rejects unsupported visibility on authored capture events', () => {
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const sceneWithInvalidVisibility = {
+      id: 'invalid-capture-visibility-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'item',
+            type: 'text',
+            initial: {},
+            emit: {
+              pointerdown: {
+                event: { name: 'drag:start', visibility: 'instance' },
+                capture: {},
+              },
+            },
+          }],
+        },
+      },
+    } as unknown as SceneDoc<string>
+
+    const result = builder.build(sceneWithInvalidVisibility)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostics.errors.map((diagnostic) => diagnostic.code)).toContain(
+        'AUTHOR_CAPTURE_EVENT_VISIBILITY_INVALID',
+      )
+    }
   })
 
   it('preserves ordinary V1 emit fields while compiling V2 visibility', () => {

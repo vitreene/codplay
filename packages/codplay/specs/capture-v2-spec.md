@@ -2,10 +2,11 @@
 
 ## Périmètre vérifié
 
-Cette spécification décrit le cycle source-agnostique, le tracking live et les
-sorties de fin déjà implémentés et vérifiés. La migration de portée des
-événements de capture est suivie dans le
-[plan capture](../plan/capture-authoring-plan.md).
+Cette spécification décrit le cycle source-agnostique, le tracking live, les
+sorties de fin et le routage par visibilité implémentés et vérifiés. Les
+validations navigateur encore ouvertes pour S5 et S6 sont suivies dans leurs
+[plans dédiés](../plan/capture-s5-validation-plan.md) et
+[plan S6](../plan/drag-capture-list-s6-validation-plan.md).
 
 Cette spécification définit le cycle de capture V2 indépendant de sa source.
 Elle distingue les samples éphémères, les actions live et les événements de
@@ -59,6 +60,24 @@ reconstruit pas l’état au seek. Une modification durable de l’état passe p
 événement de fin, le circuit `listen`/strap et le mécanisme normal `update`.
 `trackCommand` n’accède pas aux nœuds de présentation.
 
+## Portée des événements de capture
+
+L’événement d’ouverture, `endEmit` et chaque événement retourné par
+`endCapture` acceptent `visibility: 'story' | 'scene' | 'public'`, avec le
+routage défini pour les événements V2 dans la
+[spécification événementielle](./event-pipeline-v2-spec.md). Pour ces trois
+frontières, `story` cible la story propriétaire de la capture ; `scene` cible
+la track globale et participe à la matérialisation des stories ; `public`
+cible la track globale et l’observateur public. La visibilité omise conserve
+la cible story par défaut. `public` ne transporte pas l’événement vers une
+autre instance.
+
+`cascade` n’est pas un champ de capture V2 : le builder le refuse dans les
+déclarations auteur, le codec le refuse dans les événements compilés et la
+session runtime la refuse sur `endEmit` et sur les sorties dynamiques de
+`endCapture`. Cette règle concerne les événements de capture ; les autres
+formes d’événements conservent leurs contrats propres.
+
 ## Sorties de fin
 
 `endEmit` et `endCapture` sont indépendants et facultatifs.
@@ -67,8 +86,7 @@ reconstruit pas l’état au seek. Une modification durable de l’état passe p
   fermeture, sa donnée porte toujours `captureState` sous la clé réservée
   `data.captureState`, en conservant les autres données explicitement déclarées
   par l’auteur. Il emprunte le mode d'insertion ordinaire, `apply-now` par
-  défaut. La migration de sa forme de portée vers `visibility` reste au plan
-  capture.
+  défaut et sa cible suit la règle de visibilité ci-dessus.
 - `endCapture` reçoit les samples bruts, le dernier `captureState`, l’état
   courant en lecture seule et les métadonnées. Il peut retourner une collection
   d’événements ou ne rien retourner. Il ne modifie jamais l’état directement.
@@ -119,13 +137,16 @@ progression et d’observation sont définies dans la
 
 ## Vérification des comportements documentés
 
-Le [contrôleur de capture](../src/runtime/player/runtime-player/capture-controller.ts)
-et les [déclarations auteur](../src/scene/capture/authoring-types.ts) portent
-le chemin source-agnostique. Les tests de
+Le [contrôleur de capture](../src/runtime/player/runtime-player/capture-controller.ts),
+les [déclarations auteur](../src/scene/capture/authoring-types.ts), le
+[validateur](../src/scene/compiled/capture-event-validation.ts), le
+[résolveur de cible](../src/runtime/capture/capture-event-target.ts) et le
+[codec](../src/scene/compiled/codec.ts) portent le contrat. Les tests de
 [session](../tests/runtime/capture/runtime-capture-session.spec.ts),
 [player](../tests/runtime/player/runtime-capture-player.spec.ts),
 [adaptateur HTML](../tests/runtime/capture/html-pointer-capture-source-adapter.spec.ts)
 et [codec](../tests/scene/compiled/codec.spec.ts) couvrent les frontières
-actuelles décrites dans cette spécification. La fixture S5 exerce le chemin
-d’intégration HTML et la telco ; son état de validation est suivi dans le
-[plan S5](../plan/capture-s5-validation-plan.md).
+source-agnostiques et leurs portées. Le 2026-09-26, les 107 fichiers de tests
+CodPlay ont réussi (706 tests) ; les typechecks CodPlay, component-v2 et démos
+V2 ont réussi. La validation navigateur S5 et l’acceptance Seek navigateur S6
+restent ouvertes dans leurs plans respectifs.

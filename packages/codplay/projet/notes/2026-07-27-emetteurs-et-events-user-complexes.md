@@ -40,9 +40,10 @@ d'acceptation doivent précéder toute API ou modification du core.
 ## Frontières actuelles
 
 - Le cycle source-agnostique et les sorties vérifiées de capture sont décrits
-  dans la [spécification capture](../../specs/capture-v2-spec.md). La migration
-  de ses événements de `cascade` vers `visibility` reste au
-  [plan capture](../../plan/capture-authoring-plan.md).
+  dans la [spécification capture](../../specs/capture-v2-spec.md), qui reprend
+  le routage événementiel `visibility`. Les acceptances navigateur S5 et S6
+  restent dans leurs [plans dédiés](../../plan/capture-s5-validation-plan.md)
+  et [S6](../../plan/drag-capture-list-s6-validation-plan.md).
 - Le dispatch de `listen`, la journalisation et l'absence de rejeu des straps
   sont décrits dans la [spécification événementielle](../../specs/event-pipeline-v2-spec.md).
 - Le sous-ensemble vérifié des déclarations ordinaires `Perso.emit` est dans sa

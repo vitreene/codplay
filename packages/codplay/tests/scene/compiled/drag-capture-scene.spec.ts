@@ -46,6 +46,10 @@ describe('V2 drag capture demo scene', () => {
     const pointerRules: readonly CompiledEmitRule[] = Array.isArray(pointerRule)
       ? pointerRule as readonly CompiledEmitRule[]
       : [pointerRule as CompiledEmitRule]
+    expect(pointerRules[0]?.event).toMatchObject({
+      name: 'item:drag:start',
+      visibility: 'scene',
+    })
     const capture = pointerRules[0]?.capture
     expect(capture).toBeDefined()
     if (capture === undefined) return

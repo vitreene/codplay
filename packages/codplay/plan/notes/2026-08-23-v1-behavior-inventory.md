@@ -36,5 +36,6 @@ elles seules, une syntaxe de scène : seule la surface actuellement vérifiée d
   [spécification straps](../../specs/strap-execution-v2-spec.md) et
   [plan d'acceptation](../strap-execution-plan.md).
 - La capture à partir d'échantillons externes :
-  [spécification capture](../../specs/capture-v2-spec.md) et
-  [plan capture](../capture-authoring-plan.md).
+  [spécification capture](../../specs/capture-v2-spec.md), avec l'acceptance
+  navigateur restante aux [plans S5](../capture-s5-validation-plan.md) et
+  [S6](../drag-capture-list-s6-validation-plan.md).

@@ -5,6 +5,7 @@ export {
 } from './runtime-capture-session'
 export type { RuntimeCaptureSessionOptions } from './runtime-capture-session'
 export { resolveCompiledCaptureDeclaration } from './compiled-capture'
+export { resolveCaptureEventTarget } from './capture-event-target'
 export type {
   RuntimeCaptureAction,
   RuntimeCaptureBeginInput,

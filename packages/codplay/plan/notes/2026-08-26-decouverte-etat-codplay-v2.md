@@ -47,10 +47,10 @@ détaillés restent les sources de référence.
   la décision non prise sur une éventuelle observation des changements de
   `snapshot`.
 - **Capture** : la [spécification capture](../../specs/capture-v2-spec.md)
-  décrit les comportements vérifiés. La migration vers la portée V2
-  `visibility` et sa revalidation restent dans le
-  [plan core capture](../capture-authoring-plan.md) et le
-  [plan S5](../capture-s5-validation-plan.md).
+  décrit le contrat vérifié, y compris le routage `visibility` des événements
+  d’ouverture et de fin. Les validations navigateur restantes sont suivies par
+  les [plans S5](../capture-s5-validation-plan.md) et
+  [S6](../drag-capture-list-s6-validation-plan.md).
 - **Scroll-container** : la capacité a été validée par l'utilisateur et son
   contrat vérifié est dans la [spécification scroll](../../specs/scroll-container-spec.md).
 - **Source DOM `Perso.emit`** : le sous-ensemble compilé et intégré est dans la

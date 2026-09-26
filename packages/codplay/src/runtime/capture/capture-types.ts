@@ -1,4 +1,5 @@
 import type { CompiledCaptureDeclaration, CompiledRecord } from '../../scene/compiled'
+import type { EventVisibility } from '../../scene/capture/authoring-types'
 import type { RuntimeEventInsertMode } from '../config/event-insertion'
 import type { RuntimeCaptureSession } from './runtime-capture-session'
 
@@ -18,7 +19,7 @@ export type RuntimeCaptureAction = Readonly<{
 export type RuntimeCaptureEvent = Readonly<{
   name: string
   data?: CompiledRecord
-  cascade?: boolean
+  visibility?: EventVisibility
   mode?: RuntimeEventInsertMode
 }>
 

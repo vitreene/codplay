@@ -44,6 +44,7 @@ import { qualifyStructuredLengthStyles } from './length'
 import { validateCompiledSceneSemantics } from './semantic-validator'
 import { validateCompiledRelTargets } from './rel-target-validation'
 import { validateAuthoredScrollDeclarations } from './scroll-observation-validation'
+import { validateAuthoredCaptureEvents } from './capture-event-validation'
 import { isRel } from '../rel'
 
 /** Options controlling one deterministic scene compilation. */
@@ -90,6 +91,7 @@ export class SceneBuilder {
 
     const activeScene = withoutDisabledStories(canonical)
     validateAuthoredScrollDeclarations(activeScene, diagnostics)
+    validateAuthoredCaptureEvents(activeScene, diagnostics)
     this.validationEngine.validate(
       {
         persos: listPersoValidationInputs(activeScene),

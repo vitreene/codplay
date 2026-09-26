@@ -1162,6 +1162,11 @@ describe('HtmlPlayerRunner', () => {
 
     source.dispatch('pointerdown', item, { pointerId: 1 })
     await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    expect(runner.player.trackJournal.getAllEvents()).toContainEqual(expect.objectContaining({
+      name: 'item:drag:start',
+      visibility: 'scene',
+      storyId: undefined,
+    }))
     source.dispatch('pointermove', item, {
       pointerId: 1,
       clientX: 104,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { EVENT_INSERT_MODE_PERSIST_ONLY } from '../../../src/runtime/config/event-insertion'
 import { openRuntimeCaptureSession } from '../../../src/runtime/capture'
+import type { RuntimeCaptureDeclaration } from '../../../src/runtime/capture'
 
 describe('runtime capture session', () => {
   it('keeps captureState private and adds it to the normal endEmit output', () => {
@@ -23,6 +24,7 @@ describe('runtime capture session', () => {
         endEmit: {
           name: 'drag:end',
           data: { source: 'capture' },
+          visibility: 'scene',
         },
       },
     })
@@ -48,6 +50,7 @@ describe('runtime capture session', () => {
         source: 'capture',
         captureState: { value: 42 },
       },
+      visibility: 'scene',
       source: 'endEmit',
       applyAtMs: 140,
       mode: 'apply-now',
@@ -100,6 +103,70 @@ describe('runtime capture session', () => {
       mode: EVENT_INSERT_MODE_PERSIST_ONLY,
       applyAtMs: -200,
     })])
+  })
+
+  it('preserves named visibility on endCapture events', () => {
+    const opened = openRuntimeCaptureSession({
+      state: {},
+      declaration: {
+        endCapture: () => ({
+          events: [{ name: 'capture:published', visibility: 'public' }],
+        }),
+      },
+    })
+
+    expect(opened.ok).toBe(true)
+    if (!opened.ok) return
+    const ended = opened.session.end({})
+
+    expect(ended).toMatchObject({
+      ok: true,
+      endCaptureEvents: [{
+        name: 'capture:published',
+        visibility: 'public',
+        source: 'endCapture',
+        mode: EVENT_INSERT_MODE_PERSIST_ONLY,
+      }],
+    })
+  })
+
+  it('rejects cascade on a capture declaration and on an endCapture result', () => {
+    const invalidDeclaration = {
+      endEmit: { name: 'capture:end', cascade: true },
+    } as unknown as RuntimeCaptureDeclaration
+    const invalidOpen = openRuntimeCaptureSession({ state: {}, declaration: invalidDeclaration })
+    expect(invalidOpen).toMatchObject({ ok: false, code: 'RUNTIME_CAPTURE_EVENT_INVALID' })
+
+    const invalidOutput = (() => ({
+      events: [{ name: 'capture:stored', cascade: true }],
+    })) as unknown as NonNullable<RuntimeCaptureDeclaration['endCapture']>
+    const opened = openRuntimeCaptureSession({
+      state: {},
+      declaration: { endCapture: invalidOutput },
+    })
+    expect(opened.ok).toBe(true)
+    if (!opened.ok) return
+
+    expect(opened.session.end({})).toMatchObject({
+      ok: false,
+      code: 'RUNTIME_CAPTURE_END_EVENT_INVALID',
+      message: expect.stringContaining('visibility'),
+    })
+
+    const invalidVisibility = (() => ({
+      events: [{ name: 'capture:stored', visibility: 'instance' }],
+    })) as unknown as NonNullable<RuntimeCaptureDeclaration['endCapture']>
+    const visibilitySession = openRuntimeCaptureSession({
+      state: {},
+      declaration: { endCapture: invalidVisibility },
+    })
+    expect(visibilitySession.ok).toBe(true)
+    if (!visibilitySession.ok) return
+    expect(visibilitySession.session.end({})).toMatchObject({
+      ok: false,
+      code: 'RUNTIME_CAPTURE_END_EVENT_INVALID',
+      message: expect.stringContaining('visibility'),
+    })
   })
 
   it('resolves capture duration and propagates it only to missing transitions', () => {

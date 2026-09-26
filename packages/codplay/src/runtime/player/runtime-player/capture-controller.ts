@@ -26,6 +26,7 @@ import {
   type RuntimeCaptureSessionEntry,
   type RuntimePlayerEmitInput,
 } from '../capture'
+import { resolveCaptureEventTarget } from '../../capture/capture-event-target'
 
 /** Dependencies required to coordinate live capture without owning playback. */
 export type RuntimePlayerCaptureControllerContext = Readonly<{
@@ -167,7 +168,7 @@ export class RuntimePlayerCaptureController {
         dispatchResults.push(await this.context.emitEvent({
           name: event.name,
           applyAtMs: event.applyAtMs,
-          storyId: event.cascade === true ? undefined : entry.storyId,
+          ...resolveCaptureEventTarget(event, entry.storyId),
           data: event.data,
           mode: event.mode,
           meta,
@@ -178,7 +179,7 @@ export class RuntimePlayerCaptureController {
         dispatchResults.push(await this.context.emitEvent({
           name: event.name,
           applyAtMs: event.applyAtMs,
-          storyId: event.cascade === true ? undefined : entry.storyId,
+          ...resolveCaptureEventTarget(event, entry.storyId),
           data: event.data,
           mode: event.mode,
           meta,

@@ -7,6 +7,7 @@ import type {
 type CompiledCaptureEmitRule = Extract<CompiledEmitRule, { capture: CompiledCaptureDeclaration }>
 import type { RuntimePlayer } from '../../player'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture-types'
+import { resolveCaptureEventTarget } from '../capture-event-target'
 import { isFiniteNumber } from '../../../shared'
 
 const DEFAULT_TRACK_EVENT = 'pointermove'
@@ -281,7 +282,7 @@ export class HtmlPointerCaptureSourceAdapter {
       const result = await this.player.emit({
         name: event.name,
         applyAtMs: this.player.getCurrentTimeMs(),
-        storyId: event.cascade === true ? undefined : storyId,
+        ...resolveCaptureEventTarget(event, storyId),
         data: event.data,
         mode: event.mode,
       })

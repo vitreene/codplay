@@ -91,6 +91,68 @@ describe('CompiledSceneCodec', () => {
     }
   })
 
+  it('round-trips capture event visibility and rejects the removed cascade field', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const captureScene: CompiledScene = {
+      ...artifact,
+      scene: {
+        ...artifact.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [],
+            persos: [{
+              id: 'item',
+              type: 'tag',
+              initial: {},
+              actions: { item: null },
+              emit: {
+                pointerdown: {
+                  event: { name: 'drag:start', visibility: 'scene' },
+                  capture: { endEmit: { name: 'drag:end', visibility: 'public' } },
+                },
+              },
+            }],
+          },
+        },
+      },
+      requirements: { components: ['tag'], services: [], modules: [], resources: [] },
+      actionTargetIndex: { item: [{ storyId: 'main', persoId: 'item' }] },
+    }
+
+    const decoded = codec.decode(codec.encode(captureScene))
+    expect(decoded.ok).toBe(true)
+    if (decoded.ok) {
+      const rule = decoded.value.scene.stories.main?.persos[0]?.emit?.pointerdown
+      expect(rule).toMatchObject({
+        event: { visibility: 'scene' },
+        capture: { endEmit: { visibility: 'public' } },
+      })
+    }
+
+    const legacyCapture = {
+      ...captureScene,
+      scene: {
+        ...captureScene.scene,
+        stories: {
+          main: {
+            ...captureScene.scene.stories.main!,
+            persos: [{
+              ...captureScene.scene.stories.main!.persos[0]!,
+              emit: {
+                pointerdown: {
+                  event: { name: 'drag:start', visibility: 'scene' },
+                  capture: { endEmit: { name: 'drag:end', cascade: true } },
+                },
+              },
+            }],
+          },
+        },
+      },
+    }
+    expect(codec.decode(JSON.stringify(legacyCapture)).ok).toBe(false)
+  })
+
   it('accepts compiled local strap references alongside reusable strap names', () => {
     const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
     const value: CompiledScene = {

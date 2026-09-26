@@ -7,8 +7,10 @@ import {
   EVENT_INSERT_MODE_PERSIST_ONLY,
   RuntimePlayer,
 } from '../../../src/runtime/player'
+import { TRACK_GLOBAL_ID } from '../../../src/runtime/config/track'
 import type { RuntimeComponentRuntime } from '../../../src/runtime/components'
 import type { CompiledScene } from '../../../src/scene/compiled'
+import type { RuntimeTrackEvent } from '../../../src/runtime/player'
 
 const scene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
@@ -63,6 +65,76 @@ describe('RuntimePlayer capture facade', () => {
     expect(ended.events[0]?.data).toEqual({ value: 7, captureState: { value: 7 } })
     expect(ended.warnings).toEqual([])
     expect(player.resolveSceneAt(0).storyStates.main).toEqual({ value: 7 })
+    player.destroy()
+  })
+
+  it.each([
+    { visibility: 'story' as const, expectedStoryId: 'main' },
+    { visibility: 'scene' as const, expectedStoryId: undefined },
+    { visibility: 'public' as const, expectedStoryId: undefined },
+  ])('routes endEmit visibility $visibility through the shared dispatcher', async ({ visibility, expectedStoryId }) => {
+    const player = createPlayer()
+    expect(player.init().ok).toBe(true)
+    expect(player.beginCapture({
+      captureId: `end-emit-${visibility}`,
+      storyId: 'main',
+      declaration: { endEmit: { name: 'capture:scope', visibility } },
+    }).ok).toBe(true)
+
+    const ended = await player.endCapture(`end-emit-${visibility}`)
+    expect(ended.ok).toBe(true)
+    if (!ended.ok) return
+    const event = ended.dispatchResults[0]?.events[0]
+    expect(event?.visibility).toBe(visibility)
+    expect(event?.storyId).toBe(expectedStoryId)
+    expect(event?.trackId).toBe(visibility === 'story' ? 'main' : TRACK_GLOBAL_ID)
+    expect(event).not.toHaveProperty('cascade')
+    player.destroy()
+  })
+
+  it.each([
+    { visibility: 'story' as const, expectedStoryId: 'main' },
+    { visibility: 'scene' as const, expectedStoryId: undefined },
+    { visibility: 'public' as const, expectedStoryId: undefined },
+  ])('routes endCapture visibility $visibility through the shared dispatcher', async ({ visibility, expectedStoryId }) => {
+    const player = createPlayer()
+    expect(player.init().ok).toBe(true)
+    expect(player.beginCapture({
+      captureId: `end-capture-${visibility}`,
+      storyId: 'main',
+      declaration: {
+        endCapture: () => ({ events: [{ name: 'capture:scope', visibility }] }),
+      },
+    }).ok).toBe(true)
+
+    const ended = await player.endCapture(`end-capture-${visibility}`)
+    expect(ended.ok).toBe(true)
+    if (!ended.ok) return
+    const event = ended.dispatchResults[0]?.events[0]
+    expect(event?.visibility).toBe(visibility)
+    expect(event?.storyId).toBe(expectedStoryId)
+    expect(event?.trackId).toBe(visibility === 'story' ? 'main' : TRACK_GLOBAL_ID)
+    expect(event?.mode).toBe(EVENT_INSERT_MODE_PERSIST_ONLY)
+    expect(event).not.toHaveProperty('cascade')
+    player.destroy()
+  })
+
+  it('publishes a public capture end event through the player observer on playback', async () => {
+    const publicEvents: RuntimeTrackEvent[] = []
+    const player = createPlayer(undefined, (event) => publicEvents.push(event))
+    expect(player.init().ok).toBe(true)
+    expect(player.beginCapture({
+      captureId: 'public-capture',
+      storyId: 'main',
+      declaration: { endEmit: { name: 'capture:public', visibility: 'public' } },
+    }).ok).toBe(true)
+    expect((await player.endCapture('public-capture')).ok).toBe(true)
+
+    player.play()
+    player.engine.advance(0)
+
+    expect(publicEvents.map((event) => event.name)).toContain('capture:public')
+    expect(publicEvents.find((event) => event.name === 'capture:public')?.visibility).toBe('public')
     player.destroy()
   })
 
@@ -343,7 +415,10 @@ describe('RuntimePlayer capture facade', () => {
 })
 
 /** Creates one player with the single story strap used by the capture tests. */
-function createPlayer(listenOn?: string): RuntimePlayer {
+function createPlayer(
+  listenOn?: string,
+  publicEventListener?: (event: RuntimeTrackEvent) => void,
+): RuntimePlayer {
   const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
   const playerScene = listenOn === undefined
     ? scene
@@ -384,5 +459,12 @@ function createPlayer(listenOn?: string): RuntimePlayer {
         },
       },
     },
+    undefined,
+    [],
+    undefined,
+    undefined,
+    {},
+    undefined,
+    publicEventListener,
   )
 }

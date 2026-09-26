@@ -117,7 +117,7 @@ function compileEmitEvent(
   }
 }
 
-/** Compiles one ordinary event carried by a capture declaration. */
+/** Compiles one capture event with the ordinary V2 visibility contract. */
 function compileCaptureEvent(
   event: AuthorCaptureEvent,
   scope: string,
@@ -126,7 +126,7 @@ function compileCaptureEvent(
   return {
     name: event.name,
     ...(event.data === undefined ? {} : { data: extractCompiledRecord(event.data, `${scope}.data`, state) }),
-    ...(event.cascade === undefined ? {} : { cascade: event.cascade }),
+    ...(event.visibility === undefined ? {} : { visibility: event.visibility }),
     ...(event.mode === undefined ? {} : { mode: event.mode }),
   }
 }

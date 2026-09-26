@@ -2,45 +2,42 @@
 
 ## Statut
 
-`En cours` — la fixture S5, l’adaptateur HTML, la telco et leurs validations
-avaient été exercés avant la décision de remplacer `cascade` par `visibility`.
-La validation doit être reprise lorsque la migration core suivie dans le
-[plan capture](./capture-authoring-plan.md) sera autorisée et implémentée.
+`En cours` — la migration du contrat capture vers `visibility` est appliquée
+et vérifiée par les tests builder, codec, session, player et adaptateur HTML.
+La revalidation navigateur visible de S5 reste ouverte ; elle doit exercer la
+cible story par défaut sur le chemin HTML et la telco réels.
 
-Le cycle source-agnostique vérifié est décrit dans la
-[spécification capture V2](../specs/capture-v2-spec.md). La portée cible
-`visibility` reprend le vocabulaire des événements V2 défini dans la
-[spécification du pipeline événementiel](../specs/event-pipeline-v2-spec.md).
-Ce plan suit uniquement l’acceptance de la fixture S5 par le chemin HTML réel.
+Le contrat source-agnostique vérifié est décrit dans la
+[spécification capture V2](../specs/capture-v2-spec.md). Ce plan suit
+uniquement l’acceptance navigateur de la fixture S5.
 
-## Périmètre
+## Parcours navigateur
 
-La tranche couvre la fixture `Drag & Capture`, l’adaptateur HTML de pointeur,
-la telco V2 et les tests d’intégration associés. Elle n’introduit ni sémantique
-de capture parallèle, ni circuit DnD, ni nouvelle démo.
+Le parcours d'acceptance est la démo V2 existante
+[`stroke-path`](../../demos/src/v2/demos/stroke-path/main.ts), sélectionnée par
+`?demo=stroke-path`. Sa règle `pointerdown` déclare une capture compilée et
+traverse l'adaptateur pointeur, le player, le journal et le layout/telco
+partagés. L'ancien libellé `Drag & Capture` ne correspond pas à une fixture
+présente dans l'arbre actuel ; ce plan ne demande ni une nouvelle démo ni un
+circuit de capture parallèle.
 
-La fixture reste sous `packages/codplay/tests/fixtures`. Elle n’est pas exposée
-comme démo ; le layout V2 conserve la propriété de la page, du remote et de la
-telco.
+## Acceptance restante
 
-## Acceptance à reprendre
+- Rejouer `stroke-path` dans un navigateur visible via le chemin HTML et la
+  telco existants ; vérifier l’ouverture, `endEmit` et leur cible story par
+  défaut. Les cibles `scene`/`public` et les sorties `endCapture` sont déjà
+  couvertes par les tests source-agnostiques référencés dans la spec capture.
+- Vérifier Play, pause, seek continu, fermeture, seconde capture, rewind et
+  teardown sur ce parcours réel.
+- Confirmer que le journal et la présentation gardent les sémantiques
+  `apply-now` et `persist-only` certifiées dans la spec.
+- Consigner la preuve navigateur et clore ce plan si aucun écart n’apparaît.
 
-Lorsque le contrat `visibility` sera implémenté :
+Les frontières automatisées de capture et S6 ont été revérifiées le
+2026-09-26 : suite CodPlay
+(107 fichiers, 706 tests), suite component-v2 (11 fichiers, 48 tests), tests
+ciblés S5 et S6 dans CodPlay et typechecks CodPlay, component-v2 et démos V2.
 
-- vérifier les événements d’ouverture, `endEmit` et `endCapture` sur le chemin
-  HTML ;
-- couvrir les portées `story`, `scene`, `public` et le défaut ordinaire ;
-- vérifier l’adaptateur pointeur : `pointerId`, sortie du perso, événements de
-  fin explicitement déclarés et annulation au teardown ;
-- vérifier l’absence de samples dans le journal, la sortie live par les actions
-  compilées et le routage des événements de fin ;
-- vérifier l’ancrage, `persist-only`, le seek avant/pendant/après transition et
-  la seconde capture qui relit l’état produit ;
-- valider Play, pause, seek continu, dernière valeur au relâchement et rewind
-  avec la telco unique ;
-- exécuter les tests d’intégration, typecheck et build concernés, puis valider
-  la démo dans un navigateur visible.
-
-Une compilation ou un test direct de `RuntimePlayer.trackCapture()` ne suffit
-pas à accepter cette tranche : la validation doit traverser le dispatcher, le
-journal, la présentation et le cycle de vie HTML concernés.
+Les seuls tests directs de `RuntimePlayer.trackCapture()` ne suffisent pas à
+accepter cette tranche : la validation navigateur doit traverser le
+dispatcher, le journal, la présentation et le cycle de vie HTML concernés.

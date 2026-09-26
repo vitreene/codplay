@@ -103,6 +103,11 @@ unique de l’event de début éventuel ; elle se ferme à `scrollend` par
 `endCapture`. Un seek, un détachement, `sequence:end`, une destruction ou une
 erreur annule la session sans event de fermeture.
 
+L’événement d’ouverture réutilise la portée `visibility` du contrat capture
+commun. Sans portée ou avec `story`, il vise la story du scroll-container ;
+`scene` et `public` utilisent la cible globale. Le résolveur partagé porte ce
+routage ; l’adaptateur scroll ne crée pas de chemin de dispatch spécifique.
+
 Pour cette source, `trackCommand` peut retourner une collection ordonnée
 d’actions live :
 
@@ -137,11 +142,6 @@ affichée après la fermeture de l’activité, `trackCommand` la place dans
 l’action réapplique cette valeur. Cet event de fin apparaît une fois par
 activité, jamais une fois par sample. Il conserve la valeur finale sans
 enregistrer la trajectoire scroll.
-
-Le pont `scroll-temp-capture-bridge` est interne à cette capacité et temporaire.
-Il réutilise `RuntimePlayer.emit()`, `beginCompiledCapture()`,
-`trackCapture()`, `endCapture()` et `cancelCapture()`. Il ne cherche pas de
-cible, n’appelle pas directement `updateLive()` et n’est pas exporté comme API.
 
 ## Observation des descendants
 
@@ -278,6 +278,9 @@ sont refusées.
 - [`scroll-container-providers.spec.ts`](../../authoring/component-v2/tests/scroll-container-providers.spec.ts)
   vérifie le cycle de vie des providers, le calcul et la coalescence du
   progress, ainsi que l’ordre des transitions d’observation.
+- [`scroll-container-capture-visibility.spec.ts`](../../authoring/component-v2/tests/scroll-container-capture-visibility.spec.ts)
+  vérifie que l’adaptateur route l’événement d’ouverture selon les portées
+  implicite, `story`, `scene` et `public`.
 - La scène réelle de validation est
   [`main.ts`](../../demos/src/v2/demos/scroll-container/main.ts). La validation
   navigateur de la feature a été confirmée par l’utilisateur ; ce constat ne
@@ -296,3 +299,10 @@ scroll.
 
 Ces vérifications et la confirmation utilisateur clôturent la capacité scroll
 décrite ici.
+
+Après la migration du contrat capture, le 2026-09-26, la suite `component-v2`
+(11 fichiers, 48 tests), la suite CodPlay (107 fichiers, 706 tests) et les
+typechecks CodPlay, component-v2 et démos V2 ont réussi. Le test dédié de
+l’adaptateur scroll vérifie la cible de son événement d’ouverture pour les
+quatre formes de portée ; l’acceptance navigateur scroll déjà confirmée reste
+distincte de la gate Seek S6.
