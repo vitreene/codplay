@@ -22,13 +22,15 @@ export function sampleLoopedTemplate(
   elapsedMs: number,
   seed: number,
   baseline: Readonly<Record<string, number>> = {},
+  initialValues: Readonly<Record<string, number>> = {},
 ): Readonly<Record<string, number>> {
   return sampleLoopedTemplates(
     () => template,
     elapsedMs,
     seed,
     baseline,
-  )
+    initialValues,
+  ).values
 }
 
 /** Samples a loop whose template is selected anew for every native cycle. */
@@ -37,6 +39,8 @@ export function sampleLoopedAlternatives(
   elapsedMs: number,
   seed: number,
   baseline: Readonly<Record<string, number>> = {},
+  initialValues: Readonly<Record<string, number>> = {},
+  interruptions: readonly Readonly<{ channel: string; at: number; value: number }>[] = [],
 ): Readonly<Record<string, number>> {
   if (alternatives.length === 0) return {}
   return sampleLoopedTemplates(
@@ -44,6 +48,32 @@ export function sampleLoopedAlternatives(
     elapsedMs,
     seed,
     baseline,
+    initialValues,
+    undefined,
+    interruptions,
+  ).values
+}
+
+/** Samples one alternative loop and its discrete native control occurrences. */
+export function sampleLoopedAlternativeMarkers(
+  alternatives: readonly ThTemplateAlternative[],
+  elapsedMs: number,
+  seed: number,
+  markerName: string,
+  baseline: Readonly<Record<string, number>> = {},
+  initialValues: Readonly<Record<string, number>> = {},
+): Readonly<{
+  values: Readonly<Record<string, number>>
+  markers: readonly Readonly<{ startAt: number; value: number }>[]
+}> {
+  if (alternatives.length === 0) return { values: {}, markers: [] }
+  return sampleLoopedTemplates(
+    (random) => chooseAlternative(alternatives, random),
+    elapsedMs,
+    seed,
+    baseline,
+    initialValues,
+    markerName,
   )
 }
 
@@ -53,17 +83,24 @@ function sampleLoopedTemplates(
   elapsedMs: number,
   seed: number,
   baseline: Readonly<Record<string, number>>,
-): Readonly<Record<string, number>> {
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return {}
+  initialValues: Readonly<Record<string, number>>,
+  markerName?: string,
+  interruptions: readonly Readonly<{ channel: string; at: number; value: number }>[] = [],
+): Readonly<{
+  values: Readonly<Record<string, number>>
+  markers: readonly Readonly<{ startAt: number; value: number }>[]
+}> {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return { values: {}, markers: [] }
 
   const random = createRandomSource(seed)
   const state: Record<string, number> = {}
+  const markers: { startAt: number; value: number }[] = []
   let cursor = 0
 
   for (let cycle = 0; cycle < 10_000; cycle += 1) {
     const template = resolveTemplate(random)
     for (const name of Object.keys(template.vs)) {
-      if (!(name in state)) state[name] = baseline[name] ?? 0
+      if (!(name in state)) state[name] = initialValues[name] ?? baseline[name] ?? 0
     }
     const delay = sampleTemplateNumber(template.delay ?? 0, random)
     const times = [cursor + delay]
@@ -74,16 +111,34 @@ function sampleLoopedTemplates(
 
     const endAt = times[times.length - 1]!
     const targets = sampleTemplateTargets(template.vs, baseline, random)
-    if (elapsedMs < times[0]!) return state
+    const interruption = interruptions
+      .filter(({ at }) => at >= cursor && at <= endAt && at <= elapsedMs)
+      .sort((left, right) => right.at - left.at)[0]
+    if (elapsedMs < times[0]!) {
+      if (interruption !== undefined) state[interruption.channel] = interruption.value
+      return { values: state, markers }
+    }
+    if (markerName !== undefined) {
+      const values = targets[markerName] ?? []
+      for (let index = 1; index < values.length && index < times.length; index += 1) {
+        const value = values[index]
+        const startAt = times[index]!
+        if (typeof value === 'number' && startAt <= elapsedMs) {
+          markers.push({ startAt, value })
+        }
+      }
+    }
     if (elapsedMs <= endAt) {
       sampleTemplateChannels(targets, times, elapsedMs, state)
-      return state
+      if (interruption !== undefined) state[interruption.channel] = interruption.value
+      return { values: state, markers }
     }
     applyTemplateTargets(targets, state)
+    if (interruption !== undefined) state[interruption.channel] = interruption.value
     cursor = endAt
   }
 
-  return state
+  return { values: state, markers }
 }
 
 /** Selects one alternative using TalkingHead's remaining-probability rule. */

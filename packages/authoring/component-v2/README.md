@@ -171,7 +171,7 @@ disponibles sont :
 
 `durationMs` est facultatif : lorsqu'il est fourni, le composant anime la
 transition ; sinon le changement est immédiat. Les autres capacités Avatar
-(`avatar-lip-sync`, `avatar-gesture`, `avatar-idle` et `avatar-gaze`) restent
+(`avatar-lip-sync`, `avatar-gesture` et `avatar-gaze`) restent
 séparées parce qu'elles représentent des familles d'actions différentes.
 
 Le nom de l'action porte les choix stables du perso. Les données d'event sont
@@ -302,17 +302,18 @@ données de motions sont reprises ; son runtime TalkingHead n'est pas importé.
 dans le nom de l'action ; `contact` et `durationMs` peuvent rester dans
 `data` lorsqu'ils varient d'une occurrence à l'autre.
 
-`avatar-idle` regroupe la présentation au repos : il applique la pose initiale
+`avatar-mood` regroupe aussi la présentation au repos : il applique la pose initiale
 `neutral` par défaut, les clignements, une respiration et un léger balancement
 déterministe de la tête et du corps. Ces comportements restent des indications
 auteur simples ; l'engine Avatar masque leurs détails et les adapte au modèle.
 
 ```ts
 {
-  id: 'avatar-idle',
-  type: 'avatar-idle',
+  id: 'avatar-mood',
+  type: 'avatar-mood',
   initial: {
     rel: { host: 'avatar-three-host', target: 'avatar' },
+    mood: 'neutral',
     pose: 'neutral',
     blink: true,
     breathe: true,

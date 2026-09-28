@@ -86,15 +86,19 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
       }
     },
 
-    animate(deltaMs) {
+    animate(deltaMs, timeMs) {
+      _blinkElapsed = timeMs ?? _blinkElapsed + deltaMs
       if (_blinkScheduleFn) {
-        _blinkElapsed += deltaMs
         const r = _blinkScheduleFn({ elapsed: _blinkElapsed, mood: currentMood })
         if (r != null) morphEngine.snapFixed('eyesClosed', r.eyesClosed)
       }
 
       morphEngine.update(deltaMs)
       pendingDynamicDeltaMs = Math.max(0, deltaMs)
+    },
+
+    resetSemantic() {
+      gestureEngine?.reset()
     },
 
     prepareSeek() {
@@ -126,8 +130,8 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
       currentMood = name
     },
 
-    setPose(name, startAt = 0) {
-      return gestureEngine?.setBodyPose(name, startAt) ?? false
+    setPose(name, startAt = 0, durationMs) {
+      return gestureEngine?.setBodyPose(name, startAt, durationMs) ?? false
     },
 
     playGesture(name, rng, mirror = false, startAt = 0) {
@@ -152,7 +156,6 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
 
     setBlinkScheduleFn(fn) {
       _blinkScheduleFn = fn
-      _blinkElapsed = 0
       if (!fn) morphEngine.snapFixed('eyesClosed', 0)
     },
 
@@ -205,12 +208,15 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
       animationPlayer?.set(animation)
     },
 
-    applyAnimationAt(timeMs) {
+    applyAnimationAt(timeMs, applyRootMotion) {
       const gestures = gestureEngine
       if (gestures === null || poseComposer === null) return NO_ROOT_MOTION
       const semantic = gestures.sampleAt(timeMs)
 
       const animation = animationPlayer?.sampleAt(timeMs) ?? null
+      const rootMotion = animation?.rootMotionOffset ?? NO_ROOT_MOTION
+      // Gaze solves in world space and must see this frame's arrival position.
+      applyRootMotion?.(rootMotion)
       const suspendTalkingHands = animation !== null
         && (animation.releaseProgress === undefined || animation.releaseProgress < 1)
       const gestureOverlay = gestures.getOverlay(timeMs, semantic, suspendTalkingHands)
@@ -251,7 +257,7 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
         ))
       }
       morphEngine.reapplyFixed()
-      return animation?.rootMotionOffset ?? NO_ROOT_MOTION
+      return rootMotion
     },
 
     get morphEngine() { return morphEngine },

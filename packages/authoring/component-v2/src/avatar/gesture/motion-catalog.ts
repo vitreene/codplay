@@ -5,6 +5,7 @@ import {
 } from './th-emoji-catalog.js'
 import type {
   AvatarGestureFrame,
+  AvatarGestureHistoryEvent,
   AvatarGestureOverlay,
   AvatarHandTarget,
   AvatarMotionDefinition,
@@ -231,6 +232,20 @@ function createMotionPlayer(
   return {
     name: motion.name,
     durationMs,
+    semanticEvents: createSemanticEvents(
+      timing,
+      motionDurationMs,
+      activeDurationMs,
+      channels,
+      motion.gestureValues,
+      motion.poseValues,
+      motion.handLeftValues,
+      motion.handRightValues,
+      eyeContactValues,
+      headMoveValues,
+      motion.overlay,
+      cameraContact,
+    ),
     sample: (timeMs) => sampleMotion(
       timing,
       motionDurationMs,
@@ -247,6 +262,68 @@ function createMotionPlayer(
       timeMs,
     ),
   }
+}
+
+/** Extracts exact skeletal markers from the same motion sampler used for frames. */
+function createSemanticEvents(
+  timing: MotionTiming,
+  motionDurationMs: number,
+  activeDurationMs: number,
+  channels: Readonly<Record<string, readonly (number | null)[]>>,
+  gestureValues: readonly unknown[],
+  poseValues: readonly unknown[],
+  handLeftValues: readonly unknown[],
+  handRightValues: readonly unknown[],
+  eyeContactValues: readonly (number | null)[],
+  headMoveValues: readonly (number | null)[],
+  overlay: RawOverlay | undefined,
+  cameraContact: boolean,
+): readonly AvatarGestureHistoryEvent[] {
+  const times = [...new Set([0, ...timing.presentationTimes, activeDurationMs + RELEASE_TAIL_MS])]
+    .sort((left, right) => left - right)
+  const events: AvatarGestureHistoryEvent[] = []
+  let previousGesture: string | null = null
+  let previousMirror = false
+  let previousPose: string | undefined
+  let previousPoseStartAt: number | undefined
+  for (const timeMs of times) {
+    const frame = sampleMotion(
+      timing, motionDurationMs, activeDurationMs, channels, gestureValues,
+      poseValues, handLeftValues, handRightValues, eyeContactValues,
+      headMoveValues, overlay, cameraContact, timeMs,
+    )
+    if (frame.gesture !== previousGesture || frame.mirror !== previousMirror) {
+      events.push({
+        kind: 'gesture',
+        name: frame.gesture,
+        startAt: frame.released ? timeMs : frame.gestureStartMs,
+        seed: 0,
+        mirror: frame.mirror,
+      })
+      previousGesture = frame.gesture
+      previousMirror = frame.mirror
+    }
+    if (frame.pose !== undefined && (
+      frame.pose !== previousPose || frame.poseStartMs !== previousPoseStartAt
+    )) {
+      events.push({
+        kind: 'pose',
+        name: frame.pose,
+        startAt: frame.poseStartMs ?? timeMs,
+        seed: 0,
+        mirror: false,
+      })
+      previousPose = frame.pose
+      previousPoseStartAt = frame.poseStartMs
+    } else if (frame.released && previousPose !== undefined) {
+      events.push({
+        kind: 'pose', name: null, startAt: timeMs, seed: 0, mirror: false,
+      })
+      previousPose = undefined
+      previousPoseStartAt = undefined
+    }
+  }
+  return events.sort((left, right) => left.startAt - right.startAt)
 }
 
 /** Resolves one action frame, including its return to the neutral action layer. */
@@ -285,7 +362,7 @@ function sampleMotion(
 
   const released = localTimeMs >= activeDurationMs + RELEASE_TAIL_MS
   const marker = released
-    ? { name: null, mirror: false, startAt: localTimeMs }
+    ? { name: null, mirror: false, startAt: activeDurationMs + RELEASE_TAIL_MS }
     : sampleGestureMarker(
       timing.presentationTimes,
       rawGestureValues,
@@ -315,6 +392,7 @@ function sampleMotion(
 
   return {
     morphs,
+    morphWeight: releaseFactor,
     gesture: marker.name,
     gestureStartMs: marker.startAt,
     mirror: marker.mirror,

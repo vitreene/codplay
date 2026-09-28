@@ -28,6 +28,12 @@ type GazeTransition = Readonly<{
   endAt: number
 }>
 
+type GazeAction = Readonly<{
+  transition: GazeTransition
+  lookAheadDurationMs: number
+  lookAheadSeed: number
+}>
+
 const GAZE_ENABLE_ACTION = 'avatar:gaze:on'
 const GAZE_DISABLE_ACTION = 'avatar:gaze:off'
 const GAZE_IDLE_ACTION = 'avatar:gaze:idle'
@@ -51,62 +57,43 @@ export class AvatarGazeComponent extends AvatarFeatureComponent<AvatarGazeInitia
       listeningHeadMove: this.perso.initial.listeningHeadMove ?? TH_GAZE_DEFAULTS.listeningHeadMove,
       ignoreCamera: this.perso.initial.ignoreCamera,
     })
-    const occurrence = resolveLatestGazeOccurrence(input.activeActions)
-    const previous = resolveLatestGazeOccurrence(input.activeActions, occurrence?.startAt)
-    const mode = resolveGazeMode(occurrence?.name)
+    const occurrences = (input.activeActions ?? [])
+      .filter((occurrence) => hasGazeValue(occurrence.name, occurrence.action))
+      .sort((left, right) => left.startAt - right.startAt)
+    const mode = resolveGazeMode(occurrences.at(-1)?.name)
     if (mode !== undefined) target.setGazeMode?.(mode)
-    const previousGaze = resolveOccurrenceContribution(previous, this.perso.initial)
-    const action = occurrence?.action
-    const enabled = resolveEnabled(
-      occurrence?.name,
-      input.state.enabled,
-      this.perso.initial.enabled,
-    )
-    const contact = resolveContact(action?.contact, input.state.contact, this.perso.initial.contact)
-    const headMove = resolveHeadMove(action?.headMove, input.state.headMove, this.perso.initial.headMove)
-    const lookAhead = occurrence?.name === GAZE_LOOK_AHEAD_ACTION
-    const durationMs = resolveDuration(
-      action?.durationMs,
-      input.state.durationMs,
-      this.perso.initial.durationMs,
-    )
-    const transition = createTransition(
-      previousGaze,
-      resolveContribution(
-        enabled,
-        contact,
-        headMove,
-        resolveGazeTarget(occurrence?.name, this.perso.initial.ignoreCamera) ?? previousGaze.target,
-        lookAhead,
-      ),
-      occurrence?.startAt ?? input.timeMs,
-      durationMs,
-    )
-    const lookAheadDurationMs = lookAhead
-      ? resolveLookAheadDuration(durationMs)
-      : 0
-    const lookAheadSeed = stableSeed(occurrence?.eventId ?? GAZE_LOOK_AHEAD_ACTION)
-    target.setTimeline('gaze', createAnimation(
-      transition,
-      target,
-      lookAheadDurationMs,
-      lookAheadSeed,
-    ))
+    const initial = resolveOccurrenceContribution(undefined, this.perso.initial)
+    const actions: GazeAction[] = []
+    for (const occurrence of occurrences) {
+      const from = actions.length === 0
+        ? initial
+        : sampleTransition(actions[actions.length - 1]!.transition, occurrence.startAt)
+      const to = resolveOccurrenceContribution(occurrence, this.perso.initial, from)
+      const durationMs = resolveDuration(
+        occurrence.action.durationMs, undefined, this.perso.initial.durationMs,
+      )
+      actions.push({
+        transition: createTransition(from, to, occurrence.startAt, durationMs),
+        lookAheadDurationMs: to.lookAhead ? resolveLookAheadDuration(durationMs) : 0,
+        lookAheadSeed: stableSeed(occurrence.eventId ?? GAZE_LOOK_AHEAD_ACTION),
+      })
+    }
+    if (actions.length === 0) {
+      const selected = resolveContribution(
+        resolveEnabled(undefined, input.state.enabled, this.perso.initial.enabled),
+        resolveContact(undefined, input.state.contact, this.perso.initial.contact),
+        resolveHeadMove(undefined, input.state.headMove, this.perso.initial.headMove),
+        initial.target,
+        false,
+      )
+      actions.push({
+        transition: createTransition(selected, selected, 0, 0),
+        lookAheadDurationMs: 0,
+        lookAheadSeed: 0,
+      })
+    }
+    target.setTimeline('gaze', createAnimation(actions, target))
   }
-}
-
-/** Selects the latest ordinary action that carries a gaze change. */
-function resolveLatestGazeOccurrence(
-  actions: readonly ComponentActionOccurrence[] | undefined,
-  beforeStartAt = Number.POSITIVE_INFINITY,
-): ComponentActionOccurrence | undefined {
-  let latest: ComponentActionOccurrence | undefined
-  for (const occurrence of actions ?? []) {
-    if (!hasGazeValue(occurrence.name, occurrence.action)) continue
-    if (occurrence.startAt >= beforeStartAt) continue
-    if (latest === undefined || occurrence.startAt >= latest.startAt) latest = occurrence
-  }
-  return latest
 }
 
 /** Identifies an action that changes the generic gaze contribution. */
@@ -217,12 +204,14 @@ function resolveDuration(
 function resolveOccurrenceContribution(
   occurrence: ComponentActionOccurrence | undefined,
   initial: AvatarGazeInitial,
+  previous?: GazeContribution,
 ): GazeContribution {
   return resolveContribution(
     resolveEnabled(occurrence?.name, undefined, initial.enabled),
     resolveContact(occurrence?.action.contact, undefined, initial.contact),
     resolveHeadMove(occurrence?.action.headMove, undefined, initial.headMove),
     resolveGazeTarget(occurrence?.name, initial.ignoreCamera)
+      ?? previous?.target
       ?? (initial.ignoreCamera === true ? 'ahead' : 'camera'),
     occurrence?.name === GAZE_LOOK_AHEAD_ACTION,
   )
@@ -245,16 +234,20 @@ function createTransition(
 
 /** Creates a gaze stream consumed by Avatar's central presentation. */
 function createAnimation(
-  transition: GazeTransition,
+  actions: readonly GazeAction[],
   target: AvatarTarget,
-  lookAheadDurationMs: number,
-  lookAheadSeed: number,
 ): AvatarTimeline {
   return {
     id: 'avatar-gaze',
-    startAt: transition.startAt,
-    endAt: transition.endAt,
+    startAt: actions[0]!.transition.startAt,
+    endAt: Number.POSITIVE_INFINITY,
     sample: (timeMs) => {
+      let selected = actions[0]!
+      for (const action of actions) {
+        if (action.transition.startAt > timeMs) break
+        selected = action
+      }
+      const { transition, lookAheadDurationMs, lookAheadSeed } = selected
       const gaze = sampleTransition(transition, timeMs)
       return {
         value: gaze,
@@ -262,6 +255,7 @@ function createAnimation(
           target.setGazeTarget?.(gaze.target, {
             startAt: transition.startAt,
             durationMs: transition.endAt - transition.startAt,
+            from: transition.from.target,
           })
           if (gaze.headMove === undefined) target.setGaze(gaze.enabled, gaze.contact)
           else target.setGaze(gaze.enabled, gaze.contact, gaze.headMove)

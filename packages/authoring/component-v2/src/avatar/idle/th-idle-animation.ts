@@ -21,6 +21,7 @@ import type {
 import { sampleTalkingHeadEasing } from '../avatar-easing.js'
 import {
   createRandomSource,
+  sampleLoopedAlternativeMarkers,
   sampleLoopedAlternatives,
   sampleLoopedTemplate,
   sampleTemplateNumber,
@@ -47,6 +48,9 @@ export function sampleThIdle(
   elapsedMs: number,
   options: ThIdleOptions,
   baseline: Readonly<Record<string, number>> = {},
+  initialMorphs: Readonly<Record<string, number>> = {},
+  headMarkerCutoffAt = Number.POSITIVE_INFINITY,
+  resolveHeadSourceAt?: (elapsedMs: number) => Readonly<Record<string, number>>,
 ): ThIdleFrame {
   if (!options.enabled || !Number.isFinite(elapsedMs) || elapsedMs < 0) {
     return { morphs: {}, overlay: null }
@@ -54,6 +58,9 @@ export function sampleThIdle(
 
   const templates = resolveTemplates(mood, options.speaking === true)
   const templateBaseline = resolveTemplateBaseline(baseline)
+  const templateInitial = Object.keys(initialMorphs).length === 0
+    ? {}
+    : resolveTemplateBaseline(initialMorphs)
   const eyeContactProbability = resolveProbability(
     options.eyeContactProbability,
     options.speaking === true ? 0.5 : 0.2,
@@ -62,42 +69,97 @@ export function sampleThIdle(
   const morphs: Record<string, number> = {}
   let eyeContact: number | undefined
   let headMove: number | undefined
+  let headMoveTask: ThIdleFrame['headMoveTask']
 
   if (options.breathe) {
-    mergeTemplate(morphs, templates.breathing, elapsedMs, options.seed, 'breathing', templateBaseline)
+    mergeTemplate(morphs, templates.breathing, elapsedMs, options.seed, 'breathing', templateBaseline, templateInitial)
   }
   if (options.headMove) {
     const head = options.speaking === true ? templates.speakingHead : templates.head
-    mergeTemplate(morphs, head, elapsedMs, options.seed, 'head', templateBaseline)
-    const eyes = sampleLoopedAlternatives(
-      setEyeContactProbability(
-        options.speaking === true ? templates.speakingEyes : templates.eyes,
-        eyeContactProbability,
-      ),
-      elapsedMs,
-      stableSeed(`${options.seed}:eyes:${options.speaking === true}`),
-      templateBaseline,
+    mergeTemplate(morphs, head, elapsedMs, options.seed, 'head', templateBaseline, templateInitial)
+    const eyeAlternatives = setEyeContactProbability(
+      options.speaking === true ? templates.speakingEyes : templates.eyes,
+      eyeContactProbability,
     )
-    const resolvedEyes = setHeadMoveProbability(eyes, headMoveProbability)
-    mergeEyes(morphs, resolvedEyes)
+    const eyesSeed = stableSeed(`${options.seed}:eyes:${options.speaking === true}`)
+    const eyes = sampleLoopedAlternativeMarkers(
+      eyeAlternatives,
+      elapsedMs,
+      eyesSeed,
+      'headMove',
+      templateBaseline,
+      templateInitial,
+    )
+    let resolvedEyes = setHeadMoveProbability(eyes.values, headMoveProbability)
     if (typeof resolvedEyes.eyeContact === 'number') eyeContact = resolvedEyes.eyeContact
     if (typeof resolvedEyes.headMove === 'number') headMove = resolvedEyes.headMove
-    if (typeof headMove === 'number' && headMove > 0) {
+    const headMarkers = eyes.markers.filter(({ startAt }) => startAt <= headMarkerCutoffAt)
+    if (headMarkers.length > 0) {
       const headMoveFrame = sampleNativeHeadMove(
         elapsedMs,
         options.seed,
-        headMove,
-        eyeContact === 1,
-        morphs.bodyRotateY ?? templateBaseline.bodyRotateY ?? 0,
-        (morphs.eyeLookInLeft ?? 0) - (morphs.eyeLookOutLeft ?? 0),
+        headMarkers,
+        headMoveProbability,
+        (startAt, moveStartAt, eyeInterruptions) => {
+          const headAtStart = sampleLoopedTemplate(
+            head,
+            startAt,
+            stableSeed(`${options.seed}:head`),
+            templateBaseline,
+            templateInitial,
+          )
+          const eyeValues = sampleLoopedAlternatives(
+            eyeAlternatives,
+            startAt,
+            eyesSeed,
+            templateBaseline,
+            templateInitial,
+            eyeInterruptions,
+          )
+          const eyeMorphs: Record<string, number> = {}
+          mergeEyes(eyeMorphs, eyeValues)
+          const eyesAtMoveStart: Record<string, number> = {}
+          mergeEyes(eyesAtMoveStart, sampleLoopedAlternatives(
+            eyeAlternatives,
+            moveStartAt,
+            eyesSeed,
+            templateBaseline,
+            templateInitial,
+            eyeInterruptions,
+          ))
+          return {
+            eyeContact: eyeValues.eyeContact === 1,
+            bodyRotateY: headAtStart.bodyRotateY ?? templateBaseline.bodyRotateY ?? 0,
+            eyeYaw: (eyeMorphs.eyeLookInLeft ?? 0) - (eyeMorphs.eyeLookOutLeft ?? 0),
+            eyeMorphs: eyesAtMoveStart,
+            headMorphs: resolveHeadSourceAt?.(eyeValues.eyeContact === 1 ? startAt : moveStartAt) ?? {},
+          }
+        },
       )
+      if (headMoveFrame.eyeInterruptions.length > 0) {
+        resolvedEyes = setHeadMoveProbability(sampleLoopedAlternatives(
+          eyeAlternatives,
+          elapsedMs,
+          eyesSeed,
+          templateBaseline,
+          templateInitial,
+          headMoveFrame.eyeInterruptions,
+        ), headMoveProbability)
+      }
+      mergeEyes(morphs, resolvedEyes)
       Object.assign(morphs, headMoveFrame.morphs)
+      if (headMoveFrame.endAt !== undefined) headMoveTask = {
+        endAt: headMoveFrame.endAt,
+        ...(headMoveFrame.lastStartedAt === undefined ? {} : { lastStartedAt: headMoveFrame.lastStartedAt }),
+      }
       if (headMoveFrame.eyeContact !== undefined) eyeContact = headMoveFrame.eyeContact
+    } else {
+      mergeEyes(morphs, resolvedEyes)
     }
   }
 
-  mergeTemplate(morphs, templates.mouth, elapsedMs, options.seed, 'mouth', templateBaseline)
-  mergeTemplate(morphs, templates.misc, elapsedMs, options.seed, 'misc', templateBaseline)
+  mergeTemplate(morphs, templates.mouth, elapsedMs, options.seed, 'mouth', templateBaseline, templateInitial)
+  mergeTemplate(morphs, templates.misc, elapsedMs, options.seed, 'misc', templateBaseline, templateInitial)
   if (options.view !== undefined && options.view !== 'full') {
     mergeCloseViewVariation(morphs, templateBaseline, elapsedMs, options.seed)
   }
@@ -107,16 +169,19 @@ export function sampleThIdle(
     overlay: AvatarGestureOverlay | null
     eyeContact?: number
     headMove?: number
+    headMoveTask?: ThIdleFrame['headMoveTask']
     pose?: string
     poseStartAt?: number
+    poseHistory?: readonly Readonly<{ name: string; startAt: number }>[]
   } = {
     morphs,
     overlay: null,
     ...(eyeContact === undefined ? {} : { eyeContact }),
     ...(headMove === undefined ? {} : { headMove }),
+    ...(headMoveTask === undefined ? {} : { headMoveTask }),
   }
   if (options.poseChanges === true) {
-    const pose = samplePoseChange(
+    const poseHistory = samplePoseChanges(
       mood,
       elapsedMs,
       options.seed,
@@ -124,6 +189,8 @@ export function sampleThIdle(
       options.body,
       options.view,
     )
+    frame.poseHistory = poseHistory
+    const pose = poseHistory.at(-1)
     if (pose !== undefined) {
       frame.pose = pose.name
       frame.poseStartAt = pose.startAt
@@ -222,79 +289,153 @@ function mergeEyes(
   morphs.eyeLookInRight = Math.max(0, horizontal)
 }
 
+/** Holds the timing and source captured when a native head task begins. */
+type NativeHeadTask = Readonly<{
+  startAt: number
+  moveStartAt: number
+  moveEndAt: number
+  holdEndAt: number
+  endAt: number
+  eyeContact: boolean
+  eyeMorphs: Readonly<Record<string, number>>
+  headFrom: Readonly<Record<string, number>>
+  headTo: Readonly<Record<string, number>>
+}>
+
 /** Samples the extra head movement task that TH schedules from `headMove`. */
 function sampleNativeHeadMove(
   elapsedMs: number,
   seed: number,
+  markers: readonly Readonly<{ startAt: number; value: number }>[],
   probability: number,
-  eyeContact: boolean,
-  bodyRotateY: number,
-  eyeYaw: number,
-): Readonly<{ morphs: Readonly<Record<string, number>>; eyeContact?: number }> {
+  sampleTarget: (
+    startAt: number,
+    moveStartAt: number,
+    eyeInterruptions: readonly Readonly<{ channel: string; at: number; value: number }>[],
+  ) => Readonly<{
+    eyeContact: boolean
+    bodyRotateY: number
+    eyeYaw: number
+    eyeMorphs: Readonly<Record<string, number>>
+    headMorphs: Readonly<Record<string, number>>
+  }>,
+): Readonly<{
+  morphs: Readonly<Record<string, number>>
+  eyeContact?: number
+  endAt?: number
+  lastStartedAt?: number
+  eyeInterruptions: readonly Readonly<{ channel: string; at: number; value: number }>[]
+}> {
   const random = createRandomSource(stableSeed(`${seed}:headmove`))
-  const chance = Math.max(0, Math.min(1, probability))
-  let cursor = 0
+  let active: Readonly<{ morphs: Readonly<Record<string, number>>; eyeContact?: number; endAt?: number }> = {
+    morphs: {},
+  }
+  const selectedTasks: NativeHeadTask[] = []
+  let lastStartedAt: number | undefined
+  const eyeInterruptions: { channel: string; at: number; value: number }[] = []
 
-  for (let cycle = 0; cycle < 10_000; cycle += 1) {
-    // TH creates this task with four dt segments and a leading null value:
-    // the first segment is therefore a delay, followed by move, hold and
-    // return. The task does not start rotating during that first segment.
+  for (const marker of markers) {
+    // TH creates a separate task when the eye template emits headMove. Its
+    // first time slot delays the movement after that marker, not after mood 0.
+    const chance = Math.max(0, Math.min(1, marker.value > 0 ? probability : 0))
+    if (chance === 0 || random.random() >= chance) continue
     const delayDuration = sampleTemplateNumber([1_000, 2_000], random)
     const moveDuration = sampleTemplateNumber([1_000, 2_000, 1, 2], random)
     const holdDuration = sampleTemplateNumber([1_000, 2_000], random)
     const returnDuration = sampleTemplateNumber([1_000, 2_000, 1, 2], random)
-    const startAt = cursor
-    const moveStartAt = startAt + delayDuration
+    const moveStartAt = marker.startAt + delayDuration
     const moveEndAt = moveStartAt + moveDuration
     const holdEndAt = moveEndAt + holdDuration
     const endAt = holdEndAt + returnDuration
     const headRotateX = sampleTemplateNumber([-0.2, 0.2], random)
-    const headRotateY = eyeContact ? -bodyRotateY : eyeYaw
-    const headRotateZ = -headRotateY / 4
-    const selected = random.random() < chance
-
-    if (elapsedMs < startAt) return { morphs: {} }
-    if (selected && elapsedMs <= endAt) {
-      if (elapsedMs < moveStartAt) return { morphs: {} }
-      const morphs = elapsedMs <= moveEndAt
-        ? interpolateHeadMove({
-          headRotateX: 0,
-          headRotateY: 0,
-          headRotateZ: 0,
-        }, {
-          headRotateX,
-          headRotateY,
-          headRotateZ,
-        }, (elapsedMs - moveStartAt) / moveDuration)
-        : elapsedMs <= holdEndAt
-          ? { headRotateX, headRotateY, headRotateZ }
-          : interpolateHeadMove({
-          headRotateX,
-          headRotateY,
-          headRotateZ,
-        }, {
-          headRotateX: 0,
-          headRotateY: 0,
-          headRotateZ: 0,
-        }, (elapsedMs - holdEndAt) / returnDuration)
-      return {
-        morphs: {
-          ...morphs,
-          ...(eyeContact ? {} : {
-            eyeLookInLeft: 0,
-            eyeLookOutLeft: 0,
-            eyeLookInRight: 0,
-            eyeLookOutRight: 0,
-          }),
-        },
-        ...(eyeContact ? {} : { eyeContact: 0 }),
+    const target = sampleTarget(marker.startAt, moveStartAt, eyeInterruptions)
+    const headStartAt = target.eyeContact ? marker.startAt : moveStartAt
+    const precedingHead = selectedTasks.findLast((task) => (
+      headStartAt >= (task.eyeContact ? task.startAt : task.moveStartAt)
+      && headStartAt <= task.endAt
+    ))
+    const precedingEyes = selectedTasks.findLast((task) => (
+      moveStartAt >= task.moveStartAt && moveStartAt <= task.endAt && !task.eyeContact
+    ))
+    const headFrom = precedingHead === undefined
+      ? {
+        headRotateX: target.headMorphs.headRotateX ?? 0,
+        headRotateY: target.headMorphs.headRotateY ?? 0,
+        headRotateZ: target.headMorphs.headRotateZ ?? 0,
       }
+      : sampleNativeHeadTask(precedingHead, headStartAt).morphs
+    const eyeMorphs = precedingEyes === undefined
+      ? target.eyeMorphs
+      : sampleNativeHeadTask(precedingEyes, moveStartAt).morphs
+    const headRotateY = target.eyeContact ? -target.bodyRotateY : target.eyeYaw
+    const task: NativeHeadTask = {
+      startAt: marker.startAt,
+      moveStartAt,
+      moveEndAt,
+      holdEndAt,
+      endAt,
+      eyeContact: target.eyeContact,
+      eyeMorphs,
+      headFrom,
+      headTo: { headRotateX, headRotateY, headRotateZ: -headRotateY / 4 },
     }
+    selectedTasks.push(task)
 
-    cursor = endAt
+    if (elapsedMs >= headStartAt) {
+      lastStartedAt = headStartAt
+      active = elapsedMs <= endAt
+        ? { ...sampleNativeHeadTask(task, elapsedMs), endAt }
+        : { morphs: {} }
+    }
+    if (elapsedMs > endAt && marker.value > 0) {
+      if (!target.eyeContact) eyeInterruptions.push({ channel: 'eyesRotateY', at: endAt, value: 0 })
+    }
   }
 
-  return { morphs: {} }
+  const endAt = selectedTasks.reduce((latest, task) => Math.max(latest, task.endAt), -Infinity)
+  return {
+    ...active,
+    ...(Number.isFinite(endAt) ? { endAt } : {}),
+    ...(lastStartedAt === undefined ? {} : { lastStartedAt }),
+    eyeInterruptions,
+  }
+}
+
+/** Evaluates one independent TH head task, including its eye handoff. */
+function sampleNativeHeadTask(
+  task: NativeHeadTask,
+  elapsedMs: number,
+): Readonly<{ morphs: Readonly<Record<string, number>>; eyeContact?: number }> {
+  const moveFrom = task.eyeContact ? task.startAt : task.moveStartAt
+  const moveTo = task.eyeContact ? task.moveStartAt : task.moveEndAt
+  const holdTo = task.eyeContact ? task.moveEndAt : task.holdEndAt
+  const returnTo = task.eyeContact ? task.holdEndAt : task.endAt
+  const head = elapsedMs <= moveTo
+    ? interpolateHeadMove(task.headFrom, task.headTo, (elapsedMs - moveFrom) / (moveTo - moveFrom))
+    : elapsedMs <= holdTo
+      ? task.headTo
+      : elapsedMs <= returnTo
+        ? interpolateHeadMove(task.headTo, {
+          headRotateX: 0,
+          headRotateY: 0,
+          headRotateZ: 0,
+        }, (elapsedMs - holdTo) / (returnTo - holdTo))
+        : { headRotateX: 0, headRotateY: 0, headRotateZ: 0 }
+  if (task.eyeContact || elapsedMs < task.moveStartAt) return { morphs: head }
+
+  const eyeReturn = elapsedMs <= task.moveEndAt
+    ? 1 - sampleTalkingHeadEasing((elapsedMs - task.moveStartAt) / (task.moveEndAt - task.moveStartAt))
+    : 0
+  return {
+    morphs: {
+      ...head,
+      eyeLookInLeft: (task.eyeMorphs.eyeLookInLeft ?? 0) * eyeReturn,
+      eyeLookOutLeft: (task.eyeMorphs.eyeLookOutLeft ?? 0) * eyeReturn,
+      eyeLookInRight: (task.eyeMorphs.eyeLookInRight ?? 0) * eyeReturn,
+      eyeLookOutRight: (task.eyeMorphs.eyeLookOutRight ?? 0) * eyeReturn,
+    },
+    eyeContact: 0,
+  }
 }
 
 /** Interpolates one native head-move segment with the TH easing curve. */
@@ -319,38 +460,39 @@ function mergeTemplate(
   seed: number,
   channel: string,
   baseline: Readonly<Record<string, number>>,
+  initialValues: Readonly<Record<string, number>>,
 ): void {
-  const values = sampleLoopedTemplate(template, elapsedMs, stableSeed(`${seed}:${channel}`), baseline)
+  const values = sampleLoopedTemplate(template, elapsedMs, stableSeed(`${seed}:${channel}`), baseline, initialValues)
   for (const [name, value] of Object.entries(values)) {
     if (name === 'headMove' || name === 'eyeContact' || name === 'pose' || name === 'gesture') continue
     morphs[name] = value
   }
 }
 
-/** Resolves delayed pose changes from the native mood alternatives. */
-function samplePoseChange(
+/** Reconstructs all delayed pose changes up to one absolute mood-relative time. */
+function samplePoseChanges(
   mood: string,
   elapsedMs: number,
   seed: number,
   speaking: boolean,
   body: AvatarBody | undefined,
   view: AvatarView | undefined,
-): Readonly<{ name: string; startAt: number }> | undefined {
+): readonly Readonly<{ name: string; startAt: number }>[] {
   const choices = getThPoseChoices(mood, speaking)
     .map((choice) => resolveThPoseChoice(choice, body, view))
-  if (choices.length === 0) return undefined
+  if (choices.length === 0) return []
   const random = createRandomSource(stableSeed(`${seed}:poses`))
+  const changes: { name: string; startAt: number }[] = []
   let cursor = 0
-  let current: string | undefined
   for (let cycle = 0; cycle < 10_000; cycle += 1) {
     const choice = choosePose(choices, random)
     const delay = sampleTemplateNumber(choice.delay, random)
     const eventAt = cursor + delay
-    if (elapsedMs < eventAt) return current === undefined ? undefined : { name: current, startAt: cursor }
-    current = choice.name
+    if (elapsedMs < eventAt) return changes
+    changes.push({ name: choice.name, startAt: eventAt })
     cursor = eventAt
   }
-  return current === undefined ? undefined : { name: current, startAt: cursor }
+  return changes
 }
 
 /** Chooses a native mood pose according to its declared alternatives. */

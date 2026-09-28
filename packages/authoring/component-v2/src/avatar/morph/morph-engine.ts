@@ -237,12 +237,12 @@ export class MorphEngine {
     this._snapAmbient(name, value)
   }
 
-  /** Snaps an automatic value without disturbing a fixed event override. */
+  /** Snaps an automatic value unless a fixed event is active or still easing out. */
   private _snapAmbient(name: string, value: number | null): void {
     const mt = this.morphs.get(name)
     if (!mt) return
     mt.ambient = value
-    if (mt.fixed !== null) return
+    if (mt.fixed !== null || mt.needsUpdate) return
     const target = value !== null ? value : resolveTarget(mt)
     const limited = mt.limit !== null ? mt.limit(target) : target
     const clamped = Math.max(mt.min, Math.min(mt.max, limited))
@@ -271,12 +271,13 @@ export class MorphEngine {
     this._snapSystem(name, value)
   }
 
-  /** Snaps one runtime constraint while preserving an authored fixed value. */
+  /** Snaps a changed runtime constraint without cancelling another layer's easing. */
   private _snapSystem(name: string, value: number | null): void {
     const mt = this.morphs.get(name)
     if (!mt) return
+    const unchanged = mt.system === value
     mt.system = value
-    if (mt.fixed !== null) return
+    if (mt.fixed !== null || (unchanged && mt.needsUpdate)) return
     const target = value !== null ? value : resolveTarget(mt)
     const limited = mt.limit !== null ? mt.limit(target) : target
     const clamped = Math.max(mt.min, Math.min(mt.max, limited))
@@ -355,6 +356,40 @@ export class MorphEngine {
     if (!mt) return
     mt.baseline = value
     mt.needsUpdate = true
+  }
+
+  /** Applies an absolute-time mood baseline without smoothing it a second time. */
+  snapBaseline(name: string, value: number | null): void {
+    if (this.morphs.has(name)) {
+      this._snapBaseline(name, value)
+      return
+    }
+    if (this.setDirectional(name, value, (target, next) => this._snapBaseline(target, next))) return
+    const alias = this.aliases[name]
+    if (alias) {
+      for (const { name: target, factor } of alias.targets) {
+        this._snapBaseline(target, value === null ? null : value * factor)
+      }
+      return
+    }
+    this._snapBaseline(name, value)
+  }
+
+  /** Snaps the baseline only when no higher-priority morph layer owns the value. */
+  private _snapBaseline(name: string, value: number | null): void {
+    const mt = this.morphs.get(name)
+    if (!mt) return
+    mt.baseline = value
+    if (mt.fixed !== null || mt.system !== null || mt.ambient !== null) return
+    const target = value ?? 0
+    const limited = mt.limit !== null ? mt.limit(target) : target
+    const clamped = Math.max(mt.min, Math.min(mt.max, limited))
+    mt.value = clamped
+    mt.applied = clamped
+    mt.v = 0
+    mt.needsUpdate = false
+    this.applyEntry(mt, clamped)
+    mt.onchange?.(clamped)
   }
 
   /** Advance all morphs by deltaMs. */

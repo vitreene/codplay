@@ -17,7 +17,7 @@ dédié de `@codplay/component-v2`, sans reproduire son regroupement monolithiqu
 - les responsabilités encore regroupées dans l'adaptation de référence
   (`morph`, `gaze`, `blink`, `head-drift`, `breathe`, `pose` et caméra) sont
   portées par des composants ou capacités Avatar cohérents ; la pose de repos,
-  le clignement et la dérive appartiennent à `avatar-idle` ;
+  le clignement et la dérive appartiennent à `avatar-mood` ;
 - un coordonnateur Avatar recueille les contributions et les applique à
   l'objet chargé ;
 - la scène auteur ne fait que déclarer les relations, les données et les
@@ -37,8 +37,8 @@ avatar:          { rel: { host: 'three-scene-host' } }
 avatar-mood:     { rel: { host: 'three-scene-host', target: 'avatar' } }
 avatar-lip-sync: { rel: { host: 'three-scene-host', target: 'avatar' } }
 avatar-gesture:  { rel: { host: 'three-scene-host', target: 'avatar' } }
-avatar-idle:     { rel: { host: 'three-scene-host', target: 'avatar' } }
 avatar-gaze:     { rel: { host: 'three-scene-host', target: 'avatar' } }
+avatar-motion:   { rel: { host: 'three-scene-host', target: 'avatar' } }
 ```
 
 Le composant `avatar` ne reçoit pas `move`. Il ajoute son objet au
@@ -65,7 +65,8 @@ validation propre avant d'être utilisée par la démo :
    présent, puis replay déterministe après seek et reprise ;
 2. `avatar-mood` : expressions sémantiques, baselines et transitions de mood ;
 3. `avatar-gesture` : gestes corporels et replay déterministe ;
-4. `avatar-idle` : pose de repos, clignement, respiration et dérive de tête ;
+4. les capacités initialement prévues pour `avatar-idle` sont intégrées à
+   `avatar-mood` : pose de repos, clignement, respiration et dérive de tête ;
 5. `avatar-gaze` : contact visuel vers la caméra du host ;
 6. capacité caméra Avatar, raccordée au composant caméra Three existant ;
 7. scène d'acceptation : port complet des eventimes, straps, piste optionnelle,
@@ -163,7 +164,8 @@ interne et aucun composant `avatar-morph` séparé n'est enregistré.
   `avatar:mood:happy`, etc.) ; chaque occurrence reste un événement ordinaire
   reçu par le composant via `activeActions` ;
 - le composant résout le mood, sa durée éventuelle (`durationMs`) et produit
-  une transition absolue de baselines avec une interpolation smoothstep ;
+  une transition absolue de baselines avec l'easing TalkingHead ; une nouvelle
+  occurrence part de la valeur présentée à sa date de début ;
 - le composant remet la couche au `AvatarCoordinator`, sans connaître le
   modèle, ses meshes ou le host Three ;
 - une absence de durée conserve le comportement discret : la bascule est
@@ -184,8 +186,9 @@ le lip-sync et le geste. Elle n'importe aucune valeur de la démo.
 La démo Avatar a été exercée sur le chemin navigateur réel : les actions
 `avatar:mood:happy` et `avatar:mood:neutral` sont observées à `4600 ms` et
 `8800 ms`, et les positions `5000 ms` et `10000 ms` ont été rendues après seek.
-Aucun changement du core CodPlay n'a été nécessaire. La tranche mood est
-validée ; la transposition Avatar globale reste **En cours**.
+Aucun changement du core CodPlay n'a été nécessaire. Cette première vérification
+des baselines ne clôt pas la tranche mood : la section 42 consigne l'écart de
+perception et de responsabilité découvert pendant l'isolation des composants.
 
 ## 9. Tranche `avatar-idle` — 20 septembre 2026
 
@@ -232,16 +235,19 @@ distinct :
 - `ThreeSceneTarget.getCamera()` est une lecture de la caméra sélectionnée par
   le host. Elle complète `setCamera()` sans déplacer la responsabilité de
   création ou de rendu hors de `three-camera` et `three-scene-host` ;
-- la démo exerce l'activation initiale et deux événements ordinaires de
-  désactivation/réactivation. Les tests du composant et du pont Three restent
-  autonomes et ne dépendent pas des valeurs de la démo.
+- la démo garde le contact caméra actif depuis l'initial du perso. Les actions
+  ordinaires de désactivation et de réactivation restent disponibles dans le
+  composant et couvertes par ses tests autonomes ; leur usage dépend des
+  instructions auteur de chaque scène. Les tests du composant et du pont Three
+  ne dépendent pas des valeurs de la démo.
 
 Validations exécutées : typecheck et tests de `component-v2`, typecheck et
 tests de `avatar-engine`, typecheck et build de `demos`, puis lecture
 navigateur avec le journal d'événements et Seek aux positions `5000 ms`,
-`5800 ms` et `6200 ms`. Les actions `avatar:gaze:off` et `avatar:gaze:on` sont
-reçues ; la position `6200 ms` montre la transition progressive vers le
-contact désactivé. Aucun changement de `packages/codplay` n'est nécessaire.
+`5800 ms` et `6200 ms` avant la décision de garder le contact continu dans
+cette scène. Les actions `avatar:gaze:off` et `avatar:gaze:on` ont été reçues ;
+la position `6200 ms` montrait la transition progressive vers le contact
+désactivé. Aucun changement de `packages/codplay` n'est nécessaire.
 
 ## 11. Validation de `avatar-gesture` — 20 septembre 2026
 
@@ -500,8 +506,8 @@ La surface est maintenant implémentée dans `component-v2` :
   frame jusqu'à sa libération ;
 - `three-fbx` réutilise la même stratégie binaire Three.js que `three-glb` ;
   aucun importateur, cache ou circuit CodPlay parallèle n'a été ajouté ;
-- la démo Avatar contient un clip FBX compatible et son entrée de preload afin
-  d'exercer le chemin réel du composant.
+- la scène d'animation dédiée contient un clip FBX compatible et son entrée de
+  preload afin d'exercer le chemin réel du composant.
 
 Les tests autonomes couvrent la lecture absolue, la fin d'une animation, le
 Seek, le changement de boucle, la borne de démarrage et la stratégie `three-fbx`.
@@ -1152,8 +1158,9 @@ alternatives restaient donc figées à `0.2` et `0.5`.
 idle. Celui-ci remplace uniquement les probabilités des alternatives et le
 marqueur `headMove`; les délais, les valeurs, les transitions et le temps
 absolu restent ceux des templates TH. Quand aucun template ne demande le
-contact ou le mouvement, la contribution de regard est nulle pour cet
-échantillon, comme dans la boucle TH.
+contact ou le mouvement, cette contribution spontanée est nulle pour cet
+échantillon, comme dans la boucle TH. Cela ne désactive pas le contact caméra
+permanent demandé par `avatar-gaze`.
 
 Le test autonome échantillonne la même animation avec profils `0` et `1` et
 vérifie respectivement l'absence et la présence du contact et du mouvement.
@@ -1242,8 +1249,8 @@ visuelle complète des enchaînements par l'auteur.
 
 ## 40. Isolation temporaire des composants Avatar — 26 septembre 2026
 
-> Statut : **En cours**. Instrument de diagnostic `temp`, à retirer une fois les
-> contributions réintroduites et leurs frontières validées.
+> Statut : **Fini**. L'instrument de diagnostic `temp` est retiré après la
+> réintroduction et la validation provisoire des contributions par l'auteur.
 
 L'auteur demande de repartir du comportement existant et d'isoler les causes
 des ruptures en réactivant les composants Avatar un par un. La correction de
@@ -1256,9 +1263,18 @@ La première étape conserve le composant central `avatar` et active seulement
 enregistrés et reçoivent leurs mises à jour, mais leur contribution est
 temporairement suspendue au point commun des composants. La scène, ses
 eventimes, l'audio, le layout et le core CodPlay restent sur leur circuit réel.
+Après validation de la première étape, `avatar-mood` est réactivé avec
+`avatar-lip-sync` ; `avatar-gesture`, `avatar-idle`, `avatar-gaze` et
+`avatar-motion` restent suspendus pendant cette deuxième étape.
+La troisième étape réactive `avatar-gesture` avec `avatar-lip-sync` et
+`avatar-mood`. `avatar-gaze` et `avatar-motion` restent suspendus ;
+`avatar-idle` a depuis été fusionné dans `avatar-mood` (§43).
 Ce filtre n'est pas un contrat V2 ; sa portée est limitée à l'investigation
 Avatar et sa condition de retrait est la réactivation et la validation des
 composants concernés.
+Tous les composants spécialisés étant réactivés et l'auteur validant leur
+état actuel, la classe commune et les cinq composants ne portent plus ce
+filtre. Les tracks continuent à passer par le même coordonnateur Avatar.
 
 L'acceptation de cette première étape vérifie le lip-sync sur le modèle chargé
 dans Safari TP, avec les visèmes reçus par le journal et les morphs effectivement
@@ -1319,7 +1335,7 @@ ni placement, ni reparent, ni taille, ni persistance.
 
 ## 41. Assouplissement des transitions de visèmes — 26 septembre 2026
 
-> Statut : **En cours**. La première validation d'amplitude est conservée.
+> Statut : **Fixe** pour les réglages de `avatar-lip-sync` validés par l'auteur.
 
 L'auteur constate maintenant des ouvertures et fermetures de bouche trop
 brusques. Le composant construit une enveloppe dont l'attaque commence aux
@@ -1366,5 +1382,853 @@ reproduit respectivement `0 → 0 → 0,3 → 0,6 → 0,404 → 0 → 0 → 0,6`
 du modèle. La suite complète des composants conserve les échecs attendus des
 composants temporairement désactivés, notamment le profil `avatar-idle`.
 
-La validation visuelle par l'auteur et la réintroduction des autres
-composants restent ouvertes ; cette étape demeure **En cours**.
+L'auteur valide le composant et ses réglages. La réintroduction des autres
+composants reste suivie par la section 40 ; le plan Avatar global demeure
+**En cours**.
+
+## 42. Réactivation de `avatar-mood` — 26–27 septembre 2026
+
+> Statut : **En cours**. Courbe validée et trajet technique vérifié ;
+> l'expression `happy` actuelle ne permet pas encore l'acceptation visuelle.
+
+La section 3 fixe `avatar-mood` comme étape suivante. Le plan initial et le
+lecteur V1 utilisaient `smoothstep`, tandis que le composant V2 emploie déjà
+`sampleTalkingHeadEasing()`. L'auteur choisit explicitement de conserver cette
+dernière courbe pour V2 ; la section 8 est alignée sur cette décision. Le
+composant V2 prenait le baseline cible de l'occurrence précédente
+comme origine. Si une nouvelle action survenait pendant une transition, cette
+origine pouvait créer un saut. La correction reconstruit, depuis les
+occurrences disponibles et l'état initial, la valeur réellement présentée à
+la date de la nouvelle action. La même date absolue doit produire la même
+expression en Play, Seek et replay, et une absence de durée doit rester
+immédiate. La scène Avatar actuelle déclare `happy` à `4600 ms` et `neutral`
+à `8800 ms` sans durée ; elle vérifie le trajet intégré mais n'exerce pas le
+recouvrement. Celui-ci a une fixture autonome. `avatar-mood` est
+réactivé au niveau du composant avec `avatar-lip-sync` ; les autres composants
+spécialisés resteront suspendus. L'acceptation comprend les tests de début,
+milieu, interruption et retour temporel, puis Play, Seek, replay, coexistence
+avec le lip-sync, typechecks et build sur le trajet réel.
+
+Le test d'interruption autonome passe : une action `sad` déclenchée au milieu
+de `happy` reprend `mouthSmile = 0,1` à sa frontière, atteint `0,05` au milieu
+de sa propre transition et reconstruit la même valeur après Seek. Une action
+sans durée ramène immédiatement les morphs absents à zéro. Le contrat normatif
+est consigné dans [`avatar-mood-spec.md`](../specs/avatar-mood-spec.md).
+
+La première passe Safari a révélé deux défauts supplémentaires à la frontière
+du coordonnateur et du moteur. Après `5000 → 550 ms`, le visème était reconstruit
+mais `mouthSmile = 0,2` restait appliqué : `prepareSeek()` conservait les
+baselines dans `MorphEngine`, alors que le coordonnateur oubliait les noms de
+la couche mood précédente avant de pouvoir les effacer. La mémoire des noms
+appliqués est désormais conservée pendant ce Seek. Par ailleurs, la timeline
+mood donnait immédiatement sa nouvelle valeur au Play, mais `setBaseline()`
+ajoutait le lissage du moteur ; cela retardait le changement sans durée et
+dénaturait la courbe choisie pour les transitions. `snapBaseline()` applique
+maintenant l'échantillon du mood sans retarder les morphs qu'il possède, tout
+en respectant les couches fixes, système et ambiantes prioritaires. Les deux
+régressions sont couvertes par des tests au niveau du coordonnateur et du
+`MorphEngine` réel.
+
+Les tests ciblés mood, lip-sync, coordonnateur et priorité des morphs passent ;
+le typecheck `component-v2`, le typecheck V2 des démos et leur build passent.
+La suite complète `component-v2` compte `80` tests réussis et `10` échecs
+attendus sur `avatar-gesture`, `avatar-motion`, `avatar-idle` et `avatar-gaze`
+encore désactivés ; aucun test de mood ou de lip-sync n'échoue. Dans Safari TP,
+le Play avec audio applique `mouthSmile = 0,2` dès `4600 ms` et le remet à zéro
+dès `8800 ms`. Le Seek `550 → 4500 → 4600 → 5000 → 8790 → 8800 → 10000 → 5000
+→ 550 → 5000 ms` donne `0 → 0 → 0,2 → 0,2 → 0,2 → 0 → 0 → 0,2 → 0 → 0,2` sur
+le sourire du modèle ; `viseme_O` vaut encore environ `0,58` à `550 ms`.
+Le replay après `sequence:end` et le rechargement de scène ramènent l'état à
+zéro. Les frontières de placement, reparent, taille et persistance ne sont
+pas touchées par ce changement de composition des morphs.
+
+L'auteur ne perçoit pas l'expression mood à la lecture. La comparaison Safari
+à `4590/4610 ms` garde pratiquement le même visème (`viseme_DD` environ
+`0,58`), tandis que `mouthSmile` passe de `0` à `0,2` ; les images restent
+très proches. Le modèle paraît déjà souriant au repos et le cadrage du corps
+réduit encore la différence visible. Une sonde temporaire dans la page a
+confirmé qu'une baseline `sad` plus riche active réellement les sourcils, les
+yeux et la bouche du modèle ; elle a été retirée sans modification du dépôt.
+Augmenter seulement `mouthSmile` jusqu'à `1` ne rend pas l'état `happy`
+nettement plus lisible dans ce cadrage. Le trajet runtime fonctionne, mais le
+scénario auteur actuel ne démontre pas visuellement le changement de mood.
+
+La comparaison avec `TalkingHead/modules/talkinghead.mjs`, dans `animMoods`,
+confirme les valeurs natives : `neutral` contient `eyesLookDown = 0,1` et
+`happy` ajoute `mouthSmile = 0,2`. Son morph mixte `mouthSmile` combine les
+côtés gauche et droit à `0,8`, comme le chargeur Avatar V2. Sur le modèle réel,
+les deux slots de `mouthSmile` reçoivent `0,2` dans Safari. TalkingHead associe
+aussi à `happy` des animations périodiques de bouche, regard, tête et pose ;
+elles relèvent de `avatar-idle`, encore désactivé par l'isolation des composants.
+Un grossissement temporaire du canvas dans Safari à `4590/4610 ms` garde le
+même constat visuel : le sourire du modèle au repos et sa barbe rendent le
+petit changement des commissures difficile à lire, même avec le visage agrandi.
+Le canvas et le journal ont été remis dans leur état initial après la sonde.
+La proposition de substituer un mood plus expressif à `happy` est écartée :
+elle ne traiterait pas la cause de la faible visibilité de l'action actuelle.
+
+L'auteur précise ensuite que `avatar:mood:happy` doit produire une expression
+perceptible par sa propre contribution : un perso auteur ne peut dépendre
+implicitement d'un autre composant pour rendre son instruction intelligible.
+L'examen de la construction révèle une séparation incomplète de TalkingHead.
+Son `setMood()` remplace à la fois les baselines et les boucles de `animMoods` ;
+`avatar-mood` V2 ne produit que les baselines, tandis que le coordonnateur
+échantillonne les boucles de bouche et de visage via `sampleThIdle()`, bloqué
+par le profil `avatar-idle.enabled = false` pendant l'isolation. De plus, le
+sampler actuel reçoit le temps global et choisirait les boucles du nouveau mood
+comme si celui-ci était actif depuis `t = 0`, au lieu de dater leur démarrage à
+l'occurrence de mood. Cette frontière peut rendre l'action peu perceptible seule
+et créer une rupture lors de la réactivation de `avatar-idle`.
+
+La correction exige une décision de contrat sur le propriétaire des boucles
+`animMoods` et leur origine temporelle avant de modifier l'implémentation. La
+validation devra inclure `happy` visible sur le modèle actuel avec seulement
+`avatar-mood` et `avatar-lip-sync`, puis Play, Seek et changement de mood sans
+discontinuité, sans dupliquer l'échantillonneur de templates.
+
+## 43. Fusion auteur de `avatar-idle` dans `avatar-mood` — 27 septembre 2026
+
+> Statut : **Fixe** pour le contrat approuvé par l'auteur ; implémentation
+> **En cours**.
+
+L'auteur valide un unique perso `avatar-mood` pour l'expression et le comportement
+spontané TalkingHead. Dans TalkingHead, `idle` est une branche de `animMoods`,
+pas une humeur indépendante. La définition publique `avatar-idle` est retirée ;
+sa configuration de pose, clignement, respiration, tête, changements de pose,
+mains parlantes et graine rejoint `AvatarMoodInitial`. Le sampler interne de
+templates est conservé et réutilisé, sans second circuit. `avatar-lip-sync`,
+`avatar-gesture` et `avatar-gaze` gardent leurs contributions et priorités.
+
+Ordre de correction :
+
+1. déplacer la configuration et le déclenchement des boucles `animMoods` dans
+   la contribution du perso `avatar-mood`, puis retirer l'enregistrement et les
+   usages auteur de `avatar-idle` ;
+2. dater les boucles à l'occurrence de mood, avec origine `t = 0` pour le mood
+   initial, et reconstruire leur état au Seek sans phase héritée de la scène ;
+3. établir la pose de repos dès le premier rendu, sans transition depuis la
+   pose de bind, puis préserver les transitions de pose ultérieures ;
+4. vérifier les priorités avec visèmes, geste et regard et le nettoyage des
+   couches au changement de mood ;
+5. exercer le modèle réel dans Safari TP en Play, Seek, replay, rechargement et
+   changement de mood : `happy` doit être perceptible avec `avatar-mood` et
+   `avatar-lip-sync` seuls. Les tests autonomes de timeline, pose et couches,
+   les typechecks, la suite pertinente et le build complètent l'acceptation.
+
+La spécification ciblée est [`avatar-mood-spec.md`](../specs/avatar-mood-spec.md).
+La visibilité reste une gate : si le paquet TalkingHead complet ne suffit pas
+sur ce modèle, le travail reste **En cours** jusqu'à une décision explicite sur
+le rendu, sans ajuster silencieusement les valeurs natives.
+
+### Contrôle de la fusion — 27 septembre 2026
+
+La configuration de repos et les boucles TalkingHead passent par
+`avatar-mood` ; la définition auteur `avatar-idle` est retirée. Le coordonnateur
+date ces boucles à l'occurrence, y compris si le même mood revient. La pose
+`neutral` est appliquée avant la première présentation et reconstruite au
+Seek à zéro. Le clignement reçoit maintenant le temps absolu du ticker : une
+réinstallation de son callback au changement de mood ne décale plus sa phase.
+Le lip-sync conserve sa couche et sa timeline propres.
+
+Les tests ciblés de coordonnateur, pose et fidélité morph passent, ainsi que
+les typechecks `component-v2` et démos, le build démos et `git diff --check`.
+La suite `component-v2` compte 84 réussites et 9 échecs circonscrits aux
+composants `gesture`, `gaze` et `motion` encore volontairement désactivés
+pendant cette isolation ; aucun échec mood ou lip-sync. Dans Safari TP, le
+modèle réel présente une pose relâchée à 0 ms après présentation et Seek, le
+mood `happy` à 5 500 ms diffère visiblement du neutre à 4 590 ms, et Play,
+Seek arrière et rechargement ont été exercés. La page partagée reste vide en
+état `ready` immédiatement après un rechargement, avant sa première
+présentation par Play ou Seek ; ce comportement de la page n'affiche pas de
+pose T et n'est pas modifié dans cette tranche Avatar. Les cas de
+redimensionnement, persistance et hiérarchie parent/enfant ne traversent pas
+les chemins modifiés : ceux-ci ne touchent ni le host Three ni CodPlay core.
+
+Le contrôle Safari du parcours complet révèle cependant des cassures dans les
+transitions de poses. L'analyse identifie deux pertes d'historique côté
+coordonnateur : il compare seulement le nom de pose, ce qui ignore une nouvelle
+occurrence du même nom, et le Seek ne reconstruit que la dernière pose choisie,
+sans les poses antérieures qui déterminent sa pose source. La correction
+reconstruit la suite déterministe des poses depuis le mood initial et les
+occurrences de mood actives ; le moteur reçoit les poses dans l'ordre absolu
+pour retrouver la même origine en Play, Seek et replay.
+
+Le correctif transmet l'historique ordonné des moods au coordonnateur et fait
+produire par le sampler l'historique des poses sélectionnées. Au premier tick
+et après Seek, le coordonnateur réapplique la pose auteur puis rejoue chaque
+transition antérieure jusqu'au temps demandé. En lecture, il compare le couple
+nom/date d'occurrence pour ne pas ignorer un retour au même nom. Les tests
+comparent le moteur sémantique réel après lecture continue et Seek direct à
+6 secondes avec un changement de mood, et vérifient deux occurrences du même
+nom de pose ; ils passent. Les tests du sampler et le typecheck passent aussi.
+
+La reprise visuelle Safari reste à confirmer : la page contrôlée par l'outil
+est en arrière-plan, le ticker n'avance pas et la capture du canvas est noire.
+
+Une autre cassure est localisée vers `2930 ms`. La piste de visèmes passe de
+`DD` à une occurrence nulle au milieu de la phrase ; `avatar-lip-sync`
+convertissait cette seule information de bouche en mode corporel `idle` du
+coordonnateur. Les templates de tête `speaking` et `idle` donnent à cette date
+respectivement `bodyRotateY ≈ +0,025` et `−0,077`, et `headRotateY ≈ −0,046`
+et `+0,001`. Le remplacement instantané explique la cassure observée autour
+de `2950 ms`.
+
+L'auteur fixe la frontière : les visèmes commandent uniquement la bouche.
+Une occurrence nulle ferme la bouche selon l'enveloppe lip-sync, sans changer
+le mood, la pose ou le regard ; `happy` garde son sourire. La piste `word`
+sert aux sous-titres et ne commande pas l'Avatar. La correction retire la
+commande de mode corporel du perso lip-sync, puis vérifie l'absence de cette
+commande, la composition sourire/visème et la continuité à la frontière en
+Play et Seek sur le modèle réel. Les comportements spontanés restent portés
+par l'initial du perso mood ; un profil général d'humeur (`agité`,
+`tranquille`, `nerveux`) reste une idée à définir séparément avant tout code.
+
+Le perso lip-sync ne commande plus `setGazeMode` ; ses occurrences restent dans
+la seule timeline `lip-sync`. Dans la scène, `avatar:viseme` vise ce perso,
+`avatar:mood:*` vise `avatar-mood`, et `subtitle:word` vise uniquement le perso
+de sous-titres. Le test de frontière vérifie qu'un visème parlé puis nul ne
+commande aucun mode corporel ; le test de composition vérifie que le sourire
+`happy` reste présent quand `viseme_O` retombe à zéro. Les tests ciblés
+coordonnateur/sampler (25) et composant (4), les typechecks du composant et
+des démos, le build des démos et `git diff --check` passent. La suite complète
+compte 89 réussites et les 9 échecs déjà attribués aux persos `gesture`,
+`gaze` et `motion` désactivés pendant l'isolation. Safari TP présente la même
+orientation à `2920` et `2950 ms` après Seek ; Play traverse cette frontière
+avec le modèle réel et sans erreur de runtime. Les chemins de resize,
+persistance et hiérarchie restent hors de ce changement : seule l'émission
+d'une commande latérale depuis le perso lip-sync est supprimée.
+
+Le balayage numérique des autres frontières révèle encore un écart distinct
+aux changements de mood (`4600` et `8800 ms`) : le redémarrage des templates
+à l'occurrence remet instantanément les morphs spontanés à leur valeur
+initiale. Par exemple, `headRotateX` passe d'environ `−0,106` à `0` à
+`4600 ms`. L'auteur demande de reprendre la règle TalkingHead par défaut :
+chaque nouveau template part de la valeur affichée et suit ses durées natives ;
+une tâche autonome `headmove` déjà lancée continue jusqu'à sa sortie. La
+correction doit reconstruire cet état depuis l'historique des moods, y compris
+au Seek et quand une occurrence interrompt la précédente. Les tests comparent
+les valeurs de part et d'autre de la frontière, puis Play et Seek ; Safari TP
+contrôle le modèle aux deux changements de mood. La tranche demeure
+**En cours** jusqu'à cette validation.
+
+### Raccord des tâches natives — 27 septembre 2026
+
+L'analyse de TalkingHead précise trois causes qui se cumulaient : le marqueur
+`headMove` était lu comme une valeur continue et sa tâche était datée du début
+du mood ; la reprise des yeux par la tête remettait le regard horizontal à zéro
+sans parcourir la durée native ; enfin, le sampler oubliait les valeurs
+affichées et les tâches antérieures lors d'un changement ou d'un chevauchement.
+Le sampler des templates restitue désormais les marqueurs à leur slot natif.
+Le coordonnateur reconstruit les sources de chaque mood depuis l'historique et
+conserve les tâches autonomes déjà émises, sans générer de nouveaux marqueurs
+depuis une ancienne boucle après son remplacement. Une nouvelle tâche reprend
+les canaux de tête et de regard à leur valeur courante ; la libération des yeux
+attend leur prochaine boucle native.
+
+Les tests de régression couvrent le délai du marqueur, le début et la sortie du
+regard, deux tâches de tête superposées, la transition vers un mood répété, une
+tâche qui traverse un changement de mood, la reprise par la tâche d'un mood
+ultérieur et l'identité Play/Seek. Les 30 tests ciblés passent. Un balayage de
+la scène de `0` à `12 000 ms`, pas `1 ms`, donne un plus grand écart de
+`0,00399` entre deux pas sur les canaux tête, buste et yeux observés. Un
+balayage de 30 graines, trois occurrences de mood et un pas de `5 ms` ne
+retrouve plus les ruptures supérieures à `0,03` ; il exerce notamment les
+tâches superposées et les changements de mood. Les typechecks composant et
+démos, le build des démos et `git diff --check` passent. La suite complète du
+composant compte 94 réussites et les mêmes 9 échecs attribués à `gesture`,
+`gaze` et `motion`, toujours désactivés pour l'isolation.
+
+Safari TP a été rechargé puis contrôlé en Seek à `0`, `4030/4040`,
+`4590/4600` et `8790/8800 ms` : la pose initiale n'est pas en T et les
+frontières contrôlées ne montrent plus de changement d'orientation brusque.
+Une lecture réelle depuis `3900 ms` a traversé les actions mood de `4600` et
+`8800 ms` jusqu'à la fin de la scène ; le journal ne rapporte pas d'erreur
+runtime. Après le dernier raccord des tâches superposées, une nouvelle passe
+Safari TP a confirmé le Seek à `0`, `4590/4600` et `8790/8800 ms`, puis Play
+de `3900` à `18500 ms` avec les deux actions mood effectivement traversées.
+La tranche reste **En cours** pendant l'isolation des autres composants et
+jusqu'à l'appréciation visuelle de l'auteur.
+
+### Perceptibilité du mood — 27 septembre 2026
+
+L'auteur confirme la fluidité des raccords, mais ne distingue pas suffisamment
+le mood dans la lecture : le visage lui paraît neutre. Le journal Safari TP
+confirme la réception de `avatar:mood:happy` à `4600 ms` et le retour à
+`neutral` à `8800 ms`. La baseline `happy` reste la valeur TalkingHead native
+`mouthSmile = 0,2`, distribuée en `0,16` sur chaque morph de sourire du
+modèle ; le sampler spontané conserve cette même cible. Les captures au Seek
+montrent une différence légère entre `0` et `5500 ms`, insuffisante comme
+critère d'acceptation en lecture. La gate de visibilité du §43 reste donc
+ouverte. L'auteur choisit un réglage optionnel par expression dans l'initial
+du perso `avatar-mood`, par exemple `moods: { happy: { mouthSmile: 0.5 } }`.
+`mood: 'happy'` reste accepté pour sélectionner l'expression initiale, avec
+ou sans cette table. Chaque valeur remplace le canal homonyme de la baseline
+TalkingHead pour ce seul perso ; les autres valeurs et les moods non renseignés
+restent natifs. La même baseline résolue doit alimenter la transition
+d'expression et le sampler spontané, y compris les reconstructions Play/Seek
+et les tâches traversant un changement de mood. Les valeurs sont absolues,
+finies et validées à la construction. La démo exerce `happy` avec ce réglage
+via son vrai perso et la piste `avatar:mood:happy`, puis Safari TP permet de
+juger le modèle en lecture, Seek et replay. La tranche reste **En cours**
+jusqu'à cette appréciation.
+
+Le réglage par perso est implémenté sans modifier les valeurs globales de
+TalkingHead. Le perso transmet la baseline résolue avec chaque occurrence de
+mood ; le coordonnateur la réutilise dans les templates spontanés, y compris
+pour une tâche de tête qui traverse un changement de mood. `mood: 'happy'`
+fonctionne comme expression initiale avec `moods`, et un `happy` ultérieur
+utilise la même valeur. La scène de validation déclare
+`moods: { happy: { mouthSmile: 0.5 } }` sur son perso mood ; l'événement
+`avatar:mood:happy` et le lip-sync continuent par leurs pistes dédiées.
+
+Les tests ciblés du composant, du coordonnateur et du sampler comptent 45
+réussites ; les quatre échecs de cette sélection concernent les composants
+`gesture` et `gaze` volontairement désactivés. La suite complète compte 97
+réussites et les neuf échecs déjà connus de `gesture`, `gaze` et `motion`.
+Les typechecks composant et démos et le build démos passent. Safari TP a
+chargé le GLB réel : il contient `mouthSmileLeft` et `mouthSmileRight`, et
+le morph mixte `mouthSmile` accepte la valeur `0,5`. La démo a été vérifiée
+en Seek à `5500` et `6200 ms`, puis en lecture réelle traversant l'action
+`happy` jusqu'à `6200 ms`, avec le visage présent et sans erreur runtime
+observée. La perceptibilité en lecture reste à juger par l'auteur avant de
+clore la tranche.
+
+### Fréquence de clignement observée — 27 septembre 2026
+
+L'auteur observe un seul clignement sur les `18 500 ms` de la scène, contre
+trois à quatre avant la fusion de `avatar-idle` dans `avatar-mood`. Le calcul
+déterministe du sampler confirme un clignement complet vers `15 550 ms` avec
+la graine dérivée de `avatar-mood` et le redémarrage du temps de clignement
+aux moods de `4600` et `8800 ms`. Avec la même graine mais un temps absolu
+continu, le sampler en produit trois ; l'ancien perso `avatar-idle` avec sa
+graine propre et un temps continu en produisait quatre. TalkingHead recrée
+la boucle `blink` dans `setMood`, ce qui explique le redémarrage actuel, mais
+la spécification Avatar ne définit pas encore de réglage de fréquence pour
+répondre au besoin auteur. Une décision de contrat est nécessaire avant de
+modifier la boucle ou sa configuration ; la tranche reste **En cours**.
+
+### Troisième étape : réactivation de `avatar-gesture` — 27 septembre 2026
+
+À la demande de l'auteur, le filtre `temp` du composant `avatar-gesture` est
+levé. Son circuit existant dépose toujours ses frames sur la timeline `gesture`
+du coordonnateur ; ni les événements de la scène ni le core CodPlay ne sont
+modifiés. Les pistes mood et lip-sync restent indépendantes. La sortie
+`avatar:gesture:release` et les gestes successifs empruntent le même circuit.
+
+Les tests ciblés du composant, du coordonnateur, du catalogue de motions et de
+fidélité TH comptent 48 réussites ; les six échecs restants portent uniquement
+sur `avatar-gaze` et `avatar-motion`, toujours désactivés. La suite complète
+compte 100 réussites et ces mêmes six échecs. Les typechecks `component-v2` et
+démos ainsi que le build démos passent. Dans Safari TP, le modèle réel présente
+`nod_yes` à `4500 ms`, `wave_left` en Seek à `6800 ms` et en Play de `5500` à
+`6300 ms`, revient aux bras au repos à `8500 ms`, présente `wave_right` à
+`9400 ms`, `thumbup_right` à `12500 ms`, `celebrate` à `15100 ms` puis `bow`
+à `17800 ms`. La lecture intégrale de `0` à `18430 ms`, un Seek arrière et un
+rechargement suivi d'un Seek retrouvent la même pose à `6800 ms`. Aucune erreur
+ou alerte n'est relevée dans la console.
+La validation visuelle de la continuité par l'auteur reste ouverte ; la tranche
+demeure **En cours**. Le réglage de clignement et la perceptibilité du mood
+restent suivis séparément.
+
+### Cassure de tête à la sortie de `nod_yes` — 27 septembre 2026
+
+L'auteur signale une cassure d'orientation vers `5400 ms`, à la frontière de
+`avatar:gesture:release`. L'action `nod_yes` commence à `3900 ms` et dure
+`1200 ms` ; sa sortie interne de `250 ms` se termine vers `5350 ms`. Le geste
+libère alors ses morphs de tête. `MorphEngine.setFixed(null)` démarrait bien un
+retour progressif, mais le prochain échantillon spontané du mood appelait
+`snapAmbient()` sur ces mêmes canaux : dès que `fixed` était nul, il écrasait
+la valeur en cours par la cible ambiante. Cette interaction, indépendante des
+visèmes et de l'eventime `release`, explique une rupture visible peu après la
+sortie interne du geste.
+
+Le circuit existant de `MorphEngine` conserve maintenant l'approche en cours
+quand `snapAmbient()` reçoit une nouvelle cible ; celle-ci continue de suivre
+le mood pendant le retour du geste. Le test de frontière fait échouer l'ancien
+comportement avec un saut de `0,177 rad` sur `headRotateX`, puis vérifie que la
+valeur reste continue et reprend sa progression. Les sept tests de fidélité TH
+passent. La suite `component-v2` compte 101 réussites et les six échecs connus
+de gaze et motion désactivés ; les typechecks composant et démos ainsi que le
+build démos passent.
+
+Safari TP a été rechargé sur le vrai modèle ; Play a traversé `5367 → 5433 ms`
+sans réorientation nette observée, puis la scène entière de `0` à `18450 ms`.
+Un Seek arrière `5390 → 5400 ms` et un rechargement suivi d'un Seek à `5400 ms`
+ont été exercés. La seule erreur console est une requête de `favicon.ico`
+absent (`404`), sans lien avec l'Avatar. Cette correction ne touche ni la
+hiérarchie, ni la taille du host, ni la persistance : ces catégories ne
+traversent pas le moteur de morphs modifié. La tranche reste **En cours**
+jusqu'à l'appréciation visuelle de l'auteur autour de cette sortie et des
+autres gestes.
+
+### Cassure à la sortie de `bow` — 27 septembre 2026
+
+Le balayage de la lecture réelle après le premier correctif révèle une
+seconde cassure vers `18400 ms`, à la sortie explicite de `bow`. La trace du
+`MorphEngine` montre que `bodyRotateX` tombe de la valeur encore interpolée
+vers la valeur spontanée sur une seule frame. Cette fois, la cause est un
+`snapSystem('bodyRotateX', null)` répété par le regard : bien que cette
+contrainte soit déjà nulle, son traitement instantané annule la sortie du
+geste. Le coordonnateur ne fait pas de Seek à cette frontière ; la correction
+reste dans le moteur de morphs existant.
+
+`snapSystem()` laisse désormais une interpolation en cours quand sa valeur
+système est inchangée. Une nouvelle valeur système reste instantanée. Le test
+de régression reproduit l'ancien saut de `0,219 rad` sur `bodyRotateX` et
+vérifie les deux comportements. Les huit tests de fidélité TH passent ; la
+suite complète compte 102 réussites et les six échecs déjà connus de gaze et
+motion suspendus. Les typechecks composant et démos, le build démos et
+`git diff --check` passent.
+
+Safari TP présente `bow` avant et après `18400 ms` sans redressement immédiat.
+Dans le relevé exploratoire de la zone tête/buste, la variation de cette
+frontière passe d'environ `9,9` à `1,4` unités moyennes par frame ; la lecture
+complète ne montre plus de pic comparable aux autres frontières de geste.
+Play et Seek direct présentent cependant deux poses différentes à `18400 ms` :
+Play conserve le retour progressif, tandis que le Seek applique `snapAll()` et
+présente la cible. Le §39 autorise ce snap au Seek, mais l'égalité souhaitée
+entre ces deux modes pour une transition encore active reste à décider avec
+l'auteur avant tout changement de reconstruction. La tranche demeure
+**En cours**.
+
+### Quatrième étape : réactivation de `avatar-gaze` — 27 septembre 2026
+
+À la demande de l'auteur, le filtre `temp` est levé sur `avatar-gaze` au niveau
+du composant. `avatar-lip-sync`, `avatar-mood` et `avatar-gesture` restent
+actifs ; `avatar-motion` reste suspendu. Les eventimes, la scène, le host Three
+et le core CodPlay ne changent pas. Le regard utilise sa timeline existante
+et la caméra transmise au coordonnateur Avatar par le composant central.
+
+Les 39 tests ciblés des composants, du regard natif et du coordonnateur
+passent. La suite complète `component-v2` compte 104 réussites et quatre
+échecs, tous dus à `avatar-motion` encore suspendu. Les typechecks
+`component-v2` et démos, le build démos et `git diff --check` passent. Dans
+Safari TP, le journal reçoit `avatar:gaze:off` à `5400 ms` et
+`avatar:gaze:on` à `9600 ms`. Les images juste avant et à chaque événement
+sont identiques ; la tête et les yeux évoluent pendant les fenêtres
+`5400–6200 ms` et `9600–10400 ms`. Les poses à `6200` et `10400 ms` ont été
+observées par Seek puis par Play sur le vrai modèle. Un Seek arrière à `0 ms`
+retrouve la pose de repos, et un changement de taille suivi d'un Seek puis un
+rechargement suivi d'un Seek à `6200 ms` représentent le modèle sans erreur
+console. La validation visuelle de l'auteur et le raccord Play/Seek transitoire
+du geste à `18400 ms` restent ouverts ; cette étape reste **En cours**.
+
+Le contrôle du rechargement révèle aussi une lacune distincte du regard :
+après chargement asynchrone du GLB, le lecteur est `ready` à `0 ms`, mais le
+canvas reste vide tant qu'aucune nouvelle présentation Play ou Seek n'a lieu.
+`AvatarComponent.loadModel()` attache le modèle et incrémente sa révision
+après le dernier passage de présentation initial ; l'absence de nouveau tick
+laisse le host sans rendu. Le défaut persiste après douze secondes à `0 ms`
+et après un Seek vers cette même date. Un Seek à `5000 ms` présente le modèle ;
+un retour à `0 ms` présente ensuite la bonne pose.
+Le §38 interdit de présenter directement une frame depuis le callback de
+chargement ; le contrat ne précise pas encore comment un chargement asynchrone
+demande un nouveau passage du flux commun lorsque le lecteur est à l'arrêt.
+Cette frontière devra être décidée avant une correction, sans rendu parallèle
+dans le composant ou contournement de la démo.
+
+### Décision : identité de pose entre Play et Seek — 27 septembre 2026
+
+> Statut : **En cours**. L'auteur décide explicitement que, pour toute date
+> `t`, `Play(t) = Seek(t)`, y compris au milieu d'une transition. Cette décision
+> remplace l'exception de reconstruction instantanée admise au §39.
+
+L'écart à `18400 ms` est une preuve de non-conformité : en Play,
+`MorphEngine.update(deltaMs)` garde la valeur et la vitesse de sortie de
+`bow`, tandis que `commitSeek()` appelle `snapAll()` et saute à la cible.
+Corriger cette seule date serait insuffisant. Le même état dépendant des
+frames existe dans les transitions sémantiques de `GestureEngine`, la
+conservation des translations du lecteur de clips et les ressorts
+`AvatarDynamicBones`. `AvatarCoordinator` ne reçoit actuellement que la
+timeline de la dernière occurrence de geste ; cette représentation ne permet
+pas de rejouer tout l'historique au Seek. Une variation de cadence en Play
+modifie également les intégrations qui consomment directement `deltaMs`.
+
+L'auteur précise que toute transformation doit passer par le flux commun des
+composants. Le raccord doit garder `avatar-coordinate` comme seule
+présentation persistante et faire de la pose une fonction de la date CodPlay,
+de l'initial du modèle et des historiques d'instructions de chaque composant.
+Les transformations de `bow` et des autres gestes, les corrections de regard,
+les morphs et les animations externes doivent être composés dans ce même
+passage. Les traitements TH qui intègrent une vitesse ou un ressort devront
+partager une progression déterministe, indépendante des frames de rendu, puis
+reconstruire la même progression au Seek. `snapAll()` ne peut plus remplacer
+cette reconstruction pour une transition en cours. Les historiques restent
+dans leurs tracks respectives ; aucun événement visème ne pilote le corps.
+Le raccord des transformations ne prévoit aucun changement du core CodPlay ni
+contournement de la démo. Le chargement asynchrone à `0 ms` relève d'une
+frontière distincte du runtime, décrite plus bas.
+
+L'acceptation comparera les morphs, les rotations et les positions du modèle
+à la même date après Play continu, Play à cadences différentes, Seek direct,
+Seek arrière, replay et rechargement, avant, pendant et après les frontières
+de geste, mood, regard et motion. Elle couvrira les ressorts lorsque le perso
+les configure, puis le parcours Safari TP du modèle réel. Les tests ciblés,
+les non-régressions des couches précédentes, les typechecks et le build
+accompagneront ce contrôle. Le défaut d'affichage initial à `0 ms` reste une
+frontière distincte du chargement asynchrone.
+
+Première correction du flux commun : `avatar-gesture` conserve maintenant les
+occurrences de sa track et calcule chaque morph de geste à la date CodPlay.
+Une interruption, notamment le `release` de `bow`, part de la valeur du geste
+précédent à la frontière et suit une courbe TH absolue sur `250 ms`. Le
+coordonnateur applique cet échantillon avec `snapFixed()` ; le moteur de morphs
+ne lui ajoute plus un easing dépendant des frames. Les marqueurs squelettiques
+des gestes et poses sont transmis comme historique au même coordonnateur, qui
+les rejoue avec les poses mood dans l'ordre des dates au premier passage et
+après Seek. Le moteur sémantique est réinitialisé puis reconstruit à chaque
+date présentée : un Seek avant ou un Seek arrière ne dépend donc pas de la
+taille du saut ni de la cadence des frames précédentes. Un test de frontière
+compare la rotation de `bow` en Play et Seek au milieu du retour ; un autre
+compare le relâchement d'un geste natif, y compris après un saut direct vers
+l'avant.
+
+Une erreur d'intégration lors de cette correction (`sameGestureHistory` absent)
+a empêché la création de l'instance dans Safari TP. La fonction est rétablie :
+la démo revient à l'état `ready` et le canvas contient le modèle à `5000` et
+`18400 ms`, sans nouveau diagnostic console. Les tests ciblés des composants,
+du coordinateur et du regard passent ; la suite complète compte 108 réussites
+et les quatre échecs préexistants du
+composant `avatar-motion` encore désactivé. Les typechecks du composant et des
+démos, ainsi que le build des démos, passent. Cette preuve ne clôt pas la
+tranche : le template `look-ahead`, les translations conservées des clips,
+les ressorts optionnels et la comparaison Safari Play/Seek à toutes les
+frontières restent à vérifier et à corriger.
+
+Le composant de regard ne gardait que la dernière occurrence et la précédente.
+Une interruption au milieu d'une transition repartait de la cible finale
+précédente, avec un saut. Il échantillonne désormais toutes les occurrences
+de sa track à chaque nouvelle frontière ; le moteur natif reçoit aussi la
+cible source de la transition, même après Seek direct. Un test autonome vérifie
+la continuité et la même valeur après reconstruction. La source des morphs du
+template natif `look-ahead`, encore capturée dans l'état mutable du moteur,
+reste à reconstruire sur l'horloge commune ; cette correction n'est donc pas
+une validation globale de la parité du regard.
+
+Le canvas est encore vide après un chargement frais arrêté à `0 ms` ; le
+framebuffer vaut `[0,0,0,0]`. Après une présentation par Seek à `0 ms`, le
+modèle apparaît. `AvatarComponent.loadModel()` ne dispose que de la révision
+locale et du target Three ; `registerAnimation` n'est valable que durant
+`update()`. Le runtime ne propose pas de demande de nouvelle présentation
+après la fin asynchrone du chargement. Une capacité de réévaluation du frame
+courant par le pipe commun doit être spécifiée et acceptée avant toute
+modification du core ; le callback de chargement ne doit pas écrire la pose ni
+dessiner directement dans le host.
+L'auteur n'autorise pas de modification de `packages/codplay` pour cette
+demande. Le défaut du chargement frais arrêté à `0 ms` demeure donc ouvert ;
+aucun rendu parallèle dans le composant Avatar ne doit le masquer.
+
+### Continuité du hochement vers `5500 ms` — 28 septembre 2026
+
+La trace du modèle réel en Safari TP isole deux ruptures du même circuit :
+`nod_yes` finissait sa sortie naturelle vers `5350 ms` en tenant
+`headRotateX` à zéro, puis cédait immédiatement au mood spontané
+(`-0,112 rad` dans ce scénario). À `5400 ms`, le `release` explicite
+réintroduisait les canaux déjà libérés à zéro jusqu'à `5650 ms`, avant un
+second saut vers le mood. L'action de regard simultanée ne provoquait pas
+ces sauts de morph.
+
+Le sampler de geste transmet maintenant la part de pose encore possédée par
+la motion durant sa sortie. Le coordonnateur mélange cette part avec le
+dernier échantillon spontané dans `avatar-coordinate`. Un `release` après la
+fin naturelle reste libéré et ne recrée pas de canal fixe. Les interruptions
+actives conservent leur easing et la priorité des visèmes reste inchangée.
+
+Les tests ciblés des composants, du coordonnateur et de fidélité TH passent
+(`50/50`). La suite complète compte `110` réussites et les quatre échecs
+connus du composant `avatar-motion` encore désactivé. Les deux typechecks,
+le build des démos et `git diff --check` passent. Dans Safari TP, la trace
+Play de `5335` à `5450 ms` varie continûment de `-0,105` à `-0,112 rad`,
+puis reste à `-0,112 rad` pendant le `release` ; les Seek directs de
+`5250` à `5800 ms` donnent les mêmes échantillons aux dates communes. La
+validation perceptive par l'auteur et les autres frontières de composition
+du plan restent ouvertes ; la tranche demeure **En cours**.
+
+### Regard caméra continu dans la scène Avatar — 28 septembre 2026
+
+L'auteur demande que le contact caméra reste actif pendant toute la scène.
+Le perso `avatar-gaze` garde `enabled: true` et `contact: 1` dès son initial ;
+les occurrences `avatar:gaze:off` à `5400 ms` et `avatar:gaze:on` à `9600 ms`
+sont retirées des eventimes de cette scène. Les deux actions restent déclarées
+sur le perso et disponibles pour les scènes qui veulent piloter cette option.
+La capacité et ses tests de transitions restent dans le composant partagé.
+Le parcours de validation compare le regard caméra en Play, Seek et
+rechargement avant, pendant et après les anciennes fenêtres d'extinction,
+sur le modèle réel dans Safari TP. Le flux `avatar-coordinate` et le core
+CodPlay ne changent pas.
+
+Le premier contrôle du parcours réel révèle un écart de contrat : malgré
+`enabled: true`, `contact: 1` et la cible `camera`, le coordonnateur transmet
+un contact effectif de `0` à `5000`, `5400`, `5500`, `6200`, `8000`, `9600`
+et `10400 ms`. La couche spontanée mood produit un `eyeContact` nul à ces
+dates et le coordonnateur multiplie systématiquement le contact auteur par
+cette valeur. Porter la probabilité du profil idle à `1` ne donne pas un
+contact continu non plus : les templates TH contiennent des fenêtres sans
+contact. Les tests ciblés (`45/45`), le typecheck et le build passaient sans
+valider l'intention auteur ; cette observation a fixé la décision suivante.
+
+Décision de l'auteur : **l'eye contact est actif par défaut**. La track
+`avatar-gaze` possède donc la force du contact continu (`1` sans réglage
+auteur) et ses actions `on/off` la font varier ou la coupent. Les probabilités
+des templates TH restent dans le mood et ne multiplient plus la force demandée
+par `avatar-gaze` ; un marqueur de geste ne désactive pas cette option. La
+correction reste dans `AvatarCoordinator`, sans chemin de présentation
+supplémentaire. L'acceptation comprend une régression autonome avec une
+fenêtre TH sans contact, puis Play, Seek et rechargement Safari TP sur la
+scène entière, en plus des tests du regard et des autres composants actifs.
+
+`AvatarCoordinator` transmet désormais directement la force échantillonnée
+par `avatar-gaze` ; les marqueurs de contact du mood et du geste ne la
+remplacent plus. Le test de frontière utilise une date où le template TH ne
+demande aucun contact, vérifie le contact auteur `0,8`, puis une désactivation,
+une réactivation et un Seek arrière. Les tests du composant couvrent le défaut
+`enabled: true`, `contact: 1`, cible `camera`, ainsi que `on/off` de la
+timeline jusqu'au coordonnateur. Les 61 tests ciblés passent ;
+la suite complète compte `113` réussites et les quatre échecs connus de
+`avatar-motion` encore suspendu. Les typechecks du composant et des démos,
+le build des démos et `git diff --check` passent. Sur le modèle réel dans
+Safari TP, le contact reste à `1` et la cible `camera` en Seek de `0` à
+`18000 ms` ; les `1111` présentations d'un Play complet jusqu'à `18500 ms`
+gardent aussi ces valeurs. Après redimensionnement et rechargement, le Seek
+à `5510 ms` garde ces valeurs et le framebuffer contient le modèle. Aucun
+diagnostic runtime n'apparaît. La composition n'écrit ni état persistant ni
+hiérarchie du host ;
+ces frontières ne sont pas modifiées. La tranche Avatar reste **En cours**
+pour ses autres frontières de composition et la validation perceptive.
+
+### Dernière étape : réactivation de `avatar-motion` — 28 septembre 2026
+
+À la demande de l'auteur, le filtre `temp` est levé sur `avatar-motion` au
+niveau du composant. La surface auteur et le lecteur de clip existants des
+sections 20, 27 et 35 restent le circuit de référence. Les `117` tests de
+`component-v2` passent après activation, dont les quatre tests auparavant
+suspendus avec ce composant ; le typecheck du package passe. Aucun core
+CodPlay n'est modifié.
+
+La scène Avatar principale conserve son rôle de validation des expressions,
+gestes et regard. Le parcours d'acceptation de la motion utilise la scène
+d'animation dédiée prévue en section 27, avec le modèle préparé et la ressource
+`hero-walk.fbx` déclarés dans le preload réel. Il doit exercer l'initial et
+l'action `avatar:motion:walk`, comparer Play et Seek au départ, pendant le
+clip, pendant le retour à la pose Avatar et après, puis rechargement et
+redimensionnement dans Safari TP. La tranche reste **En cours** jusqu'à cette
+validation, y compris l'égalité des translations et rotations.
+
+### Validation de `avatar-motion` sur le modèle réel — 28 septembre 2026
+
+La scène dédiée `?demo=avatar-motion` charge `avatarsdk.glb` et
+`hero-walk.fbx` par le manifeste et les stratégies Three.js communs. Elle
+active le composant avec `motion: 'walk'` et une occurrence
+`avatar:motion:walk` à `0 ms`. Son cadrage auteur montre le corps entier pour
+observer la marche ; ce réglage ne remplace aucun comportement du runtime.
+
+Le premier balayage Safari TP a révélé deux dépendances à la frame précédente.
+L'équilibre hanches/pieds lisait les pieds et les limites du modèle en
+coordonnées mondiales : le déplacement `arrival` du parent se retrouvait ainsi
+ajouté aux hanches du squelette. Le calcul est désormais effectué dans le
+repère local de l'armature, avec une régression où le parent est déplacé et
+tourné. Ensuite, pendant la sortie naturelle, le temps du clip restait sur sa
+dernière image. Le mixer Three.js évitait de réécrire une valeur jugée
+identique, alors que le composeur avait entre-temps écrit la pose de la frame
+précédente. Le lecteur renouvelle les bindings quand ce temps est répété ; une
+régression compare désormais la pose terminale lue sur plusieurs frames Play
+avec un Seek direct au milieu de la sortie.
+
+Après correction, les hanches et leur quaternion ont les mêmes valeurs en
+Seek avant et après un retour temporel (`500`, `1000`, `1180`, `6000` puis
+`1180 ms`). À `1200 ms`, une frame Play et un Seek au même temps donnent des
+translations et quaternions identiques sur le vrai modèle. Les échantillons de
+`900` à `1800 ms` montrent un déplacement `arrival` qui atteint zéro puis un
+retour progressif à la pose. La capture Safari montre le modèle entier en
+marche à `500 ms`. Après redimensionnement à `900 × 800`, puis rechargement de
+la scène, le framebuffer contient toujours le modèle aux dates testées. La
+démo Avatar principale reste affichée à `5500 ms` après réactivation de
+`avatar-motion`. Aucun état persistant ni hiérarchie du host n'est modifié par
+ces corrections ; la vérification de persistance ne requiert donc pas de
+nouveau scénario.
+
+La suite `component-v2` passe avec `118` tests, les deux typechecks et le build
+des démos passent. Le contrôle `git diff --check` et les diagnostics navigateur
+terminent cette étape. Le défaut connu de première présentation asynchrone à
+`0 ms`, déjà documenté plus haut et hors de cette correction sans autorisation
+core, reste ouvert. La tranche Avatar demeure **En cours** pour sa validation
+perceptive d'ensemble.
+
+### Continuité à 630 ms et regard caméra — 28 septembre 2026
+
+Sur `?demo=avatar-motion`, l'auteur observe une petite cassure de tête au début
+de la levée du bras et ne voit jamais de contact caméra. À `630 ms`, le
+coordonnateur reçoit pourtant `avatar-gaze` actif, un contact de `1` et la cible
+`camera`. Le mouvement de tête transmis au regard est nul : le mood de cette
+scène coupe son mouvement spontané de tête, et le coordonnateur multipliait à
+tort la force propre au regard par ce réglage mood. Le regard conserve désormais
+sa force auteur indépendamment du mouvement spontané ; une régression vérifie
+ce cas avec un mood immobile et une force de regard explicite.
+
+L'arrivée animée déplace le parent du modèle à chaque date. La résolution du
+regard utilisait sa position de la présentation précédente, car le déplacement
+du parent était appliqué après la composition et les matrices mondiales de ses
+ancêtres restaient parfois périmées. Le déplacement est maintenant posé dans
+la présentation Avatar, après l'échantillon du clip et avant le calcul du
+regard. Le regard actualise aussi les matrices mondiales de ses ancêtres. Une
+régression déplace le parent entre deux échantillons ; le regard obtenu égale
+celui d'un modèle directement placé à la nouvelle position.
+
+La comparaison Safari TP a ensuite isolé une seconde dépendance temporelle :
+Three.js pouvait conserver une valeur de piste inchangée dans son mixer alors
+que le composeur avait écrit une autre pose sur l'os entre deux échantillons.
+Le lecteur renouvelle les bindings natifs à chaque échantillon. Le test ciblé
+reproduit ce cas sur la translation constante des hanches. Pour l'arrivée
+centrée, l'ancrage de cette translation est la position du modèle chargé,
+conformément au contrat `arrival` ; un autre test couvre cette origine.
+
+Après ces corrections, les parcours Safari TP `0 → 1200 → 633 → 1200 → 0 →
+1200 → 633 ms` produisent exactement la même position et le même quaternion
+de tête, la même position locale des hanches et le même déplacement du parent
+à chaque retour sur `633` ou `1200 ms`. Le regard calculé à `630 ms` est non
+nul et son axe final pointe vers la caméra à quelques centièmes de radian
+près. Le modèle est présent dans le framebuffer après redimensionnement et
+rechargement sur la scène dédiée, ainsi qu'à `5500 ms` dans la scène Avatar
+principale. Les `123` tests de `component-v2`, les deux typechecks, le build
+des démos et `git diff --check` passent. Safari TP signale actuellement son
+onglet comme masqué et suspend le RAF ; cette session ne permet donc pas de
+confirmer visuellement un Play continu après la dernière correction. La
+tranche reste **En cours** jusqu'à ce contrôle perceptif et au retour de
+l'auteur sur les deux symptômes.
+
+Le chargement du FBX émet des avertissements Three.js pour des pistes dont
+l'os cible est absent du modèle. Un Seek supplémentaire à `630 ms` n'en émet
+pas après vidage du journal ; aucun traitement du clip n'a été ajouté sur la
+base de ces seuls avertissements.
+
+### Lisibilité des trois appuis de l'entrée — 28 septembre 2026
+
+L'auteur observe que la marche de la scène dédiée finit trop tôt et ressemble
+à un glissement ou à une avancée de caméra. Le clip `hero-walk.fbx` dure
+`0,967 s` et porte une translation de hanches d'environ `1,62 m` avec trois
+phases d'appui visibles dans ses pistes pied droit, pied gauche, pied droit.
+L'ancienne scène laissait la transition d'entrée à sa valeur TH de `1 000 ms` :
+la pose de marche n'atteignait donc son poids entier qu'après la fin du clip.
+Le `ease-out` auteur comprimait en outre la cadence des premiers appuis. La
+caméra de cette scène est fixe, sans action ; c'est le groupe de présentation
+de l'avatar qui avance selon `rootMotion: arrival`.
+
+La scène d'acceptation règle maintenant la vitesse auteur de `avatar-motion`
+à `0,5`, soit `1,933 s` pour le clip complet, et `entryTransitionMs` à `0`
+sur la ressource. Elle retire l'easing de ce clip pour conserver le rythme
+de ses appuis. C'est un réglage du scénario au moyen des surfaces déjà prévues
+par les sections 20, 27 et 35 : le runtime est responsable d'échantillonner
+ce clip et son déplacement à la même date, mais ne doit pas inventer une
+durée ou une transition particulière pour cette ressource. Le preload et le
+flux réel `avatar-coordinate` restent exercés ; aucun composant ni core
+CodPlay n'est modifié.
+
+Dans Safari TP, les images du canvas aux Seek `0`, `700`, `1300`, `1900` et
+`2500 ms` montrent le cycle encore actif à `1900 ms` puis la pose de repos.
+Après rechargement et redimensionnement, le modèle reste présent à `1900 ms`.
+Les Seek `700 → 1300 → 1900 → 700 → 1300 → 1900 ms` reproduisent des images
+identiques pour chaque date. Le Play atteint la fin de la scène ; la session
+Safari masque parfois l'onglet et ne permet pas une observation fiable de
+toutes ses frames intermédiaires. Les `123` tests `component-v2`, les deux
+typechecks, le build des démos et `git diff --check` passent. La tranche
+reste **En cours** pour l'appréciation perceptive de l'auteur.
+
+### Audit des frontières de tête — 28 septembre 2026
+
+L'auteur constate de nouvelles cassures de tête après les corrections
+précédentes et demande de vérifier les changements de propriété des canaux,
+sans lissage local. La scène Avatar principale n'utilise pas `avatar-motion` :
+les réglages de vitesse et d'entrée de la marche dédiée ne peuvent pas être
+leur cause directe. La suite existante du coordonnateur et des composants
+passe (`46/46`), mais elle ne contrôle pas la continuité entre les deux côtés
+de chaque frontière.
+
+L'audit en lecture seule des échantillons mood et des motions de geste révèle
+un écart avant la correction de regard : à l'entrée de `nod_yes`, la valeur
+spontanée `headRotateX` vaut environ `-0,01212` à `3899 ms`, tandis que le
+premier échantillon du geste lui substitue `0` à `3900 ms`. Un premier calcul
+isolé suggérait aussi une rupture à l'entrée de `bow`, mais le passage réel
+par `avatar-gesture` la dément : son raccord avec l'action précédente conserve
+`bodyRotateX` autour de `0,03267` à `17300 ms`. Les autres entrées de la scène
+ne revendiquent pas ces canaux au même instant. Dans un balayage
+de la seule couche mood à pas de `10 ms`, aucun des six canaux de rotation
+tête/corps ne varie de plus de `0,00265` rad entre deux échantillons ; cela
+n'exclut pas un autre défaut après composition. Les valeurs rapportées ici ne
+sont pas une mesure du quaternion final du modèle dans Safari.
+
+Le mécanisme est dans la composition commune : les canaux numériques d'un
+geste sont initialisés depuis zéro. Le premier geste ne conserve pas l'action
+initiale relâchée dans son historique ; son poids vaut donc `1` dès sa première
+frame et `applyFixedLayer()` retire la valeur spontanée. Les actions suivantes
+passent par le raccord commun de `avatar-gesture`, qui part de la valeur à leur
+frontière. La correction doit rendre ce raccord cohérent pour la première
+action et les suivantes, puis mesurer les
+contributions et le quaternion final immédiatement avant, à et après les
+entrées, sorties et interruptions sur une fixture autonome, puis vérifier
+Play, Seek, replay et Safari sur le modèle réel. La tranche reste **En cours**.
+
+Le test autonome a d'abord reproduit l'entrée fautive avec une valeur
+spontanée de tête de `-0,05421` rad : le premier geste présentait `0` à sa
+date de départ. `avatar-gesture` conserve maintenant son état initial dans
+l'historique, afin que le premier geste utilise le même raccord daté que les
+suivants. Le contrôle du quaternion final avec regard caméra a ensuite révélé
+un autre défaut au `release` d'un hochement : les morphs restaient continus,
+mais la tête sautait de `0,371` rad, parce que le marqueur `headMove: 0` du
+geste cessait instantanément de remplacer la force du perso `avatar-gaze`.
+Le coordonnateur laisse désormais cette force au regard. Le contact caméra
+temporaire des gestes emoji reste conservé, conformément à la décision de
+fidélité TalkingHead de la section 18.
+
+Enfin, le raccord commun utilisait un poids unique pour tous les morphs : un
+`bow` arrivant pendant la sortie d'un autre geste retirait environ `0,0087`
+rad de `bodyRotateX` spontané dès sa première frame. Le raccord transmet
+maintenant une part de propriété par canal, puis le coordonnateur compose
+chaque canal avec sa propre part. Les tests autonomes couvrent l'entrée du
+premier geste, le retour en Seek, la conservation d'un geste initial auteur,
+la propriété du regard et le quaternion final sur une entrée, une sortie
+interrompue, un nouveau geste et un second `release`. Les tests ciblés passent
+(`51/51`). La suite `component-v2` passe (`129` tests, `17` fichiers), ainsi que
+les typechecks du composant et des démos, le build des démos et
+`git diff --check`.
+
+Dans Safari TP, la scène réelle se charge et le modèle reste visible en Seek
+à `3900` et `5600 ms`. Le framebuffer à `3900 ms` produit la même empreinte
+(`3438449930`) après Seek arrière et après rechargement. Un redimensionnement
+change la résolution du canvas de `1440×960` à `1440×620`, avec modèle présent,
+puis la rétablit. La lecture réelle a démarré à `3890 ms`, mais le temps n'a
+pas avancé dans cette session Safari suspendue ; sa fluidité perceptive reste
+à contrôler avant de déclarer la tranche stabilisée.
+
+### Ouverture de bouche concurrente avec le lip-sync — 28 septembre 2026
+
+L'auteur observe une bouche maintenue ouverte autour de `15000 ms` pendant la
+parole. À cette date, la scène est revenue à `neutral` depuis `8800 ms` ; le
+geste `celebrate`, démarré à `14400 ms`, contribue simultanément
+`mouthSmile`, `mouthOpen` et `jawOpen`. Le cue de silence `14860–15060 ms`
+ramène les visèmes à zéro, mais la couche lip-sync ne revendiquait pas les deux
+ouvertures laissées par le geste. La frontière auteur déjà fixée en section 43
+est que le visème nul referme la bouche sans retirer le sourire ni changer les
+autres comportements.
+
+La correction reste dans la timeline `avatar-lip-sync` : elle présente
+`mouthOpen = 0` et `jawOpen = 0` avec ses visèmes, y compris au silence. La
+priorité existante des morphs de parole sur ceux de geste suffit ; le geste
+conserve `mouthSmile` et ses canaux corporels. Un test autonome compose les
+deux ouvertures et le sourire d'un geste avec un visème parlé puis nul, puis
+compare Play et Seek sur le moteur morphique réel. La scène Avatar sert à
+contrôler l'articulation sur le modèle chargé autour de `15000 ms`, avec le
+reste de la séquence et le rechargement. Le code se limite au composant
+lip-sync et à ses tests. La validation couvre les frontières du composant et
+la scène réelle.
+
+Le test a d'abord échoué au silence : la frame lip-sync ne contenait que les
+visèmes à zéro. Après correction, les `50` tests ciblés et les `130` tests de
+la suite `component-v2` passent, ainsi que les deux typechecks, le build des
+démos et `git diff --check`. Dans Safari TP, le modèle montre la bouche fermée
+et le sourire de `celebrate` à `15000 ms`. La lecture réelle traverse cette
+zone ; les Seek `14800 → 15000 → 15100 → 14800 → 15000 ms` redonnent les mêmes
+images pour chaque date répétée. Après rechargement, l'image à `15000 ms`
+garde la même empreinte (`1853715325`). La correction ne modifie ni taille,
+hiérarchie, reparentage, placement, ni persistance : elle ajoute deux morphs
+fixes à la contribution existante du lip-sync. La tranche Avatar globale
+reste **En cours** pour les autres validations perceptives de l'auteur.

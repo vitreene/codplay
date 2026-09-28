@@ -222,6 +222,25 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       };
     },
   },
+  {
+    id: "avatar-motion",
+    path: "?demo=avatar-motion",
+    title: "Avatar — animation liée au modèle",
+    description: "Une marche FBX préchargée exerce le déplacement d’entrée et le retour à la pose Avatar.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/avatar-motion/main"),
+        import("./demos/avatar/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        engineCapabilities: module.engineCapabilities,
+        preloadManifest: module.preloadManifest,
+        preloadStrategies: module.preloadStrategies,
+      };
+    },
+  },
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */

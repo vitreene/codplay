@@ -5,11 +5,13 @@ import type {
   AvatarBody,
   AvatarEngine,
   AvatarGestureFrame,
+  AvatarGestureHistoryEvent,
   AvatarGestureOverlay,
   AvatarGazeLookAhead,
   AvatarGazeTarget,
   AvatarGazeTargetTransition,
   AvatarHandTarget,
+  AvatarMoodOccurrence,
   AvatarMorphs,
   AvatarTimeline,
   AvatarTimelineSlot,
@@ -18,6 +20,7 @@ import type {
   BlinkScheduleFn,
   MoodName,
   TalkingHandsOptions,
+  ThIdleFrame,
   ThIdleOptions,
 } from '../avatar-types.js'
 import { sampleThIdle } from '../idle/th-idle-animation.js'
@@ -40,8 +43,12 @@ export class AvatarCoordinator {
   private engine: AvatarEngine | undefined
   private moodMorphs: AvatarMorphs
   private moodName: MoodName
+  private moodStartAt = 0
+  private moodHistory: readonly AvatarMoodOccurrence[]
   private idleProfile: ThIdleOptions
   private gesture: GestureContribution = null
+  private gestureHistory: readonly AvatarGestureHistoryEvent[] = []
+  private gestureReleaseAt = 0
   private pose: string | undefined
   private poseStartAt = 0
   private blinkSchedule: BlinkScheduleFn | null = null
@@ -52,8 +59,6 @@ export class AvatarCoordinator {
   private gazeTarget: AvatarGazeTarget = 'camera'
   private gazeTargetTransition: AvatarGazeTargetTransition | undefined
   private gazeLookAhead: AvatarGazeLookAhead | null = null
-  private idleEyeContact: number = TH_GAZE_DEFAULTS.idleContact
-  private idleHeadMove: number = TH_GAZE_DEFAULTS.idleHeadMove
   private gazeMode: 'idle' | 'speaking' | 'listening' = 'idle'
   private gazeProfiles: Readonly<{
     idle?: number | null
@@ -72,10 +77,10 @@ export class AvatarCoordinator {
   private readonly view: AvatarView
   private readonly timelines: Partial<Record<AvatarTimelineSlot, AvatarTimeline>> = {}
   private gestureMorphs: AvatarMorphs = {}
+  private gestureMorphWeight = 1
+  private gestureMorphWeights: AvatarMorphs = {}
   private gestureOverlay: AvatarGestureOverlay | null = null
   private gestureActionStartAt: number | undefined
-  private gestureEyeContact: number | undefined
-  private gestureHeadMove: number | undefined
   private gestureGazeTarget: AvatarGazeTarget | undefined
   private gestureHandTargets: readonly AvatarHandTarget[] = []
   private gesturePose: string | undefined
@@ -100,6 +105,7 @@ export class AvatarCoordinator {
     view: AvatarView = 'full',
   ) {
     this.moodName = initialMood
+    this.moodHistory = [{ mood: initialMood, startAt: 0 }]
     this.avatarBaseline = filterAvatarModelBaseline(avatarBaseline)
     this.body = body
     this.view = view
@@ -128,8 +134,6 @@ export class AvatarCoordinator {
     this.appliedPose = undefined
     this.lastTimeMs = undefined
     this.lastAppliedRevision = undefined
-    this.idleEyeContact = TH_GAZE_DEFAULTS.idleContact
-    this.idleHeadMove = TH_GAZE_DEFAULTS.idleHeadMove
     this.revision += 1
   }
 
@@ -142,8 +146,6 @@ export class AvatarCoordinator {
     this.appliedSpeechMorphs = undefined
     this.appliedGestureKey = undefined
     this.gestureActionStartAt = undefined
-    this.gestureEyeContact = undefined
-    this.gestureHeadMove = undefined
     this.gestureGazeTarget = undefined
     this.gestureHandTargets = []
     this.gesturePose = undefined
@@ -153,8 +155,6 @@ export class AvatarCoordinator {
     this.lastTimeMs = undefined
     this.lastAppliedRevision = undefined
     this.engineConfigurationDirty = true
-    this.idleEyeContact = TH_GAZE_DEFAULTS.idleContact
-    this.idleHeadMove = TH_GAZE_DEFAULTS.idleHeadMove
   }
 
   /** Returns the change revision used by the central presentation stream. */
@@ -169,6 +169,13 @@ export class AvatarCoordinator {
     this.revision += 1
   }
 
+  /** Stages skeletal gesture markers for reconstruction in the common stream. */
+  setGestureHistory(events: readonly AvatarGestureHistoryEvent[]): void {
+    if (sameGestureHistory(this.gestureHistory, events)) return
+    this.gestureHistory = events.map((event) => ({ ...event }))
+    this.revision += 1
+  }
+
   /** Stores and applies the latest mood baseline contribution. */
   applyMood(morphs: AvatarMorphs): void {
     const next = { ...this.avatarBaseline, ...morphs }
@@ -177,15 +184,31 @@ export class AvatarCoordinator {
     this.revision += 1
   }
 
-  /** Stores the semantic mood used by the automatic TH animation templates. */
-  setMood(name: MoodName): void {
-    if (this.moodName === name) return
-    this.moodName = name
-    this.revision += 1
-    this.engineConfigurationDirty = true
+  /** Stores the mood and the eventime from which its TH loops begin. */
+  setMood(name: MoodName, startAt = 0): void {
+    this.setMoodHistory([
+      ...this.moodHistory.filter((occurrence) => occurrence.startAt < startAt),
+      { mood: name, startAt },
+    ])
   }
 
-  /** Stages the automatic TH idle channels owned by avatar-idle. */
+  /** Replaces the active mood history used to rebuild spontaneous pose changes. */
+  setMoodHistory(occurrences: readonly AvatarMoodOccurrence[]): void {
+    const next = [...occurrences].sort((left, right) => left.startAt - right.startAt)
+    if (sameMoodHistory(this.moodHistory, next)) return
+    this.moodHistory = next
+    const latest = next.at(-1)
+    const mood = latest?.mood ?? 'neutral'
+    const startAt = latest?.startAt ?? 0
+    if (this.moodName !== mood || this.moodStartAt !== startAt) {
+      this.moodName = mood
+      this.moodStartAt = startAt
+      this.engineConfigurationDirty = true
+    }
+    this.revision += 1
+  }
+
+  /** Stages the automatic TH channels configured by the mood perso. */
   setIdleProfile(options: ThIdleOptions): void {
     const next = {
       ...options,
@@ -214,21 +237,20 @@ export class AvatarCoordinator {
       ? null
       : { name: frame.gesture, seed, mirror: frame.mirror, startAt }
     const nextMorphs = actionChanged ? {} : { ...this.gestureMorphs }
+    const nextMorphWeight = frame.released ? 0 : frame.morphWeight ?? 1
+    const nextMorphWeights = frame.released || actionChanged ? {} : { ...this.gestureMorphWeights }
     if (frame.released) {
       for (const name of Object.keys(nextMorphs)) delete nextMorphs[name]
     } else {
       for (const [name, value] of Object.entries(frame.morphs)) {
         if (typeof value === 'number') {
-          nextMorphs[name] = value + (this.moodMorphs[name] ?? 0)
+          nextMorphs[name] = value
+          const weight = frame.morphWeights?.[name]
+          if (weight === undefined) delete nextMorphWeights[name]
+          else nextMorphWeights[name] = weight
         }
       }
     }
-    const nextEyeContact = frame.released
-      ? undefined
-      : actionChanged ? frame.eyeContact : frame.eyeContact ?? this.gestureEyeContact
-    const nextHeadMove = frame.released
-      ? undefined
-      : actionChanged ? frame.headMove : frame.headMove ?? this.gestureHeadMove
     const nextGazeTarget = frame.released
       ? undefined
       : frame.gazeTarget === null
@@ -250,18 +272,21 @@ export class AvatarCoordinator {
     const changed = !sameGesture(this.gesture, nextGesture)
       || this.gestureActionStartAt !== (frame.released ? undefined : actionStartAt)
       || !sameMorphs(this.gestureMorphs, nextMorphs)
+      || this.gestureMorphWeight !== nextMorphWeight
+      || !sameMorphs(this.gestureMorphWeights, nextMorphWeights)
       || !sameOverlay(this.gestureOverlay, frame.overlay)
       || !sameHandTargets(this.gestureHandTargets, nextHandTargets)
       || this.gesturePose !== nextPose
       || this.gesturePoseStartAt !== nextPoseStartAt
-      || this.gestureEyeContact !== nextEyeContact
-      || this.gestureHeadMove !== nextHeadMove
       || this.gestureGazeTarget !== nextGazeTarget
     if (!changed) return
 
     this.gesture = nextGesture
+    if (nextGesture === null) this.gestureReleaseAt = startAt
     this.gestureActionStartAt = frame.released ? undefined : actionStartAt
     this.gestureMorphs = nextMorphs
+    this.gestureMorphWeight = nextMorphWeight
+    this.gestureMorphWeights = nextMorphWeights
     this.gestureOverlay = frame.overlay
     this.gestureHandTargets = nextHandTargets.map((target) => ({
       ...target,
@@ -269,8 +294,6 @@ export class AvatarCoordinator {
     }))
     this.gesturePose = nextPose
     this.gesturePoseStartAt = nextPoseStartAt
-    this.gestureEyeContact = nextEyeContact
-    this.gestureHeadMove = nextHeadMove
     this.gestureGazeTarget = nextGazeTarget
     this.revision += 1
     this.engineConfigurationDirty = true
@@ -305,7 +328,7 @@ export class AvatarCoordinator {
   /** Stages the gaze selection for the next central presentation. */
   setGaze(enabled: boolean, contact?: number | null, headMove?: number | null): void {
     const nextContact = contact === undefined ? this.resolveGazeContact() : contact
-    const nextHeadMove = headMove === undefined ? this.resolveGazeHeadMove() : headMove
+    const nextHeadMove = headMove === undefined ? this.gazeHeadMove : headMove
     const nextEnabled = enabled
     if (this.gazeEnabled === nextEnabled
       && this.gazeContact === nextContact
@@ -388,7 +411,7 @@ export class AvatarCoordinator {
   }
 
   /** Applies all collected contributions at one absolute CodPlay time. */
-  applyAt(timeMs: number): AvatarVector3 {
+  applyAt(timeMs: number, applyRootMotion?: (offset: AvatarVector3) => void): AvatarVector3 {
     const engine = this.engine
     if (engine === undefined) return NO_ROOT_MOTION
 
@@ -400,7 +423,6 @@ export class AvatarCoordinator {
     )
     if (seeking) {
       engine.prepareSeek()
-      this.appliedMoodMorphs = undefined
       this.appliedAmbientMorphs = undefined
       this.appliedFixedMorphs = undefined
       this.appliedSpeechMorphs = undefined
@@ -410,13 +432,17 @@ export class AvatarCoordinator {
       this.engineConfigurationDirty = true
     }
 
+    engine.resetSemantic?.()
+    const rebuildSemantic = seeking || this.lastTimeMs === undefined
+      || engine.resetSemantic !== undefined
+
     this.applyTimelines(timeMs)
     this.applyMoodLayer()
-    this.applyAmbientLayer(timeMs)
+    this.applyAmbientLayer(timeMs, rebuildSemantic)
     this.applyFixedLayer()
     this.applyPoseLayer(timeMs)
 
-    this.applyGestureSelection(timeMs)
+    this.applyGestureSelection(rebuildSemantic)
     this.applyOverlayLayer()
     this.applyEngineConfiguration()
 
@@ -424,9 +450,9 @@ export class AvatarCoordinator {
       engine.commitSeek(timeMs)
     } else {
       const deltaMs = Math.max(0, timeMs - (this.lastTimeMs ?? timeMs))
-      engine.animate(deltaMs)
+      engine.animate(deltaMs, timeMs)
     }
-    const rootMotion = engine.applyAnimationAt(timeMs)
+    const rootMotion = engine.applyAnimationAt(timeMs, applyRootMotion)
     this.lastTimeMs = timeMs
     this.lastAppliedRevision = this.revision
     return rootMotion
@@ -445,7 +471,12 @@ export class AvatarCoordinator {
     if (engine === undefined) return
 
     if (this.engineConfigurationDirty) {
-      engine.setBlinkScheduleFn(this.blinkSchedule)
+      engine.setBlinkScheduleFn(this.blinkSchedule === null
+        ? null
+        : ({ elapsed, mood }) => this.blinkSchedule?.({
+          elapsed: elapsed - this.moodStartAt,
+          mood,
+        }))
       engine.setMood(this.moodName)
       engine.setTalkingHands(resolveTalkingHandsOptions(this.idleProfile))
       engine.setAnimation(this.animation)
@@ -454,7 +485,7 @@ export class AvatarCoordinator {
 
     engine.setGazeCamera(this.gazeCamera)
     engine.setGazeContact(this.resolveGazeContact())
-    engine.setGazeHeadMove(this.resolveGazeHeadMove())
+    engine.setGazeHeadMove(this.gazeHeadMove)
     engine.setGazeTarget(this.resolveEffectiveGazeTarget(), this.gazeTargetTransition)
     engine.setGazeLookAhead(this.gazeLookAhead)
     engine.setGazeEnabled(this.gazeEnabled)
@@ -471,29 +502,28 @@ export class AvatarCoordinator {
       ...Object.keys(this.moodMorphs),
     ])
     for (const name of names) {
-      engine.morphEngine.setBaseline(name, this.moodMorphs[name] ?? null)
+      engine.morphEngine.snapBaseline(name, this.moodMorphs[name] ?? null)
     }
     this.appliedMoodMorphs = { ...this.moodMorphs }
   }
 
   /** Samples and applies the deterministic TH idle/mood animation layer. */
-  private applyAmbientLayer(timeMs: number): void {
+  private applyAmbientLayer(timeMs: number, rebuildPoseHistory: boolean): void {
     const engine = this.engine
     if (engine === undefined) return
 
-    const frame = sampleThIdle(
-      this.moodName,
-      timeMs,
-      this.resolveIdleTemplateOptions(),
-      this.moodMorphs,
-    )
+    const frame = this.sampleAmbientHistory(timeMs)
+    if (rebuildPoseHistory) this.rebuildMoodPoseHistory(timeMs)
     const morphs = frame.morphs
     this.ambientOverlay = frame.overlay
-    this.idleEyeContact = frame.eyeContact ?? 0
-    this.idleHeadMove = frame.headMove ?? 0
-    if (frame.pose !== undefined && frame.pose !== this.pose) {
+    const framePoseStartAt = frame.poseStartAt === undefined
+      ? timeMs
+      : this.moodStartAt + frame.poseStartAt
+    if (frame.pose !== undefined && (
+      frame.pose !== this.pose || framePoseStartAt !== this.poseStartAt
+    )) {
       this.pose = frame.pose
-      this.poseStartAt = frame.poseStartAt ?? timeMs
+      this.poseStartAt = framePoseStartAt
       this.appliedPose = undefined
     }
     if (sameMorphs(this.appliedAmbientMorphs, morphs)) return
@@ -508,21 +538,149 @@ export class AvatarCoordinator {
     this.appliedAmbientMorphs = { ...morphs }
   }
 
-  /** Resolves the contact value for the active TH interaction state. */
-  private resolveGazeContact(): number | null {
-    if (this.gestureEyeContact !== undefined) return this.gestureEyeContact
-    const selected = this.gazeProfiles[this.gazeMode]
-    const base = selected === undefined ? this.gazeContact : selected
-    return base === null ? this.idleEyeContact : base * this.idleEyeContact
+  /** Rebuilds TH template handoffs and unfinished head tasks from mood events. */
+  private sampleAmbientHistory(timeMs: number): ThIdleFrame {
+    const options = this.resolveIdleTemplateOptions()
+    const occurrences = this.moodHistory.filter((occurrence) => occurrence.startAt <= timeMs)
+    if (occurrences.length === 0) {
+      return sampleThIdle(this.moodName, 0, options, this.moodMorphs)
+    }
+
+    const continuedTasks: {
+      occurrence: AvatarMoodOccurrence
+      initialMorphs: AvatarMorphs
+      endAt: number
+      markerCutoffAt: number
+      resolveHeadSourceAt: (elapsedMs: number) => Readonly<Record<string, number>>
+    }[] = []
+    let initialMorphs: AvatarMorphs = {}
+    let frame: ThIdleFrame = { morphs: {}, overlay: null }
+
+    for (let index = 0; index < occurrences.length; index += 1) {
+      const occurrence = occurrences[index]!
+      const next = occurrences[index + 1]
+      const sampleAt = Math.min(timeMs, next?.startAt ?? timeMs)
+      const previousTasks = [...continuedTasks]
+      /** Resolves the latest autonomous head task before this mood takes ownership. */
+      const resolveHeadSourceAt = (elapsedMs: number): Readonly<Record<string, number>> => {
+        const absoluteAt = occurrence.startAt + elapsedMs
+        for (const task of [...previousTasks].reverse()) {
+          if (absoluteAt >= task.endAt) continue
+          const previous = sampleThIdle(
+            task.occurrence.mood,
+            absoluteAt - task.occurrence.startAt,
+            options,
+            task.occurrence.baseline ?? MOOD_BASELINES[task.occurrence.mood],
+            task.initialMorphs,
+            task.markerCutoffAt,
+            task.resolveHeadSourceAt,
+          )
+          if (previous.headMoveTask?.lastStartedAt !== undefined) return previous.morphs
+        }
+        return {}
+      }
+      const ownFrame = sampleThIdle(
+        occurrence.mood,
+        sampleAt - occurrence.startAt,
+        options,
+        occurrence.baseline ?? MOOD_BASELINES[occurrence.mood],
+        initialMorphs,
+        Number.POSITIVE_INFINITY,
+        resolveHeadSourceAt,
+      )
+      const morphs: Record<string, number> = { ...ownFrame.morphs }
+      if (ownFrame.headMoveTask?.lastStartedAt === undefined) {
+        copyHeadRotation(morphs, resolveHeadSourceAt(sampleAt - occurrence.startAt))
+      }
+      if (ownFrame.headMoveTask !== undefined) copyHeadRotation(morphs, ownFrame.morphs)
+      frame = { ...ownFrame, morphs }
+
+      if (next === undefined) return frame
+      if (ownFrame.headMoveTask !== undefined
+        && occurrence.startAt + ownFrame.headMoveTask.endAt > next.startAt) {
+        continuedTasks.push({
+          occurrence,
+          initialMorphs,
+          endAt: occurrence.startAt + ownFrame.headMoveTask.endAt,
+          markerCutoffAt: next.startAt - occurrence.startAt,
+          resolveHeadSourceAt,
+        })
+      }
+      initialMorphs = morphs
+    }
+
+    return frame
   }
 
-  /** Resolves the TH head-motion profile for the current interaction state. */
-  private resolveGazeHeadMove(): number | null {
-    if (this.gestureHeadMove !== undefined) return this.gestureHeadMove
-    const key = `${this.gazeMode}HeadMove` as keyof typeof this.gazeProfiles
-    const selected = this.gazeProfiles[key]
-    const base = typeof selected === 'boolean' || selected === undefined ? this.gazeHeadMove : selected
-    return base === null ? this.idleHeadMove : base * this.idleHeadMove
+  /** Replays mood and gesture skeletal selections in authored time order. */
+  private rebuildMoodPoseHistory(timeMs: number): void {
+    const engine = this.engine
+    const initialPose = this.idleProfile.pose
+    if (engine === undefined) return
+
+    const poseEvents: AvatarGestureHistoryEvent[] = []
+    if (this.idleProfile.enabled && initialPose !== undefined) {
+      engine.setPose(initialPose, 0, 0)
+      this.pose = initialPose
+      this.poseStartAt = 0
+      const options = this.resolveIdleTemplateOptions()
+      const occurrences = this.moodHistory.filter((occurrence) => occurrence.startAt <= timeMs)
+      for (let index = 0; index < occurrences.length; index += 1) {
+        const occurrence = occurrences[index]!
+        const nextOccurrence = occurrences[index + 1]
+        const stopAt = Math.min(timeMs, nextOccurrence?.startAt ?? timeMs)
+        const frame = sampleThIdle(
+          occurrence.mood,
+          Math.max(0, stopAt - occurrence.startAt),
+          options,
+          occurrence.baseline ?? MOOD_BASELINES[occurrence.mood],
+        )
+        for (const pose of frame.poseHistory ?? []) {
+          const startAt = occurrence.startAt + pose.startAt
+          if (nextOccurrence !== undefined && startAt >= nextOccurrence.startAt) continue
+          if (startAt > timeMs) continue
+          poseEvents.push({
+            kind: 'pose', name: pose.name, startAt, seed: 0, mirror: false,
+          })
+        }
+      }
+    }
+
+    let moodPose = initialPose
+    let gesturePose: string | null = null
+    let lastAppliedPose = initialPose
+    const events = [
+      ...poseEvents.map((event) => ({ ...event, source: 'mood' as const })),
+      ...this.gestureHistory
+        .filter((event) => event.startAt <= timeMs)
+        .map((event) => ({ ...event, source: 'gesture' as const })),
+    ].sort((left, right) => left.startAt - right.startAt)
+    for (const event of events) {
+      if (event.kind === 'gesture') {
+        if (event.name === null) engine.releaseGesture(event.startAt)
+        else engine.playGesture(event.name, createSeededRng(event.seed), event.mirror, event.startAt)
+        continue
+      }
+      if (event.source === 'mood') {
+        moodPose = event.name ?? undefined
+        if (event.name !== null) {
+          this.pose = event.name
+          this.poseStartAt = event.startAt
+        }
+      } else {
+        gesturePose = event.name
+      }
+      const selected = gesturePose ?? moodPose
+      if (selected === undefined) continue
+      engine.setPose(selected, event.startAt, undefined)
+      lastAppliedPose = selected
+    }
+    this.appliedPose = lastAppliedPose
+  }
+
+  /** Keeps authored camera contact independent of spontaneous TH eye phrases. */
+  private resolveGazeContact(): number | null {
+    return this.gazeContact
   }
 
   /** Adds the active TH gaze profile to the idle template evaluator. */
@@ -559,10 +717,17 @@ export class AvatarCoordinator {
     return target === 'camera' && this.gazeProfiles.ignoreCamera === true ? 'ahead' : target
   }
 
-  /** Snaps speech to its cue while leaving gesture morphs to the native easing. */
+  /** Applies already sampled speech and gesture morphs at the CodPlay date. */
   private applyFixedLayer(): void {
     const engine = this.engine
-    const fixedMorphs = { ...this.gestureMorphs, ...this.speechMorphs }
+    const gestureMorphs: Record<string, number> = {}
+    for (const [name, value] of Object.entries(this.gestureMorphs)) {
+      const weight = this.gestureMorphWeights[name] ?? this.gestureMorphWeight
+      const ambient = this.appliedAmbientMorphs?.[name] ?? this.moodMorphs[name] ?? 0
+      gestureMorphs[name] = value + (this.moodMorphs[name] ?? 0) * weight
+        + ambient * (1 - weight)
+    }
+    const fixedMorphs = { ...gestureMorphs, ...this.speechMorphs }
     if (engine === undefined || (
       sameMorphs(this.appliedFixedMorphs, fixedMorphs)
       && sameMorphs(this.appliedSpeechMorphs, this.speechMorphs)
@@ -573,31 +738,27 @@ export class AvatarCoordinator {
       ...Object.keys(fixedMorphs),
     ])
     for (const name of names) {
-      const speechOwns = Object.prototype.hasOwnProperty.call(this.speechMorphs, name)
-      const gestureOwns = Object.prototype.hasOwnProperty.call(this.gestureMorphs, name)
-      const speechReleased = !gestureOwns
-        && Object.prototype.hasOwnProperty.call(this.appliedSpeechMorphs ?? {}, name)
-      if (speechOwns || speechReleased) {
-        engine.morphEngine.snapFixed(name, fixedMorphs[name] ?? null)
-      } else {
-        engine.morphEngine.setFixed(name, fixedMorphs[name] ?? null)
-      }
+      engine.morphEngine.snapFixed(name, fixedMorphs[name] ?? null)
     }
     this.appliedFixedMorphs = { ...fixedMorphs }
     this.appliedSpeechMorphs = { ...this.speechMorphs }
   }
 
   /** Applies the current native gesture selection once per change or replay. */
-  private applyGestureSelection(timeMs: number): void {
+  private applyGestureSelection(historyRebuilt = false): void {
     const engine = this.engine
     if (engine === undefined) return
 
     const gestureKey = this.gesture === null
       ? 'none'
       : `${this.gesture.name}:${this.gesture.seed}:${this.gesture.mirror}:${this.gesture.startAt}`
+    if (historyRebuilt && this.gestureHistory.length > 0) {
+      this.appliedGestureKey = gestureKey
+      return
+    }
     if (this.appliedGestureKey === gestureKey) return
     if (this.gesture === null) {
-      engine.releaseGesture(timeMs)
+      engine.releaseGesture(this.gestureReleaseAt)
     } else {
       engine.playGesture(
         this.gesture.name,
@@ -622,8 +783,36 @@ export class AvatarCoordinator {
     const startAt = this.gesturePose === undefined
       ? this.poseStartAt
       : this.gesturePoseStartAt ?? timeMs
-    engine.setPose(selectedPose, Math.min(startAt, timeMs))
+    engine.setPose(
+      selectedPose,
+      Math.min(startAt, timeMs),
+      this.gesturePose === undefined && startAt === 0 ? 0 : undefined,
+    )
     this.appliedPose = selectedPose
+  }
+}
+
+/** Compares authored skeletal markers without treating each update as a new action. */
+function sameGestureHistory(
+  left: readonly AvatarGestureHistoryEvent[],
+  right: readonly AvatarGestureHistoryEvent[],
+): boolean {
+  return left.length === right.length && left.every((event, index) => {
+    const other = right[index]
+    return other !== undefined
+      && event.kind === other.kind
+      && event.name === other.name
+      && event.startAt === other.startAt
+      && event.seed === other.seed
+      && event.mirror === other.mirror
+  })
+}
+
+/** Preserves a native head task without replacing the new mood's eye loop. */
+function copyHeadRotation(target: Record<string, number>, source: Readonly<Record<string, number>>): void {
+  for (const name of ['headRotateX', 'headRotateY', 'headRotateZ']) {
+    const value = source[name]
+    if (value !== undefined) target[name] = value
   }
 }
 
@@ -681,7 +870,9 @@ function sameGazeTargetTransition(
   right: AvatarGazeTargetTransition | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right
-  return left.startAt === right.startAt && left.durationMs === right.durationMs
+  return left.startAt === right.startAt
+    && left.durationMs === right.durationMs
+    && left.from === right.from
 }
 
 /** Compares two morph layers without serializing their values. */
@@ -691,6 +882,23 @@ function sameMorphs(left: AvatarMorphs | undefined, right: AvatarMorphs): boolea
   const rightKeys = Object.keys(right)
   if (leftKeys.length !== rightKeys.length) return false
   return leftKeys.every((name) => Object.is(left[name], right[name]))
+}
+
+/** Compares mood occurrences without retaining sampled pose frames. */
+function sameMoodHistory(
+  left: readonly AvatarMoodOccurrence[],
+  right: readonly AvatarMoodOccurrence[],
+): boolean {
+  return left.length === right.length
+    && left.every((occurrence, index) => {
+      const other = right[index]
+      return other !== undefined
+        && occurrence.mood === other.mood
+        && occurrence.startAt === other.startAt
+        && (occurrence.baseline === undefined
+          ? other.baseline === undefined
+          : other.baseline !== undefined && sameMorphs(occurrence.baseline, other.baseline))
+    })
 }
 
 /** Compares idle options without keeping a second mutable animation state. */

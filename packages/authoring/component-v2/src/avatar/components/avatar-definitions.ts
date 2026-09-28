@@ -3,14 +3,12 @@ import type { CodPlayEngineOptions, RuntimeComponentDefinition } from 'codplay'
 import { AvatarComponent } from './avatar-component'
 import { AvatarGestureComponent } from './avatar-gesture-component'
 import { AvatarGazeComponent } from './avatar-gaze-component'
-import { AvatarIdleComponent } from './avatar-idle-component'
 import { AvatarLipSyncComponent } from './avatar-lip-sync-component'
 import { AvatarMoodComponent } from './avatar-mood-component'
 import { AvatarMotionComponent } from './avatar-motion-component'
 import {
   validateAvatarGesture,
   validateAvatarGaze,
-  validateAvatarIdle,
   validateAvatarInitial,
   validateAvatarLipSync,
   validateAvatarMood,
@@ -60,15 +58,6 @@ export const AVATAR_GESTURE_DEFINITION: RuntimeComponentDefinition = {
   validateAction: validateAvatarGesture,
 }
 
-/** Definition of the non-event-driven Avatar idle feature component. */
-export const AVATAR_IDLE_DEFINITION: RuntimeComponentDefinition = {
-  type: 'avatar-idle',
-  component: AvatarIdleComponent,
-  modules: [],
-  runtimeProfile: 'attached',
-  validateInitial: validateAvatarIdle,
-}
-
 /** Definition of the generic camera-contact feature component. */
 export const AVATAR_GAZE_DEFINITION: RuntimeComponentDefinition = {
   type: 'avatar-gaze',
@@ -95,7 +84,6 @@ export const AVATAR_COMPONENTS: readonly RuntimeComponentDefinition[] = [
   AVATAR_MOOD_DEFINITION,
   AVATAR_LIP_SYNC_DEFINITION,
   AVATAR_GESTURE_DEFINITION,
-  AVATAR_IDLE_DEFINITION,
   AVATAR_GAZE_DEFINITION,
   AVATAR_MOTION_DEFINITION,
 ]

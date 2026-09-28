@@ -92,7 +92,7 @@ export function createAvatarAnimationPlayer(root: Object3D): AvatarAnimationPlay
 
       const registration = registered.get(animation.name)
       if (registration !== undefined) {
-        capturePositionAnchors(registration.clip)
+        capturePositionAnchors(registration.clip, registration.arrivalRootMotion !== undefined)
       }
       retainedTranslations.clear()
       retainedRootMotionOffset = undefined
@@ -174,14 +174,17 @@ export function createAvatarAnimationPlayer(root: Object3D): AvatarAnimationPlay
     timeMs: number,
     loop: boolean,
   ): AvatarPose | null {
+    const elapsedSeconds = getElapsedSeconds(animation, timeMs)
+    const sampleTime = resolveClipTime(registration, elapsedSeconds, loop)
+    // The composer owns the live bones between samples. Fresh native bindings
+    // prevent the mixer from skipping a channel whose clip value is unchanged
+    // even though the composer wrote another value to that bone.
+    clearAction()
     ensureAction(registration, animation, loop)
     if (action === undefined) return null
 
     const previous = captureTransformSnapshot(action.getClip(), root)
-    const elapsedSeconds = getElapsedSeconds(animation, timeMs)
-    const sampleTime = resolveClipTime(registration, elapsedSeconds, loop)
-    action.enabled = true
-    action.paused = false
+    action.reset().play()
     mixer.setTime(sampleTime)
     const sample = captureTransformSnapshot(action.getClip(), root)
     restoreTransforms(previous)
@@ -213,13 +216,16 @@ export function createAvatarAnimationPlayer(root: Object3D): AvatarAnimationPlay
     action.play()
   }
 
-  /** Records the current composed translation as the next clip's local origin. */
-  function capturePositionAnchors(clip: AnimationClip): void {
+  /** Records the current origin, or the model baseline for a centered arrival. */
+  function capturePositionAnchors(clip: AnimationClip, arrival: boolean): void {
     positionAnchors.clear()
     for (const track of clip.tracks) {
       const target = resolveTransformTarget(root, track.name, 'position')
       if (target !== null && !positionAnchors.has(target)) {
-        positionAnchors.set(target, readVector(target.position))
+        positionAnchors.set(
+          target,
+          arrival ? positionBaselines.get(target) ?? readVector(target.position) : readVector(target.position),
+        )
       }
     }
   }

@@ -7,7 +7,6 @@ import {
   AvatarCoordinator,
   AvatarGestureComponent,
   AvatarGazeComponent,
-  AvatarIdleComponent,
   AvatarLipSyncComponent,
   AvatarMoodComponent,
   createAvatarBlinkSchedule,
@@ -23,13 +22,12 @@ function emptyServices(): ComponentServices {
 }
 
 describe('Avatar V2 components', () => {
-  it('registers one central component and three independent feature components', () => {
+  it('registers the fused mood feature without a separate idle perso', () => {
     expect(AVATAR_COMPONENTS.map((definition) => definition.type)).toEqual([
       'avatar',
       'avatar-mood',
       'avatar-lip-sync',
       'avatar-gesture',
-      'avatar-idle',
       'avatar-gaze',
       'avatar-motion',
     ])
@@ -46,15 +44,15 @@ describe('Avatar V2 components', () => {
     coordinator.applyAt(0)
     coordinator.applyAt(200)
 
-    expect(engine.morph.setBaseline).toHaveBeenCalledWith('mouthSmile', 0.2)
-    expect(engine.setPose).toHaveBeenCalledWith('straight', 0)
+    expect(engine.morph.snapBaseline).toHaveBeenCalledWith('mouthSmile', 0.2)
+    expect(engine.setPose).toHaveBeenCalledWith('straight', 0, 0)
     expect(engine.playGesture).toHaveBeenCalledWith(
       'handup',
       expect.objectContaining({ random: expect.any(Function) }),
       false,
       0,
     )
-    expect(engine.animate).toHaveBeenLastCalledWith(200)
+    expect(engine.animate).toHaveBeenLastCalledWith(200, 200)
     expect(engine.morph.snapFixed).toHaveBeenCalledWith('viseme_aa', 0.48)
     expect(engine.morph.snapFixed).toHaveBeenCalledWith('viseme_PP', 0)
 
@@ -71,23 +69,56 @@ describe('Avatar V2 components', () => {
     coordinator.attachEngine(engine.value)
     coordinator.applyAt(0)
 
-    expect(engine.setPose).toHaveBeenCalledWith('straight', 0)
+    expect(engine.setPose).toHaveBeenCalledWith('straight', 0, 0)
   })
 
   it('keeps TalkingHead speaking hands enabled unless the author disables them', () => {
     const setIdleProfile = vi.fn()
     const target = {
+      setTimeline: vi.fn(),
       setBlinkSchedule: vi.fn(),
       setIdleProfile,
     } as unknown as AvatarTarget
 
-    new AvatarIdleComponent({
+    new AvatarMoodComponent({
       services: emptyServices(),
-      perso: { id: 'idle', storyId: 'main', initial: {} },
+      perso: { id: 'mood', storyId: 'main', initial: {} },
     } as never).update({ state: {}, timeMs: 0, target })
 
     expect(setIdleProfile).toHaveBeenCalledWith(expect.objectContaining({
       speakWithHands: true,
+    }))
+  })
+
+  it('lets a null viseme close the mouth without changing any body mode', () => {
+    const setTimeline = vi.fn()
+    const setGazeMode = vi.fn()
+    const target = {
+      setTimeline,
+      setGazeMode,
+    } as unknown as AvatarTarget
+    const lipSync = new AvatarLipSyncComponent({
+      services: emptyServices(),
+      perso: { id: 'viseme', storyId: 'main', initial: {} },
+    } as never)
+    const spoken = {
+      name: 'avatar:viseme', startAt: 100, elapsedMs: 0,
+      action: { viseme: 'O', durationMs: 100 }, eventId: 'spoken',
+    }
+    const silence = {
+      name: 'avatar:viseme', startAt: 200, elapsedMs: 0,
+      action: { viseme: null, durationMs: 100 }, eventId: 'silence',
+    }
+
+    lipSync.update({ state: {}, timeMs: 100, activeActions: [spoken], target })
+    lipSync.update({ state: {}, timeMs: 200, activeActions: [spoken, silence], target })
+
+    expect(setGazeMode).not.toHaveBeenCalled()
+    const timeline = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    expect(timeline?.sample(300)?.value).toEqual(expect.objectContaining({
+      viseme_O: 0,
+      jawOpen: 0,
+      mouthOpen: 0,
     }))
   })
 
@@ -165,7 +196,7 @@ describe('Avatar V2 components', () => {
     }
     new AvatarMoodComponent({
       services: emptyServices(),
-      perso: { id: 'mood', storyId: 'main', initial: {} },
+      perso: { id: 'mood', storyId: 'main', initial: { blinkSeed: 41, pose: 'straight', breathe: true } },
     } as never).update({
       state: {},
       timeMs: 0,
@@ -211,10 +242,6 @@ describe('Avatar V2 components', () => {
       target,
     })
     timelines.get('gesture')?.sample(0)?.apply()
-    new AvatarIdleComponent({
-      services: emptyServices(),
-      perso: { id: 'idle', storyId: 'main', initial: { blinkSeed: 41, pose: 'straight', breathe: true } },
-    } as never).update({ state: {}, timeMs: 0, target })
     const gaze = new AvatarGazeComponent({
       services: emptyServices(),
       perso: { id: 'gaze', storyId: 'main', initial: { enabled: false, contact: 0.1, durationMs: 1_000 } },
@@ -320,6 +347,67 @@ describe('Avatar V2 components', () => {
     expect(coordinator.applyMorphs).toHaveBeenCalled()
   })
 
+  it('enables continuous camera contact by default through avatar-gaze', () => {
+    const setGaze = vi.fn()
+    const setGazeTarget = vi.fn()
+    let timeline: AvatarTimeline | undefined
+    const target = {
+      setTimeline: (_slot: 'gaze', value: AvatarTimeline) => { timeline = value },
+      setGaze,
+      setGazeTarget,
+    } as unknown as AvatarTarget
+    const component = new AvatarGazeComponent({
+      services: emptyServices(),
+      perso: { id: 'gaze', storyId: 'main', initial: {} },
+    } as never)
+    component.update({ state: {}, timeMs: 0, activeActions: [], target })
+
+    timeline?.sample(0)?.apply()
+    expect(setGaze).toHaveBeenCalledWith(true, 1)
+    expect(setGazeTarget).toHaveBeenCalledWith('camera', expect.any(Object))
+  })
+
+  it('presents gaze on and off actions through the central Avatar timeline', () => {
+    const engine = createEngineProbe()
+    const coordinator = new AvatarCoordinator()
+    coordinator.attachEngine(engine.value)
+    const component = new AvatarGazeComponent({
+      services: emptyServices(),
+      perso: { id: 'gaze', storyId: 'main', initial: {} },
+    } as never)
+    const off = {
+      name: 'avatar:gaze:off', startAt: 1_000, elapsedMs: 0,
+      action: { durationMs: 250 }, eventId: 'contact-off',
+    }
+    const on = {
+      name: 'avatar:gaze:on', startAt: 2_000, elapsedMs: 0,
+      action: { durationMs: 250 }, eventId: 'contact-on',
+    }
+    const contact = engine.value.setGazeContact as ReturnType<typeof vi.fn>
+    const enabled = engine.value.setGazeEnabled as ReturnType<typeof vi.fn>
+
+    component.update({ state: {}, timeMs: 0, activeActions: [], target: coordinator })
+    coordinator.applyAt(0)
+    expect(contact).toHaveBeenLastCalledWith(1)
+    expect(enabled).toHaveBeenLastCalledWith(true)
+
+    component.update({ state: {}, timeMs: 1_250, activeActions: [off], target: coordinator })
+    coordinator.applyAt(1_125)
+    expect(contact.mock.lastCall?.[0]).toBeGreaterThan(0)
+    expect(contact.mock.lastCall?.[0]).toBeLessThan(1)
+    coordinator.applyAt(1_250)
+    expect(contact).toHaveBeenLastCalledWith(0)
+    expect(enabled).toHaveBeenLastCalledWith(false)
+
+    component.update({ state: {}, timeMs: 2_250, activeActions: [off, on], target: coordinator })
+    coordinator.applyAt(2_250)
+    expect(contact).toHaveBeenLastCalledWith(1)
+    expect(enabled).toHaveBeenLastCalledWith(true)
+    coordinator.applyAt(1_125)
+    expect(contact.mock.lastCall?.[0]).toBeGreaterThan(0)
+    expect(contact.mock.lastCall?.[0]).toBeLessThan(1)
+  })
+
   it('starts a gesture release at the declared event position', () => {
     const applyGestureMotion = vi.fn()
     let timeline: AvatarTimeline | undefined
@@ -350,9 +438,160 @@ describe('Avatar V2 components', () => {
     expect(applyGestureMotion).toHaveBeenCalledWith(
       expect.objectContaining({ gesture: null, released: true }),
       expect.any(Number),
-      5_420,
+      5_400,
       5_400,
     )
+  })
+
+  it('retains an authored initial gesture when the first action arrives', () => {
+    const setGestureHistory = vi.fn()
+    const target = {
+      setGestureHistory,
+      setTimeline: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarGestureComponent({
+      services: emptyServices(),
+      perso: { id: 'gesture', storyId: 'main', initial: { gesture: 'handup' } },
+    } as never)
+
+    component.update({
+      state: {}, timeMs: 1_000,
+      activeActions: [{
+        name: 'avatar:gesture:wave_left', startAt: 1_000, elapsedMs: 0,
+        action: { durationMs: 1_000 }, eventId: 'first-wave',
+      }],
+      target,
+    })
+
+    expect(setGestureHistory).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ kind: 'gesture', name: 'handup', startAt: 0 }),
+      expect.objectContaining({ kind: 'gesture', name: null, startAt: 1_000 }),
+    ]))
+  })
+
+  it('reconstructs an interrupted bow from authored gesture history', () => {
+    const applyGestureMotion = vi.fn()
+    let timeline: AvatarTimeline | undefined
+    const target = {
+      setTimeline: (_slot: 'gesture', value: AvatarTimeline) => { timeline = value },
+      applyGestureMotion,
+    } as unknown as AvatarTarget
+    const component = new AvatarGestureComponent({
+      services: emptyServices(),
+      perso: { id: 'gesture', storyId: 'main', initial: {} },
+    } as never)
+    const bow = {
+      name: 'avatar:gesture:bow',
+      startAt: 0,
+      elapsedMs: 0,
+      action: {},
+      eventId: 'bow-event',
+    }
+    const release = {
+      name: 'avatar:gesture:release',
+      startAt: 1_000,
+      elapsedMs: 0,
+      action: {},
+      eventId: 'release-event',
+    }
+    component.update({ state: {}, timeMs: 1_000, activeActions: [bow, release], target })
+
+    const sample = (timeMs: number): AvatarGestureFrame => {
+      timeline?.sample(timeMs)?.apply()
+      return applyGestureMotion.mock.lastCall?.[0] as AvatarGestureFrame
+    }
+    const atRelease = sample(1_000)
+    const inRelease = sample(1_125)
+    const afterRelease = sample(1_250)
+
+    expect(atRelease.morphs.bodyRotateX).toBeGreaterThan(0)
+    expect(inRelease.morphs.bodyRotateX).toBeGreaterThan(0)
+    expect(inRelease.morphs.bodyRotateX).toBeLessThan(atRelease.morphs.bodyRotateX ?? 0)
+    expect(afterRelease.released).toBe(true)
+
+    component.update({ state: {}, timeMs: 1_125, activeActions: [bow, release], target })
+    expect(sample(1_125)).toEqual(inRelease)
+  })
+
+  it('keeps a completed gesture released when a later release instruction arrives', () => {
+    const applyGestureMotion = vi.fn()
+    let timeline: AvatarTimeline | undefined
+    const target = {
+      setTimeline: (_slot: 'gesture', value: AvatarTimeline) => { timeline = value },
+      applyGestureMotion,
+    } as unknown as AvatarTarget
+    const component = new AvatarGestureComponent({
+      services: emptyServices(),
+      perso: { id: 'gesture', storyId: 'main', initial: {} },
+    } as never)
+    const gesture = {
+      name: 'avatar:gesture:nod_yes', startAt: 0, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'completed-nod',
+    }
+    const release = {
+      name: 'avatar:gesture:release', startAt: 2_000, elapsedMs: 0,
+      action: {}, eventId: 'later-release',
+    }
+    component.update({ state: {}, timeMs: 2_000, activeActions: [gesture, release], target })
+
+    timeline?.sample(1_125)?.apply()
+    const naturalExit = applyGestureMotion.mock.lastCall?.[0] as AvatarGestureFrame
+    expect(naturalExit.released).toBe(false)
+    expect(naturalExit.morphWeight).toBeCloseTo(0.5)
+
+    for (const timeMs of [2_000, 2_125, 2_249]) {
+      timeline?.sample(timeMs)?.apply()
+      const frame = applyGestureMotion.mock.lastCall?.[0] as AvatarGestureFrame
+      expect(frame.released).toBe(true)
+      expect(frame.morphs).toEqual({})
+    }
+  })
+
+  it('presents the same bow release morph in Play and Seek through the coordinator', () => {
+    const engine = createEngineProbe()
+    const morphEngine = new MorphEngine()
+    const bodyRotation = [0]
+    morphEngine.registerBlendMorph('bodyRotateX', { influences: bodyRotation, index: 0 })
+    Object.assign(engine.value, {
+      morphEngine,
+      animate: (deltaMs: number) => morphEngine.update(deltaMs),
+      prepareSeek: () => morphEngine.resetToBaselines(),
+      commitSeek: () => morphEngine.snapAll(),
+    })
+    const coordinator = new AvatarCoordinator()
+    coordinator.attachEngine(engine.value)
+    const component = new AvatarGestureComponent({
+      services: emptyServices(),
+      perso: { id: 'gesture', storyId: 'main', initial: {} },
+    } as never)
+    const bow = {
+      name: 'avatar:gesture:bow',
+      startAt: 0,
+      elapsedMs: 0,
+      action: {},
+      eventId: 'bow-event',
+    }
+    const release = {
+      name: 'avatar:gesture:release',
+      startAt: 1_000,
+      elapsedMs: 0,
+      action: {},
+      eventId: 'release-event',
+    }
+    component.update({ state: {}, timeMs: 0, activeActions: [bow], target: coordinator })
+    coordinator.applyAt(0)
+    coordinator.applyAt(999)
+    component.update({ state: {}, timeMs: 1_000, activeActions: [bow, release], target: coordinator })
+    coordinator.applyAt(1_000)
+    const start = bodyRotation[0]!
+    coordinator.applyAt(1_125)
+    const play = bodyRotation[0]!
+    coordinator.applyAt(1_250)
+    coordinator.applyAt(1_125)
+
+    expect(play).toBeGreaterThan(0)
+    expect(play).toBeLessThan(start)
+    expect(bodyRotation[0]).toBeCloseTo(play)
   })
 
   it('releases a native gesture from its current presentation time', () => {
@@ -395,7 +634,7 @@ describe('Avatar V2 components', () => {
     expect(applyGestureMotion).toHaveBeenLastCalledWith(
       expect.objectContaining({ gesture: null, released: true }),
       expect.any(Number),
-      4_001,
+      4_000,
       1_000,
     )
   })
@@ -443,6 +682,134 @@ describe('Avatar V2 components', () => {
       viseme_O: 0,
       viseme_aa: 0,
     })
+  })
+
+  it('starts an interrupted mood from its presented value and reconstructs it after seek', () => {
+    let timeline: AvatarTimeline | undefined
+    const applyMood = vi.fn()
+    const target = {
+      setTimeline: (_slot: 'mood', value: AvatarTimeline) => { timeline = value },
+      setMood: vi.fn(),
+      setMoodHistory: vi.fn(),
+      setBlinkSchedule: vi.fn(),
+      setIdleProfile: vi.fn(),
+      applyMood,
+    } as unknown as AvatarTarget
+    const component = new AvatarMoodComponent({
+      services: emptyServices(),
+      perso: { id: 'mood', storyId: 'main', initial: { mood: 'neutral' } },
+    } as never)
+    const happy = {
+      name: 'avatar:mood:happy',
+      startAt: 100,
+      elapsedMs: 0,
+      action: { durationMs: 1_000 },
+      eventId: 'happy',
+    }
+    const sad = {
+      name: 'avatar:mood:sad',
+      startAt: 600,
+      elapsedMs: 0,
+      action: { durationMs: 1_000 },
+      eventId: 'sad',
+    }
+
+    component.update({ state: {}, timeMs: 100, activeActions: [happy], target })
+    expect((timeline?.sample(350)?.value as Record<string, number>).mouthSmile).toBeCloseTo(0.0140207433)
+    const smileAtInterruption = (timeline?.sample(600)?.value as Record<string, number>).mouthSmile
+    expect(smileAtInterruption).toBeCloseTo(0.1)
+
+    component.update({ state: {}, timeMs: 600, activeActions: [happy, sad], target })
+    expect(target.setMood).not.toHaveBeenCalled()
+    expect(target.setMoodHistory).toHaveBeenLastCalledWith([
+      { mood: 'neutral', startAt: 0 },
+      { mood: 'happy', startAt: 100 },
+      { mood: 'sad', startAt: 600 },
+    ])
+    expect((timeline?.sample(600)?.value as Record<string, number>).mouthSmile).toBeCloseTo(smileAtInterruption)
+    expect((timeline?.sample(600)?.value as Record<string, number>).mouthFrownLeft).toBeCloseTo(0)
+    timeline?.sample(1_100)?.apply()
+    expect(lastMorphValue(applyMood, 'mouthSmile')).toBeCloseTo(0.05)
+    expect(lastMorphValue(applyMood, 'mouthFrownLeft')).toBeCloseTo(0.4)
+
+    component.update({ state: {}, timeMs: 350, activeActions: [happy], target })
+    expect((timeline?.sample(350)?.value as Record<string, number>).mouthSmile).toBeCloseTo(0.0140207433)
+    component.update({ state: {}, timeMs: 600, activeActions: [happy, sad], target })
+    expect((timeline?.sample(600)?.value as Record<string, number>).mouthSmile).toBeCloseTo(0.1)
+
+    component.update({
+      state: {},
+      timeMs: 1_700,
+      activeActions: [happy, sad, {
+        name: 'avatar:mood:neutral',
+        startAt: 1_700,
+        elapsedMs: 0,
+        action: {},
+        eventId: 'neutral',
+      }],
+      target,
+    })
+    expect((timeline?.sample(1_700)?.value as Record<string, number>).mouthFrownLeft).toBe(0)
+  })
+
+  it('accepts an initial happy mood with persona-specific morph values', () => {
+    let timeline: AvatarTimeline | undefined
+    const setMoodHistory = vi.fn()
+    const target = {
+      setTimeline: (_slot: 'mood', value: AvatarTimeline) => { timeline = value },
+      setMoodHistory,
+      setBlinkSchedule: vi.fn(),
+      setIdleProfile: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarMoodComponent({
+      services: emptyServices(),
+      perso: {
+        id: 'mood',
+        storyId: 'main',
+        initial: { mood: 'happy', moods: { happy: { mouthSmile: 0.5 } } },
+      },
+    } as never)
+
+    component.update({ state: {}, timeMs: 0, target })
+
+    expect(timeline?.sample(0)?.value).toMatchObject({ mouthSmile: 0.5, eyesLookDown: 0.1 })
+    expect(setMoodHistory).toHaveBeenLastCalledWith([
+      { mood: 'happy', startAt: 0, baseline: { mouthSmile: 0.5, eyesLookDown: 0.1 } },
+    ])
+  })
+
+  it('uses persona-specific values for a later happy action', () => {
+    let timeline: AvatarTimeline | undefined
+    const setMoodHistory = vi.fn()
+    const target = {
+      setTimeline: (_slot: 'mood', value: AvatarTimeline) => { timeline = value },
+      setMoodHistory,
+      setBlinkSchedule: vi.fn(),
+      setIdleProfile: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarMoodComponent({
+      services: emptyServices(),
+      perso: {
+        id: 'mood',
+        storyId: 'main',
+        initial: { mood: 'neutral', moods: { happy: { mouthSmile: 0.5 } } },
+      },
+    } as never)
+    const happy = {
+      name: 'avatar:mood:happy',
+      startAt: 1_000,
+      elapsedMs: 0,
+      action: {},
+      eventId: 'happy',
+    }
+
+    component.update({ state: {}, timeMs: 1_000, activeActions: [happy], target })
+
+    expect(timeline?.sample(1_000)?.value).toMatchObject({ mouthSmile: 0.5 })
+    expect(setMoodHistory).toHaveBeenLastCalledWith([
+      { mood: 'neutral', startAt: 0 },
+      { mood: 'happy', startAt: 1_000, baseline: { mouthSmile: 0.5, eyesLookDown: 0.1 } },
+    ])
   })
 
   it('opens a short viseme smoothly and carries its release into a repeated cue', () => {
@@ -520,7 +887,41 @@ describe('Avatar V2 components', () => {
     expect(setGazeTarget).toHaveBeenCalledWith('ahead', {
       startAt: 1_000,
       durationMs: 500,
+      from: 'camera',
     })
+  })
+
+  it('continues interrupted gaze changes from the value at each authored boundary', () => {
+    let timeline: AvatarTimeline | undefined
+    const target = {
+      setTimeline: (_slot: 'gaze', value: AvatarTimeline) => { timeline = value },
+      setGaze: vi.fn(),
+      setGazeProfiles: vi.fn(),
+      setGazeTarget: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarGazeComponent({
+      services: emptyServices(),
+      perso: { id: 'gaze', storyId: 'main', initial: { enabled: false, contact: 1 } },
+    } as never)
+    const first = {
+      name: 'avatar:gaze:on', startAt: 1_000, elapsedMs: 0,
+      action: { durationMs: 1_000, contact: 1 }, eventId: 'contact-on',
+    }
+    const second = {
+      name: 'avatar:gaze:off', startAt: 1_500, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'contact-off',
+    }
+    component.update({ state: {}, timeMs: 1_500, activeActions: [first, second], target })
+
+    const contactAt = (timeMs: number): number => (
+      (timeline?.sample(timeMs)?.value as { contact: number }).contact
+    )
+    expect(contactAt(1_499)).toBeCloseTo(0.5, 2)
+    expect(contactAt(1_500)).toBeCloseTo(0.5, 2)
+    expect(contactAt(2_000)).toBeCloseTo(0.25, 2)
+
+    component.update({ state: {}, timeMs: 2_000, activeActions: [first, second], target })
+    expect(contactAt(2_000)).toBeCloseTo(0.25, 2)
   })
 
   it('produces deterministic random blink windows that survive a backward seek', () => {
@@ -584,6 +985,7 @@ function createEngineProbe(): {
     setFixed: ReturnType<typeof vi.fn>
     snapFixed: ReturnType<typeof vi.fn>
     setBaseline: ReturnType<typeof vi.fn>
+    snapBaseline: ReturnType<typeof vi.fn>
   }
   playGesture: ReturnType<typeof vi.fn>
   setPose: ReturnType<typeof vi.fn>
@@ -593,7 +995,7 @@ function createEngineProbe(): {
   applyAnimationAt: ReturnType<typeof vi.fn>
   setGazeTarget: ReturnType<typeof vi.fn>
 } {
-  const morph = { setFixed: vi.fn(), snapFixed: vi.fn(), setBaseline: vi.fn() }
+  const morph = { setFixed: vi.fn(), snapFixed: vi.fn(), setBaseline: vi.fn(), snapBaseline: vi.fn() }
   const playGesture = vi.fn()
   const setPose = vi.fn()
   const animate = vi.fn()

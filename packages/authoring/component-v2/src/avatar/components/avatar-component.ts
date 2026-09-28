@@ -167,8 +167,9 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
   /** Applies the Avatar layers after refreshing the host camera reference. */
   private applyAt(timeMs: number): void {
     this.syncGazeCamera()
-    const rootMotion = this.coordinator.applyAt(timeMs)
-    this.motionRoot?.position.set(rootMotion.x, rootMotion.y, rootMotion.z)
+    this.coordinator.applyAt(timeMs, (rootMotion) => {
+      this.motionRoot?.position.set(rootMotion.x, rootMotion.y, rootMotion.z)
+    })
   }
 
   /** Detaches the model while keeping the host scene alive. */

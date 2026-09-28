@@ -49,8 +49,6 @@ type VisemeCue = Readonly<{
 
 /** Converts ordinary viseme events into an absolute-time morph stream. */
 export class AvatarLipSyncComponent extends AvatarFeatureComponent<AvatarLipSyncInitial> {
-  /** temp: Lip-sync is the first active feature in the staged Avatar investigation. */
-  protected readonly tempEnabled = true
   static readonly declaredServices = [] as const
 
   /** Projects all due viseme events onto the current Avatar morph frame. */
@@ -68,16 +66,11 @@ export class AvatarLipSyncComponent extends AvatarFeatureComponent<AvatarLipSync
       fallbackViseme,
       resolveNumber(input.state.weight, this.perso.initial.weight, 1),
     )
-    const modeViseme = latest === undefined
-      ? fallbackViseme
-      : resolveViseme(latest.action, null)
-    target.setGazeMode?.(modeViseme === null || modeViseme === 'sil' ? 'idle' : 'speaking')
-
     target.setTimeline('lip-sync', createAnimation(cues, fallbackMorphs, target))
   }
 }
 
-/** Selects the latest ordinary viseme occurrence for the speech interaction mode. */
+/** Selects the latest viseme to avoid restoring an initial cue after an action. */
 function resolveLatestVisemeOccurrence(
   actions: readonly ComponentActionOccurrence[] | undefined,
 ): ComponentActionOccurrence | undefined {
@@ -163,9 +156,9 @@ function resolveVisemeMorphs(viseme: string | null, weight: number): AvatarMorph
   return morphs
 }
 
-/** Creates the zero-valued morph layer used when no viseme is active. */
+/** Keeps jaw openings closed while the lip-sync track owns mouth articulation. */
 function createEmptyMorphs(): Record<string, number> {
-  const morphs: Record<string, number> = {}
+  const morphs: Record<string, number> = { jawOpen: 0, mouthOpen: 0 }
   for (const profile of Object.values(AVATAR_VISEME_PROFILES)) {
     morphs[profile.morph] = 0
   }

@@ -57,8 +57,50 @@ describe('Avatar gaze adaptation', () => {
     const middle = gaze.sample(500).get(head)?.rotation?.y ?? 0
     const end = gaze.sample(1_000).get(head)?.rotation?.y ?? 0
 
+    const direct = new GazeService(new MorphEngine(), leftEye, rightEye, head, camera)
+    direct.setEnabled(true)
+    direct.setTarget('camera', { startAt: 0, durationMs: 1_000, from: 'ahead' })
+    const directMiddle = direct.sample(500).get(head)?.rotation?.y ?? 0
+
     expect(Math.abs(middle)).toBeGreaterThan(Math.abs(start))
     expect(Math.abs(middle)).toBeLessThan(Math.abs(end))
+    expect(directMiddle).toBeCloseTo(middle)
+  })
+
+  it('reads a moved presentation parent before solving camera contact', () => {
+    /** Builds one independent head and camera fixture with a movable parent. */
+    function createFixture() {
+      const parent = new Group()
+      const head = new Bone()
+      head.name = 'Head'
+      const leftEye = new Bone()
+      leftEye.name = 'LeftEye'
+      leftEye.position.set(-0.03, 0, 0.12)
+      const rightEye = new Bone()
+      rightEye.name = 'RightEye'
+      rightEye.position.set(0.03, 0, 0.12)
+      head.add(leftEye, rightEye)
+      parent.add(head)
+      const camera = new PerspectiveCamera()
+      camera.position.set(0.7, 0, 2)
+      const gaze = new GazeService(new MorphEngine(), leftEye, rightEye, head, camera)
+      gaze.setEnabled(true)
+      return { parent, head, gaze }
+    }
+
+    const played = createFixture()
+    played.parent.updateMatrixWorld(true)
+    const before = played.gaze.sample(0).get(played.head)?.rotation?.y ?? 0
+    played.parent.position.z = -1
+    const after = played.gaze.sample(630).get(played.head)?.rotation?.y ?? 0
+
+    const direct = createFixture()
+    direct.parent.position.z = -1
+    direct.parent.updateMatrixWorld(true)
+    const expected = direct.gaze.sample(630).get(direct.head)?.rotation?.y ?? 0
+
+    expect(Math.abs(after - before)).toBeGreaterThan(0.01)
+    expect(after).toBeCloseTo(expected, 8)
   })
 
   it('reproduces the finite native look-ahead template on the absolute clock', () => {

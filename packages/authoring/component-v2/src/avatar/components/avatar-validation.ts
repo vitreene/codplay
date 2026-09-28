@@ -47,7 +47,31 @@ export const validateAvatarMood: ValidationFunction = (value, context) => {
   validateRecord(value, context, 'AUTHOR_AVATAR_MOOD_INVALID', 'Avatar mood state must be a plain object.')
   if (!isComponentRecord(value)) return
   validateMood(value.mood, context, 'mood')
+  validateMoodOverrides(value.moods, context)
   validateFiniteNumber(value.durationMs, context, 'durationMs')
+  validateMoodPresentation(value, context)
+}
+
+/** Validates persona-specific mood baselines without inspecting model morphs. */
+function validateMoodOverrides(value: unknown, context: ValidationContext): void {
+  if (value === undefined) return
+  if (!isComponentRecord(value)) {
+    reportInvalidComponentValue(context, 'AUTHOR_AVATAR_MOODS_INVALID', 'moods must be a plain object.', 'moods')
+    return
+  }
+  for (const [mood, morphs] of Object.entries(value)) {
+    if (!(mood in MOOD_BASELINES)) {
+      reportInvalidComponentValue(context, 'AUTHOR_AVATAR_MOOD_NAME_INVALID', `moods.${mood} is not a supported Avatar mood.`, `moods.${mood}`)
+      continue
+    }
+    if (!isComponentRecord(morphs)) {
+      reportInvalidComponentValue(context, 'AUTHOR_AVATAR_MOOD_MORPHS_INVALID', `moods.${mood} must be a plain object.`, `moods.${mood}`)
+      continue
+    }
+    for (const [name, morphValue] of Object.entries(morphs)) {
+      validateFiniteNumber(morphValue, context, `moods.${mood}.${name}`)
+    }
+  }
 }
 
 /** Validates the generic viseme payload and optional weight. */
@@ -75,10 +99,8 @@ export const validateAvatarGesture: ValidationFunction = (value, context) => {
   }
 }
 
-/** Validates the optional idle controls without inspecting the Avatar model. */
-export const validateAvatarIdle: ValidationFunction = (value, context) => {
-  validateRecord(value, context, 'AUTHOR_AVATAR_IDLE_INVALID', 'Avatar idle state must be a plain object.')
-  if (!isComponentRecord(value)) return
+/** Validates the optional spontaneous presentation carried by one mood perso. */
+function validateMoodPresentation(value: Record<string, unknown>, context: ValidationContext): void {
   if (value.pose !== undefined && typeof value.pose !== 'string') {
     reportInvalidComponentValue(context, 'AUTHOR_AVATAR_POSE_INVALID', 'pose must be a string.', 'pose')
   }

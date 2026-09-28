@@ -3,13 +3,29 @@ import type {
   ComponentUpdateInput,
 } from 'codplay'
 import { AvatarFeatureComponent } from './avatar-feature-component'
-import type { AvatarGestureInitial, AvatarTarget, AvatarTimeline } from '../avatar-types'
+import type {
+  AvatarGestureHistoryEvent,
+  AvatarGestureInitial,
+  AvatarTarget,
+  AvatarTimeline,
+} from '../avatar-types'
 import { getAvatarActionMotion, getAvatarEmojiMotion } from '../gesture/motion-catalog'
 import type { AvatarGestureFrame } from '../avatar-types'
 import { hasGestureTemplate } from '../gesture/gesture-definitions'
+import { sampleTalkingHeadEasing } from '../avatar-easing'
 
 const GESTURE_ACTION_PREFIX = 'avatar:gesture:'
 const RELEASE_ACTION = `${GESTURE_ACTION_PREFIX}release`
+const HANDOFF_MS = 250
+
+type GestureAction = Readonly<{
+  startAt: number
+  seed: number
+  sample: (timeMs: number) => AvatarGestureFrame
+  semanticEvents: readonly AvatarGestureHistoryEvent[]
+}>
+
+type GestureState = Pick<AvatarGestureInitial, 'gesture' | 'seed' | 'mirror' | 'durationMs'>
 
 /** Contributes one gesture selection to the Avatar coordinator. */
 export class AvatarGestureComponent extends AvatarFeatureComponent<AvatarGestureInitial> {
@@ -17,60 +33,180 @@ export class AvatarGestureComponent extends AvatarFeatureComponent<AvatarGesture
 
   /** Stores the selected gesture and derives a stable replay seed from its occurrence. */
   protected contribute(target: AvatarTarget, input: ComponentUpdateInput<AvatarGestureInitial>): void {
-    const occurrence = resolveLatestGestureOccurrence(input.activeActions)
-    const gesture = resolveGestureName(occurrence?.name, input.state.gesture, this.perso.initial.gesture)
-    const seed = input.state.seed ?? stableSeed(occurrence?.eventId ?? gesture)
-    const mirror = resolveMirror(occurrence?.action, input.state.mirror, this.perso.initial.mirror)
-    if (gesture === null) {
-      target.setTimeline('gesture', createNativeGestureAnimation(
-        null,
-        seed,
-        mirror,
-        occurrence?.startAt ?? input.timeMs,
-        0,
-        target,
-      ))
-      return
-    }
+    const occurrences = (input.activeActions ?? [])
+      .filter((occurrence) => occurrence.name.startsWith(GESTURE_ACTION_PREFIX))
+      .sort((left, right) => left.startAt - right.startAt)
+    const actions = [
+      createGestureAction(
+        undefined,
+        occurrences.length === 0 ? input.state : this.perso.initial,
+        this.perso.initial,
+      ),
+      ...occurrences.map((occurrence) => createGestureAction(
+        occurrence, input.state, this.perso.initial,
+      )),
+    ]
+    target.setGestureHistory?.(resolveGestureHistory(actions))
+    target.setTimeline('gesture', createGestureTimeline(actions, target))
+  }
+}
 
-    const motion = resolveMotion(
-      gesture,
+/** Resolves one authored event into a deterministic gesture sampler. */
+function createGestureAction(
+  occurrence: ComponentActionOccurrence | undefined,
+  state: GestureState,
+  initial: AvatarGestureInitial,
+): GestureAction {
+  const gesture = resolveGestureName(occurrence?.name, state.gesture, initial.gesture)
+  const seed = state.seed ?? stableSeed(occurrence?.eventId ?? gesture)
+  const mirror = resolveMirror(occurrence?.action, state.mirror, initial.mirror)
+  const startAt = occurrence?.startAt ?? 0
+  if (gesture === null) {
+    return {
+      startAt,
       seed,
-      resolveDuration(occurrence?.action.durationMs, input.state.durationMs, this.perso.initial.durationMs),
-    )
-    if (motion === undefined) {
-      if (hasGestureTemplate(gesture)) {
-        const startAt = occurrence?.startAt ?? 0
-        const durationMs = resolveNativeDuration(
-          occurrence?.action.durationMs,
-          input.state.durationMs,
-          this.perso.initial.durationMs,
-        )
-        const animation = createNativeGestureAnimation(
-          gesture,
-          seed,
-          mirror,
-          startAt,
-          durationMs,
-          target,
-        )
-        target.setTimeline('gesture', animation)
-        return
-      }
-      target.setTimeline('gesture', createNativeGestureAnimation(
-        gesture,
-        seed,
-        mirror,
-        occurrence?.startAt ?? input.timeMs,
-        0,
-        target,
-      ))
-      return
+      sample: () => emptyGestureFrame(mirror, true),
+      semanticEvents: [{ kind: 'gesture', name: null, startAt, seed, mirror }],
     }
+  }
+  const motion = resolveMotion(
+    gesture,
+    seed,
+    resolveDuration(occurrence?.action.durationMs, state.durationMs, initial.durationMs),
+  )
+  if (motion !== undefined) {
+    return {
+      startAt,
+      seed,
+      sample: (timeMs) => motion.sample(timeMs - startAt),
+      semanticEvents: motion.semanticEvents.map((event) => ({
+        ...event,
+        startAt: startAt + event.startAt,
+        seed,
+      })),
+    }
+  }
+  const durationMs = hasGestureTemplate(gesture)
+    ? resolveNativeDuration(occurrence?.action.durationMs, state.durationMs, initial.durationMs)
+    : 0
+  return {
+    startAt,
+    seed,
+    semanticEvents: [
+      { kind: 'gesture', name: gesture, startAt, seed, mirror },
+      { kind: 'gesture', name: null, startAt: startAt + durationMs, seed, mirror },
+    ],
+    sample: (timeMs) => {
+      const active = timeMs < startAt + durationMs
+      return {
+        ...emptyGestureFrame(mirror, !active),
+        gesture: active ? gesture : null,
+        gestureStartMs: active ? 0 : durationMs,
+      }
+    },
+  }
+}
 
-    const startAt = occurrence?.startAt ?? 0
-    const animation = createMotionAnimation(motion.sample, startAt, motion.durationMs, target, seed)
-    target.setTimeline('gesture', animation)
+/** Truncates superseded skeletal commands at the next authored action. */
+function resolveGestureHistory(actions: readonly GestureAction[]): readonly AvatarGestureHistoryEvent[] {
+  const events: AvatarGestureHistoryEvent[] = []
+  for (let index = 0; index < actions.length; index += 1) {
+    const action = actions[index]!
+    const nextStartAt = actions[index + 1]?.startAt ?? Number.POSITIVE_INFINITY
+    if (index > 0) {
+      events.push({
+        kind: 'gesture', name: null, startAt: action.startAt,
+        seed: action.seed, mirror: false,
+      })
+      events.push({
+        kind: 'pose', name: null, startAt: action.startAt,
+        seed: action.seed, mirror: false,
+      })
+    }
+    for (const event of action.semanticEvents) {
+      if (event.startAt >= nextStartAt) continue
+      events.push(event)
+    }
+  }
+  return events.sort((left, right) => left.startAt - right.startAt)
+}
+
+/** Samples each gesture from its authored history, including interrupted handoffs. */
+function createGestureTimeline(actions: readonly GestureAction[], target: AvatarTarget): AvatarTimeline {
+  const first = actions[0]!
+  return {
+    id: 'avatar-gesture-history',
+    startAt: first.startAt,
+    endAt: Number.POSITIVE_INFINITY,
+    sample: (timeMs) => {
+      let index = 0
+      for (let next = 1; next < actions.length; next += 1) {
+        if (actions[next]!.startAt > timeMs) break
+        index = next
+      }
+      const action = actions[index]!
+      const frame = sampleGestureHistory(actions, index, timeMs)
+      return {
+        value: frame,
+        apply: () => target.applyGestureMotion(
+          frame,
+          action.seed,
+          resolveGestureStartAt(frame, action.startAt),
+          action.startAt,
+        ),
+      }
+    },
+  }
+}
+
+/** Keeps the previous absolute morph value while a new action takes ownership. */
+function sampleGestureHistory(
+  actions: readonly GestureAction[],
+  index: number,
+  timeMs: number,
+): AvatarGestureFrame {
+  const action = actions[index]!
+  const frame = action.sample(timeMs)
+  if (index === 0 || timeMs >= action.startAt + HANDOFF_MS) return frame
+  const previous = sampleGestureHistory(actions, index - 1, action.startAt)
+  if (previous.released && frame.released) return frame
+  const progress = sampleTalkingHeadEasing((timeMs - action.startAt) / HANDOFF_MS)
+  const previousMorphs = previous.released ? {} : previous.morphs
+  const names = new Set([...Object.keys(previousMorphs), ...Object.keys(frame.morphs)])
+  const morphs: Record<string, number> = {}
+  const morphWeights: Record<string, number> = {}
+  for (const name of names) {
+    const from = previousMorphs[name] ?? 0
+    const to = frame.morphs[name] ?? 0
+    morphs[name] = from + (to - from) * progress
+    const previousWeight = typeof previousMorphs[name] === 'number'
+      ? previous.morphWeights?.[name] ?? previous.morphWeight ?? 1
+      : 0
+    const nextWeight = typeof frame.morphs[name] === 'number' && !frame.released
+      ? frame.morphWeights?.[name] ?? frame.morphWeight ?? 1
+      : 0
+    morphWeights[name] = previousWeight + (nextWeight - previousWeight) * progress
+  }
+  return {
+    ...frame,
+    morphs,
+    morphWeights,
+    morphWeight: (previous.released ? 0 : previous.morphWeight ?? 1) * (1 - progress)
+      + (frame.released ? 0 : frame.morphWeight ?? 1) * progress,
+    released: frame.released && progress >= 1,
+  }
+}
+
+/** Creates the neutral gesture contribution used by a release or timeout. */
+function emptyGestureFrame(mirror: boolean, released: boolean): AvatarGestureFrame {
+  return {
+    morphs: {},
+    gesture: null,
+    gestureStartMs: 0,
+    mirror,
+    overlay: null,
+    handTargets: [],
+    released,
   }
 }
 
@@ -84,18 +220,6 @@ function resolveMotion(
     return getAvatarEmojiMotion(name.slice('emoji:'.length), seed, duration)
   }
   return getAvatarEmojiMotion(name, seed, duration) ?? getAvatarActionMotion(name, seed, duration)
-}
-
-/** Selects the latest declared gesture action without reading static data from its event. */
-function resolveLatestGestureOccurrence(
-  actions: readonly ComponentActionOccurrence[] | undefined,
-): ComponentActionOccurrence | undefined {
-  let latest: ComponentActionOccurrence | undefined
-  for (const occurrence of actions ?? []) {
-    if (!occurrence.name.startsWith(GESTURE_ACTION_PREFIX)) continue
-    if (latest === undefined || occurrence.startAt >= latest.startAt) latest = occurrence
-  }
-  return latest
 }
 
 /** Converts one declared gesture action into a semantic or native gesture name. */
@@ -143,82 +267,9 @@ function resolveMirror(
   return initialMirror === true
 }
 
-/** Sends one native gesture selection through the common sampled-frame path. */
-function applyNativeGestureFrame(
-  target: AvatarTarget,
-  name: string | null,
-  seed: number,
-  startAt: number,
-  timeMs: number,
-  mirror: boolean,
-): void {
-  target.applyGestureMotion({
-    morphs: {},
-    gesture: name,
-    gestureStartMs: 0,
-    mirror,
-    overlay: null,
-    handTargets: [],
-    released: name === null,
-  }, seed, name === null ? timeMs : startAt, startAt)
-}
-
-/** Creates one semantic gesture stream for Avatar's central presentation. */
-function createMotionAnimation(
-  sample: (timeMs: number) => AvatarGestureFrame,
-  startAt: number,
-  durationMs: number,
-  target: AvatarTarget,
-  seed: number,
-): AvatarTimeline {
-  return {
-    id: 'avatar-gesture-motion',
-    startAt,
-    endAt: startAt + durationMs,
-    sample: (timeMs) => {
-      const frame = sample(timeMs - startAt)
-      return {
-        value: frame,
-        apply: () => target.applyGestureMotion(frame, seed, resolveGestureStartAt(frame, startAt), startAt),
-      }
-    },
-  }
-}
-
 /** Starts a native gesture at the motion occurrence, except when releasing. */
 function resolveGestureStartAt(frame: AvatarGestureFrame, actionStartAt: number): number {
   return frame.released ? actionStartAt + frame.gestureStartMs : actionStartAt
-}
-
-/** Holds a native TH hand gesture, then returns control to the active pose. */
-function createNativeGestureAnimation(
-  name: string | null,
-  seed: number,
-  mirror: boolean,
-  startAt: number,
-  durationMs: number,
-  target: AvatarTarget,
-): AvatarTimeline {
-  const endAt = startAt + durationMs
-  return {
-    id: 'avatar-native-gesture',
-    startAt,
-    endAt: endAt + 1_000,
-    sample: (timeMs) => {
-      const active = timeMs < endAt
-      return {
-        value: { name: active ? name : null, startAt, mirror },
-        apply: () => applyNativeGestureFrame(
-          target,
-          active ? name : null,
-          seed,
-          startAt,
-          timeMs,
-          mirror,
-        ),
-      }
-    },
-  }
 }
 
 /** Derives a repeatable seed when a gesture is supplied as stable initial data. */

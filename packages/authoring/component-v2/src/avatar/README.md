@@ -12,7 +12,7 @@ Avatar V2 est composé d'un avatar central et de composants optionnels :
 | changer son expression | `avatar-mood` | `avatar:mood:<nom>` |
 | synchroniser sa bouche | `avatar-lip-sync` | `avatar:viseme` avec un visème |
 | lui faire un geste | `avatar-gesture` | `avatar:gesture:<nom>` |
-| le présenter au repos | `avatar-idle` | rien |
+| lui donner une pose de repos | `avatar-mood` | rien |
 | lui faire suivre la caméra | `avatar-gaze` | `avatar:gaze:on` ou `avatar:gaze:off` |
 
 Les composants Avatar sont logiques : ils ne reçoivent pas `move`. Seul le
@@ -130,7 +130,7 @@ rel: { host: hostId, target: avatarId }
 ## Ajouter les comportements
 
 Il faut ajouter uniquement les composants nécessaires. Le bloc suivant active
-les sept comportements disponibles autour de l'avatar :
+les six comportements disponibles autour de l'avatar :
 
 ```ts
 const avatarMood = {
@@ -139,6 +139,10 @@ const avatarMood = {
   initial: {
     rel: { host: hostId, target: avatarId },
     mood: 'neutral',
+    pose: 'neutral',
+    blink: true,
+    breathe: true,
+    headDrift: true,
   },
   actions: {
     'avatar:mood:happy': {},
@@ -182,19 +186,6 @@ const avatarGesture = {
     'avatar:gesture:wave_right': {},
     'avatar:gesture:release': {},
   },
-}
-
-const avatarIdle = {
-  id: 'avatar-idle',
-  type: 'avatar-idle',
-  initial: {
-    rel: { host: hostId, target: avatarId },
-    pose: 'neutral',
-    blink: true,
-    breathe: true,
-    headDrift: true,
-  },
-  actions: {},
 }
 
 const avatarGaze = {
@@ -377,7 +368,7 @@ la dernière frame, l'avatar est à `position`, puis il rejoint sa pose de repos
 N'ajoutez ni coordonnées ni calcul de déplacement aux données de l'événement.
 
 `avatar:motion:release` rend progressivement la pose aux autres composants
-Avatar (`avatar-gesture`, `avatar-idle`, `avatar-mood`, etc.) tout en
+Avatar (`avatar-gesture`, `avatar-mood`, etc.) tout en
 conservant la position atteinte. `data.durationMs` permet de choisir une autre
 durée pour une occurrence explicite et prend alors le dessus sur
 `rootMotion.transitionMs`.
@@ -417,6 +408,18 @@ frown  squint  curious
 
 `durationMs` est facultatif. Sans cette donnée, l'expression change
 immédiatement. Avec cette donnée, la transition dure le temps indiqué.
+
+Le perso peut partir directement d'une expression et régler ses valeurs :
+
+```ts
+initial: {
+  rel: { host: hostId, target: avatarId },
+  mood: 'happy',
+  moods: { happy: { mouthSmile: 0.5 } },
+}
+```
+
+Sans `moods`, chaque expression conserve les valeurs TalkingHead.
 
 Pour déclarer toutes les expressions sans recopier la liste :
 
@@ -582,10 +585,10 @@ const gestureActions = Object.fromEntries([
 ].map((name) => [`avatar:gesture:${name}`, {}]))
 ```
 
-## Présentation spontanée : `avatar-idle`
+## Présentation spontanée : `avatar-mood`
 
-Ce composant ne reçoit pas d'événement. Il suffit de régler ses propriétés
-initiales :
+Le perso d'expression porte aussi la pose de repos et les animations spontanées.
+Réglez ces propriétés dans son état initial :
 
 ```ts
 initial: {
@@ -622,8 +625,9 @@ initial: {
 }
 ```
 
-`contact` est compris entre `0` et `1` : `0` désactive la correction et `1`
-demande le contact complet. La tête et les yeux se répartissent le mouvement
+`enabled` vaut `true` et `contact` vaut `1` par défaut. `contact` est compris
+entre `0` et `1` : `0` désactive la correction et `1` demande le contact
+complet. La tête et les yeux se répartissent le mouvement
 et restent dans leurs limites naturelles ; l'avatar ne force pas une rotation
 impossible.
 
@@ -638,8 +642,9 @@ Les profils automatiques de TalkingHead peuvent être réglés séparément :
 | `listeningContact` | Profil de contact pendant l'écoute | `0.5` |
 | `listeningHeadMove` | Profil de mouvement pendant l'écoute | `0.5` |
 
-Ces profils changent la sélection des templates internes ; ils ne créent pas
-de nouveaux événements dans la scène.
+Ces profils changent la sélection des templates internes sans couper le
+contact caméra demandé par `avatar-gaze` ; ils ne créent pas de nouveaux
+événements dans la scène.
 
 Pour activer ou désactiver le contact pendant la scène :
 
@@ -760,7 +765,6 @@ const scene = {
         avatarMood,
         avatarLipSync,
         avatarGesture,
-        avatarIdle,
         avatarGaze,
       ],
       eventimes: [
@@ -792,7 +796,6 @@ import type {
   AvatarGestureInitial,
   AvatarGazeAction,
   AvatarGazeInitial,
-  AvatarIdleInitial,
   AvatarInitial,
   AvatarLipSyncAction,
   AvatarLipSyncInitial,

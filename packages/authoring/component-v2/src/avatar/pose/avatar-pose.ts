@@ -1,4 +1,4 @@
-import { Box3, Euler, Quaternion, Vector3 } from 'three'
+import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import type { Object3D } from 'three'
 import type {
   AvatarAnimationLayer,
@@ -97,14 +97,15 @@ export function createHipFeetBalanceDelta(
   const rightToe = bones.get('RightToeBase')
   if (hips === undefined || leftToe === undefined || rightToe === undefined) return new Map()
 
-  armature.updateMatrixWorld(true)
-  const bounds = new Box3().setFromObject(armature)
+  armature.updateWorldMatrix(true, true)
+  const inverseWorld = armature.matrixWorld.clone().invert()
+  const bounds = createLocalBounds(armature, inverseWorld)
   const leftWorld = new Vector3()
   const rightWorld = new Vector3()
   leftToe.getWorldPosition(leftWorld)
   rightToe.getWorldPosition(rightWorld)
-  leftWorld.sub(armature.position)
-  rightWorld.sub(armature.position)
+  leftWorld.applyMatrix4(inverseWorld)
+  rightWorld.applyMatrix4(inverseWorld)
 
   return new Map([[hips, {
     position: {
@@ -113,6 +114,31 @@ export function createHipFeetBalanceDelta(
       z: -(leftWorld.z + rightWorld.z) / 2,
     },
   }]])
+}
+
+/** Measures renderable bounds in the armature frame, independent of its presentation parent. */
+function createLocalBounds(armature: Object3D, inverseWorld: Matrix4): Box3 {
+  const bounds = new Box3()
+  const relative = new Matrix4()
+  armature.traverse((node) => {
+    const renderable = node as Object3D & {
+      boundingBox?: Box3 | null
+      computeBoundingBox?: () => void
+      geometry?: { boundingBox: Box3 | null; computeBoundingBox: () => void }
+    }
+    let box: Box3 | null | undefined
+    if (renderable.computeBoundingBox !== undefined) {
+      if (renderable.boundingBox === null) renderable.computeBoundingBox()
+      box = renderable.boundingBox
+    } else if (renderable.geometry !== undefined) {
+      if (renderable.geometry.boundingBox === null) renderable.geometry.computeBoundingBox()
+      box = renderable.geometry.boundingBox
+    }
+    if (box !== undefined && box !== null) {
+      bounds.union(box.clone().applyMatrix4(relative.multiplyMatrices(inverseWorld, node.matrixWorld)))
+    }
+  })
+  return bounds
 }
 
 /** Applies the clip ownership or release interpolation to its covered channels. */

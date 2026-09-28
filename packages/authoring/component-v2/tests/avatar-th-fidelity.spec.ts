@@ -91,6 +91,67 @@ describe('TalkingHead morph fidelity', () => {
     expect(values.at(-1)).toBe(0.5)
   })
 
+  it('keeps a released head gesture easing while the mood samples a new ambient value', () => {
+    const engine = new MorphEngine()
+    engine.registerBoneMorphs(() => undefined)
+    engine.snapAmbient('headRotateX', -0.1)
+    engine.setFixed('headRotateX', 0.5)
+    engine.update(200)
+    const gestureValue = engine.getValue('headRotateX')
+
+    engine.setFixed('headRotateX', null)
+    engine.update(16)
+    const releaseValue = engine.getValue('headRotateX')
+    engine.snapAmbient('headRotateX', -0.08)
+    const nextAmbientValue = engine.getValue('headRotateX')
+
+    expect(gestureValue).toBeGreaterThan(0)
+    expect(Math.abs(releaseValue - gestureValue)).toBeLessThan(0.05)
+    expect(nextAmbientValue).toBeCloseTo(releaseValue)
+    engine.update(16)
+    expect(engine.getValue('headRotateX')).toBeLessThan(releaseValue)
+  })
+
+  it('keeps a released body gesture easing when an unchanged system constraint is sampled', () => {
+    const engine = new MorphEngine()
+    engine.registerBoneMorphs(() => undefined)
+    engine.snapAmbient('bodyRotateX', 0.03)
+    engine.setFixed('bodyRotateX', 0.25)
+    engine.update(1_000)
+
+    engine.setFixed('bodyRotateX', null)
+    engine.update(16)
+    const releaseValue = engine.getValue('bodyRotateX')
+    engine.snapSystem('bodyRotateX', null)
+
+    expect(releaseValue).toBeGreaterThan(0.05)
+    expect(engine.getValue('bodyRotateX')).toBeCloseTo(releaseValue)
+    engine.update(16)
+    expect(engine.getValue('bodyRotateX')).toBeLessThan(releaseValue)
+    engine.snapSystem('bodyRotateX', 0.1)
+    expect(engine.getValue('bodyRotateX')).toBe(0.1)
+  })
+
+  it('snaps a sampled mood baseline while preserving a fixed morph owner', () => {
+    const influence = [0]
+    const engine = new MorphEngine()
+    engine.registerBlendMorph('mouthSmileLeft', { influences: influence, index: 0 })
+
+    engine.snapFixed('mouthSmileLeft', 0.5)
+    engine.snapBaseline('mouthSmileLeft', 0.2)
+    expect(influence[0]).toBe(0.5)
+    expect(engine.getBaseline('mouthSmileLeft')).toBe(0.2)
+
+    engine.snapFixed('mouthSmileLeft', null)
+    expect(influence[0]).toBe(0.2)
+
+    engine.snapSystem('mouthSmileLeft', 0.7)
+    engine.snapBaseline('mouthSmileLeft', 0.3)
+    expect(influence[0]).toBe(0.7)
+    engine.snapSystem('mouthSmileLeft', null)
+    expect(influence[0]).toBe(0.3)
+  })
+
   it('keeps the complete native shrug head variation', () => {
     expect(GESTURE_TEMPLATES.shrug['Neck.rotation']?.x).toEqual([-0.3, 0.3, 1, 2])
     expect(GESTURE_TEMPLATES.shrug['Neck.rotation']?.y).toEqual([-0.3, 0.3, 1, 2])

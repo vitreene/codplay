@@ -305,3 +305,37 @@ validation comprend :
 
 Le plan reste `En cours` pendant l'implémentation. Il ne passe à `Fini` qu'après
 alignement des spécifications, du suivi et des démos de référence.
+
+## 13. Représentation Three.js au resize — 28 septembre 2026
+
+L'auteur constate que le canvas de la scène Avatar se déforme ou se vide
+après un changement de taille en pause. Le parcours Safari reproduit le défaut
+à `6500 ms` : le buffer passe de `1440 × 682` à `1440 × 852`, mais son pixel
+central devient `[0, 0, 0, 0]`. Le host possédait déjà un `ResizeObserver`
+qui ajustait le viewport et la caméra ; il vidait ainsi le buffer. Le resize
+de la racine CodPlay appelle bien `HtmlPlayerRunner.resize()`, puis
+`RuntimePlayer.refresh()` et la transaction de présentation courante, mais
+le commit Three déclarait `timeMs` seul comme valeur d'échantillon. À temps
+inchangé, le runtime écartait ce commit.
+
+La correction reste dans le host Three et le circuit prévu par les tranches
+2 et le plan du pont CodPlay : la valeur du commit inclut la boîte actuelle
+du canvas. Son application ajuste d'abord le viewport et l'aspect de caméra,
+puis peint la scène dans la phase `commit`. Un resize déjà appliqué à la même
+taille n'appelle plus `renderer.setSize()` et ne vide donc pas l'image qu'un
+commit vient de peindre. Il n'y a ni RAF, ni rendu direct dans le
+`ResizeObserver`, ni modification du core CodPlay.
+
+Le test autonome livre les notifications de la racine et du canvas dans les
+deux ordres au même temps logique ; il vérifie la nouvelle projection, un
+seul nouveau rendu par commit et l'absence de vidage tardif. Dans Safari TP,
+la scène `avatar-motion` arrêtée à `1500 ms` reste dessinée après les resize
+`740 × 800 → 980 × 740 → 740 × 800` ; le pixel central reste opaque et le
+buffer suit les tailles de boîte. À `6500 ms`, le resize vers `980 × 740`
+garde également le modèle affiché. La scène Avatar principale garde son pixel
+central opaque à `5500 ms` lors du même resize. La grille Three conserve une
+boîte et un buffer de même proportion après resize ; son canvas ne conserve
+pas son buffer hors du rendu, comme déclaré par son option native. Les `124`
+tests du package, les deux typechecks, le build des démos et `git diff --check`
+passent. Le plan global reste **En cours** pour les autres validations de
+cycle de vie.

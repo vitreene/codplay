@@ -4,7 +4,6 @@ export {
   AVATAR_ENGINE,
   AVATAR_GESTURE_DEFINITION,
   AVATAR_GAZE_DEFINITION,
-  AVATAR_IDLE_DEFINITION,
   AVATAR_LIP_SYNC_DEFINITION,
   AVATAR_MOOD_DEFINITION,
   AVATAR_MOTION_DEFINITION,
@@ -19,7 +18,6 @@ export {
 export { TH_EMOJI_MOTION_NAMES } from './gesture/th-emoji-catalog'
 export { AvatarGestureComponent } from './components/avatar-gesture-component'
 export { AvatarGazeComponent } from './components/avatar-gaze-component'
-export { AvatarIdleComponent } from './components/avatar-idle-component'
 export {
   createAvatarBlinkSchedule,
 } from './idle/avatar-idle-schedule'
@@ -56,7 +54,6 @@ export type {
   AvatarGazeTarget,
   AvatarGazeTargetTransition,
   AvatarHandTarget,
-  AvatarIdleInitial,
   AvatarInitial,
   AvatarLipSyncAction,
   AvatarLipSyncInitial,

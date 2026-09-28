@@ -22,6 +22,8 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
   private camera: Camera | null = null
   private target: ThreeSceneTarget | undefined
   private resizeObserver: ResizeObserver | undefined
+  private viewportWidth = 0
+  private viewportHeight = 0
 
   /** Returns the canvas root used by the HTML materializer. */
   render(): string {
@@ -47,6 +49,8 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
     })
     renderer.setPixelRatio(resolvePixelRatio(initial.renderer?.pixelRatio))
     renderer.setSize(width, height, false)
+    this.viewportWidth = width
+    this.viewportHeight = height
 
     const scene = new this.runtime.Scene()
     this.renderer = renderer
@@ -68,7 +72,7 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
     return this.target
   }
 
-  /** Applies host state and schedules the final render after all updates. */
+  /** Samples the canvas box so a same-time CodPlay refresh can repaint after resize. */
   update(input: ComponentUpdateInput<ThreeSceneHostInitial>): void {
     this.applyBackground(input.state.background)
     const animation: ComponentAnimation = {
@@ -76,10 +80,18 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
       startAt: 0,
       endAt: Number.MAX_SAFE_INTEGER,
       presentationPhase: 'commit',
-      sample: (timeMs) => ({
-        value: timeMs,
-        apply: () => this.renderFrame(),
-      }),
+      sample: (timeMs) => {
+        const canvas = this.node as HTMLCanvasElement
+        const width = resolvePositiveNumber(canvas.clientWidth, this.viewportWidth)
+        const height = resolvePositiveNumber(canvas.clientHeight, this.viewportHeight)
+        return {
+          value: [timeMs, width, height],
+          apply: () => {
+            this.resize(width, height)
+            this.renderFrame()
+          },
+        }
+      },
     }
     input.registerAnimation?.(animation)
   }
@@ -94,6 +106,8 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
     this.scene = undefined
     this.renderer?.dispose()
     this.renderer = undefined
+    this.viewportWidth = 0
+    this.viewportHeight = 0
   }
 
   /** Updates the renderer viewport without rebuilding the scene graph. */
@@ -101,7 +115,10 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
     if (this.renderer === undefined) return
     const nextWidth = resolvePositiveNumber(width, 1)
     const nextHeight = resolvePositiveNumber(height, 1)
+    if (nextWidth === this.viewportWidth && nextHeight === this.viewportHeight) return
     this.renderer.setSize(nextWidth, nextHeight, false)
+    this.viewportWidth = nextWidth
+    this.viewportHeight = nextHeight
     if (this.camera !== null) syncCameraAspect(this.camera, nextWidth, nextHeight)
   }
 
@@ -122,7 +139,7 @@ export class ThreeSceneHostComponent extends BaseThreeHTMLComponent<ThreeSceneHo
     if (this.camera !== null && this.camera !== camera) this.scene.remove(this.camera)
     this.camera = camera
     if (camera !== null && camera.parent !== this.scene) this.scene.add(camera)
-    if (camera !== null) syncCameraAspect(camera, this.renderer?.domElement.width ?? 1, this.renderer?.domElement.height ?? 1)
+    if (camera !== null) syncCameraAspect(camera, this.viewportWidth, this.viewportHeight)
   }
 
   /** Applies the serializable scene background value. */

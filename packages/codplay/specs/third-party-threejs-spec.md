@@ -100,6 +100,13 @@ produit une autre pose et que le même `t` la reproduit.
 L’hôte enregistre une animation de présentation persistante en phase
 `commit`. Le runtime applique d’abord les animations de contenu, puis le rendu
 utilise l’état natif que les consommateurs ont écrit pour la frame courante.
+La taille du canvas fait partie de la valeur échantillonnée par ce commit.
+Lorsqu'un resize conduit CodPlay à représenter le même temps logique, le host
+ajuste le viewport natif et l'aspect de la caméra à la boîte actuelle avant
+de peindre la nouvelle image. L'observation locale du canvas peut signaler
+une nouvelle taille, mais elle ne produit pas de rendu hors du commit. Une
+notification tardive portant la taille déjà peinte ne réinitialise pas le
+buffer du renderer.
 
 Une capacité composite comme Avatar reste du côté composant : ses capacités
 spécialisées peuvent préparer des timelines absolues, mais elles ne présentent

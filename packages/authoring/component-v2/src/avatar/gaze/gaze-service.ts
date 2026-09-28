@@ -135,16 +135,17 @@ export class GazeService {
     const durationMs = Number.isFinite(transition.durationMs)
       ? Math.max(0, transition.durationMs)
       : 0
+    const from = transition.from ?? this.resolveTargetAt(startAt)
     if (this.target === target
       && this.targetTransition?.startAt === startAt
-      && this.targetTransition?.endAt === startAt + durationMs) return
+      && this.targetTransition?.endAt === startAt + durationMs
+      && this.targetTransition.from === from) return
     if (durationMs === 0) {
       this.target = target
       this.targetTransition = null
       return
     }
 
-    const from = this.resolveTargetAt(startAt)
     this.target = target
     this.targetTransition = {
       from,
@@ -254,14 +255,14 @@ export class GazeService {
   /** Computes the selected attention direction in Head-local coordinates. */
   private computeHeadLocalDirection(timeMs: number): Vector3 | null {
     if (this.leftEye === null || this.rightEye === null) return null
-    this.leftEye.updateMatrixWorld(true)
-    this.rightEye.updateMatrixWorld(true)
+    this.leftEye.updateWorldMatrix(true, false)
+    this.rightEye.updateWorldMatrix(true, false)
     this.pL.setFromMatrixPosition(this.leftEye.matrixWorld)
     this.pR.setFromMatrixPosition(this.rightEye.matrixWorld)
     this.pEyes.addVectors(this.pL, this.pR).multiplyScalar(0.5)
 
     if (this.head !== null) {
-      this.head.updateMatrixWorld(true)
+      this.head.updateWorldMatrix(true, false)
       this.head.getWorldQuaternion(this.headWorldQuaternion).invert()
     }
 
@@ -287,7 +288,7 @@ export class GazeService {
       result.set(0.035, 0.025, 1).normalize()
     } else {
       if (this.camera === null) return false
-      this.camera.updateMatrixWorld(true)
+      this.camera.updateWorldMatrix(true, false)
       this.camera.getWorldPosition(this.pCamera)
       result.subVectors(this.pCamera, this.pEyes).normalize()
     }

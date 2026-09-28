@@ -170,6 +170,48 @@ describe('Avatar animation player', () => {
     expect(replayed?.transforms.values().next().value).toEqual(first?.transforms.values().next().value)
   })
 
+  it('keeps the terminal clip pose across consecutive Play frames and a direct Seek', () => {
+    const { root, hips } = createAvatarRoot(2)
+    const player = createAvatarAnimationPlayer(root)
+    const selection = { name: 'walk', startAt: 0, speed: 1, loop: false }
+    player.register('walk', createWalkClip(true), 'animation')
+    player.set(selection)
+
+    for (const time of [0, 500, 999, 1_000, 1_100]) player.sampleAt(time)
+    const played = player.sampleAt(1_180)
+    player.prepareSeek()
+    player.set(selection)
+    const seeked = player.sampleAt(1_180)
+
+    expect(played?.transforms.get(hips)).toEqual(seeked?.transforms.get(hips))
+    expect(played?.releaseProgress).toBeCloseTo(seeked?.releaseProgress ?? 0)
+  })
+
+  it('reconstructs the terminal pose after a backward Seek followed by Play', () => {
+    const { root, hips } = createAvatarRoot(2)
+    const player = createAvatarAnimationPlayer(root)
+    const selection = { name: 'walk', startAt: 0, speed: 1, loop: false }
+    player.register('walk', createWalkClip(true), 'animation', {
+      type: 'arrival', easing: 'ease-out', transitionMs: 800,
+    })
+    player.set(selection)
+    player.sampleAt(0)
+    hips.position.set(0.3, 2.2, -0.4)
+    const first = player.sampleAt(1_200)
+    player.prepareSeek()
+    player.set(selection)
+    player.sampleAt(630)
+    hips.position.set(-0.1, 2.1, 0.4)
+    const resumed = player.sampleAt(1_200)
+    player.prepareSeek()
+    player.set(selection)
+    const direct = player.sampleAt(1_200)
+
+    expect(first?.transforms.get(hips)?.position).toEqual({ x: 0, y: 3, z: 0 })
+    expect(first?.transforms.get(hips)).toEqual(direct?.transforms.get(hips))
+    expect(resumed?.transforms.get(hips)).toEqual(direct?.transforms.get(hips))
+  })
+
   it('moves an arrival clip through its presentation offset without translating Hips twice', () => {
     const { root, hips } = createAvatarRoot()
     const player = createAvatarAnimationPlayer(root)
@@ -185,6 +227,36 @@ describe('Avatar animation player', () => {
     expect(arrival?.rootMotionOffset).toEqual({ x: 0, y: 0, z: 0 })
     expect(middle?.transforms.get(hips)?.position?.z).toBeCloseTo(0)
     expect(arrival?.releaseProgress).toBe(0)
+  })
+
+  it('anchors an arrival to the loaded model even after another composed pose', () => {
+    const { root, hips } = createAvatarRoot(2)
+    const player = createAvatarAnimationPlayer(root)
+    player.register('walk-in', createArrivalClip(), 'animation', 'arrival')
+    hips.position.set(0.3, 2.2, -0.4)
+    const selection = { name: 'walk-in', startAt: 0, speed: 1 }
+    player.set(selection)
+
+    const played = player.sampleAt(500)
+    player.prepareSeek()
+    player.set(selection)
+    const seeked = player.sampleAt(500)
+
+    expect(played?.transforms.get(hips)).toEqual(seeked?.transforms.get(hips))
+    expect(played?.transforms.get(hips)?.position).toEqual({ x: 0, y: 2, z: 0 })
+  })
+
+  it('reapplies a constant arrival track after the composer writes another pose', () => {
+    const { root, hips } = createAvatarRoot(2)
+    const player = createAvatarAnimationPlayer(root)
+    player.register('walk-in', createArrivalClip(), 'animation', 'arrival')
+    player.set({ name: 'walk-in', startAt: 0, speed: 1 })
+    player.sampleAt(0)
+    hips.position.set(0.3, 2.2, -0.4)
+
+    const terminal = player.sampleAt(1_200)
+
+    expect(terminal?.transforms.get(hips)?.position).toEqual({ x: 0, y: 2, z: 0 })
   })
 
   it('keeps the position reached by an interrupted arrival animation', () => {
@@ -260,6 +332,20 @@ describe('Avatar animation player', () => {
     expect(position?.x).toBeCloseTo(0.1)
     expect(position?.y).toBeCloseTo(0.5)
     expect(position?.z).toBeCloseTo(-0.5)
+
+    const presentation = new Group()
+    presentation.position.set(4, 1.5, -3)
+    presentation.rotation.y = 0.4
+    presentation.add(root)
+    const translated = createHipFeetBalanceDelta(root, new Map([
+      ['Hips', hips],
+      ['LeftToeBase', leftToe],
+      ['RightToeBase', rightToe],
+    ])).get(hips)?.position
+
+    expect(translated?.x).toBeCloseTo(position?.x ?? 0)
+    expect(translated?.y).toBeCloseTo(position?.y ?? 0)
+    expect(translated?.z).toBeCloseTo(position?.z ?? 0)
   })
 })
 

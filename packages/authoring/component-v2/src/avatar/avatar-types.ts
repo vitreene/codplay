@@ -68,6 +68,14 @@ export type MoodName =
   | 'thinking' | 'nervous' | 'shy' | 'listen' | 'smirk' | 'grimace'
   | 'pleading' | 'sleeping' | 'frown' | 'squint' | 'curious'
 
+/** One active mood occurrence used to reconstruct deterministic mood motion. */
+export type AvatarMoodOccurrence = Readonly<{
+  mood: MoodName
+  startAt: number
+  /** Persona-specific baseline used by the spontaneous TalkingHead templates. */
+  baseline?: Readonly<Record<string, number>>
+}>
+
 /** Morph baseline associated with one mood. */
 export type MoodBaseline = Record<string, number>
 
@@ -125,8 +133,26 @@ export type AvatarInitial = PersoInitialCommon & Readonly<{
 export type AvatarMoodInitial = PersoInitialCommon & Readonly<{
   /** Initial facial expression. */
   mood?: MoodName
+  /** Optional absolute morph values replacing native baselines by expression. */
+  moods?: Readonly<Partial<Record<MoodName, Readonly<Record<string, number>>>>>
   /** Default transition duration. */
   durationMs?: number
+  /** Initial body pose. */
+  pose?: string
+  /** Enables spontaneous eye blinking. */
+  blink?: boolean
+  /** Seed used to reconstruct mood loops and blinks after seek. */
+  blinkSeed?: number
+  /** Enables the native TalkingHead breathing channel. */
+  breathe?: boolean
+  /** Enables the native TalkingHead head-movement channel. */
+  headDrift?: boolean
+  /** Allows delayed native pose changes. */
+  poseChanges?: boolean
+  /** Allows deterministic speaking-hand phrases. */
+  speakWithHands?: boolean
+  /** Probability of a speaking-hand phrase. */
+  speakWithHandsProbability?: number
 }>
 
 /** Optional lip-sync contribution attached to one Avatar target. */
@@ -149,26 +175,6 @@ export type AvatarGestureInitial = PersoInitialCommon & Readonly<{
   durationMs?: number
   /** Mirrors the native hand gesture. */
   mirror?: boolean
-}>
-
-/** Optional idle contribution attached to one Avatar target. */
-export type AvatarIdleInitial = PersoInitialCommon & Readonly<{
-  /** Initial body pose. */
-  pose?: string
-  /** Enables spontaneous eye blinking. */
-  blink?: boolean
-  /** Seed used to reproduce the blink schedule after seek. */
-  blinkSeed?: number
-  /** Enables the native TalkingHead breathing channel. */
-  breathe?: boolean
-  /** Enables the native TalkingHead head-movement channel. */
-  headDrift?: boolean
-  /** Allows delayed native pose changes. */
-  poseChanges?: boolean
-  /** Allows deterministic speaking-hand phrases. */
-  speakWithHands?: boolean
-  /** Probability of a speaking-hand phrase. */
-  speakWithHandsProbability?: number
 }>
 
 /** Optional gaze contribution attached to one Avatar target. */
@@ -262,6 +268,7 @@ export type AvatarGazeTarget = 'camera' | 'ahead'
 export type AvatarGazeTargetTransition = Readonly<{
   startAt: number
   durationMs: number
+  from?: AvatarGazeTarget
 }>
 
 /** One finite TalkingHead look-ahead template request. */
@@ -368,6 +375,10 @@ export type AvatarGestureOverlay = Readonly<Record<string, Readonly<{
 /** Frame passed from the gesture component to the Avatar coordinator. */
 export type AvatarGestureFrame = Readonly<{
   morphs: Readonly<Record<string, number | null>>
+  /** Share of the authored morph pose; the remainder belongs to the ambient pose. */
+  morphWeight?: number
+  /** Per-channel share while actions with different morph sets exchange ownership. */
+  morphWeights?: Readonly<Record<string, number>>
   gesture: string | null
   gestureStartMs: number
   mirror: boolean
@@ -396,6 +407,16 @@ export type AvatarMotionPlayer = Readonly<{
   name: string
   durationMs: number
   sample: (timeMs: number) => AvatarGestureFrame
+  semanticEvents: readonly AvatarGestureHistoryEvent[]
+}>
+
+/** One authored skeletal selection reconstructed on the Avatar clock. */
+export type AvatarGestureHistoryEvent = Readonly<{
+  kind: 'gesture' | 'pose'
+  name: string | null
+  startAt: number
+  seed: number
+  mirror: boolean
 }>
 
 /** Deterministic random source supplied to Avatar samplers. */
@@ -492,11 +513,13 @@ export type ThIdleFrame = Readonly<{
   overlay: AvatarGestureOverlay | null
   eyeContact?: number
   headMove?: number
+  headMoveTask?: Readonly<{ endAt: number; lastStartedAt?: number }>
   pose?: string
   poseStartAt?: number
+  poseHistory?: readonly Readonly<{ name: string; startAt: number }>[]
 }>
 
-/** Options controlled by avatar-idle. */
+/** Internal TalkingHead activity options supplied by the mood perso. */
 export type ThIdleOptions = Readonly<{
   enabled: boolean
   breathe: boolean
@@ -674,7 +697,8 @@ export type AvatarTarget = Readonly<{
   /** Replaces one feature's absolute-time contribution before the next tick. */
   setTimeline: (slot: AvatarTimelineSlot, timeline: AvatarTimeline) => void
   applyMood: (morphs: AvatarMorphs) => void
-  setMood?: (name: MoodName) => void
+  setMood?: (name: MoodName, startAt?: number) => void
+  setMoodHistory?: (occurrences: readonly AvatarMoodOccurrence[]) => void
   setIdleProfile: (options: Readonly<{
     enabled: boolean
     breathe: boolean
@@ -693,6 +717,7 @@ export type AvatarTarget = Readonly<{
     startAt?: number,
     actionStartAt?: number,
   ) => void
+  setGestureHistory?: (events: readonly AvatarGestureHistoryEvent[]) => void
   setBlinkSchedule: (schedule: BlinkScheduleFn | null) => void
   setGaze: (enabled: boolean, contact?: number | null, headMove?: number | null) => void
   setGazeTarget?: (target: AvatarGazeTarget, transition?: AvatarGazeTargetTransition) => void
@@ -727,11 +752,12 @@ export type AvatarEngine = {
     boneMap: Map<string, Object3D>
     animations: readonly AnimationClip[]
   }>
-  animate(deltaMs: number): void
+  animate(deltaMs: number, timeMs?: number): void
+  resetSemantic?(): void
   prepareSeek(): void
   commitSeek(timelineMs: number): void
   setMood(name: MoodName): void
-  setPose(name: string, startAt?: number): boolean
+  setPose(name: string, startAt?: number, durationMs?: number): boolean
   playGesture(name: string, rng: Rng, mirror?: boolean, startAt?: number): ResolvedPose | null
   releaseGesture(startAt?: number): void
   setGestureOverlay(overlay: AvatarGestureOverlay | null): void
@@ -754,5 +780,5 @@ export type AvatarEngine = {
   ): void
   getAnimation(name: string): AvatarAnimationMode | undefined
   setAnimation(animation: ActiveAnimation | null): void
-  applyAnimationAt(timeMs: number): AvatarVector3
+  applyAnimationAt(timeMs: number, applyRootMotion?: (offset: AvatarVector3) => void): AvatarVector3
 }

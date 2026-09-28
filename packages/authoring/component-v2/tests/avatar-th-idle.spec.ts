@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bone, Group } from 'three'
 import { sampleThIdle } from '../src/avatar/idle/th-idle-animation'
-import { sampleLoopedTemplate } from '../src/avatar/idle/th-animation-template'
+import { sampleLoopedAlternativeMarkers, sampleLoopedTemplate } from '../src/avatar/idle/th-animation-template'
 import { sampleTalkingHeadEasing } from '../src/avatar/avatar-easing'
 import { getThPoseChoices, resolveThPoseChoice } from '../src/avatar/idle/th-mood-data'
 import { GestureEngine } from '../src/avatar/gesture/gesture-engine'
@@ -40,6 +40,45 @@ describe('TalkingHead idle adaptation', () => {
 
     expect(frame.testChannel).toBeCloseTo(sampleTalkingHeadEasing(0.25))
     expect(frame.testChannel).not.toBeCloseTo(0.25)
+  })
+
+  it('emits a head-move control at its native time slot after the eye delay', () => {
+    const alternatives = [{
+      template: {
+        delay: 100,
+        dt: [20, 200],
+        vs: { headMove: [0.5] },
+      },
+    }] as const
+
+    expect(sampleLoopedAlternativeMarkers(alternatives, 119, 41, 'headMove').markers).toEqual([])
+    expect(sampleLoopedAlternativeMarkers(alternatives, 120, 41, 'headMove').markers).toEqual([
+      { startAt: 120, value: 0.5 },
+    ])
+  })
+
+  it('hands the eyes to a head task gradually and keeps its release continuous', () => {
+    const options = { enabled: true, breathe: false, headMove: true, seed: 5 } as const
+    const before = sampleThIdle('neutral', 5_237, options)
+    const atStart = sampleThIdle('neutral', 5_238, options)
+    const beforeRelease = sampleThIdle('neutral', 9_382, options)
+    const afterRelease = sampleThIdle('neutral', 9_383, options)
+
+    expect(before.morphs.eyeLookOutLeft).toBeGreaterThan(0.1)
+    expect(Math.abs((atStart.morphs.eyeLookOutLeft ?? 0) - (before.morphs.eyeLookOutLeft ?? 0))).toBeLessThan(0.005)
+    expect(atStart.headMoveTask).toBeDefined()
+    expect(Math.abs((afterRelease.morphs.eyeLookOutLeft ?? 0) - (beforeRelease.morphs.eyeLookOutLeft ?? 0))).toBeLessThan(0.005)
+  })
+
+  it('starts a second head task from the first task while their timings overlap', () => {
+    const options = { enabled: true, breathe: true, headMove: true, seed: 45 } as const
+    const before = sampleThIdle('neutral', 8_662, options)
+    const after = sampleThIdle('neutral', 8_663, options)
+    const firstTaskEnds = sampleThIdle('neutral', 9_098, options)
+
+    expect(Math.abs((after.morphs.headRotateX ?? 0) - (before.morphs.headRotateX ?? 0))).toBeLessThan(0.005)
+    expect(Math.abs((after.morphs.eyeLookInLeft ?? 0) - (before.morphs.eyeLookInLeft ?? 0))).toBeLessThan(0.005)
+    expect(firstTaskEnds.headMoveTask?.endAt).toBeGreaterThan(9_098)
   })
 
   it('solves deterministic speaking hands independently from scene data', () => {

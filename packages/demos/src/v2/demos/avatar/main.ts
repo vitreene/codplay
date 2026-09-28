@@ -128,20 +128,13 @@ export function createScene(): SceneDoc<string> {
 						initial: {
 							rel: { host: AVATAR_HOST_ID, target: AVATAR_ID },
 							mood: 'neutral',
-						},
-						actions: AVATAR_MOOD_ACTIONS,
-					},
-					{
-						id: 'avatar-idle',
-						type: 'avatar-idle',
-						initial: {
-							rel: { host: AVATAR_HOST_ID, target: AVATAR_ID },
+							moods: { happy: { mouthSmile: 0.5 } },
 							pose: 'neutral',
 							blink: true,
 							breathe: false,
 							headDrift: true,
 						},
-						actions: {},
+						actions: AVATAR_MOOD_ACTIONS,
 					},
 					{
 						id: 'avatar-gaze',
@@ -233,8 +226,6 @@ export function createScene(): SceneDoc<string> {
 					{ name: 'avatar:gesture:release', startAt: 17_000 },
 					{ name: 'avatar:gesture:bow', startAt: 17_300, data: { durationMs: 1_000 } },
 					{ name: 'avatar:gesture:release', startAt: 18_400 },
-					{ name: 'avatar:gaze:off', startAt: 5_400, data: { durationMs: 800 } },
-					{ name: 'avatar:gaze:on', startAt: 9_600, data: { contact: 1, durationMs: 800 } },
 					...buildVisemeEventimes(),
 					...buildWordEventimes(),
 					{ name: 'sequence:end', startAt: SCENE_END_MS },
