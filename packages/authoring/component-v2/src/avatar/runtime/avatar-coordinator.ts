@@ -23,7 +23,7 @@ import type {
   ThIdleFrame,
   ThIdleOptions,
 } from '../avatar-types.js'
-import { sampleThIdle } from '../idle/th-idle-animation.js'
+import { createThIdleSamplingState, sampleThIdle, type ThIdleSamplingState } from '../idle/th-idle-animation.js'
 import { filterAvatarModelBaseline } from '../morph/morph-engine.js'
 import { TH_GAZE_DEFAULTS } from '../gaze/gaze-service.js'
 
@@ -35,6 +35,21 @@ type GestureContribution = Readonly<{
 }> | null
 
 type AnimationContribution = ActiveAnimation | null
+type SemanticEvent = AvatarGestureHistoryEvent & Readonly<{ source: 'mood' | 'gesture' }>
+type AmbientHeadTask = Readonly<{
+  occurrence: AvatarMoodOccurrence
+  initialMorphs: AvatarMorphs
+  endAt: number
+  markerCutoffAt: number
+  resolveHeadSourceAt: (elapsedMs: number) => Readonly<Record<string, number>>
+}>
+type AmbientContext = Readonly<{
+  occurrence: AvatarMoodOccurrence
+  initialMorphs: AvatarMorphs
+  previousTasks: readonly AmbientHeadTask[]
+  resolveHeadSourceAt: (elapsedMs: number) => Readonly<Record<string, number>>
+  samplingState: ThIdleSamplingState
+}>
 
 const NO_ROOT_MOTION: AvatarVector3 = { x: 0, y: 0, z: 0 }
 
@@ -45,9 +60,22 @@ export class AvatarCoordinator {
   private moodName: MoodName
   private moodStartAt = 0
   private moodHistory: readonly AvatarMoodOccurrence[]
+  private moodHistoryRevision = 0
   private idleProfile: ThIdleOptions
+  private ambientContexts: AmbientContext[] = []
+  private ambientPastPoseEvents: AvatarGestureHistoryEvent[] = []
+  private ambientLastTimeMs: number | undefined
+  private ambientOptionsRevision = 0
+  private ambientAppliedOptionsRevision = -1
+  private ambientAppliedMoodHistoryRevision = -1
   private gesture: GestureContribution = null
   private gestureHistory: readonly AvatarGestureHistoryEvent[] = []
+  private semanticActivePoseCount = 0
+  private semanticGestureCount = 0
+  private semanticDirty = true
+  private semanticInitialized = false
+  private semanticMoodPose: string | undefined
+  private semanticGesturePose: string | null = null
   private gestureReleaseAt = 0
   private pose: string | undefined
   private poseStartAt = 0
@@ -134,6 +162,13 @@ export class AvatarCoordinator {
     this.appliedPose = undefined
     this.lastTimeMs = undefined
     this.lastAppliedRevision = undefined
+    this.semanticDirty = true
+    this.semanticInitialized = false
+    this.semanticMoodPose = undefined
+    this.semanticGesturePose = null
+    this.ambientContexts = []
+    this.ambientPastPoseEvents = []
+    this.ambientLastTimeMs = undefined
     this.revision += 1
   }
 
@@ -155,6 +190,13 @@ export class AvatarCoordinator {
     this.lastTimeMs = undefined
     this.lastAppliedRevision = undefined
     this.engineConfigurationDirty = true
+    this.semanticDirty = true
+    this.semanticInitialized = false
+    this.semanticMoodPose = undefined
+    this.semanticGesturePose = null
+    this.ambientContexts = []
+    this.ambientPastPoseEvents = []
+    this.ambientLastTimeMs = undefined
   }
 
   /** Returns the change revision used by the central presentation stream. */
@@ -172,6 +214,7 @@ export class AvatarCoordinator {
   /** Stages skeletal gesture markers for reconstruction in the common stream. */
   setGestureHistory(events: readonly AvatarGestureHistoryEvent[]): void {
     if (sameGestureHistory(this.gestureHistory, events)) return
+    if (!gestureHistoryStartsWith(events, this.gestureHistory)) this.semanticDirty = true
     this.gestureHistory = events.map((event) => ({ ...event }))
     this.revision += 1
   }
@@ -196,7 +239,9 @@ export class AvatarCoordinator {
   setMoodHistory(occurrences: readonly AvatarMoodOccurrence[]): void {
     const next = [...occurrences].sort((left, right) => left.startAt - right.startAt)
     if (sameMoodHistory(this.moodHistory, next)) return
+    if (!moodHistoryStartsWith(next, this.moodHistory)) this.semanticDirty = true
     this.moodHistory = next
+    this.moodHistoryRevision += 1
     const latest = next.at(-1)
     const mood = latest?.mood ?? 'neutral'
     const startAt = latest?.startAt ?? 0
@@ -221,6 +266,8 @@ export class AvatarCoordinator {
     this.appliedAmbientMorphs = undefined
     if (next.pose !== undefined) this.setPose(next.pose)
     this.engineConfigurationDirty = true
+    this.semanticDirty = true
+    this.ambientOptionsRevision += 1
   }
 
   /** Stores the speech/lip-sync morph layer for the next central presentation. */
@@ -365,6 +412,8 @@ export class AvatarCoordinator {
     this.idleProfile = { ...this.idleProfile, speaking: mode === 'speaking' }
     this.setGaze(this.gazeEnabled, this.resolveGazeContact())
     this.engineConfigurationDirty = true
+    this.semanticDirty = true
+    this.ambientOptionsRevision += 1
   }
 
   /** Stores the state-specific contact strengths supplied by avatar-gaze. */
@@ -384,6 +433,8 @@ export class AvatarCoordinator {
     }
     this.setGaze(this.gazeEnabled, this.resolveGazeContact())
     this.engineConfigurationDirty = true
+    this.semanticDirty = true
+    this.ambientOptionsRevision += 1
   }
 
   /** Stages the host camera used by the next central gaze sample. */
@@ -430,19 +481,19 @@ export class AvatarCoordinator {
       this.appliedPose = undefined
       this.lastTimeMs = 0
       this.engineConfigurationDirty = true
+      this.semanticDirty = true
+      this.semanticInitialized = false
+      this.semanticMoodPose = undefined
+      this.semanticGesturePose = null
     }
-
-    engine.resetSemantic?.()
-    const rebuildSemantic = seeking || this.lastTimeMs === undefined
-      || engine.resetSemantic !== undefined
 
     this.applyTimelines(timeMs)
     this.applyMoodLayer()
-    this.applyAmbientLayer(timeMs, rebuildSemantic)
+    this.applyAmbientLayer(timeMs)
     this.applyFixedLayer()
     this.applyPoseLayer(timeMs)
 
-    this.applyGestureSelection(rebuildSemantic)
+    this.applyGestureSelection(this.gestureHistory.length > 0)
     this.applyOverlayLayer()
     this.applyEngineConfiguration()
 
@@ -508,12 +559,12 @@ export class AvatarCoordinator {
   }
 
   /** Samples and applies the deterministic TH idle/mood animation layer. */
-  private applyAmbientLayer(timeMs: number, rebuildPoseHistory: boolean): void {
+  private applyAmbientLayer(timeMs: number): void {
     const engine = this.engine
     if (engine === undefined) return
 
     const frame = this.sampleAmbientHistory(timeMs)
-    if (rebuildPoseHistory) this.rebuildMoodPoseHistory(timeMs)
+    this.applySemanticEvents(timeMs, frame)
     const morphs = frame.morphs
     this.ambientOverlay = frame.overlay
     const framePoseStartAt = frame.poseStartAt === undefined
@@ -538,123 +589,113 @@ export class AvatarCoordinator {
     this.appliedAmbientMorphs = { ...morphs }
   }
 
-  /** Rebuilds TH template handoffs and unfinished head tasks from mood events. */
+  /** Samples the active mood while retaining handoffs from received occurrences. */
   private sampleAmbientHistory(timeMs: number): ThIdleFrame {
     const options = this.resolveIdleTemplateOptions()
-    const occurrences = this.moodHistory.filter((occurrence) => occurrence.startAt <= timeMs)
-    if (occurrences.length === 0) {
-      return sampleThIdle(this.moodName, 0, options, this.moodMorphs)
+    const historyChanged = this.ambientAppliedMoodHistoryRevision !== this.moodHistoryRevision
+    const canContinue = this.ambientAppliedOptionsRevision === this.ambientOptionsRevision
+      && this.ambientLastTimeMs !== undefined
+      && timeMs >= this.ambientLastTimeMs
+      && (!historyChanged || this.ambientContexts.every((context, index) => (
+        this.moodHistory[index] !== undefined
+        && sameMoodOccurrence(context.occurrence, this.moodHistory[index]!)
+      )))
+    if (!canContinue) {
+      this.ambientContexts = []
+      this.ambientPastPoseEvents = []
+      this.semanticDirty = true
     }
+    this.ambientAppliedOptionsRevision = this.ambientOptionsRevision
+    this.ambientAppliedMoodHistoryRevision = this.moodHistoryRevision
 
-    const continuedTasks: {
-      occurrence: AvatarMoodOccurrence
-      initialMorphs: AvatarMorphs
-      endAt: number
-      markerCutoffAt: number
-      resolveHeadSourceAt: (elapsedMs: number) => Readonly<Record<string, number>>
-    }[] = []
-    let initialMorphs: AvatarMorphs = {}
-    let frame: ThIdleFrame = { morphs: {}, overlay: null }
-
-    for (let index = 0; index < occurrences.length; index += 1) {
-      const occurrence = occurrences[index]!
-      const next = occurrences[index + 1]
-      const sampleAt = Math.min(timeMs, next?.startAt ?? timeMs)
-      const previousTasks = [...continuedTasks]
-      /** Resolves the latest autonomous head task before this mood takes ownership. */
-      const resolveHeadSourceAt = (elapsedMs: number): Readonly<Record<string, number>> => {
-        const absoluteAt = occurrence.startAt + elapsedMs
-        for (const task of [...previousTasks].reverse()) {
-          if (absoluteAt >= task.endAt) continue
-          const previous = sampleThIdle(
-            task.occurrence.mood,
-            absoluteAt - task.occurrence.startAt,
-            options,
-            task.occurrence.baseline ?? MOOD_BASELINES[task.occurrence.mood],
-            task.initialMorphs,
-            task.markerCutoffAt,
-            task.resolveHeadSourceAt,
-          )
-          if (previous.headMoveTask?.lastStartedAt !== undefined) return previous.morphs
-        }
-        return {}
+    for (let index = this.ambientContexts.length; index < this.moodHistory.length; index += 1) {
+      const occurrence = this.moodHistory[index]!
+      if (occurrence.startAt > timeMs) break
+      const previous = this.ambientContexts.at(-1)
+      if (previous === undefined) {
+        this.ambientContexts.push(createAmbientContext(occurrence, {}, [], options))
+        continue
       }
-      const ownFrame = sampleThIdle(
-        occurrence.mood,
-        sampleAt - occurrence.startAt,
-        options,
-        occurrence.baseline ?? MOOD_BASELINES[occurrence.mood],
-        initialMorphs,
-        Number.POSITIVE_INFINITY,
-        resolveHeadSourceAt,
-      )
-      const morphs: Record<string, number> = { ...ownFrame.morphs }
-      if (ownFrame.headMoveTask?.lastStartedAt === undefined) {
-        copyHeadRotation(morphs, resolveHeadSourceAt(sampleAt - occurrence.startAt))
-      }
-      if (ownFrame.headMoveTask !== undefined) copyHeadRotation(morphs, ownFrame.morphs)
-      frame = { ...ownFrame, morphs }
-
-      if (next === undefined) return frame
-      if (ownFrame.headMoveTask !== undefined
-        && occurrence.startAt + ownFrame.headMoveTask.endAt > next.startAt) {
-        continuedTasks.push({
-          occurrence,
-          initialMorphs,
-          endAt: occurrence.startAt + ownFrame.headMoveTask.endAt,
-          markerCutoffAt: next.startAt - occurrence.startAt,
-          resolveHeadSourceAt,
+      this.semanticActivePoseCount = 0
+      const boundary = sampleAmbientContext(previous, occurrence.startAt, options)
+      for (const pose of boundary.poseHistory ?? []) {
+        const startAt = previous.occurrence.startAt + pose.startAt
+        if (startAt >= occurrence.startAt) continue
+        this.ambientPastPoseEvents.push({
+          kind: 'pose', name: pose.name, startAt, seed: 0, mirror: false,
         })
       }
-      initialMorphs = morphs
+      const previousTasks = [...previous.previousTasks]
+      const headTask = boundary.headMoveTask
+      if (headTask !== undefined
+        && previous.occurrence.startAt + headTask.endAt > occurrence.startAt) {
+        previousTasks.push({
+          occurrence: previous.occurrence,
+          initialMorphs: previous.initialMorphs,
+          endAt: previous.occurrence.startAt + headTask.endAt,
+          markerCutoffAt: occurrence.startAt - previous.occurrence.startAt,
+          resolveHeadSourceAt: previous.resolveHeadSourceAt,
+        })
+      }
+      this.ambientContexts.push(createAmbientContext(
+        occurrence,
+        boundary.morphs,
+        previousTasks,
+        options,
+      ))
     }
-
-    return frame
+    this.ambientLastTimeMs = timeMs
+    if (this.ambientContexts.length === 0) {
+      return sampleThIdle(this.moodName, 0, options, this.moodMorphs)
+    }
+    return sampleAmbientContext(this.ambientContexts.at(-1)!, timeMs, options)
   }
 
-  /** Replays mood and gesture skeletal selections in authored time order. */
-  private rebuildMoodPoseHistory(timeMs: number): void {
+  /** Applies newly due skeletal events in Play and reconstructs them after Seek. */
+  private applySemanticEvents(timeMs: number, frame: ThIdleFrame): void {
     const engine = this.engine
-    const initialPose = this.idleProfile.pose
+    const initialPose = this.idleProfile.enabled ? this.idleProfile.pose : undefined
     if (engine === undefined) return
-
-    const poseEvents: AvatarGestureHistoryEvent[] = []
-    if (this.idleProfile.enabled && initialPose !== undefined) {
+    const rebuild = this.semanticDirty
+    if (rebuild) {
+      engine.resetSemantic?.()
+      this.appliedPose = undefined
+      this.semanticInitialized = false
+      this.semanticMoodPose = initialPose
+      this.semanticGesturePose = null
+    }
+    const activeOccurrence = this.ambientContexts.at(-1)?.occurrence
+    const poseHistory = initialPose === undefined ? [] : frame.poseHistory ?? []
+    const poseEvents = initialPose === undefined ? [] : [
+      ...(rebuild ? this.ambientPastPoseEvents : []),
+      ...poseHistory.slice(rebuild ? 0 : this.semanticActivePoseCount).flatMap((pose) => {
+        if (activeOccurrence === undefined) return []
+        const startAt = activeOccurrence.startAt + pose.startAt
+        return startAt > timeMs ? [] : [{
+          kind: 'pose' as const, name: pose.name, startAt, seed: 0, mirror: false,
+        }]
+      }),
+    ]
+    let gestureCount = rebuild ? 0 : this.semanticGestureCount
+    while (gestureCount < this.gestureHistory.length
+      && this.gestureHistory[gestureCount]!.startAt <= timeMs) {
+      gestureCount += 1
+    }
+    const events: SemanticEvent[] = [
+      ...poseEvents.map((event) => ({ ...event, source: 'mood' as const })),
+      ...this.gestureHistory
+        .slice(rebuild ? 0 : this.semanticGestureCount, gestureCount)
+        .map((event) => ({ ...event, source: 'gesture' as const })),
+    ].sort((left, right) => left.startAt - right.startAt)
+    this.semanticDirty = false
+    let lastAppliedPose = this.appliedPose ?? initialPose
+    if (!this.semanticInitialized && initialPose !== undefined) {
       engine.setPose(initialPose, 0, 0)
       this.pose = initialPose
       this.poseStartAt = 0
-      const options = this.resolveIdleTemplateOptions()
-      const occurrences = this.moodHistory.filter((occurrence) => occurrence.startAt <= timeMs)
-      for (let index = 0; index < occurrences.length; index += 1) {
-        const occurrence = occurrences[index]!
-        const nextOccurrence = occurrences[index + 1]
-        const stopAt = Math.min(timeMs, nextOccurrence?.startAt ?? timeMs)
-        const frame = sampleThIdle(
-          occurrence.mood,
-          Math.max(0, stopAt - occurrence.startAt),
-          options,
-          occurrence.baseline ?? MOOD_BASELINES[occurrence.mood],
-        )
-        for (const pose of frame.poseHistory ?? []) {
-          const startAt = occurrence.startAt + pose.startAt
-          if (nextOccurrence !== undefined && startAt >= nextOccurrence.startAt) continue
-          if (startAt > timeMs) continue
-          poseEvents.push({
-            kind: 'pose', name: pose.name, startAt, seed: 0, mirror: false,
-          })
-        }
-      }
+      lastAppliedPose = initialPose
     }
-
-    let moodPose = initialPose
-    let gesturePose: string | null = null
-    let lastAppliedPose = initialPose
-    const events = [
-      ...poseEvents.map((event) => ({ ...event, source: 'mood' as const })),
-      ...this.gestureHistory
-        .filter((event) => event.startAt <= timeMs)
-        .map((event) => ({ ...event, source: 'gesture' as const })),
-    ].sort((left, right) => left.startAt - right.startAt)
+    this.semanticInitialized = true
     for (const event of events) {
       if (event.kind === 'gesture') {
         if (event.name === null) engine.releaseGesture(event.startAt)
@@ -662,19 +703,21 @@ export class AvatarCoordinator {
         continue
       }
       if (event.source === 'mood') {
-        moodPose = event.name ?? undefined
+        this.semanticMoodPose = event.name ?? undefined
         if (event.name !== null) {
           this.pose = event.name
           this.poseStartAt = event.startAt
         }
       } else {
-        gesturePose = event.name
+        this.semanticGesturePose = event.name
       }
-      const selected = gesturePose ?? moodPose
+      const selected = this.semanticGesturePose ?? this.semanticMoodPose
       if (selected === undefined) continue
       engine.setPose(selected, event.startAt, undefined)
       lastAppliedPose = selected
     }
+    this.semanticActivePoseCount = poseHistory.length
+    this.semanticGestureCount = gestureCount
     this.appliedPose = lastAppliedPose
   }
 
@@ -792,13 +835,90 @@ export class AvatarCoordinator {
   }
 }
 
+/** Captures one received mood's source and inherited autonomous head tasks. */
+function createAmbientContext(
+  occurrence: AvatarMoodOccurrence,
+  initialMorphs: AvatarMorphs,
+  previousTasks: readonly AmbientHeadTask[],
+  options: ThIdleOptions,
+): AmbientContext {
+  /** Resolves a head task that began before this mood occurrence. */
+  const resolveHeadSourceAt = (elapsedMs: number): Readonly<Record<string, number>> => {
+    const absoluteAt = occurrence.startAt + elapsedMs
+    for (let index = previousTasks.length - 1; index >= 0; index -= 1) {
+      const task = previousTasks[index]!
+      if (absoluteAt >= task.endAt) continue
+      const previous = sampleThIdle(
+        task.occurrence.mood,
+        absoluteAt - task.occurrence.startAt,
+        options,
+        task.occurrence.baseline ?? MOOD_BASELINES[task.occurrence.mood],
+        task.initialMorphs,
+        task.markerCutoffAt,
+        task.resolveHeadSourceAt,
+      )
+      if (previous.headMoveTask?.lastStartedAt !== undefined) return previous.morphs
+    }
+    return {}
+  }
+  return {
+    occurrence,
+    initialMorphs: { ...initialMorphs },
+    previousTasks,
+    resolveHeadSourceAt,
+    samplingState: createThIdleSamplingState(),
+  }
+}
+
+/** Samples one active mood with the same inherited head handoff in Play and Seek. */
+function sampleAmbientContext(
+  context: AmbientContext,
+  timeMs: number,
+  options: ThIdleOptions,
+): ThIdleFrame {
+  const elapsedMs = timeMs - context.occurrence.startAt
+  const ownFrame = sampleThIdle(
+    context.occurrence.mood,
+    elapsedMs,
+    options,
+    context.occurrence.baseline ?? MOOD_BASELINES[context.occurrence.mood],
+    context.initialMorphs,
+    Number.POSITIVE_INFINITY,
+    context.resolveHeadSourceAt,
+    context.samplingState,
+  )
+  const morphs: Record<string, number> = { ...ownFrame.morphs }
+  if (ownFrame.headMoveTask?.lastStartedAt === undefined) {
+    copyHeadRotation(morphs, context.resolveHeadSourceAt(elapsedMs))
+  }
+  if (ownFrame.headMoveTask !== undefined) copyHeadRotation(morphs, ownFrame.morphs)
+  return { ...ownFrame, morphs }
+}
+
+/** Checks whether an existing mood context still belongs to the received history. */
+function sameMoodOccurrence(left: AvatarMoodOccurrence, right: AvatarMoodOccurrence): boolean {
+  return left.mood === right.mood
+    && left.startAt === right.startAt
+    && (left.baseline === undefined
+      ? right.baseline === undefined
+      : right.baseline !== undefined && sameMorphs(left.baseline, right.baseline))
+}
+
 /** Compares authored skeletal markers without treating each update as a new action. */
 function sameGestureHistory(
   left: readonly AvatarGestureHistoryEvent[],
   right: readonly AvatarGestureHistoryEvent[],
 ): boolean {
-  return left.length === right.length && left.every((event, index) => {
-    const other = right[index]
+  return left.length === right.length && gestureHistoryStartsWith(right, left)
+}
+
+/** Checks that newly received gesture markers only append to the applied journal. */
+function gestureHistoryStartsWith(
+  next: readonly AvatarGestureHistoryEvent[],
+  previous: readonly AvatarGestureHistoryEvent[],
+): boolean {
+  return previous.length <= next.length && previous.every((event, index) => {
+    const other = next[index]
     return other !== undefined
       && event.kind === other.kind
       && event.name === other.name
@@ -806,6 +926,16 @@ function sameGestureHistory(
       && event.seed === other.seed
       && event.mirror === other.mirror
   })
+}
+
+/** Checks that newly received mood occurrences only extend the active history. */
+function moodHistoryStartsWith(
+  next: readonly AvatarMoodOccurrence[],
+  previous: readonly AvatarMoodOccurrence[],
+): boolean {
+  return previous.length <= next.length && previous.every((occurrence, index) => (
+    next[index] !== undefined && sameMoodOccurrence(occurrence, next[index]!)
+  ))
 }
 
 /** Preserves a native head task without replacing the new mood's eye loop. */
@@ -892,12 +1022,7 @@ function sameMoodHistory(
   return left.length === right.length
     && left.every((occurrence, index) => {
       const other = right[index]
-      return other !== undefined
-        && occurrence.mood === other.mood
-        && occurrence.startAt === other.startAt
-        && (occurrence.baseline === undefined
-          ? other.baseline === undefined
-          : other.baseline !== undefined && sameMorphs(occurrence.baseline, other.baseline))
+      return other !== undefined && sameMoodOccurrence(occurrence, other)
     })
 }
 

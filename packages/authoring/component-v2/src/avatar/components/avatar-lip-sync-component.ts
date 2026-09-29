@@ -111,7 +111,7 @@ function resolveVisemeCues(
       endAt: Math.max(startAt + duration, peakAt) + rampMs,
     })
   }
-  return cues
+  return cues.sort((left, right) => left.attackAt - right.attackAt)
 }
 
 /** Resolves the canonical viseme carried by one ordinary event or state. */
@@ -171,18 +171,46 @@ function createAnimation(
   fallbackMorphs: AvatarMorphs,
   target: AvatarTarget,
 ): AvatarTimeline {
+  let activeCues: VisemeCue[] = []
+  let nextCueIndex = 0
+  let lastTimeMs: number | undefined
   return {
     id: 'avatar-lip-sync',
     startAt: 0,
     endAt: Number.POSITIVE_INFINITY,
     sample: (timeMs) => {
-      const morphs = sampleVisemeCues(cues, fallbackMorphs, timeMs)
+      if (lastTimeMs === undefined || timeMs < lastTimeMs) {
+        nextCueIndex = findNextVisemeCueIndex(cues, timeMs)
+        activeCues = cues.slice(0, nextCueIndex)
+          .filter((cue) => cue.endAt >= timeMs)
+      } else {
+        activeCues = activeCues.filter((cue) => cue.endAt >= timeMs)
+        while (nextCueIndex < cues.length && cues[nextCueIndex]!.attackAt <= timeMs) {
+          const cue = cues[nextCueIndex]!
+          if (cue.endAt >= timeMs) activeCues.push(cue)
+          nextCueIndex += 1
+        }
+      }
+      lastTimeMs = timeMs
+      const morphs = sampleVisemeCues(activeCues, fallbackMorphs, timeMs)
       return {
         value: morphs,
         apply: () => target.applyMorphs(morphs),
       }
     },
   }
+}
+
+/** Finds the first cue that has not begun at the requested Seek date. */
+function findNextVisemeCueIndex(cues: readonly VisemeCue[], timeMs: number): number {
+  let low = 0
+  let high = cues.length
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (cues[middle]!.attackAt <= timeMs) low = middle + 1
+    else high = middle
+  }
+  return low
 }
 
 /** Samples overlapping cue envelopes without cutting off an earlier release. */

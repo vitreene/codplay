@@ -1,23 +1,14 @@
 import { Euler, Quaternion, QuaternionKeyframeTrack } from 'three'
-import type { AnimationClip, Group } from 'three'
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import type { AnimationClip } from 'three'
 import type { AvatarAnimationSource } from '../avatar-types.js'
 
-type FbxAnimationRoot = Group & Readonly<{
-  animations?: readonly AnimationClip[]
-}>
-
-/** Parses one preloaded Avatar animation resource into a normalized clip. */
-export async function parseAvatarAnimation(
-  buffer: ArrayBuffer,
+/** Selects and normalizes one clip from an animation decoded by preload. */
+export function prepareAvatarAnimation(
+  clips: readonly AnimationClip[],
   source: AvatarAnimationSource,
   fallbackName: string,
-): Promise<AnimationClip> {
-  const format = source.format ?? inferAnimationFormat(source.src)
-  const clips = format === 'fbx'
-    ? await parseFbxAnimations(buffer)
-    : await parseGltfAnimations(buffer)
+): AnimationClip {
+  const format = resolveAvatarAnimationFormat(source)
   const clip = selectClip(clips, source.clip, fallbackName)
   if (clip === undefined) {
     throw new Error(`Avatar animation "${fallbackName}" was not found in "${source.src}".`)
@@ -25,24 +16,11 @@ export async function parseAvatarAnimation(
   return normalizeClip(clip, format, source.scale)
 }
 
-/** Infers the supported animation container from one resource URL. */
-function inferAnimationFormat(src: string): 'glb' | 'fbx' {
-  const path = src.split(/[?#]/, 1)[0] ?? src
+/** Resolves the supported animation container from author data or its URL. */
+export function resolveAvatarAnimationFormat(source: AvatarAnimationSource): 'glb' | 'fbx' {
+  if (source.format !== undefined) return source.format
+  const path = source.src.split(/[?#]/, 1)[0] ?? source.src
   return path.toLowerCase().endsWith('.fbx') ? 'fbx' : 'glb'
-}
-
-/** Parses one GLB resource with the Three.js GLTF loader. */
-function parseGltfAnimations(buffer: ArrayBuffer): Promise<readonly AnimationClip[]> {
-  const loader = new GLTFLoader()
-  return new Promise((resolve, reject) => {
-    loader.parse(buffer, '', (gltf) => resolve(gltf.animations), reject)
-  })
-}
-
-/** Parses one FBX resource with the Three.js FBX loader. */
-function parseFbxAnimations(buffer: ArrayBuffer): Promise<readonly AnimationClip[]> {
-  const root = new FBXLoader().parse(buffer, '') as FbxAnimationRoot
-  return Promise.resolve(root.animations ?? [])
 }
 
 /** Selects one named or indexed clip, with a single-clip convenience fallback. */

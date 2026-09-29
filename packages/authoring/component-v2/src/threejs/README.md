@@ -10,10 +10,10 @@ Les composants génériques de l'intégration se trouvent dans `threejs/core` :
 - `three-camera` et `three-light` ajoutent leurs objets à cette scène ;
 - l'hôte effectue le rendu final après la mise à jour de ses composants.
 
-Les ressources binaires passent par `THREE_PRELOAD_STRATEGIES` (`three-glb` ou
-`three-fbx`). Cette stratégie utilise le `FileLoader` de Three.js ; un
-composant spécialisé consomme ensuite les octets préparés et peut les remettre
-au loader Three.js approprié pour créer sa propre instance.
+Les ressources GLB et FBX passent par `THREE_PRELOAD_STRATEGIES`. Le preload
+charge et décode chaque fichier avant l'initialisation du player. Un composant
+spécialisé peut ensuite construire synchroniquement sa propre instance depuis
+la ressource décodée.
 
 ```ts
 import { CodPlay } from 'codplay'

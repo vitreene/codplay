@@ -98,10 +98,10 @@ composants spécialisés se rattachent à la capacité publiée par `avatar` ave
 `rel: { host, target: 'avatar' }`. Ils ne reçoivent pas `move` et ne demandent
 pas à l'auteur de connaître les morph targets du modèle.
 
-Le GLB est préparé par le support Three.js, avec `THREE_PRELOAD_STRATEGIES`
-et une entrée de manifeste `type: 'three-glb'`. Avatar consomme ensuite les
-octets préparés et utilise le loader GLTF de Three.js pour construire son
-instance ; il ne possède pas de fetch ni de cache de modèle séparé.
+Le GLB est décodé par le preload Three.js, avec `THREE_PRELOAD_STRATEGIES`
+et une entrée de manifeste `type: 'three-glb'`. Avatar construit ensuite
+synchroniquement sa propre scène depuis cette ressource, avant la première
+présentation à `0 ms`.
 
 Le guide complet, les déclarations TypeScript et un exemple réunissant les six
 possibilités Avatar sont disponibles dans

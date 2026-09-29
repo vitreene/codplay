@@ -2232,3 +2232,255 @@ garde la même empreinte (`1853715325`). La correction ne modifie ni taille,
 hiérarchie, reparentage, placement, ni persistance : elle ajoute deux morphs
 fixes à la contribution existante du lip-sync. La tranche Avatar globale
 reste **En cours** pour les autres validations perceptives de l'auteur.
+
+### Relecture de cohérence du premier Seek — 29 septembre 2026
+
+La revue Safari TP de `?demo=avatar-motion` retrouve la divergence entre la
+première présentation après chargement et les suivantes. Après rechargement,
+le canvas est vide à `0 ms` (défaut asynchrone déjà documenté plus haut).
+Les Seek `700 → 1300 → 1900 → 700 → 1300 → 1900 ms` donnent ensuite des
+captures différentes entre le premier et le second passage à chaque date.
+Une comparaison des pixels à taille constante (`1440 × 884`) situe les écarts
+sur les yeux : respectivement `104`, `113` et `140` pixels modifiés, dans des
+rectangles de moins de `42 × 17` pixels. Une fois ces dates revisitées, les
+captures restent identiques lors des Seek répétés. Un premier Seek direct à
+`1300 ms` reproduit aussi une différence après retour à cette date. Ce
+résultat corrige la portée du contrôle antérieur qui annonçait des images
+identiques : l'égalité ne tient pas encore pour la première présentation.
+
+Le coordonnateur emprunte effectivement deux chemins : quand `lastTimeMs` est
+absent, sa première présentation appelle `animate(0, timeMs)` ; un retour
+arrière appelle `prepareSeek()` puis `commitSeek(timeMs)`, qui force tous les
+morphs à leur cible. Leur effet exact sur les yeux reste à isoler. Aucun
+réglage de scène ni lissage n'est retenu sur cette seule observation. La
+prochaine validation doit comparer
+les valeurs des morphs oculaires, la pose de tête et l'état du regard à une
+date obtenue en premier Seek, en Play et après un retour Seek, sur une fixture
+autonome puis sur le modèle réel. La tranche reste **En cours**.
+
+La revue des coûts repère aussi trois trajets à mesurer après cette correction :
+reconstruction de l'historique sémantique à chaque présentation dans le
+coordonnateur, renouvellement des bindings du mixer à chaque échantillon de
+clip et calcul des bornes locales pour l'équilibre hanches/pieds. Aucun cache
+n'est décidé sans profilage et sans preuve de l'égalité Play/Seek/replay aux
+frontières de propriété des canaux.
+
+### Proposition de correction structurelle — 29 septembre 2026
+
+> Statut : **En cours**. L'auteur a demandé une démonstration et du code pour
+> l'évaluation live en Play et la reconstruction en Seek. La première tranche
+> concerne les transitions `avatar-mood` et les marqueurs squelettiques.
+
+La décision de l'auteur du 29 septembre révise le critère global d'identité
+Play/Seek ci-dessus : le Seek est un outil de diagnostic pour l'auteur. Il doit
+retrouver les instructions et une pose visuellement assez proche du Play pour
+ne pas fausser le diagnostic ; l'identité pixel par pixel n'est pas exigée.
+Le Play sans cassure ni régression visible est prioritaire. TalkingHead reste
+la référence de comportement, notamment son intégration des ressorts avec le
+`dt` effectivement reçu. Aucun autre algorithme de ressort ni calendrier de
+pas n'est décidé. Si une reconstruction Seek fidèle à TH ne peut être obtenue
+sans écart de construction nuisible au Play, cette question reste ouverte pour
+le moment. Cette révision ne relâche pas les égalités exactes déjà établies
+pour les contributions datées déterministes (visèmes, mood, geste, regard et
+clips), ni l'obligation de tester leurs frontières.
+
+En Play, chaque composant doit écarter du calcul courant les contributions
+terminées, tout en conservant leur effet final lorsqu'il sert de source à une
+transition suivante. Au Seek, rejouer le parcours nécessaire est admis. Les
+visèmes conservent toutes les enveloppes simultanément actives, car l'arrivée
+d'un visème ne termine pas nécessairement la sortie du précédent.
+
+Le profilage seul ne résout pas l'écart de construction. Trois faits du code
+doivent guider la correction : le premier `applyAt(t)` après `attachEngine()`
+appelle `animate(0, t)`, alors qu'un retour Seek appelle `prepareSeek()` puis
+`commitSeek(t)` ; `MorphEngine.update(0)` peut laisser un canal dépendant
+marqué `needsUpdate` sans réappliquer sa limite, tandis que `snapAll()` force
+toutes les valeurs ; `resetSemantic()` rend la reconstruction de l'historique
+des poses obligatoire à chaque présentation actuelle. La dépendance des
+paupières envers le regard vers le bas et les sourcils est une piste causale
+précise pour les pixels observés, à confirmer sur les valeurs internes.
+
+1. Établir une trace autonome du premier `applyAt(t)`, d'un Play, d'un retour
+   Seek et d'un rechargement : cibles, valeurs appliquées, indicateurs de mise
+   à jour et limites des morphs oculaires, pose de tête, correction de regard,
+   clip et déplacement racine. Isoler gaze, blink et motion sans changer la
+   scène d'acceptation. Le test doit échouer sur la première présentation si
+   ses valeurs diffèrent de la reconstruction au même `t`.
+2. Normaliser la construction d'une frame Avatar : mêmes contributions datées,
+   mêmes priorités et mêmes dépendances de morphs pour une première présentation,
+   Play et Seek. Résoudre les canaux dépendants à partir d'un état cohérent
+   avant l'écriture des morphs et des os ; retirer le rôle de `snapAll()` comme
+   substitut à une transition temporelle. Garder `avatar-coordinate` seul
+   propriétaire de la pose finale et le commit Three après cette pose. Quand
+   les données changent à temps égal, le commit commun doit repeindre après
+   l'application du contenu modifié, même si `[temps, largeur, hauteur]` ne
+   change pas.
+3. Construire l'état Avatar au fil des instructions réellement reçues, sans
+   lecture préalable de la scène entière ni connaissance des instructions
+   interactives futures. À l'arrivée d'une instruction datée, échantillonner
+   l'état courant à sa date, puis enregistrer les seules transitions et tâches
+   encore actives avec leur source, cible, début, durée et graine déterministe.
+   Une présentation à `t` évalue cet état avec les données actualisées à `t` ;
+   elle ne rejoue pas tout l'historique en Play. CodPlay remet les eventimes
+   auteur lorsqu'ils deviennent dus et les instructions interactives
+   lorsqu'elles sont émises. Un saut en avant doit traiter toutes les
+   instructions effectivement survenues jusqu'à `t` avant la présentation.
+   Un Seek ou replay reconstruit le même état en rejouant uniquement le journal
+   des instructions réellement
+   reçues jusqu'à `t`, puis utilise le même évaluateur. Une action interrompue
+   repart de la valeur échantillonnée à sa date, jamais de la dernière frame
+   peinte. Les contributions datées déterministes ne doivent pas intégrer
+   librement `deltaMs` ; les ressorts TH conservent leur intégration native
+   avec le `dt` du Play selon la révision ci-dessus. La prescription actuelle de
+   `avatar-gesture-spec.md` de rejouer à chaque présentation devra être revue
+   avant le code.
+4. Faire du preload la barrière de disponibilité du modèle : il ne réussit
+   qu'une fois les ressources Avatar utilisables, avant la création de
+   l'instance et le démarrage du player. Le runner et la démo attendent déjà
+   `preload.load()` avant leur initialisation ; c'est la stratégie Three qui
+   annonce prématurément la réussite après le seul téléchargement des octets.
+   `AvatarComponent.initialize()` lance alors `GLTFLoader.parse()` sans
+   l'attendre, si bien que la première présentation peut précéder le modèle.
+   Le contrat `third-party-threejs-spec.md`, qui prescrivait ce partage entre
+   téléchargement et parsing, est corrigé pour faire du preload la barrière de
+   décodage. Le manifeste reste indexé par URL : le document décodé est partagé
+   comme source immuable, et chaque instance en construit une copie privée
+   pendant son initialisation synchrone. La pose à `0 ms` passe par le commit
+   commun ; aucun refresh direct du composant n'est nécessaire.
+
+   **Décision validée le 29 septembre 2026 :** la stratégie Three.js
+   prépare sous chaque URL la scène GLB décodée avec ses textures et clips,
+   ou les clips d'un FBX d'animation. Une instance Avatar clone synchroniquement
+   la scène GLB préparée
+   avant sa première présentation, avec géométries et matériaux privés, et
+   associe les clips décodés du même cache. Le clone conserve la relation de
+   squelette partagée par les maillages qui la partageaient dans la source.
+   L'essai isolé de `SkeletonUtils.clone` a montré que cette relation est
+   scindée alors que les os clonés restent communs : il faut donc réunifier
+   ces squelettes avant le retargeting. Le preload reste la seule barrière de
+   chargement et le commit Avatar existant présente la pose à `0 ms` ; aucun
+   nouveau circuit du core n'est proposé. L'acceptation devra prouver deux
+   instances indépendantes, la conservation de la topologie et du cadrage,
+   les morphs mixtes et le retarget privés, les clips externes FBX/GLB, la
+   libération d'une instance sans effet sur l'autre, le premier rendu à
+   `0 ms`, Play, Seek, rechargement et Safari TP. Aucun changement du core
+   CodPlay n'est prévu pour cette tranche.
+
+L'acceptation exige l'égalité des contributions datées déterministes et une
+cohérence visuelle diagnostique des ressorts TH à
+`t = 0` puis avant, pendant et après les frontières mood, gesture, gaze et
+motion, pour premier passage, Play à plusieurs cadences, Seek direct/arrière,
+replay, rechargement et instruction interactive reçue pendant la lecture ou
+à temps inchangé pendant une pause. Le Seek doit retrouver l'état antérieur à
+cette instruction ou son effet selon la date demandée, sans inventer une
+instruction future. Vérifier d'abord que le Play reste fluide et fidèle à TH,
+puis la continuité de la tête, l'articulation
+lip-sync et le regard sur le modèle réel, ainsi que resize, lifecycle,
+parent/enfant, reparentage, persistance, tests autonomes, typechecks, build et
+Safari TP selon les frontières effectivement touchées. Aucun gain de
+performance ne clôt cette tranche si l'égalité ou la continuité régresse.
+
+La première tranche conserve la transition courante de `avatar-mood` entre
+deux instructions et n'applique chaque marqueur squelettique qu'une fois en
+Play. Un Seek, ou une modification rétroactive des marqueurs reçus,
+reconstruit l'état depuis les mêmes événements datés. Les tests autonomes
+prouvent qu'une transition mood interrompue donne les mêmes valeurs après
+Seek, qu'une frame Play supplémentaire ne recrée pas sa timeline, qu'une action
+mood interactive reçue à temps inchangé part de la valeur alors affichée, et
+qu'un geste natif n'est appliqué qu'une fois en Play puis reconstruit à la même
+pose après Seek. Les 133 tests et le typecheck de `@codplay/component-v2`, le
+typecheck et le build des démos, ainsi que `git diff --check` passent. Dans
+Safari TP, la scène Avatar a joué les événements `avatar:mood:happy @4600 ms`
+et `avatar:gesture:release @5400 ms` dans le player réel. Après rechargement,
+les Seek `5590 → 7000 → 5590 ms` ont produit la même empreinte PNG du canvas
+à `5590 ms` (`827904826`). La comparaison visuelle stricte entre Play et Seek
+à la même date reste ouverte : le slider de cette démo quantifie ses valeurs
+par pas de `10 ms`, et l'écart oculaire du premier Seek demeure à isoler.
+La correction des morphs oculaires et le preload complet restent dans les
+étapes ouvertes ci-dessus. La tranche globale reste **En cours** jusqu'à la
+validation Play et Seek sur le modèle réel selon le critère révisé plus haut,
+et jusqu'aux autres frontières d'acceptation.
+
+La reprise du 29 septembre réduit les calculs répétés en Play dans la branche
+de travail courante : les raccords des occurrences mood reçues sont conservés ;
+gaze et gesture échantillonnent l'action sélectionnée avec un curseur temporel ;
+lip-sync ne parcourt plus que les enveloppes encore actives. Les tests ciblés
+vérifient les interruptions de gaze et de gesture ainsi que les visèmes
+recouvrants après un Seek arrière. Les 137 tests `component-v2`, ses typechecks,
+le typecheck et le build des démos V2 et `git diff --check` passent. Dans Safari
+TP, le Play réel présente le modèle et les actions jusqu'à `13752 ms`, puis la
+pause conserve une pose. Ce parcours ne prouve pas à lui seul l'absence de
+cassure de tête sur toutes les frontières. À `0 ms` après un chargement frais,
+le canvas reste vide tant qu'aucune présentation ultérieure n'a lieu : la
+frontière preload décrite plus haut demeure un défaut bloquant pour une entrée
+en Play sans écueil.
+
+La tranche suivante supprime aussi la refusion des marqueurs squelettiques à
+chaque frame et garde, par occurrence mood, les cycles TH courants de
+respiration, tête, yeux et bouche, les tâches de tête encore actives et le
+prochain changement de pose. Les tâches finies sont retirées de la liste active ;
+leurs libérations oculaires restent datées dans le flux nécessaire à la boucle
+des yeux. Les anciens marqueurs et cycles sont rejoués pour un Seek
+ou une révision rétroactive des instructions. Un test dense compare le Play et
+la reconstruction sur 30 s, trois graines et les recouvrements de tâches de
+tête. Il a exposé une dépendance rétroactive : la fin d'une tâche oculaire
+modifiait la source d'une tâche de tête déjà créée. La libération oculaire est
+maintenant datée dès la création de la tâche et le même calcul causal sert en
+Play et au Seek. Un test autonome vérifie qu'un mood ajouté pendant le Play ne
+réapplique pas les gestes antérieurs. Les 141 tests `component-v2`, les
+typechecks `component-v2` et démos, le build V2 et `git diff --check` passent.
+Safari TP présente le modèle en Play puis au Seek à `5400 ms` ; après resize,
+le backing store du canvas suit ses dimensions CSS au facteur de pixels `2` et
+la pose reste affichée.
+
+Le défaut historique du canvas vide à `0 ms` est traité par la décision du
+point 4. La comparaison diagnostique des yeux en premier Seek et le parcours
+complet des frontières navigateur restent ouverts. La reconstruction exacte
+des ressorts au Seek n'est pas poursuivie dans cette tranche, conformément au
+critère révisé. **Statut global : En cours.**
+
+### Disponibilité du modèle dès `0 ms` — 29 septembre 2026
+
+Les stratégies `three-glb` et `three-fbx` attendent maintenant le décodage du
+document et des clips avant de résoudre le preload. Une ressource invalide
+fait échouer ce preload. `Avatar.initialize()` instancie synchroniquement la
+source décodée ; le premier `update()` attache le modèle avant le flux de
+contenu Avatar et le commit Three déjà utilisés par CodPlay. Aucun callback
+de refresh, horloge ni rendu direct n'est ajouté. Le contrat Three.js, le guide
+d'utilisation et l'API interne de chargement Avatar sont alignés.
+
+La copie privée restaure le partage des squelettes entre les maillages qui le
+partageaient dans la source, puis clone la géométrie de chaque maillage : les
+morphs mixtes et le retarget peuvent ainsi la modifier sans toucher une autre
+instance ou appliquer deux fois une mutation à une géométrie partagée. Les
+matériaux sont privés par instance. Les tests autonomes vérifient deux
+instances, leur squelette interne, leurs os et morphs indépendants, le décodage
+GLB/FBX, l'erreur de décodage, l'abandon et le premier échantillon à `0 ms`
+après preload. Les 145 tests `component-v2`, le typecheck du package et des
+démos, le build V2 et `git diff --check` passent.
+
+Dans Safari TP, la scène `avatar-motion` suit le vrai preload GLB + FBX et le
+player commun : à `ready` et `0 ms`, le canvas contient une image non vide
+(échantillon central `[17,24,39,255]`, empreinte 64 × 64 `1388442`). Un Seek à
+`1900 ms` donne une autre image, puis le retour à `0 ms` retrouve la même
+empreinte. Le resize change le backing store de `1440 × 674` à `1440 × 744`
+et conserve l'image ; le rechargement de l'instance présente encore l'avatar à
+`0 ms`. Le Play n'avance pas dans cet onglet Safari masqué par le connecteur
+(`document.visibilityState === 'hidden'`) ; cette observation ne valide donc
+pas sa cadence. **Tranche de disponibilité du modèle implémentée et testée ;
+statut Avatar global : En cours.**
+
+La mention précédente d'un preload audio bloquant la démo Avatar complète
+était prématurée. Après un chargement frais de cette démo dans Safari TP, le
+player atteint `ready` à `0 ms` avec son canvas ; l'audio adopté est à
+`readyState=4`, `networkState=1`, sans erreur, et `currentTime` avance après
+`Lire`. La stratégie audio attend `canplaythrough` conformément au contrat
+V1/V2 et le preload possède un délai maximal de `10 000 ms` par ressource.
+Un chargement audio indépendant, avec une URL de contrôle non mise en cache,
+reçoit `loadedmetadata` à `27 ms`, puis `loadeddata`, `canplay` et
+`canplaythrough` à `35 ms`, également dans l'onglet masqué.
+Aucun défaut du preload audio n'est reproduit par ce contrôle ; aucun correctif
+core ni changement de scène n'est justifié. Le seul constat Play non résolu
+dans cette session est la suspension des frames du player quand l'onglet du
+connecteur est masqué, malgré la progression de l'audio natif. La validation
+visuelle Play dans un onglet actif reste ouverte.

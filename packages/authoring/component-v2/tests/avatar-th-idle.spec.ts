@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bone, Group } from 'three'
-import { sampleThIdle } from '../src/avatar/idle/th-idle-animation'
-import { sampleLoopedAlternativeMarkers, sampleLoopedTemplate } from '../src/avatar/idle/th-animation-template'
+import { createThIdleSamplingState, sampleThIdle } from '../src/avatar/idle/th-idle-animation'
+import { createThTemplateCursor, sampleLoopedAlternativeMarkers, sampleLoopedTemplate } from '../src/avatar/idle/th-animation-template'
 import { sampleTalkingHeadEasing } from '../src/avatar/avatar-easing'
 import { getThPoseChoices, resolveThPoseChoice } from '../src/avatar/idle/th-mood-data'
 import { GestureEngine } from '../src/avatar/gesture/gesture-engine'
@@ -19,6 +19,53 @@ describe('TalkingHead idle adaptation', () => {
     expect(sampleThIdle('neutral', 2_400, options)).toEqual(
       sampleThIdle('neutral', 2_400, options),
     )
+  })
+
+  it('advances live TH loops with the same values as reconstruction across cycle boundaries', () => {
+    const options = {
+      enabled: true,
+      breathe: true,
+      headMove: true,
+      poseChanges: true,
+      seed: 45,
+      view: 'upper',
+    } as const
+    const live = createThIdleSamplingState()
+    for (const timeMs of [0, 120, 1_000, 2_399, 5_238, 8_662, 8_663, 9_382, 12_000, 20_000]) {
+      expect(sampleThIdle('neutral', timeMs, options, {}, {}, Infinity, undefined, live))
+        .toEqual(sampleThIdle('neutral', timeMs, options))
+    }
+    expect(sampleThIdle('neutral', 5_238, options, {}, {}, Infinity, undefined, live))
+      .toEqual(sampleThIdle('neutral', 5_238, options))
+  })
+
+  it('matches a dense Play path through repeated head tasks and eye handoffs', () => {
+    for (const seed of [5, 41, 45]) {
+      const options = {
+        enabled: true,
+        breathe: true,
+        headMove: true,
+        poseChanges: true,
+        seed,
+      } as const
+      const live = createThIdleSamplingState()
+      for (let timeMs = 0; timeMs <= 30_000; timeMs += 173) {
+        const liveFrame = sampleThIdle('neutral', timeMs, options, {}, {}, Infinity, undefined, live)
+        const referenceFrame = sampleThIdle('neutral', timeMs, options)
+        expect(liveFrame, `seed ${seed} at ${timeMs} ms`).toEqual(referenceFrame)
+      }
+      expect(live.headTasks?.tasks.every(({ task }) => task.endAt >= live.headTasks!.lastElapsedMs))
+        .toBe(true)
+    }
+  })
+
+  it('keeps live eye markers once when a frame repeats their exact time', () => {
+    const alternatives = [{ template: { delay: 100, dt: [20, 200], vs: { headMove: [0.5] } } }] as const
+    const cursor = createThTemplateCursor()
+    for (const timeMs of [0, 119, 120, 120, 121, 320, 321, 440]) {
+      expect(sampleLoopedAlternativeMarkers(alternatives, timeMs, 41, 'headMove', {}, {}, cursor))
+        .toEqual(sampleLoopedAlternativeMarkers(alternatives, timeMs, 41, 'headMove'))
+    }
   })
 
   it('does not create idle channels when the feature is disabled', () => {

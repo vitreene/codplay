@@ -7,6 +7,7 @@ import { AvatarPoseComposer } from '../src/avatar/pose/avatar-pose'
 import { MorphEngine } from '../src/avatar/morph/morph-engine'
 import { createAvatarEngine } from '../src/avatar/runtime/avatar-engine'
 import { sampleThIdle } from '../src/avatar/idle/th-idle-animation'
+import * as thIdleAnimation from '../src/avatar/idle/th-idle-animation'
 import { AvatarGestureComponent } from '../src/avatar/components/avatar-gesture-component'
 import { AvatarLipSyncComponent } from '../src/avatar/components/avatar-lip-sync-component'
 
@@ -50,6 +51,29 @@ describe('AvatarCoordinator pose ownership', () => {
     coordinator.applyAt(0)
     coordinator.applyAt(1_200)
     expect(lastAmbientValue(fixture.morphEngine.snapAmbient, 'mouthSmile')).toBeCloseTo(playSmile ?? 0)
+  })
+
+  it('samples only the active mood after its received handoff in Play', () => {
+    const fixture = createPoseFixture()
+    const coordinator = new AvatarCoordinator()
+    coordinator.setIdleProfile({
+      enabled: true, breathe: false, headMove: false, poseChanges: false,
+      seed: 17, speaking: false, speakWithHands: false,
+    })
+    coordinator.setMoodHistory([
+      { mood: 'neutral', startAt: 0 },
+      { mood: 'happy', startAt: 1_000 },
+    ])
+    coordinator.attachEngine(fixture.engine)
+    coordinator.applyAt(1_500)
+    const sample = vi.spyOn(thIdleAnimation, 'sampleThIdle')
+    try {
+      coordinator.applyAt(1_516)
+      expect(sample).toHaveBeenCalledTimes(1)
+      expect(sample.mock.calls[0]?.[0]).toBe('happy')
+    } finally {
+      sample.mockRestore()
+    }
   })
 
   it('presents the authored rest pose on the first frame and after Seek to zero', () => {
@@ -111,6 +135,35 @@ describe('AvatarCoordinator pose ownership', () => {
     seekCoordinator.applyAt(6_000)
 
     expect(seeking.shoulder.quaternion.angleTo(playback.shoulder.quaternion)).toBeLessThan(1e-6)
+  })
+
+  it('keeps existing skeletal selections when a new mood arrives during Play', () => {
+    const fixture = createPoseFixture()
+    const coordinator = new AvatarCoordinator()
+    coordinator.setIdleProfile({
+      enabled: true,
+      breathe: false,
+      headMove: false,
+      poseChanges: true,
+      seed: 41,
+      pose: 'neutral',
+    })
+    coordinator.setMoodHistory([{ mood: 'neutral', startAt: 0 }])
+    coordinator.setGestureHistory([{
+      kind: 'gesture', name: 'handup', startAt: 1_000, seed: 31, mirror: false,
+    }])
+    coordinator.attachEngine(fixture.engine)
+    coordinator.applyAt(0)
+    coordinator.applyAt(1_000)
+    coordinator.setMoodHistory([
+      { mood: 'neutral', startAt: 0 },
+      { mood: 'happy', startAt: 4_600 },
+    ])
+    coordinator.applyAt(4_600)
+    coordinator.applyAt(4_616)
+
+    expect(fixture.engine.resetSemantic).toHaveBeenCalledTimes(1)
+    expect(fixture.engine.playGesture).toHaveBeenCalledTimes(1)
   })
 
   it('reapplies a repeated pose name when its spontaneous occurrence changes', () => {
@@ -420,8 +473,31 @@ describe('AvatarCoordinator pose ownership', () => {
     coordinator.applyGestureMotion(gestureFrame('handup'), 0, 6_000, 5_700)
     coordinator.applyAt(6_016)
 
-    expect(fixture.setPose).toHaveBeenCalledTimes(2)
+    expect(fixture.setPose).toHaveBeenCalledTimes(1)
     expect(fixture.shoulder.quaternion.angleTo(beforeGesture)).toBeLessThan(0.2)
+  })
+
+  it('applies a received gesture once in Play and reconstructs the same pose after Seek', () => {
+    const history = [
+      { kind: 'gesture', name: 'handup', startAt: 1_000, seed: 31, mirror: false },
+    ] as const
+    const fixture = createPoseFixture()
+    const coordinator = new AvatarCoordinator()
+    coordinator.attachEngine(fixture.engine)
+    coordinator.setGestureHistory(history)
+    coordinator.applyAt(0)
+    coordinator.applyAt(1_000)
+    coordinator.applyAt(1_016)
+    const playPose = fixture.shoulder.quaternion.clone()
+
+    expect(fixture.engine.playGesture).toHaveBeenCalledTimes(1)
+    expect(fixture.engine.resetSemantic).toHaveBeenCalledTimes(1)
+
+    coordinator.applyAt(2_000)
+    coordinator.applyAt(1_016)
+
+    expect(fixture.engine.playGesture).toHaveBeenCalledTimes(2)
+    expect(fixture.shoulder.quaternion.angleTo(playPose)).toBeLessThan(1e-6)
   })
 
   it('starts a gesture release from the pose currently presented', () => {

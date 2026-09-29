@@ -30,11 +30,13 @@ reçoit pas un second lissage dépendant des frames. La parole garde la priorit�
 si elle et un geste revendiquent le même morph.
 
 Les marqueurs de gestes squelettiques et de poses contenus dans une motion
-sont conservés avec leur date absolue. Le coordonnateur les rejoue avec les
-changements de pose du mood dans l'ordre des dates à chaque présentation.
-Un Seek vers l'avant ou l'arrière reconstruit donc la source d'une transition
-native à partir des instructions auteur déjà reçues, sans réutiliser l'état
-mutable de la frame précédente.
+sont conservés avec leur date absolue. En Play, le coordonnateur applique les
+nouveaux marqueurs avec les changements de pose du mood dans l'ordre des dates,
+puis échantillonne l'état courant sans rejouer les marqueurs déjà appliqués.
+Un Seek reconstruit cet état dans le même ordre à partir des instructions auteur
+déjà reçues, sans lire les instructions futures ni dépendre de la dernière
+frame peinte. Si l'historique reçu change rétroactivement, cette reconstruction
+remplace l'état courant.
 
 Un visème ne porte aucune instruction de geste. Les actions de mood et de
 regard gardent leurs tracks respectives. Le geste ne sélectionne aucun mode

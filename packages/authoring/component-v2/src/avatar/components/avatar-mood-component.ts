@@ -22,55 +22,85 @@ type MoodTransition = Readonly<{
   endAt: number
 }>
 
+type MoodInstruction = Readonly<{
+  eventId: string | undefined
+  name: string
+  startAt: number
+  durationMs: number
+}>
+
 const MOOD_ACTION_PREFIX = 'avatar:mood:'
 
 /** Converts mood eventimes into their complete TalkingHead presentation. */
 export class AvatarMoodComponent extends AvatarFeatureComponent<AvatarMoodInitial> {
   static readonly declaredServices = [] as const
   private configuredTarget: AvatarTarget | undefined
+  private activeTarget: AvatarTarget | undefined
+  private initialMood: MoodName | undefined
+  private transition: MoodTransition | undefined
+  private instructions: readonly MoodInstruction[] = []
+  private lastUpdateTimeMs: number | undefined
 
   /** Resolves the mood history and configures its spontaneous TH channels. */
   protected contribute(target: AvatarTarget, input: ComponentUpdateInput<AvatarMoodInitial>): void {
     this.configurePresentation(target)
-    const initialMood = this.perso.initial.mood ?? 'neutral'
+    const authoredInitialMood = this.perso.initial.mood ?? 'neutral'
     const occurrences = resolveMoodOccurrences(input.activeActions, input.timeMs)
     const latest = occurrences.at(-1)
-    const mood = resolveMood(latest?.name, input.state.mood, initialMood)
+    const mood = resolveMood(latest?.name, input.state.mood, authoredInitialMood)
+    const initialMood = occurrences.length === 0 ? mood : authoredInitialMood
     const moodBaselines = this.perso.initial.moods
+    const instructions = occurrences.map((occurrence) => ({
+      eventId: occurrence.eventId,
+      name: occurrence.name,
+      startAt: occurrence.startAt,
+      durationMs: resolveDuration(
+        occurrence.action.durationMs,
+        occurrence === latest ? input.state.durationMs : undefined,
+        this.perso.initial.durationMs,
+      ),
+    }))
     const moodHistory: AvatarMoodOccurrence[] = [
-      createMoodOccurrence(occurrences.length === 0 ? mood : initialMood, 0, moodBaselines),
+      createMoodOccurrence(initialMood, 0, moodBaselines),
       ...occurrences.map((occurrence) => createMoodOccurrence(
-        resolveMood(occurrence.name, undefined, initialMood),
+        resolveMood(occurrence.name, undefined, authoredInitialMood),
         occurrence.startAt,
         moodBaselines,
       )),
     ]
-    const initialBaseline = resolveMoodBaseline(initialMood, moodBaselines)
-    let transition = createMoodTransition(initialBaseline, initialBaseline, 0, 0)
-
-    for (const occurrence of occurrences) {
-      const nextMood = resolveMood(occurrence.name, undefined, initialMood)
+    const canContinue = this.activeTarget === target
+      && this.initialMood === initialMood
+      && this.lastUpdateTimeMs !== undefined
+      && input.timeMs >= this.lastUpdateTimeMs
+      && this.instructions.length <= instructions.length
+      && this.instructions.every((instruction, index) => sameMoodInstruction(instruction, instructions[index]!))
+    let transition = canContinue ? this.transition : undefined
+    if (transition === undefined) {
+      const baseline = resolveMoodBaseline(initialMood, moodBaselines)
+      transition = createMoodTransition(baseline, baseline, 0, 0)
+    }
+    for (let index = canContinue ? this.instructions.length : 0; index < instructions.length; index += 1) {
+      const instruction = instructions[index]!
+      const nextMood = resolveMood(instruction.name, undefined, authoredInitialMood)
       transition = createMoodTransition(
-        sampleTransition(transition, occurrence.startAt),
+        sampleTransition(transition, instruction.startAt),
         resolveMoodBaseline(nextMood, moodBaselines),
-        occurrence.startAt,
-        resolveDuration(
-          occurrence.action.durationMs,
-          occurrence === latest ? input.state.durationMs : undefined,
-          this.perso.initial.durationMs,
-        ),
+        instruction.startAt,
+        instruction.durationMs,
       )
     }
-    if (latest === undefined) {
-      const baseline = resolveMoodBaseline(mood, moodBaselines)
-      transition = createMoodTransition(baseline, baseline, input.timeMs, 0)
-    }
+    const transitionChanged = transition !== this.transition || target !== this.activeTarget
+    this.transition = transition
+    this.instructions = instructions
+    this.initialMood = initialMood
+    this.activeTarget = target
+    this.lastUpdateTimeMs = input.timeMs
     if (target.setMoodHistory !== undefined) {
       target.setMoodHistory(moodHistory)
     } else {
       target.setMood?.(mood, latest?.startAt ?? 0)
     }
-    target.setTimeline('mood', createAnimation(transition, target))
+    if (transitionChanged) target.setTimeline('mood', createAnimation(transition, target))
   }
 
   /** Installs the authored mood presentation once for each selected Avatar. */
@@ -91,6 +121,14 @@ export class AvatarMoodComponent extends AvatarFeatureComponent<AvatarMoodInitia
     })
     this.configuredTarget = target
   }
+}
+
+/** Detects an unchanged received instruction without reading future actions. */
+function sameMoodInstruction(left: MoodInstruction, right: MoodInstruction): boolean {
+  return left.eventId === right.eventId
+    && left.name === right.name
+    && left.startAt === right.startAt
+    && left.durationMs === right.durationMs
 }
 
 /** Resolves one persona expression while leaving the shared TH catalog intact. */

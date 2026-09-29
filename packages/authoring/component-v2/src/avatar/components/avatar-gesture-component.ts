@@ -23,6 +23,7 @@ type GestureAction = Readonly<{
   seed: number
   sample: (timeMs: number) => AvatarGestureFrame
   semanticEvents: readonly AvatarGestureHistoryEvent[]
+  handoffFrom?: AvatarGestureFrame
 }>
 
 type GestureState = Pick<AvatarGestureInitial, 'gesture' | 'seed' | 'mirror' | 'durationMs'>
@@ -36,7 +37,7 @@ export class AvatarGestureComponent extends AvatarFeatureComponent<AvatarGesture
     const occurrences = (input.activeActions ?? [])
       .filter((occurrence) => occurrence.name.startsWith(GESTURE_ACTION_PREFIX))
       .sort((left, right) => left.startAt - right.startAt)
-    const actions = [
+    const actions = prepareGestureHandoffs([
       createGestureAction(
         undefined,
         occurrences.length === 0 ? input.state : this.perso.initial,
@@ -45,10 +46,22 @@ export class AvatarGestureComponent extends AvatarFeatureComponent<AvatarGesture
       ...occurrences.map((occurrence) => createGestureAction(
         occurrence, input.state, this.perso.initial,
       )),
-    ]
+    ])
     target.setGestureHistory?.(resolveGestureHistory(actions))
     target.setTimeline('gesture', createGestureTimeline(actions, target))
   }
+}
+
+/** Captures the previous displayed gesture once at each received action boundary. */
+function prepareGestureHandoffs(actions: readonly GestureAction[]): readonly GestureAction[] {
+  const prepared: GestureAction[] = []
+  for (const action of actions) {
+    const previous = prepared.at(-1)
+    prepared.push(previous === undefined
+      ? action
+      : { ...action, handoffFrom: sampleGestureAction(previous, action.startAt) })
+  }
+  return prepared
 }
 
 /** Resolves one authored event into a deterministic gesture sampler. */
@@ -134,18 +147,24 @@ function resolveGestureHistory(actions: readonly GestureAction[]): readonly Avat
 /** Samples each gesture from its authored history, including interrupted handoffs. */
 function createGestureTimeline(actions: readonly GestureAction[], target: AvatarTarget): AvatarTimeline {
   const first = actions[0]!
+  let selectedIndex = 0
+  let lastTimeMs: number | undefined
   return {
     id: 'avatar-gesture-history',
     startAt: first.startAt,
     endAt: Number.POSITIVE_INFINITY,
     sample: (timeMs) => {
-      let index = 0
-      for (let next = 1; next < actions.length; next += 1) {
-        if (actions[next]!.startAt > timeMs) break
-        index = next
+      if (lastTimeMs !== undefined && timeMs < lastTimeMs) {
+        selectedIndex = findGestureActionIndex(actions, timeMs)
+      } else {
+        while (selectedIndex + 1 < actions.length
+          && actions[selectedIndex + 1]!.startAt <= timeMs) {
+          selectedIndex += 1
+        }
       }
-      const action = actions[index]!
-      const frame = sampleGestureHistory(actions, index, timeMs)
+      lastTimeMs = timeMs
+      const action = actions[selectedIndex]!
+      const frame = sampleGestureAction(action, timeMs)
       return {
         value: frame,
         apply: () => target.applyGestureMotion(
@@ -159,16 +178,23 @@ function createGestureTimeline(actions: readonly GestureAction[], target: Avatar
   }
 }
 
-/** Keeps the previous absolute morph value while a new action takes ownership. */
-function sampleGestureHistory(
-  actions: readonly GestureAction[],
-  index: number,
-  timeMs: number,
-): AvatarGestureFrame {
-  const action = actions[index]!
+/** Selects the received gesture action active after a backward seek. */
+function findGestureActionIndex(actions: readonly GestureAction[], timeMs: number): number {
+  let low = 0
+  let high = actions.length - 1
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (actions[middle]!.startAt <= timeMs) low = middle
+    else high = middle - 1
+  }
+  return low
+}
+
+/** Keeps the captured morph value while one new action takes ownership. */
+function sampleGestureAction(action: GestureAction, timeMs: number): AvatarGestureFrame {
   const frame = action.sample(timeMs)
-  if (index === 0 || timeMs >= action.startAt + HANDOFF_MS) return frame
-  const previous = sampleGestureHistory(actions, index - 1, action.startAt)
+  const previous = action.handoffFrom
+  if (previous === undefined || timeMs >= action.startAt + HANDOFF_MS) return frame
   if (previous.released && frame.released) return frame
   const progress = sampleTalkingHeadEasing((timeMs - action.startAt) / HANDOFF_MS)
   const previousMorphs = previous.released ? {} : previous.morphs

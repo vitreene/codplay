@@ -6,11 +6,19 @@ import {
 import { Group } from 'three'
 import type { Object3D, Scene } from 'three'
 import { createAvatarEngine } from '../runtime/avatar-engine'
-import { BaseThreeComponent, getThreeBinaryResource } from '../../threejs/core'
+import {
+  BaseThreeComponent,
+  getThreeFbxResource,
+  getThreeGlbResource,
+} from '../../threejs/core'
+import type { PreparedThreeGlbResource } from '../../threejs/core'
 import type { ThreeSceneTarget } from '../../threejs/core'
 import { AvatarCoordinator } from '../runtime/avatar-coordinator'
 import type { AvatarInitial, AvatarTarget } from '../avatar-types'
-import { parseAvatarAnimation } from '../model/animation-loader'
+import {
+  prepareAvatarAnimation,
+  resolveAvatarAnimationFormat,
+} from '../model/animation-loader'
 
 /** Loads one prepared 3D avatar and attaches it to an existing Three host. */
 export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
@@ -24,7 +32,6 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
   private attachedScene: Scene | undefined
   private sceneTarget: ThreeSceneTarget | undefined
   private modelRevision = 0
-  private destroyed = false
 
   /** Creates the central Avatar capability without owning a canvas or renderer. */
   constructor(input: ComponentInput<AvatarInitial>) {
@@ -39,9 +46,9 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     this.target = this.coordinator
   }
 
-  /** Starts parsing the bytes prepared by the Three.js preload strategy. */
+  /** Builds the private model synchronously from the decoded preload source. */
   initialize(): void {
-    void this.loadModel(getThreeBinaryResource(this.initial.src))
+    this.loadModel(getThreeGlbResource(this.initial.src))
   }
 
   /** Attaches the model and registers the coordinator's absolute-time stream. */
@@ -59,7 +66,6 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
 
   /** Removes the model and releases the coordinator-owned native state. */
   destroy(): void {
-    this.destroyed = true
     this.detachModel()
     if (this.presentation !== undefined) disposeAvatarPresentation(this.presentation)
     this.presentation = undefined
@@ -80,8 +86,8 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     }
   }
 
-  /** Parses one independent model instance and creates its private presentation hierarchy. */
-  private async loadModel(buffer: ArrayBuffer): Promise<void> {
+  /** Builds one independent model instance and its presentation hierarchy. */
+  private loadModel(resource: PreparedThreeGlbResource): void {
     const engine = createAvatarEngine({
       mood: this.initial.mood,
       baseline: this.initial.baseline,
@@ -89,13 +95,13 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
       dynamicBones: this.initial.dynamicBones,
       dynamicBoneOptions: this.initial.dynamicBoneOptions,
     })
-    const result = await engine.loadModel(buffer, {
+    const result = engine.loadModel(resource, {
       morphPrefix: this.initial.morphPrefix,
       modelRoot: this.initial.modelRoot,
       retarget: this.initial.retarget,
     })
     this.registerEmbeddedAnimations(engine, result.animations)
-    await this.loadAnimations(engine)
+    this.loadAnimations(engine)
     const presentation = new Group()
     const motionRoot = new Group()
     const position = this.initial.position ?? [0, 0, 0]
@@ -105,11 +111,6 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     motionRoot.add(result.scene)
     presentation.updateMatrixWorld(true)
 
-    if (this.destroyed) {
-      disposeAvatarPresentation(presentation)
-      return
-    }
-
     this.presentation = presentation
     this.motionRoot = motionRoot
     this.modelRevision += 1
@@ -117,11 +118,15 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
     this.attachModel()
   }
 
-  /** Parses and registers the animation resources associated with this Avatar. */
-  private async loadAnimations(engine: ReturnType<typeof createAvatarEngine>): Promise<void> {
+  /** Registers animations decoded before this Avatar was initialized. */
+  private loadAnimations(engine: ReturnType<typeof createAvatarEngine>): void {
     for (const [name, source] of Object.entries(this.initial.animations ?? {})) {
-      const clip = await parseAvatarAnimation(
-        getThreeBinaryResource(source.src),
+      const format = resolveAvatarAnimationFormat(source)
+      const clips = format === 'fbx'
+        ? getThreeFbxResource(source.src).animations
+        : getThreeGlbResource(source.src).animations
+      const clip = prepareAvatarAnimation(
+        clips,
         source,
         name,
       )
@@ -181,21 +186,25 @@ export class AvatarComponent extends BaseThreeComponent<AvatarInitial> {
   }
 }
 
-/** Releases geometries and materials owned by one parsed Avatar model. */
+/** Releases geometries and materials owned by one Avatar model instance. */
 function disposeAvatarPresentation(root: Object3D): void {
+  const geometries = new Set<{ dispose: () => void }>()
+  const materials = new Set<{ dispose: () => void }>()
   root.traverse((node) => {
     const renderable = node as Object3D & {
       geometry?: { dispose: () => void }
       material?: { dispose: () => void } | readonly { dispose: () => void }[]
     }
-    renderable.geometry?.dispose()
+    if (renderable.geometry !== undefined) geometries.add(renderable.geometry)
     const material = renderable.material
     if (material === undefined) return
     if (Array.isArray(material)) {
-      for (const item of material) item.dispose()
+      for (const item of material) materials.add(item)
       return
     }
     const singleMaterial = material as { dispose: () => void }
-    singleMaterial.dispose()
+    materials.add(singleMaterial)
   })
+  for (const geometry of geometries) geometry.dispose()
+  for (const material of materials) material.dispose()
 }

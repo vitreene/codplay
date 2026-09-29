@@ -8,6 +8,7 @@
  */
 import type { PersoInitialCommon } from 'codplay'
 import type { AnimationClip, Camera, Group, Object3D } from 'three'
+import type { PreparedThreeGlbResource } from '../threejs/core/threejs-preload.js'
 import type { MorphEngine } from './morph/morph-engine.js'
 
 /** One immutable three-axis value used by Avatar pose layers. */
@@ -299,7 +300,7 @@ export type ArrivalRootMotion = Readonly<{
   offsetAt: (clipTime: number) => AvatarVector3
 }>
 
-/** Configuration used while parsing one Avatar model. */
+/** Configuration used while instantiating one prepared Avatar model. */
 export type ModelLoaderOptions = Readonly<{
   /** Prefix stripped from raw morph target names. */
   morphPrefix?: string | RegExp
@@ -309,7 +310,7 @@ export type ModelLoaderOptions = Readonly<{
   retarget?: RetargetConfig
 }>
 
-/** Result of parsing one Avatar model resource. */
+/** Result of instantiating one prepared Avatar model resource. */
 export type LoadedModel = Readonly<{
   scene: Group
   armature: Object3D | null
@@ -747,11 +748,11 @@ export type AvatarEngineOptions = {
 
 /** Runtime interface exposed by the internal Avatar coordinator. */
 export type AvatarEngine = {
-  loadModel(buffer: ArrayBuffer, opts?: ModelLoaderOptions): Promise<{
+  loadModel(resource: PreparedThreeGlbResource, opts?: ModelLoaderOptions): {
     scene: Group
     boneMap: Map<string, Object3D>
     animations: readonly AnimationClip[]
-  }>
+  }
   animate(deltaMs: number, timeMs?: number): void
   resetSemantic?(): void
   prepareSeek(): void

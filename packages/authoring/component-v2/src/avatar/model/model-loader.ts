@@ -1,12 +1,7 @@
 /**
- * Per-instance model setup — parse + discover morph targets + register them
- * with MorphEngine. The GLB fetch is a separate, cacheable-by-URL step
- * (threejs-preload.ts) that holds raw bytes; this module parses those bytes per
- * instance so each avatar gets a fresh, independent scene with the model's
- * original single-skeleton topology. (Parsing once and cloning via
- * SkeletonUtils would split the one shared skeleton into one-per-SkinnedMesh,
- * making retarget apply its origin offset once per skeleton — the buste/visage
- * framing regression.)
+ * Per-instance model setup — clone the decoded preload source, discover morph
+ * targets and register them with MorphEngine. The private clone restores the
+ * source's shared-skeleton topology before retargeting.
  *
  * Prerequisite: the model must expose ARKit blend shapes.
  * Supported naming conventions:
@@ -17,11 +12,12 @@
  * Source: https://github.com/met4citizen/TalkingHead
  */
 import { Float32BufferAttribute } from 'three'
-import type { AnimationClip, BufferAttribute, Group, Object3D } from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import type { BufferAttribute, Object3D } from 'three'
+import type { PreparedThreeGlbResource } from '../../threejs/core/threejs-preload.js'
 import type { MorphEngine } from '../morph/morph-engine.js'
 import { BONE_MORPH_NAMES, TH_MIXED_MORPHS } from '../morph/morph-engine.js'
 import { retarget } from './retargeter.js'
+import { cloneModelScene } from './clone-model-scene.js'
 import type { LoadedModel, ModelLoaderOptions } from '../avatar-types.js'
 
 type MorphMesh = Object3D & {
@@ -46,26 +42,18 @@ function stripPrefix(name: string, prefix: string | RegExp | undefined): string 
 }
 
 /**
- * Parses preloaded GLB bytes into a fresh scene and registers all its morph
- * targets with the given MorphEngine. Async — GLTFLoader.parse is callback
- * based — but the network fetch already happened in threejs-preload.ts, so this
- * only re-parses cached bytes. Each call yields an independent scene with the
- * model's original single-skeleton topology (see module header).
+ * Clones a decoded GLB source synchronously and registers its morph targets.
  *
- * @param buffer - Raw .glb ArrayBuffer from a preloaded Three.js entry.
+ * @param resource - Decoded .glb source from the Three.js preload boundary.
  * @param engine - MorphEngine instance to populate.
  * @param opts   - Optional prefix stripping + retarget.
  */
-export async function buildModelInstance(
-  buffer: ArrayBuffer,
+export function buildModelInstance(
+  resource: PreparedThreeGlbResource,
   engine: MorphEngine,
   opts: ModelLoaderOptions = {},
-): Promise<LoadedModel> {
-  const loader = new GLTFLoader()
-  const gltf = await new Promise<{ scene: Group; animations: readonly AnimationClip[] }>((resolve, reject) => {
-    loader.parse(buffer, '', resolve, reject)
-  })
-  const scene = gltf.scene
+): LoadedModel {
+  const scene = cloneModelScene(resource.scene)
 
   let detectedArmature: Object3D | null = null
   const morphNames = new Set<string>()
@@ -120,7 +108,7 @@ export async function buildModelInstance(
       : scene.getObjectByName(opts.modelRoot) ?? detectedArmature,
     morphNames: Array.from(morphNames),
     boneMap,
-    animations: gltf.animations,
+    animations: resource.animations,
   }
 }
 

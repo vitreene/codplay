@@ -16,6 +16,40 @@ import type {
   ThTemplateNumber,
 } from '../avatar-types.js'
 
+type TemplateCycle = Readonly<{
+  times: readonly number[]
+  targets: Readonly<Record<string, readonly (number | null)[]>>
+  endAt: number
+}>
+
+/** Holds the completed cycle and random stream of one Play loop. */
+export type ThTemplateCursor = {
+  lastElapsedMs: number
+  random: RandomSource | undefined
+  state: Record<string, number>
+  markers: { startAt: number; value: number }[]
+  cycleStartAt: number
+  cycleIndex: number
+  cycleMarkerIndex: number
+  interruptionIndex: number
+  activeCycle: TemplateCycle | undefined
+}
+
+/** Creates a private cursor; Seek uses a fresh cursor or the pure evaluator. */
+export function createThTemplateCursor(): ThTemplateCursor {
+  return {
+    lastElapsedMs: -1,
+    random: undefined,
+    state: {},
+    markers: [],
+    cycleStartAt: 0,
+    cycleIndex: 0,
+    cycleMarkerIndex: 1,
+    interruptionIndex: 0,
+    activeCycle: undefined,
+  }
+}
+
 /** Samples one looped TalkingHead template at an absolute elapsed time. */
 export function sampleLoopedTemplate(
   template: ThAnimationTemplate,
@@ -23,14 +57,11 @@ export function sampleLoopedTemplate(
   seed: number,
   baseline: Readonly<Record<string, number>> = {},
   initialValues: Readonly<Record<string, number>> = {},
+  cursor?: ThTemplateCursor,
 ): Readonly<Record<string, number>> {
-  return sampleLoopedTemplates(
-    () => template,
-    elapsedMs,
-    seed,
-    baseline,
-    initialValues,
-  ).values
+  return cursor === undefined
+    ? sampleLoopedTemplates(() => template, elapsedMs, seed, baseline, initialValues).values
+    : sampleLoopedTemplatesLive(() => template, elapsedMs, seed, baseline, initialValues, undefined, cursor).values
 }
 
 /** Samples a loop whose template is selected anew for every native cycle. */
@@ -41,17 +72,13 @@ export function sampleLoopedAlternatives(
   baseline: Readonly<Record<string, number>> = {},
   initialValues: Readonly<Record<string, number>> = {},
   interruptions: readonly Readonly<{ channel: string; at: number; value: number }>[] = [],
+  cursor?: ThTemplateCursor,
 ): Readonly<Record<string, number>> {
   if (alternatives.length === 0) return {}
-  return sampleLoopedTemplates(
-    (random) => chooseAlternative(alternatives, random),
-    elapsedMs,
-    seed,
-    baseline,
-    initialValues,
-    undefined,
-    interruptions,
-  ).values
+  const choose = (random: RandomSource): ThAnimationTemplate => chooseAlternative(alternatives, random)
+  return cursor === undefined
+    ? sampleLoopedTemplates(choose, elapsedMs, seed, baseline, initialValues, undefined, interruptions).values
+    : sampleLoopedTemplatesLive(choose, elapsedMs, seed, baseline, initialValues, undefined, cursor, interruptions).values
 }
 
 /** Samples one alternative loop and its discrete native control occurrences. */
@@ -62,19 +89,85 @@ export function sampleLoopedAlternativeMarkers(
   markerName: string,
   baseline: Readonly<Record<string, number>> = {},
   initialValues: Readonly<Record<string, number>> = {},
+  cursor?: ThTemplateCursor,
 ): Readonly<{
   values: Readonly<Record<string, number>>
   markers: readonly Readonly<{ startAt: number; value: number }>[]
 }> {
   if (alternatives.length === 0) return { values: {}, markers: [] }
-  return sampleLoopedTemplates(
-    (random) => chooseAlternative(alternatives, random),
-    elapsedMs,
-    seed,
-    baseline,
-    initialValues,
-    markerName,
-  )
+  const choose = (random: RandomSource): ThAnimationTemplate => chooseAlternative(alternatives, random)
+  return cursor === undefined
+    ? sampleLoopedTemplates(choose, elapsedMs, seed, baseline, initialValues, markerName)
+    : sampleLoopedTemplatesLive(choose, elapsedMs, seed, baseline, initialValues, markerName, cursor)
+}
+
+/** Advances only newly completed TH cycles while retaining their final values. */
+function sampleLoopedTemplatesLive(
+  resolveTemplate: (random: RandomSource) => ThAnimationTemplate,
+  elapsedMs: number,
+  seed: number,
+  baseline: Readonly<Record<string, number>>,
+  initialValues: Readonly<Record<string, number>>,
+  markerName: string | undefined,
+  cursor: ThTemplateCursor,
+  interruptions: readonly Readonly<{ channel: string; at: number; value: number }>[] = [],
+): Readonly<{
+  values: Readonly<Record<string, number>>
+  markers: readonly Readonly<{ startAt: number; value: number }>[]
+}> {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return { values: {}, markers: [] }
+  if (elapsedMs < cursor.lastElapsedMs) Object.assign(cursor, createThTemplateCursor())
+  cursor.lastElapsedMs = elapsedMs
+  cursor.random ??= createRandomSource(seed)
+
+  while (cursor.cycleIndex < 10_000) {
+    if (cursor.activeCycle === undefined) {
+      const template = resolveTemplate(cursor.random)
+      for (const name of Object.keys(template.vs)) {
+        if (!(name in cursor.state)) cursor.state[name] = initialValues[name] ?? baseline[name] ?? 0
+      }
+      cursor.activeCycle = createTemplateCycle(template, cursor.cycleStartAt, baseline, cursor.random)
+    }
+    const active = cursor.activeCycle
+    const values = { ...cursor.state }
+    while (interruptions[cursor.interruptionIndex]?.at < cursor.cycleStartAt) {
+      cursor.interruptionIndex += 1
+    }
+    let interruption: Readonly<{ channel: string; at: number; value: number }> | undefined
+    for (let index = cursor.interruptionIndex; index < interruptions.length; index += 1) {
+      const candidate = interruptions[index]!
+      if (candidate.at > elapsedMs || candidate.at > active.endAt) break
+      interruption = candidate
+    }
+    if (elapsedMs < active.times[0]!) {
+      if (interruption !== undefined) values[interruption.channel] = interruption.value
+      return { values, markers: cursor.markers }
+    }
+    if (markerName !== undefined) {
+      const targets = active.targets[markerName] ?? []
+      while (cursor.cycleMarkerIndex < targets.length
+        && cursor.cycleMarkerIndex < active.times.length
+        && active.times[cursor.cycleMarkerIndex]! <= elapsedMs) {
+        const index = cursor.cycleMarkerIndex
+        if (typeof targets[index] === 'number') {
+          cursor.markers.push({ startAt: active.times[index]!, value: targets[index]! })
+        }
+        cursor.cycleMarkerIndex += 1
+      }
+    }
+    if (elapsedMs <= active.endAt) {
+      sampleTemplateChannels(active.targets, active.times, elapsedMs, values)
+      if (interruption !== undefined) values[interruption.channel] = interruption.value
+      return { values, markers: cursor.markers }
+    }
+    applyTemplateTargets(active.targets, cursor.state)
+    if (interruption !== undefined) cursor.state[interruption.channel] = interruption.value
+    cursor.cycleStartAt = active.endAt
+    cursor.cycleIndex += 1
+    cursor.cycleMarkerIndex = 1
+    cursor.activeCycle = undefined
+  }
+  return { values: cursor.state, markers: cursor.markers }
 }
 
 /** Runs the common absolute-time evaluator for a fixed or selected template. */
@@ -102,15 +195,7 @@ function sampleLoopedTemplates(
     for (const name of Object.keys(template.vs)) {
       if (!(name in state)) state[name] = initialValues[name] ?? baseline[name] ?? 0
     }
-    const delay = sampleTemplateNumber(template.delay ?? 0, random)
-    const times = [cursor + delay]
-    const durations = template.dt ?? inferInstantDurations(template.vs)
-    for (const duration of durations) {
-      times.push(times[times.length - 1]! + Math.max(0, sampleTemplateNumber(duration, random)))
-    }
-
-    const endAt = times[times.length - 1]!
-    const targets = sampleTemplateTargets(template.vs, baseline, random)
+    const { times, endAt, targets } = createTemplateCycle(template, cursor, baseline, random)
     const interruption = interruptions
       .filter(({ at }) => at >= cursor && at <= endAt && at <= elapsedMs)
       .sort((left, right) => right.at - left.at)[0]
@@ -139,6 +224,25 @@ function sampleLoopedTemplates(
   }
 
   return { values: state, markers }
+}
+
+/** Draws the same delay, segment durations and targets for Play and Seek. */
+function createTemplateCycle(
+  template: ThAnimationTemplate,
+  startAt: number,
+  baseline: Readonly<Record<string, number>>,
+  random: RandomSource,
+): TemplateCycle {
+  const delay = sampleTemplateNumber(template.delay ?? 0, random)
+  const times = [startAt + delay]
+  for (const duration of template.dt ?? inferInstantDurations(template.vs)) {
+    times.push(times[times.length - 1]! + Math.max(0, sampleTemplateNumber(duration, random)))
+  }
+  return {
+    times,
+    endAt: times[times.length - 1]!,
+    targets: sampleTemplateTargets(template.vs, baseline, random),
+  }
 }
 
 /** Selects one alternative using TalkingHead's remaining-probability rule. */

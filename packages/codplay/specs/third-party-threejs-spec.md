@@ -73,17 +73,23 @@ nœud interne Three que CodPlay devrait découvrir.
 ## Ressources binaires Three.js
 
 Le module Three.js fournit les stratégies de preload `three-glb` et `three-fbx`.
-Elles utilisent le `FileLoader` de Three.js pour charger les octets et relient
-le `AbortSignal` du preload à l'abandon du loader. Le résultat reste dans le
-cache de l'intégration Three.js, indexé par l'URL ; le core CodPlay ne connaît
-ni ces formats, ni `ArrayBuffer`, ni les loaders natifs.
+Elles chargent les octets avec le `FileLoader` et relient le `AbortSignal` du
+preload à l'abandon du loader. `three-glb` attend la scène, ses textures et ses
+clips décodés par `GLTFLoader` ; `three-fbx` extrait les clips d'animation du
+FBX avec `FBXLoader`. Le résultat reste dans le cache de l'intégration
+Three.js, indexé par l'URL ; le core CodPlay ne connaît ni ces formats ni les
+loaders natifs. Une erreur de décodage fait échouer le preload. Cette tranche
+n'expose pas une scène FBX prête à afficher.
 
-Le composant spécialisé consomme cette ressource préparée. Avatar remet les
-octets à `GLTFLoader.parse` afin de construire une scène indépendante par
-instance et de conserver la topologie de squelette nécessaire au retargeting.
-Pour une animation externe, il remet les octets à `FBXLoader` ou
-`GLTFLoader`, puis associe le clip au modèle Avatar déclaré. Il ne fait donc ni
-`fetch`, ni cache de modèle ou d'animation, ni second circuit d'import.
+La ressource décodée est une source partagée immuable. Pendant son
+`initialize()` synchrone, Avatar en construit une scène privée avec os,
+géométries, matériaux et influences morphiques propres à l'instance, en
+conservant les relations de partage des squelettes internes à la source. Il
+applique ensuite son retargeting et associe les clips externes déjà décodés.
+Cette initialisation n'effectue ni `fetch` ni parsing asynchrone. La première
+présentation à `0 ms` emprunte le flux de contenu Avatar puis le commit du host
+Three, avant le démarrage du player ; aucun rendu direct ou refresh spécifique
+du composant n'est nécessaire.
 
 Les types `three-glb` et `three-fbx` sont déclarés dans le manifeste de preload
 de l'application ou du module qui utilise Three.js. Le builder générique ne

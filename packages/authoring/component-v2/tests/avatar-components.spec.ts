@@ -513,6 +513,40 @@ describe('Avatar V2 components', () => {
     expect(sample(1_125)).toEqual(inRelease)
   })
 
+  it('preserves two nested gesture handoffs in Play and Seek', () => {
+    let timeline: AvatarTimeline | undefined
+    const target = {
+      setTimeline: (_slot: 'gesture', value: AvatarTimeline) => { timeline = value },
+    } as unknown as AvatarTarget
+    const component = new AvatarGestureComponent({
+      services: emptyServices(),
+      perso: { id: 'gesture', storyId: 'main', initial: {} },
+    } as never)
+    const bow = {
+      name: 'avatar:gesture:bow', startAt: 500, elapsedMs: 0,
+      action: {}, eventId: 'first-bow',
+    }
+    const release = {
+      name: 'avatar:gesture:release', startAt: 550, elapsedMs: 0,
+      action: {}, eventId: 'release',
+    }
+    const secondBow = {
+      name: 'avatar:gesture:bow', startAt: 600, elapsedMs: 0,
+      action: {}, eventId: 'second-bow',
+    }
+    component.update({ state: {}, timeMs: 500, activeActions: [bow], target })
+    component.update({ state: {}, timeMs: 550, activeActions: [bow, release], target })
+    const beforeSecond = timeline?.sample(600)?.value as AvatarGestureFrame
+    component.update({ state: {}, timeMs: 600, activeActions: [bow, release, secondBow], target })
+    const atSecond = timeline?.sample(600)?.value as AvatarGestureFrame
+    const playAt725 = timeline?.sample(725)?.value
+
+    expect(atSecond.morphs.bodyRotateX).toBeCloseTo(beforeSecond.morphs.bodyRotateX ?? 0, 10)
+    component.update({ state: {}, timeMs: 500, activeActions: [bow], target })
+    component.update({ state: {}, timeMs: 600, activeActions: [bow, release, secondBow], target })
+    expect(timeline?.sample(725)?.value).toEqual(playAt725)
+  })
+
   it('keeps a completed gesture released when a later release instruction arrives', () => {
     const applyGestureMotion = vi.fn()
     let timeline: AvatarTimeline | undefined
@@ -752,6 +786,79 @@ describe('Avatar V2 components', () => {
     expect((timeline?.sample(1_700)?.value as Record<string, number>).mouthFrownLeft).toBe(0)
   })
 
+  it('keeps one live mood transition between actions and reproduces it after seek', () => {
+    const setTimeline = vi.fn()
+    const target = {
+      setTimeline,
+      setMoodHistory: vi.fn(),
+      setBlinkSchedule: vi.fn(),
+      setIdleProfile: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarMoodComponent({
+      services: emptyServices(),
+      perso: { id: 'mood', storyId: 'main', initial: { mood: 'neutral' } },
+    } as never)
+    const happy = {
+      name: 'avatar:mood:happy', startAt: 100, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'happy',
+    }
+    const sad = {
+      name: 'avatar:mood:sad', startAt: 600, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'sad',
+    }
+
+    component.update({ state: {}, timeMs: 100, activeActions: [happy], target })
+    const firstTimeline = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    const beforeInterruption = firstTimeline.sample(600)?.value as Record<string, number>
+    component.update({ state: {}, timeMs: 350, activeActions: [happy], target })
+    expect(setTimeline).toHaveBeenCalledTimes(1)
+    component.update({ state: {}, timeMs: 600, activeActions: [happy, sad], target })
+    const playTimeline = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    const atInterruption = playTimeline.sample(600)?.value as Record<string, number>
+    for (const name of Object.keys(beforeInterruption)) {
+      expect(atInterruption[name]).toBeCloseTo(beforeInterruption[name]!, 10)
+    }
+    const playAt800 = playTimeline.sample(800)?.value
+
+    component.update({ state: {}, timeMs: 350, activeActions: [happy], target })
+    component.update({ state: {}, timeMs: 600, activeActions: [happy, sad], target })
+    const seekTimeline = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    expect(seekTimeline.sample(800)?.value).toEqual(playAt800)
+  })
+
+  it('starts an interactive mood action from the value at a paused time', () => {
+    const setTimeline = vi.fn()
+    const target = {
+      setTimeline,
+      setMoodHistory: vi.fn(),
+      setBlinkSchedule: vi.fn(),
+      setIdleProfile: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarMoodComponent({
+      services: emptyServices(),
+      perso: { id: 'mood', storyId: 'main', initial: { mood: 'neutral' } },
+    } as never)
+    const happy = {
+      name: 'avatar:mood:happy', startAt: 100, elapsedMs: 250,
+      action: { durationMs: 1_000 }, eventId: 'happy',
+    }
+    component.update({ state: {}, timeMs: 350, activeActions: [happy], target })
+    const before = (setTimeline.mock.lastCall?.[1] as AvatarTimeline)
+      .sample(350)?.value as Record<string, number>
+    const sad = {
+      name: 'avatar:mood:sad', startAt: 350, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'interactive-sad',
+    }
+
+    component.update({ state: {}, timeMs: 350, activeActions: [happy, sad], target })
+    const after = (setTimeline.mock.lastCall?.[1] as AvatarTimeline)
+      .sample(350)?.value as Record<string, number>
+
+    expect(after.mouthSmile).toBeCloseTo(before.mouthSmile!, 10)
+    expect(after.mouthFrownLeft).toBeCloseTo(before.mouthFrownLeft ?? 0, 10)
+    expect(setTimeline).toHaveBeenCalledTimes(2)
+  })
+
   it('accepts an initial happy mood with persona-specific morph values', () => {
     let timeline: AvatarTimeline | undefined
     const setMoodHistory = vi.fn()
@@ -855,6 +962,29 @@ describe('Avatar V2 components', () => {
     expect((timeline?.sample(320)?.value as Record<string, number>).viseme_O).toBe(0)
   })
 
+  it('reconstructs overlapping visemes after expired cues and a backward Seek', () => {
+    let timeline: AvatarTimeline | undefined
+    const target = {
+      setTimeline: (_slot: 'lip-sync', value: AvatarTimeline) => { timeline = value },
+    } as unknown as AvatarTarget
+    const component = new AvatarLipSyncComponent({
+      services: emptyServices(),
+      perso: { id: 'viseme', storyId: 'main', initial: {} },
+    } as never)
+    const cues = [
+      { name: 'avatar:viseme', startAt: 100, elapsedMs: 0, action: { viseme: 'O', durationMs: 100 }, eventId: 'old' },
+      { name: 'avatar:viseme', startAt: 1_000, elapsedMs: 0, action: { viseme: 'O', durationMs: 200 }, eventId: 'first' },
+      { name: 'avatar:viseme', startAt: 1_100, elapsedMs: 0, action: { viseme: 'O', durationMs: 200 }, eventId: 'second' },
+    ]
+    component.update({ state: {}, timeMs: 1_100, activeActions: cues, target })
+    const playback = timeline
+    const at1150 = playback?.sample(1_150)?.value
+    playback?.sample(1_300)
+    playback?.sample(100)
+    expect(playback?.sample(1_150)?.value).toEqual(at1150)
+    expect((playback?.sample(500)?.value as Record<string, number>).viseme_O).toBe(0)
+  })
+
   it('applies look-ahead at the gaze event time', () => {
     const setGazeTarget = vi.fn()
     let timeline: AvatarTimeline | undefined
@@ -922,6 +1052,43 @@ describe('Avatar V2 components', () => {
 
     component.update({ state: {}, timeMs: 2_000, activeActions: [first, second], target })
     expect(contactAt(2_000)).toBeCloseTo(0.25, 2)
+  })
+
+  it('keeps the gaze transition in Play and reconstructs an interruption after Seek', () => {
+    const setTimeline = vi.fn()
+    const target = {
+      setTimeline,
+      setGazeProfiles: vi.fn(),
+      setGazeMode: vi.fn(),
+    } as unknown as AvatarTarget
+    const component = new AvatarGazeComponent({
+      services: emptyServices(),
+      perso: { id: 'gaze', storyId: 'main', initial: { enabled: false, contact: 1 } },
+    } as never)
+    const on = {
+      name: 'avatar:gaze:on', startAt: 100, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'on',
+    }
+    const off = {
+      name: 'avatar:gaze:off', startAt: 600, elapsedMs: 0,
+      action: { durationMs: 1_000 }, eventId: 'off',
+    }
+
+    component.update({ state: {}, timeMs: 100, activeActions: [on], target })
+    const first = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    component.update({ state: {}, timeMs: 350, activeActions: [on], target })
+    expect(setTimeline).toHaveBeenCalledTimes(1)
+    const beforeInterruption = first.sample(600)?.value as { contact: number }
+    component.update({ state: {}, timeMs: 600, activeActions: [on, off], target })
+    const play = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    expect((play.sample(600)?.value as { contact: number }).contact)
+      .toBeCloseTo(beforeInterruption.contact, 10)
+    const playAt800 = play.sample(800)?.value
+
+    component.update({ state: {}, timeMs: 350, activeActions: [on], target })
+    component.update({ state: {}, timeMs: 600, activeActions: [on, off], target })
+    const replay = setTimeline.mock.lastCall?.[1] as AvatarTimeline
+    expect(replay.sample(800)?.value).toEqual(playAt800)
   })
 
   it('produces deterministic random blink windows that survive a backward seek', () => {

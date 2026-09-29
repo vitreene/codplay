@@ -34,6 +34,15 @@ type GazeAction = Readonly<{
   lookAheadSeed: number
 }>
 
+type GazeInstruction = Readonly<{
+  name: string
+  startAt: number
+  eventId: string | undefined
+  durationMs: number
+  contact: unknown
+  headMove: unknown
+}>
+
 const GAZE_ENABLE_ACTION = 'avatar:gaze:on'
 const GAZE_DISABLE_ACTION = 'avatar:gaze:off'
 const GAZE_IDLE_ACTION = 'avatar:gaze:idle'
@@ -45,6 +54,10 @@ const GAZE_CAMERA_ACTION = 'avatar:gaze:camera'
 /** Applies a generic camera-contact selection to one Avatar target. */
 export class AvatarGazeComponent extends AvatarFeatureComponent<AvatarGazeInitial> {
   static readonly declaredServices = [] as const
+  private activeTarget: AvatarTarget | undefined
+  private instructions: readonly GazeInstruction[] = []
+  private actions: readonly GazeAction[] = []
+  private lastUpdateTimeMs: number | undefined
 
   /** Resolves the gaze history into one pure absolute-time transition. */
   protected contribute(target: AvatarTarget, input: ComponentUpdateInput<AvatarGazeInitial>): void {
@@ -63,18 +76,33 @@ export class AvatarGazeComponent extends AvatarFeatureComponent<AvatarGazeInitia
     const mode = resolveGazeMode(occurrences.at(-1)?.name)
     if (mode !== undefined) target.setGazeMode?.(mode)
     const initial = resolveOccurrenceContribution(undefined, this.perso.initial)
-    const actions: GazeAction[] = []
-    for (const occurrence of occurrences) {
+    const instructions = occurrences.map((occurrence) => ({
+      name: occurrence.name,
+      startAt: occurrence.startAt,
+      eventId: occurrence.eventId,
+      durationMs: resolveDuration(
+        occurrence.action.durationMs, undefined, this.perso.initial.durationMs,
+      ),
+      contact: occurrence.action.contact,
+      headMove: occurrence.action.headMove,
+    }))
+    const canContinue = this.activeTarget === target
+      && this.lastUpdateTimeMs !== undefined
+      && input.timeMs >= this.lastUpdateTimeMs
+      && this.instructions.length <= instructions.length
+      && this.instructions.length > 0
+      && this.instructions.every((instruction, index) => sameGazeInstruction(instruction, instructions[index]!))
+    const actions: GazeAction[] = canContinue ? [...this.actions] : []
+    for (let index = canContinue ? this.instructions.length : 0; index < occurrences.length; index += 1) {
+      const occurrence = occurrences[index]!
+      const instruction = instructions[index]!
       const from = actions.length === 0
         ? initial
         : sampleTransition(actions[actions.length - 1]!.transition, occurrence.startAt)
       const to = resolveOccurrenceContribution(occurrence, this.perso.initial, from)
-      const durationMs = resolveDuration(
-        occurrence.action.durationMs, undefined, this.perso.initial.durationMs,
-      )
       actions.push({
-        transition: createTransition(from, to, occurrence.startAt, durationMs),
-        lookAheadDurationMs: to.lookAhead ? resolveLookAheadDuration(durationMs) : 0,
+        transition: createTransition(from, to, occurrence.startAt, instruction.durationMs),
+        lookAheadDurationMs: to.lookAhead ? resolveLookAheadDuration(instruction.durationMs) : 0,
         lookAheadSeed: stableSeed(occurrence.eventId ?? GAZE_LOOK_AHEAD_ACTION),
       })
     }
@@ -86,14 +114,52 @@ export class AvatarGazeComponent extends AvatarFeatureComponent<AvatarGazeInitia
         initial.target,
         false,
       )
-      actions.push({
+      const fallback: GazeAction = {
         transition: createTransition(selected, selected, 0, 0),
         lookAheadDurationMs: 0,
         lookAheadSeed: 0,
-      })
+      }
+      actions.push(fallback)
     }
-    target.setTimeline('gaze', createAnimation(actions, target))
+    const changed = target !== this.activeTarget
+      || actions.length !== this.actions.length
+      || actions.some((action, index) => !sameGazeAction(action, this.actions[index]))
+    this.activeTarget = target
+    this.instructions = instructions
+    this.actions = actions
+    this.lastUpdateTimeMs = input.timeMs
+    if (changed) target.setTimeline('gaze', createAnimation(actions, target))
   }
+}
+
+/** Checks that an already received gaze instruction has not changed. */
+function sameGazeInstruction(left: GazeInstruction, right: GazeInstruction): boolean {
+  return left.name === right.name
+    && left.startAt === right.startAt
+    && left.eventId === right.eventId
+    && left.durationMs === right.durationMs
+    && Object.is(left.contact, right.contact)
+    && Object.is(left.headMove, right.headMove)
+}
+
+/** Compares a prepared gaze action without retaining a presentation frame. */
+function sameGazeAction(left: GazeAction, right: GazeAction | undefined): boolean {
+  return right !== undefined
+    && left.transition.startAt === right.transition.startAt
+    && left.transition.endAt === right.transition.endAt
+    && sameGazeContribution(left.transition.from, right.transition.from)
+    && sameGazeContribution(left.transition.to, right.transition.to)
+    && left.lookAheadDurationMs === right.lookAheadDurationMs
+    && left.lookAheadSeed === right.lookAheadSeed
+}
+
+/** Compares the finite fields that determine one gaze sample. */
+function sameGazeContribution(left: GazeContribution, right: GazeContribution): boolean {
+  return left.enabled === right.enabled
+    && left.contact === right.contact
+    && left.headMove === right.headMove
+    && left.target === right.target
+    && left.lookAhead === right.lookAhead
 }
 
 /** Identifies an action that changes the generic gaze contribution. */
@@ -237,16 +303,23 @@ function createAnimation(
   actions: readonly GazeAction[],
   target: AvatarTarget,
 ): AvatarTimeline {
+  let selectedIndex = 0
+  let lastTimeMs: number | undefined
   return {
     id: 'avatar-gaze',
     startAt: actions[0]!.transition.startAt,
     endAt: Number.POSITIVE_INFINITY,
     sample: (timeMs) => {
-      let selected = actions[0]!
-      for (const action of actions) {
-        if (action.transition.startAt > timeMs) break
-        selected = action
+      if (lastTimeMs !== undefined && timeMs < lastTimeMs) {
+        selectedIndex = findGazeActionIndex(actions, timeMs)
+      } else {
+        while (selectedIndex + 1 < actions.length
+          && actions[selectedIndex + 1]!.transition.startAt <= timeMs) {
+          selectedIndex += 1
+        }
       }
+      lastTimeMs = timeMs
+      const selected = actions[selectedIndex]!
       const { transition, lookAheadDurationMs, lookAheadSeed } = selected
       const gaze = sampleTransition(transition, timeMs)
       return {
@@ -269,6 +342,18 @@ function createAnimation(
       }
     },
   }
+}
+
+/** Finds the received gaze action active after a backward seek. */
+function findGazeActionIndex(actions: readonly GazeAction[], timeMs: number): number {
+  let low = 0
+  let high = actions.length - 1
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (actions[middle]!.transition.startAt <= timeMs) low = middle
+    else high = middle - 1
+  }
+  return low
 }
 
 /** Samples an ease-out transition so gaze reaches its pose naturally. */

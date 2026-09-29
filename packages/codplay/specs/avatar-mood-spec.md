@@ -39,14 +39,18 @@ fait donc pas sauter l'expression vers le pic de l'action précédente.
 Pour une durée positive, chaque morph de l'union des baselines source et cible
 suit l'easing TalkingHead sur le temps absolu CodPlay. Le choix de cette courbe
 est explicite pour V2. Sans durée, le changement est immédiat. Un morph absent
-de la nouvelle expression revient à zéro. Une même date donne les mêmes
-valeurs en Play, Seek et replay, sans file de transitions mutable.
+de la nouvelle expression revient à zéro. En Play, le composant conserve la
+transition courante et ne traite que les nouvelles occurrences reçues. Un Seek
+reconstruit cette transition depuis les occurrences reçues jusqu'à la date
+demandée. Une même date donne les mêmes valeurs en Play, Seek et replay, sans
+file de transitions mutable ni lecture des instructions futures.
 
 Chaque mood sélectionne aussi ses templates TalkingHead de respiration, pose,
 tête, regard, clignement, bouche et micro-mouvements du visage. Leurs boucles
 commencent à la date de l'occurrence qui sélectionne le mood ; le mood initial
-commence à `t = 0`. Le sampler unique reconstruit leurs valeurs depuis cette
-origine en Play, Seek et replay. Il utilise la même baseline résolue que la
+commence à `t = 0`. En Play, le sampler conserve le cycle courant et le tirage
+aléatoire de chaque boucle ; un Seek reconstruit ces mêmes cycles depuis
+l'origine de l'occurrence. Il utilise la même baseline résolue que la
 transition de mood, y compris après Seek et pour les tâches qui traversent un
 changement de mood. Les branches `idle` et parole sont des états
 internes, pilotés par la même contribution auteur. Le changement de mood ne
@@ -65,6 +69,10 @@ délai. Son regard rejoint le centre pendant la phase de déplacement et ne
 revient à la boucle des yeux qu'après la libération de ses canaux. Une tâche
 déjà déclenchée peut traverser un changement de mood ; si une nouvelle tâche
 prend les mêmes canaux, elle part des valeurs alors affichées et les reprend.
+La libération des yeux d'une tâche est datée dès sa création ; la source d'une
+tâche suivante dépend de cette date, jamais de la date d'évaluation de la
+frame. Cela évite de modifier rétroactivement un hochement lorsque la tâche
+précédente se termine.
 Le même historique d'occurrences reconstruit ces raccords en Play et en Seek.
 
 ## Composition

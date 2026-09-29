@@ -61,8 +61,8 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
   let pendingDynamicDeltaMs = 0
 
   return {
-    async loadModel(buffer, loaderOpts) {
-      const result = await buildModelInstance(buffer, morphEngine, loaderOpts)
+    loadModel(resource, loaderOpts) {
+      const result = buildModelInstance(resource, morphEngine, loaderOpts)
       gestureEngine = new GestureEngine(result.boneMap, opts.modelMovementFactor)
       _boneMap = result.boneMap
       _armature = result.armature ?? result.scene
