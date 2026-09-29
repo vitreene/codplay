@@ -24,11 +24,18 @@ export function resolveActionCandidates<
 
   for (const selection of composition.selections.values()) {
     const scopes = scopesForSelection(selection)
-    for (const scope of scopes) {
+    for (let scopeIndex = 0; scopeIndex < scopes.length; scopeIndex += 1) {
+      const scope = scopes[scopeIndex]
       const action = scope.actions?.[event.name]
       if (action === undefined) continue
+
+      const inheritedAction = scope.action
+        ?? scopes.slice(scopeIndex + 1).find((parent) => parent.action !== undefined)?.action
+      const resolvedAction = action.action === undefined && inheritedAction !== undefined
+        ? { ...action, action: inheritedAction }
+        : action
       candidates.push({
-        action,
+        action: resolvedAction,
         selection,
         order: order++,
         depth: scope.path.length === 0 ? 0 : scope.path.split('/').length,
@@ -44,21 +51,36 @@ export function resolveActionCandidates<
 function scopesForSelection<
   SceneKey extends string,
   SlotName extends string,
->(selection: ActiveSelection<SceneKey, SlotName>): readonly ActionScope[] {
+>(selection: ActiveSelection<SceneKey, SlotName>): readonly ActionScope<SceneKey, SlotName>[] {
   const entry = selection.entry
-  const scopes: ActionScope[] = [
-    { id: `view:${entry.path}`, path: entry.path, actions: entry.view.actions },
+  const scopes: ActionScope<SceneKey, SlotName>[] = [
+    {
+      id: `view:${entry.path}`,
+      path: entry.path,
+      action: entry.view.action,
+      actions: entry.view.actions,
+    },
   ]
 
   for (const graph of [...entry.graphScopes].reverse()) {
-    scopes.push({ id: `graph:${graph.path}`, path: graph.path, actions: graph.scope.actions })
+    scopes.push({
+      id: `graph:${graph.path}`,
+      path: graph.path,
+      action: graph.scope.action,
+      actions: graph.scope.actions,
+    })
   }
   for (const parent of [...entry.parentViews].reverse()) {
-    scopes.push({ id: `view:${parent.path}`, path: parent.path, actions: parent.view.actions })
+    scopes.push({
+      id: `view:${parent.path}`,
+      path: parent.path,
+      action: parent.view.action,
+      actions: parent.view.actions,
+    })
   }
 
   return scopes.filter((scope, scopeIndex) => {
-    if (scope.actions === undefined) return false
+    if (scope.actions === undefined && scope.action === undefined) return false
     return scopes.findIndex((candidate) => candidate.id === scope.id) === scopeIndex
   })
 }
@@ -77,8 +99,9 @@ function compareCandidates<
 }
 
 /** Keeps action scope typing separate from the public authoring type. */
-type ActionScope = Readonly<{
+type ActionScope<SceneKey extends string, SlotName extends string> = Readonly<{
   id: string
   path: string
-  actions: Readonly<Record<string, SightyViewAction>> | undefined
+  action: SightyViewAction<SceneKey, SlotName>['action'] | undefined
+  actions: Readonly<Record<string, SightyViewAction<SceneKey, SlotName>>> | undefined
 }>

@@ -1,5 +1,5 @@
 import { Sighty } from '@codplay/sighty'
-import type { SightyActionCatalog } from '@codplay/sighty'
+import type { SightyActions } from '@codplay/sighty'
 import { SCENE_A_EVENTS } from '../demo1/scenes/scene-a'
 import {
   DEMO3_COLOR_INTENTS,
@@ -37,12 +37,10 @@ export class SightyComposition {
   constructor(options: SightyDemo3Options) {
     this.onLog = options.onLog
     this.sighty = new Sighty({
-      scenario: sightyScenario,
+      scenario: { ...sightyScenario, actions: this.createActions() },
       runtime: {
         root: options.stage,
         instanceIds: INSTANCE_IDS,
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: this.createActionCatalog(),
         styles: [{
           slot: 'sighty-demo3-scene-root',
           cssText: SIGHTY_SCENE_ROOT_STYLE_SHEET,
@@ -55,7 +53,6 @@ export class SightyComposition {
           },
           pauseOnDocumentHidden: false,
         },
-        onPreloadWarning: (warning) => this.onLog(`${warning.code}: ${warning.message}`, 'warn'),
       },
     })
     this.runtime = this.sighty.runtime
@@ -69,7 +66,7 @@ export class SightyComposition {
   }
 
   /** Provides the declared actions that forward telco or host data through Sighty. */
-  private createActionCatalog(): SightyActionCatalog<SightyDemo3SceneKey> {
+  private createActions(): SightyActions<SightyDemo3SceneKey> {
     return {
       'demo3:inject-content': async ({ event, send }) => {
         const content = event.data?.content

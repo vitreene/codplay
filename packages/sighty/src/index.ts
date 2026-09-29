@@ -3,17 +3,10 @@ export type {
   SightyOptions,
 } from './sighty'
 export type {
-  SightyActionCatalog,
-  SightyActionContext,
-  SightyActionHandler,
   SightyRuntimeApi,
   SightyRuntimeConfiguration,
-  SightyConditionCatalog,
-  SightyRuntimeEvent,
-  SightyRuntimeLayout,
   SightyRuntimeSlotChangeListener,
   SightyRuntimeStyle,
-  SightyRuntimeWarning,
 } from './runtime'
 export type {
   SightyPublicEvent,
@@ -21,6 +14,9 @@ export type {
   SightyPublicEvents,
 } from './public-events'
 export type {
+  SightyActions,
+  SightyActionContext,
+  SightyActionHandler,
   SightyAuthoringDiagnostic,
   SightyAuthoringResources,
   SightyCondition,
@@ -28,16 +24,18 @@ export type {
   SightyConditionEvent,
   SightyConditionFunction,
   SightyCouplingDescriptor,
-  SightyDataBinding,
-  SightyDataValue,
   SightyMutationReloadPolicy,
   SightyScenarioApi,
   SightyScenarioMutation,
   SightyScenarioResources,
+  SightyScenarioSelection,
+  SightyScenarioStateApi,
+  SightyRuntimeEvent,
   SightySceneSource,
   SightyShowMode,
   SightyFile,
   SightyGraphView,
+  SightyGuards,
   SightyLegacyView,
   SightyRouteTarget,
   SightySceneCatalog,

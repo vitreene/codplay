@@ -28,7 +28,6 @@ export function createDemo1Composition(options: Demo1CompositionOptions): Demo1S
     runtime: {
       root: options.stage,
       instanceIds: INSTANCE_IDS,
-      layout: { sceneKey: 'layout', storyId: 'main' },
       styles: [{
         slot: 'sighty-demo-capsule-automation',
         cssText: SIGHTY_SCENE_ROOT_STYLE_SHEET,
@@ -45,7 +44,6 @@ export function createDemo1Composition(options: Demo1CompositionOptions): Demo1S
         },
       },
       onTrace: (sceneKey, event) => options.onLog(`${sceneKey}: ${event.name} @${event.timeMs}ms`),
-      onPreloadWarning: (warning) => options.onLog(`${warning.code}: ${warning.message}`, 'warn'),
     },
   })
 }

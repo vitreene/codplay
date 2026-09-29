@@ -786,6 +786,12 @@ Exécuter la suite complète applicable :
 
 - validation auteur et index ;
 - routes, héritage, `accessBy`, `exitBy` et `onDenied` ;
+- navigation `next` / `previous` aux bornes de graphes imbriqués et guards
+  hérités sur les transitions de leurs pages ;
+- `scenarioState.active` suit la vue initiale, les navigations, les refus redirigés,
+  le reset et les mutations ; `current` reste l’ensemble des sélections de slots ;
+- Demo 5 déclare les pages sous leurs chapitres ; son bouton directionnel traverse
+  les bornes de chapitres via le pointeur, tandis que le menu garde ses routes `path` ;
 - transitions concurrentes et rollback ;
 - `reset`, `maintain`, `rewind` et réadmission ;
 - identité stable de l’instance et état remis à zéro par reset ;
@@ -859,12 +865,12 @@ introduire une commande parallèle ou contourner sa coordination.
 | --- | --- | --- |
 | M0 — audit | En cours | matrice de conformité établie ; les divergences sont rattachées aux contrats acceptés et aucune décision nouvelle ne porte le code appliqué |
 | M1 — opérations | En cours | file extraite dans `RuntimeOperationCoordinator` ; dispatch, contexte, reset, mutation et commandes de lecture partagent cette file ; les transitions sont verrouillées dès l’admission et les tentatives concurrentes sont rejetées |
-| M2 — transitions | En cours | plan unique transmis au réconciliateur ; présentation physique séparée de la composition logique ; `replace` limité à la sortie active de la transition et accès `menu → scène` sans faux remplacement couverts par Demo 4 ; parcours complets à poursuivre |
+| M2 — transitions | En cours | plan unique transmis au réconciliateur ; pointeur `next`/`previous` à travers les bornes imbriquées et `exitBy` hérité vérifiés ; présentation physique séparée de la composition logique ; `replace` limité à la sortie active de la transition et accès `menu → scène` sans faux remplacement couverts par Demo 4 ; parcours complets à poursuivre |
 | M3 — cycle/reset | En cours | `instance.telco.reset()` est intégré à `showMode` et `runtime.reset()` ; Demo 4 prouve l’identité conservée et le reset de session, les erreurs partielles et validations navigateur restent ouvertes |
 | M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 3 et Demo 4 passent par les actions déclarées et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
-| M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; wrappers one-shot sans sémantique supprimés ; revue globale à poursuivre sur les parcours différés |
+| M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; `scenarioState.active` suit le pointeur à l’initialisation, aux navigations, aux replis, au reset et aux mutations ; revue globale à poursuivre sur les parcours différés |
 | M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée, avec hôtes physiques distincts pour le menu et le conteneur chapitre ; Demo 3 ne possède plus de relais direct ni de file locale et passe par l’action déclarée et la passerelle Sighty ; les démos 1 et 2 restent différées |
-| M7 — validation | En cours | Sighty : 31 tests ; CodPlay : 655 tests et typecheck ; démos : typecheck et build ; les régressions Demo 4 vérifient le fade sans translation du conteneur chapitre, la présence simultanée de scène + telco pendant le retour, le `replace` direct entre scènes et l’absence de faux `replace` après retour menu ; Safari MCP a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind, rejet d’une navigation rapide et le retour automatique C → menu sur `sequence:end`, sans warning/error ; la matrice navigateur complète et les démos 1 à 3 restent différées |
+| M7 — validation | En cours | Sighty : 43 tests et typecheck ; démos : typecheck et build ; le pointeur, ses bornes imbriquées, les guards hérités et `scenarioState.active` sont couverts ; contrôle visuel Demo 5 confirmé par l’utilisateur. Les régressions Demo 4 vérifient le fade sans translation du conteneur chapitre, la présence simultanée de scène + telco pendant le retour, le `replace` direct entre scènes et l’absence de faux `replace` après retour menu ; Safari MCP a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind, rejet d’une navigation rapide et le retour automatique C → menu sur `sequence:end`, sans warning/error ; la matrice navigateur complète, le cycle de vie restant et les démos 1 à 3 restent différés |
 
 Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
 du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.

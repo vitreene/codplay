@@ -22,7 +22,7 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
     this.bindings = bindings
   }
 
-  /** Sends one data or control event to a currently bound selection. */
+  /** Sends one scene event to a currently bound selection. */
   async sendToBinding(
     selection: ActiveSelection<SceneKey, SlotName>,
     eventime: CodPlayEventime,

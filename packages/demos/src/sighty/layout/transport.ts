@@ -12,7 +12,7 @@ export function createSightyTransport<SceneKey extends string, SlotName extends 
 ): SightyDemoTransport {
   const selectCommandSceneKeys = (): readonly SceneKey[] => options.commandSceneKeys?.() ?? runtime.sceneKeys
   return {
-    play: () => playRuntime(runtime, selectCommandSceneKeys()),
+    play: () => runtime.playAll(selectCommandSceneKeys()),
     pause: () => pauseRuntime(runtime, selectCommandSceneKeys()),
     relaunch: () => relaunchRuntime(runtime, selectCommandSceneKeys()),
   }
@@ -30,14 +30,6 @@ async function pauseRuntime<SceneKey extends string, SlotName extends string>(
   }
 }
 
-/** Starts the selected scene occurrences in their authored runtime. */
-async function playRuntime<SceneKey extends string, SlotName extends string>(
-  runtime: SightyDemoRuntime<SceneKey, SlotName>,
-  sceneKeys: readonly SceneKey[],
-): Promise<void> {
-  for (const sceneKey of sceneKeys) await runtime.play(sceneKey)
-}
-
 /** Rewinds the selected scenes, then restarts those occurrences. */
 async function relaunchRuntime<SceneKey extends string, SlotName extends string>(
   runtime: SightyDemoRuntime<SceneKey, SlotName>,
@@ -48,5 +40,5 @@ async function relaunchRuntime<SceneKey extends string, SlotName extends string>
     if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
     await instance.telco.rewind()
   }
-  await playRuntime(runtime, sceneKeys)
+  await runtime.playAll(sceneKeys)
 }

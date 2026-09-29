@@ -5,6 +5,7 @@ import { ScrollContainerComponent } from '../src/scroll-container/scroll-contain
 class TestElement extends EventTarget {
   readonly ownerDocument = {}
   scrollTop = 25
+  scrollLeft = 0
   scrollHeight = 200
   clientHeight = 100
   readonly addCalls: Array<Readonly<{ type: string; listener: EventListenerOrEventListenerObject; options?: AddEventListenerOptions | boolean }>> = []
@@ -104,8 +105,43 @@ it('attaches to the materialized root in initialize and routes progress and scro
 
   component.onSequenceEnd()
   expect(element.removeCalls.map(({ type }) => type)).toEqual(['scroll', 'scrollend'])
+  element.scrollTop = 86
   component.onReset()
+  expect(element.scrollTop).toBe(0)
   expect(element.addCalls.map(({ type }) => type)).toEqual(['scroll', 'scrollend', 'scroll', 'scrollend'])
+  component.destroy()
+})
+
+it('resets the configured inline scroll axis without changing the vertical offset', () => {
+  vi.stubGlobal('Element', TestElement)
+  const element = new TestElement()
+  element.scrollLeft = 64
+  const captureSources = {
+    open: vi.fn(() => []),
+    hasRules: () => true,
+    resolveIdentity: () => undefined,
+    getEventTypes: () => [],
+    cancelAll: vi.fn(),
+    suspend: vi.fn(),
+    resume: vi.fn(),
+    destroy: vi.fn(),
+  } as unknown as RuntimeCaptureSourcePort
+  const component = new ScrollContainerComponent({
+    services: { declare: vi.fn(), get: vi.fn(), apply: vi.fn() },
+    captureSources,
+    perso: {
+      id: 'viewport',
+      storyId: 'story',
+      initial: { tag: 'section', values: { progress: { axis: 'inline' } } } as never,
+    },
+  })
+  component._materialize(element, [])
+  component.initialize()
+
+  component.onReset()
+
+  expect(element.scrollLeft).toBe(0)
+  expect(element.scrollTop).toBe(25)
   component.destroy()
 })
 

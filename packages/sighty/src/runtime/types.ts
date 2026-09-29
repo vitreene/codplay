@@ -1,12 +1,9 @@
 import type {
   CodPlayCompileSuccess,
-  CodPlayEventime,
-  CodPlayEventimeTarget,
   CodPlayInstance,
   CodPlayInstanceHostTarget,
   CodPlayInstanceMountReplace,
   CodPlayOptions,
-  CodPlayPublicEvent,
   CodPlayTraceEvent,
   RuntimePreloadMode,
 } from 'codplay'
@@ -19,66 +16,18 @@ import type {
   ViewIndex,
 } from '../navigation/types'
 import type {
-  SightyConditionFunction,
   SightyMutationReloadPolicy,
   SightyScenarioMutation,
   SightyScenarioApi,
-  SightyShowMode,
+  SightyRuntimeEvent,
+  SightyScenarioStateApi,
 } from '../types'
-
-/** Identifies the authored layout used as the host of one runtime composition. */
-export type SightyRuntimeLayout<SceneKey extends string = string> = Readonly<{
-  sceneKey: SceneKey
-  storyId: string
-}>
 
 /** Describes one stylesheet that the runtime must install before materialization. */
 export type SightyRuntimeStyle = Readonly<{
   slot: string
   cssText: string
 }>
-
-/** Describes a non-fatal preload notification exposed to the application. */
-export type SightyRuntimeWarning = Readonly<{
-  code: string
-  message: string
-}>
-
-/** Describes an event received by the Sighty scenario router. */
-export type SightyRuntimeEvent<SceneKey extends string = string> = Readonly<{
-  name: string
-  sourceSceneKey?: SceneKey
-  data?: CodPlayPublicEvent['data']
-}>
-
-/** Provides the event and the scene-message port to one external action. */
-export type SightyActionContext<SceneKey extends string = string> = Readonly<{
-  event: SightyRuntimeEvent<SceneKey>
-  data: Readonly<Record<string, unknown>>
-  context: Readonly<Record<string, unknown>>
-  state: Readonly<Record<string, unknown>>
-  updateContext: (patch: Readonly<Record<string, unknown>>) => Promise<void>
-  send: (
-    sceneKey: SceneKey,
-    eventime: CodPlayEventime,
-    target: CodPlayEventimeTarget,
-  ) => Promise<void>
-}>
-
-/** Defines one executable action kept outside the declarative route graph. */
-export type SightyActionHandler<SceneKey extends string = string> = (
-  context: SightyActionContext<SceneKey>,
-) => void | Promise<void>
-
-/** Associates an authored action reference with its application-owned handler. */
-export type SightyActionCatalog<SceneKey extends string = string> = Readonly<
-  Record<string, SightyActionHandler<SceneKey>>
->
-
-/** Associates an author condition reference with an application-owned function. */
-export type SightyConditionCatalog<SceneKey extends string = string> = Readonly<
-  Record<string, SightyConditionFunction<SceneKey>>
->
 
 /** Receives the scene key selected in one authored layout slot. */
 export type SightyRuntimeSlotChangeListener<SceneKey extends string = string> = (
@@ -89,17 +38,11 @@ export type SightyRuntimeSlotChangeListener<SceneKey extends string = string> = 
 export type SightyRuntimeConfiguration<SceneKey extends string = string> = Readonly<{
   root: HTMLElement
   instanceIds: Readonly<Record<SceneKey, string>>
-  layout: SightyRuntimeLayout<SceneKey>
-  actionCatalog?: SightyActionCatalog<SceneKey>
-  conditionCatalog?: SightyConditionCatalog<SceneKey>
   context?: Readonly<Record<string, unknown>>
-  /** Overrides the built-in show policy for this runtime instance. */
-  showMode?: SightyShowMode
   preloadMode?: RuntimePreloadMode
   styles?: readonly SightyRuntimeStyle[]
   codplay?: CodPlayOptions
   onTrace?: (sceneKey: SceneKey, event: CodPlayTraceEvent) => void
-  onPreloadWarning?: (warning: SightyRuntimeWarning) => void
 }>
 
 /** Exposes runtime operations through the Sighty facade. */
@@ -110,6 +53,7 @@ export type SightyRuntimeApi<
   sceneKeys: readonly SceneKey[]
   slotNames: readonly SlotName[]
   events: SightyPublicEvents<SceneKey>
+  scenarioState: SightyScenarioStateApi<SceneKey, SlotName>
   getInstance: (sceneKey: SceneKey) => CodPlayInstance | undefined
   getInstanceAt: (slotAddress: string) => CodPlayInstance | undefined
   initialize: () => Promise<void>
@@ -184,9 +128,9 @@ export type RuntimeMutationSnapshot<
   generationCounters: ReadonlyMap<string, number>
   compiledBuilds: ReadonlyMap<SceneKey, CodPlayCompileSuccess>
   sceneDocuments: ReadonlyMap<SceneKey, SceneDoc<string>>
+  sceneStyleSheets: ReadonlyMap<SceneKey, string>
   resourceUrlsByScene: ReadonlyMap<SceneKey, readonly string[]>
   resourceUrls: readonly string[]
-  deliveredData: ReadonlyMap<string, Readonly<Record<string, unknown>>>
   instances: ReadonlyMap<string, CodPlayInstance>
   instanceSceneKeys: ReadonlyMap<string, SceneKey>
   presentation: readonly PresentationRelation<SceneKey, SlotName>[]

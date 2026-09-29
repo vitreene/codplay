@@ -5,12 +5,11 @@ import {
   type RuntimePreloadMode,
 } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
-import { createViewIndex } from '../navigation/graph-index'
+import { createViewIndex, getStartEntry } from '../navigation/graph-index'
 import type { ActiveComposition, IndexedEntry, ViewIndex } from '../navigation/types'
 import { createSightyPublicEventChannel, type SightyPublicEvent, type SightyPublicEvents } from '../public-events'
 import type { SightyMutableScenarioApi } from '../scenario'
-import type { SightyActionCatalog, SightyConditionCatalog, SightyRuntimeLayout, SightyRuntimeOptions, SightyRuntimeSlotChangeListener, SightyRuntimeStyle } from './types'
-import type { SightyShowMode } from '../types'
+import type { SightyRuntimeOptions, SightyRuntimeSlotChangeListener, SightyRuntimeStyle } from './types'
 import { collectSceneKeys } from './helpers'
 
 /** Keeps the mutable execution state shared by the focused runtime services. */
@@ -19,15 +18,12 @@ export type SightyRuntimeState<SceneKey extends string, SlotName extends string>
   readonly mutableScenario: SightyMutableScenarioApi<SceneKey, SlotName>
   readonly root: HTMLElement
   readonly instanceIds: Readonly<Record<SceneKey, string>>
-  readonly layout: SightyRuntimeLayout<SceneKey>
-  readonly actionCatalog: SightyActionCatalog<SceneKey>
-  readonly conditionCatalog: SightyConditionCatalog<SceneKey>
+  readonly actions: SightyRuntimeOptions<SceneKey, SlotName>['scenario']['actions']
+  readonly guards: SightyRuntimeOptions<SceneKey, SlotName>['scenario']['guards']
   readonly initialContext: Readonly<Record<string, unknown>>
-  readonly showMode: SightyShowMode | undefined
   readonly preloadMode: RuntimePreloadMode
   readonly styles: readonly SightyRuntimeStyle[]
   readonly onTrace: SightyRuntimeOptions<SceneKey, SlotName>['onTrace']
-  readonly onPreloadWarning: SightyRuntimeOptions<SceneKey, SlotName>['onPreloadWarning']
   readonly owner: CodPlay
   readonly publicEventChannel: RuntimeEventChannel<SceneKey>
   /** Keeps one CodPlay occurrence per logical slot/scene pair. */
@@ -41,8 +37,8 @@ export type SightyRuntimeState<SceneKey extends string, SlotName extends string>
   readonly generationCounters: Map<string, number>
   readonly compiledBuilds: Map<SceneKey, CodPlayCompileSuccess>
   readonly sceneDocuments: Map<SceneKey, SceneDoc<string>>
+  readonly sceneStyleSheets: Map<SceneKey, string>
   readonly resourceUrlsByScene: Map<SceneKey, readonly string[]>
-  readonly deliveredData: Map<string, Readonly<Record<string, unknown>>>
   viewIndex: ViewIndex<SceneKey, SlotName>
   authoredSceneKeys: readonly SceneKey[]
   layoutEntry: IndexedEntry<SceneKey, SlotName> | undefined
@@ -68,22 +64,19 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
   options: SightyRuntimeOptions<SceneKey, SlotName>,
 ): SightyRuntimeState<SceneKey, SlotName> {
   const viewIndex = createViewIndex(options.scenario.getViewGraph())
-  const layoutEntry = viewIndex.entriesByScene.get(options.layout.sceneKey)?.[0]
+  const layoutEntry = getStartEntry(viewIndex, '')
   const publicEventChannel = createSightyPublicEventChannel<SceneKey>()
   return {
     scenario: options.scenario,
     mutableScenario: options.scenario as SightyMutableScenarioApi<SceneKey, SlotName>,
     root: options.root,
     instanceIds: options.instanceIds,
-    layout: options.layout,
-    actionCatalog: options.actionCatalog ?? {},
-    conditionCatalog: options.conditionCatalog ?? {},
+    actions: options.scenario.actions,
+    guards: options.scenario.guards,
     initialContext: { ...(options.context ?? {}) },
-    showMode: options.showMode,
     preloadMode: options.preloadMode ?? 'author',
     styles: options.styles ?? [],
     onTrace: options.onTrace,
-    onPreloadWarning: options.onPreloadWarning,
     owner: new CodPlay(options.codplay),
     publicEventChannel,
     instances: new Map(),
@@ -95,8 +88,8 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     generationCounters: new Map(),
     compiledBuilds: new Map(),
     sceneDocuments: new Map(),
+    sceneStyleSheets: new Map(),
     resourceUrlsByScene: new Map(),
-    deliveredData: new Map(),
     viewIndex,
     authoredSceneKeys: collectSceneKeys(viewIndex),
     layoutEntry,
@@ -113,4 +106,15 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     transitioning: false,
     destroyed: false,
   }
+}
+
+/** Returns the scene owned by the scenario's starting view. */
+export function getLayoutSceneKey<SceneKey extends string, SlotName extends string>(
+  state: SightyRuntimeState<SceneKey, SlotName>,
+): SceneKey {
+  const sceneKey = state.layoutEntry?.view.view.scene
+  if (sceneKey === undefined) {
+    throw new Error('La vue de départ du scénario doit désigner la scène qui porte ses slots.')
+  }
+  return sceneKey
 }

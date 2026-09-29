@@ -1,4 +1,4 @@
-import type { SightyActionCatalog, SightyActionContext } from '@codplay/sighty'
+import type { SightyActionContext, SightyActions } from '@codplay/sighty'
 import {
   DEMO4_LAYOUT_CAROUSEL_EVENTS,
   DEMO4_LAYOUT_ITEM_IDS,
@@ -38,8 +38,8 @@ async function projectTelcoEvent({ event, send }: SightyActionContext<SightyDemo
   )
 }
 
-/** Maps Demo 4 scenario references to actions sent through the Sighty gateway. */
-export const actionCatalog: SightyActionCatalog<SightyDemo4SceneKey> = {
+/** Defines the actions referenced by Demo 4 scenario views. */
+export const actions: SightyActions<SightyDemo4SceneKey> = {
   'demo4:enter-chapter': createLayoutCarouselAction('menu', 'chapter'),
   'demo4:return-menu': createLayoutCarouselAction('chapter', 'menu'),
   'demo4:project-telco-event': projectTelcoEvent,

@@ -16,7 +16,7 @@ export type RuntimeEntryBehavior = 'none' | 'show' | 'rewind'
 export type RuntimeTransitionOptions<SceneKey extends string, SlotName extends string> = Readonly<{
   entryBehavior: RuntimeEntryBehavior
   notify: boolean
-  deliverEnteredData: (
+  deliverEnteredEvents: (
     selections: readonly ActiveSelection<SceneKey, SlotName>[],
   ) => Promise<void>
   onPrepared?: () => void
@@ -65,7 +65,7 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
       if (options.entryBehavior === 'show') {
         await this.resetShowModeEntries(synchronization.entered, showModes, entryStates)
       }
-      await options.deliverEnteredData(synchronization.entered)
+      await options.deliverEnteredEvents(synchronization.entered)
       if (options.entryBehavior === 'show') {
         await this.applyShowModes(synchronization.entered, showModes, entryStates)
       } else if (options.entryBehavior === 'rewind') {
@@ -126,7 +126,6 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
         occurrenceKeyForSelection(selection),
         resolveShowMode(
           selection,
-          this.state.showMode,
           this.state.scenario.file.showMode,
         ),
       )

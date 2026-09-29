@@ -6,10 +6,12 @@ import type { CodPlayEventime, CodPlayFrameScheduler } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 import {
   Sighty,
+  type SightyCondition,
   type SightyConditionContext,
   type SightyFile,
   type SightyScenarioMutation,
   type SightyScenarioResources,
+  type SightyGuards,
   type SightyShowMode,
   type SightyViewList,
 } from '../src'
@@ -104,8 +106,12 @@ function createFeatureScene(
             move: '@root',
           },
           actions: sceneKey === 'open' ? {
-            'data:update': null,
             'feature:data-received': null,
+            'feature:entry:first': { content: 'Action du premier événement' },
+            'feature:entry:second': {
+              content: 'Action du second événement',
+              attr: { id: `feature-${sceneKey}-root`, 'data-entry-second': 'fallback' },
+            },
           } : {},
         }],
         listen,
@@ -225,7 +231,10 @@ function createRollbackFile(): SightyFile<RollbackSceneKey, RollbackSlotName> {
 function createFeatureFile(options: Readonly<{
   includeLazy?: boolean
   showMode?: SightyShowMode
+  parentShowMode?: SightyShowMode
   openShowMode?: SightyShowMode
+  openEntry?: CodPlayEventime | readonly CodPlayEventime[]
+  lockedGuard?: SightyCondition<FeatureSceneKey>
 }> = {}): SightyFile<FeatureSceneKey, FeatureSlotName> {
   const canEnterLocked = ({ context }: SightyConditionContext<FeatureSceneKey>): boolean => context.allowed === true
   const children: SightyViewList<FeatureSceneKey, FeatureSlotName> = [
@@ -241,17 +250,15 @@ function createFeatureFile(options: Readonly<{
     },
     {
       ...(options.openShowMode === undefined ? {} : { showMode: options.openShowMode }),
+      ...(options.openEntry === undefined ? {} : { entry: options.openEntry }),
       id: 'open',
-      data: {
-        content: { from: 'context.title', update: 'live' as const },
-        mode: { from: 'data.mode', update: 'entry' as const },
-      },
+      data: { mode: 'open' },
       actions: { 'feature:leave-open': { go: { path: 'layout-view/main/menu' } } },
       view: { scene: 'open' as const },
     },
     {
       id: 'locked',
-      accessBy: canEnterLocked,
+      accessBy: options.lockedGuard ?? canEnterLocked,
       onDenied: { path: 'layout-view/main/open' },
       view: { scene: 'locked' as const },
     },
@@ -284,11 +291,79 @@ function createFeatureFile(options: Readonly<{
     },
     views: [{
       id: 'layout-view',
+      ...(options.parentShowMode === undefined ? {} : { showMode: options.parentShowMode }),
       view: {
         scene: 'layout',
         slots: { main: children },
       },
     }],
+  }
+}
+
+/** Builds a two-level course graph with shared parent navigation and guards. */
+function createPointerFile(): SightyFile<FeatureSceneKey, FeatureSlotName> {
+  return {
+    format: 'sighty',
+    version: 2,
+    id: 'sighty-pointer-file',
+    resources: {
+      scenes: {
+        layout: scenePaths.layout,
+        menu: scenePaths.menu,
+        open: scenePaths.open,
+        locked: scenePaths.locked,
+        form: scenePaths.form,
+      },
+    },
+    views: {
+      start: 'layout-view',
+      views: {
+        'layout-view': {
+          view: {
+            scene: 'layout',
+            views: {
+              start: 'course-view',
+              views: {
+                'course-view': {
+                  actions: {
+                    'feature:pointer-next': { go: { direction: 'next' } },
+                    'feature:pointer-previous': { go: { direction: 'previous' } },
+                  },
+                  exitBy: 'feature:page-exit',
+                  view: {
+                    views: {
+                      start: 'chapter-1',
+                      views: {
+                        'chapter-1': {
+                          view: {
+                            slots: {
+                              main: [
+                                { id: 'page-a', view: { scene: 'menu' } },
+                                { id: 'page-b', view: { scene: 'open' } },
+                              ],
+                            },
+                          },
+                        },
+                        'chapter-2': {
+                          view: {
+                            slots: {
+                              main: [
+                                { id: 'page-c', view: { scene: 'locked' } },
+                                { id: 'page-d', view: { scene: 'form' } },
+                              ],
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   }
 }
 
@@ -326,16 +401,23 @@ function createProject(
   file: SightyFile<FeatureSceneKey, FeatureSlotName>,
   options: Readonly<{
     context?: Readonly<Record<string, unknown>>
-    lazySource?: () => SceneDoc<string>
+    openStyleSheet?: string
+    dynamicStyleSheet?: string
+    lazySource?: () => SceneDoc<string> | Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }>
+    guards?: SightyGuards<FeatureSceneKey>
   }> = {},
 ): Sighty<FeatureSceneKey, FeatureSlotName> {
   const availableScenes: NonNullable<SightyScenarioResources<FeatureSceneKey, FeatureSlotName>['scenes']> = {
     layout: createFeatureLayout(),
     menu: createFeatureScene('menu'),
-    open: createFeatureScene('open'),
+    open: options.openStyleSheet === undefined
+      ? createFeatureScene('open')
+      : { sceneDoc: createFeatureScene('open'), styleSheet: options.openStyleSheet },
     locked: createFeatureScene('locked'),
     form: createFeatureScene('form'),
-    dynamic: createFeatureScene('dynamic'),
+    dynamic: options.dynamicStyleSheet === undefined
+      ? createFeatureScene('dynamic')
+      : { sceneDoc: createFeatureScene('dynamic'), styleSheet: options.dynamicStyleSheet },
   }
   const sceneSources = options.lazySource === undefined ? undefined : { lazy: options.lazySource }
   const scenes = Object.fromEntries(
@@ -349,6 +431,7 @@ function createProject(
     scenario: {
       file,
       scenes,
+      guards: options.guards,
       ...(sceneSources === undefined ? {} : { sceneSources }),
     },
     runtime: {
@@ -362,7 +445,6 @@ function createProject(
         lazy: 'feature-lazy-1',
         dynamic: 'feature-dynamic-1',
       },
-      layout: { sceneKey: 'layout', storyId: 'main' },
       context: options.context,
     },
   })
@@ -404,20 +486,205 @@ describe('Sighty runtime feature reconstruction', () => {
     expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
   })
 
-  it('delivers entry and live data through the active scene event path', async () => {
-    project = createProject(createFeatureFile(), { context: { title: 'initial' } })
+  it('resolves a named guard from scenario.guards', async () => {
+    project = createProject(
+      createFeatureFile({ lockedGuard: 'feature:can-enter-locked' }),
+      {
+        context: { allowed: true },
+        guards: {
+          'feature:can-enter-locked': ({ context }) => context.allowed === true,
+        },
+      },
+    )
+
+    await project.runtime.initialize()
+    expect(await project.runtime.dispatch({ name: 'feature:open-locked', sourceSceneKey: 'menu' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('locked')
+  })
+
+  it('moves the internal pointer through child pages and adjacent parent views', async () => {
+    project = createProject(createPointerFile(), {
+      context: { mayLeave: true },
+      guards: {
+        'feature:page-exit': ({ context }) => context.mayLeave === true,
+      },
+    })
+
+    await project.runtime.initialize()
+    expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
+    expect(project.runtime.scenarioState.active).toMatchObject({
+      slotName: 'main',
+      view: { path: 'layout-view/course-view/chapter-1/main/page-a' },
+      sceneKey: 'menu',
+    })
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-previous' })).toBe(false)
+
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('open')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/course-view/chapter-1/main/page-b' } })
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('locked')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/course-view/chapter-2/main/page-c' } })
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-previous' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('open')
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-previous' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
+
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(true)
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(true)
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('form')
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(false)
+  })
+
+  it('applies an inherited exit guard before leaving a selected child view', async () => {
+    const exitGuard = vi.fn(({ context }: { context: Readonly<Record<string, unknown>> }) => context.mayLeave === true)
+    project = createProject(createPointerFile(), {
+      context: { mayLeave: false },
+      guards: {
+        'feature:page-exit': exitGuard,
+      },
+    })
+
+    await project.runtime.initialize()
+    const canLeavePage = await project.runtime.scenarioState.canExit(
+      { path: 'layout-view/course-view/chapter-1/main/page-a' },
+      { name: 'feature:pointer-next', sourceSceneKey: 'menu' },
+    )
+    expect(exitGuard).toHaveBeenCalledWith(expect.objectContaining({
+      context: expect.objectContaining({ mayLeave: false }),
+    }))
+    expect(canLeavePage).toBe(false)
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(false)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/course-view/chapter-1/main/page-a' } })
+
+    await project.runtime.updateContext({ mayLeave: true })
+    expect(await project.runtime.dispatch({ name: 'feature:pointer-next' })).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('open')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/course-view/chapter-1/main/page-b' } })
+  })
+
+  it('exposes the active scenario state and evaluates the same access and exit guards as navigation', async () => {
+    project = createProject(createFeatureFile(), {
+      context: { allowed: false, complete: false },
+    })
+
+    await project.runtime.initialize()
+    const activeSelection = project.runtime.scenarioState.current.find(
+      (selection) => selection.slotName === 'main',
+    )
+    expect(activeSelection).toMatchObject({
+      slotName: 'main',
+      view: { path: 'layout-view/main/menu' },
+      sceneKey: 'menu',
+    })
+    expect(project.runtime.scenarioState.active).toEqual(activeSelection)
+    expect(project.runtime.scenarioState.context.allowed).toBe(false)
+
+    const lockedReference = { path: 'layout-view/main/locked' }
+    const lockedEvent = { name: 'feature:open-locked', sourceSceneKey: 'menu' as const }
+    expect(await project.runtime.scenarioState.canAccess(lockedReference, lockedEvent)).toBe(false)
+    expect(await project.runtime.dispatch(lockedEvent)).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('open')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/open' } })
+
+    await project.runtime.reset()
+    await project.runtime.updateContext({ allowed: true })
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/menu' } })
+    expect(project.runtime.scenarioState.context.allowed).toBe(true)
+    expect(await project.runtime.scenarioState.canAccess(lockedReference, lockedEvent)).toBe(true)
+    expect(await project.runtime.dispatch(lockedEvent)).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('locked')
+
+    await project.runtime.reset()
+    await project.runtime.dispatch({ name: 'feature:open-form', sourceSceneKey: 'menu' })
+    const formReference = { path: 'layout-view/main/form' }
+    const leaveEvent = { name: 'feature:leave-form', sourceSceneKey: 'form' as const }
+    expect(await project.runtime.scenarioState.canExit(formReference, leaveEvent)).toBe(false)
+    expect(await project.runtime.dispatch(leaveEvent)).toBe(false)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('form')
+
+    await project.runtime.updateContext({ complete: true })
+    expect(project.runtime.scenarioState.context.complete).toBe(true)
+    expect(await project.runtime.scenarioState.canExit(formReference, leaveEvent)).toBe(true)
+    expect(await project.runtime.dispatch(leaveEvent)).toBe(true)
+    expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
+  })
+
+  it('delivers entry data once and keeps context changes out of the scene event path', async () => {
+    project = createProject(createFeatureFile({
+      openEntry: { name: 'feature:data-received', data: { content: 'initial' } },
+    }), { context: { title: 'initial' } })
 
     await project.runtime.initialize()
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
     expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
 
     await project.runtime.updateContext({ title: 'updated' })
-    expect(document.querySelector('#feature-open-root')?.textContent).toBe('updated')
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
   })
 
-  it('resets a readmitted scene on its retained CodPlay instance', async () => {
+  it('sends one or more declared entry eventimes to the admitted scene', async () => {
+    project = createProject(createFeatureFile({
+      openEntry: [
+        {
+          name: 'feature:entry:first',
+          data: { attr: { id: 'feature-open-root', 'data-entry-first': 'received' } },
+        },
+        {
+          name: 'feature:entry:second',
+          data: { attr: { id: 'feature-open-root', 'data-entry-second': 'received' } },
+        },
+      ],
+    }))
+
+    await project.runtime.initialize()
+    await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
+
+    const openRoot = document.querySelector('#feature-open-root')
+    expect(openRoot?.textContent).toBe('Action du second événement')
+    expect(openRoot?.getAttribute('data-entry-second')).toBe('received')
+  })
+
+  it('accepts one declared entry eventime', async () => {
+    project = createProject(createFeatureFile({
+      openEntry: { name: 'feature:entry:first' },
+    }))
+
+    await project.runtime.initialize()
+    await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
+
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('Action du premier événement')
+  })
+
+  it('copies entry event data supplied by a scenario mutation', async () => {
+    project = createProject(createFeatureFile())
+    await project.runtime.initialize()
+
+    const entry = {
+      name: 'feature:entry:first',
+      data: { content: 'Payload copié par la mutation' },
+    }
+    await project.runtime.mutate({
+      kind: 'update-view',
+      target: { path: 'layout-view/main/open' },
+      patch: { entry },
+    })
+    entry.data.content = 'Payload muté après la mutation'
+
+    await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
+
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('Payload copié par la mutation')
+  })
+
+  it('resets a readmitted scene through its inherited showMode on the retained CodPlay instance', async () => {
     project = createProject(
-      createFeatureFile({ showMode: 'maintain', openShowMode: 'reset' }),
+      createFeatureFile({
+        showMode: 'maintain',
+        parentShowMode: 'reset',
+        openEntry: { name: 'feature:data-received', data: { content: 'initial' } },
+      }),
       { context: { title: 'initial' } },
     )
 
@@ -427,7 +694,7 @@ describe('Sighty runtime feature reconstruction', () => {
     if (open === undefined) throw new Error('La scène open de test est absente.')
     expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
     await project.runtime.updateContext({ title: 'changed' })
-    expect(document.querySelector('#feature-open-root')?.textContent).toBe('changed')
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
     await open.telco.pause()
     await open.telco.seek(1_500)
 
@@ -435,7 +702,7 @@ describe('Sighty runtime feature reconstruction', () => {
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
 
     expect(project.runtime.getInstance('open')).toBe(open)
-    expect(document.querySelector('#feature-open-root')?.textContent).toBe('changed')
+    expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
     expect(open.telco.getProgress().timelineMs).toBeLessThan(1_000)
     expect(open.telco.getState().status).toBe('playing')
   })
@@ -513,10 +780,51 @@ describe('Sighty runtime feature reconstruction', () => {
     expect(project.runtime.getInstance('lazy')).toBeDefined()
   })
 
-  it('applies a validated view mutation and removes a hidden active view', async () => {
-    project = createProject(createMutationFile())
+  it('installs a direct scene stylesheet through the scoped CodPlay preload channel', async () => {
+    project = createProject(createFeatureFile(), {
+      openStyleSheet: '.feature-open-root { color: red; }',
+    })
+    const root = document.body.lastElementChild as HTMLElement
 
     await project.runtime.initialize()
+
+    const style = document.head.querySelector<HTMLStyleElement>(
+      'style[data-codplay-preload-css-slot="sighty-scene:open"]',
+    )
+    const scope = root.getAttribute('data-codplay-scope')
+    expect(style?.textContent).toContain('@scope ([data-codplay-scope=')
+    expect(style?.textContent).toContain(`data-codplay-scope="${scope}"`)
+    expect(style?.textContent).toContain('.feature-open-root { color: red; }')
+
+    project.runtime.destroy()
+    expect(document.head.querySelector('style[data-codplay-preload-css-slot="sighty-scene:open"]')).toBeNull()
+  })
+
+  it('installs a deferred scene stylesheet before mounting its selected scene', async () => {
+    project = createProject(createFeatureFile({ includeLazy: true }), {
+      lazySource: () => ({
+        sceneDoc: createFeatureScene('lazy'),
+        styleSheet: '.feature-lazy-root { color: blue; }',
+      }),
+    })
+
+    await project.runtime.initialize()
+    await project.runtime.dispatch({ name: 'feature:open-lazy', sourceSceneKey: 'menu' })
+
+    const style = document.head.querySelector<HTMLStyleElement>(
+      'style[data-codplay-preload-css-slot="sighty-scene:lazy"]',
+    )
+    expect(style?.textContent).toContain('.feature-lazy-root { color: blue; }')
+    expect(document.querySelector('#feature-lazy-root')).not.toBeNull()
+  })
+
+  it('applies a validated view mutation and removes a hidden active view', async () => {
+    project = createProject(createMutationFile(), {
+      dynamicStyleSheet: '.feature-dynamic-root { color: green; }',
+    })
+
+    await project.runtime.initialize()
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/menu' } })
     expect(await project.runtime.mutate({
       kind: 'add-view',
       parent: { path: 'layout-view' },
@@ -525,15 +833,20 @@ describe('Sighty runtime feature reconstruction', () => {
       view: { view: { scene: 'dynamic' } },
     })).toBe(true)
     expect(project.scenario.file.version).toBe(3)
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/menu' } })
     expect(await project.runtime.dispatch({ name: 'feature:next', sourceSceneKey: 'menu' })).toBe(true)
     expect(project.runtime.getMountedSceneKey('main')).toBe('dynamic')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/dynamic' } })
+    expect(document.head.querySelector('style[data-codplay-preload-css-slot="sighty-scene:dynamic"]')).not.toBeNull()
 
     expect(await project.runtime.mutate({
       kind: 'hide-view',
       target: { path: 'layout-view/main/dynamic' },
     })).toBe(true)
     expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
+    expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/menu' } })
     expect(project.runtime.getInstance('dynamic')).toBeUndefined()
+    expect(document.head.querySelector('style[data-codplay-preload-css-slot="sighty-scene:dynamic"]')).toBeNull()
   })
 
   it('keeps same-scene occurrences independent and restores them after a later mount failure', async () => {
@@ -557,7 +870,6 @@ describe('Sighty runtime feature reconstruction', () => {
           second: 'rollback-second-1',
           dynamic: 'rollback-dynamic-1',
         },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
     await rollbackProject.runtime.initialize()
@@ -630,7 +942,6 @@ describe('Sighty runtime feature reconstruction', () => {
           second: 'independent-second-1',
           dynamic: 'independent-dynamic-1',
         },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -692,7 +1003,6 @@ describe('Sighty runtime feature reconstruction', () => {
           second: 'end-second-1',
           dynamic: 'end-dynamic-1',
         },
-        layout: { sceneKey: 'layout', storyId: 'main' },
         codplay: { frameScheduler: scheduler, pauseOnDocumentHidden: false },
       },
     })
@@ -752,7 +1062,6 @@ describe('Sighty runtime feature reconstruction', () => {
           second: 'coupling-second-1',
           dynamic: 'coupling-dynamic-1',
         },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 

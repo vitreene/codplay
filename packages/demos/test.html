@@ -1,0 +1,51 @@
+<style>
+  :root {
+    /* Écrivez ici la hauteur estimée ou exacte de votre image */
+    --hauteur-image: 350px;
+  }
+
+  /* Le paragraphe parent sert de repère de positionnement */
+  .paragraphe-continu {
+    position: relative;
+    line-height: 1.6;
+    font-size: 16px;
+  }
+
+  /* L'ancre s'insère de manière invisible pour ne pas couper le mot ou la ligne */
+  .ancre-image {
+    display: inline-block;
+    width: 0;
+    height: 0;
+  }
+
+  /* L'image est extraite de la ligne et forcée sur toute la largeur du paragraphe */
+  .ancre-image img {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: var(--hauteur-image);
+    object-fit: cover; /* Assure un bon rendu si les proportions varient */
+
+    /* Se place précisément sous la ligne de texte physique en cours */
+    top: 1.6em;
+  }
+
+  /* On utilise le pseudo-élément pour pousser la suite du texte SOUS l'image */
+  .ancre-image::after {
+    content: "";
+    display: inline-block;
+    width: 0;
+
+    /* L'espace vertical créé correspond à la hauteur de l'image + les marges */
+    padding-top: calc(var(--hauteur-image) + 1.5em);
+  }
+</style>
+<p class="paragraphe-continu">
+  Ceci est le début de mon texte. Le navigateur va afficher ce texte normalement et la ligne actuelle va aller
+  jusqu'au bout de l'écran sans s'arrêter ici.
+  <span class="ancre-image">
+    <img src="votre-image.jpg" alt="Illustration" />
+  </span>
+  Ce texte fait toujours partie du même paragraphe. Il continue de s'afficher de façon fluide, juste après le
+  bloc image, mais visuellement il ne reprend que sous l'image sur toute la largeur de sa propre ligne.
+</p>

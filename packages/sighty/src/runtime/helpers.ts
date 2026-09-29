@@ -1,27 +1,18 @@
 import type { CodPlayInstanceHostTarget } from 'codplay'
 import type {
-  ActiveComposition,
   ActiveSelection,
   IndexedSlot,
   ViewIndex,
 } from '../navigation/types'
 import type { SightyCondition, SightyViewAction } from '../types'
-import type { SightyRuntimeWarning } from './types'
 
-type RuntimeWarningSink = Readonly<{
-  onPreloadWarning?: (warning: SightyRuntimeWarning) => void
-}>
-
-/** Reports one non-fatal runtime problem through the configured warning channel. */
+/** Reports one non-fatal runtime problem without routing it through preload. */
 export function reportWarning(
-  state: RuntimeWarningSink,
   code: string,
   error: unknown,
 ): void {
-  state.onPreloadWarning?.({
-    code,
-    message: error instanceof Error ? error.message : String(error),
-  })
+  const message = error instanceof Error ? error.message : String(error)
+  console.warn(`${code}: ${message}`)
 }
 
 /** Joins diagnostic messages into one readable error detail. */
@@ -30,39 +21,21 @@ export function diagnosticDetails(diagnostics: readonly { message: string }[]): 
 }
 
 /** Adds all action references from one optional scope to a set. */
-export function addActionReferences(
-  actions: Readonly<Record<string, SightyViewAction>> | undefined,
+export function addActionReferences<SceneKey extends string, SlotName extends string>(
+  actions: Readonly<Record<string, SightyViewAction<SceneKey, SlotName>>> | undefined,
   references: Set<string>,
 ): void {
   for (const action of Object.values(actions ?? {})) {
-    if (action.action !== undefined) references.add(action.action)
+    if (typeof action.action === 'string') references.add(action.action)
   }
 }
 
-/** Adds one catalogued condition reference when a declaration uses a string. */
+/** Adds one named guard reference when a declaration uses a string. */
 export function addConditionReference<SceneKey extends string>(
   condition: SightyCondition<SceneKey> | undefined,
   references: Set<string>,
 ): void {
   if (typeof condition === 'string') references.add(condition)
-}
-
-/** Returns all view and graph scope paths active in one logical composition. */
-export function activeScopePaths<SceneKey extends string, SlotName extends string>(
-  composition: ActiveComposition<SceneKey, SlotName> | ReadonlyMap<string, ActiveSelection<SceneKey, SlotName>>,
-  layoutPath?: string,
-): ReadonlySet<string> {
-  const selections = 'selections' in composition
-    ? composition.selections.values()
-    : composition.values()
-  const paths = new Set<string>()
-  if (layoutPath !== undefined) paths.add(layoutPath)
-  for (const selection of selections) {
-    paths.add(selection.entry.path)
-    for (const parent of selection.entry.parentViews) paths.add(parent.path)
-    for (const graph of selection.entry.graphScopes) paths.add(graph.path)
-  }
-  return paths
 }
 
 /** Collects scene keys in the first-seen order of the immutable index. */

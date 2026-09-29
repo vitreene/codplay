@@ -1,6 +1,6 @@
 import type {
   SightyGraphView,
-  SightyRouteTarget,
+  SightyViewAction,
   SightyViewGraph,
   SightyViewScope,
 } from '../types'
@@ -10,7 +10,7 @@ export type IndexedGraph<SceneKey extends string = string, SlotName extends stri
   path: string
   graph: SightyViewGraph<SceneKey, SlotName>
   entries: readonly IndexedEntry<SceneKey, SlotName>[]
-  scope: SightyViewScope<SceneKey>
+  scope: SightyViewScope<SceneKey, SlotName>
 }>
 
 /** Describes one authored view with its stable internal address. */
@@ -67,10 +67,7 @@ export type ActiveComposition<SceneKey extends string = string, SlotName extends
 
 /** One candidate action selected by the pure navigation resolver. */
 export type ResolvedAction<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
-  action: Readonly<{
-    action?: string
-    go?: SightyRouteTarget
-  }>
+  action: SightyViewAction<SceneKey, SlotName>
   selection: ActiveSelection<SceneKey, SlotName>
   order: number
   depth: number

@@ -14,6 +14,10 @@ type NavigationSceneKey = 'scene-layout' | 'scene-menu' | 'scene-a' | 'scene-b' 
 
 type NavigationSlotName = 'slot-scene' | 'slot-telco'
 
+type PlaybackSceneKey = 'layout' | 'parent' | 'child' | 'leaf' | 'inactive'
+
+type PlaybackSlotName = 'main' | 'nested' | 'inner'
+
 /** Creates a deterministic CodPlay frame scheduler for public-event tests. */
 function createManualFrameScheduler(): CodPlayFrameScheduler & { flush: () => void } {
   let nextRequestId = 1
@@ -163,6 +167,83 @@ function createNavigationLayoutScene(): SceneDoc<string> {
   }
 }
 
+/** Creates a layout scene that owns the declared child slots. */
+function createPlaybackScene(sceneKey: PlaybackSceneKey, slotNames: readonly string[]): SceneDoc<string> {
+  const slotMarkup = slotNames.map((slotName) => `
+    <section id="${sceneKey}-${slotName}-host" data-part="${sceneKey}:${slotName}"></section>`).join('')
+  return {
+    id: `playback-${sceneKey}-scene`,
+    stories: {
+      main: {
+        id: 'main',
+        persos: [
+          {
+            id: `playback-${sceneKey}-layout`,
+            type: 'layout',
+            initial: {
+              move: '@root',
+              markup: `<main id="${sceneKey}-root">${slotMarkup}</main>`,
+            },
+          },
+          ...slotNames.map((slotName) => ({
+            id: `playback-${sceneKey}-${slotName}-slot`,
+            name: slotName,
+            type: 'slot' as const,
+            initial: { move: { target: `${sceneKey}:${slotName}` } },
+          })),
+        ],
+      },
+    },
+    listen: [],
+    eventimes: [],
+    tracks: {},
+  }
+}
+
+/** Creates a three-level selected scene tree plus an inactive authored sibling. */
+function createPlaybackFile(): SightyFile<PlaybackSceneKey, PlaybackSlotName> {
+  return {
+    format: 'sighty',
+    version: 1,
+    id: 'sighty-playback-file',
+    views: {
+      start: 'layout-view',
+      views: {
+        'layout-view': {
+          view: {
+            scene: 'layout',
+            slots: {
+              main: [
+                {
+                  id: 'parent',
+                  actions: {
+                    'playback:open-leaf': {
+                      go: { path: 'layout-view/main/parent/nested/child/inner/leaf' },
+                    },
+                  },
+                  view: {
+                    scene: 'parent',
+                    slots: {
+                      nested: [{
+                        id: 'child',
+                        view: {
+                          scene: 'child',
+                          slots: { inner: [{ id: 'leaf', view: { scene: 'leaf' } }] },
+                        },
+                      }],
+                    },
+                  },
+                },
+                { id: 'inactive', view: { scene: 'inactive' } },
+              ],
+            },
+          },
+        },
+      },
+    },
+  }
+}
+
 /** Builds one recursive view graph with inherited direction and direct routes. */
 function createGraphFile(): SightyFile<SceneKey, SlotName> {
   return {
@@ -197,7 +278,9 @@ function createGraphFile(): SightyFile<SceneKey, SlotName> {
                         go: { path: 'main/main/sceneB' },
                       },
                       'runtime:send-inactive': {
-                        action: 'runtime:send-inactive',
+                        action: async ({ send }) => {
+                          await send('menu', { name: 'runtime:should-not-be-sent' }, { scope: 'story', storyId: 'main' })
+                        },
                         go: { path: 'main/main/sceneA' },
                       },
                     },
@@ -311,12 +394,15 @@ function createNavigationFile(): SightyFile<NavigationSceneKey, NavigationSlotNa
 describe('Sighty runtime slot selection', () => {
   let project: Sighty<SceneKey, SlotName> | undefined
   let navigationProject: Sighty<NavigationSceneKey, NavigationSlotName> | undefined
+  let playbackProject: Sighty<PlaybackSceneKey, PlaybackSlotName> | undefined
 
   afterEach(() => {
     project?.runtime.destroy()
     navigationProject?.runtime.destroy()
+    playbackProject?.runtime.destroy()
     project = undefined
     navigationProject = undefined
+    playbackProject = undefined
     document.body.replaceChildren()
     vi.restoreAllMocks()
   })
@@ -335,6 +421,12 @@ describe('Sighty runtime slot selection', () => {
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
+        actions: {
+          'runtime:macro-open-b': async ({ send }) => {
+            macroExecuted = true
+            await send('layout', { name: 'runtime:macro-open-b' }, { scope: 'story', storyId: 'main' })
+          },
+        },
       },
       runtime: {
         root: stage,
@@ -343,16 +435,6 @@ describe('Sighty runtime slot selection', () => {
           menu: 'graph-menu-1',
           sceneA: 'graph-scene-a-1',
           sceneB: 'graph-scene-b-1',
-        },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: {
-          'runtime:macro-open-b': async ({ send }) => {
-            macroExecuted = true
-            await send('layout', { name: 'runtime:macro-open-b' }, { scope: 'story', storyId: 'main' })
-          },
-          'runtime:send-inactive': async ({ send }) => {
-            await send('menu', { name: 'runtime:should-not-be-sent' }, { scope: 'story', storyId: 'main' })
-          },
         },
       },
     })
@@ -364,6 +446,40 @@ describe('Sighty runtime slot selection', () => {
     expect(project.runtime.getMountedSceneKey('main')).toBe('sceneB')
     expect(macroExecuted).toBe(true)
     unsubscribe()
+  })
+
+  it('sends host styles through CodPlay preload and releases them on destroy', async () => {
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    project = new Sighty({
+      scenario: {
+        file: createGraphFile(),
+        scenes: {
+          layout: createLayoutScene(),
+          menu: createChildScene('menu'),
+          sceneA: createChildScene('sceneA'),
+          sceneB: createChildScene('sceneB'),
+        },
+        actions: { 'runtime:macro-open-b': async () => undefined },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: {
+          layout: 'host-style-layout-1',
+          menu: 'host-style-menu-1',
+          sceneA: 'host-style-scene-a-1',
+          sceneB: 'host-style-scene-b-1',
+        },
+        styles: [{ slot: 'sighty-host-style-test', cssText: '.host-style-test { color: red; }' }],
+      },
+    })
+
+    await project.runtime.initialize()
+    const style = document.head.querySelector('style[data-codplay-preload-css-slot="sighty-host-style-test"]')
+    expect(style?.textContent).toContain('.host-style-test { color: red; }')
+
+    project.runtime.destroy()
+    expect(document.head.querySelector('style[data-codplay-preload-css-slot="sighty-host-style-test"]')).toBeNull()
   })
 
   it('rejects an action send addressed to a scene that just left the composition', async () => {
@@ -378,6 +494,9 @@ describe('Sighty runtime slot selection', () => {
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
+        actions: {
+          'runtime:macro-open-b': async () => undefined,
+        },
       },
       runtime: {
         root: stage,
@@ -386,13 +505,6 @@ describe('Sighty runtime slot selection', () => {
           menu: 'send-inactive-menu-1',
           sceneA: 'send-inactive-scene-a-1',
           sceneB: 'send-inactive-scene-b-1',
-        },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: {
-          'runtime:macro-open-b': async () => undefined,
-          'runtime:send-inactive': async ({ send }) => {
-            await send('menu', { name: 'runtime:should-not-be-sent' }, { scope: 'story', storyId: 'main' })
-          },
         },
       },
     })
@@ -417,6 +529,9 @@ describe('Sighty runtime slot selection', () => {
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
+        actions: {
+          'runtime:macro-open-b': async () => undefined,
+        },
       },
       runtime: {
         root: stage,
@@ -425,11 +540,6 @@ describe('Sighty runtime slot selection', () => {
           menu: 'inactive-source-menu-1',
           sceneA: 'inactive-source-scene-a-1',
           sceneB: 'inactive-source-scene-b-1',
-        },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: {
-          'runtime:macro-open-b': async () => undefined,
-          'runtime:send-inactive': async () => undefined,
         },
       },
     })
@@ -440,7 +550,7 @@ describe('Sighty runtime slot selection', () => {
     expect(stage.querySelector('#runtime-menu-root')).not.toBeNull()
   })
 
-  it('rejects a referenced action that is absent from the supplied catalog', async () => {
+  it('rejects a referenced action that is absent from scenario.actions', async () => {
     const stage = document.createElement('div')
     document.body.append(stage)
     project = new Sighty({
@@ -461,12 +571,11 @@ describe('Sighty runtime slot selection', () => {
           sceneA: 'missing-action-scene-a-1',
           sceneB: 'missing-action-scene-b-1',
         },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
     await expect(project.runtime.initialize()).rejects.toThrow(
-      "L'action Sighty « runtime:macro-open-b » n'est pas enregistrée dans le catalogue.",
+      "L'action Sighty « runtime:macro-open-b » n'est pas définie dans scenario.actions.",
     )
   })
 
@@ -482,6 +591,9 @@ describe('Sighty runtime slot selection', () => {
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
+        actions: {
+          'runtime:macro-open-b': async () => undefined,
+        },
       },
       runtime: {
         root: stage,
@@ -490,11 +602,6 @@ describe('Sighty runtime slot selection', () => {
           menu: 'failed-init-menu-1',
           sceneA: 'failed-init-scene-a-1',
           sceneB: 'failed-init-scene-b-1',
-        },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: {
-          'runtime:macro-open-b': async () => undefined,
-          'runtime:send-inactive': async () => undefined,
         },
       },
     })
@@ -530,7 +637,6 @@ describe('Sighty runtime slot selection', () => {
           'scene-c': 'navigation-c-1',
           'scene-telco': 'navigation-telco-1',
         },
-        layout: { sceneKey: 'scene-layout', storyId: 'main' },
       },
     })
 
@@ -569,6 +675,69 @@ describe('Sighty runtime slot selection', () => {
     expect(stage.querySelector('#scene-telco-root')).not.toBeNull()
   })
 
+  it('plays the active scene tree nested under the requested scene', async () => {
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    playbackProject = new Sighty({
+      scenario: {
+        file: createPlaybackFile(),
+        scenes: {
+          layout: createPlaybackScene('layout', ['main', 'nested', 'inner']),
+          parent: createPlaybackScene('parent', []),
+          child: createPlaybackScene('child', []),
+          leaf: createPlaybackScene('leaf', []),
+          inactive: createPlaybackScene('inactive', []),
+        },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: {
+          layout: 'playback-layout-1',
+          parent: 'playback-parent-1',
+          child: 'playback-child-1',
+          leaf: 'playback-leaf-1',
+          inactive: 'playback-inactive-1',
+        },
+      },
+    })
+
+    await playbackProject.runtime.initialize()
+    const layout = playbackProject.runtime.getInstance('layout')
+    const parent = playbackProject.runtime.getInstance('parent')
+    if (layout === undefined || parent === undefined) throw new Error('La composition initiale de lecture est incomplète.')
+
+    expect(playbackProject.runtime.getInstance('child')).toBeUndefined()
+    expect(playbackProject.runtime.getInstance('leaf')).toBeUndefined()
+    expect(await playbackProject.runtime.dispatch({
+      name: 'playback:open-leaf',
+      sourceSceneKey: 'parent',
+    })).toBe(true)
+
+    const child = playbackProject.runtime.getInstance('child')
+    const leaf = playbackProject.runtime.getInstance('leaf')
+    if (child === undefined || leaf === undefined) throw new Error('La composition imbriquée n’a pas été sélectionnée.')
+    const layoutPlay = vi.spyOn(layout.telco, 'play')
+    const parentPlay = vi.spyOn(parent.telco, 'play')
+    const childPlay = vi.spyOn(child.telco, 'play')
+    const leafPlay = vi.spyOn(leaf.telco, 'play')
+    parentPlay.mockClear()
+    childPlay.mockClear()
+    leafPlay.mockClear()
+
+    await playbackProject.runtime.play('parent')
+    expect(parentPlay).toHaveBeenCalledOnce()
+    expect(childPlay).toHaveBeenCalledOnce()
+    expect(leafPlay).toHaveBeenCalledOnce()
+    expect(layoutPlay).not.toHaveBeenCalled()
+    expect(playbackProject.runtime.getInstance('inactive')).toBeUndefined()
+
+    await playbackProject.runtime.play('layout')
+    expect(layoutPlay).toHaveBeenCalledOnce()
+    expect(parentPlay).toHaveBeenCalledTimes(2)
+    expect(childPlay).toHaveBeenCalledTimes(2)
+    expect(leafPlay).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects a second composition-changing intent during the changing phase', async () => {
     const stage = document.createElement('div')
     document.body.append(stage)
@@ -594,7 +763,6 @@ describe('Sighty runtime slot selection', () => {
           'scene-c': 'concurrent-c-1',
           'scene-telco': 'concurrent-telco-1',
         },
-        layout: { sceneKey: 'scene-layout', storyId: 'main' },
       },
     })
 
@@ -641,7 +809,6 @@ describe('Sighty runtime slot selection', () => {
           'scene-c': 'events-c-1',
           'scene-telco': 'events-telco-1',
         },
-        layout: { sceneKey: 'scene-layout', storyId: 'main' },
         codplay: { frameScheduler: scheduler, pauseOnDocumentHidden: false },
       },
     })
@@ -713,7 +880,6 @@ describe('Sighty runtime slot selection', () => {
           'scene-c': 'idle-c-1',
           'scene-telco': 'idle-telco-1',
         },
-        layout: { sceneKey: 'scene-layout', storyId: 'main' },
         codplay: {
           frameScheduler: scheduler,
           pauseOnDocumentHidden: false,
@@ -766,7 +932,6 @@ describe('Sighty runtime slot selection', () => {
           'scene-c': 'stale-c-1',
           'scene-telco': 'stale-telco-1',
         },
-        layout: { sceneKey: 'scene-layout', storyId: 'main' },
       },
     })
     navigationProject.runtime.events.onEvent((event) => events.push(event.name))
@@ -799,6 +964,9 @@ describe('Sighty runtime slot selection', () => {
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
+        actions: {
+          'runtime:macro-open-b': async () => undefined,
+        },
       },
       runtime: {
         root: stage,
@@ -807,11 +975,6 @@ describe('Sighty runtime slot selection', () => {
           menu: 'detach-binding-menu-1',
           sceneA: 'detach-binding-scene-a-1',
           sceneB: 'detach-binding-scene-b-1',
-        },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: {
-          'runtime:macro-open-b': async () => undefined,
-          'runtime:send-inactive': async () => undefined,
         },
       },
     })
@@ -832,7 +995,7 @@ describe('Sighty runtime slot selection', () => {
 
   it('does not roll back a composition when a slot observer fails', async () => {
     const stage = document.createElement('div')
-    const warnings: string[] = []
+    const warning = vi.spyOn(console, 'warn')
     document.body.append(stage)
     project = new Sighty({
       scenario: {
@@ -843,6 +1006,9 @@ describe('Sighty runtime slot selection', () => {
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
+        actions: {
+          'runtime:macro-open-b': async () => undefined,
+        },
       },
       runtime: {
         root: stage,
@@ -852,12 +1018,6 @@ describe('Sighty runtime slot selection', () => {
           sceneA: 'observer-scene-a-1',
           sceneB: 'observer-scene-b-1',
         },
-        layout: { sceneKey: 'layout', storyId: 'main' },
-        actionCatalog: {
-          'runtime:macro-open-b': async () => undefined,
-          'runtime:send-inactive': async () => undefined,
-        },
-        onPreloadWarning: (warning) => warnings.push(warning.code),
       },
     })
     project.runtime.onSlotChange('main', () => {
@@ -867,6 +1027,6 @@ describe('Sighty runtime slot selection', () => {
     await project.runtime.initialize()
     expect(await project.runtime.dispatch({ name: 'runtime:next', sourceSceneKey: 'menu' })).toBe(true)
     expect(project.runtime.getMountedSceneKey('main')).toBe('sceneA')
-    expect(warnings).toContain('SIGHTY_SLOT_LISTENER_FAILED')
+    expect(warning).toHaveBeenCalledWith('SIGHTY_SLOT_LISTENER_FAILED: observer failure')
   })
 })

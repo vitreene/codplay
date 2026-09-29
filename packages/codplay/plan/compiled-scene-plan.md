@@ -23,7 +23,25 @@ séparation des frontières est conservé dans la
 [note de cohérence](./notes/2026-07-31-scene-coherence-boundaries.md). Cette
 note n'est pas normative ; les spécifications et les gates ci-dessous font foi.
 
-## Décisions et preuves restantes
+## Décisions et preuves
+
+### CSS inclus dans une scène de diffusion
+
+Décision appliquée dans Sighty : une ressource de scène peut porter
+`{ sceneDoc, styleSheet }`, comme le résultat du builder de l’éditeur.
+`styleSheet` est du texte CSS associé à la scène, pas un champ de `SceneDoc`.
+Sighty le transmet à `preload.css.set()` sur son conteneur ; le service existant
+applique `@scope` et retire les feuilles à la destruction de CodPlay. Aucun
+résolveur ni champ `SceneDoc` parallèle n’est ajouté. Le chargement CSS par URL
+reste au [plan preload](./media-preload-plan.md).
+
+Preuve de référence : [`build-scene.ts`](../../editor/src/builder-v2/build-scene.ts)
+produit les deux valeurs côte à côte et
+[`scene-player-bridge.ts`](../../editor/src/app/bridges/scene-player-bridge.ts)
+transmet le texte par le canal CSS existant. Les sources directes et différées,
+le scope et le nettoyage du raccord Sighty sont couverts dans
+[`runtime-features.spec.ts`](../../sighty/tests/runtime-features.spec.ts) et
+suivis au [plan Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
 
 ### Découverte du manifeste de ressources
 

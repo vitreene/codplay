@@ -14,7 +14,7 @@ Sighty doit décrire et conduire un parcours composé de scènes. Il doit pouvoi
 - faire évoluer cette vue à la suite d'un événement ;
 - choisir une variante selon des données et des conditions ;
 - conserver un état de parcours ;
-- injecter des données dans les scènes présentes ;
+- transmettre aux scènes présentes des événements avec leur payload ;
 - recevoir des événements provenant des scènes, de l'utilisateur ou d'une
   application extérieure ;
 - rester à l'écoute sans nécessairement faire avancer automatiquement un
@@ -211,8 +211,8 @@ type ViewMap = ViewScope & {
 }
 
 type ViewDefinition = ViewScope & {
-  data?: Record<string, DataBinding>
-  meta?: Record<string, DataValue | DataBinding>
+  data?: Record<string, unknown>
+  entry?: CodPlayEventime | readonly CodPlayEventime[]
   access?: ViewAccess
   view: ViewContent
 }
@@ -397,100 +397,20 @@ menu. La syntaxe exacte de la position reste à décider ; elle devra pouvoir
 être remplacée par un label lorsque les identifiants de position ne suffisent
 pas.
 
-## 5. Vues statiques et vues vivantes
+## 5. Données et événements vers les scènes
 
-Une vue statique reçoit ses données lorsqu'elle est montée. Une vue vivante
-reçoit aussi des mises à jour pendant qu'elle est active.
+Les données déclarées par le scénario servent aux guards et aux actions
+Sighty. La vue peut également déclarer `entry`, une liste ordonnée
+d'événements CodPlay à transmettre à la scène lorsqu'elle est admise. Chaque
+événement garde son payload dans `event.data`. Pour actualiser une scène déjà
+active, une action Sighty envoie un événement explicite par la passerelle
+CodPlay. La spécification auteur décrit le contrat exécuté et ses limites :
+[événements `entry` et données](../specs/authoring-library-spec.md#71-événements-dentrée).
 
-Il est préférable de qualifier chaque donnée plutôt que toute la vue :
+Sighty ne modifie pas directement l'état interne d'une scène. La scène décide
+comment traiter les événements qu'elle déclare accepter.
 
-```ts
-type DataBinding = {
-  from: string
-  update: "entry" | "live"
-  event?: EventName
-}
-```
-
-Dans cet exemple :
-
-```json
-{
-  "data": {
-    "question": {
-      "from": "context.questionCourante",
-      "update": "entry"
-    },
-    "title": {
-      "from": "meta.title",
-      "update": "live",
-      "event": "title:update"
-    }
-  }
-}
-```
-
-`entry` signifie que la valeur est résolue lorsque la vue est montée. Il n'y a
-alors aucun lien permanent entre la scène et le contexte Sighty.
-
-`live` signifie que Sighty réévalue la valeur lorsque sa source change et envoie
-la nouvelle valeur à la scène au moyen de l'événement indiqué. La scène doit
-connaître cet événement et décider comment l'interpréter.
-
-Cette forme de binding est conservée pour le moment.
-
-## 6. Injection dans une scène
-
-L'injection d'une donnée suit ce cycle :
-
-1. Le scénario choisit une vue ou reçoit une demande de mise à jour.
-2. Sighty résout les bindings de la vue à partir du contexte, de la meta
-   effective et, si nécessaire, des données de l'événement reçu.
-3. Sighty construit les données destinées à chaque scène.
-4. À la création, la scène reçoit ses données initiales dans son interface
-   d'entrée.
-5. Pour une donnée `live`, Sighty envoie ensuite un événement de mise à jour à
-   la scène concernée lorsque la valeur change.
-
-Exemple de montage initial :
-
-```text
-context.questionCourante
-        ↓ résolution du binding
-question.data = { question: ... }
-        ↓ entrée de la vue
-scene quiz reçoit ses données initiales
-```
-
-Exemple de mise à jour :
-
-```text
-une vue enfant entre dans le graphe course
-        ↓
-les meta actives sont fusionnées
-        ↓
-la meta.title effective change
-        ↓ mise à jour de la scène déjà montée
-Sighty envoie title:update à la scène titre
-        ↓
-la scène titre choisit son affichage ou son animation
-```
-
-Sighty ne modifie pas directement l'état interne de la scène. Il fournit une
-donnée initiale ou envoie un événement que la scène a déclaré accepter.
-
-Le même mécanisme permet de traiter une donnée provenant de l'extérieur :
-
-```text
-application -> événement reçu par le scénario
-           -> action et guard éventuels
-           -> transition de vue
-           -> mise à jour du contexte
-           -> bindings live concernés
-           -> événements de mise à jour aux scènes actives
-```
-
-## 7. State et context
+## 6. State et context
 
 La distinction reste à préciser, mais la séparation suivante paraît cohérente
 avec les notes :
@@ -512,7 +432,7 @@ Le chargement et l'enregistrement d'un état sont des opérations de Sighty et d
 l'application qui l'entoure. Ils ne doivent pas être confondus avec une donnée
 injectée dans une scène.
 
-## 8. Contrat minimal du premier prototype
+## 7. Contrat minimal du premier prototype
 
 La note fixe le modèle de conception. Les contrats exécutables ci-dessous sont
 les points à préciser, implémenter et éprouver par tranches ; l'absence d'un cas
@@ -597,7 +517,7 @@ Il devrait vérifier :
 - la modification du contexte uniquement lors d'une transition ;
 - la sauvegarde et la restauration du parcours.
 
-## 9. Premier cas concret demandé le 2026-09-10
+## 8. Premier cas concret
 
 La première fixture peut n'exercer qu'une partie du parcours du §8. Ce dernier
 reste la base de conception à affiner : la fixture fournit une preuve concrète,

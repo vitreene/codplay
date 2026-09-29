@@ -27,12 +27,7 @@ export function getConditionScopes<SceneKey extends string, SlotName extends str
       scope: parent.view,
     })),
   ]
-  const seen = new Set<string>()
-  return scopes.filter((candidate) => {
-    if (seen.has(candidate.path)) return false
-    seen.add(candidate.path)
-    return true
-  })
+  return scopes
 }
 
 /** Resolves the nearest access condition and its optional escape route. */

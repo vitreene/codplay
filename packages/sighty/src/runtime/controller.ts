@@ -1,6 +1,7 @@
 import { resolveInitialAnchor } from '../navigation/composition'
-import type { SightyScenarioApi } from '../types'
-import { validateActionCatalog, validateConditionCatalog } from './catalog-validation'
+import type { CodPlayInstance } from 'codplay'
+import type { SightyRuntimeEvent, SightyScenarioApi, SightyScenarioStateApi } from '../types'
+import { validateScenarioActions, validateScenarioGuards } from './scenario-validation'
 import { RuntimeBindingManager } from './binding-manager'
 import { RuntimeCompositionManager } from './composition-manager'
 import { RuntimeCouplingManager } from './coupling-manager'
@@ -11,14 +12,13 @@ import { RuntimeOperationCoordinator } from './operation-coordinator'
 import { RuntimePresentationManager } from './presentation-manager'
 import { RuntimeSceneEventGateway } from './scene-event-gateway'
 import { RuntimeSceneManager } from './scene-manager'
+import { SightyScenarioState } from './scenario-state'
 import { RuntimeTransitionManager } from './transition-manager'
-import type { SightyRuntimeState } from './state'
-import { createRuntimeState } from './state'
+import { createRuntimeState, getLayoutSceneKey, type SightyRuntimeState } from './state'
 import type {
   DispatchRequest,
   SightyRuntimeApi,
   SightyRuntimeConfiguration,
-  SightyRuntimeEvent,
   SightyRuntimeOptions,
   SightyRuntimeSlotChangeListener,
 } from './types'
@@ -38,6 +38,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   private readonly couplings: RuntimeCouplingManager<SceneKey, SlotName>
   private readonly navigation: RuntimeNavigationManager<SceneKey, SlotName>
   private readonly mutations: RuntimeMutationManager<SceneKey, SlotName>
+  private readonly scenarioStateApi: SightyScenarioStateApi<SceneKey, SlotName>
 
   /** Creates one runtime and wires its focused services together. */
   constructor(options: SightyRuntimeOptions<SceneKey, SlotName>) {
@@ -66,6 +67,18 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       this.transitions,
       events,
     )
+    this.scenarioStateApi = new SightyScenarioState({
+      active: () => this.navigation.active,
+      current: () => [...this.state.composition.selections.values()].map((selection) => ({
+        slotName: selection.slotName,
+        view: { path: selection.entry.path },
+        sceneKey: selection.sceneKey,
+      })),
+      context: () => this.state.context,
+      canAccess: (reference, event) => this.navigation.canAccessView(reference, event),
+      canExit: (reference, event) => this.navigation.canExitView(reference, event),
+    })
+    this.navigation.setScenarioState(this.scenarioStateApi)
     this.mutations = new RuntimeMutationManager(
       this.state,
       this.scenes,
@@ -74,13 +87,18 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       this.navigation,
       this.transitions,
       () => this.ensureInstanceIds(),
-      () => this.validateCatalogs(),
+      () => this.validateScenarioDefinitions(),
     )
   }
 
   /** Exposes the host-facing event observation surface. */
   get events() {
     return this.state.publicEventChannel.api
+  }
+
+  /** Exposes the active scenario state and its navigation guard decisions. */
+  get scenarioState(): SightyScenarioStateApi<SceneKey, SlotName> {
+    return this.scenarioStateApi
   }
 
   /** Returns scene keys referenced by the normalized author graph. */
@@ -115,7 +133,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       if (diagnostics.length > 0) {
         throw new Error(`Le fichier auteur Sighty est invalide. ${diagnosticDetails(diagnostics)}`)
       }
-      this.validateCatalogs()
+      this.validateScenarioDefinitions()
       this.state.layoutEntry = this.composition.requireLayoutEntry()
       this.state.initialAnchor = resolveInitialAnchor(this.state.viewIndex, this.state.layoutEntry)
       this.ensureInstanceIds()
@@ -125,18 +143,19 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       await this.scenes.preloadScenes(builds)
       this.scenes.installStyles()
 
-      const desired = await this.navigation.resolveAccessibleComposition(undefined, {
+      const resolved = await this.navigation.resolveAccessibleComposition(undefined, {
         name: 'runtime:initialize',
       })
-      if (desired === undefined) throw new Error('La composition initiale Sighty est refusée.')
+      if (resolved === undefined) throw new Error('La composition initiale Sighty est refusée.')
       this.state.layoutGeneration = 1
       this.state.initialized = true
-      await this.transitions.execute(desired, {
+      await this.transitions.execute(resolved.selections, {
         entryBehavior: 'none',
         notify: true,
         onPrepared: () => this.bindings.openLayoutBinding(),
-        deliverEnteredData: (selections) => this.navigation.deliverEnteredData(selections),
+        deliverEnteredEvents: (selections) => this.navigation.deliverEnteredEvents(selections),
       })
+      this.navigation.setActiveSelection(resolved.target, resolved.selections)
     } catch (error: unknown) {
       this.mutations.rollbackInitialization()
       throw error
@@ -172,7 +191,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
     return this.operations.enqueue(operation)
   }
 
-  /** Applies a host context patch and refreshes live data. */
+  /** Applies a host context patch for later guard and action evaluation. */
   updateContext(patch: Readonly<Record<string, unknown>>): Promise<void> {
     if (this.state.destroyed) return Promise.reject(new Error('Le runtime Sighty est déjà détruit.'))
     if (!this.state.initialized) return Promise.reject(new Error('Le runtime Sighty n’est pas initialisé.'))
@@ -212,7 +231,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
     }
   }
 
-  /** Starts one initialized scene occurrence. */
+  /** Starts an active scene occurrence and all active scenes nested beneath it. */
   play(sceneKey: SceneKey): Promise<void> {
     return this.enqueueOperation(() => this.playNow(sceneKey))
   }
@@ -221,13 +240,48 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
   playAll(sceneKeys: readonly SceneKey[] = this.state.authoredSceneKeys): Promise<void> {
     return this.enqueueOperation(async () => {
       this.requireInitialized()
-      for (const sceneKey of sceneKeys) await this.playNow(sceneKey)
+      for (const sceneKey of sceneKeys) await this.playOneNow(sceneKey)
     })
   }
 
-  /** Starts one initialized scene occurrence inside the operation queue. */
+  /** Starts an active scene occurrence and the active scenes nested beneath its view. */
   private async playNow(sceneKey: SceneKey): Promise<void> {
     this.requireInitialized()
+
+    let instance: CodPlayInstance | undefined
+    let viewPath: string | undefined
+    if (sceneKey === getLayoutSceneKey(this.state)) {
+      const layoutEntry = this.state.layoutEntry
+      if (layoutEntry === undefined) throw new Error('La vue layout Sighty est absente.')
+      instance = this.scenes.getInstanceAt(layoutEntry.path)
+      viewPath = layoutEntry.path
+    } else {
+      const selections = [...this.state.composition.selections.values()]
+        .filter((selection) => selection.sceneKey === sceneKey)
+      const selection = selections.length === 1 ? selections[0] : undefined
+      instance = selection === undefined ? undefined : this.scenes.getInstanceForSelection(selection)
+      viewPath = selection?.sceneEntry.path
+    }
+
+    if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
+    if (viewPath === undefined) {
+      await instance.telco.play()
+      return
+    }
+    const descendants = [...this.state.composition.selections.values()]
+      .filter((selection) => selection.sceneEntry.parentViews.some((parent) => parent.path === viewPath))
+      .sort((first, second) => first.sceneEntry.parentViews.length - second.sceneEntry.parentViews.length)
+    const childInstances = descendants.map((selection) => {
+      const child = this.scenes.getInstanceForSelection(selection)
+      if (child === undefined) throw new Error(`L’instance Sighty ${selection.sceneKey} est absente.`)
+      return child
+    })
+    await instance.telco.play()
+    for (const child of childInstances) await child.telco.play()
+  }
+
+  /** Starts one active occurrence without traversing its nested selections. */
+  private async playOneNow(sceneKey: SceneKey): Promise<void> {
     const instance = this.getInstance(sceneKey)
     if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
     await instance.telco.play()
@@ -262,10 +316,10 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
     if (!this.state.initialized) throw new Error('Le runtime Sighty n’est pas initialisé.')
   }
 
-  /** Validates both application-owned catalogs against the current graph. */
-  private validateCatalogs(): void {
-    validateActionCatalog(this.state)
-    validateConditionCatalog(this.state)
+  /** Validates the scenario's named actions and guards against its view graph. */
+  private validateScenarioDefinitions(): void {
+    validateScenarioActions(this.state)
+    validateScenarioGuards(this.state)
   }
 
   /** Ensures every referenced scene has one stable CodPlay instance identity. */
@@ -284,7 +338,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
       try {
         listener(sceneKey)
       } catch (error: unknown) {
-        reportWarning(this.state, 'SIGHTY_SLOT_LISTENER_FAILED', error)
+        reportWarning('SIGHTY_SLOT_LISTENER_FAILED', error)
       }
     }
   }

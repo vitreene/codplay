@@ -5,7 +5,7 @@ import {
   DEMO4_TELCO_STATE_EVENTS,
 } from './messages'
 import { sightyScenario } from './scene-resources'
-import { actionCatalog } from './action-catalog'
+import { actions } from './actions'
 import { DEMO4_LAYOUT_CAROUSEL } from './carousel'
 import type {
   SightyDemo4SceneKey,
@@ -56,12 +56,10 @@ export class SightyComposition {
   constructor(options: SightyDemo4Options) {
     this.onLog = options.onLog
     this.sighty = new Sighty({
-      scenario: sightyScenario,
+      scenario: { ...sightyScenario, actions },
       runtime: {
         root: options.stage,
         instanceIds: INSTANCE_IDS,
-        layout: { sceneKey: 'scene-layout', storyId: 'main' },
-        actionCatalog,
         styles: [{
           slot: 'sighty-demo4-scene-root',
           cssText: SIGHTY_SCENE_ROOT_STYLE_SHEET,
@@ -78,7 +76,6 @@ export class SightyComposition {
           },
           pauseOnDocumentHidden: false,
         },
-        onPreloadWarning: (warning) => this.onLog(`${warning.code}: ${warning.message}`, 'warn'),
       },
     })
     this.runtime = this.sighty.runtime

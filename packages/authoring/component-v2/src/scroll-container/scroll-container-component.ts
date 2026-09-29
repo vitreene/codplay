@@ -60,10 +60,15 @@ export class ScrollContainerComponent extends TagComponent {
     this.detachSource()
   }
 
-  /** Reattaches the scroll source when the player is explicitly reset. */
+  /** Resets the configured scroll axis and reattaches its source after player reset. */
   override onReset(): void {
     if (this.destroyed) return
     this.seeking = false
+    const scrollElement = this.element as (Element & { scrollTop?: number; scrollLeft?: number }) | undefined
+    if (scrollElement !== undefined) {
+      if (this.progressProvider?.axis === 'inline') scrollElement.scrollLeft = 0
+      else scrollElement.scrollTop = 0
+    }
     this.attachSource()
     this.sampleSource()
   }

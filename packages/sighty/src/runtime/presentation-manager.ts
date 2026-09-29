@@ -8,6 +8,7 @@ import type { ActiveSelection } from '../navigation/types'
 import { sameSelection } from '../navigation/transition'
 import { occurrenceKeyForSelection, sameMountHost } from './helpers'
 import type { SightyRuntimeState } from './state'
+import { getLayoutSceneKey } from './state'
 import type { PresentationRelation, ResolvedMount } from './types'
 
 type MountedPresentation<SceneKey extends string, SlotName extends string> = Readonly<{
@@ -33,15 +34,14 @@ export class RuntimePresentationManager<SceneKey extends string, SlotName extend
     const layoutOccurrenceKey = this.state.layoutEntry?.path ?? 'layout'
     const layoutInstance = this.state.instances.get(layoutOccurrenceKey)
     if (layoutInstance === undefined) throw new Error('L’instance layout Sighty est absente.')
-    const layoutScene = this.state.sceneDocuments.get(this.state.layout.sceneKey)
+    const layoutScene = this.state.sceneDocuments.get(getLayoutSceneKey(this.state))
     if (layoutScene === undefined) throw new Error('La ressource layout Sighty est absente.')
 
     const resolution = resolveSlotManifestEntry(
-      slotManifest(layoutScene, { storyId: this.state.layout.storyId }),
+      slotManifest(layoutScene),
       slot.slotName,
       {
         sceneId: layoutScene.id,
-        storyId: this.state.layout.storyId,
         referencePath: `views.${slot.ownerPath}.view.slots.${slot.slotName}`,
       },
     )

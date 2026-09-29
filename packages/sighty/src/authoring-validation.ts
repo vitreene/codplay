@@ -87,6 +87,7 @@ export function validateAuthoringResources<
   /** Checks one view node, its nested slots and its route declarations. */
   const validateView = (entryPath: string, view: SightyGraphView<SceneKey, SlotName>): void => {
     validateShowMode(`views.${entryPath}.showMode`, view.showMode)
+    validateEntry(`views.${entryPath}.entry`, view.entry)
     const sceneKey = view.view.scene
     if (sceneKey !== undefined && !hasAvailableScene(sceneKey)) {
       const isRootView = !entryPath.includes('/')
@@ -106,6 +107,33 @@ export function validateAuthoringResources<
     }
     if (view.view.views !== undefined) validateGraph(view.view.views, entryPath)
     if (view.view.graph !== undefined) validateGraph(view.view.graph, `${entryPath}/graph`)
+  }
+
+  /** Validates the event or ordered event list declared for one view entry. */
+  function validateEntry(path: string, entry: unknown): void {
+    if (entry === undefined) return
+    const events = Array.isArray(entry) ? entry : [entry]
+    if (events.length === 0) {
+      diagnostics.push({
+        code: 'AUTHOR_ENTRY_EVENTS_EMPTY',
+        path,
+        message: `La déclaration entry « ${path} » doit contenir au moins un événement.`,
+      })
+      return
+    }
+
+    events.forEach((eventime, index) => {
+      const eventName = typeof eventime === 'object' && eventime !== null
+        ? (eventime as { name?: unknown }).name
+        : undefined
+      if (typeof eventName === 'string' && eventName.trim().length > 0) return
+
+      diagnostics.push({
+        code: 'AUTHOR_ENTRY_EVENT_NAME_MISSING',
+        path: Array.isArray(entry) ? `${path}[${index}].name` : `${path}.name`,
+        message: `Chaque événement entry « ${path} » doit avoir un nom non vide.`,
+      })
+    })
   }
 
   /** Validates one view-level event-to-telco relation without executing it. */

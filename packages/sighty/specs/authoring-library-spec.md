@@ -13,8 +13,9 @@ verticale de la réécriture et distingue explicitement trois niveaux :
   scénario.
 
 La première verticale exécute déjà les conditions d’accès et de sortie par
-portée (`accessBy`, `exitBy`, `onDenied`), la résolution des `data` `entry` et
-`live`, le reset, les sources de scènes lazy et les mutations versionnées. Ces
+portée (`accessBy`, `exitBy`, `onDenied`), les actions et guards définis sur le
+scénario ou en ligne dans les vues, la résolution des données auteur, les
+événements de vue `entry`, le reset, les sources de scènes lazy et les mutations versionnées. Ces
 comportements sont décrits comme tels dans cette spécification. Une même
 `SceneKey` peut avoir une occurrence CodPlay indépendante dans chaque slot
 actif qui la sélectionne. Le pilotage d’une télécommande n’existe dans Sighty
@@ -65,12 +66,8 @@ surfaces publiques distinctes :
 
 ```ts
 const sighty = new Sighty({
-  scenario: { file, scenes, data },
-  runtime: {
-    root,
-    instanceIds,
-    layout: { sceneKey: 'scene-layout', storyId: 'main' },
-  },
+  scenario: { file, scenes, data, actions, guards },
+  runtime: { root, instanceIds },
 })
 
 const diagnostics = sighty.scenario.validate()
@@ -116,7 +113,8 @@ type GraphView<SceneKey, SlotName> = {
   accessBy?: SightyCondition
   exitBy?: SightyCondition
   onDenied?: RouteTarget
-  data?: Record<string, unknown | DataBinding>
+  entry?: CodPlayEventime | readonly CodPlayEventime[]
+  data?: Record<string, unknown>
   showMode?: 'reset' | 'maintain' | 'rewind'
 }
 
@@ -160,6 +158,11 @@ second exécuteur.
 `SlotName` désigne le nom d’un slot déclaré dans la scène layout. `ViewId`
 désigne la clé d’une vue de map ou l’identifiant stable d’une entrée de liste.
 
+Une ressource de scène accepte un `SceneDoc` seul ou le résultat de construction
+`{ sceneDoc, styleSheet }`. Cette seconde forme reprend la sortie du builder de
+l’éditeur : la feuille CSS texte est associée à la scène sans devenir un champ
+de `SceneDoc`. Une source différée peut retourner l’une ou l’autre forme.
+
 Le fichier décrit ces références. Il ne décrit pas l’instance physique qui
 sera créée pour les exécuter. Les formes `ViewAddress`, `SlotAddress`,
 `OccurrenceId`, `BindingId`, `Generation` et `Revision` ne sont pas des champs
@@ -177,11 +180,12 @@ par une représentation portable selon le contrat de compilation. Cette
 contrainte appartient à l’export, pas à une interdiction artificielle imposée
 au fichier auteur.
 
-La tranche de navigation actuellement exécutée utilise les références
-`action` et le catalogue d’actions d’intégration. Les conditions peuvent être
-des fonctions d’auteur ou des références résolues par le catalogue de
-conditions d’intégration. La représentation compilée/exportable de ces
-fonctions reste une question de frontière d’export, pas une seconde exécution.
+Les propriétés `scenario.actions` et `scenario.guards` nomment les fonctions
+que les vues peuvent référencer. Une vue peut aussi contenir directement une
+fonction d’action ou de guard. Le runtime résout les références dans les
+propriétés du scénario ; il ne reprend pas le modèle des scènes compilées
+CodPlay. La représentation compilée/exportable de ces fonctions reste une
+question de frontière d’export, pas une seconde exécution.
 
 ### 3.5. Politique d’affichage d’une scène
 
@@ -192,10 +196,9 @@ graphe d’un slot), une vue parente ou la vue active ; elle est héritée selon
 même priorité de portée que les conditions : vue active, graphe contenant,
 puis vues parentes. Une valeur locale remplace la valeur héritée.
 
-L’option d’intégration `runtime.showMode` se place entre la valeur par défaut
-du runtime et `file.showMode`. La valeur par défaut intégrée est `rewind`.
-L’absence d’une déclaration auteur n’empêche donc pas une scène nouvellement
-admise de démarrer, tandis qu’une déclaration `maintain` ou `reset` modifie
+En l’absence d’une déclaration auteur, la valeur par défaut est `rewind`.
+L’absence d’une déclaration n’empêche donc pas une scène nouvellement admise
+de démarrer, tandis qu’une déclaration `maintain` ou `reset` modifie
 explicitement le comportement d’une réadmission.
 
 - `reset` demande le reset logique CodPlay de l’occurrence conservée pour cette
@@ -231,6 +234,11 @@ La verticale exécutable retient deux usages distincts :
    réconciliation physique ;
    un refus bloque la transition.
 
+Les portées auteur sont conservées par identité, même lorsqu’une vue et son
+graphe `views` partagent le même chemin. Une `exitBy` héritée est évaluée pour
+chaque sélection descendante qui sort ; garder sa vue parente active ne
+supprime pas ce contrôle.
+
 Une condition reçoit l’événement de la demande, la `SceneKey`, les `data`
 résolues, le contexte courant et l’état lisible de l’occurrence. Elle ne
 modifie aucune de ces valeurs et ne fabrique pas de destination.
@@ -262,7 +270,7 @@ peut souscrire aux événements que Sighty rend accessibles à l’extérieur.
 
 La surface `scenario` expose :
 
-- `file`, `scenes` et `data` ;
+- `file`, `scenes`, `data`, `actions` et `guards` ;
 - `sceneKeys`, `getScene(sceneKey)` et `getData(dataKey)` ;
 - `getView(sceneKey)` et `getViewGraph()` ;
 - `getSlotNames(sceneKey)` ;
@@ -364,22 +372,96 @@ surfaces ne font
 pas partie de l’API auteur et ne doivent pas être utilisées pour contourner la
 publication Sighty des événements destinés à l’application hôte.
 
-### 4.4. Montage et pilotage
+### 4.4. État courant du scénario
 
-`runtime.initialize()` valide le fichier et compile les `SceneDoc`, puis
-demande à CodPlay de créer et d’initialiser les occurrences nécessaires via
+`runtime.scenarioState` expose une lecture générique de l’exécution sans
+ajouter d’état de lecture à la surface auteur `scenario`. `current` retourne
+toutes les sélections logiques actives avec `slotName`, une référence auteur
+`view` de type `SightyViewReference` et `sceneKey`. `active` retourne la
+sélection unique suivie par le pointeur interne `next`/`previous` ; elle permet
+à l’application de lire la vue de parcours courant sans rechercher elle-même
+un slot dans `current`. `context` retourne le contexte durable courant. Le
+helper n’expose ni adresses de slot ni sélections internes. Ces valeurs sont
+en lecture seule et ne permettent pas de modifier la composition.
+
+`active` suit la sélection initiale, les navigations admises, la destination
+réelle d’un repli `onDenied`, le reset et les mutations qui préservent ou
+remplacent la composition. Il vaut `undefined` tant qu’aucune sélection ne
+peut être suivie. `current` reste l’ensemble des slots actifs, y compris les
+slots persistants du layout.
+
+Le runtime crée une instance de la classe `SightyScenarioState` pour chaque
+exécution ; les types publics `SightyScenarioSelection` et
+`SightyScenarioStateApi` décrivent sa surface d’accès.
+
+Le même helper est fourni aux handlers d’action dans leur paramètre
+`scenarioState`. Une action peut ainsi mettre à jour le contexte (par exemple
+`context.signet`), puis interroger les gardes qui lisent cette nouvelle valeur
+avant d’envoyer les événements de présentation aux scènes actives.
+
+`canAccess(reference, event)` résout une vue par `path` ou `label`, puis
+réutilise la résolution de portée et l’évaluateur des conditions de
+navigation. Une référence non résolue retourne `false` ; une vue sans
+`accessBy` retourne `true`. Une sélection déjà active reste admise sans
+réévaluer `accessBy`, comme lors d’une navigation qui la conserve. La méthode
+retourne la décision d’accès de la garde ; elle n’applique pas le repli
+`onDenied` et ne navigue pas.
+
+`canExit(reference, event)` répond pour une sélection actuellement active ;
+une référence absente ou inactive retourne `false`, et une vue sans `exitBy`
+retourne `true`. Pour une vue gardée, la méthode transmet l’événement donné à
+la même condition que la navigation. L’appelant fournit l’événement de sortie
+qu’il souhaite présenter. La méthode ne résout pas de destination et ne
+modifie pas la composition.
+
+Les résultats sont asynchrones parce que les fonctions auteur de condition
+peuvent renvoyer une promesse. Le helper partage avec `dispatch` les données
+résolues, le contexte courant, l’état lisible CodPlay et l’évaluateur runtime ;
+il ne crée donc pas un second circuit de guards. Les tests de contrat et le
+parcours Demo 5 qui valident cette surface sont consignés dans
+[`runtime-features.spec.ts`](../tests/runtime-features.spec.ts) et la
+[spécification de la démo](../../demos/specs/sighty-scroll-course-demo-spec.md).
+
+### 4.5. Montage et pilotage
+
+La vue de départ du graphe racine porte la scène hôte dans `view.scene` et ses
+slots. Sighty la déduit du scénario ; `runtime` ne reçoit ni propriété
+`layout`, ni `storyId` séparé.
+
+`runtime.initialize()` valide le fichier et compile les documents de scène,
+puis demande à CodPlay de créer et d’initialiser les occurrences nécessaires via
 `owner.instances.create` avant de monter la composition initiale. Il ne
 réimplémente pas l’initialisation du player. Le preload est un service séparé :
 il prépare et enregistre les ressources avant la création lorsqu’il est requis,
 mais ne constitue pas une primitive d’initialisation CodPlay. Le runtime ne
-démarre pas implicitement toutes les telcos ; `runtime.play(sceneKey)` et
-`runtime.playAll()` pilotent le démarrage explicite. `runtime.updateContext`
-met à jour le contexte et réévalue les liaisons `data` live. `runtime.reset()`
+démarre pas implicitement toutes les telcos. `runtime.play(sceneKey)` démarre
+l’occurrence active ciblée, puis les sélections actuellement actives sous la
+vue de cette scène, dans l’ordre parent-enfant. Pour la scène de la vue de
+départ, ce chemin démarre toute la composition active ; il ne joue pas les
+scènes auteur qui ne sont pas sélectionnées. `runtime.playAll(sceneKeys)` démarre les occurrences
+nommées, une fois chacune et dans l’ordre fourni, sans parcourir leurs vues
+descendantes. Les transitions de navigation démarrent leurs sélections
+entrantes par le coordinateur commun et leur `showMode`. `runtime.updateContext`
+met à jour le contexte utilisé par les gardes et les handlers d’action. Les
+scènes reçoivent des événements déclarés dans `entry` ou envoyés explicitement
+par une action Sighty. `runtime.reset()`
 demande le reset logique CodPlay sur les occurrences existantes, restaure le
 contexte initial et réconcilie la composition ; il ne recrée pas les
 occurrences et ne déclenche pas le preload. `runtime.mutate` publie une
 nouvelle version validée du graphe selon la politique `preserve`, `rewind`,
 `reset` ou `reload`.
+
+`runtime.styles` reçoit les feuilles CSS fournies par l’application hôte. Sighty
+les enregistre par `owner.preload.css.set()` avant le montage. Une feuille
+`styleSheet` fournie avec une scène suit ce même canal CSS, dans le slot stable
+`sighty-scene:<SceneKey>`, avec `runtime.root` comme conteneur `@scope`. Les
+scènes directes sont préparées avant le montage initial ; une scène différée
+installe sa feuille avant la création de son occurrence. Quand une scène est
+retirée du graphe, Sighty efface son slot CSS. La destruction de CodPlay retire
+les feuilles restantes. Le test
+[`runtime-features.spec.ts`](../tests/runtime-features.spec.ts) couvre les
+sources directes et différées, le scope, le nettoyage à la destruction et le
+retrait après mutation.
 
 Le `reset` de `instance.telco` reconstruit l'état logique à zéro dans la même
 instance CodPlay et efface les faits runtime de sa session. Les eventimes auteur
@@ -389,9 +471,8 @@ son hook auteur et ne détruit ni ne remonte l'occurrence. Après un
 la lecture ; les actions auteur et le hook de `sequence:end` restent propres au
 traitement de cet événement terminal.
 
-L’option d’intégration `runtime.showMode` fournit le défaut de l’instance ;
-elle est surchargée par `file.showMode`, puis par les portées auteur selon la
-règle de `showMode` décrite en §3.5.
+Le mode de lecture par défaut est `rewind`. Le fichier et les portées auteur
+peuvent le remplacer selon la règle de `showMode` décrite en §3.5.
 
 Sighty transmet `runtime.codplay` à CodPlay sans modifier sa configuration
 d’inactivité. L’option `runtime.codplay.engine.idle` est donc héritée selon le
@@ -445,12 +526,16 @@ voisin du graphe approprié.
 
 `next` et `previous` suivent l’ordre d’une liste. À une borne, Sighty poursuit
 la recherche de la même intention dans les portées parentes ; il ne fabrique
-pas une sortie implicite. `up` et `down` sont des routes explicites vers un
-niveau parent ou vers le départ d’un graphe enfant lorsque cette cible est
-adressable dans la composition.
+pas une sortie implicite. Ces directions partent de la vue `scenarioState.active`
+suivie par Sighty et ne nécessitent pas de `sourceSceneKey`. Si une liste est
+imbriquée dans un graphe enfant et atteint sa borne, la recherche remonte au
+graphe parent par défaut et peut sélectionner la vue sœur suivante ou
+précédente. `up` et `down` restent des routes explicites vers un niveau parent
+ou vers le départ d’un graphe enfant lorsque cette cible est adressable dans la
+composition.
 
 Une action peut porter une route, une référence `action`, ou les deux. Une
-référence est exécutée dans `runtime.actionCatalog` après la transition
+référence est exécutée depuis `scenario.actions` après la transition
 déclarée. Le handler reçoit l’événement d’intégration et `send`, qui utilise la
 surface publique d’événements de l’occurrence visée. Le handler ne crée pas de
 destination absente du fichier et ne touche pas au DOM.
@@ -552,46 +637,57 @@ liaison sortante.
 
 ## 7. Données, conditions et fonctionnalités différées
 
-### 7.1. `data`
+### 7.1. Événements d’entrée
+
+Une vue peut déclarer `entry` avec un événement CodPlay ou une liste ordonnée
+d’événements :
+
+```ts
+type GraphView = {
+  entry?: CodPlayEventime | readonly CodPlayEventime[]
+}
+```
+
+La déclaration appartient à la vue sélectionnée. À chaque admission de cette
+sélection, Sighty transmet les événements dans l’ordre déclaré à la scène
+active par sa passerelle CodPlay. L’événement est transmis tel quel, y compris
+`event.data` ; CodPlay applique ensuite ses actions auteur pour cet événement.
+Une liste vide ou un événement sans `name` est refusé par la validation du
+fichier auteur.
+
+Cette livraison suit le coordinateur de transition : la sélection est montée
+et liée avant l’émission ; les événements `entry` sont envoyés avant que la
+transition n’applique `showMode` et ne reprend la lecture de la scène. Les
+déclarations et leurs événements imbriqués sont copiés lors d’une mutation du
+scénario. Les tests de
+[`runtime-features.spec.ts`](../tests/runtime-features.spec.ts) couvrent un
+événement unique, une liste ordonnée, les actions CodPlay et la conservation de
+`event.data`.
+
+### 7.2. `data`
 
 Sighty conserve une seule catégorie déclarative nommée `data`. Le terme
 `meta` n’est pas une seconde catégorie dans l’API Sighty : la distinction
 n’est pas suffisante et le vocabulaire `data` est déjà celui de CodPlay.
 
-La forme `DataBinding` actuelle est :
+Les données de scénario et de vue sont des valeurs auteur statiques. Les vues
+résolvent les valeurs du graphe, des vues parentes puis de la vue sélectionnée ;
+une valeur locale remplace la valeur précédente. Ces données sont fournies aux
+conditions et aux handlers d’action de Sighty. `runtime.updateContext` ne
+convertit pas ces valeurs en événements de scène ; les transmissions aux
+scènes utilisent `entry` ou l’envoi explicite par une action Sighty.
 
-```ts
-type DataBinding = {
-  from: string
-  update: 'entry' | 'live'
-  event?: string
-}
-```
-
-La verticale résout les déclarations du graphe du moins spécifique au plus
-spécifique : données de scénario, portées de graphe, vues parentes puis vue
-active. Une valeur locale remplace la valeur précédente. Un binding `from`
-résout un chemin pointé dans `context` ou `data` ; un chemin non préfixé essaie
-d’abord le contexte puis les données de scénario.
-
-À l’entrée d’une sélection, les valeurs déclarées sont livrées par un
-événement CodPlay de la scène. `update: 'live'` est réévalué après
-`runtime.updateContext`, tandis que `update: 'entry'` est livré à l’admission
-de la sélection. L’événement explicite du binding est utilisé, avec
-`data:update` comme valeur par défaut. Sighty ne modifie pas l’état interne de
-la scène pour injecter ces données.
-
-### 7.2. Conditions
+### 7.3. Conditions
 
 Les conditions exécutées sont `accessBy` et `exitBy`, sous forme de fonction ou
-de référence de catalogue, avec `onDenied` pour la route de repli d’un accès
+de référence nommée dans `scenario.guards`, avec `onDenied` pour la route de repli d’un accès
 refusé. Leur résolution par portée et la lecture de `data`, du contexte, de
 l’état et de l’événement sont exécutées. Lorsqu’une vue contient plusieurs
 scènes, son `exitBy` reste le garde de sortie de la transition : un refus sur
 une sélection sortante bloque la vue entière. Cette verticale ne transforme
 pas automatiquement une fin de scène en navigation.
 
-### 7.3. Reset et sources lazy
+### 7.4. Reset et sources lazy
 
 `runtime.reset()` remet le contexte fourni à la construction et demande le
 reset logique CodPlay sur les occurrences conservées. Il repart de l’ancre
@@ -605,7 +701,7 @@ puis son document est mis en cache par le scénario. La même source sert à la
 compilation, au preload et à l’acquisition de l’occurrence ; une source absente
 ou invalide fait échouer l’opération sans publier de composition incohérente.
 
-### 7.4. Mutations du scénario
+### 7.5. Mutations du scénario
 
 `runtime.mutate()` construit et valide une nouvelle version avant de remplacer
 le fichier et l’index publiés. Les opérations disponibles sont l’ajout, la
@@ -624,7 +720,7 @@ Une mutation refusée ou échouée restaure la version précédente et ne laisse
 instance, ni montage, ni ressource introduite par la tentative. La persistance
 sérialisée d’un `RuntimeState` reste hors de cette verticale.
 
-### 7.5. Progression et état vivant
+### 7.6. Progression et état vivant
 
 La progression reste une observation vivante de la telco. Elle ne passe ni par
 `runtime.events`, ni par `dispatch`, ni par le journal normal des événements.
@@ -645,7 +741,7 @@ La tranche actuelle est considérée comme en cours, avec les preuves suivantes 
 - sérialisation des transitions et invalidation des scènes sorties ;
 - conditions d’accès et de sortie par portée, repli `onDenied` et diagnostic
   des refus ;
-- résolution des `data` héritées, livraisons `entry`/`live` et mise à jour du
+- résolution des `data` héritées, événements `entry` et mises à jour du
   contexte ;
 - reset réel, résolution lazy mise en cache et mutations versionnées avec les
   quatre politiques de rechargement ;

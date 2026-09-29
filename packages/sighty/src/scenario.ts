@@ -1,3 +1,4 @@
+import type { CodPlayEventime } from 'codplay'
 import { validateAuthoringResources } from './authoring-validation'
 import {
   findGraphViewByPath,
@@ -69,6 +70,16 @@ export class SightyScenarioImpl<
   /** Returns the catalog of scene definitions. */
   get scenes(): Partial<SightySceneCatalog<SceneKey>> {
     return this.resources.scenes ?? {}
+  }
+
+  /** Returns action implementations named by the scenario's view declarations. */
+  get actions() {
+    return this.resources.actions ?? {}
+  }
+
+  /** Returns guard implementations named by the scenario's view declarations. */
+  get guards() {
+    return this.resources.guards ?? {}
   }
 
   /** Returns the scenario data or an empty catalog when none was supplied. */
@@ -229,7 +240,11 @@ function applyViewMutation<SceneKey extends string, SlotName extends string>(
     return next
   }
   if (mutation.kind === 'update-view') {
-    replaceEntry(next, target.path, { ...target.view, ...mutation.patch })
+    replaceEntry(next, target.path, {
+      ...target.view,
+      ...mutation.patch,
+      ...(mutation.patch.entry === undefined ? {} : { entry: cloneEntry(mutation.patch.entry) }),
+    })
   }
   return next
 }
@@ -266,6 +281,7 @@ function cloneView<SceneKey extends string, SlotName extends string>(
 ): SightyGraphView<SceneKey, SlotName> {
   return {
     ...view,
+    ...(view.entry === undefined ? {} : { entry: cloneEntry(view.entry) }),
     ...(view.actions === undefined ? {} : { actions: { ...view.actions } }),
     ...(view.data === undefined ? {} : { data: { ...view.data } }),
     ...(view.coupling === undefined ? {} : {
@@ -291,6 +307,23 @@ function cloneView<SceneKey extends string, SlotName extends string>(
       }),
     },
   } as unknown as SightyGraphView<SceneKey, SlotName>
+}
+
+/** Copies entry declarations so mutations cannot share their event lists. */
+function cloneEntry(
+  entry: CodPlayEventime | readonly CodPlayEventime[],
+): CodPlayEventime | readonly CodPlayEventime[] {
+  if (Array.isArray(entry)) return entry.map(cloneEventime)
+  return cloneEventime(entry as CodPlayEventime)
+}
+
+/** Copies one eventime and its nested declarations for a scenario snapshot. */
+function cloneEventime(eventime: CodPlayEventime): CodPlayEventime {
+  return {
+    ...eventime,
+    ...(eventime.data === undefined ? {} : { data: { ...eventime.data } }),
+    ...(eventime.events === undefined ? {} : { events: eventime.events.map(cloneEventime) }),
+  }
 }
 
 /** Replaces a view's direct child graph in a cloned graph tree. */

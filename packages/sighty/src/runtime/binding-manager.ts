@@ -3,7 +3,7 @@ import type { ActiveSelection } from '../navigation/types'
 import type { SightyPublicEvent } from '../public-events'
 import { occurrenceKeyForSelection, reportWarning } from './helpers'
 import type { DispatchRequest, RuntimeBinding } from './types'
-import type { SightyRuntimeState } from './state'
+import { getLayoutSceneKey, type SightyRuntimeState } from './state'
 
 /** Owns active scene-event subscriptions and their generation validation. */
 export class RuntimeBindingManager<SceneKey extends string, SlotName extends string> {
@@ -29,10 +29,10 @@ export class RuntimeBindingManager<SceneKey extends string, SlotName extends str
     }
     const task = this.enqueue({ event: publicEvent, binding })
     for (const error of this.state.publicEventChannel.publish(publicEvent)) {
-      reportWarning(this.state, 'SIGHTY_EVENT_LISTENER_FAILED', error)
+      reportWarning('SIGHTY_EVENT_LISTENER_FAILED', error)
     }
     void task.catch((error: unknown) => {
-      if (!this.state.destroyed) reportWarning(this.state, 'SIGHTY_NAVIGATION_FAILED', error)
+      if (!this.state.destroyed) reportWarning('SIGHTY_NAVIGATION_FAILED', error)
     })
   }
 
@@ -48,7 +48,7 @@ export class RuntimeBindingManager<SceneKey extends string, SlotName extends str
     ) return false
     if (binding.slotAddress === (this.state.layoutEntry?.path ?? 'layout')) {
       return binding.occurrenceKey === (this.state.layoutEntry?.path ?? 'layout')
-        && binding.sceneKey === this.state.layout.sceneKey
+        && binding.sceneKey === getLayoutSceneKey(this.state)
         && this.state.layoutGeneration === binding.generation
     }
     const selection = this.state.composition.selections.get(binding.slotAddress)
@@ -68,7 +68,7 @@ export class RuntimeBindingManager<SceneKey extends string, SlotName extends str
     this.openBinding({
       slotAddress: this.state.layoutEntry?.path ?? 'layout',
       occurrenceKey: this.state.layoutEntry?.path ?? 'layout',
-      sceneKey: this.state.layout.sceneKey,
+      sceneKey: getLayoutSceneKey(this.state),
       generation: this.state.layoutGeneration,
     })
   }
@@ -111,7 +111,6 @@ export class RuntimeBindingManager<SceneKey extends string, SlotName extends str
     this.state.bindingCleanups.get(slotAddress)?.()
     this.state.bindingCleanups.delete(slotAddress)
     this.state.activeBindings.delete(slotAddress)
-    this.state.deliveredData.delete(slotAddress)
   }
 
   /** Closes every active event binding during restore, rollback or destruction. */

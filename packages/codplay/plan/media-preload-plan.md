@@ -55,7 +55,8 @@ trouvée pendant cette revue :
       transférés ;
 - [ ] chemin public `registerStrategy()` et stratégies natives `audio`, `font`
       et CSS par URL ; le test CSS existant porte seulement sur le slot CSS en
-      mémoire ;
+      mémoire. Le CSS du paquet de diffusion dépend aussi du
+      [plan de scène compilée](./compiled-scene-plan.md) ;
 - [ ] seek et teardown après adoption d'une node préchargée, sans relancer son
       chargement.
 

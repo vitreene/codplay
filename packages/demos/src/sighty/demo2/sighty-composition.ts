@@ -33,7 +33,6 @@ export class SightyComposition {
       runtime: {
         root: options.stage,
         instanceIds: INSTANCE_IDS,
-        layout: { sceneKey: 'layout', storyId: 'main' },
         styles: [{
           slot: 'sighty-demo2-scene-root',
           cssText: SIGHTY_SCENE_ROOT_STYLE_SHEET,
@@ -46,7 +45,6 @@ export class SightyComposition {
           },
           pauseOnDocumentHidden: false,
         },
-        onPreloadWarning: (warning) => this.onLog(`${warning.code}: ${warning.message}`, 'warn'),
       },
     })
     this.runtime = this.sighty.runtime

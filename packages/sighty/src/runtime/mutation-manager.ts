@@ -1,4 +1,4 @@
-import { createViewIndex } from '../navigation/graph-index'
+import { createViewIndex, getStartEntry } from '../navigation/graph-index'
 import { createSelection, resolveInitialAnchor, resolveSceneEntry } from '../navigation/composition'
 import type { ActiveSelection } from '../navigation/types'
 import type {
@@ -24,7 +24,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
   private readonly navigation: RuntimeNavigationManager<SceneKey, SlotName>
   private readonly transitions: RuntimeTransitionManager<SceneKey, SlotName>
   private readonly ensureInstanceIds: () => void
-  private readonly validateCatalogs: () => void
+  private readonly validateScenarioDefinitions: () => void
 
   /** Creates a mutation manager over all runtime coordination boundaries. */
   constructor(
@@ -35,7 +35,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     navigation: RuntimeNavigationManager<SceneKey, SlotName>,
     transitions: RuntimeTransitionManager<SceneKey, SlotName>,
     ensureInstanceIds: () => void,
-    validateCatalogs: () => void,
+    validateScenarioDefinitions: () => void,
   ) {
     this.state = state
     this.scenes = scenes
@@ -44,7 +44,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.navigation = navigation
     this.transitions = transitions
     this.ensureInstanceIds = ensureInstanceIds
-    this.validateCatalogs = validateCatalogs
+    this.validateScenarioDefinitions = validateScenarioDefinitions
   }
 
   /** Restores the pristine runtime state after an incomplete initialization. */
@@ -60,7 +60,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.state.resourceUrlsByScene.clear()
     this.state.compiledBuilds.clear()
     this.state.sceneDocuments.clear()
-    this.state.deliveredData.clear()
+    this.state.sceneStyleSheets.clear()
     this.state.context = { ...this.state.initialContext }
     this.state.composition = {
       revision: this.state.composition.revision + 1,
@@ -80,7 +80,6 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.bindings.closeAllBindings()
     this.composition.detachAllMounts()
     await this.scenes.resetInstances()
-    this.state.deliveredData.clear()
     this.state.generationCounters.clear()
     this.state.context = { ...this.state.initialContext }
     this.state.composition = {
@@ -91,18 +90,19 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.state.layoutGeneration = 0
 
     try {
-      const desired = await this.navigation.resolveAccessibleComposition(undefined, {
+      const resolved = await this.navigation.resolveAccessibleComposition(undefined, {
         name: 'runtime:reset',
       })
-      if (desired === undefined) throw new Error('La composition initiale Sighty est refusée après reset.')
+      if (resolved === undefined) throw new Error('La composition initiale Sighty est refusée après reset.')
       this.state.layoutGeneration = 1
       this.state.initialized = true
-      await this.transitions.execute(desired, {
+      await this.transitions.execute(resolved.selections, {
         entryBehavior: 'none',
         notify: true,
         onPrepared: () => this.bindings.openLayoutBinding(),
-        deliverEnteredData: (selections) => this.navigation.deliverEnteredData(selections),
+        deliverEnteredEvents: (selections) => this.navigation.deliverEnteredEvents(selections),
       })
+      this.navigation.setActiveSelection(resolved.target, resolved.selections)
     } catch (error: unknown) {
       this.rollbackInitialization()
       throw error
@@ -119,14 +119,16 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
 
     try {
       const nextIndex = createViewIndex(result.viewGraph)
-      const nextLayoutEntry = nextIndex.entriesByScene.get(this.state.layout.sceneKey)?.[0]
-      if (nextLayoutEntry === undefined) throw new Error('La mutation Sighty supprime la vue layout configurée.')
+      const nextLayoutEntry = getStartEntry(nextIndex, '')
+      if (nextLayoutEntry?.view.view.scene === undefined) {
+        throw new Error('La mutation Sighty doit conserver une scène sur la vue de départ.')
+      }
       this.state.viewIndex = nextIndex
       this.state.authoredSceneKeys = collectSceneKeys(nextIndex)
       this.state.layoutEntry = nextLayoutEntry
       this.state.initialAnchor = resolveInitialAnchor(nextIndex, nextLayoutEntry)
       this.ensureInstanceIds()
-      this.validateCatalogs()
+      this.validateScenarioDefinitions()
 
       if (policy === 'reset' || policy === 'reload') {
         if (policy === 'reload') await this.reloadResources()
@@ -137,21 +139,22 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       }
 
       const target = this.resolvePreservedTarget()
-      const desired = await this.navigation.resolveAccessibleComposition(target, {
+      const resolved = await this.navigation.resolveAccessibleComposition(target, {
         name: 'runtime:mutation',
       })
-      if (desired === undefined) throw new Error('La composition Sighty est refusée après mutation.')
-      if (!await this.navigation.allowsExit(this.state.composition, desired, { name: 'runtime:mutation' })) {
+      if (resolved === undefined) throw new Error('La composition Sighty est refusée après mutation.')
+      if (!await this.navigation.allowsExit(this.state.composition, resolved.selections, { name: 'runtime:mutation' })) {
         this.restoreMutationAuthoringState(result, snapshot)
         return false
       }
-      await this.transitions.execute(desired, {
+      await this.transitions.execute(resolved.selections, {
         entryBehavior: policy === 'rewind' ? 'rewind' : 'none',
         notify: true,
-        deliverEnteredData: (selections) => this.navigation.deliverEnteredData(selections),
+        deliverEnteredEvents: (selections) => this.navigation.deliverEnteredEvents(selections),
       })
       this.composition.detachUnavailableMounts()
       this.scenes.pruneUnusedScenes()
+      this.navigation.setActiveSelection(resolved.target, resolved.selections)
       return true
     } catch (error: unknown) {
       this.restoreMutationAuthoringState(result, snapshot)
@@ -160,7 +163,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       } catch (restoreError: unknown) {
         this.state.initialized = false
         this.state.transitioning = false
-        reportWarning(this.state, 'SIGHTY_MUTATION_RESTORE_FAILED', restoreError)
+        reportWarning('SIGHTY_MUTATION_RESTORE_FAILED', restoreError)
       }
       throw error
     }
@@ -194,9 +197,9 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       generationCounters: new Map(this.state.generationCounters),
       compiledBuilds: new Map(this.state.compiledBuilds),
       sceneDocuments: new Map(this.state.sceneDocuments),
+      sceneStyleSheets: new Map(this.state.sceneStyleSheets),
       resourceUrlsByScene: new Map(this.state.resourceUrlsByScene),
       resourceUrls: [...this.state.resourceUrls],
-      deliveredData: new Map(this.state.deliveredData),
       instances: new Map(this.state.instances),
       instanceSceneKeys: new Map(this.state.instanceSceneKeys),
       presentation: this.composition.capturePresentation(),
@@ -263,6 +266,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       if (introducedUrls.length > 0) this.state.owner.preload.release(introducedUrls)
       this.restoreMap(this.state.compiledBuilds, snapshot.compiledBuilds)
       this.restoreMap(this.state.sceneDocuments, snapshot.sceneDocuments)
+      this.restoreMap(this.state.sceneStyleSheets, snapshot.sceneStyleSheets)
       this.restoreMap(this.state.resourceUrlsByScene, snapshot.resourceUrlsByScene)
       this.state.resourceUrls = [...snapshot.resourceUrls]
       this.restoreMap(this.state.instanceSceneKeys, snapshot.instanceSceneKeys)
@@ -277,10 +281,12 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
       if (currentResourceUrls.length > 0) this.state.owner.preload.release(currentResourceUrls)
       this.state.compiledBuilds.clear()
       this.state.sceneDocuments.clear()
+      this.state.sceneStyleSheets.clear()
       this.state.resourceUrlsByScene.clear()
       this.state.resourceUrls = []
       for (const [sceneKey, build] of snapshot.compiledBuilds) this.state.compiledBuilds.set(sceneKey, build)
       for (const [sceneKey, scene] of snapshot.sceneDocuments) this.state.sceneDocuments.set(sceneKey, scene)
+      for (const [sceneKey, styleSheet] of snapshot.sceneStyleSheets) this.state.sceneStyleSheets.set(sceneKey, styleSheet)
       await this.scenes.preloadScenes(snapshot.compiledBuilds)
       this.state.resourceUrls = [...snapshot.resourceUrls]
       this.createSnapshotInstances(snapshot)
@@ -291,7 +297,6 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.state.composition = snapshot.composition
     this.bindings.openLayoutBinding()
     this.bindings.openBindings([...snapshot.composition.selections.values()])
-    this.restoreMap(this.state.deliveredData, snapshot.deliveredData)
     this.state.initialized = true
     await this.restorePlaybackStates(snapshot.playback)
     this.state.transitioning = false
@@ -337,6 +342,5 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     const builds = this.scenes.compileDirectScenes()
     for (const [sceneKey, build] of builds) this.state.compiledBuilds.set(sceneKey, build)
     await this.scenes.preloadScenes(builds)
-    this.state.deliveredData.clear()
   }
 }

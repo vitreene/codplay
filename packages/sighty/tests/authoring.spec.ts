@@ -31,7 +31,6 @@ describe('Sighty authoring class', () => {
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -58,7 +57,6 @@ describe('Sighty authoring class', () => {
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -103,7 +101,6 @@ describe('Sighty authoring class', () => {
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -152,7 +149,6 @@ describe('Sighty authoring class', () => {
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -207,7 +203,6 @@ describe('Sighty authoring class', () => {
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -236,7 +231,6 @@ describe('Sighty authoring class', () => {
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
-        layout: { sceneKey: 'layout', storyId: 'main' },
       },
     })
 
@@ -245,6 +239,50 @@ describe('Sighty authoring class', () => {
       path: 'showMode',
       message: 'La politique showMode « replay » est inconnue. Les valeurs admises sont reset, maintain et rewind.',
     }])
+    project.runtime.destroy()
+  })
+
+  it('requires entry to contain at least one named event', () => {
+    const invalidFile = {
+      format: 'sighty',
+      version: 2,
+      id: 'entry-validation',
+      resources: { scenes: { layout: './layout-scene', sceneB: './scene-b' } },
+      views: {
+        start: 'layout',
+        views: {
+          layout: {
+            view: {
+              scene: 'layout',
+              slots: {
+                main: [
+                  { id: 'empty', entry: [], view: { scene: 'sceneB' } },
+                  { id: 'unnamed', entry: { name: '  ' }, view: { scene: 'sceneB' } },
+                ],
+              },
+            },
+          },
+        },
+      },
+    } as unknown as SightyFile<'layout' | 'sceneB', 'main'>
+    const project = new Sighty({
+      scenario: {
+        file: invalidFile,
+        scenes: {
+          layout: { id: 'layout', stories: {} },
+          sceneB: { id: 'scene-b', stories: {} },
+        },
+      },
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+      },
+    })
+
+    expect(project.scenario.validate().map(({ code, path }) => ({ code, path }))).toEqual([
+      { code: 'AUTHOR_ENTRY_EVENTS_EMPTY', path: 'views.layout/main/empty.entry' },
+      { code: 'AUTHOR_ENTRY_EVENT_NAME_MISSING', path: 'views.layout/main/unnamed.entry.name' },
+    ])
     project.runtime.destroy()
   })
 })

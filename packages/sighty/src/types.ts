@@ -1,3 +1,4 @@
+import type { CodPlayEventime, CodPlayEventimeTarget, CodPlayPublicEvent } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 
 /** Identifies a scene resource in an authored Sighty file. */
@@ -10,16 +11,6 @@ export type SightySlotName = string
 export type SightySlotPlacement<SceneKey extends string = string> = Readonly<{
   view: Readonly<{ scene: SceneKey }>
 }>
-
-/** Describes a data binding declared by one view. */
-export type SightyDataBinding = Readonly<{
-  from: string
-  update: 'entry' | 'live'
-  event?: string
-}>
-
-/** Describes one authored value or one authored data binding. */
-export type SightyDataValue = unknown | SightyDataBinding
 
 /** Describes the event information made available to one author condition. */
 export type SightyConditionEvent<SceneKey extends string = string> = Readonly<{
@@ -42,7 +33,62 @@ export type SightyConditionFunction<SceneKey extends string = string> = (
   context: SightyConditionContext<SceneKey>,
 ) => boolean | Promise<boolean>
 
-/** References a condition by catalog name or embeds its author function. */
+/** Describes one event received by the Sighty scenario router. */
+export type SightyRuntimeEvent<SceneKey extends string = string> = Readonly<{
+  name: string
+  sourceSceneKey?: SceneKey
+  data?: CodPlayPublicEvent['data']
+}>
+
+/** Describes one selected view exposed to a scenario action. */
+export type SightyScenarioSelection<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
+  slotName: SlotName
+  view: SightyViewReference
+  sceneKey: SceneKey
+}>
+
+/** Reads the navigation pointer and selections, then evaluates scenario guards. */
+export type SightyScenarioStateApi<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
+  /** View followed by the scenario's next/previous pointer. */
+  active: SightyScenarioSelection<SceneKey, SlotName> | undefined
+  /** Every currently selected view, including persistent and parallel slots. */
+  current: readonly SightyScenarioSelection<SceneKey, SlotName>[]
+  context: Readonly<Record<string, unknown>>
+  canAccess: (reference: SightyViewReference, event: SightyRuntimeEvent<SceneKey>) => Promise<boolean>
+  canExit: (reference: SightyViewReference, event: SightyRuntimeEvent<SceneKey>) => Promise<boolean>
+}>
+
+/** Provides the active event, view data and scenario operations to one action. */
+export type SightyActionContext<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
+  event: SightyRuntimeEvent<SceneKey>
+  data: Readonly<Record<string, unknown>>
+  context: Readonly<Record<string, unknown>>
+  state: Readonly<Record<string, unknown>>
+  scenarioState: SightyScenarioStateApi<SceneKey, SlotName>
+  updateContext: (patch: Readonly<Record<string, unknown>>) => Promise<void>
+  send: (
+    sceneKey: SceneKey,
+    eventime: CodPlayEventime,
+    target: CodPlayEventimeTarget,
+  ) => Promise<void>
+}>
+
+/** Defines one executable scenario action. */
+export type SightyActionHandler<SceneKey extends string = string, SlotName extends string = string> = (
+  context: SightyActionContext<SceneKey, SlotName>,
+) => void | Promise<void>
+
+/** Names scenario actions that view declarations may reference. */
+export type SightyActions<SceneKey extends string = string, SlotName extends string = string> = Readonly<
+  Record<string, SightyActionHandler<SceneKey, SlotName>>
+>
+
+/** Names scenario guards that access and exit declarations may reference. */
+export type SightyGuards<SceneKey extends string = string> = Readonly<
+  Record<string, SightyConditionFunction<SceneKey>>
+>
+
+/** References a guard by scenario name or embeds its author function. */
 export type SightyCondition<SceneKey extends string = string> =
   | string
   | SightyConditionFunction<SceneKey>
@@ -59,9 +105,9 @@ export type SightyRouteTarget =
 /** Selects how an occurrence is treated when its view is shown again. */
 export type SightyShowMode = 'reset' | 'maintain' | 'rewind'
 
-/** Describes one serializable action attached to a view or graph scope. */
-export type SightyViewAction = Readonly<{
-  action?: string
+/** Describes one action attached to a view or graph scope. */
+export type SightyViewAction<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
+  action?: string | SightyActionHandler<SceneKey, SlotName>
   go?: SightyRouteTarget
 }>
 
@@ -84,9 +130,11 @@ export type SightyCouplingDescriptor<SlotName extends string = string> = Readonl
 }>
 
 /** Describes actions, conditions and data inherited by descendant view nodes. */
-export type SightyViewScope<SceneKey extends string = string> = Readonly<{
-  actions?: Readonly<Record<string, SightyViewAction>>
-  data?: Readonly<Record<string, SightyDataValue>>
+export type SightyViewScope<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
+  /** Default handler inherited by event actions that do not declare one. */
+  action?: string | SightyActionHandler<SceneKey, SlotName>
+  actions?: Readonly<Record<string, SightyViewAction<SceneKey, SlotName>>>
+  data?: Readonly<Record<string, unknown>>
   /** Controls the occurrence when this scope admits a view again. */
   showMode?: SightyShowMode
   /** Admits the view when the condition returns true. */
@@ -114,7 +162,9 @@ export type SightyViewContent<
 export type SightyGraphView<
   SceneKey extends string = string,
   SlotName extends string = string,
-> = SightyViewScope<SceneKey> & Readonly<{
+> = SightyViewScope<SceneKey, SlotName> & Readonly<{
+  /** Events passed to this view's scene whenever the view is admitted. */
+  entry?: CodPlayEventime | readonly CodPlayEventime[]
   view: SightyViewContent<SceneKey, SlotName>
   /** Mediates public controller events to the telco of another declared slot. */
   coupling?: SightyCouplingDescriptor<SlotName>
@@ -140,7 +190,7 @@ export type SightyViewList<
 export type SightyViewMap<
   SceneKey extends string = string,
   SlotName extends string = string,
-> = SightyViewScope<SceneKey> & Readonly<{
+> = SightyViewScope<SceneKey, SlotName> & Readonly<{
   start: string
   views: Readonly<Record<string, SightyGraphView<SceneKey, SlotName>>>
 }>
@@ -172,7 +222,7 @@ export type SightyView<
   SlotName extends string = string,
 > = SightyGraphView<SceneKey, SlotName>
 
-/** Describes the serializable Sighty file that references authored resources. */
+/** Describes the authored Sighty file that references scenario resources. */
 export type SightyFile<
   SceneKey extends string = string,
   SlotName extends string = string,
@@ -194,15 +244,21 @@ export type SightyFile<
   views: SightyViewGraph<SceneKey, SlotName> | readonly SightyLegacyView<SceneKey, SlotName>[]
 }>
 
-/** Catalogs the CodPlay scene documents supplied to an authored project. */
+/** Holds a scene document and the stylesheet emitted alongside it by a builder. */
+type SightySceneSourceValue = SceneDoc<string> | Readonly<{
+  sceneDoc: SceneDoc<string>
+  styleSheet: string
+}>
+
+/** Catalogs scene documents and any stylesheet emitted alongside each scene. */
 export type SightySceneCatalog<SceneKey extends string = string> = Readonly<
-  Record<SceneKey, SceneDoc<string>>
+  Record<SceneKey, SightySceneSourceValue>
 >
 
 /** Supplies one scene immediately or creates it only when selected. */
 export type SightySceneSource =
-  | SceneDoc<string>
-  | (() => SceneDoc<string> | Promise<SceneDoc<string>>)
+  | SightySceneSourceValue
+  | (() => SightySceneSourceValue | Promise<SightySceneSourceValue>)
 
 /** Groups the scenario resources consumed by one Sighty project. */
 export type SightyScenarioResources<
@@ -213,6 +269,8 @@ export type SightyScenarioResources<
   scenes?: Partial<SightySceneCatalog<SceneKey>>
   sceneSources?: Partial<Readonly<Record<SceneKey, SightySceneSource>>>
   data?: Readonly<Record<string, unknown>>
+  actions?: SightyActions<SceneKey, SlotName>
+  guards?: SightyGuards<SceneKey>
 }>
 
 /** Backward-compatible internal name for the scenario resource bundle. */
@@ -274,6 +332,8 @@ export type SightyAuthoringDiagnostic = Readonly<{
     | 'AUTHOR_COUPLING_CONTROLLER_SLOT_UNKNOWN'
     | 'AUTHOR_COUPLING_CONTROLLED_SLOT_UNKNOWN'
     | 'AUTHOR_COUPLING_COMMAND_UNKNOWN'
+    | 'AUTHOR_ENTRY_EVENTS_EMPTY'
+    | 'AUTHOR_ENTRY_EVENT_NAME_MISSING'
     | 'AUTHOR_SHOW_MODE_UNKNOWN'
   path: string
   message: string
@@ -287,6 +347,8 @@ export type SightyScenarioApi<
   file: SightyFile<SceneKey, SlotName>
   scenes: Partial<SightySceneCatalog<SceneKey>>
   data: Readonly<Record<string, unknown>>
+  actions: SightyActions<SceneKey, SlotName>
+  guards: SightyGuards<SceneKey>
   sceneKeys: readonly SceneKey[]
   getSlotNames: (sceneKey: SceneKey) => readonly SlotName[]
   getScene: (sceneKey: SceneKey) => SightySceneCatalog<SceneKey>[SceneKey] | undefined

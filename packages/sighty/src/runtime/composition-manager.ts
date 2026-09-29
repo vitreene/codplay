@@ -198,7 +198,7 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
       try {
         await instance.telco.pause()
       } catch (error: unknown) {
-        reportWarning(this.state, 'SIGHTY_PAUSE_FAILED', error)
+        reportWarning('SIGHTY_PAUSE_FAILED', error)
       }
     }
   }
@@ -232,7 +232,7 @@ export class RuntimeCompositionManager<SceneKey extends string, SlotName extends
     } catch (restoreError: unknown) {
       this.bindings.closeAllBindings()
       this.state.transitioning = false
-      reportWarning(this.state, 'SIGHTY_COMPOSITION_RESTORE_FAILED', restoreError)
+      reportWarning('SIGHTY_COMPOSITION_RESTORE_FAILED', restoreError)
     }
   }
 

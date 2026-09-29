@@ -276,6 +276,11 @@ ordinaires.
   composant annule sa session et détache ses listeners ; l’adaptateur annule
   ses observers. À la destruction, le composant retire ses ressources DOM et
   l’adaptateur déconnecte ses observers et invalide sa file d’émissions.
+- Au reset explicite du player, `ScrollContainerComponent.onReset()` ramène à
+  zéro la position du scrollport sur l’axe de progression configuré (`scrollTop`
+  pour `block`, `scrollLeft` pour `inline`), puis rattache et échantillonne la
+  source. La coordonnée de l’autre axe reste inchangée. Ce comportement suit le
+  hook de reset existant ; il ne change pas les règles d’observation `once`.
 - L’adaptateur ne possède ni runner, ni player, ni journal parallèle et
   n’expose aucune cible DOM à l’auteur ou à la démo.
 
@@ -337,3 +342,11 @@ les typechecks CodPlay, `component-v2` et démos V2, ainsi que le build V2 ont
 réussi. Le test `scroll-container-player-integration.spec.ts` vérifie dans le
 vrai `HtmlPlayerRunner` les événements DOM, la session player, le journal, le
 seek et le teardown.
+
+Le 2026-09-28, `ScrollContainerComponent.onReset()` a été étendu pour remettre
+à l’origine l’axe de progression configuré. Le test de source vérifie le reset
+vertical et inline ; la suite `component-v2` (12 fichiers, 48 tests) et son
+typecheck passent. Le parcours Firefox MCP de Demo 5 a ensuite exercé le vrai
+reset Sighty : après avoir parcouru la première page, l’échec final renvoie à
+cette page avec son `scrollTop` à zéro. La vérification Safari reste suivie dans
+le [plan dédié](../plan/scroll-container-reset-plan.md).
