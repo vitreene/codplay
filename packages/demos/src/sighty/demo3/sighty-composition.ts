@@ -1,13 +1,10 @@
 import { Sighty } from '@codplay/sighty'
-import type { SightyActions } from '@codplay/sighty'
-import { SCENE_A_EVENTS } from '../demo1/scenes/scene-a'
 import {
   DEMO3_COLOR_INTENTS,
   DEMO3_COLOR_VALUES,
   type Demo3ColorName,
 } from './messages'
-import { sightyScenario } from './scene-resources'
-import type { SightyDemo3SceneKey, SightyDemo3SlotName } from './sighty-file'
+import { createDemo3Scenario, type SightyDemo3SceneKey, type SightyDemo3SlotName } from './scenario'
 import { SIGHTY_SCENE_ROOT_STYLE_SHEET } from '../scene-root-capsule'
 
 type SightyDemo3Options = Readonly<{
@@ -24,8 +21,6 @@ const INSTANCE_IDS: Readonly<Record<SightyDemo3SceneKey, string>> = {
   telco: 'demo3-telco-1',
 }
 
-const SCENE_A_TARGET = { scope: 'story', storyId: 'main' } as const
-
 /** Owns the demo 3 message policy around the generic Sighty facade. */
 export class SightyComposition {
   private readonly sighty: Demo3Sighty
@@ -37,7 +32,7 @@ export class SightyComposition {
   constructor(options: SightyDemo3Options) {
     this.onLog = options.onLog
     this.sighty = new Sighty({
-      scenario: { ...sightyScenario, actions: this.createActions() },
+      scenario: createDemo3Scenario(this.onLog),
       runtime: {
         root: options.stage,
         instanceIds: INSTANCE_IDS,
@@ -63,37 +58,6 @@ export class SightyComposition {
     await this.sighty.runtime.initialize()
     await this.startVisibleScenes()
     this.onLog('Démo 3 initialisée : telco → Sighty → sceneA')
-  }
-
-  /** Provides the declared actions that forward telco or host data through Sighty. */
-  private createActions(): SightyActions<SightyDemo3SceneKey> {
-    return {
-      'demo3:inject-content': async ({ event, send }) => {
-        const content = event.data?.content
-        if (typeof content !== 'string' && typeof content !== 'number') {
-          this.onLog(`Message ${event.name} sans contenu textuel.`, 'warn')
-          return
-        }
-        this.onLog(`message ${event.name} → sceneA (content)`)
-        await send('sceneA', {
-          name: SCENE_A_EVENTS.setContent,
-          data: { content },
-        }, SCENE_A_TARGET)
-        this.onLog('Sighty → sceneA : content injecté')
-      },
-      'demo3:set-color': async ({ event, send }) => {
-        const color = event.data?.color
-        if (typeof color !== 'string') {
-          this.onLog(`Message ${event.name} sans couleur.`, 'warn')
-          return
-        }
-        await send('sceneA', {
-          name: SCENE_A_EVENTS.setColor,
-          data: { style: { color } },
-        }, SCENE_A_TARGET)
-        this.onLog(`Sighty → sceneA : couleur ${color}`)
-      },
-    }
   }
 
   /** Dispatches one host color intention through the declared telco scope. */

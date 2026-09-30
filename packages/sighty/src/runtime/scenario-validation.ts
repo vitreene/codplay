@@ -1,5 +1,6 @@
 import { addActionReferences, addConditionReference } from './helpers'
 import type { SightyRuntimeState } from './state'
+import type { SightyActionKey, SightyGuardKey } from '../types'
 
 /** Validates every referenced action against the scenario definitions. */
 export function validateScenarioActions<SceneKey extends string, SlotName extends string>(
@@ -15,7 +16,7 @@ export function validateScenarioActions<SceneKey extends string, SlotName extend
     if (typeof graph.scope.action === 'string') references.add(graph.scope.action)
   }
   for (const reference of references) {
-    if (state.actions[reference] === undefined) {
+    if (state.scenario.actions[reference as SightyActionKey] === undefined) {
       throw new Error(`L'action Sighty « ${reference} » n'est pas définie dans scenario.actions.`)
     }
   }
@@ -35,7 +36,7 @@ export function validateScenarioGuards<SceneKey extends string, SlotName extends
     addConditionReference(graph.scope.exitBy, references)
   }
   for (const reference of references) {
-    if (state.guards[reference] === undefined) {
+    if (state.scenario.guards[reference as SightyGuardKey] === undefined) {
       throw new Error(`Le guard Sighty « ${reference} » n'est pas défini dans scenario.guards.`)
     }
   }

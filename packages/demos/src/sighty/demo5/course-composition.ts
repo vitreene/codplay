@@ -7,8 +7,7 @@ import {
 } from '@codplay/component-v2'
 import { createInitialCourseSignet } from './course-data'
 import { COURSE_EVENTS } from './messages'
-import { createCourseScenario } from './scene-resources'
-import type { CourseSceneKey, CourseSlotName } from './sighty-file'
+import { createCourseScenario, type CourseSceneKey, type CourseSlotName } from './scenario'
 import { SIGHTY_SCENE_ROOT_STYLE_SHEET } from '../scene-root-capsule'
 
 type CourseCompositionOptions = Readonly<{
@@ -62,14 +61,6 @@ export class CourseComposition {
       },
     })
     this.runtime = this.sighty.runtime
-  }
-
-  /** Returns the persistent frame scenes and the page followed by Sighty. */
-  getGeneralControlSceneKeys(): readonly CourseSceneKey[] {
-    const sceneKey = this.runtime.scenarioState.active?.sceneKey
-    return sceneKey === undefined
-      ? ['scene-layout', 'scene-menu', 'scene-title', 'scene-navigation']
-      : ['scene-layout', 'scene-menu', 'scene-title', 'scene-navigation', sceneKey]
   }
 
   /** Initializes Sighty and starts the visible layout, controls, and page. */

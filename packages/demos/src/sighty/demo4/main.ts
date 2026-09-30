@@ -12,9 +12,7 @@ export const demo4: SightyDemoDefinition = {
   create: ({ stage, onLog }) => {
     const composition = new SightyComposition({ stage, onLog })
     return {
-      transport: createSightyTransport(composition.runtime, {
-        commandSceneKeys: () => composition.getGeneralControlSceneKeys(),
-      }),
+      transport: createSightyTransport(composition.runtime),
       initialize: () => composition.initialize(),
       destroy: () => composition.destroy(),
     }

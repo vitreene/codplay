@@ -126,7 +126,7 @@ export class RuntimeTransitionManager<SceneKey extends string, SlotName extends 
         occurrenceKeyForSelection(selection),
         resolveShowMode(
           selection,
-          this.state.scenario.file.showMode,
+          this.state.scenario.showMode,
         ),
       )
     }

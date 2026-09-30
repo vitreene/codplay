@@ -4,16 +4,14 @@ import {
   findGraphViewByPath,
   getDirectGraphEntries,
   getGraphEntries,
-  normalizeSightyViewGraph,
 } from './view-graph'
 import { isAuthoredViewMap } from './navigation/graph-entries'
 import type {
   SightyAuthoringDiagnostic,
   SightyScenarioApi,
   SightyScenarioMutation,
-  SightyScenarioResources,
+  SightyScenarioDefinition,
   SightySceneCatalog,
-  SightyFile,
   SightyGraphView,
   SightyViewMap,
   SightyViewListEntry,
@@ -27,10 +25,7 @@ export type SightyScenarioMutationResult<
   SceneKey extends string = string,
   SlotName extends string = string,
 > = Readonly<{
-  previousFile: SightyFile<SceneKey, SlotName>
-  previousViewGraph: SightyViewGraph<SceneKey, SlotName>
-  file: SightyFile<SceneKey, SlotName>
-  viewGraph: SightyViewGraph<SceneKey, SlotName>
+  previousScenario: SightyScenarioDefinition<SceneKey, SlotName>
 }>
 
 /** Runtime-only extension used to publish validated scenario versions atomically. */
@@ -44,59 +39,65 @@ export type SightyMutableScenarioApi<
   restoreMutation: (result: SightyScenarioMutationResult<SceneKey, SlotName>) => void
 }>
 
-/** Owns and exposes the scenario resources grouped by the Sighty facade. */
+/** Owns and exposes the authored scenario grouped by the Sighty facade. */
 export class SightyScenarioImpl<
   SceneKey extends string = string,
   SlotName extends string = string,
 > implements SightyScenarioApi<SceneKey, SlotName> {
-  private readonly resources: SightyScenarioResources<SceneKey, SlotName>
-  private currentFile: SightyFile<SceneKey, SlotName>
-  private currentViewGraph: SightyViewGraph<SceneKey, SlotName>
+  private currentScenario: SightyScenarioDefinition<SceneKey, SlotName>
   private readonly resolvedScenes = new Map<SceneKey, SightySceneCatalog<SceneKey>[SceneKey]>()
   private readonly resolvingScenes = new Map<SceneKey, Promise<SightySceneCatalog<SceneKey>[SceneKey] | undefined>>()
 
   /** Creates one scenario surface without rendering or running its scenes. */
-  constructor(resources: SightyScenarioResources<SceneKey, SlotName>) {
-    this.resources = resources
-    this.currentFile = resources.file
-    this.currentViewGraph = normalizeSightyViewGraph<SceneKey, SlotName>(resources.file.views, resources.file.version)
+  constructor(scenario: SightyScenarioDefinition<SceneKey, SlotName>) {
+    this.currentScenario = scenario
   }
 
-  /** Returns the serializable Sighty scenario file. */
-  get file(): SightyFile<SceneKey, SlotName> {
-    return this.currentFile
+  /** Returns the authored identity of the current scenario. */
+  get id(): string | undefined {
+    return this.currentScenario.id
+  }
+
+  /** Returns the current scenario revision. */
+  get version(): number | undefined {
+    return this.currentScenario.version
+  }
+
+  /** Returns the current authored view graph. */
+  get views(): SightyViewGraph<SceneKey, SlotName> {
+    return this.currentScenario.views
+  }
+
+  /** Returns the authored default occurrence policy. */
+  get showMode() {
+    return this.currentScenario.showMode
   }
 
   /** Returns the catalog of scene definitions. */
   get scenes(): Partial<SightySceneCatalog<SceneKey>> {
-    return this.resources.scenes ?? {}
+    return this.currentScenario.scenes ?? {}
   }
 
   /** Returns action implementations named by the scenario's view declarations. */
   get actions() {
-    return this.resources.actions ?? {}
+    return this.currentScenario.actions ?? {}
   }
 
   /** Returns guard implementations named by the scenario's view declarations. */
   get guards() {
-    return this.resources.guards ?? {}
+    return this.currentScenario.guards ?? {}
   }
 
   /** Returns the scenario data or an empty catalog when none was supplied. */
   get data(): Readonly<Record<string, unknown>> {
-    return {
-      ...(this.file.data ?? {}),
-      ...(this.resources.data ?? {}),
-      ...(this.file.resources?.data ?? {}),
-    }
+    return this.currentScenario.data ?? {}
   }
 
   /** Returns the scene keys made available to the scenario. */
   get sceneKeys(): readonly SceneKey[] {
     const keys = new Set<string>([
-      ...Object.keys(this.file.resources?.scenes ?? {}),
       ...Object.keys(this.scenes),
-      ...Object.keys(this.resources.sceneSources ?? {}),
+      ...Object.keys(this.currentScenario.sceneSources ?? {}),
     ])
     return [...keys] as SceneKey[]
   }
@@ -118,7 +119,7 @@ export class SightyScenarioImpl<
     if (direct !== undefined) return Promise.resolve(direct)
     const cached = this.resolvedScenes.get(sceneKey)
     if (cached !== undefined) return Promise.resolve(cached)
-    const source = this.resources.sceneSources?.[sceneKey]
+    const source = this.currentScenario.sceneSources?.[sceneKey]
     if (source === undefined) return Promise.resolve(undefined)
     const pending = this.resolvingScenes.get(sceneKey)
     if (pending !== undefined) return pending
@@ -145,45 +146,37 @@ export class SightyScenarioImpl<
 
   /** Returns the first authored view rooted at one scene key. */
   getView(sceneKey: SceneKey): SightyView<SceneKey, SlotName> | undefined {
-    return getGraphEntries(this.currentViewGraph)
+    return getGraphEntries(this.views)
       .find((entry) => entry.view.view.scene === sceneKey)?.view
-  }
-
-  /** Returns the normalized recursive view graph used by the runtime. */
-  getViewGraph(): SightyViewGraph<SceneKey, SlotName> {
-    return this.currentViewGraph
   }
 
   /** Validates scenario references without compiling, rendering or running scenes. */
   validate(): readonly SightyAuthoringDiagnostic[] {
-    return validateAuthoringResources({ ...this.resources, file: this.currentFile })
+    return validateAuthoringResources(this.currentScenario)
   }
 
   /** Applies one integration mutation only after validating its complete result. */
   applyMutation(
     mutation: SightyScenarioMutation<SceneKey, SlotName>,
   ): SightyScenarioMutationResult<SceneKey, SlotName> {
-    const previousFile = this.currentFile
-    const previousViewGraph = this.currentViewGraph
-    const nextViewGraph = applyViewMutation(previousViewGraph, mutation)
-    const nextFile: SightyFile<SceneKey, SlotName> = {
-      ...previousFile,
-      version: (previousFile.version ?? 1) + 1,
+    const previousScenario = this.currentScenario
+    const nextViewGraph = applyViewMutation(previousScenario.views, mutation)
+    const nextScenario: SightyScenarioDefinition<SceneKey, SlotName> = {
+      ...previousScenario,
+      version: (previousScenario.version ?? 1) + 1,
       views: nextViewGraph,
     }
-    const diagnostics = validateAuthoringResources({ ...this.resources, file: nextFile })
+    const diagnostics = validateAuthoringResources(nextScenario)
     if (diagnostics.length > 0) {
       throw new Error(`La mutation Sighty est invalide. ${diagnostics.map((diagnostic) => diagnostic.message).join(' ')}`)
     }
-    this.currentFile = nextFile
-    this.currentViewGraph = nextViewGraph
-    return { previousFile, previousViewGraph, file: nextFile, viewGraph: nextViewGraph }
+    this.currentScenario = nextScenario
+    return { previousScenario }
   }
 
   /** Restores a scenario version when its runtime reconfiguration cannot commit. */
   restoreMutation(result: SightyScenarioMutationResult<SceneKey, SlotName>): void {
-    this.currentFile = result.previousFile
-    this.currentViewGraph = result.previousViewGraph
+    this.currentScenario = result.previousScenario
   }
 }
 
@@ -298,7 +291,6 @@ function cloneView<SceneKey extends string, SlotName extends string>(
     view: {
       ...view.view,
       ...(view.view.views === undefined ? {} : { views: cloneGraph(view.view.views) }),
-      ...(view.view.graph === undefined ? {} : { graph: cloneGraph(view.view.graph) }),
       ...(view.view.slots === undefined ? {} : {
         slots: Object.fromEntries(
           Object.entries(view.view.slots)
@@ -373,9 +365,6 @@ function locateMutationEntry<SceneKey extends string, SlotName extends string>(
   }
   if (direct.view.view.views !== undefined) {
     return locateMutationEntry(direct.view.view.views, childPath)
-  }
-  if (direct.view.view.graph !== undefined && (childPath === 'graph' || childPath.startsWith('graph/'))) {
-    return locateMutationEntry(direct.view.view.graph, childPath.slice('graph'.length + 1))
   }
   return undefined
 }

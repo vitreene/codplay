@@ -2,6 +2,7 @@
 export const COURSE_EVENTS = {
   next: 'course:navigation:next',
   previous: 'course:navigation:previous',
+  restart: 'course:navigation:restart',
   pageBottom: 'course:page:bottom',
   quizAnswered: 'course:quiz:answered',
   menuPrefix: 'course:menu:select:',

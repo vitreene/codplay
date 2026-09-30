@@ -7,7 +7,7 @@ import {
   getMenuPages,
 } from './course-data'
 import { COURSE_EVENTS, courseMenuEvent } from './messages'
-import type { CourseSceneKey } from './sighty-file'
+import type { CourseSceneKey } from './scenario'
 
 /** Holds the patches sent to the menu and navigation scene actions. */
 export type CoursePresentation = Readonly<{

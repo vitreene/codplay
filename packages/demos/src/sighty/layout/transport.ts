@@ -1,16 +1,22 @@
 import type { SightyDemoRuntime, SightyDemoTransport } from './types'
 
-type SightyTransportOptions<SceneKey extends string> = Readonly<{
-  /** Selects the occurrences controlled by the shared play/pause transport. */
-  commandSceneKeys?: () => readonly SceneKey[]
-}>
-
-/** Creates transport commands for selected runtime occurrences. */
+/** Creates transport commands for the occurrences selected by the runtime. */
 export function createSightyTransport<SceneKey extends string, SlotName extends string>(
   runtime: SightyDemoRuntime<SceneKey, SlotName>,
-  options: SightyTransportOptions<SceneKey> = {},
 ): SightyDemoTransport {
-  const selectCommandSceneKeys = (): readonly SceneKey[] => options.commandSceneKeys?.() ?? runtime.sceneKeys
+  const selectCommandSceneKeys = (): readonly SceneKey[] => {
+    const activeSceneKeys = new Set(runtime.scenarioState.current.map((selection) => selection.sceneKey))
+
+    // The layout scene owns the root and is intentionally absent from
+    // scenarioState.current, which lists slot selections. The runtime's live
+    // instance lookup adds that root occurrence without maintaining a demo
+    // specific scene catalogue.
+    for (const sceneKey of runtime.sceneKeys) {
+      if (runtime.getInstance(sceneKey) !== undefined) activeSceneKeys.add(sceneKey)
+    }
+
+    return runtime.sceneKeys.filter((sceneKey) => activeSceneKeys.has(sceneKey))
+  }
   return {
     play: () => runtime.playAll(selectCommandSceneKeys()),
     pause: () => pauseRuntime(runtime, selectCommandSceneKeys()),

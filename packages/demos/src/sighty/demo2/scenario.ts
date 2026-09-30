@@ -1,26 +1,21 @@
-import type { SightyFile as SightyFileDefinition } from '@codplay/sighty'
+import { sceneB } from '../demo1/scenes/scene-b'
+import { layoutScene } from './scenes/layout-scene'
+import { telcoScene } from './scenes/telco-scene'
+import type { SightyScenarioDefinition } from '@codplay/sighty'
 import { TELCO_INTENTS } from './messages'
 
 export type SightyDemo2SceneKey = 'layout' | 'sceneB' | 'telco'
 export type SightyDemo2SlotName = 'sceneB' | 'telco'
 
-/** Declarative composition file consumed by the Sighty scene-to-scene demo. */
-export type SightyDemo2File = SightyFileDefinition<SightyDemo2SceneKey, SightyDemo2SlotName>
-
+/** Names the scene and slot keys used by this scenario. */
 /** Places the reused scene B above its CodPlay command scene in one layout. */
-export const sightyFile: SightyDemo2File = {
+export const sightyScenario: SightyScenarioDefinition<SightyDemo2SceneKey, SightyDemo2SlotName> = {
   format: 'sighty',
   version: 1,
   id: 'sighty-scene-telco',
-  resources: {
-    scenes: {
-      layout: './scenes/layout-scene',
-      sceneB: '../demo1/scenes/scene-b',
-      telco: './scenes/telco-scene',
-    },
-  },
   views: [
     {
+      id: 'layout-view',
       coupling: {
         couplingId: 'sighty-demo2-telco-sceneB',
         controllerSlot: 'telco',
@@ -34,10 +29,11 @@ export const sightyFile: SightyDemo2File = {
       view: {
         scene: 'layout',
         slots: {
-          sceneB: [{ view: { scene: 'sceneB' } }],
-          telco: [{ view: { scene: 'telco' } }],
+          sceneB: [{ id: 'scene-b', view: { scene: 'sceneB' } }],
+          telco: [{ id: 'telco', view: { scene: 'telco' } }],
         },
       },
     },
   ],
+  scenes: { layout: layoutScene, sceneB, telco: telcoScene },
 }

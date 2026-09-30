@@ -1,4 +1,5 @@
 import type { SceneDoc } from 'codplay/scene/types'
+import { COURSE_EVENTS } from '../messages'
 import type { CoursePerso } from './page-support'
 import {
   createPageBottomMarker,
@@ -32,6 +33,7 @@ export function createConclusionScene(): SceneDoc<string> {
           <div id="demo5-course-conclusion-content" class="demo5-conclusion__content">
             <div id="demo5-course-conclusion-heading-host" data-part="demo5:conclusion:heading"></div>
             <div id="demo5-course-conclusion-message-host" data-part="demo5:conclusion:message"></div>
+            <div id="demo5-course-conclusion-actions-host" data-part="demo5:conclusion:actions"></div>
           </div>
           <div id="demo5-course-conclusion-bottom-host" class="demo5-page__bottom-host" data-part="${pageBottomPartId(CONCLUSION_PAGE_ID)}"></div>
         </article>`,
@@ -56,6 +58,18 @@ export function createConclusionScene(): SceneDoc<string> {
         className: 'demo5-conclusion__message',
         move: { target: 'demo5:conclusion:message' },
       },
+    },
+    {
+      id: 'demo5-course-conclusion-restart',
+      type: 'tag',
+      initial: {
+        tag: 'button',
+        content: 'Recommencer le cours',
+        attr: { type: 'button' },
+        className: 'demo5-conclusion__restart',
+        move: { target: 'demo5:conclusion:actions' },
+      },
+      emit: { click: { event: { name: COURSE_EVENTS.restart, visibility: 'public' } } },
     },
     createPageBottomMarker(CONCLUSION_PAGE_ID),
   ]

@@ -4,13 +4,12 @@ import {
   DEMO4_PLAYBACK_STATE_EVENTS,
   DEMO4_TELCO_STATE_EVENTS,
 } from './messages'
-import { sightyScenario } from './scene-resources'
-import { actions } from './actions'
+import { sightyScenario } from './scenario'
 import { DEMO4_LAYOUT_CAROUSEL } from './carousel'
 import type {
   SightyDemo4SceneKey,
   SightyDemo4SlotName,
-} from './sighty-file'
+} from './scenario'
 import { SIGHTY_SCENE_ROOT_STYLE_SHEET } from '../scene-root-capsule'
 
 type SightyDemo4Options = Readonly<{
@@ -56,7 +55,7 @@ export class SightyComposition {
   constructor(options: SightyDemo4Options) {
     this.onLog = options.onLog
     this.sighty = new Sighty({
-      scenario: { ...sightyScenario, actions },
+      scenario: sightyScenario,
       runtime: {
         root: options.stage,
         instanceIds: INSTANCE_IDS,
@@ -79,13 +78,6 @@ export class SightyComposition {
       },
     })
     this.runtime = this.sighty.runtime
-  }
-
-  /** Returns the occurrences addressed by the shared page play/pause remote. */
-  getGeneralControlSceneKeys(): readonly SightyDemo4SceneKey[] {
-    const sceneKey = this.runtime.getMountedSceneKey(CHAPTER_SCENE_SLOT)
-    if (sceneKey === undefined || sceneKey === 'scene-menu') return ['scene-layout', 'scene-menu']
-    return ['scene-layout', sceneKey, 'scene-telco']
   }
 
   /** Initializes the authored graph and starts its declared initial selections. */

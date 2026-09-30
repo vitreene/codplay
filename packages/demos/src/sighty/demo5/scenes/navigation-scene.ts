@@ -50,7 +50,7 @@ export const navigationScene: SceneDoc<string> = {
             move: { target: 'demo5:navigation:status' },
           },
           actions: {
-            [COURSE_PRESENTATION_EVENTS.navigationStatus]: { content: '' },
+            [COURSE_PRESENTATION_EVENTS.navigationStatus]: null,
           },
         },
         {

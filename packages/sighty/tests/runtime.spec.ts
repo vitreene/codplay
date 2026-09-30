@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { CodPlayFrameScheduler } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
-import { Sighty, type SightyFile } from '../src'
+import { Sighty, type SightyScenarioDefinition } from '../src'
 
 type SceneKey = 'layout' | 'menu' | 'sceneA' | 'sceneB'
 
@@ -17,6 +17,10 @@ type NavigationSlotName = 'slot-scene' | 'slot-telco'
 type PlaybackSceneKey = 'layout' | 'parent' | 'child' | 'leaf' | 'inactive'
 
 type PlaybackSlotName = 'main' | 'nested' | 'inner'
+
+type GatewaySceneKey = 'layout' | 'menu'
+
+type GatewaySlotName = 'main'
 
 /** Creates a deterministic CodPlay frame scheduler for public-event tests. */
 function createManualFrameScheduler(): CodPlayFrameScheduler & { flush: () => void } {
@@ -65,6 +69,72 @@ function createChildScene(sceneKey: Exclude<SceneKey, 'layout'>): SceneDoc<strin
     listen: [],
     eventimes: [],
     tracks: {},
+  }
+}
+
+/** Creates the active target scene used to verify immediate action projection. */
+function createGatewayMenuScene(): SceneDoc<string> {
+  return {
+    id: 'runtime-gateway-menu-scene',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'gateway-menu-content',
+          type: 'tag',
+          initial: {
+            tag: 'article',
+            content: 'initial',
+            attr: { id: 'gateway-menu-root' },
+            move: '@root',
+          },
+          actions: { 'runtime:set-content': null },
+        }],
+      },
+    },
+    listen: [],
+    eventimes: [],
+    tracks: {},
+  }
+}
+
+/** Builds one active scene action that sends a CodPlay patch through Sighty. */
+function createGatewayScenario(): SightyScenarioDefinition<GatewaySceneKey, GatewaySlotName> {
+  return {
+    format: 'sighty',
+    version: 1,
+    id: 'runtime-event-gateway',
+    views: {
+      start: 'layout-view',
+      views: {
+        'layout-view': {
+          view: {
+            scene: 'layout',
+            slots: {
+              main: {
+                start: 'menu-view',
+                views: {
+                  'menu-view': {
+                    actions: {
+                      'runtime:send-content': { action: 'action:runtime:send-content' },
+                    },
+                    view: { scene: 'menu' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    actions: {
+      'action:runtime:send-content': async ({ send }) => {
+        await send('menu', {
+          name: 'runtime:set-content',
+          data: { content: 'updated' },
+        }, { scope: 'story', storyId: 'main' })
+      },
+    },
   }
 }
 
@@ -201,11 +271,11 @@ function createPlaybackScene(sceneKey: PlaybackSceneKey, slotNames: readonly str
 }
 
 /** Creates a three-level selected scene tree plus an inactive authored sibling. */
-function createPlaybackFile(): SightyFile<PlaybackSceneKey, PlaybackSlotName> {
+function createPlaybackScenario(): SightyScenarioDefinition<PlaybackSceneKey, PlaybackSlotName> {
   return {
     format: 'sighty',
     version: 1,
-    id: 'sighty-playback-file',
+    id: 'sighty-playback-scenario',
     views: {
       start: 'layout-view',
       views: {
@@ -245,19 +315,11 @@ function createPlaybackFile(): SightyFile<PlaybackSceneKey, PlaybackSlotName> {
 }
 
 /** Builds one recursive view graph with inherited direction and direct routes. */
-function createGraphFile(): SightyFile<SceneKey, SlotName> {
+function createGraphScenario(): SightyScenarioDefinition<SceneKey, SlotName> {
   return {
     format: 'sighty',
     version: 2,
     id: 'runtime-view-graph',
-    resources: {
-      scenes: {
-        layout: './layout',
-        menu: './menu',
-        sceneA: './scene-a',
-        sceneB: './scene-b',
-      },
-    },
     views: {
       start: 'main',
       views: {
@@ -274,7 +336,7 @@ function createGraphFile(): SightyFile<SceneKey, SlotName> {
                   menu: {
                     actions: {
                       'runtime:open-b': {
-                        action: 'runtime:macro-open-b',
+                        action: 'action:runtime:macro-open-b',
                         go: { path: 'main/main/sceneB' },
                       },
                       'runtime:send-inactive': {
@@ -299,7 +361,7 @@ function createGraphFile(): SightyFile<SceneKey, SlotName> {
 }
 
 /** Builds the target recursive scenario without embedding scene sources. */
-function createNavigationFile(): SightyFile<NavigationSceneKey, NavigationSlotName> {
+function createNavigationScenario(): SightyScenarioDefinition<NavigationSceneKey, NavigationSlotName> {
   return {
     views: {
       start: 'view-main',
@@ -395,14 +457,17 @@ describe('Sighty runtime slot selection', () => {
   let project: Sighty<SceneKey, SlotName> | undefined
   let navigationProject: Sighty<NavigationSceneKey, NavigationSlotName> | undefined
   let playbackProject: Sighty<PlaybackSceneKey, PlaybackSlotName> | undefined
+  let gatewayProject: Sighty<GatewaySceneKey, GatewaySlotName> | undefined
 
   afterEach(() => {
     project?.runtime.destroy()
     navigationProject?.runtime.destroy()
     playbackProject?.runtime.destroy()
+    gatewayProject?.runtime.destroy()
     project = undefined
     navigationProject = undefined
     playbackProject = undefined
+    gatewayProject = undefined
     document.body.replaceChildren()
     vi.restoreAllMocks()
   })
@@ -414,7 +479,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -422,7 +487,7 @@ describe('Sighty runtime slot selection', () => {
           sceneB: createChildScene('sceneB'),
         },
         actions: {
-          'runtime:macro-open-b': async ({ send }) => {
+          'action:runtime:macro-open-b': async ({ send }) => {
             macroExecuted = true
             await send('layout', { name: 'runtime:macro-open-b' }, { scope: 'story', storyId: 'main' })
           },
@@ -448,19 +513,47 @@ describe('Sighty runtime slot selection', () => {
     unsubscribe()
   })
 
+  it('materializes an action event sent to the active scene at its current transport position', async () => {
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    gatewayProject = new Sighty({
+      scenario: {
+        ...createGatewayScenario(),
+        scenes: {
+          layout: createLayoutScene(),
+          menu: createGatewayMenuScene(),
+        },
+      },
+      runtime: {
+        root: stage,
+        instanceIds: { layout: 'gateway-layout-1', menu: 'gateway-menu-1' },
+      },
+    })
+
+    await gatewayProject.runtime.initialize()
+    await gatewayProject.runtime.play('layout')
+    expect(stage.querySelector('#gateway-menu-root')?.textContent).toBe('initial')
+
+    expect(await gatewayProject.runtime.dispatch({
+      name: 'runtime:send-content',
+      sourceSceneKey: 'menu',
+    })).toBe(true)
+    expect(stage.querySelector('#gateway-menu-root')?.textContent).toBe('updated')
+  })
+
   it('sends host styles through CodPlay preload and releases them on destroy', async () => {
     const stage = document.createElement('div')
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
           sceneA: createChildScene('sceneA'),
           sceneB: createChildScene('sceneB'),
         },
-        actions: { 'runtime:macro-open-b': async () => undefined },
+        actions: { 'action:runtime:macro-open-b': async () => undefined },
       },
       runtime: {
         root: stage,
@@ -487,7 +580,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -495,7 +588,7 @@ describe('Sighty runtime slot selection', () => {
           sceneB: createChildScene('sceneB'),
         },
         actions: {
-          'runtime:macro-open-b': async () => undefined,
+          'action:runtime:macro-open-b': async () => undefined,
         },
       },
       runtime: {
@@ -522,7 +615,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -530,7 +623,7 @@ describe('Sighty runtime slot selection', () => {
           sceneB: createChildScene('sceneB'),
         },
         actions: {
-          'runtime:macro-open-b': async () => undefined,
+          'action:runtime:macro-open-b': async () => undefined,
         },
       },
       runtime: {
@@ -555,7 +648,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -575,7 +668,7 @@ describe('Sighty runtime slot selection', () => {
     })
 
     await expect(project.runtime.initialize()).rejects.toThrow(
-      "L'action Sighty « runtime:macro-open-b » n'est pas définie dans scenario.actions.",
+      "L'action Sighty « action:runtime:macro-open-b » n'est pas définie dans scenario.actions.",
     )
   })
 
@@ -584,7 +677,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene('unexpected-main'),
           menu: createChildScene('menu'),
@@ -592,7 +685,7 @@ describe('Sighty runtime slot selection', () => {
           sceneB: createChildScene('sceneB'),
         },
         actions: {
-          'runtime:macro-open-b': async () => undefined,
+          'action:runtime:macro-open-b': async () => undefined,
         },
       },
       runtime: {
@@ -617,7 +710,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     navigationProject = new Sighty({
       scenario: {
-        file: createNavigationFile(),
+        ...createNavigationScenario(),
         scenes: {
           'scene-layout': createNavigationLayoutScene(),
           'scene-menu': createNavigationScene('scene-menu'),
@@ -680,7 +773,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     playbackProject = new Sighty({
       scenario: {
-        file: createPlaybackFile(),
+        ...createPlaybackScenario(),
         scenes: {
           layout: createPlaybackScene('layout', ['main', 'nested', 'inner']),
           parent: createPlaybackScene('parent', []),
@@ -743,7 +836,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     navigationProject = new Sighty({
       scenario: {
-        file: createNavigationFile(),
+        ...createNavigationScenario(),
         scenes: {
           'scene-layout': createNavigationLayoutScene(),
           'scene-menu': createNavigationScene('scene-menu'),
@@ -789,7 +882,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     navigationProject = new Sighty({
       scenario: {
-        file: createNavigationFile(),
+        ...createNavigationScenario(),
         scenes: {
           'scene-layout': createNavigationLayoutScene(),
           'scene-menu': createNavigationScene('scene-menu'),
@@ -860,7 +953,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     navigationProject = new Sighty({
       scenario: {
-        file: createNavigationFile(),
+        ...createNavigationScenario(),
         scenes: {
           'scene-layout': createNavigationLayoutScene(),
           'scene-menu': createNavigationScene('scene-menu'),
@@ -912,7 +1005,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     navigationProject = new Sighty({
       scenario: {
-        file: createNavigationFile(),
+        ...createNavigationScenario(),
         scenes: {
           'scene-layout': createNavigationLayoutScene(),
           'scene-menu': createNavigationScene('scene-menu'),
@@ -957,7 +1050,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -965,7 +1058,7 @@ describe('Sighty runtime slot selection', () => {
           sceneB: createChildScene('sceneB'),
         },
         actions: {
-          'runtime:macro-open-b': async () => undefined,
+          'action:runtime:macro-open-b': async () => undefined,
         },
       },
       runtime: {
@@ -999,7 +1092,7 @@ describe('Sighty runtime slot selection', () => {
     document.body.append(stage)
     project = new Sighty({
       scenario: {
-        file: createGraphFile(),
+        ...createGraphScenario(),
         scenes: {
           layout: createLayoutScene(),
           menu: createChildScene('menu'),
@@ -1007,7 +1100,7 @@ describe('Sighty runtime slot selection', () => {
           sceneB: createChildScene('sceneB'),
         },
         actions: {
-          'runtime:macro-open-b': async () => undefined,
+          'action:runtime:macro-open-b': async () => undefined,
         },
       },
       runtime: {

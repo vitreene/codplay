@@ -1,4 +1,11 @@
-import type { SightyFile as SightyFileDefinition } from "@codplay/sighty";
+import { sceneA } from '../demo1/scenes/scene-a'
+import { sceneB } from '../demo1/scenes/scene-b'
+import { DEMO4_LAYOUT_CAROUSEL_EVENTS, DEMO4_LAYOUT_ITEM_IDS } from './carousel'
+import { layoutScene } from './scenes/layout-scene'
+import { menuScene } from './scenes/menu-scene'
+import { sceneC } from './scenes/scene-c'
+import { telcoScene } from './scenes/telco-scene'
+import type { SightyActionContext, SightyScenarioDefinition } from "@codplay/sighty";
 import {
   DEMO4_MENU_INTENTS,
   DEMO4_NAVIGATION_INTENTS,
@@ -18,12 +25,11 @@ export type SightyDemo4SceneKey =
   | "scene-telco";
 export type SightyDemo4SlotName = "slot-menu" | "slot-scene" | "slot-telco";
 
-/** Declarative navigation file; scene sources are supplied by the catalogue. */
-export type SightyDemo4File = SightyFileDefinition<SightyDemo4SceneKey, SightyDemo4SlotName>;
+/** Names the scene and slot keys used by this scenario. */
 
 const MENU_VIEW_PATH = "view-main/view-summary/slot-menu/view-summary-menu";
 const RETURN_TO_MENU_ACTION = {
-  action: "demo4:return-menu",
+  action: "action:demo4:return-menu",
   go: { path: MENU_VIEW_PATH },
 } as const;
 const CHAPTER_NAVIGATION_ACTIONS = {
@@ -39,14 +45,14 @@ const CHAPTER_BOUNDARY_ACTIONS = {
   [DEMO4_NAVIGATION_INTENTS.next]: RETURN_TO_MENU_ACTION,
 } as const;
 const CHAPTER_TELCO_ACTIONS = {
-  [DEMO4_TELCO_STATE_EVENTS.on]: { action: "demo4:project-telco-event" },
-  [DEMO4_TELCO_STATE_EVENTS.off]: { action: "demo4:project-telco-event" },
-  [DEMO4_PLAYBACK_STATE_EVENTS.playing]: { action: "demo4:project-telco-event" },
-  [DEMO4_PLAYBACK_STATE_EVENTS.paused]: { action: "demo4:project-telco-event" },
+  [DEMO4_TELCO_STATE_EVENTS.on]: { action: "action:demo4:project-telco-event" },
+  [DEMO4_TELCO_STATE_EVENTS.off]: { action: "action:demo4:project-telco-event" },
+  [DEMO4_PLAYBACK_STATE_EVENTS.playing]: { action: "action:demo4:project-telco-event" },
+  [DEMO4_PLAYBACK_STATE_EVENTS.paused]: { action: "action:demo4:project-telco-event" },
 } as const;
 
 /** Describes the recursive menu/chapter composition consumed by Sighty. */
-export const sightyFile: SightyDemo4File = {
+export const sightyScenario: SightyScenarioDefinition<SightyDemo4SceneKey, SightyDemo4SlotName> = {
   // Demo 4 is a replay fixture: every newly shown scene starts from a fresh session.
   showMode: "reset",
   views: {
@@ -75,15 +81,15 @@ export const sightyFile: SightyDemo4File = {
                 },
                 actions: {
                   [DEMO4_MENU_INTENTS.sceneA]: {
-                    action: "demo4:enter-chapter",
+                    action: "action:demo4:enter-chapter",
                     go: { path: "view-main/view-chapter/slot-scene/view-page-a" },
                   },
                   [DEMO4_MENU_INTENTS.sceneB]: {
-                    action: "demo4:enter-chapter",
+                    action: "action:demo4:enter-chapter",
                     go: { path: "view-main/view-chapter/slot-scene/view-page-b" },
                   },
                   [DEMO4_MENU_INTENTS.sceneC]: {
-                    action: "demo4:enter-chapter",
+                    action: "action:demo4:enter-chapter",
                     go: { path: "view-main/view-chapter/slot-scene/view-page-c" },
                   },
                 },
@@ -121,7 +127,7 @@ export const sightyFile: SightyDemo4File = {
                         actions: {
                           ...CHAPTER_NAVIGATION_ACTIONS,
                           [DEMO4_SCENARIO_EVENTS.sequenceEnd]: {
-                            action: "demo4:return-menu",
+                            action: "action:demo4:return-menu",
                             go: { path: MENU_VIEW_PATH },
                           },
                         },
@@ -143,4 +149,50 @@ export const sightyFile: SightyDemo4File = {
       },
     },
   },
+  scenes: {
+    'scene-layout': layoutScene,
+    'scene-menu': menuScene,
+    'scene-a': sceneA,
+    'scene-b': sceneB,
+    'scene-c': sceneC,
+    'scene-telco': telcoScene,
+  },
+  actions: {
+    'action:demo4:enter-chapter': createLayoutCarouselAction('menu', 'chapter'),
+    'action:demo4:return-menu': createLayoutCarouselAction('chapter', 'menu'),
+    'action:demo4:project-telco-event': projectTelcoEvent,
+  },
 };
+
+const LAYOUT_SCENE_KEY = 'scene-layout' as const
+const LAYOUT_STORY_ID = 'main' as const
+const TELCO_SCENE_KEY = 'scene-telco' as const
+const TELCO_STORY_ID = 'main' as const
+
+/** Creates one action that moves the layout carousel between its two layout persos. */
+function createLayoutCarouselAction(
+  leavingItemId: keyof typeof DEMO4_LAYOUT_ITEM_IDS,
+  enteringItemId: keyof typeof DEMO4_LAYOUT_ITEM_IDS,
+) {
+  return async ({ send }: SightyActionContext<SightyDemo4SceneKey>) => {
+    await send(
+      LAYOUT_SCENE_KEY,
+      { name: DEMO4_LAYOUT_CAROUSEL_EVENTS[DEMO4_LAYOUT_ITEM_IDS[leavingItemId]].leave },
+      { scope: 'story', storyId: LAYOUT_STORY_ID },
+    )
+    await send(
+      LAYOUT_SCENE_KEY,
+      { name: DEMO4_LAYOUT_CAROUSEL_EVENTS[DEMO4_LAYOUT_ITEM_IDS[enteringItemId]].enter },
+      { scope: 'story', storyId: LAYOUT_STORY_ID },
+    )
+  }
+}
+
+/** Sends one declared discrete telco-state event through Sighty's internal gateway. */
+async function projectTelcoEvent({ event, send }: SightyActionContext<SightyDemo4SceneKey>): Promise<void> {
+  await send(
+    TELCO_SCENE_KEY,
+    { name: event.name },
+    { scope: 'story', storyId: TELCO_STORY_ID },
+  )
+}

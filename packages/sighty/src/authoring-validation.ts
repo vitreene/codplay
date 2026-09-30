@@ -1,7 +1,7 @@
 import type {
   SightyAuthoringDiagnostic,
   SightyGraphView,
-  SightyScenarioResources,
+  SightyScenarioDefinition,
   SightyShowMode,
   SightyTelcoCommand,
 } from './types'
@@ -9,69 +9,42 @@ import {
   findGraphViewByPath,
   getGraphEntries,
   getDirectGraphEntries,
-  normalizeSightyViewGraph,
 } from './view-graph'
 import { isAuthoredViewMap } from './navigation/graph-entries'
 
-/** Validates authored scene resources and view references without executing them. */
+/** Checks the namespace required for one registered scenario action key. */
+function isActionKey(value: string): boolean {
+  return isReadableRegistryKey(value, 'action')
+}
+
+/** Checks the namespace required for one registered scenario guard key. */
+function isGuardKey(value: string): boolean {
+  return isReadableRegistryKey(value, 'guard')
+}
+
+/** Requires a visible namespace, domain and semantic name in one registry key. */
+function isReadableRegistryKey(value: string, namespace: 'action' | 'guard'): boolean {
+  const [prefix, domain, name, ...extra] = value.split(':')
+  return prefix === namespace
+    && extra.length === 0
+    && domain !== undefined
+    && domain.trim().length > 0
+    && name !== undefined
+    && name.trim().length > 0
+}
+
+/** Validates authored scenario scenes and view references without executing them. */
 export function validateAuthoringResources<
   SceneKey extends string = string,
   SlotName extends string = string,
->(resources: SightyScenarioResources<SceneKey, SlotName>): readonly SightyAuthoringDiagnostic[] {
+>(scenario: SightyScenarioDefinition<SceneKey, SlotName>): readonly SightyAuthoringDiagnostic[] {
   const diagnostics: SightyAuthoringDiagnostic[] = []
-  const embeddedSceneResources = resources.file.resources?.scenes
-  const declaredSceneKeys = new Set(
-    embeddedSceneResources === undefined
-      ? [
-          ...Object.keys(resources.scenes ?? {}),
-          ...Object.keys(resources.sceneSources ?? {}),
-        ]
-      : Object.keys(embeddedSceneResources),
-  )
-
   /** Checks whether a scene is declared and available in the authoring catalog. */
   const hasAvailableScene = (sceneKey: string): boolean =>
-    declaredSceneKeys.has(sceneKey) && (
-      resources.scenes?.[sceneKey as SceneKey] !== undefined
-      || resources.sceneSources?.[sceneKey as SceneKey] !== undefined
-    )
+    scenario.scenes?.[sceneKey as SceneKey] !== undefined
+    || scenario.sceneSources?.[sceneKey as SceneKey] !== undefined
 
-  if (embeddedSceneResources !== undefined) {
-    for (const sceneKey of Object.keys(embeddedSceneResources)) {
-      if (
-        resources.scenes?.[sceneKey as SceneKey] === undefined
-        && resources.sceneSources?.[sceneKey as SceneKey] === undefined
-      ) {
-        diagnostics.push({
-          code: 'AUTHOR_SCENE_RESOURCE_MISSING',
-          path: `resources.scenes.${sceneKey}`,
-          message: `La scène auteur « ${sceneKey} » est déclarée dans le fichier mais absente du catalogue.`,
-        })
-      }
-    }
-
-    for (const sceneKey of Object.keys(resources.scenes ?? {})) {
-      if (!declaredSceneKeys.has(sceneKey)) {
-        diagnostics.push({
-          code: 'AUTHOR_SCENE_RESOURCE_UNDECLARED',
-          path: `scenes.${sceneKey}`,
-          message: `La scène auteur « ${sceneKey} » est présente dans le catalogue mais absente du fichier.`,
-        })
-      }
-    }
-
-    for (const sceneKey of Object.keys(resources.sceneSources ?? {})) {
-      if (!declaredSceneKeys.has(sceneKey)) {
-        diagnostics.push({
-          code: 'AUTHOR_SCENE_RESOURCE_UNDECLARED',
-          path: `sceneSources.${sceneKey}`,
-          message: `La source de scène auteur « ${sceneKey} » est présente dans le catalogue mais absente du fichier.`,
-        })
-      }
-    }
-  }
-
-  const viewGraph = normalizeSightyViewGraph<SceneKey, SlotName>(resources.file.views, resources.file.version)
+  const viewGraph = scenario.views
   const graphEntries = getGraphEntries(viewGraph)
   const showModes = new Set<SightyShowMode>(['reset', 'maintain', 'rewind'])
   const telcoCommands = new Set<SightyTelcoCommand>([
@@ -83,6 +56,26 @@ export function validateAuthoringResources<
     'rewind',
     'reset',
   ])
+
+  /** Validates the namespaces of the registries kept on the scenario. */
+  function validateRegistryKeys(): void {
+    for (const key of Object.keys(scenario.actions ?? {})) {
+      if (isActionKey(key)) continue
+      diagnostics.push({
+        code: 'AUTHOR_ACTION_KEY_INVALID',
+        path: `actions.${key}`,
+        message: `La clé d'action « ${key} » doit suivre la convention lisible « action:<domaine>:<verbe> » et rester distincte d'un identifiant de scène.`,
+      })
+    }
+    for (const key of Object.keys(scenario.guards ?? {})) {
+      if (isGuardKey(key)) continue
+      diagnostics.push({
+        code: 'AUTHOR_GUARD_KEY_INVALID',
+        path: `guards.${key}`,
+        message: `La clé de guard « ${key} » doit suivre la convention lisible « guard:<domaine>:<prédicat> » et rester distincte d'un identifiant de scène.`,
+      })
+    }
+  }
 
   /** Checks one view node, its nested slots and its route declarations. */
   const validateView = (entryPath: string, view: SightyGraphView<SceneKey, SlotName>): void => {
@@ -98,7 +91,10 @@ export function validateAuthoringResources<
       })
     }
 
+    validateActionReference(`views.${entryPath}.action`, view.action)
     validateActions(`de la vue « ${entryPath} »`, entryPath, view.actions)
+    validateConditionReference(`views.${entryPath}.accessBy`, view.accessBy)
+    validateConditionReference(`views.${entryPath}.exitBy`, view.exitBy)
     validateCoupling(entryPath, view)
 
     const slots = view.view.slots ?? {}
@@ -106,7 +102,6 @@ export function validateAuthoringResources<
       validateGraph(childGraph, `${entryPath}/${slotName}`)
     }
     if (view.view.views !== undefined) validateGraph(view.view.views, entryPath)
-    if (view.view.graph !== undefined) validateGraph(view.view.graph, `${entryPath}/graph`)
   }
 
   /** Validates the event or ordered event list declared for one view entry. */
@@ -195,7 +190,11 @@ export function validateAuthoringResources<
       })
     }
     if (isAuthoredViewMap(graph)) {
+      const graphPrefix = graphPath.length === 0 ? 'views' : `views.${graphPath}`
+      validateActionReference(`${graphPrefix}.action`, graph.action)
       validateActions(`du graphe « ${graphPath || 'racine'} »`, graphPath, graph.actions)
+      validateConditionReference(`${graphPrefix}.accessBy`, graph.accessBy)
+      validateConditionReference(`${graphPrefix}.exitBy`, graph.exitBy)
     }
 
     if (!isAuthoredViewMap(graph)) {
@@ -233,13 +232,39 @@ export function validateAuthoringResources<
     })
   }
 
+  /** Validates one action reference while preserving inline action functions. */
+  function validateActionReference(path: string, action: unknown): void {
+    if (action === undefined || typeof action === 'function') return
+    if (typeof action === 'string' && isActionKey(action)) return
+    diagnostics.push({
+      code: 'AUTHOR_ACTION_REFERENCE_INVALID',
+      path,
+      message: `La référence d'action « ${String(action)} » doit suivre la convention lisible « action:<domaine>:<verbe> » ou être une fonction inline.`,
+    })
+  }
+
+  /** Validates a named guard reference while preserving inline guard functions. */
+  function validateConditionReference(path: string, condition: unknown): void {
+    if (condition === undefined || typeof condition === 'function') return
+    if (typeof condition === 'string' && isGuardKey(condition)) return
+    diagnostics.push({
+      code: 'AUTHOR_GUARD_REFERENCE_INVALID',
+      path,
+      message: `La référence de guard « ${String(condition)} » doit suivre la convention lisible « guard:<domaine>:<prédicat> » ou être une fonction inline.`,
+    })
+  }
+
   /** Validates route paths in one author action scope. */
   function validateActions(
     scopeLabel: string,
     scopePath: string,
-    actions: Readonly<Record<string, { go?: unknown }>> | undefined,
+    actions: Readonly<Record<string, { action?: unknown; go?: unknown }>> | undefined,
   ): void {
     for (const [eventName, action] of Object.entries(actions ?? {})) {
+      const actionReferencePath = scopePath.length === 0
+        ? `views.actions.${eventName}.action`
+        : `views.${scopePath}.actions.${eventName}.action`
+      validateActionReference(actionReferencePath, action.action)
       const target = action.go
       const actionPath = scopePath.length === 0
         ? `views.actions.${eventName}.go.path`
@@ -278,7 +303,8 @@ export function validateAuthoringResources<
     }
   }
 
-  validateShowMode('showMode', resources.file.showMode)
+  validateRegistryKeys()
+  validateShowMode('showMode', scenario.showMode)
   validateGraph(viewGraph, '')
 
   return diagnostics

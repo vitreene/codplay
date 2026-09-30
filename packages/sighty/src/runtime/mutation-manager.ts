@@ -115,10 +115,10 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     policy: SightyMutationReloadPolicy,
   ): Promise<boolean> {
     const snapshot = this.captureMutationSnapshot()
-    const result: SightyScenarioMutationResult<SceneKey, SlotName> = this.state.mutableScenario.applyMutation(mutation)
+    const result: SightyScenarioMutationResult<SceneKey, SlotName> = this.state.scenario.applyMutation(mutation)
 
     try {
-      const nextIndex = createViewIndex(result.viewGraph)
+      const nextIndex = createViewIndex(this.state.scenario.views)
       const nextLayoutEntry = getStartEntry(nextIndex, '')
       if (nextLayoutEntry?.view.view.scene === undefined) {
         throw new Error('La mutation Sighty doit conserver une scène sur la vue de départ.')
@@ -228,7 +228,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     result: SightyScenarioMutationResult<SceneKey, SlotName>,
     snapshot: RuntimeMutationSnapshot<SceneKey, SlotName>,
   ): void {
-    this.state.mutableScenario.restoreMutation(result)
+    this.state.scenario.restoreMutation(result)
     this.state.viewIndex = snapshot.viewIndex
     this.state.authoredSceneKeys = snapshot.authoredSceneKeys
     this.state.layoutEntry = snapshot.layoutEntry

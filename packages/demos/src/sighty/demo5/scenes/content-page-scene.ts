@@ -14,9 +14,11 @@ const SECTION_TITLE_CHROMA = 0.11
 const SECTION_TITLE_HUE_SHIFT = 82
 const SECTION_TITLE_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1] as const
 const SECTION_IMAGE_ROOT_MARGIN = '0px'
+const SECTION_IMAGE_HIDDEN_OFFSET = '-112%'
+const SECTION_IMAGE_INITIAL_OFFSET = '0%'
 const SECTION_IMAGE_FRAME_CLASS = 'demo5-page__image-frame'
-const SECTION_IMAGE_VISIBLE_CLASS = 'demo5-page__image-frame--visible'
-const SECTION_IMAGE_HIDDEN_CLASS = 'demo5-page__image-frame--hidden'
+const SECTION_IMAGE_ENTER_DURATION = 1000
+const SECTION_IMAGE_LEAVE_DURATION = 820
 const VIDEO_MAX_HEIGHT = '272px'
 const VIDEO_PLAY_ROOT_MARGIN = '-136px 0px -136px 0px'
 
@@ -160,7 +162,7 @@ function createSectionPersos(
   return persos
 }
 
-/** Creates a section image that slides into view and back out through observers. */
+/** Creates a section image whose image perso owns explicit enter/leave tweens. */
 function createObservedSectionImage(
   page: CoursePage,
   section: NonNullable<CoursePage['sections']>[number],
@@ -169,7 +171,6 @@ function createObservedSectionImage(
   const image = section.image!
   const imageId = `${page.id}-section-${index + 1}-image`
   const imageFrameId = `${imageId}-frame`
-  const visibilityAction = `${imageFrameId}:visibility`
   const enterEvent = `${imageId}:enter`
   const leaveEvent = `${imageId}:leave`
   return [
@@ -179,31 +180,14 @@ function createObservedSectionImage(
       initial: {
         tag: 'figure',
         attr: { id: imageFrameId },
-        className: `${SECTION_IMAGE_FRAME_CLASS} ${SECTION_IMAGE_VISIBLE_CLASS}`,
+        className: SECTION_IMAGE_FRAME_CLASS,
         move: { target: sectionPartId(page.id, index, 'image') },
       },
       emit: {
         observe: {
-          liveAction: visibilityAction,
           zone: { rootMargin: SECTION_IMAGE_ROOT_MARGIN, threshold: 0 },
           enter: [{ name: enterEvent }],
           leave: [{ name: leaveEvent }],
-        },
-      },
-      actions: {
-        [visibilityAction]: {
-          duration: 1,
-          fn: (input: { data: Readonly<Record<string, unknown>> }): Record<string, unknown> => ({
-            className: (input.data.ratio as number) > 0
-              ? { add: SECTION_IMAGE_VISIBLE_CLASS, remove: SECTION_IMAGE_HIDDEN_CLASS }
-              : { add: SECTION_IMAGE_HIDDEN_CLASS, remove: SECTION_IMAGE_VISIBLE_CLASS },
-          }),
-        },
-        [enterEvent]: {
-          className: { add: SECTION_IMAGE_VISIBLE_CLASS, remove: SECTION_IMAGE_HIDDEN_CLASS },
-        },
-        [leaveEvent]: {
-          className: { add: SECTION_IMAGE_HIDDEN_CLASS, remove: SECTION_IMAGE_VISIBLE_CLASS },
         },
       },
     },
@@ -214,6 +198,9 @@ function createObservedSectionImage(
         src: image.src,
         alt: image.alt,
         className: 'demo5-page__image',
+        // The first IntersectionObserver callback synchronizes phase without
+        // emitting enter, so an image already in the viewport must start visible.
+        style: { translateX: SECTION_IMAGE_INITIAL_OFFSET },
         img: {
           style: {
             display: 'block',
@@ -225,6 +212,28 @@ function createObservedSectionImage(
           },
         },
         move: { target: imageFrameId },
+      },
+      actions: {
+        [enterEvent]: {
+          style: {
+            translateX: {
+              from: SECTION_IMAGE_HIDDEN_OFFSET,
+              to: '0%',
+              duration: SECTION_IMAGE_ENTER_DURATION,
+              ease: 'outCubic',
+            },
+          },
+        },
+        [leaveEvent]: {
+          style: {
+            translateX: {
+              from: '0%',
+              to: SECTION_IMAGE_HIDDEN_OFFSET,
+              duration: SECTION_IMAGE_LEAVE_DURATION,
+              ease: 'inCubic',
+            },
+          },
+        },
       },
     },
   ]

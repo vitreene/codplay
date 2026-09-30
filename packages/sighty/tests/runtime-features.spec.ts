@@ -8,9 +8,8 @@ import {
   Sighty,
   type SightyCondition,
   type SightyConditionContext,
-  type SightyFile,
+  type SightyScenarioDefinition,
   type SightyScenarioMutation,
-  type SightyScenarioResources,
   type SightyGuards,
   type SightyShowMode,
   type SightyViewList,
@@ -43,16 +42,6 @@ function createManualFrameScheduler(): CodPlayFrameScheduler & { flush: () => vo
       }
     },
   }
-}
-
-const scenePaths: Readonly<Record<FeatureSceneKey, string>> = {
-  layout: './layout',
-  menu: './menu',
-  open: './open',
-  locked: './locked',
-  form: './form',
-  lazy: './lazy',
-  dynamic: './dynamic',
 }
 
 /** Creates the layout document that exposes one physical Sighty slot. */
@@ -186,20 +175,12 @@ function createRollbackScene(sceneKey: Exclude<RollbackSceneKey, 'layout'>): Sce
   }
 }
 
-/** Builds a two-slot file whose mutation deliberately reuses one child twice. */
-function createRollbackFile(): SightyFile<RollbackSceneKey, RollbackSlotName> {
+/** Builds a two-slot scenario whose mutation deliberately reuses one child twice. */
+function createRollbackScenario(): SightyScenarioDefinition<RollbackSceneKey, RollbackSlotName> {
   return {
     format: 'sighty',
     version: 2,
-    id: 'sighty-rollback-file',
-    resources: {
-      scenes: {
-        layout: './rollback-layout',
-        first: './rollback-first',
-        second: './rollback-second',
-        dynamic: './rollback-dynamic',
-      },
-    },
+    id: 'sighty-rollback-scenario',
     views: [{
       id: 'layout-view',
       coupling: {
@@ -227,15 +208,15 @@ function createRollbackFile(): SightyFile<RollbackSceneKey, RollbackSlotName> {
   }
 }
 
-/** Builds the recursive feature file used by access, data, reset and lazy tests. */
-function createFeatureFile(options: Readonly<{
+/** Builds the recursive feature scenario used by access, data, reset and lazy tests. */
+function createFeatureScenario(options: Readonly<{
   includeLazy?: boolean
   showMode?: SightyShowMode
   parentShowMode?: SightyShowMode
   openShowMode?: SightyShowMode
   openEntry?: CodPlayEventime | readonly CodPlayEventime[]
   lockedGuard?: SightyCondition<FeatureSceneKey>
-}> = {}): SightyFile<FeatureSceneKey, FeatureSlotName> {
+}> = {}): SightyScenarioDefinition<FeatureSceneKey, FeatureSlotName> {
   const canEnterLocked = ({ context }: SightyConditionContext<FeatureSceneKey>): boolean => context.allowed === true
   const children: SightyViewList<FeatureSceneKey, FeatureSlotName> = [
     {
@@ -276,19 +257,9 @@ function createFeatureFile(options: Readonly<{
   return {
     format: 'sighty',
     version: 2,
-    id: 'sighty-feature-file',
+    id: 'sighty-feature-scenario',
     ...(options.showMode === undefined ? {} : { showMode: options.showMode }),
     data: { mode: 'base' },
-    resources: {
-      scenes: {
-        layout: scenePaths.layout,
-        menu: scenePaths.menu,
-        open: scenePaths.open,
-        locked: scenePaths.locked,
-        form: scenePaths.form,
-        ...(options.includeLazy ? { lazy: scenePaths.lazy } : {}),
-      },
-    },
     views: [{
       id: 'layout-view',
       ...(options.parentShowMode === undefined ? {} : { showMode: options.parentShowMode }),
@@ -301,20 +272,11 @@ function createFeatureFile(options: Readonly<{
 }
 
 /** Builds a two-level course graph with shared parent navigation and guards. */
-function createPointerFile(): SightyFile<FeatureSceneKey, FeatureSlotName> {
+function createPointerScenario(): SightyScenarioDefinition<FeatureSceneKey, FeatureSlotName> {
   return {
     format: 'sighty',
     version: 2,
-    id: 'sighty-pointer-file',
-    resources: {
-      scenes: {
-        layout: scenePaths.layout,
-        menu: scenePaths.menu,
-        open: scenePaths.open,
-        locked: scenePaths.locked,
-        form: scenePaths.form,
-      },
-    },
+    id: 'sighty-pointer-scenario',
     views: {
       start: 'layout-view',
       views: {
@@ -329,7 +291,7 @@ function createPointerFile(): SightyFile<FeatureSceneKey, FeatureSlotName> {
                     'feature:pointer-next': { go: { direction: 'next' } },
                     'feature:pointer-previous': { go: { direction: 'previous' } },
                   },
-                  exitBy: 'feature:page-exit',
+                  exitBy: 'guard:feature:page-exit',
                   view: {
                     views: {
                       start: 'chapter-1',
@@ -367,19 +329,12 @@ function createPointerFile(): SightyFile<FeatureSceneKey, FeatureSlotName> {
   }
 }
 
-/** Creates a mutation file whose initially active list contains only its menu. */
-function createMutationFile(): SightyFile<FeatureSceneKey, FeatureSlotName> {
+/** Creates a mutation scenario whose initially active list contains only its menu. */
+function createMutationScenario(): SightyScenarioDefinition<FeatureSceneKey, FeatureSlotName> {
   return {
     format: 'sighty',
     version: 2,
-    id: 'sighty-mutation-file',
-    resources: {
-      scenes: {
-        layout: scenePaths.layout,
-        menu: scenePaths.menu,
-        dynamic: scenePaths.dynamic,
-      },
-    },
+    id: 'sighty-mutation-scenario',
     views: [{
       id: 'layout-view',
       view: {
@@ -398,7 +353,7 @@ function createMutationFile(): SightyFile<FeatureSceneKey, FeatureSlotName> {
 
 /** Creates one Sighty project with direct scenes and optional deferred sources. */
 function createProject(
-  file: SightyFile<FeatureSceneKey, FeatureSlotName>,
+  scenario: SightyScenarioDefinition<FeatureSceneKey, FeatureSlotName>,
   options: Readonly<{
     context?: Readonly<Record<string, unknown>>
     openStyleSheet?: string
@@ -407,7 +362,7 @@ function createProject(
     guards?: SightyGuards<FeatureSceneKey>
   }> = {},
 ): Sighty<FeatureSceneKey, FeatureSlotName> {
-  const availableScenes: NonNullable<SightyScenarioResources<FeatureSceneKey, FeatureSlotName>['scenes']> = {
+  const availableScenes: NonNullable<SightyScenarioDefinition<FeatureSceneKey, FeatureSlotName>['scenes']> = {
     layout: createFeatureLayout(),
     menu: createFeatureScene('menu'),
     open: options.openStyleSheet === undefined
@@ -420,16 +375,11 @@ function createProject(
       : { sceneDoc: createFeatureScene('dynamic'), styleSheet: options.dynamicStyleSheet },
   }
   const sceneSources = options.lazySource === undefined ? undefined : { lazy: options.lazySource }
-  const scenes = Object.fromEntries(
-    Object.entries(availableScenes).filter(([sceneKey]) => (
-      file.resources?.scenes?.[sceneKey as FeatureSceneKey] !== undefined
-      && sceneKey !== 'lazy'
-    )),
-  )
+  const scenes = availableScenes
 
   return new Sighty({
     scenario: {
-      file,
+      ...scenario,
       scenes,
       guards: options.guards,
       ...(sceneSources === undefined ? {} : { sceneSources }),
@@ -464,7 +414,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('redirects a refused access condition through its declared escape', async () => {
-    project = createProject(createFeatureFile(), { context: { allowed: false } })
+    project = createProject(createFeatureScenario(), { context: { allowed: false } })
 
     await project.runtime.initialize()
     expect(project.runtime.getMountedSceneKey('main')).toBe('menu')
@@ -473,7 +423,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('blocks a view exit until its condition becomes true', async () => {
-    project = createProject(createFeatureFile(), { context: { complete: false } })
+    project = createProject(createFeatureScenario(), { context: { complete: false } })
 
     await project.runtime.initialize()
     expect(await project.runtime.dispatch({ name: 'feature:open-form', sourceSceneKey: 'menu' })).toBe(true)
@@ -488,11 +438,11 @@ describe('Sighty runtime feature reconstruction', () => {
 
   it('resolves a named guard from scenario.guards', async () => {
     project = createProject(
-      createFeatureFile({ lockedGuard: 'feature:can-enter-locked' }),
+      createFeatureScenario({ lockedGuard: 'guard:feature:can-enter-locked' }),
       {
         context: { allowed: true },
         guards: {
-          'feature:can-enter-locked': ({ context }) => context.allowed === true,
+          'guard:feature:can-enter-locked': ({ context }) => context.allowed === true,
         },
       },
     )
@@ -503,10 +453,10 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('moves the internal pointer through child pages and adjacent parent views', async () => {
-    project = createProject(createPointerFile(), {
+    project = createProject(createPointerScenario(), {
       context: { mayLeave: true },
       guards: {
-        'feature:page-exit': ({ context }) => context.mayLeave === true,
+        'guard:feature:page-exit': ({ context }) => context.mayLeave === true,
       },
     })
 
@@ -539,10 +489,10 @@ describe('Sighty runtime feature reconstruction', () => {
 
   it('applies an inherited exit guard before leaving a selected child view', async () => {
     const exitGuard = vi.fn(({ context }: { context: Readonly<Record<string, unknown>> }) => context.mayLeave === true)
-    project = createProject(createPointerFile(), {
+    project = createProject(createPointerScenario(), {
       context: { mayLeave: false },
       guards: {
-        'feature:page-exit': exitGuard,
+        'guard:feature:page-exit': exitGuard,
       },
     })
 
@@ -566,7 +516,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('exposes the active scenario state and evaluates the same access and exit guards as navigation', async () => {
-    project = createProject(createFeatureFile(), {
+    project = createProject(createFeatureScenario(), {
       context: { allowed: false, complete: false },
     })
 
@@ -613,7 +563,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('delivers entry data once and keeps context changes out of the scene event path', async () => {
-    project = createProject(createFeatureFile({
+    project = createProject(createFeatureScenario({
       openEntry: { name: 'feature:data-received', data: { content: 'initial' } },
     }), { context: { title: 'initial' } })
 
@@ -626,7 +576,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('sends one or more declared entry eventimes to the admitted scene', async () => {
-    project = createProject(createFeatureFile({
+    project = createProject(createFeatureScenario({
       openEntry: [
         {
           name: 'feature:entry:first',
@@ -648,7 +598,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('accepts one declared entry eventime', async () => {
-    project = createProject(createFeatureFile({
+    project = createProject(createFeatureScenario({
       openEntry: { name: 'feature:entry:first' },
     }))
 
@@ -659,7 +609,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('copies entry event data supplied by a scenario mutation', async () => {
-    project = createProject(createFeatureFile())
+    project = createProject(createFeatureScenario())
     await project.runtime.initialize()
 
     const entry = {
@@ -680,7 +630,7 @@ describe('Sighty runtime feature reconstruction', () => {
 
   it('resets a readmitted scene through its inherited showMode on the retained CodPlay instance', async () => {
     project = createProject(
-      createFeatureFile({
+      createFeatureScenario({
         showMode: 'maintain',
         parentShowMode: 'reset',
         openEntry: { name: 'feature:data-received', data: { content: 'initial' } },
@@ -708,7 +658,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('maintains a scene occurrence and its paused state when its view declares maintain', async () => {
-    project = createProject(createFeatureFile({ showMode: 'maintain' }))
+    project = createProject(createFeatureScenario({ showMode: 'maintain' }))
 
     await project.runtime.initialize()
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
@@ -726,7 +676,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('rewinds and starts a retained scene when its view declares rewind', async () => {
-    project = createProject(createFeatureFile({ showMode: 'rewind' }))
+    project = createProject(createFeatureScenario({ showMode: 'rewind' }))
 
     await project.runtime.initialize()
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
@@ -744,7 +694,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('restores the initial context on reset', async () => {
-    project = createProject(createFeatureFile(), { context: { allowed: false } })
+    project = createProject(createFeatureScenario(), { context: { allowed: false } })
 
     await project.runtime.initialize()
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
@@ -763,7 +713,7 @@ describe('Sighty runtime feature reconstruction', () => {
 
   it('resolves a lazy scene only when its view is selected', async () => {
     let sourceCalls = 0
-    project = createProject(createFeatureFile({ includeLazy: true }), {
+    project = createProject(createFeatureScenario({ includeLazy: true }), {
       lazySource: () => {
         sourceCalls += 1
         return createFeatureScene('lazy')
@@ -781,7 +731,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('installs a direct scene stylesheet through the scoped CodPlay preload channel', async () => {
-    project = createProject(createFeatureFile(), {
+    project = createProject(createFeatureScenario(), {
       openStyleSheet: '.feature-open-root { color: red; }',
     })
     const root = document.body.lastElementChild as HTMLElement
@@ -801,7 +751,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('installs a deferred scene stylesheet before mounting its selected scene', async () => {
-    project = createProject(createFeatureFile({ includeLazy: true }), {
+    project = createProject(createFeatureScenario({ includeLazy: true }), {
       lazySource: () => ({
         sceneDoc: createFeatureScene('lazy'),
         styleSheet: '.feature-lazy-root { color: blue; }',
@@ -819,7 +769,7 @@ describe('Sighty runtime feature reconstruction', () => {
   })
 
   it('applies a validated view mutation and removes a hidden active view', async () => {
-    project = createProject(createMutationFile(), {
+    project = createProject(createMutationScenario(), {
       dynamicStyleSheet: '.feature-dynamic-root { color: green; }',
     })
 
@@ -832,7 +782,7 @@ describe('Sighty runtime feature reconstruction', () => {
       id: 'dynamic',
       view: { view: { scene: 'dynamic' } },
     })).toBe(true)
-    expect(project.scenario.file.version).toBe(3)
+    expect(project.scenario.version).toBe(3)
     expect(project.runtime.scenarioState.active).toMatchObject({ view: { path: 'layout-view/main/menu' } })
     expect(await project.runtime.dispatch({ name: 'feature:next', sourceSceneKey: 'menu' })).toBe(true)
     expect(project.runtime.getMountedSceneKey('main')).toBe('dynamic')
@@ -854,7 +804,7 @@ describe('Sighty runtime feature reconstruction', () => {
     document.body.append(stage)
     rollbackProject = new Sighty<RollbackSceneKey, RollbackSlotName>({
       scenario: {
-        file: createRollbackFile(),
+        ...createRollbackScenario(),
         scenes: {
           layout: createRollbackLayout(),
           first: createRollbackScene('first'),
@@ -926,7 +876,7 @@ describe('Sighty runtime feature reconstruction', () => {
     document.body.append(stage)
     rollbackProject = new Sighty<RollbackSceneKey, RollbackSlotName>({
       scenario: {
-        file: createRollbackFile(),
+        ...createRollbackScenario(),
         scenes: {
           layout: createRollbackLayout(),
           first: createRollbackScene('first'),
@@ -987,7 +937,7 @@ describe('Sighty runtime feature reconstruction', () => {
     document.body.append(stage)
     rollbackProject = new Sighty<RollbackSceneKey, RollbackSlotName>({
       scenario: {
-        file: createRollbackFile(),
+        ...createRollbackScenario(),
         scenes: {
           layout: createRollbackLayout(),
           first: createRollbackScene('first'),
@@ -1046,7 +996,7 @@ describe('Sighty runtime feature reconstruction', () => {
     document.body.append(stage)
     rollbackProject = new Sighty<RollbackSceneKey, RollbackSlotName>({
       scenario: {
-        file: createRollbackFile(),
+        ...createRollbackScenario(),
         scenes: {
           layout: createRollbackLayout(),
           first: createRollbackScene('first'),

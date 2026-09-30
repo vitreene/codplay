@@ -198,6 +198,5 @@ function nestedGraphPath<
   SlotName extends string,
 >(entry: IndexedEntry<SceneKey, SlotName>): string | undefined {
   if (entry.view.view.views !== undefined) return entry.path
-  if (entry.view.view.graph !== undefined) return `${entry.path}/graph`
   return undefined
 }

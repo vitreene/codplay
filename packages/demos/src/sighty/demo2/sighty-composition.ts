@@ -1,6 +1,6 @@
 import { Sighty } from '@codplay/sighty'
-import { sightyScenario } from './scene-resources'
-import type { SightyDemo2SceneKey, SightyDemo2SlotName } from './sighty-file'
+import { sightyScenario } from './scenario'
+import type { SightyDemo2SceneKey, SightyDemo2SlotName } from './scenario'
 import { SIGHTY_SCENE_ROOT_STYLE_SHEET } from '../scene-root-capsule'
 
 type SightyDemo2Options = Readonly<{

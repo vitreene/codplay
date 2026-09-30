@@ -9,6 +9,7 @@ import { resolveActionCandidates } from '../navigation/resolver'
 import { sameSelection } from '../navigation/transition'
 import type { ActiveComposition, ActiveSelection } from '../navigation/types'
 import type {
+  SightyActionKey,
   SightyActionHandler,
   SightyCondition,
   SightyConditionContext,
@@ -336,7 +337,7 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
     selection: ActiveSelection<SceneKey, SlotName>,
     event: SightyRuntimeEvent<SceneKey>,
   ): Promise<boolean> {
-    const evaluator = typeof condition === 'function' ? condition : this.state.guards[condition]
+    const evaluator = typeof condition === 'function' ? condition : this.state.scenario.guards[condition]
     if (evaluator === undefined) {
       throw new Error(`Le guard Sighty « ${String(condition)} » n'est pas défini dans scenario.guards.`)
     }
@@ -388,11 +389,11 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
 
   /** Executes one scenario action after its declared route is active. */
   async executeAction(
-    action: string | SightyActionHandler<SceneKey, SlotName>,
+    action: SightyActionKey | SightyActionHandler<SceneKey, SlotName>,
     event: SightyRuntimeEvent<SceneKey>,
     selection: ActiveSelection<SceneKey, SlotName>,
   ): Promise<void> {
-    const handler = typeof action === 'function' ? action : this.state.actions[action]
+    const handler = typeof action === 'function' ? action : this.state.scenario.actions[action]
     if (handler === undefined) {
       throw new Error(`L'action Sighty « ${action} » n'est pas définie dans scenario.actions.`)
     }

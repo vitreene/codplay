@@ -7,7 +7,7 @@
 Cette spécification décrit le contrat actuellement exécuté par la première
 verticale de la réécriture et distingue explicitement trois niveaux :
 
-- l’API auteur, écrite dans le fichier de déclaration ;
+- l’API auteur, portée par la définition `scenario` ;
 - l’API d’intégration, utilisée par l’application hôte qui instancie Sighty ;
 - les types internes, produits et utilisés par Sighty pour exécuter le
   scénario.
@@ -19,22 +19,20 @@ scénario ou en ligne dans les vues, la résolution des données auteur, les
 comportements sont décrits comme tels dans cette spécification. Une même
 `SceneKey` peut avoir une occurrence CodPlay indépendante dans chaque slot
 actif qui la sélectionne. Le pilotage d’une télécommande n’existe dans Sighty
-que dans le contexte d’un couplage déclaré par le fichier scénario : la scène
+que dans le contexte d’un couplage déclaré par le scénario : la scène
 telco émet ses événements publics et Sighty règle en interne l’accrochage à la
 liaison active. La persistance sérialisée d’un parcours
 n’appartient pas à cette reprise et ne constitue pas un contrat Sighty actuel.
 Lorsqu’une application hôte aura besoin de persister un parcours, cette
 responsabilité relèvera de son intégration et non de Sighty.
 
-Le modèle de conception de référence est la
-[note du modèle de fichier déclaratif](../notes/2026-08-17-modele-fichier-declaratif.md).
 La reconstruction et son ordre d’implémentation sont suivis dans le
 [plan de reconstruction de la navigation](../plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
 
 ## 1. Responsabilités et frontières
 
 Sighty conduit un parcours de vues composé de scènes CodPlay. Il possède le
-fichier de scénario, son index, la résolution des routes, la composition
+scénario, son index, la résolution des routes, la composition
 logique active et l’admission des événements. Il coordonne également une
 présentation physique interne, qui peut conserver une relation de montage
 indépendamment de cette composition logique. CodPlay possède la compilation,
@@ -54,8 +52,8 @@ présenter des carousels, des scènes parallèles ou des imbrications sans que l
 routeur Sighty présume leur structure visuelle.
 
 Les démos sont des fixtures de validation non normatives. Elles fournissent un
-fichier, un catalogue de `SceneDoc` et, lorsque le scénario le demande, des
-actions de présentation. Aucune démo ne recrée l’index ni le routeur de
+scénario avec ses vues, ses guards, ses actions et son catalogue de `SceneDoc`.
+Aucune démo ne recrée l’index ni le routeur de
 Sighty. Leur priorité et leur statut de validation sont suivis dans les plans,
 pas dans ce contrat.
 
@@ -66,7 +64,7 @@ surfaces publiques distinctes :
 
 ```ts
 const sighty = new Sighty({
-  scenario: { file, scenes, data, actions, guards },
+  scenario: { views, scenes, data, actions, guards },
   runtime: { root, instanceIds },
 })
 
@@ -79,6 +77,14 @@ sighty.runtime.destroy()
 `scenario` ne crée ni instance, ni player, ni montage. `runtime` exécute le
 scénario validé et raccorde les scènes à CodPlay.
 
+La définition `scenario` est l’unique représentation auteur conservée par
+Sighty. Elle porte directement `views`, `guards`, `actions`, `scenes` et les
+éventuelles `sceneSources` et `data`. `id`, `version`, `format` et `showMode`
+sont également des propriétés directes du scénario. L’index des vues est
+calculé depuis `scenario.views` pour la navigation et reconstruit après une
+mutation ; il ne constitue pas une seconde définition du parcours. Le runtime
+résout les noms d’actions et de guards sur cette même surface `scenario`.
+
 ## 3. API auteur publique
 
 Cette section concerne uniquement ce que l’auteur écrit ou qu’un outil
@@ -87,7 +93,7 @@ les occurrences CodPlay.
 
 ### 3.1. Forme déclarative
 
-La forme de travail actuelle est un graphe récursif de listes et de maps :
+Le champ direct `scenario.views` est un graphe récursif de listes et de maps :
 
 ```ts
 type ViewGraph<SceneKey, SlotName> =
@@ -135,7 +141,7 @@ type TelcoCommand =
   | 'reset'
 
 type ViewAction = {
-  action?: string
+  action?: `action:${string}:${string}` | SightyActionHandler
   go?:
     | { path: string }
     | { label: string }
@@ -148,13 +154,12 @@ entrée possède un `id` stable. Une `ViewMap` utilise ses clés et son `start`.
 Les graphes de `views` et de `slots` peuvent être imbriqués sans devenir une
 liste plate de placements.
 
-La forme historique de fichier v1, qui contient un tableau de placements, est
-normalisée à la frontière du scénario vers ce même graphe. Elle ne crée pas un
-second exécuteur.
+Une liste de vues utilise des `id` stables sur toutes ses entrées, y compris
+celles de ses slots. Aucun format de placement antérieur n’est normalisé.
 
 ### 3.2. Scènes, slots et identifiants auteur
 
-`SceneKey` désigne une scène fournie par l’application autour du fichier.
+`SceneKey` désigne une scène fournie dans le scénario.
 `SlotName` désigne le nom d’un slot déclaré dans la scène layout. `ViewId`
 désigne la clé d’une vue de map ou l’identifiant stable d’une entrée de liste.
 
@@ -163,14 +168,14 @@ Une ressource de scène accepte un `SceneDoc` seul ou le résultat de constructi
 l’éditeur : la feuille CSS texte est associée à la scène sans devenir un champ
 de `SceneDoc`. Une source différée peut retourner l’une ou l’autre forme.
 
-Le fichier décrit ces références. Il ne décrit pas l’instance physique qui
+Le scénario décrit ces références. Il ne décrit pas l’instance physique qui
 sera créée pour les exécuter. Les formes `ViewAddress`, `SlotAddress`,
 `OccurrenceId`, `BindingId`, `Generation` et `Revision` ne sont pas des champs
 que l’auteur doit écrire.
 
-### 3.3. Fichier et fonctions d’auteur
+### 3.3. Scénario et fonctions d’auteur
 
-Le fichier de déclaration n’est pas limité par principe à JSON. Comme dans
+Le scénario auteur n’est pas limité par principe à JSON. Comme dans
 CodPlay, l’API auteur peut exposer des fonctions ou d’autres mécanismes
 exécutables dans la forme écrite par l’auteur.
 
@@ -178,20 +183,27 @@ La forme compilée/exportable est une représentation différente. À cette
 frontière, les fonctions peuvent être extraites, référencées ou remplacées
 par une représentation portable selon le contrat de compilation. Cette
 contrainte appartient à l’export, pas à une interdiction artificielle imposée
-au fichier auteur.
+au scénario auteur.
 
 Les propriétés `scenario.actions` et `scenario.guards` nomment les fonctions
-que les vues peuvent référencer. Une vue peut aussi contenir directement une
-fonction d’action ou de guard. Le runtime résout les références dans les
-propriétés du scénario ; il ne reprend pas le modèle des scènes compilées
-CodPlay. La représentation compilée/exportable de ces fonctions reste une
-question de frontière d’export, pas une seconde exécution.
+que les vues peuvent référencer. Une clé d’action enregistrée suit la forme
+lisible `action:<domaine>:<verbe>` et une clé de guard suit la forme
+`guard:<domaine>:<prédicat>` ; le préfixe et le rôle final rendent la différence
+immédiate pour le lecteur et séparent explicitement ces registres des `SceneKey`
+et des identifiants de vues.
+Les clés des tables d’événements `actions` restent les noms d’événements et ne
+prennent pas ces préfixes. Une vue peut aussi contenir directement une
+fonction d’action ou de guard inline : elle est exécutée sans entrée de
+registre et n’a donc pas de clé à nommer. Le runtime résout les références
+dans les propriétés du scénario ; il ne reprend pas le modèle des scènes
+compilées CodPlay. La représentation compilée/exportable de ces fonctions
+reste une question de frontière d’export, pas une seconde exécution.
 
 ### 3.5. Politique d’affichage d’une scène
 
 `showMode` est la propriété auteur qui règle le traitement d’une occurrence
 lorsqu’une vue est admise. Elle accepte exclusivement `reset`, `maintain` ou
-`rewind`. La valeur peut être placée sur le fichier, un graphe (notamment le
+`rewind`. La valeur peut être placée sur le scénario, un graphe (notamment le
 graphe d’un slot), une vue parente ou la vue active ; elle est héritée selon la
 même priorité de portée que les conditions : vue active, graphe contenant,
 puis vues parentes. Une valeur locale remplace la valeur héritée.
@@ -270,9 +282,9 @@ peut souscrire aux événements que Sighty rend accessibles à l’extérieur.
 
 La surface `scenario` expose :
 
-- `file`, `scenes`, `data`, `actions` et `guards` ;
+- `views`, `scenes`, `data`, `actions` et `guards` directement ;
 - `sceneKeys`, `getScene(sceneKey)` et `getData(dataKey)` ;
-- `getView(sceneKey)` et `getViewGraph()` ;
+- `getView(sceneKey)` ;
 - `getSlotNames(sceneKey)` ;
 - `validate()`.
 
@@ -428,7 +440,7 @@ La vue de départ du graphe racine porte la scène hôte dans `view.scene` et se
 slots. Sighty la déduit du scénario ; `runtime` ne reçoit ni propriété
 `layout`, ni `storyId` séparé.
 
-`runtime.initialize()` valide le fichier et compile les documents de scène,
+`runtime.initialize()` valide le scénario et compile les documents de scène,
 puis demande à CodPlay de créer et d’initialiser les occurrences nécessaires via
 `owner.instances.create` avant de monter la composition initiale. Il ne
 réimplémente pas l’initialisation du player. Le preload est un service séparé :
@@ -471,7 +483,7 @@ son hook auteur et ne détruit ni ne remonte l'occurrence. Après un
 la lecture ; les actions auteur et le hook de `sequence:end` restent propres au
 traitement de cet événement terminal.
 
-Le mode de lecture par défaut est `rewind`. Le fichier et les portées auteur
+Le mode de lecture par défaut est `rewind`. Le scénario et les portées auteur
 peuvent le remplacer selon la règle de `showMode` décrite en §3.5.
 
 Sighty transmet `runtime.codplay` à CodPlay sans modifier sa configuration
@@ -480,7 +492,7 @@ contrat CodPlay lorsque l’application hôte la fournit ; l’absence de cette
 option ne devient pas une valeur `false` injectée par Sighty et ne constitue
 jamais un effet implicite de la telco.
 
-Pour la composition et le parcours, le fichier déclaratif du scénario est la
+Pour la composition et le parcours, la définition du scénario est la
 surface publique auteur. Les changements de sélection passent par les routes,
 actions et mutations déclarées, résolues par `dispatch` ou `mutate`. Le
 montage et le détachement physiques sont des opérations internes du
@@ -534,11 +546,11 @@ précédente. `up` et `down` restent des routes explicites vers un niveau parent
 ou vers le départ d’un graphe enfant lorsque cette cible est adressable dans la
 composition.
 
-Une action peut porter une route, une référence `action`, ou les deux. Une
-référence est exécutée depuis `scenario.actions` après la transition
-déclarée. Le handler reçoit l’événement d’intégration et `send`, qui utilise la
-surface publique d’événements de l’occurrence visée. Le handler ne crée pas de
-destination absente du fichier et ne touche pas au DOM.
+Une action peut porter une route, une référence `action:<domaine>:<verbe>`, une fonction
+inline, ou les deux. Une référence est exécutée depuis `scenario.actions` après
+la transition déclarée. Le handler reçoit l’événement d’intégration et `send`,
+qui utilise la surface publique d’événements de l’occurrence visée. Le handler
+ne crée pas de destination absente du scénario et ne touche pas au DOM.
 
 ### 6.2. Composition et cycle de transition
 
@@ -584,7 +596,7 @@ nouvelle n’est pas resetée : elle suit directement la livraison d’entrée p
 le démarrage prévu.
 
 Lorsqu’une mutation échoue après avoir modifié l’exécution, le même principe
-s’étend à la transaction : Sighty restaure le fichier et l’index précédents,
+s’étend à la transaction : Sighty restaure le scénario et l’index précédents,
 les occurrences et montages physiques, les liaisons, les ressources détenues
 et l’état de lecture capturé. Les occurrences inchangées sont réutilisées ;
 une restauration destructive recrée uniquement celles qui existaient avant la
@@ -609,6 +621,13 @@ d’observation. Sighty n’ouvre pas un second journal et ne transforme pas une
 progression continue en événements normaux. Il vérifie l’appartenance de la
 scène à la composition active, publie l’enveloppe Sighty, puis envoie la même
 demande au coordinateur de navigation.
+
+`SightyActionContext.send` utilise cette même passerelle pour cibler une
+occurrence active. La passerelle capture la position CodPlay courante, émet
+l’événement déclaré, restaure cette position et reprend la lecture si elle
+était active ; les patches d’une présentation ponctuelle sont ainsi
+matérialisés au point courant sans voie d’émission concurrente. Le test
+`runtime.spec.ts` vérifie cette matérialisation sur le DOM.
 
 `scene:end` et `sequence:end` peuvent être utilisés comme clés d’actions dans
 la déclaration auteur. Une action attachée à la sélection concernée peut donc
@@ -653,7 +672,7 @@ sélection, Sighty transmet les événements dans l’ordre déclaré à la scè
 active par sa passerelle CodPlay. L’événement est transmis tel quel, y compris
 `event.data` ; CodPlay applique ensuite ses actions auteur pour cet événement.
 Une liste vide ou un événement sans `name` est refusé par la validation du
-fichier auteur.
+scénario auteur.
 
 Cette livraison suit le coordinateur de transition : la sélection est montée
 et liée avant l’émission ; les événements `entry` sont envoyés avant que la
@@ -679,8 +698,8 @@ scènes utilisent `entry` ou l’envoi explicite par une action Sighty.
 
 ### 7.3. Conditions
 
-Les conditions exécutées sont `accessBy` et `exitBy`, sous forme de fonction ou
-de référence nommée dans `scenario.guards`, avec `onDenied` pour la route de repli d’un accès
+Les conditions exécutées sont `accessBy` et `exitBy`, sous forme de fonction
+inline ou de référence `guard:<domaine>:<prédicat>` dans `scenario.guards`, avec `onDenied` pour la route de repli d’un accès
 refusé. Leur résolution par portée et la lecture de `data`, du contexte, de
 l’état et de l’événement sont exécutées. Lorsqu’une vue contient plusieurs
 scènes, son `exitBy` reste le garde de sortie de la transition : un refus sur
@@ -704,7 +723,7 @@ ou invalide fait échouer l’opération sans publier de composition incohérent
 ### 7.5. Mutations du scénario
 
 `runtime.mutate()` construit et valide une nouvelle version avant de remplacer
-le fichier et l’index publiés. Les opérations disponibles sont l’ajout, la
+le scénario et l’index publiés. Les opérations disponibles sont l’ajout, la
 modification, le retrait, le masquage et l’affichage d’une vue, ciblés par
 `path` ou `label` auteur.
 
@@ -732,7 +751,15 @@ question.
 La tranche actuelle est considérée comme en cours, avec les preuves suivantes :
 
 - validation auteur sans exécution ;
-- index récursif et normalisation v1 ;
+- définition auteur unique `scenario` avec `views`, `guards` et `actions`
+  directs, résolution des registres par le runtime et mutation versionnée de
+  cette même définition ; les clés `action:<domaine>:<verbe>` et
+  `guard:<domaine>:<prédicat>` sont
+  validées, les fonctions inline restent admises ; les [tests auteur](../tests/authoring.spec.ts) et
+  [tests de mutation](../tests/runtime-features.spec.ts) font partie des 47
+  tests Sighty réussis, avec les typechecks Sighty/démos et le build démos
+  après migration des cinq scénarios de démo ;
+- index récursif du graphe auteur ;
 - navigation `path`, `label`, `next` et `previous` avec héritage ;
 - réconciliation des montages, conservation physique hors composition active,
   remplacement et détachement réels via la façade publique CodPlay ;

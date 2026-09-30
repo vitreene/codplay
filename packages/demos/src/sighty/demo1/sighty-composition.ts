@@ -1,8 +1,8 @@
 import {
   Sighty,
 } from '@codplay/sighty'
-import { sightyScenario } from './scene-resources'
-import type { SightySceneKey, SightySlotName } from './sighty-file'
+import { sightyScenario } from './scenario'
+import type { SightySceneKey, SightySlotName } from './scenario'
 import { SIGHTY_SCENE_ROOT_STYLE_SHEET } from '../scene-root-capsule'
 
 type Demo1LogLevel = 'info' | 'warn' | 'error'

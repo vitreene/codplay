@@ -197,7 +197,8 @@
 
 .demo5-menu button:focus-visible,
 .demo5-navigation__button:focus-visible,
-.demo5-quiz__validate:focus-visible {
+.demo5-quiz__validate:focus-visible,
+.demo5-conclusion__restart:focus-visible {
   outline: 3px solid #f5c451;
   outline-offset: 2px;
 }
@@ -257,16 +258,6 @@
 .demo5-page__image {
   display: block;
   width: 100%;
-}
-
-.demo5-page__image-frame--hidden .demo5-page__image {
-  transform: translateX(-112%);
-  transition: transform 420ms cubic-bezier(0.55, 0.055, 0.675, 0.19);
-}
-
-.demo5-page__image-frame--visible .demo5-page__image {
-  transform: translateX(0%);
-  transition: transform 520ms cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
 .demo5-page__video {
@@ -434,6 +425,21 @@
   color: #244d38;
   font-size: 1.05rem;
   line-height: 1.6;
+}
+
+.demo5-conclusion__restart {
+  margin-top: 1.25rem;
+  padding: 0.62rem 1rem;
+  border: 0;
+  border-radius: 0.45rem;
+  color: #fff;
+  background: #0f766e;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.demo5-conclusion__restart:hover {
+  background: #115e59;
 }
 
 @media (max-width: 720px) {

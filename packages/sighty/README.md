@@ -1,84 +1,63 @@
 # Sighty
 
-Sighty regroupe le scénario auteur et son exécution CodPlay derrière un seul
-point d'entrée. Le scénario décrit un graphe de vues ; le runtime reçoit les
-événements et suit les routes déclarées.
+Sighty fait avancer un parcours de scènes CodPlay selon les événements reçus.
+Le scénario réunit les vues, les conditions de navigation, les actions et les
+scènes disponibles.
 
 ```ts
-import { Sighty, type SightyFile } from '@codplay/sighty'
+import { Sighty, type SightyScenarioDefinition } from '@codplay/sighty'
 
-const file: SightyFile<'scene-layout' | 'scene-menu' | 'scene-a' | 'scene-b', 'slot-scene'> = {
-  views: {
-    start: 'view-main',
-    views: {
-      'view-main': {
-        view: {
-          scene: 'scene-layout',
-          views: {
-            start: 'view-chapter',
-            views: {
-              'view-chapter': {
-                actions: {
-                  'navigation:next': { go: { direction: 'next' } },
-                },
-                view: {
-                  slots: {
-                    'slot-scene': {
-                      start: 'view-menu',
-                      views: {
-                        'view-menu': { view: { scene: 'scene-menu' } },
-                      },
-                    },
-                  },
-                },
-              },
+const scenario: SightyScenarioDefinition<'layout' | 'intro' | 'suite', 'content'> = {
+  views: [{
+    id: 'layout',
+    view: {
+      scene: 'layout',
+      slots: {
+        content: [
+          {
+            id: 'intro',
+            actions: {
+              'course:complete': { action: 'action:course:remember-progress' },
+              'course:continue': { go: { direction: 'next' } },
             },
+            view: { scene: 'intro' },
           },
-        },
+          {
+            id: 'suite',
+            accessBy: 'guard:course:has-progress',
+            view: { scene: 'suite' },
+          },
+        ],
       },
     },
+  }],
+  guards: {
+    'guard:course:has-progress': ({ context }) => context.progress === true,
   },
-}
-
-// The scene catalogue is supplied separately from the serializable file.
-const scenes = {
-  'scene-layout': layout,
-  'scene-menu': menu,
-  'scene-a': sceneA,
-  'scene-b': sceneB,
+  actions: {
+    'action:course:remember-progress': ({ updateContext }) => updateContext({ progress: true }),
+  },
+  scenes: { layout: layoutScene, intro: introScene, suite: suiteScene },
 }
 
 const sighty = new Sighty({
-  scenario: { file, scenes },
+  scenario,
   runtime: {
-    root,
-    instanceIds: {
-      'scene-layout': 'layout-1',
-      'scene-menu': 'menu-1',
-      'scene-a': 'scene-a-1',
-      'scene-b': 'scene-b-1',
-    },
-    layout: { sceneKey: 'scene-layout', storyId: 'main' },
+    root: document.querySelector('#course')!,
+    instanceIds: { layout: 'layout-1', intro: 'intro-1', suite: 'suite-1' },
+    context: { progress: false },
   },
 })
 
 await sighty.runtime.initialize()
-await sighty.runtime.dispatch({ name: 'navigation:next' })
-
-const unsubscribe = sighty.runtime.events.onEvent((event) => {
-  console.log(event.name, event.data, event.sourceSceneKey)
-})
-
-unsubscribe()
+await sighty.runtime.dispatch({ name: 'course:complete' })
+await sighty.runtime.dispatch({ name: 'course:continue' })
 ```
 
-Chaque entrée d'une `ViewList` reçoit un `id` stable ; `next` et `previous`
-suivent l'ordre déclaré. Le scénario ne crée pas de DOM et ne contient pas les
-sources des scènes : `sighty.scenario` les reçoit dans son catalogue, tandis
-que `sighty.runtime` pilote les occurrences, les slots et la navigation.
-Les événements publics produits par les scènes remontent vers l’application
-hôte par `runtime.events.onEvent`; l’abonnement renvoie une fonction de
-désabonnement.
+Les scènes peuvent aussi émettre leurs événements publics vers Sighty.
+`sighty.runtime.destroy()` libère l’exécution lorsqu’elle n’est plus utilisée.
 
-Les contrôles de page et les fonctionnalités propres à une application restent
-à l’extérieur.
+Les références enregistrées utilisent les préfixes `action:` et `guard:` pour
+rester distinctes des identifiants de scène. Une vue peut aussi recevoir une
+fonction d’action ou de guard inline, sans clé dans `scenario.actions` ou
+`scenario.guards`.

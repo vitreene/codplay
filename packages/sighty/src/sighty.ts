@@ -2,7 +2,7 @@ import { SightyScenarioImpl } from './scenario'
 import { createSightyRuntime } from './runtime'
 import type {
   SightyScenarioApi,
-  SightyScenarioResources,
+  SightyScenarioDefinition,
   SightySceneKey,
   SightySlotName,
 } from './types'
@@ -13,7 +13,7 @@ export type SightyOptions<
   SceneKey extends string = string,
   SlotName extends string = string,
 > = Readonly<{
-  scenario: SightyScenarioResources<SceneKey, SlotName>
+  scenario: SightyScenarioDefinition<SceneKey, SlotName>
   runtime: SightyRuntimeConfiguration<SceneKey>
 }>
 

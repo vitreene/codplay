@@ -50,7 +50,7 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
     }
     const instance = this.state.instances.get(binding.occurrenceKey)
     if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
-    await this.emit(instance, eventime, target, false)
+    await this.emit(instance, eventime, target, true)
   }
 
   /** Emits one event and optionally restores its CodPlay transport state. */

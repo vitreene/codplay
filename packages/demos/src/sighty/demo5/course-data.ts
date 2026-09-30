@@ -126,8 +126,11 @@ export function canExitCoursePage(pageId: string, eventName: string | undefined,
   if (page.chapterId === 'chapter-final' && page.kind === 'quiz') {
     return Object.hasOwn(signet.finalAnswers, page.id)
   }
+  if (page.chapterId === 'chapter-1' && page.kind === 'quiz') {
+    return signet.chapter1QuizPassed
+  }
   if (signet.finishedPages[pageId] !== true) return false
-  return page.chapterId !== 'chapter-1' || page.kind !== 'quiz' || signet.chapter1QuizPassed
+  return true
 }
 /** Evaluates the accepted requirement of three correct final answers. */
 export function hasPassedFinalAssessment(signet: CourseSignet): boolean {

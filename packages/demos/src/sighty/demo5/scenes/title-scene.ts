@@ -18,7 +18,7 @@ export const titleScene: SceneDoc<string> = {
             className: 'demo5-title',
             move: '@root',
           },
-          actions: { [COURSE_PRESENTATION_EVENTS.title]: { content: 'Titre en attente' } },
+          actions: { [COURSE_PRESENTATION_EVENTS.title]: null },
         },
       ],
     },

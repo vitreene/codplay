@@ -69,9 +69,6 @@ export function createViewIndex<
       if (entry.view.view.views !== undefined) {
         walkGraph(entry.view.view.views, entry.path, [...parentViews, entry], graphScopes)
       }
-      if (entry.view.view.graph !== undefined) {
-        walkGraph(entry.view.view.graph, `${entry.path}/graph`, [...parentViews, entry], graphScopes)
-      }
     }
 
     return indexedGraph

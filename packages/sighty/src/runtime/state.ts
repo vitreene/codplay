@@ -14,12 +14,9 @@ import { collectSceneKeys } from './helpers'
 
 /** Keeps the mutable execution state shared by the focused runtime services. */
 export type SightyRuntimeState<SceneKey extends string, SlotName extends string> = {
-  readonly scenario: SightyRuntimeOptions<SceneKey, SlotName>['scenario']
-  readonly mutableScenario: SightyMutableScenarioApi<SceneKey, SlotName>
+  readonly scenario: SightyMutableScenarioApi<SceneKey, SlotName>
   readonly root: HTMLElement
   readonly instanceIds: Readonly<Record<SceneKey, string>>
-  readonly actions: SightyRuntimeOptions<SceneKey, SlotName>['scenario']['actions']
-  readonly guards: SightyRuntimeOptions<SceneKey, SlotName>['scenario']['guards']
   readonly initialContext: Readonly<Record<string, unknown>>
   readonly preloadMode: RuntimePreloadMode
   readonly styles: readonly SightyRuntimeStyle[]
@@ -63,16 +60,13 @@ export type RuntimeEventChannel<SceneKey extends string> = Readonly<{
 export function createRuntimeState<SceneKey extends string, SlotName extends string>(
   options: SightyRuntimeOptions<SceneKey, SlotName>,
 ): SightyRuntimeState<SceneKey, SlotName> {
-  const viewIndex = createViewIndex(options.scenario.getViewGraph())
+  const viewIndex = createViewIndex(options.scenario.views)
   const layoutEntry = getStartEntry(viewIndex, '')
   const publicEventChannel = createSightyPublicEventChannel<SceneKey>()
   return {
-    scenario: options.scenario,
-    mutableScenario: options.scenario as SightyMutableScenarioApi<SceneKey, SlotName>,
+    scenario: options.scenario as SightyMutableScenarioApi<SceneKey, SlotName>,
     root: options.root,
     instanceIds: options.instanceIds,
-    actions: options.scenario.actions,
-    guards: options.scenario.guards,
     initialContext: { ...(options.context ?? {}) },
     preloadMode: options.preloadMode ?? 'author',
     styles: options.styles ?? [],

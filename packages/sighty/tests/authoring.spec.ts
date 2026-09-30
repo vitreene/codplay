@@ -3,28 +3,22 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SceneDoc } from 'codplay/scene/types'
-import { Sighty, type SightyFile, type SightyGraphView } from '../src'
+import { Sighty, type SightyScenarioDefinition, type SightyGraphView } from '../src'
 
-const file: SightyFile<'layout' | 'sceneB', 'main'> = {
+const scenario: SightyScenarioDefinition<'layout' | 'sceneB', 'main'> = {
   format: 'sighty',
   version: 1,
   id: 'authoring-test',
-  resources: {
-    scenes: {
-      layout: './layout-scene',
-      sceneB: './scene-b',
-    },
-  },
-  views: [{ view: { scene: 'layout', slots: { main: [{ view: { scene: 'sceneB' } }] } } }],
+  views: [{ id: 'layout', view: { scene: 'layout', slots: { main: [{ id: 'scene-b', view: { scene: 'sceneB' } }] } } }],
 }
 
 describe('Sighty authoring class', () => {
-  it('groups file, scenes and data without executing them', () => {
+  it('groups views, scenes and data in one scenario without executing them', () => {
     const layout = { id: 'layout', stories: {} }
     const sceneB = { id: 'scene-b', stories: {} }
     const project = new Sighty({
       scenario: {
-        file,
+        ...scenario,
         scenes: { layout, sceneB },
         data: { locale: 'fr' },
       },
@@ -34,7 +28,7 @@ describe('Sighty authoring class', () => {
       },
     })
 
-    expect(project.scenario.file).toBe(file)
+    expect(project.scenario.views).toBe(scenario.views)
     expect(project.scenario.getScene('sceneB')).toBe(sceneB)
     expect(project.scenario.getData('locale')).toBe('fr')
     expect(project.scenario.getView('layout')?.view.scene).toBe('layout')
@@ -45,15 +39,13 @@ describe('Sighty authoring class', () => {
     project.runtime.destroy()
   })
 
-  it('reports missing and undeclared scene resources', () => {
-    // This intentionally invalid fixture bypasses the typed complete catalog
-    // so that runtime validation can report the missing file resource.
+  it('reports a view whose scene is absent from the scenario catalog', () => {
     const scenes = {
       layout: { id: 'layout', stories: {} },
       sceneC: { id: 'scene-c', stories: {} },
     } as unknown as Readonly<Record<'layout' | 'sceneB', SceneDoc<string>>>
     const project = new Sighty({
-      scenario: { file, scenes },
+      scenario: { ...scenario, scenes },
       runtime: {
         root: document.createElement('div'),
         instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
@@ -61,15 +53,13 @@ describe('Sighty authoring class', () => {
     })
 
     expect(project.scenario.validate().map((diagnostic) => diagnostic.code)).toEqual([
-      'AUTHOR_SCENE_RESOURCE_MISSING',
-      'AUTHOR_SCENE_RESOURCE_UNDECLARED',
       'AUTHOR_VIEW_CHILD_SCENE_UNKNOWN',
     ])
     project.runtime.destroy()
   })
 
   it('validates routes declared on a view map scope', () => {
-    const invalidFile: SightyFile<'layout' | 'sceneB', 'main'> = {
+    const invalidScenario: SightyScenarioDefinition<'layout' | 'sceneB', 'main'> = {
       format: 'sighty',
       version: 2,
       id: 'invalid-map-action',
@@ -92,7 +82,7 @@ describe('Sighty authoring class', () => {
     }
     const project = new Sighty({
       scenario: {
-        file: invalidFile,
+        ...invalidScenario,
         scenes: {
           layout: { id: 'layout', stories: {} },
           sceneB: { id: 'scene-b', stories: {} },
@@ -113,7 +103,7 @@ describe('Sighty authoring class', () => {
   })
 
   it('rejects unknown and ambiguous route labels during authoring validation', () => {
-    const invalidFile: SightyFile<'layout' | 'sceneB', 'main' | 'secondary'> = {
+    const invalidScenario: SightyScenarioDefinition<'layout' | 'sceneB', 'main' | 'secondary'> = {
       format: 'sighty',
       version: 2,
       id: 'invalid-label-routes',
@@ -140,7 +130,7 @@ describe('Sighty authoring class', () => {
     }
     const project = new Sighty({
       scenario: {
-        file: invalidFile,
+        ...invalidScenario,
         scenes: {
           layout: { id: 'layout', stories: {} },
           sceneB: { id: 'scene-b', stories: {} },
@@ -168,7 +158,7 @@ describe('Sighty authoring class', () => {
   })
 
   it('validates view couplings before runtime initialization', () => {
-    const invalidFile: SightyFile<'layout' | 'sceneB', 'main'> = {
+    const invalidScenario: SightyScenarioDefinition<'layout' | 'sceneB', 'main'> = {
       format: 'sighty',
       version: 2,
       id: 'invalid-coupling',
@@ -194,7 +184,7 @@ describe('Sighty authoring class', () => {
     }
     const project = new Sighty({
       scenario: {
-        file: invalidFile,
+        ...invalidScenario,
         scenes: {
           layout: { id: 'layout', stories: {} },
           sceneB: { id: 'scene-b', stories: {} },
@@ -216,13 +206,13 @@ describe('Sighty authoring class', () => {
   })
 
   it('validates the public showMode vocabulary before runtime initialization', () => {
-    const invalidFile = {
-      ...file,
+    const invalidScenario = {
+      ...scenario,
       showMode: 'replay',
-    } as unknown as SightyFile<'layout' | 'sceneB', 'main'>
+    } as unknown as SightyScenarioDefinition<'layout' | 'sceneB', 'main'>
     const project = new Sighty({
       scenario: {
-        file: invalidFile,
+        ...invalidScenario,
         scenes: {
           layout: { id: 'layout', stories: {} },
           sceneB: { id: 'scene-b', stories: {} },
@@ -243,11 +233,10 @@ describe('Sighty authoring class', () => {
   })
 
   it('requires entry to contain at least one named event', () => {
-    const invalidFile = {
+    const invalidScenario = {
       format: 'sighty',
       version: 2,
       id: 'entry-validation',
-      resources: { scenes: { layout: './layout-scene', sceneB: './scene-b' } },
       views: {
         start: 'layout',
         views: {
@@ -264,10 +253,10 @@ describe('Sighty authoring class', () => {
           },
         },
       },
-    } as unknown as SightyFile<'layout' | 'sceneB', 'main'>
+    } as unknown as SightyScenarioDefinition<'layout' | 'sceneB', 'main'>
     const project = new Sighty({
       scenario: {
-        file: invalidFile,
+        ...invalidScenario,
         scenes: {
           layout: { id: 'layout', stories: {} },
           sceneB: { id: 'scene-b', stories: {} },
@@ -283,6 +272,114 @@ describe('Sighty authoring class', () => {
       { code: 'AUTHOR_ENTRY_EVENTS_EMPTY', path: 'views.layout/main/empty.entry' },
       { code: 'AUTHOR_ENTRY_EVENT_NAME_MISSING', path: 'views.layout/main/unnamed.entry.name' },
     ])
+    project.runtime.destroy()
+  })
+
+  it('keeps registered action and guard keys in their own namespaces', () => {
+    const invalidScenario = {
+      format: 'sighty',
+      version: 2,
+      id: 'invalid-key-names',
+      views: [{
+        id: 'layout',
+        actions: {
+          'course:open': { action: 'course:remember-progress' },
+        },
+        accessBy: 'course:has-progress',
+        view: {
+          scene: 'layout',
+          slots: { main: [{ id: 'scene-b', view: { scene: 'sceneB' } }] },
+        },
+      }],
+      actions: { 'course:remember-progress': async () => undefined },
+      guards: { 'course:has-progress': () => true },
+    } as unknown as SightyScenarioDefinition<'layout' | 'sceneB', 'main'>
+    const project = new Sighty({
+      scenario: {
+        ...invalidScenario,
+        scenes: {
+          layout: { id: 'layout', stories: {} },
+          sceneB: { id: 'scene-b', stories: {} },
+        },
+      },
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+      },
+    })
+
+    expect(project.scenario.validate().map(({ code, path }) => ({ code, path }))).toEqual([
+      { code: 'AUTHOR_ACTION_KEY_INVALID', path: 'actions.course:remember-progress' },
+      { code: 'AUTHOR_GUARD_KEY_INVALID', path: 'guards.course:has-progress' },
+      { code: 'AUTHOR_ACTION_REFERENCE_INVALID', path: 'views.layout.actions.course:open.action' },
+      { code: 'AUTHOR_GUARD_REFERENCE_INVALID', path: 'views.layout.accessBy' },
+    ])
+    project.runtime.destroy()
+  })
+
+  it('requires a domain and semantic name so action and guard keys stay readable', () => {
+    const invalidScenario = {
+      ...scenario,
+      views: [{
+        id: 'layout',
+        actions: { 'course:open': { action: 'action:course' } },
+        accessBy: 'guard:course',
+        view: {
+          scene: 'layout',
+          slots: { main: [{ id: 'scene-b', view: { scene: 'sceneB' } }] },
+        },
+      }],
+      actions: { 'action:course': async () => undefined },
+      guards: { 'guard:course': () => true },
+      scenes: {
+        layout: { id: 'layout', stories: {} },
+        sceneB: { id: 'scene-b', stories: {} },
+      },
+    } as unknown as SightyScenarioDefinition<'layout' | 'sceneB', 'main'>
+    const project = new Sighty({
+      scenario: invalidScenario,
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+      },
+    })
+
+    expect(project.scenario.validate().map(({ code, path }) => ({ code, path }))).toEqual([
+      { code: 'AUTHOR_ACTION_KEY_INVALID', path: 'actions.action:course' },
+      { code: 'AUTHOR_GUARD_KEY_INVALID', path: 'guards.guard:course' },
+      { code: 'AUTHOR_ACTION_REFERENCE_INVALID', path: 'views.layout.actions.course:open.action' },
+      { code: 'AUTHOR_GUARD_REFERENCE_INVALID', path: 'views.layout.accessBy' },
+    ])
+    project.runtime.destroy()
+  })
+
+  it('accepts inline actions and guards without registry keys', () => {
+    const inlineScenario: SightyScenarioDefinition<'layout' | 'sceneB', 'main'> = {
+      ...scenario,
+      views: [{
+        id: 'layout',
+        action: async () => undefined,
+        accessBy: () => true,
+        actions: { 'course:complete': { action: async () => undefined } },
+        view: {
+          scene: 'layout',
+          slots: { main: [{ id: 'scene-b', view: { scene: 'sceneB' } }] },
+        },
+      }],
+      scenes: {
+        layout: { id: 'layout', stories: {} },
+        sceneB: { id: 'scene-b', stories: {} },
+      },
+    }
+    const project = new Sighty({
+      scenario: inlineScenario,
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+      },
+    })
+
+    expect(project.scenario.validate()).toEqual([])
     project.runtime.destroy()
   })
 })
