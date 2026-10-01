@@ -61,3 +61,30 @@ Les références enregistrées utilisent les préfixes `action:` et `guard:` pou
 rester distinctes des identifiants de scène. Une vue peut aussi recevoir une
 fonction d’action ou de guard inline, sans clé dans `scenario.actions` ou
 `scenario.guards`.
+
+## Rejouer un parcours
+
+Une action peut restaurer le contexte Sighty et demander aux scènes de remettre
+à zéro leur propre état. Dans une scène de quiz, `onReset` traduit les clés en
+un événement que le circuit `listen`/`straps` du quiz traite :
+
+```ts
+const restartAction = {
+  go: { path: 'layout/content/intro' },
+  reset: ['all'],
+  action: 'action:course:refresh-presentation',
+}
+
+const quizSource = {
+  sceneDoc: quizScene,
+  onReset: (keys: readonly string[]) =>
+    keys.includes('all') || keys.includes('quiz')
+      ? { name: 'course-quiz:reset' }
+      : undefined,
+}
+```
+
+`all` restaure le contexte initial ; le quiz reçoit ensuite `course-quiz:reset`
+et vide ses réponses. La scène reste propriétaire de ses corrections et de son
+feedback. Demo 5 utilise ce parcours dans
+[`scenario.ts`](../demos/src/sighty/demo5/scenario.ts).

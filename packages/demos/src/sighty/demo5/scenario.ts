@@ -2,18 +2,17 @@ import type {
   SightyActionContext,
   SightyActionHandler,
   SightyGraphView,
+  SightySceneSourceValue,
   SightyScenarioDefinition,
   SightyViewAction,
   SightyViewList,
 } from '@codplay/sighty'
-import type { SceneDoc } from 'codplay/scene/types'
 import {
   canAccessCoursePage,
   canExitCoursePage,
   COURSE_CHAPTERS,
   COURSE_PAGES,
   COURSE_START_PAGE_ID,
-  createInitialCourseSignet,
   getCoursePageBySceneKey,
   getCoursePagePath,
   getCourseSceneKey,
@@ -58,8 +57,15 @@ export function createCourseScenario(
       : page.kind === 'quiz'
         ? createQuizPageScene(page)
         : createConclusionScene()
-    return [getCourseSceneKey(page.id), scene]
-  })) as Record<`scene-${string}`, SceneDoc<string>>
+    if (page.kind !== 'quiz') return [getCourseSceneKey(page.id), scene]
+
+    return [getCourseSceneKey(page.id), {
+      sceneDoc: scene,
+      onReset: (keys) => keys.includes('all') || keys.includes('quiz') || keys.includes('solutions')
+        ? { name: `course-quiz:${page.id}:reset`, data: { keys: [...keys] } }
+        : undefined,
+    }]
+  })) as Record<`scene-${string}`, SightySceneSourceValue>
   const coursePageActions = createCoursePageActions()
   const chapterViews = createCourseChapterViews()
 
@@ -109,7 +115,8 @@ export function createCourseScenario(
                     },
                     [COURSE_EVENTS.restart]: {
                       go: { path: getCoursePagePath(COURSE_START_PAGE_ID) },
-                      action: 'action:course:reset-progress',
+                      reset: ['all'],
+                      action: 'action:course:refresh-presentation',
                     },
                     [COURSE_EVENTS.pageBottom]: { action: 'action:course:mark-page-finished' },
                     [COURSE_EVENTS.quizAnswered]: { action: 'action:course:record-quiz-answer' },
@@ -137,7 +144,6 @@ export function createCourseScenario(
     actions: {
       'action:course:mark-page-finished': markCurrentPageFinished(onLog),
       'action:course:record-quiz-answer': recordCurrentQuizAnswer(onLog),
-      'action:course:reset-progress': resetCourseProgress(onLog),
       'action:course:refresh-presentation': refreshCoursePresentation(onLog),
     },
     guards: {
@@ -215,7 +221,10 @@ function markCurrentPageFinished(
       return
     }
 
-    const signet = markCoursePageFinished(readCourseSignet(context.context.signet), page.id)
+    const currentSignet = readCourseSignet(context.context.signet)
+    if (currentSignet.finishedPages[page.id] === true) return
+
+    const signet = markCoursePageFinished(currentSignet, page.id)
     await updateCourseProgress(context, signet, onLog)
   }
 }
@@ -235,16 +244,6 @@ function recordCurrentQuizAnswer(
     const signet = recordCourseQuizAnswer(readCourseSignet(context.context.signet), page, isCorrect)
     await updateCourseProgress(context, signet, onLog)
     onLog(`${page.title} : ${isCorrect ? 'réponse juste' : 'réponse fausse'}`)
-  }
-}
-
-/** Resets the course signet after the conclusion has navigated to the start page. */
-function resetCourseProgress(
-  onLog: (message: string, level?: 'info' | 'warn' | 'error') => void,
-): SightyActionHandler<CourseSceneKey> {
-  return async function resetProgress(context): Promise<void> {
-    await updateCourseProgress(context, createInitialCourseSignet(), onLog)
-    onLog('Cours réinitialisé depuis la page de félicitations.')
   }
 }
 

@@ -110,6 +110,8 @@ export type SightyShowMode = 'reset' | 'maintain' | 'rewind'
 export type SightyViewAction<SceneKey extends string = string, SlotName extends string = string> = Readonly<{
   action?: SightyActionKey | SightyActionHandler<SceneKey, SlotName>
   go?: SightyRouteTarget
+  /** Resets Sighty context or asks existing scenes to handle selected reset keys. */
+  reset?: readonly string[]
 }>
 
 /** Names of the CodPlay telco commands that Sighty can mediate declaratively. */
@@ -206,13 +208,17 @@ export type SightyView<
   SlotName extends string = string,
 > = SightyGraphView<SceneKey, SlotName>
 
-/** Holds a scene document and the stylesheet emitted alongside it by a builder. */
-type SightySceneSourceValue = SceneDoc<string> | Readonly<{
+/** Converts selected replay reset keys into one event handled by a scene. */
+export type SightySceneResetHandler = (keys: readonly string[]) => CodPlayEventime | undefined
+
+/** Holds a scene document and its optional stylesheet and reset handler. */
+export type SightySceneSourceValue = SceneDoc<string> | Readonly<{
   sceneDoc: SceneDoc<string>
-  styleSheet: string
+  styleSheet?: string
+  onReset?: SightySceneResetHandler
 }>
 
-/** Catalogs scene documents and any stylesheet emitted alongside each scene. */
+/** Catalogs scene documents with optional stylesheet and reset handlers. */
 export type SightySceneCatalog<SceneKey extends string = string> = Readonly<
   Record<SceneKey, SightySceneSourceValue>
 >
@@ -297,6 +303,9 @@ export type SightyAuthoringDiagnostic = Readonly<{
     | 'AUTHOR_ENTRY_EVENTS_EMPTY'
     | 'AUTHOR_ENTRY_EVENT_NAME_MISSING'
     | 'AUTHOR_SHOW_MODE_UNKNOWN'
+    | 'AUTHOR_ACTION_RESET_INVALID'
+    | 'AUTHOR_ACTION_RESET_EMPTY'
+    | 'AUTHOR_ACTION_RESET_ALL_MIXED'
   path: string
   message: string
 }>

@@ -146,8 +146,15 @@ type ViewAction = {
     | { path: string }
     | { label: string }
     | { direction: 'next' | 'previous' | 'up' | 'down' }
+  reset?: readonly string[]
 }
 ```
+
+`reset` demande des effets de reprise sur l’action qui la porte. Son absence
+ne demande aucun reset. La liste doit contenir au moins une clé texte non vide ;
+`all` doit apparaître seul. `context` est la clé Sighty intégrée. Les autres
+clés sont transmises aux callbacks `onReset` des scènes et restent définies par
+elles, par exemple `quiz` ou `solutions`.
 
 Une `ViewList` utilise l’ordre déclaré pour `next` et `previous`, mais chaque
 entrée possède un `id` stable. Une `ViewMap` utilise ses clés et son `start`.
@@ -163,10 +170,12 @@ celles de ses slots. Aucun format de placement antérieur n’est normalisé.
 `SlotName` désigne le nom d’un slot déclaré dans la scène layout. `ViewId`
 désigne la clé d’une vue de map ou l’identifiant stable d’une entrée de liste.
 
-Une ressource de scène accepte un `SceneDoc` seul ou le résultat de construction
-`{ sceneDoc, styleSheet }`. Cette seconde forme reprend la sortie du builder de
-l’éditeur : la feuille CSS texte est associée à la scène sans devenir un champ
-de `SceneDoc`. Une source différée peut retourner l’une ou l’autre forme.
+Une ressource de scène accepte un `SceneDoc` seul ou un descripteur
+`{ sceneDoc, styleSheet?, onReset? }`. La feuille CSS texte est associée à la
+scène sans devenir un champ de `SceneDoc`. `onReset(keys)` peut traduire les clés
+de reprise en un `CodPlayEventime`, ou retourner `undefined` si la scène ne
+prend pas en charge cette demande. Une source différée peut retourner l’une ou
+l’autre forme ; son callback n’est disponible qu’une fois la source résolue.
 
 Le scénario décrit ces références. Il ne décrit pas l’instance physique qui
 sera créée pour les exécuter. Les formes `ViewAddress`, `SlotAddress`,
@@ -548,9 +557,13 @@ composition.
 
 Une action peut porter une route, une référence `action:<domaine>:<verbe>`, une fonction
 inline, ou les deux. Une référence est exécutée depuis `scenario.actions` après
-la transition déclarée. Le handler reçoit l’événement d’intégration et `send`,
-qui utilise la surface publique d’événements de l’occurrence visée. Le handler
-ne crée pas de destination absente du scénario et ne touche pas au DOM.
+la transition déclarée. Si elle porte aussi `reset`, la route est d’abord
+résolue, admise et appliquée ; Sighty traite ensuite `reset`, puis exécute le
+handler. Si la route est refusée, les effets de reprise et le handler ne sont
+pas exécutés. Sans route, `reset` s’applique à la composition courante. Le
+handler reçoit l’événement d’intégration et `send`, qui utilise la surface
+publique d’événements de l’occurrence visée. Le handler ne crée pas de
+destination absente du scénario et ne touche pas au DOM.
 
 ### 6.2. Composition et cycle de transition
 
@@ -628,6 +641,19 @@ l’événement déclaré, restaure cette position et reprend la lecture si elle
 était active ; les patches d’une présentation ponctuelle sont ainsi
 matérialisés au point courant sans voie d’émission concurrente. Le test
 `runtime.spec.ts` vérifie cette matérialisation sur le DOM.
+
+Pour `reset`, Sighty restaure une copie du contexte initial lorsque la liste
+contient `context` ou `all`. Il ne développe pas les autres clés et n’appelle
+pas `telco.reset()` pour l’état métier des scènes. Pour chaque `SceneKey` qui
+possède déjà une occurrence conservée, Sighty appelle son `onReset` une fois
+avec la liste écrite par l’auteur. Si le callback retourne un événement, la
+passerelle l’envoie à chaque occurrence conservée de cette clé, active ou
+inactive, en ciblant chaque story déclarée. L’envoi réutilise la conservation
+de position et d’état de lecture de la passerelle. Il ne crée pas d’occurrence
+et ne résout pas une source différée uniquement pour effectuer un reset.
+`all` restaure donc le contexte et est transmis tel quel aux scènes ; chaque
+scène choisit les effets qu’elle associe à cette clé. Par exemple, elle peut
+remettre à zéro un quiz sans exposer les solutions.
 
 `scene:end` et `sequence:end` peuvent être utilisés comme clés d’actions dans
 la déclaration auteur. Une action attachée à la sélection concernée peut donc
@@ -780,16 +806,27 @@ La tranche actuelle est considérée comme en cours, avec les preuves suivantes 
   `SceneKey` est active plusieurs fois ;
 - abonnement hôte `runtime.events.onEvent`, données publiques et
   désabonnement, avec isolation des erreurs d’observateur ;
+- propriété `reset` des actions, restauration du contexte, ordre après la route
+  et avant le handler, et callbacks `onReset` diffusés aux stories des
+  occurrences conservées, actives et inactives ; les [tests de reset de
+  relecture](../tests/replay-reset.spec.ts) et les validations auteur couvrent
+  aussi les listes vides, les clés invalides et `all` combiné ;
 - relais d’un événement public de scène par `runtime.events`, sans abonnement
   direct aux événements publics de l’instance telco ;
 - nettoyage des instances, montages, abonnements, ressources et CSS lors d’une
   initialisation partiellement échouée ;
-- typecheck, tests de contrat Sighty et intégration du chemin runtime réel.
+- typecheck Sighty et démos, build démos, tests de contrat Sighty et
+  intégration du chemin runtime réel pour les scénarios déjà acceptés.
+
+La propriété `reset` est couverte par 51 tests Sighty, le typecheck Sighty, le
+typecheck et le build des démos. Le parcours navigateur Demo 5 après cette
+modification reste à vérifier avec le MCP du navigateur ; son outil n’était
+pas exposé dans cette session. Cette preuve reste ouverte dans le
+[plan de relecture](../plan/2026-09-30-sighty-replay-reset-plan.md).
 
 Restent à réaliser avant une stabilisation : la matrice complète des parcours
-navigateur/Safari et la suite complète des vérifications de cycle de vie et de
-ressources. Le smoke test Safari MCP de Demo 4 est déjà exécuté sur l’instance
-active ; sa disponibilité ne constitue donc pas une décision ou un blocage
-d’architecture. La persistance reste une responsabilité de l’application hôte
-lorsqu’elle sera intégrée ; elle ne sera pas ajoutée à l’API Sighty pour cette
-reprise.
+navigateur et la suite complète des vérifications de cycle de vie et de
+ressources. Le smoke test MCP de Demo 4 est déjà exécuté sur l’instance active ;
+sa disponibilité ne constitue donc pas une décision ou un blocage d’architecture.
+La persistance reste une responsabilité de l’application hôte lorsqu’elle sera
+intégrée ; elle ne sera pas ajoutée à l’API Sighty pour cette reprise.

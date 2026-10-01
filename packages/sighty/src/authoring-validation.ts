@@ -258,7 +258,7 @@ export function validateAuthoringResources<
   function validateActions(
     scopeLabel: string,
     scopePath: string,
-    actions: Readonly<Record<string, { action?: unknown; go?: unknown }>> | undefined,
+    actions: Readonly<Record<string, { action?: unknown; go?: unknown; reset?: unknown }>> | undefined,
   ): void {
     for (const [eventName, action] of Object.entries(actions ?? {})) {
       const actionReferencePath = scopePath.length === 0
@@ -269,6 +269,10 @@ export function validateAuthoringResources<
       const actionPath = scopePath.length === 0
         ? `views.actions.${eventName}.go.path`
         : `views.${scopePath}.actions.${eventName}.go.path`
+      const resetPath = scopePath.length === 0
+        ? `views.actions.${eventName}.reset`
+        : `views.${scopePath}.actions.${eventName}.reset`
+      validateReset(resetPath, action.reset)
       if (typeof target !== 'object' || target === null) continue
 
       if ('path' in target) {
@@ -299,6 +303,42 @@ export function validateAuthoringResources<
         code: 'AUTHOR_VIEW_ROUTE_AMBIGUOUS',
         path: actionPath.replace(/\.path$/, '.label'),
         message: `L'action « ${eventName} » ${scopeLabel} référence le label ambigu « ${routeLabel} ».`,
+      })
+    }
+  }
+
+  /** Validates one explicit list of replay reset keys. */
+  function validateReset(path: string, reset: unknown): void {
+    if (reset === undefined) return
+    if (!Array.isArray(reset)) {
+      diagnostics.push({
+        code: 'AUTHOR_ACTION_RESET_INVALID',
+        path,
+        message: `La propriété reset « ${path} » doit être une liste de clés texte.`,
+      })
+      return
+    }
+    if (reset.length === 0) {
+      diagnostics.push({
+        code: 'AUTHOR_ACTION_RESET_EMPTY',
+        path,
+        message: `La propriété reset « ${path} » doit contenir au moins une clé.`,
+      })
+      return
+    }
+    if (!Array.from(reset).every((key) => typeof key === 'string' && key.trim().length > 0)) {
+      diagnostics.push({
+        code: 'AUTHOR_ACTION_RESET_INVALID',
+        path,
+        message: `Chaque clé de reset « ${path} » doit être un texte non vide.`,
+      })
+      return
+    }
+    if (reset.includes('all') && reset.length > 1) {
+      diagnostics.push({
+        code: 'AUTHOR_ACTION_RESET_ALL_MIXED',
+        path,
+        message: `La clé reset « all » doit apparaître seule dans « ${path} ».`,
       })
     }
   }

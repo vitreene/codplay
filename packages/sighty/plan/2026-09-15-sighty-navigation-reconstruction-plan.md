@@ -3,7 +3,7 @@
 ## Statut
 
 **En cours.** Les corrections de surface ci-dessous sont intégrées et vérifiées.
-Le CSS auteur des scènes de diffusion est intégré ; deux décisions runtime restent ouvertes.
+Le CSS auteur des scènes de diffusion est intégré ; plusieurs décisions runtime restent ouvertes.
 
 ## Intégration vérifiée
 
@@ -24,7 +24,7 @@ Le CSS auteur des scènes de diffusion est intégré ; deux décisions runtime r
   La migration couvre les démos Sighty 1 à 5, dont la démo 5 qui construit
   désormais son scénario complet dans un seul module. Acceptation : 47 tests
   Sighty, typechecks Sighty et démos, build démos et `git diff --check`.
-  Le smoke test Safari charge les cinq démos ; la démo 3 exécute son action
+  Le smoke test du navigateur charge les cinq démos ; la démo 3 exécute son action
   d’injection, la démo 4 navigue vers la scène A et la démo 5 parcourt les dix
   pages, refuse une page verrouillée, affiche les félicitations après les trois
   réponses finales et restaure la première page et son titre après reset. La
@@ -53,7 +53,7 @@ Le CSS auteur des scènes de diffusion est intégré ; deux décisions runtime r
   par `scenarioState.current` et ajoute seulement l’occurrence layout résolue
   par `runtime.getInstance`. L’acceptation automatisée est passée : 47 tests
   Sighty, 48 tests component-v2, 711 tests CodPlay, typechecks, build des
-  démos et `git diff --check`. Le parcours Safari MCP couvre l’initialisation,
+  démos et `git diff --check`. Le parcours MCP du navigateur couvre l’initialisation,
   le refus d’une page verrouillée, les repères bas, le quiz du chapitre 1, les
   trois questions finales, les félicitations et la remise à zéro.
 - La transition d’image de la démo 5 suit désormais le circuit attendu par
@@ -63,6 +63,46 @@ Le CSS auteur des scènes de diffusion est intégré ; deux décisions runtime r
   (`inCubic`). La classe CSS et la `liveAction` qui réappliquaient le même
   état ont été retirées. L’instrumentation DOM vérifie une mutation de style
   par action logique, sans double mise à jour de classe.
+
+## Régression Demo 5 — repères de fin après recommencer — 2026-09-30
+
+**Statut : En cours.** La réinitialisation du signet remet bien à zéro les
+pages terminées et les réponses, mais les marqueurs `pageBottom` étaient
+déclarés `once: true`. Le contrat scroll précise qu’un tel event ne peut partir
+qu’une fois pendant la vie du player ; le retour à la première page conserve
+les instances et ne réarme donc pas les marqueurs consommés. La première page
+reste alors verrouillée vers la suite après son second défilement au bas.
+
+**Correction appliquée pour le repère de fin :** garder l’observation
+`emit.observe` et ses phases normales, retirer `once` des marqueurs de fin de
+page et rendre le traitement Sighty idempotent tant que la page est déjà
+inscrite dans le signet. Après la nouvelle action de replay, le signet vide
+permet à la prochaine entrée du marqueur de réinscrire la page et de reprojeter
+les gardes. Le comportement visuel après replay reste à vérifier dans le
+parcours navigateur complet.
+
+**Propriété `reset` des actions de relecture : En cours.** Sighty prend en
+charge la liste `reset`, la restauration du contexte et les événements
+`onReset` pour les occurrences conservées. Demo 5 utilise `reset: ['all']` au
+redémarrage ; l’action route d’abord vers la première page, puis le runtime
+restaure le signet, réinitialise les quiz conservés et rafraîchit la
+présentation. Les pages suivantes reviennent en haut lors de leur réadmission
+par leur `showMode: 'reset'`. Le contrat et ses tests figurent dans la
+[spécification Sighty](../specs/authoring-library-spec.md) et le [plan dédié](./2026-09-30-sighty-replay-reset-plan.md).
+
+Les étapes restantes et la matrice d’acceptation sont suivies dans le
+[plan de la propriété reset par action de relecture](./2026-09-30-sighty-replay-reset-plan.md).
+Le contrat runtime est vérifié par tests unitaires ; son intégration visuelle
+dans Demo 5 reste à valider. Cette tranche reste côté Sighty et démo de
+validation ; toute nécessité de modifier `packages/codplay` exigerait un plan
+accepté distinct.
+
+**Acceptation du repère :** rejouer le parcours Demo 5 jusqu’aux félicitations,
+choisir « Recommencer le cours », vérifier que les accès et Suivant sont remis
+à zéro, puis descendre au bas de la première page et vérifier que `pageBottom`
+est de nouveau émis et active Suivant. Repasser par le même marqueur sans
+réinitialiser le cours ne doit pas republier une progression déjà inscrite. Le
+parcours navigateur complet reste à valider.
 
 ## Travail restant
 

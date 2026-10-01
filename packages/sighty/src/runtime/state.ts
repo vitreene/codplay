@@ -9,6 +9,7 @@ import { createViewIndex, getStartEntry } from '../navigation/graph-index'
 import type { ActiveComposition, IndexedEntry, ViewIndex } from '../navigation/types'
 import { createSightyPublicEventChannel, type SightyPublicEvent, type SightyPublicEvents } from '../public-events'
 import type { SightyMutableScenarioApi } from '../scenario'
+import type { SightySceneResetHandler } from '../types'
 import type { SightyRuntimeOptions, SightyRuntimeSlotChangeListener, SightyRuntimeStyle } from './types'
 import { collectSceneKeys } from './helpers'
 
@@ -35,6 +36,8 @@ export type SightyRuntimeState<SceneKey extends string, SlotName extends string>
   readonly compiledBuilds: Map<SceneKey, CodPlayCompileSuccess>
   readonly sceneDocuments: Map<SceneKey, SceneDoc<string>>
   readonly sceneStyleSheets: Map<SceneKey, string>
+  /** Keeps callbacks only for scene sources resolved by the runtime. */
+  readonly sceneResetHandlers: Map<SceneKey, SightySceneResetHandler>
   readonly resourceUrlsByScene: Map<SceneKey, readonly string[]>
   viewIndex: ViewIndex<SceneKey, SlotName>
   authoredSceneKeys: readonly SceneKey[]
@@ -83,6 +86,7 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     compiledBuilds: new Map(),
     sceneDocuments: new Map(),
     sceneStyleSheets: new Map(),
+    sceneResetHandlers: new Map(),
     resourceUrlsByScene: new Map(),
     viewIndex,
     authoredSceneKeys: collectSceneKeys(viewIndex),

@@ -32,6 +32,8 @@ export type {
   SightyScenarioStateApi,
   SightyRuntimeEvent,
   SightySceneSource,
+  SightySceneSourceValue,
+  SightySceneResetHandler,
   SightyShowMode,
   SightyGraphView,
   SightyGuards,

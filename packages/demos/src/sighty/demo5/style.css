@@ -204,6 +204,7 @@
 }
 
 .demo5-page__scrollport {
+  container-type: size;
   color: #26374a;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
@@ -223,17 +224,31 @@
   border-bottom: 1px solid #e1e7ed;
 }
 
-.demo5-page__section-title {
+/* Measure half the scrollport while keeping the heading's normal flow height. */
+.demo5-page__section-title-observer {
   position: sticky;
   z-index: 1;
   top: 0.65rem;
+  box-sizing: border-box;
+  min-height: 0;
+  font-size: clamp(1.05rem, 2vw, 1.38rem);
+  line-height: 1.2;
+  height: 50vh;
+  height: 50cqh;
+  margin-bottom: calc(-50vh + 1.2em + 1.7rem + 2px);
+  margin-bottom: calc(-50cqh + 1.2em + 1.7rem + 2px);
+}
+
+.demo5-page__section-title {
   margin: 0;
   padding: 0.85rem 1rem;
   border: 1px solid rgb(255 255 255 / 45%);
   border-radius: 0.7rem;
   color: #fff;
+  background-color: var(--demo5-section-title-color);
+  box-shadow: var(--demo5-section-title-shadow);
   font-size: clamp(1.05rem, 2vw, 1.38rem);
-  box-shadow: 0 0.3rem 0.9rem rgb(15 23 42 / 10%);
+  line-height: inherit;
 }
 
 .demo5-page__paragraph {

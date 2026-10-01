@@ -353,6 +353,46 @@ describe('Sighty authoring class', () => {
     project.runtime.destroy()
   })
 
+  it('requires reset to be a non-empty list and keeps all as a standalone keyword', () => {
+    const invalidScenario = {
+      ...scenario,
+      views: [{
+        id: 'layout',
+        actions: {
+          'reset:empty': { reset: [] },
+          'reset:invalid': { reset: ['context', ' '] },
+          'reset:scalar': { reset: 'all' },
+          'reset:sparse': { reset: new Array(1) },
+          'reset:all-mixed': { reset: ['all', 'quiz'] },
+        },
+        view: {
+          scene: 'layout',
+          slots: { main: [{ id: 'scene-b', view: { scene: 'sceneB' } }] },
+        },
+      }],
+      scenes: {
+        layout: { id: 'layout', stories: {} },
+        sceneB: { id: 'scene-b', stories: {} },
+      },
+    } as unknown as SightyScenarioDefinition<'layout' | 'sceneB', 'main'>
+    const project = new Sighty({
+      scenario: invalidScenario,
+      runtime: {
+        root: document.createElement('div'),
+        instanceIds: { layout: 'layout-1', sceneB: 'scene-b-1' },
+      },
+    })
+
+    expect(project.scenario.validate().map(({ code, path }) => ({ code, path }))).toEqual([
+      { code: 'AUTHOR_ACTION_RESET_EMPTY', path: 'views.layout.actions.reset:empty.reset' },
+      { code: 'AUTHOR_ACTION_RESET_INVALID', path: 'views.layout.actions.reset:invalid.reset' },
+      { code: 'AUTHOR_ACTION_RESET_INVALID', path: 'views.layout.actions.reset:scalar.reset' },
+      { code: 'AUTHOR_ACTION_RESET_INVALID', path: 'views.layout.actions.reset:sparse.reset' },
+      { code: 'AUTHOR_ACTION_RESET_ALL_MIXED', path: 'views.layout.actions.reset:all-mixed.reset' },
+    ])
+    project.runtime.destroy()
+  })
+
   it('accepts inline actions and guards without registry keys', () => {
     const inlineScenario: SightyScenarioDefinition<'layout' | 'sceneB', 'main'> = {
       ...scenario,

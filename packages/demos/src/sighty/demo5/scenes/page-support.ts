@@ -37,7 +37,7 @@ export function createPageBottomMarker(pageId: string): CoursePerso {
       observe: {
         root: pageScrollPortId(pageId),
         zone: { threshold: 0 },
-        enter: [{ name: COURSE_EVENTS.pageBottom, data: { pageId }, visibility: 'public', once: true }],
+        enter: [{ name: COURSE_EVENTS.pageBottom, data: { pageId }, visibility: 'public' }],
       },
     },
   }

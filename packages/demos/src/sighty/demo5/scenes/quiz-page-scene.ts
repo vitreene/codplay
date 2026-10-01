@@ -14,6 +14,7 @@ type QuizState = Readonly<{
   question: CourseQuestion
   selectedAnswerIds: readonly string[]
   submitted: boolean
+  solutionsExposed: boolean
 }>
 
 /** Builds one independent quiz scene using CodPlay input, listen, and straps. */
@@ -40,16 +41,24 @@ export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
       main: {
         id: 'main',
         initial: { move: '@root' },
-        state: { question: page.question, selectedAnswerIds: [], submitted: false } satisfies QuizState,
+        state: {
+          question: page.question,
+          selectedAnswerIds: [],
+          submitted: false,
+          solutionsExposed: false,
+        } satisfies QuizState,
         straps: {
           'course-quiz-select-answer': ({ event, state }) =>
             selectQuizAnswer(prefix, page.question!, state, event.data),
           'course-quiz-validate-answer': ({ state }) =>
             validateQuizAnswer(page, prefix, state),
+          'course-quiz-replay-reset': ({ event, state }) =>
+            applyQuizReplayReset(page, prefix, state, event.data),
         },
         listen: [
           { on: `${prefix}:answer:select`, straps: ['course-quiz-select-answer'] },
           { on: `${prefix}:validate`, straps: ['course-quiz-validate-answer'] },
+          { on: `${prefix}:reset`, straps: ['course-quiz-replay-reset'] },
         ],
         persos,
       },
@@ -172,6 +181,15 @@ function createAnswerPerso(page: CoursePage, prefix: string, answerId: string, l
         checked: false,
         visualState: 'idle',
       },
+      [`${prefix}:answer:${answerId}:reset`]: {
+        selectedAnswerIds: [],
+        correctAnswerIds: [],
+        checked: false,
+        disabled: false,
+        disableAnswers: false,
+        showCorrection: false,
+        visualState: 'idle',
+      },
       [`${prefix}:answer:${answerId}:revealed-correct`]: {
         selectedAnswerIds: [answerId],
         correctAnswerIds,
@@ -259,7 +277,7 @@ function selectQuizAnswer(
   eventData: Record<string, unknown> | undefined,
 ) {
   const payload = eventData as { answerId?: unknown } | undefined
-  if (state.submitted === true || typeof payload?.answerId !== 'string') return undefined
+  if (state.submitted === true || state.solutionsExposed === true || typeof payload?.answerId !== 'string') return undefined
   if (!question.answers.some((answer) => answer.id === payload.answerId)) return undefined
 
   const selectedBefore = readSelectedAnswers(state.selectedAnswerIds)
@@ -288,11 +306,9 @@ function validateQuizAnswer(
 ) {
   const question = page.question!
   const selectedAnswerIds = readSelectedAnswers(state.selectedAnswerIds)
-  if (state.submitted === true || selectedAnswerIds.length === 0) return undefined
+  if (state.submitted === true || state.solutionsExposed === true || selectedAnswerIds.length === 0) return undefined
 
   const isCorrect = hasSameAnswerSet([...question.correctAnswerIds], selectedAnswerIds)
-  const selected = new Set(selectedAnswerIds)
-  const correct = new Set(question.correctAnswerIds)
   const feedbackMessage = page.id === 'chapter-1-quiz'
     ? isCorrect
       ? 'Bonne réponse ! Le chapitre 2 est maintenant accessible.'
@@ -300,15 +316,6 @@ function validateQuizAnswer(
     : isCorrect
       ? 'Bonne réponse.'
       : 'Réponse incorrecte.'
-  const answerEvents = question.answers.map((answer) => {
-    if (selected.has(answer.id) && correct.has(answer.id)) {
-      return { name: `${prefix}:answer:${answer.id}:revealed-correct` }
-    }
-    if (selected.has(answer.id)) return { name: `${prefix}:answer:${answer.id}:revealed-incorrect` }
-    if (correct.has(answer.id)) return { name: `${prefix}:answer:${answer.id}:revealed-missed-correct` }
-    return { name: `${prefix}:answer:${answer.id}:locked` }
-  })
-
   const events: Array<{ name: string; data?: CompiledRecord; visibility?: 'public' }> = [
     {
       name: `${prefix}:feedback`,
@@ -319,7 +326,7 @@ function validateQuizAnswer(
       },
     },
     { name: `${prefix}:resolved` },
-    ...answerEvents,
+    ...createAnswerResolutionEvents(question, prefix, selectedAnswerIds),
     {
       name: COURSE_EVENTS.quizAnswered,
       data: { pageId: page.id, isCorrect },
@@ -331,6 +338,68 @@ function validateQuizAnswer(
     update: { selectedAnswerIds, submitted: true },
     events,
   }
+}
+
+/** Applies requested quiz reset and solution exposure effects in one scene event. */
+function applyQuizReplayReset(
+  page: CoursePage,
+  prefix: string,
+  state: Readonly<Record<string, unknown>>,
+  eventData: Record<string, unknown> | undefined,
+) {
+  const question = page.question!
+  const keys = Array.isArray(eventData?.keys)
+    ? eventData.keys.filter((key): key is string => typeof key === 'string')
+    : []
+  const shouldResetQuiz = keys.includes('all') || keys.includes('quiz')
+  const shouldExposeSolutions = keys.includes('solutions')
+  if (!shouldResetQuiz && !shouldExposeSolutions) return undefined
+
+  const selectedAnswerIds = shouldResetQuiz
+    ? []
+    : readSelectedAnswers(state.selectedAnswerIds)
+  const events: Array<{ name: string; data?: CompiledRecord }> = []
+  if (shouldResetQuiz) {
+    events.push(
+      { name: `${prefix}:selection:empty` },
+      ...question.answers.map((answer) => ({ name: `${prefix}:answer:${answer.id}:reset` })),
+      { name: `${prefix}:feedback`, data: { content: '', attr: { hidden: true } } },
+    )
+  }
+  if (shouldExposeSolutions) {
+    events.push(
+      { name: `${prefix}:resolved` },
+      ...createAnswerResolutionEvents(question, prefix, selectedAnswerIds),
+    )
+  }
+
+  return {
+    update: {
+      ...(shouldResetQuiz ? { selectedAnswerIds, submitted: false } : {}),
+      ...(shouldResetQuiz || shouldExposeSolutions
+        ? { solutionsExposed: shouldExposeSolutions }
+        : {}),
+    },
+    events,
+  }
+}
+
+/** Returns the answer-state events for a participant's selection and corrections. */
+function createAnswerResolutionEvents(
+  question: CourseQuestion,
+  prefix: string,
+  selectedAnswerIds: readonly string[],
+): Array<{ name: string }> {
+  const selected = new Set(selectedAnswerIds)
+  const correct = new Set(question.correctAnswerIds)
+  return question.answers.map((answer) => {
+    if (selected.has(answer.id) && correct.has(answer.id)) {
+      return { name: `${prefix}:answer:${answer.id}:revealed-correct` }
+    }
+    if (selected.has(answer.id)) return { name: `${prefix}:answer:${answer.id}:revealed-incorrect` }
+    if (correct.has(answer.id)) return { name: `${prefix}:answer:${answer.id}:revealed-missed-correct` }
+    return { name: `${prefix}:answer:${answer.id}:locked` }
+  })
 }
 
 /** Accepts only string ids from the runtime state snapshot. */

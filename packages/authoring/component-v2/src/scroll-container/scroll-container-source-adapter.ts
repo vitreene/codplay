@@ -34,6 +34,7 @@ type ObserverGroup = {
   root: Element
   options: ExtendedIntersectionObserverInit
   observer: IntersectionObserver
+  generation: number
   rulesByTarget: Map<Element, Map<string, ScrollObservationRule>>
 }
 
@@ -48,6 +49,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   private readonly compiledScene: CompiledScene
   private readonly observationRules: readonly ScrollObservationRule[]
   private readonly observationProvider: IntersectionObservationProvider
+  private observationBindings: ObservationBinding[] = []
   private readonly observerGroups = new Map<Element, Map<string, ObserverGroup>>()
   private readonly reportedDiagnostics = new Set<string>()
   private readonly emittedOnce = new Set<CompiledScrollObservationEvent>()
@@ -55,6 +57,8 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   private attached = false
   private seeking = false
   private destroyed = false
+  private observationGeneration = 0
+  private observerSetGeneration = 0
 
   /** Builds immutable observation declarations without touching the DOM. */
   constructor(context: HtmlSourceAdapterContext) {
@@ -67,16 +71,16 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   /** Attaches descendant observers after the runner has materialized the scene. */
   attach(): void {
     if (this.attached || this.destroyed) return
-    this.attached = true
-    this.observationProvider.attach()
     const scene = this.context.getSolvedScene()
-    if (scene !== undefined) this.attachObservations(scene)
+    if (scene !== undefined) this.resolveObservationBindings(scene)
+    this.attachObservationSource()
   }
 
   /** Silences observations while the runner reconstructs a seek target. */
   beforeSeek(): void {
     if (this.destroyed) return
     this.seeking = true
+    this.observationGeneration += 1
   }
 
   /** Resumes observation delivery after seek presentation. */
@@ -87,9 +91,25 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
 
   /** Disconnects observers before the player finalizes sequence:end. */
   onSequenceEnd(): void {
+    this.observationGeneration += 1
     this.attached = false
     this.seeking = true
     this.disconnectObservationBindings()
+  }
+
+  /** Clears stale phases and reattaches the original roots after component reset. */
+  onReset(): void {
+    if (this.destroyed) return
+    this.observationGeneration += 1
+    this.disconnectObservationBindings()
+    this.observationProvider.detach()
+    this.attached = false
+    this.seeking = false
+    this.pendingDispatch = Promise.resolve()
+    for (const rule of this.observationRules) {
+      this.context.commands.setLiveActions(`observe:${rule.id}`, undefined)
+    }
+    this.attachObservationSource()
   }
 
   /** Disconnects every observer and invalidates queued observation emissions. */
@@ -98,13 +118,15 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     this.destroyed = true
     this.attached = false
     this.seeking = true
+    this.observationGeneration += 1
     this.disconnectObservationBindings()
     this.observationProvider.destroy()
     this.pendingDispatch = Promise.resolve()
   }
 
-  /** Resolves each observed perso's initial logical root and attaches its observer. */
-  private attachObservations(scene: SolvedScene): void {
+  /** Resolves each observed perso's initial logical root once for this player. */
+  private resolveObservationBindings(scene: SolvedScene): void {
+    this.observationBindings = []
     for (const rule of this.observationRules) {
       const targetKey = runtimePersoKey(rule.storyId, rule.persoId)
       const targetPerso = scene.persos[targetKey]
@@ -145,13 +167,23 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
         options,
         optionsKey: JSON.stringify(options),
       }
+      this.observationBindings.push(binding)
+    }
+  }
+
+  /** Reuses the original logical roots while attaching their native observers. */
+  private attachObservationSource(): void {
+    if (this.attached || this.destroyed) return
+    this.attached = true
+    this.observationProvider.attach()
+    for (const binding of this.observationBindings) {
       const group = this.getOrCreateObserverGroup(binding)
       if (group === undefined) continue
-      const rules = group.rulesByTarget.get(target) ?? new Map<string, ScrollObservationRule>()
+      const rules = group.rulesByTarget.get(binding.target) ?? new Map<string, ScrollObservationRule>()
       const shouldObserveTarget = rules.size === 0
-      rules.set(rule.id, rule)
-      group.rulesByTarget.set(target, rules)
-      if (shouldObserveTarget) group.observer.observe(target)
+      rules.set(binding.rule.id, binding.rule)
+      group.rulesByTarget.set(binding.target, rules)
+      if (shouldObserveTarget) group.observer.observe(binding.target)
     }
   }
 
@@ -176,6 +208,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     const group = {
       root: binding.root,
       options: binding.options,
+      generation: this.observerSetGeneration,
       rulesByTarget: new Map<Element, Map<string, ScrollObservationRule>>(),
       observer: undefined as unknown as IntersectionObserver,
     }
@@ -217,7 +250,10 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
 
   /** Normalizes one native batch, applies ratio actions, and queues phase events. */
   private handleIntersectionEntries(group: ObserverGroup, entries: readonly IntersectionObserverEntry[]): void {
-    if (this.destroyed || this.seeking || !this.attached) return
+    if (this.destroyed
+      || this.seeking
+      || !this.attached
+      || group.generation !== this.observerSetGeneration) return
     const updates: ScrollObservationUpdate[] = []
     for (const entry of entries) {
       const rules = group.rulesByTarget.get(entry.target)
@@ -246,9 +282,13 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     }
     if (this.context.getLifecycleState() !== PLAYER_LIFECYCLE_PLAYING || emissions.length === 0) return
     const applyAtMs = this.context.getCurrentTimeMs()
+    const generation = this.observationGeneration
     this.pendingDispatch = this.pendingDispatch.then(async () => {
       for (const emission of emissions) {
-        if (this.destroyed || this.seeking || this.context.getLifecycleState() !== PLAYER_LIFECYCLE_PLAYING) continue
+        if (generation !== this.observationGeneration
+          || this.destroyed
+          || this.seeking
+          || this.context.getLifecycleState() !== PLAYER_LIFECYCLE_PLAYING) continue
         if (emission.event.once === true && this.emittedOnce.has(emission.event)) continue
         const visibility = emission.event.visibility ?? 'story'
         const result = await this.context.commands.emit({
@@ -275,8 +315,9 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     })
   }
 
-  /** Disconnects each observer group before the component or runner is torn down. */
+  /** Disconnects every observer and invalidates callbacks from its observer set. */
   private disconnectObservationBindings(): void {
+    this.observerSetGeneration += 1
     for (const groupsForRoot of this.observerGroups.values()) {
       for (const group of groupsForRoot.values()) group.observer.disconnect()
     }

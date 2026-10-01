@@ -108,12 +108,14 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
         this.setActiveSelection(resolved.target, resolved.selections)
       }
 
+      if (action.reset !== undefined) await this.applyReset(action.reset)
+
       if (action.action !== undefined) {
         const activeSelection = this.state.composition.selections.get(candidate.selection.slotAddress)
           ?? candidate.selection
         await this.executeAction(action.action, request.event, activeSelection)
       }
-      return action.go !== undefined || action.action !== undefined
+      return action.go !== undefined || action.reset !== undefined || action.action !== undefined
     }
     return false
   }
@@ -373,6 +375,23 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
   /** Applies one context patch for guards and action handlers. */
   async applyContextPatch(patch: Readonly<Record<string, unknown>>): Promise<void> {
     this.state.context = { ...this.state.context, ...patch }
+  }
+
+  /** Applies reset keys after routing and before the authored action handler. */
+  private async applyReset(keys: readonly string[]): Promise<void> {
+    if (keys.includes('all') || keys.includes('context')) {
+      this.state.context = { ...this.state.initialContext }
+    }
+
+    if (keys.length === 0) return
+    const retainedSceneKeys = new Set(this.state.instanceSceneKeys.values())
+    for (const sceneKey of retainedSceneKeys) {
+      const onReset = this.state.sceneResetHandlers.get(sceneKey)
+      if (onReset === undefined) continue
+      const eventime = onReset(keys)
+      if (eventime === undefined) continue
+      await this.events.sendToExistingSceneOccurrences(sceneKey, eventime)
+    }
   }
 
   /** Delivers declared entry events to newly admitted selections. */

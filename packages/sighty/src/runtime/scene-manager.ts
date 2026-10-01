@@ -8,7 +8,7 @@ import type { ActiveSelection } from '../navigation/types'
 import { diagnosticDetails, occurrenceKeyForSelection } from './helpers'
 import type { SightyRuntimeBuilds } from './types'
 import { getLayoutSceneKey, type SightyRuntimeState } from './state'
-import type { SightySceneCatalog } from '../types'
+import type { SightySceneCatalog, SightySceneResetHandler } from '../types'
 
 /** Owns scene compilation, preparation and CodPlay occurrence lifecycle. */
 export class RuntimeSceneManager<SceneKey extends string, SlotName extends string> {
@@ -26,7 +26,8 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
     for (const sceneKey of this.state.authoredSceneKeys) {
       const source = this.state.scenario.getScene(sceneKey)
       if (source === undefined) continue
-      const { sceneDoc, styleSheet } = resolveSceneSource(source)
+      const { sceneDoc, styleSheet, onReset } = resolveSceneSource(source)
+      this.cacheResetHandler(sceneKey, onReset)
       this.state.sceneDocuments.set(sceneKey, sceneDoc)
       const result = this.state.owner.build({ scene: sceneDoc })
       if (!result.ok) {
@@ -45,7 +46,8 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
 
     const source = await this.state.scenario.resolveScene(sceneKey)
     if (source === undefined) throw new Error(`La ressource de scène Sighty ${sceneKey} est absente.`)
-    const { sceneDoc, styleSheet } = resolveSceneSource(source)
+    const { sceneDoc, styleSheet, onReset } = resolveSceneSource(source)
+    this.cacheResetHandler(sceneKey, onReset)
     this.state.sceneDocuments.set(sceneKey, sceneDoc)
     const result = this.state.owner.build({ scene: sceneDoc })
     if (!result.ok) {
@@ -127,6 +129,15 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
       container: this.state.root,
     })
     this.installedSceneStyleSheets.add(sceneKey)
+  }
+
+  /** Retains a reset callback only after its scene source has been resolved. */
+  private cacheResetHandler(sceneKey: SceneKey, onReset: SightySceneResetHandler | undefined): void {
+    if (onReset === undefined) {
+      this.state.sceneResetHandlers.delete(sceneKey)
+      return
+    }
+    this.state.sceneResetHandlers.set(sceneKey, onReset)
   }
 
   /** Creates one scene occurrence once its compiled definition is available. */
@@ -244,6 +255,7 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
       this.state.compiledBuilds.delete(sceneKey)
       this.state.sceneDocuments.delete(sceneKey)
       this.state.sceneStyleSheets.delete(sceneKey)
+      this.state.sceneResetHandlers.delete(sceneKey)
       this.state.owner.preload.css.clear(sceneStyleSlot(sceneKey))
       this.installedSceneStyleSheets.delete(sceneKey)
       this.state.resourceUrlsByScene.delete(sceneKey)
@@ -262,8 +274,15 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
 function resolveSceneSource(source: SightySceneCatalog[string]): Readonly<{
   sceneDoc: SceneDoc<string>
   styleSheet: string
+  onReset?: SightySceneResetHandler
 }> {
-  if ('sceneDoc' in source) return source
+  if ('sceneDoc' in source) {
+    return {
+      sceneDoc: source.sceneDoc,
+      styleSheet: source.styleSheet ?? '',
+      ...(source.onReset === undefined ? {} : { onReset: source.onReset }),
+    }
+  }
   return { sceneDoc: source, styleSheet: '' }
 }
 

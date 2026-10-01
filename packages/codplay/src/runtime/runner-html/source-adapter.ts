@@ -33,6 +33,7 @@ export type HtmlSourceAdapter = Readonly<{
   attach: () => void
   onScenePresented?: (scene: SolvedScene) => void
   onPlaybackStateChange?: (state: PlayerLifecycleState) => void
+  onReset?: () => void
   beforeSeek?: () => void
   afterSeek?: (scene: SolvedScene | undefined, result: PlayerSeekResult | undefined) => void
   onSequenceEnd?: (event: RuntimeTrackEvent) => void

@@ -53,6 +53,22 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
     await this.emit(instance, eventime, target, true)
   }
 
+  /** Sends one reset event to every retained occurrence of a scene key. */
+  async sendToExistingSceneOccurrences(sceneKey: SceneKey, eventime: CodPlayEventime): Promise<void> {
+    const storyIds = Object.keys(this.state.sceneDocuments.get(sceneKey)?.stories ?? {})
+    const occurrenceKeys = [...this.state.instanceSceneKeys]
+      .filter(([, currentSceneKey]) => currentSceneKey === sceneKey)
+      .map(([occurrenceKey]) => occurrenceKey)
+
+    for (const occurrenceKey of occurrenceKeys) {
+      const instance = this.state.instances.get(occurrenceKey)
+      if (instance === undefined) continue
+      for (const storyId of storyIds) {
+        await this.emit(instance, eventime, { scope: 'story', storyId }, true)
+      }
+    }
+  }
+
   /** Emits one event and optionally restores its CodPlay transport state. */
   private async emit(
     instance: CodPlayInstance,

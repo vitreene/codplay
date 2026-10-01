@@ -90,7 +90,7 @@ function createContentArticle(page: CoursePage): CoursePerso {
   }
 }
 
-/** Creates the authored heading, paragraph, and media persos for one section. */
+/** Creates the title observer, heading, paragraph, and optional media for one section. */
 function createSectionPersos(
   page: CoursePage,
   section: NonNullable<CoursePage['sections']>[number],
@@ -98,6 +98,7 @@ function createSectionPersos(
 ): CoursePerso[] {
   const sectionNumber = index + 1
   const headingId = `${page.id}-section-${sectionNumber}-heading`
+  const headingObserverId = `${headingId}-observer`
   const headingVisibilityAction = `${headingId}:visibility`
   const headingStartHue = (24 + index * 54) % 360
   const headingStartColor = `oklch(${SECTION_TITLE_LIGHTNESS}% ${SECTION_TITLE_CHROMA} ${headingStartHue}deg)`
@@ -110,14 +111,16 @@ function createSectionPersos(
   })
   const persos: CoursePerso[] = [
     {
-      id: headingId,
+      id: headingObserverId,
       type: 'tag',
       initial: {
-        tag: 'h2',
-        attr: { id: headingId },
-        content: section.heading,
-        className: 'demo5-page__section-title',
-        style: { backgroundColor: headingStartColor },
+        tag: 'div',
+        attr: { id: headingObserverId },
+        className: 'demo5-page__section-title-observer',
+        style: {
+          '--demo5-section-title-color': headingStartColor,
+          '--demo5-section-title-shadow': '0 0.3rem 0.9rem rgb(15 23 42 / 10%)',
+        },
         move: { target: sectionPartId(page.id, index, 'heading') },
       },
       emit: {
@@ -132,11 +135,22 @@ function createSectionPersos(
         [headingVisibilityAction]: {
           duration: 1,
           fn: (input: { data: Readonly<Record<string, unknown>> }): Record<string, unknown> => ({
-            style: { backgroundColor: resolveTween(headingTween, input.data.ratio as number) },
+            style: { '--demo5-section-title-color': resolveTween(headingTween, input.data.ratio as number) },
           }),
         },
-        [`${headingId}:enter`]: { style: { boxShadow: '0 0.6rem 1.3rem rgb(15 23 42 / 18%)' } },
-        [`${headingId}:leave`]: { style: { boxShadow: 'none' } },
+        [`${headingId}:enter`]: { style: { '--demo5-section-title-shadow': '0 0.6rem 1.3rem rgb(15 23 42 / 18%)' } },
+        [`${headingId}:leave`]: { style: { '--demo5-section-title-shadow': 'none' } },
+      },
+    },
+    {
+      id: headingId,
+      type: 'tag',
+      initial: {
+        tag: 'h2',
+        attr: { id: headingId },
+        content: section.heading,
+        className: 'demo5-page__section-title',
+        move: { target: headingObserverId },
       },
     },
     {

@@ -364,6 +364,7 @@ export class HtmlPlayerRunner {
       this.player.reset()
       this.captureSourceCircuit.resume()
       this.player.componentRuntime?.onReset()
+      this.notifySourceAdapters('reset', (adapter) => adapter.onReset?.())
       if (this.ownsEngine) {
         this.engine.pause()
       }
