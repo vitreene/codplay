@@ -1,7 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "codplay": ["../codplay/src/index.ts"],
+      "codplay/*": ["../codplay/src/*"],
+      "ace": ["../codplay/src/ace/index.ts"],
+      "ace/*": ["../codplay/src/ace/*"],
+      "@codplay/sighty": ["../sighty/src/index.ts"],
+      "@codplay/component-v2": ["../authoring/component-v2/src/index.ts"],
+      "@codplay/component-v2/*": ["../authoring/component-v2/src/*"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

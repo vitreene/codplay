@@ -80,6 +80,7 @@ function compileScrollObservation(
 ): CompiledScrollObservation {
   return {
     ...(declaration.root === undefined ? {} : { root: declaration.root }),
+    ...(declaration.initial === undefined ? {} : { initial: declaration.initial }),
     ...(declaration.liveAction === undefined ? {} : { liveAction: declaration.liveAction }),
     ...(declaration.zone === undefined ? {} : { zone: { ...declaration.zone } }),
     ...(declaration.enter === undefined ? {} : {

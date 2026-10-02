@@ -32,12 +32,13 @@ class ProbeSourceProvider extends AbstractLiveSourceProvider {
 }
 
 /** Creates one serialized event declaration for a test observation rule. */
-function rule(id: string, name: string): ScrollObservationRule {
+function rule(id: string, name: string, initial?: 'enter' | 'leave'): ScrollObservationRule {
   return {
     id,
     persoId: `target-${id}`,
     storyId: 'story',
     declaration: {
+      ...(initial === undefined ? {} : { initial }),
       zone: { threshold: 0.5 },
       enter: [{ name: `${name}:enter` }],
       leave: [{ name: `${name}:leave` }],
@@ -123,5 +124,27 @@ describe('scroll source providers', () => {
     provider.detach()
     provider.attach()
     expect(provider.updatePhases([{ ruleId: 'second-rule', phase: 'inside' }])).toEqual([])
+  })
+
+  it('emits only the declared matching phase on the first observation', () => {
+    const provider = new IntersectionObservationProvider([
+      rule('enter-rule', 'enter', 'enter'),
+      rule('leave-rule', 'leave', 'leave'),
+    ])
+
+    provider.attach()
+    expect(provider.updatePhases([
+      { ruleId: 'enter-rule', phase: 'inside' },
+      { ruleId: 'leave-rule', phase: 'inside' },
+    ])).toEqual([
+      expect.objectContaining({ ruleId: 'enter-rule', event: { name: 'enter:enter' } }),
+    ])
+    expect(provider.updatePhases([
+      { ruleId: 'enter-rule', phase: 'outside' },
+      { ruleId: 'leave-rule', phase: 'outside' },
+    ])).toEqual([
+      expect.objectContaining({ ruleId: 'enter-rule', event: { name: 'enter:leave' } }),
+      expect.objectContaining({ ruleId: 'leave-rule', event: { name: 'leave:leave' } }),
+    ])
   })
 })

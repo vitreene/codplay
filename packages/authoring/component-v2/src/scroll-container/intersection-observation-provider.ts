@@ -52,7 +52,14 @@ export class IntersectionObservationProvider extends AbstractLiveSourceProvider 
       }
       const previousPhase = this.phases.get(rule.id)
       this.phases.set(rule.id, update.phase)
-      if (previousPhase === undefined || previousPhase === update.phase) continue
+      if (previousPhase === undefined) {
+        const initialPhase = rule.declaration.initial === 'enter'
+          ? 'inside'
+          : rule.declaration.initial === 'leave'
+            ? 'outside'
+            : undefined
+        if (initialPhase === undefined || initialPhase !== update.phase) continue
+      } else if (previousPhase === update.phase) continue
       const events = update.phase === 'inside'
         ? rule.declaration.enter
         : rule.declaration.leave

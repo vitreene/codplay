@@ -4,7 +4,7 @@ import type { CanonicalSceneDoc } from '../types'
 
 const allowedZoneKeys = new Set(['rootMargin', 'scrollMargin', 'threshold', 'trackVisibility'])
 const allowedEventKeys = new Set(['name', 'data', 'visibility', 'mode', 'once'])
-const allowedObservationKeys = new Set(['root', 'liveAction', 'zone', 'enter', 'leave'])
+const allowedObservationKeys = new Set(['root', 'initial', 'liveAction', 'zone', 'enter', 'leave'])
 
 /** Validates authored scroll observation and capture declarations before extraction. */
 export function validateAuthoredScrollDeclarations(
@@ -99,6 +99,12 @@ function validateObservationDeclaration(
     }
   } else if (context.scrollContainerIds.size === 0) {
     report('AUTHOR_SCROLL_OBSERVATION_SCOPE_INVALID', 'emit.observe requires a scroll-container in the same story.', '')
+  }
+
+  if (declaration.initial !== undefined
+    && declaration.initial !== 'enter'
+    && declaration.initial !== 'leave') {
+    report('AUTHOR_SCROLL_OBSERVATION_INITIAL_INVALID', 'emit.observe.initial must be enter or leave.', '.initial')
   }
 
   if (declaration.liveAction !== undefined) {

@@ -106,6 +106,8 @@ export type AuthorScrollObservationZone = Readonly<{
 export type AuthorScrollObservationDeclaration = Readonly<{
   /** Logical id of an ancestor scroll-container used to disambiguate the root. */
   root?: string
+  /** Allows one matching phase event to be emitted by the first observation. */
+  initial?: 'enter' | 'leave'
   /** Compiled TweenAction on this perso, updated with the visible ratio. */
   liveAction?: string
   zone?: AuthorScrollObservationZone

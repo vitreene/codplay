@@ -350,6 +350,11 @@ Voir [`src/rive/README.md`](src/rive/README.md).
 
 ## Scroll container
 
+Le guide complet et accessible du composant se trouve dans
+[`src/scroll-container/README.md`](src/scroll-container/README.md). Il détaille
+la progression, les captures `emit.scroll`, les observations `emit.observe` et
+le cycle des événements `enter` / `leave`.
+
 Enregistrez le composant et son module dans l’engine, puis ajoutez la source
 HTML au host pour activer les observations :
 
@@ -415,6 +420,10 @@ By default, an observation uses the closest ancestor scroll container. Add
 `root: 'chapter-scroll'` to `emit.observe` to choose a particular ancestor.
 Events repeat at each enter or leave transition unless that event declares
 `once: true`.
+
+Use `initial: 'enter'` or `initial: 'leave'` when a matching first
+observation must emit its phase event immediately; without it, the first
+observation only synchronizes the phase.
 
 To drive a card's own ACE color from its visible proportion, name one of its
 TweenActions with `liveAction`. Its function reads `input.data.ratio` from 0 to

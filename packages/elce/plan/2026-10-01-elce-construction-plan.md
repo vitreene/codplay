@@ -4,7 +4,8 @@ Date d’ouverture : 2026-10-01.
 
 ## Statut et travail en cours
 
-**Fixe — plan accepté le 2026-10-02 ; implémentation en cours à l’étape 0.**
+**Fixe — plan accepté le 2026-10-02 ; implémentation en cours aux étapes 1,
+2, 3, 4, 6 et 7.**
 
 La [note de présentation](../notes/2026-10-01-presentation-elce.md) est rédigée
 à partir de la description initiale. Le travail engagé consiste à préciser
@@ -51,6 +52,23 @@ reprenant les circuits de lecture de la démo 5.
 | Préciser les comportements et les frontières | Fixe — accepté, non appliqué | Bdc à usage unique, médias réemployables, ancres, catalogue et séparation Elcé/CodPlay/Sighty retenus. |
 | Définir les preuves et les tranches de construction | Fixe — accepté, non appliqué | Séquence ordonnée et preuves observables au sujet 12. |
 | Relire le plan de construction avec l’utilisateur | Réalisé | Plan accepté pour l’implémentation ; les décisions propres à une tranche sont vérifiées au moment de cette tranche. |
+| Mettre en place l’application Elcé et son workspace | En cours — automatisation et parcours navigateur vérifiés | Typecheck, tests de fumée, build, serveur de développement et preview HTTP validés ; aucun import privé d’ed2. |
+| Construire le modèle documentaire minimal et la façade de commandes | En cours | Document versionné, commandes pures, contrôleur XState et frontière IndexedDB en place ; la restauration navigateur reste à éprouver. |
+| Préparer la première projection Flux et le scénario séparé | En cours — cadre complet et scroll-end vérifiés | Le builder produit un `SceneDoc` Flux, le constructeur un graphe Sighty avec menu, titre, contenu et navigation, et la composition monte le player réel en DOM de test ; Safari confirme le passage par le repère bas sur une page longue. |
+
+### Correctif de raccord CodPlay/Sighty — 2026-10-02
+
+Le parcours Safari a d’abord montré que CodPlay produisait bien l’événement du
+repère, mais que Sighty refusait la requête parce que le builder Flux écrivait
+`elce:page-bottom` alors que la constante de scénario déclarait
+`elce:page:bottom`. Le contrôle DOM de page courte dans
+`ElcePlayerComposition` masquait cette divergence. La correction aligne le
+builder sur la constante, retire le dispatch local et introduit l’option
+déclarative `emit.observe.initial` du composant scroll pour les repères déjà
+visibles. Les tests Elcé exercent maintenant l’observation CodPlay et le
+routage Sighty pour une page courte et après une transition de visibilité ; le
+parcours Safari confirme la page longue. Aucune démo ni aucun circuit local ne
+contourne CodPlay.
 
 ## Arbitrages de produit du lot
 
@@ -70,10 +88,10 @@ redemandées.
    et réemployables, restent dans le catalogue.
 2. **Résolu :** retirer un bdc placé directement dans une page le remet au
    catalogue, comme le retrait d’un bdc ancré ; son média reste réemployable.
-3. **Résolu :** une page en réserve peut être éditée et consultée dans
-   l’éditeur, mais n’appartient pas au parcours du player. Le scénario peut
-   aussi contenir une page hors chapitre, au même niveau que les chapitres,
-   par exemple une page de présentation : celle-ci appartient au parcours.
+3. **Résolu :** une page du catalogue peut être éditée et consultée dans
+   l’éditeur, mais n’appartient pas au scénario du player. Le scénario peut
+   aussi contenir une page à sa racine, au même niveau que les chapitres,
+   par exemple une page de présentation : celle-ci appartient au scénario.
 
 ### Document et sauvegarde
 
@@ -190,14 +208,14 @@ reste soumise à l’autorisation explicite et au plan accepté prévus par les
 | --- | --- |
 | Elcé | Document de l’auteur, catalogue, affectation et ordre des pages et bdc, commandes d’édition, sauvegarde du document. Un seul document métier sert de source à la génération. |
 | Builder de scènes Elcé | Projection d’une page et de ses bdc en `SceneDoc`. Chaque bdc produit normalement sa story avec ses persos et son état propre ; un bdc simple peut produire un seul perso sans story autonome. Les straps servent aux calculs internes des bdc et de la scène. Aucun ordre d’activation ou séquencement temporel n’est dérivé de l’ordre des bdc. Une édition de page ne reconstruit pas les scènes des autres pages. |
-| Construction du scénario Elcé | Projection distincte de l’organisation du document en scénario Sighty, avec les références des scènes des pages diffusées. Lorsqu’il faut actualiser le scénario, l’éditeur le reconstruit en entier, sans employer la mutation live de Sighty et sans reconstruire les scènes inchangées. Les pages en réserve restent hors parcours ; l’application gère l’accès direct à la page courante. |
+| Construction du scénario Elcé | Projection distincte de l’organisation du document en scénario Sighty, avec le layout à la racine, le slot des pages racine et une entrée de slot par chapitre. Lorsqu’il faut actualiser le scénario, l’éditeur le reconstruit en entier, sans employer la mutation live de Sighty et sans reconstruire les scènes inchangées. Les pages du catalogue restent hors scénario ; l’application gère l’accès direct à la page courante. |
 | CodPlay | Compilation et lecture des scènes, persos `img`, `media` et `input`, observation dans le scrollport, actions et événements des persos. |
 | Sighty | Graphe du parcours, guards d’accès et de sortie, actions de navigation, état de lecture en session et relecture des pages selon le scénario. |
 | Stockage de l’application | Document auteur et octets des médias importés ; la progression du lecteur n’est pas persistée dans le POC. |
 
 La preuve minimale du raccord sera un document Elcé contenant une page de
-présentation hors chapitre, une page Flux de texte dans un chapitre et une
-page en réserve. La construction du scénario doit produire une définition validée par
+présentation à la racine du scénario, une page Flux de texte dans un chapitre
+et une page du catalogue. La construction du scénario doit produire une définition validée par
 `sighty.scenario.validate()` ; le vrai player doit lire les deux premières
 pages dans leur ordre et ne proposer aucune route vers la page en réserve.
 Cette preuve appartient à la tranche « Première lecture réelle » : la
@@ -244,7 +262,8 @@ hors page sont suivies au sujet 5.
 
 ## Sujet 2 — Document, pages et nodes
 
-**En cours — décisions partielles acceptées le 2026-10-01, non appliquées.**
+**En cours — modèle et commandes appliqués ; le catalogue des bdc et médias
+reste à construire.**
 
 Décisions retenues :
 
@@ -339,18 +358,19 @@ Résultat attendu : vocabulaire, structure du document et opérations auteur.
 
 ## Sujet 3 — Parcours d’édition et interface
 
-**En cours — principes d’interface acceptés le 2026-10-01, non appliqués.**
+**En cours — première organisation et déplacement par glisser-déposer appliqués ; la preuve navigateur complète reste à consigner.**
 
 Décisions retenues :
 
 - L’éditeur du POC vise l’ordinateur. Le player doit également pouvoir être
   joué sur mobile ; cette exigence de lecture est précisée au sujet 6.
-- L’organisation des chapitres/pages et la réserve occupent la partie gauche,
-  la page est au centre, les réglages à droite.
+- L’organisation du scénario (pages racine et chapitres) et du catalogue
+  occupe la partie gauche, la page est au centre, les réglages à droite.
 - L’interface doit rester accessible et compréhensible pour des personnes
-  peu formées. Le glisser-déposer est souhaité si possible pour les
-  déplacements ; sa faisabilité et sa clarté seront vérifiées lors de la
-  construction de l’interface.
+  peu formées. Une page se déplace par glisser-déposer depuis sa poignée vers
+  un chapitre, la racine du scénario ou le catalogue ; le dépôt sur une
+  page l’insère avant ou après elle selon la position du pointeur. La corbeille
+  reste l’action explicite de suppression définitive.
 - Le texte est édité directement dans la page, en WYSIWYG.
 - L’utilisateur de l’éditeur ne saisit jamais de HTML : cette règle vaut
   pour tout Elcé, pendant le POC et au-delà. Les structures HTML nécessaires
@@ -358,14 +378,15 @@ Décisions retenues :
 - La sélection d’un bdc ancré affiche une icône à son point d’insertion.
   Glisser cette icône repositionne l’insertion dans le texte, selon une
   interaction rappelant les traitements de texte ; détails au sujet 5.
-- Un bouton Lecture permet de basculer vers le player dans la même
-  application, puis de revenir à l’édition. Cette bascule utilise les scènes
-  produites par le builder et le scénario construit séparément. Cette
-  lecture est la prévisualisation en mode auteur du POC ; le mode de
-  diffusion et ses contrôles de publication viendront plus tard.
-- Depuis l’éditeur, la lecture du parcours démarre sur la page en cours
-  d’édition si elle appartient au scénario. Une page restée en réserve est
-  consultée dans l’éditeur, sans entrer dans le player du parcours.
+- Un bouton de prévisualisation ouvre une surface séparée du WYSIWYG. Pour le
+  POC, cette surface est une modale dans l’application ; une fenêtre
+  différente reste une évolution possible. Elle utilise les scènes produites
+  par le builder et le scénario construit séparément. Cette lecture est la
+  prévisualisation en mode auteur du POC ; le mode de diffusion et ses
+  contrôles de publication viendront plus tard.
+- Depuis l’éditeur, la lecture du scénario démarre sur la page en cours
+  d’édition si elle appartient au scénario. Une page du catalogue est
+  consultée dans l’éditeur, sans entrer dans le player.
 - Le player peut également être lu dans une fenêtre différente.
 - Le retour à l’édition retrouve la page, le node sélectionné et la position
   de défilement précédant la lecture.
@@ -373,15 +394,17 @@ Décisions retenues :
   adopter dès sa construction le modèle de commandes et de machine d’état
   qui permettra d’ajouter l’historique ultérieurement, comme décrit au sujet 11.
 
-Les contrôles d’ajout/suppression, la sélection, les échanges avec la réserve
-et les raccourcis utiles seront précisés avec les gestes retenus.
+Les contrôles d’ajout, la sélection et les raccourcis utiles seront précisés
+avec les gestes retenus. Le déplacement n’emploie plus de boutons nommés
+« Parcours », « Réserve » ou « Chapitre » : les listes de dépôt portent leur
+destination explicite.
 
 Résultat attendu : parcours auteur et disposition des outils.
 
 ## Sujet 4 — Structure du Flux de texte et enrichissement
 
-**En cours — structure et règles de base acceptées le 2026-10-01, non
-appliquées ; option de collage enrichi à évaluer.**
+**En cours — structure, règles de base et première surface Tiptap appliquées ;
+l’insertion des bdc reste à construire.**
 
 Décisions retenues :
 
@@ -420,8 +443,9 @@ Résultat attendu : structure éditable, options exactes et traitement du collag
 
 ## Sujet 5 — Contenus et ancrage dans le texte
 
-**En cours — principes acceptés le 2026-10-01, non appliqués ; réalisation
-CSS et modalités d’insertion à vérifier et à préciser.**
+**En cours — extension Tiptap et service métier d’ancrage appliqués ; les
+sources catalogue, la réouverture et la preuve navigateur du déplacement restent
+à vérifier.**
 
 Les premiers contenus ancrés à rendre utilisables sont l’image et la vidéo.
 La démo 5 illustre une image qui entre dans le scrollport et une vidéo dont
@@ -449,6 +473,11 @@ requis dans cette première démonstration.
   le bloc inséré, par exemple une image ou un média. Il doit réserver l’espace
   sous la ligne d’ancrage et permettre la superposition du contenu selon
   l’intention initiale, tout en conservant la continuité du texte.
+- Dans l’éditeur, le `span` d’ancre réserve la place sans porter le décor de
+  manipulation. Un enfant représentant le bdc marque cette surface et accueille
+  l’aperçu image ou vidéo lorsque la source est disponible ; la prise est un
+  élément superposé qui ne participe pas à la taille. Ce décor d’édition n’est
+  pas exporté dans le markup destiné à CodPlay.
 - L’extension d’ancre sera écrite pour Elcé sur Tiptap : la piste à éprouver
   représente l’ancre par un nœud inline identifié et exporte un `span`
   portant son `id` et son `data-part` dans le HTML statique.
@@ -533,6 +562,14 @@ elle ne certifie pas encore le comportement du `span`.
   cette ancre. Il n’existe pas de circuit de mutation parallèle pour ce
   raccourci. Le regroupement des commandes et le traitement d’un échec
   pendant la suite restent à définir.
+- Le dépôt de fichier passe par la façade métier `ElceAnchorDropFacade`, puis
+  par l’événement XState `section.change`. `ElceAnchorDropService` prépare la
+  cible et le commandement ; la machine XState séquence la sauvegarde du média,
+  la création du bdc, l’insertion de l’ancre et l’enregistrement de la source
+  de lecture. Les changements de contenu, de déplacement et de suppression
+  empruntent la même commande et la file portée par la machine. Cette file est
+  nécessaire car deux sauvegardes IndexedDB concurrentes pouvaient sinon
+  appliquer deux `markup` issus de sélections différentes dans un ordre inverse.
 - Pour le POC, l’interface présente une liste de types créables selon le
   contexte : la section texte est proposée dans une page, mais pas dans
   l’espace de création isolé. Cette restriction relève de la logique de
@@ -865,7 +902,11 @@ la [démo 5](../../demos/specs/sighty-scroll-course-demo-spec.md) :
 le graphe de vues et les actions de navigation sont produits pour Sighty,
 les commandes Précédent/Suivant et le menu empruntent son circuit public,
 et le repère de bas de page observé dans le `scroll-container` racine autorise
-« Suivant » pour une page Flux sans Question.
+« Suivant » pour une page Flux sans Question. Après le montage, si le contenu
+tient déjà dans le scrollport, la composition émet ce même signal de fin afin
+que « Suivant » soit disponible immédiatement ; elle ne crée pas un second
+circuit de navigation. Cette vérification complète la règle CodPlay qui
+synchronise la première observation sans émettre `enter`.
 Avec une Question, ce repère et la validation de la réponse sont nécessaires,
 indépendamment de la position de la Question et de la justesse de la réponse.
 Atteindre le bas ne change pas automatiquement de page. La page produit le
@@ -1051,7 +1092,7 @@ reproduire ce fonctionnement.
 | --- | --- | --- |
 | Page Flux | La story de page déclare le perso `scroll-container` racine de contenu, le support du flux et le repère bas. Ces éléments sont construits à partir de la page, sans devenir des bdc du catalogue. | Les persos du flux sont placés dans le scrollport par leurs `move`, le repère bas est observé par CodPlay, et l’événement public atteint l’action Sighty de la démo 5. |
 | Page Diapo | Une scène de page sans `scroll-container` de page présente le carousel sur tout le lecteur ; le preset de lecture résolu fournit les plages des cartes et, si une voix est présente, un perso `media` audio ; le constructeur de scénario n’attend aucun repère bas pour « Suivant ». | La page ne défile pas ; avec une voix, chaque carte occupe une part égale de sa durée, la voix démarre avec la page, se lit une fois et s’arrête à sa sortie ; « Suivant » reste disponible par le circuit Sighty. |
-| Section titre/texte | Une story propre au bdc produit son texte et, s’il existe, son titre. Ses persos visent les emplacements du flux par `move`. | Le contenu reste à sa place sous le perso `scroll-container` créé pour la page. |
+| Section titre/texte | Le markup de la Section réserve d’abord un hôte de titre, puis porte le HTML statique du texte ; la story du bdc monte le titre dans cet hôte par `move`. | Le rendu conserve l’ordre titre puis texte sous le perso `scroll-container` créé pour la page. |
 | Image ancrée | Un seul perso `img` sans story autonome de bdc, accueilli dans la story technique de page ; ses actions de visibilité sont déclarées sur lui. | L’image déjà visible et celle qui entre ensuite dans le scrollport réagissent comme prévu, sans perso `figure`. |
 | Carte image avec légende | Le preset fournit un markup fixe à deux zones qui accueille un perso `img` et un texte de légende fourni par le média ; le builder compose ces zones dans la story du bdc. | L’image et la légende occupent leurs emplacements sans modification interne de `img` ; deux utilisations du même média lisent la même légende. La structure HTML choisie pour le preset est inspectée. |
 | Vidéo ancrée | Une story de bdc porte le perso `media` et les persos d’observation nécessaires au comportement de la démo 5. Les actions `START` et `PAUSE` appartiennent au perso média. | La lecture et la pause suivent la visibilité dans le scrollport, y compris après relecture. |
@@ -1275,7 +1316,7 @@ dans une spécification Elcé. Dès qu’ils existent, les deux chemins
 player. Une preuve manquante laisse l’étape en cours et bloque sa dépendante,
 sans faire échouer artificiellement les travaux indépendants.
 
-0. **Mise en place de l’application — préalable obligatoire — En cours.**
+0. **Mise en place de l’application — préalable obligatoire — En cours ; automatisation vérifiée.**
    faire de `packages/elce/` une application et un workspace npm autonomes dans
    ce monorepo. Ajouter son chemin aux `workspaces` racine, puis créer son
    `package.json`, `src/`, entrée Vite, configuration TypeScript et scripts
@@ -1295,7 +1336,7 @@ sans faire échouer artificiellement les travaux indépendants.
    parcours navigateur sont consignés avec leur résultat ; aucun code Elcé
    ne dépend d’un import privé d’ed2. Un échec de configuration est résolu
    ici avant d’ajouter le modèle métier.
-1. **Document minimal, commandes et stockage.** Définir les identifiants
+1. **Document minimal, commandes et stockage — En cours.** Définir les identifiants
    stables et un premier schéma Elcé versionné : un document, une page Flux,
    une Section et sa référence à un premier preset de carte minimal, puis les
    collections de chapitres, pages, bdc et médias.
@@ -1308,25 +1349,28 @@ sans faire échouer artificiellement les travaux indépendants.
    visible passe par la façade, sans copie métier dans React. *Sortie :* un
    document minimal se crée, se modifie et se relit ; le stockage temporaire
    du POC est éprouvé avant de multiplier les contenus.
-2. **Première verticale de lecture réelle.** À partir de ce document, créer
+2. **Première verticale de lecture réelle — En cours ; compilation et montage automatisés vérifiés.** À partir de ce document, créer
    séparément le builder d’une scène Flux et le constructeur d’un scénario
    Sighty minimal. Enregistrer la capacité optionnelle `scroll-container`,
    compiler la scène et valider le scénario avant de lire la page dans le
    player réel. Le builder utilise le premier preset Elcé plutôt qu’un layout
    codé directement dans la fixture. Préparer dans le document de preuve
-   une page de présentation hors chapitre, une page Flux dans un chapitre
-   avec deux Sections dans deux stories et un repère bas, ainsi qu’une page
-   en réserve ; l’interface d’organisation viendra à l’étape 4. **Vérifier**
+   une page de présentation à la racine du scénario, une page Flux dans un
+   chapitre avec deux Sections dans deux stories et un repère bas, ainsi qu’une
+   page du catalogue ; l’interface d’organisation viendra à l’étape 4. **Vérifier**
    en navigateur le montage de persos de stories différentes sous le même
    scrollport, l’observation du repère, les actions dans les persos, la
-   navigation Sighty de la démo 5 et l’absence de la page en réserve dans le
+   navigation Sighty de la démo 5 et l’absence de la page du catalogue dans le
    parcours ; inspecter aussi les `SceneDoc` et le scénario produits.
-   *Sortie :* ces deux builders et leurs frontières sont exercés de bout en
-   bout, sans player ou routeur local de substitution. L’image simple sera
+   *Sortie partielle :* ces deux builders et leurs frontières sont exercés de bout en
+   bout par le runtime Sighty/CodPlay, sans player ou routeur local de substitution.
+   La vérification navigateur du scroll, du repère et de la navigation reste
+   requise avant de clore l’étape. L’image simple sera
    éprouvée à l’étape 3 ; la Question suivra son preset et sa tranche dédiée.
    Une capacité manquante est portée dans le plan de son propriétaire avant
    tout travail Elcé qui en dépend.
-3. **Essai anticipé de l’ancre Tiptap.** Sur cette verticale, réaliser dans
+3. **Essai anticipé de l’ancre Tiptap — En cours ; nœud, export statique,
+   service métier et montage CodPlay en DOM vérifiés.** Sur cette verticale, réaliser dans
    Elcé un premier nœud d’ancre, sa NodeView et le plugin de dépôt, raccordés
    aux commandes. Utiliser un bdc image préparé pour tester le geste avant
    d’investir dans toutes les interfaces d’édition. **Vérifier** dans le
@@ -1337,16 +1381,17 @@ sans faire échouer artificiellement les travaux indépendants.
    vérifier que l’ancre vise encore le même bdc. *Sortie :* Tiptap est retenu
    seulement si l’extension Elcé et le rendu conviennent ; sinon la
    représentation ou la bibliothèque est réexaminée avant la suite.
-4. **Organisation du scénario dans l’éditeur.** Construire la liste des
-   chapitres et pages, la page hors chapitre, la réserve du catalogue et la
+4. **Organisation du scénario dans l’éditeur — En cours ; commandes et
+   organisation de base visibles, glisser-déposer appliqué.** Construire la
+   liste des chapitres et de leurs pages, la page racine du scénario, le catalogue et la
    sélection, puis les commandes de création, nom automatique ou choisi,
    déplacement, retrait, suppression définitive et suppression d’un chapitre
-   vide. Permettre aussi de créer une page hors chapitre au niveau du parcours
+   vide. Permettre aussi de créer une page racine au niveau du scénario
    et de l’y déplacer depuis un chapitre. Ouvrir Lecture à la page courante
    et restaurer ensuite le contexte d’édition ; rendre la lecture possible
    dans une fenêtre distincte.
-   **Vérifier** que les pages en réserve restent éditables mais absentes du
-   scénario, que les pages hors chapitre y figurent, et que les deux formes
+   **Vérifier** que les pages du catalogue restent éditables mais absentes du
+   scénario, que les pages racine y figurent, et que les deux formes
    de suppression ont des résultats distincts après rechargement. Déplacer
    une page doit reconstruire le scénario entier sans reconstruire les
    scènes ; éditer une page ne reconstruit que sa scène. *Sortie :* l’ordre
@@ -1368,18 +1413,23 @@ sans faire échouer artificiellement les travaux indépendants.
    `id` et ses parts CodPlay, ainsi que son rendu réel. *Sortie :* Section,
    média et future Question peuvent partager le modèle de cartes sans
    dupliquer leurs contenus ni introduire un second circuit de rendu.
-6. **Édition des Sections.** Installer l’édition WYSIWYG retenue dans la page :
+6. **Édition des Sections — En cours ; première surface Tiptap vérifiée.** Installer l’édition WYSIWYG retenue dans la page :
    titre facultatif, texte, paragraphes et titres `h1` à `h6`, gras, italique,
    souligné, indice, exposant, ainsi que les alignements gauche, centré,
-   droite et justifié ; le collage reste en texte brut par défaut. Le JSON
+   droite et justifié ; les commandes d’enrichissement sont représentées par
+   des icônes Lucide avec un nom accessible. Le collage reste en texte brut
+   par défaut. Le JSON
    éditable reste la source ; le builder
    exporte son HTML statique en `layout.markup`, sans saisie HTML par l’auteur.
    **Vérifier** la saisie, le changement de style, le placement vertical de
    plusieurs Sections, l’export avec `id` explicites et la lecture réelle sur
    ordinateur et mobile. Tester qu’une modification d’une Section conserve
-   les autres scènes. *Sortie :* l’auteur peut créer et relire une page Flux
-   textuelle complète sans dépendre d’une ancre ou d’un média importé.
-7. **Catalogue des médias et bdc simples.** Importer une image depuis un
+   les autres scènes. *Sortie partielle :* l’auteur peut éditer une Section et
+   son HTML statique exporté dans le document. La lecture navigateur
+   ordinateur/mobile et le placement de plusieurs Sections restent à vérifier
+   avant de clore l’étape.
+7. **Catalogue des médias et bdc simples — projection image/vidéo et import
+   fichier vérifiés ; catalogue et réemploi à construire.** Importer une image depuis un
    fichier, puis une vidéo si elle suit le même circuit ; conserver leurs
    octets et leurs références réemployables dans IndexedDB. Créer des bdc
    image/vidéo uniques, proposer leur édition dans l’espace isolé et générer
@@ -1392,7 +1442,8 @@ sans faire échouer artificiellement les travaux indépendants.
    4:3/3:4/16:9, les marges vidéo, les contrôles et les actions automatiques
    de visibilité dans le vrai player. *Sortie :* médias et bdc sont reliés
    par le modèle métier et lisibles sans rendu média propre à Elcé.
-8. **Insertion complète des bdc dans le texte.** Achever l’extension éprouvée
+8. **Insertion complète des bdc dans le texte — dépôt fichier et service métier
+   appliqués ; sources catalogue et preuve navigateur du déplacement à compléter.** Achever l’extension éprouvée
    à l’étape 3 pour les sources autorisées : icône de type, bdc ou média du
    catalogue, fichier de l’ordinateur. Tous les gestes créent l’ancre au dépôt
    par le même circuit de commandes ; le dépôt de fichier enchaîne création
@@ -1507,8 +1558,8 @@ des demandes de réponse une par une avant la première démonstration.
   page et ses bdc du document sans les verser au catalogue ; les médias
   réemployables restent disponibles. Les deux résultats doivent survivre
   au rechargement.
-- Vérifier qu’une page de présentation hors chapitre apparaît dans le
-  parcours du player, tandis qu’une page en réserve reste consultable dans
+- Vérifier qu’une page de présentation à la racine du scénario apparaît dans
+  le player, tandis qu’une page du catalogue reste consultable dans
   l’éditeur et absente de ce parcours.
 - Vérifier avec deux pages diffusées que déplacer l’une d’elles ne modifie
   que la projection du scénario : leurs scènes et identités restent stables.

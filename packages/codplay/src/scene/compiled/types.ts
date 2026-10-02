@@ -59,6 +59,7 @@ export type CompiledScrollObservationZone = Readonly<{
 /** Serializable enter/leave rule carried by the perso that is observed. */
 export type CompiledScrollObservation = Readonly<{
   root?: string
+  initial?: 'enter' | 'leave'
   liveAction?: string
   zone?: CompiledScrollObservationZone
   enter?: readonly CompiledScrollObservationEvent[]

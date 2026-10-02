@@ -222,8 +222,9 @@ function isCompiledEmitRule(value: unknown): boolean {
 
 /** Checks one geometric observation without admitting browser objects or callbacks. */
 function isCompiledScrollObservation(value: unknown): boolean {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['root', 'liveAction', 'zone', 'enter', 'leave'])) return false
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['root', 'initial', 'liveAction', 'zone', 'enter', 'leave'])) return false
   if (value.root !== undefined && typeof value.root !== 'string') return false
+  if (value.initial !== undefined && value.initial !== 'enter' && value.initial !== 'leave') return false
   if (value.liveAction !== undefined && (typeof value.liveAction !== 'string' || value.liveAction.trim().length === 0)) return false
   if (value.zone !== undefined) {
     if (!isPlainRecord(value.zone) || !hasOnlyKeys(value.zone, ['rootMargin', 'scrollMargin', 'threshold', 'trackVisibility'])) return false

@@ -1,0 +1,457 @@
+import {
+  BDC_LOCATION,
+  BDC_TYPE,
+  CHAPTER_TYPE,
+  DEFAULT_EVALUATION_THRESHOLD,
+  DEFAULT_PRESET_ID,
+  PAGE_LOCATION,
+  PAGE_TYPE,
+} from '../../config/document-config'
+import type { BdcType } from '../../config/document-config-types'
+import {
+  createEmptyRichTextDocument,
+  ElceDocument,
+  nextChapterName,
+  nextPageName,
+  createStableId,
+} from '../../domain/document-model'
+import type { Bdc, BdcId, Chapter, ChapterId, Page, PageId, RichTextDocument } from '../../domain/document-types'
+import type { BdcPlacement, CreatePageCommandInput, DocumentCommand, PagePlacement } from './document-command-types'
+
+/** Creates a page command while keeping identifier generation outside rendering. */
+export function createPageCommand(input: CreatePageCommandInput): Extract<DocumentCommand, { type: 'page.create' }> {
+  return { type: 'page.create', ...input }
+}
+
+/** Creates the first authoring action exposed by the application scaffold. */
+export function createDefaultPageCommand(
+  document: ElceDocument,
+  name?: string,
+): Extract<DocumentCommand, { type: 'page.create' }> {
+  const chapter = document.chapters[0]
+  if (chapter === undefined) fail('Impossible de créer une page sans chapitre.')
+  return createPageCommand({
+    pageId: createStableId('page'),
+    bdcId: createStableId('bdc-section'),
+    name,
+    placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: chapter.id },
+  })
+}
+
+/** Creates a chapter command with a stable generated identifier and a readable fallback name. */
+export function createChapterCommand(
+  document: ElceDocument,
+  name?: string,
+): Extract<DocumentCommand, { type: 'chapter.create' }> {
+  return {
+    type: 'chapter.create',
+    chapterId: createStableId('chapter'),
+    name: name?.trim() || nextChapterName(document),
+  }
+}
+
+/** Creates the command used to move a page between the document's page collections. */
+export function createPageMoveCommand(
+  pageId: PageId,
+  placement: PagePlacement,
+): Extract<DocumentCommand, { type: 'page.move' }> {
+  return { type: 'page.move', pageId, placement }
+}
+
+/** Creates the command that sends a page to the catalogue without deleting it. */
+export function createPageRemoveCommand(pageId: PageId): Extract<DocumentCommand, { type: 'page.remove' }> {
+  return { type: 'page.remove', pageId }
+}
+
+/** Creates the command that permanently deletes a page and its bdc. */
+export function createPageDeleteCommand(pageId: PageId): Extract<DocumentCommand, { type: 'page.delete' }> {
+  return { type: 'page.delete', pageId }
+}
+
+function fail(message: string): never {
+  throw new Error(message)
+}
+
+function indexAtEndOrRequested(length: number, index: number | undefined): number {
+  return Math.max(0, Math.min(index ?? length, length))
+}
+
+function insertAt<T>(values: readonly T[], value: T, index: number | undefined): readonly T[] {
+  const result = [...values]
+  result.splice(indexAtEndOrRequested(result.length, index), 0, value)
+  return result
+}
+
+function removeValue<T>(values: readonly T[], value: T): readonly T[] {
+  return values.filter((candidate) => candidate !== value)
+}
+
+function sourceIndexForPlacement(
+  document: ElceDocument,
+  page: Page,
+  placement: PagePlacement,
+): number | undefined {
+  switch (placement.kind) {
+    case PAGE_LOCATION.CATALOG:
+      return undefined
+    case PAGE_LOCATION.SCENARIO: {
+      const sourceIndex = document.data.scenarioPageIds.indexOf(page.id)
+      return sourceIndex < 0 ? undefined : sourceIndex
+    }
+    case PAGE_LOCATION.CHAPTER: {
+      if (page.chapterId !== placement.chapterId) return undefined
+      const chapter = document.chapters.find((candidate) => candidate.id === placement.chapterId)
+      if (chapter === undefined) return undefined
+      const sourceIndex = chapter.pageIds.indexOf(page.id)
+      return sourceIndex < 0 ? undefined : sourceIndex
+    }
+  }
+}
+
+function indexAfterPageRemoval(
+  document: ElceDocument,
+  page: Page,
+  placement: PagePlacement,
+): number | undefined {
+  const requestedIndex = pageIndexForPlacement(placement)
+  const sourceIndex = sourceIndexForPlacement(document, page, placement)
+  if (requestedIndex === undefined || sourceIndex === undefined || sourceIndex >= requestedIndex) return requestedIndex
+  return requestedIndex - 1
+}
+
+function pageIndexForPlacement(placement: PagePlacement): number | undefined {
+  switch (placement.kind) {
+    case PAGE_LOCATION.CATALOG:
+      return undefined
+    case PAGE_LOCATION.SCENARIO:
+    case PAGE_LOCATION.CHAPTER:
+      return placement.index
+  }
+}
+
+function replaceAt<T>(values: readonly T[], value: T, predicate: (candidate: T) => boolean): readonly T[] {
+  return values.map((candidate) => (predicate(candidate) ? value : candidate))
+}
+
+function findPage(document: ElceDocument, pageId: PageId): Page {
+  return document.pages.find((page) => page.id === pageId) ?? fail(`Page inconnue : ${pageId}`)
+}
+
+function findBdc(document: ElceDocument, bdcId: BdcId): Bdc {
+  return document.bdcs.find((bdc) => bdc.id === bdcId) ?? fail(`Bdc inconnu : ${bdcId}`)
+}
+
+function findChapter(document: ElceDocument, chapterId: ChapterId): Chapter {
+  return document.chapters.find((chapter) => chapter.id === chapterId) ?? fail(`Chapitre inconnu : ${chapterId}`)
+}
+
+function sectionForBdc(type: BdcType, bdcId: BdcId): Bdc['section'] {
+  switch (type) {
+    case BDC_TYPE.SECTION:
+      return { title: '', markup: `<p id="${bdcId}-text"></p>`, content: createEmptyRichTextDocument() }
+    default:
+      return null
+  }
+}
+
+function withPage(document: ElceDocument, page: Page): ElceDocument {
+  return new ElceDocument({ ...document.data, pages: replaceAt(document.pages, page, (candidate) => candidate.id === page.id) })
+}
+
+function withBdc(document: ElceDocument, bdc: Bdc): ElceDocument {
+  return new ElceDocument({ ...document.data, bdcs: replaceAt(document.bdcs, bdc, (candidate) => candidate.id === bdc.id) })
+}
+
+function placePage(document: ElceDocument, page: Page, placement: PagePlacement): ElceDocument {
+  const insertionIndex = indexAfterPageRemoval(document, page, placement)
+  const withoutPage = new ElceDocument({
+    ...document.data,
+    chapters: document.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, page.id) })),
+    scenarioPageIds: removeValue(document.data.scenarioPageIds, page.id),
+    catalogPageIds: removeValue(document.data.catalogPageIds, page.id),
+  })
+  switch (placement.kind) {
+    case PAGE_LOCATION.CATALOG:
+      return withPage(
+        new ElceDocument({ ...withoutPage.data, catalogPageIds: [...withoutPage.data.catalogPageIds, page.id] }),
+        { ...page, chapterId: null },
+      )
+    case PAGE_LOCATION.SCENARIO: {
+      const scenarioPageIds = insertAt(withoutPage.data.scenarioPageIds, page.id, insertionIndex)
+      return withPage(new ElceDocument({ ...withoutPage.data, scenarioPageIds }), { ...page, chapterId: null })
+    }
+    case PAGE_LOCATION.CHAPTER: {
+      const chapter = findChapter(withoutPage, placement.chapterId)
+      const chapters = replaceAt(
+        withoutPage.chapters,
+        { ...chapter, pageIds: insertAt(chapter.pageIds, page.id, insertionIndex) },
+        (candidate) => candidate.id === chapter.id,
+      )
+      return withPage(new ElceDocument({ ...withoutPage.data, chapters }), { ...page, chapterId: chapter.id })
+    }
+  }
+}
+
+function placeBdc(document: ElceDocument, bdc: Bdc, placement: BdcPlacement): ElceDocument {
+  const withoutBdc = new ElceDocument({
+    ...document.data,
+    pages: document.pages.map((page) => ({ ...page, bdcIds: removeValue(page.bdcIds, bdc.id) })),
+    catalogBdcIds: removeValue(document.data.catalogBdcIds, bdc.id),
+  })
+  switch (placement.kind) {
+    case BDC_LOCATION.CATALOG:
+      return withBdc(new ElceDocument({ ...withoutBdc.data, catalogBdcIds: [...withoutBdc.data.catalogBdcIds, bdc.id] }), {
+        ...bdc,
+        pageId: null,
+      })
+    case BDC_LOCATION.PAGE: {
+      const page = findPage(withoutBdc, placement.pageId)
+      const pages = replaceAt(
+        withoutBdc.pages,
+        { ...page, bdcIds: insertAt(page.bdcIds, bdc.id, placement.index) },
+        (candidate) => candidate.id === page.id,
+      )
+      return withBdc(new ElceDocument({ ...withoutBdc.data, pages }), { ...bdc, pageId: page.id })
+    }
+  }
+}
+
+function createPage(document: ElceDocument, command: Extract<DocumentCommand, { type: 'page.create' }>): ElceDocument {
+  if (document.pages.some((page) => page.id === command.pageId)) fail(`Page déjà présente : ${command.pageId}`)
+  if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+  const page: Page = {
+    id: command.pageId,
+    name: command.name?.trim() || nextPageName(document),
+    type: command.pageType ?? PAGE_TYPE.FLUX,
+    chapterId: null,
+    bdcIds: [],
+  }
+  const section: Bdc = {
+    id: command.bdcId,
+    type: BDC_TYPE.SECTION,
+    presetId: DEFAULT_PRESET_ID.SECTION,
+    pageId: page.id,
+    mediaId: null,
+    section: { title: '', markup: `<p id="${command.bdcId}-text"></p>`, content: createEmptyRichTextDocument() },
+  }
+  const withEntities = new ElceDocument({ ...document.data, pages: [...document.pages, page], bdcs: [...document.bdcs, section] })
+  return placeBdc(placePage(withEntities, page, command.placement), section, { kind: BDC_LOCATION.PAGE, pageId: page.id })
+}
+
+function createChapter(document: ElceDocument, command: Extract<DocumentCommand, { type: 'chapter.create' }>): ElceDocument {
+  if (document.chapters.some((chapter) => chapter.id === command.chapterId)) fail(`Chapitre déjà présent : ${command.chapterId}`)
+  const chapter: Chapter = {
+    id: command.chapterId,
+    name: command.name,
+    type: command.chapterType ?? CHAPTER_TYPE.STANDARD,
+    pageIds: [],
+    ...(command.chapterType === CHAPTER_TYPE.EVALUATION ? { evaluationThreshold: DEFAULT_EVALUATION_THRESHOLD } : {}),
+  }
+  return new ElceDocument({ ...document.data, chapters: [...document.chapters, chapter] })
+}
+
+function deleteChapter(document: ElceDocument, chapterId: ChapterId): ElceDocument {
+  const chapter = findChapter(document, chapterId)
+  if (chapter.pageIds.length > 0) fail(`Impossible de supprimer un chapitre non vide : ${chapterId}`)
+  return new ElceDocument({
+    ...document.data,
+    chapters: document.chapters.filter((candidate) => candidate.id !== chapter.id),
+  })
+}
+
+function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { type: 'bdc.create' }>): ElceDocument {
+  if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+  const bdc: Bdc = {
+    id: command.bdcId,
+    type: command.bdcType,
+    presetId: command.presetId,
+    pageId: null,
+    mediaId: command.mediaId ?? null,
+    section: sectionForBdc(command.bdcType, command.bdcId),
+  }
+  return placeBdc(new ElceDocument({ ...document.data, bdcs: [...document.bdcs, bdc] }), bdc, command.placement)
+}
+
+/** Returns the Section that owns an anchor edit and checks its page boundary. */
+function findAnchorSection(document: ElceDocument, sectionBdcId: BdcId, pageId: PageId): Bdc {
+  const section = findBdc(document, sectionBdcId)
+  if (section.type !== BDC_TYPE.SECTION || section.pageId !== pageId || section.section === null) {
+    fail(`La Section ${sectionBdcId} ne porte pas la page ${pageId}.`)
+  }
+  return section
+}
+
+/** Updates the serializable Section source after an anchor transaction. */
+function updateAnchorSection(
+  document: ElceDocument,
+  sectionBdcId: BdcId,
+  markup: string,
+  content: RichTextDocument,
+): ElceDocument {
+  const section = findBdc(document, sectionBdcId)
+  if (section.type !== BDC_TYPE.SECTION || section.section === null) fail(`Bdc Section incomplet : ${sectionBdcId}`)
+  return withBdc(document, { ...section, section: { ...section.section, markup, content } })
+}
+
+/** Applies the one-command file/catalogue drop that creates and anchors a media bdc. */
+function createAnchoredBdc(
+  document: ElceDocument,
+  command: Extract<DocumentCommand, { type: 'bdc.anchor.create' }>,
+): ElceDocument {
+  const page = findPage(document, command.pageId)
+  findAnchorSection(document, command.sectionBdcId, command.pageId)
+  if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+
+  const mediaExists = document.medias.some((media) => media.id === command.media.id)
+  const withMedia = mediaExists
+    ? document
+    : new ElceDocument({ ...document.data, medias: [...document.medias, command.media] })
+  const bdc: Bdc = {
+    id: command.bdcId,
+    type: command.bdcType,
+    presetId: command.presetId,
+    pageId: page.id,
+    mediaId: command.media.id,
+    section: null,
+  }
+  const pageWithBdc = replaceAt(
+    withMedia.pages,
+    { ...page, bdcIds: [...page.bdcIds, bdc.id] },
+    (candidate) => candidate.id === page.id,
+  )
+  const withEntities = new ElceDocument({
+    ...withMedia.data,
+    pages: pageWithBdc,
+    bdcs: [...withMedia.bdcs, bdc],
+  })
+  return updateAnchorSection(withEntities, command.sectionBdcId, command.markup, command.content)
+}
+
+/** Applies an anchor repositioning while keeping its bdc assignment unchanged. */
+function moveAnchoredBdc(
+  document: ElceDocument,
+  command: Extract<DocumentCommand, { type: 'bdc.anchor.move' }>,
+): ElceDocument {
+  const anchorBdc = findBdc(document, command.anchorBdcId)
+  if (anchorBdc.pageId === null) fail(`Le bdc ancré est hors page : ${command.anchorBdcId}`)
+  findAnchorSection(document, command.sectionBdcId, anchorBdc.pageId)
+  return updateAnchorSection(document, command.sectionBdcId, command.markup, command.content)
+}
+
+/** Removes an anchor and returns its unique bdc to the catalogue. */
+function removeAnchoredBdc(
+  document: ElceDocument,
+  command: Extract<DocumentCommand, { type: 'bdc.anchor.remove' }>,
+): ElceDocument {
+  const anchorBdc = findBdc(document, command.anchorBdcId)
+  if (anchorBdc.pageId === null) fail(`Le bdc ancré est hors page : ${command.anchorBdcId}`)
+  findAnchorSection(document, command.sectionBdcId, anchorBdc.pageId)
+  const detached = placeBdc(document, anchorBdc, { kind: BDC_LOCATION.CATALOG })
+  return updateAnchorSection(detached, command.sectionBdcId, command.markup, command.content)
+}
+
+function movePage(document: ElceDocument, command: Extract<DocumentCommand, { type: 'page.move' }>): ElceDocument {
+  return placePage(document, findPage(document, command.pageId), command.placement)
+}
+
+function moveBdc(document: ElceDocument, command: Extract<DocumentCommand, { type: 'bdc.move' }>): ElceDocument {
+  return placeBdc(document, findBdc(document, command.bdcId), command.placement)
+}
+
+function deletePage(document: ElceDocument, pageId: PageId): ElceDocument {
+  const page = findPage(document, pageId)
+  const bdcIds = new Set(page.bdcIds)
+  const detached = movePage(document, { type: 'page.move', pageId, placement: { kind: PAGE_LOCATION.CATALOG } })
+  return new ElceDocument({
+    ...detached.data,
+    chapters: detached.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, pageId) })),
+    pages: detached.pages.filter((candidate) => candidate.id !== pageId),
+    scenarioPageIds: removeValue(detached.data.scenarioPageIds, pageId),
+    catalogPageIds: removeValue(detached.data.catalogPageIds, pageId),
+    bdcs: detached.bdcs.filter((bdc) => !bdcIds.has(bdc.id)),
+    catalogBdcIds: detached.data.catalogBdcIds.filter((bdcId) => !bdcIds.has(bdcId)),
+  })
+}
+
+/** Applies one document command and returns a new immutable model value. */
+export function applyDocumentCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
+  switch (command.type) {
+    case 'chapter.create':
+      return createChapter(document, command)
+    case 'chapter.delete':
+      return deleteChapter(document, command.chapterId)
+    case 'page.create':
+      return createPage(document, command)
+    case 'page.move':
+      return movePage(document, command)
+    case 'page.remove':
+      return movePage(document, { type: 'page.move', pageId: command.pageId, placement: { kind: PAGE_LOCATION.CATALOG } })
+    case 'page.delete':
+      return deletePage(document, command.pageId)
+    case 'bdc.create':
+      return createBdc(document, command)
+    case 'bdc.move':
+      return moveBdc(document, command)
+    case 'bdc.remove':
+      return moveBdc(document, { type: 'bdc.move', bdcId: command.bdcId, placement: { kind: BDC_LOCATION.CATALOG } })
+    case 'bdc.section.update': {
+      const bdc = findBdc(document, command.bdcId)
+      switch (bdc.type) {
+        case BDC_TYPE.SECTION:
+          if (bdc.section === null) fail(`Bdc Section incomplet : ${command.bdcId}`)
+          return withBdc(document, { ...bdc, section: { title: command.title, markup: command.markup, content: command.content } })
+        default:
+          fail(`Bdc non textuel : ${command.bdcId}`)
+      }
+    }
+    case 'bdc.anchor.create':
+      return createAnchoredBdc(document, command)
+    case 'bdc.anchor.move':
+      return moveAnchoredBdc(document, command)
+    case 'bdc.anchor.remove':
+      return removeAnchoredBdc(document, command)
+    case 'media.add':
+      if (document.medias.some((media) => media.id === command.media.id)) fail(`Média déjà présent : ${command.media.id}`)
+      return new ElceDocument({ ...document.data, medias: [...document.medias, command.media] })
+    case 'document.rename':
+      return new ElceDocument({ ...document.data, name: command.name })
+  }
+}
+
+/** Checks the exclusivity invariants before a document is persisted or built. */
+export function assertDocumentInvariants(document: ElceDocument): void {
+  const pageIds = new Set<PageId>()
+  const bdcIds = new Set<BdcId>()
+  const knownBdcIds = new Set(document.bdcs.map((bdc) => bdc.id))
+  for (const page of document.pages) {
+    if (pageIds.has(page.id)) fail(`Page dupliquée : ${page.id}`)
+    pageIds.add(page.id)
+    for (const bdcId of page.bdcIds) {
+      if (!knownBdcIds.has(bdcId)) fail(`Bdc inconnu dans la page ${page.id} : ${bdcId}`)
+      if (bdcIds.has(bdcId)) fail(`Bdc placé deux fois dans la page ${page.id}`)
+      bdcIds.add(bdcId)
+      if (document.bdcs.find((bdc) => bdc.id === bdcId)?.pageId !== page.id) fail(`Affectation de bdc incohérente : ${bdcId}`)
+    }
+  }
+  const placedPageIds = new Set([
+    ...document.data.scenarioPageIds,
+    ...document.data.catalogPageIds,
+    ...document.chapters.flatMap((chapter) => chapter.pageIds),
+  ])
+  if (placedPageIds.size !== document.pages.length) fail('Chaque page doit avoir un emplacement unique')
+  for (const bdc of document.bdcs) {
+    if (bdcIds.has(bdc.id)) continue
+    if (!document.data.catalogBdcIds.includes(bdc.id) || bdc.pageId !== null) fail(`Bdc sans emplacement : ${bdc.id}`)
+    bdcIds.add(bdc.id)
+  }
+  if (bdcIds.size !== document.bdcs.length) fail('Chaque bdc doit avoir un emplacement unique')
+  for (const chapter of document.chapters) {
+    for (const pageId of chapter.pageIds) {
+      if (document.pages.find((page) => page.id === pageId)?.chapterId !== chapter.id) fail(`Affectation de chapitre incohérente : ${pageId}`)
+    }
+  }
+  for (const page of document.pages) {
+    if (page.chapterId === null && document.chapters.some((chapter) => chapter.pageIds.includes(page.id))) fail(`Page affectée à un chapitre sans référence : ${page.id}`)
+    if (page.chapterId !== null && !document.chapters.some((chapter) => chapter.id === page.chapterId && chapter.pageIds.includes(page.id))) fail(`Page hors chapitre incohérente : ${page.id}`)
+  }
+}

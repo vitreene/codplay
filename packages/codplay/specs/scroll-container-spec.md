@@ -175,6 +175,7 @@ variante est exclusive de `event` et `capture` sur cette règle :
 ```ts
 type ScrollObservationDeclaration = Readonly<{
   root?: string
+  initial?: 'enter' | 'leave'
   liveAction?: string
   zone?: Readonly<{
     rootMargin?: string
@@ -218,13 +219,17 @@ si `trackVisibility` est activé, `isVisible`. Les sorties
 `enter`/`leave` réutilisent `AuthorEmitEvent` et peuvent déclarer `once: true`.
 Sans `once`, chaque transition de phase émet l’event. Avec `once`, cet event ne
 peut être émis qu’une fois pendant la vie du player ; un seek ne réarme pas ce
-choix. La phase ne conserve que `inside` ou `outside` : le premier callback
-synchronise la phase sans event, une phase inchangée n’émet rien, et une
-transition ultérieure produit les events déclarés. Les transitions d’un même
+choix. La phase ne conserve que `inside` ou `outside` : par défaut, le premier
+callback synchronise la phase sans event, une phase inchangée n’émet rien, et
+une transition ultérieure produit les events déclarés. `initial: 'enter'`
+autorise l’event `enter` si la première phase est `inside`, et
+`initial: 'leave'` fait de même pour `leave` si elle est `outside` ; une
+première mesure dans l’autre phase ne produit rien. Les transitions d’un même
 batch sont traitées dans l’ordre des déclarations compilées.
 
-Au premier callback, la phase est synchronisée sans event, mais une action
-`liveAction` reçoit quand même le ratio de cette première mesure.
+Au premier callback, la phase est synchronisée. Une action `liveAction` reçoit
+quand même le ratio de cette première mesure ; une déclaration `initial`
+compatible peut en plus produire l’event de phase correspondant.
 
 Après la première matérialisation, l’adaptateur résout une fois le parentage
 logique courant. Sans `root`, il prend le premier scroll-container en remontant
@@ -232,7 +237,8 @@ depuis le parent du perso ; avec `root`, il cherche cet ancêtre précis. La
 liaison reste attachée à ce scrollport pendant la durée de vie du player. Un
 `move` ultérieur ne relance pas la recherche dans cette première tranche.
 L’ascendance vient du graphe de persos résolu, jamais de l’ascendance DOM. Le
-callback initial de l’observer synchronise la phase sans produire d’event.
+callback initial de l’observer synchronise la phase ; l’option `initial` peut
+demander l’émission déclarative de l’event correspondant.
 
 Les observers qui partagent exactement le même root et les mêmes options sont
 mutualisés. La phase reste propre à chaque cible et règle. Les transitions

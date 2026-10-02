@@ -82,6 +82,182 @@ body {
   font-size: 1rem;
 }
 
+.elce-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.elce-panel-heading button {
+  padding: 0.45rem 0.65rem;
+  color: #fffdf8;
+  background: #46726b;
+  border: 0;
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+
+.elce-outline-actions,
+.elce-outline-item-heading,
+.elce-page-row,
+.elce-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.elce-outline-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.elce-create-page-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.elce-create-page-form input {
+  width: 8.5rem;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.elce-outline-actions button,
+.elce-outline-item-heading button,
+.elce-page-actions button {
+  padding: 0.25rem 0.4rem;
+  color: #263b3a;
+  background: #f7f4ed;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.elce-outline-actions button {
+  color: #fffdf8;
+  background: #46726b;
+  border-color: #46726b;
+}
+
+.elce-outline-actions button:disabled,
+.elce-outline-item-heading button:disabled,
+.elce-page-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.elce-outline-item-heading {
+  justify-content: space-between;
+}
+
+.elce-page-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.elce-page-row[draggable='true'] {
+  cursor: grab;
+}
+
+.elce-page-row[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.elce-drag-handle {
+  display: inline-flex;
+  color: #9aa39b;
+  cursor: grab;
+}
+
+.elce-drag-handle svg {
+  display: block;
+}
+
+.elce-page-row--drop-target,
+.elce-outline-list.elce-drop-target,
+.elce-page-drop-empty.elce-drop-target {
+  outline: 2px dashed #46726b;
+  outline-offset: 2px;
+  background: #eef4ef;
+}
+
+.elce-page-drop-empty {
+  padding: 0.45rem 0.6rem;
+  color: #777d76;
+  border: 1px dashed #c9c4b9;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.elce-page-actions {
+  flex-wrap: wrap;
+  margin-left: 0.25rem;
+}
+
+.elce-page-actions button:hover,
+.elce-outline-item-heading button:hover {
+  background: #e8e4db;
+}
+
+.elce-danger-action {
+  display: inline-flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  align-items: center;
+  justify-content: center;
+  color: #8d3b35 !important;
+}
+
+.elce-danger-action svg {
+  display: block;
+}
+
+.elce-outline-group {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #d9d4c9;
+}
+
+.elce-outline-group h2 {
+  margin: 0;
+  color: #263b3a;
+  font-size: 0.85rem;
+}
+
+.elce-outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-left: 1rem;
+}
+
+.elce-muted {
+  color: #777d76;
+  font-size: 0.85em;
+}
+
+.elce-page-button {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.elce-page-button--selected {
+  color: #46726b;
+  font-weight: 700;
+}
+
 .elce-panel p {
   color: #626761;
   line-height: 1.5;
@@ -90,9 +266,263 @@ body {
 .elce-work-area {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 1rem;
+  min-height: 34rem;
+}
+
+.elce-work-area-heading {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+}
+
+.elce-work-area-heading p {
+  margin: 0.35rem 0 0;
+}
+
+.elce-work-area-heading > button {
+  padding: 0.45rem 0.75rem;
+  color: #fffdf8;
+  background: #46726b;
+  border: 0;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.elce-player-stage {
+  display: flex;
+  flex: 1;
+  min-height: 28rem;
+  overflow: hidden;
+  background: #e8e4db;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.35rem;
+}
+
+.elce-player-layout {
+  width: 100%;
+  min-height: 28rem;
+}
+
+.elce-player-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.elce-player-content-slot {
+  display: contents;
+}
+
+.elce-preview-modal {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(20 29 28 / 62%);
+}
+
+.elce-preview-dialog {
+  display: flex;
+  width: min(96vw, 74rem);
+  height: min(92vh, 52rem);
+  min-height: 30rem;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf8;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.55rem;
+  box-shadow: 0 1.5rem 4rem rgb(20 29 28 / 30%);
+}
+
+.elce-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.2rem;
+  padding: 0.55rem 0.8rem;
+  color: #263b3a;
+  border-bottom: 1px solid #d9d4c9;
+}
+
+.elce-preview-header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.elce-preview-header button {
+  padding: 0.35rem 0.6rem;
+  color: #263b3a;
+  background: #f7f4ed;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.elce-preview-dialog .elce-player-stage {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.elce-section-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #f7f4ed;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.35rem;
+}
+
+.elce-section-title-input {
+  width: 100%;
+  padding: 0.2rem 0;
+  color: #263b3a;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.elce-section-title-input:focus {
+  border-bottom-color: #46726b;
+  outline: none;
+}
+
+.elce-section-title-input::placeholder {
+  color: #8a9088;
+  font-weight: 450;
+}
+
+.elce-section-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.elce-section-toolbar button {
+  display: inline-flex;
+  width: 1.9rem;
+  height: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.45rem;
+  color: #263b3a;
+  background: #fffdf8;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.elce-section-toolbar button svg {
+  display: block;
+  pointer-events: none;
+}
+
+.elce-section-toolbar button:hover {
+  background: #e8e4db;
+}
+
+.elce-section-toolbar button[data-active="true"] {
+  color: #fffdf8;
+  background: #46726b;
+  border-color: #46726b;
+}
+
+.elce-section-toolbar button[data-active="true"]:hover {
+  background: #385d58;
+  border-color: #385d58;
+}
+
+.elce-editor-content {
+  min-height: 7rem;
+  padding: 0.6rem;
+  background: #fffdf8;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  outline: none;
+  text-align: left;
+}
+
+.elce-editor-content[data-placeholder] > p:only-child:empty::before {
+  color: #8a9088;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.elce-editor-content .elce-anchor {
+  display: inline-block;
+  width: 100%;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  margin: 0.6rem 0;
+  position: relative;
+  vertical-align: top;
+  line-height: 0;
+}
+
+.elce-editor-content .elce-anchor-bdc {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  background: #eef4ef;
+  border: 1px solid #46726b;
+  border-radius: 0.2rem;
+}
+
+.elce-editor-content .elce-anchor-handle {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.4rem;
+  z-index: 1;
+  display: block;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: #46726b;
+  background: #fffdf8;
+  border: 1px solid #46726b;
+  border-radius: 50%;
+  cursor: grab;
+  font-size: 0.9rem;
+  line-height: 1.25rem;
   text-align: center;
+  user-select: none;
+}
+
+.elce-editor-content .elce-anchor-handle:active {
+  cursor: grabbing;
+}
+
+.elce-editor-content .elce-anchor-media-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.elce-editor-content p,
+.elce-editor-content h1,
+.elce-editor-content h2,
+.elce-editor-content h3,
+.elce-editor-content h4,
+.elce-editor-content h5,
+.elce-editor-content h6 {
+  margin: 0.35rem 0;
 }
 
 @media (max-width: 800px) {
@@ -102,5 +532,15 @@ body {
 
   .elce-panel {
     min-height: 8rem;
+  }
+
+  .elce-player-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'title' 'content' 'menu' 'navigation';
+  }
+
+  .elce-player-layout__menu {
+    max-height: 12rem;
   }
 }

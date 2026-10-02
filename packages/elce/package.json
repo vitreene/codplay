@@ -11,7 +11,18 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codplay/component-v2": "*",
+    "@codplay/sighty": "*",
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/extension-subscript": "^3.31.4",
+    "@tiptap/extension-superscript": "^3.31.4",
+    "@tiptap/extension-text-align": "^3.31.4",
+    "@tiptap/pm": "^3.31.4",
+    "@tiptap/react": "^3.31.4",
+    "@tiptap/starter-kit": "^3.31.4",
     "@xstate/react": "^6.1.0",
+    "codplay": "*",
+    "lucide-react": "^1.50.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "xstate": "^5.32.2"

@@ -13,6 +13,26 @@ reste enregistré par le composant, le module et la capacité scroll-container.
 - Couvrir Play, Seek, reset, fin de séquence et destruction.
 - Mettre à jour la spécification après implémentation et validations.
 
+## Décision acceptée — observation initiale déclarative
+
+Le premier callback `IntersectionObserver` continue de synchroniser la phase
+sans produire d’événement par défaut. Une déclaration peut demander une sortie
+initiale explicite avec `initial: 'enter'` ou `initial: 'leave'` : l’événement
+correspondant n’est produit que si la première mesure est dans la phase
+correspondante. Cette option reste portée par `emit.observe` et suit le même
+circuit CodPlay que les transitions ultérieures. Elle permet à une page dont le
+repère bas est déjà visible de signaler son achèvement sans lecture DOM ni
+dispatch local dans l’application Elcé.
+
+L’acceptation exige la couverture du type auteur, de la compilation, de la
+validation JSON, du provider, de l’adaptateur HTML et du parcours Elcé/Sighty.
+
+**État de cette décision :** appliquée et vérifiée par les suites
+`codplay` (711 tests), `component-v2` (50 tests) et `elce` (31 tests), avec les
+typechecks correspondants. Le parcours Safari Elcé confirme le routage du
+repère après un défilement long ; le cas initial est exercé par le test de
+composition avec le vrai adapter CodPlay et son ticker contrôlé.
+
 ## Point technique à résoudre avant le code
 
 Le composant reçoit son node matérialisé, les actions compilées et le port de
