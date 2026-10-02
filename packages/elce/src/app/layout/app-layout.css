@@ -1,0 +1,106 @@
+:root {
+  color: #20242b;
+  background: #f2f0eb;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#elce-app {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.elce-workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.elce-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4rem;
+  padding: 0 1.5rem;
+  color: #f8f5ef;
+  background: #263b3a;
+}
+
+.elce-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.elce-brand-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.elce-brand-status,
+.elce-controller-state {
+  color: #c6d2c9;
+  font-size: 0.8rem;
+}
+
+.elce-main {
+  display: grid;
+  grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr) minmax(12rem, 18rem);
+  flex: 1;
+  gap: 1rem;
+  width: 100%;
+  padding: 1rem;
+}
+
+.elce-panel {
+  min-height: 14rem;
+  padding: 1.25rem;
+  background: #fffdf8;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.25rem 1rem rgb(38 59 58 / 6%);
+}
+
+.elce-panel h1 {
+  margin: 0;
+  color: #263b3a;
+  font-size: 1rem;
+}
+
+.elce-panel p {
+  color: #626761;
+  line-height: 1.5;
+}
+
+.elce-work-area {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .elce-main {
+    grid-template-columns: 1fr;
+  }
+
+  .elce-panel {
+    min-height: 8rem;
+  }
+}

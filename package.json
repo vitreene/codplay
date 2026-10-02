@@ -16,6 +16,7 @@
     "packages/sighty",
     "packages/demos",
     "packages/editor",
+    "packages/elce",
     "packages/authoring/*",
     "packages/authoring/components/*"
   ],
