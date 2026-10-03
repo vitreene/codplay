@@ -5,6 +5,7 @@ import {
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
 import { BDC_LOCATION, BDC_TYPE, ELCE_EVENTS, PAGE_TYPE } from '../config/document-config'
+import { anchorNameFor } from '../anchor/anchor-position'
 import { applyDocumentCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
 import { buildFluxScene } from './flux-scene-builder'
@@ -144,11 +145,31 @@ describe('Elcé Flux scene builder', () => {
     const articleInitial = pageStory?.persos[1]?.initial
     const articleMarkup = articleInitial !== undefined && 'markup' in articleInitial ? String(articleInitial.markup) : ''
 
-    expect(articleMarkup).toContain('data-elce-anchor="true"')
+    expect(articleMarkup).toContain('class="elce-flow-slot"')
+    expect(articleMarkup).not.toContain('data-elce-anchor="true"')
     expect(articleMarkup).not.toContain('page-a-bdc-image-1-media-host')
+    expect(articleInitial).toMatchObject({
+      flowReservations: [{
+        partId: 'page-a:bdc-image-1:anchor',
+        blockSize: 'calc(12rem + 1rem + 1rem)',
+      }],
+    })
     expect(pageStory?.persos[3]).toMatchObject({
       type: 'img',
-      initial: { src: 'blob:image-1', move: { target: 'page-a:bdc-image-1:anchor' } },
+      initial: {
+        src: 'blob:image-1',
+        style: {
+          position: 'absolute',
+          'position-anchor': anchorNameFor('page-a:bdc-image-1:anchor'),
+          'inset-inline-start': 0,
+          'inset-inline-end': 0,
+          'inset-block-start': 'calc(anchor(top) + 1rem)',
+          width: '100%',
+          height: 'auto',
+          aspectRatio: '4 / 3',
+        },
+        move: { target: 'page-a:bdc-image-1:anchor' },
+      },
     })
   })
 

@@ -21,12 +21,11 @@
     "packages/authoring/components/*"
   ],
   "scripts": {
-    "dev:demos": "npm run dev --workspace=packages/demos",
+    "dev:demos-v1": "npm run dev --workspace=packages/demos",
     "dev:editor": "npm run dev --workspace=packages/editor",
-    "demo:flip": "npm run dev --workspace=@codplay/demos -- --open '/?demo=flip-list'",
-    "demo:v2": "npm run dev --workspace=@codplay/demos -- --open /",
+    "dev:elce": "npm run dev --workspace=@codplay/elce",
+    "dev:demos": "npm run dev --workspace=@codplay/demos -- --open /",
     "demo:sighty": "npm run dev --workspace=@codplay/demos -- --open /sighty.html",
-    "demo:sighty2": "npm run dev --workspace=@codplay/demos -- --open '/sighty.html?demo=demo2'",
     "test": "npm run test --workspace=codplay-v1",
     "test:gates": "npm run test:gates --workspace=codplay-v1",
     "build": "npm run build --workspace=codplay-v1"

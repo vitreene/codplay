@@ -276,10 +276,12 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    const anchor = stage.querySelector('[data-bdc-id="bdc-image-1"]')
-    expect(anchor).not.toBeNull()
-    expect(anchor?.querySelector('.elce-flux-image img')).not.toBeNull()
-    expect(anchor?.querySelector('.elce-flux-image')?.parentElement).toBe(anchor)
+    const flowSlot = stage.querySelector('.elce-flow-slot')
+    expect(flowSlot).not.toBeNull()
+    expect(stage.querySelector('[data-elce-anchor="true"]')).toBeNull()
+    expect(stage.querySelector('[data-bdc-id="bdc-image-1"]')).toBeNull()
+    expect(flowSlot?.querySelector('.elce-flux-image img')).not.toBeNull()
+    expect(flowSlot?.querySelector('.elce-flux-image')?.parentElement).toBe(flowSlot)
   })
 
   it('mounts a simple video bdc through the real CodPlay media component', async () => {

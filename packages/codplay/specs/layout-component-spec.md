@@ -14,6 +14,54 @@ projette ensuite la parenté résolue par CodPlay. Le composant `layout` ne cré
 pas lui-même les nœuds DOM et le markup auteur ne reçoit aucune enveloppe
 générée pour un point d'accès.
 
+## Réservation visuelle après une ligne de texte
+
+Un `layout` peut déclarer `initial.flowReservations` pour des `outlet` déjà
+présents dans son markup :
+
+```ts
+flowReservations: [{ partId: 'image-slot', blockSize: 'calc(75% + 2rem)' }]
+```
+
+Après l'attachement du template, le composant mémorise pour chaque part son
+parent et son frère suivant dans le markup initial. Ces références gardent les
+points logiques stables même quand un placement précédent a coupé des nœuds de
+texte. Avant chaque calcul, les slots retournent à ces positions et les
+fragments de texte adjacents sont réunis. Le composant retire alors
+temporairement la réservation, cherche avec des `Range` temporaires la fin de
+la ligne visuelle qui contient chaque point, puis place **le même élément** à
+cette fin de ligne. Les réservations sont traitées dans l'ordre du markup. Le
+slot flotte sur toute la largeur et son `padding-bottom` prend la valeur
+`blockSize`. Le texte situé après le point logique finit donc sa ligne avant
+le bloc. Aucun élément ni perso supplémentaire n'est créé ; la cible
+`data-part` et son éventuel enfant restent les mêmes.
+
+Le composant observe la largeur de son layout avec `ResizeObserver`. Un
+changement de largeur refait le placement à partir des points logiques ; les
+changements de hauteur dus aux réservations ne déclenchent pas de boucle.
+Après un seek, un reset ou un replay, le même calcul peut être demandé : il
+reste idempotent et garde l'ordre initial des slots. C'est important quand
+Sighty rejoue une scène conservée avec son mode `rewind`. `destroy()` retire
+l'observation. La capture des positions attend que la racine soit attachée au
+document ; la prendre pendant `initialize()`, quand le template est encore
+dans un fragment détaché, perdrait les bonnes références de parent.
+
+Le test ciblé
+[`layout-flow-reservation.spec.ts`](../tests/runtime/components/layout-flow-reservation.spec.ts)
+vérifie l'attachement différé, la conservation du slot et de son enfant, le
+recalcul après un changement de largeur, l'ordre stable de plusieurs slots
+après des calculs répétés et la libération de l'écouteur. La
+prévisualisation Elcé dans Safari du 2026-10-03 exerce le vrai player : à
+`846 px` puis `670 px` de colonne, le texte reste continu, l'image est montée
+une seule fois dans le slot, et le média garde `16 px` de marge au-dessus et
+au-dessous. Avant correction, le cycle réel A → B → A dans Safari déplaçait
+les deux vidéos avant le texte. Après correction, le même parcours garde un
+`innerHTML`, un ordre des nœuds et un texte identiques sur A avant et après le
+passage par B. Le test `HtmlPlayerRunner.seek(0)` vérifie aussi que le cycle
+`afterSeek` appelle bien `refresh()` tout en conservant les deux slots et leurs
+persos. Les autres validations d’intégration restent ouvertes dans le
+[plan](../plan/layout-inline-flow-plan.md).
+
 ## Marqueurs auteur
 
 Deux formes appartiennent au même espace d'identifiants de parts :

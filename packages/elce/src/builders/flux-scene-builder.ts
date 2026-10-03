@@ -1,18 +1,21 @@
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { BDC_TYPE, ELCE_ANCHOR, ELCE_EVENTS, PAGE_TYPE } from '../config/document-config'
+import { ANCHOR, BDC_TYPE, ELCE_EVENTS, PAGE_TYPE } from '../config/document-config'
 import type { Bdc, Page } from '../domain/document-types'
+import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
+import { anchorFlowBlockSizeFor, anchorNameFor } from '../anchor/anchor-position'
+import { ElceAnchorRatioService } from '../domain/anchor-ratio-service'
+import type { FluxAnchorTarget } from './flux-anchor-player-markup-types'
 import type { FluxSceneBuild, FluxSceneBuildOptions } from './flux-scene-builder-types'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
   readonly partId: string
   readonly markup: string
+  readonly anchored: boolean
+  readonly paddingBottom?: string
 }>
 
-type FluxAnchorTarget = Readonly<{
-  readonly bdcId: string
-  readonly partId: string
-}>
+const anchorRatioService = new ElceAnchorRatioService()
 
 /** Builds an Elcé Flux scene from the métier page without creating a player circuit. */
 export function buildFluxScene(
@@ -71,6 +74,10 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
           className: 'elce-flux-article',
           style: { display: 'flex', minHeight: '100%', flexDirection: 'column', gap: '1.25rem', padding: '2rem', boxSizing: 'border-box' },
           markup: articleMarkup,
+          flowReservations: anchorTargets.map((target) => ({
+            partId: target.partId,
+            blockSize: anchorFlowBlockSizeFor(target.paddingBottom),
+          })),
         },
       },
       {
@@ -119,7 +126,8 @@ function createBdcMount(page: Page, bdc: Bdc, anchorTargets: readonly FluxAnchor
       return {
         bdc,
         partId,
-        markup: `<section id="${sectionId}" data-part="${partId}"><div id="${sectionId}-title-host" data-part="${titlePartId}"></div>${bdc.section?.markup ?? ''}</section>`,
+        anchored: false,
+        markup: `<section id="${sectionId}" data-part="${partId}"><div id="${sectionId}-title-host" data-part="${titlePartId}"></div>${projectFluxPlayerMarkup(bdc.section?.markup ?? '')}</section>`,
       }
     }
     case BDC_TYPE.IMAGE:
@@ -129,13 +137,14 @@ function createBdcMount(page: Page, bdc: Bdc, anchorTargets: readonly FluxAnchor
         case undefined:
           break
         default:
-          return { bdc, partId: anchorTarget.partId, markup: '' }
+          return { bdc, partId: anchorTarget.partId, markup: '', anchored: true, paddingBottom: anchorTarget.paddingBottom }
       }
       const partId = `${page.id}:${bdc.id}:media`
       const hostId = `${page.id}-${bdc.id}-media-host`
       return {
         bdc,
         partId,
+        anchored: false,
         markup: `<div id="${hostId}" class="elce-flux-media-host" data-part="${partId}"></div>`,
       }
     }
@@ -152,7 +161,7 @@ function readAnchorTargets(bdcs: readonly Bdc[]): readonly FluxAnchorTarget[] {
   return bdcs.flatMap((bdc) => {
     switch (bdc.type) {
       case BDC_TYPE.SECTION:
-        return readAnchorTargetsFromMarkup(bdc.section?.markup ?? '')
+        return readFluxAnchorTargets(bdc.section?.markup ?? '')
       case BDC_TYPE.IMAGE:
       case BDC_TYPE.VIDEO:
       case BDC_TYPE.QUESTION:
@@ -162,33 +171,6 @@ function readAnchorTargets(bdcs: readonly Bdc[]): readonly FluxAnchorTarget[] {
         return assertNeverBdcType(bdc.type)
     }
   })
-}
-
-/** Extracts the stable bdc and CodPlay part identifiers from exported anchor spans. */
-function readAnchorTargetsFromMarkup(markup: string): readonly FluxAnchorTarget[] {
-  const anchorPattern = new RegExp(`<span\\b(?=[^>]*\\b${ELCE_ANCHOR.DATA_ATTRIBUTE}\\s*=\\s*["']true["'])[^>]*>`, 'gi')
-  return Array.from(markup.matchAll(anchorPattern)).flatMap((match) => {
-    const tag = match[0] ?? ''
-    const bdcId = readMarkupAttribute(tag, 'data-bdc-id')
-    const partId = readMarkupAttribute(tag, 'data-part')
-    switch (bdcId) {
-      case null:
-        return []
-      default:
-        switch (partId) {
-          case null:
-            return []
-          default:
-            return [{ bdcId, partId }]
-        }
-    }
-  })
-}
-
-/** Reads one quoted attribute from an exported markup tag. */
-function readMarkupAttribute(tag: string, name: string): string | null {
-  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'))
-  return match?.[2] ?? null
 }
 
 function createMediaPersos(
@@ -201,9 +183,17 @@ function createMediaPersos(
     case BDC_TYPE.SECTION:
       return []
     case BDC_TYPE.IMAGE:
-      return [createImagePerso(page, mount.bdc, mount.partId, scrollPortId, resolveMediaSource(mount.bdc, options))]
+      return [createImagePerso(
+        page,
+        mount.bdc,
+        mount.partId,
+        scrollPortId,
+        resolveMediaSource(mount.bdc, options),
+        mount.anchored,
+        mount.paddingBottom ?? ANCHOR.IMAGE_BLOCK_SIZE,
+      )]
     case BDC_TYPE.VIDEO:
-      return [createVideoPerso(page, mount.bdc, mount.partId, scrollPortId, resolveMediaSource(mount.bdc, options))]
+      return [createVideoPerso(page, mount.bdc, mount.partId, scrollPortId, resolveMediaSource(mount.bdc, options), mount.anchored)]
     case BDC_TYPE.QUESTION:
     case BDC_TYPE.DIAPO:
       throw new Error(`Le bdc ${mount.bdc.type} n’est pas encore pris en charge dans le Flux.`)
@@ -236,19 +226,36 @@ function createImagePerso(
   articlePartId: string,
   scrollPortId: string,
   source: string,
+  anchored: boolean,
+  paddingBottom: string,
 ): PersoDoc<string> {
   const imageId = `${page.id}-${bdc.id}-image`
   const enterEvent = `${imageId}:enter`
   const leaveEvent = `${imageId}:leave`
+  const aspectRatio = anchored
+    ? anchorRatioService.imageAspectRatio(paddingBottom)
+    : ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO
   return {
     id: imageId,
     type: 'img',
     initial: {
       src: source,
       className: 'elce-flux-image',
-      style: { translateX: '0%' },
+      style: anchored
+        ? {
+            position: 'absolute',
+            'position-anchor': anchorNameFor(articlePartId),
+            'inset-inline-start': 0,
+            'inset-inline-end': 0,
+            'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
+            width: '100%',
+            height: 'auto',
+            aspectRatio,
+            translateX: '0%',
+          }
+        : { translateX: '0%' },
       img: {
-        style: { display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' },
+        style: { display: 'block', width: '100%', aspectRatio, objectFit: 'cover' },
       },
       move: { target: articlePartId },
     },
@@ -273,6 +280,7 @@ function createVideoPerso(
   articlePartId: string,
   scrollPortId: string,
   source: string,
+  anchored: boolean,
 ): PersoDoc<string> {
   const videoId = `${page.id}-${bdc.id}-video`
   const playEvent = `${videoId}:fully-visible`
@@ -286,7 +294,18 @@ function createVideoPerso(
       controls: true,
       master: false,
       className: 'elce-flux-video',
-      style: { position: 'relative', width: '100%', marginInline: 'auto', maxWidth: '48rem' },
+      style: anchored
+        ? {
+            position: 'absolute',
+            'position-anchor': anchorNameFor(articlePartId),
+            'inset-inline-start': 0,
+            'inset-inline-end': 0,
+            'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
+            width: '100%',
+            height: 'auto',
+            aspectRatio: '16 / 9',
+          }
+        : { position: 'relative', width: '100%', marginInline: 'auto', maxWidth: '48rem' },
       video: {
         style: { display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover' },
       },

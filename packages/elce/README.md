@@ -18,3 +18,8 @@ npm run dev --workspace=@codplay/elce
 The development server uses port `5175`.
 
 The workspace also exposes `typecheck`, `test`, `build`, and `preview` scripts.
+
+To exercise the anchored Flux path in the application itself, open the editor,
+drop an image or video file into the Section WYSIWYG surface, then select
+`Prévisualiser`. The editor command path creates the media reference, bdc and
+anchor; the preview mounts the resulting scene through Sighty and CodPlay.

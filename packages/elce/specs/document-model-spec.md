@@ -40,25 +40,44 @@ des médias sont conservés à part par la frontière IndexedDB.
 ## Commandes
 
 Les transformations sont pures : `applyDocumentCommand(document, command)`
-retourne une nouvelle valeur. Elles couvrent la création et le déplacement de
+retourne une nouvelle valeur après vérification de ses invariants. Elles couvrent la création et le déplacement de
 chapitres, pages et bdc, le retrait vers le catalogue, la suppression
 définitive d’une page, la mise à jour d’une Section, l’ajout de métadonnées
 média et le renommage du document. La suppression définitive d’une page
 supprime ses bdc, mais conserve les médias du catalogue.
 
-`assertDocumentInvariants()` vérifie les affectations uniques et les
-références page/bdc. Les commandes peuvent créer et supprimer un chapitre
+`assertDocumentInvariants()` vérifie les affectations uniques, les références
+page/bdc et l’intégrité des ancres : une référence désigne un bdc image ou vidéo
+de la même page, sans doublon dans une ou plusieurs Sections. Une mise à jour
+de Section compare les références avant et après l’édition ; chaque bdc dont
+l’ancre a disparu rejoint `catalogBdcIds` dans cette même commande, son média
+reste conservé. Les commandes peuvent créer et supprimer un chapitre
 vide, déplacer une page entre chapitre, racine du scénario et catalogue,
 retirer une page vers le catalogue ou la supprimer définitivement avec ses bdc. Le
 contrôleur XState possède le document et n’accepte les changements que par
 un événement de commande (`document.apply` ou `page.create`).
 React ne conserve pas de copie métier.
 
+Pour un média affecté directement à la page, le panneau Propriétés propose
+« Renvoyer au catalogue ». `ElcePageMediaService` distingue ces médias des
+bdc image ou vidéo référencés par une ancre dans le document riche ; l’action
+envoie la commande `bdc.remove` par `document.apply`. Le bdc quitte la page et
+entre dans `catalogBdcIds`, tandis que la ressource média reste dans le
+document et dans IndexedDB. Le retrait d’un bdc ancré continue d’utiliser sa
+commande d’ancre afin de retirer aussi la référence du texte.
+
 ## Preuves
 
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
   vérifie création, déplacement, retrait, suppression, réemploi d’un média,
-  suppression conditionnelle d’un chapitre, exclusivité et aller-retour JSON.
+  suppression conditionnelle d’un chapitre, retour au catalogue après
+  suppression ordinaire d’une ancre, exclusivité et aller-retour JSON.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
-  vérifie la possession du document par XState et une modification visible
-  par commande.
+  vérifie la possession du document par XState, une modification visible par
+  commande et le retour du bdc au catalogue lors d’une édition ordinaire qui
+  supprime son ancre.
+- Dans Safari, la page de test A contenait deux ancres vidéo et un bdc vidéo
+  direct. L’action « Renvoyer au catalogue » a fait passer l’aperçu réel à
+  deux vidéos et deux slots. Après rechargement, A conserve ses deux bdc
+  ancrés, le troisième bdc est dans le catalogue et ses trois ressources
+  média restent enregistrées.

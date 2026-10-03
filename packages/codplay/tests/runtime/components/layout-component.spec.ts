@@ -68,6 +68,22 @@ describe('LayoutComponent V2', () => {
     ])
   })
 
+  it('rejects a flow reservation without a target part', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+
+    validatePersoWithCapabilities(createCoreRuntimeCatalog().validationSnapshot(), {
+      id: 'flow-layout',
+      type: 'layout',
+      initial: {
+        markup: '<p id="text">Text</p>',
+        flowReservations: [{ partId: '', blockSize: '75%' }],
+      },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors.map((entry) => entry.code)).toContain('AUTHOR_LAYOUT_FLOW_RESERVATION_INVALID')
+  })
+
   it('registers public materialized parts and cleans them up with the component', () => {
     const markup = createMarkupModuleServiceDefinition().create({
       playerId: 'player',

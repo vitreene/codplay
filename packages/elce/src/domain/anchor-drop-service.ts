@@ -1,4 +1,4 @@
-import { DEFAULT_PRESET_ID } from '../config/document-config'
+import { ANCHOR, DEFAULT_PRESET_ID } from '../config/document-config'
 import type { DocumentCommand } from '../app/commands/document-command-types'
 import { createStableId } from './document-model'
 import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
@@ -11,9 +11,9 @@ export class ElceAnchorDropService {
     const mediaType = mediaTypeFor(file.type)
     switch (mediaType) {
       case 'image':
-        return createMediaDropTarget(file, pageId, mediaType, DEFAULT_PRESET_ID.IMAGE, '75%')
+        return createMediaDropTarget(file, pageId, mediaType, DEFAULT_PRESET_ID.IMAGE, ANCHOR.IMAGE_BLOCK_SIZE)
       case 'video':
-        return createMediaDropTarget(file, pageId, mediaType, DEFAULT_PRESET_ID.VIDEO, '56.25%')
+        return createMediaDropTarget(file, pageId, mediaType, DEFAULT_PRESET_ID.VIDEO, ANCHOR.VIDEO_BLOCK_SIZE)
       default:
         return null
     }

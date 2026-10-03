@@ -1,7 +1,7 @@
 import { useSelector } from '@xstate/react'
 import { useRef, useState } from 'react'
 import type { DragEvent, FormEvent } from 'react'
-import { GripVertical, Trash2 } from 'lucide-react'
+import { Archive, GripVertical, Trash2 } from 'lucide-react'
 import './app-layout.css'
 
 import { PAGE_LOCATION } from '../../config/document-config'
@@ -16,6 +16,9 @@ import { SectionEditor } from '../editor/SectionEditor'
 import { PlayerPreview } from '../player/PlayerPreview'
 import type { ElceDocument } from '../../domain/document-model'
 import { ElceAnchorDropFacade } from '../../domain/anchor-drop-facade'
+import { ElcePageMediaService } from '../../domain/page-media-service'
+
+const pageMediaService = new ElcePageMediaService()
 
 /** Renders the Elcé work area from the controller-owned application state. */
 export function AppLayout({ controller }: AppLayoutProps) {
@@ -40,6 +43,9 @@ export function AppLayout({ controller }: AppLayoutProps) {
     : selectedPage.bdcIds
       .map((bdcId) => documentModel.bdcs.find((bdc) => bdc.id === bdcId))
       .find((bdc) => bdc?.type === 'section')
+  const unanchoredMediaBdcs = selectedPage === undefined
+    ? []
+    : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
 
   const addPage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -59,6 +65,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
 
   const deletePage = (pageId: string) => {
     controller.send({ type: 'document.apply', command: createPageDeleteCommand(pageId) })
+  }
+
+  const returnBdcToCatalog = (bdcId: string) => {
+    controller.send({ type: 'document.apply', command: { type: 'bdc.remove', bdcId } })
   }
 
   const beginPageDrag = (event: DragEvent<HTMLElement>, pageId: string) => {
@@ -200,7 +210,31 @@ export function AppLayout({ controller }: AppLayoutProps) {
         </section>
         <aside id="elce-properties" className="elce-panel">
           <h1 id="elce-properties-title">Propriétés</h1>
-          <p id="elce-properties-empty">Les propriétés du document apparaîtront ici.</p>
+          {unanchoredMediaBdcs.length === 0
+            ? <p id="elce-properties-empty">Les propriétés du document apparaîtront ici.</p>
+            : <section id="elce-page-media" className="elce-outline-group">
+                <h2 id="elce-page-media-title">Médias dans la page</h2>
+                <ul id="elce-page-media-list" className="elce-media-catalog-list">
+                  {unanchoredMediaBdcs.map((bdc) => {
+                    const media = documentModel.medias.find((candidate) => candidate.id === bdc.mediaId)
+                    return (
+                      <li id={`elce-page-media-${bdc.id}`} key={bdc.id} className="elce-media-catalog-row">
+                        <span id={`elce-page-media-name-${bdc.id}`}>{media?.name ?? bdc.type}</span>
+                        <button
+                          id={`elce-page-media-catalog-${bdc.id}`}
+                          type="button"
+                          className="elce-secondary-action"
+                          aria-label="Renvoyer au catalogue"
+                          title="Renvoyer au catalogue"
+                          onClick={() => returnBdcToCatalog(bdc.id)}
+                        >
+                          <Archive aria-hidden="true" size={14} strokeWidth={2} />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>}
         </aside>
       </main>
       {previewOpen

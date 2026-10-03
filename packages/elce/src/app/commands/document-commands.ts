@@ -15,8 +15,11 @@ import {
   nextPageName,
   createStableId,
 } from '../../domain/document-model'
+import { ElceAnchorReferenceService } from '../../domain/anchor-reference-service'
 import type { Bdc, BdcId, Chapter, ChapterId, Page, PageId, RichTextDocument } from '../../domain/document-types'
 import type { BdcPlacement, CreatePageCommandInput, DocumentCommand, PagePlacement } from './document-command-types'
+
+const anchorReferenceService = new ElceAnchorReferenceService()
 
 /** Creates a page command while keeping identifier generation outside rendering. */
 export function createPageCommand(input: CreatePageCommandInput): Extract<DocumentCommand, { type: 'page.create' }> {
@@ -281,16 +284,75 @@ function findAnchorSection(document: ElceDocument, sectionBdcId: BdcId, pageId: 
   return section
 }
 
-/** Updates the serializable Section source after an anchor transaction. */
-function updateAnchorSection(
+/** Returns a Section payload after checking the bdc's discriminated type. */
+function requireSectionData(bdc: Bdc): NonNullable<Bdc['section']> {
+  switch (bdc.type) {
+    case BDC_TYPE.SECTION:
+      switch (bdc.section) {
+        case null:
+          fail(`Bdc Section incomplet : ${bdc.id}`)
+        default:
+          return bdc.section
+      }
+    default:
+      fail(`Bdc non textuel : ${bdc.id}`)
+  }
+}
+
+/** Updates a Section and returns bdc whose inline anchors were removed to the catalogue. */
+function updateSectionContent(
   document: ElceDocument,
   sectionBdcId: BdcId,
+  title: string | undefined,
   markup: string,
   content: RichTextDocument,
 ): ElceDocument {
   const section = findBdc(document, sectionBdcId)
-  if (section.type !== BDC_TYPE.SECTION || section.section === null) fail(`Bdc Section incomplet : ${sectionBdcId}`)
-  return withBdc(document, { ...section, section: { ...section.section, markup, content } })
+  const sectionData = requireSectionData(section)
+
+  const nextAnchorIds = anchorReferenceService.bdcIdsIn(content)
+  if (new Set(nextAnchorIds).size !== nextAnchorIds.length) fail('Un même bdc ne peut apparaître qu’une fois dans une Section.')
+  for (const anchorBdcId of nextAnchorIds) {
+    switch (section.pageId) {
+      case null:
+        fail(`Une Section hors page ne peut pas porter l’ancre ${anchorBdcId}.`)
+      default:
+        break
+    }
+    const anchorBdc = findBdc(document, anchorBdcId)
+    switch (anchorBdc.type) {
+      case BDC_TYPE.IMAGE:
+      case BDC_TYPE.VIDEO:
+        switch (anchorBdc.pageId) {
+          case section.pageId:
+            break
+          default:
+            fail(`Le bdc ancré ${anchorBdcId} doit rester sur la page de sa Section.`)
+        }
+        break
+      default:
+        fail(`Seuls les bdcs image et vidéo peuvent être ancrés : ${anchorBdcId}`)
+    }
+  }
+
+  let updated = document
+  for (const removedBdcId of anchorReferenceService.removedBdcIds(sectionData.content, content)) {
+    const removedBdc = findBdc(updated, removedBdcId)
+    switch (removedBdc.pageId) {
+      case section.pageId:
+        updated = placeBdc(updated, removedBdc, { kind: BDC_LOCATION.CATALOG })
+        break
+      default:
+        fail(`Le bdc retiré de l’ancre ${removedBdcId} n’est pas affecté à la page de sa Section.`)
+    }
+  }
+
+  const updatedSection = findBdc(updated, sectionBdcId)
+  const updatedSectionData = requireSectionData(updatedSection)
+  return withBdc(updated, {
+    ...updatedSection,
+    section: { ...updatedSectionData, title: title ?? updatedSectionData.title, markup, content },
+  })
 }
 
 /** Applies the one-command file/catalogue drop that creates and anchors a media bdc. */
@@ -301,6 +363,7 @@ function createAnchoredBdc(
   const page = findPage(document, command.pageId)
   findAnchorSection(document, command.sectionBdcId, command.pageId)
   if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+  if (!anchorReferenceService.bdcIdsIn(command.content).includes(command.bdcId)) fail(`L’ancre du bdc ${command.bdcId} manque dans la Section.`)
 
   const mediaExists = document.medias.some((media) => media.id === command.media.id)
   const withMedia = mediaExists
@@ -324,7 +387,7 @@ function createAnchoredBdc(
     pages: pageWithBdc,
     bdcs: [...withMedia.bdcs, bdc],
   })
-  return updateAnchorSection(withEntities, command.sectionBdcId, command.markup, command.content)
+  return updateSectionContent(withEntities, command.sectionBdcId, undefined, command.markup, command.content)
 }
 
 /** Applies an anchor repositioning while keeping its bdc assignment unchanged. */
@@ -335,7 +398,8 @@ function moveAnchoredBdc(
   const anchorBdc = findBdc(document, command.anchorBdcId)
   if (anchorBdc.pageId === null) fail(`Le bdc ancré est hors page : ${command.anchorBdcId}`)
   findAnchorSection(document, command.sectionBdcId, anchorBdc.pageId)
-  return updateAnchorSection(document, command.sectionBdcId, command.markup, command.content)
+  if (!anchorReferenceService.bdcIdsIn(command.content).includes(command.anchorBdcId)) fail(`Le déplacement a perdu l’ancre ${command.anchorBdcId}.`)
+  return updateSectionContent(document, command.sectionBdcId, undefined, command.markup, command.content)
 }
 
 /** Removes an anchor and returns its unique bdc to the catalogue. */
@@ -345,9 +409,12 @@ function removeAnchoredBdc(
 ): ElceDocument {
   const anchorBdc = findBdc(document, command.anchorBdcId)
   if (anchorBdc.pageId === null) fail(`Le bdc ancré est hors page : ${command.anchorBdcId}`)
-  findAnchorSection(document, command.sectionBdcId, anchorBdc.pageId)
-  const detached = placeBdc(document, anchorBdc, { kind: BDC_LOCATION.CATALOG })
-  return updateAnchorSection(detached, command.sectionBdcId, command.markup, command.content)
+  const section = findAnchorSection(document, command.sectionBdcId, anchorBdc.pageId)
+  if (!anchorReferenceService.bdcIdsIn(requireSectionData(section).content).includes(command.anchorBdcId)) {
+    fail(`L’ancre ${command.anchorBdcId} est introuvable dans sa Section.`)
+  }
+  if (anchorReferenceService.bdcIdsIn(command.content).includes(command.anchorBdcId)) fail(`La nouvelle Section conserve l’ancre ${command.anchorBdcId}.`)
+  return updateSectionContent(document, command.sectionBdcId, undefined, command.markup, command.content)
 }
 
 function movePage(document: ElceDocument, command: Extract<DocumentCommand, { type: 'page.move' }>): ElceDocument {
@@ -355,7 +422,22 @@ function movePage(document: ElceDocument, command: Extract<DocumentCommand, { ty
 }
 
 function moveBdc(document: ElceDocument, command: Extract<DocumentCommand, { type: 'bdc.move' }>): ElceDocument {
-  return placeBdc(document, findBdc(document, command.bdcId), command.placement)
+  const bdc = findBdc(document, command.bdcId)
+  if (anchorReferenceService.isReferenced(document, bdc.id)) {
+    switch (command.placement.kind) {
+      case BDC_LOCATION.CATALOG:
+        fail(`Retirer le bdc ancré ${bdc.id} exige de supprimer aussi son ancre.`)
+      case BDC_LOCATION.PAGE:
+        switch (command.placement.pageId) {
+          case bdc.pageId:
+            break
+          default:
+            fail(`Déplacer le bdc ancré ${bdc.id} exige de déplacer aussi son ancre.`)
+        }
+        break
+    }
+  }
+  return placeBdc(document, bdc, command.placement)
 }
 
 function deletePage(document: ElceDocument, pageId: PageId): ElceDocument {
@@ -374,7 +456,7 @@ function deletePage(document: ElceDocument, pageId: PageId): ElceDocument {
 }
 
 /** Applies one document command and returns a new immutable model value. */
-export function applyDocumentCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
+function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
   switch (command.type) {
     case 'chapter.create':
       return createChapter(document, command)
@@ -398,8 +480,7 @@ export function applyDocumentCommand(document: ElceDocument, command: DocumentCo
       const bdc = findBdc(document, command.bdcId)
       switch (bdc.type) {
         case BDC_TYPE.SECTION:
-          if (bdc.section === null) fail(`Bdc Section incomplet : ${command.bdcId}`)
-          return withBdc(document, { ...bdc, section: { title: command.title, markup: command.markup, content: command.content } })
+          return updateSectionContent(document, command.bdcId, command.title, command.markup, command.content)
         default:
           fail(`Bdc non textuel : ${command.bdcId}`)
       }
@@ -418,7 +499,14 @@ export function applyDocumentCommand(document: ElceDocument, command: DocumentCo
   }
 }
 
-/** Checks the exclusivity invariants before a document is persisted or built. */
+/** Applies a document command and verifies its cross-entity invariants before returning. */
+export function applyDocumentCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
+  const updated = applyCommand(document, command)
+  assertDocumentInvariants(updated)
+  return updated
+}
+
+/** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: ElceDocument): void {
   const pageIds = new Set<PageId>()
   const bdcIds = new Set<BdcId>()
@@ -453,5 +541,48 @@ export function assertDocumentInvariants(document: ElceDocument): void {
   for (const page of document.pages) {
     if (page.chapterId === null && document.chapters.some((chapter) => chapter.pageIds.includes(page.id))) fail(`Page affectée à un chapitre sans référence : ${page.id}`)
     if (page.chapterId !== null && !document.chapters.some((chapter) => chapter.id === page.chapterId && chapter.pageIds.includes(page.id))) fail(`Page hors chapitre incohérente : ${page.id}`)
+  }
+
+  const referencedAnchorBdcIds = new Set<BdcId>()
+  for (const sectionBdc of document.bdcs) {
+    switch (sectionBdc.type) {
+      case BDC_TYPE.SECTION: {
+        const section = requireSectionData(sectionBdc)
+        const anchorBdcIds = anchorReferenceService.bdcIdsIn(section.content)
+        if (new Set(anchorBdcIds).size !== anchorBdcIds.length) fail(`Une ancre est dupliquée dans la Section ${sectionBdc.id}.`)
+        for (const anchorBdcId of anchorBdcIds) {
+          if (referencedAnchorBdcIds.has(anchorBdcId)) fail(`Le bdc ancré ${anchorBdcId} est référencé plusieurs fois.`)
+          const anchorBdc = document.bdcs.find((bdc) => bdc.id === anchorBdcId)
+          switch (anchorBdc) {
+            case undefined:
+              fail(`Ancre sans bdc associé : ${anchorBdcId}`)
+            default:
+              switch (anchorBdc.type) {
+                case BDC_TYPE.IMAGE:
+                case BDC_TYPE.VIDEO:
+                  switch (sectionBdc.pageId) {
+                    case null:
+                      fail(`Une Section hors page ne peut pas porter l’ancre ${anchorBdcId}.`)
+                    default:
+                      break
+                  }
+                  switch (anchorBdc.pageId) {
+                    case sectionBdc.pageId:
+                      break
+                    default:
+                      fail(`Le bdc ancré ${anchorBdcId} doit rester sur la page de sa Section.`)
+                  }
+                  break
+                default:
+                  fail(`Seuls les bdcs image et vidéo peuvent être ancrés : ${anchorBdcId}`)
+              }
+          }
+          referencedAnchorBdcIds.add(anchorBdcId)
+        }
+        break
+      }
+      default:
+        break
+    }
   }
 }

@@ -223,6 +223,77 @@ describe('Elcé document commands', () => {
     assertDocumentInvariants(removed)
   })
 
+  it('returns a media bdc when an ordinary text update erases its anchor', () => {
+    const anchored = applyDocumentCommand(createInitialDocument(), {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-video-1',
+      bdcType: BDC_TYPE.VIDEO,
+      presetId: 'video-basic',
+      media: { id: 'media-video-1', type: 'video', name: 'video.mp4', mimeType: 'video/mp4', size: 24, caption: '' },
+      partId: 'page-a:bdc-video-1:anchor',
+      markup: '<p>Avant <span data-bdc-id="bdc-video-1"></span> après</p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-video-1', partId: 'page-a:bdc-video-1:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+
+    const edited = applyDocumentCommand(anchored, {
+      type: 'bdc.section.update',
+      bdcId: 'bdc-section-1',
+      title: '',
+      markup: '<p>Avant après</p>',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] },
+    })
+
+    expect(edited.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(edited.data.catalogBdcIds).toEqual(['bdc-video-1'])
+    expect(edited.medias.map((media) => media.id)).toEqual(['media-video-1'])
+    expect(edited.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.content)
+      .toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] })
+    assertDocumentInvariants(edited)
+    expect(() => applyDocumentCommand(anchored, { type: 'bdc.remove', bdcId: 'bdc-video-1' }))
+      .toThrow('Retirer le bdc ancré')
+  })
+
+  it('rejects duplicate anchor references in ordinary Section updates', () => {
+    const anchored = applyDocumentCommand(createInitialDocument(), {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      partId: 'page-a:bdc-image-1:anchor',
+      markup: '<p><span data-bdc-id="bdc-image-1"></span></p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } }] }],
+      },
+    })
+
+    expect(() => applyDocumentCommand(anchored, {
+      type: 'bdc.section.update',
+      bdcId: 'bdc-section-1',
+      title: '',
+      markup: '<p><span></span><span></span></p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+        ] }],
+      },
+    })).toThrow('Un même bdc ne peut apparaître qu’une fois')
+  })
+
   it('only deletes an empty chapter', () => {
     const initial = createInitialDocument()
     const added = applyDocumentCommand(initial, createChapterCommand(initial, 'Annexe'))

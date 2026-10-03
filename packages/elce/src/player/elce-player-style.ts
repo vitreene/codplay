@@ -232,12 +232,24 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 .elce-flux-article > section {
   width: 100%;
   flex: 0 0 auto;
+  position: relative;
 }
 
 .elce-flux-image {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
+  position: relative;
+  overflow: hidden;
+  object-fit: cover;
+}
+
+.elce-flux-image > img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -248,27 +260,25 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   object-fit: cover;
 }
 
-.elce-flux-article [data-elce-anchor='true'] {
-  display: inline-block;
-  width: 100%;
-  min-height: 0;
-  margin-block: 0.75rem;
-  padding-bottom: 12rem;
+.elce-flux-article > section p,
+.elce-flux-article > section h1,
+.elce-flux-article > section h2,
+.elce-flux-article > section h3,
+.elce-flux-article > section h4,
+.elce-flux-article > section h5,
+.elce-flux-article > section h6 {
   position: relative;
-  vertical-align: top;
 }
 
-.elce-flux-article [data-elce-anchor='true'] > .elce-flux-image,
-.elce-flux-article [data-elce-anchor='true'] > .elce-flux-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: auto;
+.elce-flow-slot {
+  display: inline-block;
+  width: 0;
+  height: 0;
   margin: 0;
-}
-
-.elce-flux-article [data-elce-anchor='true'] > .elce-flux-video {
-  padding-inline: clamp(0.5rem, 3vw, 2rem);
+  position: static;
+  padding-inline: 0;
+  padding-block-start: 0;
+  vertical-align: baseline;
   box-sizing: border-box;
 }
 `

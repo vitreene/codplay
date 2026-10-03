@@ -43,11 +43,19 @@ export const DEFAULT_EVALUATION_THRESHOLD = 0.8 as const
 
 export const SECTION_EDITOR_HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const
 
-export const ELCE_ANCHOR = {
+export const ANCHOR = {
   NODE_NAME: 'elceAnchor',
   DATA_ATTRIBUTE: 'data-elce-anchor',
   CLASS_NAME: 'elce-anchor',
+  PADDING_VARIABLE: '--elce-anchor-padding',
+  FLOW_BREAK_MARGIN: '100%',
+  EDITOR_LINE_BLOCK_SIZE: '1lh',
   DEFAULT_PADDING_BOTTOM: '12rem',
+  IMAGE_BLOCK_SIZE: '75%',
+  DEFAULT_IMAGE_ASPECT_RATIO: '4 / 3',
+  VIDEO_BLOCK_SIZE: '56.25%',
+  DEFAULT_BDC_MARGIN_TOP: '1rem',
+  DEFAULT_BDC_MARGIN_BOTTOM: '1rem',
 } as const
 
 export const ELCE_SCENARIO = {

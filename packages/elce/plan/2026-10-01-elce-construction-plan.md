@@ -55,6 +55,7 @@ reprenant les circuits de lecture de la démo 5.
 | Mettre en place l’application Elcé et son workspace | En cours — automatisation et parcours navigateur vérifiés | Typecheck, tests de fumée, build, serveur de développement et preview HTTP validés ; aucun import privé d’ed2. |
 | Construire le modèle documentaire minimal et la façade de commandes | En cours | Document versionné, commandes pures, contrôleur XState et frontière IndexedDB en place ; la restauration navigateur reste à éprouver. |
 | Préparer la première projection Flux et le scénario séparé | En cours — cadre complet et scroll-end vérifiés | Le builder produit un `SceneDoc` Flux, le constructeur un graphe Sighty avec menu, titre, contenu et navigation, et la composition monte le player réel en DOM de test ; Safari confirme le passage par le repère bas sur une page longue. |
+| Prouver l’ancrage d’un bdc média dans le Flux | En cours — intégrité métier vérifiée, validation visuelle restante | Safari confirme l’import d’une vidéo par `SectionEditor`/XState, sa restauration après rechargement et son montage dans le slot CodPlay. Deux ancres de Page A survivent au rechargement et produisent deux vidéos dans deux slots. Un troisième bdc vidéo non ancré, laissé par un essai précédent, a été renvoyé au catalogue par la commande XState prévue ; l’aperçu revient à deux vidéos et les trois médias restent enregistrés. Page C a été créée pour poursuivre les essais sans remplacer A ou B. L’éditeur cadre en `contain`, le player en `cover` ; parité à décider. Les commandes et la machine XState vérifient maintenant la suppression ordinaire d’une ancre, la suppression dédiée, l’unicité des références et la conservation du média ; les tests éditeur couvrent le collage et le glisser-déposer copiés. Le cycle Safari A → B → A avait révélé que le recalcul `afterSeek` déplaçait les deux slots avant le texte ; après correction, le parcours réel conserve exactement le même `innerHTML`, le même ordre de nœuds et le même texte sur Page A. Reste à tester la suppression par sélection de texte et à valider le rendu combiné de plusieurs ancres. |
 
 ### Correctif de raccord CodPlay/Sighty — 2026-10-02
 
@@ -69,6 +70,145 @@ visibles. Les tests Elcé exercent maintenant l’observation CodPlay et le
 routage Sighty pour une page courte et après une transition de visibilité ; le
 parcours Safari confirme la page longue. Aucune démo ni aucun circuit local ne
 contourne CodPlay.
+
+### POC de faisabilité de l’ancrage Flux — 2026-10-03
+
+La preuve se déroule dans l’application Elcé elle-même : un dépôt d’image ou
+de vidéo dans `SectionEditor` crée la référence média, le bdc et l’ancre par
+la commande XState existante ; `PlayerPreview` reconstruit ensuite la scène et
+le scénario réels. La projection remplace l’ancre d’édition par un slot
+`data-part` inline à largeur nulle, puis monte le perso média dans ce slot par
+le circuit CodPlay existant. Le slot conserve le ratio dans
+`--elce-anchor-padding`, réserve ce ratio plus la marge du bdc et utilise
+`margin-inline-end:100%` pour faire reprendre le texte sur la ligne suivante.
+Il reçoit un `anchor-name`, le perso reçoit le `position-anchor` correspondant
+et son ratio, puis le CSS utilise `anchor(top)` pour placer le bdc. Le circuit
+Elcé d’ancrage ne lit pas la géométrie du DOM, ne crée pas de perso et ne
+dispatch pas d’événement.
+
+La première preuve JavaScript a été invalidée : elle lisait des rectangles DOM
+depuis Elcé, alors que la géométrie du rendu appartient au runtime CodPlay.
+L’essai CSS seul, fondé sur `margin-inline-end:100%`, a ensuite été invalidé
+par la coupure du texte. La correction actuelle fait calculer la fin de ligne
+par le composant `layout` CodPlay, sur déclaration du builder Elcé.
+
+L’acceptation navigateur demande une seule image ou vidéo dans le slot, aucune
+ancre d’édition rendue, une marge visible au-dessus du bdc et la conservation
+du texte dans le flux. Le parcours Safari du 3 octobre 2026 confirme que le
+bdc rejoint les deux bords de la colonne et conserve une marge de `16 px`.
+La continuité du texte après déplacement de l’ancre est invalidée plus bas.
+Safari confirme maintenant le chargement d’une vidéo réelle de `442 × 300 px`
+et `5,89 s` ; elle conserve la réserve POC de `56.25%` et un cadre `16 / 9`.
+La différence `contain` dans l’éditeur / `cover` dans le player reste à décider.
+
+### Intégrité des références d’ancre — 2026-10-03
+
+L’analyse a isolé une faille dans la commande de mise à jour de Section : un
+remplacement ordinaire du document riche mettait à jour le texte sans comparer
+les ancres supprimées. Le bdc vidéo restait donc affecté à la page et le
+builder le projetait comme média direct. La commande commune réconcilie
+maintenant les anciennes et nouvelles références ; une ancre effacée renvoie
+son bdc au catalogue en même temps que la mise à jour, en gardant le média.
+Les références sont uniques, limitées aux bdcs image/vidéo de la page, et une
+commande générique ne peut pas détacher un bdc tant que son ancre existe. Le
+collage garde le texte mais retire les ancres copiées ; le glisser-déposer en
+mode copie est refusé.
+
+Les tests de document, d’extension Tiptap et du contrôleur XState vérifient
+respectivement la réconciliation, la non-duplication et le parcours
+`section.change` → `bdc.section.update`. Les 48 tests Elcé, le typecheck et le
+build passent. Le test Safari d’une sélection de texte qui efface une ancre
+reste à faire ; il ne faut pas considérer la validation visuelle de cette
+tranche comme terminée.
+
+### Réservation dans l’éditeur — 2026-10-03
+
+L’ancre Tiptap reste inline, de largeur nulle. Le retour forcé par
+`margin-inline-end:100%` isolait le texte avant l’image ; un ancrage haut sans
+`vertical-align:top` poussait ce même texte au bas de la boîte de réservation.
+La NodeView utilise désormais `vertical-align:top` et réserve dans son
+`padding-bottom` la hauteur du média, `1lh` pour la ligne d’insertion et les
+deux marges du bdc. Le bdc commence sous cette ligne. Le texte placé des deux
+côtés de l’ancre garde ainsi son retour naturel à la ligne. Safari confirme le
+résultat après déplacement par le plugin Tiptap, rechargement et resize à deux
+largeurs ; la géométrie n’est pas recalculée par un circuit JavaScript Elcé.
+
+La prise de déplacement apparaît au point d’insertion dans le texte, et non
+dans le bdc image. Elle reste enfant de la NodeView Tiptap, sœur du bdc, et
+utilise le même nom d’ancre CSS sans largeur dans le flux. Safari confirme sa
+coïncidence avec le point d’insertion, la continuité du texte, le resize et le
+déplacement par le plugin Tiptap. La preview ne montre aucune prise.
+
+Pour une image, le ratio de `padding-bottom` vient maintenant des dimensions
+intrinsèques du fichier. Le NodeView lit le ratio après chargement et l’inscrit
+dans les attributs du nœud par une transaction Tiptap ; la Section suit ensuite
+la commande XState existante. Le builder utilise cette valeur pour dimensionner
+la réserve du flux et le cadre `cover`. La vidéo reste en 16:9.
+
+### Réservation après la ligne visuelle — 2026-10-03
+
+**Player et éditeur image vérifiés ; vidéo réelle montée et persistée, cadrage à décider.**
+Dans la vraie preview Safari, le composant `layout` réutilise le slot `data-part`
+existant, sans modifier le HTML source ni ajouter de conteneur ou de perso.
+Il remet d’abord ce slot à son point d’insertion logique, sans réservation,
+cherche la fin de sa ligne visuelle, puis déplace ce même slot à cette fin de
+ligne. Le slot devient un flottant pleine largeur qui réserve
+`calc(81.75% + 2rem)` ; son `anchor-name` continue de positionner le seul perso
+image à `1rem` du haut. Cette transformation concerne le DOM de présentation,
+pas le markup de la scène.
+
+Dans ce parcours, le texte des deux côtés de l’ancre partage la même ligne :
+« shows stepped copies, and YouTube's compression smears the film grain. For
+the best version, render it locally (see ». Pour l’image de `1200 × 981 px`,
+le slot réserve `calc(81.75% + 2rem)` : à `834,2 px` de largeur, sa hauteur
+mesure `713,9 px`, et le perso image occupe `681,9 px` avec `16 px` de marge
+en haut et en bas. Le texte suivant reprend au bord inférieur de la réserve.
+
+Le premier montage a révélé que le repère logique était enregistré dans le
+fragment du template avant son attachement par CodPlay. Le premier calcul
+retirait alors le slot et l’image de la page. La capture attend désormais
+`isConnected` ; Safari confirme un slot et un perso image après montage,
+réduction de la colonne de `846 px` à `670 px`, élargissement et
+démontage/remontage de la preview. Le texte suivant reprend sous l’image avec
+environ `16 px` de marge.
+
+Le cycle A → B → A dans Safari a révélé un second défaut : `afterSeek` demande
+un nouveau placement, mais les `Range` vivants des deux ancres dérivaient
+après la coupe des nœuds texte. Au retour sur A, les slots et vidéos passaient
+devant tout le texte. Le layout conserve maintenant le parent et le frère
+suivant d’origine, réunit les fragments de texte avant le recalcul et traite
+les réservations dans l’ordre du markup. Le test ciblé CodPlay vérifie qu’un
+second calcul garde les deux emplacements. Safari confirme ensuite, après un
+vrai retour par le menu du player, que le `innerHTML`, la structure, le texte
+et l’ordre des deux slots sur A sont identiques avant et après le passage par B.
+
+1. **Réalisé pour l’image :** le composant CodPlay `layout` reçoit une déclaration de
+   réservation sur les parts existantes et un écouteur de changement de largeur.
+   La logique de présentation restaure les slots à leurs repères d’origine,
+   réunit les fragments de texte, mesure chaque ligne, les replace en fin de
+   ligne et règle la réserve visuelle. Le
+   `scroll-container` conserve son unique tag et le markup auteur ne change
+   pas. Le [plan CodPlay dédié](../../codplay/plan/layout-inline-flow-plan.md)
+   définit le contrat et les validations du cœur.
+2. **Réalisé pour l’image :** la NodeView et l’export statique gardent l’ancre
+   inline à largeur nulle, sans retour forcé. Safari confirme la même ligne
+   naturelle de part et d’autre de l’ancre à deux largeurs, après déplacement
+   par le plugin Tiptap et après rechargement. Le document passe par la commande
+   métier XState existante. La preview du document déplacé conserve un seul
+   perso image et la reprise du texte sous lui.
+3. **Partiellement vérifié dans Safari le 2026-10-03 :** le dépôt d’un vrai MP4
+   dans l’éditeur passe par la façade et la commande XState, crée un bdc unique,
+   survit au rechargement IndexedDB et se monte dans le slot du player CodPlay.
+   La source mesure `442 × 300 px` pour `5,89 s` ; le POC réserve `56.25%` et
+   rend un cadre `16 / 9`. L’éditeur utilise `contain`, le player `cover` ; cet
+   écart de cadrage reste à décider. Le contrôle Play du player lance le clip,
+   qui atteint sa fin. Le Seek observé dans Safari concernait l’élément média
+   natif, pas le parcours interactif CodPlay. Restent à vérifier : édition
+   correcte du texte près de l’ancre, plusieurs ancres et cycles Play/Seek/replay
+   par les contrôles visibles. Un deuxième dépôt a produit un second slot et un
+   second perso média, mais les deux ancres d’essai sont adjacentes et le
+   document de test contient aussi un bdc vidéo sans ancre ; cela ne valide pas
+   encore le placement de plusieurs ancres distinctes ni leur flux combiné.
 
 ## Arbitrages de produit du lot
 
@@ -487,16 +627,12 @@ requis dans cette première démonstration.
   et la réservation CSS n’ont pas été vérifiés dans l’éditeur et le player.
 - Le bdc ancré dispose de toute la largeur du flux de texte. La demi-largeur,
   avec placement à gauche ou à droite, est reportée.
-- Les formats prédéfinis sont 4:3 pour une image horizontale, 3:4 pour une
-  image verticale et 16:9 pour une vidéo. L’image horizontale occupe toute
-  la largeur du flux de texte. L’image verticale est moins large afin de
-  conserver sensiblement la même surface affichée. À largeur de flux égale
-  à `W`, un repère exact est `W × 3W/4` pour l’horizontale et
-  `3W/4 × W` pour la verticale. L’image verticale est centrée dans le flux.
-  La vidéo 16:9 occupe la largeur disponible du flux à l’intérieur de marges.
-  Choix de réalisation proposé : des marges symétriques et adaptatives,
-  dont la valeur CSS sera ajustée lors de la validation visuelle, sans en
-  faire un réglage de l’auteur.
+- Une image ancrée est affichée en `cover`. À son chargement, Elcé lit ses
+  dimensions intrinsèques, calcule `hauteur / largeur × 100 %` et inscrit ce
+  ratio dans le `padding-bottom` métier de l’ancre. Le builder du player reprend
+  cette même valeur pour la réserve de flux et le ratio du perso image. La
+  vidéo reste en 16:9. Les marges autour des médias restent configurées et
+  indépendantes du ratio.
 - Pour un bdc image à contenu unique, le builder génère un seul perso
   CodPlay `img`, sans perso supplémentaire consacré à son rendu. La carte
   « image avec légende » est un autre cas : ses deux zones donnent lieu à
@@ -586,9 +722,9 @@ Points à préciser ensuite :
   circuit que l’import d’image, puis l’inclure dans la tranche Médias ;
 - changement de ligne, proximité de plusieurs ancres et suppression d’une
   sélection de texte qui contient une ancre ;
-- valider visuellement l’ajustement des fichiers aux cadres 4:3, 3:4 et
-  16:9 ainsi que les marges vidéo, en partant du cadrage `cover` de la
-  démo 5 ; ajuster les valeurs CSS pendant la réalisation ;
+- vérifier que chaque image ancrée conserve son ratio intrinsèque dans le
+  `padding-bottom` et le cadre `cover`, puis valider le cadre vidéo 16:9 avec
+  ses marges ;
 - régler les seuils et les durées des réactions automatiques à la visibilité
   en partant des exemples de la démo 5, puis vérifier leur comportement
   initial et lors d’une relecture ;
@@ -1159,7 +1295,9 @@ offrent des points de greffe, sans fournir le comportement demandé :
    est un candidat. Le dépôt, le déplacement de l’icône et le retrait doivent
    tous emprunter la façade de commandes documentaire ; les détails de
    synchronisation entre transaction Tiptap et état XState sont à prouver dans
-   l’essai, sans circuit métier parallèle dans React.
+   l’essai : le composant transmet la transaction à la façade de commandes,
+   puis XState enregistre le markup dans le document ; React ne construit pas
+   une seconde commande et n’écrit pas directement dans le document.
 4. Le builder produit le HTML statique depuis le JSON avec
    [`generateHTML`](https://tiptap.dev/docs/editor/api/utilities/html) de
    `@tiptap/core` et le même jeu d’extensions. Il y ajoute ou vérifie les `id`
@@ -1174,10 +1312,12 @@ bloc requiert un essai supplémentaire, car cette structure peut être
 incompatible avec le contenu inline du `span`. Si le navigateur réorganise ce
 DOM ou casse le flux, ajuster la représentation de l’ancre dans le plan avant
 de figer Tiptap ; ne pas masquer ce problème par un second circuit de rendu.
-L’éditeur Tiptap peut conserver son état de transaction local, tandis que les
-modifications du document Elcé passent par la façade de commandes et XState ;
-React ne porte pas une autre copie du texte métier. Les extensions sont limitées
-aux enrichissements autorisés ;
+L’éditeur Tiptap conserve uniquement son état de transaction nécessaire à la
+sélection et au rendu pendant l’édition. À chaque modification, la Section
+envoie le markup à la façade ; la machine XState met à jour le bdc et déclenche
+la persistance. Le document conservé n’existe donc qu’une fois, dans le
+contexte de la machine. Les extensions sont limitées aux enrichissements
+autorisés ;
 le `StarterKit` inclut des fonctions supplémentaires et un Undo que le POC
 ne demande pas. Le JSON est la source conservée par Elcé, le HTML une
 projection recalculée lors du build de la page, sans saisie HTML par l’auteur.
@@ -1219,13 +1359,16 @@ propres à ed2 ne sont pas transposés automatiquement.
 
 ### Règles de conception retenues pour le POC
 
-**Décisions du 2026-10-02, non appliquées.** XState détient l’état de
-l’application et pilote ses transitions. React sert au rendu et à la liaison
-avec la machine. Les composants d’affichage ne portent pas la logique métier
-ni un second état applicatif ; les hooks React se limitent à la liaison XState
-et à d’éventuels besoins strictement locaux, explicités au moment de leur
-emploi. Aucun pont d’état ad hoc ne doit dupliquer ou synchroniser des états
-concurrents entre React et XState.
+**Décisions du 2026-10-02, non appliquées.** Le contrôleur XState possède le
+document, la page sélectionnée, les médias résolus et les transitions de
+l’application. `AppLayout` les lit avec `useSelector` et envoie les événements
+typés du contrôleur. Les deux états locaux de l’interface (`previewOpen` et
+`dropTarget`) ne décrivent ni le document ni le parcours ; ils servent
+uniquement à ouvrir la preview et à afficher la cible visuelle d’un dépôt.
+`SectionEditor` conserve une référence Tiptap et son cycle de montage, puis
+transmet les transactions à la façade. `PlayerPreview` conserve une référence
+de composition et son cycle de destruction. Aucun de ces états locaux ne
+remplace ou ne synchronise une copie du document XState.
 
 Les règles métier, transformations et projections privilégient des classes
 métier lisibles et testables, hors des composants de rendu. Les
@@ -1244,7 +1387,8 @@ Elcé est vérifiée, sans mêler les deux projets.
   selon leur place dans la page, sans règle d’activation entre stories.
 - La validation d’une Question utilise les straps et événements CodPlay de
   la démo 5. Le résultat transmis au scénario contribue au signet de session
-  du chapitre, sans état métier parallèle dans React.
+  du chapitre ; React ne fait que déclencher l’événement et afficher le
+  snapshot reçu du contrôleur.
 - Réordonner une page conserve les scènes inchangées et reconstruit le
   scénario entier ; modifier un bdc ne reconstruit que sa scène. Après cette
   actualisation, l’application peut ouvrir directement la page courante.
@@ -1438,8 +1582,8 @@ sans faire échouer artificiellement les travaux indépendants.
    sans changer le rendu de l’image simple ; le markup fixe de cette carte
    déterminera ses propres balises, éventuellement `figure`/`figcaption`.
    **Vérifier** l’import et la relecture après fermeture, deux bdc distincts
-   qui réutilisent le même média, un seul perso par bdc image simple, les formats
-   4:3/3:4/16:9, les marges vidéo, les contrôles et les actions automatiques
+   qui réutilisent le même média, un seul perso par bdc image simple, le ratio
+   intrinsèque des images et le format vidéo 16:9, les marges vidéo, les contrôles et les actions automatiques
    de visibilité dans le vrai player. *Sortie :* médias et bdc sont reliés
    par le modèle métier et lisibles sans rendu média propre à Elcé.
 8. **Insertion complète des bdc dans le texte — dépôt fichier et service métier
@@ -1598,6 +1742,10 @@ des demandes de réponse une par une avant la première démonstration.
   texte et le retour du contenu au catalogue après suppression de l’ancre.
 - Vérifier que retirer un bdc placé directement dans la page le remet
   également au catalogue, sans supprimer le média réemployable qu’il utilise.
+  Safari a vérifié ce retour sur Page A : le player est passé de trois vidéos
+  (dont un bdc resté hors ancre après un essai précédent) à deux vidéos et deux
+  slots, puis a conservé cet état après rechargement. Page C a été créée pour
+  garder Page A et Page B disponibles pendant les essais suivants.
 - Pour la création isolée, vérifier que ses choix de création
   suivent la liste de types proposée par l’interface (sans section texte
   dans le POC), que cela n’impose aucune restriction au modèle des données,
@@ -1647,10 +1795,9 @@ des demandes de réponse une par une avant la première démonstration.
   l’image utilise le composant `img`, la légende commune au média est projetée
   comme texte de carte dans son architecture HTML fixe et la composition ne
   modifie pas le rendu interne de `img`.
-  Vérifier les formats 4:3 et 3:4 pour les images, 16:9 pour la vidéo, et
-  l’occupation de toute la largeur du flux par l’image horizontale.
-  Vérifier que l’image verticale garde sensiblement la même surface affichée
-  avec une largeur réduite et qu’elle est centrée. Vérifier que la vidéo
+  Vérifier que le ratio intrinsèque de chaque image est conservé par son
+  `padding-bottom` et le cadre `cover`, y compris pour une image verticale.
+  Vérifier que la vidéo
   remplit le cadre 16:9 disponible après ses marges et conserve ses contrôles
   natifs visibles.
   Vérifier sur l’unique perso `img` l’observation de visibilité : l’image déjà

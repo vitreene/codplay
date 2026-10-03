@@ -238,6 +238,42 @@ body {
   padding-left: 1rem;
 }
 
+.elce-media-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0;
+  list-style: none;
+}
+
+.elce-media-catalog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.elce-media-catalog-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.elce-secondary-action {
+  display: inline-flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #263b3a;
+  background: #f7f4ed;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
 .elce-muted {
   color: #777d76;
   font-size: 0.85em;
@@ -447,6 +483,7 @@ body {
 }
 
 .elce-editor-content {
+  position: relative;
   min-height: 7rem;
   padding: 0.6rem;
   background: #fffdf8;
@@ -464,31 +501,48 @@ body {
 
 .elce-editor-content .elce-anchor {
   display: inline-block;
-  width: 100%;
+  position: static;
+  width: 0;
   height: 0;
-  min-width: 0;
-  min-height: 0;
-  margin: 0.6rem 0;
-  position: relative;
+  margin: 0;
+  padding: 0;
   vertical-align: top;
-  line-height: 0;
+}
+
+.elce-editor-content p,
+.elce-editor-content h1,
+.elce-editor-content h2,
+.elce-editor-content h3,
+.elce-editor-content h4,
+.elce-editor-content h5,
+.elce-editor-content h6 {
+  position: relative;
 }
 
 .elce-editor-content .elce-anchor-bdc {
   position: absolute;
-  inset: 0;
   display: block;
+  inset-inline: 0;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0 !important;
+  box-sizing: border-box;
   overflow: hidden;
   background: #eef4ef;
   border: 1px solid #46726b;
   border-radius: 0.2rem;
 }
 
+.elce-editor-content .elce-anchor-bdc[data-media-type='video'] {
+  aspect-ratio: 16 / 9;
+}
+
 .elce-editor-content .elce-anchor-handle {
   position: absolute;
-  top: 0.3rem;
-  left: 0.4rem;
-  z-index: 1;
+  inset-inline-start: anchor(left);
+  inset-block-start: anchor(top);
+  z-index: 2;
   display: block;
   width: 1.4rem;
   height: 1.4rem;
@@ -500,6 +554,7 @@ body {
   font-size: 0.9rem;
   line-height: 1.25rem;
   text-align: center;
+  transform: translate(-50%, -10%);
   user-select: none;
 }
 
@@ -513,6 +568,10 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.elce-editor-content .elce-anchor-bdc[data-media-type='image'] .elce-anchor-media-preview {
+  object-fit: cover;
 }
 
 .elce-editor-content p,

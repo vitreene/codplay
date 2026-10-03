@@ -2,10 +2,14 @@
 
 ## Statut
 
-**Fixe — projection Flux et montage Sighty/CodPlay implémentés et vérifiés.**
+**En cours — projection Flux et montage Sighty/CodPlay implémentés et vérifiés ;
+la preview Safari confirme l’image et le chargement d’une vidéo réelle ancrée.**
 
 L’observation du repère et le parcours dans un navigateur restent la preuve
 d’intégration visuelle de la tranche 2 du plan.
+
+Le parcours complet du slot inline et du montage du perso média est détaillé
+dans la [spécification d’intégration CodPlay](./codplay-anchor-integration-spec.md).
 
 ## Contrat
 
@@ -14,9 +18,21 @@ Section. Une source média optionnelle peut être fournie séparément par
 `mediaSources`; un bdc image ou vidéo simple produit alors un hôte de média et
 un seul perso CodPlay correspondant, directement dans la story de page afin que
 son observation utilise le même `scroll-container`. Lorsqu’une Section exporte
-une ancre `data-elce-anchor` dont le `data-bdc-id` désigne ce bdc, le builder
-réutilise la part `data-part` de l’ancre et n’ajoute pas d’hôte frère. Il produit
-un `SceneDoc` avec :
+une ancre `data-elce-anchor` dont le `data-bdc-id` désigne ce bdc, le builder lit
+sa cible logique puis projette le markup en remplaçant l’ancre d’édition par un
+slot de flux inline à largeur nulle. Le perso image ou vidéo est monté dans la
+part `data-part` de ce slot et aucun hôte frère n’est ajouté. Le slot porte un
+`anchor-name` CSS ; le perso reçoit le même `position-anchor`, une position
+absolue, une largeur de `100 %`, son ratio et la marge
+`ANCHOR.DEFAULT_BDC_MARGIN_TOP`. La variable CSS du slot conserve le ratio ;
+le builder fournit aussi à `layout.initial.flowReservations` cette part et la
+hauteur `calc(ratio + marge haute + marge basse)`. Le layout CodPlay déplace la
+part après la ligne visuelle et applique cette réserve au montage et au
+changement de largeur. La règle inline initiale `margin-inline-end:100%` est
+supplantée par ce calcul. Pour une image ancrée, la valeur conservée dans le
+padding donne le ratio du cadre et de la réserve ; le perso image utilise
+`object-fit:cover`. Il produit un
+`SceneDoc` avec :
 
 - un perso `scroll-container` racine, placé sur `@root` ;
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
@@ -64,9 +80,10 @@ composant scroll porte aussi la politique déclarative d’émission initiale.
 
 `ElcePlayerComposition` instancie le runtime Sighty avec les définitions
 optionnelles `scroll-container`, compile le catalogue de scènes fourni par le
-builder et démarre la scène de layout. Il conserve le circuit de navigation
-Sighty ; aucun contrôle géométrique ni dispatch local n’est ajouté au player
-Elcé.
+builder et démarre la scène de layout. Aucun gestionnaire de géométrie Elcé ne
+réintervient après le montage : le runtime CodPlay place le perso dans le slot
+et le composant `layout` recalcule la position de ce slot. Le circuit de navigation Sighty reste
+inchangé.
 
 Les contrats de sortie sont isolés dans
 [`flux-scene-builder-types.ts`](../src/builders/flux-scene-builder-types.ts) et
@@ -78,8 +95,16 @@ builders ne déclarent que leur comportement d’exécution.
 - [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
   vérifie les stories, le scrollport, les parts et la compilation avec les
   définitions réelles `scroll-container` de CodPlay, ainsi que le montage
-  d’un bdc image simple vers un seul perso `img`, y compris son montage sur une
-  part d’ancre exportée.
+  d’un bdc image simple vers un seul perso `img`, y compris son montage sur la
+  part du slot projeté depuis une ancre exportée.
+- `PlayerPreview` fournit la preuve navigateur dans l’application : le dépôt
+  réel depuis `SectionEditor` passe par XState, puis la preview monte le
+  builder, Sighty et CodPlay avec le slot projeté.
+- Safari confirme le 3 octobre 2026 qu’un MP4 réel déposé dans `SectionEditor`
+  passe par XState, survit au rechargement et se monte comme perso `media` dans
+  la part du slot d’ancre. Le cadre reste en `16 / 9` avec une réserve de
+  `56.25%` ; la source testée mesure `442 × 300 px` pour `5,89 s`. Le cadrage
+  diffère actuellement entre l’éditeur (`contain`) et le player (`cover`).
 - [`scenario-builder.test.ts`](../src/builders/scenario-builder.test.ts)
   vérifie la présence des scènes persistantes, du graphe Sighty et du layout
   complet de slots.

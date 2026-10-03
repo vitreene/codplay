@@ -1,6 +1,7 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
 import { assertDocumentInvariants } from '../commands/document-commands'
+import { BDC_TYPE } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
 import type { ElceSectionChange } from '../../domain/anchor-types'
@@ -57,7 +58,7 @@ describe('Elcé controller', () => {
     actor.start()
 
     actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(firstFile, firstTarget, 'one') })
-    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(secondFile, secondTarget, 'two') })
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(secondFile, secondTarget, 'two', { target: firstTarget, text: 'one' }) })
     await flush()
 
     expect(store.pending.map(({ media }) => media.id)).toEqual([firstTarget.media.id])
@@ -81,20 +82,82 @@ describe('Elcé controller', () => {
     assertDocumentInvariants(actor.getSnapshot().context.document)
     actor.stop()
   })
+
+  it('returns an anchored bdc when the editor removes it through an ordinary text update', async () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    actor.start()
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.anchor.create',
+        sectionBdcId: 'bdc-section-1',
+        pageId: 'page-a',
+        bdcId: 'bdc-image-1',
+        bdcType: BDC_TYPE.IMAGE,
+        presetId: 'image-basic',
+        media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+        partId: 'page-a:bdc-image-1:anchor',
+        markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
+        content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [
+            { type: 'text', text: 'Avant ' },
+            { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+            { type: 'text', text: ' après' },
+          ] }],
+        },
+      },
+    })
+
+    actor.send({
+      type: 'section.change',
+      sectionBdcId: 'bdc-section-1',
+      change: {
+        kind: 'content',
+        title: '',
+        markup: '<p>Avant après</p>',
+        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] },
+      },
+    })
+    await flush()
+
+    expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(actor.getSnapshot().context.document.data.catalogBdcIds).toEqual(['bdc-image-1'])
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-image-1'])
+    assertDocumentInvariants(actor.getSnapshot().context.document)
+    actor.stop()
+  })
 })
 
 function fileDrop(
   file: File,
   target: NonNullable<ReturnType<ElceAnchorDropService['createFileDropTarget']>>,
   text: string,
+  previous?: Readonly<{ target: NonNullable<ReturnType<ElceAnchorDropService['createFileDropTarget']>>; text: string }>,
 ): ElceSectionChange {
+  const previousNodes = previous === undefined
+    ? []
+    : [
+        { type: 'text', text: previous.text },
+        { type: 'elceAnchor', attrs: { bdcId: previous.target.bdcId, partId: previous.target.partId } },
+      ]
+  const previousMarkup = previous === undefined
+    ? ''
+    : `${previous.text}<span data-elce-anchor="true" data-bdc-id="${previous.target.bdcId}"></span>`
   return {
     kind: 'file-drop',
     file,
     target,
     title: '',
-    content: { type: 'doc', content: [{ type: 'paragraph' }] },
-    markup: `<p>${text}<span data-elce-anchor="true" data-bdc-id="${target.bdcId}"></span></p>`,
+    content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [
+        ...previousNodes,
+        { type: 'text', text },
+        { type: 'elceAnchor', attrs: { bdcId: target.bdcId, partId: target.partId } },
+      ] }],
+    },
+    markup: `<p>${previousMarkup}${text}<span data-elce-anchor="true" data-bdc-id="${target.bdcId}"></span></p>`,
   }
 }
 
