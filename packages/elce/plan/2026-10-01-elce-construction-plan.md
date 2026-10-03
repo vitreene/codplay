@@ -456,6 +456,11 @@ Décisions retenues :
 - Plusieurs chapitres peuvent être créés dès la première version. L’auteur
   peut les renommer et les réordonner. Dans le POC, un chapitre ne peut être
   supprimé que s’il est vide.
+- Les commandes de création de chapitre et de page sont des icônes. Une page
+  reçoit son nom automatique à la création ; dans la zone centrale, l’auteur
+  peut modifier le titre de la page sélectionnée et celui de son chapitre.
+  Une page sans chapitre n’affiche que son titre. Ces renommages passent par
+  les commandes documentaires XState.
 - Les chapitres représentent les regroupements nommés et ordonnés de pages
   du parcours, comme dans la démo 5. Cette référence porte sur leur rôle
   dans la structure ; l’édition de leurs conditions d’accès reste reportée
@@ -1595,17 +1600,30 @@ sans faire échouer artificiellement les travaux indépendants.
    seulement si l’extension Elcé et le rendu conviennent ; sinon la
    représentation ou la bibliothèque est réexaminée avant la suite.
 4. **Organisation du scénario dans l’éditeur — En cours ; commandes et
-   organisation de base visibles, glisser-déposer appliqué.** Construire la
+   organisation de base visibles, glisser-déposer appliqué ; icônes de création
+   et édition centrale des titres implémentées et testées.** Construire la
    liste des chapitres et de leurs pages, la page racine du scénario, le catalogue et la
-   sélection, puis les commandes de création, nom automatique ou choisi,
+   sélection, puis les commandes de création à nom automatique, renommage,
    déplacement, retrait, suppression définitive et suppression d’un chapitre
-   vide. Permettre aussi de créer une page racine au niveau du scénario
+   vide. Les commandes de création de page et de chapitre sont des icônes ; le
+   titre de la page sélectionnée et celui de son chapitre sont éditables au
+   centre par les commandes documentaires XState. Le test d’interface vérifie
+   l’édition par perte de focus et Entrée, l’état du document et la liste ;
+   Safari confirme l’affichage central. Permettre aussi de créer une page racine au niveau
+   du scénario
    et de l’y déplacer depuis un chapitre. Ouvrir Lecture à la page courante
    et restaurer ensuite le contexte d’édition ; rendre la lecture possible
    dans une fenêtre distincte.
+   **Clarifications ouvertes avant de poursuivre :** le plan demande une page
+   racine, sans fixer l’emplacement de sa commande de création ; la machine
+   actuelle crée les pages par défaut dans le premier chapitre. Le plan situe
+   aussi la prévisualisation en modale au sujet 3, mais exige une fenêtre
+   distincte ici et dans le parcours final ; la spécification actuelle reporte
+   cette fenêtre après le POC. Les deux choix ont été soumis à l’utilisateur.
    **Vérifier** que les pages du catalogue restent éditables mais absentes du
    scénario, que les pages racine y figurent, et que les deux formes
-   de suppression ont des résultats distincts après rechargement. Déplacer
+   de suppression ont des résultats distincts après rechargement. Vérifier
+   aussi que les renommages restent présents après rechargement. Déplacer
    une page doit reconstruire le scénario entier sans reconstruire les
    scènes ; éditer une page ne reconstruit que sa scène. *Sortie :* l’ordre
    affiché et lu vient du même document, sans état d’organisation parallèle.

@@ -664,15 +664,40 @@ function deletePage(document: ElceDocument, pageId: PageId): ElceDocument {
   })
 }
 
+/** Renames one page without changing its placement or content. */
+function renamePage(document: ElceDocument, pageId: PageId, requestedName: string): ElceDocument {
+  const page = findPage(document, pageId)
+  const name = requestedName.trim()
+  if (name.length === 0) fail(`Le nom de la page ne peut pas être vide : ${pageId}`)
+  return withPage(document, { ...page, name })
+}
+
+/** Renames one chapter without changing its type or page order. */
+function renameChapter(document: ElceDocument, chapterId: ChapterId, requestedName: string): ElceDocument {
+  const chapter = findChapter(document, chapterId)
+  const name = requestedName.trim()
+  if (name.length === 0) fail(`Le nom du chapitre ne peut pas être vide : ${chapterId}`)
+  return new ElceDocument({
+    ...document.data,
+    chapters: document.chapters.map((candidate) => candidate.id === chapter.id
+      ? { ...chapter, name }
+      : candidate),
+  })
+}
+
 /** Applies one document command and returns a new immutable model value. */
 function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
   switch (command.type) {
     case 'chapter.create':
       return createChapter(document, command)
+    case 'chapter.rename':
+      return renameChapter(document, command.chapterId, command.name)
     case 'chapter.delete':
       return deleteChapter(document, command.chapterId)
     case 'page.create':
       return createPage(document, command)
+    case 'page.rename':
+      return renamePage(document, command.pageId, command.name)
     case 'page.move':
       return movePage(document, command)
     case 'page.remove':

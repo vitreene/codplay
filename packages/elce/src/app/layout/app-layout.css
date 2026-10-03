@@ -112,22 +112,6 @@ body {
   justify-content: flex-end;
 }
 
-.elce-create-page-form {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.elce-create-page-form input {
-  width: 8.5rem;
-  padding: 0.25rem 0.35rem;
-  border: 1px solid #c9c4b9;
-  border-radius: 0.25rem;
-  font: inherit;
-  font-size: 0.75rem;
-}
-
 .elce-outline-actions button,
 .elce-outline-item-heading button,
 .elce-page-actions button {
@@ -141,9 +125,19 @@ body {
 }
 
 .elce-outline-actions button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
   color: #fffdf8;
   background: #46726b;
   border-color: #46726b;
+}
+
+.elce-outline-actions button:focus-visible {
+  outline: 2px solid #263b3a;
+  outline-offset: 2px;
 }
 
 .elce-outline-actions button:disabled,
@@ -414,10 +408,54 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
 }
 
-.elce-work-area-heading p {
-  margin: 0.35rem 0 0;
+.elce-work-area-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.elce-work-area-chapter-title,
+.elce-work-area-page-title {
+  margin: 0;
+}
+
+.elce-work-area-chapter-title {
+  margin-bottom: 0.2rem;
+  color: #626761;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.elce-work-area-page-title {
+  color: #263b3a;
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+
+.elce-inline-title-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 0.08rem;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #e8e4db;
+  border-radius: 0;
+  cursor: text;
+}
+
+.elce-inline-title-input:hover {
+  border-bottom-color: #d9d4c9;
+}
+
+.elce-inline-title-input:focus-visible {
+  border-bottom-color: #46726b;
+  outline: 2px solid #46726b;
+  outline-offset: 2px;
 }
 
 .elce-work-area-heading > button {

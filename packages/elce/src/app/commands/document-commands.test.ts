@@ -9,6 +9,43 @@ import {
 } from './document-commands'
 
 describe('Elcé document commands', () => {
+  it('renames a page and its chapter without changing document placement', () => {
+    const initial = createInitialDocument()
+    const renamedPage = applyDocumentCommand(initial, {
+      type: 'page.rename',
+      pageId: 'page-a',
+      name: 'Présentation',
+    })
+    const renamedChapter = applyDocumentCommand(renamedPage, {
+      type: 'chapter.rename',
+      chapterId: 'chapter-1',
+      name: 'Introduction',
+    })
+
+    expect(renamedChapter.pages[0]).toMatchObject({
+      id: 'page-a',
+      name: 'Présentation',
+      chapterId: 'chapter-1',
+    })
+    expect(renamedChapter.chapters[0]).toMatchObject({
+      id: 'chapter-1',
+      name: 'Introduction',
+      pageIds: ['page-a'],
+    })
+    expect(renamedChapter.bdcs).toEqual(initial.bdcs)
+    expect(renamedChapter.data.scenarioPageIds).toEqual(initial.data.scenarioPageIds)
+    expect(renamedChapter.data.catalogPageIds).toEqual(initial.data.catalogPageIds)
+  })
+
+  it('rejects blank page and chapter names', () => {
+    const initial = createInitialDocument()
+
+    expect(() => applyDocumentCommand(initial, { type: 'page.rename', pageId: 'page-a', name: '   ' }))
+      .toThrow('Le nom de la page ne peut pas être vide')
+    expect(() => applyDocumentCommand(initial, { type: 'chapter.rename', chapterId: 'chapter-1', name: '   ' }))
+      .toThrow('Le nom du chapitre ne peut pas être vide')
+  })
+
   it('creates, moves and removes pages without sharing an assignment', () => {
     const initial = createInitialDocument()
     const withPage = applyDocumentCommand(

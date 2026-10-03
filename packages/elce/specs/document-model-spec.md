@@ -42,12 +42,17 @@ des médias sont conservés à part par la frontière IndexedDB.
 
 Les transformations sont pures : `applyDocumentCommand(document, command)`
 retourne une nouvelle valeur après vérification de ses invariants. Elles couvrent
-la création et le déplacement de chapitres, pages et bdc, le retrait vers le
-catalogue, la suppression définitive d’une page ou d’un bdc disponible, la mise
-à jour d’une Section, l’ajout de métadonnées média et le renommage du document.
+la création, le renommage et le déplacement de chapitres et de pages, le
+déplacement et le retrait au catalogue des bdc, la suppression définitive
+d’une page ou d’un bdc disponible, la mise à jour d’une Section, l’ajout de
+métadonnées média et le renommage du document.
 La suppression définitive d’une page supprime ses bdc, mais conserve les médias
 du catalogue. `bdc.delete` ne peut supprimer qu’un BDC inutilisé et présent dans
 `catalogBdcIds` ; son média reste dans le document.
+
+`page.rename` et `chapter.rename` valident un nom non vide après suppression
+des espaces de bord. Ces commandes ne changent ni l’affectation des pages, ni
+leur ordre, ni les BDC.
 
 `media.merge` rattache au média canonique tous les BDC qui référencent les
 médias en doublon, puis retire leurs métadonnées du document. Les BDC, les
@@ -106,14 +111,17 @@ raccord ne choisit pas quels médias fusionner.
 ## Preuves
 
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
-  vérifie création, déplacement, retrait, suppression, réemploi d’un média,
-  la suppression catalogue d’un BDC et le refus d’effacer un BDC de page,
+  vérifie création, renommage, déplacement, retrait, suppression, réemploi
+  d’un média, la suppression catalogue d’un BDC et le refus d’effacer un BDC de page,
   avec conservation du média,
   suppression conditionnelle d’un chapitre, retrait au catalogue d’un BDC
   placé directement dans une page, suppression d’un BDC ancré sans retour au
   catalogue, conservation et réemploi de son média, exclusivité et aller-retour
   JSON, fusion de médias, conservation des BDC et placements, rejet de
   métadonnées incompatibles.
+- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) vérifie les
+  actions icônes accessibles de création ainsi que l’édition centrale des noms
+  de page et de chapitre via le contrôleur XState.
 - [`document-persistence.test.ts`](../src/app/controller/document-persistence.test.ts)
   vérifie que le remplacement d’un média utilisé et la suppression de son blob
   passent par une seule opération de persistance.

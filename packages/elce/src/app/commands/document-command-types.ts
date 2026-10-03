@@ -26,8 +26,10 @@ export type DocumentCommand =
       name: string
       chapterType?: Chapter['type']
     }>
+  | Readonly<{ type: 'chapter.rename'; chapterId: ChapterId; name: string }>
   | Readonly<{ type: 'chapter.delete'; chapterId: ChapterId }>
   | (Readonly<{ type: 'page.create' }> & CreatePageCommandInput)
+  | Readonly<{ type: 'page.rename'; pageId: PageId; name: string }>
   | Readonly<{ type: 'page.move'; pageId: PageId; placement: PagePlacement }>
   | Readonly<{ type: 'page.remove'; pageId: PageId }>
   | Readonly<{ type: 'page.delete'; pageId: PageId }>

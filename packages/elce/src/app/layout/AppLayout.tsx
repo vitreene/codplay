@@ -1,7 +1,7 @@
 import { useSelector } from '@xstate/react'
 import { useRef, useState } from 'react'
-import type { DragEvent, FormEvent } from 'react'
-import { Archive, GripVertical, Trash2 } from 'lucide-react'
+import type { DragEvent } from 'react'
+import { Archive, FilePlus, FolderPlus, GripVertical, Trash2 } from 'lucide-react'
 import './app-layout.css'
 
 import { ANCHOR_RETURN, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE, PAGE_LOCATION } from '../../config/document-config'
@@ -40,6 +40,9 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const mediaSources = useSelector(controller, (snapshot) => snapshot.context.mediaSources)
   const mediaSourceKey = Object.keys(mediaSources).sort().join('|')
   const selectedPage = documentModel.pages.find((page) => page.id === selectedPageId) ?? documentModel.pages[0]
+  const selectedChapter = selectedPage?.chapterId === null || selectedPage === undefined
+    ? undefined
+    : documentModel.chapters.find((chapter) => chapter.id === selectedPage.chapterId)
   const selectedSection = selectedPage === undefined
     ? undefined
     : selectedPage.bdcIds
@@ -50,12 +53,8 @@ export function AppLayout({ controller }: AppLayoutProps) {
     ? []
     : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
 
-  const addPage = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const nameValue = new FormData(event.currentTarget).get('pageName')
-    const name = typeof nameValue === 'string' ? nameValue.trim() : ''
-    controller.send({ type: 'page.create', name: name || undefined })
-    event.currentTarget.reset()
+  const addPage = () => {
+    controller.send({ type: 'page.create' })
   }
 
   const addChapter = () => {
@@ -165,15 +164,12 @@ export function AppLayout({ controller }: AppLayoutProps) {
           <div id="elce-outline-heading" className="elce-panel-heading">
             <h1 id="elce-outline-title">Scénario</h1>
             <div id="elce-outline-actions" className="elce-outline-actions">
-              <button id="elce-create-chapter" type="button" onClick={addChapter}>
-                Ajouter un chapitre
+              <button id="elce-create-chapter" className="elce-icon-action" type="button" aria-label="Ajouter un chapitre" title="Ajouter un chapitre" onClick={addChapter}>
+                <FolderPlus aria-hidden="true" size={17} strokeWidth={2} />
               </button>
-              <form id="elce-create-page-form" className="elce-create-page-form" onSubmit={addPage}>
-                <input id="elce-create-page-name" name="pageName" type="text" aria-label="Nom de page" placeholder="Nom de page (facultatif)" />
-                <button id="elce-create-page" type="submit" disabled={documentModel.chapters.length === 0}>
-                  Ajouter une page
-                </button>
-              </form>
+              <button id="elce-create-page" className="elce-icon-action" type="button" aria-label="Ajouter une page" title="Ajouter une page" onClick={addPage} disabled={documentModel.chapters.length === 0}>
+                <FilePlus aria-hidden="true" size={17} strokeWidth={2} />
+              </button>
             </div>
           </div>
           <p id="elce-document-name">{documentModel.data.name}</p>
@@ -344,7 +340,44 @@ export function AppLayout({ controller }: AppLayoutProps) {
         </section>
         <section id="elce-work-area" className="elce-panel elce-work-area">
           <div id="elce-work-area-heading" className="elce-work-area-heading">
-            <h1 id="elce-work-area-title">{selectedPage?.name ?? 'Éditeur'}</h1>
+            <div id="elce-work-area-titles" className="elce-work-area-titles">
+              {selectedChapter === undefined
+                ? null
+                : <h2 id="elce-work-area-chapter-title" className="elce-work-area-chapter-title">
+                    <input
+                      id={`elce-chapter-title-${selectedChapter.id}`}
+                      key={`${selectedChapter.id}:${selectedChapter.name}`}
+                      className="elce-inline-title-input"
+                      type="text"
+                      aria-label="Titre du chapitre"
+                      title="Modifier le titre du chapitre"
+                      defaultValue={selectedChapter.name}
+                      onBlur={(event) => commitInlineName(event.currentTarget, selectedChapter.name, (name) => controller.send({
+                        type: 'document.apply',
+                        command: { type: 'chapter.rename', chapterId: selectedChapter.id, name },
+                      }))}
+                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                    />
+                  </h2>}
+              {selectedPage === undefined
+                ? <h1 id="elce-work-area-title">Éditeur</h1>
+                : <h1 id="elce-work-area-title" className="elce-work-area-page-title">
+                    <input
+                      id={`elce-page-title-${selectedPage.id}`}
+                      key={`${selectedPage.id}:${selectedPage.name}`}
+                      className="elce-inline-title-input"
+                      type="text"
+                      aria-label="Titre de la page"
+                      title="Modifier le titre de la page"
+                      defaultValue={selectedPage.name}
+                      onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => controller.send({
+                        type: 'document.apply',
+                        command: { type: 'page.rename', pageId: selectedPage.id, name },
+                      }))}
+                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                    />
+                  </h1>}
+            </div>
             <button id="elce-preview-open" type="button" onClick={() => setPreviewOpen(true)}>
               Prévisualiser
             </button>
@@ -407,6 +440,20 @@ export function AppLayout({ controller }: AppLayoutProps) {
         : null}
     </div>
   )
+}
+
+/** Commits a central title field through the document command path. */
+function commitInlineName(
+  input: HTMLInputElement,
+  currentName: string,
+  commit: (name: string) => void,
+): void {
+  const name = input.value.trim()
+  if (name.length === 0 || name === currentName) {
+    input.value = currentName
+    return
+  }
+  commit(name)
 }
 
 type PageDropListProps = Readonly<{
