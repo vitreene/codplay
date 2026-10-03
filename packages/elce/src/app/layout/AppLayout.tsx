@@ -4,7 +4,7 @@ import type { DragEvent, FormEvent } from 'react'
 import { Archive, GripVertical, Trash2 } from 'lucide-react'
 import './app-layout.css'
 
-import { PAGE_LOCATION } from '../../config/document-config'
+import { ANCHOR_RETURN, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE, PAGE_LOCATION } from '../../config/document-config'
 import {
   createChapterCommand,
   createPageDeleteCommand,
@@ -17,6 +17,7 @@ import { PlayerPreview } from '../player/PlayerPreview'
 import type { ElceDocument } from '../../domain/document-model'
 import { ElceAnchorDropFacade } from '../../domain/anchor-drop-facade'
 import { ElcePageMediaService } from '../../domain/page-media-service'
+import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog-types'
 
 const pageMediaService = new ElcePageMediaService()
 
@@ -35,6 +36,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const stateValue = useSelector(controller, (snapshot) => String(snapshot.value))
   const documentModel = useSelector(controller, (snapshot) => snapshot.context.document)
   const selectedPageId = useSelector(controller, (snapshot) => snapshot.context.selectedPageId)
+  const catalogTab = useSelector(controller, (snapshot) => snapshot.context.catalogTab)
   const mediaSources = useSelector(controller, (snapshot) => snapshot.context.mediaSources)
   const mediaSourceKey = Object.keys(mediaSources).sort().join('|')
   const selectedPage = documentModel.pages.find((page) => page.id === selectedPageId) ?? documentModel.pages[0]
@@ -42,7 +44,8 @@ export function AppLayout({ controller }: AppLayoutProps) {
     ? undefined
     : selectedPage.bdcIds
       .map((bdcId) => documentModel.bdcs.find((bdc) => bdc.id === bdcId))
-      .find((bdc) => bdc?.type === 'section')
+      .find((bdc) => bdc?.type === BDC_TYPE.SECTION)
+  const catalogContents = anchorDropFacade.catalogContents(documentModel)
   const unanchoredMediaBdcs = selectedPage === undefined
     ? []
     : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
@@ -82,7 +85,50 @@ export function AppLayout({ controller }: AppLayoutProps) {
     setDropTarget(null)
   }
 
+  const beginCatalogDrag = (event: DragEvent<HTMLButtonElement>, reference: ElceCatalogReference) => {
+    event.dataTransfer.setData(CATALOG_REFERENCE.MIME_TYPE, JSON.stringify(reference))
+    switch (reference.kind) {
+      case CATALOG_REFERENCE.BDC:
+        event.dataTransfer.effectAllowed = 'move'
+        break
+      case CATALOG_REFERENCE.MEDIA:
+        event.dataTransfer.effectAllowed = 'copy'
+        break
+    }
+  }
+
+  const dragOverAvailableBdcCatalog = (event: DragEvent<HTMLElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes(ANCHOR_RETURN.MIME_TYPE)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    if (dropTarget !== CATALOG_TAB.AVAILABLE_BDCS) setDropTarget(CATALOG_TAB.AVAILABLE_BDCS)
+  }
+
+  const leaveAvailableBdcCatalog = (event: DragEvent<HTMLElement>) => {
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
+    setDropTarget(null)
+  }
+
+  const dropIntoAvailableBdcCatalog = (event: DragEvent<HTMLElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes(ANCHOR_RETURN.MIME_TYPE)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTarget(null)
+    if (catalogTab !== CATALOG_TAB.AVAILABLE_BDCS) {
+      controller.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.AVAILABLE_BDCS })
+    }
+  }
+
   const dragOverPageTarget = (event: DragEvent<HTMLElement>, targetId: string) => {
+    switch (draggedPageId.current) {
+      case null:
+        return
+      default:
+        break
+    }
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
@@ -90,11 +136,16 @@ export function AppLayout({ controller }: AppLayoutProps) {
   }
 
   const dropPage = (event: DragEvent<HTMLElement>, placement: PagePlacement) => {
+    const pageId = draggedPageId.current
+    switch (pageId) {
+      case null:
+        return
+      default:
+        break
+    }
     event.preventDefault()
     event.stopPropagation()
-    const dataPageId = event.dataTransfer.getData('text/plain')
-    const pageId = dataPageId || draggedPageId.current
-    if (pageId !== null && pageId !== '') movePage(pageId, placement)
+    movePage(pageId, placement)
     endPageDrag()
   }
 
@@ -190,6 +241,106 @@ export function AppLayout({ controller }: AppLayoutProps) {
               onDrop={dropPage}
             />
           </section>
+          <section id="elce-content-catalog" className="elce-outline-group">
+            <h2 id="elce-content-catalog-title">Contenus disponibles</h2>
+            <div id="elce-content-catalog-tabs" className="elce-content-catalog-tabs" role="group" aria-label="Contenus du catalogue">
+              <button
+                id="elce-content-catalog-tab-bdcs"
+                className={availableBdcTabClass(
+                  catalogTab === CATALOG_TAB.AVAILABLE_BDCS,
+                  dropTarget === CATALOG_TAB.AVAILABLE_BDCS,
+                )}
+                type="button"
+                aria-pressed={catalogTab === CATALOG_TAB.AVAILABLE_BDCS}
+                aria-controls="elce-catalog-bdcs"
+                onClick={() => controller.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.AVAILABLE_BDCS })}
+                onDragOver={dragOverAvailableBdcCatalog}
+                onDragLeave={leaveAvailableBdcCatalog}
+                onDrop={dropIntoAvailableBdcCatalog}
+              >
+                Blocs disponibles
+              </button>
+              <button
+                id="elce-content-catalog-tab-media"
+                className={catalogTab === CATALOG_TAB.MEDIA ? 'elce-content-catalog-tab elce-content-catalog-tab--active' : 'elce-content-catalog-tab'}
+                type="button"
+                aria-pressed={catalogTab === CATALOG_TAB.MEDIA}
+                aria-controls="elce-catalog-media"
+                onClick={() => controller.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.MEDIA })}
+              >
+                Médias
+              </button>
+            </div>
+            <section
+              id="elce-catalog-bdcs"
+              className={dropTarget === CATALOG_TAB.AVAILABLE_BDCS ? 'elce-content-catalog-panel elce-content-catalog-panel--drop-target' : 'elce-content-catalog-panel'}
+              hidden={catalogTab !== CATALOG_TAB.AVAILABLE_BDCS}
+              onDragOver={dragOverAvailableBdcCatalog}
+              onDragLeave={leaveAvailableBdcCatalog}
+              onDrop={dropIntoAvailableBdcCatalog}
+            >
+              <p id="elce-catalog-bdcs-description" className="elce-muted">
+                Ces blocs ne sont utilisés sur aucune page. Déposer ici un bloc ancré le retire du texte et le rend disponible.
+              </p>
+              {catalogContents.bdcs.length === 0
+                ? <p id="elce-catalog-bdcs-empty" className="elce-muted">Aucun bloc image ou vidéo disponible.</p>
+                : <ul id="elce-catalog-bdcs-list" className="elce-content-catalog-list">
+                    {catalogContents.bdcs.map((entry) => (
+                      <li id={`elce-catalog-bdc-${entry.reference.bdcId}`} key={entry.key}>
+                        <div id={`elce-catalog-bdc-actions-${entry.reference.bdcId}`} className="elce-content-catalog-row">
+                          <button
+                            id={`elce-catalog-bdc-drag-${entry.key}`}
+                            className="elce-content-catalog-item"
+                            type="button"
+                            draggable
+                            onDragStart={(event) => beginCatalogDrag(event, entry.reference)}
+                            aria-label={`Insérer le bloc ${catalogMediaLabel(entry.mediaType)} : ${entry.name}`}
+                            title={`Insérer le bloc ${catalogMediaLabel(entry.mediaType)} : ${entry.name}`}
+                          >
+                            <GripVertical aria-hidden="true" size={14} strokeWidth={2} />
+                            <span>{entry.name}</span>
+                            <small>Bloc {catalogMediaLabel(entry.mediaType)} · unique</small>
+                          </button>
+                          <DeleteIconButton
+                            id={`elce-catalog-bdc-delete-${entry.reference.bdcId}`}
+                            ariaLabel={`Supprimer définitivement le bloc ${entry.name}`}
+                            onClick={() => controller.send({
+                              type: 'document.apply',
+                              command: { type: 'bdc.delete', bdcId: entry.reference.bdcId },
+                            })}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>}
+            </section>
+            <section id="elce-catalog-media" className="elce-content-catalog-panel" hidden={catalogTab !== CATALOG_TAB.MEDIA}>
+              <p id="elce-catalog-media-description" className="elce-muted">
+                Les fichiers image et vidéo restent disponibles après insertion.
+              </p>
+              {catalogContents.media.length === 0
+                ? <p id="elce-catalog-media-empty" className="elce-muted">Les médias ajoutés apparaîtront ici.</p>
+                : <ul id="elce-catalog-media-list" className="elce-content-catalog-list">
+                    {catalogContents.media.map((entry) => (
+                      <li id={`elce-catalog-media-${entry.reference.mediaId}`} key={entry.key}>
+                        <button
+                          id={`elce-catalog-media-drag-${entry.key}`}
+                          className="elce-content-catalog-item"
+                          type="button"
+                          draggable
+                          onDragStart={(event) => beginCatalogDrag(event, entry.reference)}
+                          aria-label={`Déposer le média ${catalogMediaLabel(entry.mediaType)} : ${entry.name}`}
+                          title={`Déposer le média ${catalogMediaLabel(entry.mediaType)} : ${entry.name}`}
+                        >
+                          <GripVertical aria-hidden="true" size={14} strokeWidth={2} />
+                          <span>{entry.name}</span>
+                          <small>{catalogMediaLabel(entry.mediaType)}</small>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>}
+            </section>
+          </section>
         </section>
         <section id="elce-work-area" className="elce-panel elce-work-area">
           <div id="elce-work-area-heading" className="elce-work-area-heading">
@@ -204,6 +355,12 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 key={`${selectedSection.id}:${mediaSourceKey}`}
                 bdc={selectedSection}
                 createFileDropTarget={(file) => selectedPage === undefined ? null : anchorDropFacade.createFileDropTarget(file, selectedPage.id)}
+                createCatalogDropTarget={(reference) => anchorDropFacade.createCatalogDropTarget(
+                  documentModel,
+                  reference,
+                  selectedPage?.id ?? null,
+                  selectedSection.id,
+                )}
                 resolveMediaSource={(mediaId) => mediaSources[mediaId] ?? null}
                 onChange={(change) => anchorDropFacade.submitSectionChange(selectedSection.id, change)}
               />}
@@ -342,23 +499,43 @@ function resolveDropIndex(event: DragEvent<HTMLElement>, pageIndex: number): num
 
 type DeleteIconButtonProps = Readonly<{
   readonly id: string
+  readonly ariaLabel?: string
   readonly disabled?: boolean
   readonly onClick: () => void
 }>
 
 /** Renders the compact, accessible permanent-delete action. */
-function DeleteIconButton({ id, disabled, onClick }: DeleteIconButtonProps) {
+function DeleteIconButton({ id, ariaLabel = 'Supprimer définitivement', disabled, onClick }: DeleteIconButtonProps) {
   return (
     <button
       id={id}
       type="button"
       className="elce-danger-action"
-      aria-label="Supprimer définitivement"
-      title="Supprimer définitivement"
+      aria-label={ariaLabel}
+      title={ariaLabel}
       disabled={disabled}
       onClick={onClick}
     >
       <Trash2 aria-hidden="true" size={14} strokeWidth={2} />
     </button>
   )
+}
+
+/** Gives an image or video media type a compact label for catalogue rows. */
+function catalogMediaLabel(mediaType: ElceCatalogMediaEntry['mediaType']): string {
+  switch (mediaType) {
+    case MEDIA_TYPE.IMAGE:
+      return 'image'
+    case MEDIA_TYPE.VIDEO:
+      return 'vidéo'
+  }
+}
+
+/** Returns the active tab style plus the visible cue for an accepted anchor return. */
+function availableBdcTabClass(isActive: boolean, isDropTarget: boolean): string {
+  return [
+    'elce-content-catalog-tab',
+    ...(isActive ? ['elce-content-catalog-tab--active'] : []),
+    ...(isDropTarget ? ['elce-content-catalog-tab--drop-target'] : []),
+  ].join(' ')
 }

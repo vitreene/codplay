@@ -9,6 +9,7 @@ export interface MediaBlob {
 export interface ElceDocumentStore {
   loadDocument(documentId: string): Promise<ElceDocument | null>
   saveDocument(document: ElceDocument): Promise<void>
+  saveDocumentAndDeleteMedia(document: ElceDocument, mediaIds: readonly MediaId[]): Promise<void>
   saveMedia(media: MediaBlob): Promise<void>
   loadMedia(mediaId: MediaId): Promise<Blob | null>
 }

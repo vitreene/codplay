@@ -1,7 +1,7 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
 import { assertDocumentInvariants } from '../commands/document-commands'
-import { BDC_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
 import type { ElceSectionChange } from '../../domain/anchor-types'
@@ -15,6 +15,10 @@ class PendingMediaStore implements ElceDocumentStore {
   }
 
   public async saveDocument(): Promise<void> {
+    return undefined
+  }
+
+  public async saveDocumentAndDeleteMedia(): Promise<void> {
     return undefined
   }
 
@@ -36,6 +40,7 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().value).toBe('ready')
     expect(actor.getSnapshot().context.document.id).toBe('elce-document')
     expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
+    expect(actor.getSnapshot().context.catalogTab).toBe(CATALOG_TAB.AVAILABLE_BDCS)
 
     actor.send({ type: 'page.create', name: 'Page nommée' })
 
@@ -43,6 +48,38 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.pages[1]?.name).toBe('Page nommée')
     assertDocumentInvariants(actor.getSnapshot().context.document)
 
+    actor.stop()
+  })
+
+  it('owns the catalog tab and permanent catalog-bdc deletion through XState', () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    actor.start()
+    actor.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.MEDIA })
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'media.add',
+        media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      },
+    })
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.create',
+        bdcId: 'bdc-catalog-image-1',
+        bdcType: BDC_TYPE.IMAGE,
+        presetId: 'image-basic',
+        mediaId: 'media-image-1',
+        placement: { kind: BDC_LOCATION.CATALOG },
+      },
+    })
+    actor.send({ type: 'document.apply', command: { type: 'bdc.delete', bdcId: 'bdc-catalog-image-1' } })
+
+    expect(actor.getSnapshot().context.catalogTab).toBe(CATALOG_TAB.MEDIA)
+    expect(actor.getSnapshot().context.document.data.catalogBdcIds).toEqual([])
+    expect(actor.getSnapshot().context.document.bdcs.map((bdc) => bdc.id)).toEqual(['bdc-section-1'])
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-image-1'])
+    assertDocumentInvariants(actor.getSnapshot().context.document)
     actor.stop()
   })
 
@@ -83,7 +120,7 @@ describe('Elcé controller', () => {
     actor.stop()
   })
 
-  it('returns an anchored bdc when the editor removes it through an ordinary text update', async () => {
+  it('deletes an anchored bdc when the editor removes it through an ordinary text update', async () => {
     const actor = createActor(controllerMachine, { input: {} })
     actor.start()
     actor.send({
@@ -122,9 +159,171 @@ describe('Elcé controller', () => {
     await flush()
 
     expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
-    expect(actor.getSnapshot().context.document.data.catalogBdcIds).toEqual(['bdc-image-1'])
+    expect(actor.getSnapshot().context.document.data.catalogBdcIds).toEqual([])
+    expect(actor.getSnapshot().context.document.bdcs.map((bdc) => bdc.id)).toEqual(['bdc-section-1'])
     expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-image-1'])
     assertDocumentInvariants(actor.getSnapshot().context.document)
+    actor.stop()
+  })
+
+  it('creates unique bdcs for reused media through XState without copying the media', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const service = new ElceAnchorDropService()
+    actor.start()
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'media.add',
+        media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      },
+    })
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.create',
+        bdcId: 'bdc-catalog-image-1',
+        bdcType: BDC_TYPE.IMAGE,
+        presetId: 'image-basic',
+        mediaId: 'media-image-1',
+        placement: { kind: BDC_LOCATION.CATALOG },
+      },
+    })
+
+    const mediaTarget = service.createCatalogDropTarget(
+      actor.getSnapshot().context.document,
+      { kind: CATALOG_REFERENCE.MEDIA, mediaId: 'media-image-1' },
+      'page-a',
+      'bdc-section-1',
+    )
+    if (mediaTarget === null) throw new Error('Le média existant doit être réutilisable.')
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: catalogDrop(mediaTarget, 'Image réutilisée') })
+    await flush()
+
+    const secondMediaTarget = service.createCatalogDropTarget(
+      actor.getSnapshot().context.document,
+      { kind: CATALOG_REFERENCE.MEDIA, mediaId: 'media-image-1' },
+      'page-a',
+      'bdc-section-1',
+    )
+    if (secondMediaTarget === null) throw new Error('Le même média doit pouvoir créer une deuxième instance de bdc.')
+    actor.send({
+      type: 'section.change',
+      sectionBdcId: 'bdc-section-1',
+      change: catalogDrop(secondMediaTarget, 'Deuxième usage', { target: mediaTarget, text: 'Image réutilisée' }),
+    })
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    expect(secondMediaTarget.bdcId).not.toBe(mediaTarget.bdcId)
+    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1', mediaTarget.bdcId, secondMediaTarget.bdcId])
+    expect(document.bdcs.filter((bdc) => bdc.type === BDC_TYPE.IMAGE && bdc.pageId === 'page-a').map((bdc) => bdc.mediaId))
+      .toEqual(['media-image-1', 'media-image-1'])
+    expect(document.data.catalogBdcIds).toEqual(['bdc-catalog-image-1'])
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-image-1'])
+    expect(store.pending).toHaveLength(0)
+    assertDocumentInvariants(document)
+    actor.stop()
+  })
+
+  it('attaches an available catalog bdc through the XState anchor command path', async () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    const service = new ElceAnchorDropService()
+    actor.start()
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'media.add',
+        media: { id: 'media-image-1', type: 'image', name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
+      },
+    })
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.create',
+        bdcId: 'bdc-image-1',
+        bdcType: BDC_TYPE.IMAGE,
+        presetId: 'image-basic',
+        mediaId: 'media-image-1',
+        placement: { kind: BDC_LOCATION.CATALOG },
+      },
+    })
+
+    const target = service.createCatalogDropTarget(
+      actor.getSnapshot().context.document,
+      { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-image-1' },
+      'page-a',
+      'bdc-section-1',
+    )
+    if (target === null) throw new Error('Le BDC disponible doit pouvoir être déposé dans la Section.')
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: catalogDrop(target, 'Image existante') })
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-image-1'])
+    expect(document.data.catalogBdcIds).toEqual([])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
+      pageId: 'page-a',
+      mediaId: 'media-image-1',
+    })
+    expect(document.medias.map((media) => media.id)).toEqual(['media-image-1'])
+    expect(service.createCatalogDropTarget(
+      document,
+      { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-image-1' },
+      'page-a',
+      'bdc-section-1',
+    )).toBeNull()
+    assertDocumentInvariants(document)
+    actor.stop()
+  })
+
+  it('returns an anchored bdc to the available catalog through XState', async () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    actor.start()
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.anchor.create',
+        sectionBdcId: 'bdc-section-1',
+        pageId: 'page-a',
+        bdcId: 'bdc-image-1',
+        bdcType: BDC_TYPE.IMAGE,
+        presetId: 'image-basic',
+        media: { id: 'media-image-1', type: 'image', name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
+        partId: 'page-a:bdc-image-1:anchor',
+        markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
+        content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [
+            { type: 'text', text: 'Avant ' },
+            { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+            { type: 'text', text: ' après' },
+          ] }],
+        },
+      },
+    })
+    actor.send({
+      type: 'section.change',
+      sectionBdcId: 'bdc-section-1',
+      change: {
+        kind: 'anchor-return',
+        anchorBdcId: 'bdc-image-1',
+        title: '',
+        markup: '<p>Avant après</p>',
+        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] },
+      },
+    })
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(document.data.catalogBdcIds).toEqual(['bdc-image-1'])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
+      pageId: null,
+      mediaId: 'media-image-1',
+    })
+    expect(document.medias.map((media) => media.id)).toEqual(['media-image-1'])
+    assertDocumentInvariants(document)
     actor.stop()
   })
 })
@@ -158,6 +357,40 @@ function fileDrop(
       ] }],
     },
     markup: `<p>${previousMarkup}${text}<span data-elce-anchor="true" data-bdc-id="${target.bdcId}"></span></p>`,
+  }
+}
+
+function catalogDrop(
+  target: NonNullable<ReturnType<ElceAnchorDropService['createCatalogDropTarget']>>,
+  text: string,
+  previous?: Readonly<{
+    target: NonNullable<ReturnType<ElceAnchorDropService['createCatalogDropTarget']>>
+    text: string
+  }>,
+): ElceSectionChange {
+  const previousContent = previous === undefined
+    ? []
+    : [
+        { type: 'text', text: `${previous.text} ` },
+        { type: 'elceAnchor', attrs: { bdcId: previous.target.bdcId, partId: previous.target.partId } },
+        { type: 'text', text: ' ' },
+      ]
+  const previousMarkup = previous === undefined
+    ? ''
+    : `${previous.text} <span id="${previous.target.partId}" data-bdc-id="${previous.target.bdcId}"></span> `
+  return {
+    kind: 'catalog-drop',
+    target,
+    title: '',
+    content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [
+        ...previousContent,
+        { type: 'text', text: `${text} ` },
+        { type: 'elceAnchor', attrs: { bdcId: target.bdcId, partId: target.partId } },
+      ] }],
+    },
+    markup: `<p id="section-text-1">${previousMarkup}${text} <span id="${target.partId}" data-bdc-id="${target.bdcId}"></span></p>`,
   }
 }
 

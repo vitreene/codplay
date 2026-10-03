@@ -55,12 +55,12 @@ const SECTION_EDITOR_EXTENSIONS = [
 ]
 
 /** Edits one Section with the POC's bounded rich-text toolbar. */
-export function SectionEditor({ bdc, createFileDropTarget, resolveMediaSource, onChange }: SectionEditorProps) {
+export function SectionEditor({ bdc, createFileDropTarget, createCatalogDropTarget, resolveMediaSource, onChange }: SectionEditorProps) {
   const section = bdc.section
   const sectionRef = useRef(section)
   sectionRef.current = section
   const editor = useEditor({
-    extensions: [...SECTION_EDITOR_EXTENSIONS, createElceAnchorExtension({ createFileDropTarget, resolveMediaSource })],
+    extensions: [...SECTION_EDITOR_EXTENSIONS, createElceAnchorExtension({ createFileDropTarget, createCatalogDropTarget, resolveMediaSource })],
     content: toTiptapContent(section?.content ?? emptyDocument()),
     immediatelyRender: false,
     editorProps: {
@@ -84,6 +84,15 @@ export function SectionEditor({ bdc, createFileDropTarget, resolveMediaSource, o
             markup: currentEditor.getHTML(),
           })
           break
+        case 'catalog-drop':
+          onChange({
+            kind: 'catalog-drop',
+            target: change.target,
+            title: sectionRef.current?.title ?? '',
+            content,
+            markup: currentEditor.getHTML(),
+          })
+          break
         case 'move':
           onChange({
             kind: 'anchor-move',
@@ -96,6 +105,15 @@ export function SectionEditor({ bdc, createFileDropTarget, resolveMediaSource, o
         case 'remove':
           onChange({
             kind: 'anchor-remove',
+            anchorBdcId: change.bdcId,
+            title: sectionRef.current?.title ?? '',
+            content,
+            markup: currentEditor.getHTML(),
+          })
+          break
+        case 'return':
+          onChange({
+            kind: 'anchor-return',
             anchorBdcId: change.bdcId,
             title: sectionRef.current?.title ?? '',
             content,

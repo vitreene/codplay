@@ -9,6 +9,21 @@ export const BDC_LOCATION = {
   CATALOG: 'catalog',
 } as const
 
+export const CATALOG_TAB = {
+  AVAILABLE_BDCS: 'available-bdcs',
+  MEDIA: 'media',
+} as const
+
+export const CATALOG_REFERENCE = {
+  MIME_TYPE: 'application/x-elce-catalog-reference+json',
+  BDC: 'bdc',
+  MEDIA: 'media',
+} as const
+
+export const ANCHOR_RETURN = {
+  MIME_TYPE: 'application/x-elce-anchor-return+json',
+} as const
+
 export const PAGE_TYPE = {
   FLUX: 'flux',
   DIAPO: 'diapo',
@@ -31,6 +46,11 @@ export const MEDIA_TYPE = {
   IMAGE: 'image',
   VIDEO: 'video',
   AUDIO: 'audio',
+} as const
+
+export const MEDIA_MIME_PREFIX = {
+  IMAGE: 'image/',
+  VIDEO: 'video/',
 } as const
 
 export const DEFAULT_PRESET_ID = {
@@ -56,6 +76,19 @@ export const ANCHOR = {
   VIDEO_BLOCK_SIZE: '56.25%',
   DEFAULT_BDC_MARGIN_TOP: '1rem',
   DEFAULT_BDC_MARGIN_BOTTOM: '1rem',
+} as const
+
+export const ANCHOR_MEDIA_PRESETS = {
+  [MEDIA_TYPE.IMAGE]: {
+    bdcType: BDC_TYPE.IMAGE,
+    presetId: DEFAULT_PRESET_ID.IMAGE,
+    blockSize: ANCHOR.IMAGE_BLOCK_SIZE,
+  },
+  [MEDIA_TYPE.VIDEO]: {
+    bdcType: BDC_TYPE.VIDEO,
+    presetId: DEFAULT_PRESET_ID.VIDEO,
+    blockSize: ANCHOR.VIDEO_BLOCK_SIZE,
+  },
 } as const
 
 export const ELCE_SCENARIO = {

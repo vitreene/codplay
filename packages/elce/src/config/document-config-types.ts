@@ -1,7 +1,8 @@
-import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from './document-config'
+import { BDC_LOCATION, BDC_TYPE, CATALOG_TAB, CHAPTER_TYPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from './document-config'
 
 export type PageLocationKind = typeof PAGE_LOCATION[keyof typeof PAGE_LOCATION]
 export type BdcLocationKind = typeof BDC_LOCATION[keyof typeof BDC_LOCATION]
+export type CatalogTabType = typeof CATALOG_TAB[keyof typeof CATALOG_TAB]
 export type PageType = typeof PAGE_TYPE[keyof typeof PAGE_TYPE]
 export type ChapterType = typeof CHAPTER_TYPE[keyof typeof CHAPTER_TYPE]
 export type BdcType = typeof BDC_TYPE[keyof typeof BDC_TYPE]

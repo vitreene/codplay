@@ -41,6 +41,7 @@ export type DocumentCommand =
     }>
   | Readonly<{ type: 'bdc.move'; bdcId: BdcId; placement: BdcPlacement }>
   | Readonly<{ type: 'bdc.remove'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.delete'; bdcId: BdcId }>
   | Readonly<{
       type: 'bdc.section.update'
       bdcId: BdcId
@@ -61,6 +62,14 @@ export type DocumentCommand =
       content: RichTextDocument
     }>
   | Readonly<{
+      type: 'bdc.anchor.attach'
+      sectionBdcId: BdcId
+      pageId: PageId
+      bdcId: BdcId
+      markup: string
+      content: RichTextDocument
+    }>
+  | Readonly<{
       type: 'bdc.anchor.move'
       sectionBdcId: BdcId
       anchorBdcId: BdcId
@@ -74,5 +83,13 @@ export type DocumentCommand =
       markup: string
       content: RichTextDocument
     }>
+  | Readonly<{
+      type: 'bdc.anchor.return'
+      sectionBdcId: BdcId
+      anchorBdcId: BdcId
+      markup: string
+      content: RichTextDocument
+    }>
   | Readonly<{ type: 'media.add'; media: MediaMetadata }>
+  | Readonly<{ type: 'media.merge'; canonicalMediaId: MediaId; duplicateMediaIds: readonly MediaId[] }>
   | Readonly<{ type: 'document.rename'; name: string }>

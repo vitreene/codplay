@@ -1,5 +1,6 @@
 import { assign, fromPromise, setup } from 'xstate'
 import { applyDocumentCommand, createDefaultPageCommand } from '../commands/document-commands'
+import { CATALOG_TAB } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document-model'
 import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
 import type { PageId } from '../../domain/document-types'
@@ -21,14 +22,22 @@ interface AnchorWorkerOutput {
 
 const persistAnchorChange = fromPromise<AnchorWorkerOutput, AnchorWorkerInput>(async ({ input }) => {
   const operation = input.operation
-  const { change } = operation
-  if (change.kind !== 'file-drop') return { operation, source: null }
-  if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
-  await input.store.saveMedia({ id: change.target.media.id, blob: change.file })
-  const source = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
-    ? URL.createObjectURL(change.file)
-    : null
-  return { operation, source }
+  switch (operation.change.kind) {
+    case 'file-drop': {
+      if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
+      await input.store.saveMedia({ id: operation.change.target.media.id, blob: operation.change.file })
+      const source = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(operation.change.file)
+        : null
+      return { operation, source }
+    }
+    case 'content':
+    case 'catalog-drop':
+    case 'anchor-move':
+    case 'anchor-remove':
+    case 'anchor-return':
+      return { operation, source: null }
+  }
 })
 
 /** Owns all application commands and serializes asynchronous anchor changes. */
@@ -47,13 +56,10 @@ export const controllerMachine = setup({
       const output = (event as unknown as { output: AnchorWorkerOutput }).output
       const command = anchorDropService.createDocumentCommand(output.operation.sectionBdcId, output.operation.change)
       const document = applyDocumentCommand(context.document, command)
-      const nextMediaSources = output.source === null || output.operation.change.kind !== 'file-drop'
-        ? context.mediaSources
-        : { ...context.mediaSources, [output.operation.change.target.media.id]: output.source }
       return {
         document,
         selectedPageId: keepSelectedPage(document, context.selectedPageId),
-        mediaSources: nextMediaSources,
+        mediaSources: updateMediaSources(context.mediaSources, output.operation.change, output.source),
         anchorChanges: context.anchorChanges.slice(1),
       }
     }),
@@ -68,6 +74,7 @@ export const controllerMachine = setup({
   context: ({ input }) => ({
     document: initialDocument,
     selectedPageId: initialDocument.pages[0]?.id ?? null,
+    catalogTab: CATALOG_TAB.AVAILABLE_BDCS,
     mediaSources: {},
     documentStore: input?.documentStore ?? null,
     anchorChanges: [],
@@ -91,6 +98,9 @@ export const controllerMachine = setup({
       actions: assign(({ context, event }) => ({
         selectedPageId: keepSelectedPage(context.document, event.pageId),
       })),
+    },
+    'catalog.tab.select': {
+      actions: assign(({ event }) => ({ catalogTab: event.tabId })),
     },
     'media.source.register': {
       actions: assign(({ context, event }) => ({
@@ -148,4 +158,27 @@ export const controllerMachine = setup({
 function keepSelectedPage(document: ElceAppContext['document'], selectedPageId: PageId | null): PageId | null {
   if (selectedPageId !== null && document.pages.some((page) => page.id === selectedPageId)) return selectedPageId
   return document.pages[0]?.id ?? null
+}
+
+/** Adds an object URL only for a file-drop operation that created the media. */
+function updateMediaSources(
+  mediaSources: ElceAppContext['mediaSources'],
+  change: ElceAnchorChange['change'],
+  source: string | null,
+): ElceAppContext['mediaSources'] {
+  switch (change.kind) {
+    case 'file-drop':
+      switch (source) {
+        case null:
+          return mediaSources
+        default:
+          return { ...mediaSources, [change.target.media.id]: source }
+      }
+    case 'content':
+    case 'catalog-drop':
+    case 'anchor-move':
+    case 'anchor-remove':
+    case 'anchor-return':
+      return mediaSources
+  }
 }

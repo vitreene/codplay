@@ -49,6 +49,16 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
     await transactionComplete(transaction)
   }
 
+  /** Saves a document and removes obsolete media blobs in one IndexedDB transaction. */
+  public async saveDocumentAndDeleteMedia(document: ElceDocument, mediaIds: readonly MediaId[]): Promise<void> {
+    const database = await this.databasePromise
+    const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE], 'readwrite')
+    transaction.objectStore(DOCUMENT_STORE).put(document.toJSON())
+    const mediaStore = transaction.objectStore(MEDIA_STORE)
+    for (const mediaId of mediaIds) mediaStore.delete(mediaId)
+    await transactionComplete(transaction)
+  }
+
   public async saveMedia(media: MediaBlob): Promise<void> {
     const database = await this.databasePromise
     const transaction = database.transaction(MEDIA_STORE, 'readwrite')

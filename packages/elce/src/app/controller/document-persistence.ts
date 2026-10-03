@@ -15,8 +15,20 @@ export async function attachDocumentPersistence(
   } else {
     await store.saveDocument(controller.getSnapshot().context.document)
   }
+  let persistedDocument = controller.getSnapshot().context.document
+  let pendingSave = Promise.resolve()
   const subscription = controller.subscribe((snapshot) => {
-    void store.saveDocument(snapshot.context.document)
+    const document = snapshot.context.document
+    const nextMediaIds = new Set(document.medias.map((media) => media.id))
+    const removedMediaIds = persistedDocument.medias
+      .map((media) => media.id)
+      .filter((mediaId) => !nextMediaIds.has(mediaId))
+    persistedDocument = document
+    pendingSave = pendingSave
+      .then(() => removedMediaIds.length > 0
+        ? store.saveDocumentAndDeleteMedia(document, removedMediaIds)
+        : store.saveDocument(document))
+      .catch((error: unknown) => console.error('Échec de sauvegarde du document Elcé.', error))
   })
   return () => {
     subscription.unsubscribe()

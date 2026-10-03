@@ -260,6 +260,110 @@ body {
   text-overflow: ellipsis;
 }
 
+.elce-content-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0;
+  list-style: none;
+}
+
+.elce-content-catalog-tabs {
+  display: flex;
+  margin: 0.65rem 0;
+  border-bottom: 1px solid #d9d4c9;
+}
+
+.elce-content-catalog-tab {
+  flex: 1;
+  padding: 0.4rem 0.3rem;
+  color: #777d76;
+  text-align: center;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.elce-content-catalog-tab--active {
+  color: #263b3a;
+  border-bottom-color: #46726b;
+  font-weight: 600;
+}
+
+.elce-content-catalog-tab--drop-target {
+  outline: 2px dashed #46726b;
+  outline-offset: -2px;
+  background: #eef4ef;
+}
+
+.elce-content-catalog-tab:focus-visible {
+  outline: 2px solid #46726b;
+  outline-offset: -2px;
+}
+
+.elce-content-catalog-panel[hidden] {
+  display: none;
+}
+
+.elce-content-catalog-panel--drop-target {
+  outline: 2px dashed #46726b;
+  outline-offset: 2px;
+  background: #eef4ef;
+}
+
+.elce-content-catalog-panel > p:first-child {
+  margin-top: 0;
+}
+
+.elce-content-catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.elce-content-catalog-row .elce-content-catalog-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.elce-content-catalog-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.1rem 0.35rem;
+  width: 100%;
+  padding: 0.45rem;
+  color: #263b3a;
+  text-align: left;
+  background: #f7f4ed;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.3rem;
+  cursor: grab;
+}
+
+.elce-content-catalog-item:active {
+  cursor: grabbing;
+}
+
+.elce-content-catalog-item svg {
+  grid-row: span 2;
+  color: #8b948d;
+}
+
+.elce-content-catalog-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.elce-content-catalog-item small {
+  color: #777d76;
+  font-size: 0.68rem;
+}
+
 .elce-secondary-action {
   display: inline-flex;
   width: 1.6rem;

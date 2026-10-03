@@ -64,17 +64,49 @@ commande `section.change` ; aucun circuit Promise parallèle ne peut réécrire
 un markup plus récent. Le composant d’édition ne possède aucune mutation
 documentaire.
 
+Le dépôt d’une référence de BDC disponible suit aussi la façade et la machine
+XState : `ElceAnchorDropService` prépare une cible de source BDC et la commande
+`bdc.anchor.attach` insère dans la page ce même BDC, qui était disponible dans
+le catalogue. Le document réaffecte ce BDC à la page ; il ne le duplique pas
+et ne recrée pas sa ressource média. Le test du contrôleur vérifie ce parcours
+et le refus de proposer de nouveau le BDC après son placement.
+
+Glisser une ancre depuis Tiptap sur le bouton ou le panneau de l’onglet
+« Blocs disponibles » la retire du texte et remet le même BDC au catalogue.
+Si le dépôt cible le bouton, l’onglet devient actif. Le clavier Suppr conserve
+son autre comportement : il supprime l’ancre et le BDC, sans remettre ce dernier
+au catalogue. Pour le retour, le plugin Tiptap mémorise le BDC au `dragstart` ;
+après que ProseMirror a sérialisé son propre contenu de glisser-déposer, un
+écouteur du plugin ajoute `ANCHOR_RETURN.MIME_TYPE` au `DataTransfer`. Le bouton
+et le panneau des BDC acceptent ce type et fixent l’effet du dépôt à `move` ; le
+`dragend` source retire le nœud d’ancre par une transaction marquée `return`.
+Safari expose `dropEffect: move` mais une liste `DataTransfer.types` vide sur ce
+`dragend`, même après que la cible a accepté le dépôt. La décision source
+s’appuie donc sur l’identifiant et la position mémorisés au départ, l’effet
+`move` et la vérification du nœud courant ; elle ne revalide pas le type MIME
+après le dépôt.
+`SectionEditor` transmet le document riche actualisé à la façade ; XState traite
+`section.change`, puis la commande `bdc.anchor.return` vérifie l’ancre,
+conserve son identifiant et sa ressource média, et réaffecte le BDC au
+catalogue. Le BDC n’est ni cloné ni supprimé.
+
 Une édition ordinaire du texte (`kind: 'content'`) met à jour la Section par
 `bdc.section.update`. [`ElceAnchorReferenceService`](../src/domain/anchor-reference-service.ts)
-compare les identifiants présents dans l’ancien et le nouveau document riche ; le bdc de chaque ancre
-effacée retourne au catalogue dans la même commande documentaire, tandis que
-sa ressource média est conservée. `applyDocumentCommand` vérifie les invariants
+compare les identifiants présents dans l’ancien et le nouveau document riche ;
+chaque BDC ancré qui n’est plus référencé est supprimé dans la même commande,
+et son média reste conservé. Le BDC est le transport unique d’une insertion ;
+il référence la ressource média réutilisable au lieu de la remplacer.
+`applyDocumentCommand` vérifie les invariants
 avant de rendre chaque nouveau document : une ancre référence un seul bdc
 image ou vidéo de la même page, et un bdc ancré ne peut pas être déplacé vers
-le catalogue ou une autre page sans supprimer son ancre. Le collage conserve
-le texte copié mais retire les nœuds d’ancre ; un glisser-déposer copié est
-refusé. Le déplacement réel reste traité par la commande de déplacement
-d’ancre existante.
+le catalogue ou une autre page sans supprimer son ancre. ProseMirror applique
+`transformPasted` aux collages et aussi à la tranche d’un glisser-déposer avant
+d’appeler `handleDrop`. Au `dragstart`, l’extension mémorise la position de
+l’ancre source ; si cette tranche contient cette ancre locale, le filtre la
+laisse intacte pour que `handleDrop` puisse effectuer le déplacement par la
+commande d’ancre existante. Le même gestionnaire arrête une copie déplacée avec
+un modificateur sans créer une seconde ancre. Hors de ce glisser local, le
+collage conserve le texte mais retire les nœuds d’ancre.
 
 Dans la surface d’édition comme dans le player, le `span` de l’ancre est un
 élément inline de largeur nulle : il ne prend pas de largeur de texte. Sa
@@ -93,11 +125,13 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
 ## Preuve
 
 - [`elce-anchor-extension.test.ts`](../src/app/editor/elce-anchor-extension.test.ts)
-  vérifie la conversion JSON → `span` statique, les attributs de ciblage et
-  la prise d’insertion déplaçable dans la surface Tiptap, ainsi que le rendu de
-  l’image résolue dans la zone réservée. La poignée est sœur du bdc et reste
-  sous le nœud d’ancre déplaçable ; le test exerce un `dragstart` sur cette
-  poignée puis le dépôt géré par le plugin Tiptap.
+  vérifie la conversion JSON → `span` statique, les attributs de ciblage,
+  l’aperçu de l’image et le déplacement d’une ancre image par le chemin complet
+  `dragstart` → ProseMirror → `drop` → commande de déplacement. Le test vérifie
+  que le même BDC change de position et qu’un glisser en mode copie ne le
+  duplique pas. Le test du retour couvre le cas Safari où `dragend` garde
+  `dropEffect: move` avec une liste de types vide. Il couvre aussi le collage
+  qui retire les ancres.
 - [`flux-anchor-player-markup.test.ts`](../src/builders/flux-anchor-player-markup.test.ts)
   vérifie que la projection conserve le texte, remplace l’ancre d’édition par
   un slot de flux inline à largeur nulle et conserve la cible logique du bdc.
@@ -111,13 +145,27 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
   vérifie la whitelist, la construction du commandement et le passage par la
   façade métier.
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
-  vérifie qu’une mise à jour de texte ordinaire qui efface une ancre renvoie
-  son bdc au catalogue sans supprimer le média, et refuse une ancre dupliquée.
+  vérifie qu’une mise à jour de texte ordinaire ou une suppression dédiée
+  efface le BDC ancré sans le réinscrire au catalogue, conserve le média et
+  refuse une ancre dupliquée.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
   vérifie que deux dépôts dont la sauvegarde IndexedDB est asynchrone restent
   ordonnés dans la machine XState et produisent chacun leur bdc et leur ancre.
   Il vérifie aussi qu’une édition ordinaire qui efface l’ancre traverse la
-  machine et renvoie le bdc au catalogue.
+  machine, supprime le BDC concerné et conserve le média. Le test vérifie aussi
+  qu’un retour traverse `section.change` et XState, remet le même BDC au
+  catalogue et conserve sa ressource média.
+- Dans Safari MCP, le retour a été déposé directement sur le bouton
+  « Blocs disponibles » alors que l’onglet « Médias » était actif. L’application
+  a activé l’onglet, retiré l’ancre et remis au catalogue le même BDC et son
+  média. Sa réinsertion dans le texte a conservé le même identifiant ; le
+  catalogue n’en garde aucune copie lorsqu’il est replacé.
+- Après un rechargement complet ayant chargé le correctif dans le plugin Tiptap,
+  le glisser physique de Page A vers « Blocs disponibles » retire
+  `bdc-video-d49f2d52-8e10-4f77-977a-c57bd16df6d0` de la page et le rend
+  disponible sous le même identifiant. L’autre BDC vidéo reste ancré. Le retour
+  et la conservation de l’ancre restante persistent après un nouveau
+  rechargement Safari.
 - [`elce-anchor-extension.test.ts`](../src/app/editor/elce-anchor-extension.test.ts)
   vérifie que le collage de texte conserve les mots et retire les ancres
   copiées, et qu’un glisser-déposer en mode copie est arrêté.
@@ -147,6 +195,13 @@ L’édition ordinaire qui efface une ancre est vérifiée par les tests de comm
 et de machine XState ; son rendu persistant reste à refaire dans Safari avec
 plusieurs ancres distinctes.
 
+Le 3 octobre 2026, dans Safari, le dépôt d’un média réutilisable sur Page E a
+créé un BDC unique. Sa suppression par le clavier a laissé Page E sans ancre,
+gardé le nombre de BDC disponibles et conservé les trois références média du
+catalogue. Un nouveau dépôt du même média a créé un autre identifiant de BDC ;
+le média est resté présent et une seule vidéo apparaît dans l’éditeur. Page A
+est restée intacte avec ses deux ancres.
+
 Dans Safari, la poignée reste centrée sur la position de l’ancre lors du
 déplacement et après réduction de la colonne de `491,8 px` à `170,8 px`. Elle
 reste hors du cadre image. La preview du même document ne contient aucune
@@ -154,8 +209,9 @@ poignée d’édition et conserve son unique image.
 
 ## Limites
 
-Les dépôts de références du catalogue, le retour visuel d’un bdc supprimé dans
-la réserve et la réouverture d’un bdc dans l’espace isolé ne sont pas encore
-implémentés. Le déplacement interne est exercé par le test de l’extension et
-les commandes. Le rendu navigateur de plusieurs ancres distinctes reste à
-vérifier dans une tranche ultérieure.
+Le cycle retour/réinsertion a été exercé dans Safari MCP par dispatch
+d’événements de glisser-déposer sur les nœuds de l’application ; le glisser
+physique à la souris reste à éprouver. La réouverture d’un BDC dans l’espace
+isolé reste à vérifier. Le déplacement interne est exercé par le test de
+l’extension et les commandes. Le rendu navigateur de plusieurs ancres distinctes
+reste à vérifier dans une tranche ultérieure.

@@ -5,7 +5,7 @@ Date d’ouverture : 2026-10-01.
 ## Statut et travail en cours
 
 **Fixe — plan accepté le 2026-10-02 ; implémentation en cours aux étapes 1,
-2, 3, 4, 6 et 7.**
+2, 3, 4, 6, 7 et 8.**
 
 La [note de présentation](../notes/2026-10-01-presentation-elce.md) est rédigée
 à partir de la description initiale. Le travail engagé consiste à préciser
@@ -15,12 +15,18 @@ Les décisions propres à une tranche sont conservées dans cette tranche et ne
 bloquent pas les étapes indépendantes.
 
 Le périmètre initial et le principe de génération sont précisés au sujet 1.
-Les principes d’organisation du sujet 2 sont retenus : chaque bdc est utilisé
+Les principes d’organisation du sujet 2 sont retenus : chaque BDC est utilisé
 à un seul endroit dans le POC, tandis qu’un même média peut être réemployé.
-Les structures peuvent être répétées ; le catalogue accueille les pages
-disponibles, les bdc ainsi que les images et médias ajoutés. Le sujet 5
-précise le déplacement des ancres par une icône et le retour du bdc au
-catalogue lors de la suppression d’une ancre. La création
+Le BDC est le transport unique d’une insertion et référence le média ; il
+n’est pas lui-même la ressource réutilisable. Les structures peuvent être
+répétées ; le catalogue accueille les pages et BDC disponibles ainsi que les
+images et médias ajoutés. Le sujet 5 précise le déplacement des ancres par une
+icône. Précision acceptée le 2026-10-03 : supprimer une ancre supprime le BDC
+qui la transporte, sans remettre ce BDC au catalogue ; le média reste
+disponible. Glisser un BDC ancré vers l’onglet « Blocs disponibles » est une
+action distincte : elle enlève l’ancre et rend ce même BDC disponible, en
+conservant son média. Un nouveau dépôt de la ressource média crée un BDC
+distinct. La création
 d’un bdc dans un espace de travail isolé est retenue comme direction ; dans
 le POC, l’interface ne propose la création des sections texte que dans les
 pages, sans en faire une contrainte du modèle de données. Après création
@@ -55,7 +61,48 @@ reprenant les circuits de lecture de la démo 5.
 | Mettre en place l’application Elcé et son workspace | En cours — automatisation et parcours navigateur vérifiés | Typecheck, tests de fumée, build, serveur de développement et preview HTTP validés ; aucun import privé d’ed2. |
 | Construire le modèle documentaire minimal et la façade de commandes | En cours | Document versionné, commandes pures, contrôleur XState et frontière IndexedDB en place ; la restauration navigateur reste à éprouver. |
 | Préparer la première projection Flux et le scénario séparé | En cours — cadre complet et scroll-end vérifiés | Le builder produit un `SceneDoc` Flux, le constructeur un graphe Sighty avec menu, titre, contenu et navigation, et la composition monte le player réel en DOM de test ; Safari confirme le passage par le repère bas sur une page longue. |
-| Prouver l’ancrage d’un bdc média dans le Flux | En cours — intégrité métier vérifiée, validation visuelle restante | Safari confirme l’import d’une vidéo par `SectionEditor`/XState, sa restauration après rechargement et son montage dans le slot CodPlay. Deux ancres de Page A survivent au rechargement et produisent deux vidéos dans deux slots. Un troisième bdc vidéo non ancré, laissé par un essai précédent, a été renvoyé au catalogue par la commande XState prévue ; l’aperçu revient à deux vidéos et les trois médias restent enregistrés. Page C a été créée pour poursuivre les essais sans remplacer A ou B. L’éditeur cadre en `contain`, le player en `cover` ; parité à décider. Les commandes et la machine XState vérifient maintenant la suppression ordinaire d’une ancre, la suppression dédiée, l’unicité des références et la conservation du média ; les tests éditeur couvrent le collage et le glisser-déposer copiés. Le cycle Safari A → B → A avait révélé que le recalcul `afterSeek` déplaçait les deux slots avant le texte ; après correction, le parcours réel conserve exactement le même `innerHTML`, le même ordre de nœuds et le même texte sur Page A. Reste à tester la suppression par sélection de texte et à valider le rendu combiné de plusieurs ancres. |
+| Prouver l’ancrage d’un bdc média dans le Flux | En cours — commandes, dépôt média réutilisable, catalogue à onglets, suppression et retour au catalogue vérifiés ; retour physique de l’ancre vérifié ; autres gestes et rendu combiné restants | Safari confirme l’import d’une vidéo par `SectionEditor`/XState, sa restauration après rechargement et son montage dans le slot CodPlay. Deux ancres de Page A survivent au rechargement et produisent deux vidéos dans deux slots. Le dépôt d’un média de catalogue sur Page E crée un nouveau BDC, et sa suppression au clavier ne l’ajoute pas aux BDC disponibles ; le média reste disponible. Un nouveau dépôt crée un autre identifiant de BDC, conservé après rechargement. Les onglets séparent les BDC disponibles des médias réutilisables ; supprimer un BDC au catalogue laisse son média intact. Les trois anciens BDC de test ont été supprimés via l’interface, restent absents après rechargement, et leurs trois médias sont toujours présents. Le retour d’un BDC ancré déposé directement sur le bouton « Blocs disponibles » alors que « Médias » est actif active le bon onglet et passe dans Safari MCP par les gestionnaires réels de l’application ; sa réinsertion conserve le même identifiant. Safari confirme le retour physique du même BDC depuis Page A après rechargement ; les autres gestes et le rendu combiné restent à éprouver. Page C et Page E ont été créées pour poursuivre les essais sans remplacer A ou B. L’éditeur cadre en `contain`, le player en `cover` ; parité à décider. Les tests couvrent les deux voies de suppression, le retour/réinsertion, l’unicité des références et la conservation du média ; les tests éditeur couvrent le collage et le glisser-déposer copiés. Le cycle Safari A → B → A avait révélé que le recalcul `afterSeek` déplaçait les deux slots avant le texte ; après correction, le parcours réel conserve exactement le même `innerHTML`, le même ordre de nœuds et le même texte sur Page A. Reste à tester la suppression par sélection de texte et le rendu combiné de plusieurs ancres. |
+
+### Consolidation des médias vidéo identiques — terminée et vérifiée
+
+Safari a relevé trois fichiers vidéo de `389062` octets au même SHA-256
+(`03eb0fb04c0331f8f84a70b33f37c9fd3927986cceb0154eb368af9b8136d914`).
+`sample-video.mp4` est la ressource canonique retenue le 2026-10-03. Son
+identifiant est `media-video-6a19cb55-0960-4155-a8d9-66b710bf3232` et le BDC
+Page A `bdc-video-d49f2d52-8e10-4f77-977a-c57bd16df6d0` la référence déjà.
+Les deux BDC qui référencent `LcXkmXyuZQ.mp4`
+(`media-video-1b6157f9-9057-4a49-bf51-8f7230def6b5`) sont
+`bdc-video-201db87f-9e0f-4a3c-9b84-7ba8239d392a` sur Page A et
+`bdc-video-b1e1c7f3-bdfa-4f4b-9a8d-e06ec565b93c` sur Page E.
+`sample-video-second.mp4` (`media-video-b30ca9c4-e684-4956-a5fa-539fe0e78c3e`)
+n’est référencé par aucun BDC. La lecture des blobs confirme que les trois
+empreintes SHA-256 sont identiques.
+
+Décision acceptée : conserver `sample-video.mp4`, rattacher à son identifiant
+les deux BDC qui utilisaient `LcXkmXyuZQ.mp4`, puis supprimer les métadonnées et
+les blobs de `LcXkmXyuZQ.mp4` et `sample-video-second.mp4`. Les BDC, leurs
+identifiants, leurs pages, leur ordre et leur markup restent inchangés. Ajouter
+une commande documentaire `media.merge` sous `document.apply` et faire écrire
+le document réaffecté avec la suppression des deux blobs par une seule
+transaction IndexedDB. Une page temporaire `media-merge.temp.html` a envoyé la
+commande à la machine XState ; elle a été retirée après validation.
+
+**Vérifier** avant puis après rechargement : la liste des médias garde le
+`sample-video.mp4` canonique et l’image, les deux BDC indiqués référencent le
+même identifiant canonique, le BDC déjà canonique ne change pas, les deux
+identifiants média supprimés ne chargent plus de blob, et Page A/Page E
+continuent de lire les mêmes vidéos. Le nombre d’identifiants de BDC et leur
+affectation de page restent identiques.
+
+**Résultat vérifié le 2026-10-03 dans Safari MCP :** la commande `media.merge`
+est passée par `document.apply` dans XState ; IndexedDB contient maintenant
+uniquement `sample-video.mp4` et l’image, les deux blobs doublons sont absents,
+et les trois BDC vidéo conservent leurs identifiants et pages en référençant le
+même ID canonique. Le document garde ses huit BDC, ses quatre pages et leurs
+listes d’affectation. Après rechargement, l’aperçu de Page A charge ses deux
+vidéos et celui de Page E charge sa vidéo ; Safari indique `readyState = 4` sans
+erreur média. Le blob canonique garde le SHA-256 attendu. La page temporaire de
+migration a été supprimée après cette vérification.
 
 ### Correctif de raccord CodPlay/Sighty — 2026-10-02
 
@@ -103,23 +150,21 @@ La différence `contain` dans l’éditeur / `cover` dans le player reste à dé
 
 ### Intégrité des références d’ancre — 2026-10-03
 
-L’analyse a isolé une faille dans la commande de mise à jour de Section : un
-remplacement ordinaire du document riche mettait à jour le texte sans comparer
-les ancres supprimées. Le bdc vidéo restait donc affecté à la page et le
-builder le projetait comme média direct. La commande commune réconcilie
-maintenant les anciennes et nouvelles références ; une ancre effacée renvoie
-son bdc au catalogue en même temps que la mise à jour, en gardant le média.
-Les références sont uniques, limitées aux bdcs image/vidéo de la page, et une
-commande générique ne peut pas détacher un bdc tant que son ancre existe. Le
-collage garde le texte mais retire les ancres copiées ; le glisser-déposer en
-mode copie est refusé.
+L’édition ordinaire d’une Section réconcilie ses références d’ancre : effacer
+une ancre au clavier, par sélection de texte ou par collage supprime son BDC
+unique tout en gardant le média. Ce résultat est distinct du geste explicite
+de retour : glisser l’ancre sur « Blocs disponibles » retire l’ancre et affecte
+au catalogue le même BDC. `bdc.anchor.return` effectue la mise à jour du texte
+et ce changement d’emplacement dans la même commande XState ; la suppression
+ordinaire ne réutilise pas cette voie. Une référence de catalogue déposée dans
+le texte réinsère ensuite ce même BDC ; déposer le média crée, lui, un nouveau
+BDC. Les références restent uniques, limitées aux BDC image/vidéo de la page ;
+le collage garde le texte mais retire les ancres copiées, et le glisser-déposer
+en mode copie est refusé.
 
-Les tests de document, d’extension Tiptap et du contrôleur XState vérifient
-respectivement la réconciliation, la non-duplication et le parcours
-`section.change` → `bdc.section.update`. Les 48 tests Elcé, le typecheck et le
-build passent. Le test Safari d’une sélection de texte qui efface une ancre
-reste à faire ; il ne faut pas considérer la validation visuelle de cette
-tranche comme terminée.
+Les tests de document, d’extension Tiptap et du contrôleur XState vérifient ces
+deux résultats séparés. Les tests Elcé, le typecheck et le build passent. Le
+test Safari d’une sélection de texte qui efface une ancre reste à faire.
 
 ### Réservation dans l’éditeur — 2026-10-03
 
@@ -227,7 +272,8 @@ redemandées.
    la page et tous ses bdc du document. Les médias, ressources distinctes
    et réemployables, restent dans le catalogue.
 2. **Résolu :** retirer un bdc placé directement dans une page le remet au
-   catalogue, comme le retrait d’un bdc ancré ; son média reste réemployable.
+   catalogue ; supprimer l’ancre supprime le BDC transporteur sans le reproposer,
+   en conservant le média réemployable.
 3. **Résolu :** une page du catalogue peut être éditée et consultée dans
    l’éditeur, mais n’appartient pas au scénario du player. Le scénario peut
    aussi contenir une page à sa racine, au même niveau que les chapitres,
@@ -447,25 +493,33 @@ Décisions retenues :
   correspondante.
 - Les opérations sur les nodes du POC sont l’ajout, le déplacement et la
   suppression. Retirer un bdc placé directement dans une page le remet dans
-  le catalogue, comme le retrait d’un bdc ancré ; la duplication n’est pas
-  retenue pour ce périmètre.
+  le catalogue. Retirer une ancre supprime son BDC transporteur ; la
+  duplication n’est pas retenue pour ce périmètre.
 
 ### Catalogue, exclusivité des bdc et réemploi des médias
 
-**Périmètre accepté le 2026-10-01, non appliqué.**
+**Périmètre accepté le 2026-10-01 ; onglets et suppression d’un BDC inutilisé
+appliqués et vérifiés le 2026-10-03. Les autres parcours du catalogue restent
+à éprouver à l’étape 8.**
 
 - Le catalogue recense les pages inutilisées, disponibles en réserve et
   indépendantes du parcours de diffusion. Une page en réserve peut être
   éditée et consultée dans l’éditeur, mais elle n’est pas lue par le player.
-- Il accueille aussi les bdc destinés à être insérés dans des contenus de
-  page, ainsi que les images et médias ajoutés à l’application.
-- Un bdc, avec son contenu éditorial, est affecté à un seul emplacement dans
-  le POC : le même bdc n’est pas répété à plusieurs endroits. Une structure,
+- Il accueille aussi les BDC disponibles et les images et médias ajoutés à
+  l’application.
+- Dans l’interface du POC, ces collections sont séparées par deux onglets :
+  les BDC disponibles, qui ne sont pas encore utilisés sur une page, et les
+  médias réutilisables. L’onglet média suit le principe des onglets du projet
+  éditeur ; aucun composant de chutier média de ce projet n’est monté à ce jour.
+- Un BDC est le transport unique d’une insertion, affecté à un seul
+  emplacement dans le POC : le même BDC ne peut pas être répété à plusieurs
+  endroits. Une structure,
   par exemple celle d’une question, peut en revanche être employée plusieurs fois
   avec des contenus distincts.
 - Un média du catalogue, comme une image, est une ressource réemployable :
-  plusieurs bdc distincts peuvent faire référence au même média. Un bdc image
-  reste une instance unique, même si son image est utilisée ailleurs.
+  plusieurs BDC distincts peuvent transporter des références au même média.
+  Déposer à nouveau la référence du média crée un nouveau BDC ; cela ne
+  réutilise pas ou ne recrée pas le BDC déjà affecté ailleurs.
 - Le POC peut afficher une image avec sa légende dans un preset de carte à
   deux zones et à architecture HTML fixe. La légende reste commune à la
   ressource média du catalogue : plusieurs utilisations de ce média
@@ -478,9 +532,18 @@ Décisions retenues :
 - Une page utilisée dans un chapitre ne fait donc pas partie de cette
   réserve de pages inutilisées. Il en va de même pour une page du parcours
   placée hors chapitre.
-- La suppression d’une ancre ramène le bdc associé dans la réserve du
-  catalogue ; ce geste conserve le bdc et le rend disponible pour une autre
-  insertion. Le média qu’il référence reste réemployable.
+- Supprimer une ancre au clavier supprime le BDC qui transporte cette
+  insertion ; cette action ne le remet pas au catalogue. Le média qu’il
+  référence reste disponible pour créer un BDC distinct. Une autre action
+  consiste à glisser le BDC ancré depuis Tiptap vers l’onglet
+  « Blocs disponibles » : elle retire l’ancre et renvoie le même BDC au
+  catalogue, en conservant le média.
+- Le retrait d’un BDC placé directement dans une page conserve son action
+  séparée : il le renvoie au catalogue.
+- Un BDC déjà inutilisé dans le catalogue peut être supprimé définitivement
+  par une commande métier dédiée ; cette suppression retire le BDC seul et
+  conserve le média qu’il référence. Le retrait d’un BDC d’une page reste
+  l’action distincte qui le renvoie au catalogue.
 - La gestion générale d’une bibliothèque et la réutilisation multiple d’un
   même bdc dépassent le cadre du POC. L’insertion d’un bdc et la création
   envisagée hors page restent au sujet 5 ; la persistance des médias est à
@@ -583,9 +646,10 @@ Résultat attendu : structure éditable, options exactes et traitement du collag
 
 ## Sujet 5 — Contenus et ancrage dans le texte
 
-**En cours — extension Tiptap et service métier d’ancrage appliqués ; les
-sources catalogue, la réouverture et la preuve navigateur du déplacement restent
-à vérifier.**
+**En cours — extension Tiptap, cibles média/BDC et commandes XState appliquées ;
+le déplacement d’une ancre image est vérifié sur le chemin complet des
+événements ProseMirror après correction du filtre de collage ; le geste physique
+Safari, les parcours navigateur BDC et la création isolée restent à traiter.**
 
 Les premiers contenus ancrés à rendre utilisables sont l’image et la vidéo.
 La démo 5 illustre une image qui entre dans le scrollport et une vidéo dont
@@ -649,7 +713,9 @@ requis dans cette première démonstration.
   repositionner l’insertion, en conservant le contenu associé.
 - Le fonctionnement de cette ancre doit rappeler celui des traitements de
   texte pour rester compréhensible.
-- Supprimer l’ancre ramène son contenu dans le catalogue.
+- Un bdc placé à une ancre quitte le catalogue. Supprimer cette ancre supprime
+  aussi le bdc ; sa ressource média reste disponible dans le catalogue des
+  médias et peut servir à créer un autre bdc unique.
 
 La réservation réelle de l’espace par le mécanisme CSS reste à éprouver
 dans le navigateur, y compris après édition du texte et changement de
@@ -682,7 +748,7 @@ elle ne certifie pas encore le comportement du `span`.
   Une icône de type se glisse pour créer un bdc ; une référence du catalogue
   se glisse de la même façon. Déposer un bdc disponible l’affecte à
   l’insertion, tandis que déposer une référence de média crée un nouveau bdc
-  qui utilise ce média réemployable. Chacun de ces dépôts crée l’ancre au
+  unique lié à ce média réemployable. Chacun de ces dépôts crée l’ancre au
   point de dépôt en un seul geste ; la pose et le placement passent par les
   mêmes commandes documentaires, avec des opérations de création adaptées
   à la source.
@@ -1417,9 +1483,12 @@ Elcé est vérifiée, sans mêler les deux projets.
 - Garder `embedded` dans les seules données de l’application. Étudier
   l’insertion d’un bdc du catalogue et sa génération par le circuit ordinaire,
   en réutilisant notamment `capsule-automation` pour le carrousel envisagé.
-- Faire passer le déplacement de l’ancre et le retour du contenu au catalogue
-  par les commandes métier. La création isolée d’un bdc réutilise l’espace
-  central et le même circuit d’édition pour les types qui y sont autorisés.
+- Faire passer le déplacement et la suppression de l’ancre par les commandes
+  métier ; supprimer une ancre supprime le BDC transporteur sans le renvoyer
+  au catalogue, en conservant son média. Le retrait d’un BDC directement placé
+  dans une page le renvoie au catalogue. La création isolée d’un BDC réutilise
+  l’espace central et le même circuit d’édition pour les types qui y sont
+  autorisés.
 - Examiner le principe d’import de fichiers décrit pour le chutier de
   l’éditeur et définir son adaptation Elcé pour les images et, si le même
   circuit convient, les vidéos ; vérifier le circuit effectivement disponible
@@ -1586,18 +1655,50 @@ sans faire échouer artificiellement les travaux indépendants.
    intrinsèque des images et le format vidéo 16:9, les marges vidéo, les contrôles et les actions automatiques
    de visibilité dans le vrai player. *Sortie :* médias et bdc sont reliés
    par le modèle métier et lisibles sans rendu média propre à Elcé.
-8. **Insertion complète des bdc dans le texte — dépôt fichier et service métier
-   appliqués ; sources catalogue et preuve navigateur du déplacement à compléter.** Achever l’extension éprouvée
+8. **Insertion complète des bdc dans le texte — En cours.** Le dépôt fichier et
+   média réutilisable, les onglets, la suppression, le retour au catalogue et
+   la réinsertion du même BDC sont couverts par les tests. Le journal Safari du
+   2026-10-03 montre que le `drop` cible est accepté (`defaultPrevented`, effet
+   `move`), puis que `dragend` garde l’effet `move` mais expose une liste de
+   types vide. Le plugin rejetait alors le retour en exigeant à nouveau le type
+   MIME au `dragend`. Cette vérification redondante est supprimée et une
+   régression couvre ce signal Safari. Le premier essai après correction a
+   encore utilisé l’ancienne instance du plugin ; après un rechargement complet,
+   Safari confirme le glisser physique de Page A vers « Blocs disponibles » :
+   `bdc-video-d49f2d52-8e10-4f77-977a-c57bd16df6d0` quitte la page, apparaît au
+   catalogue sous le même identifiant et reste disponible après rechargement.
+   L’autre ancre vidéo reste dans Page A. Le déplacement d’une ancre image dans l’éditeur passe par le
+   chemin complet ProseMirror et conserve son BDC. Les autres sources restent
+   à éprouver.** Achever l’extension éprouvée
    à l’étape 3 pour les sources autorisées : icône de type, bdc ou média du
    catalogue, fichier de l’ordinateur. Tous les gestes créent l’ancre au dépôt
    par le même circuit de commandes ; le dépôt de fichier enchaîne création
-   du média, du bdc et placement. Prévoir le retrait vers la réserve et la
+   du média, du BDC et placement. Un BDC affecté à une ancre n’est pas listé
+   parmi les blocs disponibles. Le clavier Suppr ou l’édition qui efface son
+   ancre supprime le BDC mais garde son média réemployable ; le geste distinct
+   de glisser l’ancre sur l’onglet « Blocs disponibles » retire son ancre et
+   rend le même BDC disponible. Déposer de nouveau le média crée un BDC à
+   identifiant distinct. Prévoir aussi la
    réouverture du bdc depuis sa zone d’édition. **Vérifier** chaque source,
    la position après édition du texte, les ancres proches, le déplacement de
-   l’icône, le retour au catalogue et le résultat cohérent d’un échec pendant
-   la suite de commandes. Tester le CSS dans le player, y compris après
+   l’icône, la suppression définitive sans réoffrir le BDC, le dépôt d’un bdc
+   ancré dans l’onglet « Blocs disponibles » avec retrait de son ancre et
+   conservation de son identifiant, le maintien du média au catalogue et le
+   résultat cohérent d’un échec pendant la suite de commandes.
+   Vérifier que deux dépôts du même média ont des identifiants de BDC distincts.
+   Tester le CSS dans le player, y compris après
    resize. *Sortie :* le parcours complet d’insertion ne crée ni mutation
    hors façade, ni seconde source de vérité pour le texte ou les bdc.
+   **Précision acceptée — création directe par icône :** avant l’insertion
+   d’un bdc disponible, l’auteur peut créer un nouveau bdc en faisant glisser
+   l’icône de son type sur le texte. Ce geste crée aussi l’ancre à l’endroit
+   du dépôt et passe par la même façade et les commandes XState. Le type seul
+   ne fournit toutefois pas le média requis par les bdcs image et vidéo ; il
+   reste à préciser si ce dépôt ouvre le choix du média, pose un bdc encore
+   incomplet à éditer ensuite, ou ne s’applique qu’aux types sans média
+   obligatoire. Ne pas ajouter de bouton de création dans l’onglet du
+   catalogue pour remplacer ce geste. La preuve navigateur attend cette
+   décision de contenu initial.
 9. **Questions et évaluation.** Reprendre les trois types de Question, les
    réponses, la validation et la relecture de la démo 5 ; autoriser une
    Question au plus par page, à la place choisie par l’auteur. Son contenu
@@ -1739,7 +1840,8 @@ des demandes de réponse une par une avant la première démonstration.
   liés. Le HTML est recalculé depuis le JSON, sans devenir une seconde source
   éditable. Si cette preuve échoue, Tiptap n’est pas retenu pour le POC.
 - Vérifier l’apparition de l’icône à la sélection, son déplacement dans le
-  texte et le retour du contenu au catalogue après suppression de l’ancre.
+  texte, puis la suppression de l’ancre et du BDC associé sans le reproposer au
+  catalogue ; le média reste disponible pour un nouveau BDC.
 - Vérifier que retirer un bdc placé directement dans la page le remet
   également au catalogue, sans supprimer le média réemployable qu’il utilise.
   Safari a vérifié ce retour sur Page A : le player est passé de trois vidéos

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
 import { createInitialDocument, ElceDocument } from '../../domain/document-model'
 import {
   applyDocumentCommand,
@@ -58,6 +58,119 @@ describe('Elcé document commands', () => {
     expect(deleted.bdcs).toHaveLength(0)
     expect(deleted.medias).toHaveLength(1)
     assertDocumentInvariants(deleted)
+  })
+
+  it('merges duplicate media while preserving every BDC and page placement', () => {
+    /** Builds matching video metadata for the media-merge command test. */
+    const media = (id: string, name: string) => ({
+      id,
+      type: MEDIA_TYPE.VIDEO,
+      name,
+      mimeType: 'video/mp4',
+      size: 389062,
+      caption: '',
+    })
+    const withPageE = applyDocumentCommand(createInitialDocument(), createPageCommand({
+      pageId: 'page-e',
+      bdcId: 'bdc-section-e',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const withImage = applyDocumentCommand(withPageE, {
+      type: 'media.add',
+      media: { id: 'media-image', type: MEDIA_TYPE.IMAGE, name: 'image.jpg', mimeType: 'image/jpeg', size: 12, caption: '' },
+    })
+    const withMedia = [media('media-canonical', 'sample-video.mp4'), media('media-duplicate', 'LcXkmXyuZQ.mp4'), media('media-unused', 'sample-video-second.mp4')]
+      .reduce((document, item) => applyDocumentCommand(document, { type: 'media.add', media: item }), withImage)
+    const withCanonicalBdc = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-video-canonical',
+      bdcType: BDC_TYPE.VIDEO,
+      presetId: DEFAULT_PRESET_ID.VIDEO,
+      mediaId: 'media-canonical',
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })
+    const withPageABdc = applyDocumentCommand(withCanonicalBdc, {
+      type: 'bdc.create',
+      bdcId: 'bdc-video-a',
+      bdcType: BDC_TYPE.VIDEO,
+      presetId: DEFAULT_PRESET_ID.VIDEO,
+      mediaId: 'media-duplicate',
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })
+    const beforeMerge = applyDocumentCommand(withPageABdc, {
+      type: 'bdc.create',
+      bdcId: 'bdc-video-e',
+      bdcType: BDC_TYPE.VIDEO,
+      presetId: DEFAULT_PRESET_ID.VIDEO,
+      mediaId: 'media-duplicate',
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-e' },
+    })
+    const preservedBdcIds = beforeMerge.bdcs.map((bdc) => bdc.id)
+    const preservedPlacements = beforeMerge.pages.map((page) => ({ id: page.id, bdcIds: page.bdcIds }))
+    const canonicalBdc = beforeMerge.bdcs.find((bdc) => bdc.id === 'bdc-video-canonical')
+
+    const merged = applyDocumentCommand(beforeMerge, {
+      type: 'media.merge',
+      canonicalMediaId: 'media-canonical',
+      duplicateMediaIds: ['media-duplicate', 'media-unused'],
+    })
+
+    expect(merged.medias.map((item) => item.id)).toEqual(['media-image', 'media-canonical'])
+    expect(merged.bdcs.map((bdc) => bdc.id)).toEqual(preservedBdcIds)
+    expect(merged.bdcs.find((bdc) => bdc.id === 'bdc-video-canonical')).toEqual(canonicalBdc)
+    expect(merged.bdcs.filter((bdc) => bdc.id === 'bdc-video-a' || bdc.id === 'bdc-video-e')
+      .map((bdc) => bdc.mediaId)).toEqual(['media-canonical', 'media-canonical'])
+    expect(merged.pages.map((page) => ({ id: page.id, bdcIds: page.bdcIds }))).toEqual(preservedPlacements)
+    assertDocumentInvariants(merged)
+  })
+
+  it('rejects merging media with different content metadata', () => {
+    const withCanonical = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-canonical', type: MEDIA_TYPE.VIDEO, name: 'sample-video.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
+    })
+    const withDuplicate = applyDocumentCommand(withCanonical, {
+      type: 'media.add',
+      media: { id: 'media-duplicate', type: MEDIA_TYPE.VIDEO, name: 'other.mp4', mimeType: 'video/mp4', size: 101, caption: '' },
+    })
+
+    expect(() => applyDocumentCommand(withDuplicate, {
+      type: 'media.merge',
+      canonicalMediaId: 'media-canonical',
+      duplicateMediaIds: ['media-duplicate'],
+    })).toThrow('Média incompatible avec la ressource canonique')
+  })
+
+  it('permanently deletes only an unused catalog bdc and retains its media', () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const withCatalogBdc = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-catalog-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      mediaId: 'media-image-1',
+      placement: { kind: BDC_LOCATION.CATALOG },
+    })
+    const deleted = applyDocumentCommand(withCatalogBdc, { type: 'bdc.delete', bdcId: 'bdc-catalog-image-1' })
+
+    expect(deleted.bdcs.map((bdc) => bdc.id)).toEqual(['bdc-section-1'])
+    expect(deleted.data.catalogBdcIds).toEqual([])
+    expect(deleted.medias).toEqual(withCatalogBdc.medias)
+    assertDocumentInvariants(deleted)
+
+    const withPageBdc = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-page-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      mediaId: 'media-image-1',
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })
+    expect(() => applyDocumentCommand(withPageBdc, { type: 'bdc.delete', bdcId: 'bdc-page-image-1' }))
+      .toThrow('est utilisé par une page')
   })
 
   it('keeps the requested order when a page is reordered in the same list', () => {
@@ -159,6 +272,89 @@ describe('Elcé document commands', () => {
     assertDocumentInvariants(updated)
   })
 
+  it('attaches an unused catalog bdc without cloning its media', () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const available = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      mediaId: 'media-image-1',
+      placement: { kind: BDC_LOCATION.CATALOG },
+    })
+    const attached = applyDocumentCommand(available, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-image-1',
+      markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+
+    expect(attached.data.catalogBdcIds).toEqual([])
+    expect(attached.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-image-1'])
+    expect(attached.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
+      pageId: 'page-a',
+      mediaId: 'media-image-1',
+    })
+    expect(attached.medias).toEqual(available.medias)
+    assertDocumentInvariants(attached)
+    expect(() => applyDocumentCommand(attached, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-image-1',
+      markup: '<p></p>',
+      content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    })).toThrow('n’est plus disponible')
+  })
+
+  it('rejects catalog anchor attachment to a non-Flux page', () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const available = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      mediaId: 'media-image-1',
+      placement: { kind: BDC_LOCATION.CATALOG },
+    })
+    const withDiapo = applyDocumentCommand(available, createPageCommand({
+      pageId: 'page-diapo',
+      bdcId: 'bdc-section-diapo',
+      pageType: PAGE_TYPE.DIAPO,
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+
+    expect(() => applyDocumentCommand(withDiapo, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-diapo',
+      pageId: 'page-diapo',
+      bdcId: 'bdc-image-1',
+      markup: '<p></p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{
+          type: 'elceAnchor',
+          attrs: { bdcId: 'bdc-image-1', partId: 'page-diapo:bdc-image-1:anchor' },
+        }] }],
+      },
+    })).toThrow('ne peut pas accueillir une ancre')
+  })
+
   it('moves an anchored bdc through the same Section command boundary', () => {
     const document = createInitialDocument()
     const anchored = applyDocumentCommand(document, {
@@ -192,7 +388,7 @@ describe('Elcé document commands', () => {
     assertDocumentInvariants(moved)
   })
 
-  it('returns an anchored bdc to the catalogue without removing its media', () => {
+  it('deletes an anchored bdc without deleting its reusable media', () => {
     const document = createInitialDocument()
     const anchored = applyDocumentCommand(document, {
       type: 'bdc.anchor.create',
@@ -218,12 +414,74 @@ describe('Elcé document commands', () => {
     })
 
     expect(removed.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
-    expect(removed.data.catalogBdcIds).toEqual(['bdc-image-1'])
+    expect(removed.data.catalogBdcIds).toEqual([])
+    expect(removed.bdcs.map((bdc) => bdc.id)).toEqual(['bdc-section-1'])
     expect(removed.medias).toHaveLength(1)
     assertDocumentInvariants(removed)
   })
 
-  it('returns a media bdc when an ordinary text update erases its anchor', () => {
+  it('returns an anchored bdc to the catalog without recreating it or its media', () => {
+    const anchored = applyDocumentCommand(createInitialDocument(), {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      partId: 'page-a:bdc-image-1:anchor',
+      markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+    const returned = applyDocumentCommand(anchored, {
+      type: 'bdc.anchor.return',
+      sectionBdcId: 'bdc-section-1',
+      anchorBdcId: 'bdc-image-1',
+      markup: '<p>Avant après</p>',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] },
+    })
+
+    expect(returned.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(returned.data.catalogBdcIds).toEqual(['bdc-image-1'])
+    expect(returned.bdcs).toHaveLength(2)
+    expect(returned.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
+      pageId: null,
+      mediaId: 'media-image-1',
+    })
+    expect(returned.medias).toEqual(anchored.medias)
+    expect(returned.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.content)
+      .toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] })
+    assertDocumentInvariants(returned)
+
+    const reattached = applyDocumentCommand(returned, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-image-1',
+      markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+    expect(reattached.bdcs.filter((bdc) => bdc.id === 'bdc-image-1')).toHaveLength(1)
+    expect(reattached.data.catalogBdcIds).toEqual([])
+    expect(reattached.medias).toEqual(anchored.medias)
+    assertDocumentInvariants(reattached)
+  })
+
+  it('deletes a media bdc when an ordinary text update erases its anchor', () => {
     const anchored = applyDocumentCommand(createInitialDocument(), {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
@@ -253,13 +511,14 @@ describe('Elcé document commands', () => {
     })
 
     expect(edited.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
-    expect(edited.data.catalogBdcIds).toEqual(['bdc-video-1'])
+    expect(edited.data.catalogBdcIds).toEqual([])
+    expect(edited.bdcs.map((bdc) => bdc.id)).toEqual(['bdc-section-1'])
     expect(edited.medias.map((media) => media.id)).toEqual(['media-video-1'])
     expect(edited.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.content)
       .toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Avant après' }] }] })
     assertDocumentInvariants(edited)
     expect(() => applyDocumentCommand(anchored, { type: 'bdc.remove', bdcId: 'bdc-video-1' }))
-      .toThrow('Retirer le bdc ancré')
+      .toThrow('Le retour au catalogue du bdc ancré')
   })
 
   it('rejects duplicate anchor references in ordinary Section updates', () => {

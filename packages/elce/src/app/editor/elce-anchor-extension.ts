@@ -3,8 +3,9 @@ import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { dropPoint } from '@tiptap/pm/transform'
 import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { ANCHOR } from '../../config/document-config'
+import { ANCHOR, ANCHOR_RETURN, CATALOG_REFERENCE } from '../../config/document-config'
 import type { BdcId } from '../../domain/document-types'
+import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/catalog-types'
 import type {
   ElceAnchorAttributes,
   ElceAnchorDropTarget,
@@ -38,7 +39,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
   draggable: true,
 
   addOptions() {
-    return { createFileDropTarget: undefined, resolveMediaSource: undefined }
+    return { createFileDropTarget: undefined, createCatalogDropTarget: undefined, resolveMediaSource: undefined }
   },
 
   addAttributes() {
@@ -175,19 +176,32 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
 
   addProseMirrorPlugins() {
     const createFileDropTarget = this.options.createFileDropTarget
+    const createCatalogDropTarget = this.options.createCatalogDropTarget
     let draggedAnchorPosition: number | null = null
+    let draggedAnchorBdcId: BdcId | null = null
 
     return [new Plugin({
       key: ELCE_ANCHOR_PLUGIN_KEY,
       props: {
-        transformPasted: (slice) => removeAnchorNodes(slice),
+        transformPasted: (slice) => {
+          const isInternalAnchorDrag = draggedAnchorPosition !== null && sliceContainsAnchor(slice)
+          switch (isInternalAnchorDrag) {
+            case true:
+              return slice
+            case false:
+              return removeAnchorNodes(slice)
+          }
+        },
         handleDOMEvents: {
           dragstart: (view, event) => {
             draggedAnchorPosition = readDraggedAnchorPosition(view, event)
+            draggedAnchorBdcId = readAnchorBdcId(view, draggedAnchorPosition)
             return false
           },
-          dragend: () => {
+          dragend: (view, event) => {
+            returnDraggedAnchorToCatalog(view, event, draggedAnchorPosition, draggedAnchorBdcId)
             draggedAnchorPosition = null
+            draggedAnchorBdcId = null
             return false
           },
         },
@@ -204,6 +218,26 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
           return true
         },
         handleDrop: (view, event, slice, moved) => {
+          switch (hasCatalogReference(event.dataTransfer)) {
+            case true: {
+              const reference = readCatalogReference(event.dataTransfer)
+              switch (reference) {
+                case null:
+                  return true
+                default: {
+                  const target = createCatalogDropTarget?.(reference) ?? null
+                  switch (target) {
+                    case null:
+                      return true
+                    default:
+                      return insertDroppedCatalogAnchor(view, event, target)
+                  }
+                }
+              }
+            }
+            case false:
+              break
+          }
           const files = event.dataTransfer?.files
           if (files && files.length > 0) {
             const file = files[0]
@@ -218,8 +252,15 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
           const sourceNode = view.state.doc.nodeAt(sourcePosition)
           if (sourceNode === null || sourceNode.type.name !== ANCHOR.NODE_NAME) return true
           moveDroppedAnchor(view, event, slice, sourcePosition, sourceNode)
+          draggedAnchorPosition = null
+          draggedAnchorBdcId = null
           return true
         },
+      },
+      view: (view) => {
+        const addReturnReference = (event: Event) => writeAnchorReturnReference(event, draggedAnchorBdcId)
+        view.dom.addEventListener('dragstart', addReturnReference)
+        return { destroy: () => view.dom.removeEventListener('dragstart', addReturnReference) }
       },
     })]
   },
@@ -288,6 +329,68 @@ function insertDroppedFileAnchor(
   return true
 }
 
+/** Inserts a catalogue reference at the drop point and records its command intent. */
+function insertDroppedCatalogAnchor(
+  view: EditorView,
+  event: DragEvent,
+  target: ElceCatalogDropTarget,
+): boolean {
+  const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY })
+  if (coordinates === null) return true
+  const anchorType = view.state.schema.nodes[ANCHOR.NODE_NAME]
+  if (anchorType === undefined) return true
+  const anchor = anchorType.create({
+    bdcId: target.bdcId,
+    partId: target.partId,
+    paddingBottom: target.paddingBottom,
+    mediaId: target.mediaId,
+    mediaType: target.bdcType,
+  })
+  const transaction = view.state.tr.replaceRangeWith(coordinates.pos, coordinates.pos, anchor)
+  transaction
+    .setSelection(new NodeSelection(transaction.doc.resolve(coordinates.pos)))
+    .setMeta(ELCE_ANCHOR_TRANSACTION_META, { kind: 'catalog-drop', target } satisfies ElceAnchorTransaction)
+    .setMeta('uiEvent', 'drop')
+  view.dispatch(transaction)
+  view.focus()
+  return true
+}
+
+/** Checks whether the transfer advertises Elcé's private catalogue payload. */
+function hasCatalogReference(dataTransfer: DataTransfer | null): boolean {
+  return Array.from(dataTransfer?.types ?? []).includes(CATALOG_REFERENCE.MIME_TYPE)
+}
+
+/** Reads and validates a catalogue reference without accepting text fallbacks. */
+function readCatalogReference(dataTransfer: DataTransfer | null): ElceCatalogReference | null {
+  switch (dataTransfer) {
+    case null:
+      return null
+    default:
+      try {
+        const parsed = JSON.parse(dataTransfer.getData(CATALOG_REFERENCE.MIME_TYPE)) as {
+          readonly kind?: unknown
+          readonly bdcId?: unknown
+          readonly mediaId?: unknown
+        }
+        switch (parsed.kind) {
+          case CATALOG_REFERENCE.BDC:
+            return typeof parsed.bdcId === 'string' && parsed.bdcId.length > 0
+              ? { kind: CATALOG_REFERENCE.BDC, bdcId: parsed.bdcId }
+              : null
+          case CATALOG_REFERENCE.MEDIA:
+            return typeof parsed.mediaId === 'string' && parsed.mediaId.length > 0
+              ? { kind: CATALOG_REFERENCE.MEDIA, mediaId: parsed.mediaId }
+              : null
+          default:
+            return null
+        }
+      } catch {
+        return null
+      }
+  }
+}
+
 /** Moves the dragged anchor through one ProseMirror transaction and records its bdc id. */
 function moveDroppedAnchor(
   view: EditorView,
@@ -322,6 +425,50 @@ function readDraggedAnchorPosition(view: EditorView, event: Event): number | nul
   const anchor = target.closest(`.${ANCHOR.CLASS_NAME}`)
   if (!(anchor instanceof HTMLElement)) return null
   return view.posAtDOM(anchor, 0)
+}
+
+/** Marks a dragged anchored bdc so the available-bdc catalogue can accept it. */
+function readAnchorBdcId(view: EditorView, position: number | null): BdcId | null {
+  switch (position) {
+    case null:
+      return null
+    default: {
+      const node = view.state.doc.nodeAt(position)
+      switch (node?.type.name) {
+        case ANCHOR.NODE_NAME:
+          return String(node.attrs.bdcId ?? '') || null
+        default:
+          return null
+      }
+    }
+  }
+}
+
+/** Marks a dragged anchored bdc so the available-bdc catalogue can accept it. */
+function writeAnchorReturnReference(event: Event, bdcId: BdcId | null): void {
+  const dataTransfer = (event as DragEvent).dataTransfer
+  if (dataTransfer === null || dataTransfer === undefined || bdcId === null) return
+  dataTransfer.effectAllowed = 'copyMove'
+  dataTransfer.setData(ANCHOR_RETURN.MIME_TYPE, bdcId)
+}
+
+/** Removes the source anchor only after the available-bdc catalogue accepts the drop. */
+function returnDraggedAnchorToCatalog(
+  view: EditorView,
+  event: Event,
+  position: number | null,
+  draggedBdcId: BdcId | null,
+): void {
+  const dataTransfer = (event as DragEvent).dataTransfer
+  if (dataTransfer === null || dataTransfer === undefined || position === null || draggedBdcId === null) return
+  if (dataTransfer.dropEffect !== 'move') return
+  const node = view.state.doc.nodeAt(position)
+  if (node === null || node.type.name !== ANCHOR.NODE_NAME || node.attrs.bdcId !== draggedBdcId) return
+  const transaction = view.state.tr
+    .delete(position, position + node.nodeSize)
+    .setMeta(ELCE_ANCHOR_TRANSACTION_META, { kind: 'return', bdcId: draggedBdcId } satisfies ElceAnchorTransaction)
+    .setMeta('uiEvent', 'drop')
+  view.dispatch(transaction)
 }
 
 /** Uses the current node selection as a fallback for synthetic and keyboard-driven drops. */
