@@ -29,13 +29,14 @@ ou absentes. `shouldRevealAnswers` reste faux pendant l’échec et la reprise.
 Depuis `success`, `SUCCESS.REPLAY` ouvre `reviewing` avec toutes les Questions
 et conserve leurs réponses sélectionnées et attendues. `shouldRevealAnswers`
 est vrai uniquement dans cet état. `REPLAY.COMPLETE` revient à `success`.
-L’action du BDC Succès enverra `SUCCESS.REPLAY` uniquement si l’auteur a choisi
-la relecture. Aucun événement de relecture avec réponses n’existe depuis
-`failure`.
+L’action choisie dans la branche Réussite du BDC Résultat enverra
+`SUCCESS.REPLAY` uniquement si l’auteur a choisi la relecture. Aucun événement
+de relecture avec réponses n’existe depuis `failure`.
 
 La machine expose ce contrat métier ; le player n’est pas encore relié à son
-signal de visibilité. Les Questions, les réponses visibles et les commandes
-des BDC Succès/Échec devront être raccordés au même état lors de l’intégration.
+signal de visibilité. Les Questions, les réponses visibles et les actions des
+branches du BDC Résultat devront être raccordées au même état lors de
+l’intégration.
 
 ## Preuves
 

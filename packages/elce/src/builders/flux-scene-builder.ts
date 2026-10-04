@@ -1,5 +1,6 @@
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { ANCHOR, BDC_TYPE, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG } from '../config/document-config'
+import { ANCHOR, BDC_TYPE, ELCE_EVENTS, EVALUATION_RESULT_BRANCH, EVALUATION_RESULT_CONFIG, MEDIA_TYPE, PAGE_TYPE, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG } from '../config/document-config'
+import type { EvaluationResultAction, EvaluationResultBranch } from '../config/document-config-types'
 import type { Bdc, Page } from '../domain/document-types'
 import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
 import { anchorFlowBlockSizeFor, anchorNameFor } from '../anchor/anchor-position'
@@ -8,6 +9,8 @@ import { ElceCardPresetBuilder } from './card-preset-builder'
 import type { QuestionAnswer, QuestionContent } from '../domain/question-types'
 import type { FluxAnchorTarget } from './flux-anchor-player-markup-types'
 import type { FluxSceneBuild, FluxSceneBuildOptions } from './flux-scene-builder-types'
+import { ElceCarouselSceneBuilder } from './carousel-scene-builder'
+import type { CarouselSceneBuild } from './carousel-scene-builder-types'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -17,10 +20,12 @@ type FluxBdcMount = Readonly<{
   readonly zonePartIds: Readonly<Record<string, string>>
   readonly paddingBottom?: string
   readonly questionResetEvent?: string
+  readonly carouselBuild?: CarouselSceneBuild
 }>
 
 const anchorRatioService = new ElceAnchorRatioService()
 const cardPresetBuilder = new ElceCardPresetBuilder()
+const carouselSceneBuilder = new ElceCarouselSceneBuilder()
 
 /** Builds an Elcé Flux scene from the métier page without creating a player circuit. */
 export function buildFluxScene(
@@ -49,7 +54,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
   }
   const pageContents = pageBdcs.filter((bdc): bdc is Bdc => bdc !== undefined)
   const anchorTargets = readAnchorTargets(pageContents)
-  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, anchorTargets))
+  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, anchorTargets, options))
 
   const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
@@ -117,6 +122,13 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
       `${page.id}-${mount.bdc.id}`,
       createQuestionStory(page, mount.bdc, mount.zonePartIds),
     ])),
+    ...Object.fromEntries(mounts.filter((mount) => mount.bdc.type === BDC_TYPE.EVALUATION_RESULT).map((mount) => [
+      `${page.id}-${mount.bdc.id}`,
+      createEvaluationResultStory(page, mount.bdc, mount.zonePartIds),
+    ])),
+    ...Object.fromEntries(mounts.flatMap((mount) => mount.carouselBuild === undefined
+      ? []
+      : [[mount.carouselBuild.story.id, mount.carouselBuild.story] as const])),
   }
   const questionMount = mounts.find((mount) => mount.bdc.type === BDC_TYPE.QUESTION)
   return {
@@ -124,11 +136,17 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
     scrollPortId,
     bottomMarkerId,
     storyIds: Object.keys(stories),
+    styleSheets: mounts.flatMap((mount) => mount.carouselBuild === undefined ? [] : [mount.carouselBuild.styleSheet]),
     ...(questionMount?.questionResetEvent === undefined ? {} : { questionReset: { eventName: questionMount.questionResetEvent } }),
   }
 }
 
-function createBdcMount(page: Page, bdc: Bdc, anchorTargets: readonly FluxAnchorTarget[]): FluxBdcMount {
+function createBdcMount(
+  page: Page,
+  bdc: Bdc,
+  anchorTargets: readonly FluxAnchorTarget[],
+  options: FluxSceneBuildOptions,
+): FluxBdcMount {
   switch (bdc.type) {
     case BDC_TYPE.SECTION: {
       const partId = `${page.id}:${bdc.id}:section`
@@ -181,8 +199,44 @@ function createBdcMount(page: Page, bdc: Bdc, anchorTargets: readonly FluxAnchor
         questionResetEvent: resetEvent,
       }
     }
-    case BDC_TYPE.DIAPO:
-      throw new Error(`Le bdc ${bdc.type} n’est pas encore pris en charge dans le Flux.`)
+    case BDC_TYPE.EVALUATION_RESULT: {
+      const result = bdc.evaluationResult
+      if (result === null || result === undefined) throw new Error(`Le bdc Résultat ${bdc.id} n’a pas de contenu.`)
+      const partId = `${page.id}:${bdc.id}:evaluation-result`
+      const card = cardPresetBuilder.build(bdc.presetId, `${page.id}-${bdc.id}`, partId)
+      return {
+        bdc,
+        partId,
+        anchored: false,
+        markup: card.markup,
+        zonePartIds: card.zonePartIds,
+      }
+    }
+    case BDC_TYPE.CAROUSEL: {
+      const content = bdc.carousel
+      switch (content) {
+        case null:
+        case undefined:
+          throw new Error(`Le BDC Carousel ${bdc.id} n’a pas de contenu.`)
+        default: {
+          const carouselBuild = carouselSceneBuilder.build({
+            pageId: page.id,
+            bdcId: bdc.id,
+            content,
+            mediaSources: options.mediaSources ?? {},
+            mediaTypes: options.mediaTypes ?? {},
+          })
+          return {
+            bdc,
+            partId: `${page.id}:${bdc.id}:carousel`,
+            anchored: false,
+            markup: carouselBuild.markup,
+            zonePartIds: {},
+            carouselBuild,
+          }
+        }
+      }
+    }
     default:
       return assertNeverBdcType(bdc.type)
   }
@@ -197,7 +251,8 @@ function readAnchorTargets(bdcs: readonly Bdc[]): readonly FluxAnchorTarget[] {
       case BDC_TYPE.IMAGE:
       case BDC_TYPE.VIDEO:
       case BDC_TYPE.QUESTION:
-      case BDC_TYPE.DIAPO:
+      case BDC_TYPE.EVALUATION_RESULT:
+      case BDC_TYPE.CAROUSEL:
         return []
       default:
         return assertNeverBdcType(bdc.type)
@@ -228,10 +283,100 @@ function createMediaPersos(
       return [createVideoPerso(page, mount.bdc, mount.partId, scrollPortId, resolveMediaSource(mount.bdc, options), mount.anchored)]
     case BDC_TYPE.QUESTION:
       return createQuestionMediaPerso(page, mount.bdc, mount.zonePartIds.illustration ?? '', scrollPortId, options)
-    case BDC_TYPE.DIAPO:
-      throw new Error(`Le bdc ${mount.bdc.type} n’est pas encore pris en charge dans le Flux.`)
+    case BDC_TYPE.EVALUATION_RESULT:
+      return []
+    case BDC_TYPE.CAROUSEL:
+      return mount.carouselBuild?.mediaPersos ?? []
     default:
       return assertNeverBdcType(mount.bdc.type)
+  }
+}
+
+/** Builds the conditional success/failure presentation for one Result BDC. */
+function createEvaluationResultStory(
+  page: Page,
+  bdc: Bdc,
+  zones: Readonly<Record<string, string>>,
+): StoryDoc<string> {
+  const result = bdc.evaluationResult
+  if (result === null || result === undefined) throw new Error(`Le bdc Résultat ${bdc.id} n’a pas de contenu.`)
+  const prefix = `${page.id}:${bdc.id}`
+  const rootId = `${page.id}-${bdc.id}`
+  const partId = `${prefix}:evaluation-result`
+  const card = cardPresetBuilder.build(bdc.presetId, rootId, partId)
+  return {
+    id: `${page.id}-${bdc.id}`,
+    persos: [
+      {
+        id: `${bdc.id}-result-card`,
+        type: 'layout',
+        initial: {
+          move: '@root',
+          className: 'elce-card--evaluation-result elce-evaluation-result--pending',
+          markup: card.markup,
+        },
+        actions: {
+          [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { className: 'elce-card--evaluation-result elce-evaluation-result--success' },
+          [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { className: 'elce-card--evaluation-result elce-evaluation-result--failure' },
+        },
+      },
+      ...resultBranchPersos(page, bdc, EVALUATION_RESULT_BRANCH.SUCCESS, result.success, zones, prefix),
+      ...resultBranchPersos(page, bdc, EVALUATION_RESULT_BRANCH.FAILURE, result.failure, zones, prefix),
+    ],
+  }
+}
+
+/** Creates the message and configured button for one evaluation result branch. */
+function resultBranchPersos(
+  page: Page,
+  bdc: Bdc,
+  branch: EvaluationResultBranch,
+  content: NonNullable<Bdc['evaluationResult']>['success'],
+  zones: Readonly<Record<string, string>>,
+  prefix: string,
+): readonly PersoDoc<string>[] {
+  const messageZone = zones[`${branch}-message`]
+  const actionZone = zones[`${branch}-action`]
+  if (messageZone === undefined || actionZone === undefined) {
+    throw new Error(`Les zones du résultat ${branch} manquent au bdc ${bdc.id}.`)
+  }
+  const label = EVALUATION_RESULT_CONFIG[branch].actions.find((candidate) => candidate.value === content.action)?.label
+  const actionPersos = label === undefined || content.action === null
+    ? []
+    : [createEvaluationResultActionPerso(page, bdc, branch, content.action, label, actionZone, prefix)]
+  return [
+    {
+      id: `${bdc.id}-${branch}-message`,
+      type: 'tag',
+      initial: { tag: 'p', content: content.message, move: { target: messageZone } },
+    },
+    ...actionPersos,
+  ]
+}
+
+/** Creates the CodPlay button that reports its configured result action. */
+function createEvaluationResultActionPerso(
+  page: Page,
+  bdc: Bdc,
+  branch: EvaluationResultBranch,
+  action: EvaluationResultAction,
+  label: string,
+  target: string,
+  prefix: string,
+): PersoDoc<string> {
+  return {
+    id: `${bdc.id}-${branch}-action`,
+    type: 'tag',
+    initial: { tag: 'button', content: label, attr: { type: 'button' }, move: { target } },
+    emit: {
+      click: {
+        event: {
+          name: ELCE_EVENTS.EVALUATION_RESULT_ACTION,
+          data: { pageId: page.id, chapterId: page.chapterId, bdcId: bdc.id, branch, action, prefix },
+          visibility: 'public',
+        },
+      },
+    },
   }
 }
 

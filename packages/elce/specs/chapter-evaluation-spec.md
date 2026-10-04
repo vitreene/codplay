@@ -2,9 +2,9 @@
 
 ## Statut
 
-**En cours — calcul, garde de scénario Sighty, création auteur du type de
-chapitre et machine métier d’Évaluation sont implémentés et vérifiés. Les
-actions des BDC Succès/Échec et leur raccord au player restent à réaliser.**
+**En cours — le calcul, la garde de scénario Sighty, les réglages du chapitre,
+la machine métier et l’édition auteur du BDC Résultat sont vérifiés. Le
+raccord de ses issues au player reste à réaliser.**
 
 ## Contrat
 
@@ -30,7 +30,11 @@ d’évaluation se distingue par son icône presse-papiers et reçoit le nom
 automatique « Évaluation », sans libellé de type répété dans l’arborescence.
 Le titre reste modifiable. Une page Flux créée dans ce chapitre reçoit un BDC
 Question initial ; l’auteur peut également ajouter des BDC Texte depuis la
-barre de la page.
+barre de la page. L’icône de la page ajoute un BDC Résultat qui contient les
+deux branches, Réussite et Échec, chacune avec un message et un choix d’action
+facultatif dans les options configurées. L’icône d’ajout
+est une règle de l’interface auteur ; elle ne crée aucun type de page et
+n’ajoute pas de restriction au modèle métier.
 
 Cliquer le chapitre ouvre ses réglages dans la zone centrale. Le seuil de 80 %
 est affiché et reste fixe pour ce POC. L’auteur peut enregistrer une limite
@@ -39,11 +43,15 @@ choisir de reprendre toutes les Questions ou seulement celles dont la réponse
 est fausse ou absente. Ces valeurs sont conservées dans le document par la
 commande `chapter.evaluation.settings.update`.
 
-La machine portable qui gère les tentatives, la reprise après échec et la
-relecture après succès est décrite dans la
-[spécification de la machine d’Évaluation](evaluation-machine-spec.md). Les
-réglages d’essais édités par le chapitre ne sont pas encore raccordés aux
-actions des BDC de résultat ni à l’affichage des Questions dans le player.
+La commande `bdc.evaluation-result.update` enregistre les deux branches et
+leurs actions ; `bdc.evaluation-result.delete` retire le BDC de la page. Le
+builder compile le BDC en une story CodPlay, mais n’affiche aucune branche tant
+que le runtime n’a pas indiqué le résultat. La machine portable qui gère les
+tentatives, la reprise après échec et la relecture après succès est décrite dans
+la [spécification de la machine d’Évaluation](evaluation-machine-spec.md). Les
+réglages du chapitre et les choix du BDC ne sont pas encore raccordés à cette
+machine dans le player ; les Questions n’y suivent donc pas encore les règles
+de reprise et de relecture.
 
 `buildScenario` ajoute une garde au passage entre pages : chaque page doit
 d’abord avoir atteint son repère bas, et une page Question doit aussi avoir
@@ -70,3 +78,10 @@ confirme l’affichage des défauts sur un chapitre déjà présent dans le docu
 Le passage refusé/réussi par le score cumulé dans le vrai player reste à valider
 au plan. La machine métier est vérifiée par
 [`evaluation-machine.test.ts`](../src/domain/evaluation/evaluation-machine.test.ts).
+La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
+[`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) et
+[`document-commands.test.ts`](../src/app/commands/document-commands.test.ts) ;
+sa compilation CodPlay l’est dans
+[`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts).
+Safari MCP a également vérifié l’ajout puis le retrait du BDC sur une page
+Flux d’Évaluation existante ; le bloc de test a été supprimé.

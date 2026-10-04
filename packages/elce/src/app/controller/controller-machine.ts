@@ -1,6 +1,7 @@
 import { assign, fromPromise, setup } from 'xstate'
 import { applyDocumentCommand, createDefaultPageCommand } from '../commands/document-commands'
-import { CATALOG_TAB } from '../../config/document-config'
+import type { DocumentCommand } from '../commands/document-command-types'
+import { BDC_TYPE, CATALOG_TAB } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document-model'
 import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
 import { ElceMediaResourceService } from '../../domain/media-resource-service'
@@ -54,6 +55,15 @@ const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentCh
           return { operation, source: null, mediaCreated: false }
       }
     case 'question-media-import': {
+      if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
+      const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store)
+      return {
+        operation: { ...operation, media },
+        source: created ? createObjectUrl(operation.file) : null,
+        mediaCreated: created,
+      }
+    }
+    case 'carousel-media-import': {
       if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
       const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store)
       return {
@@ -140,6 +150,23 @@ function commandForChange(operation: ElceDocumentChange, mediaCreated: boolean) 
             mediaId: operation.media.id,
           }
       }
+    case 'carousel-media-import':
+      switch (mediaCreated) {
+        case true:
+          return {
+            type: 'bdc.carousel.media.attach' as const,
+            bdcId: operation.bdcId,
+            viewId: operation.viewId,
+            media: operation.media,
+          }
+        case false:
+          return {
+            type: 'bdc.carousel.media.set' as const,
+            bdcId: operation.bdcId,
+            viewId: operation.viewId,
+            mediaId: operation.media.id,
+          }
+      }
   }
 }
 
@@ -150,6 +177,8 @@ function documentChangeForEvent(event: ElceControllerEvent): ElceDocumentChange 
       return { kind: 'anchor', operation: { sectionBdcId: event.sectionBdcId, change: event.change } }
     case 'question.media.file.import':
       return { kind: 'question-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
+    case 'carousel.media.file.import':
+      return { kind: 'carousel-media-import', bdcId: event.bdcId, viewId: event.viewId, file: event.file, media: event.media }
     default:
       return null
   }
@@ -190,6 +219,7 @@ export const controllerMachine = setup({
     document: initialDocument,
     selectedPageId: initialDocument.pages[0]?.id ?? null,
     selectedChapterId: null,
+    selectedCarouselViewId: null,
     catalogTab: CATALOG_TAB.AVAILABLE_BDCS,
     mediaSources: {},
     documentStore: input?.documentStore ?? null,
@@ -204,6 +234,7 @@ export const controllerMachine = setup({
           document,
           selectedPageId: keepSelectedPage(document, context.selectedPageId),
           selectedChapterId: keepSelectedChapter(document, context.selectedChapterId),
+          selectedCarouselViewId: selectedCarouselViewAfterCommand(document, event.command, context.selectedCarouselViewId),
         }
       }),
     },
@@ -211,18 +242,25 @@ export const controllerMachine = setup({
       actions: assign(({ context, event }) => {
         const command = createDefaultPageCommand(context.document, event.placement, event.name)
         const document = applyDocumentCommand(context.document, command)
-        return { document, selectedPageId: command.pageId, selectedChapterId: null }
+        return { document, selectedPageId: command.pageId, selectedChapterId: null, selectedCarouselViewId: null }
       }),
     },
     'page.select': {
       actions: assign(({ context, event }) => ({
         selectedPageId: keepSelectedPage(context.document, event.pageId),
         selectedChapterId: null,
+        selectedCarouselViewId: null,
+      })),
+    },
+    'carousel.view.select': {
+      actions: assign(({ context, event }) => ({
+        selectedCarouselViewId: event.viewId !== null && findCarouselView(context.document, event.viewId) ? event.viewId : null,
       })),
     },
     'chapter.select': {
       actions: assign(({ context, event }) => ({
         selectedChapterId: keepSelectedChapter(context.document, event.chapterId),
+        selectedCarouselViewId: null,
       })),
     },
     'catalog.tab.select': {
@@ -238,6 +276,7 @@ export const controllerMachine = setup({
         document: event.document,
         selectedPageId: keepSelectedPage(event.document, context.selectedPageId),
         selectedChapterId: keepSelectedChapter(event.document, context.selectedChapterId),
+        selectedCarouselViewId: keepSelectedCarouselView(event.document, context.selectedCarouselViewId),
       })),
     },
   },
@@ -246,6 +285,7 @@ export const controllerMachine = setup({
       on: {
         'section.change': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
         'question.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'carousel.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
       },
     },
     processingDocumentChange: {
@@ -268,6 +308,7 @@ export const controllerMachine = setup({
       on: {
         'section.change': { actions: 'enqueueDocumentChange' },
         'question.media.file.import': { actions: 'enqueueDocumentChange' },
+        'carousel.media.file.import': { actions: 'enqueueDocumentChange' },
       },
     },
     nextDocumentChange: {
@@ -292,6 +333,38 @@ function keepSelectedChapter(document: ElceAppContext['document'], selectedChapt
     : null
 }
 
+/** Selects the initial view on creation and retains a surviving view after edits. */
+function selectedCarouselViewAfterCommand(
+  document: ElceAppContext['document'],
+  command: DocumentCommand,
+  currentViewId: string | null,
+): string | null {
+  switch (command.type) {
+    case 'bdc.create':
+      if (command.bdcType === BDC_TYPE.CAROUSEL) {
+        return document.bdcs.find((bdc) => bdc.id === command.bdcId)?.carousel?.views[0]?.id ?? null
+      }
+      return keepSelectedCarouselView(document, currentViewId)
+    case 'bdc.carousel.update': {
+      if (currentViewId !== null && command.carousel.views.some((view) => view.id === currentViewId)) return currentViewId
+      return command.carousel.views[0]?.id ?? null
+    }
+    default:
+      return keepSelectedCarouselView(document, currentViewId)
+  }
+}
+
+/** Keeps only view selections that remain in a Carousel in the current document. */
+function keepSelectedCarouselView(document: ElceAppContext['document'], viewId: string | null): string | null {
+  if (viewId === null) return null
+  return findCarouselView(document, viewId) ? viewId : null
+}
+
+/** Checks whether a view identifier belongs to an authored Carousel. */
+function findCarouselView(document: ElceAppContext['document'], viewId: string): boolean {
+  return document.bdcs.some((bdc) => bdc.carousel?.views.some((view) => view.id === viewId) === true)
+}
+
 /** Registers an object URL only when an import created a new media resource. */
 function updateMediaSources(
   mediaSources: ElceAppContext['mediaSources'],
@@ -311,6 +384,8 @@ function updateMediaSources(
           return mediaSources
       }
     case 'question-media-import':
+      return mediaSourceAddition(mediaSources, operation.media.id, source)
+    case 'carousel-media-import':
       return mediaSourceAddition(mediaSources, operation.media.id, source)
   }
 }

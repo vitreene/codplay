@@ -1,4 +1,4 @@
-import { BDC_LOCATION, BDC_TYPE, CATALOG_TAB, CHAPTER_TYPE, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE, SCENARIO_ENTRY_KIND } from './document-config'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_ASPECT_RATIO, CAROUSEL_CARD_PRESET_IDS, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CATALOG_TAB, CHAPTER_TYPE, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE, SCENARIO_ENTRY_KIND } from './document-config'
 
 export type PageLocationKind = typeof PAGE_LOCATION[keyof typeof PAGE_LOCATION]
 export type ScenarioEntryKind = typeof SCENARIO_ENTRY_KIND[keyof typeof SCENARIO_ENTRY_KIND]
@@ -10,3 +10,10 @@ export type BdcType = typeof BDC_TYPE[keyof typeof BDC_TYPE]
 export type MediaType = typeof MEDIA_TYPE[keyof typeof MEDIA_TYPE]
 export type ConfiguredQuestionType = typeof QUESTION_TYPE[keyof typeof QUESTION_TYPE]
 export type EvaluationRetryScope = typeof EVALUATION_RETRY_SCOPE[keyof typeof EVALUATION_RETRY_SCOPE]
+export type EvaluationResultAction = typeof EVALUATION_RESULT_ACTION[keyof typeof EVALUATION_RESULT_ACTION]
+export type EvaluationResultBranch = typeof EVALUATION_RESULT_BRANCH[keyof typeof EVALUATION_RESULT_BRANCH]
+export type CarouselCardPresetId = typeof CAROUSEL_CARD_PRESET_IDS[number]
+export type CarouselAspectRatioId = typeof CAROUSEL_ASPECT_RATIO[keyof typeof CAROUSEL_ASPECT_RATIO]
+export type CarouselImagePosition = typeof CAROUSEL_IMAGE_POSITION[keyof typeof CAROUSEL_IMAGE_POSITION]
+export type CarouselPlaybackMode = typeof CAROUSEL_PLAYBACK_MODE[keyof typeof CAROUSEL_PLAYBACK_MODE]
+export type CarouselTransition = typeof CAROUSEL_TRANSITION[keyof typeof CAROUSEL_TRANSITION]

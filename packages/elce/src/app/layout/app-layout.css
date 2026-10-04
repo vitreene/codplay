@@ -751,6 +751,62 @@ body {
   font-size: 0.82rem;
 }
 
+.elce-evaluation-result-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  background: #f7f4ed;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.35rem;
+}
+
+.elce-evaluation-result-editor__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  grid-column: 1 / -1;
+  color: #263b3a;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.elce-evaluation-result-editor__branch {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.55rem;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.3rem;
+}
+
+.elce-evaluation-result-editor__branch legend {
+  padding: 0 0.2rem;
+  color: #52645f;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.elce-evaluation-result-editor__branch textarea,
+.elce-evaluation-result-editor__branch select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.35rem 0.45rem;
+  color: #263b3a;
+  background: #fffdf8;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.elce-evaluation-result-editor__branch textarea {
+  resize: vertical;
+}
+
 .elce-bdc-icon-button {
   display: inline-flex;
   width: 1.7rem;

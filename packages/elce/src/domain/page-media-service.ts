@@ -36,7 +36,8 @@ export class ElcePageMediaService {
               return anchoredBdcIds.has(bdc.id) ? [] : [bdc]
             case BDC_TYPE.SECTION:
             case BDC_TYPE.QUESTION:
-            case BDC_TYPE.DIAPO:
+            case BDC_TYPE.EVALUATION_RESULT:
+            case BDC_TYPE.CAROUSEL:
               return []
             default:
               return assertNeverBdc(bdc.type)

@@ -1,6 +1,8 @@
 import type { BdcType, ChapterType, EvaluationRetryScope, MediaType, PageType } from '../config/document-config-types'
 import type { ScenarioEntry } from './scenario-entry-types'
 import type { QuestionContent } from './question-types'
+import type { EvaluationResultContent } from './evaluation/evaluation-result-types'
+import type { CarouselContent } from './carousel-types'
 
 export type ChapterId = string
 export type PageId = string
@@ -57,6 +59,8 @@ export interface Bdc {
     readonly content: RichTextDocument
   } | null
   readonly question: QuestionContent | null
+  readonly evaluationResult?: EvaluationResultContent | null
+  readonly carousel?: CarouselContent | null
 }
 
 export interface MediaMetadata {

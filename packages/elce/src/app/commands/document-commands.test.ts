@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { createInitialDocument, ElceDocument } from '../../domain/document-model'
+import { ElceCarouselService } from '../../domain/carousel-service'
 import { ElceQuestionService } from '../../domain/question-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
   createChapterCommand,
   createChapterMoveCommand,
+  createCarouselBdcCommand,
   createPageCommand,
 } from './document-commands'
 
@@ -212,6 +214,44 @@ describe('Elcé document commands', () => {
       canonicalMediaId: 'media-canonical',
       duplicateMediaIds: ['media-duplicate'],
     })).toThrow('Média incompatible avec la ressource canonique')
+  })
+
+  it('does not retain a video hidden by the Text-short card preset', () => {
+    const carouselService = new ElceCarouselService()
+    const withVideo = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-video-carousel', type: MEDIA_TYPE.VIDEO, name: 'clip.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
+    })
+    const withCarousel = applyDocumentCommand(withVideo, createCarouselBdcCommand('bdc-video-carousel', 'page-a', 1))
+    let carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')!.carousel!
+    const viewId = carousel.views[0]!.id
+
+    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.PHOTO)
+    carousel = carouselService.setMedia(carousel, viewId, 'media-video-carousel')
+    const photoDocument = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-video-carousel',
+      carousel,
+    })
+
+    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_SHORT)
+    const textDocument = applyDocumentCommand(photoDocument, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-video-carousel',
+      carousel,
+    })
+    expect(textDocument.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')?.carousel?.views[0])
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: null })
+
+    carousel = textDocument.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')!.carousel!
+    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
+    const textImageDocument = applyDocumentCommand(textDocument, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-video-carousel',
+      carousel,
+    })
+    expect(textImageDocument.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')?.carousel?.views[0])
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, mediaId: null })
   })
 
   it('permanently deletes only an unused catalog bdc and retains its media', () => {
@@ -776,6 +816,52 @@ describe('Elcé document commands', () => {
       placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
     })).toThrow('Une page ne peut contenir qu’une Question')
     assertDocumentInvariants(updated)
+  })
+
+  it('creates one unique Result BDC with editable success and failure branches', () => {
+    const initial = createInitialDocument()
+    const resultDocument = applyDocumentCommand(initial, {
+      type: 'bdc.create',
+      bdcId: 'bdc-result-1',
+      bdcType: BDC_TYPE.EVALUATION_RESULT,
+      presetId: DEFAULT_PRESET_ID.EVALUATION_RESULT,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const resultBdc = resultDocument.bdcs.find((bdc) => bdc.id === 'bdc-result-1')!
+    const updated = applyDocumentCommand(resultDocument, {
+      type: 'bdc.evaluation-result.update',
+      bdcId: resultBdc.id,
+      evaluationResult: {
+        success: { message: 'Bravo !', action: EVALUATION_RESULT_ACTION.REPLAY },
+        failure: { message: 'À reprendre.', action: EVALUATION_RESULT_ACTION.RETRY },
+      },
+    })
+
+    expect(resultDocument.pages[0]?.bdcIds).toEqual(['bdc-result-1', 'bdc-section-1'])
+    expect(resultDocument.data.catalogBdcIds).toEqual([])
+    expect(resultBdc.evaluationResult).toEqual({
+      success: { message: '', action: null },
+      failure: { message: '', action: null },
+    })
+    expect(updated.bdcs.find((bdc) => bdc.id === resultBdc.id)?.evaluationResult).toEqual({
+      success: { message: 'Bravo !', action: EVALUATION_RESULT_ACTION.REPLAY },
+      failure: { message: 'À reprendre.', action: EVALUATION_RESULT_ACTION.RETRY },
+    })
+    expect(() => applyDocumentCommand(updated, {
+      type: 'bdc.evaluation-result.update',
+      bdcId: resultBdc.id,
+      evaluationResult: {
+        success: { message: '', action: EVALUATION_RESULT_ACTION.RETRY },
+        failure: { message: '', action: null },
+      },
+    })).toThrow('La reprise est réservée à l’échec de l’évaluation.')
+    const deleted = applyDocumentCommand(updated, {
+      type: 'bdc.evaluation-result.delete',
+      bdcId: resultBdc.id,
+    })
+    expect(deleted.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(deleted.bdcs.some((bdc) => bdc.id === resultBdc.id)).toBe(false)
+    assertDocumentInvariants(deleted)
   })
 
   it('reuses a catalogue media for a Question without adding a reusable Question BDC', () => {

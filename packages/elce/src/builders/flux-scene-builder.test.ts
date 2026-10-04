@@ -4,11 +4,12 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
-import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
 import { anchorNameFor } from '../anchor/anchor-position'
-import { applyDocumentCommand } from '../app/commands/document-commands'
+import { applyDocumentCommand, createCarouselBdcCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
 import { ElceQuestionService } from '../domain/question-service'
+import { ElceCarouselService } from '../domain/carousel-service'
 import { buildFluxScene } from './flux-scene-builder'
 
 describe('Elcé Flux scene builder', () => {
@@ -249,6 +250,233 @@ describe('Elcé Flux scene builder', () => {
     ]))
     const result = codplay.build({ scene: build.sceneDoc })
     expect(result.ok).toBe(true)
+    codplay.destroy()
+  })
+
+  it('projects Carousel views through AutoCapsule, CodPlay stories, and reusable media persos', () => {
+    const carouselService = new ElceCarouselService()
+    const initial = createInitialDocument()
+    const withMedia = applyDocumentCommand(initial, {
+      type: 'media.add',
+      media: { id: 'media-carousel-image', type: MEDIA_TYPE.IMAGE, name: 'slide.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const withCarousel = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-carousel-1',
+      bdcType: BDC_TYPE.CAROUSEL,
+      presetId: DEFAULT_PRESET_ID.CAROUSEL,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 1 },
+    })
+    const createdCarousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-1')!.carousel!
+    let carousel = carouselService.setDefaultViewDuration(createdCarousel, 1000)
+    const firstViewId = carousel.views[0]!.id
+    carousel = carouselService.setShortText(carousel, firstViewId, 'title', 'Première vue')
+    carousel = carouselService.addView(carousel)
+    const secondViewId = carousel.views[1]!.id
+    carousel = carouselService.changeViewPreset(carousel, secondViewId, DEFAULT_PRESET_ID.IMAGE_CAPTION)
+    carousel = carouselService.setViewDuration(carousel, secondViewId, 2500)
+    carousel = carouselService.setCaption(carousel, secondViewId, 'Légende de l’image')
+    carousel = carouselService.setMedia(carousel, secondViewId, 'media-carousel-image')
+    carousel = carouselService.addView(carousel)
+    const thirdViewId = carousel.views[2]!.id
+    carousel = carouselService.changeViewPreset(carousel, thirdViewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
+    carousel = carouselService.setShortText(carousel, thirdViewId, 'title', 'Texte avec image')
+    carousel = carouselService.setImagePosition(carousel, thirdViewId, 'right')
+    carousel = carouselService.setMedia(carousel, thirdViewId, 'media-carousel-image')
+    carousel = carouselService.setRepeatCount(carousel, 0)
+    carousel = { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC }
+    const documentModel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-carousel-1',
+      carousel,
+    })
+    const build = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs, {
+      mediaSources: { 'media-carousel-image': 'blob:carousel-image' },
+      mediaTypes: { 'media-carousel-image': MEDIA_TYPE.IMAGE },
+    })
+    const carouselStory = build.sceneDoc.stories['page-a-bdc-carousel-1']
+    const articleInitial = build.sceneDoc.stories['page-a-page']?.persos[1]?.initial
+    const articleMarkup = String(articleInitial?.['markup'] ?? '')
+    const codplay = new CodPlay({
+      pauseOnDocumentHidden: false,
+      engine: {
+        idle: false,
+        components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
+        modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
+      },
+    })
+
+    expect(documentModel.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-carousel-1'])
+    expect(articleMarkup.indexOf('elce-card--section')).toBeLessThan(articleMarkup.indexOf('elce-card--carousel'))
+    expect(carouselStory?.eventimes).toEqual([
+      { name: `page-a:bdc-carousel-1:view:${firstViewId}:intro`, startAt: 0 },
+      { name: `page-a:bdc-carousel-1:view:${firstViewId}:outro`, startAt: 1000 },
+      { name: `page-a:bdc-carousel-1:view:${secondViewId}:intro`, startAt: 1000 },
+      { name: `page-a:bdc-carousel-1:view:${secondViewId}:outro`, startAt: 3500 },
+      { name: `page-a:bdc-carousel-1:view:${thirdViewId}:intro`, startAt: 3500 },
+    ])
+    expect(carouselStory?.persos).toEqual(expect.arrayContaining([
+      expect.objectContaining({ initial: expect.objectContaining({ content: 'Première vue', move: { target: `page-a:bdc-carousel-1:view:${firstViewId}:title` } }) }),
+      expect.objectContaining({ initial: expect.objectContaining({ content: 'Légende de l’image', move: { target: `page-a:bdc-carousel-1:view:${secondViewId}:caption` } }) }),
+      expect.objectContaining({ initial: expect.objectContaining({ move: { target: `page-a:bdc-carousel-1:carousel:capsule` }, className: expect.stringContaining('elce-carousel-view--image-right') }) }),
+    ]))
+    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.type === 'img')).toMatchObject({
+      type: 'img',
+      initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:view:${secondViewId}:image` } },
+    })
+    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === `page-a:bdc-carousel-1-view-${thirdViewId}-media-media-carousel-image`)).toMatchObject({
+      type: 'img',
+      initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:view:${thirdViewId}:image` } },
+    })
+    expect(build.styleSheets[0]).toContain('ac-grid-carousel')
+    expect(codplay.build({ scene: build.sceneDoc }).ok).toBe(true)
+    codplay.destroy()
+  })
+
+  it('keeps a hidden image on a Text-short view and restores its media perso in Text-image', () => {
+    const carouselService = new ElceCarouselService()
+    const initial = createInitialDocument()
+    const withMedia = applyDocumentCommand(initial, {
+      type: 'media.add',
+      media: { id: 'media-hidden-image', type: MEDIA_TYPE.IMAGE, name: 'hidden.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-hidden-media', 'page-a', 1))
+    let carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-hidden-media')!.carousel!
+    const viewId = carousel.views[0]!.id
+
+    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.PHOTO)
+    carousel = carouselService.setMedia(carousel, viewId, 'media-hidden-image')
+    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_SHORT)
+    carousel = carouselService.setShortText(carousel, viewId, 'title', 'Titre gardé')
+
+    const textOnlyDocument = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-hidden-media',
+      carousel,
+    })
+    const hiddenBuild = buildFluxScene(textOnlyDocument.pages[0]!, textOnlyDocument.bdcs, {
+      mediaSources: { 'media-hidden-image': 'blob:hidden-image' },
+      mediaTypes: { 'media-hidden-image': MEDIA_TYPE.IMAGE },
+    })
+    const hiddenStory = hiddenBuild.sceneDoc.stories['page-a-bdc-hidden-media']
+    expect(carousel.views[0]).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'media-hidden-image' })
+    expect(hiddenStory).toBeDefined()
+    expect(hiddenBuild.sceneDoc.stories['page-a-page']?.persos.some((perso) => perso.id.includes('media-hidden-image'))).toBe(false)
+
+    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
+    const textImageDocument = applyDocumentCommand(textOnlyDocument, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-hidden-media',
+      carousel,
+    })
+    const restoredBuild = buildFluxScene(textImageDocument.pages[0]!, textImageDocument.bdcs, {
+      mediaSources: { 'media-hidden-image': 'blob:hidden-image' },
+      mediaTypes: { 'media-hidden-image': MEDIA_TYPE.IMAGE },
+    })
+    const restoredStory = restoredBuild.sceneDoc.stories['page-a-bdc-hidden-media']
+    expect(restoredStory?.persos).toEqual(expect.arrayContaining([
+      expect.objectContaining({ initial: expect.objectContaining({ content: 'Titre gardé' }) }),
+    ]))
+    expect(restoredBuild.sceneDoc.stories['page-a-page']?.persos).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: `page-a:bdc-hidden-media-view-${viewId}-media-media-hidden-image`, type: 'img' }),
+    ]))
+
+    const codplay = new CodPlay({
+      pauseOnDocumentHidden: false,
+      engine: {
+        idle: false,
+        components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
+        modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
+      },
+    })
+    expect(codplay.build({ scene: restoredBuild.sceneDoc }).ok).toBe(true)
+    codplay.destroy()
+  })
+
+  it('resolves ten additional automatic passes as finite CodPlay eventimes', () => {
+    const initial = createInitialDocument()
+    const withCarousel = applyDocumentCommand(initial, createCarouselBdcCommand('bdc-repeat-10', 'page-a', 1))
+    const carouselService = new ElceCarouselService()
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-repeat-10')!.carousel!
+    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
+    const automaticCarousel = {
+      ...carousel,
+      playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+      defaultViewDurationMs: 1000,
+      views: [...carousel.views, secondView],
+    }
+    const documentModel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-repeat-10',
+      carousel: automaticCarousel,
+    })
+    const scene = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs).sceneDoc
+    const eventimes = scene.stories['page-a-bdc-repeat-10']?.eventimes ?? []
+    const firstViewIntro = `page-a:bdc-repeat-10:view:${carousel.views[0]!.id}:intro`
+
+    expect(automaticCarousel.repeatCount).toBe(10)
+    expect(eventimes.filter((eventime) => eventime.name === firstViewIntro).map((eventime) => eventime.startAt))
+      .toEqual(Array.from({ length: 11 }, (_, index) => index * 2000))
+    expect(eventimes).toHaveLength(43)
+  })
+
+  it('projects one Result BDC with success and failure persos through CodPlay', () => {
+    const initial = createInitialDocument()
+    const withResult = applyDocumentCommand(initial, {
+      type: 'bdc.create',
+      bdcId: 'bdc-result-1',
+      bdcType: BDC_TYPE.EVALUATION_RESULT,
+      presetId: DEFAULT_PRESET_ID.EVALUATION_RESULT,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })
+    const configured = applyDocumentCommand(withResult, {
+      type: 'bdc.evaluation-result.update',
+      bdcId: 'bdc-result-1',
+      evaluationResult: {
+        success: { message: 'Bravo !', action: EVALUATION_RESULT_ACTION.REPLAY },
+        failure: { message: 'À reprendre.', action: EVALUATION_RESULT_ACTION.RETRY },
+      },
+    })
+    const build = buildFluxScene(configured.pages[0]!, configured.bdcs)
+    const resultStory = build.sceneDoc.stories['page-a-bdc-result-1']
+    const resultPersos = resultStory?.persos ?? []
+    const resultLayout = resultPersos[0]
+    const successAction = resultPersos.find((perso) => perso.id === 'bdc-result-1-success-action')
+    const failureAction = resultPersos.find((perso) => perso.id === 'bdc-result-1-failure-action')
+    const codplay = new CodPlay({
+      pauseOnDocumentHidden: false,
+      engine: {
+        idle: false,
+        components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
+        modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
+      },
+    })
+
+    expect(resultPersos.map((perso) => perso.id)).toEqual([
+      'bdc-result-1-result-card',
+      'bdc-result-1-success-message',
+      'bdc-result-1-success-action',
+      'bdc-result-1-failure-message',
+      'bdc-result-1-failure-action',
+    ])
+    expect(resultLayout?.initial).toMatchObject({ className: 'elce-card--evaluation-result elce-evaluation-result--pending' })
+    expect(resultLayout?.actions).toEqual({
+      [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { className: 'elce-card--evaluation-result elce-evaluation-result--success' },
+      [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { className: 'elce-card--evaluation-result elce-evaluation-result--failure' },
+    })
+    expect(successAction?.emit?.click).toMatchObject({
+      event: {
+        name: ELCE_EVENTS.EVALUATION_RESULT_ACTION,
+        data: { branch: EVALUATION_RESULT_BRANCH.SUCCESS, action: EVALUATION_RESULT_ACTION.REPLAY },
+      },
+    })
+    expect(failureAction?.emit?.click).toMatchObject({
+      event: {
+        name: ELCE_EVENTS.EVALUATION_RESULT_ACTION,
+        data: { branch: EVALUATION_RESULT_BRANCH.FAILURE, action: EVALUATION_RESULT_ACTION.RETRY },
+      },
+    })
+    expect(codplay.build({ scene: build.sceneDoc }).ok).toBe(true)
     codplay.destroy()
   })
 })

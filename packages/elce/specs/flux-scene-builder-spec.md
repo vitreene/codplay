@@ -11,11 +11,13 @@ d’intégration visuelle de la tranche 2 du plan.
 
 Le parcours complet du slot inline et du montage du perso média est détaillé
 dans la [spécification d’intégration CodPlay](./codplay-anchor-integration-spec.md).
+Le montage d’un Carousel dans la séquence Flux est décrit dans la
+[spécification du BDC Carousel](./carousel-bdc-spec.md).
 
 ## Contrat
 
 `buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
-ordonnée de BDC Texte, Question, Image ou Vidéo. Une page Question n’a pas
+ordonnée de BDC Texte, Question, Image, Vidéo ou Carousel. Une page Question n’a pas
 besoin d’un BDC Texte. Une source média optionnelle peut être fournie séparément par
 `mediaSources`; un bdc image ou vidéo simple produit alors un hôte de média et
 un seul perso CodPlay correspondant, directement dans la story de page afin que
@@ -53,6 +55,13 @@ padding donne le ratio du cadre et de la réserve ; le perso image utilise
   fin d’une page courte ;
 - une story de page et une story par Section, les stories donnant accès aux
   persos mais ne constituant pas des éléments DOM.
+
+Un BDC Carousel utilise `ElceCarouselSceneBuilder` pour produire le markup du
+preset `carousel-basic`, une story dédiée et ses persos média. Le markup reste
+à sa place dans l’ordre des BDC ; l’image ou la vidéo de chaque vue est montée
+par un perso CodPlay dans la zone du preset. Les plages des vues, événements de
+lecture et la navigation manuelle sont définis dans la
+[spécification du BDC Carousel](./carousel-bdc-spec.md).
 
 Les cibles de montage restent des identifiants de persos/parts CodPlay. La
 projection n’ajoute pas de player ou de routeur local. L’émission initiale du

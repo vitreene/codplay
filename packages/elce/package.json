@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@codplay/component-v2": "*",
+    "@codplay/capsule-automation": "*",
+    "@codplay/scene-factory": "*",
     "@codplay/sighty": "*",
     "@tiptap/core": "^3.31.4",
     "@tiptap/extension-subscript": "^3.31.4",

@@ -91,10 +91,18 @@ unique par page ; après son ajout, son icône est désactivée. Une page créé
 un chapitre Évaluation reçoit déjà son BDC Question initial ; une page d’un
 chapitre standard reçoit un BDC Section.
 
-Les éditeurs Section et Question proposent chacun une corbeille pour supprimer
-leur BDC de la page. Supprimer une Section supprime aussi ses BDC image/vidéo
-ancrés, sans supprimer les ressources média du catalogue. Si la page devient
-vide, la barre permet toujours de créer Texte ou Quiz.
+Sur une page Flux d’un chapitre Évaluation, une icône BadgeCheck ajoute à la
+même séquence un BDC Résultat qui regroupe les branches Réussite et Échec.
+Chaque branche permet d’éditer un message et de choisir une action dans les
+options configurées. La whitelist de l’icône est une règle d’interface ; le
+modèle de données ne transforme pas la page ni le BDC. La corbeille du bloc
+envoie la commande `bdc.evaluation-result.delete` pour retirer ce BDC placé de
+la page.
+
+Les éditeurs Section, Question et Résultat proposent chacun une corbeille pour
+supprimer leur BDC de la page. Supprimer une Section supprime aussi ses BDC
+image/vidéo ancrés, sans supprimer les ressources média du catalogue. Si la
+page devient vide, la barre permet toujours de créer Texte ou Quiz.
 
 Les champs de titre gardent leur saisie dans le DOM pendant l’édition. Le
 changement est envoyé au contrôleur XState à la perte de focus ou avec Entrée,
@@ -155,3 +163,13 @@ gauche lit les noms actualisés depuis le document détenu par XState.
   dans la colonne droite. Aucun réglage du document de navigateur n’a été
   modifié pendant ce contrôle. Le typecheck, les 16 fichiers de tests (111
   tests) et le build passent.
+- `AppLayout.test.tsx` vérifie qu’une page Évaluation expose une icône unique
+  pour le BDC Résultat, que son clic crée un seul BDC avec ses deux branches,
+  que les messages/actions modifiés passent par les commandes XState, et que sa
+  corbeille le retire de la page. `document-commands.test.ts` couvre ces
+  commandes et leurs invariants. `flux-scene-builder.test.ts` vérifie qu’un
+  Résultat configuré compile au travers de CodPlay en une story portant les
+  deux issues. Le raccord des événements d’issue au player n’est pas certifié.
+- Le 4 octobre, Safari MCP a sélectionné une page Flux d’Évaluation, ajouté le
+  BDC Résultat avec son icône BadgeCheck puis supprimé le bloc temporaire depuis
+  sa corbeille. Le retrait a conservé la séquence précédente de la page.

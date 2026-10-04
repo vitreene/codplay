@@ -30,7 +30,8 @@ export class ElcePlayerComposition {
   /** Builds one player composition from the current métier document. */
   public constructor(options: ElcePlayerCompositionOptions) {
     this.options = options
-    const scenario = buildScenario(options.document, createPageSceneCatalog(options.document, options.mediaSources), options.startPageId)
+    const pageSceneCatalog = createPageSceneCatalog(options.document, options.mediaSources)
+    const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId)
     const instanceIds = createInstanceIds(scenario)
     this.sighty = new Sighty({
       scenario,
@@ -48,7 +49,7 @@ export class ElcePlayerComposition {
           htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
           pauseOnDocumentHidden: false,
         },
-        styles: [{ slot: 'elce-player-layout', cssText: ELCE_PLAYER_STYLE_SHEET }],
+        styles: [{ slot: 'elce-player-layout', cssText: [ELCE_PLAYER_STYLE_SHEET, ...pageSceneCatalog.styleSheets].join('\n') }],
       },
     })
   }
@@ -74,14 +75,16 @@ export class ElcePlayerComposition {
 function createPageSceneCatalog(
   document: ElceDocument,
   mediaSources: ElcePlayerCompositionOptions['mediaSources'],
-): Readonly<Record<string, SightySceneSourceValue>> {
-  return Object.fromEntries(scenarioPageIds(document).map((pageId) => {
+): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>>; styleSheets: readonly string[] }> {
+  const pageStyleSheets: string[] = []
+  const scenes = Object.fromEntries(scenarioPageIds(document).map((pageId) => {
     const page = document.pages.find((candidate) => candidate.id === pageId)
     if (page === undefined) throw new Error(`Page absente du document : ${pageId}`)
     const scene = buildFluxScene(page, document.bdcs, {
       mediaSources,
       mediaTypes: Object.fromEntries(document.medias.map((media) => [media.id, media.type])),
     })
+    pageStyleSheets.push(...scene.styleSheets)
     const questionReset = scene.questionReset
     if (questionReset === undefined) return [`scene-${page.id}`, scene.sceneDoc]
     return [`scene-${page.id}`, {
@@ -91,6 +94,7 @@ function createPageSceneCatalog(
         : undefined,
     }]
   }))
+  return { scenes, styleSheets: [...new Set(pageStyleSheets)] }
 }
 
 /** Reads the same page order used by the Sighty scenario builder. */

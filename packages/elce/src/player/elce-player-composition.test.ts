@@ -1,10 +1,11 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createChapterCommand, createDefaultPageCommand, createPageCommand } from '../app/commands/document-commands'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, QUESTION_TYPE } from '../config/document-config'
+import { applyDocumentCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
 import { ElceQuestionService } from '../domain/question-service'
+import { ElceCarouselService } from '../domain/carousel-service'
 import { ElcePlayerComposition } from './elce-player-composition'
 
 type IntersectionEntry = Pick<IntersectionObserverEntry, 'target' | 'intersectionRatio' | 'isIntersecting'>
@@ -92,6 +93,134 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-card--question')).not.toBeNull()
     expect(stage.querySelector('.elce-card--section')).toBeNull()
     expect(stage.querySelectorAll('input[type="radio"]')).toHaveLength(2)
+  })
+
+  it('plays a Carousel BDC and switches its view through the CodPlay dot event', async () => {
+    const initialDocument = createInitialDocument()
+    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-1', 'page-a', 1))
+    const carouselService = new ElceCarouselService()
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-1')!.carousel!
+    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
+    const documentModel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-carousel-1',
+      carousel: {
+        ...carousel,
+        views: [...carousel.views, secondView],
+      },
+    })
+    expect(carousel.playbackMode).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+
+    await composition.initialize()
+
+    const viewElements = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
+    const navigationDots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+    expect(stage.querySelector('.elce-card--carousel')).not.toBeNull()
+    expect(viewElements).toHaveLength(2)
+    expect(viewElements[0]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(viewElements[1]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+
+    navigationDots[1]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+
+    expect(viewElements[0]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+    expect(viewElements[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(navigationDots[1]?.getAttribute('aria-current')).toBe('true')
+    expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
+  })
+
+  it('advances an automatic Carousel through its compiled Capsule Automation times', async () => {
+    const initialDocument = createInitialDocument()
+    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto', 'page-a', 1))
+    const carouselService = new ElceCarouselService()
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-auto')!.carousel!
+    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
+    const documentModel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-carousel-auto',
+      carousel: { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, defaultViewDurationMs: 100, views: [...carousel.views, secondView] },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+
+    await composition.initialize()
+    await new Promise<void>((resolve) => setTimeout(resolve, 180))
+
+    const views = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
+    const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+    expect(views[0]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(dots[0]?.getAttribute('aria-current')).toBe('false')
+    expect(dots[1]?.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('repeats an automatic Carousel by the configured number of additional passes', async () => {
+    const initialDocument = createInitialDocument()
+    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-repeat', 'page-a', 1))
+    const carouselService = new ElceCarouselService()
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-repeat')!.carousel!
+    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
+    const documentModel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-carousel-repeat',
+      carousel: {
+        ...carousel,
+        playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+        defaultViewDurationMs: 60,
+        repeatCount: 1,
+        views: [...carousel.views, secondView],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+
+    await composition.initialize()
+    const views = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
+    const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 85))
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    expect(views[0]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 65))
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(dots[1]?.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('selects the matching view when an automatic Carousel point is clicked', async () => {
+    const initialDocument = createInitialDocument()
+    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto-points', 'page-a', 1))
+    const carouselService = new ElceCarouselService()
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-auto-points')!.carousel!
+    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
+    const documentModel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-carousel-auto-points',
+      carousel: { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, views: [...carousel.views, secondView] },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+
+    await composition.initialize()
+
+    const views = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
+    const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+    expect(dots[1]?.disabled).toBe(false)
+    dots[1]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+
+    expect(views[0]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(dots[1]?.getAttribute('aria-current')).toBe('true')
+    expect(dots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
   })
 
   it('renders each chapter label once through its CodPlay perso', async () => {

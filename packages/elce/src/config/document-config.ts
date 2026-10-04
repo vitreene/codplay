@@ -44,7 +44,40 @@ export const BDC_TYPE = {
   IMAGE: 'image',
   VIDEO: 'video',
   QUESTION: 'question',
-  DIAPO: 'diapo',
+  EVALUATION_RESULT: 'evaluation-result',
+  CAROUSEL: 'carousel',
+} as const
+
+export const EVALUATION_RESULT_BRANCH = {
+  SUCCESS: 'success',
+  FAILURE: 'failure',
+} as const
+
+export const EVALUATION_RESULT_ACTION = {
+  MENU: 'menu',
+  REPLAY: 'replay',
+  RETRY: 'retry',
+} as const
+
+export const EVALUATION_RESULT_CONFIG = {
+  [EVALUATION_RESULT_BRANCH.SUCCESS]: {
+    label: 'Réussite',
+    messagePlaceholder: 'Message de réussite',
+    actionLabel: 'Action du bouton',
+    actions: [
+      { value: EVALUATION_RESULT_ACTION.REPLAY, label: 'Relire les réponses' },
+      { value: EVALUATION_RESULT_ACTION.MENU, label: 'Retour au menu' },
+    ],
+  },
+  [EVALUATION_RESULT_BRANCH.FAILURE]: {
+    label: 'Échec',
+    messagePlaceholder: 'Message en cas d’échec',
+    actionLabel: 'Action du bouton',
+    actions: [
+      { value: EVALUATION_RESULT_ACTION.RETRY, label: 'Recommencer l’évaluation' },
+      { value: EVALUATION_RESULT_ACTION.MENU, label: 'Retour au menu' },
+    ],
+  },
 } as const
 
 export const CHAPTER_TYPE_CONFIG = {
@@ -142,13 +175,111 @@ export const MEDIA_MIME_PREFIX = {
   VIDEO: 'video/',
 } as const
 
+export const MEDIA_FILE_EXTENSIONS = {
+  IMAGE: '.avif,.bmp,.gif,.jpeg,.jpg,.png,.svg,.webp',
+  VIDEO: '.m4v,.mov,.mp4,.ogv,.webm',
+} as const
+
+export const MEDIA_FILE_ACCEPT = {
+  IMAGE: `${MEDIA_FILE_EXTENSIONS.IMAGE},image/*`,
+  IMAGE_AND_VIDEO: `${MEDIA_FILE_EXTENSIONS.IMAGE},${MEDIA_FILE_EXTENSIONS.VIDEO},image/*,video/*`,
+} as const
+
 export const DEFAULT_PRESET_ID = {
+  CAROUSEL: 'carousel-basic',
+  TEXT_IMAGE: 'text-image-basic',
   SECTION: 'section-basic',
   IMAGE: 'image-basic',
   VIDEO: 'video-basic',
+  PHOTO: 'photo-basic',
+  TEXT_SHORT: 'text-short-basic',
   QUESTION: 'question-basic',
+  EVALUATION_RESULT: 'evaluation-result-basic',
   IMAGE_CAPTION: 'image-caption',
   MESSAGE: 'message-basic',
+} as const
+
+export const CAROUSEL_PLAYBACK_MODE = {
+  AUTOMATIC: 'automatic',
+  MANUAL: 'manual',
+} as const
+
+export const CAROUSEL_ASPECT_RATIO = {
+  WIDE: '16:9',
+  STANDARD: '4:3',
+  SQUARE: '1:1',
+} as const
+
+export const CAROUSEL_IMAGE_POSITION = {
+  LEFT: 'left',
+  RIGHT: 'right',
+} as const
+
+export const CAROUSEL_CARD_PRESET_IDS = [
+  DEFAULT_PRESET_ID.PHOTO,
+  DEFAULT_PRESET_ID.IMAGE_CAPTION,
+  DEFAULT_PRESET_ID.TEXT_IMAGE,
+  DEFAULT_PRESET_ID.TEXT_SHORT,
+] as const
+
+export const CAROUSEL_TRANSITION = {
+  CUT: 'cut',
+  FADE: 'fade',
+  SWIPE_LEFT: 'swipe-left',
+  SWIPE_RIGHT: 'swipe-right',
+  SWIPE_TOP: 'swipe-top',
+  SWIPE_DOWN: 'swipe-down',
+  ZOOM: 'zoom',
+} as const
+
+export const CAROUSEL_TRANSITION_OPTIONS = [
+  { value: CAROUSEL_TRANSITION.CUT, label: 'Aucune' },
+  { value: CAROUSEL_TRANSITION.FADE, label: 'Fondu' },
+  { value: CAROUSEL_TRANSITION.SWIPE_LEFT, label: 'Glissement vers la gauche' },
+  { value: CAROUSEL_TRANSITION.SWIPE_RIGHT, label: 'Glissement vers la droite' },
+  { value: CAROUSEL_TRANSITION.SWIPE_TOP, label: 'Glissement vers le haut' },
+  { value: CAROUSEL_TRANSITION.SWIPE_DOWN, label: 'Glissement vers le bas' },
+  { value: CAROUSEL_TRANSITION.ZOOM, label: 'Zoom' },
+] as const
+
+export const CAROUSEL_PLAYBACK_MODE_OPTIONS = [
+  { value: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, label: 'Automatique' },
+  { value: CAROUSEL_PLAYBACK_MODE.MANUAL, label: 'Manuel' },
+] as const
+
+export const CAROUSEL_ASPECT_RATIO_OPTIONS = [
+  { value: CAROUSEL_ASPECT_RATIO.WIDE, label: '16:9', ratio: { width: 16, height: 9 } },
+  { value: CAROUSEL_ASPECT_RATIO.STANDARD, label: '4:3', ratio: { width: 4, height: 3 } },
+  { value: CAROUSEL_ASPECT_RATIO.SQUARE, label: '1:1', ratio: { width: 1, height: 1 } },
+] as const
+
+export const CAROUSEL_IMAGE_POSITION_OPTIONS = [
+  { value: CAROUSEL_IMAGE_POSITION.LEFT, label: 'Image à gauche' },
+  { value: CAROUSEL_IMAGE_POSITION.RIGHT, label: 'Image à droite' },
+] as const
+
+export const CAROUSEL_CARD_PRESET_OPTIONS = [
+  { value: DEFAULT_PRESET_ID.TEXT_SHORT, label: 'Texte court' },
+  { value: DEFAULT_PRESET_ID.TEXT_IMAGE, label: 'Texte avec image' },
+  { value: DEFAULT_PRESET_ID.PHOTO, label: 'Photo ou vidéo plein cadre' },
+  { value: DEFAULT_PRESET_ID.IMAGE_CAPTION, label: 'Image avec légende' },
+] as const
+
+export const CAROUSEL_CONFIG = {
+  bdcPresetId: DEFAULT_PRESET_ID.CAROUSEL,
+  viewDragMimeType: 'application/x-elce-carousel-view+json',
+  initialViewPresetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+  defaultAspectRatio: { width: 16, height: 9 },
+  defaultPlaybackMode: CAROUSEL_PLAYBACK_MODE.MANUAL,
+  defaultViewDurationMs: 5000,
+  minimumViewDurationSeconds: 1,
+  maximumViewDurationSeconds: 10,
+  defaultRepeatCount: 10,
+  minimumRepeatCount: 0,
+  maximumRepeatCount: 10,
+  defaultImagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
+  textShortMessageMaxLength: 250,
+  defaultTransition: CAROUSEL_TRANSITION.FADE,
 } as const
 
 export const DEFAULT_EVALUATION_THRESHOLD = 0.8 as const
@@ -211,6 +342,9 @@ export const ELCE_EVENTS = {
   NAVIGATION_PREVIOUS: 'elce:navigation:previous',
   PAGE_BOTTOM: 'elce:page:bottom',
   QUESTION_ANSWERED: 'elce:question:answered',
+  EVALUATION_RESULT_SUCCESS: 'elce:evaluation:result:success',
+  EVALUATION_RESULT_FAILURE: 'elce:evaluation:result:failure',
+  EVALUATION_RESULT_ACTION: 'elce:evaluation:result:action',
   PRESENTATION_REFRESH: 'elce:presentation:refresh',
   PRESENTATION_MENU: 'elce:presentation:menu',
   PRESENTATION_MENU_PAGE_PREFIX: 'elce:presentation:menu-page:',

@@ -2,6 +2,8 @@ import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-con
 import type { BdcType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RichTextDocument } from '../../domain/document-types'
 import type { QuestionContent } from '../../domain/question-types'
+import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
+import type { CarouselContent } from '../../domain/carousel-types'
 
 export type PagePlacement =
   | Readonly<{ kind: typeof PAGE_LOCATION.CHAPTER; chapterId: ChapterId; index?: number }>
@@ -61,10 +63,16 @@ export type DocumentCommand =
       content: RichTextDocument
   }>
   | Readonly<{ type: 'bdc.question.update'; bdcId: BdcId; question: QuestionContent }>
+  | Readonly<{ type: 'bdc.evaluation-result.update'; bdcId: BdcId; evaluationResult: EvaluationResultContent }>
+  | Readonly<{ type: 'bdc.carousel.update'; bdcId: BdcId; carousel: CarouselContent }>
+  | Readonly<{ type: 'bdc.carousel.media.set'; bdcId: BdcId; viewId: string; mediaId: MediaId | null }>
+  | Readonly<{ type: 'bdc.carousel.media.attach'; bdcId: BdcId; viewId: string; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.section.delete'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.evaluation-result.delete'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.carousel.delete'; bdcId: BdcId }>
   | Readonly<{
       type: 'bdc.anchor.create'
       sectionBdcId: BdcId

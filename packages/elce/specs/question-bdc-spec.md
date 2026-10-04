@@ -66,11 +66,12 @@ transmet le booléen de résultat au scénario Sighty. Cette révélation après
 réponse reprend la démo 5. Dans un chapitre Évaluation, la machine métier garde
 les corrections cachées après un échec et pendant la reprise ; seules les
 Questions fausses ou absentes peuvent être reprises si cette portée est
-choisie. Après une réussite, l’action de relecture choisie dans le BDC Succès
-ouvre toutes les Questions avec leurs réponses sélectionnées et attendues. Ce
-contrat est détaillé dans la [spécification de la machine d’Évaluation](evaluation-machine-spec.md).
-Son raccord à l’affichage des Questions et aux commandes des BDC de résultat
-reste à faire ; le player actuel ne valide pas encore ce parcours.
+choisie. Après une réussite, l’action de relecture choisie dans la branche
+Réussite du BDC Résultat ouvre toutes les Questions avec leurs réponses
+sélectionnées et attendues. Ce contrat est détaillé dans la
+[spécification de la machine d’Évaluation](evaluation-machine-spec.md). Le
+raccord du BDC Résultat et de l’affichage des Questions à la machine reste à
+faire ; le player actuel ne valide pas encore ce parcours.
 
 Pour une page Flux avec Question, Sighty autorise « Suivant » seulement après
 le repère bas et la validation de la réponse ; la réponse peut être fausse.

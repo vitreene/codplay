@@ -1,5 +1,5 @@
 import { Check, GripVertical, ImagePlus, Plus, Trash2, X } from 'lucide-react'
-import { CATALOG_REFERENCE, QUESTION_TYPE_CONFIG, QUESTION_TYPE_OPTIONS } from '../../config/document-config'
+import { CATALOG_REFERENCE, MEDIA_FILE_ACCEPT, QUESTION_TYPE_CONFIG, QUESTION_TYPE_OPTIONS } from '../../config/document-config'
 import type { QuestionAnswer } from '../../domain/question-types'
 import type { QuestionEditorProps } from './question-editor-types'
 
@@ -67,7 +67,7 @@ export function QuestionEditor({ bdcId, question, media, mediaSource, actions, o
           id={`elce-question-illustration-file-${bdcId}`}
           className="elce-visually-hidden"
           type="file"
-          accept="image/*,video/*"
+          accept={MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO}
           aria-label="Choisir une illustration"
           onChange={(event) => {
             const file = event.currentTarget.files?.[0]

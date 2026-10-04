@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createActor } from 'xstate'
 import { afterEach, describe, expect, it } from 'vitest'
-import { BDC_TYPE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RETRY_SCOPE, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CAROUSEL_CARD_PRESET_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { controllerMachine } from '../controller/controller-machine'
 import { AppLayout } from './AppLayout'
 
@@ -176,6 +176,220 @@ describe('AppLayout authoring titles and creation actions', () => {
     const pageBdcs = page.bdcIds.map((bdcId) => actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === bdcId))
     expect(pageBdcs.map((bdc) => bdc?.type)).toEqual([BDC_TYPE.SECTION, BDC_TYPE.SECTION, BDC_TYPE.QUESTION])
     expect(quizButton?.disabled).toBe(true)
+  })
+
+  it('creates, edits and deletes a unique Carousel BDC in the page sequence', async () => {
+    const { actor, host } = mountApp()
+    const carouselButton = host.querySelector<HTMLButtonElement>('#elce-carousel-create')
+    const existingIds = [...actor.getSnapshot().context.document.pages[0]!.bdcIds]
+
+    expect(carouselButton?.getAttribute('aria-label')).toBe('Ajouter un bloc Carousel')
+    expect(carouselButton?.querySelector('svg')?.classList.contains('lucide-images')).toBe(true)
+
+    await act(async () => carouselButton?.click())
+
+    const documentModel = actor.getSnapshot().context.document
+    const carouselBdcId = documentModel.pages[0]!.bdcIds.at(-1)!
+    const carouselBdc = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)
+    expect(documentModel.pages[0]?.bdcIds).toEqual([...existingIds, carouselBdcId])
+    expect(carouselBdc).toMatchObject({ type: BDC_TYPE.CAROUSEL, presetId: DEFAULT_PRESET_ID.CAROUSEL, pageId: 'page-a' })
+    expect(carouselBdc?.carousel?.views).toHaveLength(1)
+    expect(carouselBdc?.carousel?.playbackMode).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
+    expect(carouselBdc?.carousel?.repeatCount).toBe(10)
+    expect(host.querySelector(`#elce-carousel-editor-${carouselBdcId}`)).not.toBeNull()
+    expect(host.querySelector(`#elce-carousel-title-${carouselBdcId}`)?.textContent).toBe('Carousel')
+    expect(host.querySelector(`#elce-carousel-delete-${carouselBdcId}`)?.parentElement?.classList.contains('elce-carousel-editor__header')).toBe(true)
+    const durationSlider = host.querySelector<HTMLInputElement>(`#elce-carousel-duration-${carouselBdcId}`)
+    expect(durationSlider).toMatchObject({ type: 'range', min: '1', max: '10' })
+    expect(host.querySelector(`#elce-carousel-repeat-${carouselBdcId}`)).toBeNull()
+    const playbackSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-playback-${carouselBdcId}`)!
+    await act(async () => setControlledValue(playbackSelect, CAROUSEL_PLAYBACK_MODE.AUTOMATIC))
+    const repeatInput = host.querySelector<HTMLInputElement>(`#elce-carousel-repeat-${carouselBdcId}`)!
+    expect(repeatInput).toMatchObject({ type: 'number', min: '0', max: '10', value: '10' })
+    await act(async () => setControlledValue(repeatInput, '2'))
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.repeatCount).toBe(2)
+    await act(async () => setControlledValue(playbackSelect, CAROUSEL_PLAYBACK_MODE.MANUAL))
+    expect(host.querySelector(`#elce-carousel-repeat-${carouselBdcId}`)).toBeNull()
+    const ratioSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-ratio-${carouselBdcId}`)
+    expect(Array.from(ratioSelect?.options ?? []).map((option) => option.label)).toEqual(CAROUSEL_ASPECT_RATIO_OPTIONS.map((option) => option.label))
+    expect(host.textContent).not.toContain('Preset des prochaines vues')
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-view-add-${carouselBdcId}`)?.click())
+    const editedCarousel = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel
+    const addedView = editedCarousel?.views[1]
+    expect(editedCarousel?.views).toHaveLength(2)
+
+    const viewTransfer = createDataTransfer()
+    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-view-tab-${editedCarousel?.views[0]?.id}`)!, 'dragstart', viewTransfer))
+    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-view-tab-${addedView?.id}`)!, 'dragover', viewTransfer))
+    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-view-tab-${addedView?.id}`)!, 'drop', viewTransfer))
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views.map((view) => view.id))
+      .toEqual([addedView?.id, editedCarousel?.views[0]?.id])
+
+    await act(async () => setControlledValue(
+      host.querySelector<HTMLInputElement>(`#elce-carousel-title-${addedView?.id}`)!,
+      'Titre de la seconde vue',
+    ))
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
+      .find((view) => view.id === addedView?.id))
+      .toMatchObject({ text: { title: 'Titre de la seconde vue' } })
+
+    await act(async () => setControlledValue(ratioSelect!, '4:3'))
+    const ratioCarousel = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel
+    expect(ratioCarousel?.aspectRatio).toEqual({ width: 4, height: 3 })
+    const presetSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-view-preset-${addedView?.id}`)!
+    expect(presetSelect.parentElement?.querySelector('span')?.textContent).toBe('Carte')
+    expect(Array.from(presetSelect.options).map((option) => option.label)).toEqual(CAROUSEL_CARD_PRESET_OPTIONS.map((option) => option.label))
+    await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_IMAGE))
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
+      .find((view) => view.id === addedView?.id))
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, text: { title: 'Titre de la seconde vue' } })
+    const imagePosition = host.querySelector<HTMLSelectElement>(`#elce-carousel-image-position-${addedView?.id}`)!
+    await act(async () => setControlledValue(imagePosition, 'right'))
+    const imageDropZone = host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${addedView?.id}`)
+    expect(imageDropZone?.classList.contains('elce-carousel-media-drop--proportional')).toBe(true)
+    expect(imageDropZone?.style.aspectRatio).toBe('4 / 3')
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
+      .find((view) => view.id === addedView?.id))
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, imagePosition: 'right' })
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-delete-${carouselBdcId}`)?.click())
+    expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual(existingIds)
+    expect(actor.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === carouselBdcId)).toBe(false)
+  })
+
+  it('keeps an image attached while editing Text-short and changing to Text-image', async () => {
+    const { actor, host } = mountApp()
+    await act(async () => host.querySelector<HTMLButtonElement>('#elce-carousel-create')?.click())
+
+    let documentModel = actor.getSnapshot().context.document
+    const carouselBdcId = documentModel.pages[0]!.bdcIds.at(-1)!
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)!.carousel!
+    const viewId = carousel.views[0]!.id
+    const presetSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-view-preset-${viewId}`)!
+
+    await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.PHOTO))
+    await act(async () => actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'media.add',
+        media: { id: 'carousel-media-test', type: MEDIA_TYPE.IMAGE, name: 'photo.png', mimeType: 'image/png', size: 12, caption: '' },
+      },
+    }))
+    await act(async () => actor.send({
+      type: 'media.source.register',
+      mediaId: 'carousel-media-test',
+      source: 'data:image/png;base64,dGVzdA==',
+    }))
+    await act(async () => host.querySelector<HTMLButtonElement>('#elce-content-catalog-tab-media')?.click())
+    const mediaFileInput = host.querySelector<HTMLInputElement>(`#elce-carousel-media-file-${viewId}`)!
+    const mediaFileLabel = host.querySelector<HTMLLabelElement>(`#elce-carousel-media-select-${viewId}`)!
+    expect(mediaFileInput.type).toBe('file')
+    expect(mediaFileInput.accept).toBe(MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO)
+    expect(mediaFileInput.classList.contains('elce-visually-hidden')).toBe(true)
+    expect(mediaFileLabel.tagName).toBe('LABEL')
+    expect(mediaFileLabel.htmlFor).toBe(mediaFileInput.id)
+    expect(host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${viewId}`)?.contains(mediaFileInput)).toBe(true)
+
+    const mediaTransfer = createDataTransfer()
+    const catalogMedia = host.querySelector<HTMLElement>('#elce-catalog-media-carousel-media-test button')!
+    const photoDropZone = host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${viewId}`)!
+    act(() => dispatchDrag(catalogMedia, 'dragstart', mediaTransfer))
+    act(() => dispatchDrag(photoDropZone, 'dragover', mediaTransfer))
+    act(() => dispatchDrag(photoDropZone, 'drop', mediaTransfer))
+    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).not.toBeNull()
+    expect(mediaFileLabel.contains(host.querySelector(`#elce-carousel-media-image-${viewId}`))).toBe(true)
+
+    await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_SHORT))
+    let view = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
+      .find((candidate) => candidate.id === viewId)
+    expect(view).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'carousel-media-test' })
+    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).toBeNull()
+
+    await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${viewId}`)!, 'Image conservée'))
+    await act(async () => setControlledValue(host.querySelector<HTMLTextAreaElement>(`#elce-carousel-message-${viewId}`)!, 'Texte associé'))
+    await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_IMAGE))
+    expect(host.querySelector<HTMLInputElement>(`#elce-carousel-media-file-${viewId}`)?.accept).toBe(MEDIA_FILE_ACCEPT.IMAGE)
+    view = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
+      .find((candidate) => candidate.id === viewId)
+    expect(view).toMatchObject({
+      presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
+      mediaId: 'carousel-media-test',
+      text: { title: 'Image conservée', message: 'Texte associé' },
+    })
+    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).not.toBeNull()
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-view-add-${carouselBdcId}`)?.click())
+    const textOnlyViewId = actor.getSnapshot().context.selectedCarouselViewId!
+    await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${textOnlyViewId}`)!, 'Vue sans image'))
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-view-tab-${viewId}`)?.click())
+    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).not.toBeNull()
+
+    documentModel = actor.getSnapshot().context.document
+    const updatedViews = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
+    view = updatedViews?.find((candidate) => candidate.id === viewId)
+    expect(view).toMatchObject({
+      presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
+      mediaId: 'carousel-media-test',
+      text: { title: 'Image conservée', message: 'Texte associé' },
+    })
+    expect(updatedViews?.find((candidate) => candidate.id === textOnlyViewId))
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, text: { title: 'Vue sans image' }, mediaId: null })
+  })
+
+  it('adds one dual-outcome Result BDC from an Evaluation page icon', async () => {
+    const { actor, host } = mountApp()
+    await act(async () => host.querySelector<HTMLButtonElement>('#elce-create-evaluation-chapter')?.click())
+    const chapterId = actor.getSnapshot().context.document.chapters[1]!.id
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-create-page-${chapterId}`)?.click())
+
+    const page = actor.getSnapshot().context.document.pages.at(-1)!
+    const createResult = host.querySelector<HTMLButtonElement>('#elce-evaluation-result-create')
+    expect(page.type).toBe(PAGE_TYPE.FLUX)
+    expect(createResult?.getAttribute('aria-label')).toBe('Ajouter un bloc résultat')
+    expect(createResult?.querySelector('svg')?.classList.contains('lucide-badge-check')).toBe(true)
+    expect(host.querySelectorAll('#elce-evaluation-result-create')).toHaveLength(1)
+
+    await act(async () => createResult?.click())
+
+    const documentModel = actor.getSnapshot().context.document
+    const resultBdcs = documentModel.bdcs.filter((bdc) => bdc.type === BDC_TYPE.EVALUATION_RESULT)
+    expect(resultBdcs).toHaveLength(1)
+    const resultBdc = resultBdcs[0]!
+    expect(page.bdcIds).toHaveLength(1)
+    expect(documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds).toEqual([
+      ...page.bdcIds,
+      resultBdc.id,
+    ])
+    expect(resultBdc).toMatchObject({
+      presetId: DEFAULT_PRESET_ID.EVALUATION_RESULT,
+      evaluationResult: {
+        success: { message: '', action: null },
+        failure: { message: '', action: null },
+      },
+    })
+    expect(host.querySelector(`#elce-evaluation-result-editor-${resultBdc.id}`)).not.toBeNull()
+
+    await act(async () => setControlledValue(
+      host.querySelector<HTMLTextAreaElement>(`#elce-evaluation-result-message-${resultBdc.id}-success`)!,
+      'Bravo !',
+    ))
+    await act(async () => setControlledValue(
+      host.querySelector<HTMLSelectElement>(`#elce-evaluation-result-action-${resultBdc.id}-success`)!,
+      EVALUATION_RESULT_ACTION.REPLAY,
+    ))
+
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === resultBdc.id)?.evaluationResult).toMatchObject({
+      success: { message: 'Bravo !', action: EVALUATION_RESULT_ACTION.REPLAY },
+      failure: { message: '', action: null },
+    })
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-evaluation-result-delete-${resultBdc.id}`)?.click())
+
+    expect(actor.getSnapshot().context.document.pages.find((candidate) => candidate.id === page.id)?.bdcIds)
+      .toEqual(page.bdcIds)
+    expect(actor.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === resultBdc.id)).toBe(false)
+    expect(host.querySelector(`#elce-evaluation-result-editor-${resultBdc.id}`)).toBeNull()
   })
 
   it('deletes the default Text BDC through the XState document command', async () => {
@@ -384,6 +598,7 @@ describe('AppLayout authoring titles and creation actions', () => {
       effectAllowed: 'none',
       dropEffect: 'none',
       types,
+      files: [] as unknown as FileList,
       setData: (type: string, value: string) => {
         values.set(type, value)
         if (!types.includes(type)) types.push(type)

@@ -70,9 +70,14 @@ export class ElceDocument {
     const currentData = migrateDocumentData(data)
     return new ElceDocument({
       ...currentData,
-      bdcs: currentData.bdcs.map((bdc) => bdc.section === null || bdc.section.content !== undefined
-        ? bdc
-        : { ...bdc, section: { ...bdc.section, content: createEmptyRichTextDocument() } }),
+      bdcs: currentData.bdcs.map((bdc) => ({
+        ...bdc,
+        evaluationResult: bdc.evaluationResult ?? null,
+        carousel: bdc.carousel ?? null,
+        ...(bdc.section === null || bdc.section.content !== undefined
+          ? {}
+          : { section: { ...bdc.section, content: createEmptyRichTextDocument() } }),
+      })),
     })
   }
 }
@@ -152,6 +157,8 @@ export function createInitialDocument(): ElceDocument {
     pageId: page.id,
     mediaId: null,
     question: null,
+    evaluationResult: null,
+    carousel: null,
     section: {
       title: '',
       markup: '<p id="section-text-1"></p>',

@@ -1,7 +1,7 @@
 import { useSelector } from '@xstate/react'
 import { Fragment, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { Archive, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, ListChecks, Trash2 } from 'lucide-react'
+import { Archive, BadgeCheck, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, Images, ListChecks, Trash2 } from 'lucide-react'
 import './app-layout.css'
 
 import { ANCHOR_RETURN, BDC_ORDER, BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
@@ -9,6 +9,8 @@ import type { ChapterType, EvaluationRetryScope } from '../../config/document-co
 import {
   createChapterCommand,
   createChapterMoveCommand,
+  createCarouselBdcCommand,
+  createEvaluationResultBdcCommand,
   createPageDeleteCommand,
   createPageMoveCommand,
   createSectionBdcCommand,
@@ -16,7 +18,9 @@ import {
 import type { PagePlacement } from '../commands/document-command-types'
 import type { AppLayoutProps } from './app-layout-types'
 import { SectionEditor } from '../editor/SectionEditor'
+import { CarouselEditor } from '../editor/CarouselEditor'
 import { QuestionEditor } from '../editor/QuestionEditor'
+import { EvaluationResultEditor } from '../editor/EvaluationResultEditor'
 import { PlayerPreview } from '../player/PlayerPreview'
 import { createStableId } from '../../domain/document-model'
 import type { ElceDocument } from '../../domain/document-model'
@@ -24,8 +28,10 @@ import type { Chapter } from '../../domain/document-types'
 import { ElceAnchorDropFacade } from '../../domain/anchor-drop-facade'
 import { ElcePageMediaService } from '../../domain/page-media-service'
 import { ElceQuestionFacade } from '../../domain/question-facade'
+import { ElceCarouselFacade, createCarouselBdcId } from '../../domain/carousel-facade'
 import type { ElceQuestionEditorActions } from '../../domain/question-facade-types'
 import type { QuestionContent } from '../../domain/question-types'
+import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog-types'
 import type { ScenarioEntry } from '../../domain/scenario-entry-types'
 
@@ -74,10 +80,26 @@ export function AppLayout({ controller }: AppLayoutProps) {
     })
   }
   const questionFacade = questionFacadeRef.current
+  const carouselFacadeRef = useRef<ElceCarouselFacade | null>(null)
+  if (carouselFacadeRef.current === null) {
+    carouselFacadeRef.current = new ElceCarouselFacade({
+      dispatch: (command) => controller.send({ type: 'document.apply', command }),
+      selectView: (viewId) => controller.send({ type: 'carousel.view.select', viewId }),
+      importMedia: (bdcId, viewId, mediaImport) => controller.send({
+        type: 'carousel.media.file.import',
+        bdcId,
+        viewId,
+        file: mediaImport.file,
+        media: mediaImport.media,
+      }),
+    })
+  }
+  const carouselFacade = carouselFacadeRef.current
   const stateValue = useSelector(controller, (snapshot) => String(snapshot.value))
   const documentModel = useSelector(controller, (snapshot) => snapshot.context.document)
   const selectedPageId = useSelector(controller, (snapshot) => snapshot.context.selectedPageId)
   const selectedChapterId = useSelector(controller, (snapshot) => snapshot.context.selectedChapterId)
+  const selectedCarouselViewId = useSelector(controller, (snapshot) => snapshot.context.selectedCarouselViewId)
   const catalogTab = useSelector(controller, (snapshot) => snapshot.context.catalogTab)
   const mediaSources = useSelector(controller, (snapshot) => snapshot.context.mediaSources)
   const mediaSourceKey = Object.keys(mediaSources).sort().join('|')
@@ -97,6 +119,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
             return bdc.section === null ? [] : [bdc]
           case BDC_TYPE.QUESTION:
             return bdc.question === null ? [] : [bdc]
+          case BDC_TYPE.EVALUATION_RESULT:
+            return bdc.evaluationResult == null ? [] : [bdc]
+          case BDC_TYPE.CAROUSEL:
+            return bdc.carousel == null ? [] : [bdc]
           default:
             return []
         }
@@ -104,6 +130,13 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const pageHasQuestion = selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.QUESTION)
   const canCreateQuestion = !pageHasQuestion && pageAllowsQuestion(selectedPage)
   const canCreateSection = pageAllowsSection(selectedPage)
+  const canCreateEvaluationResult = pageAllowsEvaluationResult(selectedPage, documentModel.chapters)
+  const canCreateCarousel = selectedPage?.type === PAGE_TYPE.FLUX
+  const mediaById = Object.fromEntries(documentModel.medias.map((media) => [media.id, {
+    name: media.name,
+    type: media.type,
+    source: mediaSources[media.id] ?? null,
+  }]))
   const catalogContents = anchorDropFacade.catalogContents(documentModel)
   const unanchoredMediaBdcs = selectedPage === undefined || selectedChapter !== undefined
     ? []
@@ -191,6 +224,40 @@ export function AppLayout({ controller }: AppLayoutProps) {
         controller.send({
           type: 'document.apply',
           command: createSectionBdcCommand(createStableId('bdc-section'), selectedPage.id, selectedPage.bdcIds.length),
+        })
+        return
+      case PAGE_TYPE.DIAPO:
+      default:
+        return
+    }
+  }
+
+  /** Creates the single dual-outcome Result BDC through XState. */
+  const addEvaluationResult = () => {
+    switch (selectedPage?.type) {
+      case PAGE_TYPE.FLUX:
+        controller.send({
+          type: 'document.apply',
+          command: createEvaluationResultBdcCommand(
+            createStableId('bdc-evaluation-result'),
+            selectedPage.id,
+            selectedPage.bdcIds.length,
+          ),
+        })
+        return
+      case PAGE_TYPE.DIAPO:
+      default:
+        return
+    }
+  }
+
+  /** Adds a unique Carousel BDC at the end of the selected page's BDC order. */
+  const addCarousel = () => {
+    switch (selectedPage?.type) {
+      case PAGE_TYPE.FLUX:
+        controller.send({
+          type: 'document.apply',
+          command: createCarouselBdcCommand(createCarouselBdcId(), selectedPage.id, selectedPage.bdcIds.length),
         })
         return
       case PAGE_TYPE.DIAPO:
@@ -488,6 +555,23 @@ export function AppLayout({ controller }: AppLayoutProps) {
                   disabled={!canCreateQuestion}
                   onClick={addQuestion}
                 ><ListChecks aria-hidden="true" size={17} strokeWidth={2} /></button>
+                <button
+                  id="elce-carousel-create"
+                  className="elce-icon-action"
+                  type="button"
+                  aria-label="Ajouter un bloc Carousel"
+                  title="Ajouter un bloc Carousel"
+                  disabled={!canCreateCarousel}
+                  onClick={addCarousel}
+                ><Images aria-hidden="true" size={17} strokeWidth={2} /></button>
+                {canCreateEvaluationResult && <button
+                  id="elce-evaluation-result-create"
+                  className="elce-icon-action"
+                  type="button"
+                  aria-label="Ajouter un bloc résultat"
+                  title="Ajouter un bloc résultat"
+                  onClick={addEvaluationResult}
+                ><BadgeCheck aria-hidden="true" size={17} strokeWidth={2} /></button>}
               </div>}
             </div>
           </div>
@@ -563,7 +647,28 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                 actions={createQuestionEditorActions(questionFacade, bdc.id, bdc.question)}
                                 onCatalogReference={(value) => questionFacade.attachMediaReference(bdc.id, value)}
                               />
-                            : null}
+                            : bdc.type === BDC_TYPE.EVALUATION_RESULT && bdc.evaluationResult !== null && bdc.evaluationResult !== undefined
+                              ? <EvaluationResultEditor
+                                  bdcId={bdc.id}
+                                  content={bdc.evaluationResult}
+                                  onChange={(evaluationResult: EvaluationResultContent) => controller.send({
+                                    type: 'document.apply',
+                                    command: { type: 'bdc.evaluation-result.update', bdcId: bdc.id, evaluationResult },
+                                  })}
+                                  onDelete={() => controller.send({
+                                    type: 'document.apply',
+                                    command: { type: 'bdc.evaluation-result.delete', bdcId: bdc.id },
+                                  })}
+                                />
+                              : bdc.type === BDC_TYPE.CAROUSEL && bdc.carousel !== null && bdc.carousel !== undefined
+                                ? <CarouselEditor
+                                    bdcId={bdc.id}
+                                    content={bdc.carousel}
+                                    selectedViewId={selectedCarouselViewId}
+                                    mediaById={mediaById}
+                                    actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel)}
+                                  />
+                              : null}
                       </div>
                     </Fragment>
                   )
@@ -1173,6 +1278,30 @@ function pageAllowsSection(page: ElceDocument['pages'][number] | undefined): boo
   switch (page?.type) {
     case PAGE_TYPE.FLUX:
       return true
+    case PAGE_TYPE.DIAPO:
+    default:
+      return false
+  }
+}
+
+/** Applies the Evaluation-only whitelist for the Result BDC toolbar action. */
+function pageAllowsEvaluationResult(
+  page: ElceDocument['pages'][number] | undefined,
+  chapters: ElceDocument['chapters'],
+): boolean {
+  switch (page?.type) {
+    case PAGE_TYPE.FLUX: {
+      const chapter = page.chapterId === null
+        ? undefined
+        : chapters.find((candidate) => candidate.id === page.chapterId)
+      switch (chapter?.type) {
+        case CHAPTER_TYPE.EVALUATION:
+          return true
+        case CHAPTER_TYPE.STANDARD:
+        case undefined:
+          return false
+      }
+    }
     case PAGE_TYPE.DIAPO:
     default:
       return false

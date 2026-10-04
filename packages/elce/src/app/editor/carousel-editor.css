@@ -1,0 +1,274 @@
+.elce-carousel-editor {
+  min-width: 0;
+  padding: 1rem 0;
+  border-top: 1px solid #e4e0d7;
+}
+
+.elce-carousel-editor__header {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.elce-carousel-editor__title {
+  margin: 0;
+  color: #293b39;
+  font-size: 1rem;
+}
+
+.elce-carousel-editor__settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  align-items: end;
+  margin-bottom: 0.85rem;
+}
+
+.elce-carousel-editor__setting,
+.elce-carousel-editor__ratio,
+.elce-carousel-editor__view-duration {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #6b716f;
+  font-size: 0.7rem;
+}
+
+.elce-carousel-editor__setting--repeat {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.elce-carousel-editor__setting--repeat input {
+  width: 3.5rem;
+}
+
+.elce-carousel-editor__delete-bdc {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  margin-left: auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #d6d3ca;
+  border-radius: 0.4rem;
+  color: #8b5652;
+  background: #fff;
+  cursor: pointer;
+}
+
+.elce-carousel-editor__setting input,
+.elce-carousel-editor__setting select,
+.elce-carousel-editor__ratio input,
+.elce-carousel-editor__view-toolbar select,
+.elce-carousel-editor__view-duration input,
+.elce-carousel-text-fields input,
+.elce-carousel-text-fields textarea,
+.elce-carousel-image-caption-fields > input {
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #d8d5cb;
+  border-radius: 0.35rem;
+  color: #273b3a;
+  background: #fff;
+  font: inherit;
+}
+
+.elce-carousel-editor__setting input[type='range'] {
+  min-width: 9rem;
+  padding: 0;
+  border: 0;
+  accent-color: #52776f;
+}
+
+.elce-carousel-editor__duration-control {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.elce-carousel-editor__duration-control input[type='range'] {
+  flex: 1;
+}
+
+.elce-carousel-editor__duration-control output {
+  min-width: 2.25rem;
+  white-space: nowrap;
+}
+
+.elce-carousel-editor__views {
+  display: flex;
+  min-height: 2.6rem;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #e4e0d7;
+}
+
+.elce-carousel-editor__view-tab,
+.elce-carousel-editor__view-add,
+.elce-carousel-editor__delete,
+.elce-carousel-editor__media-clear {
+  display: inline-flex;
+  min-width: 2.15rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 1px solid #d6d3ca;
+  border-radius: 0.4rem;
+  color: #526b66;
+  background: #fff;
+  cursor: pointer;
+}
+
+.elce-carousel-editor__view-tab.is-active {
+  border-color: #52776f;
+  color: #fff;
+  background: #52776f;
+}
+
+.elce-carousel-editor__view-add {
+  border-style: dashed;
+}
+
+.elce-carousel-editor__view-toolbar {
+  display: flex;
+  min-height: 2.8rem;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.3rem 0 0.6rem;
+}
+
+.elce-carousel-editor__view-duration {
+  flex-direction: row;
+  align-items: center;
+}
+
+.elce-carousel-editor__view-duration input {
+  width: 5.5rem;
+}
+
+.elce-carousel-editor__delete {
+  color: #8b5652;
+}
+
+.elce-carousel-editor__delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.elce-carousel-text-fields,
+.elce-carousel-image-caption-fields {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+
+.elce-carousel-text-image-fields {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(15rem, 3fr);
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.elce-carousel-text-image-fields > .elce-carousel-editor__setting {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+}
+
+.elce-carousel-text-image-fields--image-right {
+  grid-template-columns: minmax(15rem, 3fr) minmax(12rem, 2fr);
+}
+
+.elce-carousel-text-image-fields--image-right > .elce-carousel-media-drop {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.elce-carousel-text-image-fields--image-right > .elce-carousel-text-fields {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.elce-carousel-text-fields textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
+.elce-carousel-text-fields small {
+  color: #818681;
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.elce-carousel-media-drop {
+  position: relative;
+  display: grid;
+  min-height: 9rem;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed #afc0b9;
+  border-radius: 0.5rem;
+  background: #f6f8f5;
+}
+
+.elce-carousel-media-drop--proportional {
+  width: 100%;
+  min-height: 0;
+}
+
+.elce-carousel-media-drop__file-trigger {
+  display: flex;
+  min-height: 9rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #5b716a;
+  cursor: pointer;
+}
+
+.elce-carousel-media-drop--proportional .elce-carousel-media-drop__file-trigger {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.elce-carousel-media-drop:focus-within {
+  outline: 2px solid #5b716a;
+  outline-offset: 2px;
+}
+
+.elce-carousel-media-drop__preview {
+  display: block;
+  width: 100%;
+  max-height: 18rem;
+  object-fit: contain;
+}
+
+.elce-carousel-media-drop--proportional .elce-carousel-media-drop__preview {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+}
+
+.elce-carousel-editor__media-clear {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  min-width: 1.85rem;
+  min-height: 1.85rem;
+  color: #7b4844;
+  background: rgb(255 255 255 / 90%);
+}
+
+.elce-carousel-editor__empty {
+  color: #727a75;
+}

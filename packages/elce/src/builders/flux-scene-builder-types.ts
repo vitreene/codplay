@@ -18,5 +18,6 @@ export interface FluxSceneBuild {
   readonly scrollPortId: string
   readonly bottomMarkerId: string
   readonly storyIds: readonly string[]
+  readonly styleSheets: readonly string[]
   readonly questionReset?: FluxQuestionReset
 }

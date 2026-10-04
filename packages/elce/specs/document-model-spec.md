@@ -24,6 +24,9 @@ pages du catalogue restent hors scénario. Une page possède un type (`flux` ou
 Un BDC est le transport unique d’une insertion et a un seul emplacement : une
 page ou le catalogue. Il référence éventuellement une ressource média, qui est
 indépendante du BDC et peut être référencée par plusieurs BDC.
+Un BDC Carousel transporte une séquence ordonnée de vues. Son contenu et les
+références de médias par vue sont enregistrés sur ce BDC unique ; les médias
+restent des ressources distinctes.
 
 `ElceDocument.fromJSON()` accepte la version 2 et migre la version 1 en
 conservant l’ordre que l’ancienne interface produisait : pages racine dans
@@ -40,15 +43,18 @@ Les modules d’exécution ne redéclarent pas ces contrats et ne réintroduisen
 donc pas de chaînes de placement dans les commandes.
 
 Un nouveau document de POC contient un chapitre, une page Flux `Page A` et un
-bdc Section vide associé au preset `section-basic`. Les quatre presets fixes
-(`section-basic`, `question-basic`, `image-caption` et `message-basic`) sont
-déclarés comme objets dans `src/config/presets.ts`. Chaque objet fixe le
-markup HTML, ses zones, leur catégorie de contenu et leur caractère requis.
+bdc Section vide associé au preset `section-basic`. Les presets de cartes sont
+déclarés comme objets dans `src/config/presets.ts`. Chaque objet fixe le markup
+HTML, ses zones, leur catégorie de contenu et leur caractère requis.
 `ElceCardPresetBuilder` instancie ce markup avec un identifiant racine et des
 parts CodPlay propres à l’instance ; il ne crée ni BDC ni composant CodPlay.
-L’auteur n’édite pas les presets dans cette tranche. Le preset Section est
-consommé par le builder Flux ; le raccord des trois autres au rendu est encore
-en cours dans le plan de construction.
+L’auteur n’édite pas les presets dans cette tranche. Le BDC Résultat utilise le
+preset `evaluation-result-basic` et porte deux branches, `success` et `failure`.
+`ElceDocument.fromJSON()` normalise à `null` le contenu Résultat absent dans les
+anciens documents pour préserver leur chargement. Le BDC Carousel utilise le
+preset `carousel-basic` ; son contenu contient le mode et les paramètres de
+lecture ainsi que les vues ordonnées, dont le preset et les données propres à
+chaque vue.
 
 `ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
 2. Les octets des médias sont conservés à part par la frontière IndexedDB.
@@ -59,15 +65,24 @@ Les transformations sont pures : `applyDocumentCommand(document, command)`
 retourne une nouvelle valeur après vérification de ses invariants. Elles couvrent
 la création, le renommage et le déplacement de chapitres et de pages, le
 déplacement et le retrait au catalogue des bdc, la suppression définitive
-d’une page ou d’un bdc disponible, la mise à jour d’une Section, l’ajout de
-métadonnées média et le renommage du document.
+d’une page ou d’un bdc disponible, la mise à jour d’une Section, d’une Question,
+d’un Résultat ou d’un Carousel, l’ajout de métadonnées média et le renommage du
+document.
 La suppression définitive d’une page supprime ses bdc, mais conserve les médias
 du catalogue. `bdc.delete` ne peut supprimer qu’un BDC inutilisé et présent dans
 `catalogBdcIds` ; son média reste dans le document.
 `bdc.section.delete` supprime un BDC Section affecté à une page et les BDC
 image/vidéo qu’il référence comme ancres ; les ressources média restent dans
 le catalogue. `bdc.question.delete` supprime le BDC Question de sa page et
-conserve son illustration média.
+conserve son illustration média. `bdc.evaluation-result.delete` retire de la
+page le BDC Résultat affecté ; il ne le remet pas au catalogue. La commande
+`bdc.evaluation-result.update` édite ensemble ses branches Réussite et Échec ;
+le service métier vérifie qu’une action choisie est permise pour sa branche.
+`bdc.carousel.update` remplace le contenu du Carousel après validation par son
+service métier. Les commandes `bdc.carousel.media.set` et
+`bdc.carousel.media.attach` changent la référence média d’une vue sans créer un
+nouveau média si la ressource existe déjà. `bdc.carousel.delete` retire le BDC
+unique de la page et conserve les médias référencés.
 
 `page.rename` et `chapter.rename` valident un nom non vide après suppression
 des espaces de bord. Ces commandes ne changent ni l’affectation des pages, ni
@@ -158,12 +173,14 @@ raccord ne choisit pas quels médias fusionner.
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
   vérifie création, renommage, déplacement, retrait, suppression, réemploi
   d’un média, la suppression catalogue d’un BDC et le refus d’effacer un BDC de page,
-  avec conservation du média,
-  suppression conditionnelle d’un chapitre, retrait au catalogue d’un BDC
+  avec conservation du média, la suppression conditionnelle d’un chapitre,
+  le retrait au catalogue d’un BDC
   placé directement dans une page, suppression d’un BDC ancré sans retour au
   catalogue, conservation et réemploi de son média, exclusivité et aller-retour
   JSON, fusion de médias, conservation des BDC et placements, rejet de
   métadonnées incompatibles.
+- Le même fichier vérifie la création, la mise à jour des deux branches et le
+  retrait par commande du BDC Résultat.
 - Le même fichier vérifie la migration v1→v2, le mélange et le déplacement
   d’entrées page/chapitre à la racine, le déplacement d’une page de chapitre
   vers la racine et les invariants de placement correspondants.
@@ -192,8 +209,8 @@ raccord ne choisit pas quels médias fusionner.
   séparés des octets différents de même taille, et ne confond pas les catégories
   image et vidéo.
 - [`card-preset-builder.test.ts`](../src/builders/card-preset-builder.test.ts)
-  vérifie les quatre objets de preset, les catégories et zones requises du
-  preset Question, les `id` des éléments produits, la distinction entre deux
+  vérifie tous les objets de preset, les catégories et zones requises du preset
+  Question, les `id` des éléments produits, la distinction entre deux
   instances du même preset et l’insertion du texte Section dans sa zone.
 - Dans un parcours Safari antérieur au nettoyage du catalogue, la page A
   contenait deux ancres vidéo et un bdc vidéo direct. L’action « Renvoyer au
