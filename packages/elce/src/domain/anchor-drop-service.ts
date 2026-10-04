@@ -2,12 +2,12 @@ import {
   ANCHOR_MEDIA_PRESETS,
   BDC_TYPE,
   CATALOG_REFERENCE,
-  MEDIA_MIME_PREFIX,
   MEDIA_TYPE,
   PAGE_TYPE,
 } from '../config/document-config'
 import type { DocumentCommand } from '../app/commands/document-command-types'
 import { createStableId, type ElceDocument } from './document-model'
+import { ElceMediaResourceService } from './media-resource-service'
 import type {
   ElceCatalogBdcEntry,
   ElceCatalogContents,
@@ -28,6 +28,8 @@ type CatalogBdcContent = Readonly<{
   mediaType: ElceCatalogMediaType
   preset: AnchorMediaPreset
 }>
+
+const mediaResourceService = new ElceMediaResourceService()
 
 /** Builds métier targets and commands for file and catalogue anchor drops. */
 export class ElceAnchorDropService {
@@ -76,12 +78,18 @@ export class ElceAnchorDropService {
 
   /** Creates a typed, stable target for one accepted file drop. */
   public createFileDropTarget(file: File, pageId: PageId): ElceAnchorDropTarget | null {
-    const mediaType = mediaTypeFor(file.type)
-    switch (mediaType) {
+    const mediaImport = mediaResourceService.createImport(file)
+    switch (mediaImport) {
       case null:
         return null
       default:
-        return createMediaDropTarget(file, pageId, mediaType)
+        switch (mediaImport.media.type) {
+          case MEDIA_TYPE.IMAGE:
+          case MEDIA_TYPE.VIDEO:
+            return createMediaDropTarget(mediaImport.media, pageId, mediaImport.media.type)
+          case MEDIA_TYPE.AUDIO:
+            return null
+        }
     }
   }
 
@@ -188,17 +196,6 @@ export class ElceAnchorDropService {
 }
 
 /** Maps supported file MIME types to their configured media categories. */
-function mediaTypeFor(mimeType: string): ElceCatalogMediaType | null {
-  switch (true) {
-    case mimeType.startsWith(MEDIA_MIME_PREFIX.IMAGE):
-      return MEDIA_TYPE.IMAGE
-    case mimeType.startsWith(MEDIA_MIME_PREFIX.VIDEO):
-      return MEDIA_TYPE.VIDEO
-    default:
-      return null
-  }
-}
-
 /** Checks that a catalogue reference still belongs to this Flux Section. */
 function isFluxSection(document: ElceDocument, pageId: PageId, sectionBdcId: string): boolean {
   const page = document.pages.find((candidate) => candidate.id === pageId)
@@ -345,22 +342,14 @@ function createReusableMediaDropTarget(
 }
 
 /** Builds the stable document references created by one accepted file drop. */
-function createMediaDropTarget(file: File, pageId: PageId, mediaType: ElceCatalogMediaType): ElceAnchorDropTarget {
+function createMediaDropTarget(media: MediaMetadata, pageId: PageId, mediaType: ElceCatalogMediaType): ElceAnchorDropTarget {
   const preset = ANCHOR_MEDIA_PRESETS[mediaType]
-  const mediaId = createStableId(`media-${mediaType}`)
   const bdcId = createStableId(`bdc-${mediaType}`)
   return {
     pageId,
     bdcId,
-    mediaId,
-    media: {
-      id: mediaId,
-      type: mediaType,
-      name: file.name,
-      mimeType: file.type || `${mediaType}/*`,
-      size: file.size,
-      caption: '',
-    },
+    mediaId: media.id,
+    media,
     bdcType: preset.bdcType,
     presetId: preset.presetId,
     partId: `${pageId}:${bdcId}:anchor`,

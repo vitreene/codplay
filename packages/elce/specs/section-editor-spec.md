@@ -2,12 +2,11 @@
 
 ## Statut
 
-**En cours — première surface WYSIWYG implémentée et vérifiée.**
+**En cours — édition WYSIWYG, ancres de média et suppression du BDC Section
+implémentées et vérifiées.**
 
-Cette tranche couvre l’édition d’une Section Flux existante. L’insertion des
-bdc par ancre, les médias et la sélection de presets restent dans les étapes
-suivantes du plan. Le nœud d’ancre partagé par l’éditeur est décrit dans la
-[spécification des ancres](./anchor-spec.md).
+Cette tranche couvre l’édition et la suppression d’une Section Flux. Les
+parcours d’ancrage sont décrits dans la [spécification des ancres](./anchor-spec.md).
 
 ## Contrat
 
@@ -32,6 +31,9 @@ La surface Tiptap propose dans le POC :
 
 Chaque modification passe par la commande `bdc.section.update` du contrôleur
 XState, avec le JSON éditable et le HTML statique correspondant.
+La corbeille du titre envoie `bdc.section.delete` au même contrôleur. Cette
+commande retire la Section de sa page, supprime ses BDC image/vidéo ancrés et
+conserve leurs ressources média réutilisables.
 
 ## Preuves
 
@@ -40,7 +42,10 @@ XState, avec le JSON éditable et le HTML statique correspondant.
   des commandes actives lorsque la sélection passe d’un titre italique à un
   paragraphe.
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
-  vérifie la conservation conjointe du JSON et du HTML exporté.
+  vérifie la conservation conjointe du JSON et du HTML exporté, ainsi que la
+  suppression de la Section et de ses BDC ancrés en conservant les médias.
+- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) vérifie que la
+  suppression du BDC Texte initial passe par la commande documentaire XState.
 - [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
   vérifie que le builder porte le markup statique dans la scène Flux.
 

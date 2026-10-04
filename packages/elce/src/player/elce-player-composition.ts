@@ -1,6 +1,6 @@
 import { Sighty, type SightyScenarioDefinition } from '@codplay/sighty'
 import type { CodPlayEngineOptions } from 'codplay'
-import type { SceneDoc } from 'codplay/scene/types'
+import type { SightySceneSourceValue } from '@codplay/sighty'
 import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
@@ -74,20 +74,28 @@ export class ElcePlayerComposition {
 function createPageSceneCatalog(
   document: ElceDocument,
   mediaSources: ElcePlayerCompositionOptions['mediaSources'],
-): Readonly<Record<string, SceneDoc<string>>> {
+): Readonly<Record<string, SightySceneSourceValue>> {
   return Object.fromEntries(scenarioPageIds(document).map((pageId) => {
     const page = document.pages.find((candidate) => candidate.id === pageId)
     if (page === undefined) throw new Error(`Page absente du document : ${pageId}`)
-    return [`scene-${page.id}`, buildFluxScene(page, document.bdcs, { mediaSources }).sceneDoc]
+    const scene = buildFluxScene(page, document.bdcs, {
+      mediaSources,
+      mediaTypes: Object.fromEntries(document.medias.map((media) => [media.id, media.type])),
+    })
+    const questionReset = scene.questionReset
+    if (questionReset === undefined) return [`scene-${page.id}`, scene.sceneDoc]
+    return [`scene-${page.id}`, {
+      sceneDoc: scene.sceneDoc,
+      onReset: (keys: readonly string[]) => keys.includes('all') || keys.includes('quiz')
+        ? { name: questionReset.eventName, data: { keys: [...keys] } }
+        : undefined,
+    }]
   }))
 }
 
 /** Reads the same page order used by the Sighty scenario builder. */
 function scenarioPageIds(document: ElceDocument): readonly string[] {
-  return [
-    ...document.data.scenarioPageIds,
-    ...document.chapters.flatMap((chapter) => chapter.pageIds),
-  ]
+  return document.scenarioPageIds
 }
 
 /** Assigns one stable CodPlay instance identity to every authored scene. */

@@ -7,6 +7,7 @@ export type SectionEditorChange = ElceSectionChange
 
 export interface SectionEditorProps {
   readonly bdc: Bdc
+  readonly onDelete: () => void
   readonly createFileDropTarget?: (file: File) => ElceAnchorDropTarget | null
   readonly createCatalogDropTarget?: (reference: ElceCatalogReference) => ElceCatalogDropTarget | null
   readonly resolveMediaSource?: (mediaId: MediaId, mediaType: 'image' | 'video') => string | null

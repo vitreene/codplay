@@ -1,6 +1,7 @@
-import { BDC_LOCATION, PAGE_LOCATION } from '../../config/document-config'
-import type { BdcType, PageType } from '../../config/document-config-types'
+import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-config'
+import type { BdcType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RichTextDocument } from '../../domain/document-types'
+import type { QuestionContent } from '../../domain/question-types'
 
 export type PagePlacement =
   | Readonly<{ kind: typeof PAGE_LOCATION.CHAPTER; chapterId: ChapterId; index?: number }>
@@ -14,6 +15,7 @@ export type BdcPlacement =
 export type CreatePageCommandInput = Readonly<{
   pageId: PageId
   bdcId: BdcId
+  defaultBdcType?: typeof BDC_TYPE.SECTION | typeof BDC_TYPE.QUESTION
   pageType?: PageType
   name?: string
   placement: PagePlacement
@@ -27,6 +29,13 @@ export type DocumentCommand =
       chapterType?: Chapter['type']
     }>
   | Readonly<{ type: 'chapter.rename'; chapterId: ChapterId; name: string }>
+  | Readonly<{
+      type: 'chapter.evaluation.settings.update'
+      chapterId: ChapterId
+      attemptLimit: number | null
+      retryScope: EvaluationRetryScope
+    }>
+  | Readonly<{ type: 'chapter.move'; chapterId: ChapterId; index?: number }>
   | Readonly<{ type: 'chapter.delete'; chapterId: ChapterId }>
   | (Readonly<{ type: 'page.create' }> & CreatePageCommandInput)
   | Readonly<{ type: 'page.rename'; pageId: PageId; name: string }>
@@ -50,7 +59,12 @@ export type DocumentCommand =
       title: string
       markup: string
       content: RichTextDocument
-    }>
+  }>
+  | Readonly<{ type: 'bdc.question.update'; bdcId: BdcId; question: QuestionContent }>
+  | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
+  | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
+  | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.section.delete'; bdcId: BdcId }>
   | Readonly<{
       type: 'bdc.anchor.create'
       sectionBdcId: BdcId

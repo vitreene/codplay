@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { createInitialDocument, ElceDocument } from '../../domain/document-model'
+import { ElceQuestionService } from '../../domain/question-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
   createChapterCommand,
+  createChapterMoveCommand,
   createPageCommand,
 } from './document-commands'
 
@@ -33,7 +35,7 @@ describe('Elcé document commands', () => {
       pageIds: ['page-a'],
     })
     expect(renamedChapter.bdcs).toEqual(initial.bdcs)
-    expect(renamedChapter.data.scenarioPageIds).toEqual(initial.data.scenarioPageIds)
+    expect(renamedChapter.data.scenarioEntries).toEqual(initial.data.scenarioEntries)
     expect(renamedChapter.data.catalogPageIds).toEqual(initial.data.catalogPageIds)
   })
 
@@ -44,6 +46,40 @@ describe('Elcé document commands', () => {
       .toThrow('Le nom de la page ne peut pas être vide')
     expect(() => applyDocumentCommand(initial, { type: 'chapter.rename', chapterId: 'chapter-1', name: '   ' }))
       .toThrow('Le nom du chapitre ne peut pas être vide')
+  })
+
+  it('stores Evaluation chapter options and keeps the 80 percent threshold fixed', () => {
+    const initial = createInitialDocument()
+    const evaluationChapter = applyDocumentCommand(initial, createChapterCommand(initial, undefined, CHAPTER_TYPE.EVALUATION))
+    const updated = applyDocumentCommand(evaluationChapter, {
+      type: 'chapter.evaluation.settings.update',
+      chapterId: evaluationChapter.chapters[1]!.id,
+      attemptLimit: 3,
+      retryScope: EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS,
+    })
+
+    expect(evaluationChapter.chapters[1]).toMatchObject({
+      evaluationThreshold: DEFAULT_EVALUATION_SETTINGS.threshold,
+      evaluationAttemptLimit: DEFAULT_EVALUATION_SETTINGS.attemptLimit,
+      evaluationRetryScope: DEFAULT_EVALUATION_SETTINGS.retryScope,
+    })
+    expect(updated.chapters[1]).toMatchObject({
+      evaluationThreshold: DEFAULT_EVALUATION_SETTINGS.threshold,
+      evaluationAttemptLimit: 3,
+      evaluationRetryScope: EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS,
+    })
+    expect(() => applyDocumentCommand(updated, {
+      type: 'chapter.evaluation.settings.update',
+      chapterId: 'chapter-1',
+      attemptLimit: 3,
+      retryScope: EVALUATION_RETRY_SCOPE.ALL_QUESTIONS,
+    })).toThrow('Les réglages d’évaluation ne s’appliquent pas')
+    expect(() => applyDocumentCommand(updated, {
+      type: 'chapter.evaluation.settings.update',
+      chapterId: evaluationChapter.chapters[1]!.id,
+      attemptLimit: 0,
+      retryScope: EVALUATION_RETRY_SCOPE.ALL_QUESTIONS,
+    })).toThrow('La limite de tentatives doit être un entier positif')
   })
 
   it('creates, moves and removes pages without sharing an assignment', () => {
@@ -64,7 +100,7 @@ describe('Elcé document commands', () => {
     const catalogued = applyDocumentCommand(moved, { type: 'page.remove', pageId: 'page-b' })
 
     expect(catalogued.data.catalogPageIds).toEqual(['page-b'])
-    expect(catalogued.data.scenarioPageIds).toEqual([])
+    expect(catalogued.scenarioPageIds).toEqual(['page-a'])
     expect(catalogued.chapters[0]?.pageIds).toEqual(['page-a'])
     assertDocumentInvariants(catalogued)
   })
@@ -249,6 +285,72 @@ describe('Elcé document commands', () => {
 
     const restored = ElceDocument.fromJSON(JSON.parse(JSON.stringify(document.toJSON())))
     expect(restored.toJSON()).toEqual(document.toJSON())
+  })
+
+  it('migrates version 1 root pages before the existing chapter order', () => {
+    const withRootPage = applyDocumentCommand(createInitialDocument(), createPageCommand({
+      pageId: 'page-root',
+      bdcId: 'bdc-section-root',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    const { scenarioEntries: _scenarioEntries, ...legacyFields } = withRootPage.toJSON()
+    const restored = ElceDocument.fromJSON({
+      ...legacyFields,
+      version: 1,
+      scenarioPageIds: ['page-root'],
+    })
+
+    expect(restored.data.scenarioEntries).toEqual([
+      { kind: 'page', pageId: 'page-root' },
+      { kind: 'chapter', chapterId: 'chapter-1' },
+    ])
+    expect(restored.scenarioPageIds).toEqual(['page-root', 'page-a'])
+  })
+
+  it('moves a standalone page before and after chapter entries in the root sequence', () => {
+    const withRootPage = applyDocumentCommand(createInitialDocument(), createPageCommand({
+      pageId: 'page-root',
+      bdcId: 'bdc-section-root',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    const beforeChapter = applyDocumentCommand(withRootPage, {
+      type: 'page.move',
+      pageId: 'page-root',
+      placement: { kind: PAGE_LOCATION.SCENARIO, index: 0 },
+    })
+    const afterChapter = applyDocumentCommand(beforeChapter, {
+      type: 'page.move',
+      pageId: 'page-root',
+      placement: { kind: PAGE_LOCATION.SCENARIO, index: 2 },
+    })
+
+    expect(beforeChapter.data.scenarioEntries).toEqual([
+      { kind: 'page', pageId: 'page-root' },
+      { kind: 'chapter', chapterId: 'chapter-1' },
+    ])
+    expect(afterChapter.data.scenarioEntries).toEqual([
+      { kind: 'chapter', chapterId: 'chapter-1' },
+      { kind: 'page', pageId: 'page-root' },
+    ])
+    const withSecondChapter = applyDocumentCommand(afterChapter, {
+      type: 'chapter.create',
+      chapterId: 'chapter-2',
+      name: 'Chapitre 2',
+    })
+    const secondChapterFirst = applyDocumentCommand(withSecondChapter, createChapterMoveCommand('chapter-2', 0))
+    const secondChapterLast = applyDocumentCommand(secondChapterFirst, createChapterMoveCommand('chapter-2', 3))
+
+    expect(secondChapterFirst.data.scenarioEntries).toEqual([
+      { kind: 'chapter', chapterId: 'chapter-2' },
+      { kind: 'chapter', chapterId: 'chapter-1' },
+      { kind: 'page', pageId: 'page-root' },
+    ])
+    expect(secondChapterLast.data.scenarioEntries).toEqual([
+      { kind: 'chapter', chapterId: 'chapter-1' },
+      { kind: 'page', pageId: 'page-root' },
+      { kind: 'chapter', chapterId: 'chapter-2' },
+    ])
+    assertDocumentInvariants(secondChapterLast)
   })
 
   it('stores the Section JSON source and its exported static markup', () => {
@@ -457,6 +559,35 @@ describe('Elcé document commands', () => {
     assertDocumentInvariants(removed)
   })
 
+  it('deletes a Section and its anchored bdcs while retaining their media', () => {
+    const anchored = applyDocumentCommand(createInitialDocument(), {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-image-1',
+      bdcType: BDC_TYPE.IMAGE,
+      presetId: 'image-basic',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      partId: 'page-a:bdc-image-1:anchor',
+      markup: '<p id="section-text-1"><span data-bdc-id="bdc-image-1"></span></p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+
+    const removed = applyDocumentCommand(anchored, { type: 'bdc.section.delete', bdcId: 'bdc-section-1' })
+
+    expect(removed.pages[0]?.bdcIds).toEqual([])
+    expect(removed.bdcs).toEqual([])
+    expect(removed.medias.map((media) => media.id)).toEqual(['media-image-1'])
+    assertDocumentInvariants(removed)
+  })
+
   it('returns an anchored bdc to the catalog without recreating it or its media', () => {
     const anchored = applyDocumentCommand(createInitialDocument(), {
       type: 'bdc.anchor.create',
@@ -600,5 +731,74 @@ describe('Elcé document commands', () => {
 
     expect(() => applyDocumentCommand(initial, { type: 'chapter.delete', chapterId: 'chapter-1' }))
       .toThrow('chapitre non vide')
+  })
+
+  it('creates one unique Question at its requested Flux position and enforces its answer rules', () => {
+    const initial = createInitialDocument()
+    const questionDocument = applyDocumentCommand(initial, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-1',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const questionBdc = questionDocument.bdcs.find((bdc) => bdc.id === 'bdc-question-1')!
+    const questionService = new ElceQuestionService()
+    const multiple = questionService.changeType(questionBdc.question!, QUESTION_TYPE.MULTIPLE_CHOICE)
+    const invalid = {
+      ...multiple,
+      answers: multiple.answers.map((answer) => ({ ...answer, correct: false })),
+    }
+
+    expect(questionDocument.pages[0]?.bdcIds).toEqual(['bdc-question-1', 'bdc-section-1'])
+    expect(questionDocument.data.catalogBdcIds).toEqual([])
+    expect(questionBdc.question?.answers.map(({ label, correct }) => ({ label, correct }))).toEqual([
+      { label: 'Oui', correct: true },
+      { label: 'Non', correct: false },
+    ])
+    expect(() => applyDocumentCommand(questionDocument, {
+      type: 'bdc.question.update',
+      bdcId: questionBdc.id,
+      question: invalid,
+    })).toThrow('exige au moins une réponse juste')
+
+    const updated = applyDocumentCommand(questionDocument, {
+      type: 'bdc.question.update',
+      bdcId: questionBdc.id,
+      question: multiple,
+    })
+    expect(updated.pages[0]?.bdcIds).toEqual(['bdc-question-1', 'bdc-section-1'])
+    expect(() => applyDocumentCommand(updated, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-2',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })).toThrow('Une page ne peut contenir qu’une Question')
+    assertDocumentInvariants(updated)
+  })
+
+  it('reuses a catalogue media for a Question without adding a reusable Question BDC', () => {
+    const initial = applyDocumentCommand(createInitialDocument(), {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-1',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })
+    const withMedia = applyDocumentCommand(initial, {
+      type: 'media.add',
+      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const illustrated = applyDocumentCommand(withMedia, {
+      type: 'bdc.question.media.set',
+      bdcId: 'bdc-question-1',
+      mediaId: 'media-image-1',
+    })
+
+    expect(illustrated.bdcs).toHaveLength(2)
+    expect(illustrated.bdcs.find((bdc) => bdc.id === 'bdc-question-1')?.mediaId).toBe('media-image-1')
+    expect(illustrated.data.catalogBdcIds).toEqual([])
+    expect(illustrated.medias.map((media) => media.id)).toEqual(['media-image-1'])
   })
 })

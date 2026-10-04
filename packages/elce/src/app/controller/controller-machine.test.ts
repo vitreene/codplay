@@ -1,14 +1,16 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
 import { assertDocumentInvariants } from '../commands/document-commands'
-import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
+import { ElceMediaResourceService } from '../../domain/media-resource-service'
 import type { ElceSectionChange } from '../../domain/anchor-types'
 import { controllerMachine } from './controller-machine'
 
 class PendingMediaStore implements ElceDocumentStore {
   public readonly pending: Array<{ media: MediaBlob; resolve: () => void }> = []
+  public readonly media = new Map<string, Blob>()
 
   public async loadDocument(): Promise<null> {
     return null
@@ -23,11 +25,17 @@ class PendingMediaStore implements ElceDocumentStore {
   }
 
   public saveMedia(media: MediaBlob): Promise<void> {
-    return new Promise((resolve) => this.pending.push({ media, resolve }))
+    return new Promise((resolve) => this.pending.push({
+      media,
+      resolve: () => {
+        this.media.set(media.id, media.blob)
+        resolve()
+      },
+    }))
   }
 
-  public async loadMedia(): Promise<null> {
-    return null
+  public async loadMedia(mediaId: string): Promise<Blob | null> {
+    return this.media.get(mediaId) ?? null
   }
 }
 
@@ -42,11 +50,40 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
     expect(actor.getSnapshot().context.catalogTab).toBe(CATALOG_TAB.AVAILABLE_BDCS)
 
-    actor.send({ type: 'page.create', name: 'Page nommée' })
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
 
     expect(actor.getSnapshot().context.document.pages).toHaveLength(2)
-    expect(actor.getSnapshot().context.document.pages[1]?.name).toBe('Page nommée')
+    expect(actor.getSnapshot().context.document.pages[1]).toMatchObject({ name: 'Page B', chapterId: null })
+    expect(actor.getSnapshot().context.document.scenarioPageIds).toEqual([
+      'page-a',
+      actor.getSnapshot().context.document.pages[1]?.id,
+    ])
+    expect(actor.getSnapshot().context.selectedPageId).toBe(actor.getSnapshot().context.document.pages[1]?.id)
+
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' }, name: 'Page nommée' })
+
+    expect(actor.getSnapshot().context.document.pages[2]).toMatchObject({ name: 'Page nommée', chapterId: 'chapter-1' })
+    expect(actor.getSnapshot().context.document.chapters[0]?.pageIds).toEqual(['page-a', actor.getSnapshot().context.document.pages[2]?.id])
+    expect(actor.getSnapshot().context.document.scenarioPageIds).toEqual([
+      'page-a',
+      actor.getSnapshot().context.document.pages[2]?.id,
+      actor.getSnapshot().context.document.pages[1]?.id,
+    ])
     assertDocumentInvariants(actor.getSnapshot().context.document)
+
+    actor.stop()
+  })
+
+  it('owns chapter selection and clears it when a page is selected', () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    actor.start()
+    actor.send({ type: 'chapter.select', chapterId: 'chapter-1' })
+
+    expect(actor.getSnapshot().context.selectedChapterId).toBe('chapter-1')
+
+    actor.send({ type: 'page.select', pageId: 'page-a' })
+    expect(actor.getSnapshot().context.selectedChapterId).toBeNull()
+    expect(actor.getSnapshot().context.selectedPageId).toBe('page-a')
 
     actor.stop()
   })
@@ -117,6 +154,43 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.bdcs[0]?.section?.markup).toContain('data-elce-anchor="true"')
     expect(actor.getSnapshot().context.document.medias.map((media) => media.name)).toEqual(['one.png', 'two.png'])
     assertDocumentInvariants(actor.getSnapshot().context.document)
+    actor.stop()
+  })
+
+  it('deduplicates identical file drops while creating a fresh unique bdc for each placement', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const service = new ElceAnchorDropService()
+    const firstFile = new File(['same image bytes'], 'first-name.png', { type: 'image/png' })
+    const secondFile = new File(['same image bytes'], 'renamed-copy.png', { type: 'image/png' })
+    const firstTarget = service.createFileDropTarget(firstFile, 'page-a')
+    const secondTarget = service.createFileDropTarget(secondFile, 'page-a')
+    if (firstTarget === null || secondTarget === null) throw new Error('Les fichiers de test doivent être acceptés.')
+    actor.start()
+
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(firstFile, firstTarget, 'premier') })
+    await flush()
+    store.pending[0]?.resolve()
+    await flush()
+
+    actor.send({
+      type: 'section.change',
+      sectionBdcId: 'bdc-section-1',
+      change: fileDrop(secondFile, secondTarget, 'second', { target: firstTarget, text: 'premier' }),
+    })
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    const imageBdcs = document.bdcs.filter((bdc) => bdc.type === BDC_TYPE.IMAGE)
+    expect(store.pending).toHaveLength(1)
+    expect(store.media.size).toBe(1)
+    expect(document.medias).toHaveLength(1)
+    expect(document.medias[0]?.name).toBe('first-name.png')
+    expect(imageBdcs).toHaveLength(2)
+    expect(imageBdcs[0]?.id).not.toBe(imageBdcs[1]?.id)
+    expect(imageBdcs.map((bdc) => bdc.mediaId)).toEqual([document.medias[0]?.id, document.medias[0]?.id])
+    expect(actor.getSnapshot().context.mediaSources[document.medias[0]!.id]).toMatch(/^blob:/)
+    assertDocumentInvariants(document)
     actor.stop()
   })
 
@@ -223,6 +297,76 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-image-1'])
     expect(store.pending).toHaveLength(0)
     assertDocumentInvariants(document)
+    actor.stop()
+  })
+
+  it('imports a Question illustration through the serialized XState command path', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const mediaImport = new ElceMediaResourceService().createImport(new File(['picture'], 'picture.png', { type: 'image/png' }))
+    if (mediaImport === null) throw new Error('Le service média doit accepter le fichier image de test.')
+    actor.start()
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.create',
+        bdcId: 'bdc-question-1',
+        bdcType: BDC_TYPE.QUESTION,
+        presetId: DEFAULT_PRESET_ID.QUESTION,
+        placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+      },
+    })
+
+    actor.send({
+      type: 'question.media.file.import',
+      bdcId: 'bdc-question-1',
+      file: mediaImport.file,
+      media: mediaImport.media,
+    })
+    await flush()
+
+    expect(store.pending.map(({ media }) => media.id)).toEqual([mediaImport.media.id])
+    expect(actor.getSnapshot().context.document.medias).toEqual([])
+    store.pending[0]?.resolve()
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    expect(document.medias).toEqual([mediaImport.media])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-question-1')?.mediaId).toBe(mediaImport.media.id)
+    expect(document.data.catalogBdcIds).toEqual([])
+    expect(actor.getSnapshot().context.mediaSources[mediaImport.media.id]).toMatch(/^blob:/)
+
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    const secondPage = actor.getSnapshot().context.document.pages[1]
+    if (secondPage === undefined) throw new Error('La page de test doit être créée.')
+    actor.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.create',
+        bdcId: 'bdc-question-2',
+        bdcType: BDC_TYPE.QUESTION,
+        presetId: DEFAULT_PRESET_ID.QUESTION,
+        placement: { kind: BDC_LOCATION.PAGE, pageId: secondPage.id },
+      },
+    })
+    const duplicateImport = new ElceMediaResourceService().createImport(new File(['picture'], 'another-name.png', { type: 'image/png' }))
+    if (duplicateImport === null) throw new Error('Le fichier image identique doit être accepté.')
+    actor.send({
+      type: 'question.media.file.import',
+      bdcId: 'bdc-question-2',
+      file: duplicateImport.file,
+      media: duplicateImport.media,
+    })
+    await flush()
+
+    const afterDuplicateImport = actor.getSnapshot().context.document
+    expect(store.pending).toHaveLength(1)
+    expect(store.media.size).toBe(1)
+    expect(afterDuplicateImport.medias).toEqual([mediaImport.media])
+    expect(afterDuplicateImport.bdcs.filter((bdc) => bdc.type === BDC_TYPE.QUESTION).map((bdc) => bdc.mediaId))
+      .toEqual([mediaImport.media.id, mediaImport.media.id])
+    assertDocumentInvariants(document)
+    assertDocumentInvariants(afterDuplicateImport)
     actor.stop()
   })
 
@@ -395,5 +539,7 @@ function catalogDrop(
 }
 
 async function flush(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  for (let turn = 0; turn < 5; turn += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
 }

@@ -2,8 +2,9 @@
 
 ## Statut
 
-**En cours — projection Flux et montage Sighty/CodPlay implémentés et vérifiés ;
-la preview Safari confirme l’image et le chargement d’une vidéo réelle ancrée.**
+**En cours — projection Flux et scénario racine mixte construits ; la
+structure du graphe et de l’ordre est vérifiée. La navigation visible entre
+un chapitre et une page racine reste à valider dans le player.**
 
 L’observation du repère et le parcours dans un navigateur restent la preuve
 d’intégration visuelle de la tranche 2 du plan.
@@ -13,8 +14,9 @@ dans la [spécification d’intégration CodPlay](./codplay-anchor-integration-s
 
 ## Contrat
 
-`buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et ses bdc
-Section. Une source média optionnelle peut être fournie séparément par
+`buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
+ordonnée de BDC Texte, Question, Image ou Vidéo. Une page Question n’a pas
+besoin d’un BDC Texte. Une source média optionnelle peut être fournie séparément par
 `mediaSources`; un bdc image ou vidéo simple produit alors un hôte de média et
 un seul perso CodPlay correspondant, directement dans la story de page afin que
 son observation utilise le même `scroll-container`. Lorsqu’une Section exporte
@@ -38,9 +40,11 @@ padding donne le ratio du cadre et de la réserve ; le perso image utilise
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
   des `id` explicites et des parts `data-part` pour chaque Section et pour le
   repère bas ;
-- chaque Section contient un hôte de titre avant son markup HTML statique ; le
-  perso de titre est monté dans cet hôte afin de conserver l’ordre titre puis
-  texte de l’éditeur ;
+- chaque Section consomme le preset `section-basic` déclaré dans la
+  configuration. `ElceCardPresetBuilder` instancie son architecture HTML fixe
+  avec des `id` et parts propres au BDC ; le texte HTML statique de Tiptap est
+  monté dans la zone body, après l’hôte de titre. Le perso titre vise sa part,
+  ce qui conserve l’ordre titre puis texte de l’éditeur ;
 - l’article occupe au minimum toute la zone de contenu et sa hauteur augmente
   avec le texte, tandis que le scrollport porte le défilement ;
 - un perso marqueur observant le scrollport et émettant l’événement public
@@ -61,15 +65,24 @@ L’exhaustivité du `switch` force l’ajout d’un cas lorsque `PageType` évo
 
 `buildScenario(document, scenes)` construit séparément le graphe Sighty avec
 le layout à la racine et ses slots persistants `slot-menu`, `slot-title`,
-`slot-content` et `slot-navigation`. Le graphe de scénario contient une
-entrée dédiée au slot des pages racine, puis une entrée par chapitre ; ces
-entrées sont au même niveau. Chaque entrée de chapitre ouvre le graphe de son
-slot de contenu sur sa première page. Un chapitre n’est donc pas une page
+`slot-content` et `slot-navigation`. À la racine du scénario, une seule
+séquence de vues reprend `scenarioEntries` dans son ordre. Chaque page
+autonome et chaque chapitre sont des entrées sœurs : une page autonome ouvre
+sa scène dans `slot-content`, tandis qu’un chapitre ouvre dans ce slot le
+graphe ordonné de ses pages. L’ordre des pages de lecture est dérivé de cette
+séquence et des listes internes des chapitres. Un chapitre n’est pas une page
 supplémentaire. Les scènes du menu, du titre et de la navigation sont des
-scènes CodPlay distinctes ; les pages racine sont les vues du slot racine et
-les pages de chapitre celles du slot du chapitre. Les pages du catalogue ne
-sont jamais intégrées au scénario. Quand aucune page n’est placée, le builder
-projette une vue vide explicite afin que le cadre reste montable.
+scènes CodPlay distinctes. Le sommaire emploie le même ordre racine : il rend
+les pages autonomes comme entrées simples et les pages d’un chapitre sous
+l’entrée du chapitre. Les pages du catalogue ne sont jamais intégrées au
+scénario. Quand aucune page n’est placée, le builder projette une vue vide
+explicite afin que le cadre reste montable.
+
+Chaque route de page pointe vers son entrée racine, puis vers la page dans
+`slot-content`. Cela permet au menu et au démarrage de viser une page précise
+sans changer le document métier. Le builder produit la structure ordonnée et
+les routes ; la transmission d’un clic public CodPlay au routeur Sighty reste
+un point d’intégration à valider.
 
 Le graphe reprend le circuit de la démo 5 : les boutons émettent des
 événements publics, Sighty route les passages `next`/`previous` et les
@@ -97,6 +110,10 @@ builders ne déclarent que leur comportement d’exécution.
   définitions réelles `scroll-container` de CodPlay, ainsi que le montage
   d’un bdc image simple vers un seul perso `img`, y compris son montage sur la
   part du slot projeté depuis une ancre exportée.
+- [`card-preset-builder.test.ts`](../src/builders/card-preset-builder.test.ts)
+  vérifie l’instanciation du preset Section et l’identité des parts utilisées
+  par le builder Flux. Les presets Question, image-légende et Message sont
+  configurés mais ne sont pas encore projetés dans une page.
 - `PlayerPreview` fournit la preuve navigateur dans l’application : le dépôt
   réel depuis `SectionEditor` passe par XState, puis la preview monte le
   builder, Sighty et CodPlay avec le slot projeté.
@@ -106,8 +123,9 @@ builders ne déclarent que leur comportement d’exécution.
   `56.25%` ; la source testée mesure `442 × 300 px` pour `5,89 s`. Le cadrage
   diffère actuellement entre l’éditeur (`contain`) et le player (`cover`).
 - [`scenario-builder.test.ts`](../src/builders/scenario-builder.test.ts)
-  vérifie la présence des scènes persistantes, du graphe Sighty et du layout
-  complet de slots.
+  vérifie les scènes persistantes, le graphe Sighty, les routes, l’ordre racine
+  mélangé des entrées page/chapitre, le menu correspondant, et l’exclusion des
+  pages du catalogue.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie le montage réel du cadre complet, du menu, du titre, de la
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de

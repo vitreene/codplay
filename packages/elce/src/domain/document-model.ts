@@ -3,10 +3,14 @@ import {
   CHAPTER_TYPE,
   DEFAULT_PRESET_ID,
   PAGE_TYPE,
+  SCENARIO_ENTRY_KIND,
+  CHAPTER_TYPE_CONFIG,
 } from '../config/document-config'
 import type { Bdc, Chapter, ElceDocumentData, MediaMetadata, Page, PageId, RichTextDocument } from './document-types'
+import type { PersistedElceDocumentData } from './document-v1-types'
+import type { ScenarioEntry } from './scenario-entry-types'
 
-export const ELCE_DOCUMENT_VERSION = 1 as const
+export const ELCE_DOCUMENT_VERSION = 2 as const
 
 /** Creates the empty rich-text document used by a new Section. */
 export function createEmptyRichTextDocument(): RichTextDocument {
@@ -34,7 +38,14 @@ export class ElceDocument {
   }
 
   public get scenarioPageIds(): readonly PageId[] {
-    return this.data.scenarioPageIds
+    return this.data.scenarioEntries.flatMap((entry) => {
+      switch (entry.kind) {
+        case SCENARIO_ENTRY_KIND.PAGE:
+          return [entry.pageId]
+        case SCENARIO_ENTRY_KIND.CHAPTER:
+          return this.data.chapters.find((chapter) => chapter.id === entry.chapterId)?.pageIds ?? []
+      }
+    })
   }
 
   public get catalogPageIds(): readonly PageId[] {
@@ -55,13 +66,11 @@ export class ElceDocument {
   }
 
   /** Rehydrates a document after a structured clone or a JSON round trip. */
-  public static fromJSON(data: ElceDocumentData): ElceDocument {
-    if (data.version !== ELCE_DOCUMENT_VERSION) {
-      throw new Error(`Version de document Elcé non supportée : ${String(data.version)}`)
-    }
+  public static fromJSON(data: PersistedElceDocumentData): ElceDocument {
+    const currentData = migrateDocumentData(data)
     return new ElceDocument({
-      ...data,
-      bdcs: data.bdcs.map((bdc) => bdc.section === null || bdc.section.content !== undefined
+      ...currentData,
+      bdcs: currentData.bdcs.map((bdc) => bdc.section === null || bdc.section.content !== undefined
         ? bdc
         : { ...bdc, section: { ...bdc.section, content: createEmptyRichTextDocument() } }),
     })
@@ -96,8 +105,21 @@ export function nextPageName(document: ElceDocument): string {
   return name
 }
 
-/** Returns the next automatic chapter name without inspecting presentation state. */
-export function nextChapterName(document: ElceDocument): string {
+/** Returns the default chapter name for its type. */
+export function nextChapterName(
+  document: ElceDocument,
+  chapterType: Chapter['type'] = CHAPTER_TYPE.STANDARD,
+): string {
+  switch (chapterType) {
+    case CHAPTER_TYPE.EVALUATION:
+      return CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].defaultName
+    case CHAPTER_TYPE.STANDARD:
+      return nextStandardChapterName(document)
+  }
+}
+
+/** Returns the next automatic name for a standard chapter. */
+function nextStandardChapterName(document: ElceDocument): string {
   const names = new Set(document.chapters.map((chapter) => chapter.name))
   let index = document.chapters.length
   let name = `Chapitre ${index + 1}`
@@ -129,6 +151,7 @@ export function createInitialDocument(): ElceDocument {
     presetId: DEFAULT_PRESET_ID.SECTION,
     pageId: page.id,
     mediaId: null,
+    question: null,
     section: {
       title: '',
       markup: '<p id="section-text-1"></p>',
@@ -141,10 +164,33 @@ export function createInitialDocument(): ElceDocument {
     name: 'Document Elcé',
     chapters: [chapter],
     pages: [page],
-    scenarioPageIds: [],
+    scenarioEntries: [{ kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }],
     catalogPageIds: [],
     bdcs: [section],
     catalogBdcIds: [],
     medias: [],
   })
+}
+
+/** Converts persisted revisions to the current root-entry sequence. */
+function migrateDocumentData(data: PersistedElceDocumentData): ElceDocumentData {
+  switch (data.version) {
+    case 1: {
+      const { scenarioPageIds, ...documentData } = data
+      const scenarioEntries: ScenarioEntry[] = [
+        ...scenarioPageIds.map((pageId) => ({ kind: SCENARIO_ENTRY_KIND.PAGE, pageId })),
+        ...data.chapters.map((chapter) => ({ kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id })),
+      ]
+      return {
+        ...documentData,
+        version: ELCE_DOCUMENT_VERSION,
+        scenarioEntries,
+        bdcs: documentData.bdcs.map((bdc) => ({ ...bdc, question: bdc.question ?? null })),
+      }
+    }
+    case ELCE_DOCUMENT_VERSION:
+      return { ...data, bdcs: data.bdcs.map((bdc) => ({ ...bdc, question: bdc.question ?? null })) }
+    default:
+      throw new Error(`Version de document Elcé non supportée : ${String((data as { version: unknown }).version)}`)
+  }
 }

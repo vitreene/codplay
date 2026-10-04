@@ -21,6 +21,7 @@ import {
   Pilcrow,
   Subscript as SubscriptIcon,
   Superscript as SuperscriptIcon,
+  Trash2,
   Underline,
   type LucideIcon,
 } from 'lucide-react'
@@ -55,7 +56,7 @@ const SECTION_EDITOR_EXTENSIONS = [
 ]
 
 /** Edits one Section with the POC's bounded rich-text toolbar. */
-export function SectionEditor({ bdc, createFileDropTarget, createCatalogDropTarget, resolveMediaSource, onChange }: SectionEditorProps) {
+export function SectionEditor({ bdc, onDelete, createFileDropTarget, createCatalogDropTarget, resolveMediaSource, onChange }: SectionEditorProps) {
   const section = bdc.section
   const sectionRef = useRef(section)
   sectionRef.current = section
@@ -149,14 +150,24 @@ export function SectionEditor({ bdc, createFileDropTarget, createCatalogDropTarg
 
   return (
     <div id={`elce-section-editor-${bdc.id}`} className="elce-section-editor">
-      <input
-        id={`elce-section-title-${bdc.id}`}
-        className="elce-section-title-input"
-        aria-label="Titre de section"
-        placeholder="Titre (facultatif)"
-        value={section.title}
-        onChange={(event) => onChange({ kind: 'content', title: event.target.value, content: section.content, markup: section.markup })}
-      />
+      <div id={`elce-section-heading-${bdc.id}`} className="elce-section-heading">
+        <input
+          id={`elce-section-title-${bdc.id}`}
+          className="elce-section-title-input"
+          aria-label="Titre de section"
+          placeholder="Titre (facultatif)"
+          value={section.title}
+          onChange={(event) => onChange({ kind: 'content', title: event.target.value, content: section.content, markup: section.markup })}
+        />
+        <button
+          id={`elce-section-delete-${bdc.id}`}
+          className="elce-bdc-icon-button elce-bdc-icon-button--danger"
+          type="button"
+          aria-label="Supprimer le bloc texte"
+          title="Supprimer le bloc texte"
+          onClick={onDelete}
+        ><Trash2 aria-hidden="true" size={16} /></button>
+      </div>
       <div id={`elce-section-toolbar-${bdc.id}`} className="elce-section-toolbar" role="toolbar" aria-label="Mise en forme">
         <ToolbarButton id={`elce-section-bold-${bdc.id}`} label="Gras" icon={Bold} active={toolbarState.bold} onClick={() => run(() => editor?.chain().toggleBold().run() ?? false)} />
         <ToolbarButton id={`elce-section-italic-${bdc.id}`} label="Italique" icon={Italic} active={toolbarState.italic} onClick={() => run(() => editor?.chain().toggleItalic().run() ?? false)} />

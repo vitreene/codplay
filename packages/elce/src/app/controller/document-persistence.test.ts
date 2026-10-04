@@ -1,6 +1,6 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE, PAGE_LOCATION } from '../../config/document-config'
 import { applyDocumentCommand } from '../commands/document-commands'
 import { createInitialDocument } from '../../domain/document-model'
 import type { ElceDocument } from '../../domain/document-model'
@@ -47,7 +47,7 @@ describe('Elcé document persistence boundary', () => {
     const detach = await attachDocumentPersistence(actor, store)
 
     expect(actor.getSnapshot().context.document.data.name).toBe('Document restauré')
-    actor.send({ type: 'page.create' })
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
     await Promise.resolve()
 
     expect(store.document?.pages).toHaveLength(2)

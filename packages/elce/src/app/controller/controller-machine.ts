@@ -3,44 +3,159 @@ import { applyDocumentCommand, createDefaultPageCommand } from '../commands/docu
 import { CATALOG_TAB } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document-model'
 import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
-import type { PageId } from '../../domain/document-types'
-import type { ElceAnchorChange, ElceAppContext, ElceControllerEvent, ElceControllerInput } from './controller-types'
+import { ElceMediaResourceService } from '../../domain/media-resource-service'
+import type { ElceDocumentChange } from './document-change-types'
+import type { ChapterId, MediaMetadata, PageId } from '../../domain/document-types'
+import type { ElceAppContext, ElceControllerEvent, ElceControllerInput } from './controller-types'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 
 const initialDocument = createInitialDocument()
 const anchorDropService = new ElceAnchorDropService()
 
-interface AnchorWorkerInput {
-  readonly operation: ElceAnchorChange
+interface DocumentChangeWorkerInput {
+  readonly operation: ElceDocumentChange
   readonly store: ElceDocumentStore | null
+  readonly document: ElceAppContext['document']
 }
 
-interface AnchorWorkerOutput {
-  readonly operation: ElceAnchorChange
+interface DocumentChangeWorkerOutput {
+  readonly operation: ElceDocumentChange
   readonly source: string | null
+  readonly mediaCreated: boolean
 }
 
-const persistAnchorChange = fromPromise<AnchorWorkerOutput, AnchorWorkerInput>(async ({ input }) => {
+const mediaResourceService = new ElceMediaResourceService()
+
+/** Persists imported files and resolves canonical media before command commit. */
+const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentChangeWorkerInput>(async ({ input }) => {
   const operation = input.operation
-  switch (operation.change.kind) {
-    case 'file-drop': {
+  switch (operation.kind) {
+    case 'anchor':
+      switch (operation.operation.change.kind) {
+        case 'file-drop': {
+          if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
+          const { media, created } = await resolveImportedMedia(
+            operation.operation.change.file,
+            operation.operation.change.target.media,
+            input.document,
+            input.store,
+          )
+          return {
+            operation: withAnchorMedia(operation, media),
+            source: created ? createObjectUrl(operation.operation.change.file) : null,
+            mediaCreated: created,
+          }
+        }
+        case 'content':
+        case 'catalog-drop':
+        case 'anchor-move':
+        case 'anchor-remove':
+        case 'anchor-return':
+          return { operation, source: null, mediaCreated: false }
+      }
+    case 'question-media-import': {
       if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
-      await input.store.saveMedia({ id: operation.change.target.media.id, blob: operation.change.file })
-      const source = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
-        ? URL.createObjectURL(operation.change.file)
-        : null
-      return { operation, source }
+      const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store)
+      return {
+        operation: { ...operation, media },
+        source: created ? createObjectUrl(operation.file) : null,
+        mediaCreated: created,
+      }
     }
+  }
+})
+
+/** Reuses an exact media resource or persists the imported bytes once. */
+async function resolveImportedMedia(
+  file: File,
+  media: MediaMetadata,
+  document: ElceAppContext['document'],
+  store: ElceDocumentStore,
+): Promise<Readonly<{ media: MediaMetadata; created: boolean }>> {
+  const duplicate = await mediaResourceService.findDuplicate(
+    file,
+    media,
+    document.medias,
+    (mediaId) => store.loadMedia(mediaId),
+  )
+  switch (duplicate) {
+    case null:
+      await store.saveMedia({ id: media.id, blob: file })
+      return { media, created: true }
+    default:
+      return { media: duplicate, created: false }
+  }
+}
+
+/** Replaces only the media reference on a new anchor target after deduplication. */
+function withAnchorMedia(
+  operation: Extract<ElceDocumentChange, { kind: 'anchor' }>,
+  media: MediaMetadata,
+): ElceDocumentChange {
+  switch (operation.operation.change.kind) {
+    case 'file-drop':
+      return {
+        ...operation,
+        operation: {
+          ...operation.operation,
+          change: {
+            ...operation.operation.change,
+            target: { ...operation.operation.change.target, mediaId: media.id, media },
+          },
+        },
+      }
     case 'content':
     case 'catalog-drop':
     case 'anchor-move':
     case 'anchor-remove':
     case 'anchor-return':
-      return { operation, source: null }
+      return operation
   }
-})
+}
 
-/** Owns all application commands and serializes asynchronous anchor changes. */
+/** Creates the player source after a new media blob has been persisted. */
+function createObjectUrl(file: File): string | null {
+  return typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+    ? URL.createObjectURL(file)
+    : null
+}
+
+/** Maps each persisted document change to one immutable document command. */
+function commandForChange(operation: ElceDocumentChange, mediaCreated: boolean) {
+  switch (operation.kind) {
+    case 'anchor':
+      return anchorDropService.createDocumentCommand(operation.operation.sectionBdcId, operation.operation.change)
+    case 'question-media-import':
+      switch (mediaCreated) {
+        case true:
+          return {
+            type: 'bdc.question.media.attach' as const,
+            bdcId: operation.bdcId,
+            media: operation.media,
+          }
+        case false:
+          return {
+            type: 'bdc.question.media.set' as const,
+            bdcId: operation.bdcId,
+            mediaId: operation.media.id,
+          }
+      }
+  }
+}
+
+/** Builds the controller-owned queue item for either accepted document change. */
+function documentChangeForEvent(event: ElceControllerEvent): ElceDocumentChange | null {
+  switch (event.type) {
+    case 'section.change':
+      return { kind: 'anchor', operation: { sectionBdcId: event.sectionBdcId, change: event.change } }
+    case 'question.media.file.import':
+      return { kind: 'question-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
+    default:
+      return null
+  }
+}
+
+/** Owns all application commands and serializes document changes that persist files. */
 export const controllerMachine = setup({
   types: {
     context: {} as ElceAppContext,
@@ -48,55 +163,66 @@ export const controllerMachine = setup({
     input: {} as ElceControllerInput | undefined,
   },
   actions: {
-    enqueueAnchorChange: assign(({ context, event }) => {
-      if (event.type !== 'section.change') return {}
-      return { anchorChanges: [...context.anchorChanges, { sectionBdcId: event.sectionBdcId, change: event.change }] }
+    enqueueDocumentChange: assign(({ context, event }) => {
+      const operation = documentChangeForEvent(event)
+      return operation === null ? {} : { documentChanges: [...context.documentChanges, operation] }
     }),
-    commitAnchorChange: assign(({ context, event }) => {
-      const output = (event as unknown as { output: AnchorWorkerOutput }).output
-      const command = anchorDropService.createDocumentCommand(output.operation.sectionBdcId, output.operation.change)
-      const document = applyDocumentCommand(context.document, command)
+    commitDocumentChange: assign(({ context, event }) => {
+      const output = (event as unknown as { output: DocumentChangeWorkerOutput }).output
+      const document = applyDocumentCommand(context.document, commandForChange(output.operation, output.mediaCreated))
       return {
         document,
         selectedPageId: keepSelectedPage(document, context.selectedPageId),
-        mediaSources: updateMediaSources(context.mediaSources, output.operation.change, output.source),
-        anchorChanges: context.anchorChanges.slice(1),
+        selectedChapterId: keepSelectedChapter(document, context.selectedChapterId),
+        mediaSources: updateMediaSources(context.mediaSources, output.operation, output.source),
+        documentChanges: context.documentChanges.slice(1),
       }
     }),
-    discardAnchorChange: assign(({ context }) => ({ anchorChanges: context.anchorChanges.slice(1) })),
+    discardDocumentChange: assign(({ context }) => ({ documentChanges: context.documentChanges.slice(1) })),
   },
   guards: {
-    hasPendingAnchorChanges: ({ context }) => context.anchorChanges.length > 0,
+    hasPendingDocumentChanges: ({ context }) => context.documentChanges.length > 0,
   },
-  actors: { persistAnchorChange },
+  actors: { persistDocumentChange },
 }).createMachine({
   id: 'elce-app',
   context: ({ input }) => ({
     document: initialDocument,
     selectedPageId: initialDocument.pages[0]?.id ?? null,
+    selectedChapterId: null,
     catalogTab: CATALOG_TAB.AVAILABLE_BDCS,
     mediaSources: {},
     documentStore: input?.documentStore ?? null,
-    anchorChanges: [],
+    documentChanges: [],
   }),
   initial: 'ready',
   on: {
     'document.apply': {
       actions: assign(({ context, event }) => {
         const document = applyDocumentCommand(context.document, event.command)
-        return { document, selectedPageId: keepSelectedPage(document, context.selectedPageId) }
+        return {
+          document,
+          selectedPageId: keepSelectedPage(document, context.selectedPageId),
+          selectedChapterId: keepSelectedChapter(document, context.selectedChapterId),
+        }
       }),
     },
     'page.create': {
       actions: assign(({ context, event }) => {
-        const command = createDefaultPageCommand(context.document, event.name)
+        const command = createDefaultPageCommand(context.document, event.placement, event.name)
         const document = applyDocumentCommand(context.document, command)
-        return { document, selectedPageId: command.pageId }
+        return { document, selectedPageId: command.pageId, selectedChapterId: null }
       }),
     },
     'page.select': {
       actions: assign(({ context, event }) => ({
         selectedPageId: keepSelectedPage(context.document, event.pageId),
+        selectedChapterId: null,
+      })),
+    },
+    'chapter.select': {
+      actions: assign(({ context, event }) => ({
+        selectedChapterId: keepSelectedChapter(context.document, event.chapterId),
       })),
     },
     'catalog.tab.select': {
@@ -111,43 +237,42 @@ export const controllerMachine = setup({
       actions: assign(({ context, event }) => ({
         document: event.document,
         selectedPageId: keepSelectedPage(event.document, context.selectedPageId),
+        selectedChapterId: keepSelectedChapter(event.document, context.selectedChapterId),
       })),
     },
   },
   states: {
     ready: {
       on: {
-        'section.change': {
-          actions: 'enqueueAnchorChange',
-          target: 'processingAnchor',
-        },
+        'section.change': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'question.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
       },
     },
-    processingAnchor: {
+    processingDocumentChange: {
       invoke: {
-        src: 'persistAnchorChange',
+        src: 'persistDocumentChange',
         input: ({ context }) => ({
-          operation: context.anchorChanges[0]!,
+          operation: context.documentChanges[0]!,
           store: context.documentStore,
+          document: context.document,
         }),
         onDone: {
-          actions: 'commitAnchorChange',
-          target: 'nextAnchorChange',
+          actions: 'commitDocumentChange',
+          target: 'nextDocumentChange',
         },
         onError: {
-          actions: 'discardAnchorChange',
-          target: 'nextAnchorChange',
+          actions: 'discardDocumentChange',
+          target: 'nextDocumentChange',
         },
       },
       on: {
-        'section.change': {
-          actions: 'enqueueAnchorChange',
-        },
+        'section.change': { actions: 'enqueueDocumentChange' },
+        'question.media.file.import': { actions: 'enqueueDocumentChange' },
       },
     },
-    nextAnchorChange: {
+    nextDocumentChange: {
       always: [
-        { guard: 'hasPendingAnchorChanges', target: 'processingAnchor' },
+        { guard: 'hasPendingDocumentChanges', target: 'processingDocumentChange' },
         { target: 'ready' },
       ],
     },
@@ -160,25 +285,41 @@ function keepSelectedPage(document: ElceAppContext['document'], selectedPageId: 
   return document.pages[0]?.id ?? null
 }
 
-/** Adds an object URL only for a file-drop operation that created the media. */
+/** Keeps the selected chapter only while it remains in the document. */
+function keepSelectedChapter(document: ElceAppContext['document'], selectedChapterId: ChapterId | null): ChapterId | null {
+  return selectedChapterId !== null && document.chapters.some((chapter) => chapter.id === selectedChapterId)
+    ? selectedChapterId
+    : null
+}
+
+/** Registers an object URL only when an import created a new media resource. */
 function updateMediaSources(
   mediaSources: ElceAppContext['mediaSources'],
-  change: ElceAnchorChange['change'],
+  operation: ElceDocumentChange,
   source: string | null,
 ): ElceAppContext['mediaSources'] {
-  switch (change.kind) {
-    case 'file-drop':
-      switch (source) {
-        case null:
+  switch (operation.kind) {
+    case 'anchor':
+      switch (operation.operation.change.kind) {
+        case 'file-drop':
+          return mediaSourceAddition(mediaSources, operation.operation.change.target.media.id, source)
+        case 'content':
+        case 'catalog-drop':
+        case 'anchor-move':
+        case 'anchor-remove':
+        case 'anchor-return':
           return mediaSources
-        default:
-          return { ...mediaSources, [change.target.media.id]: source }
       }
-    case 'content':
-    case 'catalog-drop':
-    case 'anchor-move':
-    case 'anchor-remove':
-    case 'anchor-return':
-      return mediaSources
+    case 'question-media-import':
+      return mediaSourceAddition(mediaSources, operation.media.id, source)
   }
+}
+
+/** Adds one object URL after the associated file has been persisted. */
+function mediaSourceAddition(
+  mediaSources: ElceAppContext['mediaSources'],
+  mediaId: string,
+  source: string | null,
+): ElceAppContext['mediaSources'] {
+  return source === null ? mediaSources : { ...mediaSources, [mediaId]: source }
 }

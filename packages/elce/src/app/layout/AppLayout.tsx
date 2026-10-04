@@ -1,31 +1,59 @@
 import { useSelector } from '@xstate/react'
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { Archive, FilePlus, FolderPlus, GripVertical, Trash2 } from 'lucide-react'
+import { Archive, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, ListChecks, Trash2 } from 'lucide-react'
 import './app-layout.css'
 
-import { ANCHOR_RETURN, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE, PAGE_LOCATION } from '../../config/document-config'
+import { ANCHOR_RETURN, BDC_ORDER, BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
+import type { ChapterType, EvaluationRetryScope } from '../../config/document-config-types'
 import {
   createChapterCommand,
+  createChapterMoveCommand,
   createPageDeleteCommand,
   createPageMoveCommand,
+  createSectionBdcCommand,
 } from '../commands/document-commands'
 import type { PagePlacement } from '../commands/document-command-types'
 import type { AppLayoutProps } from './app-layout-types'
 import { SectionEditor } from '../editor/SectionEditor'
+import { QuestionEditor } from '../editor/QuestionEditor'
 import { PlayerPreview } from '../player/PlayerPreview'
+import { createStableId } from '../../domain/document-model'
 import type { ElceDocument } from '../../domain/document-model'
+import type { Chapter } from '../../domain/document-types'
 import { ElceAnchorDropFacade } from '../../domain/anchor-drop-facade'
 import { ElcePageMediaService } from '../../domain/page-media-service'
+import { ElceQuestionFacade } from '../../domain/question-facade'
+import type { ElceQuestionEditorActions } from '../../domain/question-facade-types'
+import type { QuestionContent } from '../../domain/question-types'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog-types'
+import type { ScenarioEntry } from '../../domain/scenario-entry-types'
 
 const pageMediaService = new ElcePageMediaService()
+type ScenarioPagePlacement = Extract<PagePlacement, { kind: typeof PAGE_LOCATION.SCENARIO }>
+const chapterIcons = {
+  folder: Folder,
+  'clipboard-check': ClipboardCheck,
+} as const
+
+/** Renders the chapter type icon and any label configured for that type. */
+function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
+  const presentation = CHAPTER_TYPE_CONFIG[type]
+  const Icon = chapterIcons[presentation.icon]
+  return (
+    <span className="elce-chapter-type-mark">
+      <Icon aria-hidden="true" size={14} strokeWidth={2} />
+      {presentation.label === null ? null : <span>{presentation.label}</span>}
+    </span>
+  )
+}
 
 /** Renders the Elcé work area from the controller-owned application state. */
 export function AppLayout({ controller }: AppLayoutProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
-  const draggedPageId = useRef<string | null>(null)
+  const draggedEntry = useRef<ScenarioEntry | null>(null)
+  const draggedBdcId = useRef<string | null>(null)
   const anchorDropFacadeRef = useRef<ElceAnchorDropFacade | null>(null)
   if (anchorDropFacadeRef.current === null) {
     anchorDropFacadeRef.current = new ElceAnchorDropFacade({
@@ -33,36 +61,77 @@ export function AppLayout({ controller }: AppLayoutProps) {
     })
   }
   const anchorDropFacade = anchorDropFacadeRef.current
+  const questionFacadeRef = useRef<ElceQuestionFacade | null>(null)
+  if (questionFacadeRef.current === null) {
+    questionFacadeRef.current = new ElceQuestionFacade({
+      dispatch: (command) => controller.send({ type: 'document.apply', command }),
+      importMedia: (bdcId, mediaImport) => controller.send({
+        type: 'question.media.file.import',
+        bdcId,
+        file: mediaImport.file,
+        media: mediaImport.media,
+      }),
+    })
+  }
+  const questionFacade = questionFacadeRef.current
   const stateValue = useSelector(controller, (snapshot) => String(snapshot.value))
   const documentModel = useSelector(controller, (snapshot) => snapshot.context.document)
   const selectedPageId = useSelector(controller, (snapshot) => snapshot.context.selectedPageId)
+  const selectedChapterId = useSelector(controller, (snapshot) => snapshot.context.selectedChapterId)
   const catalogTab = useSelector(controller, (snapshot) => snapshot.context.catalogTab)
   const mediaSources = useSelector(controller, (snapshot) => snapshot.context.mediaSources)
   const mediaSourceKey = Object.keys(mediaSources).sort().join('|')
   const selectedPage = documentModel.pages.find((page) => page.id === selectedPageId) ?? documentModel.pages[0]
-  const selectedChapter = selectedPage?.chapterId === null || selectedPage === undefined
+  const selectedChapter = selectedChapterId === null
+    ? undefined
+    : documentModel.chapters.find((chapter) => chapter.id === selectedChapterId)
+  const pageChapter = selectedPage?.chapterId === null || selectedPage === undefined
     ? undefined
     : documentModel.chapters.find((chapter) => chapter.id === selectedPage.chapterId)
-  const selectedSection = selectedPage === undefined
-    ? undefined
-    : selectedPage.bdcIds
-      .map((bdcId) => documentModel.bdcs.find((bdc) => bdc.id === bdcId))
-      .find((bdc) => bdc?.type === BDC_TYPE.SECTION)
+  const selectedPageBdcs = selectedPage === undefined
+    ? []
+    : selectedPage.bdcIds.flatMap((bdcId) => {
+        const bdc = documentModel.bdcs.find((candidate) => candidate.id === bdcId)
+        switch (bdc?.type) {
+          case BDC_TYPE.SECTION:
+            return bdc.section === null ? [] : [bdc]
+          case BDC_TYPE.QUESTION:
+            return bdc.question === null ? [] : [bdc]
+          default:
+            return []
+        }
+      })
+  const pageHasQuestion = selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.QUESTION)
+  const canCreateQuestion = !pageHasQuestion && pageAllowsQuestion(selectedPage)
+  const canCreateSection = pageAllowsSection(selectedPage)
   const catalogContents = anchorDropFacade.catalogContents(documentModel)
-  const unanchoredMediaBdcs = selectedPage === undefined
+  const unanchoredMediaBdcs = selectedPage === undefined || selectedChapter !== undefined
     ? []
     : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
 
-  const addPage = () => {
-    controller.send({ type: 'page.create' })
+  const addPage = (placement: PagePlacement) => {
+    controller.send({ type: 'page.create', placement })
   }
 
+  /** Creates a standard chapter through the controller's document command. */
   const addChapter = () => {
     controller.send({ type: 'document.apply', command: createChapterCommand(documentModel) })
   }
 
+  /** Creates an Evaluation chapter through the same XState document command. */
+  const addEvaluationChapter = () => {
+    controller.send({
+      type: 'document.apply',
+      command: createChapterCommand(documentModel, undefined, CHAPTER_TYPE.EVALUATION),
+    })
+  }
+
   const movePage = (pageId: string, placement: PagePlacement) => {
     controller.send({ type: 'document.apply', command: createPageMoveCommand(pageId, placement) })
+  }
+
+  const moveChapter = (chapterId: string, index: number) => {
+    controller.send({ type: 'document.apply', command: createChapterMoveCommand(chapterId, index) })
   }
 
   const deletePage = (pageId: string) => {
@@ -73,14 +142,77 @@ export function AppLayout({ controller }: AppLayoutProps) {
     controller.send({ type: 'document.apply', command: { type: 'bdc.remove', bdcId } })
   }
 
+  const beginBdcDrag = (event: DragEvent<HTMLButtonElement>, bdcId: string) => {
+    draggedBdcId.current = bdcId
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(BDC_ORDER.MIME_TYPE, bdcId)
+  }
+
+  const dragOverBdcSeparator = (event: DragEvent<HTMLElement>, targetId: string) => {
+    if (draggedBdcId.current === null) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTarget(targetId)
+  }
+
+  const dropBdc = (event: DragEvent<HTMLElement>, index: number) => {
+    const bdcId = draggedBdcId.current
+    if (bdcId === null || selectedPage === undefined) return
+    event.preventDefault()
+    event.stopPropagation()
+    controller.send({
+      type: 'document.apply',
+      command: { type: 'bdc.move', bdcId, placement: { kind: BDC_LOCATION.PAGE, pageId: selectedPage.id, index } },
+    })
+    draggedBdcId.current = null
+    setDropTarget(null)
+  }
+
+  const endBdcDrag = () => {
+    draggedBdcId.current = null
+    setDropTarget(null)
+  }
+
+  const addQuestion = () => {
+    switch (selectedPage?.type) {
+      case PAGE_TYPE.FLUX:
+        questionFacade.create(documentModel, selectedPage.id, selectedPage.bdcIds.length)
+        return
+      case PAGE_TYPE.DIAPO:
+      default:
+        return
+    }
+  }
+
+  const addSection = () => {
+    switch (selectedPage?.type) {
+      case PAGE_TYPE.FLUX:
+        controller.send({
+          type: 'document.apply',
+          command: createSectionBdcCommand(createStableId('bdc-section'), selectedPage.id, selectedPage.bdcIds.length),
+        })
+        return
+      case PAGE_TYPE.DIAPO:
+      default:
+        return
+    }
+  }
+
   const beginPageDrag = (event: DragEvent<HTMLElement>, pageId: string) => {
-    draggedPageId.current = pageId
+    draggedEntry.current = { kind: SCENARIO_ENTRY_KIND.PAGE, pageId }
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', pageId)
   }
 
+  const beginChapterDrag = (event: DragEvent<HTMLElement>, chapterId: string) => {
+    draggedEntry.current = { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId }
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', chapterId)
+  }
+
   const endPageDrag = () => {
-    draggedPageId.current = null
+    draggedEntry.current = null
     setDropTarget(null)
   }
 
@@ -122,7 +254,23 @@ export function AppLayout({ controller }: AppLayoutProps) {
   }
 
   const dragOverPageTarget = (event: DragEvent<HTMLElement>, targetId: string) => {
-    switch (draggedPageId.current) {
+    switch (draggedEntry.current?.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        break
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        event.stopPropagation()
+        return
+      default:
+        return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTarget(targetId)
+  }
+
+  const dragOverScenarioEntry = (event: DragEvent<HTMLElement>, targetId: string) => {
+    switch (draggedEntry.current) {
       case null:
         return
       default:
@@ -134,18 +282,47 @@ export function AppLayout({ controller }: AppLayoutProps) {
     setDropTarget(targetId)
   }
 
+  const dragLeaveDropSeparator = (event: DragEvent<HTMLElement>) => {
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
+    setDropTarget(null)
+  }
+
   const dropPage = (event: DragEvent<HTMLElement>, placement: PagePlacement) => {
-    const pageId = draggedPageId.current
-    switch (pageId) {
-      case null:
+    const entry = draggedEntry.current
+    switch (entry?.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        event.preventDefault()
+        event.stopPropagation()
+        movePage(entry.pageId, placement)
+        endPageDrag()
+        return
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        event.stopPropagation()
         return
       default:
-        break
+        return
     }
-    event.preventDefault()
-    event.stopPropagation()
-    movePage(pageId, placement)
-    endPageDrag()
+  }
+
+  const dropScenarioEntry = (event: DragEvent<HTMLElement>, placement: ScenarioPagePlacement) => {
+    const entry = draggedEntry.current
+    switch (entry?.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        event.preventDefault()
+        event.stopPropagation()
+        movePage(entry.pageId, placement)
+        endPageDrag()
+        return
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        event.preventDefault()
+        event.stopPropagation()
+        moveChapter(entry.chapterId, placement.index ?? documentModel.data.scenarioEntries.length)
+        endPageDrag()
+        return
+      default:
+        return
+    }
   }
 
   return (
@@ -164,60 +341,46 @@ export function AppLayout({ controller }: AppLayoutProps) {
           <div id="elce-outline-heading" className="elce-panel-heading">
             <h1 id="elce-outline-title">Scénario</h1>
             <div id="elce-outline-actions" className="elce-outline-actions">
-              <button id="elce-create-chapter" className="elce-icon-action" type="button" aria-label="Ajouter un chapitre" title="Ajouter un chapitre" onClick={addChapter}>
+              <button id="elce-create-chapter" className="elce-icon-action" type="button" aria-label={CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].createLabel} title={CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].createLabel} onClick={addChapter}>
                 <FolderPlus aria-hidden="true" size={17} strokeWidth={2} />
               </button>
-              <button id="elce-create-page" className="elce-icon-action" type="button" aria-label="Ajouter une page" title="Ajouter une page" onClick={addPage} disabled={documentModel.chapters.length === 0}>
-                <FilePlus aria-hidden="true" size={17} strokeWidth={2} />
+              <button id="elce-create-evaluation-chapter" className="elce-icon-action" type="button" aria-label={CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel} title={CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel} onClick={addEvaluationChapter}>
+                <ClipboardCheck aria-hidden="true" size={17} strokeWidth={2} />
+              </button>
+              <button
+                id="elce-create-scenario-page"
+                className="elce-icon-action"
+                type="button"
+                aria-label="Ajouter une page à la racine du scénario"
+                title="Ajouter une page à la racine du scénario"
+                onClick={() => addPage({ kind: PAGE_LOCATION.SCENARIO })}
+              >
+                <FilePlus aria-hidden="true" size={14} strokeWidth={2} />
               </button>
             </div>
           </div>
           <p id="elce-document-name">{documentModel.data.name}</p>
           <p id="elce-page-dnd-help" className="elce-muted">Glissez une page pour la déplacer ou la réordonner.</p>
-          <PageDropList
-            id="elce-scenario-page-list"
+          <ScenarioEntryDropList
+            id="elce-scenario-entry-list"
             documentModel={documentModel}
-            pageIds={documentModel.data.scenarioPageIds}
-            selectedPageId={selectedPage?.id}
-            emptyLabel="Déposer une page à la racine du scénario"
+            selectedPageId={selectedChapter === undefined ? selectedPage?.id : undefined}
+            selectedChapterId={selectedChapter?.id}
             dropTarget={dropTarget}
-            placementAt={(index) => ({ kind: PAGE_LOCATION.SCENARIO, index })}
+            onDragLeaveDropSeparator={dragLeaveDropSeparator}
             onSelect={(pageId) => controller.send({ type: 'page.select', pageId })}
-            onDelete={deletePage}
-            onDragStart={beginPageDrag}
+            onSelectChapter={(chapterId) => controller.send({ type: 'chapter.select', chapterId })}
+            onDeletePage={deletePage}
+            onDeleteChapter={(chapterId) => controller.send({ type: 'document.apply', command: { type: 'chapter.delete', chapterId } })}
+            onAddChapterPage={(chapterId) => addPage({ kind: PAGE_LOCATION.CHAPTER, chapterId })}
+            onDragStartPage={beginPageDrag}
+            onDragStartChapter={beginChapterDrag}
             onDragEnd={endPageDrag}
-            onDragOver={dragOverPageTarget}
-            onDrop={dropPage}
+            onDragOverRoot={dragOverScenarioEntry}
+            onDragOverPage={dragOverPageTarget}
+            onDropRoot={dropScenarioEntry}
+            onDropPage={dropPage}
           />
-          <ul id="elce-chapter-list" className="elce-outline-list">
-            {documentModel.chapters.map((chapter) => (
-              <li id={`elce-chapter-${chapter.id}`} key={chapter.id}>
-                <div id={`elce-chapter-heading-${chapter.id}`} className="elce-outline-item-heading">
-                  <strong id={`elce-chapter-name-${chapter.id}`}>{chapter.name}</strong>
-                  <DeleteIconButton
-                    id={`elce-chapter-delete-${chapter.id}`}
-                    disabled={chapter.pageIds.length > 0}
-                    onClick={() => controller.send({ type: 'document.apply', command: { type: 'chapter.delete', chapterId: chapter.id } })}
-                  />
-                </div>
-                <PageDropList
-                  id={`elce-pages-${chapter.id}`}
-                  documentModel={documentModel}
-                  pageIds={chapter.pageIds}
-                  selectedPageId={selectedPage?.id}
-                  emptyLabel="Déposer une page dans ce chapitre"
-                  dropTarget={dropTarget}
-                  placementAt={(index) => ({ kind: PAGE_LOCATION.CHAPTER, chapterId: chapter.id, index })}
-                  onSelect={(pageId) => controller.send({ type: 'page.select', pageId })}
-                  onDelete={deletePage}
-                  onDragStart={beginPageDrag}
-                  onDragEnd={endPageDrag}
-                  onDragOver={dragOverPageTarget}
-                  onDrop={dropPage}
-                />
-              </li>
-            ))}
-          </ul>
           <section id="elce-catalog-pages" className="elce-outline-group">
             <h2 id="elce-catalog-pages-title">Catalogue</h2>
             <p id="elce-catalog-pages-description" className="elce-muted">Pages créées mais non placées dans le scénario.</p>
@@ -228,6 +391,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
               selectedPageId={selectedPage?.id}
               emptyLabel="Déposer une page ici"
               dropTarget={dropTarget}
+              onDragLeaveDropSeparator={dragLeaveDropSeparator}
               placementAt={() => ({ kind: PAGE_LOCATION.CATALOG })}
               onSelect={(pageId) => controller.send({ type: 'page.select', pageId })}
               onDelete={deletePage}
@@ -237,8 +401,186 @@ export function AppLayout({ controller }: AppLayoutProps) {
               onDrop={dropPage}
             />
           </section>
+        </section>
+        <section id="elce-work-area" className="elce-panel elce-work-area">
+          <div id="elce-work-area-heading" className="elce-work-area-heading">
+            <div id="elce-work-area-preview-row" className="elce-work-area-preview-row">
+              <button id="elce-preview-open" type="button" onClick={() => setPreviewOpen(true)}>
+                Prévisualiser
+              </button>
+            </div>
+            <div id="elce-work-area-title-row" className="elce-work-area-title-row">
+              <div id="elce-work-area-titles" className="elce-work-area-titles">
+                {selectedChapter !== undefined
+                  ? <h1 id="elce-work-area-chapter-title" className="elce-work-area-page-title elce-work-area-chapter-title--active">
+                      <ChapterTypeMark type={selectedChapter.type} />
+                      <input
+                        id={`elce-chapter-title-${selectedChapter.id}`}
+                        key={`${selectedChapter.id}:${selectedChapter.name}`}
+                        className="elce-inline-title-input"
+                        type="text"
+                        aria-label={CHAPTER_TYPE_CONFIG[selectedChapter.type].titleLabel}
+                        title={CHAPTER_TYPE_CONFIG[selectedChapter.type].editTitleLabel}
+                        defaultValue={selectedChapter.name}
+                        onBlur={(event) => commitInlineName(event.currentTarget, selectedChapter.name, (name) => controller.send({
+                          type: 'document.apply',
+                          command: { type: 'chapter.rename', chapterId: selectedChapter.id, name },
+                        }))}
+                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                      />
+                    </h1>
+                  : pageChapter === undefined
+                    ? null
+                    : <h2 id="elce-work-area-chapter-title" className="elce-work-area-chapter-title">
+                        <ChapterTypeMark type={pageChapter.type} />
+                        <input
+                          id={`elce-chapter-title-${pageChapter.id}`}
+                          key={`${pageChapter.id}:${pageChapter.name}`}
+                          className="elce-inline-title-input"
+                          type="text"
+                          aria-label={CHAPTER_TYPE_CONFIG[pageChapter.type].titleLabel}
+                          title={CHAPTER_TYPE_CONFIG[pageChapter.type].editTitleLabel}
+                          defaultValue={pageChapter.name}
+                          onBlur={(event) => commitInlineName(event.currentTarget, pageChapter.name, (name) => controller.send({
+                            type: 'document.apply',
+                            command: { type: 'chapter.rename', chapterId: pageChapter.id, name },
+                          }))}
+                          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                        />
+                      </h2>}
+                {selectedChapter !== undefined
+                  ? null
+                  : selectedPage === undefined
+                  ? <h1 id="elce-work-area-title">Éditeur</h1>
+                  : <h1 id="elce-work-area-title" className="elce-work-area-page-title">
+                      <input
+                        id={`elce-page-title-${selectedPage.id}`}
+                        key={`${selectedPage.id}:${selectedPage.name}`}
+                        className="elce-inline-title-input"
+                        type="text"
+                        aria-label="Titre de la page"
+                        title="Modifier le titre de la page"
+                        defaultValue={selectedPage.name}
+                        onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => controller.send({
+                          type: 'document.apply',
+                          command: { type: 'page.rename', pageId: selectedPage.id, name },
+                        }))}
+                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                      />
+                    </h1>}
+              </div>
+              {selectedChapter === undefined && <div id="elce-work-area-actions" className="elce-work-area-actions">
+                <button
+                  id="elce-section-create"
+                  className="elce-icon-action"
+                  type="button"
+                  aria-label="Ajouter un bloc texte"
+                  title="Ajouter un bloc texte"
+                  disabled={!canCreateSection}
+                  onClick={addSection}
+                ><FileText aria-hidden="true" size={17} strokeWidth={2} /></button>
+                <button
+                  id="elce-question-create"
+                  className="elce-icon-action"
+                  type="button"
+                  aria-label="Ajouter un bloc quiz"
+                  title="Ajouter un bloc quiz"
+                  disabled={!canCreateQuestion}
+                  onClick={addQuestion}
+                ><ListChecks aria-hidden="true" size={17} strokeWidth={2} /></button>
+              </div>}
+            </div>
+          </div>
+          {selectedChapter !== undefined
+            ? selectedChapter.type === CHAPTER_TYPE.EVALUATION
+              ? <EvaluationChapterSettingsEditor
+                  chapter={selectedChapter}
+                  onChange={(attemptLimit, retryScope) => controller.send({
+                    type: 'document.apply',
+                    command: {
+                      type: 'chapter.evaluation.settings.update',
+                      chapterId: selectedChapter.id,
+                      attemptLimit,
+                      retryScope,
+                    },
+                  })}
+                />
+              : null
+            : selectedPage === undefined
+              ? <p id="elce-editor-unavailable">Sélectionnez une page du scénario.</p>
+              : <div id={`elce-page-bdc-list-${selectedPage.id}`} className="elce-page-bdc-list">
+                {selectedPageBdcs.length === 0
+                  ? <p id="elce-editor-unavailable">Cette page ne contient aucun bloc éditable.</p>
+                  : null}
+                {selectedPageBdcs.map((bdc) => {
+                  const index = selectedPage.bdcIds.indexOf(bdc.id)
+                  const separatorId = `elce-page-bdc-drop-${index}`
+                  return (
+                    <Fragment key={bdc.id}>
+                      <div
+                        id={separatorId}
+                        className={dropTarget === separatorId ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
+                        aria-label="Déposer le bloc à cet endroit"
+                        onDragOver={(event) => dragOverBdcSeparator(event, separatorId)}
+                        onDragLeave={dragLeaveDropSeparator}
+                        onDrop={(event) => dropBdc(event, index)}
+                      ><span /></div>
+                      <div id={`elce-page-bdc-${bdc.id}`} className="elce-page-bdc">
+                        <button
+                          id={`elce-page-bdc-drag-${bdc.id}`}
+                          className="elce-page-bdc__drag"
+                          type="button"
+                          draggable
+                          aria-label="Déplacer le bloc dans la page"
+                          title="Glisser pour déplacer"
+                          onDragStart={(event) => beginBdcDrag(event, bdc.id)}
+                          onDragEnd={endBdcDrag}
+                        ><GripVertical aria-hidden="true" size={15} /></button>
+                        {bdc.type === BDC_TYPE.SECTION
+                          ? <SectionEditor
+                              key={`${bdc.id}:${mediaSourceKey}`}
+                              bdc={bdc}
+                              onDelete={() => controller.send({
+                                type: 'document.apply',
+                                command: { type: 'bdc.section.delete', bdcId: bdc.id },
+                              })}
+                              createFileDropTarget={(file) => anchorDropFacade.createFileDropTarget(file, selectedPage.id)}
+                              createCatalogDropTarget={(reference) => anchorDropFacade.createCatalogDropTarget(
+                                documentModel,
+                                reference,
+                                selectedPage.id,
+                                bdc.id,
+                              )}
+                              resolveMediaSource={(mediaId) => mediaSources[mediaId] ?? null}
+                              onChange={(change) => anchorDropFacade.submitSectionChange(bdc.id, change)}
+                            />
+                          : bdc.type === BDC_TYPE.QUESTION && bdc.question !== null
+                            ? <QuestionEditor
+                                bdcId={bdc.id}
+                                question={bdc.question}
+                                media={documentModel.medias.find((media) => media.id === bdc.mediaId) ?? null}
+                                mediaSource={bdc.mediaId === null ? null : mediaSources[bdc.mediaId] ?? null}
+                                actions={createQuestionEditorActions(questionFacade, bdc.id, bdc.question)}
+                                onCatalogReference={(value) => questionFacade.attachMediaReference(bdc.id, value)}
+                              />
+                            : null}
+                      </div>
+                    </Fragment>
+                  )
+                })}
+                <div
+                  id={`elce-page-bdc-drop-${selectedPage.bdcIds.length}`}
+                  className={dropTarget === `elce-page-bdc-drop-${selectedPage.bdcIds.length}` ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
+                  aria-label="Déposer le bloc à la fin de la page"
+                  onDragOver={(event) => dragOverBdcSeparator(event, `elce-page-bdc-drop-${selectedPage.bdcIds.length}`)}
+                  onDragLeave={dragLeaveDropSeparator}
+                  onDrop={(event) => dropBdc(event, selectedPage.bdcIds.length)}
+                ><span /></div>
+              </div>}
+        </section>
+        <aside id="elce-properties" className="elce-panel">
           <section id="elce-content-catalog" className="elce-outline-group">
-            <h2 id="elce-content-catalog-title">Contenus disponibles</h2>
+            <h1 id="elce-content-catalog-title">Contenus disponibles</h1>
             <div id="elce-content-catalog-tabs" className="elce-content-catalog-tabs" role="group" aria-label="Contenus du catalogue">
               <button
                 id="elce-content-catalog-tab-bdcs"
@@ -337,71 +679,8 @@ export function AppLayout({ controller }: AppLayoutProps) {
                   </ul>}
             </section>
           </section>
-        </section>
-        <section id="elce-work-area" className="elce-panel elce-work-area">
-          <div id="elce-work-area-heading" className="elce-work-area-heading">
-            <div id="elce-work-area-titles" className="elce-work-area-titles">
-              {selectedChapter === undefined
-                ? null
-                : <h2 id="elce-work-area-chapter-title" className="elce-work-area-chapter-title">
-                    <input
-                      id={`elce-chapter-title-${selectedChapter.id}`}
-                      key={`${selectedChapter.id}:${selectedChapter.name}`}
-                      className="elce-inline-title-input"
-                      type="text"
-                      aria-label="Titre du chapitre"
-                      title="Modifier le titre du chapitre"
-                      defaultValue={selectedChapter.name}
-                      onBlur={(event) => commitInlineName(event.currentTarget, selectedChapter.name, (name) => controller.send({
-                        type: 'document.apply',
-                        command: { type: 'chapter.rename', chapterId: selectedChapter.id, name },
-                      }))}
-                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-                    />
-                  </h2>}
-              {selectedPage === undefined
-                ? <h1 id="elce-work-area-title">Éditeur</h1>
-                : <h1 id="elce-work-area-title" className="elce-work-area-page-title">
-                    <input
-                      id={`elce-page-title-${selectedPage.id}`}
-                      key={`${selectedPage.id}:${selectedPage.name}`}
-                      className="elce-inline-title-input"
-                      type="text"
-                      aria-label="Titre de la page"
-                      title="Modifier le titre de la page"
-                      defaultValue={selectedPage.name}
-                      onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => controller.send({
-                        type: 'document.apply',
-                        command: { type: 'page.rename', pageId: selectedPage.id, name },
-                      }))}
-                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-                    />
-                  </h1>}
-            </div>
-            <button id="elce-preview-open" type="button" onClick={() => setPreviewOpen(true)}>
-              Prévisualiser
-            </button>
-          </div>
-          {selectedSection === undefined
-            ? <p id="elce-editor-unavailable">Sélectionnez une page Flux contenant une Section.</p>
-            : <SectionEditor
-                key={`${selectedSection.id}:${mediaSourceKey}`}
-                bdc={selectedSection}
-                createFileDropTarget={(file) => selectedPage === undefined ? null : anchorDropFacade.createFileDropTarget(file, selectedPage.id)}
-                createCatalogDropTarget={(reference) => anchorDropFacade.createCatalogDropTarget(
-                  documentModel,
-                  reference,
-                  selectedPage?.id ?? null,
-                  selectedSection.id,
-                )}
-                resolveMediaSource={(mediaId) => mediaSources[mediaId] ?? null}
-                onChange={(change) => anchorDropFacade.submitSectionChange(selectedSection.id, change)}
-              />}
-        </section>
-        <aside id="elce-properties" className="elce-panel">
-          <h1 id="elce-properties-title">Propriétés</h1>
           {unanchoredMediaBdcs.length === 0
-            ? <p id="elce-properties-empty">Les propriétés du document apparaîtront ici.</p>
+            ? null
             : <section id="elce-page-media" className="elce-outline-group">
                 <h2 id="elce-page-media-title">Médias dans la page</h2>
                 <ul id="elce-page-media-list" className="elce-media-catalog-list">
@@ -456,6 +735,249 @@ function commitInlineName(
   commit(name)
 }
 
+type EvaluationChapterSettingsEditorProps = Readonly<{
+  readonly chapter: Chapter
+  readonly onChange: (attemptLimit: number | null, retryScope: EvaluationRetryScope) => void
+}>
+
+/** Edits the persisted POC settings for one Evaluation chapter. */
+function EvaluationChapterSettingsEditor({ chapter, onChange }: EvaluationChapterSettingsEditorProps) {
+  const attemptLimit = chapter.evaluationAttemptLimit ?? DEFAULT_EVALUATION_SETTINGS.attemptLimit
+  const retryScope = chapter.evaluationRetryScope ?? DEFAULT_EVALUATION_SETTINGS.retryScope
+  return (
+    <form id={`elce-evaluation-settings-${chapter.id}`} className="elce-evaluation-settings" onSubmit={(event) => event.preventDefault()}>
+      <label className="elce-evaluation-setting">
+        <span>Seuil de réussite</span>
+        <output id={`elce-evaluation-threshold-${chapter.id}`}>{DEFAULT_EVALUATION_SETTINGS.threshold * 100} %</output>
+        <small>Fixé pour le POC.</small>
+      </label>
+      <label className="elce-evaluation-setting">
+        <span>Nombre maximal de tentatives</span>
+        <input
+          id={`elce-evaluation-attempt-limit-${chapter.id}`}
+          key={`${chapter.id}:${attemptLimit ?? 'unlimited'}`}
+          type="number"
+          min="1"
+          step="1"
+          placeholder="Illimité"
+          defaultValue={attemptLimit ?? ''}
+          onBlur={(event) => commitAttemptLimit(event.currentTarget, attemptLimit, (value) => onChange(value, retryScope))}
+          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+        />
+        <small>Laisser vide pour autoriser un nombre illimité de tentatives.</small>
+      </label>
+      <label className="elce-evaluation-setting">
+        <span>Questions à reprendre après un échec</span>
+        <select
+          id={`elce-evaluation-retry-scope-${chapter.id}`}
+          value={retryScope}
+          onChange={(event) => onChange(attemptLimit, event.currentTarget.value as EvaluationRetryScope)}
+        >
+          <option value={EVALUATION_RETRY_SCOPE.ALL_QUESTIONS}>Toutes les questions</option>
+          <option value={EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS}>Les réponses incorrectes seulement</option>
+        </select>
+      </label>
+    </form>
+  )
+}
+
+/** Commits a positive attempt limit or restores the current unlimited/default value. */
+function commitAttemptLimit(
+  input: HTMLInputElement,
+  currentValue: number | null,
+  commit: (value: number | null) => void,
+): void {
+  const value = input.value.trim() === '' ? null : Number(input.value)
+  if (value !== null && (!Number.isInteger(value) || value < 1)) {
+    input.value = currentValue === null ? '' : String(currentValue)
+    return
+  }
+  if (value !== currentValue) commit(value)
+}
+
+/** Binds one Question editor to the métier facade without keeping React state. */
+function createQuestionEditorActions(
+  facade: ElceQuestionFacade,
+  bdcId: string,
+  question: QuestionContent,
+): ElceQuestionEditorActions {
+  return {
+    setType: (type) => facade.setType(bdcId, question, type),
+    setTitle: (title) => facade.setTitle(bdcId, question, title),
+    setPrompt: (prompt) => facade.setPrompt(bdcId, question, prompt),
+    setAnswerLabel: (answerId, label) => facade.setAnswerLabel(bdcId, question, answerId, label),
+    setAnswerCorrect: (answerId, correct) => facade.setAnswerCorrect(bdcId, question, answerId, correct),
+    addAnswer: () => facade.addAnswer(bdcId, question),
+    removeAnswer: (answerId) => facade.removeAnswer(bdcId, question, answerId),
+    canRemoveAnswer: (answerId) => facade.canRemoveAnswer(question, answerId),
+    moveAnswer: (answerId, index) => facade.moveAnswer(bdcId, question, answerId, index),
+    importMedia: (file) => facade.importMediaFile(bdcId, file),
+    clearMedia: () => facade.clearMedia(bdcId),
+    deleteQuestion: () => facade.delete(bdcId),
+  }
+}
+
+type ScenarioEntryDropListProps = Readonly<{
+  readonly id: string
+  readonly documentModel: ElceDocument
+  readonly selectedPageId?: string
+  readonly selectedChapterId?: string
+  readonly dropTarget: string | null
+  readonly onDragLeaveDropSeparator: (event: DragEvent<HTMLElement>) => void
+  readonly onSelect: (pageId: string) => void
+  readonly onSelectChapter: (chapterId: string) => void
+  readonly onDeletePage: (pageId: string) => void
+  readonly onDeleteChapter: (chapterId: string) => void
+  readonly onAddChapterPage: (chapterId: string) => void
+  readonly onDragStartPage: (event: DragEvent<HTMLElement>, pageId: string) => void
+  readonly onDragStartChapter: (event: DragEvent<HTMLElement>, chapterId: string) => void
+  readonly onDragEnd: () => void
+  readonly onDragOverRoot: (event: DragEvent<HTMLElement>, targetId: string) => void
+  readonly onDragOverPage: (event: DragEvent<HTMLElement>, targetId: string) => void
+  readonly onDropRoot: (event: DragEvent<HTMLElement>, placement: ScenarioPagePlacement) => void
+  readonly onDropPage: (event: DragEvent<HTMLElement>, placement: PagePlacement) => void
+}>
+
+/** Renders root pages and chapter entries in their shared scenario order. */
+function ScenarioEntryDropList({
+  id,
+  documentModel,
+  selectedPageId,
+  selectedChapterId,
+  dropTarget,
+  onDragLeaveDropSeparator,
+  onSelect,
+  onSelectChapter,
+  onDeletePage,
+  onDeleteChapter,
+  onAddChapterPage,
+  onDragStartPage,
+  onDragStartChapter,
+  onDragEnd,
+  onDragOverRoot,
+  onDragOverPage,
+  onDropRoot,
+  onDropPage,
+}: ScenarioEntryDropListProps) {
+  const entries = documentModel.data.scenarioEntries
+  const placementAt = (index: number): ScenarioPagePlacement => ({ kind: PAGE_LOCATION.SCENARIO, index })
+
+  return (
+    <ul id={id} className="elce-outline-list">
+      {entries.map((entry, entryIndex) => {
+        switch (entry.kind) {
+          case SCENARIO_ENTRY_KIND.PAGE: {
+            const page = documentModel.pages.find((candidate) => candidate.id === entry.pageId)
+            if (page === undefined) return null
+            return (
+              <Fragment key={`${SCENARIO_ENTRY_KIND.PAGE}-${page.id}`}>
+                <ScenarioDropSeparator
+                  id={`${id}-drop-${entryIndex}`}
+                  dropTarget={dropTarget}
+                  onDragOver={onDragOverRoot}
+                  onDragLeave={onDragLeaveDropSeparator}
+                  onDrop={(event) => onDropRoot(event, placementAt(entryIndex))}
+                />
+                <li id={`${id}-item-${page.id}`}>
+                  <PageOutlineRow
+                    id={id}
+                    page={page}
+                    selectedPageId={selectedPageId}
+                    onSelect={onSelect}
+                    onDelete={onDeletePage}
+                    onDragStart={onDragStartPage}
+                    onDragEnd={onDragEnd}
+                  />
+                </li>
+              </Fragment>
+            )
+          }
+          case SCENARIO_ENTRY_KIND.CHAPTER: {
+            const chapter = documentModel.chapters.find((candidate) => candidate.id === entry.chapterId)
+            if (chapter === undefined) return null
+            return (
+              <Fragment key={`${SCENARIO_ENTRY_KIND.CHAPTER}-${chapter.id}`}>
+              <ScenarioDropSeparator
+                id={`${id}-drop-${entryIndex}`}
+                dropTarget={dropTarget}
+                onDragOver={onDragOverRoot}
+                onDragLeave={onDragLeaveDropSeparator}
+                onDrop={(event) => onDropRoot(event, placementAt(entryIndex))}
+              />
+              <li id={`elce-chapter-${chapter.id}`}>
+                <div
+                  id={`elce-chapter-heading-${chapter.id}`}
+                  className="elce-outline-item-heading"
+                  draggable
+                  aria-label={`Glisser pour déplacer ${chapter.name}`}
+                  onDragStart={(event) => onDragStartChapter(event, chapter.id)}
+                  onDragEnd={onDragEnd}
+                >
+                  <span className="elce-drag-handle" title="Glisser pour déplacer" aria-hidden="true">
+                    <GripVertical size={14} strokeWidth={2} />
+                  </span>
+                  <button
+                    id={`elce-chapter-select-${chapter.id}`}
+                    className={selectedChapterId === chapter.id ? 'elce-chapter-select elce-chapter-select--selected' : 'elce-chapter-select'}
+                    type="button"
+                    aria-pressed={selectedChapterId === chapter.id}
+                    onClick={() => onSelectChapter(chapter.id)}
+                  >
+                    <ChapterTypeMark type={chapter.type} />
+                    <strong id={`elce-chapter-name-${chapter.id}`}>{chapter.name}</strong>
+                  </button>
+                  <div id={`elce-chapter-actions-${chapter.id}`} className="elce-outline-item-actions">
+                    <button
+                      id={`elce-create-page-${chapter.id}`}
+                      className="elce-location-page-action"
+                      type="button"
+                      aria-label={`Ajouter une page dans ${chapter.name}`}
+                      title={`Ajouter une page dans ${chapter.name}`}
+                      onClick={() => onAddChapterPage(chapter.id)}
+                    >
+                      <FilePlus aria-hidden="true" size={14} strokeWidth={2} />
+                    </button>
+                    <DeleteIconButton
+                      id={`elce-chapter-delete-${chapter.id}`}
+                      disabled={chapter.pageIds.length > 0}
+                      onClick={() => onDeleteChapter(chapter.id)}
+                    />
+                  </div>
+                </div>
+                <PageDropList
+                  id={`elce-pages-${chapter.id}`}
+                  documentModel={documentModel}
+                  pageIds={chapter.pageIds}
+                  selectedPageId={selectedPageId}
+                  emptyLabel="Déposer une page dans ce chapitre"
+                  dropTarget={dropTarget}
+                  onDragLeaveDropSeparator={onDragLeaveDropSeparator}
+                  placementAt={(index) => ({ kind: PAGE_LOCATION.CHAPTER, chapterId: chapter.id, index })}
+                  onSelect={onSelect}
+                  onDelete={onDeletePage}
+                  onDragStart={onDragStartPage}
+                  onDragEnd={onDragEnd}
+                  onDragOver={onDragOverPage}
+                  onDrop={onDropPage}
+                />
+              </li>
+              </Fragment>
+            )
+          }
+        }
+      })}
+      <ScenarioDropSeparator
+        id={`${id}-drop-${entries.length}`}
+        label={entries.length === 0 ? 'Déposer une page à la racine du scénario' : undefined}
+        dropTarget={dropTarget}
+        onDragOver={onDragOverRoot}
+        onDragLeave={onDragLeaveDropSeparator}
+        onDrop={(event) => onDropRoot(event, placementAt(entries.length))}
+      />
+    </ul>
+  )
+}
+
 type PageDropListProps = Readonly<{
   readonly id: string
   readonly documentModel: ElceDocument
@@ -463,6 +985,7 @@ type PageDropListProps = Readonly<{
   readonly selectedPageId?: string
   readonly emptyLabel: string
   readonly dropTarget: string | null
+  readonly onDragLeaveDropSeparator: (event: DragEvent<HTMLElement>) => void
   readonly placementAt: (index: number) => PagePlacement
   readonly onSelect: (pageId: string) => void
   readonly onDelete: (pageId: string) => void
@@ -472,7 +995,7 @@ type PageDropListProps = Readonly<{
   readonly onDrop: (event: DragEvent<HTMLElement>, placement: PagePlacement) => void
 }>
 
-/** Renders one ordered page collection and its explicit drop targets. */
+/** Renders one ordered page collection with separators as its only drop targets. */
 function PageDropList({
   id,
   documentModel,
@@ -480,6 +1003,7 @@ function PageDropList({
   selectedPageId,
   emptyLabel,
   dropTarget,
+  onDragLeaveDropSeparator,
   placementAt,
   onSelect,
   onDelete,
@@ -489,59 +1013,124 @@ function PageDropList({
   onDrop,
 }: PageDropListProps) {
   return (
-    <ul
-      id={id}
-      className={dropTarget === `${id}-end` ? 'elce-outline-list elce-drop-target' : 'elce-outline-list'}
-      onDragOver={(event) => onDragOver(event, `${id}-end`)}
-      onDrop={(event) => onDrop(event, placementAt(pageIds.length))}
-    >
+    <ul id={id} className="elce-outline-list">
       {pageIds.map((pageId, pageIndex) => {
         const page = documentModel.pages.find((candidate) => candidate.id === pageId)
         if (page === undefined) return null
-        const rowTarget = `${id}-${page.id}`
-        const rowClassName = dropTarget === rowTarget ? 'elce-page-row elce-page-row--drop-target' : 'elce-page-row'
         return (
-          <li id={`${id}-item-${page.id}`} key={page.id}>
-            <div
-              id={`${id}-row-${page.id}`}
-              className={rowClassName}
-              draggable
-              aria-label={`Glisser pour déplacer ${page.name}`}
-              onDragStart={(event) => onDragStart(event, page.id)}
-              onDragEnd={onDragEnd}
-              onDragOver={(event) => onDragOver(event, rowTarget)}
-              onDrop={(event) => onDrop(event, placementAt(resolveDropIndex(event, pageIndex)))}
-            >
-              <span className="elce-drag-handle" title="Glisser pour déplacer" aria-hidden="true">
-                <GripVertical size={14} strokeWidth={2} />
-              </span>
-              <button
-                id={`${id}-select-${page.id}`}
-                className={page.id === selectedPageId ? 'elce-page-button elce-page-button--selected' : 'elce-page-button'}
-                type="button"
-                onClick={() => onSelect(page.id)}
-              >
-                {page.name}
-              </button>
-              <span id={`${id}-type-${page.id}`} className="elce-muted"> · {page.type}</span>
-              <div id={`${id}-actions-${page.id}`} className="elce-page-actions">
-                <DeleteIconButton id={`${id}-delete-${page.id}`} onClick={() => onDelete(page.id)} />
-              </div>
-            </div>
-          </li>
+          <Fragment key={page.id}>
+            <ScenarioDropSeparator
+                id={`${id}-drop-${pageIndex}`}
+                dropTarget={dropTarget}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeaveDropSeparator}
+                onDrop={(event) => onDrop(event, placementAt(pageIndex))}
+            />
+            <li id={`${id}-item-${page.id}`}>
+              <PageOutlineRow
+                id={id}
+                page={page}
+                selectedPageId={selectedPageId}
+                onSelect={onSelect}
+                onDelete={onDelete}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+              />
+            </li>
+          </Fragment>
         )
       })}
-      {pageIds.length === 0
-        ? <li id={`${id}-empty`} className={dropTarget === `${id}-empty` ? 'elce-page-drop-empty elce-drop-target' : 'elce-page-drop-empty'} onDragOver={(event) => onDragOver(event, `${id}-empty`)} onDrop={(event) => onDrop(event, placementAt(0))}>{emptyLabel}</li>
-        : null}
+      <ScenarioDropSeparator
+        id={`${id}-drop-${pageIds.length}`}
+        label={pageIds.length === 0 ? emptyLabel : undefined}
+        dropTarget={dropTarget}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeaveDropSeparator}
+        onDrop={(event) => onDrop(event, placementAt(pageIds.length))}
+      />
     </ul>
   )
 }
 
-/** Chooses insertion before or after the row under the pointer. */
-function resolveDropIndex(event: DragEvent<HTMLElement>, pageIndex: number): number {
-  const bounds = event.currentTarget.getBoundingClientRect()
-  return event.clientY > bounds.top + bounds.height / 2 ? pageIndex + 1 : pageIndex
+type ScenarioDropSeparatorProps = Readonly<{
+  readonly id: string
+  readonly label?: string
+  readonly dropTarget: string | null
+  readonly onDragOver: (event: DragEvent<HTMLElement>, targetId: string) => void
+  readonly onDragLeave: (event: DragEvent<HTMLElement>) => void
+  readonly onDrop: (event: DragEvent<HTMLElement>) => void
+}>
+
+/** Displays a list insertion point and handles drops at that position. */
+function ScenarioDropSeparator({ id, label, dropTarget, onDragOver, onDragLeave, onDrop }: ScenarioDropSeparatorProps) {
+  const active = dropTarget === id
+  const className = active
+    ? 'elce-drop-separator elce-drop-separator--active'
+    : 'elce-drop-separator'
+  return (
+    <li
+      id={id}
+      className={className}
+      aria-label={label ?? 'Point d’insertion'}
+      onDragOver={(event) => onDragOver(event, id)}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <span className="elce-drop-separator__line" aria-hidden="true" />
+      {label === undefined ? null : <span className="elce-drop-separator__label">{label}</span>}
+    </li>
+  )
+}
+
+type PageOutlineRowProps = Readonly<{
+  readonly id: string
+  readonly page: ElceDocument['pages'][number]
+  readonly selectedPageId?: string
+  readonly onSelect: (pageId: string) => void
+  readonly onDelete: (pageId: string) => void
+  readonly onDragStart: (event: DragEvent<HTMLElement>, pageId: string) => void
+  readonly onDragEnd: () => void
+}>
+
+/** Renders one draggable page entry with its selection and delete actions. */
+function PageOutlineRow({
+  id,
+  page,
+  selectedPageId,
+  onSelect,
+  onDelete,
+  onDragStart,
+  onDragEnd,
+}: PageOutlineRowProps) {
+  return (
+    <div
+      id={`${id}-row-${page.id}`}
+      className="elce-page-row"
+      draggable
+      aria-label={`Glisser pour déplacer ${page.name}`}
+      onDragStart={(event) => {
+        event.stopPropagation()
+        onDragStart(event, page.id)
+      }}
+      onDragEnd={onDragEnd}
+    >
+      <span className="elce-drag-handle" title="Glisser pour déplacer" aria-hidden="true">
+        <GripVertical size={14} strokeWidth={2} />
+      </span>
+      <button
+        id={`${id}-select-${page.id}`}
+        className={page.id === selectedPageId ? 'elce-page-button elce-page-button--selected' : 'elce-page-button'}
+        type="button"
+        onClick={() => onSelect(page.id)}
+      >
+        {page.name}
+      </button>
+      <span id={`${id}-type-${page.id}`} className="elce-muted"> · {page.type}</span>
+      <div id={`${id}-actions-${page.id}`} className="elce-page-actions">
+        <DeleteIconButton id={`${id}-delete-${page.id}`} onClick={() => onDelete(page.id)} />
+      </div>
+    </div>
+  )
 }
 
 type DeleteIconButtonProps = Readonly<{
@@ -566,6 +1155,28 @@ function DeleteIconButton({ id, ariaLabel = 'Supprimer définitivement', disable
       <Trash2 aria-hidden="true" size={14} strokeWidth={2} />
     </button>
   )
+}
+
+/** Applies the editor's page-type whitelist for creating a Question BDC. */
+function pageAllowsQuestion(page: ElceDocument['pages'][number] | undefined): boolean {
+  switch (page?.type) {
+    case PAGE_TYPE.FLUX:
+      return true
+    case PAGE_TYPE.DIAPO:
+    default:
+      return false
+  }
+}
+
+/** Applies the editor's page-type whitelist for creating a text BDC. */
+function pageAllowsSection(page: ElceDocument['pages'][number] | undefined): boolean {
+  switch (page?.type) {
+    case PAGE_TYPE.FLUX:
+      return true
+    case PAGE_TYPE.DIAPO:
+    default:
+      return false
+  }
 }
 
 /** Gives an image or video media type a compact label for catalogue rows. */

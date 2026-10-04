@@ -6,7 +6,7 @@ Source : présentation initiale fournie par le porteur du projet.
 
 Cette note reformule l’intention du projet et les besoins exprimés. Les
 décisions à prendre et la préparation du plan de construction sont suivies
-dans le [plan de cadrage](../plan/2026-10-01-elce-construction-plan.md).
+dans le [plan de construction](../plan/2026-10-01-elce-construction-plan.md).
 
 ## Intention
 
@@ -69,7 +69,7 @@ Chaque zone permet une saisie de texte enrichi basique :
 
 La formulation d’origine pour les options de paragraphe est : « gauche —
 centré — souligné — justifié ». La clarification de cette liste est suivie
-dans le sujet 4 du plan de cadrage.
+dans le sujet 4 du plan de construction.
 
 Aucune autre option d’enrichissement n’est demandée pour cette version.
 Selon la difficulté, l’édition pourra s’appuyer sur une bibliothèque externe
@@ -134,4 +134,4 @@ par l’utilisateur.
 La page porte la responsabilité du passage à la page suivante. Les modes
 évoqués sont la fin du défilement (`scroll-end`), un délai et un signal de fin
 de scène. Leur articulation avec l’enchaînement des nodes et le parcours
-Sighty sera précisée dans le plan de cadrage.
+Sighty sera précisée dans le plan de construction.

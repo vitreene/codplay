@@ -4,6 +4,7 @@ export interface CardPreset {
   readonly id: string
   readonly label: string
   readonly allowedContent: readonly CardPresetContent[]
+  readonly markupTemplate: string
   readonly zones: readonly {
     readonly id: string
     readonly label: string

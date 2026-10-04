@@ -2,11 +2,13 @@ import {
   BDC_LOCATION,
   BDC_TYPE,
   CHAPTER_TYPE,
-  DEFAULT_EVALUATION_THRESHOLD,
+  CHAPTER_TYPE_CONFIG,
+  DEFAULT_EVALUATION_SETTINGS,
   DEFAULT_PRESET_ID,
   MEDIA_TYPE,
   PAGE_LOCATION,
   PAGE_TYPE,
+  SCENARIO_ENTRY_KIND,
 } from '../../config/document-config'
 import type { BdcType, MediaType } from '../../config/document-config-types'
 import {
@@ -17,41 +19,64 @@ import {
   createStableId,
 } from '../../domain/document-model'
 import { ElceAnchorReferenceService } from '../../domain/anchor-reference-service'
-import type { Bdc, BdcId, Chapter, ChapterId, MediaId, Page, PageId, RichTextDocument } from '../../domain/document-types'
+import { ElceQuestionService } from '../../domain/question-service'
+import type { Bdc, BdcId, Chapter, ChapterId, MediaId, MediaMetadata, Page, PageId, RichTextDocument } from '../../domain/document-types'
 import type { BdcPlacement, CreatePageCommandInput, DocumentCommand, PagePlacement } from './document-command-types'
 
 const anchorReferenceService = new ElceAnchorReferenceService()
+const questionService = new ElceQuestionService()
 
 /** Creates a page command while keeping identifier generation outside rendering. */
 export function createPageCommand(input: CreatePageCommandInput): Extract<DocumentCommand, { type: 'page.create' }> {
   return { type: 'page.create', ...input }
 }
 
-/** Creates the first authoring action exposed by the application scaffold. */
+/** Creates a default Flux page command at the requested document location. */
 export function createDefaultPageCommand(
   document: ElceDocument,
+  placement: PagePlacement,
   name?: string,
 ): Extract<DocumentCommand, { type: 'page.create' }> {
-  const chapter = document.chapters[0]
-  if (chapter === undefined) fail('Impossible de créer une page sans chapitre.')
   return createPageCommand({
     pageId: createStableId('page'),
-    bdcId: createStableId('bdc-section'),
+    bdcId: createStableId('bdc'),
+    defaultBdcType: defaultBdcTypeForPlacement(document, placement),
     name,
-    placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: chapter.id },
+    placement,
   })
+}
+
+/** Selects the initial page-content BDC from the explicitly requested chapter. */
+function defaultBdcTypeForPlacement(document: ElceDocument, placement: PagePlacement) {
+  switch (placement.kind) {
+    case PAGE_LOCATION.CHAPTER:
+      return CHAPTER_TYPE_CONFIG[findChapter(document, placement.chapterId).type].defaultBdcType
+    case PAGE_LOCATION.SCENARIO:
+    case PAGE_LOCATION.CATALOG:
+      return CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].defaultBdcType
+  }
 }
 
 /** Creates a chapter command with a stable generated identifier and a readable fallback name. */
 export function createChapterCommand(
   document: ElceDocument,
   name?: string,
+  chapterType: Chapter['type'] = CHAPTER_TYPE.STANDARD,
 ): Extract<DocumentCommand, { type: 'chapter.create' }> {
   return {
     type: 'chapter.create',
     chapterId: createStableId('chapter'),
-    name: name?.trim() || nextChapterName(document),
+    name: name?.trim() || nextChapterName(document, chapterType),
+    chapterType,
   }
+}
+
+/** Creates the command that moves a chapter among root scenario entries. */
+export function createChapterMoveCommand(
+  chapterId: ChapterId,
+  index?: number,
+): Extract<DocumentCommand, { type: 'chapter.move' }> {
+  return { type: 'chapter.move', chapterId, index }
 }
 
 /** Creates the command used to move a page between the document's page collections. */
@@ -72,6 +97,36 @@ export function createPageDeleteCommand(pageId: PageId): Extract<DocumentCommand
   return { type: 'page.delete', pageId }
 }
 
+/** Creates the single Question block at an explicit position in one page flow. */
+export function createQuestionBdcCommand(
+  bdcId: BdcId,
+  pageId: PageId,
+  index: number,
+): Extract<DocumentCommand, { type: 'bdc.create' }> {
+  return {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.QUESTION,
+    presetId: DEFAULT_PRESET_ID.QUESTION,
+    placement: { kind: BDC_LOCATION.PAGE, pageId, index },
+  }
+}
+
+/** Creates a default text BDC at its requested position in a Flux page. */
+export function createSectionBdcCommand(
+  bdcId: BdcId,
+  pageId: PageId,
+  index: number,
+): Extract<DocumentCommand, { type: 'bdc.create' }> {
+  return {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.SECTION,
+    presetId: DEFAULT_PRESET_ID.SECTION,
+    placement: { kind: BDC_LOCATION.PAGE, pageId, index },
+  }
+}
+
 function fail(message: string): never {
   throw new Error(message)
 }
@@ -90,6 +145,44 @@ function removeValue<T>(values: readonly T[], value: T): readonly T[] {
   return values.filter((candidate) => candidate !== value)
 }
 
+/** Removes one standalone page from the root scenario sequence. */
+function removeScenarioPageEntry(document: ElceDocument, pageId: PageId) {
+  return document.data.scenarioEntries.filter((entry) => {
+    switch (entry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        return entry.pageId !== pageId
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        return true
+    }
+  })
+}
+
+/** Returns a standalone page's root entry position when it already has one. */
+function scenarioEntryIndexForPage(document: ElceDocument, pageId: PageId): number | undefined {
+  const index = document.data.scenarioEntries.findIndex((entry) => {
+    switch (entry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        return entry.pageId === pageId
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        return false
+    }
+  })
+  return index < 0 ? undefined : index
+}
+
+/** Returns one chapter's root entry position. */
+function scenarioEntryIndexForChapter(document: ElceDocument, chapterId: ChapterId): number {
+  const index = document.data.scenarioEntries.findIndex((entry) => {
+    switch (entry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        return false
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        return entry.chapterId === chapterId
+    }
+  })
+  return index < 0 ? fail(`Entrée de chapitre absente : ${chapterId}`) : index
+}
+
 function sourceIndexForPlacement(
   document: ElceDocument,
   page: Page,
@@ -99,8 +192,12 @@ function sourceIndexForPlacement(
     case PAGE_LOCATION.CATALOG:
       return undefined
     case PAGE_LOCATION.SCENARIO: {
-      const sourceIndex = document.data.scenarioPageIds.indexOf(page.id)
-      return sourceIndex < 0 ? undefined : sourceIndex
+      switch (page.chapterId) {
+        case null:
+          return scenarioEntryIndexForPage(document, page.id)
+        default:
+          return undefined
+      }
     }
     case PAGE_LOCATION.CHAPTER: {
       if (page.chapterId !== placement.chapterId) return undefined
@@ -169,6 +266,16 @@ function sectionForBdc(type: BdcType, bdcId: BdcId): Bdc['section'] {
   }
 }
 
+/** Creates the configured authored Question value for a new Question BDC. */
+function questionForBdc(type: BdcType): Bdc['question'] {
+  switch (type) {
+    case BDC_TYPE.QUESTION:
+      return questionService.createDefault()
+    default:
+      return null
+  }
+}
+
 function withPage(document: ElceDocument, page: Page): ElceDocument {
   return new ElceDocument({ ...document.data, pages: replaceAt(document.pages, page, (candidate) => candidate.id === page.id) })
 }
@@ -182,7 +289,7 @@ function placePage(document: ElceDocument, page: Page, placement: PagePlacement)
   const withoutPage = new ElceDocument({
     ...document.data,
     chapters: document.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, page.id) })),
-    scenarioPageIds: removeValue(document.data.scenarioPageIds, page.id),
+    scenarioEntries: removeScenarioPageEntry(document, page.id),
     catalogPageIds: removeValue(document.data.catalogPageIds, page.id),
   })
   switch (placement.kind) {
@@ -192,8 +299,12 @@ function placePage(document: ElceDocument, page: Page, placement: PagePlacement)
         { ...page, chapterId: null },
       )
     case PAGE_LOCATION.SCENARIO: {
-      const scenarioPageIds = insertAt(withoutPage.data.scenarioPageIds, page.id, insertionIndex)
-      return withPage(new ElceDocument({ ...withoutPage.data, scenarioPageIds }), { ...page, chapterId: null })
+      const scenarioEntries = insertAt(
+        withoutPage.data.scenarioEntries,
+        { kind: SCENARIO_ENTRY_KIND.PAGE, pageId: page.id },
+        insertionIndex,
+      )
+      return withPage(new ElceDocument({ ...withoutPage.data, scenarioEntries }), { ...page, chapterId: null })
     }
     case PAGE_LOCATION.CHAPTER: {
       const chapter = findChapter(withoutPage, placement.chapterId)
@@ -262,6 +373,7 @@ function deleteCatalogBdc(document: ElceDocument, bdcId: BdcId): ElceDocument {
 function createPage(document: ElceDocument, command: Extract<DocumentCommand, { type: 'page.create' }>): ElceDocument {
   if (document.pages.some((page) => page.id === command.pageId)) fail(`Page déjà présente : ${command.pageId}`)
   if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+  const initialBdcType = command.defaultBdcType ?? CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].defaultBdcType
   const page: Page = {
     id: command.pageId,
     name: command.name?.trim() || nextPageName(document),
@@ -269,16 +381,31 @@ function createPage(document: ElceDocument, command: Extract<DocumentCommand, { 
     chapterId: null,
     bdcIds: [],
   }
-  const section: Bdc = {
+  const initialBdc: Bdc = {
     id: command.bdcId,
-    type: BDC_TYPE.SECTION,
-    presetId: DEFAULT_PRESET_ID.SECTION,
+    type: initialBdcType,
+    presetId: initialPageBdcPreset(initialBdcType),
     pageId: page.id,
     mediaId: null,
-    section: { title: '', markup: `<p id="${command.bdcId}-text"></p>`, content: createEmptyRichTextDocument() },
+    section: sectionForBdc(initialBdcType, command.bdcId),
+    question: questionForBdc(initialBdcType),
   }
-  const withEntities = new ElceDocument({ ...document.data, pages: [...document.pages, page], bdcs: [...document.bdcs, section] })
-  return placeBdc(placePage(withEntities, page, command.placement), section, { kind: BDC_LOCATION.PAGE, pageId: page.id })
+  const withEntities = new ElceDocument({ ...document.data, pages: [...document.pages, page], bdcs: [...document.bdcs, initialBdc] })
+  return placeBdc(
+    placePage(withEntities, page, command.placement),
+    initialBdc,
+    { kind: BDC_LOCATION.PAGE, pageId: page.id },
+  )
+}
+
+/** Returns the configured preset for the only BDC types used to seed new pages. */
+function initialPageBdcPreset(type: typeof BDC_TYPE.SECTION | typeof BDC_TYPE.QUESTION): string {
+  switch (type) {
+    case BDC_TYPE.SECTION:
+      return DEFAULT_PRESET_ID.SECTION
+    case BDC_TYPE.QUESTION:
+      return DEFAULT_PRESET_ID.QUESTION
+  }
 }
 
 function createChapter(document: ElceDocument, command: Extract<DocumentCommand, { type: 'chapter.create' }>): ElceDocument {
@@ -288,9 +415,17 @@ function createChapter(document: ElceDocument, command: Extract<DocumentCommand,
     name: command.name,
     type: command.chapterType ?? CHAPTER_TYPE.STANDARD,
     pageIds: [],
-    ...(command.chapterType === CHAPTER_TYPE.EVALUATION ? { evaluationThreshold: DEFAULT_EVALUATION_THRESHOLD } : {}),
+    ...(command.chapterType === CHAPTER_TYPE.EVALUATION ? {
+      evaluationThreshold: DEFAULT_EVALUATION_SETTINGS.threshold,
+      evaluationAttemptLimit: DEFAULT_EVALUATION_SETTINGS.attemptLimit,
+      evaluationRetryScope: DEFAULT_EVALUATION_SETTINGS.retryScope,
+    } : {}),
   }
-  return new ElceDocument({ ...document.data, chapters: [...document.chapters, chapter] })
+  return new ElceDocument({
+    ...document.data,
+    chapters: [...document.chapters, chapter],
+    scenarioEntries: [...document.data.scenarioEntries, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }],
+  })
 }
 
 function deleteChapter(document: ElceDocument, chapterId: ChapterId): ElceDocument {
@@ -299,11 +434,63 @@ function deleteChapter(document: ElceDocument, chapterId: ChapterId): ElceDocume
   return new ElceDocument({
     ...document.data,
     chapters: document.chapters.filter((candidate) => candidate.id !== chapter.id),
+    scenarioEntries: document.data.scenarioEntries.filter((entry) => {
+      switch (entry.kind) {
+        case SCENARIO_ENTRY_KIND.PAGE:
+          return true
+        case SCENARIO_ENTRY_KIND.CHAPTER:
+          return entry.chapterId !== chapter.id
+      }
+    }),
+  })
+}
+
+/** Reorders one chapter entry without changing its pages or document identity. */
+function moveChapter(document: ElceDocument, chapterId: ChapterId, requestedIndex: number | undefined): ElceDocument {
+  const chapter = findChapter(document, chapterId)
+  const sourceIndex = scenarioEntryIndexForChapter(document, chapter.id)
+  const targetIndex = indexAtEndOrRequested(document.data.scenarioEntries.length, requestedIndex)
+  const insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+  const scenarioEntries = document.data.scenarioEntries.filter((entry) => {
+    switch (entry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        return true
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        return entry.chapterId !== chapter.id
+    }
+  })
+  return new ElceDocument({
+    ...document.data,
+    scenarioEntries: insertAt(scenarioEntries, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }, insertionIndex),
   })
 }
 
 function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { type: 'bdc.create' }>): ElceDocument {
   if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+  switch (command.bdcType) {
+    case BDC_TYPE.QUESTION: {
+      if (command.presetId !== DEFAULT_PRESET_ID.QUESTION || command.mediaId !== undefined) {
+        fail('Une Question utilise son preset configuré et reçoit un média par sa zone Illustration.')
+      }
+      switch (command.placement.kind) {
+        case BDC_LOCATION.PAGE: {
+          const page = findPage(document, command.placement.pageId)
+          switch (page.type) {
+            case PAGE_TYPE.FLUX:
+              break
+            case PAGE_TYPE.DIAPO:
+              fail('Une Question ne peut être créée que dans une page Flux.')
+          }
+          break
+        }
+        case BDC_LOCATION.CATALOG:
+          fail('Un bdc Question est créé directement dans une page Flux.')
+      }
+      break
+    }
+    default:
+      break
+  }
   const bdc: Bdc = {
     id: command.bdcId,
     type: command.bdcType,
@@ -311,8 +498,108 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
     pageId: null,
     mediaId: command.mediaId ?? null,
     section: sectionForBdc(command.bdcType, command.bdcId),
+    question: questionForBdc(command.bdcType),
   }
   return placeBdc(new ElceDocument({ ...document.data, bdcs: [...document.bdcs, bdc] }), bdc, command.placement)
+}
+
+/** Updates Question text and response definitions through a single command. */
+function updateQuestion(document: ElceDocument, bdcId: BdcId, question: NonNullable<Bdc['question']>): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  switch (bdc.type) {
+    case BDC_TYPE.QUESTION:
+      if (bdc.question === null) fail(`Bdc Question incomplet : ${bdcId}`)
+      break
+    default:
+      fail(`Le bdc ${bdcId} n’est pas une Question.`)
+  }
+  questionService.assertValid(question)
+  return withBdc(document, { ...bdc, question })
+}
+
+/** Assigns a reusable image or video resource to the Question illustration. */
+function setQuestionMedia(document: ElceDocument, bdcId: BdcId, mediaId: MediaId | null): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  switch (bdc.type) {
+    case BDC_TYPE.QUESTION:
+      if (bdc.question === null) fail(`Bdc Question incomplet : ${bdcId}`)
+      break
+    default:
+      fail(`Le bdc ${bdcId} n’est pas une Question.`)
+  }
+  if (mediaId !== null) {
+    assertQuestionMediaAllowed(document, mediaId)
+  }
+  return withBdc(document, { ...bdc, mediaId })
+}
+
+/** Adds an imported media resource and attaches it to one Question atomically. */
+function attachQuestionMedia(document: ElceDocument, bdcId: BdcId, media: MediaMetadata): ElceDocument {
+  if (document.medias.some((candidate) => candidate.id === media.id)) fail(`Média déjà présent : ${media.id}`)
+  const withMedia = new ElceDocument({ ...document.data, medias: [...document.medias, media] })
+  return setQuestionMedia(withMedia, bdcId, media.id)
+}
+
+/** Permanently removes one Question BDC and preserves its reusable illustration. */
+function deleteQuestion(document: ElceDocument, bdcId: BdcId): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  switch (bdc.type) {
+    case BDC_TYPE.QUESTION:
+      return deleteBdc(document, bdc.id)
+    default:
+      fail(`Seul un bdc Question peut être supprimé par cette commande : ${bdcId}`)
+  }
+}
+
+/** Permanently deletes a Section and its anchored bdcs while retaining media. */
+function deleteSection(document: ElceDocument, bdcId: BdcId): ElceDocument {
+  const section = findBdc(document, bdcId)
+  switch (section.type) {
+    case BDC_TYPE.SECTION:
+      break
+    default:
+      fail(`Seul un bdc texte peut être supprimé par cette commande : ${bdcId}`)
+  }
+  const sectionData = requireSectionData(section)
+  switch (section.pageId) {
+    case null:
+      fail(`La Section ${bdcId} n’est pas affectée à une page.`)
+    default:
+      break
+  }
+
+  let updated = document
+  for (const anchorBdcId of new Set(anchorReferenceService.bdcIdsIn(sectionData.content))) {
+    const anchorBdc = findBdc(updated, anchorBdcId)
+    switch (anchorBdc.type) {
+      case BDC_TYPE.IMAGE:
+      case BDC_TYPE.VIDEO:
+        switch (anchorBdc.pageId) {
+          case section.pageId:
+            updated = deleteBdc(updated, anchorBdc.id)
+            break
+          default:
+            fail(`Le bdc ancré ${anchorBdcId} doit rester sur la page de sa Section.`)
+        }
+        break
+      default:
+        fail(`Seuls les bdcs image et vidéo peuvent être ancrés : ${anchorBdcId}`)
+    }
+  }
+  return deleteBdc(updated, section.id)
+}
+
+/** Keeps Question illustrations inside the media types supported by its card. */
+function assertQuestionMediaAllowed(document: ElceDocument, mediaId: MediaId): void {
+  const media = document.medias.find((candidate) => candidate.id === mediaId)
+  if (media === undefined) fail(`Le média ${mediaId} ne peut pas illustrer une Question.`)
+  switch (media.type) {
+    case MEDIA_TYPE.IMAGE:
+    case MEDIA_TYPE.VIDEO:
+      return
+    case MEDIA_TYPE.AUDIO:
+      fail(`Le média ${mediaId} ne peut pas illustrer une Question.`)
+  }
 }
 
 /** Rebinds each BDC from duplicate media records to one canonical record. */
@@ -481,6 +768,7 @@ function createAnchoredBdc(
     pageId: page.id,
     mediaId: command.media.id,
     section: null,
+    question: null,
   }
   const pageWithBdc = replaceAt(
     withMedia.pages,
@@ -657,7 +945,7 @@ function deletePage(document: ElceDocument, pageId: PageId): ElceDocument {
     ...detached.data,
     chapters: detached.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, pageId) })),
     pages: detached.pages.filter((candidate) => candidate.id !== pageId),
-    scenarioPageIds: removeValue(detached.data.scenarioPageIds, pageId),
+    scenarioEntries: removeScenarioPageEntry(detached, pageId),
     catalogPageIds: removeValue(detached.data.catalogPageIds, pageId),
     bdcs: detached.bdcs.filter((bdc) => !bdcIds.has(bdc.id)),
     catalogBdcIds: detached.data.catalogBdcIds.filter((bdcId) => !bdcIds.has(bdcId)),
@@ -685,6 +973,28 @@ function renameChapter(document: ElceDocument, chapterId: ChapterId, requestedNa
   })
 }
 
+/** Stores editable Evaluation chapter options through the document command path. */
+function updateChapterEvaluationSettings(
+  document: ElceDocument,
+  command: Extract<DocumentCommand, { type: 'chapter.evaluation.settings.update' }>,
+): ElceDocument {
+  const chapter = findChapter(document, command.chapterId)
+  if (chapter.type !== CHAPTER_TYPE.EVALUATION) fail(`Les réglages d’évaluation ne s’appliquent pas au chapitre ${command.chapterId}`)
+  if (command.attemptLimit !== null && (!Number.isInteger(command.attemptLimit) || command.attemptLimit < 1)) {
+    fail('La limite de tentatives doit être un entier positif ou illimitée')
+  }
+  return new ElceDocument({
+    ...document.data,
+    chapters: document.chapters.map((candidate) => candidate.id === chapter.id
+      ? {
+          ...chapter,
+          evaluationAttemptLimit: command.attemptLimit,
+          evaluationRetryScope: command.retryScope,
+        }
+      : candidate),
+  })
+}
+
 /** Applies one document command and returns a new immutable model value. */
 function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
   switch (command.type) {
@@ -692,6 +1002,10 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return createChapter(document, command)
     case 'chapter.rename':
       return renameChapter(document, command.chapterId, command.name)
+    case 'chapter.evaluation.settings.update':
+      return updateChapterEvaluationSettings(document, command)
+    case 'chapter.move':
+      return moveChapter(document, command.chapterId, command.index)
     case 'chapter.delete':
       return deleteChapter(document, command.chapterId)
     case 'page.create':
@@ -721,6 +1035,16 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
           fail(`Bdc non textuel : ${command.bdcId}`)
       }
     }
+    case 'bdc.question.update':
+      return updateQuestion(document, command.bdcId, command.question)
+    case 'bdc.question.media.set':
+      return setQuestionMedia(document, command.bdcId, command.mediaId)
+    case 'bdc.question.media.attach':
+      return attachQuestionMedia(document, command.bdcId, command.media)
+    case 'bdc.question.delete':
+      return deleteQuestion(document, command.bdcId)
+    case 'bdc.section.delete':
+      return deleteSection(document, command.bdcId)
     case 'bdc.anchor.create':
       return createAnchoredBdc(document, command)
     case 'bdc.anchor.attach':
@@ -763,12 +1087,49 @@ export function assertDocumentInvariants(document: ElceDocument): void {
       if (document.bdcs.find((bdc) => bdc.id === bdcId)?.pageId !== page.id) fail(`Affectation de bdc incohérente : ${bdcId}`)
     }
   }
-  const placedPageIds = new Set([
-    ...document.data.scenarioPageIds,
-    ...document.data.catalogPageIds,
-    ...document.chapters.flatMap((chapter) => chapter.pageIds),
-  ])
-  if (placedPageIds.size !== document.pages.length) fail('Chaque page doit avoir un emplacement unique')
+  const scenarioEntryChapterIds = document.data.scenarioEntries.flatMap((entry) => {
+    switch (entry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE: {
+        const page = document.pages.find((candidate) => candidate.id === entry.pageId)
+        switch (page) {
+          case undefined:
+            fail(`Page racine inconnue : ${entry.pageId}`)
+          default:
+            switch (page.chapterId) {
+              case null:
+                break
+              default:
+                fail(`Une page racine ne peut pas appartenir au chapitre ${page.chapterId} : ${page.id}`)
+            }
+        }
+        return []
+      }
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        return [entry.chapterId]
+    }
+  })
+  const uniqueScenarioChapterIds = new Set(scenarioEntryChapterIds)
+  if (scenarioEntryChapterIds.length !== document.chapters.length
+    || uniqueScenarioChapterIds.size !== scenarioEntryChapterIds.length) {
+    fail('Chaque chapitre doit avoir une entrée racine unique')
+  }
+  for (const chapterId of scenarioEntryChapterIds) {
+    switch (document.chapters.find((chapter) => chapter.id === chapterId)) {
+      case undefined:
+        fail(`Entrée de chapitre inconnue : ${chapterId}`)
+      default:
+        break
+    }
+  }
+  const scenarioPageIds = document.scenarioPageIds
+  const placedPageIds = new Set([...scenarioPageIds, ...document.data.catalogPageIds])
+  if (placedPageIds.size !== scenarioPageIds.length + document.data.catalogPageIds.length
+    || placedPageIds.size !== document.pages.length) {
+    fail('Chaque page doit avoir un emplacement unique')
+  }
+  for (const pageId of scenarioPageIds) {
+    if (!pageIds.has(pageId)) fail(`Page de scénario inconnue : ${pageId}`)
+  }
   for (const bdc of document.bdcs) {
     if (bdcIds.has(bdc.id)) continue
     if (!document.data.catalogBdcIds.includes(bdc.id) || bdc.pageId !== null) fail(`Bdc sans emplacement : ${bdc.id}`)
@@ -783,6 +1144,45 @@ export function assertDocumentInvariants(document: ElceDocument): void {
   for (const page of document.pages) {
     if (page.chapterId === null && document.chapters.some((chapter) => chapter.pageIds.includes(page.id))) fail(`Page affectée à un chapitre sans référence : ${page.id}`)
     if (page.chapterId !== null && !document.chapters.some((chapter) => chapter.id === page.chapterId && chapter.pageIds.includes(page.id))) fail(`Page hors chapitre incohérente : ${page.id}`)
+  }
+
+  for (const page of document.pages) {
+    const questions = page.bdcIds.flatMap((bdcId) => {
+      const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+      switch (bdc?.type) {
+        case BDC_TYPE.QUESTION:
+          return [bdc]
+        default:
+          return []
+      }
+    })
+    if (questions.length > 1) fail(`Une page ne peut contenir qu’une Question : ${page.id}`)
+    switch (page.type) {
+      case PAGE_TYPE.FLUX:
+        break
+      case PAGE_TYPE.DIAPO:
+        if (questions.length > 0) fail(`Une Question ne peut pas être placée sur une page Diapo : ${page.id}`)
+        continue
+    }
+    for (const bdc of questions) {
+      if (bdc.question === null) fail(`Bdc Question incomplet : ${bdc.id}`)
+      questionService.assertValid(bdc.question)
+      if (bdc.mediaId !== null) assertQuestionMediaAllowed(document, bdc.mediaId)
+    }
+  }
+
+  for (const bdc of document.bdcs) {
+    switch (bdc.type) {
+      case BDC_TYPE.QUESTION: {
+        if (bdc.question === null || bdc.section !== null) fail(`Bdc Question incomplet : ${bdc.id}`)
+        questionService.assertValid(bdc.question)
+        if (bdc.pageId === null) fail(`Un bdc Question doit rester affecté à une page : ${bdc.id}`)
+        if (bdc.mediaId !== null) assertQuestionMediaAllowed(document, bdc.mediaId)
+        break
+      }
+      default:
+        if (bdc.question !== null) fail(`Un bdc ${bdc.type} ne peut pas porter de Question : ${bdc.id}`)
+    }
   }
 
   const referencedAnchorBdcIds = new Set<BdcId>()

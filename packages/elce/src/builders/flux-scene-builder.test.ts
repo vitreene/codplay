@@ -4,10 +4,11 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
-import { BDC_LOCATION, BDC_TYPE, ELCE_EVENTS, PAGE_TYPE } from '../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
 import { anchorNameFor } from '../anchor/anchor-position'
 import { applyDocumentCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
+import { ElceQuestionService } from '../domain/question-service'
 import { buildFluxScene } from './flux-scene-builder'
 
 describe('Elcé Flux scene builder', () => {
@@ -196,5 +197,58 @@ describe('Elcé Flux scene builder', () => {
       type: 'media',
       initial: { tag: 'video', src: 'blob:video-1', controls: true, move: { target: 'page-a:bdc-video-1:media' } },
     })
+  })
+
+  it('projects Question inputs, instructions, validation, and reset as a CodPlay story', () => {
+    const questionService = new ElceQuestionService()
+    const withQuestion = applyDocumentCommand(createInitialDocument(), {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-1',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const createdQuestion = withQuestion.bdcs.find((bdc) => bdc.id === 'bdc-question-1')!.question!
+    const multipleChoice = questionService.setPrompt(
+      questionService.changeType(createdQuestion, QUESTION_TYPE.MULTIPLE_CHOICE),
+      'Quels éléments sont corrects ?',
+    )
+    const documentModel = applyDocumentCommand(withQuestion, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-question-1',
+      question: multipleChoice,
+    })
+    const build = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs)
+    const questionStory = build.sceneDoc.stories['page-a-bdc-question-1']
+    const answerInputs = questionStory?.persos.filter((perso) => perso.type === 'input')
+    const codplay = new CodPlay({
+      pauseOnDocumentHidden: false,
+      engine: {
+        idle: false,
+        components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
+        modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
+      },
+    })
+
+    expect(build.sceneDoc.stories['page-a-page']?.persos[1]?.initial).toMatchObject({
+      markup: expect.stringContaining('data-part="page-a:bdc-question-1:question:answers"'),
+    })
+    expect(answerInputs).toHaveLength(2)
+    expect(answerInputs?.map((perso) => perso.initial)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ inputType: 'checkbox', value: multipleChoice.answers[0]?.id }),
+      expect.objectContaining({ inputType: 'checkbox', value: multipleChoice.answers[1]?.id }),
+    ]))
+    expect(questionStory?.persos.map((perso) => perso.initial)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: 'Quels éléments sont corrects ?' }),
+      expect.objectContaining({ content: 'Plusieurs réponses possibles. Sélectionnez-les, puis validez.' }),
+      expect.objectContaining({ tag: 'button', attr: { type: 'button', disabled: true } }),
+    ]))
+    expect(questionStory?.listen).toEqual(expect.arrayContaining([
+      expect.objectContaining({ on: 'page-a:bdc-question-1:validate' }),
+      expect.objectContaining({ on: 'page-a:bdc-question-1:reset' }),
+    ]))
+    const result = codplay.build({ scene: build.sceneDoc })
+    expect(result.ok).toBe(true)
+    codplay.destroy()
   })
 })

@@ -1,4 +1,6 @@
-import type { BdcType, ChapterType, MediaType, PageType } from '../config/document-config-types'
+import type { BdcType, ChapterType, EvaluationRetryScope, MediaType, PageType } from '../config/document-config-types'
+import type { ScenarioEntry } from './scenario-entry-types'
+import type { QuestionContent } from './question-types'
 
 export type ChapterId = string
 export type PageId = string
@@ -31,6 +33,8 @@ export interface Chapter {
   readonly type: ChapterType
   readonly pageIds: readonly PageId[]
   readonly evaluationThreshold?: number
+  readonly evaluationAttemptLimit?: number | null
+  readonly evaluationRetryScope?: EvaluationRetryScope
 }
 
 export interface Page {
@@ -52,6 +56,7 @@ export interface Bdc {
     readonly markup: string
     readonly content: RichTextDocument
   } | null
+  readonly question: QuestionContent | null
 }
 
 export interface MediaMetadata {
@@ -65,11 +70,11 @@ export interface MediaMetadata {
 
 export interface ElceDocumentData {
   readonly id: string
-  readonly version: 1
+  readonly version: 2
   readonly name: string
   readonly chapters: readonly Chapter[]
   readonly pages: readonly Page[]
-  readonly scenarioPageIds: readonly PageId[]
+  readonly scenarioEntries: readonly ScenarioEntry[]
   readonly catalogPageIds: readonly PageId[]
   readonly bdcs: readonly Bdc[]
   readonly catalogBdcIds: readonly BdcId[]

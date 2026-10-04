@@ -42,7 +42,7 @@ gates restants ne sont pas enregistrés.
 ## Demande Elcé — rendu alternatif du composant `img`
 
 **A relire — contrat non décidé, aucune implémentation engagée.** Le
-[cadrage Elcé](../../elce/plan/2026-10-01-elce-construction-plan.md)
+[plan de construction Elcé](../../elce/plan/2026-10-01-elce-construction-plan.md)
 demande qu’un markup choisi puisse remplacer le rendu HTML par défaut du
 composant image. Un bdc image Elcé à contenu unique génère un seul perso
 `img`, sans `figure` ajoutée par ce bdc, y compris si ce rendu alternatif est

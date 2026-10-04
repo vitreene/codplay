@@ -877,3 +877,27 @@ introduire une commande parallèle ou contourner sa coordination.
 
 Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
 du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.
+
+## 10. À réaliser après le POC Elcé
+
+### Recherche inverse lors d’un précédent refusé — différée
+
+Le 2026-10-04, le besoin Sighty suivant a été confirmé pour une suite
+post-POC : lorsqu’une action `go: { direction: 'previous' }` rencontre une
+vue précédente refusée par `accessBy`, Sighty devra poursuivre dans l’ordre
+inverse du graphe jusqu’à la première destination admise. Si aucune destination
+précédente n’est admise, la composition reste inchangée. La recherche devra
+traverser les bornes de graphes imbriqués selon le pointeur de navigation.
+
+Cette amélioration ne change pas le contrat appliqué au POC Elcé : ouvrir
+directement Page F ne déverrouille pas les pages antérieures et « Précédent »
+reste désactivé ; après leur parcours, F revient à E. La priorité d’un
+`onDenied` explicitement déclaré sera arrêtée dans le plan d’implémentation
+post-POC. Le comportement n’est pas encore inscrit dans la spécification
+Sighty, qui continue de décrire le runtime vérifié.
+
+**Acceptation à prévoir :** vérifier les refus successifs, le passage inverse
+des bornes imbriquées, le maintien de la composition lorsqu’aucune cible
+précédente n’est admise, l’interaction avec `onDenied` et le respect de
+`exitBy`. Ajouter les tests au runtime Sighty et vérifier un parcours réel
+dans une démo de validation, sans introduire de circuit local à la démo.

@@ -20,9 +20,10 @@ describe('SectionEditor', () => {
     document.body.append(host)
     const section = createInitialDocument().bdcs[0]!
     root = createRoot(host)
+    let deleteRequested = false
 
     await act(async () => {
-      root?.render(<SectionEditor bdc={section} onChange={() => undefined} />)
+      root?.render(<SectionEditor bdc={section} onDelete={() => { deleteRequested = true }} onChange={() => undefined} />)
     })
 
     expect(host.querySelector(`#elce-editor-content-${section.id}`)).not.toBeNull()
@@ -33,6 +34,8 @@ describe('SectionEditor', () => {
     expect(toolbarButtons.length).toBe(16)
     expect(toolbarButtons.every((button) => button.getAttribute('aria-label') !== null)).toBe(true)
     expect(toolbarButtons.every((button) => button.querySelector('svg') !== null)).toBe(true)
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-section-delete-${section.id}`)?.click())
+    expect(deleteRequested).toBe(true)
   })
 
   it('marks the commands active for the selected heading and text marks', async () => {
@@ -59,7 +62,7 @@ describe('SectionEditor', () => {
     root = createRoot(host)
 
     await act(async () => {
-      root?.render(<SectionEditor bdc={section} onChange={() => undefined} />)
+      root?.render(<SectionEditor bdc={section} onDelete={() => undefined} onChange={() => undefined} />)
     })
 
     const headingText = host.querySelector(`#elce-editor-content-${section.id} h3`)?.firstChild

@@ -64,6 +64,14 @@ commande `section.change` ; aucun circuit Promise parallèle ne peut réécrire
 un markup plus récent. Le composant d’édition ne possède aucune mutation
 documentaire.
 
+Avant cette sauvegarde, le worker de la même file demande au service média de
+comparer le fichier aux ressources de même catégorie et de même taille, puis
+aux octets conservés, par SHA-256. Un fichier identique réutilise l’entrée et
+le blob existants, quel que soit son nom ; le dépôt garde son nouvel
+identifiant de BDC. Des octets différents créent une nouvelle ressource média.
+Le contrôleur sérialise les imports afin qu’un second dépôt attende le commit
+du premier avant la comparaison.
+
 Le dépôt d’une référence de BDC disponible suit aussi la façade et la machine
 XState : `ElceAnchorDropService` prépare une cible de source BDC et la commande
 `bdc.anchor.attach` insère dans la page ce même BDC, qui était disponible dans
@@ -96,6 +104,9 @@ compare les identifiants présents dans l’ancien et le nouveau document riche 
 chaque BDC ancré qui n’est plus référencé est supprimé dans la même commande,
 et son média reste conservé. Le BDC est le transport unique d’une insertion ;
 il référence la ressource média réutilisable au lieu de la remplacer.
+La suppression d’une Section par `bdc.section.delete` applique la même règle à
+toutes ses ancres : les BDC image/vidéo sont supprimés avec la Section, leurs
+ressources média restent disponibles dans le catalogue.
 `applyDocumentCommand` vérifie les invariants
 avant de rendre chaque nouveau document : une ancre référence un seul bdc
 image ou vidéo de la même page, et un bdc ancré ne peut pas être déplacé vers
@@ -146,11 +157,14 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
   façade métier.
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
   vérifie qu’une mise à jour de texte ordinaire ou une suppression dédiée
-  efface le BDC ancré sans le réinscrire au catalogue, conserve le média et
-  refuse une ancre dupliquée.
+  efface le BDC ancré sans le réinscrire au catalogue, conserve le média,
+  supprime aussi les ancres lorsqu’une Section entière est supprimée, et refuse
+  une ancre dupliquée.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
   vérifie que deux dépôts dont la sauvegarde IndexedDB est asynchrone restent
   ordonnés dans la machine XState et produisent chacun leur bdc et leur ancre.
+  Il vérifie aussi qu’un même fichier déposé sous deux noms réutilise un seul
+  média et un seul blob tout en créant deux BDC distincts.
   Il vérifie aussi qu’une édition ordinaire qui efface l’ancre traverse la
   machine, supprime le BDC concerné et conserve le média. Le test vérifie aussi
   qu’un retour traverse `section.change` et XState, remet le même BDC au
