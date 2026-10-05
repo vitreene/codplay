@@ -116,7 +116,7 @@ Capsule Automation sont réunis aux styles du player Elcé.
 
 ## Preuves
 
-- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) vérifie la
+- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie la
   création par icône à la fin de la séquence, l’édition XState, l’ajout et le
   réordonnancement des vues, la modification d’un titre, la valeur initiale de
   répétition, la saisie du nombre, le dépôt d’une image depuis le catalogue,

@@ -1169,7 +1169,7 @@ Le calcul pur est implémenté dans `src/domain/chapter-evaluation.ts` ; le
 constructeur de scénario Sighty l’applique au départ de la dernière page d’un
 chapitre Évaluation. `scenario-builder.test.ts` vérifie les gardes sur 4/5,
 3/5, les réponses absentes et un chapitre sans Question. L’éditeur permet de
-créer ce type de chapitre ; `AppLayout.test.tsx` vérifie la commande XState,
+créer ce type de chapitre ; `app-layout.test.tsx` vérifie la commande XState,
 le seuil par défaut, et Safari MCP a exercé la création puis la suppression
 d’un chapitre Évaluation vide. La
 [spécification des Questions](../specs/question-bdc-spec.md), la

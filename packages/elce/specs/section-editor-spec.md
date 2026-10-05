@@ -37,14 +37,14 @@ conserve leurs ressources média réutilisables.
 
 ## Preuves
 
-- [`SectionEditor.test.tsx`](../src/app/editor/SectionEditor.test.tsx) vérifie
+- [`section-editor.test.tsx`](../src/app/editor/section-editor.test.tsx) vérifie
   le montage de la surface Tiptap dans un DOM réel de test et l’actualisation
   des commandes actives lorsque la sélection passe d’un titre italique à un
   paragraphe.
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
   vérifie la conservation conjointe du JSON et du HTML exporté, ainsi que la
   suppression de la Section et de ses BDC ancrés en conservant les médias.
-- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) vérifie que la
+- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie que la
   suppression du BDC Texte initial passe par la commande documentaire XState.
 - [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
   vérifie que le builder porte le markup statique dans la scène Flux.

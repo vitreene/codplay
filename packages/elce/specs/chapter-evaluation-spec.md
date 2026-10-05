@@ -67,7 +67,7 @@ vérifie 4/5 réussi, 3/5 échoué avec une réponse absente comptée incorrecte
 et le résultat sans score d’un chapitre sans Question.
 [`scenario-builder.test.ts`](../src/builders/scenario-builder.test.ts) vérifie
 le garde 4/5, 3/5, les conditions de page avant et après validation, et le cas
-sans Question. [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx)
+sans Question. [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx)
 vérifie la création d’un chapitre Évaluation par la commande XState, ses
 réglages par défaut, son nom « Évaluation », son icône, l’ouverture du
 formulaire central et l’enregistrement de la limite d’essais et de la portée de
@@ -79,7 +79,7 @@ Le passage refusé/réussi par le score cumulé dans le vrai player reste à val
 au plan. La machine métier est vérifiée par
 [`evaluation-machine.test.ts`](../src/domain/evaluation/evaluation-machine.test.ts).
 La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
-[`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) et
+[`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) et
 [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts) ;
 sa compilation CodPlay l’est dans
 [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts).

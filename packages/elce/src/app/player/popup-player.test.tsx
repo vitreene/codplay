@@ -22,7 +22,7 @@ vi.mock('../../infrastructure/indexed-db/document-store', () => ({
   },
 }))
 
-vi.mock('./PlayerPreview', () => ({
+vi.mock('./player-preview', () => ({
   /** Exposes the active player page while the integration boundary is tested. */
   PlayerPreview: ({ selectedPageId }: { selectedPageId: string | null }) => (
     <div id="test-reader-page" data-page-id={selectedPageId ?? ''} />

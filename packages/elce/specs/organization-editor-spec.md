@@ -114,7 +114,7 @@ gauche lit les noms actualisés depuis le document détenu par XState.
 
 ## Preuves
 
-- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) vérifie les
+- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
   icônes accessibles pour chapitre standard, chapitre Évaluation et pages,
   l’envoi par XState, le seuil de 80 %, leur emplacement de création, le
   regroupement côte à côte des commandes, le nom automatique et la sélection
@@ -151,7 +151,7 @@ gauche lit les noms actualisés depuis le document détenu par XState.
   contre le document détenu par XState.
 - Le 4 octobre, Safari MCP confirme les boîtes SVG de 14 × 14 px pour FilePlus
   et Trash2 dans la liste ; le CSS empêche le flex de réduire la corbeille.
-  `AppLayout.test.tsx` vérifie qu’un chapitre d’évaluation reçoit le nom
+  `app-layout.test.tsx` vérifie qu’un chapitre d’évaluation reçoit le nom
   « Évaluation » sans texte de type dupliqué et que ses icônes d’ajout et de
   suppression mesurent 14 px.
 - Le 4 octobre, Safari MCP crée une page temporaire dans un chapitre standard,
@@ -163,7 +163,7 @@ gauche lit les noms actualisés depuis le document détenu par XState.
   dans la colonne droite. Aucun réglage du document de navigateur n’a été
   modifié pendant ce contrôle. Le typecheck, les 16 fichiers de tests (111
   tests) et le build passent.
-- `AppLayout.test.tsx` vérifie qu’une page Évaluation expose une icône unique
+- `app-layout.test.tsx` vérifie qu’une page Évaluation expose une icône unique
   pour le BDC Résultat, que son clic crée un seul BDC avec ses deux branches,
   que les messages/actions modifiés passent par les commandes XState, et que sa
   corbeille le retire de la page. `document-commands.test.ts` couvre ces

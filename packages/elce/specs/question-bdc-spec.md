@@ -91,7 +91,7 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   vérifie que le réimport d’une illustration identique depuis un autre nom de
   fichier rattache une seconde Question au même média et ne sauvegarde pas un
   second blob.
-- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) exerce l’édition
+- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) exerce l’édition
   auteur à travers le contrôleur XState, le changement de type, l’énoncé, les
   marques de correction, le réordonnancement et la présence de l’icône Quiz
   ListChecks.

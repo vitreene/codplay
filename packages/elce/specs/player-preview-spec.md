@@ -49,7 +49,7 @@ exclues du scénario.
 
 ## Preuves
 
-- [`AppLayout.tsx`](../src/app/layout/AppLayout.tsx) expose le lancement du
+- [`app-layout.tsx`](../src/app/layout/app-layout.tsx) expose le lancement du
   lecteur et désactive l’accès à la modale intégrée pour le POC.
 - [`popup-preview-host.ts`](../src/app/player/popup-preview-host.ts) ouvre le
   lecteur depuis la page sélectionnée et transmet les instantanés depuis

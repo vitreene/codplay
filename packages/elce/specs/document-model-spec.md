@@ -184,7 +184,7 @@ raccord ne choisit pas quels médias fusionner.
 - Le même fichier vérifie la migration v1→v2, le mélange et le déplacement
   d’entrées page/chapitre à la racine, le déplacement d’une page de chapitre
   vers la racine et les invariants de placement correspondants.
-- [`AppLayout.test.tsx`](../src/app/layout/AppLayout.test.tsx) vérifie les
+- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
   actions icônes accessibles de création à la racine et dans un chapitre,
   l’emplacement produit, ainsi que l’édition centrale des noms de page et de
   chapitre via le contrôleur XState.

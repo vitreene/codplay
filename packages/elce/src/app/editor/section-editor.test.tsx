@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createInitialDocument } from '../../domain/document-model'
-import { SectionEditor } from './SectionEditor'
+import { SectionEditor } from './section-editor'
 
 describe('SectionEditor', () => {
   let root: ReturnType<typeof createRoot> | undefined
