@@ -34,7 +34,7 @@ export const DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS: Record<string, AutoCapsuleE
 		style: {
 			[EVENT_ACTION.intro]: {
 				opacity: { from: 0, to: 1 },
-				x: { from: -250, to: 0 }
+				x: { from: 250, to: 0 }
 			},
 			[EVENT_ACTION.outro]: {
 				opacity: { to: 0 },
@@ -48,7 +48,7 @@ export const DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS: Record<string, AutoCapsuleE
 		style: {
 			[EVENT_ACTION.intro]: {
 				opacity: { from: 0, to: 1 },
-				x: { from: 250, to: 0 }
+				x: { from: -250, to: 0 }
 			},
 			[EVENT_ACTION.outro]: {
 				opacity: { to: 0 },
@@ -62,7 +62,7 @@ export const DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS: Record<string, AutoCapsuleE
 		style: {
 			[EVENT_ACTION.intro]: {
 				opacity: { from: 0, to: 1 },
-				y: { from: -250, to: 0 }
+				y: { from: 250, to: 0 }
 			},
 			[EVENT_ACTION.outro]: {
 				opacity: { to: 0 },
@@ -76,7 +76,7 @@ export const DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS: Record<string, AutoCapsuleE
 		style: {
 			[EVENT_ACTION.intro]: {
 				opacity: { from: 0, to: 1 },
-				y: { from: 250, to: 0 }
+				y: { from: -250, to: 0 }
 			},
 			[EVENT_ACTION.outro]: {
 				opacity: { to: 0 },

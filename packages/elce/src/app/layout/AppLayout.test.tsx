@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createActor } from 'xstate'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CAROUSEL_CARD_PRESET_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { controllerMachine } from '../controller/controller-machine'
 import { AppLayout } from './AppLayout'
@@ -20,6 +20,21 @@ describe('AppLayout authoring titles and creation actions', () => {
     stopActor?.()
     stopActor = undefined
     document.body.replaceChildren()
+    vi.restoreAllMocks()
+  })
+
+  it('opens the separate reader by default and keeps the integrated modal available only by opt-in', () => {
+    const popup = { focus: vi.fn(), postMessage: vi.fn() } as unknown as Window
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup)
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('123e4567-e89b-12d3-a456-426614174000')
+    const { host } = mountApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('#elce-preview-open')?.click())
+
+    const openedUrl = new URL(open.mock.calls[0]![0]!)
+    expect(openedUrl.searchParams.get('elce-preview-session')).toBe('123e4567-e89b-12d3-a456-426614174000')
+    expect(openedUrl.searchParams.get('elce-preview-page')).toBe('page-a')
+    expect(host.querySelector('#elce-preview-modal')).toBeNull()
   })
 
   it('creates pages at the root and in a chapter from contextual icon buttons', async () => {

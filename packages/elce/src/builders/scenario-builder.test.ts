@@ -179,10 +179,11 @@ describe('Elcé scenario builder', () => {
       'scene-page-b': emptyScene,
     }, 'page-root')
     const menuScene = scenario.scenes?.['scene-menu']
-    const menuMarkup = menuScene !== undefined && 'stories' in menuScene
-      ? String(menuScene.stories.main?.persos[0]?.initial && 'markup' in menuScene.stories.main.persos[0].initial
-        ? menuScene.stories.main.persos[0].initial.markup
-        : '')
+    const menuPanel = menuScene !== undefined && 'stories' in menuScene
+      ? menuScene.stories.main?.persos.find((perso) => perso.id === `${document.id}-menu-panel`)
+      : undefined
+    const menuMarkup = menuPanel?.initial && 'markup' in menuPanel.initial
+      ? String(menuPanel.initial.markup)
       : ''
 
     expect(scenario.data?.pageIds).toEqual(['page-a', 'page-root', 'page-b'])

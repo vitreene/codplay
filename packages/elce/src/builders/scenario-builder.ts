@@ -100,6 +100,8 @@ export function buildScenario(
     scenes: sceneCatalog,
     actions: {
       [ELCE_SCENARIO_HANDLERS.REFRESH_PRESENTATION]: refreshPresentation,
+      [ELCE_SCENARIO_HANDLERS.OPEN_MENU_DRAWER]: openMenuDrawer,
+      [ELCE_SCENARIO_HANDLERS.CLOSE_MENU_DRAWER]: closeMenuDrawer,
       [ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED]: markPageFinished,
       [ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT]: recordQuestionResult,
     },
@@ -232,6 +234,20 @@ function createPageViews(
   return { start, views: entries }
 }
 
+/** Sends the drawer-open event to the existing persistent menu scene. */
+async function openMenuDrawer(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await context.send(ELCE_SCENARIO.MENU_SCENE, {
+    name: ELCE_EVENTS.MENU_DRAWER_OPEN,
+  }, { scope: 'story', storyId: 'main' })
+}
+
+/** Sends a responsive close request through the persistent menu scene. */
+async function closeMenuDrawer(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await context.send(ELCE_SCENARIO.MENU_SCENE, {
+    name: ELCE_EVENTS.MENU_DRAWER_CLOSE,
+  }, { scope: 'story', storyId: 'main' })
+}
+
 /** Creates one persistent scene slot under the document layout. */
 function createPersistentSceneSlot(
   sceneKey: ElceSceneKey,
@@ -253,6 +269,8 @@ function createScenarioActions(
 ): Readonly<Record<string, SightyViewAction<ElceSceneKey, ElceSlotName>>> {
   const actions: Record<string, SightyViewAction<ElceSceneKey, ElceSlotName>> = {
     [ELCE_EVENTS.PRESENTATION_REFRESH]: {},
+    [ELCE_EVENTS.MENU_DRAWER_OPEN]: { action: ELCE_SCENARIO_HANDLERS.OPEN_MENU_DRAWER },
+    [ELCE_EVENTS.MENU_DRAWER_CLOSE_REQUEST]: { action: ELCE_SCENARIO_HANDLERS.CLOSE_MENU_DRAWER },
   }
   for (const pageId of pageIds) {
     actions[menuEvent(pageId)] = { go: { path: pagePathFromTable(pagePaths, pageId) } }
@@ -505,6 +523,7 @@ function findChapter(document: ElceDocument, chapterId: string): Chapter {
 /** Creates the fixed layout with the five explicit regions of the complete preview. */
 function createLayoutScene(documentId: string): SceneDoc<string> {
   const menuPartId = `${documentId}:layout:menu`
+  const menuTogglePartId = `${documentId}:layout:menu-toggle`
   const titlePartId = `${documentId}:layout:title`
   const contentPartId = `${documentId}:layout:content`
   const navigationPartId = `${documentId}:layout:navigation`
@@ -523,7 +542,10 @@ function createLayoutScene(documentId: string): SceneDoc<string> {
               className: 'elce-player-layout',
               markup: `<main id="${documentId}-layout-root" class="elce-player-layout">
                 <aside id="${documentId}-menu-region" class="elce-player-layout__menu" data-part="${menuPartId}" aria-label="Menu du document"></aside>
-                <header id="${documentId}-title-region" class="elce-player-layout__title" data-part="${titlePartId}" aria-label="Page courante"></header>
+                <header id="${documentId}-title-region" class="elce-player-layout__title" aria-label="Page courante">
+                  <div id="${documentId}-menu-toggle-host" class="elce-player-menu-toggle-host" data-part="${menuTogglePartId}"></div>
+                  <div id="${documentId}-title-host" class="elce-player-layout__title-slot-host" data-part="${titlePartId}"></div>
+                </header>
                 <section id="${documentId}-content-region" class="elce-player-layout__content" data-part="${contentPartId}" aria-label="Contenu de la page"></section>
                 <nav id="${documentId}-navigation-region" class="elce-player-layout__navigation" aria-label="Navigation des pages">
                   <div id="${documentId}-navigation-host" class="elce-player-layout__navigation-host" data-part="${navigationPartId}"></div>
@@ -532,6 +554,7 @@ function createLayoutScene(documentId: string): SceneDoc<string> {
             },
             actions: {},
           },
+          createMenuTogglePerso(documentId, menuTogglePartId),
           createLayoutSlot(ELCE_SCENARIO.MENU_SLOT, menuPartId, 'elce-player-layout__menu-slot'),
           createLayoutSlot(ELCE_SCENARIO.TITLE_SLOT, titlePartId, 'elce-player-layout__title-slot'),
           createLayoutSlot(ELCE_SCENARIO.CONTENT_SLOT, contentPartId, 'elce-player-layout__content-slot elce-player-content-slot'),
@@ -555,6 +578,10 @@ function createLayoutSlot(name: string, target: string, className: string): Pers
 
 /** Builds the menu scene from chapters, scenario pages, and the document order. */
 function createMenuScene(document: ElceDocument): SceneDoc<string> {
+  const pageIds = scenarioPageIds(document)
+  const drawerBackdropPartId = 'elce:menu:drawer:backdrop'
+  const drawerPanelPartId = 'elce:menu:drawer:panel'
+  const drawerClosePartId = 'elce:menu:drawer:close'
   const scenarioMarkup = document.data.scenarioEntries.map((entry) => {
     switch (entry.kind) {
       case SCENARIO_ENTRY_KIND.PAGE:
@@ -563,8 +590,22 @@ function createMenuScene(document: ElceDocument): SceneDoc<string> {
         return createChapterMarkup(document, findChapter(document, entry.chapterId))
     }
   }).join('')
-  const pagePersos = scenarioPageIds(document).map((pageId) => createMenuPagePerso(findPage(document, pageId)))
+  const pagePersos = pageIds.map((pageId) => createMenuPagePerso(findPage(document, pageId)))
   const chapterPersos = document.chapters.flatMap((chapter) => createChapterPerso(chapter))
+  const openDrawerAction = {
+    attr: { 'data-open': 'true', 'aria-hidden': 'false', inert: false },
+    style: { opacity: { from: 0, to: 1, duration: 260, ease: 'outCubic' } },
+  }
+  const closeDrawerAction = {
+    attr: { 'data-open': 'false', 'aria-hidden': 'true', inert: true },
+    style: { opacity: { from: 1, to: 0, duration: 260, ease: 'inCubic' } },
+  }
+  const openPanelAction = {
+    style: { translateX: { from: '-100%', to: '0%', duration: 260, ease: 'outCubic' } },
+  }
+  const closePanelAction = {
+    style: { translateX: { from: '0%', to: '-100%', duration: 260, ease: 'inCubic' } },
+  }
   return {
     id: `${document.id}-menu-scene`,
     stories: {
@@ -573,19 +614,54 @@ function createMenuScene(document: ElceDocument): SceneDoc<string> {
         initial: { move: '@root' },
         persos: [
           {
-            id: `${document.id}-menu-root`,
+            id: `${document.id}-menu-drawer`,
             type: 'layout',
             initial: {
               move: '@root',
-              className: 'elce-player-menu',
-              markup: `<nav id="${document.id}-menu-root" class="elce-player-menu" aria-label="Chapitres et pages du document">
-                <h2 id="${document.id}-menu-title" class="elce-player-menu__title">Sommaire</h2>
-                <span id="${document.id}-menu-state-host" class="elce-player-menu__state" data-part="elce:menu:state" aria-hidden="true"></span>
-                <div id="${document.id}-menu-scroll" class="elce-player-menu__scroll"><ol id="elce-menu-scenario-entries" class="elce-player-menu__entries">${scenarioMarkup}</ol></div>
-              </nav>`,
+              className: 'elce-player-menu-drawer',
+              attr: { 'data-open': 'false', 'aria-hidden': 'true', inert: true },
+              markup: `<div id="${document.id}-menu-drawer-root" class="elce-player-menu-drawer" role="dialog" aria-label="Sommaire du document" aria-modal="true" aria-hidden="true" inert tabindex="-1">
+                <div id="${document.id}-menu-drawer-backdrop-host" data-part="${drawerBackdropPartId}"></div>
+                <div id="${document.id}-menu-drawer-panel-host" class="elce-player-menu-panel-host" data-part="${drawerPanelPartId}"></div>
+              </div>`,
             },
-            actions: {},
+            actions: createMenuDrawerActions(pageIds, openDrawerAction, closeDrawerAction),
+            emit: {
+              keydown: {
+                keyCode: 'Escape',
+                preventDefault: true,
+                event: { name: ELCE_EVENTS.MENU_DRAWER_CLOSE, visibility: 'public' },
+              },
+            },
           },
+          {
+            id: `${document.id}-menu-backdrop`,
+            type: 'layout',
+            initial: {
+              move: { target: drawerBackdropPartId },
+              className: 'elce-player-menu-backdrop-host',
+              markup: `<button id="${document.id}-menu-backdrop" class="elce-player-menu-backdrop" type="button" tabindex="-1" aria-label="Fermer le sommaire"></button>`,
+            },
+            emit: { click: { event: { name: ELCE_EVENTS.MENU_DRAWER_CLOSE, visibility: 'public' } } },
+          },
+          {
+            id: `${document.id}-menu-panel`,
+            type: 'layout',
+            initial: {
+              move: { target: drawerPanelPartId },
+              className: 'elce-player-menu-panel',
+              markup: `<aside id="${document.id}-menu-panel-root" class="elce-player-menu-panel">
+                <div id="${document.id}-menu-close-host" data-part="${drawerClosePartId}"></div>
+                <nav id="${document.id}-menu-root" class="elce-player-menu" aria-label="Chapitres et pages du document">
+                  <h2 id="${document.id}-menu-title" class="elce-player-menu__title">Sommaire</h2>
+                  <span id="${document.id}-menu-state-host" class="elce-player-menu__state" data-part="elce:menu:state" aria-hidden="true"></span>
+                  <div id="${document.id}-menu-scroll" class="elce-player-menu__scroll"><ol id="elce-menu-scenario-entries" class="elce-player-menu__entries">${scenarioMarkup}</ol></div>
+                </nav>
+              </aside>`,
+            },
+            actions: createMenuDrawerActions(pageIds, openPanelAction, closePanelAction),
+          },
+          createMenuClosePerso(document.id, drawerClosePartId),
           {
             id: `${document.id}-menu-state`,
             type: 'tag',
@@ -601,6 +677,57 @@ function createMenuScene(document: ElceDocument): SceneDoc<string> {
         ],
       },
     },
+  }
+}
+
+/** Maps drawer events and page selection to the same CodPlay close transition. */
+function createMenuDrawerActions(
+  pageIds: readonly string[],
+  openAction: Readonly<Record<string, unknown>>,
+  closeAction: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  return {
+    [ELCE_EVENTS.MENU_DRAWER_OPEN]: openAction,
+    [ELCE_EVENTS.MENU_DRAWER_CLOSE]: closeAction,
+    ...Object.fromEntries(pageIds.map((pageId) => [menuEvent(pageId), closeAction])),
+  }
+}
+
+/** Creates the layout-owned menu trigger with its accessible state actions. */
+function createMenuTogglePerso(documentId: string, target: string): PersoDoc<string> {
+  return {
+    id: `${documentId}-menu-toggle`,
+    type: 'layout',
+    initial: {
+      move: { target },
+      markup: `<button id="${documentId}-menu-toggle" class="elce-player-menu-toggle" type="button" aria-label="Ouvrir le sommaire" aria-controls="${documentId}-menu-drawer-root" aria-expanded="false">
+        <svg id="${documentId}-menu-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path id="${documentId}-menu-toggle-icon-path" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>`,
+    },
+    emit: { click: { event: { name: ELCE_EVENTS.MENU_DRAWER_OPEN, visibility: 'public' } } },
+    actions: {
+      [ELCE_EVENTS.MENU_DRAWER_OPEN]: { attr: { 'aria-expanded': 'true' } },
+      [ELCE_EVENTS.MENU_DRAWER_CLOSE]: { attr: { 'aria-expanded': 'false' } },
+    },
+  }
+}
+
+/** Creates the close button owned by the persistent CodPlay menu scene. */
+function createMenuClosePerso(documentId: string, target: string): PersoDoc<string> {
+  return {
+    id: `${documentId}-menu-close`,
+    type: 'layout',
+    initial: {
+      move: { target },
+      markup: `<button id="${documentId}-menu-close" class="elce-player-menu-close" type="button" aria-label="Fermer le sommaire">
+        <svg id="${documentId}-menu-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path id="${documentId}-menu-close-icon-path" d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>`,
+    },
+    emit: { click: { event: { name: ELCE_EVENTS.MENU_DRAWER_CLOSE, visibility: 'public' } } },
   }
 }
 

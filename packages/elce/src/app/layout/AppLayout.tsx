@@ -1,5 +1,5 @@
 import { useSelector } from '@xstate/react'
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import { Archive, BadgeCheck, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, Images, ListChecks, Trash2 } from 'lucide-react'
 import './app-layout.css'
@@ -22,6 +22,8 @@ import { CarouselEditor } from '../editor/CarouselEditor'
 import { QuestionEditor } from '../editor/QuestionEditor'
 import { EvaluationResultEditor } from '../editor/EvaluationResultEditor'
 import { PlayerPreview } from '../player/PlayerPreview'
+import { PopupPreviewHost } from '../player/popup-preview-host'
+import { PREVIEW_SURFACE } from '../player/preview-surface-config'
 import { createStableId } from '../../domain/document-model'
 import type { ElceDocument } from '../../domain/document-model'
 import type { Chapter } from '../../domain/document-types'
@@ -57,6 +59,8 @@ function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
 /** Renders the Elcé work area from the controller-owned application state. */
 export function AppLayout({ controller }: AppLayoutProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const popupPreviewHostRef = useRef<PopupPreviewHost | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const draggedEntry = useRef<ScenarioEntry | null>(null)
   const draggedBdcId = useRef<string | null>(null)
@@ -141,6 +145,21 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const unanchoredMediaBdcs = selectedPage === undefined || selectedChapter !== undefined
     ? []
     : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
+
+  useEffect(() => () => popupPreviewHostRef.current?.destroy(), [])
+
+  /** Opens the active POC preview surface from the editor's current page. */
+  const openPreview = () => {
+    setPreviewError(null)
+    if (PREVIEW_SURFACE === 'modal') {
+      setPreviewOpen(true)
+      return
+    }
+    popupPreviewHostRef.current ??= new PopupPreviewHost(controller)
+    if (!popupPreviewHostRef.current.open()) {
+      setPreviewError('Le navigateur a bloqué la fenêtre de lecture.')
+    }
+  }
 
   const addPage = (placement: PagePlacement) => {
     controller.send({ type: 'page.create', placement })
@@ -472,9 +491,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
         <section id="elce-work-area" className="elce-panel elce-work-area">
           <div id="elce-work-area-heading" className="elce-work-area-heading">
             <div id="elce-work-area-preview-row" className="elce-work-area-preview-row">
-              <button id="elce-preview-open" type="button" onClick={() => setPreviewOpen(true)}>
+              <button id="elce-preview-open" type="button" onClick={openPreview}>
                 Prévisualiser
               </button>
+              {previewError === null ? null : <p id="elce-preview-open-error" role="alert">{previewError}</p>}
             </div>
             <div id="elce-work-area-title-row" className="elce-work-area-title-row">
               <div id="elce-work-area-titles" className="elce-work-area-titles">
@@ -811,7 +831,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
               </section>}
         </aside>
       </main>
-      {previewOpen
+      {PREVIEW_SURFACE === 'modal' && previewOpen
         ? <div id="elce-preview-modal" className="elce-preview-modal" role="dialog" aria-modal="true" aria-labelledby="elce-preview-title">
             <div id="elce-preview-dialog" className="elce-preview-dialog">
               <header id="elce-preview-header" className="elce-preview-header">

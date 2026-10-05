@@ -1,0 +1,73 @@
+.elce-popup-reader {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  min-height: 20rem;
+  flex-direction: column;
+}
+
+.elce-popup-reader__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.5rem;
+  padding: 0.55rem 1rem;
+  color: #f8f5ef;
+  background: #263b3a;
+}
+
+.elce-popup-reader__header h1 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.elce-popup-reader__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.elce-popup-reader__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid #c5d7d2;
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  color: #263b3a;
+  background: #f8f5ef;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.elce-popup-reader__actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.elce-popup-reader__main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 0.75rem;
+}
+
+.elce-popup-reader__main .elce-player-stage {
+  width: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 800px) {
+  .elce-popup-reader__actions button {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0.4rem;
+  }
+
+  .elce-popup-reader__action-label {
+    display: none;
+  }
+}

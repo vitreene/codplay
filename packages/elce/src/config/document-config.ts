@@ -338,6 +338,9 @@ export const ELCE_SCENARIO = {
 export const ELCE_EVENTS = {
   RUNTIME_INITIALIZE: 'runtime:initialize',
   MENU_PREFIX: 'elce:menu:select:',
+  MENU_DRAWER_OPEN: 'elce:menu:drawer:open',
+  MENU_DRAWER_CLOSE: 'elce:menu:drawer:close',
+  MENU_DRAWER_CLOSE_REQUEST: 'elce:menu:drawer:close-request',
   NAVIGATION_NEXT: 'elce:navigation:next',
   NAVIGATION_PREVIOUS: 'elce:navigation:previous',
   PAGE_BOTTOM: 'elce:page:bottom',
@@ -357,6 +360,8 @@ export const ELCE_EVENTS = {
 /** Names the declared Sighty handlers used by the Elcé document scenario. */
 export const ELCE_SCENARIO_HANDLERS = {
   REFRESH_PRESENTATION: 'action:elce:refresh-presentation',
+  OPEN_MENU_DRAWER: 'action:elce:open-menu-drawer',
+  CLOSE_MENU_DRAWER: 'action:elce:close-menu-drawer',
   MARK_PAGE_FINISHED: 'action:elce:mark-page-finished',
   RECORD_QUESTION_RESULT: 'action:elce:record-question-result',
   PAGE_ACCESS: 'guard:elce:page-access',

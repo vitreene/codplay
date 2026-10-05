@@ -1250,14 +1250,4 @@ body {
   .elce-panel {
     min-height: 8rem;
   }
-
-  .elce-player-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-    grid-template-areas: 'title' 'content' 'menu' 'navigation';
-  }
-
-  .elce-player-layout__menu {
-    max-height: 12rem;
-  }
 }

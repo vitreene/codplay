@@ -3,7 +3,7 @@ import { ElcePlayerComposition } from '../../player/elce-player-composition'
 import type { PlayerPreviewProps } from './player-preview-types'
 
 /** Mounts the complete Elcé Sighty/CodPlay document preview in its own surface. */
-export function PlayerPreview({ documentModel, selectedPageId, mediaSources }: PlayerPreviewProps) {
+export function PlayerPreview({ documentModel, selectedPageId, mediaSources, sceneCache }: PlayerPreviewProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const selectedPage = documentModel.pages.find((page) => page.id === selectedPageId)
   const selectedPageIsInCatalog = selectedPage !== undefined && documentModel.data.catalogPageIds.includes(selectedPage.id)
@@ -18,6 +18,7 @@ export function PlayerPreview({ documentModel, selectedPageId, mediaSources }: P
       document: documentModel,
       startPageId: selectedPageId ?? undefined,
       mediaSources,
+      sceneCache,
       onLog: (message, level) => {
         if (level === 'error') console.error(`[Elcé] ${message}`)
       },

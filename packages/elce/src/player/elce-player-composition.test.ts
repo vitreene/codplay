@@ -6,7 +6,8 @@ import { applyDocumentCommand, createCarouselBdcCommand, createChapterCommand, c
 import { createInitialDocument } from '../domain/document-model'
 import { ElceQuestionService } from '../domain/question-service'
 import { ElceCarouselService } from '../domain/carousel-service'
-import { ElcePlayerComposition } from './elce-player-composition'
+import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
+import type { ElcePageSceneCache } from './player-composition-types'
 
 type IntersectionEntry = Pick<IntersectionObserverEntry, 'target' | 'intersectionRatio' | 'isIntersecting'>
 
@@ -50,6 +51,36 @@ describe('Elcé player composition', () => {
     document.body.replaceChildren()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('reuses unchanged page scenes across organization changes and rebuilds only an edited page scene', () => {
+    const initial = createInitialDocument()
+    const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO })
+    const withPages = applyDocumentCommand(initial, pageCommand)
+    const cache: ElcePageSceneCache = new Map()
+    const first = createPageSceneCatalog(withPages, {}, cache)
+    const moved = applyDocumentCommand(withPages, {
+      type: 'page.move',
+      pageId: pageCommand.pageId,
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: withPages.chapters[0]!.id },
+    })
+    const reordered = createPageSceneCatalog(moved, {}, cache)
+
+    expect(reordered.scenes['scene-page-a']).toBe(first.scenes['scene-page-a'])
+    expect(reordered.scenes[`scene-${pageCommand.pageId}`]).toBe(first.scenes[`scene-${pageCommand.pageId}`])
+
+    const sectionBdc = moved.bdcs.find((bdc) => bdc.id === moved.pages[0]?.bdcIds[0])!
+    const edited = applyDocumentCommand(moved, {
+      type: 'bdc.section.update',
+      bdcId: sectionBdc.id,
+      title: 'Titre corrigé',
+      markup: '<p>Contenu corrigé</p>',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Contenu corrigé' }] }] },
+    })
+    const synchronized = createPageSceneCatalog(edited, {}, cache)
+
+    expect(synchronized.scenes['scene-page-a']).not.toBe(reordered.scenes['scene-page-a'])
+    expect(synchronized.scenes[`scene-${pageCommand.pageId}`]).toBe(reordered.scenes[`scene-${pageCommand.pageId}`])
   })
 
   it('mounts the layout, slot and Flux page through Sighty and CodPlay', async () => {

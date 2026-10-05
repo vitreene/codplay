@@ -37,16 +37,116 @@ preuves qui permettent de fermer chaque tranche.
 | 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
 | 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
 | 5 | Évaluation de chapitre | En cours — icône, édition, retrait et compilation CodPlay du BDC Résultat vérifiés ; intégration player restante. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
-| 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvre la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). La lecture dans une fenêtre distincte est reportée à l’acceptation finale du POC (tranche 9). |
+| 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
 | 7 | BDC Carousel dans une page Flux | En cours — Safari confirme le cadre 16:9, la sélection par point et l’affichage de « Répéter 10 fois » ; le test player couvre une répétition finie. Le parcours image → Texte court → saisie → Texte avec image et son rendu sont vérifiés dans les tests d’interface et de builder. Restent 4:3, 1:1, l’aperçu d’un média chargé et le cycle temporisé. L’ouverture du sélecteur natif est vérifiée par l’auteur dans une fenêtre Safari non contrôlée avec `accept` explicite ; Safari MCP ne permet pas d’observer le panneau système. L’insertion dans un BDC Texte reste pour après. | Le BDC Carousel est un objet Elcé unique, ajouté par une icône à la suite des autres BDC de la page, édité dans la zone centrale et compilé en story CodPlay autonome. Il démarre en lecture manuelle ; la durée commune est réglable de 1 à 10 secondes, et chaque vue peut recevoir une durée auteur. Le ratio propose 16:9, 4:3 et 1:1. Chaque vue occupe seule le cadre de ce ratio ; les points de navigation restent à l’extérieur. Les points sélectionnent leur vue en modes manuel et automatique ; en mode automatique, les changements temporisés suivent leur programme. En lecture automatique, « Répéter [x] fois » règle de 0 à 10 passages supplémentaires après le premier, avec 10 par défaut ; 0 conserve un seul passage. La carte Texte avec image reprend les champs Texte court et permet de placer l’image à gauche ou à droite. Changer de carte conserve les valeurs communes ; une image attachée à une vue reste liée lorsqu’on passe provisoirement par une carte Texte court et redevient visible en Texte avec image. L’identifiant et la durée auteur restent inchangés. Pause/lecture reste hors du POC. Vérifier les autres comportements livrés dans le player réel avec Safari MCP. Ne pas créer ni activer le type de page Diapo dans cette tranche. Voir la [spécification du BDC Carousel](../specs/carousel-bdc-spec.md). |
 | 8 | Page Diapo | Après le BDC Carousel — décisions d’interface encore ouvertes | Ajouter le type de page sans défilement et son builder distinct. Définir auparavant les BDC autorisés et le BDC initial. Vérifier le player réel sans détourner le builder Flux. |
-| 9 | Acceptation finale du POC | À faire | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture, lecture intégrée et fenêtre distincte, puis typecheck, tests, build et vérifications navigateur. Documenter seulement les comportements effectivement vérifiés. |
+| 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Le sommaire annonce `aria-expanded="true"` après le passage de 800 à 801 px alors que son tiroir est fermé ; lors d’une sélection, Brave signale aussi qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden`. Corriger ces écarts puis rejouer l’acceptation responsive avant de clore. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Après correction du sommaire à la frontière 800/801 et du transfert de focus, rejouer ses vérifications, puis typecheck, tests, build et navigateur. Documenter seulement les comportements effectivement vérifiés. |
 
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
 contrat. Un échec de preuve garde la tranche « En cours » et bloque son
 intégration dépendante ; les travaux indépendants continuent.
 
+### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
+
+- Décision validée le 5 octobre 2026 : à 800 px et en dessous, une icône ouvre
+  un tiroir latéral gauche superposé au contenu ; au-dessus, le sommaire reste
+  dans la colonne latérale. Le tiroir se ferme par son icône de fermeture, un
+  clic à l’extérieur, Échap ou le choix d’une page.
+- Précision acceptée le 5 octobre 2026 : le bouton reprend le fond du sommaire
+  (`#263b3a`) et CodPlay déclenche les animations d’entrée et de sortie par les
+  événements et actions de style de la scène. Le tiroir garde les événements de
+  navigation de page Sighty/CodPlay existants ; aucune navigation parallèle ni
+  animation pilotée par React n’est ajoutée.
+- Le sélecteur responsive reste dans la feuille du player pour fonctionner
+  dans une fenêtre de preview distincte. L’implémentation remplace le premier
+  montage en dialogue natif par le tiroir animé dans le circuit CodPlay ; les
+  états accessibles et le retour du focus restent synchronisés avec les
+  commandes.
+- Brave DevTools, le 5 octobre 2026, vérifie à 390 × 844 l’ouverture du tiroir,
+  la sélection de Page A et l’absence de débordement horizontal. À 800 × 900,
+  le tiroir s’ouvre, son animation de CodPlay est visible, puis Échap et le
+  bouton de fond le ferment et rendent le focus au bouton d’ouverture.
+- Écart détecté lors du passage de 800 à 801 px avec le tiroir fermé : le
+  bouton passe en `display: none` et le tiroir reste `data-open="false"`,
+  `aria-hidden="true"` et `inert`, mais le bouton porte
+  `aria-expanded="true"`. Cette incohérence garde l’acceptation en cours.
+- Lors de la sélection d’une page dans le tiroir, le navigateur émet aussi un
+  avertissement indiquant que le bouton de page garde le focus quand son
+  ancêtre reçoit `aria-hidden`. Le focus finit sur le bouton d’ouverture, mais
+  l’ordre de fermeture reste à corriger pour éviter cet état intermédiaire.
+- Précision acceptée le 5 octobre 2026, non appliquée : le bouton du menu, le
+  tiroir, ses commandes, le comportement responsive et la gestion du focus
+  doivent être portés par des persos, événements et actions CodPlay dans la
+  scène `layout`. Le tiroir ne doit pas être une scène séparée, et
+  `ElcePlayerComposition` ne doit pas en reprendre l’état accessible ou le
+  focus dans un adaptateur DOM impératif.
+- Après correction, rejouer le typecheck, la suite Elcé, le build et le
+  parcours Brave à 390, 800 et 801 px. Confirmer l’état du bouton et du tiroir,
+  l’animation, Échap, le clic extérieur, la sélection d’une page et le retour
+  du focus sans avertissement console avant d’enregistrer le comportement dans
+  la spécification.
+
+### Lecture dans une fenêtre distincte — tranche 9 en cours
+
+- Décision du 5 octobre 2026 : la popup devient le parcours de
+  preview actif. Le code de la modale intégrée reste disponible mais son accès
+  est désactivé pour comparer les choix pendant le POC. Le mode de diffusion
+  qui projette le projet derrière l’éditeur viendra après la popup.
+- À l’ouverture, la popup présente la page affichée dans l’éditeur. Sa
+  navigation Sighty/CodPlay reste ensuite indépendante. Une commande distincte
+  permet de réafficher la page éditée. Une synchronisation affiche également
+  cette page. Si cette page a été créée depuis la dernière synchronisation,
+  cette commande synchronise automatiquement une fois pour pouvoir l’afficher.
+- Première étape : une commande de synchronisation manuelle au-dessus du rendu
+  transmet le document courant de l’éditeur et reconstruit le projet selon la
+  règle déjà retenue : une édition ne reconstruit que la scène de sa page ; un
+  changement d’organisation reconstruit le scénario entier en réutilisant les
+  scènes inchangées. La popup monte sa propre composition Sighty/CodPlay et
+  possède son cycle de vie. La lecture repart de la page éditée avec temps,
+  réponses et historique remis à zéro ; le POC ne persiste pas ces éléments.
+- Étapes suivantes, non appliquées : signaler visuellement sur la commande
+  qu’une mise à jour est demandée, puis proposer un mode automatique
+  débrayable qui calcule le nouvel état du projet. Ne pas confondre ce mode
+  avec la lecture automatique d’un BDC Carousel.
+- Le document XState de l’éditeur reste la source unique. Les deux contextes
+  navigateur imposent un transport entre eux ; aucune voie équivalente
+  n’existe actuellement dans Elcé. Ce transport ne possède ni document, ni
+  navigation, ni catalogue parallèles. Les médias continuent de passer par le
+  stockage IndexedDB existant et sont chargés dans le contexte de la popup.
+- Brave DevTools, le 5 octobre 2026, vérifie l’ouverture d’une popup depuis la
+  page éditée, la navigation indépendante A → B, l’attente d’une synchronisation
+  après correction, le retour à la page éditée et la synchronisation unique
+  lorsqu’elle a été créée depuis le dernier instantané. Après réorganisation,
+  le nouveau scénario commence sur la page éditée en première position ; le
+  test de composition vérifie l’identité des sources de scènes inchangées.
+  Brave vérifie aussi les icônes et les noms accessibles des commandes : les
+  libellés sont masqués avec `title` à 390 px et 800 px, puis visibles à 801 px.
+- Un fichier image de test chargé par l’événement `change` de l’input produit
+  une image décodée dans la popup après synchronisation, puis après fermeture
+  et réouverture depuis IndexedDB. Le MCP a refusé le chemin local pour son
+  action `upload_file` ; la boîte de dialogue système n’est donc pas couverte
+  par cette preuve.
+- Typecheck réussi, suite Elcé réussie (130/130) et build réussi le
+  5 octobre 2026. Le build signale un chunk supérieur à 500 kB.
+- Avant de clore cette tranche, corriger l’écart `aria-expanded` et l’ordre de
+  transfert du focus du sommaire décrits ci-dessus, puis rejouer l’acceptation
+  responsive. Le signal visuel de synchronisation et le mode automatique
+  restent des étapes ultérieures non appliquées.
+
 ## BDC Carousel — périmètre en cours
+
+### Direction des transitions de glissement — acceptée, preuve restante
+
+- Décision du 5 octobre 2026 : pour un glissement vers la gauche, la vue
+  entrante et la vue sortante se déplacent toutes deux vers la gauche sans se
+  croiser. La même règle directionnelle s’applique aux glissements vers la
+  droite, vers le haut et vers le bas.
+- Le réglage reste porté par AutoCapsule et les actions de style CodPlay déjà
+  utilisées par le builder du Carousel. Corriger les définitions nommées
+  existantes ; ne pas ajouter un second circuit de transition.
+- La preuve d’acceptation devra contrôler des instants intermédiaires des
+  deux vues dans le player Elcé réel pour les quatre directions. La
+  spécification du Carousel reste inchangée jusqu’à cette vérification.
 
 ### Comportements retenus
 
