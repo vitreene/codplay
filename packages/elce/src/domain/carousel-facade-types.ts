@@ -30,6 +30,7 @@ export interface ElceCarouselEditorActions {
   readonly setImageFit: (bdcId: string, imageFit: CardImageFit) => void
   readonly attachCatalogReference: (bdcId: string, reference: ElceCatalogReference) => void
   readonly importMediaFile: (bdcId: string, file: File) => void
+  readonly importMediaFiles: (bdcId: string, files: readonly File[]) => void
   readonly clearMedia: (bdcId: string) => void
   readonly deleteCarousel: () => void
 }

@@ -171,8 +171,11 @@ export function CarouselEditor({ bdcId, content, cards, selectedCardBdcId, media
       {selected === undefined
         ? <p id={`elce-carousel-empty-${bdcId}`} className="elce-carousel-editor__empty">Ajoutez une carte pour commencer.</p>
         : <div id={`elce-carousel-card-editor-${selected.bdc.id}`} className="elce-carousel-editor__view-content" role="tabpanel">
-            <div id={`elce-carousel-card-toolbar-${selected.bdc.id}`} className="elce-carousel-editor__view-toolbar">
-              <label id={`elce-carousel-card-layout-label-${selected.bdc.id}`} className="elce-carousel-editor__setting">
+            <div
+              id={`elce-carousel-card-toolbar-${selected.bdc.id}`}
+              className={cardToolbarClassName(selected.bdc.presetId)}
+            >
+              <label id={`elce-carousel-card-layout-label-${selected.bdc.id}`} className="elce-carousel-editor__setting elce-carousel-editor__setting--card-layout">
                 <span>Représentation</span>
                 <select
                   id={`elce-carousel-card-layout-${selected.bdc.id}`}
@@ -196,6 +199,7 @@ export function CarouselEditor({ bdcId, content, cards, selectedCardBdcId, media
                   onChange={(event) => submitOptionalPositiveNumber(event.currentTarget.value, selected.bdc.id, actions.setCardDurationSeconds)}
                 />
               </label>
+              {renderCardPresentationSettings(selected.bdc, mediaById, actions)}
               <button
                 id={`elce-carousel-card-delete-${selected.bdc.id}`}
                 className="elce-carousel-editor__delete"
@@ -209,6 +213,58 @@ export function CarouselEditor({ bdcId, content, cards, selectedCardBdcId, media
             {renderCardContent(selected.bdc, mediaById, content.aspectRatio, actions)}
           </div>}
     </section>
+  )
+}
+
+/** Chooses a compact one-row toolbar for the settings projected by a Card layout. */
+function cardToolbarClassName(presetId: CardLayoutId): string {
+  const baseClassName = 'elce-carousel-editor__view-toolbar'
+  if (presetId === DEFAULT_PRESET_ID.TEXT_SHORT) return `${baseClassName} ${baseClassName}--text-only`
+  if (presetId === DEFAULT_PRESET_ID.TEXT_IMAGE) return `${baseClassName} ${baseClassName}--image-position`
+  return `${baseClassName} ${baseClassName}--image`
+}
+
+/** Places the selected Card's image presentation controls beside its other settings. */
+function renderCardPresentationSettings(
+  bdc: Bdc,
+  mediaById: ElceCarouselEditorProps['mediaById'],
+  actions: ElceCarouselEditorProps['actions'],
+) {
+  if (bdc.type !== 'card' || bdc.card == null) return null
+  const hasImageLayout = bdc.presetId === DEFAULT_PRESET_ID.PHOTO
+    || bdc.presetId === DEFAULT_PRESET_ID.IMAGE_CAPTION
+    || bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
+  const media = bdc.mediaId === null ? undefined : mediaById[bdc.mediaId]
+
+  return (
+    <>
+      {hasImageLayout && media?.type !== MEDIA_TYPE.VIDEO && (
+        <label id={`elce-carousel-image-fit-label-${bdc.id}`} className="elce-carousel-editor__setting elce-carousel-editor__setting--image-fit">
+          <span>Ajustement de l’image</span>
+          <select
+            id={`elce-carousel-image-fit-${bdc.id}`}
+            aria-label="Ajustement de l’image"
+            value={bdc.card.imageFit}
+            onChange={(event) => actions.setImageFit(bdc.id, event.currentTarget.value as typeof bdc.card.imageFit)}
+          >
+            {CARD_IMAGE_FIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+      )}
+      {bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE && (
+        <label id={`elce-carousel-image-position-label-${bdc.id}`} className="elce-carousel-editor__setting elce-carousel-editor__setting--image-position">
+          <span>Position de l’image</span>
+          <select
+            id={`elce-carousel-image-position-${bdc.id}`}
+            aria-label="Position de l’image"
+            value={bdc.card.imagePosition}
+            onChange={(event) => actions.setImagePosition(bdc.id, event.currentTarget.value as typeof bdc.card.imagePosition)}
+          >
+            {CAROUSEL_IMAGE_POSITION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+      )}
+    </>
   )
 }
 
@@ -238,17 +294,6 @@ function renderCardContent(
           id={`elce-carousel-text-image-fields-${bdc.id}`}
           className={`elce-carousel-text-image-fields elce-carousel-text-image-fields--image-${bdc.card.imagePosition}`}
         >
-          <label id={`elce-carousel-image-position-label-${bdc.id}`} className="elce-carousel-editor__setting">
-            <span>Position de l’image</span>
-            <select
-              id={`elce-carousel-image-position-${bdc.id}`}
-              aria-label="Position de l’image"
-              value={bdc.card.imagePosition}
-              onChange={(event) => actions.setImagePosition(bdc.id, event.currentTarget.value as typeof bdc.card.imagePosition)}
-            >
-              {CAROUSEL_IMAGE_POSITION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
           <CarouselMediaEditor bdc={bdc} mediaById={mediaById} actions={actions} imageAspectRatio={aspectRatio} />
           {renderShortTextFields(bdc.id, bdc.card, actions)}
         </div>
@@ -289,21 +334,8 @@ function CarouselMediaEditor({ bdc, mediaById, actions, imageAspectRatio }: Caro
   const media = bdc.mediaId === null ? undefined : mediaById[bdc.mediaId]
   const canUseVideo = bdc.presetId === DEFAULT_PRESET_ID.PHOTO
   const hasVideoPreview = media?.type === MEDIA_TYPE.VIDEO && media.source !== null
-  const imageFitControl = media?.type === MEDIA_TYPE.VIDEO
-    ? null
-    : <label id={`elce-carousel-image-fit-label-${bdc.id}`} className="elce-carousel-editor__setting">
-        <span>Ajustement de l’image</span>
-        <select
-          id={`elce-carousel-image-fit-${bdc.id}`}
-          aria-label="Ajustement de l’image"
-          value={bdc.card.imageFit}
-          onChange={(event) => actions.setImageFit(bdc.id, event.currentTarget.value as typeof bdc.card.imageFit)}
-        >
-          {CARD_IMAGE_FIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-      </label>
   const fileTriggerContent = media?.source === null || media === undefined
-    ? <><ImagePlus aria-hidden="true" size={18} />{media?.name ?? (canUseVideo ? 'Déposer une image ou vidéo' : 'Déposer une image')}</>
+    ? <><ImagePlus aria-hidden="true" size={18} />{media?.name ?? (canUseVideo ? 'Déposer des images ou vidéos' : 'Déposer des images')}</>
     : media.type === MEDIA_TYPE.IMAGE
       ? <img
           id={`elce-carousel-media-image-${bdc.id}`}
@@ -321,12 +353,19 @@ function CarouselMediaEditor({ bdc, mediaById, actions, imageAspectRatio }: Caro
     return types.includes('Files') || types.includes(CATALOG_REFERENCE.MIME_TYPE)
   }
 
+  /** Imports one accepted file into this Card or routes a selection as a batch. */
+  const importFiles = (files: readonly File[]): void => {
+    const acceptedFiles = files.filter((file) => acceptsFile(bdc.presetId as CardLayoutId, file))
+    if (acceptedFiles.length === 1) actions.importMediaFile(bdc.id, acceptedFiles[0]!)
+    else if (acceptedFiles.length > 1) actions.importMediaFiles(bdc.id, acceptedFiles)
+  }
+
   /** Routes a file or catalogue media reference through the Card BDC actions. */
   const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
-    const file = event.dataTransfer.files[0]
-    if (file !== undefined) {
+    const files = Array.from(event.dataTransfer.files)
+    if (files.length > 0) {
       event.preventDefault()
-      if (acceptsFile(bdc.presetId as CardLayoutId, file)) actions.importMediaFile(bdc.id, file)
+      importFiles(files)
       return
     }
     const reference = parseCatalogReference(event.dataTransfer.getData(CATALOG_REFERENCE.MIME_TYPE))
@@ -341,7 +380,6 @@ function CarouselMediaEditor({ bdc, mediaById, actions, imageAspectRatio }: Caro
 
   return (
     <div id={`elce-carousel-media-editor-${bdc.id}`} className="elce-carousel-media-editor">
-      {imageFitControl}
       <div
         id={`elce-carousel-media-drop-${bdc.id}`}
         className={imageAspectRatio === null ? 'elce-carousel-media-drop' : 'elce-carousel-media-drop elce-carousel-media-drop--proportional'}
@@ -357,11 +395,11 @@ function CarouselMediaEditor({ bdc, mediaById, actions, imageAspectRatio }: Caro
           id={`elce-carousel-media-file-${bdc.id}`}
           className="elce-visually-hidden"
           type="file"
+          multiple
           accept={canUseVideo ? MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO : MEDIA_FILE_ACCEPT.IMAGE}
-          aria-label={canUseVideo ? 'Choisir une image ou vidéo' : 'Choisir une image'}
+          aria-label={canUseVideo ? 'Choisir une ou plusieurs images ou vidéos' : 'Choisir une ou plusieurs images'}
           onChange={(event) => {
-            const file = event.currentTarget.files?.[0]
-            if (file !== undefined && acceptsFile(bdc.presetId as CardLayoutId, file)) actions.importMediaFile(bdc.id, file)
+            importFiles(Array.from(event.currentTarget.files ?? []))
             event.currentTarget.value = ''
           }}
         />
@@ -380,7 +418,7 @@ function CarouselMediaEditor({ bdc, mediaById, actions, imageAspectRatio }: Caro
               id={`elce-carousel-media-select-${bdc.id}`}
               className="elce-carousel-media-drop__file-trigger"
               htmlFor={`elce-carousel-media-file-${bdc.id}`}
-              title={media === undefined ? 'Cliquer pour choisir un fichier ou le déposer' : 'Cliquer pour remplacer le média'}
+              title={media === undefined ? 'Cliquer pour choisir un ou plusieurs fichiers ou les déposer' : 'Cliquer pour remplacer le média'}
             >{fileTriggerContent}</label>}
         {media !== undefined && <button
           id={`elce-carousel-media-clear-${bdc.id}`}

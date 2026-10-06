@@ -39,6 +39,53 @@ export class ElceCarouselFacade {
       if (currentCard == null) return
       this.dispatch({ type: 'bdc.card.update', bdcId: cardBdcId, card: transform(currentCard) })
     }
+    /** Imports one supported file through the controller's serialized media queue. */
+    const importMediaFile = (cardBdcId: BdcId, file: File): void => {
+      const mediaImport = this.mediaService.createImport(file)
+      if (mediaImport !== null) this.importMedia(cardBdcId, mediaImport)
+    }
+    /** Creates ordered Card BDCs for a multi-file import and queues each media. */
+    const importMediaFiles = (cardBdcId: BdcId, files: readonly File[]): void => {
+      if (files.length === 0) return
+      if (files.length === 1) {
+        const file = files[0]
+        if (file !== undefined) importMediaFile(cardBdcId, file)
+        return
+      }
+      const targetCard = cards.find((candidate) => candidate.id === cardBdcId)
+      const targetIndex = content.cards.findIndex((entry) => entry.bdcId === cardBdcId)
+      if (targetCard?.type !== 'card' || targetCard.card == null || targetIndex < 0
+        || !CARD_LAYOUT_IDS.includes(targetCard.presetId as CardLayoutId)) return
+      const mediaImports = files.flatMap((file) => {
+        const mediaImport = this.mediaService.createImport(file)
+        return mediaImport === null ? [] : [mediaImport]
+      })
+      if (mediaImports.length === 0) return
+      if (mediaImports.length === 1) {
+        this.importMedia(cardBdcId, mediaImports[0]!)
+        return
+      }
+      const cardBdcIds = [cardBdcId]
+      const initialCardOptions = {
+        imagePosition: targetCard.card.imagePosition,
+        imageFit: targetCard.card.imageFit,
+      }
+      for (let index = 1; index < mediaImports.length; index += 1) {
+        const nextCardBdcId = createStableId('bdc-card')
+        this.dispatch(createCardBdcCommand(
+          nextCardBdcId,
+          bdcId,
+          targetIndex + index,
+          targetCard.presetId as CardLayoutId,
+          initialCardOptions,
+        ))
+        cardBdcIds.push(nextCardBdcId)
+      }
+      mediaImports.forEach((mediaImport, index) => {
+        const targetBdcId = cardBdcIds[index]
+        if (targetBdcId !== undefined) this.importMedia(targetBdcId, mediaImport)
+      })
+    }
     return {
       selectCard: (cardBdcId) => this.selectCard(cardBdcId),
       addCard: () => {
@@ -80,10 +127,8 @@ export class ElceCarouselFacade {
       setImagePosition: (cardBdcId, imagePosition) => updateCard(cardBdcId, (current) => this.cardService.setImagePosition(current, imagePosition)),
       setImageFit: (cardBdcId, imageFit) => updateCard(cardBdcId, (current) => this.cardService.setImageFit(current, imageFit)),
       attachCatalogReference: (cardBdcId, reference) => this.attachCatalogReference(cardBdcId, reference),
-      importMediaFile: (cardBdcId, file) => {
-        const mediaImport = this.mediaService.createImport(file)
-        if (mediaImport !== null) this.importMedia(cardBdcId, mediaImport)
-      },
+      importMediaFile,
+      importMediaFiles,
       clearMedia: (cardBdcId) => this.dispatch({ type: 'bdc.card.media.set', bdcId: cardBdcId, mediaId: null }),
       deleteCarousel: () => this.dispatch({ type: 'bdc.carousel.delete', bdcId }),
     }
