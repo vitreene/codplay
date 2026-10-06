@@ -80,6 +80,14 @@ intégration dépendante ; les travaux indépendants continuent.
   scène `layout`. Le tiroir ne doit pas être une scène séparée, et
   `ElcePlayerComposition` ne doit pas en reprendre l’état accessible ou le
   focus dans un adaptateur DOM impératif.
+- Gap de contrat avant implémentation : l’action vérifiée du perso `layout`
+  expose les données visuelles `className`, `style` et `attr` ; les sources
+  `emit` vérifiées transmettent les interactions, mais CodPlay ne documente
+  aucune action de focus ni émission de changement de media query. L’acceptation
+  demande encore le retour du focus après fermeture. Résoudre cette frontière
+  dans un plan CodPlay accepté et avec l’autorisation explicite requise avant
+  toute modification de `packages/codplay`. Ne pas remplacer l’adaptateur par
+  un autre pont DOM Elcé.
 - Après correction, rejouer le typecheck, la suite Elcé, le build et le
   parcours Brave à 390, 800 et 801 px. Confirmer l’état du bouton et du tiroir,
   l’animation, Échap, le clic extérieur, la sélection d’une page et le retour
