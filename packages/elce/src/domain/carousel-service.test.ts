@@ -1,76 +1,59 @@
 import { describe, expect, it } from 'vitest'
-import { CAROUSEL_CONFIG, DEFAULT_PRESET_ID } from '../config/document-config'
+import { CAROUSEL_CONFIG, CAROUSEL_PLAYBACK_MODE } from '../config/document-config'
 import { ElceCarouselService } from './carousel-service'
 
 describe('ElceCarouselService', () => {
-  it('preserves shared text and hidden image references while changing card presets', () => {
+  it('creates a manual Carousel with one identified Card child', () => {
     const service = new ElceCarouselService()
-    let carousel = service.createDefault()
-    const viewId = carousel.views[0]!.id
+    const carousel = service.createDefault('card-1')
 
-    carousel = service.setShortText(carousel, viewId, 'title', 'Présentation')
-    carousel = service.setShortText(carousel, viewId, 'message', 'Texte conservé')
-    carousel = service.setViewDuration(carousel, viewId, 7000)
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
-
-    expect(carousel.views[0]).toMatchObject({
-      id: viewId,
-      presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
-      durationMs: 7000,
-      text: { title: 'Présentation', message: 'Texte conservé' },
-      mediaId: null,
-      imagePosition: CAROUSEL_CONFIG.defaultImagePosition,
-    })
-
-    carousel = service.setMedia(carousel, viewId, 'media-photo')
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.PHOTO)
-
-    expect(carousel.views[0]).toMatchObject({
-      presetId: DEFAULT_PRESET_ID.PHOTO,
-      durationMs: 7000,
-      mediaId: 'media-photo',
-    })
-
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_SHORT)
-    expect(carousel.views[0]).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'media-photo' })
-
-    carousel = service.setShortText(carousel, viewId, 'title', 'Titre après passage par Texte court')
-    carousel = service.setShortText(carousel, viewId, 'message', 'Message après passage par Texte court')
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
-
-    expect(carousel.views[0]).toMatchObject({
-      presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
-      durationMs: 7000,
-      mediaId: 'media-photo',
-      text: { title: 'Titre après passage par Texte court', message: 'Message après passage par Texte court' },
-      imagePosition: CAROUSEL_CONFIG.defaultImagePosition,
-    })
-
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.IMAGE_CAPTION)
-    expect(carousel.views[0]).toMatchObject({
-      presetId: DEFAULT_PRESET_ID.IMAGE_CAPTION,
-      durationMs: 7000,
-      mediaId: 'media-photo',
-      text: { caption: '' },
-    })
-
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
-    expect(carousel.views[0]).toMatchObject({
-      presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
-      durationMs: 7000,
-      mediaId: 'media-photo',
+    expect(carousel).toMatchObject({
+      playbackMode: CAROUSEL_PLAYBACK_MODE.MANUAL,
+      defaultViewDurationMs: CAROUSEL_CONFIG.defaultViewDurationMs,
+      cards: [{ bdcId: 'card-1', durationMs: null }],
     })
   })
 
-  it('keeps all content when the selected preset is already active', () => {
+  it('adds, removes and reorders identified Card entries with their duration', () => {
     const service = new ElceCarouselService()
-    let carousel = service.createDefault()
-    const viewId = carousel.views[0]!.id
+    const first = service.createDefault('card-1')
+    const withSecond = service.addCard(first, 'card-2')
+    const withThird = service.addCard(withSecond, 'card-3')
+    const timed = service.setCardDuration(withThird, 'card-2', 2500)
+    const reordered = service.moveCard(timed, 'card-2', 2)
+    const removed = service.removeCard(reordered, 'card-3')
 
-    carousel = service.setShortText(carousel, viewId, 'title', 'Titre existant')
-    const originalView = carousel.views[0]
-    carousel = service.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_SHORT)
+    expect(reordered.cards.map(({ bdcId }) => bdcId)).toEqual(['card-1', 'card-3', 'card-2'])
+    expect(reordered.cards[2]).toEqual({ bdcId: 'card-2', durationMs: 2500 })
+    expect(removed.cards.map(({ bdcId }) => bdcId)).toEqual(['card-1', 'card-2'])
+    expect(service.removeCard(first, 'card-1')).toBe(first)
+  })
 
-    expect(carousel.views[0]).toBe(originalView)
+  it('validates unique children and positive durations', () => {
+    const service = new ElceCarouselService()
+    const carousel = service.createDefault('card-1')
+
+    expect(() => service.assertValid({ ...carousel, cards: [...carousel.cards, { bdcId: 'card-1', durationMs: null }] }))
+      .toThrow('ne peut apparaître qu’une fois')
+    expect(() => service.assertValid({ ...carousel, cards: [{ bdcId: 'card-1', durationMs: 0 }] }))
+      .toThrow('doit être positive')
+    expect(() => service.assertValid({ ...carousel, cards: [] })).toThrow('au moins une carte')
+  })
+
+  it('updates playback and frame settings without changing Card relationships', () => {
+    const service = new ElceCarouselService()
+    const carousel = service.createDefault('card-1')
+    const automatic = service.setPlaybackMode(carousel, CAROUSEL_PLAYBACK_MODE.AUTOMATIC)
+    const repeated = service.setRepeatCount(automatic, 0)
+    const square = service.setAspectRatio(repeated, { width: 1, height: 1 })
+    const transitioned = service.setTransition(square, 'cut')
+
+    expect(transitioned).toMatchObject({
+      playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+      repeatCount: 0,
+      aspectRatio: { width: 1, height: 1 },
+      transition: 'cut',
+      cards: carousel.cards,
+    })
   })
 })

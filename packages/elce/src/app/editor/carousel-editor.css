@@ -183,11 +183,18 @@
   align-items: center;
 }
 
+.elce-carousel-media-editor {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+  align-content: start;
+}
+
 .elce-carousel-text-image-fields--image-right {
   grid-template-columns: minmax(15rem, 3fr) minmax(12rem, 2fr);
 }
 
-.elce-carousel-text-image-fields--image-right > .elce-carousel-media-drop {
+.elce-carousel-text-image-fields--image-right > .elce-carousel-media-editor {
   grid-column: 2;
   grid-row: 2;
 }
@@ -257,6 +264,10 @@
   height: 100%;
   max-height: none;
   object-fit: cover;
+}
+
+.elce-carousel-media-drop--proportional .elce-carousel-media-drop__preview--contain {
+  object-fit: contain;
 }
 
 .elce-carousel-editor__media-clear {

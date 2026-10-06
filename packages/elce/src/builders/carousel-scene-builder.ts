@@ -3,24 +3,34 @@ import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import type { StrapFunction } from 'codplay/runtime/player'
-import { CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, MEDIA_TYPE } from '../config/document-config'
-import type { CarouselContent, CarouselView } from '../domain/carousel-types'
-import type { MediaId } from '../domain/document-types'
+import { CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID } from '../config/document-config'
+import type { CarouselContent, CarouselCardEntry } from '../domain/carousel-types'
+import type { Bdc } from '../domain/document-types'
 import { ElceCardPresetBuilder } from './card-preset-builder'
+import { ElceCardBdcSceneBuilder } from './card-bdc-scene-builder'
+import type { CardBdcSceneBuild } from './card-bdc-scene-builder'
 import type { CarouselSceneBuild, CarouselSceneBuildInput } from './carousel-scene-builder-types'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
+const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
 
-/** Builds one page-level Carousel BDC using the Capsule Automation authoring path. */
+type ScheduledCard = Readonly<{
+  readonly entry: CarouselCardEntry
+  readonly bdc: Bdc
+  readonly startMs: number
+  readonly endMs: number
+}>
+
+/** Builds a Carousel scene whose ordered children are first-class Card BDCs. */
 export class ElceCarouselSceneBuilder {
-  /** Projects the unique Elcé BDC to markup, one CodPlay story, and reusable media persos. */
+  /** Projects Carousel settings and Card BDCs into a CodPlay story. */
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
     const { pageId, bdcId, content } = input
     const prefix = `${pageId}:${bdcId}`
     const rootId = `${pageId}-${bdcId}`
     const capsulePartId = `${prefix}:carousel:capsule`
     const navigationPartId = `${prefix}:carousel:navigation`
-    const schedule = resolveViewSchedule(content)
+    const schedule = resolveCardSchedule(input)
     const capsule = new AutoCapsule({
       capsule: {
         id: `${rootId}-capsule`,
@@ -35,32 +45,32 @@ export class ElceCarouselSceneBuilder {
         },
       },
       children: schedule.map((entry, index) => ({
-        id: entry.view.id,
+        id: entry.bdc.id,
         order: index,
         timeRange: { startMs: entry.startMs, endMs: entry.endMs },
         className: 'elce-carousel-view',
         events: {
-          intro: { name: `${prefix}:view:${entry.view.id}:intro`, action: EVENT_ACTION.intro, ref: content.transition },
-          outro: { name: `${prefix}:view:${entry.view.id}:outro`, action: EVENT_ACTION.outro, ref: content.transition },
+          intro: { name: `${prefix}:card:${entry.bdc.id}:intro`, action: EVENT_ACTION.intro, ref: content.transition },
+          outro: { name: `${prefix}:card:${entry.bdc.id}:outro`, action: EVENT_ACTION.outro, ref: content.transition },
         },
       })),
     })
     const capsuleResult = capsule.resolve()
-    const viewById = new Map(content.views.map((view) => [view.id, view]))
-    const firstViewId = content.views[0]?.id ?? null
-    const viewPersos = capsuleResult.children.flatMap((child) => {
-      const view = viewById.get(child.id)
-      if (view === undefined) throw new Error(`La vue Carousel ${child.id} est introuvable.`)
-      return createCarouselViewPersos(prefix, capsulePartId, child, view, firstViewId)
+    const firstCardBdcId = content.cards[0]?.bdcId ?? null
+    const cardBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildCard(input, entry.bdc)]))
+    const cardPersos = capsuleResult.children.flatMap((child) => {
+      const entry = schedule.find((candidate) => candidate.bdc.id === child.id)
+      const cardBuild = cardBuilds.get(child.id)
+      if (entry === undefined || cardBuild === undefined) throw new Error(`La carte Carousel ${child.id} est introuvable.`)
+      return createCarouselCardPersos(prefix, capsulePartId, child, entry.bdc, cardBuild, firstCardBdcId)
     })
-    const selectionEvent = `${prefix}:select-view`
-    const selectionStrapName = `${prefix}:select-view`
-    const viewNavigationPersos = content.views.map((view, index) => {
-      const child = capsuleResult.children.find((candidate) => candidate.id === view.id)
-      if (child === undefined) throw new Error(`La vue Carousel ${view.id} n’a pas de placement résolu.`)
-      return createCarouselNavigationPerso(prefix, navigationPartId, child, view, index, firstViewId, selectionEvent)
+    const selectionEvent = `${prefix}:select-card`
+    const navigationPersos = content.cards.map((entry, index) => {
+      const child = capsuleResult.children.find((candidate) => candidate.id === entry.bdcId)
+      const bdc = input.cards.find((candidate) => candidate.id === entry.bdcId)
+      if (child === undefined || bdc === undefined) throw new Error(`La carte Carousel ${entry.bdcId} n’a pas de placement résolu.`)
+      return createCarouselNavigationPerso(prefix, navigationPartId, child, bdc, index, firstCardBdcId, selectionEvent)
     })
-    const selectionStrap = createSelectionStrap(prefix, content)
     const card = cardPresetBuilder.build(
       DEFAULT_PRESET_ID.CAROUSEL,
       rootId,
@@ -72,54 +82,64 @@ export class ElceCarouselSceneBuilder {
     )
     const story: StoryDoc<string> = {
       id: `${pageId}-${bdcId}`,
-      state: { activeViewId: firstViewId },
-      persos: [...viewPersos, ...viewNavigationPersos],
+      state: { activeCardBdcId: firstCardBdcId },
+      persos: [...cardPersos, ...navigationPersos],
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
-        ? createAutomaticEventimes(
-          content,
-          capsuleResult.children,
-          schedule[schedule.length - 1]?.endMs ?? 0,
-        )
+        ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
         : [],
-      straps: { [selectionStrapName]: selectionStrap },
-      listen: [{ on: selectionEvent, straps: [selectionStrapName] }],
+      straps: { [selectionEvent]: createSelectionStrap(prefix, content) },
+      listen: [{ on: selectionEvent, straps: [selectionEvent] }],
     }
     return {
       markup: card.markup,
       story,
-      mediaPersos: content.views.flatMap((view) => createCarouselMediaPersos(input, view, prefix)),
+      mediaPersos: [...cardBuilds.values()].flatMap((build) => build.mediaPersos),
       styleSheet: capsuleResult.styleSheet,
     }
   }
 }
 
-/** Converts per-view durations into the explicit bounds consumed by CapsuleDistribution. */
-function resolveViewSchedule(content: CarouselContent): readonly Readonly<{ view: CarouselView; startMs: number; endMs: number }>[] {
+/** Resolves Carousel entry durations into the ranges consumed by CapsuleDistribution. */
+function resolveCardSchedule(input: CarouselSceneBuildInput): readonly ScheduledCard[] {
+  const cardById = new Map(input.cards.map((bdc) => [bdc.id, bdc]))
   let endMs = 0
-  const authoredBounds = content.views.map((view) => {
-    const durationMs = view.durationMs ?? content.defaultViewDurationMs
+  const authoredBounds = input.content.cards.map((entry) => {
+    const bdc = cardById.get(entry.bdcId)
+    if (bdc === undefined || bdc.type !== 'card') throw new Error(`Le BDC Carte ${entry.bdcId} est introuvable.`)
+    const durationMs = entry.durationMs ?? input.content.defaultViewDurationMs
     const startMs = endMs
     endMs += durationMs
-    return { view, startMs, endMs }
+    return { entry, bdc, startMs, endMs }
   })
   const distribution = CapsuleDistribution.compute({
     clipDurationMs: endMs,
     mode: CapsulePreset.resolve({ capsuleType: CAPSULE_TYPE.carousel }).mode,
-    children: authoredBounds.map(({ view, startMs, endMs: viewEndMs }) => ({
-      trackId: view.id,
+    children: authoredBounds.map(({ entry, startMs, endMs: cardEndMs }) => ({
+      trackId: entry.bdcId,
       lockedIntroMs: startMs,
-      lockedOutroMs: viewEndMs,
+      lockedOutroMs: cardEndMs,
     })),
   })
   const distributedById = new Map(distribution.children.map((child) => [child.trackId, child]))
-  return authoredBounds.map(({ view }) => {
-    const range = distributedById.get(view.id)
-    if (range === undefined) throw new Error(`CapsuleDistribution n’a pas résolu la vue ${view.id}.`)
-    return { view, startMs: range.introMs, endMs: range.outroMs }
+  return authoredBounds.map(({ entry, bdc }) => {
+    const range = distributedById.get(entry.bdcId)
+    if (range === undefined) throw new Error(`CapsuleDistribution n’a pas résolu la carte ${entry.bdcId}.`)
+    return { entry, bdc, startMs: range.introMs, endMs: range.outroMs }
   })
 }
 
-/** Expands Capsule Automation's finite view schedule into the configured repeat count. */
+/** Builds one Card layout and content projection using the shared Card BDC builder. */
+function buildCard(input: CarouselSceneBuildInput, bdc: Bdc): CardBdcSceneBuild {
+  return cardBdcSceneBuilder.build({
+    pageId: input.pageId,
+    containerBdcId: input.bdcId,
+    bdc,
+    mediaSources: input.mediaSources,
+    mediaTypes: input.mediaTypes,
+  })
+}
+
+/** Expands Capsule Automation's finite Card schedule into the configured repeat count. */
 function createAutomaticEventimes(
   content: CarouselContent,
   children: ReturnType<AutoCapsule['resolve']>['children'],
@@ -127,9 +147,9 @@ function createAutomaticEventimes(
 ): NonNullable<StoryDoc<string>['eventimes']> {
   const repeatCount = content.repeatCount ?? CAROUSEL_CONFIG.defaultRepeatCount
   return Array.from({ length: repeatCount + 1 }, (_, repetitionIndex) =>
-    children.flatMap((child, viewIndex) => Object.values(child.events)
+    children.flatMap((child, cardIndex) => Object.values(child.events)
       .filter((event) => repetitionIndex < repeatCount
-        || viewIndex < children.length - 1
+        || cardIndex < children.length - 1
         || event.action !== EVENT_ACTION.outro)
       .map((event) => ({
         name: event.name,
@@ -138,7 +158,7 @@ function createAutomaticEventimes(
   ).flat()
 }
 
-/** Creates the fixed AutoCapsule host and each preset-card view inside it. */
+/** Creates the fixed AutoCapsule host and its resolved inline layout. */
 function createCapsuleMarkup(
   rootId: string,
   capsulePartId: string,
@@ -149,7 +169,7 @@ function createCapsuleMarkup(
   return `<div id="${rootId}-capsule" class="${result.capsule.className}" data-part="${capsulePartId}" data-transition="${transition}"${style}></div>`
 }
 
-/** Serializes builder-owned inline style values for the static card markup. */
+/** Serializes builder-owned inline style values for static scene markup. */
 function serializeStyle(value: unknown): string {
   if (value === null || typeof value !== 'object') return ''
   const entries = Object.entries(value as Record<string, unknown>)
@@ -163,17 +183,17 @@ function toKebabCase(property: string): string {
   return property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 }
 
-/** Creates a view layout with its generated automatic and manual selection actions. */
-function createCarouselViewPersos(
+/** Creates a Card layout root with its Capsule transition actions. */
+function createCarouselCardPersos(
   prefix: string,
   framePartId: string,
   child: ReturnType<AutoCapsule['resolve']>['children'][number],
-  view: CarouselView,
-  firstViewId: string | null,
+  bdc: Bdc,
+  cardBuild: CardBdcSceneBuild,
+  firstCardBdcId: string | null,
 ): readonly PersoDoc<string>[] {
-  const card = cardPresetBuilder.build(view.presetId, `${prefix}-view-${view.id}`, `${prefix}:view:${view.id}`)
-  const selectedEvent = `${prefix}:view:${view.id}:selected`
-  const unselectedEvent = `${prefix}:view:${view.id}:unselected`
+  const selectedEvent = `${prefix}:card:${bdc.id}:selected`
+  const unselectedEvent = `${prefix}:card:${bdc.id}:unselected`
   const introEvent = child.events.intro
   const outroEvent = child.events.outro
   const actions: Record<string, unknown> = {
@@ -188,8 +208,7 @@ function createCarouselViewPersos(
       ...(outroEvent === undefined ? {} : eventStyleAction(outroEvent)),
     },
   }
-  const initialEvents = Object.values(child.events)
-  for (const event of initialEvents) {
+  for (const event of Object.values(child.events)) {
     switch (event.action) {
       case EVENT_ACTION.intro:
         actions[event.name] = {
@@ -209,30 +228,35 @@ function createCarouselViewPersos(
         throw new Error(`Action de transition Carousel non prise en charge : ${event.action}`)
     }
   }
+  const imagePosition = bdc.card?.imagePosition
   const className = [
     child.className,
-    firstViewId === view.id ? 'elce-carousel-view--visible' : 'elce-carousel-view--hidden',
-    imagePositionClass(view),
+    firstCardBdcId === bdc.id ? 'elce-carousel-view--visible' : 'elce-carousel-view--hidden',
+    bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
+      ? imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT
+        ? 'elce-carousel-view--image-right'
+        : 'elce-carousel-view--image-left'
+      : null,
   ].filter(Boolean).join(' ')
-  const viewRoot: PersoDoc<string> = {
-    id: `${prefix}-view-${view.id}`,
+  const cardRoot: PersoDoc<string> = {
+    id: `${prefix}-card-${bdc.id}`,
     type: 'layout',
     initial: {
       move: { target: framePartId },
       className,
-      attr: { 'aria-hidden': firstViewId !== view.id, inert: firstViewId !== view.id },
+      attr: { 'aria-hidden': firstCardBdcId !== bdc.id, inert: firstCardBdcId !== bdc.id },
       style: {
         ...child.inlineStyle,
-        opacity: firstViewId === view.id ? 1 : 0,
+        opacity: firstCardBdcId === bdc.id ? 1 : 0,
         x: 0,
         y: 0,
         scale: 1,
       },
-      markup: card.markup,
+      markup: cardBuild.markup,
     },
     actions,
   }
-  return [viewRoot, ...createCarouselViewTextPersos(prefix, view, card.zonePartIds)]
+  return [cardRoot, ...cardBuild.contentPersos]
 }
 
 /** Converts a Capsule Automation transition definition into a CodPlay style action. */
@@ -247,69 +271,19 @@ function eventStyleAction(event: AutoCapsuleResolvedEvent): Record<string, unkno
   return { style }
 }
 
-/** Creates CodPlay text persos for the text zones of one fixed card preset. */
-function createCarouselViewTextPersos(
-  prefix: string,
-  view: CarouselView,
-  zonePartIds: Readonly<Record<string, string>>,
-): readonly PersoDoc<string>[] {
-  switch (view.presetId) {
-    case DEFAULT_PRESET_ID.TEXT_SHORT:
-    case DEFAULT_PRESET_ID.TEXT_IMAGE:
-      return [
-        createCarouselTextPerso(prefix, view.id, 'overline', 'p', view.text.overline, zonePartIds.overline),
-        createCarouselTextPerso(prefix, view.id, 'title', 'h2', view.text.title, zonePartIds.title),
-        createCarouselTextPerso(prefix, view.id, 'description', 'p', view.text.description, zonePartIds.description),
-        createCarouselTextPerso(prefix, view.id, 'message', 'p', view.text.message, zonePartIds.message),
-        createCarouselTextPerso(prefix, view.id, 'note', 'footer', view.text.note, zonePartIds.note),
-      ]
-    case DEFAULT_PRESET_ID.PHOTO:
-      return []
-    case DEFAULT_PRESET_ID.IMAGE_CAPTION:
-      return [createCarouselTextPerso(prefix, view.id, 'caption', 'p', view.text.caption, zonePartIds.caption)]
-  }
-}
-
-/** Places an optional plain-text field in its configured preset zone. */
-function createCarouselTextPerso(
-  prefix: string,
-  viewId: string,
-  zone: string,
-  tag: string,
-  content: string,
-  target: string | undefined,
-): PersoDoc<string> {
-  switch (target) {
-    case undefined:
-      throw new Error(`La zone ${zone} manque à la vue Carousel ${viewId}.`)
-    default:
-      break
-  }
-  return {
-    id: `${prefix}-view-${viewId}-${zone}`,
-    type: 'tag',
-    initial: {
-      tag,
-      content,
-      attr: { hidden: content.length === 0 },
-      move: { target },
-    },
-  }
-}
-
-/** Creates one CodPlay button that selects its corresponding view in either mode. */
+/** Creates the CodPlay button that selects one Card BDC in either playback mode. */
 function createCarouselNavigationPerso(
   prefix: string,
   navigationPartId: string,
   child: ReturnType<AutoCapsule['resolve']>['children'][number],
-  view: CarouselView,
+  bdc: Bdc,
   index: number,
-  firstViewId: string | null,
+  firstCardBdcId: string | null,
   selectionEvent: string,
 ): PersoDoc<string> {
-  const selectedEvent = `${prefix}:view:${view.id}:selected`
-  const unselectedEvent = `${prefix}:view:${view.id}:unselected`
-  const isFirstView = firstViewId === view.id
+  const selectedEvent = `${prefix}:card:${bdc.id}:selected`
+  const unselectedEvent = `${prefix}:card:${bdc.id}:unselected`
+  const isFirstCard = firstCardBdcId === bdc.id
   const selectedAttributes = { type: 'button', 'aria-label': `Aller à la vue ${index + 1}`, 'aria-current': 'true' }
   const unselectedAttributes = { type: 'button', 'aria-label': `Aller à la vue ${index + 1}`, 'aria-current': 'false' }
   const actions: Record<string, unknown> = {
@@ -329,151 +303,32 @@ function createCarouselNavigationPerso(
     }
   }
   return {
-    id: `${prefix}-dot-${view.id}`,
+    id: `${prefix}-dot-${bdc.id}`,
     type: 'tag',
     initial: {
       tag: 'button',
       content: '•',
-      className: isFirstView ? 'elce-carousel-dot elce-carousel-dot--active' : 'elce-carousel-dot elce-carousel-dot--inactive',
-      attr: isFirstView ? selectedAttributes : unselectedAttributes,
+      className: isFirstCard ? 'elce-carousel-dot elce-carousel-dot--active' : 'elce-carousel-dot elce-carousel-dot--inactive',
+      attr: isFirstCard ? selectedAttributes : unselectedAttributes,
       move: { target: navigationPartId },
     },
-    emit: { click: { event: { name: selectionEvent, data: { viewId: view.id }, visibility: 'story' } } },
-    actions: {
-      ...actions,
-    },
+    emit: { click: { event: { name: selectionEvent, data: { cardBdcId: bdc.id }, visibility: 'story' } } },
+    actions,
   }
 }
 
-/** Builds the story strap that records point selection and updates all view states. */
-function createSelectionStrap(
-  prefix: string,
-  content: CarouselContent,
-): StrapFunction {
+/** Builds the strap that records selected Card BDC identity and visibility actions. */
+function createSelectionStrap(prefix: string, content: CarouselContent): StrapFunction {
   return ({ event }) => {
-    const selectedViewId = event.data?.viewId
-    switch (typeof selectedViewId) {
-      case 'string':
-        break
-      default:
-        return undefined
+    const selectedBdcId = event.data?.cardBdcId
+    if (typeof selectedBdcId !== 'string') return undefined
+    const selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId)
+    if (selectedEntry === undefined) return undefined
+    return {
+      update: { activeCardBdcId: selectedEntry.bdcId },
+      events: content.cards.map((entry) => ({
+        name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? 'selected' : 'unselected'}`,
+      })),
     }
-    const selectedView = content.views.find((view) => view.id === selectedViewId)
-    switch (selectedView) {
-      case undefined:
-        return undefined
-      default:
-        return {
-          update: { activeViewId: selectedView.id },
-          events: content.views.map((view) => ({
-            name: `${prefix}:view:${view.id}:${view.id === selectedView.id ? 'selected' : 'unselected'}`,
-          })),
-        }
-    }
-  }
-}
-
-/** Creates the image or video perso that fills one preset's media part. */
-function createCarouselMediaPersos(
-  input: CarouselSceneBuildInput,
-  view: CarouselView,
-  prefix: string,
-): readonly PersoDoc<string>[] {
-  switch (view.presetId) {
-    case DEFAULT_PRESET_ID.TEXT_SHORT:
-      return []
-    case DEFAULT_PRESET_ID.PHOTO:
-    case DEFAULT_PRESET_ID.IMAGE_CAPTION:
-    case DEFAULT_PRESET_ID.TEXT_IMAGE:
-      break
-  }
-  switch (view.mediaId) {
-    case null:
-      return []
-    default:
-      break
-  }
-  const source = input.mediaSources[view.mediaId]
-  switch (source) {
-    case undefined:
-      return []
-    default:
-      break
-  }
-  const type = input.mediaTypes[view.mediaId]
-  const partId = carouselMediaPartId(prefix, view)
-  switch (type) {
-    case MEDIA_TYPE.IMAGE:
-      return [createCarouselImagePerso(prefix, view.id, view.mediaId, source, partId)]
-    case MEDIA_TYPE.VIDEO:
-      switch (view.presetId) {
-        case DEFAULT_PRESET_ID.PHOTO:
-          return [createCarouselVideoPerso(prefix, view.id, view.mediaId, source, partId)]
-        default:
-          return []
-      }
-    default:
-      return []
-  }
-}
-
-/** Resolves the media target emitted by the view's fixed card preset. */
-function carouselMediaPartId(prefix: string, view: CarouselView): string {
-  switch (view.presetId) {
-    case DEFAULT_PRESET_ID.PHOTO:
-      return `${prefix}:view:${view.id}:media`
-    case DEFAULT_PRESET_ID.IMAGE_CAPTION:
-      return `${prefix}:view:${view.id}:image`
-    case DEFAULT_PRESET_ID.TEXT_IMAGE:
-      return `${prefix}:view:${view.id}:image`
-    case DEFAULT_PRESET_ID.TEXT_SHORT:
-      throw new Error(`La vue Texte court ${view.id} ne comporte pas de zone média.`)
-  }
-}
-
-/** Adds the selected image-side class to a Text-image view wrapper. */
-function imagePositionClass(view: CarouselView): string | null {
-  switch (view.presetId) {
-    case DEFAULT_PRESET_ID.TEXT_IMAGE:
-      switch (view.imagePosition) {
-        case CAROUSEL_IMAGE_POSITION.LEFT:
-          return 'elce-carousel-view--image-left'
-        case CAROUSEL_IMAGE_POSITION.RIGHT:
-          return 'elce-carousel-view--image-right'
-      }
-    default:
-      return null
-  }
-}
-
-/** Creates the CodPlay image component for a Carousel view's fixed media zone. */
-function createCarouselImagePerso(prefix: string, viewId: string, mediaId: MediaId, source: string, target: string): PersoDoc<string> {
-  return {
-    id: `${prefix}-view-${viewId}-media-${mediaId}`,
-    type: 'img',
-    initial: {
-      src: source,
-      alt: '',
-      className: 'elce-carousel-media',
-      img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'cover' } },
-      move: { target },
-    },
-  }
-}
-
-/** Creates the CodPlay video component for a full-frame Carousel media zone. */
-function createCarouselVideoPerso(prefix: string, viewId: string, mediaId: MediaId, source: string, target: string): PersoDoc<string> {
-  return {
-    id: `${prefix}-view-${viewId}-media-${mediaId}`,
-    type: 'media',
-    initial: {
-      tag: 'video',
-      src: source,
-      controls: true,
-      master: false,
-      className: 'elce-carousel-media',
-      video: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'cover' } },
-      move: { target },
-    },
   }
 }

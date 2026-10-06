@@ -9,4 +9,4 @@ export interface ElceAnchorChange {
 export type ElceDocumentChange =
   | Readonly<{ kind: 'anchor'; operation: ElceAnchorChange }>
   | Readonly<{ kind: 'question-media-import'; bdcId: BdcId; file: File; media: MediaMetadata }>
-  | Readonly<{ kind: 'carousel-media-import'; bdcId: BdcId; viewId: string; file: File; media: MediaMetadata }>
+  | Readonly<{ kind: 'carousel-card-media-import'; bdcId: BdcId; file: File; media: MediaMetadata }>

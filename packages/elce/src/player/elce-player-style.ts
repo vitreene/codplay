@@ -467,6 +467,10 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   object-fit: cover;
 }
 
+.elce-carousel-media--contain {
+  object-fit: contain;
+}
+
 .elce-card--image-caption {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;

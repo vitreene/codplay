@@ -14,7 +14,7 @@ import type { HtmlMaterializerRuntimeContext } from '../../services/html-materia
 export const HTML_ATTR_SERVICE: ServiceRuntimeDefinition = {
   ...ATTR_SERVICE,
   materializers: [HTML_MATERIALIZER_ID],
-  create: () => createHtmlAttrService(),
+  create: (context) => createHtmlAttrService(readHtmlMaterializerContext(context)),
 }
 
 /** Declares the core className service and its HTML materializer adapter. */
@@ -38,10 +38,10 @@ export const HTML_STYLE_SERVICE: ServiceRuntimeDefinition = {
   create: (context) => createHtmlStyleService(readHtmlMaterializerContext(context)),
 }
 
-/** Validates and narrows the context supplied to the HTML style adapter. */
+/** Validates and narrows the context supplied to HTML service adapters. */
 function readHtmlMaterializerContext(context: ServiceRuntimeContext): HtmlMaterializerRuntimeContext {
   if (context.materializerId !== HTML_MATERIALIZER_ID) {
-    throw new Error(`Style service received an unexpected materializer: ${context.materializerId}`)
+    throw new Error(`HTML service received an unexpected materializer: ${context.materializerId}`)
   }
   if (!isHtmlMaterializerRuntimeContext(context.materializerContext)) {
     throw new Error('HTML materializer context is invalid.')

@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CARD_LAYOUT_IDS, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { createInitialDocument, ElceDocument } from '../../domain/document-model'
-import { ElceCarouselService } from '../../domain/carousel-service'
 import { ElceQuestionService } from '../../domain/question-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
   createChapterCommand,
   createChapterMoveCommand,
+  createCardBdcCommand,
   createCarouselBdcCommand,
+  createEvaluationResultBdcCommand,
   createPageCommand,
 } from './document-commands'
 
@@ -216,42 +217,196 @@ describe('Elcé document commands', () => {
     })).toThrow('Média incompatible avec la ressource canonique')
   })
 
-  it('does not retain a video hidden by the Text-short card preset', () => {
-    const carouselService = new ElceCarouselService()
+  it('retains every Card field and media reference while layouts hide them', () => {
     const withVideo = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-video-carousel', type: MEDIA_TYPE.VIDEO, name: 'clip.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
     })
     const withCarousel = applyDocumentCommand(withVideo, createCarouselBdcCommand('bdc-video-carousel', 'page-a', 1))
-    let carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')!.carousel!
-    const viewId = carousel.views[0]!.id
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')!.carousel!
+    const cardBdcId = carousel.cards[0]!.bdcId
+    const photoCard = applyDocumentCommand(withCarousel, {
+      type: 'bdc.card.layout.set',
+      bdcId: cardBdcId,
+      layoutId: DEFAULT_PRESET_ID.PHOTO,
+    })
+    const withMedia = applyDocumentCommand(photoCard, {
+      type: 'bdc.card.media.set',
+      bdcId: cardBdcId,
+      mediaId: 'media-video-carousel',
+    })
+    const authoredCard = withMedia.bdcs.find((bdc) => bdc.id === cardBdcId)!.card!
+    const authoredDocument = applyDocumentCommand(withMedia, {
+      type: 'bdc.card.update',
+      bdcId: cardBdcId,
+      card: {
+        ...authoredCard,
+        overline: 'Surtitre',
+        title: 'Titre conservé',
+        description: 'Description conservée',
+        message: 'Message conservé',
+        note: 'Note conservée',
+        caption: 'Légende conservée',
+        imagePosition: 'right',
+      },
+    })
+    let current = authoredDocument
+    for (const layoutId of CARD_LAYOUT_IDS) {
+      current = applyDocumentCommand(current, { type: 'bdc.card.layout.set', bdcId: cardBdcId, layoutId })
+      expect(current.bdcs.find((bdc) => bdc.id === cardBdcId)).toMatchObject({
+        presetId: layoutId,
+        parentBdcId: 'bdc-video-carousel',
+        mediaId: 'media-video-carousel',
+        card: {
+          overline: 'Surtitre',
+          title: 'Titre conservé',
+          description: 'Description conservée',
+          message: 'Message conservé',
+          note: 'Note conservée',
+          caption: 'Légende conservée',
+          imagePosition: 'right',
+        },
+      })
+    }
+  })
 
-    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.PHOTO)
-    carousel = carouselService.setMedia(carousel, viewId, 'media-video-carousel')
-    const photoDocument = applyDocumentCommand(withCarousel, {
-      type: 'bdc.carousel.update',
-      bdcId: 'bdc-video-carousel',
-      carousel,
+  it('deletes one Card child while the Carousel retains its final child', () => {
+    let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand('bdc-carousel-delete-card', 'page-a', 1))
+    document = applyDocumentCommand(document, createCardBdcCommand(
+      'bdc-card-to-delete', 'bdc-carousel-delete-card', 1, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    const carousel = document.bdcs.find((bdc) => bdc.id === 'bdc-carousel-delete-card')!.carousel!
+    const firstCardBdcId = carousel.cards[0]!.bdcId
+
+    const remaining = applyDocumentCommand(document, { type: 'bdc.carousel.card.delete', bdcId: firstCardBdcId })
+
+    expect(remaining.bdcs.some((bdc) => bdc.id === firstCardBdcId)).toBe(false)
+    expect(remaining.bdcs.find((bdc) => bdc.id === 'bdc-carousel-delete-card')?.carousel?.cards)
+      .toEqual([{ bdcId: 'bdc-card-to-delete', durationMs: null }])
+    expect(() => applyDocumentCommand(remaining, { type: 'bdc.carousel.card.delete', bdcId: 'bdc-card-to-delete' }))
+      .toThrow('conserver au moins une carte')
+    assertDocumentInvariants(remaining)
+  })
+
+  it('moves a Card BDC between Carousels without cloning its authored content', () => {
+    let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand(
+      'bdc-carousel-source', 'page-a', 1, 'bdc-card-source-first',
+    ))
+    document = applyDocumentCommand(document, createCardBdcCommand(
+      'bdc-card-moved', 'bdc-carousel-source', 1, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    document = applyDocumentCommand(document, createCarouselBdcCommand(
+      'bdc-carousel-target', 'page-a', 2, 'bdc-card-target-first',
+    ))
+    const card = document.bdcs.find((bdc) => bdc.id === 'bdc-card-moved')!.card!
+    document = applyDocumentCommand(document, {
+      type: 'bdc.card.update',
+      bdcId: 'bdc-card-moved',
+      card: { ...card, title: 'Carte déplacée', note: 'Contenu conservé' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-moved-card', type: MEDIA_TYPE.IMAGE, name: 'carte.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'bdc.card.media.set',
+      bdcId: 'bdc-card-moved',
+      mediaId: 'media-moved-card',
     })
 
-    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_SHORT)
-    const textDocument = applyDocumentCommand(photoDocument, {
-      type: 'bdc.carousel.update',
-      bdcId: 'bdc-video-carousel',
-      carousel,
+    const moved = applyDocumentCommand(document, {
+      type: 'bdc.move',
+      bdcId: 'bdc-card-moved',
+      placement: { kind: BDC_LOCATION.PARENT, parentBdcId: 'bdc-carousel-target', index: 1 },
     })
-    expect(textDocument.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')?.carousel?.views[0])
-      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: null })
 
-    carousel = textDocument.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')!.carousel!
-    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
-    const textImageDocument = applyDocumentCommand(textDocument, {
-      type: 'bdc.carousel.update',
-      bdcId: 'bdc-video-carousel',
-      carousel,
+    expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-carousel-source')?.carousel?.cards.map(({ bdcId }) => bdcId))
+      .toEqual(['bdc-card-source-first'])
+    expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-carousel-target')?.carousel?.cards)
+      .toEqual([
+        { bdcId: 'bdc-card-target-first', durationMs: null },
+        { bdcId: 'bdc-card-moved', durationMs: null },
+      ])
+    expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-card-moved')).toMatchObject({
+      type: BDC_TYPE.CARD,
+      parentBdcId: 'bdc-carousel-target',
+      pageId: null,
+      presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+      mediaId: 'media-moved-card',
+      card: { title: 'Carte déplacée', note: 'Contenu conservé' },
     })
-    expect(textImageDocument.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')?.carousel?.views[0])
-      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, mediaId: null })
+    assertDocumentInvariants(moved)
+    expect(() => applyDocumentCommand(moved, {
+      type: 'bdc.move',
+      bdcId: 'bdc-card-source-first',
+      placement: { kind: BDC_LOCATION.PARENT, parentBdcId: 'bdc-carousel-target', index: 0 },
+    })).toThrow('Un BDC Carousel doit contenir au moins une carte.')
+  })
+
+  it('rejects evaluation data on a Card BDC', () => {
+    let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand(
+      'bdc-carousel-invariant', 'page-a', 1, 'bdc-card-invariant',
+    ))
+    document = applyDocumentCommand(document, createEvaluationResultBdcCommand(
+      'bdc-evaluation-result-invariant', 'page-a', 2,
+    ))
+    const evaluationResult = document.bdcs.find((bdc) => bdc.id === 'bdc-evaluation-result-invariant')!.evaluationResult
+    const invalid = new ElceDocument({
+      ...document.data,
+      bdcs: document.bdcs.map((bdc) => bdc.id === 'bdc-card-invariant'
+        ? { ...bdc, evaluationResult }
+        : bdc),
+    })
+
+    expect(() => assertDocumentInvariants(invalid)).toThrow('Bdc Carte incomplet : bdc-card-invariant')
+  })
+
+  it('rebinds media references owned by Card BDCs during catalogue merges', () => {
+    let document = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-card-canonical', type: MEDIA_TYPE.IMAGE, name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-card-duplicate', type: MEDIA_TYPE.IMAGE, name: 'renamed.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-carousel-media-merge', 'page-a', 1))
+    const cardBdcId = document.bdcs.find((bdc) => bdc.id === 'bdc-carousel-media-merge')!.carousel!.cards[0]!.bdcId
+    document = applyDocumentCommand(document, {
+      type: 'bdc.card.media.set',
+      bdcId: cardBdcId,
+      mediaId: 'media-card-duplicate',
+    })
+
+    const merged = applyDocumentCommand(document, {
+      type: 'media.merge',
+      canonicalMediaId: 'media-card-canonical',
+      duplicateMediaIds: ['media-card-duplicate'],
+    })
+
+    expect(merged.bdcs.find((bdc) => bdc.id === cardBdcId)?.mediaId).toBe('media-card-canonical')
+    expect(merged.medias.map((media) => media.id)).toContain('media-card-canonical')
+    expect(merged.medias.map((media) => media.id)).not.toContain('media-card-duplicate')
+    assertDocumentInvariants(merged)
+  })
+
+  it('removes Carousel children with their parent but keeps reusable media', () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-card-photo', type: MEDIA_TYPE.IMAGE, name: 'card.png', mimeType: 'image/png', size: 100, caption: '' },
+    })
+    const withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-carousel-parent', 'page-a', 1))
+    const cardBdcId = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-parent')!.carousel!.cards[0]!.bdcId
+    const withCardMedia = applyDocumentCommand(withCarousel, {
+      type: 'bdc.card.media.set',
+      bdcId: cardBdcId,
+      mediaId: 'media-card-photo',
+    })
+    const deleted = applyDocumentCommand(withCardMedia, { type: 'bdc.carousel.delete', bdcId: 'bdc-carousel-parent' })
+
+    expect(deleted.bdcs.some((bdc) => bdc.id === cardBdcId || bdc.id === 'bdc-carousel-parent')).toBe(false)
+    expect(deleted.medias.map((media) => media.id)).toContain('media-card-photo')
+    assertDocumentInvariants(deleted)
   })
 
   it('permanently deletes only an unused catalog bdc and retains its media', () => {
@@ -327,24 +482,17 @@ describe('Elcé document commands', () => {
     expect(restored.toJSON()).toEqual(document.toJSON())
   })
 
-  it('migrates version 1 root pages before the existing chapter order', () => {
+  it('rejects previously persisted document versions without migrating them', () => {
     const withRootPage = applyDocumentCommand(createInitialDocument(), createPageCommand({
       pageId: 'page-root',
       bdcId: 'bdc-section-root',
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
     const { scenarioEntries: _scenarioEntries, ...legacyFields } = withRootPage.toJSON()
-    const restored = ElceDocument.fromJSON({
-      ...legacyFields,
-      version: 1,
-      scenarioPageIds: ['page-root'],
-    })
-
-    expect(restored.data.scenarioEntries).toEqual([
-      { kind: 'page', pageId: 'page-root' },
-      { kind: 'chapter', chapterId: 'chapter-1' },
-    ])
-    expect(restored.scenarioPageIds).toEqual(['page-root', 'page-a'])
+    for (const version of [1, 2]) {
+      expect(() => ElceDocument.fromJSON({ ...legacyFields, version } as never))
+        .toThrow(`Version de document Elcé non supportée : ${version}`)
+    }
   })
 
   it('moves a standalone page before and after chapter entries in the root sequence', () => {

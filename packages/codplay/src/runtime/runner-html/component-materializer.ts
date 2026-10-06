@@ -21,9 +21,12 @@ import type {
   RuntimeMaterializer,
   RuntimeMaterializerSceneContext,
 } from '../materializer'
-import type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
+import type {
+  HtmlMaterializerRuntimeContext,
+} from '../../services/html-materializer-service-types'
 import { isHtmlTransientNode } from './transient-node'
 import { createHtmlReplacePresentationSurface } from './replace-presentation-surface'
+import { applyActivatedHtmlElementMethods } from './html-element-method/html-element-method'
 
 export type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
 
@@ -52,6 +55,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   ) {
     this.nodes = nodes
     this.context = context
+    this.context.deferredAccessibilityAttributes ??= new Map()
   }
 
   /** Creates one DOM component instance and its deterministic cleanup action. */
@@ -118,8 +122,21 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
    * Materializes solved parentage and child order without destroying detached author nodes.
    * Component cleanup only occurs through the final RuntimeComponentHandle.destroy().
    */
-  materializeScene(scene: SolvedScene, _context: RuntimeMaterializerSceneContext = { moveDeltas: [] }): void {
-    if (!this.structureDirty && this.lastStructuralRevision === scene.graph.revision) return
+  materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext = { moveDeltas: [] }): void {
+    try {
+      if (this.structureDirty || this.lastStructuralRevision !== scene.graph.revision) {
+        this.materializeStructure(scene)
+      }
+      if (context.phase !== 'geometry-capture') {
+        applyActivatedHtmlElementMethods(scene, context.previousScene, this.nodes.persoNodes)
+      }
+    } finally {
+      this.flushDeferredAccessibilityAttributes()
+    }
+  }
+
+  /** Applies resolved parentage and order when the graph revision changes. */
+  private materializeStructure(scene: SolvedScene): void {
     const childrenByTarget = resolvePresentationOrder(scene)
     const nextMountedPersos = new Set(
       Object.values(scene.persos)
@@ -171,6 +188,19 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     this.structureDirty = false
   }
 
+  /** Applies queued closing attributes after method actions in the current presentation. */
+  private flushDeferredAccessibilityAttributes(): void {
+    const pending = this.context.deferredAccessibilityAttributes
+    if (pending === undefined) return
+    for (const [node, attributes] of pending) {
+      for (const [name, value] of attributes) {
+        if (value === undefined) node.removeAttribute(name)
+        else node.setAttribute(name, value)
+      }
+    }
+    pending.clear()
+  }
+
   /** Invalidates the structural fast path after an external transient DOM move. */
   invalidateStructure(): void {
     this.structureDirty = true
@@ -195,6 +225,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     for (const persoKey of this.mountedPersos) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
     this.mountedPersos.clear()
     this.foreignAttachments.clear()
+    this.context.deferredAccessibilityAttributes?.clear()
     this.lastStructuralRevision = undefined
     this.structureDirty = true
   }

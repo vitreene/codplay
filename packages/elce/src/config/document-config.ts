@@ -11,6 +11,7 @@ export const SCENARIO_ENTRY_KIND = {
 
 export const BDC_LOCATION = {
   PAGE: 'page',
+  PARENT: 'parent',
   CATALOG: 'catalog',
 } as const
 
@@ -46,6 +47,7 @@ export const BDC_TYPE = {
   QUESTION: 'question',
   EVALUATION_RESULT: 'evaluation-result',
   CAROUSEL: 'carousel',
+  CARD: 'card',
 } as const
 
 export const EVALUATION_RESULT_BRANCH = {
@@ -215,7 +217,12 @@ export const CAROUSEL_IMAGE_POSITION = {
   RIGHT: 'right',
 } as const
 
-export const CAROUSEL_CARD_PRESET_IDS = [
+export const CARD_IMAGE_FIT = {
+  CONTAIN: 'contain',
+  COVER: 'cover',
+} as const
+
+export const CARD_LAYOUT_IDS = [
   DEFAULT_PRESET_ID.PHOTO,
   DEFAULT_PRESET_ID.IMAGE_CAPTION,
   DEFAULT_PRESET_ID.TEXT_IMAGE,
@@ -258,7 +265,12 @@ export const CAROUSEL_IMAGE_POSITION_OPTIONS = [
   { value: CAROUSEL_IMAGE_POSITION.RIGHT, label: 'Image à droite' },
 ] as const
 
-export const CAROUSEL_CARD_PRESET_OPTIONS = [
+export const CARD_IMAGE_FIT_OPTIONS = [
+  { value: CARD_IMAGE_FIT.CONTAIN, label: 'Contenir' },
+  { value: CARD_IMAGE_FIT.COVER, label: 'Couvrir' },
+] as const
+
+export const CARD_LAYOUT_OPTIONS = [
   { value: DEFAULT_PRESET_ID.TEXT_SHORT, label: 'Texte court' },
   { value: DEFAULT_PRESET_ID.TEXT_IMAGE, label: 'Texte avec image' },
   { value: DEFAULT_PRESET_ID.PHOTO, label: 'Photo ou vidéo plein cadre' },
@@ -267,8 +279,8 @@ export const CAROUSEL_CARD_PRESET_OPTIONS = [
 
 export const CAROUSEL_CONFIG = {
   bdcPresetId: DEFAULT_PRESET_ID.CAROUSEL,
-  viewDragMimeType: 'application/x-elce-carousel-view+json',
-  initialViewPresetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+  cardDragMimeType: 'application/x-elce-bdc-card+json',
+  initialCardLayoutId: DEFAULT_PRESET_ID.TEXT_SHORT,
   defaultAspectRatio: { width: 16, height: 9 },
   defaultPlaybackMode: CAROUSEL_PLAYBACK_MODE.MANUAL,
   defaultViewDurationMs: 5000,
@@ -278,6 +290,7 @@ export const CAROUSEL_CONFIG = {
   minimumRepeatCount: 0,
   maximumRepeatCount: 10,
   defaultImagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
+  defaultImageFit: CARD_IMAGE_FIT.COVER,
   textShortMessageMaxLength: 250,
   defaultTransition: CAROUSEL_TRANSITION.FADE,
 } as const

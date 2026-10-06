@@ -9,6 +9,7 @@ import {
 import { ELCE_EVENTS, ELCE_SCENARIO } from '../config/document-config'
 import { buildFluxScene } from '../builders/flux-scene-builder'
 import { buildScenario } from '../builders/scenario-builder'
+import { validateHtmlElementMethodActions } from '../builders/html-element-method-validation'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario-builder-types'
 import type { ElceDocument } from '../domain/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
@@ -33,6 +34,9 @@ export class ElcePlayerComposition {
     this.options = options
     const pageSceneCatalog = createPageSceneCatalog(options.document, options.mediaSources, options.sceneCache)
     const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId)
+    for (const warning of validateHtmlElementMethodActions(scenario.scenes ?? {})) {
+      options.onLog?.(warning, 'warn')
+    }
     const instanceIds = createInstanceIds(scenario)
     this.sighty = new Sighty({
       scenario,
@@ -195,10 +199,11 @@ export function createPageSceneCatalog(
     const page = document.pages.find((candidate) => candidate.id === pageId)
     if (page === undefined) throw new Error(`Page absente du document : ${pageId}`)
     const pageBdcs = page.bdcIds.map((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId))
+    const carouselCardBdcIds = new Set(pageBdcs.flatMap((bdc) => bdc?.carousel?.cards.map((entry) => entry.bdcId) ?? []))
+    const carouselCardBdcs = document.bdcs.filter((bdc) => carouselCardBdcIds.has(bdc.id))
     const mediaIds = new Set(pageBdcs.flatMap((bdc) => [
       ...(bdc?.mediaId === null || bdc?.mediaId === undefined ? [] : [bdc.mediaId]),
-      ...(bdc?.carousel?.views.flatMap((view) => view.mediaId === null ? [] : [view.mediaId]) ?? []),
-    ]))
+    ]).concat(carouselCardBdcs.flatMap((bdc) => bdc.mediaId === null ? [] : [bdc.mediaId])))
     const pageMediaSources = Object.fromEntries([...mediaIds].flatMap((mediaId) => {
       const source = mediaSources?.[mediaId]
       return source === undefined ? [] : [[mediaId, source]]

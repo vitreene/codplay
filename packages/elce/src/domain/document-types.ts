@@ -3,6 +3,7 @@ import type { ScenarioEntry } from './scenario-entry-types'
 import type { QuestionContent } from './question-types'
 import type { EvaluationResultContent } from './evaluation/evaluation-result-types'
 import type { CarouselContent } from './carousel-types'
+import type { CardContent } from './card/card-types'
 
 export type ChapterId = string
 export type PageId = string
@@ -52,6 +53,7 @@ export interface Bdc {
   readonly type: BdcType
   readonly presetId: string
   readonly pageId: PageId | null
+  readonly parentBdcId: BdcId | null
   readonly mediaId: MediaId | null
   readonly section: {
     readonly title: string
@@ -61,6 +63,7 @@ export interface Bdc {
   readonly question: QuestionContent | null
   readonly evaluationResult?: EvaluationResultContent | null
   readonly carousel?: CarouselContent | null
+  readonly card?: CardContent | null
 }
 
 export interface MediaMetadata {
@@ -74,7 +77,7 @@ export interface MediaMetadata {
 
 export interface ElceDocumentData {
   readonly id: string
-  readonly version: 2
+  readonly version: 3
   readonly name: string
   readonly chapters: readonly Chapter[]
   readonly pages: readonly Page[]

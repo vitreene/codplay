@@ -1,5 +1,6 @@
 import {
   BDC_TYPE,
+  CAROUSEL_CONFIG,
   CHAPTER_TYPE,
   DEFAULT_PRESET_ID,
   PAGE_TYPE,
@@ -7,10 +8,8 @@ import {
   CHAPTER_TYPE_CONFIG,
 } from '../config/document-config'
 import type { Bdc, Chapter, ElceDocumentData, MediaMetadata, Page, PageId, RichTextDocument } from './document-types'
-import type { PersistedElceDocumentData } from './document-v1-types'
-import type { ScenarioEntry } from './scenario-entry-types'
 
-export const ELCE_DOCUMENT_VERSION = 2 as const
+export const ELCE_DOCUMENT_VERSION = 3 as const
 
 /** Creates the empty rich-text document used by a new Section. */
 export function createEmptyRichTextDocument(): RichTextDocument {
@@ -66,19 +65,15 @@ export class ElceDocument {
   }
 
   /** Rehydrates a document after a structured clone or a JSON round trip. */
-  public static fromJSON(data: PersistedElceDocumentData): ElceDocument {
-    const currentData = migrateDocumentData(data)
-    return new ElceDocument({
-      ...currentData,
-      bdcs: currentData.bdcs.map((bdc) => ({
-        ...bdc,
-        evaluationResult: bdc.evaluationResult ?? null,
-        carousel: bdc.carousel ?? null,
-        ...(bdc.section === null || bdc.section.content !== undefined
-          ? {}
-          : { section: { ...bdc.section, content: createEmptyRichTextDocument() } }),
-      })),
+  public static fromJSON(data: ElceDocumentData): ElceDocument {
+    if (data.version !== ELCE_DOCUMENT_VERSION) {
+      throw new Error(`Version de document Elcé non supportée : ${String(data.version)}`)
+    }
+    const bdcs = data.bdcs.map((bdc) => {
+      if (bdc.type !== BDC_TYPE.CARD || bdc.card == null || bdc.card.imageFit != null) return bdc
+      return { ...bdc, card: { ...bdc.card, imageFit: CAROUSEL_CONFIG.defaultImageFit } }
     })
+    return new ElceDocument(bdcs.some((bdc, index) => bdc !== data.bdcs[index]) ? { ...data, bdcs } : data)
   }
 }
 
@@ -155,10 +150,12 @@ export function createInitialDocument(): ElceDocument {
     type: BDC_TYPE.SECTION,
     presetId: DEFAULT_PRESET_ID.SECTION,
     pageId: page.id,
+    parentBdcId: null,
     mediaId: null,
     question: null,
     evaluationResult: null,
     carousel: null,
+    card: null,
     section: {
       title: '',
       markup: '<p id="section-text-1"></p>',
@@ -177,27 +174,4 @@ export function createInitialDocument(): ElceDocument {
     catalogBdcIds: [],
     medias: [],
   })
-}
-
-/** Converts persisted revisions to the current root-entry sequence. */
-function migrateDocumentData(data: PersistedElceDocumentData): ElceDocumentData {
-  switch (data.version) {
-    case 1: {
-      const { scenarioPageIds, ...documentData } = data
-      const scenarioEntries: ScenarioEntry[] = [
-        ...scenarioPageIds.map((pageId) => ({ kind: SCENARIO_ENTRY_KIND.PAGE, pageId })),
-        ...data.chapters.map((chapter) => ({ kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id })),
-      ]
-      return {
-        ...documentData,
-        version: ELCE_DOCUMENT_VERSION,
-        scenarioEntries,
-        bdcs: documentData.bdcs.map((bdc) => ({ ...bdc, question: bdc.question ?? null })),
-      }
-    }
-    case ELCE_DOCUMENT_VERSION:
-      return { ...data, bdcs: data.bdcs.map((bdc) => ({ ...bdc, question: bdc.question ?? null })) }
-    default:
-      throw new Error(`Version de document Elcé non supportée : ${String((data as { version: unknown }).version)}`)
-  }
 }

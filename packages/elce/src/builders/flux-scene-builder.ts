@@ -54,7 +54,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
   }
   const pageContents = pageBdcs.filter((bdc): bdc is Bdc => bdc !== undefined)
   const anchorTargets = readAnchorTargets(pageContents)
-  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, anchorTargets, options))
+  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, anchorTargets, options))
 
   const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
@@ -144,6 +144,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
 function createBdcMount(
   page: Page,
   bdc: Bdc,
+  allBdcs: readonly Bdc[],
   anchorTargets: readonly FluxAnchorTarget[],
   options: FluxSceneBuildOptions,
 ): FluxBdcMount {
@@ -223,6 +224,7 @@ function createBdcMount(
             pageId: page.id,
             bdcId: bdc.id,
             content,
+            cards: allBdcs,
             mediaSources: options.mediaSources ?? {},
             mediaTypes: options.mediaTypes ?? {},
           })
@@ -237,6 +239,8 @@ function createBdcMount(
         }
       }
     }
+    case BDC_TYPE.CARD:
+      throw new Error(`Le BDC Carte ${bdc.id} doit être projeté par son BDC conteneur.`)
     default:
       return assertNeverBdcType(bdc.type)
   }
@@ -253,6 +257,7 @@ function readAnchorTargets(bdcs: readonly Bdc[]): readonly FluxAnchorTarget[] {
       case BDC_TYPE.QUESTION:
       case BDC_TYPE.EVALUATION_RESULT:
       case BDC_TYPE.CAROUSEL:
+      case BDC_TYPE.CARD:
         return []
       default:
         return assertNeverBdcType(bdc.type)
@@ -287,6 +292,8 @@ function createMediaPersos(
       return []
     case BDC_TYPE.CAROUSEL:
       return mount.carouselBuild?.mediaPersos ?? []
+    case BDC_TYPE.CARD:
+      return []
     default:
       return assertNeverBdcType(mount.bdc.type)
   }

@@ -6,6 +6,8 @@ export type HtmlMaterializerRuntimeContext = {
   numericLengthScale: number
   /** Prefix before `part` in comment-based author markers; defaults to `data-`. */
   partMarkerPrefix?: string
+  /** Accessibility attributes queued until the HTML materializer completes one presentation. */
+  deferredAccessibilityAttributes?: Map<HtmlElementNode, Map<string, string | undefined>>
 }
 
 /** Minimal element contract required by the HTML service adapters. */

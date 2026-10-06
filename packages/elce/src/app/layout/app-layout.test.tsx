@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createActor } from 'xstate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CAROUSEL_CARD_PRESET_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CARD_LAYOUT_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { controllerMachine } from '../controller/controller-machine'
 import { AppLayout } from './app-layout'
 
@@ -208,7 +208,9 @@ describe('AppLayout authoring titles and creation actions', () => {
     const carouselBdc = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)
     expect(documentModel.pages[0]?.bdcIds).toEqual([...existingIds, carouselBdcId])
     expect(carouselBdc).toMatchObject({ type: BDC_TYPE.CAROUSEL, presetId: DEFAULT_PRESET_ID.CAROUSEL, pageId: 'page-a' })
-    expect(carouselBdc?.carousel?.views).toHaveLength(1)
+    expect(carouselBdc?.carousel?.cards).toHaveLength(1)
+    const initialCardBdcId = carouselBdc?.carousel?.cards[0]?.bdcId
+    expect(documentModel.bdcs.find((bdc) => bdc.id === initialCardBdcId)).toMatchObject({ type: BDC_TYPE.CARD, parentBdcId: carouselBdcId })
     expect(carouselBdc?.carousel?.playbackMode).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     expect(carouselBdc?.carousel?.repeatCount).toBe(10)
     expect(host.querySelector(`#elce-carousel-editor-${carouselBdcId}`)).not.toBeNull()
@@ -229,44 +231,41 @@ describe('AppLayout authoring titles and creation actions', () => {
     expect(Array.from(ratioSelect?.options ?? []).map((option) => option.label)).toEqual(CAROUSEL_ASPECT_RATIO_OPTIONS.map((option) => option.label))
     expect(host.textContent).not.toContain('Preset des prochaines vues')
 
-    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-view-add-${carouselBdcId}`)?.click())
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-card-add-${carouselBdcId}`)?.click())
     const editedCarousel = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel
-    const addedView = editedCarousel?.views[1]
-    expect(editedCarousel?.views).toHaveLength(2)
+    const addedCardBdcId = editedCarousel?.cards[1]?.bdcId
+    expect(editedCarousel?.cards).toHaveLength(2)
 
-    const viewTransfer = createDataTransfer()
-    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-view-tab-${editedCarousel?.views[0]?.id}`)!, 'dragstart', viewTransfer))
-    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-view-tab-${addedView?.id}`)!, 'dragover', viewTransfer))
-    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-view-tab-${addedView?.id}`)!, 'drop', viewTransfer))
-    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views.map((view) => view.id))
-      .toEqual([addedView?.id, editedCarousel?.views[0]?.id])
+    const cardTransfer = createDataTransfer()
+    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-card-tab-${initialCardBdcId}`)!, 'dragstart', cardTransfer))
+    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-card-tab-${addedCardBdcId}`)!, 'dragover', cardTransfer))
+    act(() => dispatchDrag(host.querySelector<HTMLElement>(`#elce-carousel-card-tab-${addedCardBdcId}`)!, 'drop', cardTransfer))
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.cards.map((entry) => entry.bdcId))
+      .toEqual([addedCardBdcId, initialCardBdcId])
 
     await act(async () => setControlledValue(
-      host.querySelector<HTMLInputElement>(`#elce-carousel-title-${addedView?.id}`)!,
-      'Titre de la seconde vue',
+      host.querySelector<HTMLInputElement>(`#elce-carousel-title-${addedCardBdcId}`)!,
+      'Titre de la seconde carte',
     ))
-    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
-      .find((view) => view.id === addedView?.id))
-      .toMatchObject({ text: { title: 'Titre de la seconde vue' } })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === addedCardBdcId)?.card)
+      .toMatchObject({ title: 'Titre de la seconde carte' })
 
     await act(async () => setControlledValue(ratioSelect!, '4:3'))
     const ratioCarousel = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel
     expect(ratioCarousel?.aspectRatio).toEqual({ width: 4, height: 3 })
-    const presetSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-view-preset-${addedView?.id}`)!
-    expect(presetSelect.parentElement?.querySelector('span')?.textContent).toBe('Carte')
-    expect(Array.from(presetSelect.options).map((option) => option.label)).toEqual(CAROUSEL_CARD_PRESET_OPTIONS.map((option) => option.label))
+    const presetSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-card-layout-${addedCardBdcId}`)!
+    expect(presetSelect.parentElement?.querySelector('span')?.textContent).toBe('Représentation')
+    expect(Array.from(presetSelect.options).map((option) => option.label)).toEqual(CARD_LAYOUT_OPTIONS.map((option) => option.label))
     await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_IMAGE))
-    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
-      .find((view) => view.id === addedView?.id))
-      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, text: { title: 'Titre de la seconde vue' } })
-    const imagePosition = host.querySelector<HTMLSelectElement>(`#elce-carousel-image-position-${addedView?.id}`)!
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === addedCardBdcId))
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, card: { title: 'Titre de la seconde carte' } })
+    const imagePosition = host.querySelector<HTMLSelectElement>(`#elce-carousel-image-position-${addedCardBdcId}`)!
     await act(async () => setControlledValue(imagePosition, 'right'))
-    const imageDropZone = host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${addedView?.id}`)
+    const imageDropZone = host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${addedCardBdcId}`)
     expect(imageDropZone?.classList.contains('elce-carousel-media-drop--proportional')).toBe(true)
     expect(imageDropZone?.style.aspectRatio).toBe('4 / 3')
-    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
-      .find((view) => view.id === addedView?.id))
-      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, imagePosition: 'right' })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === addedCardBdcId))
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_IMAGE, card: { imagePosition: 'right' } })
 
     await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-delete-${carouselBdcId}`)?.click())
     expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual(existingIds)
@@ -280,8 +279,8 @@ describe('AppLayout authoring titles and creation actions', () => {
     let documentModel = actor.getSnapshot().context.document
     const carouselBdcId = documentModel.pages[0]!.bdcIds.at(-1)!
     const carousel = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)!.carousel!
-    const viewId = carousel.views[0]!.id
-    const presetSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-view-preset-${viewId}`)!
+    const cardBdcId = carousel.cards[0]!.bdcId
+    const presetSelect = host.querySelector<HTMLSelectElement>(`#elce-carousel-card-layout-${cardBdcId}`)!
 
     await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.PHOTO))
     await act(async () => actor.send({
@@ -297,59 +296,58 @@ describe('AppLayout authoring titles and creation actions', () => {
       source: 'data:image/png;base64,dGVzdA==',
     }))
     await act(async () => host.querySelector<HTMLButtonElement>('#elce-content-catalog-tab-media')?.click())
-    const mediaFileInput = host.querySelector<HTMLInputElement>(`#elce-carousel-media-file-${viewId}`)!
-    const mediaFileLabel = host.querySelector<HTMLLabelElement>(`#elce-carousel-media-select-${viewId}`)!
+    const mediaFileInput = host.querySelector<HTMLInputElement>(`#elce-carousel-media-file-${cardBdcId}`)!
+    const mediaFileLabel = host.querySelector<HTMLLabelElement>(`#elce-carousel-media-select-${cardBdcId}`)!
     expect(mediaFileInput.type).toBe('file')
     expect(mediaFileInput.accept).toBe(MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO)
     expect(mediaFileInput.classList.contains('elce-visually-hidden')).toBe(true)
     expect(mediaFileLabel.tagName).toBe('LABEL')
     expect(mediaFileLabel.htmlFor).toBe(mediaFileInput.id)
-    expect(host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${viewId}`)?.contains(mediaFileInput)).toBe(true)
+    expect(host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${cardBdcId}`)?.contains(mediaFileInput)).toBe(true)
 
     const mediaTransfer = createDataTransfer()
     const catalogMedia = host.querySelector<HTMLElement>('#elce-catalog-media-carousel-media-test button')!
-    const photoDropZone = host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${viewId}`)!
+    const photoDropZone = host.querySelector<HTMLElement>(`#elce-carousel-media-drop-${cardBdcId}`)!
     act(() => dispatchDrag(catalogMedia, 'dragstart', mediaTransfer))
     act(() => dispatchDrag(photoDropZone, 'dragover', mediaTransfer))
     act(() => dispatchDrag(photoDropZone, 'drop', mediaTransfer))
-    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).not.toBeNull()
-    expect(mediaFileLabel.contains(host.querySelector(`#elce-carousel-media-image-${viewId}`))).toBe(true)
+    expect(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`)).not.toBeNull()
+    expect(mediaFileLabel.contains(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`))).toBe(true)
 
     await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_SHORT))
-    let view = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
-      .find((candidate) => candidate.id === viewId)
-    expect(view).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'carousel-media-test' })
-    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).toBeNull()
+    let cardBdc = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)
+    expect(cardBdc).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'carousel-media-test' })
+    expect(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`)).toBeNull()
 
-    await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${viewId}`)!, 'Image conservée'))
-    await act(async () => setControlledValue(host.querySelector<HTMLTextAreaElement>(`#elce-carousel-message-${viewId}`)!, 'Texte associé'))
+    await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${cardBdcId}`)!, 'Image conservée'))
+    await act(async () => setControlledValue(host.querySelector<HTMLTextAreaElement>(`#elce-carousel-message-${cardBdcId}`)!, 'Texte associé'))
     await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_IMAGE))
-    expect(host.querySelector<HTMLInputElement>(`#elce-carousel-media-file-${viewId}`)?.accept).toBe(MEDIA_FILE_ACCEPT.IMAGE)
-    view = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
-      .find((candidate) => candidate.id === viewId)
-    expect(view).toMatchObject({
+    expect(host.querySelector<HTMLInputElement>(`#elce-carousel-media-file-${cardBdcId}`)?.accept).toBe(MEDIA_FILE_ACCEPT.IMAGE)
+    cardBdc = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)
+    expect(cardBdc).toMatchObject({
       presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
       mediaId: 'carousel-media-test',
-      text: { title: 'Image conservée', message: 'Texte associé' },
+      card: { title: 'Image conservée', message: 'Texte associé' },
     })
-    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).not.toBeNull()
+    expect(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`)).not.toBeNull()
 
-    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-view-add-${carouselBdcId}`)?.click())
-    const textOnlyViewId = actor.getSnapshot().context.selectedCarouselViewId!
-    await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${textOnlyViewId}`)!, 'Vue sans image'))
-    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-view-tab-${viewId}`)?.click())
-    expect(host.querySelector(`#elce-carousel-media-image-${viewId}`)).not.toBeNull()
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-card-add-${carouselBdcId}`)?.click())
+    const textOnlyCardBdcId = actor.getSnapshot().context.selectedCarouselCardBdcId!
+    await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${textOnlyCardBdcId}`)!, 'Carte sans image'))
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-card-tab-${cardBdcId}`)?.click())
+    expect(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`)).not.toBeNull()
 
     documentModel = actor.getSnapshot().context.document
-    const updatedViews = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.views
-    view = updatedViews?.find((candidate) => candidate.id === viewId)
-    expect(view).toMatchObject({
+    const updatedCards = documentModel.bdcs.find((bdc) => bdc.id === carouselBdcId)?.carousel?.cards
+    cardBdc = documentModel.bdcs.find((bdc) => bdc.id === cardBdcId)
+    expect(cardBdc).toMatchObject({
       presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
       mediaId: 'carousel-media-test',
-      text: { title: 'Image conservée', message: 'Texte associé' },
+      card: { title: 'Image conservée', message: 'Texte associé' },
     })
-    expect(updatedViews?.find((candidate) => candidate.id === textOnlyViewId))
-      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, text: { title: 'Vue sans image' }, mediaId: null })
+    expect(documentModel.bdcs.find((bdc) => bdc.id === textOnlyCardBdcId))
+      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, card: { title: 'Carte sans image' }, mediaId: null })
+    expect(updatedCards?.map((entry) => entry.bdcId)).toContain(textOnlyCardBdcId)
   })
 
   it('adds one dual-outcome Result BDC from an Evaluation page icon', async () => {

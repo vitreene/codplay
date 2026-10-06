@@ -108,6 +108,11 @@ disparaissent du nouvel état et gardent leur état géré isolé par nœud. Pou
 `content`, une chaîne inchangée conserve son nœud texte ; un enfant élément est
 remplacé par un nœud texte même si son texte visible est identique.
 
+La projection accepte aussi les méthodes focalisées d’une action via
+[`htmlElementMethod`](./html-element-method-spec.md). Les valeurs de fermeture
+`aria-hidden="true"` et `inert` sont validées après le focus de retour dans le
+même passage synchrone du materializer HTML.
+
 [`HtmlComponentMaterializer`](../src/runtime/runner-html/component-materializer.ts)
 projette le placement et l’ordre résolus sur les nœuds réels. Les tests
 couvrent le montage, le réordonnancement et le détachement vers des cibles de

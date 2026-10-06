@@ -50,7 +50,10 @@ export class RuntimePlayerPresentation {
     )
     if (componentPhase === 'normal') this.context.applyLiveActions(scene)
     componentRuntime?.presentAt?.(scene.timeMs)
-    const motionOccurrences = materialization.phase === 'geometry-capture'
+    const materializerContext = componentPhase === 'seek'
+      ? { ...materialization, phase: 'geometry-capture' as const }
+      : materialization
+    const motionOccurrences = materializerContext.phase === 'geometry-capture'
       ? []
       : collectMoveOccurrences(
         materialization.previousScene,
@@ -68,8 +71,8 @@ export class RuntimePlayerPresentation {
     materializer?.materializeScene(
       scene,
       motionOccurrences.length === 0
-        ? materialization
-        : { ...materialization, motionOccurrences },
+        ? materializerContext
+        : { ...materializerContext, motionOccurrences },
     )
   }
 

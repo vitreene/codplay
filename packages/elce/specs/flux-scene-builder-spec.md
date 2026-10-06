@@ -58,9 +58,11 @@ padding donne le ratio du cadre et de la réserve ; le perso image utilise
 
 Un BDC Carousel utilise `ElceCarouselSceneBuilder` pour produire le markup du
 preset `carousel-basic`, une story dédiée et ses persos média. Le markup reste
-à sa place dans l’ordre des BDC ; l’image ou la vidéo de chaque vue est montée
-par un perso CodPlay dans la zone du preset. Les plages des vues, événements de
-lecture et la navigation manuelle sont définis dans la
+à sa place dans l’ordre des BDC de la page. Le builder résout les BDC Carte
+enfants à partir des identifiants ordonnés dans le Carousel ; les cartes ne
+figurent pas dans `page.bdcIds`. `ElceCardBdcSceneBuilder` projette chaque
+enfant avec son layout, ses champs visibles et son média compatible. Les
+plages, événements et la navigation sont définis dans la
 [spécification du BDC Carousel](./carousel-bdc-spec.md).
 
 Les cibles de montage restent des identifiants de persos/parts CodPlay. La
@@ -118,7 +120,9 @@ builders ne déclarent que leur comportement d’exécution.
   vérifie les stories, le scrollport, les parts et la compilation avec les
   définitions réelles `scroll-container` de CodPlay, ainsi que le montage
   d’un bdc image simple vers un seul perso `img`, y compris son montage sur la
-  part du slot projeté depuis une ancre exportée.
+  part du slot projeté depuis une ancre exportée. Il vérifie aussi la
+  projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
+  leurs médias selon le layout et les plages automatiques finies.
 - [`card-preset-builder.test.ts`](../src/builders/card-preset-builder.test.ts)
   vérifie l’instanciation du preset Section et l’identité des parts utilisées
   par le builder Flux. Les presets Question, image-légende et Message sont
@@ -140,4 +144,5 @@ builders ne déclarent que leur comportement d’exécution.
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de
   test, ainsi que
   le montage d’un bdc image simple avec le composant `img` réel, d’une image
-  dans une ancre de texte et d’un bdc vidéo avec le composant `media`.
+  dans une ancre de texte, d’un bdc vidéo avec le composant `media`, et d’un
+  média de carte selon son layout dans le player.

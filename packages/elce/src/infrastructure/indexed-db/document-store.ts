@@ -1,6 +1,5 @@
-import { ELCE_DOCUMENT_VERSION, ElceDocument } from '../../domain/document-model'
-import type { MediaId } from '../../domain/document-types'
-import type { PersistedElceDocumentData } from '../../domain/document-v1-types'
+import { ElceDocument } from '../../domain/document-model'
+import type { ElceDocumentData, MediaId } from '../../domain/document-types'
 import type { ElceDocumentStore, MediaBlob } from './document-store-types'
 
 const DATABASE_NAME = 'elce-poc'
@@ -38,12 +37,10 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
   public async loadDocument(documentId: string): Promise<ElceDocument | null> {
     const database = await this.databasePromise
     const transaction = database.transaction(DOCUMENT_STORE, 'readonly')
-    const data = await requestResult(transaction.objectStore(DOCUMENT_STORE).get(documentId)) as PersistedElceDocumentData | undefined
+    const data = await requestResult(transaction.objectStore(DOCUMENT_STORE).get(documentId)) as ElceDocumentData | undefined
     await transactionComplete(transaction)
     if (data === undefined) return null
-    const document = ElceDocument.fromJSON(data)
-    if (data.version !== ELCE_DOCUMENT_VERSION) await this.saveDocument(document)
-    return document
+    return ElceDocument.fromJSON(data)
   }
 
   public async saveDocument(document: ElceDocument): Promise<void> {

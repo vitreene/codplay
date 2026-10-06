@@ -118,6 +118,7 @@ export class HtmlPlayerRunner {
     this.materializerContext = {
       numericLengthScale: options.numericLengthScale ?? 1,
       partMarkerPrefix: options.partMarkerPrefix,
+      deferredAccessibilityAttributes: new Map(),
     }
     this.fillResourceMetadata(options.resourceMetadata)
     this.fillResourceMedia(options.resourceMedia)

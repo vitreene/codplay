@@ -6,7 +6,7 @@ import {
 } from '@codplay/component-v2'
 import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
 import { anchorNameFor } from '../anchor/anchor-position'
-import { applyDocumentCommand, createCarouselBdcCommand } from '../app/commands/document-commands'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
 import { ElceQuestionService } from '../domain/question-service'
 import { ElceCarouselService } from '../domain/carousel-service'
@@ -253,42 +253,51 @@ describe('Elcé Flux scene builder', () => {
     codplay.destroy()
   })
 
-  it('projects Carousel views through AutoCapsule, CodPlay stories, and reusable media persos', () => {
+  it('projects identified Card BDCs through AutoCapsule, CodPlay stories, and reusable media persos', () => {
     const carouselService = new ElceCarouselService()
     const initial = createInitialDocument()
     const withMedia = applyDocumentCommand(initial, {
       type: 'media.add',
       media: { id: 'media-carousel-image', type: MEDIA_TYPE.IMAGE, name: 'slide.png', mimeType: 'image/png', size: 10, caption: '' },
     })
-    const withCarousel = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-carousel-1',
-      bdcType: BDC_TYPE.CAROUSEL,
-      presetId: DEFAULT_PRESET_ID.CAROUSEL,
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 1 },
-    })
+    let withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-carousel-1', 'page-a', 1))
     const createdCarousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-1')!.carousel!
-    let carousel = carouselService.setDefaultViewDuration(createdCarousel, 1000)
-    const firstViewId = carousel.views[0]!.id
-    carousel = carouselService.setShortText(carousel, firstViewId, 'title', 'Première vue')
-    carousel = carouselService.addView(carousel)
-    const secondViewId = carousel.views[1]!.id
-    carousel = carouselService.changeViewPreset(carousel, secondViewId, DEFAULT_PRESET_ID.IMAGE_CAPTION)
-    carousel = carouselService.setViewDuration(carousel, secondViewId, 2500)
-    carousel = carouselService.setCaption(carousel, secondViewId, 'Légende de l’image')
-    carousel = carouselService.setMedia(carousel, secondViewId, 'media-carousel-image')
-    carousel = carouselService.addView(carousel)
-    const thirdViewId = carousel.views[2]!.id
-    carousel = carouselService.changeViewPreset(carousel, thirdViewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
-    carousel = carouselService.setShortText(carousel, thirdViewId, 'title', 'Texte avec image')
-    carousel = carouselService.setImagePosition(carousel, thirdViewId, 'right')
-    carousel = carouselService.setMedia(carousel, thirdViewId, 'media-carousel-image')
-    carousel = carouselService.setRepeatCount(carousel, 0)
-    carousel = { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC }
+    const firstCardBdcId = createdCarousel.cards[0]!.bdcId
+    withCarousel = applyDocumentCommand(withCarousel, createCardBdcCommand(
+      'bdc-card-2', 'bdc-carousel-1', 1, DEFAULT_PRESET_ID.IMAGE_CAPTION,
+    ))
+    withCarousel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.card.layout.set',
+      bdcId: firstCardBdcId,
+      layoutId: DEFAULT_PRESET_ID.TEXT_IMAGE,
+    })
+    const firstCard = withCarousel.bdcs.find((bdc) => bdc.id === firstCardBdcId)!.card!
+    withCarousel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.card.update',
+      bdcId: firstCardBdcId,
+      card: { ...firstCard, title: 'Première carte', imagePosition: 'right' },
+    })
+    withCarousel = applyDocumentCommand(withCarousel, { type: 'bdc.card.media.set', bdcId: firstCardBdcId, mediaId: 'media-carousel-image' })
+    const secondCard = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-card-2')!.card!
+    withCarousel = applyDocumentCommand(withCarousel, {
+      type: 'bdc.card.update',
+      bdcId: 'bdc-card-2',
+      card: { ...secondCard, caption: 'Légende de l’image' },
+    })
+    withCarousel = applyDocumentCommand(withCarousel, { type: 'bdc.card.media.set', bdcId: 'bdc-card-2', mediaId: 'media-carousel-image' })
+    const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-1')!.carousel!
+    const automaticCarousel = carouselService.setRepeatCount(
+      carouselService.setPlaybackMode(
+        carouselService.setDefaultViewDuration(carousel, 1000),
+        CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+      ),
+      0,
+    )
+    const timedCarousel = carouselService.setCardDuration(automaticCarousel, 'bdc-card-2', 2500)
     const documentModel = applyDocumentCommand(withCarousel, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-carousel-1',
-      carousel,
+      carousel: timedCarousel,
     })
     const build = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs, {
       mediaSources: { 'media-carousel-image': 'blob:carousel-image' },
@@ -309,32 +318,29 @@ describe('Elcé Flux scene builder', () => {
     expect(documentModel.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-carousel-1'])
     expect(articleMarkup.indexOf('elce-card--section')).toBeLessThan(articleMarkup.indexOf('elce-card--carousel'))
     expect(carouselStory?.eventimes).toEqual([
-      { name: `page-a:bdc-carousel-1:view:${firstViewId}:intro`, startAt: 0 },
-      { name: `page-a:bdc-carousel-1:view:${firstViewId}:outro`, startAt: 1000 },
-      { name: `page-a:bdc-carousel-1:view:${secondViewId}:intro`, startAt: 1000 },
-      { name: `page-a:bdc-carousel-1:view:${secondViewId}:outro`, startAt: 3500 },
-      { name: `page-a:bdc-carousel-1:view:${thirdViewId}:intro`, startAt: 3500 },
+      { name: `page-a:bdc-carousel-1:card:${firstCardBdcId}:intro`, startAt: 0 },
+      { name: `page-a:bdc-carousel-1:card:${firstCardBdcId}:outro`, startAt: 1000 },
+      { name: 'page-a:bdc-carousel-1:card:bdc-card-2:intro', startAt: 1000 },
     ])
     expect(carouselStory?.persos).toEqual(expect.arrayContaining([
-      expect.objectContaining({ initial: expect.objectContaining({ content: 'Première vue', move: { target: `page-a:bdc-carousel-1:view:${firstViewId}:title` } }) }),
-      expect.objectContaining({ initial: expect.objectContaining({ content: 'Légende de l’image', move: { target: `page-a:bdc-carousel-1:view:${secondViewId}:caption` } }) }),
+      expect.objectContaining({ initial: expect.objectContaining({ content: 'Première carte', move: { target: `page-a:bdc-carousel-1:card:${firstCardBdcId}:title` } }) }),
+      expect.objectContaining({ initial: expect.objectContaining({ content: 'Légende de l’image', move: { target: 'page-a:bdc-carousel-1:card:bdc-card-2:caption' } }) }),
       expect.objectContaining({ initial: expect.objectContaining({ move: { target: `page-a:bdc-carousel-1:carousel:capsule` }, className: expect.stringContaining('elce-carousel-view--image-right') }) }),
     ]))
-    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.type === 'img')).toMatchObject({
+    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'card-bdc-card-2-media-media-carousel-image')).toMatchObject({
       type: 'img',
-      initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:view:${secondViewId}:image` } },
+      initial: { src: 'blob:carousel-image', move: { target: 'page-a:bdc-carousel-1:card:bdc-card-2:image' } },
     })
-    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === `page-a:bdc-carousel-1-view-${thirdViewId}-media-media-carousel-image`)).toMatchObject({
+    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === `card-${firstCardBdcId}-media-media-carousel-image`)).toMatchObject({
       type: 'img',
-      initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:view:${thirdViewId}:image` } },
+      initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:card:${firstCardBdcId}:image` } },
     })
     expect(build.styleSheets[0]).toContain('ac-grid-carousel')
     expect(codplay.build({ scene: build.sceneDoc }).ok).toBe(true)
     codplay.destroy()
   })
 
-  it('keeps a hidden image on a Text-short view and restores its media perso in Text-image', () => {
-    const carouselService = new ElceCarouselService()
+  it('keeps hidden Card media and content when a layout changes', () => {
     const initial = createInitialDocument()
     const withMedia = applyDocumentCommand(initial, {
       type: 'media.add',
@@ -342,33 +348,30 @@ describe('Elcé Flux scene builder', () => {
     })
     const withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-hidden-media', 'page-a', 1))
     let carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-hidden-media')!.carousel!
-    const viewId = carousel.views[0]!.id
-
-    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.PHOTO)
-    carousel = carouselService.setMedia(carousel, viewId, 'media-hidden-image')
-    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_SHORT)
-    carousel = carouselService.setShortText(carousel, viewId, 'title', 'Titre gardé')
-
-    const textOnlyDocument = applyDocumentCommand(withCarousel, {
-      type: 'bdc.carousel.update',
-      bdcId: 'bdc-hidden-media',
-      carousel,
+    const cardBdcId = carousel.cards[0]!.bdcId
+    let textOnlyDocument = applyDocumentCommand(withCarousel, { type: 'bdc.card.layout.set', bdcId: cardBdcId, layoutId: DEFAULT_PRESET_ID.PHOTO })
+    textOnlyDocument = applyDocumentCommand(textOnlyDocument, { type: 'bdc.card.media.set', bdcId: cardBdcId, mediaId: 'media-hidden-image' })
+    const card = textOnlyDocument.bdcs.find((bdc) => bdc.id === cardBdcId)!.card!
+    textOnlyDocument = applyDocumentCommand(textOnlyDocument, {
+      type: 'bdc.card.update',
+      bdcId: cardBdcId,
+      card: { ...card, title: 'Titre gardé', message: 'Message gardé', caption: 'Légende gardée' },
     })
+    textOnlyDocument = applyDocumentCommand(textOnlyDocument, { type: 'bdc.card.layout.set', bdcId: cardBdcId, layoutId: DEFAULT_PRESET_ID.TEXT_SHORT })
     const hiddenBuild = buildFluxScene(textOnlyDocument.pages[0]!, textOnlyDocument.bdcs, {
       mediaSources: { 'media-hidden-image': 'blob:hidden-image' },
       mediaTypes: { 'media-hidden-image': MEDIA_TYPE.IMAGE },
     })
     const hiddenStory = hiddenBuild.sceneDoc.stories['page-a-bdc-hidden-media']
-    expect(carousel.views[0]).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'media-hidden-image' })
+    expect(textOnlyDocument.bdcs.find((bdc) => bdc.id === cardBdcId)).toMatchObject({
+      presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+      mediaId: 'media-hidden-image',
+      card: { title: 'Titre gardé', message: 'Message gardé', caption: 'Légende gardée' },
+    })
     expect(hiddenStory).toBeDefined()
     expect(hiddenBuild.sceneDoc.stories['page-a-page']?.persos.some((perso) => perso.id.includes('media-hidden-image'))).toBe(false)
 
-    carousel = carouselService.changeViewPreset(carousel, viewId, DEFAULT_PRESET_ID.TEXT_IMAGE)
-    const textImageDocument = applyDocumentCommand(textOnlyDocument, {
-      type: 'bdc.carousel.update',
-      bdcId: 'bdc-hidden-media',
-      carousel,
-    })
+    const textImageDocument = applyDocumentCommand(textOnlyDocument, { type: 'bdc.card.layout.set', bdcId: cardBdcId, layoutId: DEFAULT_PRESET_ID.TEXT_IMAGE })
     const restoredBuild = buildFluxScene(textImageDocument.pages[0]!, textImageDocument.bdcs, {
       mediaSources: { 'media-hidden-image': 'blob:hidden-image' },
       mediaTypes: { 'media-hidden-image': MEDIA_TYPE.IMAGE },
@@ -378,7 +381,7 @@ describe('Elcé Flux scene builder', () => {
       expect.objectContaining({ initial: expect.objectContaining({ content: 'Titre gardé' }) }),
     ]))
     expect(restoredBuild.sceneDoc.stories['page-a-page']?.persos).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: `page-a:bdc-hidden-media-view-${viewId}-media-media-hidden-image`, type: 'img' }),
+      expect.objectContaining({ id: `card-${cardBdcId}-media-media-hidden-image`, type: 'img' }),
     ]))
 
     const codplay = new CodPlay({
@@ -396,26 +399,29 @@ describe('Elcé Flux scene builder', () => {
   it('resolves ten additional automatic passes as finite CodPlay eventimes', () => {
     const initial = createInitialDocument()
     const withCarousel = applyDocumentCommand(initial, createCarouselBdcCommand('bdc-repeat-10', 'page-a', 1))
-    const carouselService = new ElceCarouselService()
     const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-repeat-10')!.carousel!
-    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
+    const firstCardBdcId = carousel.cards[0]!.bdcId
+    const withSecondCard = applyDocumentCommand(withCarousel, createCardBdcCommand(
+      'bdc-repeat-10-card-2', 'bdc-repeat-10', 1, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    const updatedCarousel = withSecondCard.bdcs.find((bdc) => bdc.id === 'bdc-repeat-10')!.carousel!
     const automaticCarousel = {
-      ...carousel,
+      ...updatedCarousel,
       playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
       defaultViewDurationMs: 1000,
-      views: [...carousel.views, secondView],
+      repeatCount: 10,
     }
-    const documentModel = applyDocumentCommand(withCarousel, {
+    const documentModel = applyDocumentCommand(withSecondCard, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-repeat-10',
       carousel: automaticCarousel,
     })
     const scene = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs).sceneDoc
     const eventimes = scene.stories['page-a-bdc-repeat-10']?.eventimes ?? []
-    const firstViewIntro = `page-a:bdc-repeat-10:view:${carousel.views[0]!.id}:intro`
+    const firstCardIntro = `page-a:bdc-repeat-10:card:${firstCardBdcId}:intro`
 
     expect(automaticCarousel.repeatCount).toBe(10)
-    expect(eventimes.filter((eventime) => eventime.name === firstViewIntro).map((eventime) => eventime.startAt))
+    expect(eventimes.filter((eventime) => eventime.name === firstCardIntro).map((eventime) => eventime.startAt))
       .toEqual(Array.from({ length: 11 }, (_, index) => index * 2000))
     expect(eventimes).toHaveLength(43)
   })

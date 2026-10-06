@@ -1,11 +1,10 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand } from '../app/commands/document-commands'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE, PAGE_LOCATION, QUESTION_TYPE } from '../config/document-config'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
 import { ElceQuestionService } from '../domain/question-service'
-import { ElceCarouselService } from '../domain/carousel-service'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
 import type { ElcePageSceneCache } from './player-composition-types'
 
@@ -128,17 +127,13 @@ describe('Elcé player composition', () => {
 
   it('plays a Carousel BDC and switches its view through the CodPlay dot event', async () => {
     const initialDocument = createInitialDocument()
-    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-1', 'page-a', 1))
-    const carouselService = new ElceCarouselService()
+    let withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-1', 'page-a', 1))
+    withCarousel = applyDocumentCommand(withCarousel, createCardBdcCommand('bdc-carousel-card-2', 'bdc-carousel-1', 1, DEFAULT_PRESET_ID.TEXT_SHORT))
     const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-1')!.carousel!
-    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
     const documentModel = applyDocumentCommand(withCarousel, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-carousel-1',
-      carousel: {
-        ...carousel,
-        views: [...carousel.views, secondView],
-      },
+      carousel,
     })
     expect(carousel.playbackMode).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     const stage = document.createElement('div')
@@ -163,23 +158,60 @@ describe('Elcé player composition', () => {
     expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
   })
 
+  it('mounts Card BDC media through its selected layout in the real player composition', async () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-carousel-card', type: MEDIA_TYPE.IMAGE, name: 'card.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-carousel-card-media', 'page-a', 1))
+    const cardBdcId = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-card-media')!.carousel!.cards[0]!.bdcId
+    const withImageLayout = applyDocumentCommand(withCarousel, {
+      type: 'bdc.card.layout.set',
+      bdcId: cardBdcId,
+      layoutId: DEFAULT_PRESET_ID.TEXT_IMAGE,
+    })
+    const documentModel = applyDocumentCommand(withImageLayout, {
+      type: 'bdc.card.media.set',
+      bdcId: cardBdcId,
+      mediaId: 'media-carousel-card',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const source = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22%3E%3C/svg%3E'
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { 'media-carousel-card': source },
+    })
+
+    await composition.initialize()
+
+    const image = stage.querySelector<HTMLImageElement>('.elce-carousel-view--visible .elce-carousel-media img')
+    expect(image?.getAttribute('src')).toBe(source)
+    expect(stage.querySelector('.elce-carousel-view--visible')?.contains(image)).toBe(true)
+  })
+
   it('advances an automatic Carousel through its compiled Capsule Automation times', async () => {
     const initialDocument = createInitialDocument()
-    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto', 'page-a', 1))
-    const carouselService = new ElceCarouselService()
+    let withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto', 'page-a', 1))
+    withCarousel = applyDocumentCommand(withCarousel, createCardBdcCommand('bdc-carousel-auto-card-2', 'bdc-carousel-auto', 1, DEFAULT_PRESET_ID.TEXT_SHORT))
     const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-auto')!.carousel!
-    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
     const documentModel = applyDocumentCommand(withCarousel, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-carousel-auto',
-      carousel: { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, defaultViewDurationMs: 100, views: [...carousel.views, secondView] },
+      carousel: {
+        ...carousel,
+        playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+        defaultViewDurationMs: 300,
+        repeatCount: 0,
+      },
     })
     const stage = document.createElement('div')
     document.body.append(stage)
     composition = new ElcePlayerComposition({ stage, document: documentModel })
 
     await composition.initialize()
-    await new Promise<void>((resolve) => setTimeout(resolve, 180))
+    await new Promise<void>((resolve) => setTimeout(resolve, 450))
 
     const views = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
     const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
@@ -191,10 +223,9 @@ describe('Elcé player composition', () => {
 
   it('repeats an automatic Carousel by the configured number of additional passes', async () => {
     const initialDocument = createInitialDocument()
-    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-repeat', 'page-a', 1))
-    const carouselService = new ElceCarouselService()
+    let withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-repeat', 'page-a', 1))
+    withCarousel = applyDocumentCommand(withCarousel, createCardBdcCommand('bdc-carousel-repeat-card-2', 'bdc-carousel-repeat', 1, DEFAULT_PRESET_ID.TEXT_SHORT))
     const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-repeat')!.carousel!
-    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
     const documentModel = applyDocumentCommand(withCarousel, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-carousel-repeat',
@@ -203,7 +234,6 @@ describe('Elcé player composition', () => {
         playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
         defaultViewDurationMs: 60,
         repeatCount: 1,
-        views: [...carousel.views, secondView],
       },
     })
     const stage = document.createElement('div')
@@ -227,14 +257,13 @@ describe('Elcé player composition', () => {
 
   it('selects the matching view when an automatic Carousel point is clicked', async () => {
     const initialDocument = createInitialDocument()
-    const withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto-points', 'page-a', 1))
-    const carouselService = new ElceCarouselService()
+    let withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto-points', 'page-a', 1))
+    withCarousel = applyDocumentCommand(withCarousel, createCardBdcCommand('bdc-carousel-auto-points-card-2', 'bdc-carousel-auto-points', 1, DEFAULT_PRESET_ID.TEXT_SHORT))
     const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-auto-points')!.carousel!
-    const secondView = carouselService.createView(DEFAULT_PRESET_ID.TEXT_SHORT)
     const documentModel = applyDocumentCommand(withCarousel, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-carousel-auto-points',
-      carousel: { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, views: [...carousel.views, secondView] },
+      carousel: { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC },
     })
     const stage = document.createElement('div')
     document.body.append(stage)

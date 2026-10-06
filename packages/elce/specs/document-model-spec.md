@@ -2,36 +2,43 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v2 et séquence racine mixte implémentés et
-vérifiés par tests ; migration navigateur v1→v2 reste à confirmer après
-rechargement.**
+**Fixe — modèle documentaire v3 avec BDC Carte enfants du Carousel, sans
+migration des documents v1/v2 ; modèle, commandes et invariants vérifiés le
+6 octobre 2026.**
 
 Cette spécification couvre le document métier manipulé par l’application et
-la voie de modification utilisée par l’interface. Elle ne certifie pas encore
-la projection d’une page vers CodPlay ni la restauration navigateur complète ;
-ces preuves restent dans le plan de construction.
+la voie de modification utilisée par l’interface. La projection des cartes
+dans le player est décrite dans la spécification du Carousel et du builder
+Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 2 contient des tableaux de chapitres, pages, bdc et
+Un `ElceDocument` version 3 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
 Chaque chapitre conserve son propre ordre de pages. La séquence racine et les
 ordres internes des chapitres déterminent ensemble l’ordre de lecture. Les
 pages du catalogue restent hors scénario. Une page possède un type (`flux` ou
-`diapo`), un nom, une affectation de chapitre éventuelle et un ordre de bdc.
-Un BDC est le transport unique d’une insertion et a un seul emplacement : une
-page ou le catalogue. Il référence éventuellement une ressource média, qui est
-indépendante du BDC et peut être référencée par plusieurs BDC.
-Un BDC Carousel transporte une séquence ordonnée de vues. Son contenu et les
-références de médias par vue sont enregistrés sur ce BDC unique ; les médias
-restent des ressources distinctes.
+`diapo`), un nom, une affectation de chapitre éventuelle et un ordre de BDC.
 
-`ElceDocument.fromJSON()` accepte la version 2 et migre la version 1 en
-conservant l’ordre que l’ancienne interface produisait : pages racine dans
-leur ordre, puis chapitres dans leur ordre. `IndexedDbDocumentStore` réécrit
-un document ainsi migré en version 2 lors de son chargement.
+Chaque BDC a un emplacement unique : dans une page, dans le catalogue, ou
+comme enfant d’un BDC conteneur. Cette version n’autorise que des BDC Carte
+comme enfants d’un BDC Carousel. Le BDC Carousel reste affecté à une page et
+porte ses réglages ainsi qu’une séquence ordonnée d’entrées
+`{ bdcId, durationMs }`. Chaque identifiant désigne un BDC Carte distinct dont
+`parentBdcId` désigne le Carousel. Un BDC Carte porte son layout dans
+`presetId`, toutes ses valeurs dans `card` et une référence média facultative
+dans `mediaId`. Changer de layout masque éventuellement des valeurs, mais ne
+les retire pas du BDC. Les médias sont indépendants et peuvent être partagés
+par plusieurs BDC.
+
+`ElceDocument.fromJSON()` accepte uniquement la version 3 et rejette les
+versions 1 et 2 sans migration. `IndexedDbDocumentStore.loadDocument()` lit
+l’enregistrement en transaction `readonly` puis délègue à `fromJSON()` ; il ne
+réécrit ni ne supprime automatiquement un document d’ancienne version. La
+conversion ou la récupération d’un ancien enregistrement n’est pas prise en
+charge dans le POC.
 
 Les valeurs de placement et les constantes de configuration sont déclarées
 dans [`document-config.ts`](../src/config/document-config.ts), leurs types
@@ -43,21 +50,19 @@ Les modules d’exécution ne redéclarent pas ces contrats et ne réintroduisen
 donc pas de chaînes de placement dans les commandes.
 
 Un nouveau document de POC contient un chapitre, une page Flux `Page A` et un
-bdc Section vide associé au preset `section-basic`. Les presets de cartes sont
-déclarés comme objets dans `src/config/presets.ts`. Chaque objet fixe le markup
+BDC Section vide associé au preset `section-basic`. Les presets sont déclarés
+comme objets dans `src/config/presets.ts`. Chaque objet fixe le markup
 HTML, ses zones, leur catégorie de contenu et leur caractère requis.
 `ElceCardPresetBuilder` instancie ce markup avec un identifiant racine et des
 parts CodPlay propres à l’instance ; il ne crée ni BDC ni composant CodPlay.
-L’auteur n’édite pas les presets dans cette tranche. Le BDC Résultat utilise le
-preset `evaluation-result-basic` et porte deux branches, `success` et `failure`.
-`ElceDocument.fromJSON()` normalise à `null` le contenu Résultat absent dans les
-anciens documents pour préserver leur chargement. Le BDC Carousel utilise le
-preset `carousel-basic` ; son contenu contient le mode et les paramètres de
-lecture ainsi que les vues ordonnées, dont le preset et les données propres à
-chaque vue.
+Le BDC Résultat utilise le preset `evaluation-result-basic` et porte deux
+branches, `success` et `failure`. Le BDC Carousel utilise `carousel-basic` ;
+il est créé atomiquement avec un BDC Carte enfant au layout initial
+`text-short-basic`. Les quatre layouts Carte partagent le même jeu de champs
+métier.
 
 `ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
-2. Les octets des médias sont conservés à part par la frontière IndexedDB.
+3. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 ## Commandes
 
@@ -78,11 +83,15 @@ conserve son illustration média. `bdc.evaluation-result.delete` retire de la
 page le BDC Résultat affecté ; il ne le remet pas au catalogue. La commande
 `bdc.evaluation-result.update` édite ensemble ses branches Réussite et Échec ;
 le service métier vérifie qu’une action choisie est permise pour sa branche.
-`bdc.carousel.update` remplace le contenu du Carousel après validation par son
-service métier. Les commandes `bdc.carousel.media.set` et
-`bdc.carousel.media.attach` changent la référence média d’une vue sans créer un
-nouveau média si la ressource existe déjà. `bdc.carousel.delete` retire le BDC
-unique de la page et conserve les médias référencés.
+`bdc.carousel.update` remplace les réglages et l’ordre des entrées, sans
+modifier l’ensemble des BDC Carte enfants. `bdc.card.update`,
+`bdc.card.layout.set`, `bdc.card.media.set` et `bdc.card.media.attach` modifient
+une carte identifiée sans dupliquer une ressource existante.
+`bdc.carousel.card.delete` retire un BDC Carte enfant, mais refuse de vider le
+Carousel. `bdc.carousel.delete` retire le parent et ses BDC Carte enfants en
+conservant les médias référencés. `bdc.move` peut déplacer une carte vers un
+autre Carousel ; l’opération enlève son ancienne relation parent/enfant et en
+crée une nouvelle tout en gardant le BDC Carte lui-même.
 
 `page.rename` et `chapter.rename` valident un nom non vide après suppression
 des espaces de bord. Ces commandes ne changent ni l’affectation des pages, ni
@@ -116,8 +125,11 @@ disponible pour consolider explicitement d’anciennes ressources déjà
 dupliquées.
 
 `assertDocumentInvariants()` vérifie les affectations uniques, les références
-page/bdc et l’intégrité des ancres : une référence désigne un BDC image ou vidéo
-de la même page, sans doublon dans une ou plusieurs Sections. Une mise à jour
+page/bdc et parent/enfant, les données propres au type de BDC, et l’intégrité
+des ancres : une référence désigne un BDC image ou vidéo de la même page, sans
+doublon dans une ou plusieurs Sections. Un BDC Carte a un parent Carousel, un
+layout configuré, ses seules données Carte et, s’il y a lieu, une référence
+média image ou vidéo. Les Carousels ne peuvent pas être vides. Une mise à jour
 de Section compare les références avant et après l’édition ; chaque BDC dont
 l’ancre a disparu est supprimé dans cette même commande et son média reste
 conservé. Pour le geste explicite de retour, `bdc.anchor.return` met à jour le
@@ -181,9 +193,12 @@ raccord ne choisit pas quels médias fusionner.
   métadonnées incompatibles.
 - Le même fichier vérifie la création, la mise à jour des deux branches et le
   retrait par commande du BDC Résultat.
-- Le même fichier vérifie la migration v1→v2, le mélange et le déplacement
-  d’entrées page/chapitre à la racine, le déplacement d’une page de chapitre
-  vers la racine et les invariants de placement correspondants.
+- Le même fichier vérifie que les versions 1 et 2 sont rejetées, le mélange et
+  le déplacement d’entrées page/chapitre à la racine, le déplacement d’une
+  page de chapitre vers la racine et les invariants de placement correspondants.
+- Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
+  layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
+  la fusion média et l’exclusivité des données de type.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
   actions icônes accessibles de création à la racine et dans un chapitre,
   l’emplacement produit, ainsi que l’édition centrale des noms de page et de

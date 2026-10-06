@@ -1,9 +1,10 @@
 import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-config'
-import type { BdcType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
+import type { BdcType, CardLayoutId, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RichTextDocument } from '../../domain/document-types'
 import type { QuestionContent } from '../../domain/question-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import type { CarouselContent } from '../../domain/carousel-types'
+import type { CardContent, CardPresentationOptions } from '../../domain/card/card-types'
 
 export type PagePlacement =
   | Readonly<{ kind: typeof PAGE_LOCATION.CHAPTER; chapterId: ChapterId; index?: number }>
@@ -12,6 +13,7 @@ export type PagePlacement =
 
 export type BdcPlacement =
   | Readonly<{ kind: typeof BDC_LOCATION.PAGE; pageId: PageId; index?: number }>
+  | Readonly<{ kind: typeof BDC_LOCATION.PARENT; parentBdcId: BdcId; index?: number }>
   | Readonly<{ kind: typeof BDC_LOCATION.CATALOG }>
 
 export type CreatePageCommandInput = Readonly<{
@@ -51,6 +53,8 @@ export type DocumentCommand =
       presetId: string
       placement: BdcPlacement
       mediaId?: MediaId
+      initialCardBdcId?: BdcId
+      initialCardOptions?: CardPresentationOptions
     }>
   | Readonly<{ type: 'bdc.move'; bdcId: BdcId; placement: BdcPlacement }>
   | Readonly<{ type: 'bdc.remove'; bdcId: BdcId }>
@@ -65,8 +69,11 @@ export type DocumentCommand =
   | Readonly<{ type: 'bdc.question.update'; bdcId: BdcId; question: QuestionContent }>
   | Readonly<{ type: 'bdc.evaluation-result.update'; bdcId: BdcId; evaluationResult: EvaluationResultContent }>
   | Readonly<{ type: 'bdc.carousel.update'; bdcId: BdcId; carousel: CarouselContent }>
-  | Readonly<{ type: 'bdc.carousel.media.set'; bdcId: BdcId; viewId: string; mediaId: MediaId | null }>
-  | Readonly<{ type: 'bdc.carousel.media.attach'; bdcId: BdcId; viewId: string; media: MediaMetadata }>
+  | Readonly<{ type: 'bdc.card.update'; bdcId: BdcId; card: CardContent }>
+  | Readonly<{ type: 'bdc.card.layout.set'; bdcId: BdcId; layoutId: CardLayoutId }>
+  | Readonly<{ type: 'bdc.card.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
+  | Readonly<{ type: 'bdc.card.media.attach'; bdcId: BdcId; media: MediaMetadata }>
+  | Readonly<{ type: 'bdc.carousel.card.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>

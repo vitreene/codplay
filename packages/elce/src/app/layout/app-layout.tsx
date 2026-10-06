@@ -88,11 +88,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
   if (carouselFacadeRef.current === null) {
     carouselFacadeRef.current = new ElceCarouselFacade({
       dispatch: (command) => controller.send({ type: 'document.apply', command }),
-      selectView: (viewId) => controller.send({ type: 'carousel.view.select', viewId }),
-      importMedia: (bdcId, viewId, mediaImport) => controller.send({
-        type: 'carousel.media.file.import',
+      selectCard: (bdcId) => controller.send({ type: 'carousel.card.select', bdcId }),
+      importMedia: (bdcId, mediaImport) => controller.send({
+        type: 'carousel.card.media.file.import',
         bdcId,
-        viewId,
         file: mediaImport.file,
         media: mediaImport.media,
       }),
@@ -103,7 +102,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const documentModel = useSelector(controller, (snapshot) => snapshot.context.document)
   const selectedPageId = useSelector(controller, (snapshot) => snapshot.context.selectedPageId)
   const selectedChapterId = useSelector(controller, (snapshot) => snapshot.context.selectedChapterId)
-  const selectedCarouselViewId = useSelector(controller, (snapshot) => snapshot.context.selectedCarouselViewId)
+  const selectedCarouselCardBdcId = useSelector(controller, (snapshot) => snapshot.context.selectedCarouselCardBdcId)
   const catalogTab = useSelector(controller, (snapshot) => snapshot.context.catalogTab)
   const mediaSources = useSelector(controller, (snapshot) => snapshot.context.mediaSources)
   const mediaSourceKey = Object.keys(mediaSources).sort().join('|')
@@ -619,6 +618,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 {selectedPageBdcs.map((bdc) => {
                   const index = selectedPage.bdcIds.indexOf(bdc.id)
                   const separatorId = `elce-page-bdc-drop-${index}`
+                  const carouselCards = bdc.carousel?.cards.flatMap((entry) => {
+                    const card = documentModel.bdcs.find((candidate) => candidate.id === entry.bdcId)
+                    return card === undefined ? [] : [card]
+                  }) ?? []
                   return (
                     <Fragment key={bdc.id}>
                       <div
@@ -681,13 +684,14 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                   })}
                                 />
                               : bdc.type === BDC_TYPE.CAROUSEL && bdc.carousel !== null && bdc.carousel !== undefined
-                                ? <CarouselEditor
-                                    bdcId={bdc.id}
-                                    content={bdc.carousel}
-                                    selectedViewId={selectedCarouselViewId}
-                                    mediaById={mediaById}
-                                    actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel)}
-                                  />
+                              ? <CarouselEditor
+                                  bdcId={bdc.id}
+                                  content={bdc.carousel}
+                                  cards={carouselCards}
+                                  selectedCardBdcId={selectedCarouselCardBdcId}
+                                  mediaById={mediaById}
+                                  actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel, carouselCards)}
+                                />
                               : null}
                       </div>
                     </Fragment>

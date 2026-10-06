@@ -38,6 +38,7 @@ export class ElcePageMediaService {
             case BDC_TYPE.QUESTION:
             case BDC_TYPE.EVALUATION_RESULT:
             case BDC_TYPE.CAROUSEL:
+            case BDC_TYPE.CARD:
               return []
             default:
               return assertNeverBdc(bdc.type)

@@ -1,6 +1,8 @@
 import {
   BDC_LOCATION,
   BDC_TYPE,
+  CARD_LAYOUT_IDS,
+  CAROUSEL_CONFIG,
   CHAPTER_TYPE,
   CHAPTER_TYPE_CONFIG,
   DEFAULT_EVALUATION_SETTINGS,
@@ -10,7 +12,7 @@ import {
   PAGE_TYPE,
   SCENARIO_ENTRY_KIND,
 } from '../../config/document-config'
-import type { BdcType, MediaType } from '../../config/document-config-types'
+import type { BdcType, CardLayoutId, MediaType } from '../../config/document-config-types'
 import {
   createEmptyRichTextDocument,
   ElceDocument,
@@ -22,6 +24,8 @@ import { ElceAnchorReferenceService } from '../../domain/anchor-reference-servic
 import { ElceQuestionService } from '../../domain/question-service'
 import { ElceEvaluationResultService } from '../../domain/evaluation/evaluation-result-service'
 import { ElceCarouselService } from '../../domain/carousel-service'
+import { ElceCardService } from '../../domain/card/card-service'
+import type { CardContent, CardPresentationOptions } from '../../domain/card/card-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import type { CarouselContent } from '../../domain/carousel-types'
 import type { Bdc, BdcId, Chapter, ChapterId, MediaId, MediaMetadata, Page, PageId, RichTextDocument } from '../../domain/document-types'
@@ -31,6 +35,7 @@ const anchorReferenceService = new ElceAnchorReferenceService()
 const questionService = new ElceQuestionService()
 const evaluationResultService = new ElceEvaluationResultService()
 const carouselService = new ElceCarouselService()
+const cardService = new ElceCardService()
 
 /** Creates a page command while keeping identifier generation outside rendering. */
 export function createPageCommand(input: CreatePageCommandInput): Extract<DocumentCommand, { type: 'page.create' }> {
@@ -153,6 +158,7 @@ export function createCarouselBdcCommand(
   bdcId: BdcId,
   pageId: PageId,
   index: number,
+  initialCardBdcId: BdcId = createStableId('bdc-card'),
 ): Extract<DocumentCommand, { type: 'bdc.create' }> {
   return {
     type: 'bdc.create',
@@ -160,6 +166,25 @@ export function createCarouselBdcCommand(
     bdcType: BDC_TYPE.CAROUSEL,
     presetId: DEFAULT_PRESET_ID.CAROUSEL,
     placement: { kind: BDC_LOCATION.PAGE, pageId, index },
+    initialCardBdcId,
+  }
+}
+
+/** Creates a Card BDC as an ordered child of a container that accepts Cards. */
+export function createCardBdcCommand(
+  bdcId: BdcId,
+  parentBdcId: BdcId,
+  index: number,
+  layoutId: CardLayoutId,
+  initialCardOptions?: CardPresentationOptions,
+): Extract<DocumentCommand, { type: 'bdc.create' }> {
+  return {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.CARD,
+    presetId: layoutId,
+    placement: { kind: BDC_LOCATION.PARENT, parentBdcId, index },
+    ...(initialCardOptions === undefined ? {} : { initialCardOptions }),
   }
 }
 
@@ -322,11 +347,11 @@ function evaluationResultForBdc(type: BdcType): NonNullable<Bdc['evaluationResul
   }
 }
 
-/** Creates the initial Carousel payload only for a Carousel BDC. */
-function carouselForBdc(type: BdcType): CarouselContent | null {
+/** Creates all Card fields for a new Card BDC, regardless of its selected layout. */
+function cardForBdc(type: BdcType): CardContent | null {
   switch (type) {
-    case BDC_TYPE.CAROUSEL:
-      return carouselService.createDefault()
+    case BDC_TYPE.CARD:
+      return cardService.createDefault(CAROUSEL_CONFIG.defaultImagePosition)
     default:
       return null
   }
@@ -378,22 +403,40 @@ function placeBdc(document: ElceDocument, bdc: Bdc, placement: BdcPlacement): El
   const withoutBdc = new ElceDocument({
     ...document.data,
     pages: document.pages.map((page) => ({ ...page, bdcIds: removeValue(page.bdcIds, bdc.id) })),
+    bdcs: document.bdcs.map((candidate) => candidate.type === BDC_TYPE.CAROUSEL && candidate.carousel != null
+      ? { ...candidate, carousel: { ...candidate.carousel, cards: candidate.carousel.cards.filter((entry) => entry.bdcId !== bdc.id) } }
+      : candidate),
     catalogBdcIds: removeValue(document.data.catalogBdcIds, bdc.id),
   })
   switch (placement.kind) {
     case BDC_LOCATION.CATALOG:
+      if (bdc.type === BDC_TYPE.CARD) fail('Un BDC Carte doit rester dans un BDC conteneur.')
       return withBdc(new ElceDocument({ ...withoutBdc.data, catalogBdcIds: [...withoutBdc.data.catalogBdcIds, bdc.id] }), {
         ...bdc,
         pageId: null,
+        parentBdcId: null,
       })
     case BDC_LOCATION.PAGE: {
+      if (bdc.type === BDC_TYPE.CARD) fail('Un BDC Carte ne peut pas être placé directement dans une page.')
       const page = findPage(withoutBdc, placement.pageId)
       const pages = replaceAt(
         withoutBdc.pages,
         { ...page, bdcIds: insertAt(page.bdcIds, bdc.id, placement.index) },
         (candidate) => candidate.id === page.id,
       )
-      return withBdc(new ElceDocument({ ...withoutBdc.data, pages }), { ...bdc, pageId: page.id })
+      return withBdc(new ElceDocument({ ...withoutBdc.data, pages }), { ...bdc, pageId: page.id, parentBdcId: null })
+    }
+    case BDC_LOCATION.PARENT: {
+      const parent = findBdc(withoutBdc, placement.parentBdcId)
+      if (bdc.type !== BDC_TYPE.CARD || parent.type !== BDC_TYPE.CAROUSEL || parent.carousel == null) {
+        fail('Un BDC Carousel accepte uniquement des BDC Carte comme enfants.')
+      }
+      const carousel = {
+        ...parent.carousel,
+        cards: insertAt(parent.carousel.cards, { bdcId: bdc.id, durationMs: null }, placement.index),
+      }
+      const withParent = withBdc(withoutBdc, { ...parent, carousel })
+      return withBdc(withParent, { ...bdc, pageId: null, parentBdcId: parent.id })
     }
   }
 }
@@ -401,11 +444,19 @@ function placeBdc(document: ElceDocument, bdc: Bdc, placement: BdcPlacement): El
 /** Deletes the unique bdc for a removed anchor and preserves its separate media resource. */
 function deleteBdc(document: ElceDocument, bdcId: BdcId): ElceDocument {
   const bdc = findBdc(document, bdcId)
+  let documentWithoutChildren = document
+  if (bdc.type === BDC_TYPE.CAROUSEL && bdc.carousel != null) {
+    for (const entry of bdc.carousel.cards) documentWithoutChildren = deleteBdc(documentWithoutChildren, entry.bdcId)
+  }
   return new ElceDocument({
-    ...document.data,
-    pages: document.pages.map((page) => ({ ...page, bdcIds: removeValue(page.bdcIds, bdc.id) })),
-    bdcs: document.bdcs.filter((candidate) => candidate.id !== bdc.id),
-    catalogBdcIds: removeValue(document.data.catalogBdcIds, bdc.id),
+    ...documentWithoutChildren.data,
+    pages: documentWithoutChildren.pages.map((page) => ({ ...page, bdcIds: removeValue(page.bdcIds, bdc.id) })),
+    bdcs: documentWithoutChildren.bdcs
+      .filter((candidate) => candidate.id !== bdc.id)
+      .map((candidate) => candidate.type === BDC_TYPE.CAROUSEL && candidate.carousel != null
+        ? { ...candidate, carousel: { ...candidate.carousel, cards: candidate.carousel.cards.filter((entry) => entry.bdcId !== bdc.id) } }
+        : candidate),
+    catalogBdcIds: removeValue(documentWithoutChildren.data.catalogBdcIds, bdc.id),
   })
 }
 
@@ -442,11 +493,13 @@ function createPage(document: ElceDocument, command: Extract<DocumentCommand, { 
     type: initialBdcType,
     presetId: initialPageBdcPreset(initialBdcType),
     pageId: page.id,
+    parentBdcId: null,
     mediaId: null,
     section: sectionForBdc(initialBdcType, command.bdcId),
     question: questionForBdc(initialBdcType),
     evaluationResult: null,
-    carousel: carouselForBdc(initialBdcType),
+    carousel: null,
+    card: null,
   }
   const withEntities = new ElceDocument({ ...document.data, pages: [...document.pages, page], bdcs: [...document.bdcs, initialBdc] })
   return placeBdc(
@@ -525,10 +578,13 @@ function moveChapter(document: ElceDocument, chapterId: ChapterId, requestedInde
 
 function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { type: 'bdc.create' }>): ElceDocument {
   if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
+  if (command.initialCardOptions !== undefined && command.bdcType !== BDC_TYPE.CARD) {
+    fail('Les options initiales ne concernent que la création d’un BDC Carte.')
+  }
   switch (command.bdcType) {
     case BDC_TYPE.CAROUSEL:
-      if (command.presetId !== DEFAULT_PRESET_ID.CAROUSEL || command.mediaId !== undefined) {
-        fail('Un BDC Carousel utilise son preset configuré et référence les médias depuis ses vues.')
+      if (command.presetId !== DEFAULT_PRESET_ID.CAROUSEL || command.mediaId !== undefined || command.initialCardBdcId === undefined) {
+        fail('Un BDC Carousel utilise son preset configuré et reçoit une première carte identifiée.')
       }
       switch (command.placement.kind) {
         case BDC_LOCATION.PAGE: {
@@ -543,6 +599,16 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
         }
         case BDC_LOCATION.CATALOG:
           fail('Un BDC Carousel est créé directement dans une page Flux.')
+        case BDC_LOCATION.PARENT:
+          fail('Un BDC Carousel ne peut pas être créé dans un autre BDC pendant cette tranche.')
+      }
+      break
+    case BDC_TYPE.CARD:
+      if (!CARD_LAYOUT_IDS.includes(command.presetId as CardLayoutId)
+        || command.mediaId !== undefined
+        || command.initialCardBdcId !== undefined
+        || command.placement.kind !== BDC_LOCATION.PARENT) {
+        fail('Un BDC Carte utilise un layout configuré et appartient à un BDC conteneur.')
       }
       break
     case BDC_TYPE.EVALUATION_RESULT:
@@ -562,6 +628,8 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
         }
         case BDC_LOCATION.CATALOG:
           fail('Un BDC Résultat est créé directement dans une page Flux.')
+        case BDC_LOCATION.PARENT:
+          fail('Un BDC Résultat ne peut pas être créé dans un autre BDC.')
       }
       break
     case BDC_TYPE.QUESTION: {
@@ -581,6 +649,8 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
         }
         case BDC_LOCATION.CATALOG:
           fail('Un bdc Question est créé directement dans une page Flux.')
+        case BDC_LOCATION.PARENT:
+          fail('Un bdc Question ne peut pas être créé dans un autre BDC pendant cette tranche.')
       }
       break
     }
@@ -592,13 +662,36 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
     type: command.bdcType,
     presetId: command.presetId,
     pageId: null,
+    parentBdcId: null,
     mediaId: command.mediaId ?? null,
     section: sectionForBdc(command.bdcType, command.bdcId),
     question: questionForBdc(command.bdcType),
     evaluationResult: evaluationResultForBdc(command.bdcType),
-    carousel: carouselForBdc(command.bdcType),
+    carousel: command.bdcType === BDC_TYPE.CAROUSEL && command.initialCardBdcId !== undefined
+      ? { ...carouselService.createDefault(command.initialCardBdcId), cards: [] }
+      : null,
+    card: command.initialCardOptions === undefined
+      ? cardForBdc(command.bdcType)
+      : cardService.createDefault(command.initialCardOptions.imagePosition, command.initialCardOptions.imageFit),
   }
-  return placeBdc(new ElceDocument({ ...document.data, bdcs: [...document.bdcs, bdc] }), bdc, command.placement)
+  const withParent = placeBdc(new ElceDocument({ ...document.data, bdcs: [...document.bdcs, bdc] }), bdc, command.placement)
+  if (bdc.type !== BDC_TYPE.CAROUSEL || command.initialCardBdcId === undefined) return withParent
+  const initialCard: Bdc = {
+    id: command.initialCardBdcId,
+    type: BDC_TYPE.CARD,
+    presetId: CAROUSEL_CONFIG.initialCardLayoutId,
+    pageId: null,
+    parentBdcId: null,
+    mediaId: null,
+    section: null,
+    question: null,
+    evaluationResult: null,
+    carousel: null,
+    card: cardService.createDefault(),
+  }
+  if (withParent.bdcs.some((candidate) => candidate.id === initialCard.id)) fail(`Bdc déjà présent : ${initialCard.id}`)
+  const withCard = new ElceDocument({ ...withParent.data, bdcs: [...withParent.bdcs, initialCard] })
+  return placeBdc(withCard, initialCard, { kind: BDC_LOCATION.PARENT, parentBdcId: bdc.id })
 }
 
 /** Updates Question text and response definitions through a single command. */
@@ -631,7 +724,7 @@ function updateEvaluationResult(document: ElceDocument, bdcId: BdcId, evaluation
   return withBdc(document, { ...bdc, evaluationResult })
 }
 
-/** Updates one unique Carousel BDC through the document command boundary. */
+/** Updates Carousel settings and its existing Card order through one command. */
 function updateCarousel(document: ElceDocument, bdcId: BdcId, carousel: CarouselContent): ElceDocument {
   const bdc = findBdc(document, bdcId)
   switch (bdc.type) {
@@ -641,75 +734,69 @@ function updateCarousel(document: ElceDocument, bdcId: BdcId, carousel: Carousel
     default:
       fail(`Le bdc ${bdcId} n’est pas un Carousel.`)
   }
-  const normalizedCarousel = normalizeTextShortMediaReferences(document, carousel)
-  carouselService.assertValid(normalizedCarousel)
-  const updatedBdc = { ...bdc, carousel: normalizedCarousel }
-  assertCarouselMediaReferences(document, updatedBdc)
-  return withBdc(document, updatedBdc)
-}
-
-/** Keeps hidden image references on Text-short views but drops unsupported video references. */
-function normalizeTextShortMediaReferences(document: ElceDocument, carousel: CarouselContent): CarouselContent {
-  return {
-    ...carousel,
-    views: carousel.views.map((view) => {
-      switch (view.presetId) {
-        case DEFAULT_PRESET_ID.TEXT_SHORT:
-          switch (view.mediaId === null ? null : document.medias.find((media) => media.id === view.mediaId)?.type) {
-            case MEDIA_TYPE.VIDEO:
-              return { ...view, mediaId: null }
-            default:
-              return view
-          }
-        case DEFAULT_PRESET_ID.PHOTO:
-        case DEFAULT_PRESET_ID.IMAGE_CAPTION:
-        case DEFAULT_PRESET_ID.TEXT_IMAGE:
-          return view
-      }
-    }),
+  carouselService.assertValid(carousel)
+  const currentIds = bdc.carousel.cards.map((entry) => entry.bdcId).sort()
+  const nextIds = carousel.cards.map((entry) => entry.bdcId).sort()
+  if (currentIds.length !== nextIds.length || currentIds.some((id, index) => id !== nextIds[index])) {
+    fail('Une mise à jour Carousel ne peut ni ajouter ni retirer ses BDC Carte.')
   }
-}
-
-/** Attaches one existing reusable media resource to a Carousel view. */
-function setCarouselMedia(document: ElceDocument, bdcId: BdcId, viewId: string, mediaId: MediaId | null): ElceDocument {
-  const bdc = findBdc(document, bdcId)
-  switch (bdc.type) {
-    case BDC_TYPE.CAROUSEL:
-      if (bdc.carousel === null || bdc.carousel === undefined) fail(`Bdc Carousel incomplet : ${bdcId}`)
-      break
-    default:
-      fail(`Le bdc ${bdcId} n’est pas un Carousel.`)
-  }
-  const carousel = carouselService.setMedia(bdc.carousel, viewId, mediaId)
-  assertCarouselMediaReferences(document, { ...bdc, carousel })
   return withBdc(document, { ...bdc, carousel })
 }
 
-/** Stores imported media and its Carousel-view reference in one document command. */
-function attachCarouselMedia(document: ElceDocument, bdcId: BdcId, viewId: string, media: MediaMetadata): ElceDocument {
-  if (document.medias.some((candidate) => candidate.id === media.id)) fail(`Média déjà présent : ${media.id}`)
-  const withMedia = new ElceDocument({ ...document.data, medias: [...document.medias, media] })
-  return setCarouselMedia(withMedia, bdcId, viewId, media.id)
+/** Updates the complete content fields of one Card without changing its layout. */
+function updateCard(document: ElceDocument, bdcId: BdcId, card: CardContent): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  switch (bdc.type) {
+    case BDC_TYPE.CARD:
+      if (bdc.card === null || bdc.card === undefined) fail(`Bdc Carte incomplet : ${bdcId}`)
+      break
+    default:
+      fail(`Le bdc ${bdcId} n’est pas une Carte.`)
+  }
+  cardService.assertValid(card)
+  return withBdc(document, { ...bdc, card })
 }
 
-/** Checks that every Carousel media reference targets an allowed catalogue resource. */
-function assertCarouselMediaReferences(document: ElceDocument, bdc: Bdc): void {
-  if (bdc.carousel === null || bdc.carousel === undefined) fail(`Bdc Carousel incomplet : ${bdc.id}`)
-  for (const view of bdc.carousel.views) {
-    if (view.mediaId === null) continue
-    const media = document.medias.find((candidate) => candidate.id === view.mediaId)
-    switch (media?.type) {
-      case MEDIA_TYPE.IMAGE:
-        break
-      case MEDIA_TYPE.VIDEO:
-        if (view.presetId !== DEFAULT_PRESET_ID.PHOTO) {
-          fail(`La vue ${view.id} de type ${view.presetId} accepte seulement une image.`)
-        }
-        break
-      default:
-        fail(`Le média ${view.mediaId} ne peut pas être placé dans la vue ${view.id}.`)
-    }
+/** Selects one Card layout while preserving every authored Card field. */
+function setCardLayout(document: ElceDocument, bdcId: BdcId, layoutId: CardLayoutId): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  if (bdc.type !== BDC_TYPE.CARD || bdc.card == null) fail(`Le bdc ${bdcId} n’est pas une Carte.`)
+  if (!CARD_LAYOUT_IDS.includes(layoutId)) fail(`Layout de carte inconnu : ${layoutId}`)
+  return withBdc(document, { ...bdc, presetId: layoutId })
+}
+
+/** Attaches one reusable image or video resource to a Card BDC. */
+function setCardMedia(document: ElceDocument, bdcId: BdcId, mediaId: MediaId | null): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  if (bdc.type !== BDC_TYPE.CARD || bdc.card == null) fail(`Le bdc ${bdcId} n’est pas une Carte.`)
+  if (mediaId !== null) assertCardMediaAllowed(document, mediaId)
+  return withBdc(document, { ...bdc, mediaId })
+}
+
+/** Stores imported media and its Card BDC reference atomically. */
+function attachCardMedia(document: ElceDocument, bdcId: BdcId, media: MediaMetadata): ElceDocument {
+  if (document.medias.some((candidate) => candidate.id === media.id)) fail(`Média déjà présent : ${media.id}`)
+  const withMedia = new ElceDocument({ ...document.data, medias: [...document.medias, media] })
+  return setCardMedia(withMedia, bdcId, media.id)
+}
+
+/** Validates Card media references independently of which layout projects them. */
+function assertCardMediaAllowed(document: ElceDocument, mediaId: MediaId): void {
+  const media = document.medias.find((candidate) => candidate.id === mediaId)
+  if (media === undefined || (media.type !== MEDIA_TYPE.IMAGE && media.type !== MEDIA_TYPE.VIDEO)) {
+    fail(`Le média ${mediaId} ne peut pas être rattaché à une Carte.`)
   }
+}
+
+/** Permanently removes one Card child while leaving its reusable media resource. */
+function deleteCard(document: ElceDocument, bdcId: BdcId): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  if (bdc.type !== BDC_TYPE.CARD) fail(`Seul un BDC Carte peut être retiré par cette commande : ${bdcId}`)
+  const parent = bdc.parentBdcId === null ? undefined : findBdc(document, bdc.parentBdcId)
+  if (parent?.type !== BDC_TYPE.CAROUSEL || parent.carousel == null || parent.carousel.cards.length <= 1) {
+    fail('Un Carousel doit conserver au moins une carte.')
+  }
+  return deleteBdc(document, bdc.id)
 }
 
 /** Permanently removes one Carousel BDC while keeping its reusable media resources. */
@@ -874,19 +961,7 @@ function mergeMedia(
       const withDirectMedia = duplicateIds.has(bdc.mediaId ?? '')
         ? { ...bdc, mediaId: canonicalMediaId }
         : bdc
-      switch (bdc.type) {
-        case BDC_TYPE.CAROUSEL: {
-          const carousel = bdc.carousel ?? null
-          if (carousel === null) return withDirectMedia
-          const reboundCarousel = [...duplicateIds].reduce(
-            (current, duplicateMediaId) => carouselService.replaceMediaReference(current, duplicateMediaId, canonicalMediaId),
-            carousel,
-          )
-          return { ...withDirectMedia, carousel: reboundCarousel }
-        }
-        default:
-          return withDirectMedia
-      }
+      return withDirectMedia
     }),
     medias: document.medias.filter((media) => !duplicateIds.has(media.id)),
   })
@@ -998,10 +1073,13 @@ function createAnchoredBdc(
     type: command.bdcType,
     presetId: command.presetId,
     pageId: page.id,
+    parentBdcId: null,
     mediaId: command.media.id,
     section: null,
     question: null,
     evaluationResult: null,
+    carousel: null,
+    card: null,
   }
   const pageWithBdc = replaceAt(
     withMedia.pages,
@@ -1165,6 +1243,8 @@ function moveBdc(document: ElceDocument, command: Extract<DocumentCommand, { typ
             fail(`Déplacer le bdc ancré ${bdc.id} exige de déplacer aussi son ancre.`)
         }
         break
+      case BDC_LOCATION.PARENT:
+        fail(`Le bdc ancré ${bdc.id} ne peut pas être placé dans un autre BDC.`)
     }
   }
   return placeBdc(document, bdc, command.placement)
@@ -1172,16 +1252,14 @@ function moveBdc(document: ElceDocument, command: Extract<DocumentCommand, { typ
 
 function deletePage(document: ElceDocument, pageId: PageId): ElceDocument {
   const page = findPage(document, pageId)
-  const bdcIds = new Set(page.bdcIds)
-  const detached = movePage(document, { type: 'page.move', pageId, placement: { kind: PAGE_LOCATION.CATALOG } })
+  let detached = movePage(document, { type: 'page.move', pageId, placement: { kind: PAGE_LOCATION.CATALOG } })
+  for (const bdcId of page.bdcIds) detached = deleteBdc(detached, bdcId)
   return new ElceDocument({
     ...detached.data,
     chapters: detached.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, pageId) })),
     pages: detached.pages.filter((candidate) => candidate.id !== pageId),
     scenarioEntries: removeScenarioPageEntry(detached, pageId),
     catalogPageIds: removeValue(detached.data.catalogPageIds, pageId),
-    bdcs: detached.bdcs.filter((bdc) => !bdcIds.has(bdc.id)),
-    catalogBdcIds: detached.data.catalogBdcIds.filter((bdcId) => !bdcIds.has(bdcId)),
   })
 }
 
@@ -1274,10 +1352,16 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return updateEvaluationResult(document, command.bdcId, command.evaluationResult)
     case 'bdc.carousel.update':
       return updateCarousel(document, command.bdcId, command.carousel)
-    case 'bdc.carousel.media.set':
-      return setCarouselMedia(document, command.bdcId, command.viewId, command.mediaId)
-    case 'bdc.carousel.media.attach':
-      return attachCarouselMedia(document, command.bdcId, command.viewId, command.media)
+    case 'bdc.card.update':
+      return updateCard(document, command.bdcId, command.card)
+    case 'bdc.card.layout.set':
+      return setCardLayout(document, command.bdcId, command.layoutId)
+    case 'bdc.card.media.set':
+      return setCardMedia(document, command.bdcId, command.mediaId)
+    case 'bdc.card.media.attach':
+      return attachCardMedia(document, command.bdcId, command.media)
+    case 'bdc.carousel.card.delete':
+      return deleteCard(document, command.bdcId)
     case 'bdc.question.media.set':
       return setQuestionMedia(document, command.bdcId, command.mediaId)
     case 'bdc.question.media.attach':
@@ -1321,17 +1405,38 @@ export function applyDocumentCommand(document: ElceDocument, command: DocumentCo
 export function assertDocumentInvariants(document: ElceDocument): void {
   const pageIds = new Set<PageId>()
   const bdcIds = new Set<BdcId>()
-  const knownBdcIds = new Set(document.bdcs.map((bdc) => bdc.id))
+  const bdcById = new Map(document.bdcs.map((bdc) => [bdc.id, bdc]))
   for (const page of document.pages) {
     if (pageIds.has(page.id)) fail(`Page dupliquée : ${page.id}`)
     pageIds.add(page.id)
     for (const bdcId of page.bdcIds) {
-      if (!knownBdcIds.has(bdcId)) fail(`Bdc inconnu dans la page ${page.id} : ${bdcId}`)
+      const bdc = bdcById.get(bdcId)
+      if (bdc === undefined) fail(`Bdc inconnu dans la page ${page.id} : ${bdcId}`)
       if (bdcIds.has(bdcId)) fail(`Bdc placé deux fois dans la page ${page.id}`)
       bdcIds.add(bdcId)
-      if (document.bdcs.find((bdc) => bdc.id === bdcId)?.pageId !== page.id) fail(`Affectation de bdc incohérente : ${bdcId}`)
+      if (bdc.pageId !== page.id || bdc.parentBdcId !== null) fail(`Affectation de bdc incohérente : ${bdcId}`)
     }
   }
+  for (const parent of document.bdcs) {
+    if (parent.type !== BDC_TYPE.CAROUSEL || parent.carousel == null) continue
+    for (const entry of parent.carousel.cards) {
+      const child = bdcById.get(entry.bdcId)
+      if (child === undefined) fail(`Bdc Carte inconnue dans le Carousel ${parent.id} : ${entry.bdcId}`)
+      if (bdcIds.has(child.id)) fail(`Bdc placé deux fois : ${child.id}`)
+      bdcIds.add(child.id)
+      if (child.type !== BDC_TYPE.CARD || child.parentBdcId !== parent.id || child.pageId !== null) {
+        fail(`Affectation de carte incohérente : ${child.id}`)
+      }
+    }
+  }
+  for (const bdcId of document.data.catalogBdcIds) {
+    const bdc = bdcById.get(bdcId)
+    if (bdc === undefined) fail(`Bdc inconnu dans le catalogue : ${bdcId}`)
+    if (bdcIds.has(bdcId)) fail(`Bdc placé deux fois : ${bdcId}`)
+    bdcIds.add(bdcId)
+    if (bdc.pageId !== null || bdc.parentBdcId !== null) fail(`Affectation de catalogue incohérente : ${bdcId}`)
+  }
+  if (bdcIds.size !== document.bdcs.length) fail('Chaque bdc doit avoir un emplacement unique')
   const scenarioEntryChapterIds = document.data.scenarioEntries.flatMap((entry) => {
     switch (entry.kind) {
       case SCENARIO_ENTRY_KIND.PAGE: {
@@ -1375,12 +1480,6 @@ export function assertDocumentInvariants(document: ElceDocument): void {
   for (const pageId of scenarioPageIds) {
     if (!pageIds.has(pageId)) fail(`Page de scénario inconnue : ${pageId}`)
   }
-  for (const bdc of document.bdcs) {
-    if (bdcIds.has(bdc.id)) continue
-    if (!document.data.catalogBdcIds.includes(bdc.id) || bdc.pageId !== null) fail(`Bdc sans emplacement : ${bdc.id}`)
-    bdcIds.add(bdc.id)
-  }
-  if (bdcIds.size !== document.bdcs.length) fail('Chaque bdc doit avoir un emplacement unique')
   for (const chapter of document.chapters) {
     for (const pageId of chapter.pageIds) {
       if (document.pages.find((page) => page.id === pageId)?.chapterId !== chapter.id) fail(`Affectation de chapitre incohérente : ${pageId}`)
@@ -1426,14 +1525,26 @@ export function assertDocumentInvariants(document: ElceDocument): void {
         break
       }
       case BDC_TYPE.CAROUSEL: {
-        if (bdc.carousel === null || bdc.carousel === undefined || bdc.section !== null || bdc.question !== null) {
+        if (bdc.carousel === null || bdc.carousel === undefined || bdc.section !== null || bdc.question !== null || bdc.card != null) {
           fail(`Bdc Carousel incomplet : ${bdc.id}`)
         }
         carouselService.assertValid(bdc.carousel)
-        if (bdc.pageId === null) fail(`Un bdc Carousel doit rester affecté à une page : ${bdc.id}`)
+        if (bdc.pageId === null || bdc.parentBdcId !== null) fail(`Un bdc Carousel doit rester affecté à une page : ${bdc.id}`)
+        break
+      }
+      case BDC_TYPE.CARD: {
+        if (bdc.card === null || bdc.card === undefined || bdc.section !== null || bdc.question !== null
+          || bdc.evaluationResult != null
+          || bdc.carousel != null || bdc.parentBdcId === null || bdc.pageId !== null) {
+          fail(`Bdc Carte incomplet : ${bdc.id}`)
+        }
+        if (!CARD_LAYOUT_IDS.includes(bdc.presetId as CardLayoutId)) fail(`Layout de carte inconnu : ${bdc.presetId}`)
+        cardService.assertValid(bdc.card)
+        if (bdc.mediaId !== null) assertCardMediaAllowed(document, bdc.mediaId)
         break
       }
       default:
+        if (bdc.card != null || bdc.parentBdcId !== null) fail(`Un bdc ${bdc.type} ne peut pas être un enfant de conteneur : ${bdc.id}`)
         if (bdc.question !== null) fail(`Un bdc ${bdc.type} ne peut pas porter de Question : ${bdc.id}`)
         if (bdc.carousel != null) fail(`Un bdc ${bdc.type} ne peut pas porter un Carousel : ${bdc.id}`)
     }
