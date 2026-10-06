@@ -39,12 +39,30 @@ preuves qui permettent de fermer chaque tranche.
 | 5 | Évaluation de chapitre | En cours — icône, édition, retrait et compilation CodPlay du BDC Résultat vérifiés ; intégration player restante. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
-| 8 | Page Diapo | Après le BDC Carousel — modèle de contenu encore ouvert | Ajouter le type de page sans défilement et son builder distinct. Définir les BDC autorisés et le BDC initial. La fin fonctionnelle de Diapo signale `scene:end` à Sighty pour mettre à jour le verrouillage de la navigation globale ; elle ne déclenche pas elle-même la navigation vers la page suivante. Vérifier le player réel sans détourner le builder Flux. |
+| 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
 contrat. Un échec de preuve garde la tranche « En cours » et bloque son
 intégration dépendante ; les travaux indépendants continuent.
+
+### Catalogue responsive de l’éditeur — implémenté et vérifié
+
+- À 1200 px et moins, le bouton icône du catalogue est dans la ligne du titre
+  « Elcé » et ouvre le tiroir droit. À 800 px et moins, une icône Scénario la
+  précède dans cette ligne et ouvre un tiroir gauche. Les tiroirs sont exclusifs,
+  se ferment par leur bouton, Échap ou clic sur le fond, puis rendent le focus à
+  leur bouton. Les icônes sont dans le flux normal, sans position fixe ni sticky.
+- Entre 801 et 1200 px, la colonne Scénario reste visible et la zone de travail
+  centrale flexible utilise la largeur restante ; à 800 px et moins, elle prend
+  toute la largeur disponible. À plus de 1200 px, les trois colonnes restent
+  visibles et les icônes responsive sont masquées. Le bandeau ne montre que
+  « Elcé », sans libellé POC ni état technique.
+- Brave DevTools vérifie à 390 × 844 px les deux boutons en haut, l’ouverture
+  indépendante des tiroirs gauche et droit, leur fermeture par Échap et le retour
+  du focus. À 1024 px, le Scénario reste à 288 px et l’espace central atteint
+  688 px ; à 1408 px, les trois colonnes mesurent 288/768/288 px. Le comportement
+  appartient au layout React de l’éditeur, hors scène CodPlay.
 
 ### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
 
@@ -312,6 +330,18 @@ intégration dépendante ; les travaux indépendants continuent.
 - Le Carousel n’accepte que des BDC Carte dans cette tranche. Les autres types
   enfants seront décidés pour la Diapo dans sa tranche ; la Question reste hors
   du périmètre Carousel actuel.
+- Les réglages Lecture, Répéter, Durée par vue, Transition et Ratio restent sur
+  une rangée. Dans Brave, cette rangée tient sur 704 px de largeur.
+- Correction autorisée et implémentée : le perso layout Capsule matérialise
+  l’article de la carte et reprend maintenant les classes racines et de zones du
+  preset. Avant correction, Brave observait un hôte média de 916 × 644 px et une
+  image de 412 × 640 px dans un cadre de 916 × 515 px. Après correction, le
+  layout Photo/vidéo plein cadre garde l’article, l’hôte média et l’image dans
+  le même cadre : 916 × 515 px sur ordinateur et 298 × 168 px à 390 px. Le
+  cadrage de l’image utilise `object-fit` ; le typecheck Elcé passe et aucun
+  changement du core CodPlay n’est requis.
+  Vérifier visuellement le confinement des contenus dans les trois autres
+  layouts avant de clore cette acceptation.
 - Étendre le modèle documentaire et ses invariants de placement unique aux
   relations parent/enfant, puis aligner les commandes, la sélection d’édition,
   l’éditeur Carousel, le traitement des médias et la composition de scène sur
@@ -410,19 +440,57 @@ intégration dépendante ; les travaux indépendants continuent.
   effacement manuel. Ne pas déclarer la tranche terminée avant ce choix et sa
   vérification.
 
-## Page Diapo — décisions reportées
+## Page Diapo — décisions et tranche active
 
-- Une nouvelle page Diapo crée-t-elle un BDC Carousel par défaut ou reste-t-elle
-  vide ? Quels autres BDC, s’il y en a, la barre d’ajout propose-t-elle ? La
-  Section en est exclue.
-- Direction acceptée le 6 octobre 2026, application en attente : la progression
+- Décision acceptée le 6 octobre 2026 : quand une Diapo contient un BDC
+  Carousel, celui-ci reste propriétaire de l’ordre et des durées de sa séquence
+  de BDC Carte. Une nouvelle Diapo propose le Carousel comme BDC par défaut,
+  avec sa première Carte selon le défaut déjà configuré. Une Diapo contient un
+  seul BDC direct : l’auteur peut supprimer le Carousel et le remplacer par le
+  BDC Question/Quiz existant ou par le même BDC Carte que celui du Carousel,
+  utilisé seul. La Carte autonome conserve son modèle, ses layouts et ses
+  champs. Aucun empilement, overlay ou autre circuit de composition n’est
+  ajouté.
+- Le Carousel garde seul son modèle de séquence temporisée et sa lecture. Une
+  proposition à évaluer plus tard consiste à créer un BDC séquence spécialisé
+  capable d’enchaîner plusieurs types existants dans une même présentation
+  (par exemple vidéo, Question, puis Résultat et explication). Ce BDC n’est ni
+  décidé ni implémenté dans la tranche Diapo.
+- Convention acceptée le 6 octobre 2026 : dans l’interface, les types sont
+  nommés « Page » et « Diapo ». Le code conserve les types internes `flux` et
+  `diapo` ; `Page` désigne le type utilisateur correspondant à Flux. Aucun
+  renommage de modèle n’est requis à ce stade.
+- Exigence responsive acceptée le 6 octobre 2026, application et arbitrage
+  visuel en attente : quand le conteneur de lecture est portrait, le Carousel
+  vise à occuper toute la scène, qu’il se trouve dans une Page ou une Diapo.
+  Dans un conteneur paysage, le plein écran ne s’applique qu’à la Diapo ; le
+  Carousel d’une Page garde son cadre de contenu. Il reste à comparer deux
+  rendus : inversion du ratio choisi (par exemple 16:9 vers 9:16) et adaptation
+  du contenu à la taille disponible. Ces comportements ne sont pas équivalents :
+  à 350 px de large, un cadre 9:16 mesure environ 622 px de haut et ne remplit
+  pas un viewport portrait de 1016 px.
+- Vérification Brave du 6 octobre 2026 sur la preview existante de 5175 : dans
+  un viewport de 442 × 1016 px, le Carousel de Page garde son ratio 16:9 ; son
+  cadre mesure 350 × 197 px. Le builder passe le ratio choisi en style inline.
+  `AutoCapsule` n’utilise `orientation` que pour dériver les grilles de type
+  `derived` ; le Carousel force une grille 1×1. La génération CSS actuelle ne
+  produit pas de variante `@container (orientation: ...)`, et le layout Texte
+  avec image reste en deux colonnes. Ni l’inversion du ratio ni l’adaptation
+  portrait demandée ne sont donc implémentées. L’orientation des zones nommées
+  reste suivie dans le plan actif Capsule Automation ci-dessus ; ne pas ajouter
+  de règles locales parallèles dans Elcé.
+- Modèle temporel accepté le 6 octobre 2026 : la séquence temporisée des BDC
+  Carte est portée par le BDC Carousel enfant. Ce choix fixe le parent des
+  cartes, le contenu initial et le circuit de lecture ; il ne restreint pas les
+  autres BDC page de la Diapo.
+- Décision appliquée et vérifiée le 6 octobre 2026 : la progression
   de page reste globale et appartient à Sighty, selon les règles définies par
-  l’application pour toutes les pages. Diapo signale sa fin fonctionnelle par
-  `scene:end`, à la fin de sa voix ou après l’apparition de sa dernière vue ;
-  cette information sert le parcours utilisateur et l’application réévalue
-  alors l’accès pour déverrouiller « Page suivante ». La scène continue
-  techniquement à jouer : ce signal ne l’arrête pas, ne la démonte pas et ne
-  navigue pas lui-même vers la page suivante.
+  l’application pour toutes les pages. À la fin fonctionnelle d’une Diapo, la
+  scène publie exactement l’événement de fin des Pages Flux :
+  `elce:page:finished`, visibilité `public`, données `{ pageId }`. Sighty réutilise
+  son action existante pour réévaluer l’accès à « Page suivante ». Cet événement
+  ne déclenche pas lui-même la navigation. `scene:end` et `sequence:end` gardent
+  leur sémantique CodPlay distincte et ne servent pas au déverrouillage de page.
 - `sequence:end` est le signal technique distinct indiquant que CodPlay a
   terminé la lecture de la séquence. Le player arrête sa lecture, termine son
   cycle et nettoie ses captures actives ; l’occurrence reste montée et devient
@@ -430,6 +498,28 @@ intégration dépendante ; les travaux indépendants continuent.
   ses ressources : Sighty garde la décision de les démonter. Voir la
   [spécification Engine/Player CodPlay](../../codplay/specs/engine-player-v2-spec.md)
   et la [spécification Sighty](../../sighty/specs/authoring-library-spec.md).
+- Décision du 6 octobre 2026 : pour une Diapo Quiz, l’événement commun
+  `elce:page:finished` est envoyé après validation de la réponse, quelle que soit
+  sa justesse. « Page suivante » se déverrouille alors ; la scène reste montée
+  et le Quiz continue de s’afficher.
+- Règle appliquée et vérifiée le 6 octobre 2026 : chaque type de BDC Diapo
+  publie le même événement public `elce:page:finished` avec `{ pageId }` au
+  moment où sa fin fonctionnelle est atteinte. La Carte autonome le publie dès
+  son affichage ; le Quiz après validation ; le Carousel quand sa dernière
+  vue apparaît. Sighty réutilise son action existante. Aucun changement
+  CodPlay n’est requis. Voir la [spécification Diapo](../specs/diapo-scene-builder-spec.md).
+- Acceptation du 6 octobre 2026 : Brave DevTools sur le serveur de référence
+  5175 vérifie les trois chemins avec une page suivante : la Carte autonome
+  déverrouille « Suivant » dès son affichage, le Quiz après validation et le
+  Carousel manuel à deux vues après sélection de la dernière vue. Le Carousel
+  garde le bouton verrouillé avant cette sélection. Les parcours restent sur
+  la scène Diapo et ne produisent pas d’erreur console. Un test player vérifie
+  le nom exact `elce:page:finished`, la visibilité publique, `{ pageId }` et
+  l’absence de `scene:end` pour le Carousel. Les tests ciblés (30/30) et le
+  typecheck passent. La frontière de compilation CodPlay est respectée par un
+  `scroll-container` dans la story Carousel ; aucun changement CodPlay ni
+  relais Elcé distinct n’est nécessaire. La tranche reste en cours pour le
+  comportement vocal décrit ci-dessous.
 - La voix facultative appartient à la page Diapo : elle démarre au lancement et
   s’arrête en quittant la page. En mode automatique, sa durée peut fournir la
   durée totale répartie entre les vues ; les durées auteur par vue la remplacent

@@ -14,6 +14,7 @@ export interface CardBdcSceneBuildInput {
 
 export interface CardBdcSceneBuild {
   readonly markup: string
+  readonly rootClassName: string
   readonly zonePartIds: Readonly<Record<string, string>>
   readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
@@ -32,6 +33,7 @@ export class ElceCardBdcSceneBuilder {
     const layout = cardPresetBuilder.build(bdc.presetId, rootId, partId)
     return {
       markup: layout.markup,
+      rootClassName: layout.rootClassName,
       zonePartIds: layout.zonePartIds,
       contentPersos: createCardContentPersos(bdc, layout.zonePartIds, `${pageId}:${bdc.id}`),
       mediaPersos: createCardMediaPersos(input, partId, bdc.card.imageFit),

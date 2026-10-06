@@ -32,12 +32,19 @@ body {
 .elce-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 1rem;
   min-height: 4rem;
   padding: 0 1.5rem;
   color: #f8f5ef;
   background: #263b3a;
+}
+
+.elce-header-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
 }
 
 .elce-brand {
@@ -50,12 +57,6 @@ body {
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-}
-
-.elce-brand-status,
-.elce-controller-state {
-  color: #c6d2c9;
-  font-size: 0.8rem;
 }
 
 .elce-main {
@@ -96,6 +97,20 @@ body {
   border: 0;
   border-radius: 0.3rem;
   cursor: pointer;
+}
+
+.elce-properties-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.elce-responsive-panel-access,
+.elce-responsive-panel-toggle,
+.elce-responsive-panel-close,
+.elce-responsive-panel-backdrop {
+  display: none;
 }
 
 .elce-outline-actions,
@@ -1242,12 +1257,157 @@ body {
   margin: 0.35rem 0;
 }
 
+@media (max-width: 1200px) {
+  .elce-main {
+    grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
+  }
+
+  .elce-responsive-panel-access {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .elce-responsive-panel-toggle {
+    display: inline-grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    place-items: center;
+    padding: 0;
+    color: #263b3a;
+    background: #fffdf8;
+    border: 1px solid #c9c4b9;
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+
+  .elce-responsive-panel-toggle--outline {
+    display: none;
+  }
+
+  .elce-responsive-panel-toggle--open {
+    display: none;
+  }
+
+  .elce-responsive-panel-toggle:focus-visible,
+  .elce-responsive-panel-close:focus-visible {
+    outline: 2px solid #46726b;
+    outline-offset: 2px;
+  }
+
+  .elce-responsive-panel-backdrop {
+    position: fixed;
+    z-index: 39;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    background: rgb(25 35 33 / 38%);
+    border: 0;
+    touch-action: none;
+  }
+
+  .elce-properties {
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(24rem, calc(100vw - 3rem));
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0.6rem 0 0 0.6rem;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform 180ms ease, visibility 0s linear 180ms;
+  }
+
+  .elce-properties[data-drawer-open='true'] {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 180ms ease, visibility 0s;
+  }
+
+  .elce-properties-close {
+    display: inline-grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    color: #263b3a;
+    background: #f7f4ed;
+    border: 1px solid #c9c4b9;
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+}
+
 @media (max-width: 800px) {
   .elce-main {
     grid-template-columns: 1fr;
   }
 
-  .elce-panel {
+  .elce-responsive-panel-toggle--outline {
+    display: inline-grid;
+  }
+
+  .elce-responsive-panel-toggle--outline.elce-responsive-panel-toggle--open {
+    display: none;
+  }
+
+  .elce-outline {
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(24rem, calc(100vw - 3rem));
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0 0.6rem 0.6rem 0;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 180ms ease, visibility 0s linear 180ms;
+  }
+
+  .elce-outline[data-drawer-open='true'] {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 180ms ease, visibility 0s;
+  }
+
+  .elce-outline-close {
+    display: inline-grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    color: #263b3a;
+    background: #f7f4ed;
+    border: 1px solid #c9c4b9;
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+
+  .elce-panel:not(.elce-properties):not(.elce-outline) {
     min-height: 8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elce-properties,
+  .elce-outline {
+    transition: none;
   }
 }

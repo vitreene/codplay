@@ -112,7 +112,9 @@ déclarative `emit.observe.initial` du composant scroll pour les repères déjà
 visibles. Les tests Elcé exercent maintenant l’observation CodPlay et le
 routage Sighty pour une page courte et après une transition de visibilité ; le
 parcours Safari confirme la page longue. Aucune démo ni aucun circuit local ne
-contourne CodPlay.
+contourne CodPlay. Le nom public a ensuite été aligné sémantiquement sur
+`elce:page:finished` le 6 octobre 2026 ; les spécifications courantes décrivent
+ce nom.
 
 ### POC de faisabilité de l’ancrage Flux — 2026-10-03
 

@@ -16,12 +16,14 @@ export class ElceCardPresetBuilder {
     let markup = preset.markupTemplate
       .replaceAll('{{rootId}}', rootId)
       .replaceAll('{{partPrefix}}', partPrefix)
+      .replaceAll('{{rootClassName}}', preset.rootClassName)
     for (const zone of preset.zones) {
       markup = markup.replaceAll(`{{content:${zone.id}}}`, contentByZone[zone.id] ?? '')
     }
 
     return {
       markup,
+      rootClassName: preset.rootClassName,
       zonePartIds: Object.fromEntries(preset.zones.map((zone) => [zone.id, `${partPrefix}:${zone.id}`])),
     }
   }

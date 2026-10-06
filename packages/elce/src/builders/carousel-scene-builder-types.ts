@@ -10,6 +10,8 @@ export interface CarouselSceneBuildInput {
   readonly cards: readonly Bdc[]
   readonly mediaSources: Readonly<Record<MediaId, string>>
   readonly mediaTypes: Readonly<Record<MediaId, MediaType>>
+  readonly displayMode?: 'content' | 'scene'
+  readonly completionEventRootId?: string
 }
 
 export interface CarouselSceneBuild {

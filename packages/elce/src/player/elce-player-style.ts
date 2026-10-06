@@ -290,6 +290,79 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   position: relative;
 }
 
+.elce-diapo-host,
+.elce-diapo-content {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.elce-diapo-content {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.elce-diapo-content > .elce-card--carousel {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.elce-diapo-content > .elce-card:not(.elce-card--carousel) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.elce-diapo-content > .elce-card--question {
+  display: flex;
+  flex-direction: column;
+}
+
+.elce-diapo-content > .elce-card--question > form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.elce-diapo-content > .elce-card--question > form > fieldset {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.elce-diapo-content > .elce-card--question [data-part$=':answers'] {
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  overflow: hidden;
+}
+
+.elce-diapo-content .elce-carousel__frame,
+.elce-diapo-content .elce-carousel-capsule--scene,
+.elce-diapo-content .elce-carousel-capsule__grid {
+  height: 100%;
+  min-height: 0;
+}
+
 .elce-card--carousel {
   box-sizing: border-box;
   width: 100%;
@@ -338,6 +411,10 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   pointer-events: none;
 }
 
+.elce-carousel-view--hidden .elce-carousel-completion-marker {
+  display: none;
+}
+
 .elce-card--text-short {
   display: flex;
   width: 100%;
@@ -359,23 +436,23 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   margin: 0;
 }
 
-.elce-card--text-short [data-part$=':overline'],
-.elce-card--text-short [data-part$=':note'] {
+.elce-card--text-short .elce-card-text-short__overline,
+.elce-card--text-short .elce-card-text-short__note {
   color: #647670;
   font-size: clamp(0.7rem, 1.5cqw, 0.95rem);
 }
 
-.elce-card--text-short [data-part$=':title'] {
+.elce-card--text-short .elce-card-text-short__title {
   font-size: clamp(1.25rem, 3.5cqw, 2.4rem);
   line-height: 1.1;
 }
 
-.elce-card--text-short [data-part$=':description'] {
+.elce-card--text-short .elce-card-text-short__description {
   color: #52645f;
   font-size: clamp(0.85rem, 1.8cqw, 1.15rem);
 }
 
-.elce-card--text-short [data-part$=':message'] {
+.elce-card--text-short .elce-card-text-short__message {
   font-size: clamp(0.95rem, 2.2cqw, 1.45rem);
   line-height: 1.4;
 }
@@ -392,19 +469,19 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   color: #263b3a;
 }
 
-.elce-carousel-view--image-right .elce-card--text-image {
+.elce-carousel-view--image-right.elce-card--text-image {
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   grid-template-areas: 'content image';
 }
 
-.elce-card--text-image > [data-part$=':image'] {
+.elce-card--text-image > .elce-carousel-text-image__image {
   min-width: 0;
   min-height: 0;
   grid-area: image;
   overflow: hidden;
 }
 
-.elce-card--text-image > [data-part$=':content'] {
+.elce-card--text-image > .elce-carousel-text-image__content {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -416,29 +493,29 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   overflow: hidden;
 }
 
-.elce-card--text-image > [data-part$=':content'] > p,
-.elce-card--text-image > [data-part$=':content'] > h2,
-.elce-card--text-image > [data-part$=':content'] > footer {
+.elce-card--text-image > .elce-carousel-text-image__content > p,
+.elce-card--text-image > .elce-carousel-text-image__content > h2,
+.elce-card--text-image > .elce-carousel-text-image__content > footer {
   margin: 0;
 }
 
-.elce-card--text-image [data-part$=':overline'],
-.elce-card--text-image [data-part$=':note'] {
+.elce-card--text-image .elce-card-text-image__overline,
+.elce-card--text-image .elce-card-text-image__note {
   color: #647670;
   font-size: clamp(0.7rem, 1.5cqw, 0.95rem);
 }
 
-.elce-card--text-image [data-part$=':title'] {
+.elce-card--text-image .elce-card-text-image__title {
   font-size: clamp(1.1rem, 3cqw, 2rem);
   line-height: 1.1;
 }
 
-.elce-card--text-image [data-part$=':description'] {
+.elce-card--text-image .elce-card-text-image__description {
   color: #52645f;
   font-size: clamp(0.8rem, 1.6cqw, 1.05rem);
 }
 
-.elce-card--text-image [data-part$=':message'] {
+.elce-card--text-image .elce-card-text-image__message {
   font-size: clamp(0.85rem, 1.8cqw, 1.2rem);
   line-height: 1.35;
 }
@@ -453,7 +530,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   overflow: hidden;
 }
 
-.elce-card--photo > [data-part$=':media'] {
+.elce-card--photo > .elce-carousel-photo__media {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -464,10 +541,20 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   display: block;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.elce-carousel-media > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: cover;
 }
 
-.elce-carousel-media--contain {
+.elce-carousel-media--contain > img {
   object-fit: contain;
 }
 
@@ -476,13 +563,13 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
-.elce-card--image-caption > [data-part$=':image'] {
+.elce-card--image-caption > .elce-card-image-caption__image {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.elce-card--image-caption > [data-part$=':caption'] {
+.elce-card--image-caption > .elce-card-image-caption__caption {
   margin: 0;
   padding: 0.45rem 0.75rem;
   color: #52645f;

@@ -20,7 +20,7 @@
 
 .elce-carousel-editor__settings {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.65rem 1rem;
   align-items: end;
   margin-bottom: 0.85rem;

@@ -144,7 +144,7 @@ function createScenarioViews(
     actions: {
       [ELCE_EVENTS.NAVIGATION_NEXT]: { go: { direction: 'next' } },
       [ELCE_EVENTS.NAVIGATION_PREVIOUS]: { go: { direction: 'previous' } },
-    [ELCE_EVENTS.PAGE_BOTTOM]: { action: ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED },
+      [ELCE_EVENTS.PAGE_FINISHED]: { action: ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED },
     [ELCE_EVENTS.QUESTION_ANSWERED]: { action: ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT },
   },
   showMode: 'reset',
@@ -306,7 +306,7 @@ function createPageExitGuard(document: ElceDocument, pageIds: readonly string[],
   }
 }
 
-/** Records the current page's bottom marker and refreshes the fixed controls. */
+/** Records a functional page end and refreshes the fixed controls. */
 async function markPageFinished(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
   const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
   if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return

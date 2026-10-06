@@ -63,7 +63,7 @@ const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentCh
         mediaCreated: created,
       }
     }
-    case 'carousel-card-media-import': {
+    case 'card-media-import': {
       if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
       const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store)
       return {
@@ -150,7 +150,7 @@ function commandForChange(operation: ElceDocumentChange, mediaCreated: boolean) 
             mediaId: operation.media.id,
           }
       }
-    case 'carousel-card-media-import':
+    case 'card-media-import':
       switch (mediaCreated) {
         case true:
           return {
@@ -175,8 +175,8 @@ function documentChangeForEvent(event: ElceControllerEvent): ElceDocumentChange 
       return { kind: 'anchor', operation: { sectionBdcId: event.sectionBdcId, change: event.change } }
     case 'question.media.file.import':
       return { kind: 'question-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
-    case 'carousel.card.media.file.import':
-      return { kind: 'carousel-card-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
+    case 'card.media.file.import':
+      return { kind: 'card-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
     default:
       return null
   }
@@ -238,7 +238,7 @@ export const controllerMachine = setup({
     },
     'page.create': {
       actions: assign(({ context, event }) => {
-        const command = createDefaultPageCommand(context.document, event.placement, event.name)
+        const command = createDefaultPageCommand(context.document, event.placement, event.name, event.pageType)
         const document = applyDocumentCommand(context.document, command)
         return { document, selectedPageId: command.pageId, selectedChapterId: null, selectedCarouselCardBdcId: null }
       }),
@@ -283,7 +283,7 @@ export const controllerMachine = setup({
       on: {
         'section.change': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
         'question.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
-        'carousel.card.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'card.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
       },
     },
     processingDocumentChange: {
@@ -306,7 +306,7 @@ export const controllerMachine = setup({
       on: {
         'section.change': { actions: 'enqueueDocumentChange' },
         'question.media.file.import': { actions: 'enqueueDocumentChange' },
-        'carousel.card.media.file.import': { actions: 'enqueueDocumentChange' },
+        'card.media.file.import': { actions: 'enqueueDocumentChange' },
       },
     },
     nextDocumentChange: {
@@ -383,7 +383,7 @@ function updateMediaSources(
       }
     case 'question-media-import':
       return mediaSourceAddition(mediaSources, operation.media.id, source)
-    case 'carousel-card-media-import':
+    case 'card-media-import':
       return mediaSourceAddition(mediaSources, operation.media.id, source)
   }
 }

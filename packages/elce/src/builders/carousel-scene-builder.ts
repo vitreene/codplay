@@ -9,6 +9,7 @@ import type { Bdc } from '../domain/document-types'
 import { ElceCardPresetBuilder } from './card-preset-builder'
 import { ElceCardBdcSceneBuilder } from './card-bdc-scene-builder'
 import type { CardBdcSceneBuild } from './card-bdc-scene-builder'
+import { createPageBottomMarkerPerso } from './page-bottom-marker'
 import type { CarouselSceneBuild, CarouselSceneBuildInput } from './carousel-scene-builder-types'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
@@ -26,6 +27,7 @@ export class ElceCarouselSceneBuilder {
   /** Projects Carousel settings and Card BDCs into a CodPlay story. */
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
     const { pageId, bdcId, content } = input
+    const displayMode = input.displayMode ?? 'content'
     const prefix = `${pageId}:${bdcId}`
     const rootId = `${pageId}-${bdcId}`
     const capsulePartId = `${prefix}:carousel:capsule`
@@ -35,9 +37,11 @@ export class ElceCarouselSceneBuilder {
       capsule: {
         id: `${rootId}-capsule`,
         type: CAPSULE_TYPE.carousel,
-        className: 'elce-carousel-capsule',
+        className: displayMode === 'scene' ? 'elce-carousel-capsule elce-carousel-capsule--scene' : 'elce-carousel-capsule',
         grid: { className: 'elce-carousel-capsule__grid' },
-        style: { aspectRatio: `${content.aspectRatio.width} / ${content.aspectRatio.height}` },
+        style: displayMode === 'scene'
+          ? { height: '100%' }
+          : { aspectRatio: `${content.aspectRatio.width} / ${content.aspectRatio.height}` },
         defaults: {
           introTransitionRef: content.transition,
           outroTransitionRef: content.transition,
@@ -58,11 +62,21 @@ export class ElceCarouselSceneBuilder {
     const capsuleResult = capsule.resolve()
     const firstCardBdcId = content.cards[0]?.bdcId ?? null
     const cardBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildCard(input, entry.bdc)]))
+    const lastCardBdcId = capsuleResult.children.at(-1)?.id
+    const completionRootPartId = input.completionEventRootId === undefined
+      ? undefined
+      : `${prefix}:carousel:completion-root`
+    const cardMountTarget = input.completionEventRootId ?? capsulePartId
     const cardPersos = capsuleResult.children.flatMap((child) => {
       const entry = schedule.find((candidate) => candidate.bdc.id === child.id)
       const cardBuild = cardBuilds.get(child.id)
       if (entry === undefined || cardBuild === undefined) throw new Error(`La carte Carousel ${child.id} est introuvable.`)
-      return createCarouselCardPersos(prefix, capsulePartId, child, entry.bdc, cardBuild, firstCardBdcId)
+      return [
+        ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, cardBuild, firstCardBdcId),
+        ...(input.completionEventRootId !== undefined && child.id === lastCardBdcId
+          ? [createCarouselCompletionMarker(input.pageId, input.bdcId, child.id, input.completionEventRootId)]
+          : []),
+      ]
     })
     const selectionEvent = `${prefix}:select-card`
     const navigationPersos = content.cards.map((entry, index) => {
@@ -76,14 +90,20 @@ export class ElceCarouselSceneBuilder {
       rootId,
       `${pageId}:${bdcId}:carousel`,
       {
-        frame: createCapsuleMarkup(rootId, capsulePartId, capsuleResult, content.transition),
+        frame: createCapsuleMarkup(rootId, capsulePartId, capsuleResult, content.transition, completionRootPartId),
         navigation: '',
       },
     )
     const story: StoryDoc<string> = {
       id: `${pageId}-${bdcId}`,
       state: { activeCardBdcId: firstCardBdcId },
-      persos: [...cardPersos, ...navigationPersos],
+      persos: [
+        ...(input.completionEventRootId === undefined || completionRootPartId === undefined
+          ? []
+          : [createCarouselCompletionRoot(input.completionEventRootId, completionRootPartId)]),
+        ...cardPersos,
+        ...navigationPersos,
+      ],
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
         ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
         : [],
@@ -139,6 +159,45 @@ function buildCard(input: CarouselSceneBuildInput, bdc: Bdc): CardBdcSceneBuild 
   })
 }
 
+/** Observes the final visible Diapo Carousel Card through the shared Page event. */
+function createCarouselCompletionMarker(
+  pageId: string,
+  carouselBdcId: string,
+  cardBdcId: string,
+  rootId: string,
+): PersoDoc<string> {
+  return createPageBottomMarkerPerso({
+    pageId,
+    markerId: `${pageId}:${carouselBdcId}-completion-marker`,
+    rootId,
+    targetPartId: `${pageId}:${carouselBdcId}:card:${cardBdcId}:root`,
+    className: 'elce-page-bottom-marker elce-carousel-completion-marker',
+    style: { position: 'absolute', insetInlineEnd: 0, insetBlockEnd: 0, width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' },
+  })
+}
+
+/** Creates the same-story scroll root required by the shared Page-bottom observer. */
+function createCarouselCompletionRoot(rootId: string, targetPartId: string): PersoDoc<string> {
+  return {
+    id: rootId,
+    type: 'scroll-container',
+    initial: {
+      tag: 'div',
+      attr: { id: rootId },
+      className: 'elce-carousel-completion-root',
+      style: {
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        minHeight: 0,
+        overflow: 'hidden',
+      },
+      move: { target: targetPartId },
+    },
+  }
+}
+
 /** Expands Capsule Automation's finite Card schedule into the configured repeat count. */
 function createAutomaticEventimes(
   content: CarouselContent,
@@ -164,9 +223,13 @@ function createCapsuleMarkup(
   capsulePartId: string,
   result: ReturnType<AutoCapsule['resolve']>,
   transition: CarouselContent['transition'],
+  completionRootPartId?: string,
 ): string {
   const style = serializeStyle(result.capsule.inlineStyle)
-  return `<div id="${rootId}-capsule" class="${result.capsule.className}" data-part="${capsulePartId}" data-transition="${transition}"${style}></div>`
+  const completionRootMarkup = completionRootPartId === undefined
+    ? ''
+    : `<div id="${rootId}-completion-root-host" data-part="${completionRootPartId}"></div>`
+  return `<div id="${rootId}-capsule" class="${result.capsule.className}" data-part="${capsulePartId}" data-transition="${transition}"${style}>${completionRootMarkup}</div>`
 }
 
 /** Serializes builder-owned inline style values for static scene markup. */
@@ -231,6 +294,7 @@ function createCarouselCardPersos(
   const imagePosition = bdc.card?.imagePosition
   const className = [
     child.className,
+    cardBuild.rootClassName,
     firstCardBdcId === bdc.id ? 'elce-carousel-view--visible' : 'elce-carousel-view--hidden',
     bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
       ? imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT

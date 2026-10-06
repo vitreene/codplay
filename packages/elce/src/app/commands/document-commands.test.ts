@@ -9,11 +9,65 @@ import {
   createChapterMoveCommand,
   createCardBdcCommand,
   createCarouselBdcCommand,
+  createDefaultPageCommand,
   createEvaluationResultBdcCommand,
   createPageCommand,
+  createQuestionBdcCommand,
+  createStandaloneCardBdcCommand,
 } from './document-commands'
 
 describe('Elcé document commands', () => {
+  it('creates a Diapo with a default Carousel and its first Card child', () => {
+    const initial = createInitialDocument()
+    const command = createDefaultPageCommand(
+      initial,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo de test',
+      PAGE_TYPE.DIAPO,
+    )
+    const document = applyDocumentCommand(initial, command)
+    const page = document.pages.find((candidate) => candidate.id === command.pageId)
+    const carousel = document.bdcs.find((candidate) => candidate.id === command.bdcId)
+
+    expect(command.initialCardBdcId).toBeDefined()
+    expect(page).toMatchObject({ type: PAGE_TYPE.DIAPO, name: 'Diapo de test', bdcIds: [command.bdcId] })
+    expect(carousel).toMatchObject({
+      type: BDC_TYPE.CAROUSEL,
+      pageId: command.pageId,
+      carousel: { cards: [{ bdcId: command.initialCardBdcId, durationMs: null }] },
+    })
+    expect(document.bdcs.find((candidate) => candidate.id === command.initialCardBdcId)).toMatchObject({
+      type: BDC_TYPE.CARD,
+      parentBdcId: command.bdcId,
+      pageId: null,
+    })
+    assertDocumentInvariants(document)
+  })
+
+  it('keeps one direct Diapo BDC and permits a standalone Card or Quiz after removing the default Carousel', () => {
+    const initial = createInitialDocument()
+    const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
+    let document = applyDocumentCommand(initial, pageCommand)
+    document = applyDocumentCommand(document, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
+    document = applyDocumentCommand(document, createStandaloneCardBdcCommand('bdc-diapo-card', pageCommand.pageId))
+
+    expect(document.pages.find((page) => page.id === pageCommand.pageId)?.bdcIds).toEqual(['bdc-diapo-card'])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-diapo-card')).toMatchObject({
+      type: BDC_TYPE.CARD,
+      pageId: pageCommand.pageId,
+      parentBdcId: null,
+      presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+    })
+    expect(() => applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question', pageCommand.pageId, 1)))
+      .toThrow('Une Diapo ne peut contenir qu’un seul BDC direct')
+
+    document = applyDocumentCommand(document, { type: 'bdc.card.delete', bdcId: 'bdc-diapo-card' })
+    document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question', pageCommand.pageId, 0))
+    expect(document.pages.find((page) => page.id === pageCommand.pageId)?.bdcIds).toEqual(['bdc-diapo-question'])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-diapo-question')?.type).toBe(BDC_TYPE.QUESTION)
+    assertDocumentInvariants(document)
+  })
+
   it('renames a page and its chapter without changing document placement', () => {
     const initial = createInitialDocument()
     const renamedPage = applyDocumentCommand(initial, {
@@ -278,12 +332,12 @@ describe('Elcé document commands', () => {
     const carousel = document.bdcs.find((bdc) => bdc.id === 'bdc-carousel-delete-card')!.carousel!
     const firstCardBdcId = carousel.cards[0]!.bdcId
 
-    const remaining = applyDocumentCommand(document, { type: 'bdc.carousel.card.delete', bdcId: firstCardBdcId })
+    const remaining = applyDocumentCommand(document, { type: 'bdc.card.delete', bdcId: firstCardBdcId })
 
     expect(remaining.bdcs.some((bdc) => bdc.id === firstCardBdcId)).toBe(false)
     expect(remaining.bdcs.find((bdc) => bdc.id === 'bdc-carousel-delete-card')?.carousel?.cards)
       .toEqual([{ bdcId: 'bdc-card-to-delete', durationMs: null }])
-    expect(() => applyDocumentCommand(remaining, { type: 'bdc.carousel.card.delete', bdcId: 'bdc-card-to-delete' }))
+    expect(() => applyDocumentCommand(remaining, { type: 'bdc.card.delete', bdcId: 'bdc-card-to-delete' }))
       .toThrow('conserver au moins une carte')
     assertDocumentInvariants(remaining)
   })
@@ -661,14 +715,15 @@ describe('Elcé document commands', () => {
     })
     const withDiapo = applyDocumentCommand(available, createPageCommand({
       pageId: 'page-diapo',
-      bdcId: 'bdc-section-diapo',
+      bdcId: 'bdc-carousel-diapo',
+      initialCardBdcId: 'bdc-card-diapo',
       pageType: PAGE_TYPE.DIAPO,
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
 
     expect(() => applyDocumentCommand(withDiapo, {
       type: 'bdc.anchor.attach',
-      sectionBdcId: 'bdc-section-diapo',
+      sectionBdcId: 'bdc-section-1',
       pageId: 'page-diapo',
       bdcId: 'bdc-image-1',
       markup: '<p></p>',

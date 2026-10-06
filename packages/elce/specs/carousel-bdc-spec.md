@@ -3,8 +3,9 @@
 ## Statut
 
 **Fixe — Carousel à enfants BDC Carte, modèle v3, implémenté et vérifié le
-6 octobre 2026.** L’insertion du Carousel dans un BDC Texte et son emploi comme
-conteneur de Diapo restent hors de cette tranche.
+6 octobre 2026.** L’insertion du Carousel dans un BDC Texte reste hors de cette
+tranche. Son emploi comme BDC par défaut d’une Diapo est décrit dans la
+[spécification du builder Diapo](./diapo-scene-builder-spec.md).
 
 ## Rôle et modèle métier
 
@@ -68,6 +69,7 @@ de 0 à 10 ; 0 correspond à un passage. En lecture automatique, une durée
 particulière remplace la durée commune pour l’entrée concernée. Les points
 permettent de sélectionner une carte dans les deux modes ; en automatique, la
 séquence temporisée continue après la sélection.
+Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
 
 ## Projection et lecture
 
@@ -77,6 +79,13 @@ enfants dans `CarouselContent.cards`, puis délègue chaque carte à
 `ElceCardBdcSceneBuilder`. `ElceCardPresetBuilder` reste propriétaire du
 markup fixe de chaque layout. Les persos de texte et de média CodPlay ciblent
 les parts générées pour le BDC Carte sélectionné.
+
+Dans une Capsule, le perso layout porte l’article racine de la carte. Le builder
+ajoute à cet article la classe racine fournie par le preset, avec les classes de
+la vue Capsule, afin que les styles de chaque layout s’appliquent au nœud
+matérialisé. Les zones de média et l’image native sont dimensionnées à 100 % de
+leur conteneur ; `object-fit` règle le cadrage `cover` ou `contain` sur l’image.
+L’image ne conserve donc pas ses dimensions intrinsèques au-delà du cadre.
 
 `AutoCapsule` fournit le type Carousel et les transitions ;
 `CapsuleDistribution` résout les plages construites depuis la durée commune et
@@ -117,6 +126,11 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
   et la carte active conserve ses attributs visibles. Aucun média importé
   depuis un fichier n’a été vérifié dans ce parcours navigateur ; le montage
   média est couvert par les tests builder et player.
+- Après la correction du 6 octobre 2026, Brave mesure en mode Photo/vidéo
+  plein cadre l’article, l’hôte média et l’image à 916 × 515 px sur ordinateur,
+  puis 298 × 168 px à 390 px de largeur. `scrollWidth` et `scrollHeight` restent
+  égaux aux dimensions du cadre ; l’image conserve le cadrage `contain`. La
+  validation visuelle des trois autres layouts reste suivie dans le plan actif.
 - Vérification du 6 octobre 2026 : typecheck réussi, 140 tests réussis dans
   20 fichiers et build réussi. Le build émet un avertissement sur le chunk
   JavaScript supérieur à 500 kB.

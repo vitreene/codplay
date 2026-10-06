@@ -30,7 +30,7 @@ describe('Elcé Flux scene builder', () => {
     expect(build.sceneDoc.stories['page-a-bdc-section-1']?.persos).toHaveLength(0)
     expect(build.sceneDoc.stories['page-a-page']?.persos[2]?.emit?.observe).toMatchObject({
       initial: 'enter',
-      enter: [{ name: ELCE_EVENTS.PAGE_BOTTOM }],
+      enter: [{ name: ELCE_EVENTS.PAGE_FINISHED }],
     })
   })
 

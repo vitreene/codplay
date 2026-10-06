@@ -83,6 +83,17 @@ La colonne droite précédemment intitulée « Propriétés » accueille la sect
 Les interactions de dépôt et de retrait restent identiques. Quand une page est
 sélectionnée, les médias de cette page non ancrés restent accessibles sous le
 catalogue dans cette même colonne.
+À 1200 px et moins, cette colonne est remplacée par un bouton d’accès à icône ;
+placé sur la même ligne que le titre « Elcé ». Ce bouton ouvre le même catalogue
+dans un tiroir depuis la droite. À 800 px et moins, le Scénario devient lui aussi
+un tiroir, ouvert par son icône placée avant celle du catalogue. Ces deux tiroirs
+sont exclusifs. Entre 801 et 1200 px, le Scénario reste dans la colonne gauche et
+la zone de travail centrale souple occupe l’espace restant ; à 800 px et moins,
+elle occupe toute la largeur disponible. Les boutons restent dans le bandeau du
+titre, dans le flux normal de la page. Chaque tiroir se ferme par son bouton,
+par Échap ou en cliquant le fond, puis rend le focus à son bouton d’accès.
+Au-delà de 1200 px, les trois colonnes restent visibles et les boutons d’accès
+disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
 
 Au-dessus des BDC de la page Flux, les icônes « Texte » et « Quiz » ajoutent
 respectivement un BDC Section et un BDC Question à la fin de leur séquence.
@@ -170,6 +181,11 @@ gauche lit les noms actualisés depuis le document détenu par XState.
   commandes et leurs invariants. `flux-scene-builder.test.ts` vérifie qu’un
   Résultat configuré compile au travers de CodPlay en une story portant les
   deux issues. Le raccord des événements d’issue au player n’est pas certifié.
+- Le 6 octobre 2026, Brave vérifie le repli à 1024 px : la zone centrale passe
+  de 384 à 688 px et le panneau devient un accès latéral. À 390 × 844 px, les
+  colonnes restantes s’empilent et le bouton reste accessible ; le tiroir
+  conserve le catalogue et les médias, et Échap le ferme en restaurant le
+  focus. À 1408 px, les trois colonnes restent visibles.
 - Le 4 octobre, Safari MCP a sélectionné une page Flux d’Évaluation, ajouté le
   BDC Résultat avec son icône BadgeCheck puis supprimé le bloc temporaire depuis
   sa corbeille. Le retrait a conservé la séquence précédente de la page.

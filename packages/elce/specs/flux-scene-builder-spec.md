@@ -50,7 +50,7 @@ padding donne le ratio du cadre et de la réserve ; le perso image utilise
 - l’article occupe au minimum toute la zone de contenu et sa hauteur augmente
   avec le texte, tandis que le scrollport porte le défilement ;
 - un perso marqueur observant le scrollport et émettant l’événement public
-  `elce:page:bottom` avec l’identifiant de page ; la déclaration demande aussi
+  `elce:page:finished` avec l’identifiant de page ; la déclaration demande aussi
   `initial: 'enter'` pour qu’un repère déjà visible signale immédiatement la
   fin d’une page courte ;
 - une story de page et une story par Section, les stories donnant accès aux
@@ -70,9 +70,11 @@ projection n’ajoute pas de player ou de routeur local. L’émission initiale 
 repère est portée par la déclaration `initial: 'enter'` du composant scroll et
 suit le même événement public que les transitions de défilement.
 
-La résolution du type de page est explicite : Flux est envoyé vers ce builder
-et Diapo produit une erreur dédiée tant que son builder n’est pas implémenté.
-L’exhaustivité du `switch` force l’ajout d’un cas lorsque `PageType` évolue.
+`buildFluxScene` accepte explicitement les pages Flux et rejette les pages
+Diapo, qui relèvent de leur builder distinct. `ElcePlayerComposition` distribue
+les types de page vers ces deux builders ; le contrat Diapo est décrit dans la
+[spécification de son builder](./diapo-scene-builder-spec.md). L’exhaustivité
+du `switch` Flux force l’ajout d’un cas lorsque `PageType` évolue.
 
 `buildScenario(document, scenes)` construit séparément le graphe Sighty avec
 le layout à la racine et ses slots persistants `slot-menu`, `slot-title`,

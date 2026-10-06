@@ -44,7 +44,7 @@ describe('AppLayout authoring titles and creation actions', () => {
     const chapterButton = host.querySelector<HTMLButtonElement>('#elce-create-chapter')
     const evaluationChapterButton = host.querySelector<HTMLButtonElement>('#elce-create-evaluation-chapter')
 
-    expect(rootPageButton?.getAttribute('aria-label')).toBe('Ajouter une page à la racine du scénario')
+    expect(rootPageButton?.getAttribute('aria-label')).toBe('Ajouter une Page à la racine du scénario')
     expect(rootPageButton?.querySelector('svg')).not.toBeNull()
     expect(rootPageButton?.textContent?.trim()).toBe('')
     expect(rootPageButton?.parentElement?.id).toBe('elce-outline-actions')
@@ -56,8 +56,9 @@ describe('AppLayout authoring titles and creation actions', () => {
       'elce-create-chapter',
       'elce-create-evaluation-chapter',
       'elce-create-scenario-page',
+      'elce-create-scenario-diapo',
     ])
-    expect(chapterPageButton?.getAttribute('aria-label')).toBe('Ajouter une page dans Chapitre 1')
+    expect(chapterPageButton?.getAttribute('aria-label')).toBe('Ajouter une Page dans Chapitre 1')
     expect(chapterPageButton?.querySelector('svg')).not.toBeNull()
     expect(chapterPageButton?.textContent?.trim()).toBe('')
     expect(chapterButton?.getAttribute('aria-label')).toBe('Ajouter un chapitre')
@@ -99,6 +100,65 @@ describe('AppLayout authoring titles and creation actions', () => {
       `elce-scenario-entry-list-item-${rootPage?.id}`,
       `elce-chapter-${actor.getSnapshot().context.document.chapters[1]?.id}`,
     ])
+  })
+
+  it('creates a Diapo at the scenario root with a Carousel child by default', async () => {
+    const { actor, host } = mountApp()
+    const createButton = host.querySelector<HTMLButtonElement>('#elce-create-scenario-diapo')
+
+    expect(createButton?.getAttribute('aria-label')).toBe('Ajouter une Diapo à la racine du scénario')
+    expect(createButton?.querySelector('svg')?.classList.contains('lucide-presentation')).toBe(true)
+
+    await act(async () => createButton?.click())
+
+    const page = actor.getSnapshot().context.document.pages.at(-1)
+    const carousel = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === page?.bdcIds[0])
+    const firstCard = carousel?.carousel?.cards[0]
+    expect(page).toMatchObject({ type: PAGE_TYPE.DIAPO, chapterId: null, bdcIds: [carousel?.id] })
+    expect(carousel).toMatchObject({ type: BDC_TYPE.CAROUSEL, pageId: page?.id })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === firstCard?.bdcId))
+      .toMatchObject({ type: BDC_TYPE.CARD, parentBdcId: carousel?.id })
+    expect(host.querySelector(`#elce-scenario-entry-list-type-${page?.id}`)?.textContent).toBe(' · Diapo')
+  })
+
+  it('lets a Diapo replace its default Carousel with one Quiz or standalone Card', async () => {
+    const { actor, host } = mountApp()
+    await act(async () => host.querySelector<HTMLButtonElement>('#elce-create-scenario-diapo')?.click())
+
+    let documentModel = actor.getSnapshot().context.document
+    const page = documentModel.pages.at(-1)!
+    const carouselBdcId = page.bdcIds[0]!
+    const quizButton = host.querySelector<HTMLButtonElement>('#elce-question-create')!
+    const cardButton = host.querySelector<HTMLButtonElement>('#elce-card-create')!
+    expect(quizButton.disabled).toBe(true)
+    expect(cardButton.disabled).toBe(true)
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-carousel-delete-${carouselBdcId}`)?.click())
+    expect(quizButton.disabled).toBe(false)
+    expect(cardButton.disabled).toBe(false)
+
+    await act(async () => cardButton.click())
+    documentModel = actor.getSnapshot().context.document
+    const cardBdcId = documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds[0]!
+    expect(documentModel.bdcs.find((bdc) => bdc.id === cardBdcId)).toMatchObject({
+      type: BDC_TYPE.CARD,
+      pageId: page.id,
+      parentBdcId: null,
+    })
+    expect(host.querySelector(`#elce-card-editor-${cardBdcId}`)).not.toBeNull()
+    expect(host.querySelector<HTMLInputElement>(`#elce-card-title-${cardBdcId}`)).not.toBeNull()
+    expect(host.querySelector(`#elce-card-media-file-${cardBdcId}`)).toBeNull()
+    expect(quizButton.disabled).toBe(true)
+    expect(cardButton.disabled).toBe(true)
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`#elce-card-editor-delete-${cardBdcId}`)?.click())
+    expect(quizButton.disabled).toBe(false)
+    await act(async () => quizButton.click())
+    documentModel = actor.getSnapshot().context.document
+    const questionBdcId = documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds[0]!
+    expect(documentModel.bdcs.find((bdc) => bdc.id === questionBdcId)?.type).toBe(BDC_TYPE.QUESTION)
+    expect(quizButton.disabled).toBe(true)
+    expect(cardButton.disabled).toBe(true)
   })
 
   it('creates an Evaluation chapter from its icon with the configured threshold', async () => {
@@ -346,7 +406,15 @@ describe('AppLayout authoring titles and creation actions', () => {
       card: { title: 'Image conservée', message: 'Texte associé' },
     })
     expect(documentModel.bdcs.find((bdc) => bdc.id === textOnlyCardBdcId))
-      .toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, card: { title: 'Carte sans image' }, mediaId: null })
+      .toMatchObject({
+        presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
+        card: {
+          title: 'Carte sans image',
+          imagePosition: cardBdc?.card?.imagePosition,
+          imageFit: cardBdc?.card?.imageFit,
+        },
+        mediaId: null,
+      })
     expect(updatedCards?.map((entry) => entry.bdcId)).toContain(textOnlyCardBdcId)
   })
 

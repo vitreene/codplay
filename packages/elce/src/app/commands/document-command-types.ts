@@ -19,6 +19,7 @@ export type BdcPlacement =
 export type CreatePageCommandInput = Readonly<{
   pageId: PageId
   bdcId: BdcId
+  initialCardBdcId?: BdcId
   defaultBdcType?: typeof BDC_TYPE.SECTION | typeof BDC_TYPE.QUESTION
   pageType?: PageType
   name?: string
@@ -73,7 +74,7 @@ export type DocumentCommand =
   | Readonly<{ type: 'bdc.card.layout.set'; bdcId: BdcId; layoutId: CardLayoutId }>
   | Readonly<{ type: 'bdc.card.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.card.media.attach'; bdcId: BdcId; media: MediaMetadata }>
-  | Readonly<{ type: 'bdc.carousel.card.delete'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.card.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>

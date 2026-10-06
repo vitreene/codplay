@@ -1,5 +1,5 @@
 import type { ElceDocument } from '../../domain/document-model'
-import type { CatalogTabType } from '../../config/document-config-types'
+import type { CatalogTabType, PageType } from '../../config/document-config-types'
 import type { BdcId, ChapterId, MediaId, MediaMetadata, PageId } from '../../domain/document-types'
 import type { ElceSectionChange } from '../../domain/anchor-types'
 import type { DocumentCommand, PagePlacement } from '../commands/document-command-types'
@@ -25,7 +25,7 @@ export interface ElceControllerInput {
 
 export type ElceControllerEvent =
   | Readonly<{ type: 'document.apply'; command: DocumentCommand }>
-  | Readonly<{ type: 'page.create'; placement: PagePlacement; name?: string }>
+  | Readonly<{ type: 'page.create'; placement: PagePlacement; pageType?: PageType; name?: string }>
   | Readonly<{ type: 'page.select'; pageId: PageId }>
   | Readonly<{ type: 'chapter.select'; chapterId: ChapterId }>
   | Readonly<{ type: 'carousel.card.select'; bdcId: string | null }>
@@ -33,5 +33,5 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'media.source.register'; mediaId: MediaId; source: string }>
   | Readonly<{ type: 'section.change'; sectionBdcId: string; change: ElceSectionChange }>
   | Readonly<{ type: 'question.media.file.import'; bdcId: string; file: File; media: MediaMetadata }>
-  | Readonly<{ type: 'carousel.card.media.file.import'; bdcId: BdcId; file: File; media: MediaMetadata }>
+  | Readonly<{ type: 'card.media.file.import'; bdcId: BdcId; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'document.replace'; document: ElceDocument }>

@@ -12,7 +12,7 @@ import {
   PAGE_TYPE,
   SCENARIO_ENTRY_KIND,
 } from '../../config/document-config'
-import type { BdcType, CardLayoutId, MediaType } from '../../config/document-config-types'
+import type { BdcType, CardLayoutId, MediaType, PageType } from '../../config/document-config-types'
 import {
   createEmptyRichTextDocument,
   ElceDocument,
@@ -42,16 +42,30 @@ export function createPageCommand(input: CreatePageCommandInput): Extract<Docume
   return { type: 'page.create', ...input }
 }
 
-/** Creates a default Flux page command at the requested document location. */
+/** Creates a default Page or Diapo command at the requested document location. */
 export function createDefaultPageCommand(
   document: ElceDocument,
   placement: PagePlacement,
   name?: string,
+  pageType: PageType = PAGE_TYPE.FLUX,
 ): Extract<DocumentCommand, { type: 'page.create' }> {
+  const pageId = createStableId('page')
+  const bdcId = createStableId('bdc')
+  if (pageType === PAGE_TYPE.DIAPO) {
+    return createPageCommand({
+      pageId,
+      bdcId,
+      initialCardBdcId: createStableId('bdc-card'),
+      pageType,
+      name,
+      placement,
+    })
+  }
   return createPageCommand({
-    pageId: createStableId('page'),
-    bdcId: createStableId('bdc'),
+    pageId,
+    bdcId,
     defaultBdcType: defaultBdcTypeForPlacement(document, placement),
+    pageType,
     name,
     placement,
   })
@@ -184,6 +198,23 @@ export function createCardBdcCommand(
     bdcType: BDC_TYPE.CARD,
     presetId: layoutId,
     placement: { kind: BDC_LOCATION.PARENT, parentBdcId, index },
+    ...(initialCardOptions === undefined ? {} : { initialCardOptions }),
+  }
+}
+
+/** Creates a standalone Card BDC as the only direct content of a Diapo. */
+export function createStandaloneCardBdcCommand(
+  bdcId: BdcId,
+  pageId: PageId,
+  layoutId: CardLayoutId = CAROUSEL_CONFIG.initialCardLayoutId,
+  initialCardOptions?: CardPresentationOptions,
+): Extract<DocumentCommand, { type: 'bdc.create' }> {
+  return {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.CARD,
+    presetId: layoutId,
+    placement: { kind: BDC_LOCATION.PAGE, pageId },
     ...(initialCardOptions === undefined ? {} : { initialCardOptions }),
   }
 }
@@ -417,8 +448,10 @@ function placeBdc(document: ElceDocument, bdc: Bdc, placement: BdcPlacement): El
         parentBdcId: null,
       })
     case BDC_LOCATION.PAGE: {
-      if (bdc.type === BDC_TYPE.CARD) fail('Un BDC Carte ne peut pas être placé directement dans une page.')
       const page = findPage(withoutBdc, placement.pageId)
+      if (bdc.type === BDC_TYPE.CARD && page.type !== PAGE_TYPE.DIAPO) {
+        fail('Un BDC Carte autonome ne peut être placé que dans une page Diapo.')
+      }
       const pages = replaceAt(
         withoutBdc.pages,
         { ...page, bdcIds: insertAt(page.bdcIds, bdc.id, placement.index) },
@@ -480,7 +513,6 @@ function deleteCatalogBdc(document: ElceDocument, bdcId: BdcId): ElceDocument {
 function createPage(document: ElceDocument, command: Extract<DocumentCommand, { type: 'page.create' }>): ElceDocument {
   if (document.pages.some((page) => page.id === command.pageId)) fail(`Page déjà présente : ${command.pageId}`)
   if (document.bdcs.some((bdc) => bdc.id === command.bdcId)) fail(`Bdc déjà présent : ${command.bdcId}`)
-  const initialBdcType = command.defaultBdcType ?? CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].defaultBdcType
   const page: Page = {
     id: command.pageId,
     name: command.name?.trim() || nextPageName(document),
@@ -488,25 +520,42 @@ function createPage(document: ElceDocument, command: Extract<DocumentCommand, { 
     chapterId: null,
     bdcIds: [],
   }
-  const initialBdc: Bdc = {
-    id: command.bdcId,
-    type: initialBdcType,
-    presetId: initialPageBdcPreset(initialBdcType),
-    pageId: page.id,
-    parentBdcId: null,
-    mediaId: null,
-    section: sectionForBdc(initialBdcType, command.bdcId),
-    question: questionForBdc(initialBdcType),
-    evaluationResult: null,
-    carousel: null,
-    card: null,
+  const withPage = placePage(new ElceDocument({ ...document.data, pages: [...document.pages, page] }), page, command.placement)
+  switch (page.type) {
+    case PAGE_TYPE.DIAPO:
+      if (command.defaultBdcType !== undefined || command.initialCardBdcId === undefined) {
+        fail('Une page Diapo reçoit un BDC Carousel initial et sa première carte identifiée.')
+      }
+      return createBdc(withPage, {
+        type: 'bdc.create',
+        bdcId: command.bdcId,
+        bdcType: BDC_TYPE.CAROUSEL,
+        presetId: DEFAULT_PRESET_ID.CAROUSEL,
+        initialCardBdcId: command.initialCardBdcId,
+        placement: { kind: BDC_LOCATION.PAGE, pageId: page.id },
+      })
+    case PAGE_TYPE.FLUX: {
+      if (command.initialCardBdcId !== undefined) fail('Une page Flux ne reçoit pas de carte Carousel initiale.')
+      const initialBdcType = command.defaultBdcType ?? CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].defaultBdcType
+      const initialBdc: Bdc = {
+        id: command.bdcId,
+        type: initialBdcType,
+        presetId: initialPageBdcPreset(initialBdcType),
+        pageId: page.id,
+        parentBdcId: null,
+        mediaId: null,
+        section: sectionForBdc(initialBdcType, command.bdcId),
+        question: questionForBdc(initialBdcType),
+        evaluationResult: null,
+        carousel: null,
+        card: null,
+      }
+      const withEntities = new ElceDocument({ ...withPage.data, bdcs: [...withPage.bdcs, initialBdc] })
+      return placeBdc(withEntities, initialBdc, { kind: BDC_LOCATION.PAGE, pageId: page.id })
+    }
+    default:
+      return fail(`Type de page non pris en charge : ${page.type}`)
   }
-  const withEntities = new ElceDocument({ ...document.data, pages: [...document.pages, page], bdcs: [...document.bdcs, initialBdc] })
-  return placeBdc(
-    placePage(withEntities, page, command.placement),
-    initialBdc,
-    { kind: BDC_LOCATION.PAGE, pageId: page.id },
-  )
 }
 
 /** Returns the configured preset for the only BDC types used to seed new pages. */
@@ -581,6 +630,15 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
   if (command.initialCardOptions !== undefined && command.bdcType !== BDC_TYPE.CARD) {
     fail('Les options initiales ne concernent que la création d’un BDC Carte.')
   }
+  if (command.placement.kind === BDC_LOCATION.PAGE) {
+    const page = findPage(document, command.placement.pageId)
+    if (page.type === PAGE_TYPE.DIAPO
+      && command.bdcType !== BDC_TYPE.CAROUSEL
+      && command.bdcType !== BDC_TYPE.QUESTION
+      && command.bdcType !== BDC_TYPE.CARD) {
+      fail('Une Diapo accepte un Carousel, un Quiz ou une Carte autonome.')
+    }
+  }
   switch (command.bdcType) {
     case BDC_TYPE.CAROUSEL:
       if (command.presetId !== DEFAULT_PRESET_ID.CAROUSEL || command.mediaId !== undefined || command.initialCardBdcId === undefined) {
@@ -593,7 +651,10 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
             case PAGE_TYPE.FLUX:
               break
             case PAGE_TYPE.DIAPO:
-              fail('Un BDC Carousel est créé dans une page Flux pendant cette tranche.')
+              if (page.bdcIds.some((bdcId) => findBdc(document, bdcId).type === BDC_TYPE.CAROUSEL)) {
+                fail(`La page Diapo possède déjà son BDC Carousel : ${page.id}`)
+              }
+              break
           }
           break
         }
@@ -607,8 +668,12 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
       if (!CARD_LAYOUT_IDS.includes(command.presetId as CardLayoutId)
         || command.mediaId !== undefined
         || command.initialCardBdcId !== undefined
-        || command.placement.kind !== BDC_LOCATION.PARENT) {
-        fail('Un BDC Carte utilise un layout configuré et appartient à un BDC conteneur.')
+        || command.placement.kind === BDC_LOCATION.CATALOG) {
+        fail('Un BDC Carte utilise un layout configuré et appartient à un Carousel ou à une page Diapo.')
+      }
+      if (command.placement.kind === BDC_LOCATION.PAGE
+        && findPage(document, command.placement.pageId).type !== PAGE_TYPE.DIAPO) {
+        fail('Un BDC Carte autonome ne peut être placé que dans une page Diapo.')
       }
       break
     case BDC_TYPE.EVALUATION_RESULT:
@@ -643,7 +708,7 @@ function createBdc(document: ElceDocument, command: Extract<DocumentCommand, { t
             case PAGE_TYPE.FLUX:
               break
             case PAGE_TYPE.DIAPO:
-              fail('Une Question ne peut être créée que dans une page Flux.')
+              break
           }
           break
         }
@@ -788,12 +853,17 @@ function assertCardMediaAllowed(document: ElceDocument, mediaId: MediaId): void 
   }
 }
 
-/** Permanently removes one Card child while leaving its reusable media resource. */
+/** Permanently removes one Card BDC, preserving media and nonempty Carousels. */
 function deleteCard(document: ElceDocument, bdcId: BdcId): ElceDocument {
   const bdc = findBdc(document, bdcId)
   if (bdc.type !== BDC_TYPE.CARD) fail(`Seul un BDC Carte peut être retiré par cette commande : ${bdcId}`)
-  const parent = bdc.parentBdcId === null ? undefined : findBdc(document, bdc.parentBdcId)
-  if (parent?.type !== BDC_TYPE.CAROUSEL || parent.carousel == null || parent.carousel.cards.length <= 1) {
+  if (bdc.parentBdcId === null) {
+    const page = bdc.pageId === null ? undefined : findPage(document, bdc.pageId)
+    if (page?.type === PAGE_TYPE.DIAPO) return deleteBdc(document, bdc.id)
+    fail(`La Carte ${bdc.id} doit appartenir à un Carousel ou à une Diapo.`)
+  }
+  const parent = findBdc(document, bdc.parentBdcId)
+  if (parent.type !== BDC_TYPE.CAROUSEL || parent.carousel == null || parent.carousel.cards.length <= 1) {
     fail('Un Carousel doit conserver au moins une carte.')
   }
   return deleteBdc(document, bdc.id)
@@ -1360,7 +1430,7 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return setCardMedia(document, command.bdcId, command.mediaId)
     case 'bdc.card.media.attach':
       return attachCardMedia(document, command.bdcId, command.media)
-    case 'bdc.carousel.card.delete':
+    case 'bdc.card.delete':
       return deleteCard(document, command.bdcId)
     case 'bdc.question.media.set':
       return setQuestionMedia(document, command.bdcId, command.mediaId)
@@ -1504,9 +1574,17 @@ export function assertDocumentInvariants(document: ElceDocument): void {
     switch (page.type) {
       case PAGE_TYPE.FLUX:
         break
-      case PAGE_TYPE.DIAPO:
-        if (questions.length > 0) fail(`Une Question ne peut pas être placée sur une page Diapo : ${page.id}`)
+      case PAGE_TYPE.DIAPO: {
+        if (page.bdcIds.length > 1) fail(`Une Diapo ne peut contenir qu’un seul BDC direct : ${page.id}`)
+        const carouselCount = page.bdcIds.filter((bdcId) => bdcById.get(bdcId)?.type === BDC_TYPE.CAROUSEL).length
+        const unsupportedBdc = page.bdcIds.find((bdcId) => {
+          const type = bdcById.get(bdcId)?.type
+          return type !== BDC_TYPE.CAROUSEL && type !== BDC_TYPE.QUESTION && type !== BDC_TYPE.CARD
+        })
+        if (carouselCount > 1) fail(`Une page Diapo ne peut contenir qu’un BDC Carousel : ${page.id}`)
+        if (unsupportedBdc !== undefined) fail(`Le BDC ${unsupportedBdc} n’est pas pris en charge dans une page Diapo.`)
         continue
+      }
     }
     for (const bdc of questions) {
       if (bdc.question === null) fail(`Bdc Question incomplet : ${bdc.id}`)
@@ -1535,8 +1613,14 @@ export function assertDocumentInvariants(document: ElceDocument): void {
       case BDC_TYPE.CARD: {
         if (bdc.card === null || bdc.card === undefined || bdc.section !== null || bdc.question !== null
           || bdc.evaluationResult != null
-          || bdc.carousel != null || bdc.parentBdcId === null || bdc.pageId !== null) {
+          || bdc.carousel != null || (bdc.parentBdcId === null) === (bdc.pageId === null)) {
           fail(`Bdc Carte incomplet : ${bdc.id}`)
+        }
+        if (bdc.parentBdcId !== null && bdcById.get(bdc.parentBdcId)?.type !== BDC_TYPE.CAROUSEL) {
+          fail(`Le parent de la Carte ${bdc.id} doit être un Carousel.`)
+        }
+        if (bdc.pageId !== null && document.pages.find((page) => page.id === bdc.pageId)?.type !== PAGE_TYPE.DIAPO) {
+          fail(`Une Carte autonome ne peut appartenir qu’à une Diapo : ${bdc.id}`)
         }
         if (!CARD_LAYOUT_IDS.includes(bdc.presetId as CardLayoutId)) fail(`Layout de carte inconnu : ${bdc.presetId}`)
         cardService.assertValid(bdc.card)

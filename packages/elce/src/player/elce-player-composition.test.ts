@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE, PAGE_LOCATION, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand } from '../app/commands/document-commands'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../app/commands/document-commands'
 import { createInitialDocument } from '../domain/document-model'
 import { ElceQuestionService } from '../domain/question-service'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
@@ -35,9 +35,9 @@ class ControlledIntersectionObserver {
 }
 
 /** Runs pending CodPlay frames once so a queued public event reaches Sighty. */
-function flushPendingFrames(pendingFrames: FrameRequestCallback[]): void {
+function flushPendingFrames(pendingFrames: FrameRequestCallback[], timestamp = 0): void {
   const callbacks = pendingFrames.splice(0)
-  for (const callback of callbacks) callback(0)
+  for (const callback of callbacks) callback(timestamp)
 }
 
 describe('Elcé player composition', () => {
@@ -156,6 +156,211 @@ describe('Elcé player composition', () => {
     expect(viewElements[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
     expect(navigationDots[1]?.getAttribute('aria-current')).toBe('true')
     expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
+  })
+
+  it('emits a standalone Diapo Card completion immediately and unlocks Next', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const initialDocument = createInitialDocument()
+    const diapoCommand = createDefaultPageCommand(
+      initialDocument,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Carte',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(initialDocument, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createStandaloneCardBdcCommand(
+      'bdc-diapo-standalone-card',
+      diapoCommand.pageId,
+      DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-after-diapo-card',
+      bdcId: 'bdc-after-diapo-card',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: diapoCommand.pageId })
+    const publicEvents: { name: string; sourceSceneKey?: string; data?: unknown }[] = []
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const runtime = (composition as unknown as {
+      readonly sighty: { readonly runtime: {
+        readonly events: { onEvent(listener: (event: { name: string; sourceSceneKey?: string; data?: unknown }) => void): () => void }
+        getInstance(sceneKey: string): {
+          readonly events: { onEvent(listener: (event: { name: string }) => void): () => void }
+          readonly diagnostic: { onTrace(listener: (event: { name: string }) => void): () => void }
+          readonly telco: { getState(): { status: string; sequenceEnded: boolean; timelineMs: number } }
+        } | undefined
+        initialize(): Promise<void>
+      } }
+    }).sighty.runtime
+    const instanceEvents: string[] = []
+    const traceEvents: string[] = []
+    runtime.events.onEvent((event) => publicEvents.push(event))
+    await runtime.initialize()
+    const pageInstance = runtime.getInstance(`scene-${diapoCommand.pageId}`)!
+    pageInstance.events.onEvent((event) => instanceEvents.push(event.name))
+    pageInstance.diagnostic.onTrace((event) => traceEvents.push(event.name))
+
+    await composition.initialize()
+    const marker = stage.querySelector(`#${diapoCommand.pageId}-diapo-bottom-marker`)
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
+    expect(marker).not.toBeNull()
+    expect(observer).toBeDefined()
+    observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+
+    const pageState = runtime.getInstance(`scene-${diapoCommand.pageId}`)?.telco.getState()
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    expect(pageState?.status).toBe('playing')
+    expect(pageState?.sequenceEnded).toBe(false)
+    expect(traceEvents).toContain(ELCE_EVENTS.PAGE_FINISHED)
+    expect(instanceEvents).toContain(ELCE_EVENTS.PAGE_FINISHED)
+    expect(stage.querySelector('.elce-card--text-short')).not.toBeNull()
+    expect((stage.querySelector('.elce-diapo-host') as HTMLElement | null)?.style.overflowY).toBe('hidden')
+    expect(stage.querySelector('.elce-flux-scrollport')).toBeNull()
+    expect(publicEvents).toContainEqual(expect.objectContaining({
+      name: ELCE_EVENTS.PAGE_FINISHED,
+      sourceSceneKey: `scene-${diapoCommand.pageId}`,
+      data: { pageId: diapoCommand.pageId },
+    }))
+    expect(nextButton?.disabled).toBe(false)
+    expect(stage.querySelector('.elce-card--text-short')).not.toBeNull()
+  })
+
+  it('emits the shared Page-bottom event when the final manual Diapo Carousel view appears', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const initialDocument = createInitialDocument()
+    const diapoCommand = createDefaultPageCommand(
+      initialDocument,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Carousel',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(initialDocument, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-diapo-carousel-card-2',
+      diapoCommand.bdcId,
+      1,
+      DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-after-diapo-carousel',
+      bdcId: 'bdc-after-diapo-carousel',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: diapoCommand.pageId })
+    const publicEvents: { name: string; sourceSceneKey?: string; data?: unknown }[] = []
+    const runtime = (composition as unknown as {
+      readonly sighty: { readonly runtime: {
+        readonly events: { onEvent(listener: (event: { name: string; sourceSceneKey?: string; data?: unknown }) => void): void }
+      } }
+    }).sighty.runtime
+    runtime.events.onEvent((event) => publicEvents.push(event))
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const finalView = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')[1]
+    const finalDot = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')[1]
+    const marker = finalView?.querySelector('.elce-carousel-completion-marker')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
+    expect(nextButton?.disabled).toBe(true)
+    expect(finalView?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+    expect(marker).not.toBeNull()
+    expect(observer).toBeDefined()
+
+    finalDot?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+    expect(finalView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+
+    expect(publicEvents).toContainEqual(expect.objectContaining({
+      name: ELCE_EVENTS.PAGE_FINISHED,
+      sourceSceneKey: `scene-${diapoCommand.pageId}`,
+      data: { pageId: diapoCommand.pageId },
+    }))
+    expect(publicEvents.some((event) => event.name === ELCE_EVENTS.SCENE_END)).toBe(false)
+    expect(nextButton?.disabled).toBe(false)
+  })
+
+  it('unlocks a Diapo Quiz only after validation and keeps its Question mounted', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const initialDocument = createInitialDocument()
+    const diapoCommand = createDefaultPageCommand(
+      initialDocument,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Quiz',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(initialDocument, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createQuestionBdcCommand(
+      'bdc-diapo-question',
+      diapoCommand.pageId,
+      0,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-after-diapo-question',
+      bdcId: 'bdc-after-diapo-question',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: diapoCommand.pageId })
+    const publicEvents: { name: string; sourceSceneKey?: string; data?: unknown }[] = []
+    const runtime = (composition as unknown as {
+      readonly sighty: { readonly runtime: {
+        readonly events: { onEvent(listener: (event: { name: string; sourceSceneKey?: string; data?: unknown }) => void): () => void }
+      } }
+    }).sighty.runtime
+    runtime.events.onEvent((event) => publicEvents.push(event))
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const answers = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
+    const validateButton = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    expect(answers).toHaveLength(2)
+    expect(nextButton?.disabled).toBe(true)
+
+    answers[0]?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(validateButton?.disabled).toBe(false)
+    expect(nextButton?.disabled).toBe(true)
+
+    validateButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-question-feedback')?.textContent).toMatch(/Bonne réponse|Réponse incorrecte/)
+    expect(nextButton?.disabled).toBe(false)
+    expect(stage.querySelector('.elce-card--question')).not.toBeNull()
+    expect(publicEvents).toContainEqual(expect.objectContaining({
+      name: ELCE_EVENTS.PAGE_FINISHED,
+      sourceSceneKey: `scene-${diapoCommand.pageId}`,
+      data: { pageId: diapoCommand.pageId },
+    }))
   })
 
   it('mounts Card BDC media through its selected layout in the real player composition', async () => {
@@ -721,6 +926,15 @@ function expectQuestionCorrectionHidden(container: ParentNode): void {
   expect(container.querySelector('.input__correction-icon.is-correct')).toBeNull()
   expect(container.querySelector('.input__correction-icon.is-incorrect')).toBeNull()
   expect(container.querySelector('.input__correction-icon.is-missed-correct')).toBeNull()
+}
+
+/** Gives public CodPlay events and Sighty presentation updates several frames to settle. */
+async function flushCompositionFrames(pendingFrames: FrameRequestCallback[]): Promise<void> {
+  for (let pass = 0; pass < 3; pass += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    flushPendingFrames(pendingFrames, pass * 25)
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, 25))
 }
 
 /** Confirms CodPlay displays the expected answer corrections after validation. */

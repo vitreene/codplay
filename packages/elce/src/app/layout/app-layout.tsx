@@ -1,11 +1,11 @@
 import { useSelector } from '@xstate/react'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { Archive, BadgeCheck, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, Images, ListChecks, Trash2 } from 'lucide-react'
+import { Archive, BadgeCheck, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, Images, List, ListChecks, Presentation, RectangleHorizontal, Trash2, X } from 'lucide-react'
 import './app-layout.css'
 
 import { ANCHOR_RETURN, BDC_ORDER, BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
-import type { ChapterType, EvaluationRetryScope } from '../../config/document-config-types'
+import type { ChapterType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import {
   createChapterCommand,
   createChapterMoveCommand,
@@ -14,6 +14,7 @@ import {
   createPageDeleteCommand,
   createPageMoveCommand,
   createSectionBdcCommand,
+  createStandaloneCardBdcCommand,
 } from '../commands/document-commands'
 import type { PagePlacement } from '../commands/document-command-types'
 import type { AppLayoutProps } from './app-layout-types'
@@ -21,6 +22,7 @@ import { SectionEditor } from '../editor/section-editor'
 import { CarouselEditor } from '../editor/carousel-editor'
 import { QuestionEditor } from '../editor/question-editor'
 import { EvaluationResultEditor } from '../editor/evaluation-result-editor'
+import { CardEditor } from '../editor/card/card-editor'
 import { PlayerPreview } from '../player/player-preview'
 import { PopupPreviewHost } from '../player/popup-preview-host'
 import { PREVIEW_SURFACE } from '../player/preview-surface-config'
@@ -31,6 +33,7 @@ import { ElceAnchorDropFacade } from '../../domain/anchor-drop-facade'
 import { ElcePageMediaService } from '../../domain/page-media-service'
 import { ElceQuestionFacade } from '../../domain/question-facade'
 import { ElceCarouselFacade, createCarouselBdcId } from '../../domain/carousel-facade'
+import { ElceCardFacade } from '../../domain/card/card-facade'
 import type { ElceQuestionEditorActions } from '../../domain/question-facade-types'
 import type { QuestionContent } from '../../domain/question-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
@@ -38,6 +41,9 @@ import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/c
 import type { ScenarioEntry } from '../../domain/scenario-entry-types'
 
 const pageMediaService = new ElcePageMediaService()
+const PROPERTIES_DRAWER_BREAKPOINT_PX = 1200
+const OUTLINE_DRAWER_BREAKPOINT_PX = 800
+type ResponsivePanel = 'outline' | 'properties' | null
 type ScenarioPagePlacement = Extract<PagePlacement, { kind: typeof PAGE_LOCATION.SCENARIO }>
 const chapterIcons = {
   folder: Folder,
@@ -60,7 +66,15 @@ function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
 export function AppLayout({ controller }: AppLayoutProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [responsivePanel, setResponsivePanel] = useState<ResponsivePanel>(null)
   const popupPreviewHostRef = useRef<PopupPreviewHost | null>(null)
+  const outlineDrawerRef = useRef<HTMLElement | null>(null)
+  const propertiesDrawerRef = useRef<HTMLElement | null>(null)
+  const outlineToggleRef = useRef<HTMLButtonElement | null>(null)
+  const propertiesToggleRef = useRef<HTMLButtonElement | null>(null)
+  const outlineCloseRef = useRef<HTMLButtonElement | null>(null)
+  const propertiesCloseRef = useRef<HTMLButtonElement | null>(null)
+  const responsivePanelWasOpenRef = useRef<ResponsivePanel>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const draggedEntry = useRef<ScenarioEntry | null>(null)
   const draggedBdcId = useRef<string | null>(null)
@@ -90,7 +104,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
       dispatch: (command) => controller.send({ type: 'document.apply', command }),
       selectCard: (bdcId) => controller.send({ type: 'carousel.card.select', bdcId }),
       importMedia: (bdcId, mediaImport) => controller.send({
-        type: 'carousel.card.media.file.import',
+        type: 'card.media.file.import',
         bdcId,
         file: mediaImport.file,
         media: mediaImport.media,
@@ -98,7 +112,19 @@ export function AppLayout({ controller }: AppLayoutProps) {
     })
   }
   const carouselFacade = carouselFacadeRef.current
-  const stateValue = useSelector(controller, (snapshot) => String(snapshot.value))
+  const cardFacadeRef = useRef<ElceCardFacade | null>(null)
+  if (cardFacadeRef.current === null) {
+    cardFacadeRef.current = new ElceCardFacade({
+      dispatch: (command) => controller.send({ type: 'document.apply', command }),
+      importMedia: (bdcId, mediaImport) => controller.send({
+        type: 'card.media.file.import',
+        bdcId,
+        file: mediaImport.file,
+        media: mediaImport.media,
+      }),
+    })
+  }
+  const cardFacade = cardFacadeRef.current
   const documentModel = useSelector(controller, (snapshot) => snapshot.context.document)
   const selectedPageId = useSelector(controller, (snapshot) => snapshot.context.selectedPageId)
   const selectedChapterId = useSelector(controller, (snapshot) => snapshot.context.selectedChapterId)
@@ -126,15 +152,23 @@ export function AppLayout({ controller }: AppLayoutProps) {
             return bdc.evaluationResult == null ? [] : [bdc]
           case BDC_TYPE.CAROUSEL:
             return bdc.carousel == null ? [] : [bdc]
+          case BDC_TYPE.CARD:
+            return bdc.card == null ? [] : [bdc]
           default:
             return []
         }
       })
   const pageHasQuestion = selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.QUESTION)
-  const canCreateQuestion = !pageHasQuestion && pageAllowsQuestion(selectedPage)
+  const pageHasCarousel = selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.CAROUSEL)
+  const pageHasContent = selectedPageBdcs.length > 0
+  const canCreateQuestion = pageAllowsQuestion(selectedPage)
+    && !pageHasQuestion
+    && (selectedPage?.type !== PAGE_TYPE.DIAPO || !pageHasContent)
   const canCreateSection = pageAllowsSection(selectedPage)
   const canCreateEvaluationResult = pageAllowsEvaluationResult(selectedPage, documentModel.chapters)
   const canCreateCarousel = selectedPage?.type === PAGE_TYPE.FLUX
+    || (selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent && !pageHasCarousel)
+  const canCreateStandaloneCard = selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent
   const mediaById = Object.fromEntries(documentModel.medias.map((media) => [media.id, {
     name: media.name,
     type: media.type,
@@ -146,6 +180,61 @@ export function AppLayout({ controller }: AppLayoutProps) {
     : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
 
   useEffect(() => () => popupPreviewHostRef.current?.destroy(), [])
+
+  useEffect(() => {
+    /** Closes a responsive panel when its inline layout becomes available again. */
+    const closeDrawerWhenInline = () => {
+      if (responsivePanel === 'outline' && window.innerWidth > OUTLINE_DRAWER_BREAKPOINT_PX) {
+        setResponsivePanel(null)
+      } else if (responsivePanel === 'properties' && window.innerWidth > PROPERTIES_DRAWER_BREAKPOINT_PX) {
+        setResponsivePanel(null)
+      }
+    }
+    window.addEventListener('resize', closeDrawerWhenInline)
+    return () => window.removeEventListener('resize', closeDrawerWhenInline)
+  }, [responsivePanel])
+
+  useEffect(() => {
+    if (responsivePanel === 'outline') {
+      outlineCloseRef.current?.focus()
+    } else if (responsivePanel === 'properties') {
+      propertiesCloseRef.current?.focus()
+    } else if (responsivePanelWasOpenRef.current === 'outline' && window.innerWidth <= OUTLINE_DRAWER_BREAKPOINT_PX) {
+      outlineToggleRef.current?.focus()
+    } else if (responsivePanelWasOpenRef.current === 'properties' && window.innerWidth <= PROPERTIES_DRAWER_BREAKPOINT_PX) {
+      propertiesToggleRef.current?.focus()
+    }
+    responsivePanelWasOpenRef.current = responsivePanel
+  }, [responsivePanel])
+
+  useEffect(() => {
+    if (responsivePanel === null) return
+    const drawer = responsivePanel === 'outline' ? outlineDrawerRef.current : propertiesDrawerRef.current
+    if (drawer === null) return
+    const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+    /** Keeps Escape and Tab navigation inside the open responsive panel. */
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setResponsivePanel(null)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>(focusableSelector))
+        .filter((element) => element.getClientRects().length > 0)
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (first === undefined || last === undefined) return
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [responsivePanel])
 
   /** Opens the active POC preview surface from the editor's current page. */
   const openPreview = () => {
@@ -160,8 +249,8 @@ export function AppLayout({ controller }: AppLayoutProps) {
     }
   }
 
-  const addPage = (placement: PagePlacement) => {
-    controller.send({ type: 'page.create', placement })
+  const addPage = (placement: PagePlacement, pageType: PageType = PAGE_TYPE.FLUX) => {
+    controller.send({ type: 'page.create', placement, pageType })
   }
 
   /** Creates a standard chapter through the controller's document command. */
@@ -228,9 +317,9 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const addQuestion = () => {
     switch (selectedPage?.type) {
       case PAGE_TYPE.FLUX:
+      case PAGE_TYPE.DIAPO:
         questionFacade.create(documentModel, selectedPage.id, selectedPage.bdcIds.length)
         return
-      case PAGE_TYPE.DIAPO:
       default:
         return
     }
@@ -279,9 +368,25 @@ export function AppLayout({ controller }: AppLayoutProps) {
         })
         return
       case PAGE_TYPE.DIAPO:
+        if (!pageHasCarousel) {
+          controller.send({
+            type: 'document.apply',
+            command: createCarouselBdcCommand(createCarouselBdcId(), selectedPage.id, selectedPage.bdcIds.length),
+          })
+        }
+        return
       default:
         return
     }
+  }
+
+  /** Adds the reusable standalone Card model as the Diapo's only direct BDC. */
+  const addStandaloneCard = () => {
+    if (selectedPage?.type !== PAGE_TYPE.DIAPO || pageHasContent) return
+    controller.send({
+      type: 'document.apply',
+      command: createStandaloneCardBdcCommand(createStableId('bdc-card'), selectedPage.id),
+    })
   }
 
   const beginPageDrag = (event: DragEvent<HTMLElement>, pageId: string) => {
@@ -413,16 +518,46 @@ export function AppLayout({ controller }: AppLayoutProps) {
   return (
     <div id="elce-workspace" className="elce-workspace">
       <header id="elce-header" className="elce-header">
-        <div id="elce-brand" className="elce-brand">
-          <span id="elce-brand-name">Elcé</span>
-          <span id="elce-brand-status">POC</span>
+        <div id="elce-header-title" className="elce-header-title">
+          <div id="elce-brand" className="elce-brand">
+            <span id="elce-brand-name">Elcé</span>
+          </div>
+          <nav id="elce-responsive-panel-access" className="elce-responsive-panel-access" aria-label="Panneaux de l’éditeur">
+            <button
+              id="elce-outline-toggle"
+              ref={outlineToggleRef}
+              className={responsivePanel === 'outline' ? 'elce-responsive-panel-toggle elce-responsive-panel-toggle--outline elce-responsive-panel-toggle--open' : 'elce-responsive-panel-toggle elce-responsive-panel-toggle--outline'}
+              type="button"
+              aria-label="Ouvrir le scénario"
+              title="Scénario"
+              aria-expanded={responsivePanel === 'outline'}
+              aria-controls="elce-outline"
+              onClick={() => setResponsivePanel('outline')}
+            ><List aria-hidden="true" size={18} strokeWidth={2} /></button>
+            <button
+              id="elce-properties-toggle"
+              ref={propertiesToggleRef}
+              className={responsivePanel === 'properties' ? 'elce-responsive-panel-toggle elce-responsive-panel-toggle--properties elce-responsive-panel-toggle--open' : 'elce-responsive-panel-toggle elce-responsive-panel-toggle--properties'}
+              type="button"
+              aria-label="Ouvrir les contenus disponibles"
+              title="Contenus disponibles"
+              aria-expanded={responsivePanel === 'properties'}
+              aria-controls="elce-properties"
+              onClick={() => setResponsivePanel('properties')}
+            ><Images aria-hidden="true" size={18} strokeWidth={2} /></button>
+          </nav>
         </div>
-        <span id="elce-controller-state" className="elce-controller-state">
-          état : {stateValue}
-        </span>
       </header>
       <main id="elce-main" className="elce-main">
-        <section id="elce-outline" className="elce-panel">
+        <section
+          id="elce-outline"
+          ref={outlineDrawerRef}
+          className="elce-panel elce-outline"
+          data-drawer-open={responsivePanel === 'outline'}
+          role={responsivePanel === 'outline' ? 'dialog' : undefined}
+          aria-modal={responsivePanel === 'outline' ? true : undefined}
+          aria-labelledby="elce-outline-title"
+        >
           <div id="elce-outline-heading" className="elce-panel-heading">
             <h1 id="elce-outline-title">Scénario</h1>
             <div id="elce-outline-actions" className="elce-outline-actions">
@@ -436,13 +571,31 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 id="elce-create-scenario-page"
                 className="elce-icon-action"
                 type="button"
-                aria-label="Ajouter une page à la racine du scénario"
-                title="Ajouter une page à la racine du scénario"
-                onClick={() => addPage({ kind: PAGE_LOCATION.SCENARIO })}
+                aria-label="Ajouter une Page à la racine du scénario"
+                title="Ajouter une Page à la racine du scénario"
+                onClick={() => addPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX)}
               >
                 <FilePlus aria-hidden="true" size={14} strokeWidth={2} />
               </button>
+              <button
+                id="elce-create-scenario-diapo"
+                className="elce-icon-action"
+                type="button"
+                aria-label="Ajouter une Diapo à la racine du scénario"
+                title="Ajouter une Diapo à la racine du scénario"
+                onClick={() => addPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO)}
+              >
+                <Presentation aria-hidden="true" size={16} strokeWidth={2} />
+              </button>
             </div>
+            <button
+              id="elce-outline-close"
+              ref={outlineCloseRef}
+              className="elce-responsive-panel-close elce-outline-close"
+              type="button"
+              aria-label="Fermer le scénario"
+              onClick={() => setResponsivePanel(null)}
+            ><X aria-hidden="true" size={18} strokeWidth={2} /></button>
           </div>
           <p id="elce-document-name">{documentModel.data.name}</p>
           <p id="elce-page-dnd-help" className="elce-muted">Glissez une page pour la déplacer ou la réordonner.</p>
@@ -457,7 +610,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
             onSelectChapter={(chapterId) => controller.send({ type: 'chapter.select', chapterId })}
             onDeletePage={deletePage}
             onDeleteChapter={(chapterId) => controller.send({ type: 'document.apply', command: { type: 'chapter.delete', chapterId } })}
-            onAddChapterPage={(chapterId) => addPage({ kind: PAGE_LOCATION.CHAPTER, chapterId })}
+            onAddChapterPage={(chapterId, pageType) => addPage({ kind: PAGE_LOCATION.CHAPTER, chapterId }, pageType)}
             onDragStartPage={beginPageDrag}
             onDragStartChapter={beginChapterDrag}
             onDragEnd={endPageDrag}
@@ -583,6 +736,15 @@ export function AppLayout({ controller }: AppLayoutProps) {
                   disabled={!canCreateCarousel}
                   onClick={addCarousel}
                 ><Images aria-hidden="true" size={17} strokeWidth={2} /></button>
+                {selectedPage?.type === PAGE_TYPE.DIAPO && <button
+                  id="elce-card-create"
+                  className="elce-icon-action"
+                  type="button"
+                  aria-label="Ajouter une carte autonome"
+                  title="Ajouter une carte autonome"
+                  disabled={!canCreateStandaloneCard}
+                  onClick={addStandaloneCard}
+                ><RectangleHorizontal aria-hidden="true" size={17} strokeWidth={2} /></button>}
                 {canCreateEvaluationResult && <button
                   id="elce-evaluation-result-create"
                   className="elce-icon-action"
@@ -692,6 +854,16 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                   mediaById={mediaById}
                                   actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel, carouselCards)}
                                 />
+                              : bdc.type === BDC_TYPE.CARD && bdc.card !== null
+                              ? <CardEditor
+                                  bdc={bdc}
+                                  mediaById={mediaById}
+                                  actions={cardFacade.createEditorActions(documentModel.bdcs)}
+                                  onDelete={() => controller.send({
+                                    type: 'document.apply',
+                                    command: { type: 'bdc.card.delete', bdcId: bdc.id },
+                                  })}
+                                />
                               : null}
                       </div>
                     </Fragment>
@@ -707,9 +879,29 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 ><span /></div>
               </div>}
         </section>
-        <aside id="elce-properties" className="elce-panel">
+        <aside
+          id="elce-properties"
+          ref={propertiesDrawerRef}
+          className="elce-panel elce-properties"
+          data-drawer-open={responsivePanel === 'properties'}
+          role={responsivePanel === 'properties' ? 'dialog' : undefined}
+          aria-modal={responsivePanel === 'properties' ? true : undefined}
+          aria-labelledby="elce-content-catalog-title"
+        >
           <section id="elce-content-catalog" className="elce-outline-group">
-            <h1 id="elce-content-catalog-title">Contenus disponibles</h1>
+            <header id="elce-properties-heading" className="elce-properties-heading">
+              <h1 id="elce-content-catalog-title">Contenus disponibles</h1>
+              <button
+                id="elce-properties-close"
+                ref={propertiesCloseRef}
+                className="elce-responsive-panel-close elce-properties-close"
+                type="button"
+                aria-label="Fermer les contenus disponibles"
+                onClick={() => setResponsivePanel(null)}
+              >
+                <X aria-hidden="true" size={18} strokeWidth={2} />
+              </button>
+            </header>
             <div id="elce-content-catalog-tabs" className="elce-content-catalog-tabs" role="group" aria-label="Contenus du catalogue">
               <button
                 id="elce-content-catalog-tab-bdcs"
@@ -835,6 +1027,15 @@ export function AppLayout({ controller }: AppLayoutProps) {
               </section>}
         </aside>
       </main>
+      {responsivePanel !== null
+        ? <button
+            id="elce-responsive-panel-backdrop"
+            className="elce-responsive-panel-backdrop"
+            type="button"
+            aria-label={responsivePanel === 'outline' ? 'Fermer le scénario' : 'Fermer les contenus disponibles'}
+            onClick={() => setResponsivePanel(null)}
+          />
+        : null}
       {PREVIEW_SURFACE === 'modal' && previewOpen
         ? <div id="elce-preview-modal" className="elce-preview-modal" role="dialog" aria-modal="true" aria-labelledby="elce-preview-title">
             <div id="elce-preview-dialog" className="elce-preview-dialog">
@@ -957,7 +1158,7 @@ type ScenarioEntryDropListProps = Readonly<{
   readonly onSelectChapter: (chapterId: string) => void
   readonly onDeletePage: (pageId: string) => void
   readonly onDeleteChapter: (chapterId: string) => void
-  readonly onAddChapterPage: (chapterId: string) => void
+  readonly onAddChapterPage: (chapterId: string, pageType: PageType) => void
   readonly onDragStartPage: (event: DragEvent<HTMLElement>, pageId: string) => void
   readonly onDragStartChapter: (event: DragEvent<HTMLElement>, chapterId: string) => void
   readonly onDragEnd: () => void
@@ -1060,11 +1261,21 @@ function ScenarioEntryDropList({
                       id={`elce-create-page-${chapter.id}`}
                       className="elce-location-page-action"
                       type="button"
-                      aria-label={`Ajouter une page dans ${chapter.name}`}
-                      title={`Ajouter une page dans ${chapter.name}`}
-                      onClick={() => onAddChapterPage(chapter.id)}
+                      aria-label={`Ajouter une Page dans ${chapter.name}`}
+                      title={`Ajouter une Page dans ${chapter.name}`}
+                      onClick={() => onAddChapterPage(chapter.id, PAGE_TYPE.FLUX)}
                     >
                       <FilePlus aria-hidden="true" size={14} strokeWidth={2} />
+                    </button>
+                    <button
+                      id={`elce-create-diapo-${chapter.id}`}
+                      className="elce-location-page-action"
+                      type="button"
+                      aria-label={`Ajouter une Diapo dans ${chapter.name}`}
+                      title={`Ajouter une Diapo dans ${chapter.name}`}
+                      onClick={() => onAddChapterPage(chapter.id, PAGE_TYPE.DIAPO)}
+                    >
+                      <Presentation aria-hidden="true" size={16} strokeWidth={2} />
                     </button>
                     <DeleteIconButton
                       id={`elce-chapter-delete-${chapter.id}`}
@@ -1254,12 +1465,22 @@ function PageOutlineRow({
       >
         {page.name}
       </button>
-      <span id={`${id}-type-${page.id}`} className="elce-muted"> · {page.type}</span>
+        <span id={`${id}-type-${page.id}`} className="elce-muted"> · {pageTypeLabel(page.type)}</span>
       <div id={`${id}-actions-${page.id}`} className="elce-page-actions">
         <DeleteIconButton id={`${id}-delete-${page.id}`} onClick={() => onDelete(page.id)} />
       </div>
     </div>
   )
+}
+
+/** Returns the user-facing name of a page type without exposing code identifiers. */
+function pageTypeLabel(pageType: PageType): 'Page' | 'Diapo' {
+  switch (pageType) {
+    case PAGE_TYPE.FLUX:
+      return 'Page'
+    case PAGE_TYPE.DIAPO:
+      return 'Diapo'
+  }
 }
 
 type DeleteIconButtonProps = Readonly<{
@@ -1290,8 +1511,8 @@ function DeleteIconButton({ id, ariaLabel = 'Supprimer définitivement', disable
 function pageAllowsQuestion(page: ElceDocument['pages'][number] | undefined): boolean {
   switch (page?.type) {
     case PAGE_TYPE.FLUX:
-      return true
     case PAGE_TYPE.DIAPO:
+      return true
     default:
       return false
   }

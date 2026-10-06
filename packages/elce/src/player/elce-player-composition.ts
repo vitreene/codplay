@@ -6,8 +6,10 @@ import {
   SCROLL_CONTAINER_MODULE_DEFINITION,
   createScrollContainerSourceAdapter,
 } from '@codplay/component-v2'
-import { ELCE_EVENTS, ELCE_SCENARIO } from '../config/document-config'
+import { ELCE_EVENTS, ELCE_SCENARIO, PAGE_TYPE } from '../config/document-config'
 import { buildFluxScene } from '../builders/flux-scene-builder'
+import type { FluxSceneBuildOptions } from '../builders/flux-scene-builder-types'
+import { buildDiapoScene } from '../builders/diapo/diapo-scene-builder'
 import { buildScenario } from '../builders/scenario-builder'
 import { validateHtmlElementMethodActions } from '../builders/html-element-method-validation'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario-builder-types'
@@ -224,7 +226,7 @@ export function createPageSceneCatalog(
       pageStyleSheets.push(...cached.styleSheets)
       return [`scene-${page.id}`, cached.source]
     }
-    const scene = buildFluxScene(page, document.bdcs, {
+    const scene = buildPageScene(page, document.bdcs, {
       mediaSources: pageMediaSources,
       mediaTypes: pageMediaTypes,
     })
@@ -240,6 +242,20 @@ export function createPageSceneCatalog(
     return [`scene-${page.id}`, source]
   }))
   return { scenes, styleSheets: [...new Set(pageStyleSheets)] }
+}
+
+/** Dispatches each page type to the scene builder that owns its presentation. */
+function buildPageScene(
+  page: ElceDocument['pages'][number],
+  bdcs: ElceDocument['bdcs'],
+  options: FluxSceneBuildOptions,
+) {
+  switch (page.type) {
+    case PAGE_TYPE.FLUX:
+      return buildFluxScene(page, bdcs, options)
+    case PAGE_TYPE.DIAPO:
+      return buildDiapoScene(page, bdcs, options)
+  }
 }
 
 /** Reads the same page order used by the Sighty scenario builder. */

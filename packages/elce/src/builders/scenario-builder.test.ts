@@ -9,6 +9,19 @@ import { buildScenario } from './scenario-builder'
 const emptyScene: SceneDoc<string> = { id: 'empty-scene', stories: {} }
 
 describe('Elcé scenario builder', () => {
+  it('routes the shared page-completion event to the Sighty action', () => {
+    const scenario = buildScenario(createInitialDocument(), {})
+    const mainView = scenario.views !== undefined && 'views' in scenario.views
+      ? scenario.views.views.main
+      : undefined
+    const pageGraph = mainView?.view.views
+
+    expect(pageGraph !== undefined && 'actions' in pageGraph ? pageGraph.actions?.[ELCE_EVENTS.PAGE_FINISHED] : undefined)
+      .toEqual({ action: ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED })
+    expect(pageGraph !== undefined && 'actions' in pageGraph ? pageGraph.actions?.[ELCE_EVENTS.SCENE_END] : undefined)
+      .toBeUndefined()
+  })
+
   it('keeps page ordering in a separate Sighty graph', () => {
     const document = createInitialDocument()
     const scenario = buildScenario(document, { 'scene-page-a': emptyScene })
