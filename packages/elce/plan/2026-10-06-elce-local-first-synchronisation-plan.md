@@ -246,9 +246,13 @@ produit un conflit visible sans écrasement.
 Enregistrer les originaux comme fichiers côté serveur et leurs identifiants et
 métadonnées dans SQLite.
 
-- Recevoir un média sous un nom temporaire, le finaliser dans le répertoire
-  média puis publier sa référence dans SQLite. Contrôler les fichiers
-  temporaires ou orphelins après interruption.
+- Le serveur reçoit les octets par `PUT` brut, les écrit en flux dans un
+  temporaire en calculant SHA-256, les finalise dans le FileStorage filesystem
+  Remix puis publie `storage_key` dans SQLite. Il vérifie la taille déclarée
+  dans `media_resources`, nettoie les fichiers temporaires ou orphelins au
+  démarrage et après les suppressions. Ce trajet serveur est implémenté et
+  vérifié par le test HTTP intégré ; le raccord à la synchronisation locale
+  reste à faire.
 - Réutiliser les mêmes octets au sein d’un projet à partir de leur empreinte.
 - Garder les octets locaux jusqu’à confirmation du transfert. Pour une image
   confirmée, résoudre sa référence média vers l’URL serveur et retirer son Blob
@@ -258,7 +262,9 @@ métadonnées dans SQLite.
 - Transférer aussi les vidéos comme fichiers et conserver leur référence côté
   serveur. Le seuil de conservation locale et le choix entre lecture locale ou
   depuis une URL serveur sont reportés après le POC, selon les contraintes du
-  serveur réel.
+  serveur réel. Une vidéo fournie au player par URL serveur passe par le
+  preload Sighty/CodPlay existant avant le montage de la scène ; Elcé ne crée
+  pas de circuit de préchargement distinct.
 - Le cache HTTP navigateur est opportuniste : il peut être évincé et ne garantit
   pas l’accès hors connexion. Si l’image n’est pas en cache, elle est rechargée
   du serveur au retour du réseau. Une vidéo distante n’est pas lisible hors

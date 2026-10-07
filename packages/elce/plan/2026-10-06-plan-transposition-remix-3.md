@@ -1,6 +1,6 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : En cours — étapes 0, 1 et 2 Finies ; étape 3 À faire.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
+**Statut : En cours — étapes 0, 1, 2 et 3 Finies.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
@@ -135,18 +135,43 @@ responsabilités distinctes.
 
 **Sortie :** atteinte. Les opérations de projet traversent les routes et
 contrôleurs Remix jusqu’à SQLite ; une révision périmée est refusée sans
-écrasement. Le listener local et les routes de fichiers restent à réaliser à
-l’étape 3.
+écrasement. Le listener et les routes de fichiers ont été assemblés et vérifiés
+dans l’étape 3 ; l’étape 2 reste couverte par ses tests routeur/SQLite propres.
 
-### 3. Brancher les fichiers média — À faire
+### 3. Brancher les fichiers média — Fini le 7 octobre
 
-- Déclarer les routes d’import et de lecture média, puis recevoir images et
-  vidéos avec le parsing multipart en flux de Remix.
+- **Méthode d’import fixée le 7 octobre :** `PUT` en corps brut. Les
+  métadonnées et la taille attendue proviennent de `media_resources` ; le corps
+  est écrit en flux dans un temporaire, puis transféré vers FileStorage Remix
+  avant la publication de `storage_key` dans SQLite. Le parseur multipart
+  `remix@3.0.0-rc.4` construit le `FileUpload` depuis les morceaux accumulés et
+  ne convient donc pas aux vidéos longues dans ce parcours.
 - Stocker les octets dans le FileStorage filesystem de Remix, et les métadonnées/références dans SQLite, en gardant l’étape de finalisation avant publication prévue par le plan local-first.
-- Conserver le service de déduplication et le transfert local déjà définis.
-- Lire les médias par réponse fichier Remix ; vérifier les entêtes de cache décidées par Elcé et les réponses Range pour les vidéos sans charger le fichier complet en mémoire.
+- Le serveur renvoie l’identifiant canonique quand les mêmes octets existent
+  déjà dans une autre ressource du projet. La réconciliation du document par
+  la commande métier de fusion appartient au transfert local-first, pas à ce
+  listener.
+- Lire les médias par `createFileResponse()` de Remix ; régler les entêtes de cache prévues par le plan local-first. L’aide fournit déjà le transfert fichier et les requêtes Range pour les médias, sans implémentation Elcé dédiée.
+- Le builder reçoit les URL via son mapping `mediaSources`. Le transfert local-first choisira la source à fournir ; Sighty compile le manifeste puis appelle le preload CodPlay avant le montage de la scène. Elcé n’ajoute aucun préchargeur.
 
-**Sortie :** upload réel, réutilisation d’un média identique, accès URL à une image et lecture partielle d’une vidéo vérifiés dans le navigateur.
+**Vérification :** `createElceHttpServer()` lance un vrai listener Node assemblant
+les routes Remix, SQLite et FileStorage. Le test d’intégration envoie les
+requêtes au serveur en écoute : import image/vidéo en flux, rejet d’une taille
+incorrecte, URL de lecture, réponse vidéo `206 Range`, idempotence, signalement
+d’un contenu déjà enregistré sous une autre ressource, retrait du fichier lors
+de `media.merge`, nettoyage après suppression du projet, et reprise après
+fichiers temporaires/orphelins présents au démarrage. Les tests ciblés SQLite/API,
+les 190 tests Elcé, le typecheck et le build passent.
+
+Le service média n’est pas encore raccordé au transfert local IndexedDB ou à
+la sélection de source `mediaSources` du builder ; cette synchronisation
+appartient au plan [local-first](./2026-10-06-elce-local-first-synchronisation-plan.md).
+Pour la lecture, Sighty/CodPlay reste responsable du preload avant montage de
+scène ; Elcé n’ajoute pas de circuit séparé.
+
+**Sortie :** le listener serveur média, les routes HTTP et le stockage fichiers
+sont intégrés et vérifiés en HTTP réel. La synchronisation de l’éditeur avec
+cette API reste dans les étapes local-first.
 
 ### 4. Porter l’application par surfaces — À faire
 

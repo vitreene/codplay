@@ -23,6 +23,7 @@ import type {
   CreateProjectResult,
   SaveProjectDocumentResult,
 } from '../project-persistence'
+import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from '../../media/media-persistence'
 
 type ProjectDatabase = Pick<Database<'sqlite'>, 'exec'>
 type SqlRow = Record<string, unknown>
@@ -40,7 +41,7 @@ type NormalizedPlacement =
   | Readonly<{ kind: 'catalog'; position: number }>
 
 /** Persists structured Elcé documents in the relational SQLite schema. */
-export class SqliteProjectPersistence implements ProjectPersistence {
+export class SqliteProjectPersistence implements ProjectPersistence, MediaPersistence {
   private readonly database: SqliteDatabase
 
   /** Creates the repository around an already migrated Remix SQLite database. */
@@ -59,6 +60,80 @@ export class SqliteProjectPersistence implements ProjectPersistence {
   /** Loads and reconstructs one project and its complete document in a read transaction. */
   public async findProject(projectId: string): Promise<StoredProject | null> {
     return this.database.transaction(async (transaction) => readStoredProject(transaction, projectId))
+  }
+
+  /** Loads one media row for its upload or file-read route. */
+  public async findMediaFile(projectId: string, mediaId: string): Promise<StoredMediaResource | null> {
+    const rows = await queryRows(this.database, `
+      SELECT media_id, name, mime_type, size_bytes, storage_key, content_sha256
+      FROM media_resources
+      WHERE project_id = ? AND media_id = ?
+    `, [projectId, mediaId])
+    const row = rows[0]
+    if (row === undefined) return null
+    return {
+      id: stringValue(row, 'media_id'),
+      name: stringValue(row, 'name'),
+      mimeType: stringValue(row, 'mime_type'),
+      size: numberValue(row, 'size_bytes'),
+      storageKey: nullableText(row, 'storage_key'),
+      contentSha256: nullableText(row, 'content_sha256'),
+    }
+  }
+
+  /** Lists media file keys that remain referenced by the relational document. */
+  public async listMediaStorageKeys(): Promise<readonly string[]> {
+    const rows = await queryRows(this.database, `
+      SELECT storage_key
+      FROM media_resources
+      WHERE storage_key IS NOT NULL
+    `)
+    return rows.map((row) => stringValue(row, 'storage_key'))
+  }
+
+  /** Stores the file reference only after checking the target row and content identity. */
+  public async storeMediaFile(
+    projectId: string,
+    mediaId: string,
+    expectedSize: number,
+    storageKey: string,
+    contentSha256: string,
+  ): Promise<StoreMediaFileResult> {
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction, `
+        SELECT size_bytes, storage_key, content_sha256
+        FROM media_resources
+        WHERE project_id = ? AND media_id = ?
+      `, [projectId, mediaId])
+      const row = rows[0]
+      if (row === undefined) return { kind: 'media-not-found' }
+      if (numberValue(row, 'size_bytes') !== expectedSize) return { kind: 'media-changed' }
+
+      const existingHash = nullableText(row, 'content_sha256')
+      const existingKey = nullableText(row, 'storage_key')
+      if (existingKey !== null) {
+        return existingHash === contentSha256
+          ? { kind: 'already-stored' }
+          : { kind: 'media-already-has-file' }
+      }
+
+      const duplicateRows = await queryRows(transaction, `
+        SELECT media_id
+        FROM media_resources
+        WHERE project_id = ? AND size_bytes = ? AND content_sha256 = ? AND media_id <> ?
+      `, [projectId, expectedSize, contentSha256, mediaId])
+      if (duplicateRows[0] !== undefined) {
+        return { kind: 'duplicate-content', existingMediaId: stringValue(duplicateRows[0], 'media_id') }
+      }
+
+      const updated = await queryRows(transaction, `
+        UPDATE media_resources
+        SET storage_key = ?, content_sha256 = ?
+        WHERE project_id = ? AND media_id = ? AND storage_key IS NULL
+        RETURNING media_id
+      `, [storageKey, contentSha256, projectId, mediaId])
+      return updated.length === 0 ? { kind: 'media-changed' } : { kind: 'stored' }
+    })
   }
 
   /** Creates a project from its browser-owned v4 document unless its id already exists. */

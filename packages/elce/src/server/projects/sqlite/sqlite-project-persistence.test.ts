@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rawSql } from 'remix/data-table'
@@ -18,6 +19,9 @@ import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/
 import { createInitialDocument, ElceDocument } from '../../../domain/document/document-model'
 import type { ElceDocument as ElceDocumentClass } from '../../../domain/document/document-model'
 import { createElceApiRouter } from '../../api-router'
+import { createElceHttpServer } from '../../elce-http-server'
+import { MediaApiController } from '../../media/media-api-controller'
+import { createMediaFileStorage } from '../../media/media-file-storage'
 import { openProjectDatabase } from './project-database'
 import { SqliteProjectPersistence } from './sqlite-project-persistence'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
@@ -94,6 +98,167 @@ describe('SQLite project persistence through the Remix API', () => {
       [original.id],
     ))
     expect(mediaRows.rows).toEqual([{ storage_key: 'image-1.webp', content_sha256: 'a'.repeat(64) }])
+  })
+
+  it('streams media through SQLite and Remix FileStorage, including native byte ranges', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'elce-media-'))
+    const databaseFile = join(temporaryDirectory, 'projects.sqlite')
+    const mediaDirectory = join(temporaryDirectory, 'files')
+    const temporaryUploadDirectory = `${mediaDirectory}.incoming`
+    const staleTemporaryFile = join(temporaryUploadDirectory, 'interrupted-upload')
+    await mkdir(temporaryUploadDirectory, { recursive: true })
+    await writeFile(staleTemporaryFile, 'interrupted')
+    const staleKey = 'media/project-interrupted/media-old/hash/upload-old'
+    await createMediaFileStorage(mediaDirectory).put(
+      staleKey,
+      new File([new Uint8Array([1])], 'orphan.webp', { type: 'image/webp' }),
+    )
+    const api = await createElceHttpServer({
+      databaseFile,
+      mediaDirectory,
+    })
+    expect(await createMediaFileStorage(mediaDirectory).has(staleKey)).toBe(false)
+    await expect(access(staleTemporaryFile)).rejects.toThrow()
+    const { server } = api
+    const imageBytes = new TextEncoder().encode('elce-image-content')
+    const videoBytes = new TextEncoder().encode('elce-video-content')
+    let document = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-upload-image', name: 'picture.webp', mimeType: 'image/webp', size: imageBytes.byteLength, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-upload-video', name: 'sample.mp4', mimeType: 'video/mp4', size: videoBytes.byteLength, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-upload-image-duplicate', name: 'other-picture.webp', mimeType: 'image/webp', size: imageBytes.byteLength, caption: '' },
+    })
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject)
+          resolve()
+        })
+      })
+      const address = server.address() as AddressInfo
+      const origin = `http://127.0.0.1:${address.port}`
+
+      const projectResponse = await fetch(`${origin}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(document.toJSON()),
+      })
+      expect(projectResponse.status).toBe(201)
+
+      const imageUrl = `${origin}/api/projects/${document.id}/media/media-upload-image`
+      const oversizedUpload = await fetch(imageUrl, {
+        method: 'PUT',
+        body: new Blob([imageBytes, new Uint8Array([0])], { type: 'image/webp' }),
+      })
+      expect(oversizedUpload.status).toBe(400)
+
+      const uploadedImage = await fetch(imageUrl, {
+        method: 'PUT',
+        body: new Blob([imageBytes], { type: 'image/webp' }),
+      })
+      expect(uploadedImage.status).toBe(201)
+      expect(await uploadedImage.json()).toEqual({
+        media: { id: 'media-upload-image', url: `/api/projects/${document.id}/media/media-upload-image` },
+      })
+
+      const fullFile = await fetch(imageUrl)
+      expect(fullFile.status).toBe(200)
+      expect(fullFile.headers.get('Content-Type')).toBe('image/webp')
+      expect(fullFile.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable')
+      expect(new Uint8Array(await fullFile.arrayBuffer())).toEqual(imageBytes)
+
+      const videoUrl = `${origin}/api/projects/${document.id}/media/media-upload-video`
+      const uploadedVideo = await fetch(videoUrl, {
+        method: 'PUT',
+        body: new Blob([videoBytes], { type: 'video/mp4' }),
+      })
+      expect(uploadedVideo.status).toBe(201)
+
+      const partialFile = await fetch(videoUrl, { headers: { Range: 'bytes=2-6' } })
+      expect(partialFile.status).toBe(206)
+      expect(partialFile.headers.get('Content-Range')).toBe(`bytes 2-6/${videoBytes.byteLength}`)
+      expect(new Uint8Array(await partialFile.arrayBuffer())).toEqual(videoBytes.slice(2, 7))
+
+      const repeatedUpload = await fetch(imageUrl, {
+        method: 'PUT',
+        body: new Blob([imageBytes], { type: 'image/webp' }),
+      })
+      expect(repeatedUpload.status).toBe(204)
+
+      const duplicateImageUrl = `${origin}/api/projects/${document.id}/media/media-upload-image-duplicate`
+      const duplicateImageBytes = new TextEncoder().encode('elce-other-content')
+      const uploadedDuplicateImage = await fetch(duplicateImageUrl, {
+        method: 'PUT',
+        body: new Blob([duplicateImageBytes], { type: 'image/webp' }),
+      })
+      expect(uploadedDuplicateImage.status).toBe(201)
+
+      document = applyDocumentCommand(document, {
+        type: 'media.merge',
+        canonicalMediaId: 'media-upload-image',
+        duplicateMediaIds: ['media-upload-image-duplicate'],
+      })
+      const mergedDocument = await fetch(`${origin}/api/projects/${document.id}/document`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'If-Match': '"0"' },
+        body: JSON.stringify(document.toJSON()),
+      })
+      expect(mergedDocument.status).toBe(200)
+      const removedDuplicateFile = await fetch(duplicateImageUrl)
+      expect(removedDuplicateFile.status).toBe(404)
+
+      const deletedProject = await fetch(`${origin}/api/projects/${document.id}`, { method: 'DELETE' })
+      expect(deletedProject.status).toBe(204)
+    } finally {
+      await api.close()
+    }
+
+    const remainingFiles = await createMediaFileStorage(mediaDirectory).list({ prefix: 'media/' })
+    expect(remainingFiles.files).toEqual([])
+  })
+
+  it('rejects an upload whose bytes would duplicate a different media resource', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'elce-media-duplicate-'))
+    database = await openProjectDatabase(':memory:')
+    const persistence = new SqliteProjectPersistence(database)
+    const fileStorage = createMediaFileStorage(join(temporaryDirectory, 'files'))
+    const router = createElceApiRouter(persistence, new MediaApiController(
+      persistence,
+      fileStorage,
+      join(temporaryDirectory, 'incoming'),
+    ))
+    const bytes = new TextEncoder().encode('shared-image')
+    let document = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-canonical', name: 'one.webp', mimeType: 'image/webp', size: bytes.byteLength, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-duplicate', name: 'two.webp', mimeType: 'image/webp', size: bytes.byteLength, caption: '' },
+    })
+    await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+
+    const canonical = await router.fetch(new Request(
+      `http://elce.test/api/projects/${document.id}/media/media-canonical`,
+      { method: 'PUT', body: new Blob([bytes], { type: 'image/webp' }) },
+    ))
+    const duplicate = await router.fetch(new Request(
+      `http://elce.test/api/projects/${document.id}/media/media-duplicate`,
+      { method: 'PUT', body: new Blob([bytes], { type: 'image/webp' }) },
+    ))
+
+    expect(canonical.status).toBe(201)
+    expect(duplicate.status).toBe(409)
+    expect(await duplicate.json()).toEqual({ error: 'media_already_exists', mediaId: 'media-canonical' })
+    expect((await persistence.findMediaFile(document.id, 'media-duplicate'))?.storageKey).toBeNull()
   })
 
   it('lists, renames, and deletes projects through their SQLite-backed routes', async () => {
