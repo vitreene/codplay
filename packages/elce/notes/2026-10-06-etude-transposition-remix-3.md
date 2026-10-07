@@ -57,9 +57,9 @@ Le player n’est pas une surface à porter vers Remix. Le parcours de prévisua
 
 ## Utilisation du backend Remix
 
-La carte de routes déclare les chemins et méthodes. Les contrôleurs traitent les requêtes Web et retournent des réponses Web ; le middleware partage les dépendances serveur. Cette séparation convient à une petite API locale pour les projets, leurs révisions et les médias.
+Le mode SPA et l’API serveur utilisent deux parcours de requête distincts. Dans le navigateur, `remix/spa` démarre un routeur Fetch client ; ses routes rendent des arbres Remix dans la fenêtre auteur. Côté serveur, un routeur Fetch Remix déclare les routes API et ses contrôleurs répondent avec des objets `Request` et `Response`. L’éditeur appelle ces API explicitement depuis le synchroniseur ; une réponse d’API ne remplace pas l’état XState. Il s’agit de deux tables de routes avec des responsabilités distinctes, pas d’un rendu serveur de l’état éditorial.
 
-Pour SQLite, la première voie à éprouver est remix/data-table/sqlite avec les migrations Remix. L’adaptateur Elcé sérialise le document v3 comme ElceDocument.toJSON() et préserve le contrat de révision du plan local-first. Les types SQL et Remix restent dans infrastructure, pas dans le modèle métier. Si le modèle de tables est mal adapté au stockage d’un instantané et de sa révision, la décision devra être prise à l’étape d’essai plutôt que de forcer une abstraction.
+Pour SQLite, la première voie à éprouver est `remix/data-table/sqlite` avec les migrations Remix. Les lignes suivent la proposition relationnelle de la [note de tables](./2026-10-06-premier-etat-modele-donnees-bdd.md) : aucun enregistrement ne contient le document Elcé complet en JSON. Le JSON Tiptap et son HTML exporté restent seulement dans les lignes de Section prévues à cet effet. L’adaptateur reconstruit le modèle Elcé depuis les tables et préserve le contrat de révision du plan local-first. Les types SQL et Remix restent dans l’infrastructure, pas dans le modèle métier.
 
 Pour les médias, Remix fournit le parsing multipart avec transfert en flux, une interface FileStorage avec implémentation filesystem, ainsi qu’une réponse fichier prenant en charge ETag, requêtes conditionnelles, HEAD et Range. Cela correspond au stockage des octets hors SQLite déjà retenu. Les contrôleurs doivent garder l’ordre établi dans le plan local-first : recevoir et finaliser le fichier, puis publier sa référence en base ; les règles de déduplication, les noms et le cache restent ceux du projet.
 
@@ -67,12 +67,12 @@ Le document actif reste local : IndexedDB le restaure, XState accepte les comman
 
 ## Rendu SPA retenu
 
-Le mode choisi est SPA Remix. L’interface auteur démarre dans le navigateur,
-restaure son document depuis IndexedDB et démarre l’acteur XState. Le serveur
-Remix expose en parallèle les contrôleurs de synchronisation, SQLite et médias ;
-il ne devient pas une seconde source du document affiché. Cette forme suit
-l’architecture locale d’Elcé et évite de faire dépendre le rendu initial des
-données du serveur.
+Le mode choisi est SPA Remix. Le routeur de `remix/spa` rend l’interface auteur
+dans le navigateur ; celle-ci restaure son document depuis IndexedDB et démarre
+l’acteur XState. Un routeur serveur indépendant expose les contrôleurs de
+synchronisation, SQLite et médias ; il ne devient pas une seconde source du
+document affiché. Cette forme suit l’architecture locale d’Elcé et évite de
+faire dépendre le rendu initial des données du serveur.
 
 Le runtime Remix et les routes backend cohabitent sans modifier la frontière
 de lecture existante. L’éditeur garde son accès actuel à la prévisualisation ;
@@ -86,13 +86,19 @@ Sighty/CodPlay continue de prendre en charge le player.
 - La version stable a retiré ses primitives visuelles du paquet remix. Le runtime peut remplacer React ; il ne remplace pas le design Elcé.
 - Les interactions de l’éditeur et Tiptap doivent rester vérifiées dans Safari, Firefox et Chromium. Le player conserve son parcours d’acceptation Sighty/CodPlay existant et n’est pas un critère de migration Remix.
 
-La conclusion de faisabilité est positive. Le seul préalable technique qui
-reste à démontrer avant un portage complet est un parcours vertical dans le
-vrai runtime : démarrage SPA, acteur unique, commande par la façade, rendu
-d’une mise à jour et montage/démontage de Tiptap avec l’extension d’ancre. Le
-contrôle de prévisualisation doit continuer à appeler le player existant sans
-porter son rendu dans Remix. Le plan Remix contient déjà ce critère. Mettre
-Node à niveau vers la version minimale déclarée par Remix avant ce parcours.
+La conclusion de faisabilité est positive. Le préalable technique qui reste à
+démontrer avant un portage complet est un parcours vertical dans le vrai
+runtime : démarrage SPA, acteur unique, commande par la façade, rendu d’une
+mise à jour et montage/démontage de Tiptap avec l’extension d’ancre. Le
+`Handle` Remix fournit `context`, `signal`, `queueTask()` et `update()` ; une
+tâche différée reçoit le nœud DOM après mise à jour. Pour Tiptap, le petit
+parcours doit vérifier ce cycle de vie réel et le sort du DOM détenu par
+ProseMirror lors d’une navigation de frame. Si `data-rmx-preserve-dom` est
+nécessaire, éprouver ce mécanisme documenté sur le plus petit hôte Tiptap avant
+d’étendre le portage. Ne pas remplacer cette preuve par une recherche DOM
+globale. Le contrôle de prévisualisation doit continuer à appeler le player
+existant sans porter son rendu dans Remix. Mettre Node à niveau vers la version
+minimale déclarée par Remix avant ce parcours.
 
 ## Sources officielles consultées
 
@@ -101,6 +107,10 @@ Node à niveau vers la version minimale déclarée par Remix avant ce parcours.
 - [Remix — Rendering UI](https://guides.remix.run/rendering-ui/)
 - [Remix — Interactivity and clientEntry](https://guides.remix.run/interactivity/)
 - [Remix — SPA runtime](https://api.remix.run/api/remix/spa/overview/)
+- [Remix — SPA `run()`](https://api.remix.run/api/remix/spa/function/run/)
+- [Remix — `Handle` du composant](https://api.remix.run/api/remix/component/interface/Handle/)
+- [Remix — contexte du composant](https://api.remix.run/api/remix/component/interface/Context/)
+- [Remix — préservation du DOM client](https://api.remix.run/api/remix/component/jsx-runtime/overview/)
 - [Remix — Routing and Controllers](https://guides.remix.run/routing-and-controllers/)
 - [Remix — Data and Validation, SQLite and migrations](https://guides.remix.run/data-and-validation/)
 - [Remix — Files and Assets](https://guides.remix.run/files-and-assets/)

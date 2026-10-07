@@ -8,12 +8,12 @@ raccord aux résultats et à l’affichage du player reste à réaliser.**
 
 ## Contrat auteur
 
-Une Question est un BDC unique dans la séquence d’une page Flux. L’auteur la
-place à l’endroit voulu dans cette séquence ; une page ne peut contenir qu’une
-Question dans le POC. L’éditeur actuel crée et projette les Questions dans les
-pages Flux. Leur usage dans les cartes d’une page Diapo suivra le travail de la
-tranche Diapo. Le titre et l’illustration sont facultatifs ; l’énoncé, les
-réponses et la validation sont requis par le preset Question.
+Une Question est un BDC unique dans la séquence d’une page Flux ; l’auteur la
+place à l’endroit voulu dans cette séquence. Une page ne peut contenir qu’une
+Question dans le POC. Une page Diapo peut aussi accueillir une Question comme
+son unique BDC direct ; elle n’est pas une carte enfant de Carousel. Le titre
+et l’illustration sont facultatifs ; l’énoncé, les réponses et la validation
+sont requis par le preset Question.
 
 Une page Flux créée dans un chapitre Évaluation reçoit un BDC Question par
 défaut ; une page de chapitre standard ou une page racine reçoit un BDC

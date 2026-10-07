@@ -2,9 +2,9 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v3 avec BDC Carte enfants du Carousel, sans
-migration des documents v1/v2 ; modèle, commandes et invariants vérifiés le
-6 octobre 2026.**
+**Fixe — modèle documentaire v3 avec BDC Carte enfants de Carousel et Carte
+autonome de Diapo, sans migration des documents v1/v2 ; modèle, commandes et
+invariants vérifiés le 6 octobre 2026.**
 
 Cette spécification couvre le document métier manipulé par l’application et
 la voie de modification utilisée par l’interface. La projection des cartes
@@ -23,15 +23,18 @@ pages du catalogue restent hors scénario. Une page possède un type (`flux` ou
 `diapo`), un nom, une affectation de chapitre éventuelle et un ordre de BDC.
 
 Chaque BDC a un emplacement unique : dans une page, dans le catalogue, ou
-comme enfant d’un BDC conteneur. Cette version n’autorise que des BDC Carte
-comme enfants d’un BDC Carousel. Le BDC Carousel reste affecté à une page et
-porte ses réglages ainsi qu’une séquence ordonnée d’entrées
+comme enfant d’un BDC conteneur. Les BDC Carte peuvent être enfants d’un BDC
+Carousel ou occuper directement l’unique emplacement BDC d’une page Diapo ; ils
+ne peuvent pas être placés dans le catalogue. Le BDC Carousel reste affecté à
+une page et porte ses réglages ainsi qu’une séquence ordonnée d’entrées
 `{ bdcId, durationMs }`. Chaque identifiant désigne un BDC Carte distinct dont
 `parentBdcId` désigne le Carousel. Un BDC Carte porte son layout dans
 `presetId`, toutes ses valeurs dans `card` et une référence média facultative
 dans `mediaId`. Changer de layout masque éventuellement des valeurs, mais ne
 les retire pas du BDC. Les médias sont indépendants et peuvent être partagés
-par plusieurs BDC.
+par plusieurs BDC. Une page Diapo contient au plus un BDC direct, qui peut être
+un Carousel, une Carte autonome ou une Question ; elle n’accepte pas de Section.
+La création propose un Carousel avec sa première Carte enfant.
 
 `ElceDocument.fromJSON()` accepte uniquement la version 3 et rejette les
 versions 1 et 2 sans migration. `IndexedDbDocumentStore.loadDocument()` lit
@@ -104,6 +107,12 @@ chapitre Évaluation. Les deux restent des BDC d’une page Flux ; aucun nouveau
 format de page n’est créé pour le Quiz. Le preset et le contenu initial
 viennent des constantes et services métier existants.
 
+Une création explicitement demandée en Diapo crée un BDC Carousel direct et
+sa première Carte enfant. La Carte autonome est une autre possibilité de BDC
+direct Diapo, fournie par sa commande dédiée après retrait du contenu initial.
+Les commandes et invariants refusent plusieurs BDC directs sur une Diapo, un
+type de BDC non pris en charge ou une Carte autonome sur une page Flux.
+
 `media.merge` rattache au média canonique tous les BDC qui référencent les
 médias en doublon, puis retire leurs métadonnées du document. Les BDC, les
 pages, leur ordre et le média canonique ne changent pas ; le nom et les autres
@@ -127,9 +136,12 @@ dupliquées.
 `assertDocumentInvariants()` vérifie les affectations uniques, les références
 page/bdc et parent/enfant, les données propres au type de BDC, et l’intégrité
 des ancres : une référence désigne un BDC image ou vidéo de la même page, sans
-doublon dans une ou plusieurs Sections. Un BDC Carte a un parent Carousel, un
-layout configuré, ses seules données Carte et, s’il y a lieu, une référence
-média image ou vidéo. Les Carousels ne peuvent pas être vides. Une mise à jour
+doublon dans une ou plusieurs Sections. Un BDC Carte a exactement un
+emplacement : soit un parent Carousel, soit une page Diapo directe. Une Carte
+directe n’est jamais une entrée de catalogue. Chaque Carte porte un layout
+configuré, ses seules données Carte et, s’il y a lieu, une référence média
+image ou vidéo. Une Diapo contient au plus un BDC direct et n’accepte que
+Carousel, Carte ou Question. Les Carousels ne peuvent pas être vides. Une mise à jour
 de Section compare les références avant et après l’édition ; chaque BDC dont
 l’ancre a disparu est supprimé dans cette même commande et son média reste
 conservé. Pour le geste explicite de retour, `bdc.anchor.return` met à jour le
@@ -198,7 +210,11 @@ raccord ne choisit pas quels médias fusionner.
   page de chapitre vers la racine et les invariants de placement correspondants.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
   layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
-  la fusion média et l’exclusivité des données de type.
+  la Carte autonome comme unique BDC direct d’une Diapo, le rejet d’une seconde
+  entrée directe et l’exclusivité des données de type.
+- [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
+  vérifie la projection des variantes Carousel, Carte et Question dans une
+  scène Diapo réelle.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
   actions icônes accessibles de création à la racine et dans un chapitre,
   l’emplacement produit, ainsi que l’édition centrale des noms de page et de

@@ -9,11 +9,15 @@ tranche. Son emploi comme BDC par défaut d’une Diapo est décrit dans la
 
 ## Rôle et modèle métier
 
-Le BDC Carousel est placé dans la séquence ordonnée des BDC d’une page Flux.
-Il porte les réglages de présentation et référence une séquence ordonnée de
-BDC Carte enfants. Les BDC Carte sont des entités métier identifiées, chacune
-avec un parent unique ; ils ne figurent donc pas dans `page.bdcIds` ni dans le
-catalogue. Les changements de layout ne créent pas un nouveau BDC.
+Dans une page Flux, le BDC Carousel occupe une place dans la séquence ordonnée
+des BDC. Dans une page Diapo, il peut occuper l’unique emplacement BDC direct.
+Dans les deux cas, il porte les réglages de présentation et référence une
+séquence ordonnée de BDC Carte enfants. Chaque Carte enfant a le Carousel comme
+parent ; elle ne figure donc pas dans `page.bdcIds` ni dans le catalogue. Le
+même modèle BDC Carte peut aussi être placé directement comme unique BDC d’une
+Diapo ; cette Carte autonome n’a pas de parent Carousel et figure alors dans
+`page.bdcIds`. Aucun BDC Carte n’est placé au catalogue. Les changements de
+layout ne créent pas un nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
 nombre fini de répétitions, le ratio, la transition et les entrées
@@ -45,7 +49,8 @@ laisserait son Carousel vide.
 Le preset `carousel-basic` fournit le cadre responsive et sa navigation. Le
 Carousel n’ajoute ni un format de page Diapo ni une story CodPlay au modèle
 métier. Les contenus des cartes restent des données de BDC Elcé ; les builders
-les projettent dans les parts du preset.
+les projettent dans les parts du preset. La Carte directe de Diapo et ses
+restrictions sont décrites dans la [spécification du builder Diapo](./diapo-scene-builder-spec.md).
 
 ## Édition
 

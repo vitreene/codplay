@@ -3,6 +3,7 @@
 **Statut : Fixe.** Le périmètre local et le transfert des médias sont établis.
 Le seuil de conservation locale des vidéos dépendra du serveur réel et est
 reporté après le POC. Le preload CodPlay existant n’est pas un chantier Elcé.
+La migration SQLite reste bloquée jusqu’à la fin et l’acceptation de la tranche 0.
 
 ## Cadre
 
@@ -29,6 +30,62 @@ reporté après le POC. Le preload CodPlay existant n’est pas un chantier Elc�
 
 ## Tranches et critères de sortie
 
+### 0. Compléter le modèle documentaire avant SQLite
+
+Cette tranche est un prérequis à toute migration vers SQLite. Le schéma
+relationnel proposé anticipe cette forme métier et ne doit pas être raccordé au
+document v3 actuel avant sa réalisation.
+
+- Remplacer le modèle où `image`/`video` et `card` sont des types BDC séparés
+  par un BDC Carte unique, utilisable selon la whitelist dans Flux, Diapo,
+  comme enfant inline d’un BDC Texte, comme enfant d’un Carousel et au
+  catalogue. Une ressource média reste réutilisable ; chaque insertion garde
+  son BDC Carte propre.
+- À l’ajout d’une image ou vidéo, créer une Carte « Photo ou vidéo plein cadre ».
+  Une icône placée sur l’image ouvre l’édition du layout et des paramètres de
+  la Carte. La durée s’applique aux entrées Carousel, pas à une Carte seule.
+- Garder distincts le format de page (`flux` ou `diapo`) et le type de chapitre
+  (`standard` ou `evaluation`). Le BDC Résultat est proposé dans un chapitre
+  Évaluation, sur une page Flux ou comme BDC direct unique d’une Diapo. Étendre
+  la whitelist et le builder Diapo à ce cas avant SQLite ; ne pas traiter
+  Évaluation comme un format de page.
+- Porter les valeurs de révélation par défaut sur le BDC parent. Dans un BDC
+  Texte/Section, déclencher la révélation à la visibilité au scroll selon le
+  circuit d’observation de la démo 5. Dans un Carousel, permettre une valeur
+  d’entrée ou de sortie propre à chaque Carte, héritée du Carousel si elle
+  n’est pas renseignée. Une Carte déjà visible au chargement n’exécute pas son animation
+  d’entrée. Capsule Automation fournit les références et définitions de
+  transition pour les deux contextes ; le Carousel reprend son preset `fade`.
+  La démo 5 fixe le déclenchement enter/leave au scroll ; l’animation vient
+  des définitions nommées de Capsule Automation.
+- Définir les valeurs de repli au niveau du projet, sans réglage propre à chaque
+  page à cette étape. Une Carte directe dans la séquence racine d’une page Flux
+  hérite donc des valeurs du projet, initialisées depuis la configuration. Un
+  BDC parent peut définir ses propres défauts pour ses enfants ; les vues
+  Carousel peuvent les remplacer au niveau de leur placement. L’interface ne
+  propose pas de réglage par page ou par Carte individuelle à cette étape.
+- Utiliser le registre de définitions Capsule Automation, dont
+  `DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS`, pour résoudre les références de
+  transition. Réutiliser le circuit `AutoCapsuleChildInput.events` pour les
+  transitions Carousel et les événements `emit.observe` de visibilité déjà
+  exercés dans la démo 5 pour le scroll, puis déclarer les actions sur les
+  persos CodPlay concernés. N’ajouter ni minuteur, ni définitions locales de
+  transition, ni circuit d’animation parallèle.
+- Mettre à jour le modèle, ses commandes, la surface d’édition, les builders,
+  leurs spécifications et les tests d’intégration avant d’ouvrir le DDL SQLite.
+
+**Acceptation :** une image ou vidéo ajoutée devient une seule BDC Carte ; le
+média reste une ressource partageable et n’est pas dupliqué. L’icône permet
+d’ouvrir et modifier le layout. La même Carte et son média survivent aux
+déplacements entre les emplacements autorisés. Le player réel vérifie la
+révélation au scroll, les entrées/sorties propres aux vues Carousel et l’absence
+d’animation d’entrée pour le contenu déjà visible au montage. La navigation et
+la composition des pages existantes restent inchangées. Un BDC Résultat est
+lisible en Flux et en Diapo dans un chapitre Évaluation ; en Diapo, il occupe
+l’unique emplacement direct. Le même BDC reste refusé hors d’un chapitre
+Évaluation. Le modèle relationnel et les spécifications sont alors alignés ;
+seulement après cette acceptation la tranche 1 peut commencer.
+
 ### 1. Serveur local et projets SQLite
 
 Créer une petite API Elcé accessible directement depuis l’application et
@@ -44,18 +101,80 @@ adossée à SQLite.
 
 Avant le DDL, relire le [premier état des tables SQLite](../notes/2026-10-06-premier-etat-modele-donnees-bdd.md)
 et valider les décisions qu’il laisse ouvertes : correspondance entre projet
-et `ElceDocument`, placement relationnel des pages, validation des sous-types
-BDC, représentation et contraintes des placements BDC, séparation ou non des
+et `ElceDocument`, placement relationnel des pages, séparation ou non des
 réglages d’évaluation dans une table liée, colonnes du registre média et
 frontière de validation des données reçues.
-Le schéma proposé sépare les tables de projet, chapitres, pages, entrées de
-scénario, catalogue, médias, placements BDC et détails propres aux BDC.
+
+**Décision de modèle acceptée le 7 octobre 2026, non implémentée :** un BDC
+Image ou Vidéo n’est pas un type de BDC distinct. Le même BDC Carte porte le
+layout et la référence média, qu’il soit ajouté dans une page Flux, ancré dans
+un BDC Texte, placé comme enfant d’un Carousel, seul sur une Diapo ou rendu
+disponible au catalogue. Chaque Carte reste un BDC unique avec un seul
+placement ; déplacer la Carte conserve son identifiant, tandis qu’une nouvelle
+insertion crée un BDC Carte distinct. Une même ressource `media_resources` peut
+être référencée par plusieurs Cartes. Pour un enfant inline d’une Section,
+`parent_content_block_id` désigne cette Section et le JSON Tiptap garde la
+position exacte ; pour un enfant Carousel, le placement garde l’ordre et la
+durée de la vue.
+
+**Décision de révélation acceptée le 7 octobre 2026, non implémentée :**
+ajouter une image ou une vidéo crée une BDC Carte au layout « Photo ou vidéo
+plein cadre ». Une icône dans un coin de l’image ouvre l’édition du layout et
+de ses paramètres. La durée ne concerne pas une Carte placée seule ; dans un
+Carousel, la durée reste une option de son entrée. La révélation est distincte
+de cette durée et dépend du contexte : au scroll dans un BDC Texte/Section,
+avec le déclenchement de visibilité de la démo 5 ; dans un Carousel, par les
+événements d’entrée/sortie de chaque Carte. Le parent peut définir les valeurs
+par défaut d’entrée et de sortie. Le Carousel peut fournir une valeur propre à
+une Carte, comme pour sa durée ; ces remplacements sont stockés sur le
+placement, tandis que les valeurs par défaut sont stockées dans `sections` ou
+`carousels`. Une Carte déjà visible au chargement ne joue pas son animation
+d’entrée, notamment la première Carte du Carousel. Les valeurs sont des
+références de transition déclarées en configuration et résolues depuis
+Capsule Automation, source des définitions pour le scroll et le Carousel. Le
+Carousel reprend le preset `fade`. La démo 5 fournit les événements enter/leave
+de visibilité au scroll. Le projet porte les valeurs de repli ; une page n’a
+pas ses propres réglages à ce stade. Un BDC parent peut remplacer ces défauts,
+et le placement d’une Carte Carousel peut remplacer ceux du Carousel. Le futur
+éditeur pourra choisir
+d’exposer ces réglages individuellement ; ce choix d’interface est reporté.
+
+Le contrat `AutoCapsuleChildInput.events` accepte déjà des événements
+`intro`/`outro` propres à un enfant ; le builder Elcé actuel passe la transition
+commune du Carousel à tous les enfants. La démo 5 observe l’entrée et la sortie
+de visibilité du média dans le scroll. L’implémentation devra résoudre les
+références depuis le registre Capsule Automation et déclarer leurs actions sur
+le perso média, sans ajouter de minuteur ou d’animation parallèle.
+
+Le modèle v3 du code distingue encore les BDC `image`/`video` des BDC `card`.
+L’évolution du modèle documentaire et de ses commandes précède donc le
+connecteur SQLite ; l’API ne doit pas simuler une conversion implicite. Le
+format documentaire cible et le traitement des documents locaux v3 restent à
+fixer avant l’écriture du dépôt. La whitelist de types et de layouts selon le
+contexte appartient à l’interface auteur ; le schéma conserve des placements
+génériques et n’encode pas cette whitelist dans des `CHECK`.
+
+Inclure également le contrat Diapo : une seule entrée BDC directe, choisie
+dans les types proposés par la whitelist. Dans un chapitre Évaluation, le BDC
+Résultat peut occuper cette entrée unique. Le type de chapitre détermine le
+suivi de résultat et la disponibilité du BDC Résultat ; le type de page reste
+un choix indépendant entre Flux et Diapo. Les Cartes d’un Carousel et les BDC
+inline d’une Section gardent des placements parents distincts. Le schéma
+sépare les tables de projet, chapitres, pages, entrées de scénario, catalogue,
+médias, placements BDC et détails propres aux BDC.
 
 **Acceptation :** plusieurs projets restent présents après redémarrage du
 serveur ; un aller-retour entre lignes SQLite et modèle Elcé conserve les
-relations et l’ordre ; les Sections conservent le JSON Tiptap et le HTML
-exporté ; aucun document complet JSON opaque n’est nécessaire au stockage.
-Les formats v1/v2 ne sont pas migrés implicitement.
+relations et l’ordre ; une Carte média peut être relue comme placement direct
+de Flux/Diapo, enfant inline de Section, enfant ordonné de Carousel ou BDC du
+catalogue ; la position inline vient de Tiptap et les Cartes distinctes peuvent
+partager le même média. Les valeurs par défaut du projet, les remplacements des
+BDC parents et ceux des vues Carousel sont conservés au chargement. Une Diapo
+restitue son unique entrée directe et les Sections conservent le JSON Tiptap et
+le HTML exporté ; aucun document complet JSON opaque n’est nécessaire au
+stockage. Une branche Réussite/Échec se restitue aussi dans une Diapo
+d’Évaluation, sans changement des tables selon le format. Les anciens formats
+ne sont pas migrés implicitement.
 
 ### 2. Copies locales et édition hors connexion
 
