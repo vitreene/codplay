@@ -47,8 +47,9 @@ la ressource existante après vérification SHA-256, même si le nom diffère.
 
 ## Commandes et projection
 
-La façade applicative `ElceQuestionFacade` (`app/facades/question/`) transforme
-les gestes auteur en commandes documentaires envoyées au contrôleur XState. La
+`EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) appelle la façade
+applicative `ElceQuestionFacade` (`app/facades/question/`) pour transformer les
+gestes auteur en commandes documentaires envoyées au contrôleur XState. La
 création est insérée dans la position
 ordonnée de la page ; l’édition des réponses, du texte et de la référence média
 modifie le document par la même façade et les mêmes commandes. React affiche

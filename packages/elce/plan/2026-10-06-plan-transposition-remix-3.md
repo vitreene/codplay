@@ -11,7 +11,7 @@ Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-el
 - L’interface auteur utilise le routeur navigateur `remix/spa` ; les routes API utilisent un routeur Fetch serveur distinct. L’API n’affiche pas l’éditeur et ses réponses ne remplacent pas l’état éditorial.
 - Le contrôleur XState reste propriétaire de l’état éditorial. Les gestes métier passent par les commandes et façades déjà définies.
 - Les classes métier, le modèle ElceDocument, les builders de scènes et la composition Sighty/CodPlay ne dépendent pas de Remix.
-- La migration d’interface ne change ni les données v3 d’IndexedDB, ni le scénario, ni les scènes et contenus existants.
+- La migration d’interface ne change ni les documents v4 d’IndexedDB, ni le scénario, ni les scènes et contenus existants.
 - Le serveur utilise les frontières d’infrastructure Elcé pour SQLite et les fichiers ; les règles métier ne sont pas déplacées dans les contrôleurs.
 - Les autres paquets du monorepo peuvent conserver React. Les surfaces auteur portées ne l’utilisent plus ; dans le workspace Elcé, ne retirer une dépendance React que si le player hors périmètre ne l’utilise pas.
 
@@ -36,14 +36,14 @@ Dans une tranche isolée de l’application Elcé, utiliser le vrai routeur SPA 
 
 - **Fini :** contrats et transformations documentaires déplacés dans `domain/commands/` ; façades déplacées dans `app/facades/` ; props React des champs Carte déplacées dans `app/editor/card/`. Les tests, le typecheck et le build passent sans changement de comportement.
 - **Fini :** l’entrée navigateur compose l’acteur, le store et l’attachement de persistance une seule fois. La racine Remix reçoit cet acteur dans son Context ; le pont React reçoit la même instance. Safari recharge l’éditeur restauré sans erreur de console.
-- **À faire :** extraire de `AppLayout` l’adaptateur d’actions et le modèle de vue applicatifs comme prévu par l’audit avant de raccorder de nouvelles surfaces Remix. Ce déplacement ne change ni les événements ni les commandes XState.
-- **À faire :** les composants Remix lisent l’acteur par le `Context` ; une vue s’abonne à ses snapshots, conserve uniquement le snapshot nécessaire au rendu et demande une mise à jour avec `handle.update()`. Elle désabonne avec le signal de durée de vie de son `Handle`. À la navigation SPA puis au démontage, vérifier l’absence d’acteur dupliqué ou d’abonnement orphelin.
-- Éditer une Carte autonome directe dans une Diapo et une Carte enfant de Carousel avec le même rendu de champs et `ElceCardFacade`. Une modification passe par la façade, la commande existante et l’acteur XState ; le document doit conserver leurs placements distincts.
+- **Fini le 7 octobre :** extraire de `AppLayout` la façade d’actions et le modèle de vue prévus par l’audit. L’entrée navigateur crée `EditorActionsFacade` une fois et transmet la même instance ; `AppLayout` ne fabrique plus les commandes documentaires et utilise le sélecteur pur `selectEditorViewModel`. Les événements, commandes et règles UI restent identiques.
+- **Fini le 7 octobre :** éprouver dans le runtime Remix l’accès au contrôleur par `EditorContextProvider`, l’abonnement d’une vue aux snapshots, le rendu par `handle.update()` et le désabonnement au signal de durée de vie. Le composant et la route `?__remixProof=1` sont des preuves temporaires de cycle de vie : les retirer quand les vues Carte et Section portées remplacent leur équivalent React et que leurs propres parcours valident le même abonnement et nettoyage.
+- **À faire :** éditer une Carte autonome directe dans une Diapo et une Carte enfant de Carousel avec le même rendu de champs et `ElceCardFacade`. Une modification passe par `EditorActionsFacade`, la façade existante et l’acteur XState ; le document doit conserver leurs placements distincts.
 - Remplacer le raccord React de la Section par `@tiptap/core` `Editor`, sans réécrire l’extension d’ancre. Monter l’éditeur sur l’élément DOM fourni par le cycle de vie documenté du composant Remix ; vérifier édition, sélection de toolbar, import d’image et déplacement d’ancre. Vérifier le maintien du DOM ProseMirror à travers une navigation de frame ; si nécessaire, éprouver `data-rmx-preserve-dom` sur le plus petit hôte Tiptap.
 - Vérifier que la commande de prévisualisation de l’éditeur continue de lancer le player Sighty/CodPlay existant ; ne pas porter son rendu, ses builders ou sa composition.
 - Vérifier que le bundle de la surface Remix portée n’utilise pas React. Le contrôle complet de l’éditeur sans React reste à l’étape 5, après retrait du `ReactEditorTempBridge`. Garder les dépendances du workspace encore requises par le player hors périmètre.
-- Exécuter un test de composant dans le navigateur avec le runtime Remix, puis le parcours réel SPA dans Safari, Firefox et Chromium. Le premier valide le montage, l’abonnement XState et son nettoyage ; le second vérifie le rendu après commande, la navigation et le cycle Tiptap.
-- Ne pas toucher aux API, au schéma SQLite, au transfert des médias, au modèle v3 ou aux scènes du player dans cette étape.
+- Exécuter des tests de composant avec le runtime Remix, puis le parcours réel SPA dans Safari, Firefox et Chromium. Le composant de cycle de vie temporaire valide déjà le montage, l’abonnement XState et son nettoyage ; les parcours Carte et Section devront vérifier le rendu après commande, la navigation et le cycle Tiptap.
+- Ne pas toucher aux API, au schéma SQLite, au transfert des médias, au modèle v4 ou aux scènes du player dans cette étape.
 
 **Sortie :** parcours auteur vérifié dans le vrai routeur SPA Remix avec commande, Carte et Section Tiptap ; état éditorial toujours possédé par le même acteur XState ; aucune route API, table SQLite, scène ni composition Sighty/CodPlay modifiée. L’étape 1 suit l’étape 0 ; les validations POC restantes ne conditionnent pas son démarrage.
 
@@ -100,7 +100,7 @@ Chaque surface d’édition passe par l’acteur et les commandes existants. Les
 - Retirer des surfaces de l’éditeur les imports React, @xstate/react, @tiptap/react et lucide-react remplacés par le runtime Remix. Supprimer une dépendance du workspace uniquement si elle n’est plus utilisée ailleurs ; préserver celles requises par le player hors périmètre.
 - Relier les scripts du workspace Elcé au CLI, au serveur et au rendu d’assets Remix. Garder Vite dans les autres workspaces ; ne le retirer d’Elcé que si le nouveau serveur remplace réellement son usage.
 - Porter les tests de route, composants et interactions de l’éditeur vers les outils Remix documentés. Garder les tests purs du domaine et de XState indépendants du navigateur ; ne pas porter les tests du player.
-- Vérifier les documents v3 présents dans IndexedDB au même origin, sans remise à zéro, migration implicite ou perte de médias.
+- Vérifier que les documents v4 présents dans IndexedDB restent lisibles au même origin, sans remise à zéro ni perte de médias. Les documents v1, v2 et v3 sont rejetés par le modèle actuel, sans migration implicite.
 - Exécuter typecheck, build, tests domaine/commandes/stockage, tests HTTP SQLite/fichiers et parcours auteur dans Safari, Firefox et Chromium.
 - Mettre à jour les spécifications touchées avec le comportement et les preuves réellement vérifiés ; clore le plan seulement quand les preuves navigateur et données sont complètes.
 

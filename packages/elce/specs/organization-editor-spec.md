@@ -123,6 +123,12 @@ dans le champ et aucune commande n’est envoyée. Le modèle met à jour son no
 sans changer les identifiants, l’ordre, l’affectation ou les BDC. La liste à
 gauche lit les noms actualisés depuis le document détenu par XState.
 
+Pour le raccordement de l’interface, `AppLayout` reçoit `EditorActionsFacade`
+pour les commandes durables et `selectEditorViewModel` pour les données
+dérivées. La façade transmet les intentions à l’acteur XState existant ; elle
+ne possède pas de document séparé. Les règles de whitelist, les gestes de
+glisser-déposer et leurs états visuels restent dans la vue auteur.
+
 ## Preuves
 
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
@@ -137,6 +143,9 @@ gauche lit les noms actualisés depuis le document détenu par XState.
   vérifie que l’événement `page.create` conserve le placement explicitement
   demandé et sélectionne la page produite, et que la sélection de chapitre
   passe par le contrôleur puis se ferme lors de la sélection d’une page.
+- [`editor-actions-facade.test.ts`](../src/app/facades/editor-actions-facade.test.ts)
+  vérifie que la création, le renommage et la sélection de pages empruntent
+  l’acteur XState existant.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie le renommage immuable, le refus d’un nom vide et la validation des
   réglages persistés d’un chapitre Évaluation.

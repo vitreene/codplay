@@ -14,9 +14,10 @@ Le JSON riche de la Section est la source éditable du document métier. Le
 builder conserve aussi le HTML statique exporté dans `section.markup` pour la
 projection CodPlay. L’auteur ne saisit pas de HTML. Le composant émet la
 description d’une transaction d’éditeur. `ElceAnchorDropService` définit les
-cibles métier et les commandes ; la façade applicative
-`ElceAnchorDropFacade` relie les intentions d’édition au contrôleur XState. Le
-composant ne sauvegarde pas les médias et ne possède aucune mutation métier.
+cibles métier et les commandes ; `EditorActionsFacade` appelle la façade
+applicative `ElceAnchorDropFacade`, qui relie les intentions d’édition au
+contrôleur XState. Le composant ne sauvegarde pas les médias et ne possède
+aucune mutation métier.
 
 La surface Tiptap propose dans le POC :
 

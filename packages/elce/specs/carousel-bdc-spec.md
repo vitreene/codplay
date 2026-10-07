@@ -64,6 +64,8 @@ page Flux et ouvre son éditeur. Les changements passent par les commandes
 XState et les services métier ; React ne conserve pas une seconde copie du
 document.
 
+`EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) expose les
+intentions Carousel et Carte à l’éditeur, puis délègue aux façades existantes.
 `ElceCarouselFacade` (`app/facades/carousel/`) orchestre les réglages du
 Carousel et délègue les champs des Cartes à `ElceCardFacade`
 (`app/facades/card/`). Les mêmes actions de Carte servent au BDC direct d’une

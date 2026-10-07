@@ -4,6 +4,7 @@ import { createActor } from 'xstate'
 import { mountElceEditor } from '../main'
 import { attachDocumentPersistence } from '../controller/document-persistence'
 import { controllerMachine } from '../controller/controller-machine'
+import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
 import { POPUP_PREVIEW_SESSION_PARAM } from '../player/popup-preview-messages'
 import { createElceSpaRouter } from './remix-spa-router'
@@ -15,6 +16,7 @@ async function startRemixEditor(): Promise<void> {
   const controller = documentStore === null
     ? null
     : createActor(controllerMachine, { input: { documentStore } })
+  const editorActions = controller === null ? null : new EditorActionsFacade(controller)
   controller?.start()
 
   let disposed = false
@@ -30,7 +32,7 @@ async function startRemixEditor(): Promise<void> {
       })
   }
 
-  const runtime = run(createElceSpaRouter(controller), {
+  const runtime = run(createElceSpaRouter(controller, editorActions), {
     fallback: jsx('p', {
       id: 'elce-remix-loading',
       role: 'status',
@@ -42,7 +44,7 @@ async function startRemixEditor(): Promise<void> {
   const host = document.getElementById('elce-react-temp-host')
   if (!host) throw new Error('Remix did not render the temporary Elcé editor host.')
 
-  const disposeEditor = mountElceEditor(host, controller)
+  const disposeEditor = mountElceEditor(host, controller, editorActions)
   window.addEventListener('pagehide', () => {
     disposed = true
     disposeEditor()

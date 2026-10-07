@@ -4,7 +4,7 @@
 
 ## But et limites
 
-Préparer le portage de l’éditeur vers Remix en rendant explicite la séparation entre modèle métier, application XState, adaptateurs d’infrastructure et interface auteur. Le travail futur doit clarifier ces frontières sans modifier les comportements Elcé, le format v3, les scènes CodPlay ni le circuit de commandes. Il ne prévoit pas de porter le player.
+Préparer le portage de l’éditeur vers Remix en rendant explicite la séparation entre modèle métier, application XState, adaptateurs d’infrastructure et interface auteur. Le travail futur doit clarifier ces frontières sans modifier les comportements Elcé, le format v4, les scènes CodPlay ni le circuit de commandes. Il ne prévoit pas de porter le player.
 
 Le document complète le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md) et le [plan local-first](./2026-10-06-elce-local-first-synchronisation-plan.md). Il ne remplace ni les spécifications de comportement ni le plan de construction du POC.
 
@@ -12,7 +12,7 @@ Règles impératives pour la mise en œuvre ultérieure :
 
 - Appliquer cet audit pendant la migration autorisée, indépendamment des validations POC restantes ; préserver les comportements Elcé déjà définis et ne pas porter le player.
 - Relire les spécifications citées ci-dessous et vérifier que les fichiers n’ont pas changé depuis cet audit.
-- Ne pas changer de comportement métier, de schéma v3, de layout, de navigation ou de résultat CodPlay pendant ce refactoring.
+- Ne pas changer de comportement métier, de schéma v4, de layout, de navigation ou de résultat CodPlay pendant ce refactoring.
 - Toute modification documentaire suit une modification implémentée et vérifiée ; une divergence de spécification bloque le code dépendant jusqu’à clarification.
 - Chaque mutation du document continue de passer par les événements et commandes du contrôleur XState existant. Ne pas créer une seconde voie d’écriture.
 - Conserver les whitelists d’ajout de BDC dans l’interface : elles sont une règle de logique UI, pas une contrainte de schéma métier.
@@ -23,7 +23,7 @@ Règles impératives pour la mise en œuvre ultérieure :
 
 Le modèle documentaire, ses transformations immuables, la machine d’Évaluation, les builders de scène et l’adaptateur IndexedDB sont déjà distincts de React. Le contrôleur XState reste la source du document et les composants d’édition envoient leurs modifications par ce contrôleur.
 
-La séparation n’est toutefois pas complète à plusieurs endroits : des façades d’application sont rangées dans `domain/` et importent `app/commands`; `AppLayout` construit encore beaucoup de commandes et de décisions d’orchestration dans le composant; le worker de la machine XState dépend directement du contrat IndexedDB et appelle `URL.createObjectURL`. Les builders et le player Sighty/CodPlay sont déjà séparés de l’interface auteur ; ils restent hors des modifications prévues par cet audit.
+La séparation n’était pas complète au début de l’audit : les commandes étaient rangées dans `app/`, les façades Ancre, Question, Carte et Carousel étaient hors de `app/facades/`, et l’orchestration des actions et lectures dérivées se trouvait dans `AppLayout`. Les modifications des sections 1 à 3 suivent ces déplacements. La vue auteur n’est pas encore découpée en surfaces Remix ; le worker de la machine XState dépend encore du contrat IndexedDB et appelle `URL.createObjectURL`. Les builders et le player Sighty/CodPlay restent hors des modifications prévues par cet audit.
 
 ## Architecture cible
 
@@ -62,11 +62,11 @@ d’exécution dans `domain/` n’importe `app/` ou React.
 Safari démarre avec le même contrôleur XState après déplacement de la
 composition dans l’entrée Remix.
 
-### 3. Extraire le raccord entre `AppLayout` et les commandes
+### 3. Extraire le raccord entre `AppLayout` et les commandes — En cours
 
-`src/app/layout/app-layout.tsx` cumule actuellement affichage, sélection des données, construction d’identifiants, création de commandes, appels `controller.send` et gestion des événements de glisser-déposer.
+#### Façade d’actions et modèle de vue — Fini le 7 octobre 2026
 
-Créer dans `src/app/facades/` un adaptateur d’actions d’éditeur, assemblé une fois au démarrage de l’application. Il reprend les appels déjà présents dans `AppLayout` et les confie aux fabriques et façades existantes :
+`EditorActionsFacade` réside dans `src/app/facades/` et est assemblée une fois dans `browser-entry.ts`. Elle reprend les intentions de `AppLayout` et les confie aux fabriques et façades existantes :
 
 - créer une page racine ou dans un chapitre, un chapitre standard ou Évaluation ;
 - déplacer et supprimer une page, déplacer ou supprimer un chapitre ;
@@ -76,17 +76,21 @@ Créer dans `src/app/facades/` un adaptateur d’actions d’éditeur, assemblé
 - renommer page et chapitre, modifier les réglages du chapitre Évaluation et éditer/supprimer le BDC Résultat ;
 - sélectionner page, chapitre, carte et onglet de catalogue.
 
-L’adaptateur envoie les mêmes événements XState et commandes que le code actuel. Il ne crée ni acteur ni file d’écriture supplémentaire. L’interface reçoit des callbacks d’intention ; elle ne fabrique plus les objets `DocumentCommand` et n’appelle plus directement les services métier.
+La façade envoie les mêmes événements XState et commandes que le code antérieur. Elle ne crée ni acteur ni file d’écriture supplémentaire. `AppLayout` reçoit des callbacks d’intention ; il ne fabrique plus les objets `DocumentCommand` et n’appelle plus directement les façades de cas d’usage.
 
-Extraire les lectures répétées de `AppLayout` dans un modèle de vue applicatif pur : page/chapter sélectionné, BDC visibles et ordonnés, média par identifiant, contenu du catalogue et média de page non ancré. La fonction de sélection reçoit un snapshot et retourne des valeurs dérivées ; elle ne modifie jamais le document.
+`selectEditorViewModel` réside dans `src/app/selectors/`. Cette fonction pure reçoit un snapshot et dérive la page et le chapitre sélectionnés, les BDC visibles dans leur ordre, les médias, le contenu du catalogue et les médias non ancrés de la page ; elle ne modifie jamais le document. `AppLayout` l’emploie avec `useSelector` et son comparateur dédié.
+
+**Vérification :** tests de la façade et du sélecteur, `app-layout.test.tsx`, typecheck, build et Safari MCP. Dans Safari, la preuve Remix temporaire affiche le changement de sélection après création d’une page par l’interface React ; la suppression de cette page rétablit le document.
+
+#### Découpage des surfaces auteur — À faire
 
 Garder dans l’adaptateur d’interface les whitelists `pageAllowsQuestion`, `pageAllowsSection` et `pageAllowsEvaluationResult`, ainsi que la disponibilité de création d’une Carte autonome directe dans une Diapo. Ces choix décrivent les commandes que l’interface expose ; ils ne remplacent pas les invariants du domaine. Garder également les textes et icônes, l’état visuel de drop et les `DragEvent`/`DataTransfer`. Au dépôt, appeler le callback correspondant avec un identifiant et un placement métier, jamais transmettre l’événement DOM au domaine.
 
 Conserver localement à la surface d’édition les états purement visuels (`previewOpen`, erreur affichée, séparateur de drop, identifiant glissé). Ne pas les enregistrer dans `ElceDocument` ni les promouvoir dans la machine métier. Les sélections qui déterminent la page, le chapitre, la carte ou l’onglet restent dans le contrôleur XState, comme aujourd’hui.
 
-Scinder le rendu existant en surfaces aux responsabilités déjà visibles, sans modifier le CSS ni l’apparence : organisation Scénario, zone d’édition, panneau des contenus disponibles et commandes de preview. Les lignes et séparateurs de drag restent des vues ; les opérations de déplacement passent par l’adaptateur d’actions.
+Scinder le rendu restant en surfaces aux responsabilités déjà visibles, sans modifier le CSS ni l’apparence : organisation Scénario, zone d’édition, panneau des contenus disponibles et commandes de preview. Les lignes et séparateurs de drag restent des vues ; les opérations de déplacement passent par `EditorActionsFacade`.
 
-**Acceptation :** reprendre les cas déjà couverts par `app-layout.test.tsx` avec des tests de l’adaptateur et des surfaces ; vérifier add/move/delete et renommage par le contrôleur ; vérifier au navigateur l’ordre racine page/chapitre, les séparateurs de dépôt et les deux onglets catalogue.
+**Acceptation restante :** reprendre les cas déjà couverts par `app-layout.test.tsx` avec des tests des surfaces découpées ; vérifier add/move/delete et renommage par le contrôleur ; vérifier au navigateur l’ordre racine page/chapitre, les séparateurs de dépôt et les deux onglets catalogue.
 
 ### 4. Garder les éditeurs de BDC comme adaptateurs d’interaction
 
@@ -128,7 +132,7 @@ Toute évolution de cette frontière relève d’un travail séparé sur Sighty/
 `ElceDocumentStore` et `MediaBlob` définissent le contrat utilisé par le contrôleur et la persistance, mais sont actuellement rangés sous `infrastructure/indexed-db/`.
 
 - Déplacer ces contrats vers un port applicatif commun, par exemple `src/app/ports/document-store-types.ts`.
-- Faire implémenter ce port par `IndexedDbDocumentStore` sans changer ses transactions, clés ni les données v3.
+- Faire implémenter ce port par `IndexedDbDocumentStore` sans changer ses transactions, clés ni le modèle de document v4.
 - Modifier `controller-types.ts`, `controller-machine.ts` et `document-persistence.ts` pour dépendre du port, pas du chemin IndexedDB. Ne pas déplacer ni refactorer l’adaptateur de preview/player.
 - Retirer la construction par défaut `new IndexedDbDocumentStore()` de `attachDocumentPersistence`. Construire l’adaptateur concret au point de composition et l’injecter.
 - Au travail serveur prévu par le plan local-first, définir des ports/adaptateurs SQLite et filesystem distincts pour l’API. Ne pas forcer les appels réseau et les écritures locales dans un contrat de stockage unique. Les routes Remix valident et délèguent ; elles n’embarquent pas les règles de document.
@@ -166,7 +170,7 @@ Cette cartographie fixe le périmètre observé le 6 octobre 2026. Lors de la re
 |---|---|
 | Commandes documentaires — Fini | `document-command-types.ts`, `document-commands/` et `document-commands.test.ts` résident dans `src/domain/commands/`. Les imports XState, façades, builders et player visent ces chemins ; les transformations et la projection player n’ont pas changé. |
 | Façades d’édition — Fini | Les façades Ancre, Question, Carte et Carousel résident dans `src/app/facades/<feature>/`. `ElceCardEditorFieldsProps` réside dans `src/app/editor/card/card-editor-fields-types.ts`; aucun module d’exécution sous `domain/` n’importe `app/` ni React. Les tests de service et de façade sont séparés. L’extraction de l’orchestration de `AppLayout` reste à faire à la ligne suivante. |
-| Orchestration et vues auteur | Extraire les actions actuellement dans `src/app/layout/app-layout.tsx` vers `src/app/facades/editor-actions-facade.ts` ; extraire les sélections dérivées dans `src/app/selectors/editor-view-model.ts`. Garder `app-layout-types.ts`, `app-layout.css` et `app-layout.test.tsx` comme références des états, du rendu et de l’acceptation actuelle. Les composants source concernés sont aussi `src/app/editor/section/section-editor.tsx`, `src/app/editor/question/question-editor.tsx`, `src/app/editor/card/card-editor.tsx`, `src/app/editor/card/card-editor-fields.tsx`, `src/app/editor/carousel/carousel-editor.tsx` et `src/app/editor/evaluation-result/evaluation-result-editor.tsx`. Préserver la whitelist auteur qui limite la Carte directe à une Diapo vide et les autres types de BDC selon leur page. |
+| Orchestration et vues auteur — extraction Fini, surfaces À faire | `src/app/facades/editor-actions-facade.ts` porte les actions préexistantes et `src/app/selectors/editor-view-model.ts` les sélections dérivées ; `browser-entry.ts` compose la façade avec l’acteur existant. `AppLayout` reçoit la façade et sélectionne un modèle de vue pur. `app-layout-types.ts`, `app-layout.css` et `app-layout.test.tsx` restent les références du rendu, du CSS et des interactions à préserver. Le découpage reste à faire pour `src/app/editor/section/section-editor.tsx`, `src/app/editor/question/question-editor.tsx`, `src/app/editor/card/card-editor.tsx`, `src/app/editor/card/card-editor-fields.tsx`, `src/app/editor/carousel/carousel-editor.tsx` et `src/app/editor/evaluation-result/evaluation-result-editor.tsx`. Préserver la whitelist auteur qui limite la Carte directe à une Diapo vide et les autres types de BDC selon leur page. |
 | Adaptateur Section/Tiptap | Adapter `src/app/editor/section/section-editor.tsx` et `src/app/editor/section/section-editor-types.ts` au cycle de vie `@tiptap/core`, avec le raccord impératif dans `src/app/editor/section/section-editor-adapter.ts`. Conserver `src/app/editor/anchor/elce-anchor-extension.ts`, `src/app/editor/anchor/anchor-types.ts` et `src/domain/anchor/anchor-types.ts`. Garder `src/app/editor/section/section-editor.test.tsx` et `src/app/editor/anchor/elce-anchor-extension.test.ts` comme corpus des comportements JSON/HTML, sélection et ancre à porter. |
 | Player Sighty/CodPlay — hors portage | Garder sans modification `scenario-builder.ts`, `flux-scene-builder.ts`, les builders Carte/Carousel, `ElcePlayerComposition`, le rendu player et son protocole de preview. Le portage de l’éditeur ne réécrit ni ces modules ni leurs tests. |
 | Accès éditeur à la preview | Conserver le contrôle de preview et son appel au player existant ; ne pas extraire `PopupPlayer` ni remplacer son rendu. `PopupPreviewHost` et les messages restent à leur contrat actuel. |
@@ -187,7 +191,7 @@ Ne pas publier ces changements comme comportement vérifié avant les tests conc
 ## Décisions qui bloquent encore des détails du portage
 
 - **Icônes :** l’usage de Lucide est conservé, mais la bibliothèque/méthode de rendu hors React n’est pas décidée. La trancher dans la preuve Remix de l’interface ; l’état actif, les noms accessibles et les tailles d’icônes doivent rester conformes.
-- **Contrat de rendu Remix :** l’abonnement XState et le cycle de vie Tiptap de l’éditeur doivent être prouvés avec le runtime réellement retenu dans l’étape 1 du plan Remix. Aucun pont de state parallèle ni API supposée ne doit être ajouté avant cette preuve.
+- **Cycle de vie Remix :** le contexte, l’abonnement XState, `handle.update()` et le désabonnement d’une vue sont prouvés dans le runtime RC retenu et dans Safari par une route temporaire. Le montage/démontage de Tiptap, son DOM ProseMirror et ses transactions restent à éprouver avant de porter la Section. Aucun pont d’état parallèle ni API supposée ne doit être ajouté.
 
 ## Critères de clôture de cet audit
 

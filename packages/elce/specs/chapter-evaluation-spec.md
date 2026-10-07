@@ -30,7 +30,9 @@ d’évaluation se distingue par son icône presse-papiers et reçoit le nom
 automatique « Évaluation », sans libellé de type répété dans l’arborescence.
 Le titre reste modifiable. Une page Flux créée dans ce chapitre reçoit un BDC
 Question initial ; l’auteur peut également ajouter des BDC Texte depuis la
-barre de la page. L’icône de la page ajoute un BDC Résultat qui contient les
+barre de la page. `EditorActionsFacade` transmet les commandes de création au
+contrôleur XState sans déplacer ces règles dans la vue. L’icône de la page
+ajoute un BDC Résultat qui contient les
 deux branches, Réussite et Échec, chacune avec un message et un choix d’action
 facultatif dans les options configurées. L’icône d’ajout
 est une règle de l’interface auteur ; elle ne crée aucun type de page et

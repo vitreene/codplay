@@ -4,18 +4,8 @@ import type { DragEvent } from 'react'
 import { Archive, BadgeCheck, ClipboardCheck, FilePlus, FileText, Folder, FolderPlus, GripVertical, Images, List, ListChecks, Presentation, RectangleHorizontal, Trash2, X } from 'lucide-react'
 import './app-layout.css'
 
-import { ANCHOR_RETURN, BDC_ORDER, BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
+import { ANCHOR_RETURN, BDC_ORDER, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
 import type { CardLayoutId, ChapterType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
-import {
-  createChapterCommand,
-  createChapterMoveCommand,
-  createCarouselBdcCommand,
-  createEvaluationResultBdcCommand,
-  createPageDeleteCommand,
-  createPageMoveCommand,
-  createSectionBdcCommand,
-  createStandaloneCardBdcCommand,
-} from '../../domain/commands/document-commands'
 import type { PagePlacement } from '../../domain/commands/document-command-types'
 import type { AppLayoutProps } from './app-layout-types'
 import { SectionEditor } from '../editor/section/section-editor'
@@ -26,22 +16,13 @@ import { CardEditor } from '../editor/card/card-editor'
 import { PlayerPreview } from '../player/player-preview'
 import { PopupPreviewHost } from '../player/popup-preview-host'
 import { PREVIEW_SURFACE } from '../player/preview-surface-config'
-import { createStableId } from '../../domain/document/document-model'
 import type { ElceDocument } from '../../domain/document/document-model'
 import type { Chapter } from '../../domain/document/document-types'
-import { ElceAnchorDropFacade } from '../facades/anchor/anchor-drop-facade'
-import { ElcePageMediaService } from '../../domain/media/page-media-service'
-import { ElceQuestionFacade } from '../facades/question/question-facade'
-import { ElceCarouselFacade, createCarouselBdcId } from '../facades/carousel/carousel-facade'
-import { ElceCardFacade } from '../facades/card/card-facade'
 import { mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
-import type { ElceQuestionEditorActions } from '../facades/question/question-facade-types'
-import type { QuestionContent } from '../../domain/question/question-types'
-import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
+import { selectEditorViewModel, editorViewModelEqual } from '../selectors/editor-view-model'
 
-const pageMediaService = new ElcePageMediaService()
 const PROPERTIES_DRAWER_BREAKPOINT_PX = 1200
 const OUTLINE_DRAWER_BREAKPOINT_PX = 800
 type ResponsivePanel = 'outline' | 'properties' | null
@@ -64,7 +45,7 @@ function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
 }
 
 /** Renders the Elcé work area from the controller-owned application state. */
-export function AppLayout({ controller }: AppLayoutProps) {
+export function AppLayout({ controller, actions }: AppLayoutProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [responsivePanel, setResponsivePanel] = useState<ResponsivePanel>(null)
@@ -79,89 +60,24 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const draggedEntry = useRef<ScenarioEntry | null>(null)
   const draggedBdcId = useRef<string | null>(null)
-  const anchorDropFacadeRef = useRef<ElceAnchorDropFacade | null>(null)
-  if (anchorDropFacadeRef.current === null) {
-    anchorDropFacadeRef.current = new ElceAnchorDropFacade({
-      dispatch: (sectionBdcId, change) => controller.send({ type: 'section.change', sectionBdcId, change }),
-    })
-  }
-  const anchorDropFacade = anchorDropFacadeRef.current
-  const questionFacadeRef = useRef<ElceQuestionFacade | null>(null)
-  if (questionFacadeRef.current === null) {
-    questionFacadeRef.current = new ElceQuestionFacade({
-      dispatch: (command) => controller.send({ type: 'document.apply', command }),
-      importMedia: (bdcId, mediaImport) => controller.send({
-        type: 'question.media.file.import',
-        bdcId,
-        file: mediaImport.file,
-        media: mediaImport.media,
-      }),
-    })
-  }
-  const questionFacade = questionFacadeRef.current
-  const carouselFacadeRef = useRef<ElceCarouselFacade | null>(null)
-  if (carouselFacadeRef.current === null) {
-    carouselFacadeRef.current = new ElceCarouselFacade({
-      dispatch: (command) => controller.send({ type: 'document.apply', command }),
-      selectCard: (bdcId) => controller.send({ type: 'carousel.card.select', bdcId }),
-      importMedia: (bdcId, mediaImport) => controller.send({
-        type: 'card.media.file.import',
-        bdcId,
-        file: mediaImport.file,
-        media: mediaImport.media,
-      }),
-    })
-  }
-  const carouselFacade = carouselFacadeRef.current
-  const cardFacadeRef = useRef<ElceCardFacade | null>(null)
-  if (cardFacadeRef.current === null) {
-    cardFacadeRef.current = new ElceCardFacade({
-      dispatch: (command) => controller.send({ type: 'document.apply', command }),
-      importMedia: (bdcId, mediaImport) => controller.send({
-        type: 'card.media.file.import',
-        bdcId,
-        file: mediaImport.file,
-        media: mediaImport.media,
-      }),
-    })
-  }
-  const cardFacade = cardFacadeRef.current
-  const documentModel = useSelector(controller, (snapshot) => snapshot.context.document)
-  const selectedPageId = useSelector(controller, (snapshot) => snapshot.context.selectedPageId)
-  const selectedChapterId = useSelector(controller, (snapshot) => snapshot.context.selectedChapterId)
-  const selectedCarouselCardBdcId = useSelector(controller, (snapshot) => snapshot.context.selectedCarouselCardBdcId)
-  const catalogTab = useSelector(controller, (snapshot) => snapshot.context.catalogTab)
-  const mediaSources = useSelector(controller, (snapshot) => snapshot.context.mediaSources)
-  const mediaSourceKey = Object.keys(mediaSources).sort().join('|')
-  const selectedPage = documentModel.pages.find((page) => page.id === selectedPageId) ?? documentModel.pages[0]
-  const selectedChapter = selectedChapterId === null
-    ? undefined
-    : documentModel.chapters.find((chapter) => chapter.id === selectedChapterId)
-  const pageChapter = selectedPage?.chapterId === null || selectedPage === undefined
-    ? undefined
-    : documentModel.chapters.find((chapter) => chapter.id === selectedPage.chapterId)
-  const selectedPageBdcs = selectedPage === undefined
-    ? []
-    : selectedPage.bdcIds.flatMap((bdcId) => {
-        const bdc = documentModel.bdcs.find((candidate) => candidate.id === bdcId)
-        switch (bdc?.type) {
-          case BDC_TYPE.SECTION:
-            return bdc.section === null ? [] : [bdc]
-          case BDC_TYPE.QUESTION:
-            return bdc.question === null ? [] : [bdc]
-          case BDC_TYPE.EVALUATION_RESULT:
-            return bdc.evaluationResult == null ? [] : [bdc]
-          case BDC_TYPE.CAROUSEL:
-            return bdc.carousel == null ? [] : [bdc]
-          case BDC_TYPE.CARD:
-            return bdc.card == null ? [] : [bdc]
-          default:
-            return []
-        }
-      })
-  const pageHasQuestion = selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.QUESTION)
-  const pageHasCarousel = selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.CAROUSEL)
-  const pageHasContent = selectedPageBdcs.length > 0
+  const view = useSelector(controller, selectEditorViewModel, editorViewModelEqual)
+  const {
+    documentModel,
+    selectedCarouselCardBdcId,
+    catalogTab,
+    mediaSources,
+    mediaSourceKey,
+    selectedPage,
+    selectedChapter,
+    pageChapter,
+    selectedPageBdcs,
+    pageHasQuestion,
+    pageHasCarousel,
+    pageHasContent,
+    mediaById,
+    catalogContents,
+    unanchoredMediaBdcs,
+  } = view
   const canCreateQuestion = pageAllowsQuestion(selectedPage)
     && !pageHasQuestion
     && (selectedPage?.type !== PAGE_TYPE.DIAPO || !pageHasContent)
@@ -172,15 +88,6 @@ export function AppLayout({ controller }: AppLayoutProps) {
     || (selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent && !pageHasCarousel)
   const canCreateStandaloneCard = selectedPage?.type === PAGE_TYPE.FLUX
     || (selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent)
-  const mediaById = Object.fromEntries(documentModel.medias.flatMap((media) => {
-    const type = mediaTypeFromMimeType(media.mimeType)
-    return type === null ? [] : [[media.id, { name: media.name, type, source: mediaSources[media.id] ?? null }]]
-  }))
-  const catalogContents = anchorDropFacade.catalogContents(documentModel)
-  const unanchoredMediaBdcs = selectedPage === undefined || selectedChapter !== undefined
-    ? []
-    : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage)
-
   useEffect(() => () => popupPreviewHostRef.current?.destroy(), [])
 
   useEffect(() => {
@@ -252,36 +159,37 @@ export function AppLayout({ controller }: AppLayoutProps) {
   }
 
   const addPage = (placement: PagePlacement, pageType: PageType = PAGE_TYPE.FLUX) => {
-    controller.send({ type: 'page.create', placement, pageType })
+    actions.createPage(placement, pageType)
   }
 
   /** Creates a standard chapter through the controller's document command. */
   const addChapter = () => {
-    controller.send({ type: 'document.apply', command: createChapterCommand(documentModel) })
+    actions.createChapter(documentModel)
   }
 
   /** Creates an Evaluation chapter through the same XState document command. */
   const addEvaluationChapter = () => {
-    controller.send({
-      type: 'document.apply',
-      command: createChapterCommand(documentModel, undefined, CHAPTER_TYPE.EVALUATION),
-    })
+    actions.createEvaluationChapter(documentModel)
   }
 
   const movePage = (pageId: string, placement: PagePlacement) => {
-    controller.send({ type: 'document.apply', command: createPageMoveCommand(pageId, placement) })
+    actions.movePage(pageId, placement)
   }
 
   const moveChapter = (chapterId: string, index: number) => {
-    controller.send({ type: 'document.apply', command: createChapterMoveCommand(chapterId, index) })
+    actions.moveChapter(chapterId, index)
   }
 
   const deletePage = (pageId: string) => {
-    controller.send({ type: 'document.apply', command: createPageDeleteCommand(pageId) })
+    actions.deletePage(pageId)
+  }
+
+  const deleteChapter = (chapterId: string) => {
+    actions.deleteChapter(chapterId)
   }
 
   const returnBdcToCatalog = (bdcId: string) => {
-    controller.send({ type: 'document.apply', command: { type: 'bdc.remove', bdcId } })
+    actions.returnBdcToCatalog(bdcId)
   }
 
   const beginBdcDrag = (event: DragEvent<HTMLButtonElement>, bdcId: string) => {
@@ -303,10 +211,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
     if (bdcId === null || selectedPage === undefined) return
     event.preventDefault()
     event.stopPropagation()
-    controller.send({
-      type: 'document.apply',
-      command: { type: 'bdc.move', bdcId, placement: { kind: BDC_LOCATION.PAGE, pageId: selectedPage.id, index } },
-    })
+    actions.moveBdc(bdcId, selectedPage.id, index)
     draggedBdcId.current = null
     setDropTarget(null)
   }
@@ -320,7 +225,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
     switch (selectedPage?.type) {
       case PAGE_TYPE.FLUX:
       case PAGE_TYPE.DIAPO:
-        questionFacade.create(documentModel, selectedPage.id, selectedPage.bdcIds.length)
+        actions.createQuestion(documentModel, selectedPage.id, selectedPage.bdcIds.length)
         return
       default:
         return
@@ -330,10 +235,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const addSection = () => {
     switch (selectedPage?.type) {
       case PAGE_TYPE.FLUX:
-        controller.send({
-          type: 'document.apply',
-          command: createSectionBdcCommand(createStableId('bdc-section'), selectedPage.id, selectedPage.bdcIds.length),
-        })
+        actions.createSection(selectedPage.id, selectedPage.bdcIds.length)
         return
       case PAGE_TYPE.DIAPO:
       default:
@@ -346,16 +248,8 @@ export function AppLayout({ controller }: AppLayoutProps) {
     switch (selectedPage?.type) {
       case PAGE_TYPE.FLUX:
       case PAGE_TYPE.DIAPO:
-        if (!pageAllowsEvaluationResult(selectedPage, documentModel.chapters)) return
-        if (selectedPage.type === PAGE_TYPE.DIAPO && selectedPage.bdcIds.length > 0) return
-        controller.send({
-          type: 'document.apply',
-          command: createEvaluationResultBdcCommand(
-            createStableId('bdc-evaluation-result'),
-            selectedPage.id,
-            selectedPage.bdcIds.length,
-          ),
-        })
+        if (!canCreateEvaluationResult) return
+        actions.createEvaluationResult(selectedPage.id, selectedPage.bdcIds.length)
         return
       default:
         return
@@ -366,18 +260,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const addCarousel = () => {
     switch (selectedPage?.type) {
       case PAGE_TYPE.FLUX:
-        controller.send({
-          type: 'document.apply',
-          command: createCarouselBdcCommand(createCarouselBdcId(), selectedPage.id, selectedPage.bdcIds.length),
-        })
+        actions.createCarousel(selectedPage.id, selectedPage.bdcIds.length)
         return
       case PAGE_TYPE.DIAPO:
-        if (!pageHasCarousel) {
-          controller.send({
-            type: 'document.apply',
-            command: createCarouselBdcCommand(createCarouselBdcId(), selectedPage.id, selectedPage.bdcIds.length),
-          })
-        }
+        if (!pageHasCarousel && canCreateCarousel) actions.createCarousel(selectedPage.id, selectedPage.bdcIds.length)
         return
       default:
         return
@@ -387,10 +273,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
   /** Adds a unique Card BDC directly to a page. */
   const addStandaloneCard = () => {
     if (selectedPage === undefined || (selectedPage.type === PAGE_TYPE.DIAPO && pageHasContent)) return
-    controller.send({
-      type: 'document.apply',
-      command: createStandaloneCardBdcCommand(createStableId('bdc-card'), selectedPage.id),
-    })
+    actions.createStandaloneCard(selectedPage.id)
   }
 
   const beginPageDrag = (event: DragEvent<HTMLElement>, pageId: string) => {
@@ -443,7 +326,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
     event.dataTransfer.dropEffect = 'move'
     setDropTarget(null)
     if (catalogTab !== CATALOG_TAB.AVAILABLE_BDCS) {
-      controller.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.AVAILABLE_BDCS })
+      actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)
     }
   }
 
@@ -610,10 +493,10 @@ export function AppLayout({ controller }: AppLayoutProps) {
             selectedChapterId={selectedChapter?.id}
             dropTarget={dropTarget}
             onDragLeaveDropSeparator={dragLeaveDropSeparator}
-            onSelect={(pageId) => controller.send({ type: 'page.select', pageId })}
-            onSelectChapter={(chapterId) => controller.send({ type: 'chapter.select', chapterId })}
+            onSelect={(pageId) => actions.selectPage(pageId)}
+            onSelectChapter={(chapterId) => actions.selectChapter(chapterId)}
             onDeletePage={deletePage}
-            onDeleteChapter={(chapterId) => controller.send({ type: 'document.apply', command: { type: 'chapter.delete', chapterId } })}
+            onDeleteChapter={deleteChapter}
             onAddChapterPage={(chapterId, pageType) => addPage({ kind: PAGE_LOCATION.CHAPTER, chapterId }, pageType)}
             onDragStartPage={beginPageDrag}
             onDragStartChapter={beginChapterDrag}
@@ -635,7 +518,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
               dropTarget={dropTarget}
               onDragLeaveDropSeparator={dragLeaveDropSeparator}
               placementAt={() => ({ kind: PAGE_LOCATION.CATALOG })}
-              onSelect={(pageId) => controller.send({ type: 'page.select', pageId })}
+              onSelect={(pageId) => actions.selectPage(pageId)}
               onDelete={deletePage}
               onDragStart={beginPageDrag}
               onDragEnd={endPageDrag}
@@ -665,10 +548,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                         aria-label={CHAPTER_TYPE_CONFIG[selectedChapter.type].titleLabel}
                         title={CHAPTER_TYPE_CONFIG[selectedChapter.type].editTitleLabel}
                         defaultValue={selectedChapter.name}
-                        onBlur={(event) => commitInlineName(event.currentTarget, selectedChapter.name, (name) => controller.send({
-                          type: 'document.apply',
-                          command: { type: 'chapter.rename', chapterId: selectedChapter.id, name },
-                        }))}
+                        onBlur={(event) => commitInlineName(event.currentTarget, selectedChapter.name, (name) => actions.renameChapter(selectedChapter.id, name))}
                         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
                       />
                     </h1>
@@ -684,10 +564,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                           aria-label={CHAPTER_TYPE_CONFIG[pageChapter.type].titleLabel}
                           title={CHAPTER_TYPE_CONFIG[pageChapter.type].editTitleLabel}
                           defaultValue={pageChapter.name}
-                          onBlur={(event) => commitInlineName(event.currentTarget, pageChapter.name, (name) => controller.send({
-                            type: 'document.apply',
-                            command: { type: 'chapter.rename', chapterId: pageChapter.id, name },
-                          }))}
+                          onBlur={(event) => commitInlineName(event.currentTarget, pageChapter.name, (name) => actions.renameChapter(pageChapter.id, name))}
                           onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
                         />
                       </h2>}
@@ -704,10 +581,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                         aria-label="Titre de la page"
                         title="Modifier le titre de la page"
                         defaultValue={selectedPage.name}
-                        onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => controller.send({
-                          type: 'document.apply',
-                          command: { type: 'page.rename', pageId: selectedPage.id, name },
-                        }))}
+                        onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => actions.renamePage(selectedPage.id, name))}
                         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
                       />
                     </h1>}
@@ -764,15 +638,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
             ? selectedChapter.type === CHAPTER_TYPE.EVALUATION
               ? <EvaluationChapterSettingsEditor
                   chapter={selectedChapter}
-                  onChange={(attemptLimit, retryScope) => controller.send({
-                    type: 'document.apply',
-                    command: {
-                      type: 'chapter.evaluation.settings.update',
-                      chapterId: selectedChapter.id,
-                      attemptLimit,
-                      retryScope,
-                    },
-                  })}
+                  onChange={(attemptLimit, retryScope) => actions.updateEvaluationChapterSettings(selectedChapter.id, attemptLimit, retryScope)}
                 />
               : null
             : selectedPage === undefined
@@ -813,12 +679,9 @@ export function AppLayout({ controller }: AppLayoutProps) {
                           ? <SectionEditor
                               key={`${bdc.id}:${mediaSourceKey}`}
                               bdc={bdc}
-                              onDelete={() => controller.send({
-                                type: 'document.apply',
-                                command: { type: 'bdc.section.delete', bdcId: bdc.id },
-                              })}
-                              createFileDropTarget={(file) => anchorDropFacade.createFileDropTarget(file, selectedPage.id)}
-                              createCatalogDropTarget={(reference) => anchorDropFacade.createCatalogDropTarget(
+                              onDelete={() => actions.deleteSection(bdc.id)}
+                              createFileDropTarget={(file) => actions.createSectionFileDropTarget(file, selectedPage.id)}
+                              createCatalogDropTarget={(reference) => actions.createSectionCatalogDropTarget(
                                 documentModel,
                                 reference,
                                 selectedPage.id,
@@ -838,8 +701,8 @@ export function AppLayout({ controller }: AppLayoutProps) {
                               }}
                               anchorCards={documentModel.bdcs.filter((candidate) => candidate.type === BDC_TYPE.CARD && candidate.parentBdcId === bdc.id)}
                               mediaById={mediaById}
-                              cardActions={cardFacade.createEditorActions(documentModel.bdcs)}
-                              onChange={(change) => anchorDropFacade.submitSectionChange(bdc.id, change)}
+                              cardActions={actions.createCardEditorActions(documentModel.bdcs)}
+                              onChange={(change) => actions.submitSectionChange(bdc.id, change)}
                             />
                           : bdc.type === BDC_TYPE.QUESTION && bdc.question !== null
                             ? <QuestionEditor
@@ -850,21 +713,15 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                   ? null
                                   : mediaTypeFromMimeType(documentModel.medias.find((media) => media.id === bdc.question?.mediaId)?.mimeType ?? '')}
                                 mediaSource={bdc.question?.mediaId == null ? null : mediaSources[bdc.question.mediaId] ?? null}
-                                actions={createQuestionEditorActions(questionFacade, bdc.id, bdc.question)}
-                                onCatalogReference={(value) => questionFacade.attachMediaReference(bdc.id, value)}
+                                actions={actions.createQuestionEditorActions(bdc.id, bdc.question)}
+                                onCatalogReference={(value) => actions.attachQuestionMediaReference(bdc.id, value)}
                               />
                             : bdc.type === BDC_TYPE.EVALUATION_RESULT && bdc.evaluationResult !== null && bdc.evaluationResult !== undefined
                               ? <EvaluationResultEditor
                                   bdcId={bdc.id}
                                   content={bdc.evaluationResult}
-                                  onChange={(evaluationResult: EvaluationResultContent) => controller.send({
-                                    type: 'document.apply',
-                                    command: { type: 'bdc.evaluation-result.update', bdcId: bdc.id, evaluationResult },
-                                  })}
-                                  onDelete={() => controller.send({
-                                    type: 'document.apply',
-                                    command: { type: 'bdc.evaluation-result.delete', bdcId: bdc.id },
-                                  })}
+                                  onChange={(evaluationResult) => actions.updateEvaluationResult(bdc.id, evaluationResult)}
+                                  onDelete={() => actions.deleteEvaluationResult(bdc.id)}
                                 />
                               : bdc.type === BDC_TYPE.CAROUSEL && bdc.carousel !== null && bdc.carousel !== undefined
                               ? <CarouselEditor
@@ -873,17 +730,14 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                   cards={carouselCards}
                                   selectedCardBdcId={selectedCarouselCardBdcId}
                                   mediaById={mediaById}
-                                  actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel, carouselCards, documentModel.data.revelationDefaults)}
+                                  actions={actions.createCarouselEditorActions(bdc.id, bdc.carousel, carouselCards, documentModel.data.revelationDefaults)}
                                 />
                               : bdc.type === BDC_TYPE.CARD && bdc.card !== null
                               ? <CardEditor
                                   bdc={bdc}
                                   mediaById={mediaById}
-                                  actions={cardFacade.createEditorActions(documentModel.bdcs)}
-                                  onDelete={() => controller.send({
-                                    type: 'document.apply',
-                                    command: { type: 'bdc.card.delete', bdcId: bdc.id },
-                                  })}
+                                  actions={actions.createCardEditorActions(documentModel.bdcs)}
+                                  onDelete={() => actions.deleteCard(bdc.id)}
                                 />
                               : null}
                       </div>
@@ -933,7 +787,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 type="button"
                 aria-pressed={catalogTab === CATALOG_TAB.AVAILABLE_BDCS}
                 aria-controls="elce-catalog-bdcs"
-                onClick={() => controller.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.AVAILABLE_BDCS })}
+                onClick={() => actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)}
                 onDragOver={dragOverAvailableBdcCatalog}
                 onDragLeave={leaveAvailableBdcCatalog}
                 onDrop={dropIntoAvailableBdcCatalog}
@@ -946,7 +800,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 type="button"
                 aria-pressed={catalogTab === CATALOG_TAB.MEDIA}
                 aria-controls="elce-catalog-media"
-                onClick={() => controller.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.MEDIA })}
+                onClick={() => actions.selectCatalogTab(CATALOG_TAB.MEDIA)}
               >
                 Médias
               </button>
@@ -984,10 +838,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                           <DeleteIconButton
                             id={`elce-catalog-bdc-delete-${entry.reference.bdcId}`}
                             ariaLabel={`Supprimer définitivement le bloc ${entry.name}`}
-                            onClick={() => controller.send({
-                              type: 'document.apply',
-                              command: { type: 'bdc.delete', bdcId: entry.reference.bdcId },
-                            })}
+                            onClick={() => actions.deleteCatalogBdc(entry.reference.bdcId)}
                           />
                         </div>
                       </li>
@@ -1144,28 +995,6 @@ function commitAttemptLimit(
     return
   }
   if (value !== currentValue) commit(value)
-}
-
-/** Binds one Question editor to the métier facade without keeping React state. */
-function createQuestionEditorActions(
-  facade: ElceQuestionFacade,
-  bdcId: string,
-  question: QuestionContent,
-): ElceQuestionEditorActions {
-  return {
-    setType: (type) => facade.setType(bdcId, question, type),
-    setTitle: (title) => facade.setTitle(bdcId, question, title),
-    setPrompt: (prompt) => facade.setPrompt(bdcId, question, prompt),
-    setAnswerLabel: (answerId, label) => facade.setAnswerLabel(bdcId, question, answerId, label),
-    setAnswerCorrect: (answerId, correct) => facade.setAnswerCorrect(bdcId, question, answerId, correct),
-    addAnswer: () => facade.addAnswer(bdcId, question),
-    removeAnswer: (answerId) => facade.removeAnswer(bdcId, question, answerId),
-    canRemoveAnswer: (answerId) => facade.canRemoveAnswer(question, answerId),
-    moveAnswer: (answerId, index) => facade.moveAnswer(bdcId, question, answerId, index),
-    importMedia: (file) => facade.importMediaFile(bdcId, file),
-    clearMedia: () => facade.clearMedia(bdcId),
-    deleteQuestion: () => facade.delete(bdcId),
-  }
 }
 
 type ScenarioEntryDropListProps = Readonly<{

@@ -55,6 +55,10 @@ donc pas de chaînes de placement dans les commandes.
 Les commandes immuables sont définies dans `domain/commands/`. Les façades
 d’édition qui les envoient au contrôleur XState sont des adaptateurs
 applicatifs rangés dans `app/facades/` ; elles ne font pas partie du domaine.
+`EditorActionsFacade` compose ces façades et les commandes de document au point
+d’entrée de l’application, sans créer un autre acteur ni un autre circuit
+d’écriture. `selectEditorViewModel` dérive les données affichées depuis un
+snapshot XState sans modifier le document.
 Les propriétés React des champs Carte restent dans `app/editor/card/`.
 
 Un nouveau document de POC contient un chapitre, une page Flux `Page A` et un

@@ -55,10 +55,11 @@ visuelle et recalcule sa réservation quand la largeur change ; aucun code Elcé
 ne mesure ou ne déplace un nœud après le montage CodPlay. Le parseur statique
 relit les attributs de l’ancre lorsqu’un markup est rouvert dans Tiptap.
 
-Le dépôt d’un fichier image ou vidéo passe par la façade applicative
-`ElceAnchorDropFacade` (`app/facades/anchor/`), puis par le contrôleur XState.
-La façade délègue à `ElceAnchorDropService` les cibles métier et la création de
-commande ; le service métier applique la whitelist et décrit le bdc. La
+Le dépôt d’un fichier image ou vidéo passe par `EditorActionsFacade`
+(`app/facades/editor-actions-facade.ts`), qui délègue à la façade spécialisée
+`ElceAnchorDropFacade` (`app/facades/anchor/`) avant le contrôleur XState.
+Cette façade délègue à `ElceAnchorDropService` les cibles métier et la création
+de commande ; le service métier applique la whitelist et décrit le bdc. La
 machine XState séquence ensuite la sauvegarde dans `ElceDocumentStore`, la
 création du bdc, l’insertion de l’ancre et l’enregistrement de la source de
 lecture. Les changements de contenu, le déplacement et la suppression d’une
@@ -94,8 +95,9 @@ Safari expose `dropEffect: move` mais une liste `DataTransfer.types` vide sur ce
 s’appuie donc sur l’identifiant et la position mémorisés au départ, l’effet
 `move` et la vérification du nœud courant ; elle ne revalide pas le type MIME
 après le dépôt.
-`SectionEditor` transmet le document riche actualisé à la façade ; XState traite
-`section.change`, puis la commande `bdc.anchor.return` vérifie l’ancre,
+`SectionEditor` transmet le document riche actualisé à `EditorActionsFacade`,
+qui appelle `ElceAnchorDropFacade` ; XState traite `section.change`, puis la
+commande `bdc.anchor.return` vérifie l’ancre,
 conserve son identifiant et sa ressource média, et réaffecte le BDC au
 catalogue. Le BDC n’est ni cloné ni supprimé.
 

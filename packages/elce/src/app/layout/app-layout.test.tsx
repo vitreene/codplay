@@ -6,6 +6,7 @@ import { createActor } from 'xstate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CARD_LAYOUT_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { controllerMachine } from '../controller/controller-machine'
+import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { AppLayout } from './app-layout'
 
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true })
@@ -638,12 +639,13 @@ describe('AppLayout authoring titles and creation actions', () => {
   function mountApp() {
     const actor = createActor(controllerMachine, { input: {} })
     actor.start()
+    const actions = new EditorActionsFacade(actor)
     stopActor = () => actor.stop()
     const host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
 
-    act(() => root?.render(<AppLayout controller={actor} />))
+    act(() => root?.render(<AppLayout controller={actor} actions={actions} />))
     return { actor, host }
   }
 
