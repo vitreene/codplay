@@ -2,23 +2,25 @@
 
 ## Statut
 
-**Fini le 7 octobre 2026.** Un verrou natif par document, son transfert par
-`BroadcastChannel`, la suspension des commandes XState et la reprise depuis la
-cache IndexedDB sont vérifiés dans Safari Technology Preview.
+**Fini le 7 octobre 2026 pour le verrou par projet et la conservation des
+caches ; le parcours de sélection des projets reste au plan Remix.** Le
+transfert du verrou par `BroadcastChannel`, la suspension XState et la reprise
+IndexedDB sont vérifiés dans Safari Technology Preview.
 
 ## Rôle
 
-Garantir qu’une seule fenêtre de même origine modifie un document Elcé à la
-fois. Cette coordination utilise les API du navigateur et ne crée ni état
-éditorial parallèle, ni synchronisation directe entre les fenêtres. L’API
-serveur reste responsable de la persistance durable ; IndexedDB ne garde que la
-cache du document actuellement ouvert, ses médias non transférés et son
-checkpoint de synchronisation.
+Garantir qu’une seule fenêtre de même origine modifie un projet Elcé à la fois.
+Cette coordination utilise les API du navigateur et ne crée ni état éditorial
+parallèle, ni synchronisation directe entre les fenêtres. L’API serveur reste
+responsable de la persistance durable ; IndexedDB garde une entrée de cache
+séparée par projet ouvert, avec ses médias non transférés et son checkpoint de
+synchronisation. Des fenêtres sur des projets différents gardent des caches
+indépendantes.
 
 ## Contrat
 
 - `ProjectEditorLock` prend un Web Lock exclusif nommé à partir de l’identifiant
-  du document et diffuse les demandes de transfert par `BroadcastChannel`.
+  du projet et diffuse les demandes de transfert par `BroadcastChannel`.
 - L’éditeur attend le verrou avant d’attacher sa persistance et d’autoriser les
   commandes. `controllerMachine` démarre dans l’état `suspended` ; les commandes
   documentaires et les imports sont acceptés uniquement lorsque son contexte
@@ -30,11 +32,14 @@ checkpoint de synchronisation.
 - `visibilitychange` vers `hidden` suspend également l’édition et libère le
   verrou après la même sauvegarde locale. Au retour visible ou au retour du
   focus, la fenêtre demande à nouveau le verrou.
-- Après acquisition, la fenêtre relit le document et le checkpoint depuis la
-  cache IndexedDB partagée, rétablit les sources de média, puis reprend la
+- Après acquisition, la fenêtre relit le document et le checkpoint de ce projet
+  depuis IndexedDB, rétablit les sources de média, puis reprend la
   synchronisation. Elle ne remplace jamais une copie locale en attente par un
   document serveur plus ancien. Les révisions HTTP et leur contrôle `If-Match`
   restent le mécanisme de détection d’une divergence distante.
+- Enregistrer, supprimer ou rejeter un ancien format de document ne retire pas
+  les caches des autres projets. Les médias sont indexés par `MediaId` et
+  rattachés aux projets par la liste `medias` du document.
 - Le contenu éditorial reste dans l’acteur XState. La persistance IndexedDB,
   `ProjectSyncCoordinator` et `ProjectEditorLock` gèrent leur cycle de vie ; ils
   ne changent pas le document en dehors des événements XState.
@@ -56,6 +61,9 @@ checkpoint de synchronisation.
 - [`document-persistence.ts`](../src/app/controller/document-persistence.ts)
   attend la fin des écritures IndexedDB et restaure le document actif avec ses
   sources média.
+- [`document-store.ts`](../src/infrastructure/indexed-db/document-store.ts)
+  conserve plusieurs caches projet dans la même base et expose la suppression
+  ciblée d’un projet avec `deleteDocument()`.
 - [`project-sync-coordinator.ts`](../src/app/sync/project-sync-coordinator.ts)
   suspend les nouvelles requêtes réseau pendant le transfert, puis reprend à
   partir du document local restauré.
@@ -81,3 +89,9 @@ checkpoint de synchronisation.
 - Le rechargement à froid a restauré le document et réacquis le verrou. Aucun
   contenu n’a été modifié durant ces vérifications ; les seules requêtes API
   observées pendant l’essai étaient les `GET` des médias existants.
+- Safari Technology Preview a exercé directement `IndexedDbDocumentStore` sur
+  deux entrées projet dans une base temporaire : sauvegarder ou supprimer l’une
+  a préservé le document, le checkpoint et les médias de l’autre. Le rejet
+  ciblé d’un document v3 a également préservé les données du projet courant.
+  L’ouverture de ces projets depuis le menu et leur édition simultanée dans
+  plusieurs onglets restent à valider dans le parcours de gestion des projets.

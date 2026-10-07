@@ -1,9 +1,14 @@
 import { ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentData, MediaId, MediaMetadata } from '../../domain/document/document-types'
 import { elceApiOrigin } from '../../config/api-config'
+import type { ElceProjectSummary } from './project-api-types'
 
 interface ProjectResponse {
-  readonly project: { readonly id: string; readonly name: string; readonly revision: number }
+  readonly project: ElceProjectSummary
+}
+
+interface ProjectListResponse {
+  readonly projects: readonly ElceProjectSummary[]
 }
 
 interface ProjectDocumentResponse extends ProjectResponse {
@@ -53,6 +58,32 @@ export class ElceProjectApiClient {
     })
     await readResponseJson<ProjectResponse>(response)
     return revisionFrom(response)
+  }
+
+  /** Lists the server-owned project catalogue without loading document bodies. */
+  public async listProjects(): Promise<readonly ElceProjectSummary[]> {
+    const response = await this.request(this.url('/api/projects'))
+    return (await readResponseJson<ProjectListResponse>(response)).projects
+  }
+
+  /** Renames one server project and returns its updated summary. */
+  public async renameProject(projectId: string, name: string): Promise<ElceProjectSummary> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    return (await readResponseJson<ProjectResponse>(response)).project
+  }
+
+  /** Deletes one server project and its media files. */
+  public async deleteProject(projectId: string): Promise<void> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}`), {
+      method: 'DELETE',
+    })
+    if (response.status === 204) return
+    await readResponseJson<never>(response)
+    throw new Error('Réponse API de suppression de projet non traitée.')
   }
 
   /** Reads one server document and its current revision. */

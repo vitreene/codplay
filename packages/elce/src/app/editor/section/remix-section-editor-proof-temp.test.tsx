@@ -23,6 +23,8 @@ class PendingMediaStore implements ElceDocumentStore {
 
   public async saveDocumentAndDeleteMedia(): Promise<void> {}
 
+  public async deleteDocument(): Promise<void> {}
+
   public async deleteMedia(): Promise<void> {}
 
   public async loadSyncState(documentId: string) {

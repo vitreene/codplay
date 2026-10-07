@@ -141,10 +141,18 @@ le cache HTTP, la lecture partielle vidéo, le nettoyage après fusion de média
 et la suppression du projet. Il vérifie aussi le prévol depuis l’origine
 éditeur `http://localhost:5175` et le refus d’une origine distante.
 
+`ElceProjectApiClient` adapte les opérations de catalogue et de document
+utilisées par l’application : lister, créer, lire, renommer, supprimer,
+enregistrer le document et transférer un média. Ses tests vérifient les chemins
+HTTP, les méthodes, les corps, les ETags et la remontée de l’identifiant média
+canonique en cas de doublon.
+
 La couverture API est dans
 [`api-router.test.ts`](../src/server/api-router.test.ts) et la couverture
 relationnelle dans
 [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts).
+La couverture de l’adaptateur navigateur est dans
+[`project-api-client.test.ts`](../src/infrastructure/project-api/project-api-client.test.ts).
 Les routes sont enregistrées dans
 [`api-router.ts`](../src/server/api-router.ts) ; les contrôleurs média et leur
 frontière de persistance sont dans `src/server/media/`.

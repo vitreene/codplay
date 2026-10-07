@@ -28,6 +28,11 @@ class MemoryDocumentStore implements ElceDocumentStore {
     for (const mediaId of mediaIds) this.media.delete(mediaId)
   }
 
+  public async deleteDocument(documentId: string): Promise<void> {
+    if (this.document?.id === documentId) this.document = null
+    this.syncState = null
+  }
+
   public async deleteMedia(mediaIds: readonly string[]): Promise<void> {
     for (const mediaId of mediaIds) this.media.delete(mediaId)
   }
@@ -137,6 +142,49 @@ describe('Elcé project synchronization', () => {
     actor.stop()
   })
 
+  it('waits for the server document and media acknowledgements before allowing a project change', async () => {
+    const media = { id: 'media-before-switch', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' }
+    const document = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })
+    const store = new MemoryDocumentStore()
+    store.document = document
+    store.media.set(media.id, new Blob(['img'], { type: media.mimeType }))
+    await store.saveDocument(document)
+    let finishUpload!: (response: Response) => void
+    const uploadResponse = new Promise<Response>((resolve) => { finishUpload = resolve })
+    const request = vi.fn<typeof fetch>().mockImplementation(async (_input, init) => {
+      switch (init?.method) {
+        case 'POST':
+          return Response.json({ project: { id: document.id, name: document.data.name, revision: 0 } }, {
+            status: 201,
+            headers: { ETag: '"0"' },
+          })
+        case 'PUT':
+          return uploadResponse
+        default:
+          throw new Error(`Méthode inattendue : ${init?.method}`)
+      }
+    })
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    actor.send({ type: 'document.replace', document })
+    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+
+    coordinator.schedule(document)
+    let completed = false
+    const waitForSync = coordinator.waitUntilCurrentDocumentSynced().then(() => { completed = true })
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+
+    expect(completed).toBe(false)
+    finishUpload(Response.json({ media: { id: media.id, url: `/api/projects/${document.id}/media/${media.id}` } }, { status: 201 }))
+    await waitForSync
+
+    expect(completed).toBe(true)
+    expect(store.syncState).toMatchObject({ status: 'synced', uploadedMediaIds: [media.id] })
+
+    coordinator.destroy()
+    actor.stop()
+  })
+
   it('updates only the latest locally saved document against the confirmed ETag', async () => {
     const original = createInitialDocument()
     const renamed = applyDocumentCommand(original, { type: 'document.rename', name: 'Document actuel' })
@@ -182,10 +230,13 @@ describe('Elcé project synchronization', () => {
       ))
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
+    actor.send({ type: 'document.replace', document: local })
     const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
 
+    await store.saveDocument(local)
+    await store.saveSyncState({ documentId: local.id, remoteRevision: 4, uploadedMediaIds: [], status: 'pending' })
     coordinator.schedule(local)
-    await waitForSync()
+    await expect(coordinator.waitUntilCurrentDocumentSynced()).rejects.toThrow('conflit')
 
     expect(request.mock.calls.map(([, init]) => init?.method ?? 'GET')).toEqual(['PUT', 'GET'])
     expect(store.syncState).toMatchObject({ remoteRevision: 5, status: 'conflict' })
@@ -235,13 +286,15 @@ describe('Elcé project synchronization', () => {
       ))
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
+    actor.send({ type: 'document.replace', document })
     const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
 
+    await store.saveDocument(document)
     coordinator.schedule(document)
-    await waitForSync()
+    await expect(coordinator.waitUntilCurrentDocumentSynced()).rejects.toThrow('Network unavailable')
     expect(request).toHaveBeenCalledOnce()
     expect(actor.getSnapshot().context.syncStatus).toBe('pending')
-    expect(store.syncState).toBeNull()
+    expect(store.syncState).toMatchObject({ documentId: document.id, status: 'pending' })
 
     onlineTarget.dispatchEvent(new Event('online'))
     await waitForSync()

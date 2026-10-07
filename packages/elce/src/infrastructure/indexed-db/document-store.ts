@@ -8,14 +8,6 @@ const DOCUMENT_STORE = 'documents'
 const MEDIA_STORE = 'media'
 const SYNC_STORE = 'sync'
 
-/** Prevents replacing the only local copy before the server confirms it. */
-export class ActiveDocumentSyncRequiredError extends Error {
-  public constructor(documentId: string) {
-    super(`Le document actif ${documentId} doit être synchronisé avant son remplacement.`)
-    this.name = 'ActiveDocumentSyncRequiredError'
-  }
-}
-
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result)
@@ -31,20 +23,20 @@ function transactionComplete(transaction: IDBTransaction): Promise<void> {
   })
 }
 
-/** Stores the active document cache, its pending media blobs, and sync checkpoint. */
+/** Stores local document caches, pending media blobs, and sync checkpoints. */
 export class IndexedDbDocumentStore implements ElceDocumentStore {
   private readonly databasePromise: Promise<IDBDatabase>
   private readonly databaseName: string
   private readonly databaseVersion: number
 
-  /** Opens the active-document cache and adds its sync checkpoint store. */
+  /** Opens the document cache and adds its sync checkpoint store. */
   public constructor(databaseName: string = DATABASE_NAME, databaseVersion: number = DATABASE_VERSION) {
     this.databaseName = databaseName
     this.databaseVersion = databaseVersion
     this.databasePromise = this.openDatabase()
   }
 
-  /** Loads the active document and clears its rejected v3 cache if encountered. */
+  /** Loads one project cache and removes only that cache when rejecting v3. */
   public async loadDocument(documentId: string): Promise<ElceDocument | null> {
     const database = await this.databasePromise
     const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE, SYNC_STORE], 'readwrite')
@@ -58,9 +50,7 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
 
     switch (stored.version) {
       case 3: {
-        documents.clear()
-        transaction.objectStore(MEDIA_STORE).clear()
-        transaction.objectStore(SYNC_STORE).clear()
+        removeProjectCache(transaction, documentId, mediaIdsFrom(stored))
         await transactionDone
         return null
       }
@@ -73,24 +63,45 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
     }
   }
 
-  /** Saves the active document locally and marks it pending for server sync. */
+  /** Saves one project locally and marks it pending for server sync. */
   public async saveDocument(document: ElceDocument): Promise<void> {
     const database = await this.databasePromise
     const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE, SYNC_STORE], 'readwrite')
     const transactionDone = transactionComplete(transaction)
-    let unsynchronizedDocumentId: string | null = null
-    saveActiveDocument(transaction, document, [], (documentId) => { unsynchronizedDocumentId = documentId })
-    await finishActiveDocumentSave(transactionDone, () => unsynchronizedDocumentId)
+    saveProjectDocument(transaction, document)
+    await transactionDone
   }
 
-  /** Saves a document and removes obsolete media in the same local transaction. */
+  /** Saves a project and removes its unreferenced media in one transaction. */
   public async saveDocumentAndDeleteMedia(document: ElceDocument, mediaIds: readonly MediaId[]): Promise<void> {
     const database = await this.databasePromise
     const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE, SYNC_STORE], 'readwrite')
     const transactionDone = transactionComplete(transaction)
-    let unsynchronizedDocumentId: string | null = null
-    saveActiveDocument(transaction, document, mediaIds, (documentId) => { unsynchronizedDocumentId = documentId })
-    await finishActiveDocumentSave(transactionDone, () => unsynchronizedDocumentId)
+    saveProjectDocument(transaction, document, mediaIds)
+    await transactionDone
+  }
+
+  /** Removes one project's local document, checkpoint, and unshared media. */
+  public async deleteDocument(documentId: string): Promise<void> {
+    const database = await this.databasePromise
+    const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE, SYNC_STORE], 'readwrite')
+    const transactionDone = transactionComplete(transaction)
+    const documents = transaction.objectStore(DOCUMENT_STORE)
+    const request = documents.getAll()
+    request.onsuccess = () => {
+      const storedDocuments = request.result as Record<string, unknown>[]
+      const target = storedDocuments.find((stored) => stored.id === documentId)
+      const otherDocuments = storedDocuments.filter((stored) => stored.id !== documentId)
+      const retainedMediaIds = new Set(otherDocuments.flatMap(mediaIdsFrom))
+      const media = transaction.objectStore(MEDIA_STORE)
+
+      for (const mediaId of target === undefined ? [] : mediaIdsFrom(target)) {
+        if (!retainedMediaIds.has(mediaId)) media.delete(mediaId)
+      }
+      documents.delete(documentId)
+      transaction.objectStore(SYNC_STORE).delete(documentId)
+    }
+    await transactionDone
   }
 
   /** Removes locally cached bytes after the server confirms their upload. */
@@ -154,69 +165,50 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
   }
 }
 
-/** Keeps only the active project's document and local media cache. */
-function saveActiveDocument(
+/** Removes one rejected or deleted project without affecting other caches. */
+function removeProjectCache(
+  transaction: IDBTransaction,
+  documentId: string,
+  removedMediaIds: readonly MediaId[],
+): void {
+  const documents = transaction.objectStore(DOCUMENT_STORE)
+  const request = documents.getAll()
+  request.onsuccess = () => {
+    const stored = request.result as Record<string, unknown>[]
+    const otherDocuments = stored.filter((candidate) => candidate.id !== documentId)
+    const retainedMediaIds = new Set(otherDocuments.flatMap(mediaIdsFrom))
+    const media = transaction.objectStore(MEDIA_STORE)
+
+    for (const mediaId of removedMediaIds) {
+      if (!retainedMediaIds.has(mediaId)) media.delete(mediaId)
+    }
+    documents.delete(documentId)
+    transaction.objectStore(SYNC_STORE).delete(documentId)
+  }
+}
+
+/** Writes one project and preserves every other project's cache. */
+function saveProjectDocument(
   transaction: IDBTransaction,
   document: ElceDocument,
   removedMediaIds: readonly MediaId[] = [],
-  onUnsynchronizedDocument: (documentId: string) => void,
 ): void {
   const documents = transaction.objectStore(DOCUMENT_STORE)
   const media = transaction.objectStore(MEDIA_STORE)
   const sync = transaction.objectStore(SYNC_STORE)
-  const request = documents.getAll()
-  request.onsuccess = () => {
-    const stored = request.result as Record<string, unknown>[]
-    const otherDocuments = stored.filter((candidate) => candidate.id !== document.id)
-    if (otherDocuments.length > 0) {
-      const syncRequest = sync.getAll()
-      syncRequest.onsuccess = () => {
-        const syncStates = syncRequest.result as DocumentSyncState[]
-        const unsynchronized = otherDocuments.find((candidate) => {
-          const syncState = syncStates.find((state) => state.documentId === candidate.id)
-          return syncState?.status !== 'synced' || syncState.remoteRevision === null
-        })
-        if (unsynchronized !== undefined) {
-          onUnsynchronizedDocument(String(unsynchronized.id))
-          transaction.abort()
-          return
-        }
-        documents.clear()
-        media.clear()
-        sync.clear()
-        writeActiveDocument(transaction, document, removedMediaIds)
-      }
-      return
-    }
-    writeActiveDocument(transaction, document, removedMediaIds)
-  }
-}
-
-/** Completes the cache transaction or reports why its sole document was protected. */
-async function finishActiveDocumentSave(
-  transactionDone: Promise<void>,
-  unsynchronizedDocumentId: () => string | null,
-): Promise<void> {
-  try {
-    await transactionDone
-  } catch (error) {
-    const blockedDocumentId = unsynchronizedDocumentId()
-    if (blockedDocumentId !== null) throw new ActiveDocumentSyncRequiredError(blockedDocumentId)
-    throw error
-  }
-}
-
-/** Writes one active document and marks it pending after any safe cache cleanup. */
-function writeActiveDocument(
-  transaction: IDBTransaction,
-  document: ElceDocument,
-  removedMediaIds: readonly MediaId[],
-): void {
-  const media = transaction.objectStore(MEDIA_STORE)
-  const sync = transaction.objectStore(SYNC_STORE)
   for (const mediaId of removedMediaIds) media.delete(mediaId)
-  transaction.objectStore(DOCUMENT_STORE).put(document.toJSON())
+  documents.put(document.toJSON())
   markDocumentPending(sync, document.id)
+}
+
+/** Reads media identifiers from a stored document without requiring its version. */
+function mediaIdsFrom(stored: Record<string, unknown>): MediaId[] {
+  if (!Array.isArray(stored.medias)) return []
+  return stored.medias.flatMap((media: unknown) => {
+    if (typeof media !== 'object' || media === null || !('id' in media)) return []
+    const mediaId = media.id
+    return typeof mediaId === 'string' ? [mediaId] : []
+  })
 }
 
 /** Marks a document dirty without discarding a saved conflict or server revision. */

@@ -33,6 +33,11 @@ class MemoryDocumentStore implements ElceDocumentStore {
     for (const mediaId of mediaIds) this.media.delete(mediaId)
   }
 
+  public async deleteDocument(documentId: string): Promise<void> {
+    if (this.document?.id === documentId) this.document = null
+    this.syncStates.delete(documentId)
+  }
+
   public async loadSyncState(documentId: string) {
     return this.syncStates.get(documentId) ?? { documentId, remoteRevision: null, uploadedMediaIds: [], status: 'pending' as const }
   }

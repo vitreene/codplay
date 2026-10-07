@@ -201,6 +201,15 @@ transaction `readwrite` couvrant les deux magasins IndexedDB. L’opération de
 fusion reste déclenchée par `document.apply` dans la machine XState ; le
 raccord ne choisit pas quels médias fusionner.
 
+Le store local conserve plusieurs caches projet dans la même base IndexedDB :
+documents et checkpoints sont indexés par identifiant de document, et les
+blobs média par `MediaId`. Enregistrer un document ne retire pas les autres
+caches. `ElceDocumentStore.deleteDocument(documentId)` supprime le document, son
+checkpoint et les médias qu’il référence sans effacer un média encore référencé
+par un autre document local. Le menu de projets attend la confirmation serveur
+avant cette suppression locale ; fermer un projet ne supprime pas le projet
+serveur.
+
 ## Preuves
 
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)

@@ -18,6 +18,7 @@ export interface ElceDocumentStore {
   loadDocument(documentId: string): Promise<ElceDocument | null>
   saveDocument(document: ElceDocument): Promise<void>
   saveDocumentAndDeleteMedia(document: ElceDocument, mediaIds: readonly MediaId[]): Promise<void>
+  deleteDocument(documentId: string): Promise<void>
   deleteMedia(mediaIds: readonly MediaId[]): Promise<void>
   loadSyncState(documentId: string): Promise<DocumentSyncState>
   saveSyncState(syncState: DocumentSyncState): Promise<void>

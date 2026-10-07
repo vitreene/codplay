@@ -177,12 +177,22 @@ cette API reste dans les étapes local-first.
 
 Porter l’affichage en gardant les commandes et l’ordre métier existants :
 
-1. démarrage, restauration IndexedDB, catalogue, organisation des pages et réglages de chapitre ;
+1. démarrage, restauration IndexedDB, gestion des projets, organisation des pages et réglages de chapitre ;
 2. Section Tiptap, ancres, dépôt de médias et barre d’outils ;
 3. éditeurs Question, Résultat, Carte autonome et Carousel ; l’éditeur de Carte
    reste partagé entre une Carte directe Diapo et les Cartes enfants du Carousel.
 
+Un menu de gestion des projets se trouve au niveau du titre « Elcé ». Il permet de créer, ouvrir, fermer et supprimer des projets. L’exportation viendra plus tard. Cette liste de projets est distincte du catalogue de contenus (pages, BDC et médias) de l’éditeur. Le menu et ses vues sont portés dans Remix, sans ajouter une seconde source d’état ni un circuit de commandes parallèle.
+
+La liste des projets lit les résumés du serveur. Plusieurs onglets peuvent éditer indépendamment leurs projets. La base IndexedDB reste locale au navigateur et conserve une entrée distincte par projet ouvert ; ce n’est pas une réplication de la cache vers le serveur. `ProjectEditorLock` reste exclusif par projet : des projets différents peuvent être édités en parallèle, tandis qu’un même projet reste éditable par une seule fenêtre à la fois. Dans un onglet, le changement de projet attend l’accusé serveur du document et de ses médias ; en cas d’échec ou de conflit, le projet courant reste ouvert.
+
+La commande « Fermer » revient à la liste des projets sans supprimer le projet serveur ; elle retire la copie locale après la confirmation de synchronisation. À la création, le nom est généré automatiquement et peut être modifié ensuite.
+
+L’acceptation vérifie deux fenêtres sur des projets différents, éditant chacune son document sans modifier la cache de l’autre, puis deux fenêtres sur le même projet, où le verrou existant n’autorise qu’un seul éditeur. L’IndexedDB garde les caches locales distinctes par identifiant de projet ; les projets non ouverts restent servis par SQLite et FileStorage.
+
 Chaque surface d’édition passe par l’acteur et les commandes existants. Les tests de chaque étape vérifient qu’une édition, un changement de page et une réouverture ne modifient pas le document de façon inattendue. Le player mobile et le rendu de lecture restent sous Sighty/CodPlay et hors du portage.
+
+**Acceptation de la gestion des projets :** depuis le menu au titre, parcourir la liste serveur, créer et ouvrir un projet, fermer le projet courant sans le supprimer, ouvrir un autre projet après l’accusé serveur complet, supprimer un projet inactif, puis supprimer le projet actif. Vérifier qu’une erreur de réseau/conflit conserve le document et la cache du projet concerné, qu’une édition faite pendant l’attente est aussi enregistrée, et que le rechargement restaure le projet propre à l’onglet. Le parcours navigateur utilise le MCP Safari Technology Preview fourni par l’environnement. Le menu appelle la même façade et le même acteur XState que l’éditeur.
 
 **Sortie :** les parcours auteur fonctionnent dans le runtime Remix avec le même document ; la sortie vers le player Sighty/CodPlay reste inchangée.
 

@@ -18,6 +18,7 @@ export class ProjectSyncCoordinator {
   private runningCompletion: Promise<void> | null = null
   private queued = false
   private suspended = false
+  private lastFailure: unknown = null
 
   public constructor(
     controller: Actor<typeof controllerMachine>,
@@ -33,6 +34,7 @@ export class ProjectSyncCoordinator {
   /** Schedules synchronization after the matching document has been cached. */
   public schedule(document: ElceDocument): void {
     this.latestDocument = document
+    this.lastFailure = null
     this.controller.send({ type: 'document.sync.status', status: 'pending' })
     if (this.timer !== null) clearTimeout(this.timer)
     if (this.suspended) return
@@ -40,6 +42,39 @@ export class ProjectSyncCoordinator {
       this.timer = null
       void this.flush()
     }, PROJECT_SYNC_DEBOUNCE_MS)
+  }
+
+  /** Waits for the queued document and every referenced media upload to be acknowledged. */
+  public async waitUntilCurrentDocumentSynced(): Promise<void> {
+    if (this.suspended) throw new Error('La synchronisation Elcé est suspendue.')
+
+    const document = this.controller.getSnapshot().context.document
+    if (this.latestDocument !== document) {
+      throw new Error('Le document courant doit être enregistré localement avant sa synchronisation.')
+    }
+
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    this.lastFailure = null
+    await this.flush()
+
+    if (this.controller.getSnapshot().context.document !== document) {
+      throw new Error('Le document a changé pendant l’attente de sa synchronisation.')
+    }
+
+    const syncState = await this.store.loadSyncState(document.id)
+    switch (syncState.status) {
+      case 'synced':
+        if (syncState.remoteRevision !== null) return
+        break
+      case 'conflict':
+        throw new Error('Le document présente un conflit avec sa version serveur.')
+      case 'pending':
+        break
+    }
+
+    if (this.lastFailure !== null) throw this.lastFailure
+    throw new Error('La synchronisation du document ne s’est pas terminée.')
   }
 
   /** Stops new network writes and waits for the current write to settle. */
@@ -84,6 +119,7 @@ export class ProjectSyncCoordinator {
         if (this.latestDocument !== document && !this.suspended) this.queued = true
       } while (this.queued && !this.suspended)
     } catch (error) {
+      this.lastFailure = error
       this.controller.send({ type: 'document.sync.status', status: 'pending' })
       console.error('La synchronisation locale Elcé a échoué.', error)
     } finally {

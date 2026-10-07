@@ -18,12 +18,12 @@ pas un chantier Elcé.
   périmètre.
 - Plusieurs projets pour une personne. Pas de comptes, rôles, partage,
   historique de versions ni fusion de documents.
-- XState reste propriétaire du document actif. IndexedDB n’est qu’un cache local
-  pour le document actuellement ouvert, les médias dont le transfert n’est pas
-  confirmé et son checkpoint de synchronisation. Le catalogue des projets et
-  les autres documents restent dans SQLite. Après transfert confirmé, les images
-  sont lues par URL et passent par le cache HTTP natif du navigateur plutôt que
-  par une copie Blob durable dans IndexedDB.
+- XState reste propriétaire du document actif de chaque fenêtre. IndexedDB est
+  un cache local distinct de SQLite : une entrée par projet ouvert, avec les
+  médias dont le transfert n’est pas confirmé et son checkpoint de
+  synchronisation. Les projets fermés restent côté serveur. Après transfert
+  confirmé, les images sont lues par URL et passent par le cache HTTP natif du
+  navigateur plutôt que par une copie Blob durable dans IndexedDB.
 - Chaque commande ou geste continu est d’abord conservé localement. Le serveur
   reçoit l’état stabilisé, pas les mouvements de pointeur intermédiaires.
 - SQLite contient les projets et leur version courante. Les originaux média
@@ -207,10 +207,12 @@ le round-trip v4, deux projets après fermeture puis réouverture du fichier,
 les révisions et l’ordre relationnel. L’assemblage du listener HTTP et le
 transfert depuis le cache local sont suivis aux tranches 3 et 4.
 
-### 2. Cache local du document actif et reprise de synchronisation
+### 2. Cache locale des projets ouverts et reprise de synchronisation
 
-Garder une seule copie temporaire dans IndexedDB : le document actuellement
-ouvert. La liste des projets et les documents inactifs restent côté serveur.
+IndexedDB reste une cache locale au navigateur, distincte du stockage durable
+SQLite/FileStorage du serveur. Elle garde une entrée séparée pour chaque projet
+ouvert dans un onglet ; les projets non ouverts restent côté serveur. Des
+fenêtres sur des projets différents peuvent éditer indépendamment.
 
 - Restaurer le document actif depuis le cache local au démarrage et le modifier
   uniquement par les commandes XState existantes.
@@ -218,28 +220,39 @@ ouvert. La liste des projets et les documents inactifs restent côté serveur.
   synchroniser » jusqu’à l’accusé du serveur.
 - Conserver localement les octets des médias dont le transfert serveur n’est
   pas confirmé.
-- Un changement de projet remplace cette copie par le document lu depuis SQLite.
-  Avant d’implémenter ce changement, décider comment l’interface traite une
-  copie locale encore à synchroniser : elle ne doit pas être écrasée
-  silencieusement.
+- Dans un onglet, un changement de projet attend l’accusé de sauvegarde serveur
+  du document courant et de ses médias avant de le remplacer. Pendant cette
+  attente, le projet reste ouvert. En cas d’échec ou de conflit, rester sur le
+  projet et conserver sa cache.
+- Le menu de gestion des projets est placé au niveau du titre « Elcé » et est
+  distinct du catalogue de contenus de l’éditeur. Il permet de créer, ouvrir,
+  fermer et supprimer des projets ; l’exportation est reportée. Toute opération
+  qui ferme ou remplace le projet actif attend la confirmation du document et
+  de ses médias. La suppression active efface ensuite le cache uniquement
+  après confirmation du serveur. La suppression d’un projet inactif ne change
+  pas le cache actif. « Fermer » revient à la liste des projets sans supprimer
+  le projet serveur et retire la copie locale après confirmation. Le nom d’un
+  projet créé est généré automatiquement et reste modifiable.
+- `ProjectEditorLock` reste exclusif par projet. Deux fenêtres sur des projets
+  distincts éditent chacune leur document et leur cache ; deux fenêtres sur le
+  même projet se transfèrent le verrou et relisent cette cache avant de reprendre.
 
-**Acceptation :** IndexedDB ne conserve que le document actuellement ouvert, ses
-médias non transférés et son checkpoint. Après rechargement, l’application
-restaure cette copie puis reprend sa synchronisation. La disponibilité hors
-connexion du document ou des médias n’est pas exigée à cette étape. L’ouverture
-d’un autre projet lit son document depuis SQLite et ne remplace pas une copie
-locale encore à synchroniser ; la décision d’interface correspondante reste à
-prendre avant d’ajouter le changement de projet.
+**Acceptation :** IndexedDB conserve séparément les documents, médias non
+transférés et checkpoints des projets ouverts. Après rechargement, chaque
+fenêtre restaure son projet et reprend sa synchronisation. La disponibilité
+hors connexion du document ou des médias n’est pas exigée. Dans un même onglet,
+le changement de projet attend l’accusé serveur et ne modifie pas les caches
+des autres projets.
 
-**État vérifié le 7 octobre 2026 :** le store IndexedDB contient désormais le
-document actif, ses Blobs et un checkpoint de synchronisation ; écrire un
-document d’un autre identifiant remplace la copie seulement si le document
-précédent a été confirmé par le serveur. Tant que sa synchronisation est en
-attente ou en conflit, la transaction IndexedDB refuse le remplacement et
-préserve le cache. Safari Technology Preview a vérifié la mise à niveau du store
-v1 vers v2 et la restauration du document actif. Le parcours de sélection d’un
-autre projet n’est pas encore présent dans l’interface ; son traitement visuel
-en cas de cache protégé reste à définir avant d’ajouter cette action.
+**État vérifié le 7 octobre 2026 :** le store IndexedDB conserve maintenant
+plusieurs documents, leurs blobs et leurs checkpoints sans évincer les autres
+projets lors d’une sauvegarde. `deleteDocument()` et le rejet d’un document v3
+ne retirent que le cache visé et ses médias non partagés. Safari Technology
+Preview a vérifié deux entrées simultanées, la sauvegarde et la suppression
+ciblée, puis le rejet d’un v3 sans perte du projet courant. Le verrou exclusif
+pour un même projet reste vérifié. La sélection de projet, le menu, le
+rechargement de plusieurs projets dans des onglets distincts et l’édition
+simultanée de projets différents restent à implémenter et vérifier.
 
 ### 3. Synchronisation directe du dernier état
 
@@ -267,6 +280,20 @@ conflit. L’entrée Safari vérifie un `POST 201` réel du document initial et 
 statut `Synchronisé`. Le conflit et les mises à jour rapides sont également
 couverts par les tests du coordinateur. Le code réessaie au retour du réseau ;
 la coupure et la reprise restent à vérifier dans l’acceptation intégrée.
+
+`waitUntilCurrentDocumentSynced()` vide le délai de regroupement puis attend le
+même coordinateur sérialisé jusqu’à la confirmation du document et de tous ses
+médias. Il échoue sans effacer le cache si le document change pendant l’attente,
+si la synchronisation échoue ou si le serveur signale un conflit. Le parcours
+de changement, fermeture ou suppression du projet actif dans un onglet attend
+cette confirmation ; une opération dans une autre fenêtre ne modifie pas la
+cache locale du projet courant.
+
+Le menu de gestion des projets au titre « Elcé » et ses opérations créer,
+ouvrir, fermer et supprimer restent à porter dans Remix. L’exportation est
+hors de cette étape. Le passage depuis le document actif suit le même ordre de
+synchronisation ; l’interface conserve le document et son cache si la
+synchronisation ou l’opération distante échoue.
 
 ### 4. Transfert des images et vidéos, cache navigateur
 
@@ -371,11 +398,12 @@ plusieurs projets et leur restauration après réouverture de la base ; Safari
 Technology Preview confirme que l’éditeur restaure le document actif depuis
 IndexedDB après rechargement et reprend le verrou lorsqu’il redevient visible.
 Le transfert de l’image par l’éditeur a déjà été vérifié à la tranche 4. Le
-parcours navigateur complet reste à faire pour l’ouverture de plusieurs
-projets, les commandes éditoriales avec synchronisation, la reprise après
-coupure réseau et l’import/transfert vidéo. L’interface ne permet pas encore de
-changer de projet ; la politique pour une cache locale en attente reste à
-trancher à la tranche 2 et bloque ce parcours.
+parcours navigateur complet reste à faire pour la création, l’ouverture, la
+fermeture et la suppression de projets, les commandes éditoriales avec
+synchronisation, la reprise après coupure réseau et l’import/transfert vidéo.
+Le coordinateur expose et teste l’attente de confirmation serveur du document
+et de ses médias ; le menu de gestion des projets et son raccordement à cette
+attente restent à implémenter.
 
 ## Suites après le POC
 
