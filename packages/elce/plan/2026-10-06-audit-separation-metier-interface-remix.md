@@ -38,10 +38,10 @@ La séparation n’est toutefois pas complète à plusieurs endroits : des faça
 
 ### 1. Placer les commandes documentaires dans le domaine
 
-Déplacer les deux contrats actuellement dans `src/app/commands/` vers un module métier, par exemple `src/domain/commands/` :
+Déplacer les contrats et transformations documentaires de `src/app/commands/` vers `src/domain/commands/` :
 
 - `document-command-types.ts` : `DocumentCommand`, `PagePlacement`, `BdcPlacement` et les entrées de création associées ;
-- `document-commands.ts` : fabriques de commandes, `applyDocumentCommand`, invariants et transformations immuables.
+- le dossier `document-commands/` : fabriques, commandes spécialisées par pages/BDC/médias/ancres/révélation, helpers, invariants et `applyDocumentCommand`. Son `index.ts` conserve l’entrée publique des commandes.
 
 Mettre à jour tous les imports de production et de tests dans `app/controller`, les façades, `app/layout`, les builders et les tests concernés. Les commandes restent des valeurs typées ; leur application continue d’être orchestrée par `controllerMachine` et ses événements `document.apply` ou `page.create`.
 
@@ -53,9 +53,9 @@ Ne pas déplacer dans le domaine les événements d’interface propres au contr
 
 Déplacer sous `src/app/facades/` les façades et contrats qui orchestrent des commandes ou des événements XState :
 
-- `domain/anchor-drop-facade.ts` et les types qu’elle expose ;
-- `domain/question-facade.ts` et `domain/question-facade-types.ts` ;
-- `domain/carousel-facade.ts` et `domain/carousel-facade-types.ts` ;
+- `domain/anchor/anchor-drop-facade.ts` et les types qu’elle expose ;
+- `domain/question/question-facade.ts` et `domain/question/question-facade-types.ts` ;
+- `domain/carousel/carousel-facade.ts` et `domain/carousel/carousel-facade-types.ts` ;
 - `domain/card/card-facade.ts` et les types de façade qu’il expose.
 
 Garder leurs responsabilités actuelles : la façade Question combine les règles de `ElceQuestionService`, la création des commandes et les imports média ; la façade Carousel combine `ElceCarouselService`, `ElceCardService`, les commandes des cartes, leur sélection et les imports ; la façade Ancre traduit la cible d’édition en intention envoyée au contrôleur. Elles peuvent rester des classes d’adaptateur injectées ; elles ne sont pas des entités métier.
@@ -123,7 +123,7 @@ Le callback de Section est branché sur la façade Ancre de l’étape 2. Ne pas
 - `EvaluationResultEditor` ne doit plus importer `ElceEvaluationResultService` ni calculer lui-même le nouveau contenu. Il transmet la branche et le changement à une façade d’application ; celle-ci appelle le service métier puis envoie `bdc.evaluation-result.update` à XState.
 - Remplacer les imports d’icônes React par le mécanisme Lucide retenu pour le runtime Remix. Le paquet de remplacement n’est pas fixé par cet audit ; ne pas choisir ni ajouter une dépendance avant la preuve de l’étape 1 du plan Remix.
 
-**Acceptation :** les vues n’importent ni `document-commands.ts` ni les services mutationnels ; les tests préservent les invariants Question, le changement de layout sans perte de champs, la durée et l’ordre Carousel, ainsi que les actions Réussite/Échec.
+**Acceptation :** les vues n’importent ni l’entrée `document-commands` ni les services mutationnels ; les tests préservent les invariants Question, le changement de layout sans perte de champs, la durée et l’ordre Carousel, ainsi que les actions Réussite/Échec.
 
 ### 5. Player Sighty/CodPlay — hors périmètre
 
@@ -174,10 +174,10 @@ Cette cartographie fixe le périmètre observé le 6 octobre 2026. Lors de la re
 
 | Frontière | Fichiers de référence et changements attendus |
 |---|---|
-| Commandes documentaires | Déplacer `src/app/commands/document-command-types.ts` et `document-commands.ts` avec leurs tests vers `src/domain/commands/`. Mettre à jour les imports de production et de test effectivement concernés ; ne modifier aucun comportement du player. |
-| Façades d’édition | Déplacer `src/domain/anchor-drop-facade.ts`, `question-facade.ts`, `question-facade-types.ts`, `carousel-facade.ts`, `carousel-facade-types.ts` et `card/card-facade.ts` sous `src/app/facades/`. Répartir les types actuellement dans `card/card-facade-types.ts` entre les contrats de façade et les propriétés de vue sous `src/app/editor/card/`; ne laisser aucun import React dans `domain/`. Adapter les éditeurs et leurs tests. `ElceAnchorDropService`, `ElceQuestionService`, `ElceCarouselService` et `ElceCardService` restent dans `domain/`. `ElceAnchorDropService` dépend du nouveau contrat métier `DocumentCommand`. |
-| Orchestration et vues auteur | Extraire les actions actuellement dans `src/app/layout/app-layout.tsx` vers `src/app/facades/editor-actions-facade.ts` ; extraire les sélections dérivées dans `src/app/selectors/editor-view-model.ts`. Garder `app-layout-types.ts`, `app-layout.css` et `app-layout.test.tsx` comme références des états, du rendu et de l’acceptation actuelle. Les composants source concernés sont aussi `src/app/editor/section-editor.tsx`, `question-editor.tsx`, `card/card-editor.tsx`, `card/card-editor-fields.tsx`, `carousel-editor.tsx` et `evaluation-result-editor.tsx`. Préserver la whitelist auteur qui limite la Carte directe à une Diapo vide et les autres types de BDC selon leur page. |
-| Adaptateur Section/Tiptap | Adapter `src/app/editor/section-editor.tsx` et `section-editor-types.ts` au cycle de vie `@tiptap/core`, avec le raccord impératif dans `src/app/editor/section-editor-adapter.ts`. Conserver `src/app/editor/elce-anchor-extension.ts`, `src/app/editor/anchor-types.ts` et `src/domain/anchor-types.ts`. Garder `section-editor.test.tsx` et `elce-anchor-extension.test.ts` comme corpus des comportements JSON/HTML, sélection et ancre à porter. |
+| Commandes documentaires | Déplacer `src/app/commands/document-command-types.ts`, le dossier spécialisé `src/app/commands/document-commands/` et `document-commands.test.ts` vers `src/domain/commands/`. Garder l’entrée publique via l’index, mettre à jour les imports concernés et ne modifier aucun comportement du player. |
+| Façades d’édition | Déplacer `src/domain/anchor/anchor-drop-facade.ts`, `src/domain/question/question-facade.ts`, `src/domain/question/question-facade-types.ts`, `src/domain/carousel/carousel-facade.ts`, `src/domain/carousel/carousel-facade-types.ts` et `src/domain/card/card-facade.ts` sous `src/app/facades/`. Répartir les types actuellement dans `src/domain/card/card-facade-types.ts` entre les contrats de façade et les propriétés de vue sous `src/app/editor/card/`; ne laisser aucun import React dans `domain/`. Adapter les éditeurs et leurs tests. `ElceAnchorDropService`, `ElceQuestionService`, `ElceCarouselService` et `ElceCardService` restent dans `domain/`. `ElceAnchorDropService` dépend du nouveau contrat métier `DocumentCommand`. |
+| Orchestration et vues auteur | Extraire les actions actuellement dans `src/app/layout/app-layout.tsx` vers `src/app/facades/editor-actions-facade.ts` ; extraire les sélections dérivées dans `src/app/selectors/editor-view-model.ts`. Garder `app-layout-types.ts`, `app-layout.css` et `app-layout.test.tsx` comme références des états, du rendu et de l’acceptation actuelle. Les composants source concernés sont aussi `src/app/editor/section/section-editor.tsx`, `src/app/editor/question/question-editor.tsx`, `src/app/editor/card/card-editor.tsx`, `src/app/editor/card/card-editor-fields.tsx`, `src/app/editor/carousel/carousel-editor.tsx` et `src/app/editor/evaluation-result/evaluation-result-editor.tsx`. Préserver la whitelist auteur qui limite la Carte directe à une Diapo vide et les autres types de BDC selon leur page. |
+| Adaptateur Section/Tiptap | Adapter `src/app/editor/section/section-editor.tsx` et `src/app/editor/section/section-editor-types.ts` au cycle de vie `@tiptap/core`, avec le raccord impératif dans `src/app/editor/section/section-editor-adapter.ts`. Conserver `src/app/editor/anchor/elce-anchor-extension.ts`, `src/app/editor/anchor/anchor-types.ts` et `src/domain/anchor/anchor-types.ts`. Garder `src/app/editor/section/section-editor.test.tsx` et `src/app/editor/anchor/elce-anchor-extension.test.ts` comme corpus des comportements JSON/HTML, sélection et ancre à porter. |
 | Player Sighty/CodPlay — hors portage | Garder sans modification `scenario-builder.ts`, `flux-scene-builder.ts`, les builders Carte/Carousel, `ElcePlayerComposition`, le rendu player et son protocole de preview. Le portage de l’éditeur ne réécrit ni ces modules ni leurs tests. |
 | Accès éditeur à la preview | Conserver le contrôle de preview et son appel au player existant ; ne pas extraire `PopupPlayer` ni remplacer son rendu. `PopupPreviewHost` et les messages restent à leur contrat actuel. |
 | Stockage et composition de l’éditeur | Déplacer `src/infrastructure/indexed-db/document-store-types.ts` vers `src/app/ports/document-store-types.ts` ; garder `document-store.ts` comme implémentation. Adapter `controller-machine.ts`, `controller-types.ts`, `document-persistence.ts` et `src/app/main.tsx` ainsi que leurs tests. `main.tsx` reste le point de composition qui crée l’acteur, le store et l’attachement de persistance. Reporter tout changement qui exigerait une refonte de l’adaptateur player. |

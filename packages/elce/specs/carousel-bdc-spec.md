@@ -2,8 +2,8 @@
 
 ## Statut
 
-**Fixe — Carousel à enfants BDC Carte, modèle v3, implémenté et vérifié le
-6 octobre 2026.** L’insertion du Carousel dans un BDC Texte reste hors de cette
+**Fixe — Carousel à enfants BDC Carte, modèle v4, implémenté et vérifié le
+7 octobre 2026.** L’insertion du Carousel dans un BDC Texte reste hors de cette
 tranche. Son emploi comme BDC par défaut d’une Diapo est décrit dans la
 [spécification du builder Diapo](./diapo-scene-builder-spec.md).
 
@@ -35,6 +35,11 @@ avec image et Image avec légende acceptent une image ; Texte court ne projette
 aucun média. Une image ou vidéo référencée est une ressource du catalogue,
 indépendante et réutilisable ; les règles d’import et de projection dépendent
 du layout actif.
+
+Ces quatre layouts sont les seuls layouts Carte enregistrés dans
+`CARD_PRESETS`. Un ancien preset statique « Message » n’était proposé ni par
+l’éditeur ni par le builder Carte et a été retiré ; les champs de texte court
+restent dans le preset Texte court prévu à cet effet.
 
 À la création du Carousel, la même commande crée son premier BDC Carte
 identifié en layout Texte court. Un BDC Carte peut être déplacé vers un autre
@@ -83,14 +88,40 @@ transmet les BDC du document. `ElceCarouselSceneBuilder` résout les IDs des
 enfants dans `CarouselContent.cards`, puis délègue chaque carte à
 `ElceCardBdcSceneBuilder`. `ElceCardPresetBuilder` reste propriétaire du
 markup fixe de chaque layout. Les persos de texte et de média CodPlay ciblent
-les parts générées pour le BDC Carte sélectionné.
+les ancres commentaire `<!-- data-part="…" -->` générées pour le BDC Carte
+sélectionné. Les champs texte sont insérés directement sous leur élément
+parent comme `h2`, paragraphe ou `footer`, avec leur classe de style issue du
+preset ; aucun élément texte vide ne les enveloppe. Les conteneurs de cadre,
+de média et de groupe restent lorsque le CSS ou la sémantique en a besoin, et
+portent le commentaire à l’intérieur.
 
-Dans une Capsule, le perso layout porte l’article racine de la carte. Le builder
-ajoute à cet article la classe racine fournie par le preset, avec les classes de
-la vue Capsule, afin que les styles de chaque layout s’appliquent au nœud
-matérialisé. Les zones de média et l’image native sont dimensionnées à 100 % de
-leur conteneur ; `object-fit` règle le cadrage `cover` ou `contain` sur l’image.
+En Flux, la racine Carousel `section` contient directement la Capsule et la
+navigation `nav`. Le point de montage `frame` est un commentaire avant la
+Capsule ; il n’ajoute pas de `div` et n’a pas de règle CSS propre. En Diapo, la
+Capsule et la navigation sont montées directement sur le `scroll-container`
+racine. La carte Photo conserve
+son conteneur média afin que ce même emplacement puisse évoluer vers
+`<picture>` et une légende ; la vidéo peut y recevoir des éléments `<track>`.
+
+Dans un Carousel Flux, le perso layout porte l’article racine de la carte. Le
+builder ajoute à cet article la classe racine fournie par le preset, avec les
+classes de la vue Capsule, afin que les styles s’appliquent au nœud matérialisé.
+Dans un Carousel Diapo, une Carte Photo conserve son `div` média comme racine
+visuelle de la vue ; le builder y porte l’identifiant et les classes de layout,
+de vue et de transition. Ce cas n’ajoute pas l’`article` externe. La racine
+Photo garde les ancres commentaire CodPlay de racine et de média. Elle est
+conservée comme emplacement futur pour un rendu `<picture>` et une légende ;
+le conteneur vidéo reste disponible pour de futurs éléments `<track>`.
+
+Les zones de média et l’image native sont dimensionnées à 100 % de leur
+conteneur ; `object-fit` règle le cadrage `cover` ou `contain` sur l’image.
 L’image ne conserve donc pas ses dimensions intrinsèques au-delà du cadre.
+Pour une Diapo, le marqueur de fin cible un commentaire dans la carte finale ;
+la racine Carousel plein cadre utilise elle aussi son commentaire d’insertion.
+Ces marqueurs n’ajoutent pas de boîtes DOM. Dans le chemin vérifié Safari d’une
+image Photo de Carousel Diapo, les cinq éléments depuis la région de contenu
+sont : la région `section`, la racine Carousel `section`, la racine Photo
+`div`, le conteneur média CodPlay `div`, et `img.cp-img-inner`.
 
 `AutoCapsule` fournit le type Carousel et les transitions ;
 `CapsuleDistribution` résout les plages construites depuis la durée commune et
@@ -106,25 +137,27 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
   le retrait d’une carte avec maintien de la dernière, le refus de supprimer
   cette dernière, le déplacement d’un BDC Carte vers un autre Carousel sans
   clonage, la suppression en cascade du Carousel avec conservation des médias,
-  la fusion des médias référencés par une carte et le rejet des documents v1/v2.
-- [`carousel-service.test.ts`](../src/domain/carousel-service.test.ts) vérifie
+  la fusion des médias référencés par une Carte et le rejet des documents
+  v1/v2/v3.
+- [`carousel-service.test.ts`](../src/domain/carousel/carousel-service.test.ts) vérifie
   l’ajout, le retrait, le réordonnancement des IDs et la conservation de la
   durée de chaque entrée lors du réordonnancement.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie la
   création du Carousel, l’édition de cartes identifiées, leurs layouts et
   l’attachement de média par les commandes de l’éditeur.
-- [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie la projection des BDC Carte, des champs visibles, des médias selon
-  le layout et des plages Capsule, ainsi que dix passages automatiques
-  supplémentaires finis ; CodPlay compile la scène.
+  le layout, les commentaires d’insertion et les plages Capsule, ainsi que dix
+  passages automatiques supplémentaires finis ; CodPlay compile la scène.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   exécute le player réel en DOM de test : sélection manuelle, sélection durant
-  l’automatique, avancement temporisé, répétition, arrêt sur la dernière carte
-  et montage d’un média de carte.
+  l’automatique, avancement temporisé, répétition, arrêt sur la dernière carte,
+  montage d’un média de carte et conservation de la structure et de la ressource
+  Photo après navigation de page et retour.
 - Brave DevTools, le 6 octobre 2026, vérifie sur l’application construite que
   l’auteur crée et ordonne des BDC Carte, édite les champs, change entre les
   quatre layouts sans perdre les valeurs, puis recharge l’éditeur. L’ordre,
-  les relations parent/enfant, les layouts, les champs et le document v3 sont
+  les relations parent/enfant, les layouts, les champs et le document v4 sont
   relus depuis IndexedDB. La preview distincte affiche les cartes et les points
   changent la carte active ; après synchronisation vers le mode automatique,
   le changement temporisé est observé. À 390 px, le cadre reste en ratio 16:9
@@ -139,3 +172,9 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
 - Vérification du 6 octobre 2026 : typecheck réussi, 140 tests réussis dans
   20 fichiers et build réussi. Le build émet un avertissement sur le chunk
   JavaScript supérieur à 500 kB.
+- Vérification du 7 octobre 2026 : Safari MCP monte une composition réelle
+  Sighty/CodPlay avec un Carousel Flux, une Carte Photo et une Carte Texte.
+  La Capsule et la navigation sont les deux enfants directs de la racine ; le
+  wrapper `.elce-carousel__frame` est absent. Le cadre mesure `686 × 386 px`
+  avec `aspect-ratio: 16 / 9`, l’image charge, et un clic sur le second point
+  change `aria-current` de `[true, false]` à `[false, true]`.

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createActor } from 'xstate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CARD_LAYOUT_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, MEDIA_TYPE, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { BDC_TYPE, CAROUSEL_ASPECT_RATIO_OPTIONS, CARD_LAYOUT_OPTIONS, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_FILE_ACCEPT, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { controllerMachine } from '../controller/controller-machine'
 import { AppLayout } from './app-layout'
 
@@ -347,7 +347,7 @@ describe('AppLayout authoring titles and creation actions', () => {
       type: 'document.apply',
       command: {
         type: 'media.add',
-        media: { id: 'carousel-media-test', type: MEDIA_TYPE.IMAGE, name: 'photo.png', mimeType: 'image/png', size: 12, caption: '' },
+        media: { id: 'carousel-media-test',  name: 'photo.png', mimeType: 'image/png', size: 12, caption: '' },
       },
     }))
     await act(async () => actor.send({
@@ -376,7 +376,7 @@ describe('AppLayout authoring titles and creation actions', () => {
 
     await act(async () => setControlledValue(presetSelect, DEFAULT_PRESET_ID.TEXT_SHORT))
     let cardBdc = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)
-    expect(cardBdc).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, mediaId: 'carousel-media-test' })
+    expect(cardBdc).toMatchObject({ presetId: DEFAULT_PRESET_ID.TEXT_SHORT, card: { mediaId: 'carousel-media-test' } })
     expect(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`)).toBeNull()
 
     await act(async () => setControlledValue(host.querySelector<HTMLInputElement>(`#elce-carousel-title-${cardBdcId}`)!, 'Image conservée'))
@@ -386,8 +386,7 @@ describe('AppLayout authoring titles and creation actions', () => {
     cardBdc = actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)
     expect(cardBdc).toMatchObject({
       presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
-      mediaId: 'carousel-media-test',
-      card: { title: 'Image conservée', message: 'Texte associé' },
+      card: { mediaId: 'carousel-media-test', title: 'Image conservée', message: 'Texte associé' },
     })
     expect(host.querySelector(`#elce-carousel-media-image-${cardBdcId}`)).not.toBeNull()
 
@@ -402,18 +401,17 @@ describe('AppLayout authoring titles and creation actions', () => {
     cardBdc = documentModel.bdcs.find((bdc) => bdc.id === cardBdcId)
     expect(cardBdc).toMatchObject({
       presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
-      mediaId: 'carousel-media-test',
-      card: { title: 'Image conservée', message: 'Texte associé' },
+      card: { mediaId: 'carousel-media-test', title: 'Image conservée', message: 'Texte associé' },
     })
     expect(documentModel.bdcs.find((bdc) => bdc.id === textOnlyCardBdcId))
       .toMatchObject({
         presetId: DEFAULT_PRESET_ID.TEXT_IMAGE,
         card: {
+          mediaId: null,
           title: 'Carte sans image',
           imagePosition: cardBdc?.card?.imagePosition,
           imageFit: cardBdc?.card?.imageFit,
         },
-        mediaId: null,
       })
     expect(updatedCards?.map((entry) => entry.bdcId)).toContain(textOnlyCardBdcId)
   })

@@ -42,8 +42,6 @@ export const CHAPTER_TYPE = {
 
 export const BDC_TYPE = {
   SECTION: 'section',
-  IMAGE: 'image',
-  VIDEO: 'video',
   QUESTION: 'question',
   EVALUATION_RESULT: 'evaluation-result',
   CAROUSEL: 'carousel',
@@ -191,14 +189,11 @@ export const DEFAULT_PRESET_ID = {
   CAROUSEL: 'carousel-basic',
   TEXT_IMAGE: 'text-image-basic',
   SECTION: 'section-basic',
-  IMAGE: 'image-basic',
-  VIDEO: 'video-basic',
   PHOTO: 'photo-basic',
   TEXT_SHORT: 'text-short-basic',
   QUESTION: 'question-basic',
   EVALUATION_RESULT: 'evaluation-result-basic',
   IMAGE_CAPTION: 'image-caption',
-  MESSAGE: 'message-basic',
 } as const
 
 export const CAROUSEL_PLAYBACK_MODE = {
@@ -248,6 +243,22 @@ export const CAROUSEL_TRANSITION_OPTIONS = [
   { value: CAROUSEL_TRANSITION.SWIPE_DOWN, label: 'Glissement vers le bas' },
   { value: CAROUSEL_TRANSITION.ZOOM, label: 'Zoom' },
 ] as const
+
+/** Maps one author-facing transition choice to its action-specific Capsule Automation refs. */
+export const REVELATION_TRANSITION_PAIRS = {
+  [CAROUSEL_TRANSITION.CUT]: { intro: CAROUSEL_TRANSITION.CUT, outro: CAROUSEL_TRANSITION.CUT },
+  [CAROUSEL_TRANSITION.FADE]: { intro: CAROUSEL_TRANSITION.FADE, outro: CAROUSEL_TRANSITION.FADE },
+  [CAROUSEL_TRANSITION.SWIPE_LEFT]: { intro: CAROUSEL_TRANSITION.SWIPE_LEFT, outro: CAROUSEL_TRANSITION.SWIPE_LEFT },
+  [CAROUSEL_TRANSITION.SWIPE_RIGHT]: { intro: CAROUSEL_TRANSITION.SWIPE_RIGHT, outro: CAROUSEL_TRANSITION.SWIPE_RIGHT },
+  [CAROUSEL_TRANSITION.SWIPE_TOP]: { intro: CAROUSEL_TRANSITION.SWIPE_TOP, outro: CAROUSEL_TRANSITION.SWIPE_TOP },
+  [CAROUSEL_TRANSITION.SWIPE_DOWN]: { intro: CAROUSEL_TRANSITION.SWIPE_DOWN, outro: CAROUSEL_TRANSITION.SWIPE_DOWN },
+  [CAROUSEL_TRANSITION.ZOOM]: { intro: CAROUSEL_TRANSITION.ZOOM, outro: CAROUSEL_TRANSITION.ZOOM },
+} as const
+
+export const DEFAULT_PROJECT_REVELATION = {
+  intro: CAROUSEL_TRANSITION.FADE,
+  outro: CAROUSEL_TRANSITION.FADE,
+} as const
 
 export const CAROUSEL_PLAYBACK_MODE_OPTIONS = [
   { value: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, label: 'Automatique' },
@@ -316,19 +327,18 @@ export const ANCHOR = {
   IMAGE_BLOCK_SIZE: '75%',
   DEFAULT_IMAGE_ASPECT_RATIO: '4 / 3',
   VIDEO_BLOCK_SIZE: '56.25%',
+  TEXT_CARD_BLOCK_SIZE: '12rem',
   DEFAULT_BDC_MARGIN_TOP: '1rem',
   DEFAULT_BDC_MARGIN_BOTTOM: '1rem',
 } as const
 
 export const ANCHOR_MEDIA_PRESETS = {
   [MEDIA_TYPE.IMAGE]: {
-    bdcType: BDC_TYPE.IMAGE,
-    presetId: DEFAULT_PRESET_ID.IMAGE,
+    presetId: DEFAULT_PRESET_ID.PHOTO,
     blockSize: ANCHOR.IMAGE_BLOCK_SIZE,
   },
   [MEDIA_TYPE.VIDEO]: {
-    bdcType: BDC_TYPE.VIDEO,
-    presetId: DEFAULT_PRESET_ID.VIDEO,
+    presetId: DEFAULT_PRESET_ID.PHOTO,
     blockSize: ANCHOR.VIDEO_BLOCK_SIZE,
   },
 } as const

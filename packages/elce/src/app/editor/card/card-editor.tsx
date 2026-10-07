@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react'
-import type { Bdc } from '../../../domain/document-types'
+import type { Bdc } from '../../../domain/document/document-types'
 import type { ElceCardEditorActions } from '../../../domain/card/card-facade-types'
-import type { ElceCarouselEditorProps } from '../../../domain/carousel-facade-types'
+import type { ElceCarouselEditorProps } from '../../../domain/carousel/carousel-facade-types'
 import { CardBdcEditorFields } from './card-editor-fields'
 import './card-editor.css'
 

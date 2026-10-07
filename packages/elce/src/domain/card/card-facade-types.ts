@@ -1,9 +1,9 @@
 import type { DocumentCommand } from '../../app/commands/document-command-types'
 import type { CardImageFit, CardLayoutId, CarouselImagePosition, MediaType } from '../../config/document-config-types'
-import type { Bdc, BdcId } from '../document-types'
+import type { Bdc, BdcId } from '../document/document-types'
 import type { CardTextField } from './card-types'
-import type { ElceCatalogReference } from '../catalog-types'
-import type { ElceMediaImport } from '../media-resource-types'
+import type { ElceCatalogReference } from '../catalog/catalog-types'
+import type { ElceMediaImport } from '../media/media-resource-types'
 import type { ReactNode } from 'react'
 
 export interface ElceCardFacadeOptions {

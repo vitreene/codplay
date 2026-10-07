@@ -3,13 +3,12 @@
 ## Objet
 
 Cette note propose un premier schéma relationnel pour enregistrer plusieurs
-projets Elcé dans SQLite. La cible reprend le modèle Elcé en y intégrant une
-évolution retenue mais pas encore implémentée : un BDC média est un BDC Carte,
-qu’il soit ajouté dans un texte, sur une page ou dans un Carousel. Le code v3
-actuel distingue encore les BDC `image`/`video` des BDC `card` ; cette cible ne
-pourra donc pas être raccordée directement au modèle actuel sans faire évoluer
-le document et ses commandes. Elle ne propose pas de colonne contenant le
-document complet sous forme de JSON.
+projets Elcé dans SQLite. Elle prend pour base le modèle documentaire v4
+implémenté : une Carte est le BDC qui porte une référence média, qu’elle soit
+placée directement dans une page ou dans un conteneur autorisé. Le modèle ne
+crée pas de BDC `image`/`video` séparé et ne stocke pas de catégorie média
+séparée. La proposition ne contient pas de colonne pour le document complet
+sous forme de JSON.
 
 Le seul JSON opaque du schéma est `content_json`, produit et relu par Tiptap
 pour le contenu riche d’un BDC Section. Le HTML statique exporté par Tiptap est
@@ -19,8 +18,8 @@ leur registre et leurs références.
 
 Cette proposition SQLite sert l’étape initiale du serveur local ; SQLite n’est
 pas fixé comme moteur de la base finale de la V1 aboutie, qui sera probablement
-différent. La version du modèle documentaire correspondant à cette évolution
-reste à fixer avant l’implémentation. Le stockage temporaire du navigateur
+différent. Le modèle documentaire cible est v4 ; aucune conversion automatique
+des enregistrements v3 n’est prévue. Le stockage temporaire du navigateur
 n’est pas modélisé ici.
 
 ## Schéma proposé
@@ -119,7 +118,6 @@ CREATE TABLE catalog_pages (
 CREATE TABLE media_resources (
   project_id TEXT NOT NULL,
   media_id TEXT NOT NULL,
-  media_type TEXT NOT NULL,
   name TEXT NOT NULL,
   mime_type TEXT NOT NULL,
   size_bytes INTEGER NOT NULL,
@@ -132,7 +130,7 @@ CREATE TABLE media_resources (
 );
 
 CREATE UNIQUE INDEX media_content_identity
-  ON media_resources(project_id, media_type, size_bytes, content_sha256)
+  ON media_resources(project_id, size_bytes, content_sha256)
   WHERE content_sha256 IS NOT NULL;
 
 CREATE TABLE content_blocks (
@@ -140,11 +138,8 @@ CREATE TABLE content_blocks (
   content_block_id TEXT NOT NULL,
   content_block_type TEXT NOT NULL,
   preset_id TEXT NOT NULL,
-  media_id TEXT,
   PRIMARY KEY (project_id, content_block_id),
-  FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
-  FOREIGN KEY (project_id, media_id)
-    REFERENCES media_resources(project_id, media_id) ON DELETE RESTRICT
+  FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );
 
 -- Un emplacement par BDC : page, catalogue des blocs disponibles ou enfant
@@ -196,12 +191,15 @@ CREATE TABLE sections (
 CREATE TABLE questions (
   project_id TEXT NOT NULL,
   content_block_id TEXT NOT NULL,
+  media_id TEXT,
   question_type TEXT NOT NULL,
   title TEXT,
   prompt TEXT NOT NULL,
   PRIMARY KEY (project_id, content_block_id),
   FOREIGN KEY (project_id, content_block_id)
-    REFERENCES content_blocks(project_id, content_block_id) ON DELETE CASCADE
+    REFERENCES content_blocks(project_id, content_block_id) ON DELETE CASCADE,
+  FOREIGN KEY (project_id, media_id)
+    REFERENCES media_resources(project_id, media_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE question_answers (
@@ -246,6 +244,7 @@ CREATE TABLE carousels (
 CREATE TABLE cards (
   project_id TEXT NOT NULL,
   content_block_id TEXT NOT NULL,
+  media_id TEXT,
   overline TEXT,
   title TEXT,
   description TEXT,
@@ -256,7 +255,9 @@ CREATE TABLE cards (
   image_fit TEXT NOT NULL,
   PRIMARY KEY (project_id, content_block_id),
   FOREIGN KEY (project_id, content_block_id)
-    REFERENCES content_blocks(project_id, content_block_id) ON DELETE CASCADE
+    REFERENCES content_blocks(project_id, content_block_id) ON DELETE CASCADE,
+  FOREIGN KEY (project_id, media_id)
+    REFERENCES media_resources(project_id, media_id) ON DELETE RESTRICT
 );
 ```
 
@@ -278,12 +279,12 @@ pas une structure distincte pour chaque couple type/emplacement.
 | Document / projet | `projects` | Identifiant, nom, version de format, révision, dates et valeurs par défaut d’entrée/sortie des Cartes. Aucune colonne document JSON. | Une base peut contenir plusieurs projets ; les Cartes sans parent BDC héritent des défauts du projet. |
 | Chapitre | `chapters`, `chapter_evaluation_settings` | Identité, nom et type ; les réglages d’évaluation sont dans une extension dédiée au chapitre. | Entrée racine du scénario ; un chapitre n’est pas une page. |
 | Pages et hiérarchie du scénario | `pages`, `scenario_entries` | Les entrées racine mélangent pages et chapitres ; les pages d’un chapitre sont ordonnées sous ce chapitre. Le type de page est `flux` ou `diapo`. | Les pages inutilisées sont hors du scénario et référencées par `catalog_pages`. |
-| Ressource média | `media_resources` | Fichier image ou vidéo réutilisable : métadonnées et clé du fichier, sans octets dans SQLite. Ce n’est pas un BDC. | Peut être référencée par plusieurs BDC Carte ; une seule ressource est conservée pour des octets identiques. |
+| Ressource média | `media_resources` | Fichier réutilisable : métadonnées dont `mime_type` et clé du fichier, sans octets dans SQLite. Ce n’est pas un BDC ; aucun champ `media_type` séparé n’est stocké. | Peut être référencée par plusieurs Cartes ou Questions ; une seule ressource est conservée pour des octets identiques. |
 | BDC Texte / Section | `content_blocks`, `content_block_placements`, `sections` | Contenu riche produit par Tiptap et HTML statique exporté ; valeurs par défaut de révélation des Cartes ancrées. | Placement direct dans une page Flux. La whitelist ne propose pas le BDC Texte dans une Diapo. La Section peut recevoir des BDC Carte ou Carousel comme enfants inline ; Tiptap garde leur position exacte dans le texte. |
-| BDC Quiz / Question | `content_blocks`, `content_block_placements`, `questions`, `question_answers`, `media_resources` | Type de quiz, question, réponses ordonnées et correction ; `media_id` peut référencer une illustration média réutilisable. | Placement direct dans Flux ou comme unique BDC direct d’une Diapo ; une seule Question par page. La whitelist n’offre pas son ajout au catalogue ni comme enfant d’un autre BDC. |
+| BDC Quiz / Question | `content_blocks`, `content_block_placements`, `questions`, `question_answers`, `media_resources` | Type de quiz, question, réponses ordonnées et correction ; `questions.media_id` facultatif référence son illustration réutilisable. | Placement direct dans Flux ou comme unique BDC direct d’une Diapo ; une seule Question par page. La whitelist n’offre pas son ajout au catalogue ni comme enfant d’un autre BDC. |
 | BDC Résultat | `content_blocks`, `content_block_placements`, `evaluation_result_branches` | Un BDC avec ses branches Réussite et Échec. | Placement direct dans une page Flux ou comme unique BDC direct d’une Diapo, seulement dans un chapitre Évaluation. Le type de chapitre commande le suivi et l’accès au BDC Résultat ; le type de page commande le format de lecture. |
 | BDC Carousel | `content_blocks`, `content_block_placements`, `carousels` | Réglages du Carousel, valeurs par défaut d’entrée/sortie et ordre de ses BDC Carte enfants. | Placement direct dans Flux ou comme unique BDC direct d’une Diapo ; il peut aussi être enfant inline d’une Section. Il ne peut pas être enfant d’un Carousel. L’insertion inline est prévue dans le modèle cible mais n’est pas implémentée dans le POC. |
-| BDC Carte | `content_blocks`, `content_block_placements`, `cards`, `media_resources` | Un BDC unique portant son layout, ses champs et, si nécessaire, un `media_id`. Les présentations image ou vidéo sont des layouts Carte, pas des types de BDC distincts. | Peut être placé directement dans Flux ou Diapo, dans le catalogue, ou comme enfant d’une Section ou d’un Carousel. La whitelist propose les layouts permis selon le contexte ; elle ne crée pas des types BDC séparés. La durée et les éventuels réglages de révélation propres à une Carte Carousel appartiennent à son placement. |
+| BDC Carte | `content_blocks`, `content_block_placements`, `cards`, `media_resources` | Un BDC unique portant son layout, ses champs et, si nécessaire, `cards.media_id`. Les présentations image ou vidéo sont des layouts Carte, pas des types de BDC distincts. | Peut être placé directement dans Flux ou Diapo, dans le catalogue, ou comme enfant d’une Section ou d’un Carousel. La whitelist propose les layouts permis selon le contexte ; elle ne crée pas des types BDC séparés. La durée et les éventuels réglages de révélation propres à une Carte Carousel appartiennent à son placement. |
 
 Les associations de placement se lisent ainsi : un BDC a exactement une ligne
 dans `content_block_placements`. `page_id` le rattache directement à une page ;
@@ -316,14 +317,12 @@ pages Diapo. Les restrictions d’ajout par type de page, parent et layout
 restent une whitelist de l’interface auteur, pas des tables ou types BDC
 parallèles.
 
-**Écart avec le modèle v3 du code.** Le document actuel encode les médias
-insérés dans un texte comme des BDC `image` ou `video`, et les BDC Carte comme
-un type séparé. Le modèle relationnel cible remplace cette distinction par un
-seul BDC `card`, doté d’un layout et d’une référence média réutilisable. Le
-référencement dans le JSON Tiptap fixe sa place dans le texte ; le placement
-relationnel rattache cette Carte à la Section. Ce changement doit être réalisé
-dans le modèle documentaire et ses commandes avant le raccord d’un aller-retour
-SQLite ; il n’est pas déjà garanti par le code v3.
+**Correspondance avec le modèle v4.** Le document et les commandes créent une
+Carte pour un média présenté comme contenu. `cards.media_id` porte la référence
+réutilisable, le placement rattache une Carte ancrée à sa Section et le JSON
+Tiptap en fixe la position. `questions.media_id` porte l’illustration d’un Quiz.
+La table `media_resources` ne conserve que le MIME pour déterminer le rendu ;
+aucune table ou colonne ne modélise un BDC image ou vidéo distinct.
 
 Dans `cards`, les zones de texte et la légende sont facultatives : elles sont
 stockées en `NULL` lorsqu’elles sont absentes. Lors du chargement du modèle
@@ -354,7 +353,8 @@ SHA-256 des octets du fichier, encodée en 64 caractères hexadécimaux. Deux
 fichiers aux mêmes octets produisent la même empreinte, même si leurs noms
 diffèrent ; elle aide alors à reconnaître le réimport d’un média. L’index
 d’unicité ne s’applique qu’aux lignes où l’empreinte est renseignée, et associe
-projet, type, taille et empreinte.
+projet, taille et empreinte. L’image ou la vidéo se déduit du `mime_type` ; le
+type n’est pas répété dans la ressource ni dans le BDC.
 
 Cette empreinte n’est ni un nom de fichier ni un chemin de stockage, ne contient
 pas les octets et ne permet pas de reconstruire le média. `storage_key` sert à
@@ -365,11 +365,11 @@ disponible. Si elle est absente en base, l’index ne dédoublonne pas cette lig
 Le placement inline d’un BDC dans le texte est porté par le JSON Tiptap de la
 Section et par son export HTML. La ligne de placement rattache ce même BDC
 Carte à sa Section par `parent_content_block_id` ; l’ancre Tiptap conserve sa
-position entre les fragments de texte. Le BDC Carte conserve son `media_id`
-vers la ressource réutilisable. L’application vérifie que l’identifiant de
-l’ancre, le parent Section et le BDC Carte désignent le même projet et que le
-layout autorise le média ; SQLite ne peut pas vérifier une référence encodée
-dans `content_json`.
+position entre les fragments de texte et référence seulement le BDC. La ligne
+`cards.media_id` relie cette Carte à la ressource réutilisable. L’application
+vérifie que l’identifiant de l’ancre, le parent Section et le BDC Carte
+désignent le même projet et que le layout autorise le média ; SQLite ne peut
+pas vérifier une référence encodée dans `content_json`.
 
 Dans `content_block_placements`, l’emplacement se déduit des références : un
 `page_id` désigne une page, un `parent_content_block_id` désigne un parent, et
@@ -384,10 +384,12 @@ parent BDC sont `NO ACTION` dans cette table : la commande doit d’abord
 supprimer ou déplacer les BDC affectés, afin d’éviter qu’une cascade efface
 seulement leur placement et laisse les blocs orphelins.
 
-L’image ou la vidéo n’est pas un type de BDC dans le modèle cible. Le BDC Carte
-porte le layout de présentation et référence le média ; `media_resources`
-porte les octets et leur type image/vidéo. Chaque Carte est une instance BDC
-unique, tandis que plusieurs Cartes peuvent référencer la même ressource média.
+Image et vidéo ne sont pas des types de BDC ni un champ séparé de la ressource.
+La Carte porte le layout de présentation et sa référence média ; `mime_type`
+permet de choisir le rendu image ou vidéo. `media_resources` porte les
+métadonnées et la clé du fichier ; les octets restent dans le répertoire de
+fichiers. Chaque Carte est une instance BDC unique, tandis que plusieurs Cartes
+ou Questions peuvent référencer la même ressource.
 
 ## Relecture table par table
 
@@ -398,14 +400,14 @@ unique, tandis que plusieurs Cartes peuvent référencer la même ressource méd
 | `pages` | Nom et type requis ; rattachement au scénario stocké séparément. | Les types et les noms sont validés par la configuration et les commandes métier. |
 | `scenario_entries` | Un ordre représente les pages et chapitres racine ou les pages d’un chapitre. | La cible unique et l’absence de chapitre imbriqué dans le POC sont validées par le domaine. Les index uniques imposent ordre et présence uniques. Le lien vers un chapitre parent est `NO ACTION`, afin de refuser la suppression d’un chapitre qui contient encore des pages. |
 | `catalog_pages` | Une ligne signifie page disponible hors scénario. | L’ordre est unique ; l’exclusivité avec `scenario_entries` est validée dans la transaction métier. |
-| `media_resources` | Métadonnées de fichier et clé serveur requises ; légende et SHA-256 facultatifs. | Taille et format des métadonnées validés par le domaine ; clé de stockage unique par projet ; l’empreinte présente identifie un contenu de même type et taille. Aucun octet n’est stocké ici. |
-| `content_blocks` | Type et preset requis ; référence média facultative. | La clé étrangère interdit un média d’un autre projet. Type et preset autorisés viennent de la configuration et du domaine. |
+| `media_resources` | Nom, MIME, taille et clé serveur requis ; légende et SHA-256 facultatifs. Aucun `media_type` distinct. | Le domaine déduit image/vidéo depuis le MIME ; clé de stockage unique par projet ; l’empreinte identifie le contenu et la taille. Aucun octet n’est stocké ici. |
+| `content_blocks` | Type et preset requis ; aucune référence média générique. | Type et preset autorisés viennent de la configuration et du domaine. |
 | `content_block_placements` | Une ligne par bloc ; cible page, parent, ou aucune des deux pour le catalogue. `position` est facultative pour un enfant inline dont la position exacte est dans Tiptap. `duration_ms` et les références d’entrée/sortie sont des options de placement. | Le domaine valide la cible unique, la position requise selon le parent et les règles de durée. Il autorise un BDC Résultat sur une page Flux ou comme contenu unique d’une Diapo seulement si cette page appartient à un chapitre Évaluation. Pour une Carte Carousel, les références de transition nulles héritent du Carousel. Les index uniques garantissent l’ordre des séquences. Les liens page/parent sont `NO ACTION` : le nettoyage métier doit précéder la suppression de la cible. |
 | `sections` | Titre facultatif ; JSON Tiptap et HTML projeté requis, y compris pour une Section vide ; références d’entrée/sortie facultatives pour ses Cartes enfants. | La validité du JSON Tiptap et les références d’ancre sont vérifiées par l’application. La Section déclare le contexte scroll ; aucune durée de lecture n’est stockée pour ses Cartes enfants. Les références nulles héritent du projet. |
-| `questions`, `question_answers` | Titre facultatif ; type, énoncé, libellés et correction requis. | Position unique par question ; le type et la valeur de correction sont validés par le domaine. Le nombre de réponses et le nombre de bonnes réponses sont également vérifiés par le domaine. |
+| `questions`, `question_answers` | Titre et `media_id` d’illustration facultatifs ; type, énoncé, libellés et correction requis. | La clé étrangère interdit une illustration d’un autre projet. Le type et la valeur de correction sont validés par le domaine. Le nombre de réponses et le nombre de bonnes réponses sont également vérifiés par le domaine. |
 | `evaluation_result_branches` | Message et action facultatifs ; branche requise. | Clé primaire empêche deux lignes pour la même branche ; la présence des deux branches et la validité de l’action sont vérifiées par le domaine. |
 | `carousels` | Réglages actifs requis ; `repeat_count NULL` reprend le défaut de configuration ; références d’entrée/sortie facultatives. | Durée, ratio, nombre de répétitions et références de transition sont validés par la configuration et le domaine. Les références nulles héritent du projet. |
-| `cards` | Champs texte et légende facultatifs ; position d’image et ajustement requis. | Les limites de longueur et la compatibilité avec le preset sont validées par le domaine. L’animation n’est pas stockée sur la Carte : elle dépend de son placement. |
+| `cards` | `media_id`, champs texte et légende facultatifs ; position d’image et ajustement requis. | La clé étrangère interdit un média d’un autre projet. Les limites de longueur et la compatibilité entre média et preset sont validées par le domaine. L’animation n’est pas stockée sur la Carte : elle dépend de son placement. |
 
 Dans ce premier état, les contraintes `CHECK` sont écartées temporairement,
 pas rejetées pour la base finale. Les clés primaires, les clés étrangères et
@@ -438,8 +440,9 @@ validation de la transaction, les règles de valeur et les invariants suivants :
   par le domaine dans la transaction ;
 - `content_blocks.content_block_type` correspond exactement à ses données de
   détail (`sections`, `questions`, `evaluation_result_branches`, `carousels` ou
-  `cards`) ; image et vidéo sont des types de `media_resources`, pas des
-  `content_block_type` ;
+  `cards`) ; image et vidéo ne sont pas des `content_block_type` ni une
+  colonne `media_type`. La Carte ou la Question porte sa référence au média ;
+  `mime_type` détermine son rendu ;
 - chaque BDC a un seul emplacement relationnel : page, parent, ou catalogue.
   Pour un placement sous Section, le parent et l’ancre Tiptap désignent le même
   BDC ; la position dans le texte est portée par Tiptap. Pour un placement sous
@@ -463,8 +466,9 @@ validation de la transaction, les règles de valeur et les invariants suivants :
 - une Section référence seulement des BDC Carte affectés à cette Section comme
   parent, avec un layout et un média compatibles ; une Carte n’est ancrée qu’une
   fois dans le document riche ;
-- une clé média correspond au nom de fichier stocké, tandis que le SHA-256
-  identifie le contenu réutilisable du même type dans un projet.
+- une clé média correspond au nom de fichier stocké, tandis que le SHA-256 et
+  la taille identifient le contenu réutilisable dans un projet ; le MIME
+  conservé sur la ressource détermine le rendu image ou vidéo.
 
 Les écritures d’une commande métier complète — création, déplacement ou
 suppression d’un ensemble de lignes — se font dans une transaction SQLite.
@@ -505,22 +509,16 @@ version SQLite.
 5. **Légendes** — `media_resources.media_caption` et `cards.caption` sont deux
    propriétés distinctes dans le modèle actuel : la première est la métadonnée
    du média, la seconde la légende du preset de carte.
-6. **Diapo** — le builder actuellement vérifié accepte au plus un BDC direct
-   parmi Carousel, Carte et Question, avec Carousel par défaut. Le modèle cible
-   ajoute une possibilité : dans un chapitre Évaluation, le BDC Résultat peut
-   occuper l’unique emplacement direct d’une Diapo. Le type de chapitre porte
-   le suivi de résultat ; `page_type` continue de décrire seulement le format
-   Flux ou Diapo. Cette extension doit être réalisée et vérifiée, puis décrite
-   dans la spécification Diapo avant le dépôt SQLite. Le schéma conserve le
-   placement générique ; aucun `CHECK` ni trigger SQLite ne porte cette
-   compatibilité.
-7. **BDC média unifié** — décision acceptée mais non implémentée : les médias
-   insérés comme contenu sont des BDC Carte, pas des BDC `image` ou `video`.
-   Leur placement parent Section, parent Carousel, direct page ou catalogue
-   utilise la même relation générique. Avant le dépôt SQLite, il reste à faire
-   évoluer le modèle documentaire qui distingue encore ces types et à fixer
-   le traitement des documents locaux v3.
-8. **Révélation des Cartes** — décision acceptée, non implémentée : le dépôt
+6. **Diapo** — le modèle et le builder acceptent au plus un BDC direct parmi
+   Carousel, Carte et Question, ainsi qu’un BDC Résultat dans un chapitre
+   Évaluation. Le Carousel est proposé par défaut ; `page_type` distingue Flux
+   et Diapo tandis que le type de chapitre porte le suivi d’évaluation. La
+   spécification Diapo et ses tests couvrent cette représentation. L’intégration
+   complète des issues au player reste un sujet séparé ; elle ne change pas la
+   relation entre page, placement et BDC dans ce schéma. Le schéma garde un
+   placement générique et n’encode pas la whitelist dans un `CHECK` ou un
+   trigger.
+7. **Révélation des Cartes** — décision acceptée, non implémentée : le dépôt
    d’une image ou vidéo crée une BDC Carte au layout « Photo ou vidéo plein
    cadre ». La durée de vue est sans objet pour une Carte placée seule dans un
    flux ; elle reste une propriété de l’entrée Carousel quand la Carte en est
@@ -543,9 +541,9 @@ version SQLite.
 Avant de coder le dépôt SQLite, il reste à relire ces choix et à fixer la forme
 de l’API de persistance (chargement des lignes vers `ElceDocument`, écriture
 transactionnelle des commandes, et frontière de validation du document reçu).
-La proposition relationnelle anticipe donc une évolution du modèle en mémoire ;
-elle n’est pas encore raccordable à `ElceDocument.toJSON()` v3. Elle ne propose
-pas d’enregistrer ce JSON complet comme un objet opaque SQLite.
+La proposition relationnelle décrit le modèle documentaire v4 présent dans le
+code. Elle ne propose pas d’enregistrer `ElceDocument.toJSON()` comme un objet
+opaque SQLite ; seul le contenu riche généré par Tiptap est conservé en JSON.
 
 ## Références consultées
 

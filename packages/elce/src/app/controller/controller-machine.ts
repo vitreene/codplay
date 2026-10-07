@@ -2,11 +2,11 @@ import { assign, fromPromise, setup } from 'xstate'
 import { applyDocumentCommand, createDefaultPageCommand } from '../commands/document-commands'
 import type { DocumentCommand } from '../commands/document-command-types'
 import { BDC_TYPE, CATALOG_TAB } from '../../config/document-config'
-import { createInitialDocument } from '../../domain/document-model'
-import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
-import { ElceMediaResourceService } from '../../domain/media-resource-service'
+import { createInitialDocument } from '../../domain/document/document-model'
+import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
+import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
 import type { ElceDocumentChange } from './document-change-types'
-import type { ChapterId, MediaMetadata, PageId } from '../../domain/document-types'
+import type { ChapterId, MediaMetadata, PageId } from '../../domain/document/document-types'
 import type { ElceAppContext, ElceControllerEvent, ElceControllerInput } from './controller-types'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 
@@ -84,7 +84,6 @@ async function resolveImportedMedia(
 ): Promise<Readonly<{ media: MediaMetadata; created: boolean }>> {
   const duplicate = await mediaResourceService.findDuplicate(
     file,
-    media,
     document.medias,
     (mediaId) => store.loadMedia(mediaId),
   )
@@ -110,7 +109,7 @@ function withAnchorMedia(
           ...operation.operation,
           change: {
             ...operation.operation.change,
-            target: { ...operation.operation.change.target, mediaId: media.id, media },
+            target: { ...operation.operation.change.target, media },
           },
         },
       }

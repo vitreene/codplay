@@ -1,14 +1,13 @@
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { BDC_TYPE, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE } from '../../config/document-config'
-import type { Bdc, Page } from '../../domain/document-types'
-import { ElceCardBdcSceneBuilder } from '../card-bdc-scene-builder'
-import { ElceCardPresetBuilder } from '../card-preset-builder'
-import { ElceCarouselSceneBuilder } from '../carousel-scene-builder'
-import { createPageBottomMarkerPerso } from '../page-bottom-marker'
-import { buildQuestionBdcStory } from '../question-bdc-scene-builder'
+import { BDC_TYPE, CHAPTER_TYPE, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE } from '../../config/document-config'
+import type { Bdc, Page } from '../../domain/document/document-types'
+import { ElceCardBdcSceneBuilder } from '../card/card-bdc-scene-builder'
+import { ElceCarouselSceneBuilder } from '../carousel/carousel-scene-builder'
+import { createPageBottomMarkerPerso } from '../flux/page-bottom-marker'
+import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/question-bdc-scene-builder'
+import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-bdc-scene-builder'
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 
-const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
 const carouselSceneBuilder = new ElceCarouselSceneBuilder()
 
@@ -24,9 +23,26 @@ export function buildDiapoScene(
   const contentBdcs = pageBdcs.filter((bdc): bdc is Bdc => bdc !== undefined)
   if (contentBdcs.length > 1) throw new Error(`La Diapo ${page.id} accepte un seul BDC direct.`)
   const bdc = contentBdcs[0]
+  const storyId = `${page.id}-diapo-page`
+
+  if (bdc?.type === BDC_TYPE.CAROUSEL) {
+    const carouselBuild = buildCarousel(page, bdc, bdcs, options)
+    const pageStory: StoryDoc<string> = {
+      ...carouselBuild.story,
+      id: storyId,
+      persos: [...(carouselBuild.story.persos ?? []), ...carouselBuild.mediaPersos],
+    }
+    return {
+      sceneDoc: {
+        id: `elce-diapo-${page.id}`,
+        stories: { [storyId]: pageStory },
+      },
+      styleSheets: [carouselBuild.styleSheet],
+    }
+  }
+
   const scrollPortId = `${page.id}-diapo-scrollport`
   const rootId = `${page.id}-diapo-content`
-  const storyId = `${page.id}-diapo-page`
   let markup = ''
   let bottomPartMarkup = ''
   let pageBottomMarker: PersoDoc<string> | undefined
@@ -37,13 +53,6 @@ export function buildDiapoScene(
 
   if (bdc !== undefined) {
     switch (bdc.type) {
-      case BDC_TYPE.CAROUSEL: {
-        const carouselBuild = buildCarousel(page, bdc, bdcs, options)
-        markup = carouselBuild.markup
-        childStories = { [carouselBuild.story.id]: carouselBuild.story }
-        styleSheets = [carouselBuild.styleSheet]
-        break
-      }
       case BDC_TYPE.CARD: {
         const cardBuild = cardBdcSceneBuilder.build({
           pageId: page.id,
@@ -53,7 +62,7 @@ export function buildDiapoScene(
           mediaTypes: options.mediaTypes ?? {},
         })
         markup = cardBuild.markup
-        bottomPartMarkup = `<div id="${page.id}-diapo-bottom-host" class="elce-diapo-bottom-host" data-part="${page.id}:bottom"></div>`
+        bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
         pageBottomMarker = createPageBottomMarkerPerso({
           pageId: page.id,
           markerId: `${page.id}-diapo-bottom-marker`,
@@ -64,10 +73,11 @@ export function buildDiapoScene(
         break
       }
       case BDC_TYPE.QUESTION: {
-        const questionBuild = cardPresetBuilder.build(
-          bdc.presetId,
+        if (bdc.question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
+        const questionBuild = buildQuestionCardPreset(
           `${page.id}-${bdc.id}`,
           `${page.id}:${bdc.id}:question`,
+          bdc.question,
         )
         markup = questionBuild.markup
         const questionStory = buildQuestionBdcStory(
@@ -84,13 +94,33 @@ export function buildDiapoScene(
         childStories = { [questionStory.id]: { ...questionStory, persos: [...(questionStory.persos ?? []), ...mediaPerso] } }
         break
       }
+      case BDC_TYPE.EVALUATION_RESULT: {
+        switch (options.chapterType) {
+          case CHAPTER_TYPE.EVALUATION:
+            break
+          case CHAPTER_TYPE.STANDARD:
+          case undefined:
+            throw new Error(`Le BDC Résultat ${bdc.id} ne peut être projeté que dans une Diapo d’Évaluation.`)
+        }
+        const resultBuild = buildEvaluationResultBdcScene(page, bdc)
+        markup = resultBuild.markup
+        childStories = { [resultBuild.story.id]: resultBuild.story }
+        bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
+        pageBottomMarker = createPageBottomMarkerPerso({
+          pageId: page.id,
+          markerId: `${page.id}-diapo-bottom-marker`,
+          rootId: scrollPortId,
+          targetPartId: `${page.id}:bottom`,
+        })
+        break
+      }
       default:
         throw new Error(`Le BDC ${bdc.id} (${bdc.type}) n’est pas pris en charge dans une Diapo.`)
     }
   }
 
   if (bdc === undefined) {
-    bottomPartMarkup = `<div id="${page.id}-diapo-bottom-host" class="elce-diapo-bottom-host" data-part="${page.id}:bottom"></div>`
+    bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
     pageBottomMarker = createPageBottomMarkerPerso({
       pageId: page.id,
       markerId: `${page.id}-diapo-bottom-marker`,
@@ -168,16 +198,17 @@ function createQuestionMediaPerso(
   target: string,
   options: DiapoSceneBuildOptions,
 ): readonly PersoDoc<string>[] {
-  if (bdc.mediaId === null || target.length === 0) return []
-  const source = options.mediaSources?.[bdc.mediaId]
-  const mediaType = options.mediaTypes?.[bdc.mediaId]
+  const mediaId = bdc.question?.mediaId
+  if (mediaId == null || target.length === 0) return []
+  const source = options.mediaSources?.[mediaId]
+  const mediaType = options.mediaTypes?.[mediaId]
   if (source === undefined || mediaType === undefined) {
-    throw new Error(`La source ou le type du média d’illustration ${bdc.mediaId} est absent.`)
+    throw new Error(`La source ou le type du média d’illustration ${mediaId} est absent.`)
   }
   switch (mediaType) {
     case MEDIA_TYPE.IMAGE:
       return [{
-        id: `${bdc.id}-diapo-illustration-${bdc.mediaId}`,
+        id: `${bdc.id}-diapo-illustration-${mediaId}`,
         type: 'img',
         initial: {
           src: source,
@@ -188,7 +219,7 @@ function createQuestionMediaPerso(
       }]
     case MEDIA_TYPE.VIDEO:
       return [{
-        id: `${bdc.id}-diapo-illustration-${bdc.mediaId}`,
+        id: `${bdc.id}-diapo-illustration-${mediaId}`,
         type: 'media',
         initial: {
           tag: 'video',
@@ -200,6 +231,6 @@ function createQuestionMediaPerso(
         },
       }]
     default:
-      throw new Error(`Le média ${bdc.mediaId} n’est pas une illustration de Question prise en charge.`)
+      throw new Error(`Le média ${mediaId} n’est pas une illustration de Question prise en charge.`)
   }
 }

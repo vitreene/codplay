@@ -1,4 +1,4 @@
-import type { ElceDocumentData, PageId } from '../../domain/document-types'
+import type { ElceDocumentData, PageId } from '../../domain/document/document-types'
 
 export const POPUP_PREVIEW_SESSION_PARAM = 'elce-preview-session'
 export const POPUP_PREVIEW_PAGE_PARAM = 'elce-preview-page'

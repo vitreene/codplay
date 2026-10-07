@@ -34,11 +34,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   cursor: pointer;
 }
 
-.elce-player-menu-toggle-host,
-.elce-player-menu-close-host {
-  display: contents;
-}
-
 .elce-player-menu-toggle svg,
 .elce-player-menu-close svg {
   width: 1.15rem;
@@ -104,12 +99,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-player-layout__title-slot {
   min-width: 0;
-  flex: 1;
-}
-
-.elce-player-layout__title-slot-host {
-  min-width: 0;
-  height: 100%;
   flex: 1;
 }
 
@@ -305,7 +294,8 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   grid-template-rows: minmax(0, 1fr);
 }
 
-.elce-diapo-content > .elce-card--carousel {
+.elce-diapo-content > .elce-card--carousel,
+.elce-diapo-carousel-root {
   display: grid;
   width: 100%;
   height: 100%;
@@ -349,14 +339,13 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   overflow: hidden;
 }
 
-.elce-diapo-content > .elce-card--question [data-part$=':answers'] {
+.elce-diapo-content > .elce-card--question .elce-question-answers {
   min-height: 0;
   flex: 1;
   align-content: start;
   overflow: hidden;
 }
 
-.elce-diapo-content .elce-carousel__frame,
 .elce-diapo-content .elce-carousel-capsule--scene,
 .elce-diapo-content .elce-carousel-capsule__grid {
   height: 100%;
@@ -371,11 +360,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   border: 1px solid #d5ddd8;
   border-radius: 0.65rem;
   background: #f8faf8;
-}
-
-.elce-carousel__frame {
-  width: 100%;
-  min-width: 0;
 }
 
 .elce-carousel-capsule {
@@ -530,7 +514,8 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   overflow: hidden;
 }
 
-.elce-card--photo > .elce-carousel-photo__media {
+.elce-card--photo > .elce-carousel-photo__media,
+.elce-carousel-view.elce-card--photo.elce-carousel-photo__media {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -655,7 +640,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   font-size: clamp(1.1rem, 2.3vw, 1.5rem);
 }
 
-.elce-card--question [data-part$=':illustration'] {
+.elce-card--question .elce-question-illustration {
   width: min(100%, 32rem);
   margin: 0 auto 1rem;
 }
@@ -683,7 +668,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   font-size: 0.85rem;
 }
 
-.elce-card--question [data-part$=':answers'] {
+.elce-card--question .elce-question-answers {
   display: grid;
   gap: 0.55rem;
 }
@@ -851,11 +836,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   .elce-player-menu-backdrop,
   .elce-player-menu-close {
     display: none;
-  }
-
-  .elce-player-menu-panel-host {
-    width: 100%;
-    height: 100%;
   }
 
   .elce-player-menu-panel {

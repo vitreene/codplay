@@ -32,22 +32,25 @@ La migration SQLite reste bloquée jusqu’à la fin et l’acceptation de la tr
 
 ### 0. Compléter le modèle documentaire avant SQLite
 
-Cette tranche est un prérequis à toute migration vers SQLite. Le schéma
-relationnel proposé anticipe cette forme métier et ne doit pas être raccordé au
-document v3 actuel avant sa réalisation.
+Cette tranche est un prérequis à toute migration vers SQLite. Le modèle
+documentaire v4 décrit dans la spécification est implémenté ; la tranche reste
+ouverte pour les réglages de révélation et l’acceptation complète du BDC Résultat
+dans le player Flux/Diapo.
 
-- Remplacer le modèle où `image`/`video` et `card` sont des types BDC séparés
-  par un BDC Carte unique, utilisable selon la whitelist dans Flux, Diapo,
-  comme enfant inline d’un BDC Texte, comme enfant d’un Carousel et au
-  catalogue. Une ressource média reste réutilisable ; chaque insertion garde
-  son BDC Carte propre.
-- À l’ajout d’une image ou vidéo, créer une Carte « Photo ou vidéo plein cadre ».
+- [x] Unifier le modèle en un BDC Carte, disponible selon le contexte dans
+  Flux, Diapo, comme enfant inline d’une Section, comme enfant d’un Carousel ou
+  au catalogue. La Carte porte sa référence média ; l’ancre Tiptap référence
+  seulement le BDC. Aucun champ `media_type` distinct n’est stocké : le rendu
+  image/vidéo est déduit du MIME. Une ressource média reste réutilisable et
+  chaque insertion garde son BDC Carte propre. Voir la
+  [spécification du modèle](../specs/document-model-spec.md).
+- [x] À l’ajout d’une image ou vidéo, créer une Carte « Photo ou vidéo plein cadre ».
   Une icône placée sur l’image ouvre l’édition du layout et des paramètres de
   la Carte. La durée s’applique aux entrées Carousel, pas à une Carte seule.
-- Garder distincts le format de page (`flux` ou `diapo`) et le type de chapitre
+- [x] Garder distincts le format de page (`flux` ou `diapo`) et le type de chapitre
   (`standard` ou `evaluation`). Le BDC Résultat est proposé dans un chapitre
-  Évaluation, sur une page Flux ou comme BDC direct unique d’une Diapo. Étendre
-  la whitelist et le builder Diapo à ce cas avant SQLite ; ne pas traiter
+  Évaluation, sur une page Flux ou comme BDC direct unique d’une Diapo. La
+  whitelist et les builders Flux/Diapo appliquent ce placement sans traiter
   Évaluation comme un format de page.
 - Porter les valeurs de révélation par défaut sur le BDC parent. Dans un BDC
   Texte/Section, déclencher la révélation à la visibilité au scroll selon le
@@ -102,20 +105,18 @@ adossée à SQLite.
 Avant le DDL, relire le [premier état des tables SQLite](../notes/2026-10-06-premier-etat-modele-donnees-bdd.md)
 et valider les décisions qu’il laisse ouvertes : correspondance entre projet
 et `ElceDocument`, placement relationnel des pages, séparation ou non des
-réglages d’évaluation dans une table liée, colonnes du registre média et
-frontière de validation des données reçues.
+réglages d’évaluation dans une table liée et frontière de validation des données
+reçues.
 
-**Décision de modèle acceptée le 7 octobre 2026, non implémentée :** un BDC
-Image ou Vidéo n’est pas un type de BDC distinct. Le même BDC Carte porte le
-layout et la référence média, qu’il soit ajouté dans une page Flux, ancré dans
-un BDC Texte, placé comme enfant d’un Carousel, seul sur une Diapo ou rendu
-disponible au catalogue. Chaque Carte reste un BDC unique avec un seul
-placement ; déplacer la Carte conserve son identifiant, tandis qu’une nouvelle
-insertion crée un BDC Carte distinct. Une même ressource `media_resources` peut
-être référencée par plusieurs Cartes. Pour un enfant inline d’une Section,
-`parent_content_block_id` désigne cette Section et le JSON Tiptap garde la
-position exacte ; pour un enfant Carousel, le placement garde l’ordre et la
-durée de la vue.
+**Modèle documentaire v4 — réalisé le 7 octobre 2026 :** `Bdc` n’a plus de
+référence média générique. Une Carte unique porte `card.mediaId`, y compris
+lorsqu’elle est créée depuis un dépôt d’image/vidéo ; une Question porte son
+illustration dans `question.mediaId`. `MediaMetadata` conserve `mimeType`, et
+le type de rendu est dérivé du MIME. L’ancre Tiptap porte seulement l’identifiant
+BDC et une Carte ancrée est enfant de sa Section. Le schéma relationnel garde
+`cards.media_id`, `questions.media_id` et `media_resources.mime_type`, sans
+`media_type` ni référence média générique dans `content_blocks`. Les tests de
+commande vérifient les versions v1, v2 et v3 refusées sans conversion.
 
 **Décision de révélation acceptée le 7 octobre 2026, non implémentée :**
 ajouter une image ou une vidéo crée une BDC Carte au layout « Photo ou vidéo
@@ -139,6 +140,15 @@ et le placement d’une Carte Carousel peut remplacer ceux du Carousel. Le futur
 éditeur pourra choisir
 d’exposer ces réglages individuellement ; ce choix d’interface est reporté.
 
+Les valeurs d’entrée et de sortie sont stockées séparément au niveau du projet,
+du BDC parent et du placement Carousel. Le sélecteur actuel de transition reste
+un choix de paire logique. Une constante Elcé associe chaque choix à deux
+références Capsule Automation, une pour `intro` et l’autre pour `outro`; ces
+références peuvent être identiques ou différentes. Le nom d’une paire exprime
+le trajet complet : le preset qui fait entrer depuis la gauche fait sortir vers
+la droite. Cette correspondance est extensible sans changer le modèle de
+données.
+
 Le contrat `AutoCapsuleChildInput.events` accepte déjà des événements
 `intro`/`outro` propres à un enfant ; le builder Elcé actuel passe la transition
 commune du Carousel à tous les enfants. La démo 5 observe l’entrée et la sortie
@@ -146,13 +156,15 @@ de visibilité du média dans le scroll. L’implémentation devra résoudre les
 références depuis le registre Capsule Automation et déclarer leurs actions sur
 le perso média, sans ajouter de minuteur ou d’animation parallèle.
 
-Le modèle v3 du code distingue encore les BDC `image`/`video` des BDC `card`.
-L’évolution du modèle documentaire et de ses commandes précède donc le
-connecteur SQLite ; l’API ne doit pas simuler une conversion implicite. Le
-format documentaire cible et le traitement des documents locaux v3 restent à
-fixer avant l’écriture du dépôt. La whitelist de types et de layouts selon le
-contexte appartient à l’interface auteur ; le schéma conserve des placements
-génériques et n’encode pas cette whitelist dans des `CHECK`.
+Le modèle documentaire v4 distingue les types de BDC métier sans créer de BDC
+`image` ou `video`. La whitelist de types et de layouts selon le contexte
+appartient à l’interface auteur ; le schéma conserve des placements génériques
+et n’encode pas cette whitelist dans des `CHECK`.
+
+**Format local v4 — implémenté :** le modèle est en version 4. Un enregistrement local v3 est rejeté sans conversion et
+remplacé par le nouveau document initial. Ses médias locaux associés sont
+également nettoyés afin de ne pas laisser des ressources orphelines dans le
+POC mono-document. `fromJSON()` continue de refuser les versions inconnues.
 
 Inclure également le contrat Diapo : une seule entrée BDC directe, choisie
 dans les types proposés par la whitelist. Dans un chapitre Évaluation, le BDC

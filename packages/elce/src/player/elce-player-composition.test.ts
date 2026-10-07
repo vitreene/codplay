@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
 import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../app/commands/document-commands'
-import { createInitialDocument } from '../domain/document-model'
-import { ElceQuestionService } from '../domain/question-service'
+import { createInitialDocument } from '../domain/document/document-model'
+import { ElceQuestionService } from '../domain/question/question-service'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
 import type { ElcePageSceneCache } from './player-composition-types'
 
@@ -90,7 +90,8 @@ describe('Elcé player composition', () => {
     await composition.initialize()
 
     expect(stage.querySelector('.elce-player-layout')).not.toBeNull()
-    expect(stage.querySelector('.elce-player-content-slot')).not.toBeNull()
+    expect(stage.querySelector('.elce-player-layout__content-slot')?.tagName).toBe('SECTION')
+    expect(stage.querySelector('.elce-player-layout__content-slot')?.id).toBe('elce-document-content-region')
     expect(stage.querySelector('.elce-player-layout__menu')).not.toBeNull()
     expect(stage.querySelector('.elce-player-layout__title')).not.toBeNull()
     expect(stage.querySelector('.elce-player-layout__navigation')).not.toBeNull()
@@ -148,6 +149,8 @@ describe('Elcé player composition', () => {
     expect(viewElements).toHaveLength(2)
     expect(viewElements[0]?.classList.contains('elce-carousel-view--visible')).toBe(true)
     expect(viewElements[1]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+    expect(viewElements[0]?.querySelector(':scope > h2.elce-card-text-short__title')).toBeNull()
+    expect(viewElements[0]?.querySelector('h2 h2, p p, footer footer')).toBeNull()
 
     navigationDots[1]?.click()
     await new Promise<void>((resolve) => setTimeout(resolve, 40))
@@ -366,7 +369,7 @@ describe('Elcé player composition', () => {
   it('mounts Card BDC media through its selected layout in the real player composition', async () => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-carousel-card', type: MEDIA_TYPE.IMAGE, name: 'card.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+      media: { id: 'media-carousel-card',  name: 'card.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
     })
     const withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-carousel-card-media', 'page-a', 1))
     const cardBdcId = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-card-media')!.carousel!.cards[0]!.bdcId
@@ -394,6 +397,179 @@ describe('Elcé player composition', () => {
     const image = stage.querySelector<HTMLImageElement>('.elce-carousel-view--visible .elce-carousel-media img')
     expect(image?.getAttribute('src')).toBe(source)
     expect(stage.querySelector('.elce-carousel-view--visible')?.contains(image)).toBe(true)
+  })
+
+  it('mounts Carousel Card images in the real Diapo player composition', async () => {
+    const initialDocument = createInitialDocument()
+    const withMedia = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-diapo-carousel-card', name: 'diapo-card.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const diapoCommand = createDefaultPageCommand(
+      withMedia,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Carousel image',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(withMedia, diapoCommand)
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === diapoCommand.bdcId)!
+    const cardBdcId = carousel.carousel!.cards[0]!.bdcId
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.layout.set',
+      bdcId: cardBdcId,
+      layoutId: DEFAULT_PRESET_ID.PHOTO,
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set',
+      bdcId: cardBdcId,
+      mediaId: 'media-diapo-carousel-card',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const source = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22%3E%3C/svg%3E'
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: diapoCommand.pageId,
+      mediaSources: { 'media-diapo-carousel-card': source },
+    })
+
+    await composition.initialize()
+
+    const image = stage.querySelector<HTMLImageElement>('.elce-diapo-carousel-root .elce-carousel-view--visible img')
+    expect(image?.getAttribute('src')).toBe(source)
+    const photoView = image?.closest('.elce-carousel-view')
+    const carouselRoot = stage.querySelector('.elce-diapo-carousel-root')
+    const contentSlot = stage.querySelector('.elce-player-layout__content-slot')
+    const imagePath: Element[] = []
+    for (let element: Element | null = image ?? null; element !== null; element = element.parentElement) {
+      imagePath.push(element)
+      if (element === contentSlot) break
+    }
+
+    expect(contentSlot?.tagName).toBe('SECTION')
+    expect(contentSlot?.classList.contains('elce-player-layout__content')).toBe(true)
+    expect(stage.querySelector('.elce-diapo-host')).toBeNull()
+    expect(photoView?.parentElement).toBe(carouselRoot)
+    expect(carouselRoot?.parentElement).toBe(contentSlot)
+    expect(imagePath.at(-1)).toBe(contentSlot)
+    expect(imagePath.length).toBeLessThanOrEqual(6)
+  })
+
+  it('keeps a Diapo Carousel composition unchanged after navigating away and back', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const initialDocument = createInitialDocument()
+    const chapterId = initialDocument.chapters[0]!.id
+    let documentModel = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-diapo-replay', name: 'diapo-replay.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const diapoCommand = createDefaultPageCommand(
+      documentModel,
+      { kind: PAGE_LOCATION.CHAPTER, chapterId },
+      'Diapo Carousel',
+      PAGE_TYPE.DIAPO,
+    )
+    documentModel = applyDocumentCommand(documentModel, diapoCommand)
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === diapoCommand.bdcId)!
+    const photoCardId = carousel.carousel!.cards[0]!.bdcId
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.layout.set',
+      bdcId: photoCardId,
+      layoutId: DEFAULT_PRESET_ID.PHOTO,
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set',
+      bdcId: photoCardId,
+      mediaId: 'media-diapo-replay',
+    })
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-diapo-replay-card-2',
+      carousel.id,
+      1,
+      DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-after-diapo-replay',
+      bdcId: 'bdc-after-diapo-replay',
+      name: 'Page C',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId },
+    }))
+
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const source = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22%3E%3C/svg%3E'
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: 'page-a',
+      mediaSources: { 'media-diapo-replay': source },
+    })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageAMarker = stage.querySelector('#page-a-bottom-marker')
+    const pageAObserver = ControlledIntersectionObserver.instances.find((observer) => observer.targets.has(pageAMarker as Element))
+    pageAObserver?.deliver({ target: pageAMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+    expect(nextButton?.disabled).toBe(false)
+
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Diapo Carousel')
+    const carouselRoot = stage.querySelector('.elce-diapo-carousel-root')
+    const finalView = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')[1]
+    const finalDot = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')[1]
+    const completionMarker = finalView?.querySelector('.elce-carousel-completion-marker')
+    const completionObserver = ControlledIntersectionObserver.instances.find((observer) => observer.targets.has(completionMarker as Element))
+    expect(carouselRoot).not.toBeNull()
+    expect(completionObserver).toBeDefined()
+
+    finalDot?.click()
+    await flushCompositionFrames(pendingFrames)
+    completionObserver?.deliver({ target: completionMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+    const diapoStructureBeforeLeaving = Array.from(carouselRoot?.querySelectorAll('*') ?? [])
+      .map((element) => [element.tagName, element.id, element.textContent])
+    const mediaSourcesBeforeLeaving = Array.from(carouselRoot?.querySelectorAll('img') ?? [])
+      .map((image) => image.getAttribute('src'))
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page C')
+
+    const previousButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')
+    expect(previousButton?.disabled).toBe(false)
+    previousButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    const returnedCarousel = stage.querySelector('.elce-diapo-carousel-root')
+    const returnedImage = returnedCarousel?.querySelector('img')
+    const contentSlot = stage.querySelector('.elce-player-layout__content-slot')
+    let imagePathLength = 0
+    for (let element: Element | null = returnedImage ?? null; element !== null; element = element.parentElement) {
+      imagePathLength += 1
+      if (element === contentSlot) break
+    }
+
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Diapo Carousel')
+    expect(Array.from(returnedCarousel?.querySelectorAll('*') ?? [])
+      .map((element) => [element.tagName, element.id, element.textContent]))
+      .toEqual(diapoStructureBeforeLeaving)
+    expect(Array.from(returnedCarousel?.querySelectorAll('img') ?? [])
+      .map((image) => image.getAttribute('src')))
+      .toEqual(mediaSourcesBeforeLeaving)
+    expect(returnedCarousel?.querySelector('.elce-carousel-view--visible')?.id)
+      .toBe(`${diapoCommand.pageId}-${carousel.id}-card-${photoCardId}`)
+    expect(returnedImage?.getAttribute('src')).toBe(source)
+    expect(imagePathLength).toBeLessThanOrEqual(6)
   })
 
   it('advances an automatic Carousel through its compiled Capsule Automation times', async () => {
@@ -816,7 +992,8 @@ describe('Elcé player composition', () => {
     await composition.initialize()
 
     const section = stage.querySelector('#page-a-bdc-section-1')
-    expect(section?.querySelector('#page-a-bdc-section-1-title-host h2')?.textContent).toBe('Introduction')
+    expect(section?.querySelector(':scope > h2')?.textContent).toBe('Introduction')
+    expect(section?.querySelector('#page-a-bdc-section-1-title-host')).toBeNull()
     expect(section?.textContent?.indexOf('Introduction')).toBeLessThan(section?.textContent?.indexOf('Texte') ?? -1)
   })
 
@@ -826,16 +1003,9 @@ describe('Elcé player composition', () => {
     const initial = createInitialDocument()
     const withMedia = applyDocumentCommand(initial, {
       type: 'media.add',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
-    const documentModel = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-image-1',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
+    const documentModel = createCardWithMedia(withMedia, 'bdc-image-1', 'media-image-1')
     composition = new ElcePlayerComposition({
       stage,
       document: documentModel,
@@ -844,7 +1014,7 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    expect(stage.querySelector('.elce-flux-image img')).not.toBeNull()
+    expect(stage.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
   })
 
   it('mounts an image bdc inside its exported text anchor', async () => {
@@ -853,20 +1023,16 @@ describe('Elcé player composition', () => {
     const initial = createInitialDocument()
     const withMedia = applyDocumentCommand(initial, {
       type: 'media.add',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
-    const withImage = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
+    const documentModel = applyDocumentCommand(withMedia, {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-image-1',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
-    const documentModel = applyDocumentCommand(withImage, {
-      type: 'bdc.section.update',
-      bdcId: 'bdc-section-1',
-      title: '',
+      presetId: DEFAULT_PRESET_ID.PHOTO,
+      media: { id: 'media-image-1', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      partId: 'page-a:bdc-image-1:anchor',
       content: {
         type: 'doc',
         content: [{
@@ -892,8 +1058,8 @@ describe('Elcé player composition', () => {
     expect(flowSlot).not.toBeNull()
     expect(stage.querySelector('[data-elce-anchor="true"]')).toBeNull()
     expect(stage.querySelector('[data-bdc-id="bdc-image-1"]')).toBeNull()
-    expect(flowSlot?.querySelector('.elce-flux-image img')).not.toBeNull()
-    expect(flowSlot?.querySelector('.elce-flux-image')?.parentElement).toBe(flowSlot)
+    expect(flowSlot?.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
+    expect(flowSlot?.querySelector('.elce-flux-card-root')?.parentElement).toBe(flowSlot)
   })
 
   it('mounts a simple video bdc through the real CodPlay media component', async () => {
@@ -903,23 +1069,28 @@ describe('Elcé player composition', () => {
     const initial = createInitialDocument()
     const withMedia = applyDocumentCommand(initial, {
       type: 'media.add',
-      media: { id: 'media-video-1', type: 'video', name: 'video.mp4', mimeType: 'video/mp4', size: 10, caption: '' },
+      media: { id: 'media-video-1',  name: 'video.mp4', mimeType: 'video/mp4', size: 10, caption: '' },
     })
-    const documentModel = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-video-1',
-      bdcType: BDC_TYPE.VIDEO,
-      presetId: 'video-basic',
-      mediaId: 'media-video-1',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
+    const documentModel = createCardWithMedia(withMedia, 'bdc-video-1', 'media-video-1')
     composition = new ElcePlayerComposition({ stage, document: documentModel, mediaSources: { 'media-video-1': 'blob:video-1' } })
 
     await composition.initialize()
 
-    expect(stage.querySelector('.elce-flux-video video')).not.toBeNull()
+    expect(stage.querySelector('.elce-carousel-photo__media video')).not.toBeNull()
   })
 })
+
+/** Creates a directly placed Photo Card whose media reference belongs to Card data. */
+function createCardWithMedia(document: ReturnType<typeof createInitialDocument>, bdcId: string, mediaId: string) {
+  const created = applyDocumentCommand(document, {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.CARD,
+    presetId: 'photo-basic',
+    placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+  })
+  return applyDocumentCommand(created, { type: 'bdc.card.media.set', bdcId, mediaId })
+}
 
 /** Confirms CodPlay keeps every answer correction idle before validation or after reset. */
 function expectQuestionCorrectionHidden(container: ParentNode): void {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CARD_LAYOUT_IDS, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
-import { createInitialDocument, ElceDocument } from '../../domain/document-model'
-import { ElceQuestionService } from '../../domain/question-service'
+import { BDC_LOCATION, BDC_TYPE, CARD_LAYOUT_IDS, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { createInitialDocument, ElceDocument } from '../../domain/document/document-model'
+import type { BdcPlacement } from './document-command-types'
+import { ElceQuestionService } from '../../domain/question/question-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
@@ -167,21 +168,14 @@ describe('Elcé document commands', () => {
       type: 'media.add',
       media: {
         id: 'media-1',
-        type: 'image',
+        
         name: 'image.png',
         mimeType: 'image/png',
         size: 12,
         caption: 'Une image',
       },
     })
-    const withImage = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-1',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
+    const withImage = createCardWithMedia(withMedia, 'bdc-image-1', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.PAGE, pageId: 'page-a' }, 'media-1')
     const deleted = applyDocumentCommand(withImage, { type: 'page.delete', pageId: 'page-a' })
 
     expect(deleted.pages).toHaveLength(0)
@@ -194,7 +188,6 @@ describe('Elcé document commands', () => {
     /** Builds matching video metadata for the media-merge command test. */
     const media = (id: string, name: string) => ({
       id,
-      type: MEDIA_TYPE.VIDEO,
       name,
       mimeType: 'video/mp4',
       size: 389062,
@@ -207,34 +200,13 @@ describe('Elcé document commands', () => {
     }))
     const withImage = applyDocumentCommand(withPageE, {
       type: 'media.add',
-      media: { id: 'media-image', type: MEDIA_TYPE.IMAGE, name: 'image.jpg', mimeType: 'image/jpeg', size: 12, caption: '' },
+      media: { id: 'media-image',  name: 'image.jpg', mimeType: 'image/jpeg', size: 12, caption: '' },
     })
     const withMedia = [media('media-canonical', 'sample-video.mp4'), media('media-duplicate', 'LcXkmXyuZQ.mp4'), media('media-unused', 'sample-video-second.mp4')]
       .reduce((document, item) => applyDocumentCommand(document, { type: 'media.add', media: item }), withImage)
-    const withCanonicalBdc = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-video-canonical',
-      bdcType: BDC_TYPE.VIDEO,
-      presetId: DEFAULT_PRESET_ID.VIDEO,
-      mediaId: 'media-canonical',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
-    const withPageABdc = applyDocumentCommand(withCanonicalBdc, {
-      type: 'bdc.create',
-      bdcId: 'bdc-video-a',
-      bdcType: BDC_TYPE.VIDEO,
-      presetId: DEFAULT_PRESET_ID.VIDEO,
-      mediaId: 'media-duplicate',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
-    const beforeMerge = applyDocumentCommand(withPageABdc, {
-      type: 'bdc.create',
-      bdcId: 'bdc-video-e',
-      bdcType: BDC_TYPE.VIDEO,
-      presetId: DEFAULT_PRESET_ID.VIDEO,
-      mediaId: 'media-duplicate',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-e' },
-    })
+    const withCanonicalBdc = createCardWithMedia(withMedia, 'bdc-video-canonical', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.PAGE, pageId: 'page-a' }, 'media-canonical')
+    const withPageABdc = createCardWithMedia(withCanonicalBdc, 'bdc-video-a', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.PAGE, pageId: 'page-a' }, 'media-duplicate')
+    const beforeMerge = createCardWithMedia(withPageABdc, 'bdc-video-e', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.PAGE, pageId: 'page-e' }, 'media-duplicate')
     const preservedBdcIds = beforeMerge.bdcs.map((bdc) => bdc.id)
     const preservedPlacements = beforeMerge.pages.map((page) => ({ id: page.id, bdcIds: page.bdcIds }))
     const canonicalBdc = beforeMerge.bdcs.find((bdc) => bdc.id === 'bdc-video-canonical')
@@ -249,7 +221,7 @@ describe('Elcé document commands', () => {
     expect(merged.bdcs.map((bdc) => bdc.id)).toEqual(preservedBdcIds)
     expect(merged.bdcs.find((bdc) => bdc.id === 'bdc-video-canonical')).toEqual(canonicalBdc)
     expect(merged.bdcs.filter((bdc) => bdc.id === 'bdc-video-a' || bdc.id === 'bdc-video-e')
-      .map((bdc) => bdc.mediaId)).toEqual(['media-canonical', 'media-canonical'])
+      .map((bdc) => bdc.card?.mediaId)).toEqual(['media-canonical', 'media-canonical'])
     expect(merged.pages.map((page) => ({ id: page.id, bdcIds: page.bdcIds }))).toEqual(preservedPlacements)
     assertDocumentInvariants(merged)
   })
@@ -257,11 +229,11 @@ describe('Elcé document commands', () => {
   it('rejects merging media with different content metadata', () => {
     const withCanonical = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-canonical', type: MEDIA_TYPE.VIDEO, name: 'sample-video.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
+      media: { id: 'media-canonical',  name: 'sample-video.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
     })
     const withDuplicate = applyDocumentCommand(withCanonical, {
       type: 'media.add',
-      media: { id: 'media-duplicate', type: MEDIA_TYPE.VIDEO, name: 'other.mp4', mimeType: 'video/mp4', size: 101, caption: '' },
+      media: { id: 'media-duplicate',  name: 'other.mp4', mimeType: 'video/mp4', size: 101, caption: '' },
     })
 
     expect(() => applyDocumentCommand(withDuplicate, {
@@ -274,7 +246,7 @@ describe('Elcé document commands', () => {
   it('retains every Card field and media reference while layouts hide them', () => {
     const withVideo = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-video-carousel', type: MEDIA_TYPE.VIDEO, name: 'clip.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
+      media: { id: 'media-video-carousel',  name: 'clip.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
     })
     const withCarousel = applyDocumentCommand(withVideo, createCarouselBdcCommand('bdc-video-carousel', 'page-a', 1))
     const carousel = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-video-carousel')!.carousel!
@@ -310,8 +282,8 @@ describe('Elcé document commands', () => {
       expect(current.bdcs.find((bdc) => bdc.id === cardBdcId)).toMatchObject({
         presetId: layoutId,
         parentBdcId: 'bdc-video-carousel',
-        mediaId: 'media-video-carousel',
         card: {
+          mediaId: 'media-video-carousel',
           overline: 'Surtitre',
           title: 'Titre conservé',
           description: 'Description conservée',
@@ -336,7 +308,7 @@ describe('Elcé document commands', () => {
 
     expect(remaining.bdcs.some((bdc) => bdc.id === firstCardBdcId)).toBe(false)
     expect(remaining.bdcs.find((bdc) => bdc.id === 'bdc-carousel-delete-card')?.carousel?.cards)
-      .toEqual([{ bdcId: 'bdc-card-to-delete', durationMs: null }])
+      .toEqual([{ bdcId: 'bdc-card-to-delete', durationMs: null, introTransitionRef: null, outroTransitionRef: null }])
     expect(() => applyDocumentCommand(remaining, { type: 'bdc.card.delete', bdcId: 'bdc-card-to-delete' }))
       .toThrow('conserver au moins une carte')
     assertDocumentInvariants(remaining)
@@ -360,7 +332,7 @@ describe('Elcé document commands', () => {
     })
     document = applyDocumentCommand(document, {
       type: 'media.add',
-      media: { id: 'media-moved-card', type: MEDIA_TYPE.IMAGE, name: 'carte.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-moved-card',  name: 'carte.png', mimeType: 'image/png', size: 10, caption: '' },
     })
     document = applyDocumentCommand(document, {
       type: 'bdc.card.media.set',
@@ -378,16 +350,15 @@ describe('Elcé document commands', () => {
       .toEqual(['bdc-card-source-first'])
     expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-carousel-target')?.carousel?.cards)
       .toEqual([
-        { bdcId: 'bdc-card-target-first', durationMs: null },
-        { bdcId: 'bdc-card-moved', durationMs: null },
+        { bdcId: 'bdc-card-target-first', durationMs: null, introTransitionRef: null, outroTransitionRef: null },
+        { bdcId: 'bdc-card-moved', durationMs: null, introTransitionRef: null, outroTransitionRef: null },
       ])
     expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-card-moved')).toMatchObject({
       type: BDC_TYPE.CARD,
       parentBdcId: 'bdc-carousel-target',
       pageId: null,
       presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
-      mediaId: 'media-moved-card',
-      card: { title: 'Carte déplacée', note: 'Contenu conservé' },
+      card: { mediaId: 'media-moved-card', title: 'Carte déplacée', note: 'Contenu conservé' },
     })
     assertDocumentInvariants(moved)
     expect(() => applyDocumentCommand(moved, {
@@ -401,8 +372,9 @@ describe('Elcé document commands', () => {
     let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand(
       'bdc-carousel-invariant', 'page-a', 1, 'bdc-card-invariant',
     ))
-    document = applyDocumentCommand(document, createEvaluationResultBdcCommand(
-      'bdc-evaluation-result-invariant', 'page-a', 2,
+    const evaluationPage = createEvaluationPage(document)
+    document = applyDocumentCommand(evaluationPage.document, createEvaluationResultBdcCommand(
+      'bdc-evaluation-result-invariant', evaluationPage.pageId, 1,
     ))
     const evaluationResult = document.bdcs.find((bdc) => bdc.id === 'bdc-evaluation-result-invariant')!.evaluationResult
     const invalid = new ElceDocument({
@@ -418,11 +390,11 @@ describe('Elcé document commands', () => {
   it('rebinds media references owned by Card BDCs during catalogue merges', () => {
     let document = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-card-canonical', type: MEDIA_TYPE.IMAGE, name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-card-canonical',  name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
     })
     document = applyDocumentCommand(document, {
       type: 'media.add',
-      media: { id: 'media-card-duplicate', type: MEDIA_TYPE.IMAGE, name: 'renamed.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-card-duplicate',  name: 'renamed.png', mimeType: 'image/png', size: 10, caption: '' },
     })
     document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-carousel-media-merge', 'page-a', 1))
     const cardBdcId = document.bdcs.find((bdc) => bdc.id === 'bdc-carousel-media-merge')!.carousel!.cards[0]!.bdcId
@@ -438,7 +410,7 @@ describe('Elcé document commands', () => {
       duplicateMediaIds: ['media-card-duplicate'],
     })
 
-    expect(merged.bdcs.find((bdc) => bdc.id === cardBdcId)?.mediaId).toBe('media-card-canonical')
+    expect(merged.bdcs.find((bdc) => bdc.id === cardBdcId)?.card?.mediaId).toBe('media-card-canonical')
     expect(merged.medias.map((media) => media.id)).toContain('media-card-canonical')
     expect(merged.medias.map((media) => media.id)).not.toContain('media-card-duplicate')
     assertDocumentInvariants(merged)
@@ -447,7 +419,7 @@ describe('Elcé document commands', () => {
   it('removes Carousel children with their parent but keeps reusable media', () => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-card-photo', type: MEDIA_TYPE.IMAGE, name: 'card.png', mimeType: 'image/png', size: 100, caption: '' },
+      media: { id: 'media-card-photo',  name: 'card.png', mimeType: 'image/png', size: 100, caption: '' },
     })
     const withCarousel = applyDocumentCommand(withMedia, createCarouselBdcCommand('bdc-carousel-parent', 'page-a', 1))
     const cardBdcId = withCarousel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-parent')!.carousel!.cards[0]!.bdcId
@@ -466,16 +438,9 @@ describe('Elcé document commands', () => {
   it('permanently deletes only an unused catalog bdc and retains its media', () => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
-    const withCatalogBdc = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-catalog-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-image-1',
-      placement: { kind: BDC_LOCATION.CATALOG },
-    })
+    const withCatalogBdc = createCardWithMedia(withMedia, 'bdc-catalog-image-1', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.CATALOG }, 'media-image-1')
     const deleted = applyDocumentCommand(withCatalogBdc, { type: 'bdc.delete', bdcId: 'bdc-catalog-image-1' })
 
     expect(deleted.bdcs.map((bdc) => bdc.id)).toEqual(['bdc-section-1'])
@@ -483,14 +448,7 @@ describe('Elcé document commands', () => {
     expect(deleted.medias).toEqual(withCatalogBdc.medias)
     assertDocumentInvariants(deleted)
 
-    const withPageBdc = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-page-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-image-1',
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
-    })
+    const withPageBdc = createCardWithMedia(withMedia, 'bdc-page-image-1', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.PAGE, pageId: 'page-a' }, 'media-image-1')
     expect(() => applyDocumentCommand(withPageBdc, { type: 'bdc.delete', bdcId: 'bdc-page-image-1' }))
       .toThrow('est utilisé par une page')
   })
@@ -543,7 +501,7 @@ describe('Elcé document commands', () => {
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
     const { scenarioEntries: _scenarioEntries, ...legacyFields } = withRootPage.toJSON()
-    for (const version of [1, 2]) {
+    for (const version of [1, 2, 3]) {
       expect(() => ElceDocument.fromJSON({ ...legacyFields, version } as never))
         .toThrow(`Version de document Elcé non supportée : ${version}`)
     }
@@ -631,11 +589,10 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
+      presetId: 'photo-basic',
       media: {
         id: 'media-image-1',
-        type: 'image',
+        
         name: 'image.png',
         mimeType: 'image/png',
         size: 10,
@@ -647,8 +604,8 @@ describe('Elcé document commands', () => {
     })
 
     expect(updated.medias.map((media) => media.id)).toEqual(['media-image-1'])
-    expect(updated.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-image-1'])
-    expect(updated.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({ pageId: 'page-a', mediaId: 'media-image-1' })
+    expect(updated.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(updated.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({ pageId: null, card: { mediaId: 'media-image-1' } })
     expect(updated.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.content).toEqual(content)
     assertDocumentInvariants(updated)
   })
@@ -656,16 +613,9 @@ describe('Elcé document commands', () => {
   it('attaches an unused catalog bdc without cloning its media', () => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
-    const available = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-image-1',
-      placement: { kind: BDC_LOCATION.CATALOG },
-    })
+    const available = createCardWithMedia(withMedia, 'bdc-image-1', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.CATALOG }, 'media-image-1')
     const attached = applyDocumentCommand(available, {
       type: 'bdc.anchor.attach',
       sectionBdcId: 'bdc-section-1',
@@ -683,10 +633,11 @@ describe('Elcé document commands', () => {
     })
 
     expect(attached.data.catalogBdcIds).toEqual([])
-    expect(attached.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-image-1'])
+    expect(attached.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
     expect(attached.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
-      pageId: 'page-a',
-      mediaId: 'media-image-1',
+      pageId: null,
+      parentBdcId: 'bdc-section-1',
+      card: { mediaId: 'media-image-1' },
     })
     expect(attached.medias).toEqual(available.medias)
     assertDocumentInvariants(attached)
@@ -697,22 +648,15 @@ describe('Elcé document commands', () => {
       bdcId: 'bdc-image-1',
       markup: '<p></p>',
       content: { type: 'doc', content: [{ type: 'paragraph' }] },
-    })).toThrow('n’est plus disponible')
+    })).toThrow('n’est pas dans le catalogue')
   })
 
   it('rejects catalog anchor attachment to a non-Flux page', () => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
-    const available = applyDocumentCommand(withMedia, {
-      type: 'bdc.create',
-      bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      mediaId: 'media-image-1',
-      placement: { kind: BDC_LOCATION.CATALOG },
-    })
+    const available = createCardWithMedia(withMedia, 'bdc-image-1', DEFAULT_PRESET_ID.PHOTO, { kind: BDC_LOCATION.CATALOG }, 'media-image-1')
     const withDiapo = applyDocumentCommand(available, createPageCommand({
       pageId: 'page-diapo',
       bdcId: 'bdc-carousel-diapo',
@@ -744,9 +688,8 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      presetId: 'photo-basic',
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       partId: 'page-a:bdc-image-1:anchor',
       markup: '<p id="section-text-1">Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
       content: {
@@ -765,7 +708,10 @@ describe('Elcé document commands', () => {
       },
     })
 
-    expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-image-1')?.pageId).toBe('page-a')
+    expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
+      pageId: null,
+      parentBdcId: 'bdc-section-1',
+    })
     expect(moved.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.markup).toContain('Après')
     assertDocumentInvariants(moved)
   })
@@ -777,9 +723,8 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      presetId: 'photo-basic',
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       partId: 'page-a:bdc-image-1:anchor',
       markup: '<p id="section-text-1"><span data-bdc-id="bdc-image-1"></span></p>',
       content: {
@@ -808,9 +753,8 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      presetId: 'photo-basic',
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       partId: 'page-a:bdc-image-1:anchor',
       markup: '<p id="section-text-1"><span data-bdc-id="bdc-image-1"></span></p>',
       content: {
@@ -837,9 +781,8 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      presetId: 'photo-basic',
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       partId: 'page-a:bdc-image-1:anchor',
       markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
       content: {
@@ -864,7 +807,8 @@ describe('Elcé document commands', () => {
     expect(returned.bdcs).toHaveLength(2)
     expect(returned.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
       pageId: null,
-      mediaId: 'media-image-1',
+      parentBdcId: null,
+      card: { mediaId: 'media-image-1' },
     })
     expect(returned.medias).toEqual(anchored.medias)
     expect(returned.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.content)
@@ -898,9 +842,8 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-video-1',
-      bdcType: BDC_TYPE.VIDEO,
-      presetId: 'video-basic',
-      media: { id: 'media-video-1', type: 'video', name: 'video.mp4', mimeType: 'video/mp4', size: 24, caption: '' },
+      presetId: 'photo-basic',
+      media: { id: 'media-video-1',  name: 'video.mp4', mimeType: 'video/mp4', size: 24, caption: '' },
       partId: 'page-a:bdc-video-1:anchor',
       markup: '<p>Avant <span data-bdc-id="bdc-video-1"></span> après</p>',
       content: {
@@ -938,9 +881,8 @@ describe('Elcé document commands', () => {
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
       bdcId: 'bdc-image-1',
-      bdcType: BDC_TYPE.IMAGE,
-      presetId: 'image-basic',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      presetId: 'photo-basic',
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       partId: 'page-a:bdc-image-1:anchor',
       markup: '<p><span data-bdc-id="bdc-image-1"></span></p>',
       content: {
@@ -1022,14 +964,10 @@ describe('Elcé document commands', () => {
   })
 
   it('creates one unique Result BDC with editable success and failure branches', () => {
-    const initial = createInitialDocument()
-    const resultDocument = applyDocumentCommand(initial, {
-      type: 'bdc.create',
-      bdcId: 'bdc-result-1',
-      bdcType: BDC_TYPE.EVALUATION_RESULT,
-      presetId: DEFAULT_PRESET_ID.EVALUATION_RESULT,
-      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
-    })
+    const evaluationPage = createEvaluationPage(createInitialDocument())
+    const resultDocument = applyDocumentCommand(evaluationPage.document, createEvaluationResultBdcCommand(
+      'bdc-result-1', evaluationPage.pageId, 1,
+    ))
     const resultBdc = resultDocument.bdcs.find((bdc) => bdc.id === 'bdc-result-1')!
     const updated = applyDocumentCommand(resultDocument, {
       type: 'bdc.evaluation-result.update',
@@ -1040,7 +978,10 @@ describe('Elcé document commands', () => {
       },
     })
 
-    expect(resultDocument.pages[0]?.bdcIds).toEqual(['bdc-result-1', 'bdc-section-1'])
+    expect(resultDocument.pages.find((page) => page.id === evaluationPage.pageId)?.bdcIds).toEqual([
+      evaluationPage.defaultBdcId,
+      'bdc-result-1',
+    ])
     expect(resultDocument.data.catalogBdcIds).toEqual([])
     expect(resultBdc.evaluationResult).toEqual({
       success: { message: '', action: null },
@@ -1062,9 +1003,15 @@ describe('Elcé document commands', () => {
       type: 'bdc.evaluation-result.delete',
       bdcId: resultBdc.id,
     })
-    expect(deleted.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(deleted.pages.find((page) => page.id === evaluationPage.pageId)?.bdcIds).toEqual([evaluationPage.defaultBdcId])
     expect(deleted.bdcs.some((bdc) => bdc.id === resultBdc.id)).toBe(false)
     assertDocumentInvariants(deleted)
+  })
+
+  it('rejects a Result BDC outside an Evaluation chapter', () => {
+    expect(() => applyDocumentCommand(createInitialDocument(), createEvaluationResultBdcCommand(
+      'bdc-result-outside-evaluation', 'page-a', 0,
+    ))).toThrow('Un BDC Résultat ne peut être créé que dans une page d’un chapitre Évaluation.')
   })
 
   it('reuses a catalogue media for a Question without adding a reusable Question BDC', () => {
@@ -1077,7 +1024,7 @@ describe('Elcé document commands', () => {
     })
     const withMedia = applyDocumentCommand(initial, {
       type: 'media.add',
-      media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
     const illustrated = applyDocumentCommand(withMedia, {
       type: 'bdc.question.media.set',
@@ -1086,8 +1033,47 @@ describe('Elcé document commands', () => {
     })
 
     expect(illustrated.bdcs).toHaveLength(2)
-    expect(illustrated.bdcs.find((bdc) => bdc.id === 'bdc-question-1')?.mediaId).toBe('media-image-1')
+    expect(illustrated.bdcs.find((bdc) => bdc.id === 'bdc-question-1')?.question?.mediaId).toBe('media-image-1')
     expect(illustrated.data.catalogBdcIds).toEqual([])
     expect(illustrated.medias.map((media) => media.id)).toEqual(['media-image-1'])
   })
 })
+
+/** Creates a Card BDC and assigns its reusable resource through the Card command. */
+function createCardWithMedia(
+  document: ReturnType<typeof createInitialDocument>,
+  bdcId: string,
+  presetId: string,
+  placement: BdcPlacement,
+  mediaId: string,
+): ReturnType<typeof createInitialDocument> {
+  const created = applyDocumentCommand(document, {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.CARD,
+    presetId,
+    placement,
+  })
+  return applyDocumentCommand(created, { type: 'bdc.card.media.set', bdcId, mediaId })
+}
+
+/** Creates a Flux page with its default Question inside a dedicated Evaluation chapter. */
+function createEvaluationPage(document: ReturnType<typeof createInitialDocument>) {
+  const withChapter = applyDocumentCommand(document, createChapterCommand(
+    document,
+    'Chapitre Évaluation de test',
+    CHAPTER_TYPE.EVALUATION,
+  ))
+  const chapter = withChapter.chapters.at(-1)!
+  const pageCommand = createDefaultPageCommand(
+    withChapter,
+    { kind: PAGE_LOCATION.CHAPTER, chapterId: chapter.id },
+    'Page Évaluation de test',
+    PAGE_TYPE.FLUX,
+  )
+  return {
+    document: applyDocumentCommand(withChapter, pageCommand),
+    pageId: pageCommand.pageId,
+    defaultBdcId: pageCommand.bdcId,
+  }
+}

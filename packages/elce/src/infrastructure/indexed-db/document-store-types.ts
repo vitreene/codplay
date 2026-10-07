@@ -1,5 +1,5 @@
-import type { ElceDocument } from '../../domain/document-model'
-import type { MediaId } from '../../domain/document-types'
+import type { ElceDocument } from '../../domain/document/document-model'
+import type { MediaId } from '../../domain/document/document-types'
 
 export interface MediaBlob {
   readonly id: MediaId

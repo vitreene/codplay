@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyDocumentCommand, createDefaultPageCommand } from '../commands/document-commands'
 import { PAGE_LOCATION } from '../../config/document-config'
-import { createInitialDocument } from '../../domain/document-model'
+import { createInitialDocument } from '../../domain/document/document-model'
 import { PopupPlayer } from './popup-player'
 
 vi.mock('../../infrastructure/indexed-db/document-store', () => ({

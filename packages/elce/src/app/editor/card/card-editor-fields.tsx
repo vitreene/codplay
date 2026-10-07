@@ -12,10 +12,10 @@ import {
   MEDIA_TYPE,
 } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
-import type { Bdc } from '../../../domain/document-types'
+import type { Bdc } from '../../../domain/document/document-types'
 import type { ElceCardEditorFieldsProps } from '../../../domain/card/card-facade-types'
 import type { CardContent } from '../../../domain/card/card-types'
-import type { ElceCatalogReference } from '../../../domain/catalog-types'
+import type { ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 
 /** Renders the selected Card layout and its currently visible authored fields. */
 export function CardBdcEditorFields({
@@ -71,7 +71,7 @@ export function CardPresentationSettings({ bdc, mediaById, actions, idPrefix }: 
   const hasImageLayout = bdc.presetId === DEFAULT_PRESET_ID.PHOTO
     || bdc.presetId === DEFAULT_PRESET_ID.IMAGE_CAPTION
     || bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
-  const media = bdc.mediaId === null ? undefined : mediaById[bdc.mediaId]
+  const media = bdc.card.mediaId === null ? undefined : mediaById[bdc.card.mediaId]
   return (
     <>
       {hasImageLayout && media?.type !== MEDIA_TYPE.VIDEO && (
@@ -182,7 +182,7 @@ type CardMediaEditorProps = Readonly<{
 /** Edits one reusable Card media reference and imports files through the Card facade. */
 function CardMediaEditor({ bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles }: CardMediaEditorProps) {
   if (bdc.type !== 'card' || bdc.card == null) return null
-  const media = bdc.mediaId === null ? undefined : mediaById[bdc.mediaId]
+  const media = bdc.card.mediaId === null ? undefined : mediaById[bdc.card.mediaId]
   const canUseVideo = bdc.presetId === DEFAULT_PRESET_ID.PHOTO
   const hasVideoPreview = media?.type === MEDIA_TYPE.VIDEO && media.source !== null
   const fileTriggerContent = media?.source === null || media === undefined

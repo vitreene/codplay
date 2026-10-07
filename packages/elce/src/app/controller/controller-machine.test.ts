@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { assertDocumentInvariants } from '../commands/document-commands'
 import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
-import { ElceAnchorDropService } from '../../domain/anchor-drop-service'
-import { ElceMediaResourceService } from '../../domain/media-resource-service'
-import type { ElceSectionChange } from '../../domain/anchor-types'
+import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
+import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
+import type { ElceSectionChange } from '../../domain/anchor/anchor-types'
 import { controllerMachine } from './controller-machine'
 
 class PendingMediaStore implements ElceDocumentStore {
@@ -96,7 +96,7 @@ describe('Elcé controller', () => {
       type: 'document.apply',
       command: {
         type: 'media.add',
-        media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+        media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       },
     })
     actor.send({
@@ -104,12 +104,12 @@ describe('Elcé controller', () => {
       command: {
         type: 'bdc.create',
         bdcId: 'bdc-catalog-image-1',
-        bdcType: BDC_TYPE.IMAGE,
-        presetId: 'image-basic',
-        mediaId: 'media-image-1',
+        bdcType: BDC_TYPE.CARD,
+        presetId: 'photo-basic',
         placement: { kind: BDC_LOCATION.CATALOG },
       },
     })
+    actor.send({ type: 'document.apply', command: { type: 'bdc.card.media.set', bdcId: 'bdc-catalog-image-1', mediaId: 'media-image-1' } })
     actor.send({ type: 'document.apply', command: { type: 'bdc.delete', bdcId: 'bdc-catalog-image-1' } })
 
     expect(actor.getSnapshot().context.catalogTab).toBe(CATALOG_TAB.MEDIA)
@@ -148,8 +148,6 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.bdcs).toHaveLength(3)
     expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual([
       'bdc-section-1',
-      firstTarget.bdcId,
-      secondTarget.bdcId,
     ])
     expect(actor.getSnapshot().context.document.bdcs[0]?.section?.markup).toContain('data-elce-anchor="true"')
     expect(actor.getSnapshot().context.document.medias.map((media) => media.name)).toEqual(['one.png', 'two.png'])
@@ -181,14 +179,14 @@ describe('Elcé controller', () => {
     await flush()
 
     const document = actor.getSnapshot().context.document
-    const imageBdcs = document.bdcs.filter((bdc) => bdc.type === BDC_TYPE.IMAGE)
+    const imageBdcs = document.bdcs.filter((bdc) => bdc.type === BDC_TYPE.CARD)
     expect(store.pending).toHaveLength(1)
     expect(store.media.size).toBe(1)
     expect(document.medias).toHaveLength(1)
     expect(document.medias[0]?.name).toBe('first-name.png')
     expect(imageBdcs).toHaveLength(2)
     expect(imageBdcs[0]?.id).not.toBe(imageBdcs[1]?.id)
-    expect(imageBdcs.map((bdc) => bdc.mediaId)).toEqual([document.medias[0]?.id, document.medias[0]?.id])
+    expect(imageBdcs.map((bdc) => bdc.card?.mediaId)).toEqual([document.medias[0]?.id, document.medias[0]?.id])
     expect(actor.getSnapshot().context.mediaSources[document.medias[0]!.id]).toMatch(/^blob:/)
     assertDocumentInvariants(document)
     actor.stop()
@@ -204,9 +202,8 @@ describe('Elcé controller', () => {
         sectionBdcId: 'bdc-section-1',
         pageId: 'page-a',
         bdcId: 'bdc-image-1',
-        bdcType: BDC_TYPE.IMAGE,
-        presetId: 'image-basic',
-        media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+        presetId: 'photo-basic',
+        media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
         partId: 'page-a:bdc-image-1:anchor',
         markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
         content: {
@@ -249,7 +246,7 @@ describe('Elcé controller', () => {
       type: 'document.apply',
       command: {
         type: 'media.add',
-        media: { id: 'media-image-1', type: 'image', name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
+        media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
       },
     })
     actor.send({
@@ -257,12 +254,12 @@ describe('Elcé controller', () => {
       command: {
         type: 'bdc.create',
         bdcId: 'bdc-catalog-image-1',
-        bdcType: BDC_TYPE.IMAGE,
-        presetId: 'image-basic',
-        mediaId: 'media-image-1',
+        bdcType: BDC_TYPE.CARD,
+        presetId: 'photo-basic',
         placement: { kind: BDC_LOCATION.CATALOG },
       },
     })
+    actor.send({ type: 'document.apply', command: { type: 'bdc.card.media.set', bdcId: 'bdc-catalog-image-1', mediaId: 'media-image-1' } })
 
     const mediaTarget = service.createCatalogDropTarget(
       actor.getSnapshot().context.document,
@@ -290,8 +287,8 @@ describe('Elcé controller', () => {
 
     const document = actor.getSnapshot().context.document
     expect(secondMediaTarget.bdcId).not.toBe(mediaTarget.bdcId)
-    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1', mediaTarget.bdcId, secondMediaTarget.bdcId])
-    expect(document.bdcs.filter((bdc) => bdc.type === BDC_TYPE.IMAGE && bdc.pageId === 'page-a').map((bdc) => bdc.mediaId))
+    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    expect(document.bdcs.filter((bdc) => bdc.type === BDC_TYPE.CARD && bdc.pageId === null && bdc.parentBdcId === 'bdc-section-1').map((bdc) => bdc.card?.mediaId))
       .toEqual(['media-image-1', 'media-image-1'])
     expect(document.data.catalogBdcIds).toEqual(['bdc-catalog-image-1'])
     expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-image-1'])
@@ -332,7 +329,7 @@ describe('Elcé controller', () => {
 
     const document = actor.getSnapshot().context.document
     expect(document.medias).toEqual([mediaImport.media])
-    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-question-1')?.mediaId).toBe(mediaImport.media.id)
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-question-1')?.question?.mediaId).toBe(mediaImport.media.id)
     expect(document.data.catalogBdcIds).toEqual([])
     expect(actor.getSnapshot().context.mediaSources[mediaImport.media.id]).toMatch(/^blob:/)
 
@@ -363,7 +360,7 @@ describe('Elcé controller', () => {
     expect(store.pending).toHaveLength(1)
     expect(store.media.size).toBe(1)
     expect(afterDuplicateImport.medias).toEqual([mediaImport.media])
-    expect(afterDuplicateImport.bdcs.filter((bdc) => bdc.type === BDC_TYPE.QUESTION).map((bdc) => bdc.mediaId))
+    expect(afterDuplicateImport.bdcs.filter((bdc) => bdc.type === BDC_TYPE.QUESTION).map((bdc) => bdc.question?.mediaId))
       .toEqual([mediaImport.media.id, mediaImport.media.id])
     assertDocumentInvariants(document)
     assertDocumentInvariants(afterDuplicateImport)
@@ -378,7 +375,7 @@ describe('Elcé controller', () => {
       type: 'document.apply',
       command: {
         type: 'media.add',
-        media: { id: 'media-image-1', type: 'image', name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
+        media: { id: 'media-image-1',  name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
       },
     })
     actor.send({
@@ -386,12 +383,12 @@ describe('Elcé controller', () => {
       command: {
         type: 'bdc.create',
         bdcId: 'bdc-image-1',
-        bdcType: BDC_TYPE.IMAGE,
-        presetId: 'image-basic',
-        mediaId: 'media-image-1',
+        bdcType: BDC_TYPE.CARD,
+        presetId: 'photo-basic',
         placement: { kind: BDC_LOCATION.CATALOG },
       },
     })
+    actor.send({ type: 'document.apply', command: { type: 'bdc.card.media.set', bdcId: 'bdc-image-1', mediaId: 'media-image-1' } })
 
     const target = service.createCatalogDropTarget(
       actor.getSnapshot().context.document,
@@ -404,11 +401,12 @@ describe('Elcé controller', () => {
     await flush()
 
     const document = actor.getSnapshot().context.document
-    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-image-1'])
+    expect(document.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
     expect(document.data.catalogBdcIds).toEqual([])
     expect(document.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
-      pageId: 'page-a',
-      mediaId: 'media-image-1',
+      pageId: null,
+      parentBdcId: 'bdc-section-1',
+      card: { mediaId: 'media-image-1' },
     })
     expect(document.medias.map((media) => media.id)).toEqual(['media-image-1'])
     expect(service.createCatalogDropTarget(
@@ -431,9 +429,8 @@ describe('Elcé controller', () => {
         sectionBdcId: 'bdc-section-1',
         pageId: 'page-a',
         bdcId: 'bdc-image-1',
-        bdcType: BDC_TYPE.IMAGE,
-        presetId: 'image-basic',
-        media: { id: 'media-image-1', type: 'image', name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
+        presetId: 'photo-basic',
+        media: { id: 'media-image-1',  name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
         partId: 'page-a:bdc-image-1:anchor',
         markup: '<p>Avant <span data-bdc-id="bdc-image-1"></span> après</p>',
         content: {
@@ -464,7 +461,8 @@ describe('Elcé controller', () => {
     expect(document.data.catalogBdcIds).toEqual(['bdc-image-1'])
     expect(document.bdcs.find((bdc) => bdc.id === 'bdc-image-1')).toMatchObject({
       pageId: null,
-      mediaId: 'media-image-1',
+      parentBdcId: null,
+      card: { mediaId: 'media-image-1' },
     })
     expect(document.medias.map((media) => media.id)).toEqual(['media-image-1'])
     assertDocumentInvariants(document)

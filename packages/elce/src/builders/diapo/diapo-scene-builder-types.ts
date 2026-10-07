@@ -1,6 +1,6 @@
 import type { SceneDoc } from 'codplay/scene/types'
-import type { MediaId } from '../../domain/document-types'
-import type { MediaType } from '../../config/document-config-types'
+import type { MediaId, RevelationTransitionDefaults } from '../../domain/document/document-types'
+import type { ChapterType, MediaType } from '../../config/document-config-types'
 
 export interface DiapoQuestionReset {
   readonly eventName: string
@@ -9,6 +9,8 @@ export interface DiapoQuestionReset {
 export type DiapoSceneBuildOptions = Readonly<{
   readonly mediaSources?: Readonly<Record<MediaId, string>>
   readonly mediaTypes?: Readonly<Record<MediaId, MediaType>>
+  readonly chapterType?: ChapterType
+  readonly revelationDefaults?: RevelationTransitionDefaults
 }>
 
 export interface DiapoSceneBuild {

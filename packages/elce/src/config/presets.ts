@@ -9,9 +9,9 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--carousel',
     allowedContent: ['bdc'],
     markupTemplate: `
-      <section id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <div id="{{rootId}}-frame" class="elce-carousel__frame" data-part="{{partPrefix}}:frame">{{content:frame}}</div>
-        <nav id="{{rootId}}-navigation" class="elce-carousel__navigation" data-part="{{partPrefix}}:navigation" aria-label="Vues du carousel">{{content:navigation}}</nav>
+      <section id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:frame" -->{{content:frame}}
+        <nav id="{{rootId}}-navigation" class="elce-carousel__navigation" aria-label="Vues du carousel"><!-- data-part="{{partPrefix}}:navigation" -->{{content:navigation}}</nav>
       </section>
     `,
     zones: [
@@ -25,9 +25,9 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--section',
     allowedContent: ['text', 'bdc'],
     markupTemplate: `
-      <section id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <div id="{{rootId}}-title-host" data-part="{{partPrefix}}:title"></div>
-        <div id="{{rootId}}-body" data-part="{{partPrefix}}:body">{{content:body}}</div>
+      <section id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:title" -->
+        <div id="{{rootId}}-body"><!-- data-part="{{partPrefix}}:body" -->{{content:body}}</div>
       </section>
     `,
     zones: [
@@ -41,15 +41,14 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--question',
     allowedContent: ['text', 'media', 'bdc'],
     markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <header id="{{rootId}}-title-host" data-part="{{partPrefix}}:title"></header>
-        <div id="{{rootId}}-illustration" data-part="{{partPrefix}}:illustration"></div>
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        {{content:title}}{{content:illustration}}
         <form id="{{rootId}}-form">
           <fieldset id="{{rootId}}-fieldset">
-            <legend id="{{rootId}}-question" data-part="{{partPrefix}}:question"></legend>
-            <div id="{{rootId}}-answers" data-part="{{partPrefix}}:answers"></div>
+            <!-- data-part="{{partPrefix}}:question" -->
+            <div id="{{rootId}}-answers" class="elce-question-answers"><!-- data-part="{{partPrefix}}:answers" --></div>
           </fieldset>
-          <div id="{{rootId}}-validation" data-part="{{partPrefix}}:validation"></div>
+          <!-- data-part="{{partPrefix}}:validation" -->
         </form>
       </article>
     `,
@@ -67,16 +66,16 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--evaluation-result',
     allowedContent: ['text', 'bdc'],
     markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <section id="{{rootId}}-success" class="elce-evaluation-result__branch elce-evaluation-result__branch--success" data-part="{{partPrefix}}:success">
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        <section id="{{rootId}}-success" class="elce-evaluation-result__branch elce-evaluation-result__branch--success">
           <h2 id="{{rootId}}-success-title">${EVALUATION_RESULT_CONFIG[EVALUATION_RESULT_BRANCH.SUCCESS].label}</h2>
-          <p id="{{rootId}}-success-message" data-part="{{partPrefix}}:success-message"></p>
-          <div id="{{rootId}}-success-action" data-part="{{partPrefix}}:success-action"></div>
+          <!-- data-part="{{partPrefix}}:success-message" -->
+          <!-- data-part="{{partPrefix}}:success-action" -->
         </section>
-        <section id="{{rootId}}-failure" class="elce-evaluation-result__branch elce-evaluation-result__branch--failure" data-part="{{partPrefix}}:failure">
+        <section id="{{rootId}}-failure" class="elce-evaluation-result__branch elce-evaluation-result__branch--failure">
           <h2 id="{{rootId}}-failure-title">${EVALUATION_RESULT_CONFIG[EVALUATION_RESULT_BRANCH.FAILURE].label}</h2>
-          <p id="{{rootId}}-failure-message" data-part="{{partPrefix}}:failure-message"></p>
-          <div id="{{rootId}}-failure-action" data-part="{{partPrefix}}:failure-action"></div>
+          <!-- data-part="{{partPrefix}}:failure-message" -->
+          <!-- data-part="{{partPrefix}}:failure-action" -->
         </section>
       </article>
     `,
@@ -93,14 +92,15 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--image-caption',
     allowedContent: ['text', 'media'],
     markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <div id="{{rootId}}-image" class="elce-card-image-caption__image" data-part="{{partPrefix}}:image"></div>
-        <p id="{{rootId}}-caption" class="elce-card-image-caption__caption" data-part="{{partPrefix}}:caption"></p>
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:root" -->
+        <div id="{{rootId}}-image" class="elce-card-image-caption__image"><!-- data-part="{{partPrefix}}:image" --></div>
+        <!-- data-part="{{partPrefix}}:caption" -->
       </article>
     `,
     zones: [
       { id: 'image', label: 'Image', required: true, content: 'media' },
-      { id: 'caption', label: 'Légende', required: false, content: 'text' },
+      { id: 'caption', label: 'Légende', required: false, content: 'text', className: 'elce-card-image-caption__caption' },
     ],
   },
   [DEFAULT_PRESET_ID.PHOTO]: {
@@ -109,8 +109,9 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--photo',
     allowedContent: ['media'],
     markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <div id="{{rootId}}-media" class="elce-carousel-photo__media" data-part="{{partPrefix}}:media"></div>
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:root" -->
+        <div id="{{rootId}}-media" class="elce-carousel-photo__media"><!-- data-part="{{partPrefix}}:media" --></div>
       </article>
     `,
     zones: [{ id: 'media', label: 'Photo ou vidéo', required: true, content: 'media' }],
@@ -121,20 +122,21 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--text-short',
     allowedContent: ['text'],
     markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <p id="{{rootId}}-overline" class="elce-card-text-short__overline" data-part="{{partPrefix}}:overline"></p>
-        <h2 id="{{rootId}}-title" class="elce-card-text-short__title" data-part="{{partPrefix}}:title"></h2>
-        <p id="{{rootId}}-description" class="elce-card-text-short__description" data-part="{{partPrefix}}:description"></p>
-        <p id="{{rootId}}-message" class="elce-card-text-short__message" data-part="{{partPrefix}}:message"></p>
-        <footer id="{{rootId}}-note" class="elce-card-text-short__note" data-part="{{partPrefix}}:note"></footer>
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:root" -->
+        <!-- data-part="{{partPrefix}}:overline" -->
+        <!-- data-part="{{partPrefix}}:title" -->
+        <!-- data-part="{{partPrefix}}:description" -->
+        <!-- data-part="{{partPrefix}}:message" -->
+        <!-- data-part="{{partPrefix}}:note" -->
       </article>
     `,
     zones: [
-      { id: 'overline', label: 'Surtitre', required: false, content: 'text' },
-      { id: 'title', label: 'Titre', required: false, content: 'text' },
-      { id: 'description', label: 'Description', required: false, content: 'text' },
-      { id: 'message', label: 'Message', required: false, content: 'text' },
-      { id: 'note', label: 'Note', required: false, content: 'text' },
+      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card-text-short__overline' },
+      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card-text-short__title' },
+      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card-text-short__description' },
+      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card-text-short__message' },
+      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card-text-short__note' },
     ],
   },
   [DEFAULT_PRESET_ID.TEXT_IMAGE]: {
@@ -143,48 +145,25 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     rootClassName: 'elce-card elce-card--text-image',
     allowedContent: ['text', 'media'],
     markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <div id="{{rootId}}-image" class="elce-carousel-text-image__image" data-part="{{partPrefix}}:image"></div>
-        <div id="{{rootId}}-content" class="elce-carousel-text-image__content" data-part="{{partPrefix}}:content">
-          <p id="{{rootId}}-overline" class="elce-card-text-image__overline" data-part="{{partPrefix}}:overline"></p>
-          <h2 id="{{rootId}}-title" class="elce-card-text-image__title" data-part="{{partPrefix}}:title"></h2>
-          <p id="{{rootId}}-description" class="elce-card-text-image__description" data-part="{{partPrefix}}:description"></p>
-          <p id="{{rootId}}-message" class="elce-card-text-image__message" data-part="{{partPrefix}}:message"></p>
-          <footer id="{{rootId}}-note" class="elce-card-text-image__note" data-part="{{partPrefix}}:note"></footer>
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:root" -->
+        <div id="{{rootId}}-image" class="elce-carousel-text-image__image"><!-- data-part="{{partPrefix}}:image" --></div>
+        <div id="{{rootId}}-content" class="elce-carousel-text-image__content"><!-- data-part="{{partPrefix}}:content" -->
+          <!-- data-part="{{partPrefix}}:overline" -->
+          <!-- data-part="{{partPrefix}}:title" -->
+          <!-- data-part="{{partPrefix}}:description" -->
+          <!-- data-part="{{partPrefix}}:message" -->
+          <!-- data-part="{{partPrefix}}:note" -->
         </div>
       </article>
     `,
     zones: [
       { id: 'image', label: 'Image', required: true, content: 'media' },
-      { id: 'overline', label: 'Surtitre', required: false, content: 'text' },
-      { id: 'title', label: 'Titre', required: false, content: 'text' },
-      { id: 'description', label: 'Description', required: false, content: 'text' },
-      { id: 'message', label: 'Message', required: false, content: 'text' },
-      { id: 'note', label: 'Note', required: false, content: 'text' },
-    ],
-  },
-  [DEFAULT_PRESET_ID.MESSAGE]: {
-    id: DEFAULT_PRESET_ID.MESSAGE,
-    label: 'Message',
-    rootClassName: 'elce-card elce-card--message',
-    allowedContent: ['text', 'media'],
-    markupTemplate: `
-      <article id="{{rootId}}" class="{{rootClassName}}" data-part="{{partPrefix}}:root">
-        <header id="{{rootId}}-header">
-          <p id="{{rootId}}-overline" data-part="{{partPrefix}}:overline"></p>
-          <h2 id="{{rootId}}-title" data-part="{{partPrefix}}:title"></h2>
-          <p id="{{rootId}}-subtitle" data-part="{{partPrefix}}:subtitle"></p>
-        </header>
-        <div id="{{rootId}}-body" data-part="{{partPrefix}}:body"></div>
-        <footer id="{{rootId}}-footer" data-part="{{partPrefix}}:footer"></footer>
-      </article>
-    `,
-    zones: [
-      { id: 'overline', label: 'Sur-titre', required: false, content: 'text' },
-      { id: 'title', label: 'Titre', required: false, content: 'text' },
-      { id: 'subtitle', label: 'Sous-titre', required: false, content: 'text' },
-      { id: 'body', label: 'Message', required: false, content: 'text' },
-      { id: 'footer', label: 'Note', required: false, content: 'text' },
+      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card-text-image__overline' },
+      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card-text-image__title' },
+      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card-text-image__description' },
+      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card-text-image__message' },
+      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card-text-image__note' },
     ],
   },
 } as const

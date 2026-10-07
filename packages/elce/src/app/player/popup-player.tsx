@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FileText, RefreshCw } from 'lucide-react'
-import { ElceDocument, createInitialDocument } from '../../domain/document-model'
+import { ElceDocument, createInitialDocument } from '../../domain/document/document-model'
 import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
 import type { ElcePageSceneCache } from '../../player/player-composition-types'
 import { PlayerPreview } from './player-preview'

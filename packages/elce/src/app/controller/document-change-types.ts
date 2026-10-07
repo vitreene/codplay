@@ -1,5 +1,5 @@
-import type { BdcId, MediaMetadata } from '../../domain/document-types'
-import type { ElceSectionChange } from '../../domain/anchor-types'
+import type { BdcId, MediaMetadata } from '../../domain/document/document-types'
+import type { ElceSectionChange } from '../../domain/anchor/anchor-types'
 
 export interface ElceAnchorChange {
   readonly sectionBdcId: string

@@ -2,9 +2,9 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v3 avec BDC Carte enfants de Carousel et Carte
-autonome de Diapo, sans migration des documents v1/v2 ; modèle, commandes et
-invariants vérifiés le 6 octobre 2026.**
+**Fixe — modèle documentaire v4 ; les médias sont portés par les détails Carte
+ou Question, les placements sont page/catalogue/parent ; modèle, commandes et
+invariants vérifiés le 7 octobre 2026.**
 
 Cette spécification couvre le document métier manipulé par l’application et
 la voie de modification utilisée par l’interface. La projection des cartes
@@ -13,7 +13,7 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 3 contient des tableaux de chapitres, pages, BDC et
+Un `ElceDocument` version 4 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
@@ -23,31 +23,31 @@ pages du catalogue restent hors scénario. Une page possède un type (`flux` ou
 `diapo`), un nom, une affectation de chapitre éventuelle et un ordre de BDC.
 
 Chaque BDC a un emplacement unique : dans une page, dans le catalogue, ou
-comme enfant d’un BDC conteneur. Les BDC Carte peuvent être enfants d’un BDC
-Carousel ou occuper directement l’unique emplacement BDC d’une page Diapo ; ils
-ne peuvent pas être placés dans le catalogue. Le BDC Carousel reste affecté à
-une page et porte ses réglages ainsi qu’une séquence ordonnée d’entrées
-`{ bdcId, durationMs }`. Chaque identifiant désigne un BDC Carte distinct dont
-`parentBdcId` désigne le Carousel. Un BDC Carte porte son layout dans
-`presetId`, toutes ses valeurs dans `card` et une référence média facultative
-dans `mediaId`. Changer de layout masque éventuellement des valeurs, mais ne
-les retire pas du BDC. Les médias sont indépendants et peuvent être partagés
-par plusieurs BDC. Une page Diapo contient au plus un BDC direct, qui peut être
-un Carousel, une Carte autonome ou une Question ; elle n’accepte pas de Section.
-La création propose un Carousel avec sa première Carte enfant.
+comme enfant d’un BDC conteneur. Une page Flux peut contenir plusieurs BDC ; une
+page Diapo en contient au plus un, parmi les types proposés par sa whitelist.
+La whitelist règle les contextes d’ajout sans créer des types BDC distincts
+selon l’emplacement. Le BDC Carousel reste affecté à une page et porte ses
+réglages ainsi qu’une séquence ordonnée d’entrées `{ bdcId, durationMs }`.
+Chaque identifiant désigne un BDC Carte distinct dont `parentBdcId` désigne le
+Carousel. Une Carte peut aussi occuper directement une page ou être enfant
+inline d’une Section ; le JSON Tiptap porte alors sa position exacte. Une Carte
+porte son layout dans `presetId`, ses valeurs et sa référence média facultative
+dans `card.mediaId`. Une Question porte son illustration facultative dans
+`question.mediaId`. Les ressources média sont indépendantes et peuvent être
+partagées par plusieurs BDC. `MediaMetadata` conserve le MIME, pas une
+catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de layout
+masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
+propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument.fromJSON()` accepte uniquement la version 3 et rejette les
-versions 1 et 2 sans migration. `IndexedDbDocumentStore.loadDocument()` lit
-l’enregistrement en transaction `readonly` puis délègue à `fromJSON()` ; il ne
-réécrit ni ne supprime automatiquement un document d’ancienne version. La
-conversion ou la récupération d’un ancien enregistrement n’est pas prise en
-charge dans le POC.
+`ElceDocument.fromJSON()` accepte uniquement la version 4 et rejette les
+versions 1, 2 et 3 sans conversion. Le POC ne conserve pas de migration depuis
+le format précédent.
 
 Les valeurs de placement et les constantes de configuration sont déclarées
 dans [`document-config.ts`](../src/config/document-config.ts), leurs types
 dans [`document-config-types.ts`](../src/config/document-config-types.ts),
 les formes du document dans
-[`document-types.ts`](../src/domain/document-types.ts), et les commandes dans
+[`document-types.ts`](../src/domain/document/document-types.ts), et les commandes dans
 [`document-command-types.ts`](../src/app/commands/document-command-types.ts).
 Les modules d’exécution ne redéclarent pas ces contrats et ne réintroduisent
 donc pas de chaînes de placement dans les commandes.
@@ -65,7 +65,7 @@ il est créé atomiquement avec un BDC Carte enfant au layout initial
 métier.
 
 `ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
-3. Les octets des médias sont conservés à part par la frontière IndexedDB.
+4. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 ## Commandes
 
@@ -79,9 +79,9 @@ document.
 La suppression définitive d’une page supprime ses bdc, mais conserve les médias
 du catalogue. `bdc.delete` ne peut supprimer qu’un BDC inutilisé et présent dans
 `catalogBdcIds` ; son média reste dans le document.
-`bdc.section.delete` supprime un BDC Section affecté à une page et les BDC
-image/vidéo qu’il référence comme ancres ; les ressources média restent dans
-le catalogue. `bdc.question.delete` supprime le BDC Question de sa page et
+`bdc.section.delete` supprime un BDC Section affecté à une page et ses BDC
+Carte enfants référencés par des ancres ; les ressources média restent dans le
+catalogue. `bdc.question.delete` supprime le BDC Question de sa page et
 conserve son illustration média. `bdc.evaluation-result.delete` retire de la
 page le BDC Résultat affecté ; il ne le remet pas au catalogue. La commande
 `bdc.evaluation-result.update` édite ensemble ses branches Réussite et Échec ;
@@ -108,47 +108,47 @@ format de page n’est créé pour le Quiz. Le preset et le contenu initial
 viennent des constantes et services métier existants.
 
 Une création explicitement demandée en Diapo crée un BDC Carousel direct et
-sa première Carte enfant. La Carte autonome est une autre possibilité de BDC
-direct Diapo, fournie par sa commande dédiée après retrait du contenu initial.
-Les commandes et invariants refusent plusieurs BDC directs sur une Diapo, un
-type de BDC non pris en charge ou une Carte autonome sur une page Flux.
+sa première Carte enfant. Une Carte peut aussi être le contenu direct d’une
+page ; la whitelist de l’éditeur propose ce placement selon le type de page.
+Les commandes et invariants refusent plusieurs BDC directs sur une Diapo et
+les types qui ne sont pas pris en charge par ce format.
 
-`media.merge` rattache au média canonique tous les BDC qui référencent les
-médias en doublon, puis retire leurs métadonnées du document. Les BDC, les
-pages, leur ordre et le média canonique ne changent pas ; le nom et les autres
+`media.merge` rattache au média canonique les détails Carte et Question qui
+référencent les médias en doublon, puis retire leurs métadonnées du document.
+Les BDC, les pages, leur ordre et le média canonique ne changent pas ; le nom et les autres
 métadonnées du canonique sont conservés. La commande exige des identifiants
-distincts déjà présents et des métadonnées compatibles (type, MIME et taille).
+distincts déjà présents et des métadonnées compatibles (MIME et taille).
 Pour la consolidation vidéo réalisée le 2026-10-03, les blobs ont aussi été
 comparés par SHA-256 avant l’envoi de cette commande.
 
 Tout import depuis fichier passe par `ElceMediaResourceService` dans le worker
-asynchrone de la file XState. Avant de sauvegarder le blob, il compare sa
-catégorie (image ou vidéo), sa taille et son SHA-256 aux ressources documentées
-et aux blobs correspondants. Une correspondance réutilise les métadonnées et
-le blob existants, même si le nom de fichier diffère. Des octets différents
-restent deux ressources, même avec le même nom et la même taille. Le dépôt crée
-néanmoins un BDC neuf pour chaque placement ; l’import d’une illustration de
-Question attache le média existant sans créer de BDC média. Le retrait d’un BDC
-ne propose donc pas une copie de la ressource au catalogue. `media.merge` reste
-disponible pour consolider explicitement d’anciennes ressources déjà
+asynchrone de la file XState. Avant de sauvegarder le blob, il compare sa taille
+et son SHA-256 aux ressources documentées et aux blobs correspondants. Une
+correspondance réutilise les métadonnées et le blob existants, même si le nom de
+fichier diffère. Des octets différents restent deux ressources, même avec le
+même nom et la même taille. Le dépôt d’image ou de vidéo crée une Carte distincte
+et lui rattache la ressource réutilisable ; il ne crée pas un BDC média. L’import d’une
+illustration de Question rattache la ressource dans `question.mediaId`. Le
+retrait d’un BDC ne crée pas de copie de la ressource au catalogue.
+`media.merge` reste disponible pour consolider explicitement d’anciennes ressources déjà
 dupliquées.
 
 `assertDocumentInvariants()` vérifie les affectations uniques, les références
-page/bdc et parent/enfant, les données propres au type de BDC, et l’intégrité
-des ancres : une référence désigne un BDC image ou vidéo de la même page, sans
-doublon dans une ou plusieurs Sections. Un BDC Carte a exactement un
-emplacement : soit un parent Carousel, soit une page Diapo directe. Une Carte
-directe n’est jamais une entrée de catalogue. Chaque Carte porte un layout
-configuré, ses seules données Carte et, s’il y a lieu, une référence média
-image ou vidéo. Une Diapo contient au plus un BDC direct et n’accepte que
-Carousel, Carte ou Question. Les Carousels ne peuvent pas être vides. Une mise à jour
+page/BDC et parent/enfant, les données propres au type de BDC, et l’intégrité
+des ancres : une référence désigne une Carte enfant de la même page, sans
+doublon dans une ou plusieurs Sections. Une Carte a exactement un emplacement :
+une page, le catalogue, un parent Carousel ou une Section. Elle porte son
+layout, ses champs et, si nécessaire, `card.mediaId`. Une Question porte son
+illustration dans `question.mediaId`. Une Diapo contient au plus un BDC direct
+parmi les types autorisés par sa whitelist. Les Carousels ne peuvent pas être
+vides. Une mise à jour
 de Section compare les références avant et après l’édition ; chaque BDC dont
 l’ancre a disparu est supprimé dans cette même commande et son média reste
 conservé. Pour le geste explicite de retour, `bdc.anchor.return` met à jour le
 contenu de la Section et affecte simultanément ce même BDC au catalogue : son
 identifiant et son média sont conservés. Cette commande retire l’ancre dans la
-même opération. Le clavier Suppr et une édition ordinaire qui efface l’ancre
-gardent leur autre résultat : le BDC est supprimé et n’est pas remis au
+même geste. Le clavier Suppr et une édition ordinaire qui efface l’ancre gardent
+leur autre résultat : le BDC est supprimé et n’est pas remis au
 catalogue ; un nouveau BDC peut être créé pour le même média.
 Les commandes peuvent créer et supprimer un chapitre
 vide, déplacer une page entre chapitre, racine du scénario et catalogue,
@@ -168,13 +168,13 @@ BDC disponibles et modifié par `catalog.tab.select`.
 configuration ; l’interface affiche séparément les BDC disponibles et les
 médias réutilisables. React ne conserve pas de copie métier ni d’état d’onglet.
 
-Pour un média affecté directement à la page, le panneau Propriétés propose
-« Renvoyer au catalogue ». `ElcePageMediaService` distingue ces médias des
-bdc image ou vidéo référencés par une ancre dans le document riche ; l’action
-envoie la commande `bdc.remove` par `document.apply`. Le bdc quitte la page et
-entre dans `catalogBdcIds`, tandis que la ressource média reste dans le
-document et dans IndexedDB. Le retrait d’un bdc ancré continue d’utiliser sa
-commande d’ancre afin de retirer aussi la référence du texte.
+Pour une Carte affectée directement à la page, le panneau Propriétés propose
+« Renvoyer au catalogue ». `ElcePageMediaService` distingue ces Cartes des
+Cartes référencées par une ancre dans le document riche ; l’action envoie la
+commande `bdc.remove` par `document.apply`. La Carte quitte la page et entre
+dans `catalogBdcIds`, tandis que sa ressource média reste dans le document et
+dans IndexedDB. Le retrait d’une Carte ancrée continue d’utiliser sa commande
+d’ancre afin de retirer aussi la référence du texte.
 
 Quand une référence de BDC inutilisé est déposée depuis le catalogue, la
 commande `bdc.anchor.attach` affecte à la page le même BDC : son identifiant et
@@ -205,7 +205,7 @@ raccord ne choisit pas quels médias fusionner.
   métadonnées incompatibles.
 - Le même fichier vérifie la création, la mise à jour des deux branches et le
   retrait par commande du BDC Résultat.
-- Le même fichier vérifie que les versions 1 et 2 sont rejetées, le mélange et
+- Le même fichier vérifie que les versions 1, 2 et 3 sont rejetées, le mélange et
   le déplacement d’entrées page/chapitre à la racine, le déplacement d’une
   page de chapitre vers la racine et les invariants de placement correspondants.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
@@ -235,19 +235,14 @@ raccord ne choisit pas quels médias fusionner.
   le second fichier réutilise le média et le blob déjà conservés tout en
   créant un nouveau BDC ancré ; une illustration réimportée dans une autre
   Question partage également la ressource existante.
-- [`media-resource-service.test.ts`](../src/domain/media-resource-service.test.ts)
-  vérifie que SHA-256 reconnaît les mêmes octets sous un nom différent, garde
-  séparés des octets différents de même taille, et ne confond pas les catégories
-  image et vidéo.
-- [`card-preset-builder.test.ts`](../src/builders/card-preset-builder.test.ts)
+- [`media-resource-service.test.ts`](../src/domain/media/media-resource-service.test.ts)
+  vérifie que SHA-256 reconnaît les mêmes octets sous un nom différent ou un
+  MIME différent, et garde séparés des octets différents de même taille. Le
+  MIME stocké sur la ressource est la source de la catégorie de rendu.
+- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
   vérifie tous les objets de preset, les catégories et zones requises du preset
   Question, les `id` des éléments produits, la distinction entre deux
   instances du même preset et l’insertion du texte Section dans sa zone.
-- Dans un parcours Safari antérieur au nettoyage du catalogue, la page A
-  contenait deux ancres vidéo et un bdc vidéo direct. L’action « Renvoyer au
-  catalogue » a fait passer l’aperçu réel à deux vidéos et deux slots. Le BDC
-  direct a ensuite été supprimé du catalogue avec les deux autres anciennes
-  entrées de test ; les ressources média ont été conservées.
 - Dans Safari, supprimer l’ancre de test sur Page E a supprimé son BDC sans
   augmenter le catalogue des BDC disponibles. Le média est resté disponible ;
   un nouveau dépôt a créé un BDC à identifiant distinct qui référence ce même

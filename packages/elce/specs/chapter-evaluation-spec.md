@@ -53,6 +53,11 @@ réglages du chapitre et les choix du BDC ne sont pas encore raccordés à cette
 machine dans le player ; les Questions n’y suivent donc pas encore les règles
 de reprise et de relecture.
 
+Les deux sections sémantiques Réussite/Échec et leurs titres restent présents.
+Un paragraphe de message n’est créé que si l’auteur a saisi un message ; un
+bouton n’est créé que si une action est choisie. Les commentaires de montage
+des messages et actions n’ajoutent pas de balises vides.
+
 `buildScenario` ajoute une garde au passage entre pages : chaque page doit
 d’abord avoir atteint son repère bas, et une page Question doit aussi avoir
 produit un résultat. La garde de score s’applique au départ de la dernière page
@@ -62,12 +67,13 @@ reçoit pas de score et reste franchissable en prévisualisation auteur.
 
 ## Preuves
 
-[`chapter-evaluation.test.ts`](../src/domain/chapter-evaluation.test.ts)
+[`chapter-evaluation.test.ts`](../src/domain/evaluation/chapter-evaluation.test.ts)
 vérifie 4/5 réussi, 3/5 échoué avec une réponse absente comptée incorrecte,
 et le résultat sans score d’un chapitre sans Question.
-[`scenario-builder.test.ts`](../src/builders/scenario-builder.test.ts) vérifie
-le garde 4/5, 3/5, les conditions de page avant et après validation, et le cas
-sans Question. [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx)
+[`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts) vérifie
+le garde 4/5, 3/5, les conditions de page avant et après validation, le cas
+sans Question et l’absence de paragraphes Résultat vides.
+[`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx)
 vérifie la création d’un chapitre Évaluation par la commande XState, ses
 réglages par défaut, son nom « Évaluation », son icône, l’ouverture du
 formulaire central et l’enregistrement de la limite d’essais et de la portée de
@@ -82,6 +88,6 @@ La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
 [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) et
 [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts) ;
 sa compilation CodPlay l’est dans
-[`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts).
+[`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts).
 Safari MCP a également vérifié l’ajout puis le retrait du BDC sur une page
 Flux d’Évaluation existante ; le bloc de test a été supprimé.

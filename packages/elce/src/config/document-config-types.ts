@@ -18,3 +18,4 @@ export type CarouselAspectRatioId = typeof CAROUSEL_ASPECT_RATIO[keyof typeof CA
 export type CarouselImagePosition = typeof CAROUSEL_IMAGE_POSITION[keyof typeof CAROUSEL_IMAGE_POSITION]
 export type CarouselPlaybackMode = typeof CAROUSEL_PLAYBACK_MODE[keyof typeof CAROUSEL_PLAYBACK_MODE]
 export type CarouselTransition = typeof CAROUSEL_TRANSITION[keyof typeof CAROUSEL_TRANSITION]
+export type RevelationTransitionRef = CarouselTransition

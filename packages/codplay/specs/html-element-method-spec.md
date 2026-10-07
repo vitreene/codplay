@@ -53,4 +53,4 @@ synchrone du materializer. Cette capacité n’ajoute aucun scheduler RAF.
   et [`runtime-player.spec.ts`](../tests/runtime/player/runtime-player.spec.ts)
   couvrent les frontières runner/player concernées.
 - La validation auteur Elcé est couverte par
-  [`html-element-method-validation.test.ts`](../../elce/src/builders/html-element-method-validation.test.ts).
+  [`html-element-method-validation.test.ts`](../../elce/src/builders/markup-validation/html-element-method-validation.test.ts).

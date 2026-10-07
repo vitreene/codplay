@@ -1,9 +1,9 @@
 import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-config'
 import type { BdcType, CardLayoutId, EvaluationRetryScope, PageType } from '../../config/document-config-types'
-import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RichTextDocument } from '../../domain/document-types'
-import type { QuestionContent } from '../../domain/question-types'
+import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RevelationTransitionDefaults, RevelationTransitionOverrides, RichTextDocument } from '../../domain/document/document-types'
+import type { QuestionContent } from '../../domain/question/question-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
-import type { CarouselContent } from '../../domain/carousel-types'
+import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { CardContent, CardPresentationOptions } from '../../domain/card/card-types'
 
 export type PagePlacement =
@@ -53,7 +53,6 @@ export type DocumentCommand =
       bdcType: BdcType
       presetId: string
       placement: BdcPlacement
-      mediaId?: MediaId
       initialCardBdcId?: BdcId
       initialCardOptions?: CardPresentationOptions
     }>
@@ -79,6 +78,7 @@ export type DocumentCommand =
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.section.delete'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.section.revelation.update'; bdcId: BdcId; revelation: RevelationTransitionOverrides }>
   | Readonly<{ type: 'bdc.evaluation-result.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.carousel.delete'; bdcId: BdcId }>
   | Readonly<{
@@ -86,7 +86,6 @@ export type DocumentCommand =
       sectionBdcId: BdcId
       pageId: PageId
       bdcId: BdcId
-      bdcType: Extract<BdcType, 'image' | 'video'>
       presetId: string
       media: MediaMetadata
       partId: string
@@ -124,4 +123,5 @@ export type DocumentCommand =
     }>
   | Readonly<{ type: 'media.add'; media: MediaMetadata }>
   | Readonly<{ type: 'media.merge'; canonicalMediaId: MediaId; duplicateMediaIds: readonly MediaId[] }>
+  | Readonly<{ type: 'document.revelation.update'; revelationDefaults: RevelationTransitionDefaults }>
   | Readonly<{ type: 'document.rename'; name: string }>

@@ -58,6 +58,16 @@ contient les persos CodPlay nécessaires : des `input` natifs, le bouton de
 validation, le texte de retour et, si elle existe, l’illustration. Les réponses
 à choix simple utilisent des boutons radio ; le choix multiple utilise des
 cases à cocher. Les straps de la story gèrent la sélection et la validation.
+Les zones de montage du preset sont des commentaires `<!-- data-part="…" -->`,
+pas des attributs sur des balises-hôtes vides. Le titre, l’énoncé et les
+contrôles sont insérés directement dans leur conteneur sémantique ; la zone de
+validation est un commentaire après le `fieldset`, sans `div` intermédiaire.
+Les conteneurs de l’illustration et des réponses restent parce qu’ils portent
+leur cadrage et leur mise en page.
+Le builder ne crée le `header` de titre que si le titre existe, et la zone
+illustration que si une référence média existe. Le paragraphe vide de retour
+est l’exception fonctionnelle : il reste caché avec `aria-live` afin que
+CodPlay puisse y afficher le résultat au moment de la validation.
 La bonne réponse est déterminée en comparant l’ensemble sélectionné à
 l’ensemble des identifiants marqués justes. Avant validation, aucune correction
 n’est affichée. Dans le parcours Quiz simple, la validation affiche le résultat
@@ -80,7 +90,7 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
 
 ## Preuves
 
-- [`question-service.test.ts`](../src/domain/question-service.test.ts) vérifie
+- [`question-service.test.ts`](../src/domain/question/question-service.test.ts) vérifie
   les réponses par défaut, l’unicité de la réponse juste en Choix, au moins une
   réponse juste et plusieurs choix justes en Choix multiple, ainsi que l’ordre
   et la suppression des réponses.
@@ -99,10 +109,14 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   Évaluation est une page Flux avec un BDC Question, et que la preview réelle
   CodPlay affiche cette Question avec ses réponses Oui/Non. La page et le
   chapitre temporaires du test ont été supprimés ensuite.
-- [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie le preset, les zones et les persos produits par le builder ;
-  [`scenario-builder.test.ts`](../src/builders/scenario-builder.test.ts)
+  [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
   vérifie la progression de page et le garde d’évaluation.
+- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+  vérifie les cibles de zones par commentaires, la cible du prompt dans le
+  `fieldset`, l’absence de conteneur de validation intermédiaire et l’omission
+  des hôtes de titre/illustration facultatifs quand leur contenu est absent.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   valide les trois types dans CodPlay : aucune correction n’apparaît avant la
   validation, puis les états justes et faux se révèlent dans la liste.

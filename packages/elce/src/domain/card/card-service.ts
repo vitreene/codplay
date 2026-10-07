@@ -10,6 +10,7 @@ export class ElceCardService {
     imageFit: CardImageFit = CAROUSEL_CONFIG.defaultImageFit,
   ): CardContent {
     return {
+      mediaId: null,
       overline: '',
       title: '',
       description: '',

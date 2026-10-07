@@ -32,12 +32,12 @@ La surface Tiptap propose dans le POC :
 Chaque modification passe par la commande `bdc.section.update` du contrôleur
 XState, avec le JSON éditable et le HTML statique correspondant.
 La corbeille du titre envoie `bdc.section.delete` au même contrôleur. Cette
-commande retire la Section de sa page, supprime ses BDC image/vidéo ancrés et
-conserve leurs ressources média réutilisables.
+commande retire la Section de sa page, supprime les Cartes ancrées qui lui
+appartiennent et conserve leurs ressources média réutilisables.
 
 ## Preuves
 
-- [`section-editor.test.tsx`](../src/app/editor/section-editor.test.tsx) vérifie
+- [`section-editor.test.tsx`](../src/app/editor/section/section-editor.test.tsx) vérifie
   le montage de la surface Tiptap dans un DOM réel de test et l’actualisation
   des commandes actives lorsque la sélection passe d’un titre italique à un
   paragraphe.
@@ -46,7 +46,7 @@ conserve leurs ressources média réutilisables.
   suppression de la Section et de ses BDC ancrés en conservant les médias.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie que la
   suppression du BDC Texte initial passe par la commande documentaire XState.
-- [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie que le builder porte le markup statique dans la scène Flux.
 
 ## Limites de la tranche

@@ -1,9 +1,9 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, MEDIA_TYPE, PAGE_LOCATION } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import { applyDocumentCommand } from '../commands/document-commands'
-import { createInitialDocument } from '../../domain/document-model'
-import type { ElceDocument } from '../../domain/document-model'
+import { createInitialDocument } from '../../domain/document/document-model'
+import type { ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { controllerMachine } from './controller-machine'
 import { attachDocumentPersistence } from './document-persistence'
@@ -58,22 +58,26 @@ describe('Elcé document persistence boundary', () => {
   it('persists a media merge and its blob deletions as one store operation', async () => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-canonical', type: MEDIA_TYPE.VIDEO, name: 'sample-video.mp4', mimeType: 'video/mp4', size: 3, caption: '' },
+      media: { id: 'media-canonical',  name: 'sample-video.mp4', mimeType: 'video/mp4', size: 3, caption: '' },
     })
     const withDuplicate = applyDocumentCommand(withMedia, {
       type: 'media.add',
-      media: { id: 'media-duplicate', type: MEDIA_TYPE.VIDEO, name: 'duplicate.mp4', mimeType: 'video/mp4', size: 3, caption: '' },
+      media: { id: 'media-duplicate',  name: 'duplicate.mp4', mimeType: 'video/mp4', size: 3, caption: '' },
     })
     const withBdc = applyDocumentCommand(withDuplicate, {
       type: 'bdc.create',
       bdcId: 'bdc-video-existing',
-      bdcType: BDC_TYPE.VIDEO,
-      presetId: DEFAULT_PRESET_ID.VIDEO,
-      mediaId: 'media-duplicate',
+      bdcType: BDC_TYPE.CARD,
+      presetId: DEFAULT_PRESET_ID.PHOTO,
       placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
     })
+    const withCardMedia = applyDocumentCommand(withBdc, {
+      type: 'bdc.card.media.set',
+      bdcId: 'bdc-video-existing',
+      mediaId: 'media-duplicate',
+    })
     const store = new MemoryDocumentStore()
-    store.document = withBdc
+    store.document = withCardMedia
     store.media.set('media-canonical', new Blob(['one']))
     store.media.set('media-duplicate', new Blob(['one']))
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
@@ -87,7 +91,7 @@ describe('Elcé document persistence boundary', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
 
     expect(store.atomicMediaDeletions).toEqual([['media-duplicate']])
-    expect(store.document?.bdcs.find((bdc) => bdc.id === 'bdc-video-existing')?.mediaId).toBe('media-canonical')
+    expect(store.document?.bdcs.find((bdc) => bdc.id === 'bdc-video-existing')?.card?.mediaId).toBe('media-canonical')
     expect(store.media.has('media-duplicate')).toBe(false)
     expect(store.media.has('media-canonical')).toBe(true)
     detach()

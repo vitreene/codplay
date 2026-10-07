@@ -1,5 +1,5 @@
 import { assign, initialTransition, setup, transition } from 'xstate'
-import { ElceChapterEvaluation } from '../chapter-evaluation'
+import { ElceChapterEvaluation } from './chapter-evaluation'
 import { EVALUATION_RETRY_SCOPE } from './evaluation-machine-types'
 import type {
   EvaluationMachineContext,

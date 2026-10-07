@@ -1,6 +1,6 @@
 import type { Actor } from 'xstate'
 import type { controllerMachine } from '../controller/controller-machine'
-import type { ElceDocumentData, PageId } from '../../domain/document-types'
+import type { ElceDocumentData, PageId } from '../../domain/document/document-types'
 import {
   POPUP_PREVIEW_PAGE_PARAM,
   POPUP_PREVIEW_SESSION_PARAM,

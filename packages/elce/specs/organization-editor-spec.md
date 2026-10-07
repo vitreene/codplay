@@ -111,8 +111,8 @@ envoie la commande `bdc.evaluation-result.delete` pour retirer ce BDC placé de
 la page.
 
 Les éditeurs Section, Question et Résultat proposent chacun une corbeille pour
-supprimer leur BDC de la page. Supprimer une Section supprime aussi ses BDC
-image/vidéo ancrés, sans supprimer les ressources média du catalogue. Si la
+supprimer leur BDC de la page. Supprimer une Section supprime aussi les Cartes
+ancrées qui lui appartiennent, sans supprimer les ressources média. Si la
 page devient vide, la barre permet toujours de créer Texte ou Quiz.
 
 Les champs de titre gardent leur saisie dans le DOM pendant l’édition. Le

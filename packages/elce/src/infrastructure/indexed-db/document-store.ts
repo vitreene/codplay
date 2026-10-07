@@ -1,5 +1,5 @@
-import { ElceDocument } from '../../domain/document-model'
-import type { ElceDocumentData, MediaId } from '../../domain/document-types'
+import { ELCE_DOCUMENT_VERSION, ElceDocument } from '../../domain/document/document-model'
+import type { ElceDocumentData, MediaId } from '../../domain/document/document-types'
 import type { ElceDocumentStore, MediaBlob } from './document-store-types'
 
 const DATABASE_NAME = 'elce-poc'
@@ -36,10 +36,33 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
 
   public async loadDocument(documentId: string): Promise<ElceDocument | null> {
     const database = await this.databasePromise
-    const transaction = database.transaction(DOCUMENT_STORE, 'readonly')
-    const data = await requestResult(transaction.objectStore(DOCUMENT_STORE).get(documentId)) as ElceDocumentData | undefined
-    await transactionComplete(transaction)
-    if (data === undefined) return null
+    const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE], 'readwrite')
+    const documentStore = transaction.objectStore(DOCUMENT_STORE)
+    const mediaStore = transaction.objectStore(MEDIA_STORE)
+    const transactionDone = transactionComplete(transaction)
+    let rejectedLegacyDocument = false
+    const data = await new Promise<ElceDocumentData | null>((resolve, reject) => {
+      const request = documentStore.get(documentId)
+      request.onsuccess = () => {
+        const stored = request.result as Record<string, unknown> | undefined
+        switch (stored?.version) {
+          case 3:
+            rejectedLegacyDocument = true
+            documentStore.delete(documentId)
+            mediaStore.clear()
+            resolve(null)
+            return
+          case ELCE_DOCUMENT_VERSION:
+            resolve(stored as unknown as ElceDocumentData)
+            return
+          default:
+            resolve((stored as unknown as ElceDocumentData | undefined) ?? null)
+        }
+      }
+      request.onerror = () => reject(request.error)
+    })
+    await transactionDone
+    if (rejectedLegacyDocument || data === null) return null
     return ElceDocument.fromJSON(data)
   }
 

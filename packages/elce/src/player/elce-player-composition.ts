@@ -6,15 +6,17 @@ import {
   SCROLL_CONTAINER_MODULE_DEFINITION,
   createScrollContainerSourceAdapter,
 } from '@codplay/component-v2'
-import { ELCE_EVENTS, ELCE_SCENARIO, PAGE_TYPE } from '../config/document-config'
-import { buildFluxScene } from '../builders/flux-scene-builder'
-import type { FluxSceneBuildOptions } from '../builders/flux-scene-builder-types'
+import { BDC_TYPE, CHAPTER_TYPE, ELCE_EVENTS, ELCE_SCENARIO, PAGE_TYPE } from '../config/document-config'
+import type { ChapterType } from '../config/document-config-types'
+import { buildFluxScene } from '../builders/flux/flux-scene-builder'
+import type { FluxSceneBuildOptions } from '../builders/flux/flux-scene-builder-types'
 import { buildDiapoScene } from '../builders/diapo/diapo-scene-builder'
-import { buildScenario } from '../builders/scenario-builder'
-import { validateHtmlElementMethodActions } from '../builders/html-element-method-validation'
-import type { ElceSceneKey, ElceSlotName } from '../builders/scenario-builder-types'
-import type { ElceDocument } from '../domain/document-model'
+import { buildScenario } from '../builders/scenario/scenario-builder'
+import { validateHtmlElementMethodActions } from '../builders/markup-validation/html-element-method-validation'
+import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
+import type { ElceDocument } from '../domain/document/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
+import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
@@ -201,26 +203,40 @@ export function createPageSceneCatalog(
     const page = document.pages.find((candidate) => candidate.id === pageId)
     if (page === undefined) throw new Error(`Page absente du document : ${pageId}`)
     const pageBdcs = page.bdcIds.map((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId))
-    const carouselCardBdcIds = new Set(pageBdcs.flatMap((bdc) => bdc?.carousel?.cards.map((entry) => entry.bdcId) ?? []))
-    const carouselCardBdcs = document.bdcs.filter((bdc) => carouselCardBdcIds.has(bdc.id))
-    const mediaIds = new Set(pageBdcs.flatMap((bdc) => [
-      ...(bdc?.mediaId === null || bdc?.mediaId === undefined ? [] : [bdc.mediaId]),
-    ]).concat(carouselCardBdcs.flatMap((bdc) => bdc.mediaId === null ? [] : [bdc.mediaId])))
+    const chapterType = page.chapterId === null
+      ? undefined
+      : document.chapters.find((chapter) => chapter.id === page.chapterId)?.type
+    const sceneChapterType = chapterType === CHAPTER_TYPE.EVALUATION ? CHAPTER_TYPE.EVALUATION : undefined
+    const pageBdcIds = new Set(pageBdcs.flatMap((bdc) => bdc === undefined ? [] : [bdc.id]))
+    const childBdcs = document.bdcs.filter((bdc) => bdc.parentBdcId !== null && pageBdcIds.has(bdc.parentBdcId))
+    const sceneBdcs = pageBdcs.flatMap((bdc) => bdc === undefined ? [] : [bdc]).concat(childBdcs)
+    const mediaIds = new Set(sceneBdcs.flatMap((bdc) => {
+      switch (bdc.type) {
+        case BDC_TYPE.CARD:
+          return bdc.card?.mediaId == null ? [] : [bdc.card.mediaId]
+        case BDC_TYPE.QUESTION:
+          return bdc.question?.mediaId == null ? [] : [bdc.question.mediaId]
+        default:
+          return []
+      }
+    }))
     const pageMediaSources = Object.fromEntries([...mediaIds].flatMap((mediaId) => {
       const source = mediaSources?.[mediaId]
       return source === undefined ? [] : [[mediaId, source]]
     }))
     const pageMediaTypes = Object.fromEntries([...mediaIds].flatMap((mediaId) => {
-      const type = document.medias.find((media) => media.id === mediaId)?.type
-      return type === undefined ? [] : [[mediaId, type]]
+      const media = document.medias.find((candidate) => candidate.id === mediaId)
+      if (media === undefined) return []
+      const type = mediaTypeFromMimeType(media.mimeType)
+      return type === null ? [] : [[mediaId, type]]
     }))
     const scenePage = {
       id: page.id,
       type: page.type,
       bdcIds: page.bdcIds,
-      chapterId: pageBdcs.some((bdc) => bdc?.evaluationResult != null) ? page.chapterId : undefined,
+      chapterType: sceneChapterType,
     }
-    const signature = JSON.stringify([scenePage, pageBdcs, pageMediaSources, pageMediaTypes])
+    const signature = JSON.stringify([scenePage, sceneBdcs, pageMediaSources, pageMediaTypes, document.data.revelationDefaults])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
       pageStyleSheets.push(...cached.styleSheets)
@@ -229,7 +245,8 @@ export function createPageSceneCatalog(
     const scene = buildPageScene(page, document.bdcs, {
       mediaSources: pageMediaSources,
       mediaTypes: pageMediaTypes,
-    })
+      revelationDefaults: document.data.revelationDefaults,
+    }, sceneChapterType)
     pageStyleSheets.push(...scene.styleSheets)
     const questionReset = scene.questionReset
     const source: SightySceneSourceValue = questionReset === undefined ? scene.sceneDoc : {
@@ -249,12 +266,16 @@ function buildPageScene(
   page: ElceDocument['pages'][number],
   bdcs: ElceDocument['bdcs'],
   options: FluxSceneBuildOptions,
+  chapterType: ChapterType | undefined,
 ) {
   switch (page.type) {
     case PAGE_TYPE.FLUX:
       return buildFluxScene(page, bdcs, options)
-    case PAGE_TYPE.DIAPO:
-      return buildDiapoScene(page, bdcs, options)
+      case PAGE_TYPE.DIAPO:
+        return buildDiapoScene(page, bdcs, {
+          ...options,
+        ...(chapterType === undefined ? {} : { chapterType }),
+      })
   }
 }
 

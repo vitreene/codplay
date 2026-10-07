@@ -11,5 +11,6 @@ export interface CardPreset {
     readonly label: string
     readonly required: boolean
     readonly content: CardPresetContent
+    readonly className?: string
   }[]
 }

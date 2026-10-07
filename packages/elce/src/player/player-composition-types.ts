@@ -1,5 +1,5 @@
-import type { ElceDocument } from '../domain/document-model'
-import type { MediaId, PageId } from '../domain/document-types'
+import type { ElceDocument } from '../domain/document/document-model'
+import type { MediaId, PageId } from '../domain/document/document-types'
 import type { SightySceneSourceValue } from '@codplay/sighty'
 
 export type ElcePageSceneCache = Map<string, Readonly<{

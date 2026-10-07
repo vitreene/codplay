@@ -1167,7 +1167,7 @@ relance l’Évaluation envoie l’événement de reprise à la machine. Le POC 
 ces deux BDC et leurs actions ; leur construction et leur raccord au player
 restent à réaliser.
 
-Le calcul pur est implémenté dans `src/domain/chapter-evaluation.ts` ; le
+Le calcul pur est implémenté dans `src/domain/evaluation/chapter-evaluation.ts` ; le
 constructeur de scénario Sighty l’applique au départ de la dernière page d’un
 chapitre Évaluation. `scenario-builder.test.ts` vérifie les gardes sur 4/5,
 3/5, les réponses absentes et un chapitre sans Question. L’éditeur permet de

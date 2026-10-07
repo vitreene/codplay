@@ -39,7 +39,7 @@ preuves qui permettent de fermer chaque tranche.
 | 5 | Évaluation de chapitre | En cours — icône, édition, retrait et compilation CodPlay du BDC Résultat vérifiés ; intégration player restante. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
-| 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
+| 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
@@ -508,6 +508,67 @@ intégration dépendante ; les travaux indépendants continuent.
   son affichage ; le Quiz après validation ; le Carousel quand sa dernière
   vue apparaît. Sighty réutilise son action existante. Aucun changement
   CodPlay n’est requis. Voir la [spécification Diapo](../specs/diapo-scene-builder-spec.md).
+- Travail appliqué et vérifié le 7 octobre 2026 : les markup Elcé emploient les
+  commentaires `<!-- data-part="…" -->` comme ancres CodPlay d’insertion. Un
+  commentaire remplace l’hôte vide ; lorsqu’un conteneur porte une fonction
+  sémantique ou visuelle, il reste en place et reçoit le commentaire. Les
+  éléments texte vides en doublon sont retirés afin que le perso inséré soit
+  lui-même le titre, le paragraphe ou le pied de carte. Le preset Question ne
+  garde pas de conteneur vide dédié à ses contrôles de validation. Les 158 tests,
+  le typecheck et le build Elcé passent ; Safari MCP vérifie le montage d’une
+  image de Carousel dans une Diapo par la composition réelle Sighty/CodPlay et
+  une console sans erreur ni avertissement. Les conteneurs nécessaires au rendu
+  (cadres, grilles, régions sémantiques et contrôles) restent présents.
+- Changement implémenté et vérifié le 7 octobre 2026 — **DOM du Carousel Diapo** :
+  la région `content` du layout et son slot sont une seule `section` portant les
+  attributs et classes de la région ; la racine du Carousel Diapo réunit le
+  layout, le cadre, la grille Capsule et le `scroll-container` observé, sans
+  hôte Diapo ni wrappers `frame`/`completion-root` supplémentaires. Les cartes
+  ciblent cette racine directement par son ID de perso. La racine Photo reste
+  présente et porte les classes de la vue (l’`article` extérieur est retiré
+  pour ce cas) ; elle pourra évoluer vers `<picture>` avec légende. Le
+  conteneur vidéo peut accueillir des éléments `<track>`. Le BDC Carte qui porte
+  le marqueur final reste présent, ainsi que le conteneur média CodPlay et
+  `img.cp-img-inner` requis par le composant `img`.
+  Acceptance vérifiée : Safari MCP observe cinq éléments entre la région de
+  contenu et l’image, son chargement, le changement de carte par les points,
+  une seule vue visible, la grille en deux lignes et une console sans erreurs.
+  Les tests player vérifient le signal de fin, la chaîne de six éléments au
+  maximum et le replay A → B → A : structure et source de l’image identiques au
+  retour, première carte réactivée. Les parcours Flux et Carte/Question Diapo
+  sont couverts par la suite Elcé (22 fichiers, 160 tests réussis) ; typecheck
+  et build passent. Le build conserve son avertissement existant de chunk
+  supérieur à 500 kB. Voir les preuves dans les spécifications du
+  [builder Diapo](../specs/diapo-scene-builder-spec.md) et du
+  [Carousel](../specs/carousel-bdc-spec.md).
+- Revue transversale acceptée le 7 octobre 2026 — **structure DOM des BDC,
+  Fini** : seuls restent les éléments HTML qui remplissent une fonction
+  vérifiée (sémantique, mise en page/cadrage, interaction ou montage CodPlay).
+  Les parts de montage seules sont des commentaires. Les contenus texte
+  facultatifs vides ne produisent pas de perso ni de balise ; un hôte Question
+  n’est présent que si son titre ou son illustration existe. Le paragraphe de
+  retour du Quiz reste un perso caché `aria-live`, car CodPlay y affiche le
+  résultat après validation. Les branches et titres du BDC Résultat, le
+  formulaire/fieldset, les médias, grilles, cadres de ratio et boutons gardent
+  leur rôle. Le wrapper `body` de Section est la frontière contractuelle du HTML
+  Tiptap et reste en place. Le wrapper Photo reste disponible pour un futur
+  `<picture>`/une légende ou des `<track>` vidéo. Le wrapper `frame` du Carousel
+  Flux a été retiré : le commentaire d’insertion Capsule suffit et la grille
+  garde Capsule et navigation comme enfants directs ; les règles CSS dédiées à
+  l’ancien wrapper et ses classes obsolètes du root Diapo ont aussi été
+  retirés. Le preset `Message`, qui
+  n’était ni sélectionnable ni pris en charge par le builder, a été retiré ; la
+  configuration contient maintenant seulement les quatre layouts Carte
+  contractuels et les presets consommés par les autres BDC. Les tests vérifient
+  les sorties vides et remplies, et les variantes Flux/Diapo. 22 fichiers de
+  tests (163 tests), typecheck et build passent. Safari MCP vérifie une vraie
+  composition Sighty/CodPlay du Carousel Flux : Capsule et `nav` sont enfants
+  directs de sa racine, aucun wrapper `frame` n’existe, le ratio calculé est
+  16:9, l’image charge et les points sélectionnent les deux vues. Le build garde
+  son avertissement de chunk supérieur à 500 kB. Les preuves détaillées sont
+  dans les spécifications [Question](../specs/question-bdc-spec.md),
+  [Résultat](../specs/chapter-evaluation-spec.md), [Carte/Carousel](../specs/carousel-bdc-spec.md),
+  [Flux](../specs/flux-scene-builder-spec.md) et [Diapo](../specs/diapo-scene-builder-spec.md).
 - Acceptation du 6 octobre 2026 : Brave DevTools sur le serveur de référence
   5175 vérifie les trois chemins avec une page suivante : la Carte autonome
   déverrouille « Suivant » dès son affichage, le Quiz après validation et le

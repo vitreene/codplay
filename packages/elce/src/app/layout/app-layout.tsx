@@ -5,7 +5,7 @@ import { Archive, BadgeCheck, ClipboardCheck, FilePlus, FileText, Folder, Folder
 import './app-layout.css'
 
 import { ANCHOR_RETURN, BDC_ORDER, BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, EVALUATION_RETRY_SCOPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
-import type { ChapterType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
+import type { CardLayoutId, ChapterType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import {
   createChapterCommand,
   createChapterMoveCommand,
@@ -18,27 +18,28 @@ import {
 } from '../commands/document-commands'
 import type { PagePlacement } from '../commands/document-command-types'
 import type { AppLayoutProps } from './app-layout-types'
-import { SectionEditor } from '../editor/section-editor'
-import { CarouselEditor } from '../editor/carousel-editor'
-import { QuestionEditor } from '../editor/question-editor'
-import { EvaluationResultEditor } from '../editor/evaluation-result-editor'
+import { SectionEditor } from '../editor/section/section-editor'
+import { CarouselEditor } from '../editor/carousel/carousel-editor'
+import { QuestionEditor } from '../editor/question/question-editor'
+import { EvaluationResultEditor } from '../editor/evaluation-result/evaluation-result-editor'
 import { CardEditor } from '../editor/card/card-editor'
 import { PlayerPreview } from '../player/player-preview'
 import { PopupPreviewHost } from '../player/popup-preview-host'
 import { PREVIEW_SURFACE } from '../player/preview-surface-config'
-import { createStableId } from '../../domain/document-model'
-import type { ElceDocument } from '../../domain/document-model'
-import type { Chapter } from '../../domain/document-types'
-import { ElceAnchorDropFacade } from '../../domain/anchor-drop-facade'
-import { ElcePageMediaService } from '../../domain/page-media-service'
-import { ElceQuestionFacade } from '../../domain/question-facade'
-import { ElceCarouselFacade, createCarouselBdcId } from '../../domain/carousel-facade'
+import { createStableId } from '../../domain/document/document-model'
+import type { ElceDocument } from '../../domain/document/document-model'
+import type { Chapter } from '../../domain/document/document-types'
+import { ElceAnchorDropFacade } from '../../domain/anchor/anchor-drop-facade'
+import { ElcePageMediaService } from '../../domain/media/page-media-service'
+import { ElceQuestionFacade } from '../../domain/question/question-facade'
+import { ElceCarouselFacade, createCarouselBdcId } from '../../domain/carousel/carousel-facade'
 import { ElceCardFacade } from '../../domain/card/card-facade'
-import type { ElceQuestionEditorActions } from '../../domain/question-facade-types'
-import type { QuestionContent } from '../../domain/question-types'
+import { mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
+import type { ElceQuestionEditorActions } from '../../domain/question/question-facade-types'
+import type { QuestionContent } from '../../domain/question/question-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
-import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog-types'
-import type { ScenarioEntry } from '../../domain/scenario-entry-types'
+import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog/catalog-types'
+import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
 
 const pageMediaService = new ElcePageMediaService()
 const PROPERTIES_DRAWER_BREAKPOINT_PX = 1200
@@ -166,14 +167,15 @@ export function AppLayout({ controller }: AppLayoutProps) {
     && (selectedPage?.type !== PAGE_TYPE.DIAPO || !pageHasContent)
   const canCreateSection = pageAllowsSection(selectedPage)
   const canCreateEvaluationResult = pageAllowsEvaluationResult(selectedPage, documentModel.chapters)
+    && (selectedPage?.type !== PAGE_TYPE.DIAPO || !pageHasContent)
   const canCreateCarousel = selectedPage?.type === PAGE_TYPE.FLUX
     || (selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent && !pageHasCarousel)
-  const canCreateStandaloneCard = selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent
-  const mediaById = Object.fromEntries(documentModel.medias.map((media) => [media.id, {
-    name: media.name,
-    type: media.type,
-    source: mediaSources[media.id] ?? null,
-  }]))
+  const canCreateStandaloneCard = selectedPage?.type === PAGE_TYPE.FLUX
+    || (selectedPage?.type === PAGE_TYPE.DIAPO && !pageHasContent)
+  const mediaById = Object.fromEntries(documentModel.medias.flatMap((media) => {
+    const type = mediaTypeFromMimeType(media.mimeType)
+    return type === null ? [] : [[media.id, { name: media.name, type, source: mediaSources[media.id] ?? null }]]
+  }))
   const catalogContents = anchorDropFacade.catalogContents(documentModel)
   const unanchoredMediaBdcs = selectedPage === undefined || selectedChapter !== undefined
     ? []
@@ -343,6 +345,9 @@ export function AppLayout({ controller }: AppLayoutProps) {
   const addEvaluationResult = () => {
     switch (selectedPage?.type) {
       case PAGE_TYPE.FLUX:
+      case PAGE_TYPE.DIAPO:
+        if (!pageAllowsEvaluationResult(selectedPage, documentModel.chapters)) return
+        if (selectedPage.type === PAGE_TYPE.DIAPO && selectedPage.bdcIds.length > 0) return
         controller.send({
           type: 'document.apply',
           command: createEvaluationResultBdcCommand(
@@ -352,7 +357,6 @@ export function AppLayout({ controller }: AppLayoutProps) {
           ),
         })
         return
-      case PAGE_TYPE.DIAPO:
       default:
         return
     }
@@ -380,9 +384,9 @@ export function AppLayout({ controller }: AppLayoutProps) {
     }
   }
 
-  /** Adds the reusable standalone Card model as the Diapo's only direct BDC. */
+  /** Adds a unique Card BDC directly to a page. */
   const addStandaloneCard = () => {
-    if (selectedPage?.type !== PAGE_TYPE.DIAPO || pageHasContent) return
+    if (selectedPage === undefined || (selectedPage.type === PAGE_TYPE.DIAPO && pageHasContent)) return
     controller.send({
       type: 'document.apply',
       command: createStandaloneCardBdcCommand(createStableId('bdc-card'), selectedPage.id),
@@ -736,12 +740,12 @@ export function AppLayout({ controller }: AppLayoutProps) {
                   disabled={!canCreateCarousel}
                   onClick={addCarousel}
                 ><Images aria-hidden="true" size={17} strokeWidth={2} /></button>
-                {selectedPage?.type === PAGE_TYPE.DIAPO && <button
+                {selectedPage !== undefined && <button
                   id="elce-card-create"
                   className="elce-icon-action"
                   type="button"
-                  aria-label="Ajouter une carte autonome"
-                  title="Ajouter une carte autonome"
+                  aria-label="Ajouter une carte"
+                  title="Ajouter une carte"
                   disabled={!canCreateStandaloneCard}
                   onClick={addStandaloneCard}
                 ><RectangleHorizontal aria-hidden="true" size={17} strokeWidth={2} /></button>}
@@ -820,15 +824,32 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                 selectedPage.id,
                                 bdc.id,
                               )}
-                              resolveMediaSource={(mediaId) => mediaSources[mediaId] ?? null}
+                              resolveCard={(anchorBdcId) => {
+                                const card = documentModel.bdcs.find((candidate) => candidate.id === anchorBdcId)
+                                if (card?.type !== BDC_TYPE.CARD || card.card == null) return null
+                                const mediaId = card.card.mediaId
+                                if (mediaId === null) return null
+                                const media = documentModel.medias.find((candidate) => candidate.id === mediaId)
+                                const source = mediaSources[mediaId]
+                                const type = media === undefined ? null : mediaTypeFromMimeType(media.mimeType)
+                                return media === undefined || source === undefined || type === null
+                                  ? null
+                                  : { source, type, layoutId: card.presetId as CardLayoutId }
+                              }}
+                              anchorCards={documentModel.bdcs.filter((candidate) => candidate.type === BDC_TYPE.CARD && candidate.parentBdcId === bdc.id)}
+                              mediaById={mediaById}
+                              cardActions={cardFacade.createEditorActions(documentModel.bdcs)}
                               onChange={(change) => anchorDropFacade.submitSectionChange(bdc.id, change)}
                             />
                           : bdc.type === BDC_TYPE.QUESTION && bdc.question !== null
                             ? <QuestionEditor
                                 bdcId={bdc.id}
                                 question={bdc.question}
-                                media={documentModel.medias.find((media) => media.id === bdc.mediaId) ?? null}
-                                mediaSource={bdc.mediaId === null ? null : mediaSources[bdc.mediaId] ?? null}
+                                media={documentModel.medias.find((media) => media.id === bdc.question?.mediaId) ?? null}
+                                mediaType={bdc.question?.mediaId == null
+                                  ? null
+                                  : mediaTypeFromMimeType(documentModel.medias.find((media) => media.id === bdc.question?.mediaId)?.mimeType ?? '')}
+                                mediaSource={bdc.question?.mediaId == null ? null : mediaSources[bdc.question.mediaId] ?? null}
                                 actions={createQuestionEditorActions(questionFacade, bdc.id, bdc.question)}
                                 onCatalogReference={(value) => questionFacade.attachMediaReference(bdc.id, value)}
                               />
@@ -852,7 +873,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                                   cards={carouselCards}
                                   selectedCardBdcId={selectedCarouselCardBdcId}
                                   mediaById={mediaById}
-                                  actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel, carouselCards)}
+                                  actions={carouselFacade.createEditorActions(bdc.id, bdc.carousel, carouselCards, documentModel.data.revelationDefaults)}
                                 />
                               : bdc.type === BDC_TYPE.CARD && bdc.card !== null
                               ? <CardEditor
@@ -1006,7 +1027,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
                 <h2 id="elce-page-media-title">Médias dans la page</h2>
                 <ul id="elce-page-media-list" className="elce-media-catalog-list">
                   {unanchoredMediaBdcs.map((bdc) => {
-                    const media = documentModel.medias.find((candidate) => candidate.id === bdc.mediaId)
+                    const media = documentModel.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
                     return (
                       <li id={`elce-page-media-${bdc.id}`} key={bdc.id} className="elce-media-catalog-row">
                         <span id={`elce-page-media-name-${bdc.id}`}>{media?.name ?? bdc.type}</span>
@@ -1547,9 +1568,19 @@ function pageAllowsEvaluationResult(
           return false
       }
     }
-    case PAGE_TYPE.DIAPO:
-    default:
-      return false
+    case PAGE_TYPE.DIAPO: {
+      const chapter = page.chapterId === null
+        ? undefined
+        : chapters.find((candidate) => candidate.id === page.chapterId)
+      switch (chapter?.type) {
+        case CHAPTER_TYPE.EVALUATION:
+          return true
+        case CHAPTER_TYPE.STANDARD:
+        case undefined:
+          return false
+      }
+    }
+    default: return false
   }
 }
 

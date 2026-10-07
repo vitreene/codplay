@@ -19,9 +19,9 @@ des persos CodPlay est décrit dans la
 
 `ElceAnchorExtension` représente une insertion de bdc comme un nœud inline
 atomique et déplaçable. Ses attributs métier sont `bdcId`, `partId` et
-`paddingBottom`. Un dépôt de fichier ajoute `mediaId` et `mediaType` afin que
-la surface d’édition puisse résoudre son aperçu ; ces attributs ne changent pas
-la projection du bdc dans la scène. L’éditeur affiche une prise déplaçable ;
+`paddingBottom`. L’extension ne stocke ni `mediaId` ni type de média :
+l’éditeur résout la Carte par `bdcId`, puis lit `card.mediaId` et le MIME de la
+ressource pour afficher son aperçu. L’éditeur affiche une prise déplaçable ;
 l’export statique produit un seul `span` avec `id`, `data-part`, `data-bdc-id`
 et `data-elce-anchor`. À la première insertion, le `padding-bottom` a un ratio
 provisoire défini dans la configuration. Après chargement de l’image, le
@@ -33,9 +33,11 @@ ajoute la marge supérieure `ANCHOR.DEFAULT_BDC_MARGIN_TOP`, également définie
 dans la configuration et non éditable dans le POC.
 
 Le nœud ne crée aucun élément CodPlay et ne contient pas de HTML saisi par
-l’auteur. Le builder Flux relit les ancres exportées dans les Sections avant
-de projeter le player : si le `data-bdc-id` correspond à un bdc image ou vidéo
-de la page, l’ancre d’édition est remplacée par un `span` de flux inline à
+l’auteur. Une Carte ancrée est un BDC enfant de la Section qui l’emploie : son
+`parentBdcId` désigne la Section, `pageId` vaut `null` et son identifiant
+n’apparaît pas dans `page.bdcIds`. Le builder Flux relit les ancres exportées
+dans les Sections : si le `data-bdc-id` correspond à cette Carte enfant,
+l’ancre d’édition est remplacée par un `span` de flux inline à
 largeur nulle, porteur du `data-part` et de la réservation verticale. Le
 `span` d’ancrage propre à l’éditeur et ses attributs métier ne sont pas rendus
 dans le player. Le perso média CodPlay est monté directement dans ce slot et
@@ -65,10 +67,9 @@ un markup plus récent. Le composant d’édition ne possède aucune mutation
 documentaire.
 
 Avant cette sauvegarde, le worker de la même file demande au service média de
-comparer le fichier aux ressources de même catégorie et de même taille, puis
-aux octets conservés, par SHA-256. Un fichier identique réutilise l’entrée et
-le blob existants, quel que soit son nom ; le dépôt garde son nouvel
-identifiant de BDC. Des octets différents créent une nouvelle ressource média.
+comparer le fichier aux ressources de même taille, puis aux octets conservés,
+par SHA-256. Un fichier identique réutilise l’entrée et le blob existants,
+quel que soit son nom ou son MIME ; le dépôt garde son nouvel identifiant de BDC. Des octets différents créent une nouvelle ressource média.
 Le contrôleur sérialise les imports afin qu’un second dépôt attende le commit
 du premier avant la comparaison.
 
@@ -99,18 +100,18 @@ conserve son identifiant et sa ressource média, et réaffecte le BDC au
 catalogue. Le BDC n’est ni cloné ni supprimé.
 
 Une édition ordinaire du texte (`kind: 'content'`) met à jour la Section par
-`bdc.section.update`. [`ElceAnchorReferenceService`](../src/domain/anchor-reference-service.ts)
+`bdc.section.update`. [`ElceAnchorReferenceService`](../src/domain/anchor/anchor-reference-service.ts)
 compare les identifiants présents dans l’ancien et le nouveau document riche ;
 chaque BDC ancré qui n’est plus référencé est supprimé dans la même commande,
 et son média reste conservé. Le BDC est le transport unique d’une insertion ;
 il référence la ressource média réutilisable au lieu de la remplacer.
 La suppression d’une Section par `bdc.section.delete` applique la même règle à
-toutes ses ancres : les BDC image/vidéo sont supprimés avec la Section, leurs
-ressources média restent disponibles dans le catalogue.
-`applyDocumentCommand` vérifie les invariants
-avant de rendre chaque nouveau document : une ancre référence un seul bdc
-image ou vidéo de la même page, et un bdc ancré ne peut pas être déplacé vers
-le catalogue ou une autre page sans supprimer son ancre. ProseMirror applique
+toutes ses ancres : les Cartes enfants ancrées sont supprimées avec la Section,
+leurs ressources média restent disponibles.
+`applyDocumentCommand` vérifie les invariants avant de rendre chaque nouveau
+document : une ancre référence une seule Carte enfant de sa Section, et une
+Carte ancrée ne peut pas être déplacée vers le catalogue ou une autre page sans
+retirer son ancre. ProseMirror applique
 `transformPasted` aux collages et aussi à la tranche d’un glisser-déposer avant
 d’appeler `handleDrop`. Au `dragstart`, l’extension mémorise la position de
 l’ancre source ; si cette tranche contient cette ancre locale, le filtre la
@@ -135,7 +136,7 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
 
 ## Preuve
 
-- [`elce-anchor-extension.test.ts`](../src/app/editor/elce-anchor-extension.test.ts)
+- [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
   vérifie la conversion JSON → `span` statique, les attributs de ciblage,
   l’aperçu de l’image et le déplacement d’une ancre image par le chemin complet
   `dragstart` → ProseMirror → `drop` → commande de déplacement. Le test vérifie
@@ -143,16 +144,16 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
   duplique pas. Le test du retour couvre le cas Safari où `dragend` garde
   `dropEffect: move` avec une liste de types vide. Il couvre aussi le collage
   qui retire les ancres.
-- [`flux-anchor-player-markup.test.ts`](../src/builders/flux-anchor-player-markup.test.ts)
+- [`flux-anchor-player-markup.test.ts`](../src/builders/flux/flux-anchor-player-markup.test.ts)
   vérifie que la projection conserve le texte, remplace l’ancre d’édition par
   un slot de flux inline à largeur nulle et conserve la cible logique du bdc.
-- [`flux-scene-builder.test.ts`](../src/builders/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie que le builder dirige le perso image vers la part du slot projeté
   sans générer un second hôte média.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie le montage de l’image dans le slot projeté par le runtime réel
   Sighty/CodPlay.
-- [`anchor-drop-service.test.ts`](../src/domain/anchor-drop-service.test.ts)
+- [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
   vérifie la whitelist, la construction du commandement et le passage par la
   façade métier.
 - [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
@@ -177,10 +178,10 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
 - Après un rechargement complet ayant chargé le correctif dans le plugin Tiptap,
   le glisser physique de Page A vers « Blocs disponibles » retire
   `bdc-video-d49f2d52-8e10-4f77-977a-c57bd16df6d0` de la page et le rend
-  disponible sous le même identifiant. L’autre BDC vidéo reste ancré. Le retour
+  disponible sous le même identifiant. L’autre Carte reste ancrée. Le retour
   et la conservation de l’ancre restante persistent après un nouveau
   rechargement Safari.
-- [`elce-anchor-extension.test.ts`](../src/app/editor/elce-anchor-extension.test.ts)
+- [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
   vérifie que le collage de texte conserve les mots et retire les ancres
   copiées, et qu’un glisser-déposer en mode copie est arrêté.
 
