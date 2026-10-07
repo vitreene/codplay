@@ -1,11 +1,11 @@
-import { CATALOG_REFERENCE } from '../../config/document-config'
-import type { CardLayoutId } from '../../config/document-config-types'
+import { CATALOG_REFERENCE } from '../../../config/document-config'
+import type { CardLayoutId } from '../../../config/document-config-types'
 import type { ElceCardEditorActions, ElceCardFacadeOptions } from './card-facade-types'
-import type { CardContent, CardTextField } from './card-types'
-import type { ElceCatalogReference } from '../catalog/catalog-types'
-import type { Bdc, BdcId } from '../document/document-types'
-import { ElceMediaResourceService } from '../media/media-resource-service'
-import { ElceCardService } from './card-service'
+import type { CardContent, CardTextField } from '../../../domain/card/card-types'
+import type { ElceCatalogReference } from '../../../domain/catalog/catalog-types'
+import type { Bdc, BdcId } from '../../../domain/document/document-types'
+import { ElceMediaResourceService } from '../../../domain/media/media-resource-service'
+import { ElceCardService } from '../../../domain/card/card-service'
 
 /** Routes shared standalone and Carousel Card edits through document commands. */
 export class ElceCardFacade {

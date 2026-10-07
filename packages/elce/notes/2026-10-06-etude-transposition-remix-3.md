@@ -1,14 +1,14 @@
 # Elcé — étude de faisabilité d’une transposition vers Remix 3
 
-**État : étude documentaire terminée — faisable sous conditions ; intégration non éprouvée.** Recherche vérifiée le 6 octobre 2026, sans modification de code.
+**État : faisabilité établie ; migration engagée le 7 octobre 2026 ; intégration Remix non éprouvée.** Les informations de version ont été revérifiées le 7 octobre 2026.
 
 ## Conclusion
 
 Le remplacement React par Remix concerne l’interface auteur de l’éditeur. Il est techniquement faisable sans déplacer le modèle métier : seules les vues de l’éditeur et leur raccord au contrôleur sont remplacés. Le volet routes/API du projet reste décrit dans le plan local-first. Les classes métier, commandes, façades, machine XState, modèle documentaire et stockage IndexedDB gardent leurs responsabilités. Le rendu et la lecture du player restent dans le circuit Sighty/CodPlay, hors du portage de l’interface.
 
-La cible qui retire React est **Remix 3.0.0**, dont le changelog officiel annonce la première version stable. Le dépôt local utilise Node 22.14.0, tandis que le manifeste Remix consulté demande Node 24.3.0 ou plus récent. L’auteur accepte de faire évoluer Node avant le portage. Le POC actuel reste la référence stable à préserver pendant la migration.
+La cible fonctionnelle acceptée est **Remix 3**. Au 7 octobre 2026, le changelog officiel et le registre npm indiquent encore `3.0.0-rc.4` sous le tag `next`; le tag `latest` reste `2.17.5`. La version 3 stable n’est donc pas publiée. L’auteur a choisi de commencer le portage avec `3.0.0-rc.4`, fixé dans le workspace Elcé. Ce workspace déclare Node `>=24.3.0`, satisfait par le Node local `26.10.0`.
 
-Remix 3 apporte un runtime de composants JSX qui ne dépend pas de React : un composant reçoit un handle, rend une vue et peut recevoir des événements via les interfaces du framework. L’entrée stable est `remix/component` ; le changement depuis `remix/ui` est décrit dans le changelog 3.0. Le runtime ne fournit pas une collection de composants visuels prêts à l’emploi. Les primitives accessibles restent dans le paquet séparé `@remix-run/ui`, signalé comme instable et indépendant. Pour Elcé, l’interface auteur s’appuie donc sur les composants génériques du runtime, le HTML natif et les styles existants, sans bibliothèque spécialisée de composants.
+Remix 3 apporte un runtime de composants JSX qui ne dépend pas de React : un composant reçoit un handle, rend une vue et peut recevoir des événements via les interfaces du framework. Les noms d’exports ont évolué pendant les versions préliminaires ; la documentation de la RC actuelle utilise `remix/ui`. Vérifier les imports contre la version effectivement choisie avant l’implémentation. Le runtime ne fournit pas à lui seul le design system d’Elcé ; l’interface auteur conserve ses styles et ses éléments HTML natifs.
 
 ## Correspondance avec Elcé
 
@@ -82,8 +82,8 @@ Sighty/CodPlay continue de prendre en charge le player.
 
 - L’enjeu principal est de reprendre l’interface auteur de l’éditeur avec le runtime Remix : remplacer les composants React, raccorder les snapshots XState et réécrire les tests d’interaction. Le modèle de document, ses invariants, les façades de commandes et les builders restent en place.
 - Le point technique le plus sensible dans l’éditeur est Tiptap : la création et le nettoyage de Editor, la toolbar liée à la sélection, les NodeView, l’ancrage et le drag-and-drop doivent être validés dans un petit parcours avant de porter toute l’interface.
-- Remix 3 utilise Node 24.3.0 ou plus récent selon son manifeste. Le Node courant du dépôt ne satisfait pas cette exigence.
-- La version stable a retiré ses primitives visuelles du paquet remix. Le runtime peut remplacer React ; il ne remplace pas le design Elcé.
+- Remix 3 utilise Node 24.3.0 ou plus récent selon son manifeste. Le workspace Elcé déclare ce minimum et le Node local est 26.10.0.
+- Remix 3 reste en préversion à cette date ; le workspace Elcé fixe explicitement la RC acceptée. Le runtime peut remplacer React ; il ne remplace pas le design Elcé.
 - Les interactions de l’éditeur et Tiptap doivent rester vérifiées dans Safari, Firefox et Chromium. Le player conserve son parcours d’acceptation Sighty/CodPlay existant et n’est pas un critère de migration Remix.
 
 La conclusion de faisabilité est positive. Le préalable technique qui reste à
@@ -97,20 +97,22 @@ ProseMirror lors d’une navigation de frame. Si `data-rmx-preserve-dom` est
 nécessaire, éprouver ce mécanisme documenté sur le plus petit hôte Tiptap avant
 d’étendre le portage. Ne pas remplacer cette preuve par une recherche DOM
 globale. Le contrôle de prévisualisation doit continuer à appeler le player
-existant sans porter son rendu dans Remix. Mettre Node à niveau vers la version
-minimale déclarée par Remix avant ce parcours.
+existant sans porter son rendu dans Remix. Le minimum Node est maintenant
+déclaré dans le workspace ; la version Remix doit être choisie avant son
+installation.
 
 ## Sources officielles consultées
 
-- [Remix 3 changelog — version 3.0.0 stable et changements d’API](https://github.com/remix-run/remix/blob/main/packages/remix/CHANGELOG.md)
+- [Remix 3 changelog — versions RC et changements d’API](https://github.com/remix-run/remix/blob/main/packages/remix/CHANGELOG.md)
+- [Versions et tags npm de Remix](https://www.npmjs.com/package/remix?activeTab=versions)
 - [Manifeste du paquet Remix — moteur Node requis](https://github.com/remix-run/remix/blob/main/packages/remix/package.json)
 - [Remix — Rendering UI](https://guides.remix.run/rendering-ui/)
 - [Remix — Interactivity and clientEntry](https://guides.remix.run/interactivity/)
 - [Remix — SPA runtime](https://api.remix.run/api/remix/spa/overview/)
 - [Remix — SPA `run()`](https://api.remix.run/api/remix/spa/function/run/)
-- [Remix — `Handle` du composant](https://api.remix.run/api/remix/component/interface/Handle/)
-- [Remix — contexte du composant](https://api.remix.run/api/remix/component/interface/Context/)
-- [Remix — préservation du DOM client](https://api.remix.run/api/remix/component/jsx-runtime/overview/)
+- [Remix — `Handle` du runtime UI](https://api.remix.run/api/remix/ui/interface/Handle/)
+- [Remix — contexte du runtime UI](https://api.remix.run/api/remix/ui/interface/Context/)
+- [Remix — préservation du DOM client](https://api.remix.run/api/remix/ui/overview/)
 - [Remix — Routing and Controllers](https://guides.remix.run/routing-and-controllers/)
 - [Remix — Data and Validation, SQLite and migrations](https://guides.remix.run/data-and-validation/)
 - [Remix — Files and Assets](https://guides.remix.run/files-and-assets/)

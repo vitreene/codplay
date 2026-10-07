@@ -1,6 +1,6 @@
 import { assign, fromPromise, setup } from 'xstate'
-import { applyDocumentCommand, createDefaultPageCommand } from '../commands/document-commands'
-import type { DocumentCommand } from '../commands/document-command-types'
+import { applyDocumentCommand, createDefaultPageCommand } from '../../domain/commands/document-commands'
+import type { DocumentCommand } from '../../domain/commands/document-command-types'
 import { BDC_TYPE, CATALOG_TAB } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'

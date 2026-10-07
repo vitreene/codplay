@@ -77,7 +77,7 @@ sans Question et l’absence de paragraphes Résultat vides.
 vérifie la création d’un chapitre Évaluation par la commande XState, ses
 réglages par défaut, son nom « Évaluation », son icône, l’ouverture du
 formulaire central et l’enregistrement de la limite d’essais et de la portée de
-reprise. [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+reprise. [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
 vérifie la conservation du seuil lors d’une modification et refuse une limite
 invalide ou l’application de ces réglages à un chapitre standard. Safari MCP
 confirme l’affichage des défauts sur un chapitre déjà présent dans le document.
@@ -86,7 +86,7 @@ au plan. La machine métier est vérifiée par
 [`evaluation-machine.test.ts`](../src/domain/evaluation/evaluation-machine.test.ts).
 La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
 [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) et
-[`document-commands.test.ts`](../src/app/commands/document-commands.test.ts) ;
+[`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts) ;
 sa compilation CodPlay l’est dans
 [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts).
 Safari MCP a également vérifié l’ajout puis le retrait du BDC sur une page

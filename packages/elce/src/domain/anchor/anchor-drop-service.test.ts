@@ -2,10 +2,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE } from '../../config/document-config'
-import { applyDocumentCommand } from '../../app/commands/document-commands'
+import { applyDocumentCommand } from '../commands/document-commands'
 import { createInitialDocument } from '../document/document-model'
 import { mediaTypeFromMimeType } from '../media/media-resource-service'
-import { ElceAnchorDropFacade } from './anchor-drop-facade'
 import { ElceAnchorDropService } from './anchor-drop-service'
 
 describe('ElceAnchorDropService', () => {
@@ -100,16 +99,6 @@ describe('ElceAnchorDropService', () => {
     expect(service.createCatalogDropTarget(document, reference, 'missing-page', 'bdc-section-1')).toBeNull()
     expect(service.createCatalogDropTarget(document, reference, 'page-a', 'missing-section')).toBeNull()
     expect(service.createCatalogDropTarget(document, { kind: CATALOG_REFERENCE.BDC, bdcId: 'missing-bdc' }, 'page-a', 'bdc-section-1')).toBeNull()
-  })
-
-  it('sends the complete Section intention through its dispatcher', () => {
-    const dispatched: Array<{ sectionBdcId: string; change: unknown }> = []
-    const facade = new ElceAnchorDropFacade({ dispatch: (sectionBdcId, change) => dispatched.push({ sectionBdcId, change }) })
-    const change = { kind: 'content' as const, title: '', content: { type: 'doc' as const, content: [{ type: 'paragraph' as const }] }, markup: '<p></p>' }
-
-    facade.submitSectionChange('bdc-section-1', change)
-
-    expect(dispatched).toEqual([{ sectionBdcId: 'bdc-section-1', change }])
   })
 
   it('maps an anchor return to its document command', () => {

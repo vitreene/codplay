@@ -1,8 +1,8 @@
-import type { ElceSectionChange, ElceAnchorDropTarget } from './anchor-types'
-import { ElceAnchorDropService } from './anchor-drop-service'
-import type { ElceDocument } from '../document/document-model'
-import type { ElceCatalogContents, ElceCatalogDropTarget, ElceCatalogReference } from '../catalog/catalog-types'
-import type { PageId } from '../document/document-types'
+import type { ElceSectionChange, ElceAnchorDropTarget } from '../../../domain/anchor/anchor-types'
+import { ElceAnchorDropService } from '../../../domain/anchor/anchor-drop-service'
+import type { ElceDocument } from '../../../domain/document/document-model'
+import type { ElceCatalogContents, ElceCatalogDropTarget, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
+import type { PageId } from '../../../domain/document/document-types'
 
 export interface ElceAnchorChangeDispatcher {
   dispatch(sectionBdcId: string, change: ElceSectionChange): void

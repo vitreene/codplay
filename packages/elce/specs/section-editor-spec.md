@@ -13,8 +13,10 @@ parcours d’ancrage sont décrits dans la [spécification des ancres](./anchor-
 Le JSON riche de la Section est la source éditable du document métier. Le
 builder conserve aussi le HTML statique exporté dans `section.markup` pour la
 projection CodPlay. L’auteur ne saisit pas de HTML. Le composant émet la
-description d’une transaction d’éditeur ; `ElceAnchorDropService` porte les
-commandes documentaires et la sauvegarde des médias hors de la surface React.
+description d’une transaction d’éditeur. `ElceAnchorDropService` définit les
+cibles métier et les commandes ; la façade applicative
+`ElceAnchorDropFacade` relie les intentions d’édition au contrôleur XState. Le
+composant ne sauvegarde pas les médias et ne possède aucune mutation métier.
 
 La surface Tiptap propose dans le POC :
 
@@ -41,7 +43,7 @@ appartiennent et conserve leurs ressources média réutilisables.
   le montage de la surface Tiptap dans un DOM réel de test et l’actualisation
   des commandes actives lorsque la sélection passe d’un titre italique à un
   paragraphe.
-- [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+- [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la conservation conjointe du JSON et du HTML exporté, ainsi que la
   suppression de la Section et de ses BDC ancrés en conservant les médias.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie que la

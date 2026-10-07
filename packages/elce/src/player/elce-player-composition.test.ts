@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../app/commands/document-commands'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { ElceQuestionService } from '../domain/question/question-service'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'

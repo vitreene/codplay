@@ -137,7 +137,7 @@ gauche lit les noms actualisés depuis le document détenu par XState.
   vérifie que l’événement `page.create` conserve le placement explicitement
   demandé et sélectionne la page produite, et que la sélection de chapitre
   passe par le contrôleur puis se ferme lors de la sélection d’une page.
-- [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+- [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie le renommage immuable, le refus d’un nom vide et la validation des
   réglages persistés d’un chapitre Évaluation.
 - Safari MCP sur l’application Elcé confirme les icônes de création côte à

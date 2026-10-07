@@ -2,7 +2,7 @@ import type { ElceDocument } from '../../domain/document/document-model'
 import type { CatalogTabType, PageType } from '../../config/document-config-types'
 import type { BdcId, ChapterId, MediaId, MediaMetadata, PageId } from '../../domain/document/document-types'
 import type { ElceSectionChange } from '../../domain/anchor/anchor-types'
-import type { DocumentCommand, PagePlacement } from '../commands/document-command-types'
+import type { DocumentCommand, PagePlacement } from '../../domain/commands/document-command-types'
 import type { ElceDocumentChange } from './document-change-types'
 
 export type { ElceAnchorChange } from './document-change-types'

@@ -1,7 +1,7 @@
 import type { Bdc } from '../../../domain/document/document-types'
 import type { ElceAnchorDropTarget, ElceAnchorMediaPreview, ElceSectionChange } from '../../../domain/anchor/anchor-types'
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
-import type { ElceCardEditorActions } from '../../../domain/card/card-facade-types'
+import type { ElceCardEditorActions } from '../../facades/card/card-facade-types'
 import type { MediaType } from '../../../config/document-config-types'
 
 export type SectionEditorChange = ElceSectionChange

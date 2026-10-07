@@ -1,11 +1,11 @@
-import { BDC_TYPE, CATALOG_REFERENCE, QUESTION_TYPE } from '../../config/document-config'
-import { createQuestionBdcCommand } from '../../app/commands/document-commands'
-import { createStableId, type ElceDocument } from '../document/document-model'
-import { ElceMediaResourceService } from '../media/media-resource-service'
+import { BDC_TYPE, CATALOG_REFERENCE, QUESTION_TYPE } from '../../../config/document-config'
+import { createQuestionBdcCommand } from '../../../domain/commands/document-commands'
+import { createStableId, type ElceDocument } from '../../../domain/document/document-model'
+import { ElceMediaResourceService } from '../../../domain/media/media-resource-service'
 import type { ElceQuestionFacadeOptions } from './question-facade-types'
-import { ElceQuestionService } from './question-service'
-import type { BdcId, PageId } from '../document/document-types'
-import type { QuestionType } from './question-types'
+import { ElceQuestionService } from '../../../domain/question/question-service'
+import type { BdcId, PageId } from '../../../domain/document/document-types'
+import type { QuestionType } from '../../../domain/question/question-types'
 
 /** Routes Question authoring intents to immutable document commands and XState. */
 export class ElceQuestionFacade {
@@ -109,7 +109,7 @@ export class ElceQuestionFacade {
 }
 
 /** Parses the catalogue drag payload without accepting a unique BDC as reusable media. */
-function readMediaReference(value: string): Extract<import('../catalog/catalog-types').ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.MEDIA }> | null {
+function readMediaReference(value: string): Extract<import('../../../domain/catalog/catalog-types').ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.MEDIA }> | null {
   try {
     const parsed = JSON.parse(value) as { kind?: unknown; mediaId?: unknown }
     if (parsed.kind !== CATALOG_REFERENCE.MEDIA || typeof parsed.mediaId !== 'string') return null

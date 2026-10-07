@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24.3.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,8 +14,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@codplay/component-v2": "*",
     "@codplay/capsule-automation": "*",
+    "@codplay/component-v2": "*",
     "@codplay/scene-factory": "*",
     "@codplay/sighty": "*",
     "@tiptap/core": "^3.31.4",
@@ -27,6 +30,7 @@
     "lucide-react": "^1.50.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "remix": "3.0.0-rc.4",
     "xstate": "^5.32.2"
   },
   "devDependencies": {

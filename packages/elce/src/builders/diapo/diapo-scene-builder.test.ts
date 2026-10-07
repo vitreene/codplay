@@ -5,7 +5,7 @@ import {
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
 import { BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
-import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../../app/commands/document-commands'
+import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { buildDiapoScene } from './diapo-scene-builder'
 

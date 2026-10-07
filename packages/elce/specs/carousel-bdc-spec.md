@@ -64,6 +64,11 @@ page Flux et ouvre son éditeur. Les changements passent par les commandes
 XState et les services métier ; React ne conserve pas une seconde copie du
 document.
 
+`ElceCarouselFacade` (`app/facades/carousel/`) orchestre les réglages du
+Carousel et délègue les champs des Cartes à `ElceCardFacade`
+(`app/facades/card/`). Les mêmes actions de Carte servent au BDC direct d’une
+Diapo et aux Cartes enfants du Carousel.
+
 L’auteur peut ajouter, supprimer et réordonner les BDC Carte, choisir leur
 layout, éditer les champs communs, la position d’image, la référence média et
 la durée propre à chaque entrée. Les quatre layouts utilisent le même BDC
@@ -132,7 +137,7 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
 
 ## Preuves
 
-- [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+- [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la conservation des champs et médias à travers les quatre layouts,
   le retrait d’une carte avec maintien de la dernière, le refus de supprimer
   cette dernière, le déplacement d’un BDC Carte vers un autre Carousel sans

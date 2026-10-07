@@ -13,7 +13,7 @@ import {
 } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
 import type { Bdc } from '../../../domain/document/document-types'
-import type { ElceCardEditorFieldsProps } from '../../../domain/card/card-facade-types'
+import type { ElceCardEditorFieldsProps } from './card-editor-fields-types'
 import type { CardContent } from '../../../domain/card/card-types'
 import type { ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 

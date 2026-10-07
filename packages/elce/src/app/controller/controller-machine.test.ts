@@ -1,6 +1,6 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { assertDocumentInvariants } from '../commands/document-commands'
+import { assertDocumentInvariants } from '../../domain/commands/document-commands'
 import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'

@@ -1,7 +1,7 @@
-import type { DocumentCommand } from '../../app/commands/document-command-types'
-import type { ElceMediaImport } from '../media/media-resource-types'
-import type { BdcId, PageId } from '../document/document-types'
-import type { QuestionContent, QuestionType } from './question-types'
+import type { DocumentCommand } from '../../../domain/commands/document-command-types'
+import type { ElceMediaImport } from '../../../domain/media/media-resource-types'
+import type { BdcId, PageId } from '../../../domain/document/document-types'
+import type { QuestionContent, QuestionType } from '../../../domain/question/question-types'
 
 export interface ElceQuestionFacadeOptions {
   readonly dispatch: (command: DocumentCommand) => void

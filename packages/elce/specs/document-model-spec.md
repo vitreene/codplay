@@ -48,9 +48,14 @@ dans [`document-config.ts`](../src/config/document-config.ts), leurs types
 dans [`document-config-types.ts`](../src/config/document-config-types.ts),
 les formes du document dans
 [`document-types.ts`](../src/domain/document/document-types.ts), et les commandes dans
-[`document-command-types.ts`](../src/app/commands/document-command-types.ts).
+[`document-command-types.ts`](../src/domain/commands/document-command-types.ts).
 Les modules d’exécution ne redéclarent pas ces contrats et ne réintroduisent
 donc pas de chaînes de placement dans les commandes.
+
+Les commandes immuables sont définies dans `domain/commands/`. Les façades
+d’édition qui les envoient au contrôleur XState sont des adaptateurs
+applicatifs rangés dans `app/facades/` ; elles ne font pas partie du domaine.
+Les propriétés React des champs Carte restent dans `app/editor/card/`.
 
 Un nouveau document de POC contient un chapitre, une page Flux `Page A` et un
 BDC Section vide associé au preset `section-basic`. Les presets sont déclarés
@@ -194,7 +199,7 @@ raccord ne choisit pas quels médias fusionner.
 
 ## Preuves
 
-- [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+- [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie création, renommage, déplacement, retrait, suppression, réemploi
   d’un média, la suppression catalogue d’un BDC et le refus d’effacer un BDC de page,
   avec conservation du média, la suppression conditionnelle d’un chapitre,

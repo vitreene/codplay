@@ -47,8 +47,9 @@ la ressource existante après vérification SHA-256, même si le nom diffère.
 
 ## Commandes et projection
 
-`ElceQuestionFacade` transforme les gestes auteur en commandes documentaires
-envoyées au contrôleur XState. La création est insérée dans la position
+La façade applicative `ElceQuestionFacade` (`app/facades/question/`) transforme
+les gestes auteur en commandes documentaires envoyées au contrôleur XState. La
+création est insérée dans la position
 ordonnée de la page ; l’édition des réponses, du texte et de la référence média
 modifie le document par la même façade et les mêmes commandes. React affiche
 le modèle et ne porte pas une copie de son état métier.
@@ -94,7 +95,7 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   les réponses par défaut, l’unicité de la réponse juste en Choix, au moins une
   réponse juste et plusieurs choix justes en Choix multiple, ainsi que l’ordre
   et la suppression des réponses.
-- [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+- [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la création d’une Question unique dans l’ordre de la page, les
   invariants de réponse, et la référence d’illustration.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)

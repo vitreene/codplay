@@ -1,4 +1,4 @@
-import type { ElceQuestionEditorActions } from '../../../domain/question/question-facade-types'
+import type { ElceQuestionEditorActions } from '../../facades/question/question-facade-types'
 import type { MediaMetadata } from '../../../domain/document/document-types'
 import type { QuestionContent } from '../../../domain/question/question-types'
 import type { SupportedMediaType } from '../../../domain/media/media-resource-service'

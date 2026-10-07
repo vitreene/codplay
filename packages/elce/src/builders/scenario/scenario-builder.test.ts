@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SceneDoc } from 'codplay/scene/types'
 import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION, QUESTION_TYPE } from '../../config/document-config'
-import { applyDocumentCommand, createPageCommand } from '../../app/commands/document-commands'
+import { applyDocumentCommand, createPageCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceQuestionService } from '../../domain/question/question-service'
 import { buildScenario } from './scenario-builder'

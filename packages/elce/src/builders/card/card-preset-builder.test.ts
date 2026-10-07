@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CARD_LAYOUT_IDS, DEFAULT_PRESET_ID } from '../../config/document-config'
 import { CARD_PRESETS } from '../../config/presets'
-import { applyDocumentCommand, createCarouselBdcCommand } from '../../app/commands/document-commands'
+import { applyDocumentCommand, createCarouselBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceCardPresetBuilder } from './card-preset-builder'
 import { ElceCardBdcSceneBuilder } from './card-bdc-scene-builder'

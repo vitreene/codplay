@@ -1,7 +1,7 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
 import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
-import { applyDocumentCommand } from '../commands/document-commands'
+import { applyDocumentCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import type { ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'

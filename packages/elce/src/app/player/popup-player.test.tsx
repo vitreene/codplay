@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyDocumentCommand, createDefaultPageCommand } from '../commands/document-commands'
+import { applyDocumentCommand, createDefaultPageCommand } from '../../domain/commands/document-commands'
 import { PAGE_LOCATION } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { PopupPlayer } from './popup-player'

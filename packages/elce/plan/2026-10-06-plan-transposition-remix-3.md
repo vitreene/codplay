@@ -1,12 +1,12 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : Fixe — cible, moteur et mode SPA acceptés ; étape 1 préparée, migration non commencée.** Le POC actuel reste la référence à préserver pendant le portage.
+**Statut : En cours — étape 0 Fini ; étape 1 En cours.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari. Le POC actuel reste la référence de comportement à préserver, sans constituer un préalable à la migration.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
 ## Invariants de migration
 
-- La cible est Remix 3 stable et son runtime de composants sans React, pas Remix v2 ni React Router Framework Mode.
+- La cible est le runtime de composants Remix 3 sans React ; la version fixée pour ce portage est `3.0.0-rc.4`, acceptée le 7 octobre 2026, pas Remix v2 ni React Router Framework Mode.
 - Le périmètre du portage est l’interface auteur de l’éditeur. Le player, ses scènes et sa composition restent gérés par Sighty/CodPlay et ne sont pas portés vers Remix.
 - L’interface auteur utilise le routeur navigateur `remix/spa` ; les routes API utilisent un routeur Fetch serveur distinct. L’API n’affiche pas l’éditeur et ses réponses ne remplacent pas l’état éditorial.
 - Le contrôleur XState reste propriétaire de l’état éditorial. Les gestes métier passent par les commandes et façades déjà définies.
@@ -17,29 +17,35 @@ Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-el
 
 ## Étapes et critères de sortie
 
-### 0. Préparer le moteur Remix — À faire
+### 0. Préparer le moteur Remix — Fini
 
-- Faire évoluer le moteur d’exécution d’Elcé vers Node 24.3.0 ou plus récent. Le dépôt tourne actuellement sous Node 22.14.0 ; l’auteur accepte cette mise à niveau.
-- Installer Remix 3.0.0 stable dans le seul workspace Elcé. Aucune dépendance Remix n’est actuellement déclarée dans `packages/elce/package.json`.
+- Déclarer Node 24.3.0 ou plus récent comme moteur minimal du seul workspace Elcé. C’est fait dans `packages/elce/package.json` ; le Node local 26.10.0 satisfait cette contrainte.
+- Installer et fixer `remix@3.0.0-rc.4` dans le seul workspace Elcé. C’est fait ; l’installation npm a réussi.
 - Démarrer l’éditeur avec le routeur navigateur `remix/spa` et un routeur serveur séparé réservé aux réponses API.
+- Monter temporairement l’éditeur React existant sous un hôte conservé par `data-rmx-preserve-dom`, nommé `ReactEditorTempBridge`. Ce raccord réutilise exactement l’acteur XState et la persistance existants ; il ne crée aucun état ni commande parallèle. Le supprimer après le portage de toutes les surfaces auteur prévu à l’étape 4.
+- Préparer le routeur Fetch API dans un module serveur distinct, sans démarrer de listener ni ajouter de route avant les opérations SQLite et fichiers prévues aux étapes 2 et 3.
 - Vérifier que l’installation, le démarrage, les scripts du workspace et le build fonctionnent sous le moteur retenu, sans modifier les autres workspaces.
 
-**Sortie :** Node mis à niveau et le workspace Elcé démarre en SPA Remix.
+**Sortie :** le workspace Elcé démarre et se construit avec la SPA Remix et `ReactEditorTempBridge`; le routeur Fetch API reste séparé et sans listener jusqu’à la tranche serveur.
 
-### 1. Prouver l’interface Remix avec les vraies frontières Elcé — À faire
+**Vérification :** installation `remix@3.0.0-rc.4` dans le workspace Elcé ; route `/` et fallback rendus par `remix/spa` ; Safari confirme l’affichage de l’éditeur et conserve exactement le host lors d’une navigation SPA vers une route inconnue. Le test Fetch confirme la réponse 404 du routeur API sans serveur en écoute. Typecheck, 164 tests et build passent ; le build signale le bundle temporairement supérieur à 500 kB, attendu tant que React et Remix cohabitent.
+
+### 1. Prouver l’interface Remix avec les vraies frontières Elcé — En cours
 
 Dans une tranche isolée de l’application Elcé, utiliser le vrai routeur SPA Remix : `createRouter`, le middleware `render()` et `run()`. Une route retourne le composant Remix de la surface ; les routes API restent dans le routeur serveur et ne font pas partie de cette preuve.
 
-- Appliquer avant le raccord les deux frontières relevées par l’audit : contrats et application des commandes sous `domain/commands/`, puis façades d’édition sous `app/facades/`. La nouvelle `ElceCardFacade` ne doit plus rester dans `domain/` ; ses types de vue ne doivent plus y importer React.
-- Créer l’acteur, le store et l’attachement de persistance une seule fois dans l’entrée navigateur, puis fournir l’acteur depuis la composition commune aux routes SPA. Les composants lisent l’acteur par le `Context` Remix ; une vue s’abonne à ses snapshots, conserve uniquement le snapshot nécessaire au rendu et demande une mise à jour avec `handle.update()`. Elle désabonne avec le signal de durée de vie de son `Handle`. À la navigation SPA puis au démontage, vérifier l’absence d’acteur dupliqué ou d’abonnement orphelin.
+- **Fini :** contrats et transformations documentaires déplacés dans `domain/commands/` ; façades déplacées dans `app/facades/` ; props React des champs Carte déplacées dans `app/editor/card/`. Les tests, le typecheck et le build passent sans changement de comportement.
+- **Fini :** l’entrée navigateur compose l’acteur, le store et l’attachement de persistance une seule fois. La racine Remix reçoit cet acteur dans son Context ; le pont React reçoit la même instance. Safari recharge l’éditeur restauré sans erreur de console.
+- **À faire :** extraire de `AppLayout` l’adaptateur d’actions et le modèle de vue applicatifs comme prévu par l’audit avant de raccorder de nouvelles surfaces Remix. Ce déplacement ne change ni les événements ni les commandes XState.
+- **À faire :** les composants Remix lisent l’acteur par le `Context` ; une vue s’abonne à ses snapshots, conserve uniquement le snapshot nécessaire au rendu et demande une mise à jour avec `handle.update()`. Elle désabonne avec le signal de durée de vie de son `Handle`. À la navigation SPA puis au démontage, vérifier l’absence d’acteur dupliqué ou d’abonnement orphelin.
 - Éditer une Carte autonome directe dans une Diapo et une Carte enfant de Carousel avec le même rendu de champs et `ElceCardFacade`. Une modification passe par la façade, la commande existante et l’acteur XState ; le document doit conserver leurs placements distincts.
 - Remplacer le raccord React de la Section par `@tiptap/core` `Editor`, sans réécrire l’extension d’ancre. Monter l’éditeur sur l’élément DOM fourni par le cycle de vie documenté du composant Remix ; vérifier édition, sélection de toolbar, import d’image et déplacement d’ancre. Vérifier le maintien du DOM ProseMirror à travers une navigation de frame ; si nécessaire, éprouver `data-rmx-preserve-dom` sur le plus petit hôte Tiptap.
 - Vérifier que la commande de prévisualisation de l’éditeur continue de lancer le player Sighty/CodPlay existant ; ne pas porter son rendu, ses builders ou sa composition.
-- Vérifier que le bundle de l’éditeur n’utilise pas React. Garder les dépendances du workspace encore requises par le player hors périmètre.
+- Vérifier que le bundle de la surface Remix portée n’utilise pas React. Le contrôle complet de l’éditeur sans React reste à l’étape 5, après retrait du `ReactEditorTempBridge`. Garder les dépendances du workspace encore requises par le player hors périmètre.
 - Exécuter un test de composant dans le navigateur avec le runtime Remix, puis le parcours réel SPA dans Safari, Firefox et Chromium. Le premier valide le montage, l’abonnement XState et son nettoyage ; le second vérifie le rendu après commande, la navigation et le cycle Tiptap.
 - Ne pas toucher aux API, au schéma SQLite, au transfert des médias, au modèle v3 ou aux scènes du player dans cette étape.
 
-**Sortie :** parcours auteur vérifié dans le vrai routeur SPA Remix avec commande, Carte et Section Tiptap ; état éditorial toujours possédé par le même acteur XState ; aucune route API, table SQLite, scène ni composition Sighty/CodPlay modifiée. L’étape 1 reste à faire après l’étape 0 et la clôture du POC en cours.
+**Sortie :** parcours auteur vérifié dans le vrai routeur SPA Remix avec commande, Carte et Section Tiptap ; état éditorial toujours possédé par le même acteur XState ; aucune route API, table SQLite, scène ni composition Sighty/CodPlay modifiée. L’étape 1 suit l’étape 0 ; les validations POC restantes ne conditionnent pas son démarrage.
 
 ### 2. Établir les routes API et la persistance SQLite — À faire
 
@@ -108,4 +114,5 @@ Chaque surface d’édition passe par l’acteur et les commandes existants. Les
 - [Modèle de document Elcé](../specs/document-model-spec.md)
 - [Édition d’une Section](../specs/section-editor-spec.md)
 - [Preview lecteur](../specs/player-preview-spec.md)
+- [Entrée Remix SPA](../specs/remix-spa-spec.md)
 - [Plan local-first](./2026-10-06-elce-local-first-synchronisation-plan.md)

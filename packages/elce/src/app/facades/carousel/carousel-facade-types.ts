@@ -1,9 +1,9 @@
-import type { DocumentCommand } from '../../app/commands/document-command-types'
-import type { CarouselPlaybackMode, CarouselTransition, MediaType } from '../../config/document-config-types'
-import type { CarouselAspectRatio, CarouselContent } from './carousel-types'
-import type { Bdc } from '../document/document-types'
+import type { DocumentCommand } from '../../../domain/commands/document-command-types'
+import type { CarouselPlaybackMode, CarouselTransition, MediaType } from '../../../config/document-config-types'
+import type { CarouselAspectRatio, CarouselContent } from '../../../domain/carousel/carousel-types'
+import type { Bdc } from '../../../domain/document/document-types'
 import type { ElceCardEditorActions } from '../card/card-facade-types'
-import type { ElceMediaImport } from '../media/media-resource-types'
+import type { ElceMediaImport } from '../../../domain/media/media-resource-types'
 
 export interface ElceCarouselFacadeOptions {
   readonly dispatch: (command: DocumentCommand) => void

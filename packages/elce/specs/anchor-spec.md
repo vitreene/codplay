@@ -55,16 +55,16 @@ visuelle et recalcule sa réservation quand la largeur change ; aucun code Elcé
 ne mesure ou ne déplace un nœud après le montage CodPlay. Le parseur statique
 relit les attributs de l’ancre lorsqu’un markup est rouvert dans Tiptap.
 
-Le dépôt d’un fichier image ou vidéo passe par `ElceAnchorDropFacade`, puis par
-le contrôleur XState. La façade et `ElceAnchorDropService`, deux classes métier
-indépendantes de React, appliquent la whitelist, créent les identifiants de
-média et de bdc et décrivent la commande. La machine XState séquence ensuite
-la sauvegarde dans `ElceDocumentStore`, la création du bdc, l’insertion de
-l’ancre et l’enregistrement de la source de lecture. Les changements de
-contenu, le déplacement et la suppression d’une ancre empruntent la même
-commande `section.change` ; aucun circuit Promise parallèle ne peut réécrire
-un markup plus récent. Le composant d’édition ne possède aucune mutation
-documentaire.
+Le dépôt d’un fichier image ou vidéo passe par la façade applicative
+`ElceAnchorDropFacade` (`app/facades/anchor/`), puis par le contrôleur XState.
+La façade délègue à `ElceAnchorDropService` les cibles métier et la création de
+commande ; le service métier applique la whitelist et décrit le bdc. La
+machine XState séquence ensuite la sauvegarde dans `ElceDocumentStore`, la
+création du bdc, l’insertion de l’ancre et l’enregistrement de la source de
+lecture. Les changements de contenu, le déplacement et la suppression d’une
+ancre empruntent la même commande `section.change` ; aucun circuit Promise
+parallèle ne peut réécrire un markup plus récent. Le composant d’édition ne
+possède aucune mutation documentaire.
 
 Avant cette sauvegarde, le worker de la même file demande au service média de
 comparer le fichier aux ressources de même taille, puis aux octets conservés,
@@ -154,9 +154,10 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
   vérifie le montage de l’image dans le slot projeté par le runtime réel
   Sighty/CodPlay.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
-  vérifie la whitelist, la construction du commandement et le passage par la
-  façade métier.
-- [`document-commands.test.ts`](../src/app/commands/document-commands.test.ts)
+  vérifie la whitelist et la construction des cibles et commandes métier.
+- [`anchor-drop-facade.test.ts`](../src/app/facades/anchor/anchor-drop-facade.test.ts)
+  vérifie le transfert de l’intention Section vers le contrôleur.
+- [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie qu’une mise à jour de texte ordinaire ou une suppression dédiée
   efface le BDC ancré sans le réinscrire au catalogue, conserve le média,
   supprime aussi les ancres lorsqu’une Section entière est supprimée, et refuse

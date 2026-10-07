@@ -10,7 +10,7 @@ import {
 import { CAROUSEL_ASPECT_RATIO_OPTIONS } from '../../../config/document-config'
 import type { CarouselAspectRatioId } from '../../../config/document-config-types'
 import type { CarouselAspectRatio } from '../../../domain/carousel/carousel-types'
-import type { ElceCarouselEditorProps } from '../../../domain/carousel/carousel-facade-types'
+import type { ElceCarouselEditorProps } from '../../facades/carousel/carousel-facade-types'
 import { CardBdcEditorFields } from '../card/card-editor-fields'
 import './carousel-editor.css'
 

@@ -5,7 +5,7 @@ import {
   MEDIA_TYPE,
   PAGE_TYPE,
 } from '../../config/document-config'
-import type { DocumentCommand } from '../../app/commands/document-command-types'
+import type { DocumentCommand } from '../commands/document-command-types'
 import { createStableId, type ElceDocument } from '../document/document-model'
 import { ElceMediaResourceService, mediaTypeFromMimeType } from '../media/media-resource-service'
 import type {

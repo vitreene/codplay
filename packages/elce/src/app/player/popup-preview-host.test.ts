@@ -3,7 +3,7 @@
 import { createActor } from 'xstate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { controllerMachine } from '../controller/controller-machine'
-import { createDefaultPageCommand } from '../commands/document-commands'
+import { createDefaultPageCommand } from '../../domain/commands/document-commands'
 import { PAGE_LOCATION } from '../../config/document-config'
 import { PopupPreviewHost } from './popup-preview-host'
 import { POPUP_PREVIEW_SESSION_PARAM } from './popup-preview-messages'
