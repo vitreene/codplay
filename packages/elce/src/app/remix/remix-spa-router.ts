@@ -4,6 +4,8 @@ import { jsx } from 'remix/ui/jsx-runtime'
 import type { Handle } from 'remix/ui'
 import type { Actor } from 'xstate'
 import { controllerMachine } from '../controller/controller-machine'
+import { RemixCardEditorProofTemp } from '../editor/card/remix-card-editor-proof-temp'
+import { RemixSectionEditorProofTemp } from '../editor/section/remix-section-editor-proof-temp'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { EditorContextProvider } from './editor-context'
 import { RemixEditorLifecycleProofTemp } from './editor-lifecycle-proof-temp'
@@ -25,12 +27,16 @@ export function createElceSpaRouter(
   })
 
   router.get('/', ({ url, render: renderRoute }) => {
-    const proof = url.searchParams.get('__remixProof') === '1'
-      ? jsx(RemixEditorLifecycleProofTemp, {})
-      : null
+    const proofs = controller === null || actions === null
+      ? []
+      : [
+          url.searchParams.get('__remixProof') === '1' ? jsx(RemixEditorLifecycleProofTemp, {}) : null,
+          url.searchParams.get('__remixCardProof') === '1' ? jsx(RemixCardEditorProofTemp, {}) : null,
+          url.searchParams.get('__remixSectionProof') === '1' ? jsx(RemixSectionEditorProofTemp, {}) : null,
+        ]
     const children = jsx('div', {
       id: 'elce-remix-route-root',
-      children: [jsx(ReactEditorTempBridge, {}), proof],
+      children: [jsx(ReactEditorTempBridge, {}), ...proofs],
     })
     return renderRoute(jsx(EditorContextProvider, { controller, actions, children }))
   })

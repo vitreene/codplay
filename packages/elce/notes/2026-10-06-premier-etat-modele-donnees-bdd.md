@@ -49,19 +49,11 @@ CREATE TABLE chapters (
   chapter_id TEXT NOT NULL,
   name TEXT NOT NULL,
   chapter_type TEXT NOT NULL,
+  evaluation_threshold REAL,
+  evaluation_attempt_limit INTEGER,
+  evaluation_retry_scope TEXT,
   PRIMARY KEY (project_id, chapter_id),
   FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
-);
-
-CREATE TABLE chapter_evaluation_settings (
-  project_id TEXT NOT NULL,
-  chapter_id TEXT NOT NULL,
-  evaluation_threshold REAL NOT NULL,
-  evaluation_attempt_limit INTEGER,
-  evaluation_retry_scope TEXT NOT NULL,
-  PRIMARY KEY (project_id, chapter_id),
-  FOREIGN KEY (project_id, chapter_id)
-    REFERENCES chapters(project_id, chapter_id) ON DELETE CASCADE
 );
 
 CREATE TABLE pages (
@@ -123,11 +115,16 @@ CREATE TABLE media_resources (
   size_bytes INTEGER NOT NULL,
   media_caption TEXT,
   content_sha256 TEXT,
-  storage_key TEXT NOT NULL,
+  storage_key TEXT,
+  position INTEGER NOT NULL,
   PRIMARY KEY (project_id, media_id),
-  UNIQUE (project_id, storage_key),
+  UNIQUE (project_id, position),
   FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX media_storage_key
+  ON media_resources(project_id, storage_key)
+  WHERE storage_key IS NOT NULL;
 
 CREATE UNIQUE INDEX media_content_identity
   ON media_resources(project_id, size_bytes, content_sha256)
@@ -232,8 +229,8 @@ CREATE TABLE carousels (
   default_view_duration_ms INTEGER NOT NULL,
   playback_mode TEXT NOT NULL,
   repeat_count INTEGER,
-  aspect_ratio_width INTEGER NOT NULL,
-  aspect_ratio_height INTEGER NOT NULL,
+  aspect_ratio_width REAL NOT NULL,
+  aspect_ratio_height REAL NOT NULL,
   default_intro_transition_ref TEXT,
   default_outro_transition_ref TEXT,
   PRIMARY KEY (project_id, content_block_id),
@@ -261,11 +258,11 @@ CREATE TABLE cards (
 );
 ```
 
-`PRAGMA user_version` porte la version du schéma SQLite et évolue par
-migrations SQL explicites. `projects.format_version` décrit la version du
-modèle documentaire Elcé ; ce sont deux versions distinctes. Le modèle cible
-doit être versionné après l’unification des BDC média. Aucune migration
-implicite des documents existants n’est proposée ici.
+Le registre de migrations Remix versionne le schéma SQLite au moyen des
+migrations SQL explicites du serveur. `projects.format_version` décrit la
+version du modèle documentaire Elcé ; les deux versions sont distinctes. Le
+document v4 est requis par cette première migration ; aucune conversion
+implicite des documents v1, v2 ou v3 n’est proposée ici.
 
 ## Correspondance modèle → tables
 
@@ -277,9 +274,9 @@ pas une structure distincte pour chaque couple type/emplacement.
 | Modèle Elcé | Tables | Description | Emplacements proposés à l’auteur |
 | --- | --- | --- | --- |
 | Document / projet | `projects` | Identifiant, nom, version de format, révision, dates et valeurs par défaut d’entrée/sortie des Cartes. Aucune colonne document JSON. | Une base peut contenir plusieurs projets ; les Cartes sans parent BDC héritent des défauts du projet. |
-| Chapitre | `chapters`, `chapter_evaluation_settings` | Identité, nom et type ; les réglages d’évaluation sont dans une extension dédiée au chapitre. | Entrée racine du scénario ; un chapitre n’est pas une page. |
+| Chapitre | `chapters` | Identité, nom, type et colonnes facultatives de réglage Évaluation. Les trois colonnes restent `NULL` pour un chapitre standard. | Entrée racine du scénario ; un chapitre n’est pas une page. |
 | Pages et hiérarchie du scénario | `pages`, `scenario_entries` | Les entrées racine mélangent pages et chapitres ; les pages d’un chapitre sont ordonnées sous ce chapitre. Le type de page est `flux` ou `diapo`. | Les pages inutilisées sont hors du scénario et référencées par `catalog_pages`. |
-| Ressource média | `media_resources` | Fichier réutilisable : métadonnées dont `mime_type` et clé du fichier, sans octets dans SQLite. Ce n’est pas un BDC ; aucun champ `media_type` séparé n’est stocké. | Peut être référencée par plusieurs Cartes ou Questions ; une seule ressource est conservée pour des octets identiques. |
+| Ressource média | `media_resources` | Métadonnées réutilisables, MIME, ordre de catalogue et clé serveur facultative ; les octets restent dans un fichier. Ce n’est pas un BDC ; aucun champ `media_type` séparé n’est stocké. | Peut être référencée par plusieurs Cartes ou Questions ; `storage_key` reste `NULL` avant le transfert serveur. |
 | BDC Texte / Section | `content_blocks`, `content_block_placements`, `sections` | Contenu riche produit par Tiptap et HTML statique exporté ; valeurs par défaut de révélation des Cartes ancrées. | Placement direct dans une page Flux. La whitelist ne propose pas le BDC Texte dans une Diapo. La Section peut recevoir des BDC Carte ou Carousel comme enfants inline ; Tiptap garde leur position exacte dans le texte. |
 | BDC Quiz / Question | `content_blocks`, `content_block_placements`, `questions`, `question_answers`, `media_resources` | Type de quiz, question, réponses ordonnées et correction ; `questions.media_id` facultatif référence son illustration réutilisable. | Placement direct dans Flux ou comme unique BDC direct d’une Diapo ; une seule Question par page. La whitelist n’offre pas son ajout au catalogue ni comme enfant d’un autre BDC. |
 | BDC Résultat | `content_blocks`, `content_block_placements`, `evaluation_result_branches` | Un BDC avec ses branches Réussite et Échec. | Placement direct dans une page Flux ou comme unique BDC direct d’une Diapo, seulement dans un chapitre Évaluation. Le type de chapitre commande le suivi et l’accès au BDC Résultat ; le type de page commande le format de lecture. |
@@ -341,10 +338,14 @@ de détail. Les tables spécialisées portent seulement le nom du détail :
 Le code métier et l’interface peuvent continuer à employer « BDC ».
 
 Les réglages d’évaluation appartiennent au chapitre de type Évaluation, et
-non à ses pages ou à ses BDC Question. `chapters` garde le discriminant du
-chapitre ; `chapter_evaluation_settings` contient ses réglages (seuil, limite
-d’essais et portée de reprise). Pour le modèle actuel, le seuil y est enregistré
-à `0.8` ; la limite peut rester `NULL` pour signifier les essais illimités.
+non à ses pages ou à ses BDC Question. Ils restent dans `chapters`, car ils
+forment trois propriétés facultatives du même objet métier et ne justifient
+pas une relation 1:1 supplémentaire. Pour un chapitre standard, les trois
+colonnes sont `NULL`. Pour un chapitre Évaluation, l’absence d’un seuil ou
+d’une portée dans le document est normalisée aux défauts du domaine (`0.8` et
+`all-questions`) lors de l’écriture ; `evaluation_attempt_limit = NULL` signifie qu’il
+n’y a pas de limite. Le type de chapitre distingue ce dernier `NULL` de ceux
+d’un chapitre standard.
 
 ### Empreinte de fichier `content_sha256`
 
@@ -357,8 +358,9 @@ projet, taille et empreinte. L’image ou la vidéo se déduit du `mime_type` ; 
 type n’est pas répété dans la ressource ni dans le BDC.
 
 Cette empreinte n’est ni un nom de fichier ni un chemin de stockage, ne contient
-pas les octets et ne permet pas de reconstruire le média. `storage_key` sert à
-retrouver le fichier enregistré sur le serveur ; `content_sha256` sert à
+pas les octets et ne permet pas de reconstruire le média. `storage_key`, quand
+elle est renseignée, sert à retrouver le fichier enregistré sur le serveur ;
+`content_sha256` sert à
 comparer son contenu à celui d’un fichier importé quand cette valeur est
 disponible. Si elle est absente en base, l’index ne dédoublonne pas cette ligne.
 
@@ -396,11 +398,11 @@ ou Questions peuvent référencer la même ressource.
 | Tables | Nullabilité et rôle | Contraintes retenues ou vérification métier |
 | --- | --- | --- |
 | `projects` | Identifiant, nom et version requis ; révision initialisée à zéro ; dates requises côté serveur ; références globales d’entrée/sortie requises et initialisées depuis la configuration. | La validation des noms non vides et des références de transition appartient aux commandes métier. |
-| `chapters`, `chapter_evaluation_settings` | Les réglages sont dans une extension 0/1 ; limite `NULL` = essais illimités. | La présence de l’extension selon `chapter_type`, la plage du seuil et la limite d’essais sont vérifiées par le domaine. |
+| `chapters` | Les trois colonnes d’évaluation sont facultatives ; elles sont `NULL` pour un chapitre standard. Une limite `NULL` sur un chapitre Évaluation signifie essais illimités. | Le domaine vérifie que les réglages ne s’appliquent qu’au chapitre Évaluation et qu’ils respectent les valeurs autorisées. |
 | `pages` | Nom et type requis ; rattachement au scénario stocké séparément. | Les types et les noms sont validés par la configuration et les commandes métier. |
 | `scenario_entries` | Un ordre représente les pages et chapitres racine ou les pages d’un chapitre. | La cible unique et l’absence de chapitre imbriqué dans le POC sont validées par le domaine. Les index uniques imposent ordre et présence uniques. Le lien vers un chapitre parent est `NO ACTION`, afin de refuser la suppression d’un chapitre qui contient encore des pages. |
 | `catalog_pages` | Une ligne signifie page disponible hors scénario. | L’ordre est unique ; l’exclusivité avec `scenario_entries` est validée dans la transaction métier. |
-| `media_resources` | Nom, MIME, taille et clé serveur requis ; légende et SHA-256 facultatifs. Aucun `media_type` distinct. | Le domaine déduit image/vidéo depuis le MIME ; clé de stockage unique par projet ; l’empreinte identifie le contenu et la taille. Aucun octet n’est stocké ici. |
+| `media_resources` | Nom, MIME et taille requis ; légende, SHA-256 et clé serveur facultatifs. Aucun `media_type` distinct. | Le domaine déduit image/vidéo depuis le MIME ; clé de stockage unique par projet quand elle existe ; l’empreinte identifie le contenu et la taille. Aucun octet n’est stocké ici. |
 | `content_blocks` | Type et preset requis ; aucune référence média générique. | Type et preset autorisés viennent de la configuration et du domaine. |
 | `content_block_placements` | Une ligne par bloc ; cible page, parent, ou aucune des deux pour le catalogue. `position` est facultative pour un enfant inline dont la position exacte est dans Tiptap. `duration_ms` et les références d’entrée/sortie sont des options de placement. | Le domaine valide la cible unique, la position requise selon le parent et les règles de durée. Il autorise un BDC Résultat sur une page Flux ou comme contenu unique d’une Diapo seulement si cette page appartient à un chapitre Évaluation. Pour une Carte Carousel, les références de transition nulles héritent du Carousel. Les index uniques garantissent l’ordre des séquences. Les liens page/parent sont `NO ACTION` : le nettoyage métier doit précéder la suppression de la cible. |
 | `sections` | Titre facultatif ; JSON Tiptap et HTML projeté requis, y compris pour une Section vide ; références d’entrée/sortie facultatives pour ses Cartes enfants. | La validité du JSON Tiptap et les références d’ancre sont vérifiées par l’application. La Section déclare le contexte scroll ; aucune durée de lecture n’est stockée pour ses Cartes enfants. Les références nulles héritent du projet. |
@@ -434,10 +436,9 @@ validation de la transaction, les règles de valeur et les invariants suivants :
   dimensions positives, le seuil dans sa plage, la limite d’essais et le
   nombre de répétitions conformes aux règles du domaine ; les valeurs de
   correction sont des booléens ;
-- un chapitre de type Évaluation possède une ligne dans
-  `chapter_evaluation_settings` ; un chapitre standard n’en possède pas. La
-  correspondance entre `chapter_type` et présence de cette ligne est vérifiée
-  par le domaine dans la transaction ;
+- un chapitre standard ne possède aucun réglage d’évaluation. Pour un chapitre
+  Évaluation, les valeurs absentes sont remplacées par les défauts du domaine
+  à l’écriture ; une limite `NULL` signifie essais illimités ;
 - `content_blocks.content_block_type` correspond exactement à ses données de
   détail (`sections`, `questions`, `evaluation_result_branches`, `carousels` ou
   `cards`) ; image et vidéo ne sont pas des `content_block_type` ni une
@@ -486,21 +487,23 @@ transaction métier n’est alors pas validée. Cette règle ne remplace pas les
 commandes XState et classes métier côté éditeur : elle protège l’écriture de la
 version SQLite.
 
-## Décisions à relire avant les migrations
+## Décisions retenues pour la première migration
 
-1. **Identifiant et nom** — la proposition prend l’identifiant et le nom du
-   projet comme ceux du document Elcé (`ElceDocument.id` et `.name`). Si
-   l’application distingue ultérieurement plusieurs projets d’un document,
-   cette relation devra être décomposée avant le DDL.
-2. **Placement des pages** — `scenario_entries` et `catalog_pages` remplacent
-   les tableaux d’ordre et d’affectation du modèle en mémoire par des lignes
-   relationnelles. Le dépôt doit lire ces lignes pour reconstruire les
-   commandes et l’ordre du document.
-3. **Réglages du chapitre Évaluation** — la proposition utilise une table
-   `chapter_evaluation_settings` liée 0/1 au chapitre. Une autre forme simple
-   serait de garder ces champs comme colonnes nullables de `chapters`. Ce choix
-   relationnel reste à relire ; la règle métier reste que les réglages
-   appartiennent au chapitre Évaluation.
+1. **Identifiant et nom — décision pour le serveur local :** un projet est un
+   `ElceDocument` v4 ; `project_id` et `name` correspondent à `ElceDocument.id`
+   et `.name`. Le navigateur crée le document initial et `POST /api/projects`
+   transmet sa valeur v4 au serveur. Le serveur ne possède pas de second
+   constructeur de document. Cette correspondance reste simple tant que le
+   modèle n’introduit pas d’entité Projet distincte.
+2. **Placement des pages — fixé :** `scenario_entries` et `catalog_pages`
+   remplacent les tableaux d’ordre et d’affectation du modèle en mémoire par
+   des lignes relationnelles. Le dépôt reconstruit les ordres racine, les pages
+   de chapitre et le catalogue à partir de ces lignes.
+3. **Réglages du chapitre Évaluation — fixé :** seuil, limite d’essais et
+   portée de reprise sont des colonnes facultatives de `chapters`. Une table
+   1:1 ajouterait une jointure sans représenter un objet métier indépendant.
+   Les réglages restent `NULL` pour les chapitres standards ; la limite `NULL`
+   d’un chapitre Évaluation signifie essais illimités.
 4. **Détails de contenu** — `sections`, `questions`, `carousels` et `cards`
    sont liées à `content_blocks` par clé étrangère. Les branches de résultat
    sont directement liées au BDC commun. La concordance avec le discriminateur
@@ -518,7 +521,7 @@ version SQLite.
    relation entre page, placement et BDC dans ce schéma. Le schéma garde un
    placement générique et n’encode pas la whitelist dans un `CHECK` ou un
    trigger.
-7. **Révélation des Cartes** — décision acceptée, non implémentée : le dépôt
+7. **Révélation des Cartes — modèle fixé :** le dépôt
    d’une image ou vidéo crée une BDC Carte au layout « Photo ou vidéo plein
    cadre ». La durée de vue est sans objet pour une Carte placée seule dans un
    flux ; elle reste une propriété de l’entrée Carousel quand la Carte en est
@@ -535,15 +538,14 @@ version SQLite.
    du Carousel et du scroll ; le Carousel reprend son preset `fade`. La démo 5
    fournit le déclenchement de visibilité au scroll.
    L’icône superposée à l’image ouvre l’édition du layout et de ses
-   paramètres ; l’affichage de ces réglages d’animation dans l’interface
-   individuelle est reporté.
+   paramètres. Les réglages d’animation individuels restent hérités ou pilotés
+   par les presets du POC ; leur exposition dans l’interface est reportée.
 
-Avant de coder le dépôt SQLite, il reste à relire ces choix et à fixer la forme
-de l’API de persistance (chargement des lignes vers `ElceDocument`, écriture
-transactionnelle des commandes, et frontière de validation du document reçu).
-La proposition relationnelle décrit le modèle documentaire v4 présent dans le
-code. Elle ne propose pas d’enregistrer `ElceDocument.toJSON()` comme un objet
-opaque SQLite ; seul le contenu riche généré par Tiptap est conservé en JSON.
+Les décisions relationnelles et la frontière API sont fixées. L’API HTTP
+accepte le document v4 structuré ; le dépôt SQLite le projette en tables
+relationnelles dans une transaction. `ElceDocument.toJSON()` n’est jamais
+stocké comme objet opaque ; seul le contenu riche généré par Tiptap est
+conservé en JSON.
 
 ## Références consultées
 

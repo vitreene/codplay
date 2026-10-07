@@ -27,6 +27,7 @@
     "@tiptap/starter-kit": "^3.31.4",
     "@xstate/react": "^6.1.0",
     "codplay": "*",
+    "lucide-static": "^1.23.0",
     "lucide-react": "^1.50.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

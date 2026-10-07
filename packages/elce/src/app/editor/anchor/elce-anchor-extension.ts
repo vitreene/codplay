@@ -1,7 +1,5 @@
 import { mergeAttributes, Node } from '@tiptap/core'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { Settings2 } from 'lucide-react'
+import { Settings2 } from 'lucide-static'
 import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { dropPoint } from '@tiptap/pm/transform'
@@ -87,6 +85,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
 
   addNodeView() {
     return ({ node, view, getPos }) => {
+      let currentNode = node
       const dom = document.createElement('span')
       dom.className = `${ANCHOR.CLASS_NAME} elce-anchor-placeholder`
       dom.id = String(node.attrs.partId ?? '')
@@ -101,46 +100,65 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       dom.style.width = '0px'
       dom.style.height = '0px'
       dom.style.verticalAlign = 'top'
-      const configuredPadding = String(node.attrs.paddingBottom ?? ANCHOR.DEFAULT_PADDING_BOTTOM)
-      dom.style.setProperty(ANCHOR.PADDING_VARIABLE, configuredPadding)
       const bdcId = String(node.attrs.bdcId ?? '')
-      const card = this.options.resolveCard?.(bdcId) ?? null
-      const layoutId = card?.layoutId ?? DEFAULT_PRESET_ID.PHOTO
-      dom.style.paddingBottom = anchorEditorReservationFor(configuredPadding, layoutId)
-      dom.style.setProperty('anchor-name', anchorNameFor(String(node.attrs.partId ?? '')))
-      const mediaType = card?.type ?? null
-      const source = card?.source ?? null
 
       const bdc = document.createElement('span')
       bdc.className = 'elce-anchor-bdc'
       bdc.id = `${bdcId}-editor-bdc`
       bdc.dataset.elceBdc = 'true'
       bdc.dataset.bdcId = bdcId
-      bdc.dataset.cardLayout = layoutId
       bdc.style.paddingBottom = '0px'
       bdc.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
       bdc.style.setProperty('inset-inline-start', '0')
       bdc.style.setProperty('inset-inline-end', '0')
       bdc.style.setProperty('inset-block-start', anchorEditorBlockPositionFor())
       bdc.style.width = '100%'
-      if (layoutId === DEFAULT_PRESET_ID.PHOTO) {
-        bdc.style.height = 'auto'
-        bdc.style.aspectRatio = mediaType === 'video'
-          ? '16 / 9'
-          : anchorRatioService.imageAspectRatio(configuredPadding)
-      } else {
-        bdc.style.height = ANCHOR.TEXT_CARD_BLOCK_SIZE
-      }
-      if (mediaType !== null) bdc.dataset.mediaType = mediaType
-      bdc.setAttribute('aria-label', mediaType === 'video' ? 'Bloc vidéo' : 'Bloc image')
-
-      if (source !== null && mediaType !== null) {
+      let renderedCard = ''
+      /** Renders the current Card media while retaining the text-flow anchor DOM. */
+      const renderCard = () => {
+        const configuredPadding = String(currentNode.attrs.paddingBottom ?? ANCHOR.DEFAULT_PADDING_BOTTOM)
+        const currentBdcId = String(currentNode.attrs.bdcId ?? '')
+        const card = this.options.resolveCard?.(currentBdcId) ?? null
+        const layoutId = card?.layoutId ?? DEFAULT_PRESET_ID.PHOTO
+        const mediaType = card?.type ?? null
+        const source = card?.source ?? null
+        const signature = `${configuredPadding}|${layoutId}|${mediaType ?? ''}|${source ?? ''}`
+        dom.id = String(currentNode.attrs.partId ?? '')
+        dom.dataset.bdcId = currentBdcId
+        dom.dataset.part = String(currentNode.attrs.partId ?? '')
+        dom.style.setProperty(ANCHOR.PADDING_VARIABLE, configuredPadding)
+        dom.style.paddingBottom = anchorEditorReservationFor(configuredPadding, layoutId)
+        dom.style.setProperty('anchor-name', anchorNameFor(String(currentNode.attrs.partId ?? '')))
+        bdc.id = `${currentBdcId}-editor-bdc`
+        bdc.dataset.bdcId = currentBdcId
+        bdc.dataset.cardLayout = layoutId
+        if (mediaType === null) delete bdc.dataset.mediaType
+        else bdc.dataset.mediaType = mediaType
+        bdc.setAttribute('aria-label', mediaType === 'video' ? 'Bloc vidéo' : 'Bloc image')
+        if (layoutId === DEFAULT_PRESET_ID.PHOTO) {
+          bdc.style.height = 'auto'
+          bdc.style.aspectRatio = mediaType === 'video'
+            ? '16 / 9'
+            : anchorRatioService.imageAspectRatio(configuredPadding)
+        } else {
+          bdc.style.height = ANCHOR.TEXT_CARD_BLOCK_SIZE
+          bdc.style.removeProperty('aspect-ratio')
+        }
+        if (signature === renderedCard) return
+        renderedCard = signature
+        bdc.replaceChildren()
+        if (source === null || mediaType === null) return
         switch (mediaType) {
           case 'image': {
             const image = document.createElement('img')
             image.className = 'elce-anchor-media-preview'
             image.draggable = false
-            image.addEventListener('load', () => updateAnchorImageRatio(image, dom, bdc, view, getPos, layoutId), { once: true })
+            image.addEventListener('load', () => {
+              const latestCard = this.options.resolveCard?.(String(currentNode.attrs.bdcId ?? ''))
+              if (latestCard !== null && latestCard !== undefined) {
+                updateAnchorImageRatio(image, dom, bdc, view, getPos, latestCard.layoutId)
+              }
+            }, { once: true })
             image.src = source
             bdc.append(image)
             if (image.complete && image.naturalWidth > 0) updateAnchorImageRatio(image, dom, bdc, view, getPos, layoutId)
@@ -156,6 +174,8 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
           }
         }
       }
+      renderCard()
+      const unregisterRefresh = this.options.registerNodeViewRefresh?.(bdcId, renderCard)
 
       const handle = document.createElement('span')
       handle.className = 'elce-anchor-handle'
@@ -170,10 +190,11 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       editButton.type = 'button'
       editButton.draggable = false
       editButton.contentEditable = 'false'
+      editButton.id = `${bdcId}-anchor-edit`
       editButton.setAttribute('aria-label', 'Modifier la carte ancrée')
       editButton.title = 'Modifier la carte'
       editButton.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
-      editButton.innerHTML = renderToStaticMarkup(createElement(Settings2, { 'aria-hidden': true, size: 14, strokeWidth: 2 }))
+      editButton.append(createAnchorEditIcon(`${bdcId}-anchor-edit-icon`))
       editButton.addEventListener('mousedown', (event) => event.preventDefault())
       editButton.addEventListener('click', (event) => {
         event.preventDefault()
@@ -183,7 +204,13 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       dom.append(bdc, handle, editButton)
       return {
         dom,
-        destroy: () => undefined,
+        update: (updatedNode) => {
+          if (updatedNode.type.name !== ANCHOR.NODE_NAME) return false
+          currentNode = updatedNode
+          renderCard()
+          return true
+        },
+        destroy: () => unregisterRefresh?.(),
         ignoreMutation: () => true,
       }
     }
@@ -280,6 +307,18 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
     })]
   },
 })
+
+/** Builds the anchor edit icon from its static Lucide asset without React. */
+function createAnchorEditIcon(id: string): SVGSVGElement {
+  const root = new DOMParser().parseFromString(Settings2, 'image/svg+xml').documentElement
+  if (root.localName !== 'svg') throw new Error('Lucide asset is not an SVG element.')
+  const icon = document.importNode(root, true) as unknown as SVGSVGElement
+  icon.id = id
+  icon.setAttribute('width', '14')
+  icon.setAttribute('height', '14')
+  icon.setAttribute('aria-hidden', 'true')
+  return icon
+}
 
 /** Creates an anchor extension configured with the current editor's file-drop policy. */
 export function createElceAnchorExtension(options: ElceAnchorExtensionOptions = {}) {

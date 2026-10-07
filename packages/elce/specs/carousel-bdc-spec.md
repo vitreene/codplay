@@ -185,3 +185,9 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
   wrapper `.elce-carousel__frame` est absent. Le cadre mesure `686 × 386 px`
   avec `aspect-ratio: 16 / 9`, l’image charge, et un clic sur le second point
   change `aria-current` de `[true, false]` à `[false, true]`.
+- La preuve temporaire de l’interface Remix (`remix-card-editor-proof-temp.ts`)
+  rend et édite le même BDC Carte comme Carte directe d’une Diapo et comme
+  enfant de Carousel, en passant par les façades existantes. Le test
+  `remix-card-editor-proof-temp.test.tsx` et Safari MCP vérifient les deux
+  relations, l’édition des champs et la conservation après changement de layout.
+  Cette preuve ne remplace pas encore l’éditeur React de production.

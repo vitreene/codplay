@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
-import type { Editor, JSONContent } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import TextAlign from '@tiptap/extension-text-align'
-import Subscript from '@tiptap/extension-subscript'
-import Superscript from '@tiptap/extension-superscript'
 import {
   AlignCenter,
   AlignJustify,
@@ -27,35 +22,17 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
-import type { RichTextDocument } from '../../../domain/document/document-types'
-import { ELCE_ANCHOR_TRANSACTION_META, createElceAnchorExtension } from '../anchor/elce-anchor-extension'
-import type { ElceAnchorTransaction } from '../anchor/anchor-types'
+import { createElceAnchorExtension } from '../anchor/elce-anchor-extension'
 import type { SectionEditorProps } from './section-editor-types'
 import { CardBdcEditorFields } from '../card/card-editor-fields'
-
-const SECTION_EDITOR_EXTENSIONS = [
-  StarterKit.configure({
-    blockquote: false,
-    bulletList: false,
-    code: false,
-    codeBlock: false,
-    dropcursor: false,
-    gapcursor: false,
-    hardBreak: false,
-    heading: { levels: [...SECTION_EDITOR_HEADING_LEVELS] },
-    horizontalRule: false,
-    link: false,
-    listItem: false,
-    listKeymap: false,
-    orderedList: false,
-    strike: false,
-    trailingNode: false,
-    undoRedo: false,
-  }),
-  TextAlign.configure({ types: ['heading', 'paragraph'] }),
-  Subscript,
-  Superscript,
-]
+import {
+  EMPTY_SECTION_TOOLBAR_STATE,
+  SECTION_EDITOR_EXTENSIONS,
+  emptySectionDocument,
+  readSectionToolbarState,
+  sectionChangeFromTransaction,
+  toTiptapContent,
+} from './section-editor-tiptap'
 
 /** Edits one Section with the POC's bounded rich-text toolbar. */
 export function SectionEditor({ bdc, onDelete, createFileDropTarget, createCatalogDropTarget, resolveCard, anchorCards = [], mediaById = {}, cardActions, onChange }: SectionEditorProps) {
@@ -70,7 +47,7 @@ export function SectionEditor({ bdc, onDelete, createFileDropTarget, createCatal
       resolveCard,
       onEditCard: setEditingAnchorBdcId,
     })],
-    content: toTiptapContent(section?.content ?? emptyDocument()),
+    content: toTiptapContent(section?.content ?? emptySectionDocument()),
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -80,65 +57,13 @@ export function SectionEditor({ bdc, onDelete, createFileDropTarget, createCatal
       },
     },
     onUpdate: ({ editor: currentEditor, transaction }) => {
-      const content = currentEditor.getJSON() as RichTextDocument
-      const change = readAnchorChange(transaction)
-      switch (change?.kind) {
-        case 'file-drop':
-          onChange({
-            kind: 'file-drop',
-            file: change.file,
-            target: change.target,
-            title: sectionRef.current?.title ?? '',
-            content,
-            markup: currentEditor.getHTML(),
-          })
-          break
-        case 'catalog-drop':
-          onChange({
-            kind: 'catalog-drop',
-            target: change.target,
-            title: sectionRef.current?.title ?? '',
-            content,
-            markup: currentEditor.getHTML(),
-          })
-          break
-        case 'move':
-          onChange({
-            kind: 'anchor-move',
-            anchorBdcId: change.bdcId,
-            title: sectionRef.current?.title ?? '',
-            content,
-            markup: currentEditor.getHTML(),
-          })
-          break
-        case 'remove':
-          onChange({
-            kind: 'anchor-remove',
-            anchorBdcId: change.bdcId,
-            title: sectionRef.current?.title ?? '',
-            content,
-            markup: currentEditor.getHTML(),
-          })
-          break
-        case 'return':
-          onChange({
-            kind: 'anchor-return',
-            anchorBdcId: change.bdcId,
-            title: sectionRef.current?.title ?? '',
-            content,
-            markup: currentEditor.getHTML(),
-          })
-          break
-        default:
-          onChange({ kind: 'content', title: sectionRef.current?.title ?? '', content, markup: currentEditor.getHTML() })
-          break
-      }
+      onChange(sectionChangeFromTransaction(currentEditor, transaction, sectionRef.current?.title ?? ''))
     },
   })
   const toolbarState = useEditorState({
     editor,
-    selector: ({ editor: currentEditor }) => readToolbarState(currentEditor),
-  }) ?? EMPTY_TOOLBAR_STATE
+    selector: ({ editor: currentEditor }) => currentEditor === null ? EMPTY_SECTION_TOOLBAR_STATE : readSectionToolbarState(currentEditor),
+  }) ?? EMPTY_SECTION_TOOLBAR_STATE
   const editingAnchorBdc = anchorCards.find((card) => card.id === editingAnchorBdcId)
 
   useEffect(() => {
@@ -251,55 +176,6 @@ function ToolbarButton({ id, label, icon: Icon, active, onClick }: ToolbarButton
   )
 }
 
-type ToolbarTextAlign = 'left' | 'center' | 'right' | 'justify'
-
-type ToolbarState = Readonly<{
-  readonly bold: boolean
-  readonly italic: boolean
-  readonly underline: boolean
-  readonly subscript: boolean
-  readonly superscript: boolean
-  readonly headingLevel: number | null
-  readonly paragraph: boolean
-  readonly textAlign: ToolbarTextAlign | null
-}>
-
-const EMPTY_TOOLBAR_STATE: ToolbarState = {
-  bold: false,
-  italic: false,
-  underline: false,
-  subscript: false,
-  superscript: false,
-  headingLevel: null,
-  paragraph: false,
-  textAlign: null,
-}
-
-/** Reads every active command from the current Tiptap selection. */
-function readToolbarState(editor: Editor | null): ToolbarState {
-  if (editor === null) return EMPTY_TOOLBAR_STATE
-  const headingLevel = SECTION_EDITOR_HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? null
-  const textAlign = readTextAlign(editor)
-  return {
-    bold: editor.isActive('bold'),
-    italic: editor.isActive('italic'),
-    underline: editor.isActive('underline'),
-    subscript: editor.isActive('subscript'),
-    superscript: editor.isActive('superscript'),
-    headingLevel,
-    paragraph: editor.isActive('paragraph'),
-    textAlign,
-  }
-}
-
-/** Resolves the selected block alignment, treating the default as left. */
-function readTextAlign(editor: Editor): ToolbarTextAlign {
-  for (const alignment of ['left', 'center', 'right', 'justify'] as const) {
-    if (editor.isActive({ textAlign: alignment })) return alignment
-  }
-  return 'left'
-}
-
 /** Selects the Lucide heading glyph matching the requested HTML level. */
 function headingIcon(level: (typeof SECTION_EDITOR_HEADING_LEVELS)[number]): LucideIcon {
   switch (level) {
@@ -320,21 +196,7 @@ function headingIcon(level: (typeof SECTION_EDITOR_HEADING_LEVELS)[number]): Luc
   }
 }
 
+/** Rejects an unsupported heading level exhaustively. */
 function assertNeverHeadingLevel(value: never): never {
   throw new Error(`Niveau de titre non pris en charge : ${String(value)}`)
-}
-
-/** Creates the minimum document accepted by the Section editor. */
-function emptyDocument(): RichTextDocument {
-  return { type: 'doc', content: [{ type: 'paragraph' }] }
-}
-
-/** Clones Elcé rich-text data into the mutable JSON shape expected by Tiptap. */
-function toTiptapContent(content: RichTextDocument): JSONContent {
-  return JSON.parse(JSON.stringify(content)) as JSONContent
-}
-
-/** Reads the Elcé transaction marker emitted by the anchor interaction plugin. */
-function readAnchorChange(transaction: { getMeta: (key: string) => unknown }): ElceAnchorTransaction | null {
-  return transaction.getMeta(ELCE_ANCHOR_TRANSACTION_META) as ElceAnchorTransaction | null
 }

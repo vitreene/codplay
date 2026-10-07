@@ -22,6 +22,7 @@
 
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
+- For browser validation, use only browser or MCP tools exposed by the current environment. Do not infer the available browser configuration from installed applications, previous sessions, or another machine. If a required browser is not exposed here, report that validation as pending instead of launching a different local browser or treating it as equivalent.
 - Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only for behavior that has been implemented and verified; keep decisions that are open or agreed but unapplied in the active plan.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.

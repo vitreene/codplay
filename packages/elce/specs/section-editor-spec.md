@@ -38,12 +38,27 @@ La corbeille du titre envoie `bdc.section.delete` au même contrôleur. Cette
 commande retire la Section de sa page, supprime les Cartes ancrées qui lui
 appartiennent et conserve leurs ressources média réutilisables.
 
+Dans la preuve Remix, `SectionTiptapAdapter` instancie `Editor` depuis
+`@tiptap/core` et le monte sur le host fourni par la `ref` Remix. Remix rend le
+titre, la barre et les commandes ; ProseMirror garde le DOM éditable et ses
+gestes internes. Les callbacks de dépôt et de transaction continuent d’appeler
+`EditorActionsFacade` et le même contrôleur XState. Quand la source d’un média
+ancré devient disponible après sa persistance, l’adaptateur rafraîchit les
+NodeViews concernées en place : le DOM ProseMirror n’est pas remonté pour ce
+seul changement de source. Cette preuve temporaire ne remplace
+pas encore la surface auteur de production.
+
 ## Preuves
 
 - [`section-editor.test.tsx`](../src/app/editor/section/section-editor.test.tsx) vérifie
   le montage de la surface Tiptap dans un DOM réel de test et l’actualisation
   des commandes actives lorsque la sélection passe d’un titre italique à un
   paragraphe.
+- [`remix-section-editor-proof-temp.test.tsx`](../src/app/editor/section/remix-section-editor-proof-temp.test.tsx)
+  vérifie le montage Remix de Tiptap Core, les commandes de titre et toolbar,
+  la conservation du même Editor pendant les mises à jour, le dépôt d’une image
+  jusqu’à sa persistance XState, le rendu du média et le déplacement natif de
+  l’ancre.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la conservation conjointe du JSON et du HTML exporté, ainsi que la
   suppression de la Section et de ses BDC ancrés en conservant les médias.

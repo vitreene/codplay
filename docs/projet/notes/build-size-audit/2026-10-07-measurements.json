@@ -1,0 +1,217 @@
+{
+  "measuredAt": "2026-10-07T14:47:14.713Z",
+  "gitRevision": "ba07c4125b7714013fea29d2459af2f3498b4dd8",
+  "packageWorkingTreeStatus": "",
+  "tools": {
+    "node": "v26.10.0",
+    "vite": "8.1.0",
+    "rolldown": "1.1.3",
+    "zip": [
+      "Copyright (c) 1990-2008 Info-ZIP - Type 'zip \"-L\"' for software license.",
+      "This is Zip 3.0 (July 5th 2008), by Info-ZIP, with modifications by Apple Inc.",
+      "Please report bugs to Apple."
+    ]
+  },
+  "configuration": {
+    "format": "es",
+    "target": "es2023",
+    "entry": "src/index.ts",
+    "sourceMaps": false,
+    "typescriptDeclarations": false,
+    "publicAssets": false,
+    "minifier": "oxc, including whitespace minification through rolldownOptions.output.minify",
+    "archive": "ZIP Deflate, zip -X -9, UTC timestamps fixed at 2000-01-01"
+  },
+  "checks": {
+    "javascriptSyntax": true,
+    "exportParity": true,
+    "zipIntegrityAndContents": true
+  },
+  "outputDirectory": "dist/build-size-audit-UiEyRN",
+  "measurements": [
+    {
+      "library": "codplay",
+      "minified": false,
+      "bytes": 871780,
+      "files": [
+        {
+          "path": "codplay/unminified/codplay.js",
+          "bytes": 871780,
+          "sha256": "9159c6567a5eb8f018a62165aeeb6101cd2df3ac639b96f17aefbe9d5dfd7bce"
+        }
+      ],
+      "zip": {
+        "path": "codplay/unminified.zip",
+        "bytes": 193420,
+        "sha256": "efb5548ebef8e866214918eef1100045dc8caff117645a946770ae63522fa83f"
+      },
+      "zipVerified": true,
+      "exports": [
+        "BaseComponent",
+        "BaseHTMLComponent",
+        "CodPlay",
+        "DEFAULT_RUNTIME_IDLE_DURATION_MS",
+        "DEFAULT_RUNTIME_IDLE_EVENT_NAME",
+        "RuntimeIdleMonitor",
+        "resolveRuntimeIdleOptions",
+        "resolveSlotManifestEntry",
+        "slotManifest"
+      ],
+      "imports": [],
+      "dynamicImports": [],
+      "moduleCounts": {
+        "packages/codplay": 236
+      },
+      "moduleCount": 236
+    },
+    {
+      "library": "codplay",
+      "minified": true,
+      "bytes": 396531,
+      "files": [
+        {
+          "path": "codplay/minified/codplay.js",
+          "bytes": 396531,
+          "sha256": "ca0c9cfe23e9dce40b3b1cee1a8a67401fda54d06461a96cf10666ec0eded0b2"
+        }
+      ],
+      "zip": {
+        "path": "codplay/minified.zip",
+        "bytes": 106491,
+        "sha256": "9ccd9b2e6b958cbf109f0a5a26868797cb39cdab21f54a0d1be0ca2599676de7"
+      },
+      "zipVerified": true,
+      "exports": [
+        "BaseComponent",
+        "BaseHTMLComponent",
+        "CodPlay",
+        "DEFAULT_RUNTIME_IDLE_DURATION_MS",
+        "DEFAULT_RUNTIME_IDLE_EVENT_NAME",
+        "RuntimeIdleMonitor",
+        "resolveRuntimeIdleOptions",
+        "resolveSlotManifestEntry",
+        "slotManifest"
+      ],
+      "imports": [],
+      "dynamicImports": [],
+      "moduleCounts": {
+        "packages/codplay": 236
+      },
+      "moduleCount": 236
+    },
+    {
+      "library": "sighty",
+      "minified": false,
+      "bytes": 128831,
+      "files": [
+        {
+          "path": "sighty/unminified/sighty.js",
+          "bytes": 128831,
+          "sha256": "9b4d7bf879dfb719f596e0b530a75e9608e7de55882d2de6831a858b91770169"
+        }
+      ],
+      "zip": {
+        "path": "sighty/unminified.zip",
+        "bytes": 28153,
+        "sha256": "e611c643c5a65e517b725f692825bd391a7444314283650fb96c63b33f524a8d"
+      },
+      "zipVerified": true,
+      "exports": [
+        "Sighty"
+      ],
+      "imports": [
+        "codplay"
+      ],
+      "dynamicImports": [],
+      "moduleCounts": {
+        "packages/sighty": 31
+      },
+      "moduleCount": 31
+    },
+    {
+      "library": "sighty",
+      "minified": true,
+      "bytes": 64465,
+      "files": [
+        {
+          "path": "sighty/minified/sighty.js",
+          "bytes": 64465,
+          "sha256": "42990d033f3c839c6301ed666fd6216221bbd6a086ac4df610fa8b11834fc2b8"
+        }
+      ],
+      "zip": {
+        "path": "sighty/minified.zip",
+        "bytes": 15711,
+        "sha256": "12aa2692cb9dd1547821439a219d5fb130825ec49c60b90877bd7db9edf8fc82"
+      },
+      "zipVerified": true,
+      "exports": [
+        "Sighty"
+      ],
+      "imports": [
+        "codplay"
+      ],
+      "dynamicImports": [],
+      "moduleCounts": {
+        "packages/sighty": 31
+      },
+      "moduleCount": 31
+    },
+    {
+      "library": "sighty-with-codplay",
+      "minified": false,
+      "bytes": 1000010,
+      "files": [
+        {
+          "path": "sighty-with-codplay/unminified/sighty-with-codplay.js",
+          "bytes": 1000010,
+          "sha256": "15bb9b9a05c0d88cb61aec3c295dee53f7bc28f7aacd229edaac56553e95d1b6"
+        }
+      ],
+      "zip": {
+        "path": "sighty-with-codplay/unminified.zip",
+        "bytes": 220488,
+        "sha256": "23a865fdd8f352a6490a2a056973a87c219267b4efd872fe6101b415ba0960ca"
+      },
+      "zipVerified": true,
+      "exports": [
+        "Sighty"
+      ],
+      "imports": [],
+      "dynamicImports": [],
+      "moduleCounts": {
+        "packages/codplay": 236,
+        "packages/sighty": 31
+      },
+      "moduleCount": 267
+    },
+    {
+      "library": "sighty-with-codplay",
+      "minified": true,
+      "bytes": 460824,
+      "files": [
+        {
+          "path": "sighty-with-codplay/minified/sighty-with-codplay.js",
+          "bytes": 460824,
+          "sha256": "4fa52c9fc7dbd58f9c2a044897ae03bef4d2cb7a33ad3baa9e42a392bba6286c"
+        }
+      ],
+      "zip": {
+        "path": "sighty-with-codplay/minified.zip",
+        "bytes": 121684,
+        "sha256": "520ed9fea30f4cb2255a00f47f11a1184634fece3e626dc65e82dd1781562286"
+      },
+      "zipVerified": true,
+      "exports": [
+        "Sighty"
+      ],
+      "imports": [],
+      "dynamicImports": [],
+      "moduleCounts": {
+        "packages/codplay": 236,
+        "packages/sighty": 31
+      },
+      "moduleCount": 267
+    }
+  ]
+}

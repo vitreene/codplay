@@ -15,7 +15,7 @@ import type { CardLayoutId } from '../../../config/document-config-types'
 import type { Bdc } from '../../../domain/document/document-types'
 import type { ElceCardEditorFieldsProps } from './card-editor-fields-types'
 import type { CardContent } from '../../../domain/card/card-types'
-import type { ElceCatalogReference } from '../../../domain/catalog/catalog-types'
+import { cardLayoutAcceptsFile, cardLayoutAcceptsMedia, cardToolbarClassName, parseCardMediaReference } from './card-editor-rules'
 
 /** Renders the selected Card layout and its currently visible authored fields. */
 export function CardBdcEditorFields({
@@ -105,13 +105,6 @@ export function CardPresentationSettings({ bdc, mediaById, actions, idPrefix }: 
 }
 
 /** Chooses a compact one-row toolbar for the fields projected by one Card layout. */
-export function cardToolbarClassName(presetId: string): string {
-  const baseClassName = 'elce-carousel-editor__view-toolbar'
-  if (presetId === DEFAULT_PRESET_ID.TEXT_SHORT) return `${baseClassName} ${baseClassName}--text-only`
-  if (presetId === DEFAULT_PRESET_ID.TEXT_IMAGE) return `${baseClassName} ${baseClassName}--image-position`
-  return `${baseClassName} ${baseClassName}--image`
-}
-
 /** Renders only the fields projected by the selected Card layout. */
 function renderCardContent(
   bdc: Bdc,
@@ -206,7 +199,7 @@ function CardMediaEditor({ bdc, mediaById, actions, idPrefix, imageAspectRatio, 
 
   /** Routes selected image files to this Card or to a Carousel batch import. */
   const importFiles = (files: readonly File[]): void => {
-    const acceptedFiles = files.filter((file) => acceptsFile(bdc.presetId as CardLayoutId, file))
+    const acceptedFiles = files.filter((file) => cardLayoutAcceptsFile(bdc.presetId as CardLayoutId, file))
     if (acceptedFiles.length === 0) return
     if (allowMultipleMediaFiles && acceptedFiles.length > 1 && importMediaFiles !== undefined) {
       importMediaFiles(bdc.id, acceptedFiles)
@@ -223,9 +216,9 @@ function CardMediaEditor({ bdc, mediaById, actions, idPrefix, imageAspectRatio, 
       importFiles(files)
       return
     }
-    const reference = parseCatalogReference(event.dataTransfer.getData(CATALOG_REFERENCE.MIME_TYPE))
+    const reference = parseCardMediaReference(event.dataTransfer.getData(CATALOG_REFERENCE.MIME_TYPE))
     if (reference?.kind !== CATALOG_REFERENCE.MEDIA) return
-    if (!acceptsCatalogMedia(bdc.presetId as CardLayoutId, mediaById[reference.mediaId]?.type)) {
+    if (!cardLayoutAcceptsMedia(bdc.presetId as CardLayoutId, mediaById[reference.mediaId]?.type)) {
       event.preventDefault()
       return
     }
@@ -289,34 +282,4 @@ function CardMediaEditor({ bdc, mediaById, actions, idPrefix, imageAspectRatio, 
       </div>
     </div>
   )
-}
-
-/** Parses a catalog payload while rejecting a unique BDC as a media reference. */
-function parseCatalogReference(value: string): ElceCatalogReference | null {
-  try {
-    const reference = JSON.parse(value) as ElceCatalogReference
-    return reference.kind === CATALOG_REFERENCE.MEDIA ? reference : null
-  } catch {
-    return null
-  }
-}
-
-/** Accepts image and video files only where the active layout projects them. */
-function acceptsFile(layoutId: CardLayoutId, file: File): boolean {
-  if (file.type.startsWith('image/')) return acceptsCatalogMedia(layoutId, MEDIA_TYPE.IMAGE)
-  if (file.type.startsWith('video/')) return acceptsCatalogMedia(layoutId, MEDIA_TYPE.VIDEO)
-  return false
-}
-
-/** Applies layout-specific media selection rules without deleting hidden Card data. */
-function acceptsCatalogMedia(layoutId: CardLayoutId, mediaType: typeof MEDIA_TYPE[keyof typeof MEDIA_TYPE] | undefined): boolean {
-  switch (layoutId) {
-    case DEFAULT_PRESET_ID.PHOTO:
-      return mediaType === MEDIA_TYPE.IMAGE || mediaType === MEDIA_TYPE.VIDEO
-    case DEFAULT_PRESET_ID.IMAGE_CAPTION:
-    case DEFAULT_PRESET_ID.TEXT_IMAGE:
-      return mediaType === MEDIA_TYPE.IMAGE
-    case DEFAULT_PRESET_ID.TEXT_SHORT:
-      return false
-  }
 }

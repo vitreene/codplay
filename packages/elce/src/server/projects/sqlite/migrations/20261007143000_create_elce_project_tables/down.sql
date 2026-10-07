@@ -1,0 +1,14 @@
+DROP TABLE cards;
+DROP TABLE carousels;
+DROP TABLE evaluation_result_branches;
+DROP TABLE question_answers;
+DROP TABLE questions;
+DROP TABLE sections;
+DROP TABLE content_block_placements;
+DROP TABLE content_blocks;
+DROP TABLE media_resources;
+DROP TABLE catalog_pages;
+DROP TABLE scenario_entries;
+DROP TABLE pages;
+DROP TABLE chapters;
+DROP TABLE projects;

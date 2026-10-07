@@ -96,12 +96,12 @@ Scinder le rendu restant en surfaces aux responsabilités déjà visibles, sans 
 
 #### Section et Tiptap
 
-`SectionEditor` est l’adaptateur Tiptap/DOM : il configure les extensions, transforme les transactions en `ElceSectionChange`, exporte JSON et HTML et affiche la toolbar. `ElceAnchorExtension` et son NodeView ProseMirror ne dépendent pas de React et restent en place.
+`SectionEditor` est l’adaptateur Tiptap/DOM : il configure les extensions, transforme les transactions en `ElceSectionChange`, exporte JSON et HTML et affiche la toolbar. Le code actuel de `ElceAnchorExtension` importe encore React uniquement pour produire l’icône Réglages2 de son NodeView ; ce rendu doit devenir natif avant que le circuit Tiptap Remix soit sans React. Les gestes internes du NodeView et des plugins restent sous la propriété de Tiptap/ProseMirror.
 
 Lors du portage prévu par le plan Remix :
 
-- remplacer seulement `@tiptap/react` (`useEditor`, `useEditorState`, `EditorContent`) par un adaptateur de cycle de vie fondé sur `@tiptap/core` ;
-- isoler le montage/démontage de l’éditeur, l’abonnement à ses transactions et l’actualisation de l’état de toolbar hors du rendu ;
+- remplacer `@tiptap/react` (`useEditor`, `useEditorState`, `EditorContent`) et le rendu React de l’icône du NodeView par les mécanismes Remix et les SVG statiques Lucide ;
+- isoler le montage/démontage de l’éditeur, l’abonnement à ses transactions et l’actualisation de l’état de toolbar dans le cycle Remix documenté ;
 - conserver le schéma, le JSON métier, le HTML statique, les commandes Tiptap, les métadonnées de transaction d’ancre et les callbacks typés ;
 - garder `ElceAnchorExtension` comme extension ProseMirror, sans lui faire connaître Remix ni XState.
 
@@ -115,7 +115,7 @@ Le callback de Section est branché sur la façade Ancre de l’étape 2. Ne pas
 - Le même BDC Carte et les mêmes champs de carte servent à une Carte autonome directe dans une Diapo et aux Cartes enfants d’un Carousel. Garder l’éditeur partagé ; la whitelist d’interface n’autorise une Carte autonome que comme unique BDC direct d’une Diapo. Le domaine et les commandes préservent également cette règle.
 - Le drag de réponses/cartes et le choix natif de fichier restent dans ces adaptateurs. Les callbacks ne reçoivent pas d’objet React ni d’événement DOM.
 - `EvaluationResultEditor` ne doit plus importer `ElceEvaluationResultService` ni calculer lui-même le nouveau contenu. Il transmet la branche et le changement à une façade d’application ; celle-ci appelle le service métier puis envoie `bdc.evaluation-result.update` à XState.
-- Remplacer les imports d’icônes React par le mécanisme Lucide retenu pour le runtime Remix. Le paquet de remplacement n’est pas fixé par cet audit ; ne pas choisir ni ajouter une dépendance avant la preuve de l’étape 1 du plan Remix.
+- Dans la preuve Remix, les icônes viennent de `lucide-static` et leurs SVG sont transformés en éléments Remix natifs avec `DOMParser`. Safari vérifie leur rendu dans la route réelle ; aucun composant d’icône React ni insertion brute par `innerHTML` n’est utilisé. Cette décision ne porte que sur la surface Remix éprouvée.
 
 **Acceptation :** les vues n’importent ni l’entrée `document-commands` ni les services mutationnels ; les tests préservent les invariants Question, le changement de layout sans perte de champs, la durée et l’ordre Carousel, ainsi que les actions Réussite/Échec.
 
@@ -190,7 +190,7 @@ Ne pas publier ces changements comme comportement vérifié avant les tests conc
 
 ## Décisions qui bloquent encore des détails du portage
 
-- **Icônes :** l’usage de Lucide est conservé, mais la bibliothèque/méthode de rendu hors React n’est pas décidée. La trancher dans la preuve Remix de l’interface ; l’état actif, les noms accessibles et les tailles d’icônes doivent rester conformes.
+- **Icônes :** décision appliquée dans la preuve Carte : `lucide-static` fournit les SVG et `DOMParser` permet de les rendre en éléments SVG Remix natifs. L’état accessible et la taille sont vérifiés dans Safari. Réutiliser ce circuit pour les autres surfaces portées, puis retirer `lucide-react` seulement après vérification qu’aucun autre rendu du workspace Elcé n’en dépend.
 - **Cycle de vie Remix :** le contexte, l’abonnement XState, `handle.update()` et le désabonnement d’une vue sont prouvés dans le runtime RC retenu et dans Safari par une route temporaire. Le montage/démontage de Tiptap, son DOM ProseMirror et ses transactions restent à éprouver avant de porter la Section. Aucun pont d’état parallèle ni API supposée ne doit être ajouté.
 
 ## Critères de clôture de cet audit

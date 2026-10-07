@@ -17,7 +17,7 @@ import { PlayerPreview } from '../player/player-preview'
 import { PopupPreviewHost } from '../player/popup-preview-host'
 import { PREVIEW_SURFACE } from '../player/preview-surface-config'
 import type { ElceDocument } from '../../domain/document/document-model'
-import type { Chapter } from '../../domain/document/document-types'
+import type { Bdc, Chapter, Page } from '../../domain/document/document-types'
 import { mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
@@ -31,6 +31,11 @@ const chapterIcons = {
   folder: Folder,
   'clipboard-check': ClipboardCheck,
 } as const
+
+/** Marks an unhandled configured value so new types require a renderer branch. */
+function assertNever(value: never): never {
+  throw new Error(`Type non pris en charge dans AppLayout : ${String(value)}`)
+}
 
 /** Renders the chapter type icon and any label configured for that type. */
 function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
@@ -402,6 +407,231 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
     }
   }
 
+  /** Renders the editable title contents shared by active and contextual chapters. */
+  const renderChapterTitleContents = (chapter: Chapter) => (
+    <>
+      <ChapterTypeMark type={chapter.type} />
+      <input
+        id={`elce-chapter-title-${chapter.id}`}
+        key={`${chapter.id}:${chapter.name}`}
+        className="elce-inline-title-input"
+        type="text"
+        aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
+        title={CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel}
+        defaultValue={chapter.name}
+        onBlur={(event) => commitInlineName(event.currentTarget, chapter.name, (name) => actions.renameChapter(chapter.id, name))}
+        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      />
+    </>
+  )
+
+  /** Selects the chapter heading level from the current editor selection. */
+  const renderChapterTitle = () => {
+    switch (selectedChapter) {
+      case undefined:
+        if (pageChapter === undefined) return null
+        return (
+          <h2 id="elce-work-area-chapter-title" className="elce-work-area-chapter-title">
+            {renderChapterTitleContents(pageChapter)}
+          </h2>
+        )
+      default:
+        return (
+          <h1 id="elce-work-area-chapter-title" className="elce-work-area-page-title elce-work-area-chapter-title--active">
+            {renderChapterTitleContents(selectedChapter)}
+          </h1>
+        )
+    }
+  }
+
+  /** Renders the page heading or the empty-editor heading when no chapter is selected. */
+  const renderPageTitle = () => {
+    if (selectedChapter !== undefined) return null
+    switch (selectedPage) {
+      case undefined:
+        return <h1 id="elce-work-area-title">Éditeur</h1>
+      default:
+        return (
+          <h1 id="elce-work-area-title" className="elce-work-area-page-title">
+            <input
+              id={`elce-page-title-${selectedPage.id}`}
+              key={`${selectedPage.id}:${selectedPage.name}`}
+              className="elce-inline-title-input"
+              type="text"
+              aria-label="Titre de la page"
+              title="Modifier le titre de la page"
+              defaultValue={selectedPage.name}
+              onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => actions.renamePage(selectedPage.id, name))}
+              onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+            />
+          </h1>
+        )
+    }
+  }
+
+  /** Renders the editor associated with one BDC type through an exhaustive dispatch. */
+  const renderBdcEditor = (bdc: Bdc, page: Page, carouselCards: readonly Bdc[]) => {
+    switch (bdc.type) {
+      case BDC_TYPE.SECTION:
+        return (
+          <SectionEditor
+            key={`${bdc.id}:${mediaSourceKey}`}
+            bdc={bdc}
+            onDelete={() => actions.deleteSection(bdc.id)}
+            createFileDropTarget={(file) => actions.createSectionFileDropTarget(file, page.id)}
+            createCatalogDropTarget={(reference) => actions.createSectionCatalogDropTarget(
+              documentModel,
+              reference,
+              page.id,
+              bdc.id,
+            )}
+            resolveCard={(anchorBdcId) => {
+              const card = documentModel.bdcs.find((candidate) => candidate.id === anchorBdcId)
+              if (card?.type !== BDC_TYPE.CARD || card.card == null) return null
+              const mediaId = card.card.mediaId
+              if (mediaId === null) return null
+              const media = documentModel.medias.find((candidate) => candidate.id === mediaId)
+              const source = mediaSources[mediaId]
+              if (media === undefined || source === undefined) return null
+              const type = mediaTypeFromMimeType(media.mimeType)
+              if (type === null) return null
+              return { source, type, layoutId: card.presetId as CardLayoutId }
+            }}
+            anchorCards={documentModel.bdcs.filter((candidate) => candidate.type === BDC_TYPE.CARD && candidate.parentBdcId === bdc.id)}
+            mediaById={mediaById}
+            cardActions={actions.createCardEditorActions(documentModel.bdcs)}
+            onChange={(change) => actions.submitSectionChange(bdc.id, change)}
+          />
+        )
+      case BDC_TYPE.QUESTION:
+        if (bdc.question === null) return null
+        return (
+          <QuestionEditor
+            bdcId={bdc.id}
+            question={bdc.question}
+            media={documentModel.medias.find((media) => media.id === bdc.question?.mediaId) ?? null}
+            mediaType={bdc.question.mediaId == null
+              ? null
+              : mediaTypeFromMimeType(documentModel.medias.find((media) => media.id === bdc.question?.mediaId)?.mimeType ?? '')}
+            mediaSource={bdc.question.mediaId == null ? null : mediaSources[bdc.question.mediaId] ?? null}
+            actions={actions.createQuestionEditorActions(bdc.id, bdc.question)}
+            onCatalogReference={(value) => actions.attachQuestionMediaReference(bdc.id, value)}
+          />
+        )
+      case BDC_TYPE.EVALUATION_RESULT:
+        if (bdc.evaluationResult == null) return null
+        return (
+          <EvaluationResultEditor
+            bdcId={bdc.id}
+            content={bdc.evaluationResult}
+            onChange={(evaluationResult) => actions.updateEvaluationResult(bdc.id, evaluationResult)}
+            onDelete={() => actions.deleteEvaluationResult(bdc.id)}
+          />
+        )
+      case BDC_TYPE.CAROUSEL:
+        if (bdc.carousel == null) return null
+        return (
+          <CarouselEditor
+            bdcId={bdc.id}
+            content={bdc.carousel}
+            cards={carouselCards}
+            selectedCardBdcId={selectedCarouselCardBdcId}
+            mediaById={mediaById}
+            actions={actions.createCarouselEditorActions(bdc.id, bdc.carousel, carouselCards, documentModel.data.revelationDefaults)}
+          />
+        )
+      case BDC_TYPE.CARD:
+        if (bdc.card == null) return null
+        return (
+          <CardEditor
+            bdc={bdc}
+            mediaById={mediaById}
+            actions={actions.createCardEditorActions(documentModel.bdcs)}
+            onDelete={() => actions.deleteCard(bdc.id)}
+          />
+        )
+      default:
+        return assertNever(bdc.type)
+    }
+  }
+
+  /** Renders BDC rows and their drag separators for the selected page. */
+  const renderPageBdcList = (page: Page) => (
+    <div id={`elce-page-bdc-list-${page.id}`} className="elce-page-bdc-list">
+      {selectedPageBdcs.length === 0
+        ? <p id="elce-editor-unavailable">Cette page ne contient aucun bloc éditable.</p>
+        : null}
+      {selectedPageBdcs.map((bdc) => {
+        const index = page.bdcIds.indexOf(bdc.id)
+        const separatorId = `elce-page-bdc-drop-${index}`
+        const carouselCards = bdc.carousel?.cards.flatMap((entry) => {
+          const card = documentModel.bdcs.find((candidate) => candidate.id === entry.bdcId)
+          if (card === undefined) return []
+          return [card]
+        }) ?? []
+        return (
+          <Fragment key={bdc.id}>
+            <div
+              id={separatorId}
+              className={dropTarget === separatorId ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
+              aria-label="Déposer le bloc à cet endroit"
+              onDragOver={(event) => dragOverBdcSeparator(event, separatorId)}
+              onDragLeave={dragLeaveDropSeparator}
+              onDrop={(event) => dropBdc(event, index)}
+            ><span /></div>
+            <div id={`elce-page-bdc-${bdc.id}`} className="elce-page-bdc">
+              <button
+                id={`elce-page-bdc-drag-${bdc.id}`}
+                className="elce-page-bdc__drag"
+                type="button"
+                draggable
+                aria-label="Déplacer le bloc dans la page"
+                title="Glisser pour déplacer"
+                onDragStart={(event) => beginBdcDrag(event, bdc.id)}
+                onDragEnd={endBdcDrag}
+              ><GripVertical aria-hidden="true" size={15} /></button>
+              {renderBdcEditor(bdc, page, carouselCards)}
+            </div>
+          </Fragment>
+        )
+      })}
+      <div
+        id={`elce-page-bdc-drop-${page.bdcIds.length}`}
+        className={dropTarget === `elce-page-bdc-drop-${page.bdcIds.length}` ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
+        aria-label="Déposer le bloc à la fin de la page"
+        onDragOver={(event) => dragOverBdcSeparator(event, `elce-page-bdc-drop-${page.bdcIds.length}`)}
+        onDragLeave={dragLeaveDropSeparator}
+        onDrop={(event) => dropBdc(event, page.bdcIds.length)}
+      ><span /></div>
+    </div>
+  )
+
+  /** Selects chapter settings, the empty state, or the selected page using explicit branches. */
+  const renderWorkAreaContent = () => {
+    if (selectedChapter !== undefined) {
+      switch (selectedChapter.type) {
+        case CHAPTER_TYPE.EVALUATION:
+          return (
+            <EvaluationChapterSettingsEditor
+              chapter={selectedChapter}
+              onChange={(attemptLimit, retryScope) => actions.updateEvaluationChapterSettings(selectedChapter.id, attemptLimit, retryScope)}
+            />
+          )
+        case CHAPTER_TYPE.STANDARD:
+          return null
+        default:
+          return assertNever(selectedChapter.type)
+      }
+    }
+
+    switch (selectedPage) {
+      case undefined:
+        return <p id="elce-editor-unavailable">Sélectionnez une page du scénario.</p>
+      default:
+        return renderPageBdcList(selectedPage)
+    }
+  }
+
   return (
     <div id="elce-workspace" className="elce-workspace">
       <header id="elce-header" className="elce-header">
@@ -537,54 +767,8 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
             </div>
             <div id="elce-work-area-title-row" className="elce-work-area-title-row">
               <div id="elce-work-area-titles" className="elce-work-area-titles">
-                {selectedChapter !== undefined
-                  ? <h1 id="elce-work-area-chapter-title" className="elce-work-area-page-title elce-work-area-chapter-title--active">
-                      <ChapterTypeMark type={selectedChapter.type} />
-                      <input
-                        id={`elce-chapter-title-${selectedChapter.id}`}
-                        key={`${selectedChapter.id}:${selectedChapter.name}`}
-                        className="elce-inline-title-input"
-                        type="text"
-                        aria-label={CHAPTER_TYPE_CONFIG[selectedChapter.type].titleLabel}
-                        title={CHAPTER_TYPE_CONFIG[selectedChapter.type].editTitleLabel}
-                        defaultValue={selectedChapter.name}
-                        onBlur={(event) => commitInlineName(event.currentTarget, selectedChapter.name, (name) => actions.renameChapter(selectedChapter.id, name))}
-                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-                      />
-                    </h1>
-                  : pageChapter === undefined
-                    ? null
-                    : <h2 id="elce-work-area-chapter-title" className="elce-work-area-chapter-title">
-                        <ChapterTypeMark type={pageChapter.type} />
-                        <input
-                          id={`elce-chapter-title-${pageChapter.id}`}
-                          key={`${pageChapter.id}:${pageChapter.name}`}
-                          className="elce-inline-title-input"
-                          type="text"
-                          aria-label={CHAPTER_TYPE_CONFIG[pageChapter.type].titleLabel}
-                          title={CHAPTER_TYPE_CONFIG[pageChapter.type].editTitleLabel}
-                          defaultValue={pageChapter.name}
-                          onBlur={(event) => commitInlineName(event.currentTarget, pageChapter.name, (name) => actions.renameChapter(pageChapter.id, name))}
-                          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-                        />
-                      </h2>}
-                {selectedChapter !== undefined
-                  ? null
-                  : selectedPage === undefined
-                  ? <h1 id="elce-work-area-title">Éditeur</h1>
-                  : <h1 id="elce-work-area-title" className="elce-work-area-page-title">
-                      <input
-                        id={`elce-page-title-${selectedPage.id}`}
-                        key={`${selectedPage.id}:${selectedPage.name}`}
-                        className="elce-inline-title-input"
-                        type="text"
-                        aria-label="Titre de la page"
-                        title="Modifier le titre de la page"
-                        defaultValue={selectedPage.name}
-                        onBlur={(event) => commitInlineName(event.currentTarget, selectedPage.name, (name) => actions.renamePage(selectedPage.id, name))}
-                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-                      />
-                    </h1>}
+                {renderChapterTitle()}
+                {renderPageTitle()}
               </div>
               {selectedChapter === undefined && <div id="elce-work-area-actions" className="elce-work-area-actions">
                 <button
@@ -634,125 +818,7 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
               </div>}
             </div>
           </div>
-          {selectedChapter !== undefined
-            ? selectedChapter.type === CHAPTER_TYPE.EVALUATION
-              ? <EvaluationChapterSettingsEditor
-                  chapter={selectedChapter}
-                  onChange={(attemptLimit, retryScope) => actions.updateEvaluationChapterSettings(selectedChapter.id, attemptLimit, retryScope)}
-                />
-              : null
-            : selectedPage === undefined
-              ? <p id="elce-editor-unavailable">Sélectionnez une page du scénario.</p>
-              : <div id={`elce-page-bdc-list-${selectedPage.id}`} className="elce-page-bdc-list">
-                {selectedPageBdcs.length === 0
-                  ? <p id="elce-editor-unavailable">Cette page ne contient aucun bloc éditable.</p>
-                  : null}
-                {selectedPageBdcs.map((bdc) => {
-                  const index = selectedPage.bdcIds.indexOf(bdc.id)
-                  const separatorId = `elce-page-bdc-drop-${index}`
-                  const carouselCards = bdc.carousel?.cards.flatMap((entry) => {
-                    const card = documentModel.bdcs.find((candidate) => candidate.id === entry.bdcId)
-                    return card === undefined ? [] : [card]
-                  }) ?? []
-                  return (
-                    <Fragment key={bdc.id}>
-                      <div
-                        id={separatorId}
-                        className={dropTarget === separatorId ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
-                        aria-label="Déposer le bloc à cet endroit"
-                        onDragOver={(event) => dragOverBdcSeparator(event, separatorId)}
-                        onDragLeave={dragLeaveDropSeparator}
-                        onDrop={(event) => dropBdc(event, index)}
-                      ><span /></div>
-                      <div id={`elce-page-bdc-${bdc.id}`} className="elce-page-bdc">
-                        <button
-                          id={`elce-page-bdc-drag-${bdc.id}`}
-                          className="elce-page-bdc__drag"
-                          type="button"
-                          draggable
-                          aria-label="Déplacer le bloc dans la page"
-                          title="Glisser pour déplacer"
-                          onDragStart={(event) => beginBdcDrag(event, bdc.id)}
-                          onDragEnd={endBdcDrag}
-                        ><GripVertical aria-hidden="true" size={15} /></button>
-                        {bdc.type === BDC_TYPE.SECTION
-                          ? <SectionEditor
-                              key={`${bdc.id}:${mediaSourceKey}`}
-                              bdc={bdc}
-                              onDelete={() => actions.deleteSection(bdc.id)}
-                              createFileDropTarget={(file) => actions.createSectionFileDropTarget(file, selectedPage.id)}
-                              createCatalogDropTarget={(reference) => actions.createSectionCatalogDropTarget(
-                                documentModel,
-                                reference,
-                                selectedPage.id,
-                                bdc.id,
-                              )}
-                              resolveCard={(anchorBdcId) => {
-                                const card = documentModel.bdcs.find((candidate) => candidate.id === anchorBdcId)
-                                if (card?.type !== BDC_TYPE.CARD || card.card == null) return null
-                                const mediaId = card.card.mediaId
-                                if (mediaId === null) return null
-                                const media = documentModel.medias.find((candidate) => candidate.id === mediaId)
-                                const source = mediaSources[mediaId]
-                                const type = media === undefined ? null : mediaTypeFromMimeType(media.mimeType)
-                                return media === undefined || source === undefined || type === null
-                                  ? null
-                                  : { source, type, layoutId: card.presetId as CardLayoutId }
-                              }}
-                              anchorCards={documentModel.bdcs.filter((candidate) => candidate.type === BDC_TYPE.CARD && candidate.parentBdcId === bdc.id)}
-                              mediaById={mediaById}
-                              cardActions={actions.createCardEditorActions(documentModel.bdcs)}
-                              onChange={(change) => actions.submitSectionChange(bdc.id, change)}
-                            />
-                          : bdc.type === BDC_TYPE.QUESTION && bdc.question !== null
-                            ? <QuestionEditor
-                                bdcId={bdc.id}
-                                question={bdc.question}
-                                media={documentModel.medias.find((media) => media.id === bdc.question?.mediaId) ?? null}
-                                mediaType={bdc.question?.mediaId == null
-                                  ? null
-                                  : mediaTypeFromMimeType(documentModel.medias.find((media) => media.id === bdc.question?.mediaId)?.mimeType ?? '')}
-                                mediaSource={bdc.question?.mediaId == null ? null : mediaSources[bdc.question.mediaId] ?? null}
-                                actions={actions.createQuestionEditorActions(bdc.id, bdc.question)}
-                                onCatalogReference={(value) => actions.attachQuestionMediaReference(bdc.id, value)}
-                              />
-                            : bdc.type === BDC_TYPE.EVALUATION_RESULT && bdc.evaluationResult !== null && bdc.evaluationResult !== undefined
-                              ? <EvaluationResultEditor
-                                  bdcId={bdc.id}
-                                  content={bdc.evaluationResult}
-                                  onChange={(evaluationResult) => actions.updateEvaluationResult(bdc.id, evaluationResult)}
-                                  onDelete={() => actions.deleteEvaluationResult(bdc.id)}
-                                />
-                              : bdc.type === BDC_TYPE.CAROUSEL && bdc.carousel !== null && bdc.carousel !== undefined
-                              ? <CarouselEditor
-                                  bdcId={bdc.id}
-                                  content={bdc.carousel}
-                                  cards={carouselCards}
-                                  selectedCardBdcId={selectedCarouselCardBdcId}
-                                  mediaById={mediaById}
-                                  actions={actions.createCarouselEditorActions(bdc.id, bdc.carousel, carouselCards, documentModel.data.revelationDefaults)}
-                                />
-                              : bdc.type === BDC_TYPE.CARD && bdc.card !== null
-                              ? <CardEditor
-                                  bdc={bdc}
-                                  mediaById={mediaById}
-                                  actions={actions.createCardEditorActions(documentModel.bdcs)}
-                                  onDelete={() => actions.deleteCard(bdc.id)}
-                                />
-                              : null}
-                      </div>
-                    </Fragment>
-                  )
-                })}
-                <div
-                  id={`elce-page-bdc-drop-${selectedPage.bdcIds.length}`}
-                  className={dropTarget === `elce-page-bdc-drop-${selectedPage.bdcIds.length}` ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
-                  aria-label="Déposer le bloc à la fin de la page"
-                  onDragOver={(event) => dragOverBdcSeparator(event, `elce-page-bdc-drop-${selectedPage.bdcIds.length}`)}
-                  onDragLeave={dragLeaveDropSeparator}
-                  onDrop={(event) => dropBdc(event, selectedPage.bdcIds.length)}
-                ><span /></div>
-              </div>}
+          {renderWorkAreaContent()}
         </section>
         <aside
           id="elce-properties"

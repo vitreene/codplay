@@ -22,4 +22,5 @@ export interface ElceAnchorExtensionOptions {
   readonly createCatalogDropTarget?: (reference: ElceCatalogReference) => ElceCatalogDropTarget | null
   readonly resolveCard?: (bdcId: BdcId) => ElceAnchorMediaPreview | null
   readonly onEditCard?: (bdcId: BdcId) => void
+  readonly registerNodeViewRefresh?: (bdcId: BdcId, refresh: () => void) => () => void
 }

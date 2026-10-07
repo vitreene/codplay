@@ -39,6 +39,34 @@ celui-ci ne remplace pas les spécifications ou plans actifs.
 | Capture continue | [Capture](../specs/capture-v2-spec.md) | — |
 | Observation par scroll | [Scroll-container](../specs/scroll-container-spec.md) | [Enregistrement des observations](./scroll-observation-registration-plan.md), [reset de position](./scroll-container-reset-plan.md) |
 
+## Mesure du poids des builds — 2026-10-07
+
+Mesure de référence réalisée et vérifiée sur les entrées publiques de CodPlay V2
+et Sighty. Les deux packages n'ayant pas de commande de build dédiée, l'audit
+utilise des builds Vite isolés : ESM, cible ES2023, sans source maps, démos ni
+ressources de scènes. Les ZIP sont des archives Deflate produites avec
+`zip -X -9`, en-têtes compris. Un Kio vaut 1 024 octets.
+
+| Bibliothèque / périmètre | Build non minifié | ZIP du non minifié | Build minifié | ZIP du minifié |
+|---|---:|---:|---:|---:|
+| CodPlay V2 | 851,35 Kio | 188,89 Kio | 387,24 Kio | **104,00 Kio** |
+| Sighty seul, CodPlay externe | 125,81 Kio | 27,49 Kio | 62,95 Kio | **15,34 Kio** |
+| Sighty avec CodPlay inclus | 976,57 Kio | 215,32 Kio | 450,02 Kio | **118,83 Kio** |
+
+Sighty seul nécessite que l'application fournisse CodPlay. La dernière ligne
+mesure un build qui inclut cette dépendance ; elle ne s'ajoute pas aux deux
+autres lignes.
+
+Les six builds, les deux typechecks, la conservation des exports et l'intégrité
+des six ZIP ont été vérifiés. Cette mesure ne constitue pas une validation des
+parcours runtime ou navigateur ni un contrat de distribution.
+
+Le [rapport détaillé](../../../docs/projet/notes/build-size-audit/2026-10-07-poids-build-codplay-sighty.md)
+conserve le périmètre, les tailles exactes, l'environnement et les liens vers
+les archives. Les [mesures JSON](../../../docs/projet/notes/build-size-audit/2026-10-07-measurements.json)
+et le [script reproductible](../../../docs/projet/notes/build-size-audit/measure-builds.mjs)
+portent les preuves de cette référence.
+
 ## Dette d'architecture différée à V2.5 — DnD et FLIP
 
 > Statut : différée à V2.5 ; aucune migration DnD/FLIP n'est ouverte dans la

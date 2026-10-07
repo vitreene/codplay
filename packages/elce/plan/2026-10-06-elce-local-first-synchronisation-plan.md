@@ -1,9 +1,12 @@
 # Elcé — plan de stockage local et synchronisation
 
 **Statut : Fixe.** Le périmètre local et le transfert des médias sont établis.
-Le seuil de conservation locale des vidéos dépendra du serveur réel et est
-reporté après le POC. Le preload CodPlay existant n’est pas un chantier Elcé.
-La migration SQLite reste bloquée jusqu’à la fin et l’acceptation de la tranche 0.
+Le modèle persistant v4 est assez défini pour commencer SQLite. L’acceptation
+du raccord d’Évaluation au player reste un travail du POC, sans données de
+session à persister dans cette base ; les résultats de lecture seront traités
+ultérieurement par SCORM. Le seuil de conservation locale des vidéos dépendra
+du serveur réel et est reporté après le POC. Le preload CodPlay existant n’est
+pas un chantier Elcé.
 
 ## Cadre
 
@@ -30,12 +33,13 @@ La migration SQLite reste bloquée jusqu’à la fin et l’acceptation de la tr
 
 ## Tranches et critères de sortie
 
-### 0. Compléter le modèle documentaire avant SQLite
+### 0. Modèle persistant v4 avant SQLite — Fixé le 7 octobre 2026
 
-Cette tranche est un prérequis à toute migration vers SQLite. Le modèle
-documentaire v4 décrit dans la spécification est implémenté ; la tranche reste
-ouverte pour les réglages de révélation et l’acceptation complète du BDC Résultat
-dans le player Flux/Diapo.
+Les décisions qui changent les tables sont représentées par le document v4 :
+BDC média fusionné dans Carte, réglages de chapitre, et références de révélation
+au niveau projet, parent et entrée de Carousel. L’acceptation runtime du BDC
+Résultat reste au plan du POC ; la base de l’éditeur ne stocke pas les réponses
+ni l’état d’une session de lecture.
 
 - [x] Unifier le modèle en un BDC Carte, disponible selon le contexte dans
   Flux, Diapo, comme enfant inline d’une Section, comme enfant d’un Carousel ou
@@ -52,7 +56,7 @@ dans le player Flux/Diapo.
   Évaluation, sur une page Flux ou comme BDC direct unique d’une Diapo. La
   whitelist et les builders Flux/Diapo appliquent ce placement sans traiter
   Évaluation comme un format de page.
-- Porter les valeurs de révélation par défaut sur le BDC parent. Dans un BDC
+- [x] Porter les valeurs de révélation par défaut sur le BDC parent. Dans un BDC
   Texte/Section, déclencher la révélation à la visibilité au scroll selon le
   circuit d’observation de la démo 5. Dans un Carousel, permettre une valeur
   d’entrée ou de sortie propre à chaque Carte, héritée du Carousel si elle
@@ -61,33 +65,37 @@ dans le player Flux/Diapo.
   transition pour les deux contextes ; le Carousel reprend son preset `fade`.
   La démo 5 fixe le déclenchement enter/leave au scroll ; l’animation vient
   des définitions nommées de Capsule Automation.
-- Définir les valeurs de repli au niveau du projet, sans réglage propre à chaque
+- [x] Définir les valeurs de repli au niveau du projet, sans réglage propre à chaque
   page à cette étape. Une Carte directe dans la séquence racine d’une page Flux
   hérite donc des valeurs du projet, initialisées depuis la configuration. Un
   BDC parent peut définir ses propres défauts pour ses enfants ; les vues
   Carousel peuvent les remplacer au niveau de leur placement. L’interface ne
   propose pas de réglage par page ou par Carte individuelle à cette étape.
-- Utiliser le registre de définitions Capsule Automation, dont
+- [x] Utiliser le registre de définitions Capsule Automation, dont
   `DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS`, pour résoudre les références de
   transition. Réutiliser le circuit `AutoCapsuleChildInput.events` pour les
   transitions Carousel et les événements `emit.observe` de visibilité déjà
   exercés dans la démo 5 pour le scroll, puis déclarer les actions sur les
   persos CodPlay concernés. N’ajouter ni minuteur, ni définitions locales de
   transition, ni circuit d’animation parallèle.
-- Mettre à jour le modèle, ses commandes, la surface d’édition, les builders,
+- [x] Mettre à jour le modèle, ses commandes, la surface d’édition, les builders,
   leurs spécifications et les tests d’intégration avant d’ouvrir le DDL SQLite.
 
-**Acceptation :** une image ou vidéo ajoutée devient une seule BDC Carte ; le
-média reste une ressource partageable et n’est pas dupliqué. L’icône permet
-d’ouvrir et modifier le layout. La même Carte et son média survivent aux
-déplacements entre les emplacements autorisés. Le player réel vérifie la
-révélation au scroll, les entrées/sorties propres aux vues Carousel et l’absence
-d’animation d’entrée pour le contenu déjà visible au montage. La navigation et
-la composition des pages existantes restent inchangées. Un BDC Résultat est
-lisible en Flux et en Diapo dans un chapitre Évaluation ; en Diapo, il occupe
-l’unique emplacement direct. Le même BDC reste refusé hors d’un chapitre
-Évaluation. Le modèle relationnel et les spécifications sont alors alignés ;
-seulement après cette acceptation la tranche 1 peut commencer.
+**Acceptation des données :** une image ou vidéo ajoutée devient une seule BDC
+Carte ; le média reste une ressource partageable et n’est pas dupliqué. Le
+layout et les références de média sont éditables, et la même Carte survit aux
+déplacements permis. Le document conserve les transitions séparées d’entrée et
+de sortie : défaut projet, remplacement du parent, puis remplacement facultatif
+de l’entrée Carousel. Les builders résolvent ces valeurs au moyen des
+définitions Capsule Automation. Le type de chapitre garde les réglages
+d’Évaluation ; le type de page reste Flux ou Diapo. Ces champs suffisent au
+schéma relationnel, sans dépendre du rendu ou du calcul d’une session lecteur.
+
+**Acceptation player encore suivie au POC :** vérifier les événements de
+révélation dans le player réel, l’absence d’entrée animée au premier montage,
+et la lecture du BDC Résultat en Flux et Diapo d’un chapitre Évaluation. Cette
+validation ne bloque plus l’ouverture du schéma SQLite : elle ne change aucune
+donnée documentaire à persister.
 
 ### 1. Serveur local et projets SQLite
 
@@ -102,11 +110,14 @@ adossée à SQLite.
 - Le serveur conserve la version courante des lignes de chaque projet ; aucun
   historique métier n’est créé.
 
-Avant le DDL, relire le [premier état des tables SQLite](../notes/2026-10-06-premier-etat-modele-donnees-bdd.md)
-et valider les décisions qu’il laisse ouvertes : correspondance entre projet
-et `ElceDocument`, placement relationnel des pages, séparation ou non des
-réglages d’évaluation dans une table liée et frontière de validation des données
-reçues.
+La correspondance du serveur local est fixée : un projet est un
+`ElceDocument` v4, `project_id` et `name` proviennent de `id` et `name`, et
+`POST /api/projects` reçoit le document créé dans le navigateur. Le schéma de
+tables et les choix de nullabilité sont fixés dans le
+[premier état des tables SQLite](../notes/2026-10-06-premier-etat-modele-donnees-bdd.md).
+La validation HTTP réutilise `ElceDocument.fromJSON()` et
+`assertDocumentInvariants()` ; le dépôt ne stocke pas le document complet en
+JSON.
 
 **Modèle documentaire v4 — réalisé le 7 octobre 2026 :** `Bdc` n’a plus de
 référence média générique. Une Carte unique porte `card.mediaId`, y compris
@@ -187,6 +198,12 @@ le HTML exporté ; aucun document complet JSON opaque n’est nécessaire au
 stockage. Une branche Réussite/Échec se restitue aussi dans une Diapo
 d’Évaluation, sans changement des tables selon le format. Les anciens formats
 ne sont pas migrés implicitement.
+
+**État vérifié le 7 octobre 2026 :** les six opérations projet traversent le
+routeur Fetch et le contrôleur jusqu’au dépôt SQLite Remix. Les tests couvrent
+le round-trip v4, deux projets après fermeture puis réouverture du fichier,
+les révisions et l’ordre relationnel. Le serveur HTTP local et les routes de
+fichiers restent à assembler avec le transfert média.
 
 ### 2. Copies locales et édition hors connexion
 

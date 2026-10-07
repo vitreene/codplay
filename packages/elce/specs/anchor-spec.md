@@ -135,6 +135,10 @@ vidéo est rendu dans le bdc réservé ; l’aperçu ne devient pas une seconde
 donnée métier. Le slot projeté du player est une interface de montage
 structurelle, sans prise ni décor d’édition. Le composant CodPlay `layout`
 lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
+Dans l’adaptateur Remix, chaque NodeView d’ancre enregistre aussi un rappel de
+rafraîchissement : quand XState met à jour la source média sans changer le JSON
+de la Section, l’image ou la vidéo apparaît dans le même DOM ProseMirror, sans
+remonter l’éditeur.
 
 ## Preuve
 
@@ -146,6 +150,9 @@ lit la géométrie de la ligne du texte pour replacer ce slot après le montage.
   duplique pas. Le test du retour couvre le cas Safari où `dragend` garde
   `dropEffect: move` avec une liste de types vide. Il couvre aussi le collage
   qui retire les ancres.
+- [`remix-section-editor-proof-temp.test.tsx`](../src/app/editor/section/remix-section-editor-proof-temp.test.tsx)
+  vérifie le rafraîchissement du média après persistance XState sans remplacer
+  l’instance `Editor` ni son DOM ProseMirror.
 - [`flux-anchor-player-markup.test.ts`](../src/builders/flux/flux-anchor-player-markup.test.ts)
   vérifie que la projection conserve le texte, remplace l’ancre d’édition par
   un slot de flux inline à largeur nulle et conserve la cible logique du bdc.
