@@ -13,6 +13,7 @@ describe('Remix editor lifecycle proof', () => {
   it('renders the live actor selection and unsubscribes when removed', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
+    controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
     actions.createPage({ kind: PAGE_LOCATION.SCENARIO })
     const pageA = controller.getSnapshot().context.document.pages[0]!

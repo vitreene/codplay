@@ -13,6 +13,7 @@ describe('Remix Card editor proof', () => {
   it('edits a standalone Diapo Card and a Carousel child through their existing facades', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
+    controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
 
     actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO)

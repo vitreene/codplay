@@ -1,4 +1,5 @@
 import { createActor } from 'xstate'
+import type { Actor } from 'xstate'
 import { describe, expect, it } from 'vitest'
 import { assertDocumentInvariants } from '../../domain/commands/document-commands'
 import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
@@ -24,6 +25,18 @@ class PendingMediaStore implements ElceDocumentStore {
     return undefined
   }
 
+  public async deleteMedia(): Promise<void> {
+    return undefined
+  }
+
+  public async loadSyncState(documentId: string) {
+    return { documentId, remoteRevision: null, uploadedMediaIds: [], status: 'pending' as const }
+  }
+
+  public async saveSyncState(): Promise<void> {
+    return undefined
+  }
+
   public saveMedia(media: MediaBlob): Promise<void> {
     return new Promise((resolve) => this.pending.push({
       media,
@@ -40,16 +53,22 @@ class PendingMediaStore implements ElceDocumentStore {
 }
 
 describe('Elcé controller', () => {
-  it('starts with the application ready for a document', () => {
+  it('keeps document commands suspended until a project lock activates them', () => {
     const actor = createActor(controllerMachine, { input: {} })
 
     actor.start()
 
-    expect(actor.getSnapshot().value).toBe('ready')
+    expect(actor.getSnapshot().value).toBe('suspended')
     expect(actor.getSnapshot().context.document.id).toBe('elce-document')
     expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
     expect(actor.getSnapshot().context.catalogTab).toBe(CATALOG_TAB.AVAILABLE_BDCS)
 
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
+
+    actor.send({ type: 'editor.access.activate' })
+    expect(actor.getSnapshot().value).toBe('ready')
+    expect(actor.getSnapshot().context.editAccess).toBe('active')
     actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
 
     expect(actor.getSnapshot().context.document.pages).toHaveLength(2)
@@ -76,7 +95,7 @@ describe('Elcé controller', () => {
 
   it('owns chapter selection and clears it when a page is selected', () => {
     const actor = createActor(controllerMachine, { input: {} })
-    actor.start()
+    startActiveActor(actor)
     actor.send({ type: 'chapter.select', chapterId: 'chapter-1' })
 
     expect(actor.getSnapshot().context.selectedChapterId).toBe('chapter-1')
@@ -90,7 +109,7 @@ describe('Elcé controller', () => {
 
   it('owns the catalog tab and permanent catalog-bdc deletion through XState', () => {
     const actor = createActor(controllerMachine, { input: {} })
-    actor.start()
+    startActiveActor(actor)
     actor.send({ type: 'catalog.tab.select', tabId: CATALOG_TAB.MEDIA })
     actor.send({
       type: 'document.apply',
@@ -129,7 +148,7 @@ describe('Elcé controller', () => {
     const firstTarget = service.createFileDropTarget(firstFile, 'page-a')
     const secondTarget = service.createFileDropTarget(secondFile, 'page-a')
     if (firstTarget === null || secondTarget === null) throw new Error('Les cibles de test doivent être acceptées.')
-    actor.start()
+    startActiveActor(actor)
 
     actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(firstFile, firstTarget, 'one') })
     actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(secondFile, secondTarget, 'two', { target: firstTarget, text: 'one' }) })
@@ -155,6 +174,34 @@ describe('Elcé controller', () => {
     actor.stop()
   })
 
+  it('finishes an accepted file import before suspending and rejects later document commands', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const service = new ElceAnchorDropService()
+    const file = new File(['image bytes'], 'image.png', { type: 'image/png' })
+    const target = service.createFileDropTarget(file, 'page-a')
+    if (target === null) throw new Error('La cible de test doit être acceptée.')
+    startActiveActor(actor)
+
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(file, target, '') })
+    await flush()
+    expect(actor.getSnapshot().value).toBe('processingDocumentChange')
+
+    actor.send({ type: 'editor.access.suspend' })
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+    expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
+
+    store.pending[0]?.resolve()
+    await flush()
+
+    expect(actor.getSnapshot().value).toBe('suspended')
+    expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
+    expect(actor.getSnapshot().context.document.bdcs).toHaveLength(2)
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual([target.media.id])
+    actor.stop()
+  })
+
   it('deduplicates identical file drops while creating a fresh unique bdc for each placement', async () => {
     const store = new PendingMediaStore()
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
@@ -164,7 +211,7 @@ describe('Elcé controller', () => {
     const firstTarget = service.createFileDropTarget(firstFile, 'page-a')
     const secondTarget = service.createFileDropTarget(secondFile, 'page-a')
     if (firstTarget === null || secondTarget === null) throw new Error('Les fichiers de test doivent être acceptés.')
-    actor.start()
+    startActiveActor(actor)
 
     actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(firstFile, firstTarget, 'premier') })
     await flush()
@@ -194,7 +241,7 @@ describe('Elcé controller', () => {
 
   it('deletes an anchored bdc when the editor removes it through an ordinary text update', async () => {
     const actor = createActor(controllerMachine, { input: {} })
-    actor.start()
+    startActiveActor(actor)
     actor.send({
       type: 'document.apply',
       command: {
@@ -241,7 +288,7 @@ describe('Elcé controller', () => {
     const store = new PendingMediaStore()
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     const service = new ElceAnchorDropService()
-    actor.start()
+    startActiveActor(actor)
     actor.send({
       type: 'document.apply',
       command: {
@@ -302,7 +349,7 @@ describe('Elcé controller', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     const mediaImport = new ElceMediaResourceService().createImport(new File(['picture'], 'picture.png', { type: 'image/png' }))
     if (mediaImport === null) throw new Error('Le service média doit accepter le fichier image de test.')
-    actor.start()
+    startActiveActor(actor)
     actor.send({
       type: 'document.apply',
       command: {
@@ -370,7 +417,7 @@ describe('Elcé controller', () => {
   it('attaches an available catalog bdc through the XState anchor command path', async () => {
     const actor = createActor(controllerMachine, { input: {} })
     const service = new ElceAnchorDropService()
-    actor.start()
+    startActiveActor(actor)
     actor.send({
       type: 'document.apply',
       command: {
@@ -421,7 +468,7 @@ describe('Elcé controller', () => {
 
   it('returns an anchored bdc to the available catalog through XState', async () => {
     const actor = createActor(controllerMachine, { input: {} })
-    actor.start()
+    startActiveActor(actor)
     actor.send({
       type: 'document.apply',
       command: {
@@ -500,6 +547,12 @@ function fileDrop(
     },
     markup: `<p>${previousMarkup}${text}<span data-elce-anchor="true" data-bdc-id="${target.bdcId}"></span></p>`,
   }
+}
+
+/** Starts a controller actor with the edit access granted by the test fixture. */
+function startActiveActor(actor: Actor<typeof controllerMachine>): void {
+  actor.start()
+  actor.send({ type: 'editor.access.activate' })
 }
 
 function catalogDrop(

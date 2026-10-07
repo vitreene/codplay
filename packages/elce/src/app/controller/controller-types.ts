@@ -4,9 +4,9 @@ import type { BdcId, ChapterId, MediaId, MediaMetadata, PageId } from '../../dom
 import type { ElceSectionChange } from '../../domain/anchor/anchor-types'
 import type { DocumentCommand, PagePlacement } from '../../domain/commands/document-command-types'
 import type { ElceDocumentChange } from './document-change-types'
+import type { DocumentSyncState, ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 
 export type { ElceAnchorChange } from './document-change-types'
-import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 
 export interface ElceAppContext {
   readonly document: ElceDocument
@@ -15,6 +15,8 @@ export interface ElceAppContext {
   readonly selectedCarouselCardBdcId: string | null
   readonly catalogTab: CatalogTabType
   readonly mediaSources: Readonly<Record<MediaId, string>>
+  readonly syncStatus: DocumentSyncState['status']
+  readonly editAccess: 'waiting' | 'active'
   readonly documentStore: ElceDocumentStore | null
   readonly documentChanges: readonly ElceDocumentChange[]
 }
@@ -35,3 +37,6 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'question.media.file.import'; bdcId: string; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'card.media.file.import'; bdcId: BdcId; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'document.replace'; document: ElceDocument }>
+  | Readonly<{ type: 'document.sync.status'; status: DocumentSyncState['status'] }>
+  | Readonly<{ type: 'editor.access.activate' }>
+  | Readonly<{ type: 'editor.access.suspend' }>

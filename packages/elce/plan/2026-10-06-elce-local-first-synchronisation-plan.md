@@ -18,10 +18,12 @@ pas un chantier Elcé.
   périmètre.
 - Plusieurs projets pour une personne. Pas de comptes, rôles, partage,
   historique de versions ni fusion de documents.
-- XState reste propriétaire du document actif. IndexedDB garde les documents,
-  les médias encore à transférer et l’état de synchronisation. Après transfert
-  confirmé, les images sont lues par URL et passent par le cache HTTP natif du
-  navigateur plutôt que par une copie Blob durable dans IndexedDB.
+- XState reste propriétaire du document actif. IndexedDB n’est qu’un cache local
+  pour le document actuellement ouvert, les médias dont le transfert n’est pas
+  confirmé et son checkpoint de synchronisation. Le catalogue des projets et
+  les autres documents restent dans SQLite. Après transfert confirmé, les images
+  sont lues par URL et passent par le cache HTTP natif du navigateur plutôt que
+  par une copie Blob durable dans IndexedDB.
 - Chaque commande ou geste continu est d’abord conservé localement. Le serveur
   reçoit l’état stabilisé, pas les mouvements de pointeur intermédiaires.
 - SQLite contient les projets et leur version courante. Les originaux média
@@ -202,26 +204,42 @@ ne sont pas migrés implicitement.
 **État vérifié le 7 octobre 2026 :** les six opérations projet traversent le
 routeur Fetch et le contrôleur jusqu’au dépôt SQLite Remix. Les tests couvrent
 le round-trip v4, deux projets après fermeture puis réouverture du fichier,
-les révisions et l’ordre relationnel. Le serveur HTTP local et les routes de
-fichiers restent à assembler avec le transfert média.
+les révisions et l’ordre relationnel. L’assemblage du listener HTTP et le
+transfert depuis le cache local sont suivis aux tranches 3 et 4.
 
-### 2. Copies locales et édition hors connexion
+### 2. Cache local du document actif et reprise de synchronisation
 
-Étendre le store IndexedDB existant aux projets multiples et à leur état de
-synchronisation.
+Garder une seule copie temporaire dans IndexedDB : le document actuellement
+ouvert. La liste des projets et les documents inactifs restent côté serveur.
 
-- Restaurer le document local au démarrage et le modifier uniquement par les
-  commandes XState existantes.
+- Restaurer le document actif depuis le cache local au démarrage et le modifier
+  uniquement par les commandes XState existantes.
 - Enregistrer localement chaque commande stabilisée. Garder l’état « à
   synchroniser » jusqu’à l’accusé du serveur.
 - Conserver localement les octets des médias dont le transfert serveur n’est
   pas confirmé.
+- Un changement de projet remplace cette copie par le document lu depuis SQLite.
+  Avant d’implémenter ce changement, décider comment l’interface traite une
+  copie locale encore à synchroniser : elle ne doit pas être écrasée
+  silencieusement.
 
-**Acceptation :** créer et réouvrir plusieurs projets, poursuivre l’édition
-hors connexion et retrouver les changements après fermeture du navigateur. Les
-images transférées au serveur peuvent être indisponibles hors connexion si le
-cache HTTP du navigateur les a évincées ; cette limite est acceptée à cette
-étape.
+**Acceptation :** IndexedDB ne conserve que le document actuellement ouvert, ses
+médias non transférés et son checkpoint. Après rechargement, l’application
+restaure cette copie puis reprend sa synchronisation. La disponibilité hors
+connexion du document ou des médias n’est pas exigée à cette étape. L’ouverture
+d’un autre projet lit son document depuis SQLite et ne remplace pas une copie
+locale encore à synchroniser ; la décision d’interface correspondante reste à
+prendre avant d’ajouter le changement de projet.
+
+**État vérifié le 7 octobre 2026 :** le store IndexedDB contient désormais le
+document actif, ses Blobs et un checkpoint de synchronisation ; écrire un
+document d’un autre identifiant remplace la copie seulement si le document
+précédent a été confirmé par le serveur. Tant que sa synchronisation est en
+attente ou en conflit, la transaction IndexedDB refuse le remplacement et
+préserve le cache. Safari Technology Preview a vérifié la mise à niveau du store
+v1 vers v2 et la restauration du document actif. Le parcours de sélection d’un
+autre projet n’est pas encore présent dans l’interface ; son traitement visuel
+en cas de cache protégé reste à définir avant d’ajouter cette action.
 
 ### 3. Synchronisation directe du dernier état
 
@@ -241,6 +259,15 @@ frappes.
 fois stabilisé ; une coupure ne perd pas l’état local ; une révision périmée
 produit un conflit visible sans écrasement.
 
+**État vérifié le 7 octobre 2026 :** `ProjectSyncCoordinator` regroupe les
+enregistrements pendant 500 ms, sérialise les requêtes et envoie le dernier
+document par `POST` ou `PUT If-Match`. La réponse `412` est comparée au document
+local ; un document divergent est conservé dans le cache et affiché comme
+conflit. L’entrée Safari vérifie un `POST 201` réel du document initial et le
+statut `Synchronisé`. Le conflit et les mises à jour rapides sont également
+couverts par les tests du coordinateur. Le code réessaie au retour du réseau ;
+la coupure et la reprise restent à vérifier dans l’acceptation intégrée.
+
 ### 4. Transfert des images et vidéos, cache navigateur
 
 Enregistrer les originaux comme fichiers côté serveur et leurs identifiants et
@@ -251,8 +278,7 @@ métadonnées dans SQLite.
   Remix puis publie `storage_key` dans SQLite. Il vérifie la taille déclarée
   dans `media_resources`, nettoie les fichiers temporaires ou orphelins au
   démarrage et après les suppressions. Ce trajet serveur est implémenté et
-  vérifié par le test HTTP intégré ; le raccord à la synchronisation locale
-  reste à faire.
+  vérifié par le test HTTP intégré.
 - Réutiliser les mêmes octets au sein d’un projet à partir de leur empreinte.
 - Garder les octets locaux jusqu’à confirmation du transfert. Pour une image
   confirmée, résoudre sa référence média vers l’URL serveur et retirer son Blob
@@ -279,22 +305,56 @@ serveur ; le choix de sa lecture locale ou distante n’est pas fixé à cette
 étape. Après éviction du cache et hors connexion, une image peut être
 inaccessible sans invalider le document.
 
-### 5. Exclusivité entre fenêtres sur une machine
+**État vérifié le 7 octobre 2026 :** le navigateur appelle directement l’API
+locale depuis `localhost:5175`. Dans Safari Technology Preview, le document a
+été créé (`POST 201`), son image transférée (`PUT 201`), puis relue depuis
+l’URL serveur (`GET 200`). Après transfert confirmé, le Blob de l’image est
+absent d’IndexedDB ; après rechargement, l’image est à nouveau demandée depuis
+le serveur et le statut reste `Synchronisé`, y compris après redémarrage de
+l’API. SQLite contient la ligne de projet et les métadonnées du média ; son
+fichier se trouve dans
+`packages/elce/.elce-data/media/`. L’intégration vidéo côté navigateur et la
+coupure/réconciliation réseau restent à valider. Les tests de
+`ProjectSyncCoordinator` vérifient l’envoi des octets vidéo tout en gardant
+leur Blob dans la cache locale, ainsi que l’état en attente après une erreur
+réseau puis la reprise sur l’événement `online`.
+
+### 5. Exclusivité entre fenêtres sur une machine — Fini le 7 octobre 2026
 
 Employer les mécanismes natifs du navigateur pour les fenêtres de même origine
 sur la machine locale. La première version ne coordonne pas plusieurs appareils.
 
-- Un verrou Web Locks exclusif par projet autorise un seul onglet éditeur.
+- Un verrou Web Locks exclusif par document ouvert autorise une seule fenêtre
+  d’édition pour ce document.
 - BroadcastChannel transmet une demande de transfert à la fenêtre active.
-- À `visibilitychange` vers `hidden`, l’éditeur suspend les commandes et
-  libère le verrou après sauvegarde locale. Au retour visible, il demande le
-  verrou et recharge la révision courante avant de reprendre.
+- À `visibilitychange` vers `hidden`, l’éditeur suspend les commandes, termine
+  les changements déjà en cours et confirme leur sauvegarde dans la cache
+  IndexedDB partagée avant de libérer le verrou. Au retour au premier plan,
+  il demande le verrou, relit le document et son checkpoint depuis cette cache,
+  puis reprend la synchronisation serveur si nécessaire. La copie locale la
+  plus récente ne doit pas être remplacée par une révision serveur plus ancienne.
 - Si le verrou n’est pas libéré, demander de fermer l’autre fenêtre. Pas de
   minuteur d’inactivité ni d’API Idle Detection dans cette étape.
 
-**Acceptation :** tester deux fenêtres sur la machine : transfert après demande, conflit si
-l’autre ne répond pas, reprise de l’état le plus récent après fermeture et
-absence de modifications depuis la fenêtre inactive.
+**Acceptation :** tester deux fenêtres sur la machine : transfert après demande,
+attente avec indication de fermer l’autre fenêtre si elle ne libère pas le
+verrou, restauration de l’état local le plus récent après réactivation et
+absence de commandes acceptées depuis la fenêtre inactive. Un état local en
+attente de synchronisation reste conservé et repart vers le serveur depuis la
+nouvelle fenêtre active.
+
+**État vérifié le 7 octobre 2026 :** `ProjectEditorLock` utilise le Web Lock
+natif par document et `BroadcastChannel` pour demander un transfert. La machine
+XState démarre suspendue et refuse les commandes tant que le verrou n’est pas
+acquis. En cas de transfert, elle arrête les nouvelles commandes et requêtes
+serveur, finit les changements acceptés, puis confirme leur cache IndexedDB.
+À la reprise, elle recharge cette cache avant de réactiver l’édition. Les tests
+vérifient l’import asynchrone, le refus des commandes et la reprise des
+synchronisations en attente. Safari Technology Preview a vérifié le transfert
+entre deux onglets, la demande BroadcastChannel depuis une fenêtre visible,
+l’attente devant un verrou retenu et le retour après rechargement. Aucun
+contenu éditorial n’a été modifié durant ces essais. Le détail est dans la
+[spécification d’accès entre fenêtres](../specs/editor-window-access-spec.md).
 
 ### 6. Acceptation intégrée
 
@@ -302,7 +362,20 @@ Vérifier le parcours réel local, pas un store ou un player simulé : plusieurs
 projets, redémarrage, commandes éditoriales, coupure/rétablissement réseau,
 conflit entre fenêtres, transfert puis lecture d’une image depuis son URL,
 ajout/réutilisation d’images et de vidéos, stockage local et API serveur.
-Tester Safari, Firefox et Chromium pour les APIs retenues.
+Tester dans le navigateur MCP exposé par l’environnement courant. Ne pas
+supposer ni lancer d’autres navigateurs s’ils ne sont pas fournis par cet
+environnement.
+
+**Avancement le 7 octobre 2026 — En cours :** les tests SQLite/API vérifient
+plusieurs projets et leur restauration après réouverture de la base ; Safari
+Technology Preview confirme que l’éditeur restaure le document actif depuis
+IndexedDB après rechargement et reprend le verrou lorsqu’il redevient visible.
+Le transfert de l’image par l’éditeur a déjà été vérifié à la tranche 4. Le
+parcours navigateur complet reste à faire pour l’ouverture de plusieurs
+projets, les commandes éditoriales avec synchronisation, la reprise après
+coupure réseau et l’import/transfert vidéo. L’interface ne permet pas encore de
+changer de projet ; la politique pour une cache locale en attente reste à
+trancher à la tranche 2 et bloque ce parcours.
 
 ## Suites après le POC
 
@@ -343,5 +416,6 @@ player.
 - [Modèle de document Elcé](../specs/document-model-spec.md)
 - [Preload CodPlay V2](../../codplay/specs/preload-v2-spec.md)
 - [Runtime Sighty](../../sighty/specs/authoring-library-spec.md)
+- [Accès d’édition entre fenêtres](../specs/editor-window-access-spec.md)
 - [MDN — HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching)
 - [Note de stratégie](../notes/2026-10-06-strategie-local-first-et-synchronisation.md)

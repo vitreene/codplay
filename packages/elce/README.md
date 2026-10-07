@@ -19,6 +19,20 @@ The development server uses port `5175`.
 
 The workspace also exposes `typecheck`, `test`, `build`, and `preview` scripts.
 
+To store projects and uploaded media locally, start the Elcé API in another
+terminal:
+
+```sh
+npm run dev:api --workspace=@codplay/elce
+```
+
+The editor keeps only its currently open document in IndexedDB as a temporary
+cache. The API stores projects in `packages/elce/.elce-data/elce.sqlite` and
+media files under `packages/elce/.elce-data/media/`. After an image upload, its
+original filename remains in SQLite; the physical file uses an internal
+storage name. The `Synchronisé` status in the editor confirms that the server
+accepted the document and its media.
+
 To exercise the anchored Flux path in the application itself, open the editor,
 drop an image or video file into the Section WYSIWYG surface, then select
 `Prévisualiser`. The editor command path creates the media reference, bdc and

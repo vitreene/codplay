@@ -10,7 +10,8 @@ L’entrée Remix démarre le routeur navigateur de l’éditeur. Elle conserve 
 
 ## Composition
 
-- `app/remix/browser-entry.ts` compose l’unique acteur XState de l’éditeur, son store IndexedDB, l’attachement de persistance et une instance de `EditorActionsFacade`, puis appelle `run()` et attend le rendu initial.
+- `app/remix/browser-entry.ts` compose l’unique acteur XState de l’éditeur, son store IndexedDB, l’attachement de persistance, `ProjectSyncCoordinator`, `ProjectEditorLock` et une instance de `EditorActionsFacade`, puis appelle `run()` et attend le rendu initial.
+- L’acteur démarre suspendu. La persistance et la synchronisation sont attachées après acquisition du Web Lock du document ; seule la fenêtre propriétaire reçoit l’événement XState qui autorise les commandes.
 - `app/remix/remix-spa-router.ts` définit les réponses d’interface avec le routeur Fetch client et le middleware `remix/spa`. `EditorContextProvider` place le même acteur et la même façade d’actions dans le Context Remix pour les surfaces auteur portées.
 - Les routes retournent toutes `#elce-remix-route-root` avec le même hôte `ReactEditorTempBridge`. La preuve temporaire ajoute seulement sa vue comme sœur de cet hôte ; cette arborescence commune permet à `data-rmx-preserve-dom` de garder le DOM React lors de la navigation.
 - `ReactEditorTempBridge` rend un hôte dédié portant `data-rmx-preserve-dom`. Le contenu de cet hôte appartient au renderer React tant que la migration des surfaces n’est pas achevée.
@@ -22,11 +23,12 @@ L’entrée Remix démarre le routeur navigateur de l’éditeur. Elle conserve 
 - L’adaptateur conserve les NodeViews et l’instance ProseMirror lorsqu’un import média termine sans modifier le JSON de Section : les rappels enregistrés par les ancres relisent la source courante et rafraîchissent l’aperçu image/vidéo en place.
 - Les vues de preuve ne sont montées que lorsque la route reçoit l’acteur et la façade auteur. Le player de preview peut conserver les paramètres de preuve dans son URL ; avec un acteur nul, le routeur ignore ces paramètres et laisse le montage du lecteur suivre son circuit habituel.
 - `RemixCardEditorFields` rend les SVG de `lucide-static` sous forme d’éléments Remix natifs : `DOMParser` lit le SVG fourni par la bibliothèque, puis le helper crée les éléments SVG avec leurs attributs et leurs enfants. Il n’insère pas les chaînes d’icône dans le DOM par `innerHTML`.
-- `server/api-router.ts` crée le routeur Fetch serveur distinct. Il ne possède encore aucun endpoint et aucun listener serveur n’est lancé ; routes et serveur arriveront avec les étapes SQLite et médias.
+- `server/api-router.ts` expose le routeur Fetch serveur séparé ; `createElceHttpServer()` l’assemble au dépôt SQLite, au FileStorage Remix et au listener local.
 
 ## Invariants
 
 - La SPA compose un seul acteur XState ; le pont React reçoit cet acteur et le Context Remix conserve cette même référence. La migration ne crée pas de copie d’état éditorial ni de second circuit de commande.
+- Les fenêtres de même origine se partagent un Web Lock par document. La fenêtre non propriétaire garde sa surface inert et restaure la cache IndexedDB partagée seulement après acquisition ; le contrat est détaillé dans la [spécification d’accès entre fenêtres](./editor-window-access-spec.md).
 - La façade d’actions est assemblée une fois avec cet acteur ; les vues Remix et React appellent le même circuit XState. Le snapshot gardé par une vue Remix sert uniquement à son rendu et n’est pas une seconde source métier.
 - L’hôte React est un raccord temporaire de rendu, pas une nouvelle voie d’état ni un contrat produit. Il sera supprimé après le portage de toutes les surfaces auteur prévu à l’étape 4 du plan Remix.
 - Le routeur API reste distinct du routeur SPA. La SPA ne remplace pas le document XState par des réponses serveur.
@@ -36,6 +38,7 @@ L’entrée Remix démarre le routeur navigateur de l’éditeur. Elle conserve 
 
 - `src/server/api-router.test.ts` exerce le routeur Fetch isolé et son fallback HTTP.
 - Safari sur `http://localhost:5175/` affiche l’éditeur restauré depuis IndexedDB et son éditeur Tiptap après déplacement de la composition dans `browser-entry.ts`. Après rechargement à froid, aucune erreur de console n’est présente.
+- Safari Technology Preview confirme le verrou exclusif entre deux onglets, le transfert explicite par `BroadcastChannel`, l’état inert devant un verrou retenu et la reprise après rechargement ; aucun changement documentaire n’a été fait durant cet essai.
 - [`editor-lifecycle-proof-temp.test.tsx`](../src/app/remix/editor-lifecycle-proof-temp.test.tsx) vérifie le rendu d’un changement de sélection et l’appel à `unsubscribe()` au démontage dans le runtime Remix.
 - Safari MCP sur `/?__remixProof=1` vérifie que la vue Remix reçoit la création d’une page déclenchée dans l’interface React ; la suppression par l’interface remet le document d’essai à son état initial. Le lien de retour et l’historique SPA démontrent le démontage puis le remontage de la vue en conservant l’hôte React.
 - [`remix-card-editor-proof-temp.test.tsx`](../src/app/editor/card/remix-card-editor-proof-temp.test.tsx) exerce les placements direct et Carousel avec le runtime Remix, modifie le titre et le message par les façades, vérifie les parents, teste le changement de preset sans perte et confirme la présence de l’icône SVG Lucide.

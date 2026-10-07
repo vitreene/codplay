@@ -208,6 +208,7 @@ export const controllerMachine = setup({
   },
   guards: {
     hasPendingDocumentChanges: ({ context }) => context.documentChanges.length > 0,
+    hasEditAccess: ({ context }) => context.editAccess === 'active',
   },
   actors: { persistDocumentChange },
 }).createMachine({
@@ -219,12 +220,15 @@ export const controllerMachine = setup({
     selectedCarouselCardBdcId: null,
     catalogTab: CATALOG_TAB.AVAILABLE_BDCS,
     mediaSources: {},
+    syncStatus: 'pending',
+    editAccess: 'waiting',
     documentStore: input?.documentStore ?? null,
     documentChanges: [],
   }),
-  initial: 'ready',
+  initial: 'suspended',
   on: {
     'document.apply': {
+      guard: 'hasEditAccess',
       actions: assign(({ context, event }) => {
         const document = applyDocumentCommand(context.document, event.command)
         return {
@@ -236,6 +240,7 @@ export const controllerMachine = setup({
       }),
     },
     'page.create': {
+      guard: 'hasEditAccess',
       actions: assign(({ context, event }) => {
         const command = createDefaultPageCommand(context.document, event.placement, event.name, event.pageType)
         const document = applyDocumentCommand(context.document, command)
@@ -274,15 +279,32 @@ export const controllerMachine = setup({
         selectedPageId: keepSelectedPage(event.document, context.selectedPageId),
         selectedChapterId: keepSelectedChapter(event.document, context.selectedChapterId),
         selectedCarouselCardBdcId: keepSelectedCarouselCard(event.document, context.selectedCarouselCardBdcId),
+        mediaSources: {},
+        syncStatus: 'pending',
       })),
+    },
+    'document.sync.status': {
+      actions: assign(({ event }) => ({ syncStatus: event.status })),
     },
   },
   states: {
+    suspended: {
+      on: {
+        'editor.access.activate': {
+          actions: assign({ editAccess: 'active' }),
+          target: 'ready',
+        },
+      },
+    },
     ready: {
       on: {
-        'section.change': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
-        'question.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
-        'card.media.file.import': { actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'editor.access.suspend': {
+          actions: assign({ editAccess: 'waiting' }),
+          target: 'suspended',
+        },
+        'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'card.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
       },
     },
     processingDocumentChange: {
@@ -303,15 +325,17 @@ export const controllerMachine = setup({
         },
       },
       on: {
-        'section.change': { actions: 'enqueueDocumentChange' },
-        'question.media.file.import': { actions: 'enqueueDocumentChange' },
-        'card.media.file.import': { actions: 'enqueueDocumentChange' },
+        'editor.access.suspend': { actions: assign({ editAccess: 'waiting' }) },
+        'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'card.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
       },
     },
     nextDocumentChange: {
       always: [
         { guard: 'hasPendingDocumentChanges', target: 'processingDocumentChange' },
-        { target: 'ready' },
+        { guard: 'hasEditAccess', target: 'ready' },
+        { target: 'suspended' },
       ],
     },
   },

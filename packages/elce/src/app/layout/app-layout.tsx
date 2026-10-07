@@ -21,6 +21,7 @@ import type { Bdc, Chapter, Page } from '../../domain/document/document-types'
 import { mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
+import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
 import { selectEditorViewModel, editorViewModelEqual } from '../selectors/editor-view-model'
 
 const PROPERTIES_DRAWER_BREAKPOINT_PX = 1200
@@ -35,6 +36,20 @@ const chapterIcons = {
 /** Marks an unhandled configured value so new types require a renderer branch. */
 function assertNever(value: never): never {
   throw new Error(`Type non pris en charge dans AppLayout : ${String(value)}`)
+}
+
+/** Gives the active document's local synchronization state a short label. */
+function syncStatusLabel(status: DocumentSyncState['status']): string {
+  switch (status) {
+    case 'pending':
+      return 'À synchroniser'
+    case 'synced':
+      return 'Synchronisé'
+    case 'conflict':
+      return 'Conflit de synchronisation'
+    default:
+      return assertNever(status)
+  }
 }
 
 /** Renders the chapter type icon and any label configured for that type. */
@@ -66,6 +81,8 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
   const draggedEntry = useRef<ScenarioEntry | null>(null)
   const draggedBdcId = useRef<string | null>(null)
   const view = useSelector(controller, selectEditorViewModel, editorViewModelEqual)
+  const syncStatus = useSelector(controller, (snapshot) => snapshot.context.syncStatus)
+  const editAccess = useSelector(controller, (snapshot) => snapshot.context.editAccess)
   const {
     documentModel,
     selectedCarouselCardBdcId,
@@ -633,12 +650,16 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
   }
 
   return (
-    <div id="elce-workspace" className="elce-workspace">
+    <Fragment>
+    <div id="elce-workspace" className="elce-workspace" inert={editAccess !== 'active'}>
       <header id="elce-header" className="elce-header">
         <div id="elce-header-title" className="elce-header-title">
           <div id="elce-brand" className="elce-brand">
             <span id="elce-brand-name">Elcé</span>
           </div>
+          <span id="elce-sync-status" className="elce-sync-status" data-status={syncStatus} role="status" aria-live="polite">
+            {syncStatusLabel(syncStatus)}
+          </span>
           <nav id="elce-responsive-panel-access" className="elce-responsive-panel-access" aria-label="Panneaux de l’éditeur">
             <button
               id="elce-outline-toggle"
@@ -986,6 +1007,10 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
           </div>
         : null}
     </div>
+    {editAccess === 'active' ? null : <div id="elce-edit-access-overlay" className="elce-edit-access-overlay" role="status" aria-live="polite">
+      <p>Le document est ouvert dans une autre fenêtre. Si l’accès ne se libère pas, fermez cette autre fenêtre.</p>
+    </div>}
+    </Fragment>
   )
 }
 

@@ -23,6 +23,28 @@ body {
   min-height: 100vh;
 }
 
+.elce-edit-access-overlay {
+  position: fixed;
+  z-index: 2000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgb(32 36 43 / 34%);
+}
+
+.elce-edit-access-overlay p {
+  max-width: 30rem;
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  color: #263b3a;
+  background: #fffdf8;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 2rem rgb(20 30 30 / 18%);
+  text-align: center;
+}
+
 .elce-workspace {
   display: flex;
   flex-direction: column;
@@ -57,6 +79,15 @@ body {
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.elce-sync-status {
+  color: #d6dfda;
+  font-size: 0.8rem;
+}
+
+.elce-sync-status[data-status="conflict"] {
+  color: #ffd08a;
 }
 
 .elce-main {

@@ -12,6 +12,19 @@ Cette spécification décrit le contrat HTTP du routeur et du contrôleur. La
 frontière `ProjectPersistence` isole le stockage ; ce contrat ne transforme pas
 le document complet en colonne JSON de SQLite.
 
+## Accès direct depuis l’éditeur
+
+L’éditeur appelle l’API depuis le navigateur, sans proxy Vite. L’origine par
+défaut est `http://127.0.0.1:5181` ; `VITE_ELCE_API_ORIGIN` permet de la
+remplacer pour l’environnement local. Le serveur de développement écoute sur
+`127.0.0.1` uniquement.
+
+Pour les requêtes navigateur, le serveur autorise les origines HTTP de boucle
+locale (`localhost`, `127.0.0.1` et `[::1]`), quelle que soit leur origine de
+port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
+`DELETE` et les en-têtes `Content-Type` et `If-Match`. Il expose `ETag` à
+l’éditeur. Un prévol d’une origine hors boucle locale est refusé.
+
 ## Requêtes et réponses
 
 | Méthode et chemin | Requête | Réponse |
@@ -125,7 +138,8 @@ révision périmée est refusée sans perdre les métadonnées de stockage médi
 SQLite et FileStorage. Le test intégré envoie un vrai `POST`, des `PUT` média
 et des `GET` au serveur en écoute ; il vérifie les octets, la déduplication,
 le cache HTTP, la lecture partielle vidéo, le nettoyage après fusion de médias
-et la suppression du projet.
+et la suppression du projet. Il vérifie aussi le prévol depuis l’origine
+éditeur `http://localhost:5175` et le refus d’une origine distante.
 
 La couverture API est dans
 [`api-router.test.ts`](../src/server/api-router.test.ts) et la couverture

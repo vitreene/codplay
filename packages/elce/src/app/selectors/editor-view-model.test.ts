@@ -8,6 +8,7 @@ describe('editor view model selector', () => {
   it('derives ordered page BDCs and catalogue entries without mutating the document', () => {
     const actor = createActor(controllerMachine, { input: {} })
     actor.start()
+    actor.send({ type: 'editor.access.activate' })
     const initialSnapshot = actor.getSnapshot()
     const initialDocument = initialSnapshot.context.document
     const initialView = selectEditorViewModel(initialSnapshot)

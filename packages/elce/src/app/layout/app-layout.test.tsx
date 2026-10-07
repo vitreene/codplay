@@ -24,6 +24,24 @@ describe('AppLayout authoring titles and creation actions', () => {
     vi.restoreAllMocks()
   })
 
+  it('blocks the authoring surface until XState grants this window edit access', () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    actor.start()
+    const actions = new EditorActionsFacade(actor)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+
+    act(() => root?.render(<AppLayout controller={actor} actions={actions} />))
+    expect(host.querySelector('#elce-workspace')?.hasAttribute('inert')).toBe(true)
+    expect(host.querySelector('#elce-edit-access-overlay')?.textContent).toContain('une autre fenêtre')
+
+    act(() => actor.send({ type: 'editor.access.activate' }))
+    expect(host.querySelector('#elce-workspace')?.hasAttribute('inert')).toBe(false)
+    expect(host.querySelector('#elce-edit-access-overlay')).toBeNull()
+    stopActor = () => actor.stop()
+  })
+
   it('opens the separate reader by default and keeps the integrated modal available only by opt-in', () => {
     const popup = { focus: vi.fn(), postMessage: vi.fn() } as unknown as Window
     const open = vi.spyOn(window, 'open').mockReturnValue(popup)
@@ -639,6 +657,7 @@ describe('AppLayout authoring titles and creation actions', () => {
   function mountApp() {
     const actor = createActor(controllerMachine, { input: {} })
     actor.start()
+    actor.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(actor)
     stopActor = () => actor.stop()
     const host = document.createElement('div')

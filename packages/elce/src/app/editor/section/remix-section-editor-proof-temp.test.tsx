@@ -23,6 +23,14 @@ class PendingMediaStore implements ElceDocumentStore {
 
   public async saveDocumentAndDeleteMedia(): Promise<void> {}
 
+  public async deleteMedia(): Promise<void> {}
+
+  public async loadSyncState(documentId: string) {
+    return { documentId, remoteRevision: null, uploadedMediaIds: [], status: 'pending' as const }
+  }
+
+  public async saveSyncState(): Promise<void> {}
+
   public saveMedia(media: MediaBlob): Promise<void> {
     return new Promise((resolve) => this.pending.push({
       media,
@@ -43,6 +51,7 @@ describe('Remix Section editor proof', () => {
     const store = new PendingMediaStore()
     const controller = createActor(controllerMachine, { input: { documentStore: store } })
     controller.start()
+    controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
     const rendered = render(jsx(EditorContextProvider, {

@@ -9,6 +9,7 @@ describe('EditorActionsFacade', () => {
     const actor = createActor(controllerMachine, { input: {} })
     const actions = new EditorActionsFacade(actor)
     actor.start()
+    actor.send({ type: 'editor.access.activate' })
 
     actions.createPage({ kind: PAGE_LOCATION.SCENARIO })
 
@@ -30,6 +31,7 @@ describe('EditorActionsFacade', () => {
     const actor = createActor(controllerMachine, { input: {} })
     const actions = new EditorActionsFacade(actor)
     actor.start()
+    actor.send({ type: 'editor.access.activate' })
 
     actions.createEvaluationChapter(actor.getSnapshot().context.document)
     const chapter = actor.getSnapshot().context.document.chapters[1]!
@@ -53,6 +55,7 @@ describe('EditorActionsFacade', () => {
     const actor = createActor(controllerMachine, { input: {} })
     const actions = new EditorActionsFacade(actor)
     actor.start()
+    actor.send({ type: 'editor.access.activate' })
 
     actions.createQuestion(actor.getSnapshot().context.document, 'page-a', 1)
 

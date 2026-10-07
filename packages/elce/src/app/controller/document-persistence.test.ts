@@ -11,6 +11,12 @@ import { attachDocumentPersistence } from './document-persistence'
 class MemoryDocumentStore implements ElceDocumentStore {
   public document: ElceDocument | null = null
   public readonly media = new Map<string, Blob>()
+  public readonly syncStates = new Map<string, {
+    documentId: string
+    remoteRevision: number | null
+    uploadedMediaIds: readonly string[]
+    status: 'pending' | 'synced' | 'conflict'
+  }>()
   public atomicMediaDeletions: string[][] = []
 
   public async loadDocument(): Promise<ElceDocument | null> {
@@ -24,6 +30,23 @@ class MemoryDocumentStore implements ElceDocumentStore {
   public async saveDocumentAndDeleteMedia(document: ElceDocument, mediaIds: readonly string[]): Promise<void> {
     this.document = document
     this.atomicMediaDeletions.push([...mediaIds])
+    for (const mediaId of mediaIds) this.media.delete(mediaId)
+  }
+
+  public async loadSyncState(documentId: string) {
+    return this.syncStates.get(documentId) ?? { documentId, remoteRevision: null, uploadedMediaIds: [], status: 'pending' as const }
+  }
+
+  public async saveSyncState(syncState: {
+    documentId: string
+    remoteRevision: number | null
+    uploadedMediaIds: readonly string[]
+    status: 'pending' | 'synced' | 'conflict'
+  }): Promise<void> {
+    this.syncStates.set(syncState.documentId, syncState)
+  }
+
+  public async deleteMedia(mediaIds: readonly string[]): Promise<void> {
     for (const mediaId of mediaIds) this.media.delete(mediaId)
   }
 
@@ -44,14 +67,15 @@ describe('Elcé document persistence boundary', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
 
-    const detach = await attachDocumentPersistence(actor, store)
+    const persistence = await attachDocumentPersistence(actor, store)
+    actor.send({ type: 'editor.access.activate' })
 
     expect(actor.getSnapshot().context.document.data.name).toBe('Document restauré')
     actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
     await Promise.resolve()
 
     expect(store.document?.pages).toHaveLength(2)
-    detach()
+    persistence.detach()
     actor.stop()
   })
 
@@ -82,7 +106,8 @@ describe('Elcé document persistence boundary', () => {
     store.media.set('media-duplicate', new Blob(['one']))
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
-    const detach = await attachDocumentPersistence(actor, store)
+    const persistence = await attachDocumentPersistence(actor, store)
+    actor.send({ type: 'editor.access.activate' })
 
     actor.send({
       type: 'document.apply',
@@ -94,7 +119,35 @@ describe('Elcé document persistence boundary', () => {
     expect(store.document?.bdcs.find((bdc) => bdc.id === 'bdc-video-existing')?.card?.mediaId).toBe('media-canonical')
     expect(store.media.has('media-duplicate')).toBe(false)
     expect(store.media.has('media-canonical')).toBe(true)
-    detach()
+    persistence.detach()
     actor.stop()
+  })
+
+  it('restores the shared active-document cache before granting a second window edit access', async () => {
+    const store = new MemoryDocumentStore()
+    const firstActor = createActor(controllerMachine, { input: { documentStore: store } })
+    firstActor.start()
+    const firstPersistence = await attachDocumentPersistence(firstActor, store)
+    firstActor.send({ type: 'editor.access.activate' })
+    firstActor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Dernière copie locale' } })
+    await firstPersistence.flushLocalChanges()
+
+    const secondActor = createActor(controllerMachine, { input: { documentStore: store } })
+    secondActor.start()
+    const secondPersistence = await attachDocumentPersistence(secondActor, store)
+
+    expect(secondActor.getSnapshot().context.document.data.name).toBe('Dernière copie locale')
+    secondActor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    expect(secondActor.getSnapshot().context.document.pages).toHaveLength(1)
+
+    secondActor.send({ type: 'editor.access.activate' })
+    expect(secondActor.getSnapshot().context.editAccess).toBe('active')
+    secondActor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    expect(secondActor.getSnapshot().context.document.pages).toHaveLength(2)
+
+    firstPersistence.detach()
+    secondPersistence.detach()
+    firstActor.stop()
+    secondActor.stop()
   })
 })

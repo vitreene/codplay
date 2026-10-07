@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import type { Server } from 'node:http'
+import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { mkdir, rm } from 'node:fs/promises'
 import { createRequestListener } from 'remix/node-fetch-server'
 import { createElceApiRouter } from './api-router'
@@ -37,7 +37,11 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
       temporaryDirectory,
     )
     const router = createElceApiRouter(persistence, media)
-    const server = createServer(createRequestListener((request) => router.fetch(request)))
+    const requestListener = createRequestListener((request) => router.fetch(request))
+    const server = createServer((request, response) => {
+      if (answerLocalCors(request, response)) return
+      requestListener(request, response)
+    })
 
     return {
       server,
@@ -53,5 +57,35 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
   } catch (error) {
     await database.close()
     throw error
+  }
+}
+
+/** Handles local-browser CORS for the editor's direct API requests. */
+function answerLocalCors(request: IncomingMessage, response: ServerResponse): boolean {
+  const origin = request.headers.origin
+  const isLocalOrigin = origin !== undefined && isLoopbackOrigin(origin)
+  if (isLocalOrigin) {
+    response.setHeader('Access-Control-Allow-Origin', origin)
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match')
+    response.setHeader('Access-Control-Expose-Headers', 'ETag')
+    response.setHeader('Access-Control-Max-Age', '600')
+    response.setHeader('Vary', 'Origin')
+  }
+  if (request.method !== 'OPTIONS') return false
+  response.writeHead(isLocalOrigin ? 204 : 403)
+  response.end()
+  return true
+}
+
+/** Accepts browser origins on loopback only, keeping this local API private. */
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin)
+    return url.origin === origin
+      && url.protocol === 'http:'
+      && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]')
+  } catch {
+    return false
   }
 }

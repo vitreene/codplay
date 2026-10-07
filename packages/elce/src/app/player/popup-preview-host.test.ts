@@ -16,6 +16,7 @@ describe('popup preview editor connection', () => {
   it('starts from the clicked page and returns the latest editor document on manual synchronization', () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
+    controller.send({ type: 'editor.access.activate' })
     const postMessage = vi.fn()
     const popup = { postMessage, focus: vi.fn() } as unknown as Window
     const open = vi.spyOn(window, 'open').mockReturnValue(popup)

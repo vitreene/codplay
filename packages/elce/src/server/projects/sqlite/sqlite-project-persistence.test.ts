@@ -146,6 +146,23 @@ describe('SQLite project persistence through the Remix API', () => {
       const address = server.address() as AddressInfo
       const origin = `http://127.0.0.1:${address.port}`
 
+      const preflight = await fetch(`${origin}/api/projects`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'http://localhost:5175',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'content-type',
+        },
+      })
+      expect(preflight.status).toBe(204)
+      expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5175')
+      expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Content-Type')
+      const rejectedOrigin = await fetch(`${origin}/api/projects`, {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://example.com', 'Access-Control-Request-Method': 'POST' },
+      })
+      expect(rejectedOrigin.status).toBe(403)
+
       const projectResponse = await fetch(`${origin}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
