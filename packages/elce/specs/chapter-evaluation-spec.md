@@ -91,5 +91,8 @@ La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
 [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts) ;
 sa compilation CodPlay l’est dans
 [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts).
+[`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+vérifie dans la page Remix de production l’édition des messages et actions des
+branches Réussite et Échec par le service Résultat et la façade XState.
 Safari MCP a également vérifié l’ajout puis le retrait du BDC sur une page
 Flux d’Évaluation existante ; le bloc de test a été supprimé.

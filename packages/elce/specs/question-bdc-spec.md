@@ -52,8 +52,8 @@ applicative `ElceQuestionFacade` (`app/facades/question/`) pour transformer les
 gestes auteur en commandes documentaires envoyées au contrôleur XState. La
 création est insérée dans la position
 ordonnée de la page ; l’édition des réponses, du texte et de la référence média
-modifie le document par la même façade et les mêmes commandes. React affiche
-le modèle et ne porte pas une copie de son état métier.
+modifie le document par la même façade et les mêmes commandes. La vue Remix
+affiche le modèle et ne porte pas une copie de son état métier.
 
 Le builder instancie le markup fixe du preset Question. Sa story autonome
 contient les persos CodPlay nécessaires : des `input` natifs, le bouton de
@@ -107,6 +107,9 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   auteur à travers le contrôleur XState, le changement de type, l’énoncé, les
   marques de correction, le réordonnancement et la présence de l’icône Quiz
   ListChecks.
+- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+  vérifie l’édition Question dans la page Remix de production ainsi que
+  l’import d’une illustration par la file média XState existante.
 - Le 4 octobre, Safari MCP confirme qu’une page créée dans un chapitre
   Évaluation est une page Flux avec un BDC Question, et que la preview réelle
   CodPlay affiche cette Question avec ses réponses Oui/Non. La page et le

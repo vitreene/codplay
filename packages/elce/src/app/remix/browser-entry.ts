@@ -1,7 +1,6 @@
 import { run } from 'remix/spa'
 import { jsx } from 'remix/ui/jsx-runtime'
 import { createActor } from 'xstate'
-import { mountElceEditor } from '../main'
 import { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
@@ -38,21 +37,13 @@ async function startRemixEditor(): Promise<void> {
   })
   await runtime.ready()
 
-  const host = document.getElementById('elce-react-temp-host')
-  if (controller !== null && editorActions !== null && host === null) {
-    throw new Error('Remix did not render the temporary Elcé editor host.')
-  }
-
-  const disposeEditor = host === null
-    ? () => {}
-    : mountElceEditor(host, controller, editorActions, { hideHeader: true, surface: 'remix-page-work-area' })
-  window.addEventListener('pagehide', () => {
-    void projectSession?.dispose().finally(() => {
-      disposeEditor()
+  const dispose = (): void => {
+    void (projectSession?.dispose() ?? Promise.resolve()).finally(() => {
       controller?.stop()
       runtime.dispose()
     })
-  }, { once: true })
+  }
+  window.addEventListener('pagehide', dispose, { once: true })
 }
 
 void startRemixEditor().catch((error: unknown) => {

@@ -1,143 +1,45 @@
-import {
-  AlignCenter,
-  AlignJustify,
-  AlignLeft,
-  AlignRight,
-  Bold,
-  Heading1,
-  Heading2,
-  Heading3,
-  Heading4,
-  Heading5,
-  Heading6,
-  Italic,
-  Pilcrow,
-  Subscript,
-  Superscript,
-  Trash2,
-  Underline,
-  X,
-} from 'lucide-static'
-import { on, ref, type Handle, type RemixNode } from 'remix/ui'
+import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
+import { on, ref, type RemixNode } from 'remix/ui'
 import { jsx } from 'remix/ui/jsx-runtime'
 import { BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
 import type { Bdc, Page } from '../../../domain/document/document-types'
 import type { ElceAnchorMediaPreview } from '../../../domain/anchor/anchor-types'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
-import { selectEditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
-import { EditorActionsFacade } from '../../facades/editor-actions-facade'
-import { EditorContextProvider } from '../../remix/editor-context'
+import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
+import type { RemixRenderHandle } from '../../remix/remix-render-handle'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
 import { RemixCardEditorFields } from '../card/remix-card-editor-fields'
 import { SectionTiptapAdapter } from './section-editor-tiptap-adapter'
 import { EMPTY_SECTION_TOOLBAR_STATE } from './section-editor-tiptap'
 import type { SectionToolbarState } from './section-editor-tiptap'
 
-/** Temporarily exposes the real Section editor through the Remix SPA runtime. */
-export function RemixSectionEditorProofTemp(handle: Handle) {
-  const { controller, actions } = handle.context.get(EditorContextProvider)
-  if (controller === null || actions === null) {
-    throw new Error('The Remix Section proof requires the authoring actor.')
-  }
-
-  const current = { view: selectEditorViewModel(controller.getSnapshot()) }
-  let editingAnchorBdcId: string | null = null
-  const bindings = new Map<string, SectionTiptapAdapter>()
-  const toolbarStates = new Map<string, SectionToolbarState>()
-
-  handle.queueTask(() => {
-    const subscription = controller.subscribe((snapshot) => {
-      current.view = selectEditorViewModel(snapshot)
-      for (const bdc of sectionBdcs(current.view)) {
-        if (bdc.section === null) continue
-        bindings.get(bdc.id)?.updateSection(bdc.section)
-      }
-      void handle.update()
-    })
-    handle.signal.addEventListener('abort', () => subscription.unsubscribe(), { once: true })
-  })
-
-  return () => renderSectionProof(current.view, actions, bindings, toolbarStates, (bdcId) => {
-    editingAnchorBdcId = bdcId
-    void handle.update()
-  }, () => {
-    editingAnchorBdcId = null
-    void handle.update()
-  }, () => editingAnchorBdcId, handle, current)
+export interface RemixSectionEditorBindings {
+  readonly adapters: Map<string, SectionTiptapAdapter>
+  readonly toolbarStates: Map<string, SectionToolbarState>
+  readonly selectedAnchorCardId: string | null
+  readonly onEditAnchorCard: (bdcId: string) => void
+  readonly onCloseAnchorCard: () => void
+  readonly handle: RemixRenderHandle
+  readonly current: { view: EditorViewModel }
 }
 
-/** Selects valid Section BDCs from the currently selected page. */
-function sectionBdcs(view: EditorViewModel): readonly Bdc[] {
-  return view.selectedPageBdcs.filter((bdc) => bdc.type === BDC_TYPE.SECTION && bdc.section !== null)
-}
-
-/** Renders the selected page Sections with the real Tiptap and XState boundaries. */
-function renderSectionProof(
-  view: EditorViewModel,
-  actions: EditorActionsFacade,
-  bindings: Map<string, SectionTiptapAdapter>,
-  toolbarStates: Map<string, SectionToolbarState>,
-  openAnchorCard: (bdcId: string) => void,
-  closeAnchorCard: () => void,
-  selectedAnchorCard: () => string | null,
-  handle: Handle,
-  current: { view: EditorViewModel },
-): RemixNode {
-  const page = view.selectedPage
-  const sections = sectionBdcs(view)
-  return jsx('main', {
-    id: 'elce-remix-section-proof',
-    'data-remix-section-proof': 'active',
-    children: [
-      jsx('h1', { id: 'elce-remix-section-proof-title', children: 'Édition de Section dans Remix' }),
-      jsx('p', { id: 'elce-remix-section-proof-page', children: `Page : ${page?.name ?? 'aucune'}` }),
-      jsx('a', {
-        id: 'elce-remix-section-proof-frame-link',
-        href: '/?__remixSectionProof=1&frame=2',
-        children: 'Recharger la frame',
-      }),
-      ...sections.map((bdc) => renderSection(
-        bdc,
-        page,
-        view,
-        actions,
-        bindings,
-        toolbarStates,
-        toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE,
-        openAnchorCard,
-        closeAnchorCard,
-        selectedAnchorCard(),
-        handle,
-        current,
-      )),
-      sections.length === 0
-        ? jsx('p', { id: 'elce-remix-section-proof-empty', children: 'La page sélectionnée ne contient aucune Section.' })
-        : null,
-    ],
-  })
-}
-
-/** Renders one Section and mounts its Tiptap editor through Remix ref lifecycle. */
-function renderSection(
+/** Renders one production Section with the shared Tiptap and anchor adapters. */
+export function renderRemixSectionEditor(
   bdc: Bdc,
-  page: Page | undefined,
+  page: Page,
   view: EditorViewModel,
   actions: EditorActionsFacade,
-  bindings: Map<string, SectionTiptapAdapter>,
-  toolbarStates: Map<string, SectionToolbarState>,
-  toolbarState: SectionToolbarState,
-  openAnchorCard: (bdcId: string) => void,
-  closeAnchorCard: () => void,
-  selectedAnchorCardId: string | null,
-  handle: Handle,
-  current: { view: EditorViewModel },
+  state: RemixSectionEditorBindings,
 ): RemixNode {
   const section = bdc.section
-  if (section === null || page === undefined) return null
+  if (bdc.type !== BDC_TYPE.SECTION || section === null) return null
   const anchorCards = view.documentModel.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id && candidate.type === BDC_TYPE.CARD)
-  const editingAnchorCard = anchorCards.find((card) => card.id === selectedAnchorCardId)
+  const editingAnchorCard = anchorCards.find((card) => card.id === state.selectedAnchorCardId)
   const cardActions = actions.createCardEditorActions(view.documentModel.bdcs)
+  const toolbarState = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
+  const handle = state.handle
+  const current = state.current
 
   return jsx('section', {
     id: `elce-section-editor-${bdc.id}`,
@@ -153,7 +55,7 @@ function renderSection(
             'aria-label': 'Titre de section',
             placeholder: 'Titre (facultatif)',
             value: section.title,
-            mix: on<HTMLInputElement, 'input'>('input', (event) => bindings.get(bdc.id)?.updateTitle(event.currentTarget.value)),
+            mix: on<HTMLInputElement, 'input'>('input', (event) => state.adapters.get(bdc.id)?.updateTitle(event.currentTarget.value)),
           }),
           jsx('button', {
             id: `elce-section-delete-${bdc.id}`,
@@ -166,7 +68,7 @@ function renderSection(
           }),
         ],
       }),
-      renderToolbar(bdc.id, toolbarState, bindings, handle),
+      renderToolbar(bdc.id, toolbarState, state.adapters, handle),
       jsx('div', {
         id: `elce-remix-section-editor-host-${bdc.id}`,
         className: 'elce-section-editor-host',
@@ -184,27 +86,27 @@ function renderSection(
                 bdc.id,
               ),
               resolveCard: (anchorBdcId) => resolveAnchorCard(current.view, anchorBdcId),
-              onEditCard: openAnchorCard,
+              onEditCard: state.onEditAnchorCard,
             },
             onChange: (change) => actions.submitSectionChange(bdc.id, change),
             onToolbarState: (next) => {
-              const current = toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
-              if (JSON.stringify(current) === JSON.stringify(next)) return
-              toolbarStates.set(bdc.id, next)
+              const previous = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
+              if (sameToolbarState(previous, next)) return
+              state.toolbarStates.set(bdc.id, next)
               if (!handle.signal.aborted) void handle.update()
             },
           })
-          bindings.set(bdc.id, adapter)
+          state.adapters.set(bdc.id, adapter)
           signal.addEventListener('abort', () => {
-            if (bindings.get(bdc.id) === adapter) bindings.delete(bdc.id)
-            toolbarStates.delete(bdc.id)
+            if (state.adapters.get(bdc.id) === adapter) state.adapters.delete(bdc.id)
+            state.toolbarStates.delete(bdc.id)
             adapter.destroy()
           }, { once: true })
         }),
       }, bdc.id),
       editingAnchorCard === undefined
         ? null
-        : renderAnchorCardEditor(editingAnchorCard, view, cardActions, closeAnchorCard),
+        : renderAnchorCardEditor(editingAnchorCard, view, cardActions, state.onCloseAnchorCard),
     ],
   }, bdc.id)
 }
@@ -213,8 +115,8 @@ function renderSection(
 function renderToolbar(
   bdcId: string,
   state: SectionToolbarState,
-  bindings: Map<string, SectionTiptapAdapter>,
-  handle: Handle,
+  adapters: Map<string, SectionTiptapAdapter>,
+  handle: RemixRenderHandle,
 ): RemixNode {
   const buttons = [
     { suffix: 'bold', label: 'Gras', icon: Bold, active: state.bold, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleBold().run() },
@@ -249,7 +151,7 @@ function renderToolbar(
       'data-active': active,
       title: label,
       mix: on<HTMLButtonElement, 'click'>('click', () => {
-        const editor = bindings.get(bdcId)?.editor
+        const editor = adapters.get(bdcId)?.editor
         if (editor === undefined) return
         run(editor)
         editor.commands.focus()
@@ -299,14 +201,26 @@ function renderAnchorCardEditor(
   })
 }
 
-/** Resolves media presentation for one Card anchor from the current document. */
+/** Resolves media presentation for an anchor from the current actor snapshot. */
 function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorMediaPreview | null {
   const card = view.documentModel.bdcs.find((candidate) => candidate.id === bdcId)
-  if (card?.type !== BDC_TYPE.CARD || card.card === null || card.card === undefined || card.card.mediaId === null) return null
+  if (card?.type !== BDC_TYPE.CARD || card.card == null || card.card.mediaId === null) return null
   const media = view.documentModel.medias.find((candidate) => candidate.id === card.card?.mediaId)
   const source = view.mediaSources[card.card.mediaId]
   const type = media === undefined ? null : mediaTypeFromMimeType(media.mimeType)
   return media === undefined || source === undefined || type === null
     ? null
     : { source, type, layoutId: card.presetId as ElceAnchorMediaPreview['layoutId'] }
+}
+
+/** Compares finite toolbar state without allocating a reactive store. */
+function sameToolbarState(left: SectionToolbarState, right: SectionToolbarState): boolean {
+  return left.bold === right.bold
+    && left.italic === right.italic
+    && left.underline === right.underline
+    && left.subscript === right.subscript
+    && left.superscript === right.superscript
+    && left.headingLevel === right.headingLevel
+    && left.paragraph === right.paragraph
+    && left.textAlign === right.textAlign
 }

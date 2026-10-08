@@ -2,7 +2,7 @@ import { QUESTION_TYPE, QUESTION_TYPE_CONFIG } from '../../config/document-confi
 import { createStableId } from '../document/document-model'
 import type { QuestionAnswer, QuestionContent, QuestionType } from './question-types'
 
-/** Owns Question defaults and answer editing rules independently of React. */
+/** Owns Question defaults and answer editing rules independently of the view. */
 export class ElceQuestionService {
   /** Creates one complete editable Question payload with its configured defaults. */
   public createDefault(): QuestionContent {

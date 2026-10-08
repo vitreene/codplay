@@ -18,7 +18,7 @@ export class ElceAnchorDropFacade {
     this.targetService = new ElceAnchorDropService()
   }
 
-  /** Creates the business target for one accepted file without touching React state. */
+  /** Creates the métier target for one accepted file without storing view state. */
   public createFileDropTarget(file: File, pageId: PageId): ElceAnchorDropTarget | null {
     return this.targetService.createFileDropTarget(file, pageId)
   }

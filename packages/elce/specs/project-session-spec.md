@@ -20,6 +20,9 @@ de contenus de l’éditeur.
   habituelle.
 - « Ouvrir » prépare la copie locale ou relit le document serveur, attend la
   synchronisation du projet courant, puis transfère l’édition au projet choisi.
+  Toute commande déjà acceptée avant l’ouverture finit d’abord son écriture
+  locale ; cette révision fait partie de l’instantané synchronisé. En cas
+  d’échec ou de conflit, le projet courant et sa copie locale restent ouverts.
   L’éditeur ne devient actif qu’après obtention de son `ProjectEditorLock`.
 - « Fermer » attend la synchronisation, libère le verrou et supprime la copie
   IndexedDB du projet actif. Le projet et son document restent sur le serveur.
@@ -39,8 +42,9 @@ de contenus de l’éditeur.
 ## Lire l’implémentation
 
 - [`project-application.ts`](../src/app/remix/project-application.ts) rend le
-  menu natif Remix, les listes et la zone de sélection. L’éditeur restant à
-  porter est toujours monté dans son hôte React temporaire.
+  menu, les listes, la sélection et la zone auteur en Remix. Une page active
+  reçoit `RemixPageEditor` ; tous ses BDC directs et sa Section sont des vues
+  natives Remix qui utilisent le même acteur et les mêmes façades.
 - [`editor-actions-facade.ts`](../src/app/facades/editor-actions-facade.ts)
   expose les intentions de gestion au même acteur XState.
 - [`controller-machine.ts`](../src/app/controller/controller-machine.ts)
@@ -54,6 +58,11 @@ de contenus de l’éditeur.
 - Les tests XState couvrent le démarrage sans création implicite, l’installation
   d’un document avant le verrou et la conservation du document et de l’accès
   courant lorsqu’une opération échoue.
+- [`project-operations.test.ts`](../src/app/controller/project-operations.test.ts)
+  traverse l’acteur XState, le raccord de persistance locale et le coordinateur
+  de synchronisation : une commande Section en cours est enregistrée avant
+  l’ouverture d’un autre projet, puis un conflit serveur ou une erreur réseau
+  garde le document, l’accès d’édition et le checkpoint local du projet courant.
 - Les tests du coordinateur couvrent la création, la fermeture sans suppression
   serveur, la suppression d’un projet inactif sans perte de l’accès courant et
   le démarrage sur un catalogue vide.

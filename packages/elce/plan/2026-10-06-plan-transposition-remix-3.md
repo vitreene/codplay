@@ -1,19 +1,19 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : En cours — étapes 0, 1, 2 et 3 Finies ; étape 4 commencée.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. La gestion des projets, l’organisation du Scénario, les réglages de chapitre et le catalogue sont maintenant rendus par des surfaces Remix natives ; la zone de travail des pages et ses éditeurs restent dans le pont React temporaire. L’acceptation Safari des réglages centraux est encore ouverte. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
+**Statut : En cours — étapes 0 à 4 finies ; le portage Remix de l’étape 5 est appliqué. Une validation reste ouverte : relire une IndexedDB v4 existante après remplacement du serveur sur le même origin, sans remise à zéro.** L’auteur, le lecteur popup et les tests Elcé sont rendus sans React. `npm run dev:elce` lance l’asset server Remix et réutilise l’API Elcé active. Typecheck réussi, 206 tests réussis sur 206, build réussi ; le chunk JavaScript fait 1 314,22 kB minifiés (372,16 kB gzip) et conserve l’avertissement Vite au-dessus de 500 kB. Brave a vérifié la liste des projets depuis `localhost:5176`, l’ouverture du lecteur natif et ses images serveur depuis l’API ; les consoles étaient vides et aucun asset React/ReactDOM n’a été demandé. Le port `localhost:5175` reste occupé par un ancien serveur Vite ; après rechargement, il renvoie `504 (Outdated Optimize Dep)`. Il n’a pas été arrêté et aucune base n’a été réinitialisée. L’auteur a reporté à une tranche ultérieure l’amélioration de reprise du verrou après un changement réel de visibilité : sans utilisateur en situation réelle, aucun développement ni test dédié n’est justifié. Cette décision ne bloque pas le portage.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
 ## Invariants de migration
 
 - La cible est le runtime de composants Remix 3 sans React ; la version fixée pour ce portage est `3.0.0-rc.4`, acceptée le 7 octobre 2026, pas Remix v2 ni React Router Framework Mode.
-- Le périmètre du portage est l’interface auteur de l’éditeur. Le player, ses scènes et sa composition restent gérés par Sighty/CodPlay et ne sont pas portés vers Remix.
+- La cible finale est zéro React dans le workspace Elcé, sans exception pour le lecteur. Les scènes et leur composition restent gérées par Sighty/CodPlay ; toute vue ou tout adaptateur d’interface React qui les entoure dans Elcé doit aussi être porté vers Remix.
 - L’interface auteur utilise le routeur navigateur `remix/spa` ; les routes API utilisent un routeur Fetch serveur distinct. L’API n’affiche pas l’éditeur et ses réponses ne remplacent pas l’état éditorial.
 - Le contrôleur XState reste propriétaire de l’état éditorial. Les gestes métier passent par les commandes et façades déjà définies.
 - Les classes métier, le modèle ElceDocument, les builders de scènes et la composition Sighty/CodPlay ne dépendent pas de Remix.
 - La migration d’interface ne change ni les documents v4 d’IndexedDB, ni le scénario, ni les scènes et contenus existants.
 - Le serveur utilise les frontières d’infrastructure Elcé pour SQLite et les fichiers ; les règles métier ne sont pas déplacées dans les contrôleurs.
-- Les autres paquets du monorepo peuvent conserver React. Les surfaces auteur portées ne l’utilisent plus ; dans le workspace Elcé, ne retirer une dépendance React que si le player hors périmètre ne l’utilise pas.
+- Les autres paquets du monorepo peuvent conserver React. Après les étapes 4 et 5, aucune surface de production Elcé ni aucun test Elcé ne doit en dépendre ; les dépendances React du workspace sont supprimées une fois tous leurs usages portés.
 
 ## Étapes et critères de sortie
 
@@ -22,11 +22,11 @@ Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-el
 - Déclarer Node 24.3.0 ou plus récent comme moteur minimal du seul workspace Elcé. C’est fait dans `packages/elce/package.json` ; le Node local 26.10.0 satisfait cette contrainte.
 - Installer et fixer `remix@3.0.0-rc.4` dans le seul workspace Elcé. C’est fait ; l’installation npm a réussi.
 - Démarrer l’éditeur avec le routeur navigateur `remix/spa` et un routeur serveur séparé réservé aux réponses API.
-- Monter temporairement l’éditeur React existant sous un hôte conservé par `data-rmx-preserve-dom`, nommé `ReactEditorTempBridge`. Ce raccord réutilise exactement l’acteur XState et la persistance existants ; il ne crée aucun état ni commande parallèle. Le supprimer après le portage de toutes les surfaces auteur prévu à l’étape 4.
+- L’entrée POC a d’abord monté temporairement l’éditeur React existant sous un hôte conservé par `data-rmx-preserve-dom`. Ce raccord partageait l’acteur XState et la persistance ; il a été supprimé à l’étape 4 après le portage des surfaces auteur. Le montage provisoire du lecteur popup reste suivi à l’étape 5.
 - Préparer le routeur Fetch API dans un module serveur distinct, sans démarrer de listener ni ajouter de route avant les opérations SQLite et fichiers prévues aux étapes 2 et 3.
 - Vérifier que l’installation, le démarrage, les scripts du workspace et le build fonctionnent sous le moteur retenu, sans modifier les autres workspaces.
 
-**Sortie :** le workspace Elcé démarre et se construit avec la SPA Remix et `ReactEditorTempBridge`; le routeur Fetch API reste séparé et sans listener jusqu’à la tranche serveur.
+**Sortie :** le workspace Elcé a démarré et s’est construit avec la SPA Remix et un hôte React provisoire. Cet hôte auteur a ensuite été retiré à l’étape 4 ; le routeur Fetch API reste séparé du routeur navigateur.
 
 **Vérification :** installation `remix@3.0.0-rc.4` dans le workspace Elcé ; route `/` et fallback rendus par `remix/spa` ; Safari confirme l’affichage de l’éditeur et conserve exactement le host lors d’une navigation SPA vers une route inconnue. Le test Fetch confirme la réponse 404 du routeur API sans serveur en écoute. Typecheck, 164 tests et build passent. Le build actuel émet un chunk de 1 557 292 octets minifiés (441 916 octets gzip) ; la limite Vite de 500 KiB s’applique avant gzip. L’audit du graphe montre que le chunk inclut aussi le player par import statique ; l’avertissement ne peut donc pas être attribué à la seule cohabitation React/Remix.
 
@@ -37,11 +37,11 @@ Dans une tranche isolée de l’application Elcé, utiliser le vrai routeur SPA 
 - **Fini :** contrats et transformations documentaires déplacés dans `domain/commands/` ; façades déplacées dans `app/facades/` ; props React des champs Carte déplacées dans `app/editor/card/`. Les tests, le typecheck et le build passent sans changement de comportement.
 - **Fini :** l’entrée navigateur compose l’acteur, le store et l’attachement de persistance une seule fois. La racine Remix reçoit cet acteur dans son Context ; le pont React reçoit la même instance. Safari recharge l’éditeur restauré sans erreur de console.
 - **Fini le 7 octobre :** extraire de `AppLayout` la façade d’actions et le modèle de vue prévus par l’audit. L’entrée navigateur crée `EditorActionsFacade` une fois et transmet la même instance ; `AppLayout` ne fabrique plus les commandes documentaires et utilise le sélecteur pur `selectEditorViewModel`. Les événements, commandes et règles UI restent identiques.
-- **Fini le 7 octobre :** éprouver dans le runtime Remix l’accès au contrôleur par `EditorContextProvider`, l’abonnement d’une vue aux snapshots, le rendu par `handle.update()` et le désabonnement au signal de durée de vie. Le composant et la route `?__remixProof=1` sont des preuves temporaires de cycle de vie : les retirer quand les vues Carte et Section portées remplacent leur équivalent React et que leurs propres parcours valident le même abonnement et nettoyage.
-- **Fini le 7 octobre :** la route temporaire `?__remixCardProof=1` édite une Carte directe de Diapo et une Carte enfant de Carousel avec les mêmes champs, presets et règles de Carte. Les modifications passent par `EditorActionsFacade`, les façades Carte/Carousel existantes et l’acteur XState ; les deux placements restent distincts. Tests de composant et parcours Safari réussis, y compris conservation des champs au changement de preset et rendu des icônes Lucide.
-- **Fini le 7 octobre — preuve Section Tiptap sans React dans Remix :** `SectionTiptapAdapter` utilise `@tiptap/core`, le cycle `ref` et les commandes Remix `on`; il garde les transactions, dépôts et déplacements ProseMirror raccordés aux mêmes façades et au même acteur XState. Les tests vérifient le titre, le JSON/HTML, H3 italique, gras, dépôt d’image, persistance, aperçu média, déplacement d’ancre et conservation de la même instance Editor/du DOM. Safari Technology Preview via MCP confirme que `&frame=2` garde le même élément `.ProseMirror` après navigation, vérifié par identité DOM, et ne produit pas d’erreur ni d’avertissement dans la console de la session de test. Le parcours ne contient aucun import React ; la surface principale reste dans le pont temporaire en attendant le portage des autres surfaces.
+- **Fini le 7 octobre, preuve temporaire retirée à l’étape 4 :** le runtime Remix a vérifié l’accès au contrôleur par `EditorContextProvider`, l’abonnement aux snapshots, le rendu par `handle.update()` et le désabonnement à la fin du cycle de vie. Le test de production `RemixPageEditor` couvre maintenant l’abonnement et son nettoyage au changement de page et au démontage.
+- **Fini le 7 octobre, preuve temporaire remplacée à l’étape 4 :** l’éditeur de Carte Remix éprouvait les champs et les façades Carte/Carousel. La page de production vérifie maintenant la Carte directe en Flux et en Diapo, les Cartes enfants, le changement de preset, l’ordre et les imports média.
+- **Fini le 7 octobre — Section Tiptap sans React dans Remix :** `SectionTiptapAdapter` utilise `@tiptap/core`, le cycle `ref` et les commandes Remix `on`; il garde les transactions, dépôts et déplacements ProseMirror raccordés aux mêmes façades et au même acteur XState. Le test de production vérifie le titre, le contenu, les commandes, le dépôt d’image, sa persistance, l’aperçu, le déplacement d’ancre et la conservation de la même instance Editor/du DOM. Safari Technology Preview via MCP avait vérifié l’identité du `.ProseMirror` pendant la preuve de portage ; la vue de preuve séparée a été retirée.
 - **Fini le 7 octobre :** « Prévisualiser » continue d’ouvrir le lecteur Sighty/CodPlay. Le player conserve les paramètres de la route auteur ; le routeur ignore les preuves temporaires quand l’acteur n’est pas présent. Safari confirme l’ouverture de « Lecture Elcé » sans erreur de console après rechargement.
-- **Fini le 7 octobre :** compiler isolément les entrées de preuve Carte et Section et contrôler leur graphe d’import. Aucun module React, `@tiptap/react` ou `lucide-react` n’est présent dans ces surfaces Remix. Ce contrôle ne prétend pas retirer React de l’entrée complète, qui conserve `ReactEditorTempBridge` et le player hors périmètre.
+- **Fini le 7 octobre :** compiler isolément les entrées de preuve Carte et Section et contrôler leur graphe d’import. Aucun module React, `@tiptap/react` ou `lucide-react` n’est présent dans ces surfaces Remix. La page auteur de production utilise maintenant ce circuit sans îlot React. La dépendance React du montage popup reste provisoire à l’étape 5.
 - **Fini le 7 octobre :** exécuter les tests de composant avec le runtime Remix et le parcours SPA dans le navigateur MCP fourni par l’environnement. Safari Technology Preview via MCP vérifie les parcours Carte et Section, la preview et la conservation de l’identité DOM après `&frame=2`, sans erreur de console. Aucun navigateur hors de cette configuration n’est requis.
 - Ne pas toucher aux API, au schéma SQLite, au transfert des médias, au modèle v4 ou aux scènes du player dans cette étape.
 
@@ -173,14 +173,129 @@ scène ; Elcé n’ajoute pas de circuit séparé.
 sont intégrés et vérifiés en HTTP réel. La synchronisation de l’éditeur avec
 cette API reste dans les étapes local-first.
 
-### 4. Porter l’application par surfaces — En cours
+### 4. Porter l’application par surfaces — Fini le 8 octobre
 
 Porter l’affichage en gardant les commandes et l’ordre métier existants :
 
 1. démarrage, restauration IndexedDB, gestion des projets, organisation des pages et réglages de chapitre ;
 2. Section Tiptap, ancres, dépôt de médias et barre d’outils ;
 3. éditeurs Question, Résultat, Carte autonome et Carousel ; l’éditeur de Carte
-   reste partagé entre une Carte directe Diapo et les Cartes enfants du Carousel.
+   reste partagé entre une Carte directe Flux ou Diapo et les Cartes enfants du Carousel.
+
+**Décision appliquée le 8 octobre — aucun pont React dans la page Remix :**
+`RemixPageEditor` rend chaque type BDC à sa position dans la séquence. La
+Section conserve `SectionTiptapAdapter`. Question, Résultat, Carte directe et
+Carousel avec ses Cartes enfants reçoivent des vues Remix natives. Ces vues
+réutilisent `EditorActionsFacade`, les façades de domaine et l’unique acteur
+XState ; elles ne créent ni état documentaire, ni commande, ni circuit média
+parallèles. L’ancien `ReactBdcEditorTempBridge` et les routes de preuve ont été
+supprimés après validation de la page de production.
+
+**Décision de placement acceptée par l’auteur le 8 octobre :** une Carte peut
+être ajoutée directement à une page Flux dans sa séquence BDC, et directement
+à une Diapo comme son unique BDC ; les Cartes enfants du Carousel restent dans
+son éditeur partagé. Les commandes, builders Elcé, tests de placement et page
+Remix de production couvrent ces deux placements. Les spécifications du modèle
+documentaire et du Carousel ont été actualisées.
+
+Les scènes et leur composition Sighty/CodPlay ne changent pas. Le lecteur popup
+est maintenant lui aussi rendu par Remix dans l’étape 5 ; le workspace Elcé ne
+garde aucune surface React.
+
+**Avancement du 8 octobre :** `ProjectApplication` et `RemixPageEditor` rendent
+les surfaces auteur et les cinq BDC dans Remix. Question, Résultat, Carte
+autonome et Carousel réutilisent les façades existantes ; les Cartes directes
+Flux et Diapo et les Cartes enfants du Carousel partagent les mêmes champs.
+Les tests de production vérifient l’ordre, l’édition, l’import média par
+Question/Carte/Carousel, la relation et le réordonnancement des Cartes enfants,
+le déplacement d’un BDC, le changement de page et le désabonnement XState. Le
+test Section vérifie également son média et son ancre dans la même page de
+production. Les preuves et le pont BDC temporaires ont été retirés. Brave
+DevTools est maintenant appelable dans cette session ; son contexte isolé a
+vérifié les réglages d’un chapitre Évaluation, l’édition Question/Résultat/
+Carte, les Cartes directes Flux/Diapo, le Carousel et son ordre, ainsi que le
+dépôt d’une image dans une Section. Le lecteur a aussi chargé cette image depuis
+l’URL serveur. Les projets des premiers parcours ont été supprimés et leur
+IndexedDB nettoyée. Le test de régression actuel a créé un nouveau Projet 2
+avec son document et un média ; il reste présent après le rejet de la demande
+de suppression permanente par l’auto-review, faute d’autorisation explicite.
+La restitution des sélections est vérifiée. La réacquisition après un
+changement réel de visibilité est explicitement reportée par l’auteur à une
+tranche fondée sur l’usage réel ; elle ne bloque pas la fin du portage auteur.
+Le Projet 2 créé pour un test reste intact après le rejet de sa suppression par
+l’auto-review ; ce nettoyage de données n’est pas une acceptation du portage.
+
+**Acceptation de la composition :** les tests du runtime Remix couvrent une
+page contenant les cinq types BDC, l’ordre, les commandes, la sélection,
+l’édition des champs, les imports média, les relations et l’ordre des Cartes
+enfants, la Carte directe en Flux et Diapo et le nettoyage au changement de
+page. Les preuves temporaires et le pont React BDC sont supprimés. Brave
+DevTools est configuré avec `npx -y brave-mcp@latest` et expose 30 outils
+appelables dans cette session. Dans un projet d’essai isolé, le parcours a
+vérifié les réglages centraux d’un chapitre Évaluation (seuil 80 %, tentatives
+illimitées, toutes les questions), l’édition de Question/Résultat/Carte, les
+Cartes directes Flux et Diapo, la Carte enfant, et le réordonnancement du
+Carousel. Un dépôt d’image synthétique dans la Section de production a créé une
+ancre et chargé l’image depuis l’URL média serveur. Les scripts de la page
+auteur et lecteur servis par Remix n’ont demandé aucun asset React ou ReactDOM.
+
+- [x] Recharger l’éditeur dans Brave et vérifier que Brave DevTools reste
+  callable, puis contrôler la liste API et l’IndexedDB de l’origine de test.
+- [reportée — nettoyage de données hors acceptation du portage] Le Projet 2
+  temporaire reste conservé : l’auto-review a rejeté sa suppression définitive
+  faute d’autorisation explicite. Aucune suppression n’a été retentée.
+- [x] Résoudre les médias confirmés par leur URL serveur dans le lecteur et
+  garder le Blob local seulement pendant un transfert en attente. **Décision
+  acceptée le 8 octobre :** URL serveur et cache HTTP. La régression ciblée du
+  popup, le typecheck et le build passent. Brave confirme le transfert de
+  `brave-preview-contract.png`, son absence du store IndexedDB après upload,
+  puis son rendu dans l’éditeur et le lecteur depuis la même URL API ; le popup
+  affiche une image décodée de 1 × 1 px, sans alerte ni erreur console.
+- [x] Corriger et vérifier l’édition d’une Carte ancrée après dépôt PNG dans
+  la Section Remix. L’ancien test dispatchait un clic synthétique sur le SVG
+  et ne prouvait pas la réponse à un clic physique. Le conteneur large laisse
+  maintenant passer les pointeurs ; seul le bouton de `1.75rem` capte le
+  clic. Brave vérifie après rechargement que son centre cible le bouton,
+  qu’un clic physique ouvre l’éditeur partagé du même BDC et que le point
+  central du conteneur retombe sur le contenu dessous. Le layout `photo-basic`
+  et l’ajustement `cover` sont affichés ; le test de production clique le vrai
+  bouton et vérifie le même éditeur. Les deux suites ciblées passent et le
+  typecheck réussit. Aucun BDC ni circuit média supplémentaire n’est créé.
+- [x] Corriger la restitution des sélections enregistrées dans les sélecteurs
+  natifs Remix. Décision de l’auteur du 8 octobre : la configuration fournit
+  les valeurs initiales ; une valeur sauvegardée ne change pas après navigation
+  ou rechargement. Cause : le renderer appliquait `value` au `<select>` avant
+  d’insérer ses options, ce qui laissait la première option sélectionnée au
+  montage. Les options reflètent maintenant le snapshot dans Chapitre,
+  Question, Résultat, Carte et Carousel. Les tests couvrent les remounts, dont
+  une transition Zoom explicitement sauvegardée. Dans Brave, Manuel et Zoom
+  restent affichés après Page A → Page B → Page A et rechargement complet ;
+  IndexedDB et l’API confirment `playbackMode: manual` et
+  `revelation.intro/outro: zoom`. La Carte ancrée restitue également
+  `photo-basic` et `cover`. Le détail vérifié est inscrit dans les
+  spécifications Remix, Carousel et ancre.
+- [reportée — nettoyage de données hors acceptation du portage] Le Projet 2
+  temporaire et son média ne sont pas supprimés. L’auto-review a rejeté cette
+  suppression faute d’autorisation utilisateur explicite ; ne pas retenter
+  cette action sans nouvel accord.
+- [x] Brave DevTools, hors réseau : après édition du titre d’une page, le
+  `PUT /document` échoue avec `ERR_INTERNET_DISCONNECTED`. L’ouverture de l’autre
+  projet échoue aussi sur `GET /api/projects` ; le projet courant reste ouvert,
+  son document local conserve le nouveau titre avec le checkpoint `pending`,
+  puis le retour réseau le synchronise à la révision serveur 1. Le projet
+  temporaire est supprimé ensuite.
+- [x] Brave DevTools, deux pages du même contexte : la seconde fenêtre qui
+  ouvre le même projet affiche l’attente et le rappel de fermer l’autre fenêtre.
+  Elle prend ensuite le verrou, modifie le titre et le synchronise à la
+  révision serveur 1 ; IndexedDB contient le même document. Après fermeture de
+  la seconde page, la première reste en attente jusqu’à son rechargement, qui
+  restaure le titre local et le synchronise. Les deux pages restaient
+  `visibilityState: visible` dans MCP ; le comportement après un vrai
+  changement de visibilité n’a donc pas été observé. Par décision de l’auteur
+  du 8 octobre, cette amélioration est reportée à une tranche ultérieure, après
+  un usage réel susceptible d’en établir le besoin. Aucun correctif ni test
+  dédié n’est à ajouter dans cette tranche. Le projet temporaire a
+  été supprimé et le Projet 1 reste à la révision 0.
 
 **Menu et cycle de vie des projets — parcours de base vérifiés le 7 octobre :**
 
@@ -192,9 +307,25 @@ Porter l’affichage en gardant les commandes et l’ordre métier existants :
   réouverture, suppression active/inactive, deux onglets sur des projets
   différents et restauration après rechargement. Les projets temporaires ont
   été supprimés ; `elce-document` est resté à la révision 0.
-- [ ] Compléter les contrôles d’échec de synchronisation pendant un changement
-  de projet et l’édition persistée quand une commande est déjà en cours au
-  moment du changement.
+- [x] Tester le contrôleur, la persistance locale et le coordinateur de
+  synchronisation quand une commande Section est acceptée pendant une demande
+  de changement : l’édition est enregistrée avant l’envoi et reste dans le
+  projet courant après un conflit ou une erreur réseau. Vérification ciblée
+  dans `project-operations.test.ts`.
+- [x] Brave DevTools : une édition en attente reste dans le projet courant
+  quand le `PUT /document` et la lecture du catalogue échouent hors réseau ; sa
+  synchronisation reprend après la reconnexion.
+- [x] Brave DevTools : une seule fenêtre obtient le verrou du même projet ; la
+  deuxième attend avec son espace auteur masqué. Après le changement de titre
+  et la fermeture de la fenêtre active, le rechargement restaure la dernière
+  copie locale et reprend la synchronisation.
+- [reportée — prochaine tranche, sur signal d’un usage réel] Réacquisition à la
+  reprise de focus ou de visibilité sans rechargement. L’auteur juge cette
+  amélioration prématurée tant qu’aucun utilisateur en situation réelle n’en a
+  montré l’utilité ; les simulations actuelles ne l’établissent pas. Ne pas
+  développer ni ajouter de test dédié maintenant. Réexaminer le besoin si
+  l’usage réel le fait apparaître. `project-operations.test.ts` couvre
+  séparément le conflit de révision `If-Match`.
 
 Le détail du comportement vérifié est dans la
 [spécification de gestion du projet actif](../specs/project-session-spec.md).
@@ -212,9 +343,9 @@ Le détail du comportement vérifié est dans la
   catalogue et remplacement de la zone centrale.
 - [x] Safari Technology Preview via MCP : Diapo racine, séparateur racine,
   onglets du catalogue et absence d’identifiants DOM dupliqués.
-- [ ] Relire dans Safari les réglages centraux après sélection d’un chapitre ;
-  le MCP a laissé l’onglet perdre son focus et cette vérification reste
-  non concluante. Les tests runtime confirment déjà le rendu après sélection.
+- [x] Brave DevTools : sélectionner un chapitre Évaluation affiche le seuil
+  fixe de 80 %, les tentatives illimitées et la reprise de toutes les
+  questions. Ce parcours a utilisé un projet isolé, ensuite supprimé.
 
 Un menu de gestion des projets se trouve au niveau du titre « Elcé ». Il permet de créer, ouvrir, fermer et supprimer des projets. L’exportation viendra plus tard. Cette liste de projets est distincte du catalogue de contenus (pages, BDC et médias) de l’éditeur. Le menu, le Scénario, les réglages de chapitre et le catalogue sont portés dans Remix, sans ajouter une seconde source d’état ni un circuit de commandes parallèle.
 
@@ -224,22 +355,57 @@ La commande « Fermer » revient à la liste des projets sans supprimer le proje
 
 L’acceptation vérifie deux fenêtres sur des projets différents, éditant chacune son document sans modifier la cache de l’autre, puis deux fenêtres sur le même projet, où le verrou existant n’autorise qu’un seul éditeur. L’IndexedDB garde les caches locales distinctes par identifiant de projet ; les projets non ouverts restent servis par SQLite et FileStorage.
 
-Chaque surface d’édition passe par l’acteur et les commandes existants. Les tests de chaque étape vérifient qu’une édition, un changement de page et une réouverture ne modifient pas le document de façon inattendue. Le player mobile et le rendu de lecture restent sous Sighty/CodPlay et hors du portage.
+Chaque surface d’édition passe par l’acteur et les commandes existants. Les tests de chaque étape vérifient qu’une édition, un changement de page et une réouverture ne modifient pas le document de façon inattendue. Les scènes restent composées par Sighty/CodPlay ; les vues et l’hôte popup Elcé restent inclus dans la cible de retrait complet de React.
 
-**Acceptation de la gestion des projets :** depuis le menu au titre, parcourir la liste serveur, créer et ouvrir un projet, fermer le projet courant sans le supprimer, ouvrir un autre projet après l’accusé serveur complet, supprimer un projet inactif, puis supprimer le projet actif. Vérifier qu’une erreur de réseau/conflit conserve le document et la cache du projet concerné, qu’une édition faite pendant l’attente est aussi enregistrée, et que le rechargement restaure le projet propre à l’onglet. Le parcours navigateur utilise le MCP Safari Technology Preview fourni par l’environnement. Le menu appelle la même façade et le même acteur XState que l’éditeur.
+**Acceptation de la gestion des projets :** depuis le menu au titre, parcourir la liste serveur, créer et ouvrir un projet, fermer le projet courant sans le supprimer, ouvrir un autre projet après l’accusé serveur complet, supprimer un projet inactif, puis supprimer le projet actif. Vérifier qu’une erreur de réseau/conflit conserve le document et la cache du projet concerné, qu’une édition faite pendant l’attente est aussi enregistrée, et que le rechargement restaure le projet propre à l’onglet. Le parcours navigateur utilise le MCP Brave DevTools, seul des deux serveurs locaux fonctionnel actuellement. Le menu appelle la même façade et le même acteur XState que l’éditeur.
 
-**Sortie :** les parcours auteur fonctionnent dans le runtime Remix avec le même document ; la sortie vers le player Sighty/CodPlay reste inchangée.
+**Sortie :** les parcours auteur fonctionnent dans le runtime Remix avec le même document ; la sortie vers le player Sighty/CodPlay utilise les sources média confirmées par URL serveur. Les comportements encore ouverts restent au plan.
 
-### 5. Clore le portage de l’interface auteur — À faire
+### 5. Retirer React du workspace Elcé — En cours, validation d’origine en attente
 
-- Retirer des surfaces de l’éditeur les imports React, @xstate/react, @tiptap/react et lucide-react remplacés par le runtime Remix. Supprimer une dépendance du workspace uniquement si elle n’est plus utilisée ailleurs ; préserver celles requises par le player hors périmètre.
-- Relier les scripts du workspace Elcé au CLI, au serveur et au rendu d’assets Remix. Garder Vite dans les autres workspaces ; ne le retirer d’Elcé que si le nouveau serveur remplace réellement son usage.
-- Porter les tests de route, composants et interactions de l’éditeur vers les outils Remix documentés. Garder les tests purs du domaine et de XState indépendants du navigateur ; ne pas porter les tests du player.
-- Vérifier que les documents v4 présents dans IndexedDB restent lisibles au même origin, sans remise à zéro ni perte de médias. Les documents v1, v2 et v3 sont rejetés par le modèle actuel, sans migration implicite.
-- Exécuter typecheck, build, tests domaine/commandes/stockage, tests HTTP SQLite/fichiers et parcours auteur dans le navigateur MCP fourni par l’environnement de validation.
-- Mettre à jour les spécifications touchées avec le comportement et les preuves réellement vérifiés ; clore le plan seulement quand les preuves navigateur et données sont complètes.
+- [x] Rendre les contrôles du lecteur popup dans Remix, en gardant la fenêtre
+  distincte, le protocole de synchronisation, le cycle de vie média et la
+  composition Sighty/CodPlay. [`player-preview-spec.md`](../specs/player-preview-spec.md)
+  décrit le comportement et ses preuves.
+- [x] Retirer `AppLayout`, les vues BDC React, leur hôte auteur historique et
+  les tests React remplacés par les tests du runtime Remix.
+- [x] Supprimer `react`, `react-dom`, `@types/react*`, `@vitejs/plugin-react`,
+  `@xstate/react`, `@tiptap/react` et `lucide-react` des dépendances Elcé.
+  Aucun code de production ou test Elcé ne les importe. Le monorepo garde
+  React pour `@codplay/editor`, un autre workspace explicitement hors de cette
+  tranche.
+- [x] Relier `npm run dev:elce` au serveur d’assets Remix, au routeur navigateur
+  `remix/spa` et au serveur API Fetch séparé. Vite reste utilisé par le
+  lanceur comme chargeur SSR du module serveur, et par build/tests ; il ne
+  démarre pas de listener web ni de plug-in React pour Elcé.
+- [x] Exécuter `npm run dev:elce` depuis la racine. Comme l’ancien serveur Vite
+  occupe `localhost:5175`, le nouveau serveur Remix s’est lancé sur
+  `localhost:5176` et a réutilisé l’API existante sur `127.0.0.1:5181`. Brave
+  y a ouvert la liste des projets, puis Projet 1 et son popup natif. La page
+  Lecture a affiché la Diapo B et cinq images complètes chargées depuis les
+  URL API ; « Réafficher la page éditée » a renvoyé la page sélectionnée. Le
+  lanceur avertit que le port de repli a une IndexedDB distincte. Les consoles
+  étaient vides et aucun asset React ou ReactDOM n’a été demandé.
+- [x] Exécuter la suite complète Elcé : 36 fichiers et 206 tests passent.
+  Le typecheck passe. Le build Vite réussit sur 581 modules ; le chunk
+  JavaScript fait `1 314,22 kB` minifiés (`372,16 kB` gzip) et garde
+  l’avertissement de taille supérieur à `500 kB`.
+- [ ] Relire les documents v4 déjà présents dans l’IndexedDB de
+  `http://localhost:5175/`, sans réinitialiser cette base ni perdre ses médias.
+  Le port 5175 reste occupé par un serveur Vite existant ; son rechargement Brave
+  a renvoyé `504 (Outdated Optimize Dep)` et une page vide, donc cette preuve
+  n’est pas valide. Le test sur `localhost:5176` ne peut pas la remplacer, car
+  un port différent forme un autre origin. Laisser ce serveur et ses données
+  intacts ; reprendre ce contrôle après son arrêt explicite, puis démarrer le
+  lanceur Remix sur `localhost:5175`.
+- [x] Actualiser les spécifications de l’entrée Remix et du lecteur avec les
+  surfaces natives et les preuves validées. La continuité IndexedDB reste au
+  plan jusqu’au contrôle d’origine ci-dessus.
 
-**Sortie :** l’interface auteur ne dépend plus de React ; son build, ses tests, les parcours document et serveur sont acceptés. Le player reste dans son circuit Sighty/CodPlay inchangé.
+**Sortie provisoire :** le portage est appliqué, les surfaces Elcé et les tests
+sont sans React, et le nouveau lanceur Remix fonctionne. L’étape reste en
+cours uniquement pour la validation de continuité des données sur l’origine
+`localhost:5175` ; aucune base n’a été remise à zéro.
 
 ## Références
 

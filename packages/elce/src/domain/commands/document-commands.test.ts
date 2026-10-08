@@ -18,6 +18,23 @@ import {
 } from './document-commands'
 
 describe('Elcé document commands', () => {
+  it('places a standalone Card in the ordered BDC sequence of a Flux page', () => {
+    const initial = createInitialDocument()
+    const page = initial.pages[0]
+    if (page === undefined) throw new Error('Le document de test ne contient pas de page Flux.')
+    expect(page.type).toBe(PAGE_TYPE.FLUX)
+
+    const document = applyDocumentCommand(initial, createStandaloneCardBdcCommand('bdc-flux-card', page.id))
+
+    expect(document.pages[0]?.bdcIds).toEqual([...page.bdcIds, 'bdc-flux-card'])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-flux-card')).toMatchObject({
+      type: BDC_TYPE.CARD,
+      pageId: page.id,
+      parentBdcId: null,
+    })
+    assertDocumentInvariants(document)
+  })
+
   it('creates a Diapo with a default Carousel and its first Card child', () => {
     const initial = createInitialDocument()
     const command = createDefaultPageCommand(

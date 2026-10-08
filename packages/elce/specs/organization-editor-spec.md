@@ -5,8 +5,8 @@
 **Fixe — création contextualisée des chapitres et des pages Flux/Diapo, ordre
 mixte page/chapitre, déplacement par séparateurs, sélection centrale d’un
 chapitre et catalogue dans la colonne droite. Les surfaces Remix sont
-implémentées et vérifiées en tests ; la vérification Safari des réglages
-centraux reste ouverte dans le plan de migration.**
+implémentées et vérifiées en tests ; Brave DevTools a également vérifié les
+réglages centraux d’un chapitre Évaluation dans le parcours de production.**
 
 Cette spécification décrit les commandes visibles pour créer des pages et des
 chapitres, ainsi que l’édition de leurs titres dans la zone centrale.
@@ -125,12 +125,15 @@ sans changer les identifiants, l’ordre, l’affectation ou les BDC. La liste �
 gauche lit les noms actualisés depuis le document détenu par XState.
 
 Dans Remix, `ProjectApplication` compose le Scénario, les réglages centraux du
-chapitre et le catalogue depuis le sélecteur `selectEditorViewModel`. Les
-commandes passent par `EditorActionsFacade` vers l’acteur XState existant ; la
-vue ne possède pas de document séparé. Le glisser-déposer des pages utilise les
-séparateurs d’insertion. Le pont React temporaire ne rend plus que la zone de
-travail de la page sélectionnée ; il ne rend pas le Scénario, le catalogue ni
-les réglages de chapitre.
+chapitre, le catalogue et `RemixPageEditor` depuis le sélecteur
+`selectEditorViewModel`. Le page editor natif rend les titres, les commandes,
+la séquence `page.bdcIds` et les séparateurs de BDC ; déplacer une ligne passe
+par `EditorActionsFacade.moveBdc` vers le même acteur XState. La Section se
+rend dans sa ligne via `SectionTiptapAdapter`. Question, Résultat, Carte
+autonome et Carousel sont également rendus dans leurs lignes Remix et utilisent
+les façades XState existantes ; les Cartes enfants partagent les champs Carte.
+Le Scénario, le catalogue et les réglages de chapitre restent des vues Remix
+séparées.
 
 ## Preuves
 
@@ -148,7 +151,15 @@ les réglages de chapitre.
   catalogue et l’ouverture des réglages centraux d’un chapitre.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie que la sélection d’un chapitre par la surface Remix native met à
-  jour la zone centrale depuis le même acteur XState.
+  jour la zone centrale depuis le même acteur XState et que la zone page active
+  monte le page editor Remix avec les éditeurs BDC natifs à leurs emplacements.
+- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+  vérifie les cinq types de BDC, l’ordre direct, l’édition des champs et médias,
+  les Cartes enfants, le déplacement par séparateur, les placements directs de
+  Carte Flux et Diapo, le changement de page et le désabonnement XState.
+- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
+  vérifie l’édition Section et les parcours d’ancre/média dans le page editor
+  de production.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
   vérifie que l’événement `page.create` conserve le placement explicitement
   demandé et sélectionne la page produite, et que la sélection de chapitre
@@ -177,7 +188,8 @@ les réglages de chapitre.
 - Le 4 octobre, Safari MCP clique l’icône « Ajouter un chapitre Évaluation »
   et confirme l’apparition du chapitre dans la liste. Le chapitre vide est
   supprimé ensuite par son action de suppression afin de restaurer le document
-  utilisé pour le test. Le type et son seuil sont vérifiés par le test React
+  utilisé pour le test. Le type, le seuil et les réglages persistés sont
+  vérifiés dans [`chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
   contre le document détenu par XState.
 - Le 4 octobre, Safari MCP confirme les boîtes SVG de 14 × 14 px pour FilePlus
   et Trash2 dans la liste ; le CSS empêche le flex de réduire la corbeille.
@@ -206,6 +218,10 @@ les réglages de chapitre.
   commandes et leurs invariants. `flux-scene-builder.test.ts` vérifie qu’un
   Résultat configuré compile au travers de CodPlay en une story portant les
   deux issues. Le raccord des événements d’issue au player n’est pas certifié.
+- Le 8 octobre, Brave DevTools sélectionne un chapitre Évaluation du projet
+  temporaire et vérifie dans la zone centrale le seuil fixe de 80 %, les
+  tentatives illimitées et la reprise de toutes les questions. Le projet de
+  validation est supprimé ensuite.
 - Le 6 octobre 2026, Brave vérifie le repli à 1024 px : la zone centrale passe
   de 384 à 688 px et le panneau devient un accès latéral. À 390 × 844 px, les
   colonnes restantes s’empilent et le bouton reste accessible ; le tiroir

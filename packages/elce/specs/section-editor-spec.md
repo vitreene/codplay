@@ -3,7 +3,10 @@
 ## Statut
 
 **En cours — édition WYSIWYG, ancres de média et suppression du BDC Section
-implémentées et vérifiées.**
+implémentées et vérifiées. La page Remix de production rend désormais les
+Sections à leur position BDC avec le même adaptateur Tiptap. Brave DevTools a
+vérifié le dépôt d’une image dans la Section intégrée ; le reste de
+l’acceptation de page reste ouvert dans le plan Remix.**
 
 Cette tranche couvre l’édition et la suppression d’une Section Flux. Les
 parcours d’ancrage sont décrits dans la [spécification des ancres](./anchor-spec.md).
@@ -38,15 +41,17 @@ La corbeille du titre envoie `bdc.section.delete` au même contrôleur. Cette
 commande retire la Section de sa page, supprime les Cartes ancrées qui lui
 appartiennent et conserve leurs ressources média réutilisables.
 
-Dans la preuve Remix, `SectionTiptapAdapter` instancie `Editor` depuis
-`@tiptap/core` et le monte sur le host fourni par la `ref` Remix. Remix rend le
-titre, la barre et les commandes ; ProseMirror garde le DOM éditable et ses
-gestes internes. Les callbacks de dépôt et de transaction continuent d’appeler
-`EditorActionsFacade` et le même contrôleur XState. Quand la source d’un média
-ancré devient disponible après sa persistance, l’adaptateur rafraîchit les
-NodeViews concernées en place : le DOM ProseMirror n’est pas remonté pour ce
-seul changement de source. Cette preuve temporaire ne remplace
-pas encore la surface auteur de production.
+Dans la page Remix de production, `renderRemixSectionEditor` utilise
+`SectionTiptapAdapter` pour instancier `Editor` depuis `@tiptap/core` et le
+monter sur le host fourni par la `ref` Remix, dans la ligne du BDC Section.
+Remix rend le titre, la barre et les commandes ; ProseMirror garde le DOM
+éditable et ses gestes internes. Les callbacks de dépôt et de transaction
+continuent d’appeler `EditorActionsFacade` et le même contrôleur XState. Quand
+la source d’un média ancré devient disponible après sa persistance, l’adaptateur
+rafraîchit les NodeViews concernées en place : le DOM ProseMirror n’est pas
+remonté pour ce seul changement de source. La route `?__remixSectionProof=1`
+utilisée pendant le portage a été retirée ; la page de production et son test
+exercent maintenant ce même adaptateur.
 
 ## Preuves
 
@@ -54,11 +59,11 @@ pas encore la surface auteur de production.
   le montage de la surface Tiptap dans un DOM réel de test et l’actualisation
   des commandes actives lorsque la sélection passe d’un titre italique à un
   paragraphe.
-- [`remix-section-editor-proof-temp.test.tsx`](../src/app/editor/section/remix-section-editor-proof-temp.test.tsx)
-  vérifie le montage Remix de Tiptap Core, les commandes de titre et toolbar,
-  la conservation du même Editor pendant les mises à jour, le dépôt d’une image
-  jusqu’à sa persistance XState, le rendu du média et le déplacement natif de
-  l’ancre.
+- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
+  vérifie dans `RemixPageEditor` le montage de Tiptap Core, les commandes de
+  titre et toolbar, la conservation du même Editor pendant les mises à jour, le
+  dépôt d’une image jusqu’à sa persistance XState, le rendu du média et le
+  déplacement natif de l’ancre.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la conservation conjointe du JSON et du HTML exporté, ainsi que la
   suppression de la Section et de ses BDC ancrés en conservant les médias.
@@ -66,6 +71,11 @@ pas encore la surface auteur de production.
   suppression du BDC Texte initial passe par la commande documentaire XState.
 - [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie que le builder porte le markup statique dans la scène Flux.
+- Le 8 octobre, Brave DevTools dépose un fichier PNG synthétique sur la Section
+  Tiptap de la page Remix de production. La commande XState crée une Carte
+  ancrée et son image s’affiche dans le même éditeur depuis l’URL média serveur
+  après confirmation du transfert. Le parcours de preview est décrit dans la
+  [spécification du lecteur](./player-preview-spec.md).
 
 ## Limites de la tranche
 

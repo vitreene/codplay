@@ -59,8 +59,6 @@ applicatifs rangés dans `app/facades/` ; elles ne font pas partie du domaine.
 d’entrée de l’application, sans créer un autre acteur ni un autre circuit
 d’écriture. `selectEditorViewModel` dérive les données affichées depuis un
 snapshot XState sans modifier le document.
-Les propriétés React des champs Carte restent dans `app/editor/card/`.
-
 Un nouveau document de POC contient un chapitre, une page Flux `Page A` et un
 BDC Section vide associé au preset `section-basic`. Les presets sont déclarés
 comme objets dans `src/config/presets.ts`. Chaque objet fixe le markup
@@ -175,7 +173,8 @@ possède aussi l’onglet courant du catalogue (`catalogTab`), initialisé sur l
 BDC disponibles et modifié par `catalog.tab.select`.
 `CATALOG_TAB` et `CatalogTabType` sont déclarés dans les fichiers de
 configuration ; l’interface affiche séparément les BDC disponibles et les
-médias réutilisables. React ne conserve pas de copie métier ni d’état d’onglet.
+médias réutilisables. La vue auteur ne conserve pas de copie métier ni d’état
+d’onglet.
 
 Pour une Carte affectée directement à la page, le panneau Propriétés propose
 « Renvoyer au catalogue ». `ElcePageMediaService` distingue ces Cartes des
@@ -200,6 +199,11 @@ enregistre le document et supprime les blobs correspondants dans une seule
 transaction `readwrite` couvrant les deux magasins IndexedDB. L’opération de
 fusion reste déclenchée par `document.apply` dans la machine XState ; le
 raccord ne choisit pas quels médias fusionner.
+
+`flushLocalChanges()` relit le document courant de l’acteur XState avant
+d’attendre la file. Si un commit vient d’être publié et que l’abonnement n’a
+pas encore mis cette révision en file, l’appel l’y ajoute. `onLocalSave` ne
+programme la synchronisation qu’après la fin de l’écriture locale.
 
 Le store local conserve plusieurs caches projet dans la même base IndexedDB :
 documents et checkpoints sont indexés par identifiant de document, et les
@@ -228,8 +232,9 @@ serveur.
   page de chapitre vers la racine et les invariants de placement correspondants.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
   layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
-  la Carte autonome comme unique BDC direct d’une Diapo, le rejet d’une seconde
-  entrée directe et l’exclusivité des données de type.
+  la Carte autonome dans la séquence Flux et comme unique BDC direct d’une
+  Diapo, le rejet d’une seconde entrée directe dans la Diapo et l’exclusivité
+  des données de type.
 - [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
   vérifie la projection des variantes Carousel, Carte et Question dans une
   scène Diapo réelle.
@@ -240,6 +245,9 @@ serveur.
 - [`document-persistence.test.ts`](../src/app/controller/document-persistence.test.ts)
   vérifie que le remplacement d’un média utilisé et la suppression de son blob
   passent par une seule opération de persistance.
+- [`project-operations.test.ts`](../src/app/controller/project-operations.test.ts)
+  vérifie qu’un changement de projet vide également une révision XState tout
+  juste validée, avant d’attendre la confirmation distante.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
   vérifie la possession du document par XState, une modification visible par
   commande, la sélection d’onglet du catalogue et `bdc.delete`, ainsi que la

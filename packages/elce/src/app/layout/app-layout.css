@@ -1441,7 +1441,7 @@ body {
   cursor: grabbing;
 }
 
-.elce-editor-content .elce-anchor-edit {
+.elce-editor-content .elce-anchor-edit-position {
   position: absolute;
   inset-inline-start: anchor(right);
   inset-block-start: calc(anchor(top) + 1lh + 1rem);
@@ -1451,11 +1451,21 @@ body {
   justify-content: flex-end;
   box-sizing: border-box;
   padding: 0.35rem;
+  pointer-events: none;
+}
+
+.elce-editor-content .elce-anchor-edit {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
   color: #315d56;
   background: transparent;
   border: 0;
   cursor: pointer;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .elce-editor-content .elce-anchor-edit > svg {
@@ -1463,7 +1473,7 @@ body {
   background: #fffdf8;
   border: 1px solid #46726b;
   border-radius: 50%;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .elce-anchor-card-editor {

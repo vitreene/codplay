@@ -28,12 +28,14 @@ export interface RemixCardEditorFieldsProps {
   readonly imageAspectRatio: Readonly<{ width: number; height: number }> | null
   readonly allowMultipleMediaFiles?: boolean
   readonly importMediaFiles?: (bdcId: BdcId, files: readonly File[]) => void
+  readonly toolbarContent?: RemixNode
+  readonly toolbarEnd?: RemixNode
 }
 
 /** Renders the shared Card fields in the Remix runtime. */
 export function RemixCardEditorFields(handle: Handle<RemixCardEditorFieldsProps>) {
   return () => {
-    const { bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles } = handle.props
+    const { bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, toolbarContent, toolbarEnd } = handle.props
     switch (bdc.type) {
       case BDC_TYPE.CARD:
         switch (bdc.card) {
@@ -51,6 +53,8 @@ export function RemixCardEditorFields(handle: Handle<RemixCardEditorFieldsProps>
               imageAspectRatio,
               allowMultipleMediaFiles === true,
               importMediaFiles,
+              toolbarContent,
+              toolbarEnd,
             )
         }
       default:
@@ -70,6 +74,8 @@ function renderCardFields(
   imageAspectRatio: RemixCardEditorFieldsProps['imageAspectRatio'],
   allowMultipleMediaFiles: boolean,
   importMediaFiles: RemixCardEditorFieldsProps['importMediaFiles'],
+  toolbarContent: RemixCardEditorFieldsProps['toolbarContent'],
+  toolbarEnd: RemixCardEditorFieldsProps['toolbarEnd'],
 ): RemixNode {
   return jsx('div', {
     id: `${idPrefix}-card-fields-${bdcId}`,
@@ -79,7 +85,9 @@ function renderCardFields(
         className: cardToolbarClassName(presetId),
         children: [
           renderCardLayoutSelect(bdcId, presetId, actions, idPrefix),
+          toolbarContent,
           ...renderCardPresentationSettings(bdcId, presetId, card, mediaById, actions, idPrefix),
+          toolbarEnd,
         ],
       }),
       renderCardContent(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles),
@@ -97,9 +105,12 @@ function renderCardLayoutSelect(bdcId: BdcId, presetId: string, actions: ElceCar
       jsx('select', {
         id: `${idPrefix}-card-layout-${bdcId}`,
         'aria-label': 'Représentation de cette carte',
-        value: presetId,
         mix: on<HTMLSelectElement, 'change'>('change', (event) => actions.setCardLayout(bdcId, event.currentTarget.value as CardLayoutId)),
-        children: CARD_LAYOUT_OPTIONS.map((option) => jsx('option', { value: option.value, children: option.label }, option.value)),
+        children: CARD_LAYOUT_OPTIONS.map((option) => jsx('option', {
+          value: option.value,
+          selected: option.value === presetId,
+          children: option.label,
+        }, option.value)),
       }),
     ],
   })
@@ -149,9 +160,12 @@ function renderImageFitSetting(bdcId: BdcId, card: CardContent, actions: ElceCar
         jsx('select', {
           id: `${idPrefix}-image-fit-${bdcId}`,
           'aria-label': 'Ajustement de l’image',
-          value: card.imageFit,
           mix: on<HTMLSelectElement, 'change'>('change', (event) => actions.setImageFit(bdcId, event.currentTarget.value as typeof card.imageFit)),
-          children: CARD_IMAGE_FIT_OPTIONS.map((option) => jsx('option', { value: option.value, children: option.label }, option.value)),
+          children: CARD_IMAGE_FIT_OPTIONS.map((option) => jsx('option', {
+            value: option.value,
+            selected: option.value === card.imageFit,
+            children: option.label,
+          }, option.value)),
         }),
       ],
   })
@@ -167,9 +181,12 @@ function renderImagePositionSetting(bdcId: BdcId, card: CardContent, actions: El
         jsx('select', {
           id: `${idPrefix}-image-position-${bdcId}`,
           'aria-label': 'Position de l’image',
-          value: card.imagePosition,
           mix: on<HTMLSelectElement, 'change'>('change', (event) => actions.setImagePosition(bdcId, event.currentTarget.value as typeof card.imagePosition)),
-          children: CAROUSEL_IMAGE_POSITION_OPTIONS.map((option) => jsx('option', { value: option.value, children: option.label }, option.value)),
+          children: CAROUSEL_IMAGE_POSITION_OPTIONS.map((option) => jsx('option', {
+            value: option.value,
+            selected: option.value === card.imagePosition,
+            children: option.label,
+          }, option.value)),
         }),
       ],
   })

@@ -1,11 +1,15 @@
 <!doctype html>
-<html lang="fr">
-  <head>
+<html id="elce-document" lang="fr">
+  <head id="elce-document-head">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Elcé — éditeur</title>
+    <link id="elce-style-layout" rel="stylesheet" href="/src/app/layout/app-layout.css" />
+    <link id="elce-style-card" rel="stylesheet" href="/src/app/editor/card/card-editor.css" />
+    <link id="elce-style-carousel" rel="stylesheet" href="/src/app/editor/carousel/carousel-editor.css" />
+    <link id="elce-style-popup-player" rel="stylesheet" href="/src/app/player/popup-player.css" />
   </head>
-  <body>
+  <body id="elce-document-body">
     <div id="elce-app"></div>
     <script type="module" src="/src/app/remix/browser-entry.ts"></script>
   </body>

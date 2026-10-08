@@ -5,7 +5,7 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
   createScrollContainerSourceAdapter,
-} from '@codplay/component-v2'
+} from '@codplay/component-v2/scroll-container'
 import { BDC_TYPE, CHAPTER_TYPE, ELCE_EVENTS, ELCE_SCENARIO, PAGE_TYPE } from '../config/document-config'
 import type { ChapterType } from '../config/document-config-types'
 import { buildFluxScene } from '../builders/flux/flux-scene-builder'

@@ -185,6 +185,11 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       handle.setAttribute('aria-label', 'Déplacer le bloc de contenu')
       handle.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
       handle.textContent = '↕'
+      const editPosition = document.createElement('span')
+      editPosition.className = 'elce-anchor-edit-position'
+      editPosition.id = `${bdcId}-anchor-edit-position`
+      editPosition.contentEditable = 'false'
+      editPosition.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
       const editButton = document.createElement('button')
       editButton.className = 'elce-anchor-edit'
       editButton.type = 'button'
@@ -193,7 +198,6 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       editButton.id = `${bdcId}-anchor-edit`
       editButton.setAttribute('aria-label', 'Modifier la carte ancrée')
       editButton.title = 'Modifier la carte'
-      editButton.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
       editButton.append(createAnchorEditIcon(`${bdcId}-anchor-edit-icon`))
       editButton.addEventListener('mousedown', (event) => event.preventDefault())
       editButton.addEventListener('click', (event) => {
@@ -201,7 +205,8 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
         event.stopPropagation()
         this.options.onEditCard?.(String(node.attrs.bdcId ?? ''))
       })
-      dom.append(bdc, handle, editButton)
+      editPosition.append(editButton)
+      dom.append(bdc, handle, editPosition)
       return {
         dom,
         update: (updatedNode) => {
@@ -308,7 +313,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
   },
 })
 
-/** Builds the anchor edit icon from its static Lucide asset without React. */
+/** Builds the anchor edit icon from its static Lucide asset as native SVG markup. */
 function createAnchorEditIcon(id: string): SVGSVGElement {
   const root = new DOMParser().parseFromString(Settings2, 'image/svg+xml').documentElement
   if (root.localName !== 'svg') throw new Error('Lucide asset is not an SVG element.')

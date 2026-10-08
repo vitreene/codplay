@@ -7,7 +7,7 @@
     "node": ">=24.3.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-elce.mjs",
     "dev:api": "node scripts/dev-api.mjs",
     "build": "vite build",
     "preview": "vite preview",
@@ -24,21 +24,13 @@
     "@tiptap/extension-superscript": "^3.31.4",
     "@tiptap/extension-text-align": "^3.31.4",
     "@tiptap/pm": "^3.31.4",
-    "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",
-    "@xstate/react": "^6.1.0",
     "codplay": "*",
     "lucide-static": "^1.23.0",
-    "lucide-react": "^1.50.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "remix": "3.0.0-rc.4",
     "xstate": "^5.32.2"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
     "typescript": "~6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"

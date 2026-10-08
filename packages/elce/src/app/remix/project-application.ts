@@ -10,11 +10,12 @@ import type { ProjectSessionStatus } from '../projects/project-session-types'
 import { selectEditorViewModel } from '../selectors/editor-view-model'
 import { PopupPreviewHost } from '../player/popup-preview-host'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
+import { RemixPageEditor } from './workspace/page-editor'
 import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
 import { renderLucideIcon } from './lucide-static-icon'
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './project-application-types'
 
-/** Renders the Remix project menu and shows the temporary editor only for an open project. */
+/** Renders project management and the native Remix authoring workspace. */
 export function ProjectApplication(handle: Handle) {
   const { controller, actions } = handle.context.get(EditorContextProvider)
   if (controller === null || actions === null) {
@@ -134,7 +135,7 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
   }
 }
 
-/** Renders the project switcher, project list, and preserved React work-area host. */
+/** Renders the project switcher, project list, and Remix work area. */
 function renderApplication(
   view: ProjectApplicationView,
   actions: EditorActionsFacade,
@@ -233,7 +234,9 @@ function renderApplication(
       renderEditorWorkspace({
         view: view.editor,
         actions,
-        pageEditorHost: jsx(ReactEditorTempBridge, { hidden: !editorVisible || view.editor.selectedChapter !== undefined }),
+        pageEditorHost: editorVisible && view.editor.selectedChapter === undefined
+          ? jsx(RemixPageEditor, { onPreview: workspace.onPreview, previewError: workspace.previewError })
+          : null,
         responsivePanel: workspace.responsivePanel,
         dropTarget: workspace.dropTarget,
         visible: editorVisible,
@@ -377,15 +380,6 @@ function projectRows(view: ProjectApplicationView, actions: EditorActionsFacade,
         }),
       ],
     }, project.id)
-  })
-}
-
-/** Keeps the React editor host mounted so Remix can preserve its DOM across route updates. */
-function ReactEditorTempBridge(handle: Handle<Readonly<{ hidden: boolean }>>) {
-  return () => jsx('div', {
-    id: 'elce-react-temp-host',
-    hidden: handle.props.hidden,
-    'data-rmx-preserve-dom': true,
   })
 }
 

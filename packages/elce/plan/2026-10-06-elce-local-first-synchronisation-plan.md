@@ -250,9 +250,14 @@ projets lors d’une sauvegarde. `deleteDocument()` et le rejet d’un document 
 ne retirent que le cache visé et ses médias non partagés. Safari Technology
 Preview a vérifié deux entrées simultanées, la sauvegarde et la suppression
 ciblée, puis le rejet d’un v3 sans perte du projet courant. Le verrou exclusif
-pour un même projet reste vérifié. La sélection de projet, le menu, le
-rechargement de plusieurs projets dans des onglets distincts et l’édition
-simultanée de projets différents restent à implémenter et vérifier.
+pour un même projet reste vérifié. Le menu Remix, la sélection par onglet, le
+rechargement et les parcours de base entre projets différents ont depuis été
+portés et vérifiés dans Safari Technology Preview. Le test
+[`project-operations.test.ts`](../src/app/controller/project-operations.test.ts)
+vérifie aussi qu’une commande Section déjà acceptée est sauvegardée localement
+avant l’attente réseau et que le projet courant est conservé en cas de conflit
+ou d’erreur réseau. Le parcours navigateur intégré de ces deux échecs reste
+ouvert dans le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md).
 
 ### 3. Synchronisation directe du dernier état
 
@@ -290,10 +295,13 @@ cette confirmation ; une opération dans une autre fenêtre ne modifie pas la
 cache locale du projet courant.
 
 Le menu de gestion des projets au titre « Elcé » et ses opérations créer,
-ouvrir, fermer et supprimer restent à porter dans Remix. L’exportation est
-hors de cette étape. Le passage depuis le document actif suit le même ordre de
-synchronisation ; l’interface conserve le document et son cache si la
-synchronisation ou l’opération distante échoue.
+ouvrir, fermer et supprimer sont portés dans Remix et utilisent le même acteur
+et le même coordinateur. L’exportation est hors de cette étape. Le test
+[`project-operations.test.ts`](../src/app/controller/project-operations.test.ts)
+vérifie l’attente d’une écriture locale en cours, puis la conservation du
+document et du cache si la synchronisation échoue. Le parcours de ces échecs
+depuis le menu reste à valider dans le navigateur MCP décrit au plan de
+transposition.
 
 ### 4. Transfert des images et vidéos, cache navigateur
 
@@ -393,17 +401,30 @@ Tester dans le navigateur MCP exposé par l’environnement courant. Ne pas
 supposer ni lancer d’autres navigateurs s’ils ne sont pas fournis par cet
 environnement.
 
-**Avancement le 7 octobre 2026 — En cours :** les tests SQLite/API vérifient
+**Avancement le 8 octobre 2026 — En cours :** les tests SQLite/API vérifient
 plusieurs projets et leur restauration après réouverture de la base ; Safari
-Technology Preview confirme que l’éditeur restaure le document actif depuis
-IndexedDB après rechargement et reprend le verrou lorsqu’il redevient visible.
-Le transfert de l’image par l’éditeur a déjà été vérifié à la tranche 4. Le
-parcours navigateur complet reste à faire pour la création, l’ouverture, la
-fermeture et la suppression de projets, les commandes éditoriales avec
-synchronisation, la reprise après coupure réseau et l’import/transfert vidéo.
-Le coordinateur expose et teste l’attente de confirmation serveur du document
-et de ses médias ; le menu de gestion des projets et son raccordement à cette
-attente restent à implémenter.
+Technology Preview a confirmé la restauration du document actif depuis
+IndexedDB, la reprise du verrou et les parcours de base du menu projet. Le
+transfert de l’image par l’éditeur a été vérifié à la tranche 4. Les tests
+ciblés vérifient maintenant qu’une commande déjà acceptée est sauvegardée
+localement avant un changement de projet et qu’un conflit ou une panne réseau
+conserve le document et le cache. Brave DevTools a vérifié le 8 octobre le cas
+hors réseau : le `PUT /document` échoue, le projet courant et son document local
+restent ouverts avec l’état `pending`, puis l’édition est synchronisée à la
+reconnexion. Brave a aussi exercé le verrou sur deux pages du même contexte :
+la seconde attend l’accès, puis édite et synchronise après transfert. Après sa
+fermeture, la première ne reprend qu’après rechargement ; elle restaure alors
+le titre enregistré localement et le synchronise. MCP a conservé
+`visibilityState: visible` dans les deux pages, donc la reprise automatique au
+retour de focus/visibilité reste à valider. Le conflit HTTP `If-Match` est
+couvert par `project-operations.test.ts`. Le transfert navigateur de vidéo
+reste à vérifier.
+Brave DevTools a aussi confirmé le 8 octobre qu’une image transférée charge
+dans l’éditeur et le lecteur via la même URL serveur ; son Blob est absent du
+store média IndexedDB. Le projet d’essai et ses entrées locales ont été
+supprimés après vérification.
+Le menu et son raccord au coordinateur de synchronisation sont implémentés ;
+les preuves restantes sont suivies dans le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md).
 
 ## Suites après le POC
 

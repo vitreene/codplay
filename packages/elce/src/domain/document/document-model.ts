@@ -73,7 +73,7 @@ export class ElceDocument {
   }
 }
 
-/** Creates an identifier without putting identifier generation in React. */
+/** Creates an identifier within the document model boundary. */
 export function createStableId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`
 }

@@ -89,6 +89,14 @@ indépendantes.
 - Le rechargement à froid a restauré le document et réacquis le verrou. Aucun
   contenu n’a été modifié durant ces vérifications ; les seules requêtes API
   observées pendant l’essai étaient les `GET` des médias existants.
+- Le 8 octobre, Brave DevTools a vérifié dans deux pages du même contexte
+  qu’une seconde fenêtre reste en attente du verrou, puis peut éditer le projet
+  et synchroniser son titre après transfert. Après fermeture de cette page,
+  l’autre a restauré la dernière copie locale et repris la synchronisation au
+  rechargement. MCP a gardé `visibilityState: visible` pour les deux pages ;
+  cette observation ne valide pas la reprise automatique sur un événement réel
+  de masquage ou de retour de focus. Le suivi reste dans le
+  [plan de transposition](../plan/2026-10-06-plan-transposition-remix-3.md).
 - Safari Technology Preview a exercé directement `IndexedDbDocumentStore` sur
   deux entrées projet dans une base temporaire : sauvegarder ou supprimer l’une
   a préservé le document, le checkpoint et les médias de l’autre. Le rejet

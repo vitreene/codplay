@@ -140,6 +140,13 @@ rafraîchissement : quand XState met à jour la source média sans changer le JS
 de la Section, l’image ou la vidéo apparaît dans le même DOM ProseMirror, sans
 remonter l’éditeur.
 
+Dans l’éditeur Remix, l’action « Modifier la carte ancrée » ouvre l’éditeur
+partagé du même BDC. Un conteneur de positionnement couvre la largeur de la
+ligne et laisse passer les pointeurs ; seul le bouton de `1.75rem` est
+interactif. Le SVG décoratif ne capte pas lui-même le pointeur, qui arrive donc
+sur le bouton. Cette cible étroite permet d’utiliser l’icône sans recouvrir le
+texte ou le média placé dessous.
+
 ## Preuve
 
 - [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
@@ -150,9 +157,20 @@ remonter l’éditeur.
   duplique pas. Le test du retour couvre le cas Safari où `dragend` garde
   `dropEffect: move` avec une liste de types vide. Il couvre aussi le collage
   qui retire les ancres.
-- [`remix-section-editor-proof-temp.test.tsx`](../src/app/editor/section/remix-section-editor-proof-temp.test.tsx)
-  vérifie le rafraîchissement du média après persistance XState sans remplacer
-  l’instance `Editor` ni son DOM ProseMirror.
+- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
+  vérifie dans la page Remix de production le rafraîchissement du média après
+  persistance XState sans remplacer l’instance `Editor` ni son DOM ProseMirror.
+  Il déclenche aussi le clic sur le vrai bouton d’édition de la Carte ancrée,
+  et vérifie que son conteneur est distinct.
+- Le 8 octobre, Brave DevTools dépose un PNG synthétique dans la Section de la
+  page Remix intégrée. XState crée une seule Carte ancrée ; son image est
+  chargée dans la prise de l’ancre depuis l’URL média serveur après le transfert
+  et le Blob absent d’IndexedDB. Après rechargement, le centre du bouton de
+  `28 × 28 px` cible ce bouton dans `elementFromPoint()` ; le clic Brave ouvre
+  l’éditeur partagé du même BDC. La ligne de positionnement mesure `529 px`,
+  laisse passer le pointeur, et son point central atteint le contenu dessous.
+  Le sélecteur restitue `photo-basic` et le contrôle d’image `cover`. La console
+  Brave ne rapporte ni erreur ni avertissement.
 - [`flux-anchor-player-markup.test.ts`](../src/builders/flux/flux-anchor-player-markup.test.ts)
   vérifie que la projection conserve le texte, remplace l’ancre d’édition par
   un slot de flux inline à largeur nulle et conserve la cible logique du bdc.

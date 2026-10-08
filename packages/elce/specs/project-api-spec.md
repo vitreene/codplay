@@ -19,6 +19,13 @@ défaut est `http://127.0.0.1:5181` ; `VITE_ELCE_API_ORIGIN` permet de la
 remplacer pour l’environnement local. Le serveur de développement écoute sur
 `127.0.0.1` uniquement.
 
+Pendant le portage Remix, `npm run dev:elce` à la racine démarre ensemble
+l’éditeur Vite sur le port `5175` et cette API sur le port `5181`, en réutilisant
+les scripts de développement existants. Cette orchestration est temporaire ;
+le plan de transposition prévoit son remplacement par les scripts du serveur
+Remix quand cette étape sera appliquée. Pour lancer l’API seule :
+`npm run dev:api --workspace=@codplay/elce`.
+
 Pour les requêtes navigateur, le serveur autorise les origines HTTP de boucle
 locale (`localhost`, `127.0.0.1` et `[::1]`), quelle que soit leur origine de
 port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
@@ -146,6 +153,12 @@ utilisées par l’application : lister, créer, lire, renommer, supprimer,
 enregistrer le document et transférer un média. Ses tests vérifient les chemins
 HTTP, les méthodes, les corps, les ETags et la remontée de l’identifiant média
 canonique en cas de doublon.
+
+Le 8 octobre, `npm run dev:elce` a démarré ensemble l’entrée Vite et le listener
+API. Le port `5175` étant occupé, Vite a servi l’entrée sur `5176` ; les requêtes
+HTTP vers `http://localhost:5176/` et
+`http://127.0.0.1:5181/api/projects` ont répondu avec la page Elcé et la liste
+vide attendue. L’arrêt du lanceur a libéré les deux ports.
 
 La couverture API est dans
 [`api-router.test.ts`](../src/server/api-router.test.ts) et la couverture

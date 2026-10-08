@@ -456,7 +456,7 @@ function readFinishedPages(context: Readonly<Record<string, unknown>>): readonly
   return progress.finishedPages ?? []
 }
 
-/** Reads the Sighty question-result signet without inventing a React state copy. */
+/** Reads the Sighty question-result signet without inventing a parallel state copy. */
 function readQuestionResults(context: Readonly<Record<string, unknown>>): Readonly<Record<string, boolean>> {
   const results = (context as ElceProgressContext).questionResults
   if (typeof results !== 'object' || results === null) return {}

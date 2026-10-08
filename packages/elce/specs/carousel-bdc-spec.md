@@ -14,10 +14,12 @@ des BDC. Dans une page Diapo, il peut occuper l’unique emplacement BDC direct.
 Dans les deux cas, il porte les réglages de présentation et référence une
 séquence ordonnée de BDC Carte enfants. Chaque Carte enfant a le Carousel comme
 parent ; elle ne figure donc pas dans `page.bdcIds` ni dans le catalogue. Le
-même modèle BDC Carte peut aussi être placé directement comme unique BDC d’une
-Diapo ; cette Carte autonome n’a pas de parent Carousel et figure alors dans
-`page.bdcIds`. Aucun BDC Carte n’est placé au catalogue. Les changements de
-layout ne créent pas un nouveau BDC.
+modèle BDC Carte peut aussi être placé directement dans la séquence d’une page
+Flux ou comme unique BDC direct d’une Diapo ; ces Cartes autonomes n’ont pas de
+parent Carousel et figurent alors dans `page.bdcIds`. La Diapo créée par défaut
+avec un Carousel doit d’abord en retirer ce BDC avant d’accepter la Carte
+directe. Aucun BDC Carte n’est placé au catalogue. Les changements de layout
+ne créent pas un nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
 nombre fini de répétitions, le ratio, la transition et les entrées
@@ -54,22 +56,23 @@ laisserait son Carousel vide.
 Le preset `carousel-basic` fournit le cadre responsive et sa navigation. Le
 Carousel n’ajoute ni un format de page Diapo ni une story CodPlay au modèle
 métier. Les contenus des cartes restent des données de BDC Elcé ; les builders
-les projettent dans les parts du preset. La Carte directe de Diapo et ses
-restrictions sont décrites dans la [spécification du builder Diapo](./diapo-scene-builder-spec.md).
+les projettent dans les parts du preset. Les placements directs de Carte en
+Flux et en Diapo partagent le même BDC ; la restriction à un seul BDC direct de
+Diapo est décrite dans la [spécification du builder Diapo](./diapo-scene-builder-spec.md).
 
 ## Édition
 
 « Ajouter un bloc Carousel » crée le conteneur à la fin de la séquence de la
-page Flux et ouvre son éditeur. Les changements passent par les commandes
-XState et les services métier ; React ne conserve pas une seconde copie du
+page Flux et ouvre son éditeur Remix. Les changements passent par les commandes
+XState et les services métier ; la vue ne conserve pas une seconde copie du
 document.
 
 `EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) expose les
 intentions Carousel et Carte à l’éditeur, puis délègue aux façades existantes.
 `ElceCarouselFacade` (`app/facades/carousel/`) orchestre les réglages du
 Carousel et délègue les champs des Cartes à `ElceCardFacade`
-(`app/facades/card/`). Les mêmes actions de Carte servent au BDC direct d’une
-Diapo et aux Cartes enfants du Carousel.
+(`app/facades/card/`). Les mêmes actions de Carte servent aux BDC directs de
+Flux ou Diapo et aux Cartes enfants du Carousel.
 
 L’auteur peut ajouter, supprimer et réordonner les BDC Carte, choisir leur
 layout, éditer les champs communs, la position d’image, la référence média et
@@ -87,6 +90,11 @@ particulière remplace la durée commune pour l’entrée concernée. Les points
 permettent de sélectionner une carte dans les deux modes ; en automatique, la
 séquence temporisée continue après la sélection.
 Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
+Les valeurs affichées suivent le document courant. Une création utilise les
+défauts configurés ; après édition, le mode et la transition enregistrés restent
+sélectionnés après un changement de page et un rechargement. La transition
+effective combine les remplacements du Carousel avec les défauts de révélation
+du projet.
 
 ## Projection et lecture
 
@@ -185,9 +193,17 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
   wrapper `.elce-carousel__frame` est absent. Le cadre mesure `686 × 386 px`
   avec `aspect-ratio: 16 / 9`, l’image charge, et un clic sur le second point
   change `aria-current` de `[true, false]` à `[false, true]`.
-- La preuve temporaire de l’interface Remix (`remix-card-editor-proof-temp.ts`)
-  rend et édite le même BDC Carte comme Carte directe d’une Diapo et comme
-  enfant de Carousel, en passant par les façades existantes. Le test
-  `remix-card-editor-proof-temp.test.tsx` et Safari MCP vérifient les deux
-  relations, l’édition des champs et la conservation après changement de layout.
-  Cette preuve ne remplace pas encore l’éditeur React de production.
+- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+  vérifie dans la page Remix de production les Cartes directes Flux et Diapo,
+  les Cartes enfants, les champs partagés, la conservation après changement de
+  layout, le réordonnancement et l’import multiple de médias via les façades
+  existantes.
+- Le 8 octobre, Brave DevTools vérifie dans la page Remix de production une
+  Carte directe en Flux, une Carte directe dans une Diapo après retrait du
+  Carousel initial, puis une Carte enfant et le réordonnancement du Carousel
+  par séparateur. Les champs de la Carte sont éditables aux deux placements.
+  Dans le même parcours, Manuel et Zoom sont enregistrés puis restent affichés
+  après navigation Page A → Page B → Page A et rechargement complet. La lecture
+  du document serveur et d’IndexedDB confirme `playbackMode: manual` et les
+  remplacements `revelation.intro/outro: zoom`. Le test de production couvre
+  également le remount et la restitution de ces sélections.

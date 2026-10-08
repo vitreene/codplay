@@ -11,38 +11,27 @@ const vite = await createViteServer({
   server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',
 })
-
-let api
-try {
-  const [{ createElceHttpServer }, { ELCE_API_PORT }] = await Promise.all([
-    vite.ssrLoadModule('/src/server/elce-http-server.ts'),
-    vite.ssrLoadModule('/src/config/api-config.ts'),
-  ])
-  const port = Number(process.env.ELCE_API_PORT ?? ELCE_API_PORT)
-  const mediaDirectory = resolve(dataDirectory, 'media')
-  await mkdir(dataDirectory, { recursive: true })
-  api = await createElceHttpServer({
-    databaseFile: resolve(dataDirectory, 'elce.sqlite'),
-    mediaDirectory,
+const port = Number(process.env.ELCE_API_PORT ?? 5181)
+const mediaDirectory = resolve(dataDirectory, 'media')
+await mkdir(dataDirectory, { recursive: true })
+const { createElceHttpServer } = await vite.ssrLoadModule('/src/server/elce-http-server.ts')
+const api = await createElceHttpServer({
+  databaseFile: resolve(dataDirectory, 'elce.sqlite'),
+  mediaDirectory,
+})
+await new Promise((resolveListen, rejectListen) => {
+  api.server.once('error', rejectListen)
+  api.server.listen(port, '127.0.0.1', () => {
+    api.server.off('error', rejectListen)
+    resolveListen()
   })
-
-  await new Promise((resolveListen, rejectListen) => {
-    api.server.once('error', rejectListen)
-    api.server.listen(port, '127.0.0.1', () => {
-      api.server.off('error', rejectListen)
-      resolveListen()
-    })
-  })
-  process.stdout.write(`API Elcé disponible sur http://127.0.0.1:${port}\n`)
-  process.stdout.write(`Base SQLite : ${resolve(dataDirectory, 'elce.sqlite')}\n`)
-  process.stdout.write(`Médias : ${mediaDirectory}\n`)
-} catch (error) {
-  await api?.close()
-  await vite.close()
-  throw error
-}
+})
+process.stdout.write(`API Elcé disponible sur http://127.0.0.1:${port}\n`)
+process.stdout.write(`Base SQLite : ${resolve(dataDirectory, 'elce.sqlite')}\n`)
+process.stdout.write(`Médias : ${mediaDirectory}\n`)
 
 let closing = false
+/** Closes the API listener and its SQLite connection once. */
 async function closeServer() {
   if (closing) return
   closing = true

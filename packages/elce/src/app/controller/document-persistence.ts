@@ -49,11 +49,10 @@ export async function attachDocumentPersistence(
     if (syncState.status !== 'synced') options.onLocalSave?.(storedDocument)
   }
 
-  await restoreCurrentDocument()
-
-  const subscription = controller.subscribe((snapshot) => {
-    const document = snapshot.context.document
+  /** Queues the latest actor-owned document once for local persistence. */
+  function queueDocumentPersistence(document: ElceDocument): void {
     if (document === persistedDocument) return
+
     const nextMediaIds = new Set(document.medias.map((media) => media.id))
     const removedMediaIds = persistedDocument.medias
       .map((media) => media.id)
@@ -72,10 +71,17 @@ export async function attachDocumentPersistence(
         lastSaveError = error
         console.error('Échec de sauvegarde du document Elcé.', error)
       })
+  }
+
+  await restoreCurrentDocument()
+
+  const subscription = controller.subscribe((snapshot) => {
+    queueDocumentPersistence(snapshot.context.document)
   })
 
   return {
     flushLocalChanges: async () => {
+      queueDocumentPersistence(controller.getSnapshot().context.document)
       await pendingSave
       if (lastSaveError !== null) throw lastSaveError
     },

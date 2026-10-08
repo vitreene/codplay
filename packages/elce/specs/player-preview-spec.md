@@ -2,17 +2,17 @@
 
 ## Statut
 
-**En cours — la fenêtre distincte, la navigation indépendante et la
-synchronisation manuelle sont vérifiées. Le sommaire accessible présente un
-état `aria-expanded` incohérent à 801 px et un transfert de focus tardif à la
-fermeture ; voir le plan de construction avant de clore l’acceptation.**
+**En cours — la fenêtre distincte, la navigation indépendante, la
+synchronisation manuelle et la composition Sighty/CodPlay sont vérifiées. Le
+lecteur est rendu par Remix sans dépendance React. Le sommaire présente encore
+un `aria-expanded` incohérent au passage de 800 à 801 px et un retour de focus
+tardif à la fermeture ; ces points restent suivis dans le plan de construction.**
 
 ## Contrat
 
-Le bouton « Prévisualiser » ouvre le lecteur dans une fenêtre distincte. La
-modale intégrée est conservée dans le code, mais son accès reste désactivé
-pendant le POC afin de comparer les deux parcours. La fenêtre reçoit le
-document de l’éditeur et la page sélectionnée au moment de son ouverture.
+Le bouton « Prévisualiser » ouvre le lecteur dans une fenêtre distincte. Cette
+fenêtre reçoit le document de l’éditeur et la page sélectionnée au moment de
+son ouverture.
 
 Le lecteur monte la composition Sighty/CodPlay réelle dans son propre contexte
 de navigateur. Sa navigation est indépendante de celle de l’éditeur. Les
@@ -29,8 +29,8 @@ La barre du lecteur propose deux commandes :
 
 Chaque commande associe une icône à son libellé. À 800 px et en dessous, le
 libellé visible est masqué et l’icône reste seule. Le texte reste disponible
-dans l’attribut `title` et dans le nom accessible du bouton. Au-dessus de
-800 px, l’icône et le libellé sont visibles ensemble.
+dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icône
+et le libellé sont visibles ensemble.
 
 Chaque instantané reçu monte une nouvelle composition du lecteur. La
 progression, les réponses et l’historique restent locaux à cette session de
@@ -38,8 +38,12 @@ lecture et ne sont pas persistés.
 
 Le document de l’éditeur reste la source unique. La communication entre les
 fenêtres transporte des demandes et des instantanés ; elle ne crée ni document,
-ni catalogue, ni navigation parallèle. Les médias réutilisent le stockage
-IndexedDB existant et leurs sources sont chargées dans le contexte du lecteur.
+ni catalogue, ni navigation parallèle. Pour un média dont le transfert est
+confirmé dans le checkpoint du projet, le lecteur utilise l’URL stable fournie
+par l’API Elcé ; le navigateur charge le fichier comme une ressource ordinaire
+et peut réutiliser son cache HTTP. Tant qu’un transfert reste en attente, le
+lecteur crée une URL objet depuis le Blob conservé localement. Après
+confirmation du transfert d’une image, le Blob n’est pas requis par le lecteur.
 
 Le lecteur rend le menu, le titre de page, le contenu Flux et la navigation
 précédente/suivante avec les compositions Sighty/CodPlay existantes. Le menu et
@@ -49,48 +53,42 @@ exclues du scénario.
 
 ## Preuves
 
-- [`app-layout.tsx`](../src/app/layout/app-layout.tsx) expose le lancement du
-  lecteur et désactive l’accès à la modale intégrée pour le POC.
-- [`popup-preview-host.ts`](../src/app/player/popup-preview-host.ts) ouvre le
-  lecteur depuis la page sélectionnée et transmet les instantanés depuis
-  l’acteur XState existant.
-- [`popup-player.tsx`](../src/app/player/popup-player.tsx) reçoit les
-  instantanés, restaure les médias depuis IndexedDB et remonte la composition
-  à chaque nouvelle révision.
-- [`popup-player.css`](../src/app/player/popup-player.css) conserve les libellés
-  des commandes sur ordinateur et masque le texte au profit des icônes à 800 px
-  et en dessous.
+- [`ProjectApplication`](../src/app/remix/project-application.ts) ouvre le
+  popup depuis la page sélectionnée et détruit sa liaison à la fermeture de
+  l’application auteur.
+- [`PopupPreviewHost`](../src/app/player/popup-preview-host.ts) transmet les
+  instantanés et les demandes au moyen du protocole de messages existant,
+  attaché à l’acteur XState auteur.
+- [`PopupPlayer`](../src/app/player/popup-player.ts) est rendu par le routeur
+  `remix/spa`. Il reçoit les instantanés, résout les médias confirmés par l’URL
+  de l’API Elcé et crée temporairement des URLs objet pour les transferts en
+  attente. Il remonte la composition réelle à chaque instantané.
+- [`popup-player.css`](../src/app/player/popup-player.css) conserve les
+  libellés sur ordinateur et masque le texte au profit des icônes à 800 px et
+  en dessous.
 - [`popup-preview-host.test.ts`](../src/app/player/popup-preview-host.test.ts)
   vérifie la page de départ, la synchronisation du document édité et la
   sélection de la page courante.
-- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) vérifie la
-  synchronisation automatique demandée lorsque la page éditée a été créée
-  depuis le dernier instantané.
+- [`popup-player.test.ts`](../src/app/player/popup-player.test.ts) vérifie la
+  synchronisation unique lorsqu’une page éditée vient d’être créée et la
+  résolution d’un média confirmé dont le Blob n’est plus présent en local.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
-  vérifie que la composition réutilise les sources de scènes inchangées lors
-  d’un changement d’organisation et reconstruit la scène d’une page éditée.
-- Brave DevTools, le 5 octobre 2026, confirme l’ouverture dans une fenêtre
-  distincte depuis la page éditée, la navigation indépendante, l’attente d’une
-  synchronisation manuelle après correction, le retour à la page éditée et la
-  synchronisation unique lorsque cette page vient d’être créée. Après
-  réorganisation, le nouveau scénario place la page éditée en première
-  position ; le test de composition vérifie l’identité des sources de scènes
-  conservées. Brave confirme aussi les deux icônes, les libellés accessibles et
-  les `title` à 390 px et 800 px, puis les libellés visibles à 801 px ; aucune
-  erreur ni aucun avertissement n’apparaît dans la console du lecteur.
-- Le même parcours Brave charge une image dans le lecteur après synchronisation
-  et après fermeture/réouverture. L’événement `change` de l’input natif a été
-  déclenché avec un fichier `File` synthétique, car l’outil MCP a refusé le
-  chemin local ; la boîte de dialogue système de sélection de fichier n’a pas
-  été observée dans ce test.
-- À 390 × 844 et 800 × 900, Brave vérifie l’ouverture du tiroir, la sélection
-  d’une page, la fermeture par Échap et par clic extérieur, et le retour final
-  du focus. À 390 px, il n’y a pas de débordement horizontal. Lors du passage
-  de 800 à 801 px, le bouton masqué conserve `aria-expanded="true"` alors que
-  le tiroir est fermé. À la sélection d’une page, le navigateur signale aussi
-  que le focus reste brièvement sur le bouton de page pendant que son ancêtre
-  reçoit `aria-hidden`. Ces deux états d’accessibilité restent à corriger ;
-  l’acceptation correspondante est suivie dans le
-  [plan de construction](../plan/2026-10-01-elce-construction-plan.md).
-- Vérifications workspace Elcé : typecheck réussi, 130 tests réussis sur 130,
-  build réussi. Le build signale un chunk JavaScript supérieur à 500 kB.
+  vérifie la réutilisation des sources de scènes inchangées après une
+  réorganisation et la reconstruction de la scène d’une page éditée.
+- Brave DevTools, le 5 octobre 2026, a vérifié l’ouverture dans une fenêtre
+  distincte, la navigation indépendante, la synchronisation manuelle, le
+  retour à la page éditée et la synchronisation unique d’une nouvelle page.
+  Il a aussi vérifié les libellés accessibles à 390 px, 800 px et 801 px.
+- Brave DevTools, le 8 octobre 2026, a vérifié le chargement d’une image
+  confirmée depuis l’URL serveur dans l’éditeur et dans le popup, sans Blob
+  conservé dans IndexedDB ; l’image y était décodée à `1 × 1 px` et la console
+  ne contenait ni alerte ni erreur.
+- Brave DevTools, le 8 octobre 2026, a lancé l’application Remix avec
+  `npm run dev:elce`, puis ouvert le popup natif depuis l’auteur. Le lecteur
+  « Lecture Elcé » a affiché la Diapo sélectionnée avec cinq images complètes
+  chargées depuis leurs URL API. « Réafficher la page éditée » a réaffiché la
+  même page. Les consoles étaient vides et aucun asset React, ReactDOM,
+  `@react-refresh` ou `react/jsx-runtime` n’a été demandé.
+- Les tests du workspace Elcé, le typecheck et le build passent. Le build
+  signale un chunk JavaScript supérieur à 500 kB ; la validation du popup ne
+  réduit pas ce chunk.

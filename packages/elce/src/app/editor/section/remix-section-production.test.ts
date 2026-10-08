@@ -9,7 +9,7 @@ import { EditorContextProvider } from '../../remix/editor-context'
 import { controllerMachine } from '../../controller/controller-machine'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
 import { EditorActionsFacade } from '../../facades/editor-actions-facade'
-import { RemixSectionEditorProofTemp } from './remix-section-editor-proof-temp'
+import { RemixPageEditor } from '../../remix/workspace/page-editor'
 
 class PendingMediaStore implements ElceDocumentStore {
   public readonly pending: Array<{ media: MediaBlob; resolve: () => void }> = []
@@ -48,7 +48,7 @@ class PendingMediaStore implements ElceDocumentStore {
   }
 }
 
-describe('Remix Section editor proof', () => {
+describe('Remix production Section editor', () => {
   it('keeps Tiptap mounted while Remix commands edit the Section and import an anchored image through XState', async () => {
     const store = new PendingMediaStore()
     const controller = createActor(controllerMachine, { input: { documentStore: store } })
@@ -59,7 +59,7 @@ describe('Remix Section editor proof', () => {
     const rendered = render(jsx(EditorContextProvider, {
       controller,
       actions,
-      children: jsx(RemixSectionEditorProofTemp, {}),
+      children: jsx(RemixPageEditor, { onPreview: () => undefined, previewError: null }),
     }))
 
     const editor = getEditor(rendered.$('.ProseMirror'))
@@ -144,9 +144,17 @@ describe('Remix Section editor proof', () => {
     expect(movedInlineContent?.at(-1)?.type).toBe('elceAnchor')
     expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === anchorCard.id)?.card?.mediaId).toBe(pendingMedia.media.id)
 
+    const editButton = editor.view.dom.querySelector<HTMLButtonElement>(`#${anchorCard.id}-anchor-edit`)
+    if (editButton === null) throw new Error('The anchor must expose its existing Card edit button.')
+    expect(editButton.parentElement?.id).toBe(`${anchorCard.id}-anchor-edit-position`)
+    await rendered.act(() => editButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })))
+    expect(rendered.$(`#elce-anchor-card-editor-${anchorCard.id}`)).not.toBeNull()
+    expect((rendered.$(`#elce-anchor-card-card-layout-${anchorCard.id}`) as HTMLSelectElement).value).toBe('photo-basic')
+    expect((rendered.$(`#elce-anchor-card-image-fit-${anchorCard.id}`) as HTMLSelectElement).value).toBe('cover')
+
     const subscription = subscribeSpy.mock.results[0]?.value
     expect(subscription).toBeDefined()
-    if (subscription === undefined) throw new Error('La preuve Section doit s’abonner à l’acteur.')
+    if (subscription === undefined) throw new Error('La page Remix doit s’abonner à l’acteur.')
     const unsubscribeSpy = vi.spyOn(subscription, 'unsubscribe')
     rendered.cleanup()
     expect(unsubscribeSpy).toHaveBeenCalledOnce()

@@ -63,6 +63,12 @@ describe('Remix chapter settings', () => {
     })
 
     rendered.cleanup()
+    chapter = findChapter(controller, chapter.id)
+    rendered = mountSettings()
+    expect((rendered.$(`#elce-remix-evaluation-retry-scope-${chapter.id}`) as HTMLSelectElement).value)
+      .toBe(EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS)
+
+    rendered.cleanup()
     controller.stop()
   })
 })

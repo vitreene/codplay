@@ -130,15 +130,24 @@ function renderEvaluationSettings(chapter: Chapter, actions: EditorActionsFacade
           jsx('span', { id: `elce-remix-evaluation-retry-text-${chapter.id}`, children: 'Questions à reprendre après un échec' }),
           jsx('select', {
             id: `elce-remix-evaluation-retry-scope-${chapter.id}`,
-            value: retryScope,
             mix: on<HTMLSelectElement, 'change'>('change', (event) => actions.updateEvaluationChapterSettings(
               chapter.id,
               attemptLimit,
               event.currentTarget.value as EvaluationRetryScope,
             )),
             children: [
-              jsx('option', { id: `elce-remix-evaluation-retry-all-${chapter.id}`, value: EVALUATION_RETRY_SCOPE.ALL_QUESTIONS, children: 'Toutes les questions' }),
-              jsx('option', { id: `elce-remix-evaluation-retry-incorrect-${chapter.id}`, value: EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS, children: 'Les réponses incorrectes seulement' }),
+              jsx('option', {
+                id: `elce-remix-evaluation-retry-all-${chapter.id}`,
+                value: EVALUATION_RETRY_SCOPE.ALL_QUESTIONS,
+                selected: retryScope === EVALUATION_RETRY_SCOPE.ALL_QUESTIONS,
+                children: 'Toutes les questions',
+              }),
+              jsx('option', {
+                id: `elce-remix-evaluation-retry-incorrect-${chapter.id}`,
+                value: EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS,
+                selected: retryScope === EVALUATION_RETRY_SCOPE.INCORRECT_QUESTIONS,
+                children: 'Les réponses incorrectes seulement',
+              }),
             ],
           }),
         ],
@@ -147,7 +156,7 @@ function renderEvaluationSettings(chapter: Chapter, actions: EditorActionsFacade
   })
 }
 
-/** Renders the configured chapter icon without introducing a React icon view. */
+/** Renders the configured chapter icon as a native SVG view. */
 function renderChapterTypeIcon(chapter: Chapter): RemixNode {
   switch (chapter.type) {
     case CHAPTER_TYPE.STANDARD:

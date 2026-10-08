@@ -136,7 +136,7 @@ export function cardLayoutHasMedia(layoutId: CardLayoutId): boolean {
   return layoutId !== DEFAULT_PRESET_ID.TEXT_SHORT
 }
 
-/** Creates a stable identity for a new Carousel BDC outside the React view. */
+/** Creates a stable identity for a new Carousel BDC outside the editor view. */
 export function createCarouselBdcId(): BdcId {
   return createStableId('bdc-carousel')
 }
