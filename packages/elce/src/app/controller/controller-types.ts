@@ -5,6 +5,8 @@ import type { ElceSectionChange } from '../../domain/anchor/anchor-types'
 import type { DocumentCommand, PagePlacement } from '../../domain/commands/document-command-types'
 import type { ElceDocumentChange } from './document-change-types'
 import type { DocumentSyncState, ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
+import type { ElceProjectSummary } from '../../infrastructure/project-api/project-api-types'
+import type { ProjectSessionOperation, ProjectSessionPort, ProjectSessionStatus } from '../projects/project-session-types'
 
 export type { ElceAnchorChange } from './document-change-types'
 
@@ -19,10 +21,18 @@ export interface ElceAppContext {
   readonly editAccess: 'waiting' | 'active'
   readonly documentStore: ElceDocumentStore | null
   readonly documentChanges: readonly ElceDocumentChange[]
+  readonly projectSession: ProjectSessionPort | null
+  readonly projects: readonly ElceProjectSummary[]
+  readonly activeProject: ElceProjectSummary | null
+  readonly projectStatus: ProjectSessionStatus
+  readonly projectError: string | null
+  readonly pendingProjectOperation: ProjectSessionOperation | null
+  readonly projectOperationHadAccess: boolean
 }
 
 export interface ElceControllerInput {
   readonly documentStore?: ElceDocumentStore
+  readonly projectSession?: ProjectSessionPort
 }
 
 export type ElceControllerEvent =
@@ -40,3 +50,5 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'document.sync.status'; status: DocumentSyncState['status'] }>
   | Readonly<{ type: 'editor.access.activate' }>
   | Readonly<{ type: 'editor.access.suspend' }>
+  | Readonly<{ type: 'project.operation'; operation: ProjectSessionOperation }>
+  | Readonly<{ type: 'project.access.error'; message: string }>

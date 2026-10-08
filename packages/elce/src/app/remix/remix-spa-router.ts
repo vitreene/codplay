@@ -9,6 +9,7 @@ import { RemixSectionEditorProofTemp } from '../editor/section/remix-section-edi
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { EditorContextProvider } from './editor-context'
 import { RemixEditorLifecycleProofTemp } from './editor-lifecycle-proof-temp'
+import { ProjectApplication } from './project-application'
 
 /** Builds the browser route table for the editor. */
 export function createElceSpaRouter(
@@ -21,7 +22,9 @@ export function createElceSpaRouter(
       return renderRoute(jsx(EditorContextProvider, {
         controller,
         actions,
-        children: jsx(ReactEditorTempBridge, {}),
+        children: controller === null || actions === null
+          ? jsx(ReactEditorTempBridge, {})
+          : jsx(ProjectApplication, {}),
       }), { status: 404 })
     },
   })
@@ -36,7 +39,10 @@ export function createElceSpaRouter(
         ]
     const children = jsx('div', {
       id: 'elce-remix-route-root',
-      children: [jsx(ReactEditorTempBridge, {}), ...proofs],
+      children: [
+        controller === null || actions === null ? jsx(ReactEditorTempBridge, {}) : jsx(ProjectApplication, {}),
+        ...proofs,
+      ],
     })
     return renderRoute(jsx(EditorContextProvider, { controller, actions, children }))
   })

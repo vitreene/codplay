@@ -1,6 +1,6 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : En cours — étapes 0, 1, 2 et 3 Finies.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
+**Statut : En cours — étapes 0, 1, 2 et 3 Finies ; étape 4 commencée.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. Le menu et le cycle de vie de base des projets sont vérifiés ; le portage des autres surfaces auteur reste à faire. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
@@ -173,7 +173,7 @@ scène ; Elcé n’ajoute pas de circuit séparé.
 sont intégrés et vérifiés en HTTP réel. La synchronisation de l’éditeur avec
 cette API reste dans les étapes local-first.
 
-### 4. Porter l’application par surfaces — À faire
+### 4. Porter l’application par surfaces — En cours
 
 Porter l’affichage en gardant les commandes et l’ordre métier existants :
 
@@ -181,6 +181,25 @@ Porter l’affichage en gardant les commandes et l’ordre métier existants :
 2. Section Tiptap, ancres, dépôt de médias et barre d’outils ;
 3. éditeurs Question, Résultat, Carte autonome et Carousel ; l’éditeur de Carte
    reste partagé entre une Carte directe Diapo et les Cartes enfants du Carousel.
+
+**Menu et cycle de vie des projets — parcours de base vérifiés le 7 octobre :**
+
+- [x] Menu Remix au titre « Elcé » ; liste serveur, création, ouverture,
+  fermeture, renommage, suppressions active et inactive.
+- [x] Mêmes façade et acteur XState ; restauration du projet par onglet,
+  transfert du verrou et retour à l’éditeur après activation.
+- [x] Safari Technology Preview via MCP : création, renommage, fermeture,
+  réouverture, suppression active/inactive, deux onglets sur des projets
+  différents et restauration après rechargement. Les projets temporaires ont
+  été supprimés ; `elce-document` est resté à la révision 0.
+- [ ] Compléter les contrôles d’échec de synchronisation pendant un changement
+  de projet et l’édition persistée quand une commande est déjà en cours au
+  moment du changement.
+
+Le détail du comportement vérifié est dans la
+[spécification de gestion du projet actif](../specs/project-session-spec.md).
+L’organisation des pages et les réglages de chapitre restent à porter avant
+les éditeurs Question, Résultat, Carte et Carousel.
 
 Un menu de gestion des projets se trouve au niveau du titre « Elcé ». Il permet de créer, ouvrir, fermer et supprimer des projets. L’exportation viendra plus tard. Cette liste de projets est distincte du catalogue de contenus (pages, BDC et médias) de l’éditeur. Le menu et ses vues sont portés dans Remix, sans ajouter une seconde source d’état ni un circuit de commandes parallèle.
 

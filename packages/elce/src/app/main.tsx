@@ -11,6 +11,7 @@ export function mountElceEditor(
   container: HTMLElement,
   controller: Actor<typeof controllerMachine> | null,
   actions: EditorActionsFacade | null,
+  options: Readonly<{ hideHeader?: boolean }> = {},
 ): () => void {
   const params = new URLSearchParams(window.location.search)
   const sessionId = params.get(POPUP_PREVIEW_SESSION_PARAM)
@@ -22,7 +23,7 @@ export function mountElceEditor(
   } else {
     if (controller === null) throw new Error('La composition XState de l’éditeur n’a pas été fournie.')
     if (actions === null) throw new Error('La façade d’actions de l’éditeur n’a pas été fournie.')
-    root.render(<AppLayout controller={controller} actions={actions} />)
+    root.render(<AppLayout controller={controller} actions={actions} hideHeader={options.hideHeader} />)
   }
 
   return () => root.unmount()

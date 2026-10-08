@@ -65,7 +65,7 @@ function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
 }
 
 /** Renders the Elcé work area from the controller-owned application state. */
-export function AppLayout({ controller, actions }: AppLayoutProps) {
+export function AppLayout({ controller, actions, hideHeader = false }: AppLayoutProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [responsivePanel, setResponsivePanel] = useState<ResponsivePanel>(null)
@@ -651,8 +651,8 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
 
   return (
     <Fragment>
-    <div id="elce-workspace" className="elce-workspace" inert={editAccess !== 'active'}>
-      <header id="elce-header" className="elce-header">
+    <div id="elce-workspace" className={hideHeader ? 'elce-workspace elce-workspace--external-header' : 'elce-workspace'} inert={editAccess !== 'active'}>
+      {hideHeader ? null : <header id="elce-header" className="elce-header">
         <div id="elce-header-title" className="elce-header-title">
           <div id="elce-brand" className="elce-brand">
             <span id="elce-brand-name">Elcé</span>
@@ -685,7 +685,7 @@ export function AppLayout({ controller, actions }: AppLayoutProps) {
             ><Images aria-hidden="true" size={18} strokeWidth={2} /></button>
           </nav>
         </div>
-      </header>
+      </header>}
       <main id="elce-main" className="elce-main">
         <section
           id="elce-outline"

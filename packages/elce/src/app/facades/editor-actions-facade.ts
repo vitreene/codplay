@@ -19,6 +19,7 @@ import type { ElceSectionChange, ElceAnchorDropTarget } from '../../domain/ancho
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { QuestionContent } from '../../domain/question/question-types'
 import type { ElceMediaImport } from '../../domain/media/media-resource-types'
+import type { ProjectSessionOperation } from '../projects/project-session-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { ElceAnchorDropFacade } from './anchor/anchor-drop-facade'
 import { ElceCardFacade } from './card/card-facade'
@@ -63,6 +64,46 @@ export class EditorActionsFacade {
         media: mediaImport.media,
       }),
     })
+  }
+
+  /** Sends a project lifecycle intention through the owning XState actor. */
+  public manageProjects(operation: ProjectSessionOperation): void {
+    this.controller.send({ type: 'project.operation', operation })
+  }
+
+  /** Starts the server-owned project list and restores this tab's selection. */
+  public bootstrapProjects(rememberedProjectId: string | null): void {
+    this.manageProjects({ kind: 'bootstrap', rememberedProjectId })
+  }
+
+  /** Re-reads project summaries from the server. */
+  public refreshProjects(): void {
+    this.manageProjects({ kind: 'refresh' })
+  }
+
+  /** Creates a new project and opens it after server creation succeeds. */
+  public createProject(): void {
+    this.manageProjects({ kind: 'create' })
+  }
+
+  /** Opens a selected project after the current project is confirmed saved. */
+  public openProject(projectId: string): void {
+    this.manageProjects({ kind: 'open', projectId })
+  }
+
+  /** Closes the active project without deleting its server copy. */
+  public closeProject(): void {
+    this.manageProjects({ kind: 'close' })
+  }
+
+  /** Deletes one server project and only its corresponding local cache. */
+  public deleteProject(projectId: string): void {
+    this.manageProjects({ kind: 'delete', projectId })
+  }
+
+  /** Renames the active project using the existing document command. */
+  public renameActiveProject(name: string): void {
+    this.apply({ type: 'document.rename', name })
   }
 
   /** Creates a page at the explicit scenario or chapter placement. */

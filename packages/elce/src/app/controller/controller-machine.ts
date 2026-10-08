@@ -9,6 +9,7 @@ import type { ElceDocumentChange } from './document-change-types'
 import type { ChapterId, MediaMetadata, PageId } from '../../domain/document/document-types'
 import type { ElceAppContext, ElceControllerEvent, ElceControllerInput } from './controller-types'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
+import type { ProjectSessionOperation, ProjectSessionResult } from '../projects/project-session-types'
 
 const initialDocument = createInitialDocument()
 const anchorDropService = new ElceAnchorDropService()
@@ -25,7 +26,27 @@ interface DocumentChangeWorkerOutput {
   readonly mediaCreated: boolean
 }
 
+interface ProjectOperationWorkerInput {
+  readonly operation: ProjectSessionOperation
+  readonly session: ElceAppContext['projectSession']
+  readonly document: ElceAppContext['document']
+  readonly activeProject: ElceAppContext['activeProject']
+  readonly editAccess: ElceAppContext['editAccess']
+  readonly hadEditAccess: boolean
+}
+
 const mediaResourceService = new ElceMediaResourceService()
+
+const performProjectOperation = fromPromise<ProjectSessionResult, ProjectOperationWorkerInput>(async ({ input }) => {
+  if (input.session === null) throw new Error('La gestion des projets n’est pas configurée.')
+  return input.session.perform(
+    input.operation,
+    input.document,
+    input.activeProject,
+    input.editAccess,
+    input.hadEditAccess,
+  )
+})
 
 /** Persists imported files and resolves canonical media before command commit. */
 const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentChangeWorkerInput>(async ({ input }) => {
@@ -205,12 +226,58 @@ export const controllerMachine = setup({
       }
     }),
     discardDocumentChange: assign(({ context }) => ({ documentChanges: context.documentChanges.slice(1) })),
+    beginProjectOperation: assign(({ context, event }) => {
+      if (event.type !== 'project.operation') return {}
+      return {
+        pendingProjectOperation: event.operation,
+        projectOperationHadAccess: context.editAccess === 'active',
+        projectStatus: event.operation.kind === 'bootstrap' ? 'loading' : 'busy',
+        projectError: null,
+        editAccess: 'waiting',
+      }
+    }),
+    commitProjectOperation: assign(({ context, event }) => {
+      const output = (event as unknown as { output: ProjectSessionResult }).output
+      const document = output.document ?? context.document
+      const replaced = output.document !== null
+      return {
+        document,
+        selectedPageId: replaced ? document.pages[0]?.id ?? null : context.selectedPageId,
+        selectedChapterId: replaced ? null : context.selectedChapterId,
+        selectedCarouselCardBdcId: replaced ? null : context.selectedCarouselCardBdcId,
+        mediaSources: replaced ? {} : context.mediaSources,
+        projects: output.projects,
+        activeProject: output.activeProject,
+        projectStatus: output.status,
+        projectError: null,
+        pendingProjectOperation: null,
+        projectOperationHadAccess: false,
+        editAccess: context.projectOperationHadAccess ? output.editAccess : 'waiting',
+      }
+    }),
+    startProjectLock: ({ context }) => {
+      if (context.projectStatus === 'opening' && context.activeProject !== null) {
+        context.projectSession?.startLock(context.activeProject.id)
+      }
+    },
+    failProjectOperation: assign(({ context, event }) => ({
+      projectStatus: context.activeProject === null ? 'list' as const : 'active' as const,
+      projectError: errorMessage((event as unknown as { error: unknown }).error),
+      pendingProjectOperation: null,
+      editAccess: context.projectOperationHadAccess ? 'active' as const : 'waiting' as const,
+      projectOperationHadAccess: false,
+    })),
+    markProjectAccessError: assign(({ event }) => ({
+      projectStatus: 'error' as const,
+      projectError: event.type === 'project.access.error' ? event.message : null,
+      editAccess: 'waiting' as const,
+    })),
   },
   guards: {
     hasPendingDocumentChanges: ({ context }) => context.documentChanges.length > 0,
     hasEditAccess: ({ context }) => context.editAccess === 'active',
   },
-  actors: { persistDocumentChange },
+  actors: { persistDocumentChange, performProjectOperation },
 }).createMachine({
   id: 'elce-app',
   context: ({ input }) => ({
@@ -224,6 +291,13 @@ export const controllerMachine = setup({
     editAccess: 'waiting',
     documentStore: input?.documentStore ?? null,
     documentChanges: [],
+    projectSession: input?.projectSession ?? null,
+    projects: [],
+    activeProject: null,
+    projectStatus: 'loading',
+    projectError: null,
+    pendingProjectOperation: null,
+    projectOperationHadAccess: false,
   }),
   initial: 'suspended',
   on: {
@@ -286,18 +360,25 @@ export const controllerMachine = setup({
     'document.sync.status': {
       actions: assign(({ event }) => ({ syncStatus: event.status })),
     },
+    'project.access.error': { actions: 'markProjectAccessError' },
   },
   states: {
     suspended: {
       on: {
+        'project.operation': { actions: 'beginProjectOperation', target: 'projectOperation' },
         'editor.access.activate': {
-          actions: assign({ editAccess: 'active' }),
+          actions: assign(({ context }) => ({
+            editAccess: 'active',
+            projectStatus: context.activeProject === null ? context.projectStatus : 'active',
+            projectError: null,
+          })),
           target: 'ready',
         },
       },
     },
     ready: {
       on: {
+        'project.operation': { actions: 'beginProjectOperation', target: 'projectOperation' },
         'editor.access.suspend': {
           actions: assign({ editAccess: 'waiting' }),
           target: 'suspended',
@@ -325,6 +406,7 @@ export const controllerMachine = setup({
         },
       },
       on: {
+        'project.operation': { actions: 'beginProjectOperation' },
         'editor.access.suspend': { actions: assign({ editAccess: 'waiting' }) },
         'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
         'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
@@ -334,6 +416,39 @@ export const controllerMachine = setup({
     nextDocumentChange: {
       always: [
         { guard: 'hasPendingDocumentChanges', target: 'processingDocumentChange' },
+        { guard: ({ context }) => context.pendingProjectOperation !== null, target: 'projectOperation' },
+        { guard: 'hasEditAccess', target: 'ready' },
+        { target: 'suspended' },
+      ],
+    },
+    projectOperation: {
+      invoke: {
+        src: 'performProjectOperation',
+        input: ({ context }) => ({
+          operation: context.pendingProjectOperation!,
+          session: context.projectSession,
+          document: context.document,
+          activeProject: context.activeProject,
+          editAccess: context.editAccess,
+          hadEditAccess: context.projectOperationHadAccess,
+        }),
+        onDone: {
+          target: 'resumeProjectAccess',
+          actions: ['commitProjectOperation', 'startProjectLock'],
+        },
+        onError: {
+          target: 'resumeProjectAccess',
+          actions: 'failProjectOperation',
+        },
+      },
+      on: {
+        'editor.access.suspend': {
+          actions: assign({ editAccess: 'waiting', projectOperationHadAccess: false }),
+        },
+      },
+    },
+    resumeProjectAccess: {
+      always: [
         { guard: 'hasEditAccess', target: 'ready' },
         { target: 'suspended' },
       ],
@@ -418,4 +533,9 @@ function mediaSourceAddition(
   source: string | null,
 ): ElceAppContext['mediaSources'] {
   return source === null ? mediaSources : { ...mediaSources, [mediaId]: source }
+}
+
+/** Converts an operation failure into a readable status without hiding its cause. */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
