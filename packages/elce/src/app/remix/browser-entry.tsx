@@ -1,5 +1,5 @@
 import { run } from 'remix/spa'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { createActor } from 'xstate'
 import { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
@@ -29,11 +29,12 @@ async function startRemixEditor(): Promise<void> {
   }
 
   const runtime = run(createElceSpaRouter(controller, editorActions), {
-    fallback: jsx('p', {
-      id: 'elce-remix-loading',
-      role: 'status',
-      children: 'Chargement de l’éditeur…',
-    }),
+    fallback: <p
+      id="elce-remix-loading"
+      role="status"
+    >
+      Chargement de l’éditeur…
+    </p>,
   })
   await runtime.ready()
 

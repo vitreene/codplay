@@ -1,6 +1,6 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : En cours — étapes 0 à 4 finies ; le portage Remix de l’étape 5 est appliqué. Une validation reste ouverte : relire une IndexedDB v4 existante après remplacement du serveur sur le même origin, sans remise à zéro.** L’auteur, le lecteur popup et les tests Elcé sont rendus sans React. `npm run dev:elce` lance l’asset server Remix et réutilise l’API Elcé active. Typecheck réussi, 206 tests réussis sur 206, build réussi ; le chunk JavaScript fait 1 314,22 kB minifiés (372,16 kB gzip) et conserve l’avertissement Vite au-dessus de 500 kB. Brave a vérifié la liste des projets depuis `localhost:5176`, l’ouverture du lecteur natif et ses images serveur depuis l’API ; les consoles étaient vides et aucun asset React/ReactDOM n’a été demandé. Le port `localhost:5175` reste occupé par un ancien serveur Vite ; après rechargement, il renvoie `504 (Outdated Optimize Dep)`. Il n’a pas été arrêté et aucune base n’a été réinitialisée. L’auteur a reporté à une tranche ultérieure l’amélioration de reprise du verrou après un changement réel de visibilité : sans utilisateur en situation réelle, aucun développement ni test dédié n’est justifié. Cette décision ne bloque pas le portage.
+**Statut : En cours — étapes 0 à 4 finies ; le portage Remix de l’étape 5 est appliqué. Une validation reste ouverte : relire une IndexedDB v4 existante après remplacement du serveur sur le même origin, sans remise à zéro.** L’auteur, le lecteur popup et les tests Elcé utilisent le runtime Remix sans React ; les composants et tests qui rendent du JSX sont en `.tsx`. `npm run dev:elce` lance l’asset server Remix et réutilise l’API Elcé active. Typecheck réussi, 206 tests réussis sur 206, build réussi ; le chunk JavaScript fait 1 314,76 kB minifiés (372,33 kB gzip) et conserve l’avertissement Vite au-dessus de 500 kB. Brave a vérifié la liste des projets depuis `localhost:5176`, l’ouverture du lecteur natif et ses images serveur depuis l’API ; après conversion TSX, les 16 modules de composants se chargent, la console est vide et aucun asset React/ReactDOM n’est demandé. Le port `localhost:5175` reste occupé par un ancien serveur Vite ; après rechargement, il renvoie `504 (Outdated Optimize Dep)`. Il n’a pas été arrêté et aucune base n’a été réinitialisée. L’auteur a reporté à une tranche ultérieure l’amélioration de reprise du verrou après un changement réel de visibilité : sans utilisateur en situation réelle, aucun développement ni test dédié n’est justifié. Cette décision ne bloque pas le portage.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
@@ -374,6 +374,11 @@ Chaque surface d’édition passe par l’acteur et les commandes existants. Les
   Aucun code de production ou test Elcé ne les importe. Le monorepo garde
   React pour `@codplay/editor`, un autre workspace explicitement hors de cette
   tranche.
+- [x] Écrire en JSX les 16 composants Remix et les 6 tests Elcé qui construisent
+  des éléments JSX ; renommer ces fichiers en `.tsx`. Configurer le runtime
+  automatique TypeScript avec `jsxImportSource: "remix/ui"`. Tous les parents
+  du markup natif ont un `id` explicite. Les modules compilés chargent le
+  runtime Remix sans importer React.
 - [x] Relier `npm run dev:elce` au serveur d’assets Remix, au routeur navigateur
   `remix/spa` et au serveur API Fetch séparé. Vite reste utilisé par le
   lanceur comme chargeur SSR du module serveur, et par build/tests ; il ne
@@ -388,7 +393,7 @@ Chaque surface d’édition passe par l’acteur et les commandes existants. Les
   étaient vides et aucun asset React ou ReactDOM n’a été demandé.
 - [x] Exécuter la suite complète Elcé : 36 fichiers et 206 tests passent.
   Le typecheck passe. Le build Vite réussit sur 581 modules ; le chunk
-  JavaScript fait `1 314,22 kB` minifiés (`372,16 kB` gzip) et garde
+  JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et garde
   l’avertissement de taille supérieur à `500 kB`.
 - [ ] Relire les documents v4 déjà présents dans l’IndexedDB de
   `http://localhost:5175/`, sans réinitialiser cette base ni perdre ses médias.

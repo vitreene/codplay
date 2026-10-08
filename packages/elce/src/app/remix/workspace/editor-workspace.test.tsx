@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { render } from 'remix/ui/test'
 import { CHAPTER_TYPE, PAGE_TYPE } from '../../../config/document-config'
 import { controllerMachine } from '../../controller/controller-machine'
@@ -127,12 +127,15 @@ function createWorkspace() {
   let dropTarget: string | null = null
   let draggedEntry: DraggedScenarioEntry = null
 
-  const mount = () => render(jsx('div', {
-    id: 'elce-remix-workspace-test-host',
-    children: renderEditorWorkspace({
+  const mount = () => render(<div
+    id="elce-remix-workspace-test-host"
+  >
+    {renderEditorWorkspace({
       view: selectEditorViewModel(controller.getSnapshot()),
       actions,
-      pageEditorHost: jsx('div', { id: 'elce-test-page-editor' }),
+      pageEditorHost: <div
+        id="elce-test-page-editor"
+      />,
       responsivePanel,
       dropTarget,
       visible: true,
@@ -140,12 +143,12 @@ function createWorkspace() {
       onSetDropTarget: (target) => { dropTarget = target },
       onSetDraggedEntry: (entry) => { draggedEntry = entry },
       getDraggedEntry: () => draggedEntry,
-      onPreview: () => {},
+      onPreview: () => { },
       previewError: null,
       onMovePage: (pageId, placement) => actions.movePage(pageId, placement),
       onMoveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
-    }),
-  }))
+    })}
+  </div>)
   const cleanup = (): void => {
     responsivePanel = null
     dropTarget = null

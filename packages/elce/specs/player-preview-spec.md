@@ -59,7 +59,7 @@ exclues du scénario.
 - [`PopupPreviewHost`](../src/app/player/popup-preview-host.ts) transmet les
   instantanés et les demandes au moyen du protocole de messages existant,
   attaché à l’acteur XState auteur.
-- [`PopupPlayer`](../src/app/player/popup-player.ts) est rendu par le routeur
+- [`PopupPlayer`](../src/app/player/popup-player.tsx) est rendu par le routeur
   `remix/spa`. Il reçoit les instantanés, résout les médias confirmés par l’URL
   de l’API Elcé et crée temporairement des URLs objet pour les transferts en
   attente. Il remonte la composition réelle à chaque instantané.
@@ -69,7 +69,7 @@ exclues du scénario.
 - [`popup-preview-host.test.ts`](../src/app/player/popup-preview-host.test.ts)
   vérifie la page de départ, la synchronisation du document édité et la
   sélection de la page courante.
-- [`popup-player.test.ts`](../src/app/player/popup-player.test.ts) vérifie la
+- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) vérifie la
   synchronisation unique lorsqu’une page éditée vient d’être créée et la
   résolution d’un média confirmé dont le Blob n’est plus présent en local.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)

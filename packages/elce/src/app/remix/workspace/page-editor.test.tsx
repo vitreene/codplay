@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { render } from 'remix/ui/test'
 import { BDC_ORDER, BDC_TYPE, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../../config/document-config'
 import { controllerMachine } from '../../controller/controller-machine'
@@ -57,11 +57,15 @@ describe('Remix production page editor', () => {
     controller.send({ type: 'page.select', pageId: firstPage.id })
 
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
-    const rendered = render(jsx(EditorContextProvider, {
-      controller,
-      actions,
-      children: jsx(RemixPageEditor, { onPreview: () => undefined, previewError: null }),
-    }))
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      <RemixPageEditor
+        onPreview={() => undefined}
+        previewError={null}
+      />
+    </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
       controller.stop()
@@ -294,11 +298,15 @@ describe('Remix production page editor', () => {
     const standaloneCardId = documentModel.pages[0]?.bdcIds.at(-1)
     if (standaloneCardId === undefined) throw new Error('The media editor fixture has no standalone Card.')
 
-    const rendered = render(jsx(EditorContextProvider, {
-      controller,
-      actions,
-      children: jsx(RemixPageEditor, { onPreview: () => undefined, previewError: null }),
-    }))
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      <RemixPageEditor
+        onPreview={() => undefined}
+        previewError={null}
+      />
+    </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
       controller.stop()
@@ -376,11 +384,15 @@ describe('Remix production page editor', () => {
     if (secondPageId === undefined) throw new Error('The Carousel editor fixture has no second page.')
     actions.selectPage(firstPage.id)
 
-    const rendered = render(jsx(EditorContextProvider, {
-      controller,
-      actions,
-      children: jsx(RemixPageEditor, { onPreview: () => undefined, previewError: null }),
-    }))
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      <RemixPageEditor
+        onPreview={() => undefined}
+        previewError={null}
+      />
+    </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
       controller.stop()
@@ -479,16 +491,16 @@ class ImmediateMediaStore implements ElceDocumentStore {
   public async loadDocument(): Promise<null> { return null }
 
   /** Keeps this test focused on editor commands rather than document persistence. */
-  public async saveDocument(): Promise<void> {}
+  public async saveDocument(): Promise<void> { }
 
   /** Keeps this test focused on editor commands rather than document persistence. */
-  public async saveDocumentAndDeleteMedia(): Promise<void> {}
+  public async saveDocumentAndDeleteMedia(): Promise<void> { }
 
   /** Has no previously persisted documents to delete in this in-memory fixture. */
-  public async deleteDocument(): Promise<void> {}
+  public async deleteDocument(): Promise<void> { }
 
   /** Has no previously persisted media to delete in this in-memory fixture. */
-  public async deleteMedia(): Promise<void> {}
+  public async deleteMedia(): Promise<void> { }
 
   /** Starts each import with no server upload checkpoint. */
   public async loadSyncState(documentId: string) {
@@ -496,7 +508,7 @@ class ImmediateMediaStore implements ElceDocumentStore {
   }
 
   /** Leaves this test's local synchronization state unchanged. */
-  public async saveSyncState(): Promise<void> {}
+  public async saveSyncState(): Promise<void> { }
 
   /** Persists the bytes immediately for the controller's media deduplication path. */
   public async saveMedia(media: MediaBlob): Promise<void> {

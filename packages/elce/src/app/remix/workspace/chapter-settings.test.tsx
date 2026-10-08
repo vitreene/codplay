@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { render } from 'remix/ui/test'
 import { CHAPTER_TYPE, EVALUATION_RETRY_SCOPE } from '../../../config/document-config'
 import type { Chapter } from '../../../domain/document/document-types'
@@ -20,10 +20,11 @@ describe('Remix chapter settings', () => {
     if (initialChapter === undefined) throw new Error('The Evaluation chapter was not created.')
     let chapter: Chapter = initialChapter
 
-    const mountSettings = () => render(jsx('main', {
-      id: 'elce-remix-chapter-settings-test-root',
-      children: renderChapterSettings({ chapter, actions, onPreview: () => {}, previewError: null }),
-    }))
+    const mountSettings = () => render(<main
+      id="elce-remix-chapter-settings-test-root"
+    >
+      {renderChapterSettings({ chapter, actions, onPreview: () => { }, previewError: null })}
+    </main>)
     let rendered = mountSettings()
 
     expect(chapter.type).toBe(CHAPTER_TYPE.EVALUATION)

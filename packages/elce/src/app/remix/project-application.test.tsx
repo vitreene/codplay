@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createActor } from 'xstate'
 import { describe, expect, it, vi } from 'vitest'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { render } from 'remix/ui/test'
 import { CHAPTER_TYPE } from '../../config/document-config'
 import { controllerMachine } from '../controller/controller-machine'
@@ -22,8 +22,8 @@ describe('Remix project application', () => {
         status: 'active',
         editAccess: 'active',
       }),
-      startLock: () => {},
-      dispose: async () => {},
+      startLock: () => { },
+      dispose: async () => { },
     }
     const controller = createActor(controllerMachine, { input: { projectSession } })
     controller.start()
@@ -39,11 +39,12 @@ describe('Remix project application', () => {
     const questionId = controller.getSnapshot().context.document.pages[0]?.bdcIds[1]
     if (questionId === undefined) throw new Error('La fixture de la page Remix ne contient pas de Question.')
 
-    const rendered = render(jsx(EditorContextProvider, {
-      controller,
-      actions,
-      children: jsx(ProjectApplication, {}),
-    }))
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      <ProjectApplication />
+    </EditorContextProvider>)
 
     await rendered.act(() => Promise.resolve())
     expect(rendered.$('#elce-work-area-title')).not.toBeNull()
@@ -64,11 +65,12 @@ describe('Remix project application', () => {
 
     if (standardChapter === undefined) throw new Error('La Fixture ne contient aucun chapitre standard.')
 
-    const rendered = render(jsx(EditorContextProvider, {
-      controller,
-      actions,
-      children: jsx(ProjectApplication, {}),
-    }))
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      <ProjectApplication />
+    </EditorContextProvider>)
 
     expect(rendered.$(`#elce-remix-standard-chapter-settings-${standardChapter.id}`)).toBeNull()
     await rendered.act(() => rendered.$(`#elce-chapter-select-${standardChapter.id}`)?.click())

@@ -67,7 +67,7 @@ indépendantes.
 - [`project-sync-coordinator.ts`](../src/app/sync/project-sync-coordinator.ts)
   suspend les nouvelles requêtes réseau pendant le transfert, puis reprend à
   partir du document local restauré.
-- [`browser-entry.ts`](../src/app/remix/browser-entry.ts) compose ces services
+- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) compose ces services
   autour de l’unique acteur XState de l’éditeur.
 
 ## Vérification

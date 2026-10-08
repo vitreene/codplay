@@ -1,6 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "remix/ui",
     "paths": {
       "codplay": ["../codplay/src/index.ts"],
       "codplay/*": ["../codplay/src/*"],

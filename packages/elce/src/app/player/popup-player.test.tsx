@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { render } from 'remix/ui/test'
 import { applyDocumentCommand, createDefaultPageCommand } from '../../domain/commands/document-commands'
 import { PAGE_LOCATION } from '../../config/document-config'
@@ -69,7 +69,10 @@ describe('Remix popup reader synchronization controls', () => {
     const requests: unknown[] = []
     const opener = { closed: false, postMessage: (message: unknown) => requests.push(message) } as unknown as Window
     setOpener(opener)
-    const rendered = render(jsx(PopupPlayer, { sessionId: 'reader-session', startPageId: 'page-a' }))
+    const rendered = render(<PopupPlayer
+      sessionId="reader-session"
+      startPageId="page-a"
+    />)
     cleanup = rendered.cleanup
 
     const originalDocument = createInitialDocument()
@@ -108,7 +111,10 @@ describe('Remix popup reader synchronization controls', () => {
   it('loads uploaded media from its stable server URL after its local Blob is removed', async () => {
     const opener = { closed: false, postMessage: vi.fn() } as unknown as Window
     setOpener(opener)
-    const rendered = render(jsx(PopupPlayer, { sessionId: 'reader-session', startPageId: 'page-a' }))
+    const rendered = render(<PopupPlayer
+      sessionId="reader-session"
+      startPageId="page-a"
+    />)
     cleanup = rendered.cleanup
 
     const documentModel = applyDocumentCommand(createInitialDocument(), {

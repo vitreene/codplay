@@ -1,5 +1,5 @@
 import { on, type RemixNode } from 'remix/ui'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { PAGE_LOCATION, SCENARIO_ENTRY_KIND } from '../../../config/document-config'
 import type { PagePlacement } from '../../../domain/commands/document-command-types'
 import type { ScenarioEntry } from '../../../domain/scenario/scenario-entry-types'
@@ -23,49 +23,48 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
     onDragLeave: (event) => dragLeaveSeparator(event, props.onSetDropTarget),
   }
   const center = props.view.selectedChapter === undefined
-    ? jsx('div', {
-        id: 'elce-remix-page-editor-host-container',
-        className: 'elce-remix-page-editor-host',
-        children: props.pageEditorHost,
-      })
+    ? <div
+      id="elce-remix-page-editor-host-container"
+      className="elce-remix-page-editor-host"
+    >
+      {props.pageEditorHost}
+    </div>
     : renderChapterSettings({
-        chapter: props.view.selectedChapter,
-        actions: props.actions,
-        onPreview: props.onPreview,
-        previewError: props.previewError,
-      })
+      chapter: props.view.selectedChapter,
+      actions: props.actions,
+      onPreview: props.onPreview,
+      previewError: props.previewError,
+    })
 
-  return jsx('div', {
-    id: 'elce-remix-editor-workspace',
-    children: [
-      jsx('main', {
-        id: 'elce-main',
-        className: 'elce-main',
-        hidden: !props.visible,
-        children: [
-          renderScenarioPanel(scenarioProps),
-          center,
-          renderContentCatalogPanel({
-            view: props.view,
-            actions: props.actions,
-            responsivePanel: props.responsivePanel,
-            dropTarget: props.dropTarget,
-            onSetResponsivePanel: (panel) => props.onSetResponsivePanel(panel),
-            onSetDropTarget: props.onSetDropTarget,
-          }),
-        ],
-      }),
-      props.responsivePanel === null
-        ? null
-        : jsx('button', {
-            id: 'elce-responsive-panel-backdrop',
-            className: 'elce-responsive-panel-backdrop',
-            type: 'button',
-            'aria-label': props.responsivePanel === 'outline' ? 'Fermer le scénario' : 'Fermer les contenus disponibles',
-            mix: on<HTMLButtonElement, 'click'>('click', () => props.onSetResponsivePanel(null)),
-          }),
-    ],
-  })
+  return <div
+    id="elce-remix-editor-workspace"
+  >
+    <main
+      id="elce-main"
+      className="elce-main"
+      hidden={!props.visible}
+    >
+      {renderScenarioPanel(scenarioProps)}
+      {center}
+      {renderContentCatalogPanel({
+        view: props.view,
+        actions: props.actions,
+        responsivePanel: props.responsivePanel,
+        dropTarget: props.dropTarget,
+        onSetResponsivePanel: (panel) => props.onSetResponsivePanel(panel),
+        onSetDropTarget: props.onSetDropTarget,
+      })}
+    </main>
+    {props.responsivePanel === null
+      ? null
+      : <button
+        id="elce-responsive-panel-backdrop"
+        className="elce-responsive-panel-backdrop"
+        type="button"
+        aria-label={props.responsivePanel === 'outline' ? 'Fermer le scénario' : 'Fermer les contenus disponibles'}
+        mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetResponsivePanel(null))}
+      />}
+  </div>
 }
 
 /** Starts a native page or chapter drag and stores its typed source. */

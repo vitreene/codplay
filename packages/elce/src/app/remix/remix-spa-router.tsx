@@ -1,6 +1,6 @@
 import { createRouter } from 'remix/router'
 import { render } from 'remix/spa'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import type { Actor } from 'xstate'
 import { controllerMachine } from '../controller/controller-machine'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
@@ -18,29 +18,36 @@ export function createElceSpaRouter(
   const sessionId = searchParams.get(POPUP_PREVIEW_SESSION_PARAM)
   const popupPlayer = sessionId === null || sessionId.length === 0
     ? null
-    : jsx(PopupPlayer, {
-        sessionId,
-        startPageId: searchParams.get(POPUP_PREVIEW_PAGE_PARAM),
-      })
+    : <PopupPlayer
+      sessionId={sessionId}
+      startPageId={searchParams.get(POPUP_PREVIEW_PAGE_PARAM)}
+    />
   const router = createRouter({
     middleware: [render()],
     defaultHandler({ render: renderRoute }) {
-      return renderRoute(jsx(EditorContextProvider, {
-        controller,
-        actions,
-        children: popupPlayer ?? jsx(ProjectApplication, {}),
-      }), { status: 404 })
+      return renderRoute(<EditorContextProvider
+        controller={controller}
+        actions={actions}
+      >
+        {popupPlayer ?? <ProjectApplication />}
+      </EditorContextProvider>, { status: 404 })
     },
   })
 
   router.get('/', ({ render: renderRoute }) => {
-    const children = jsx('div', {
-      id: 'elce-remix-route-root',
-      children: controller === null || actions === null
-        ? popupPlayer ?? jsx(ProjectApplication, {})
-        : jsx(ProjectApplication, {}),
-    })
-    return renderRoute(jsx(EditorContextProvider, { controller, actions, children }))
+    const children = <div
+      id="elce-remix-route-root"
+    >
+      {controller === null || actions === null
+        ? popupPlayer ?? <ProjectApplication />
+        : <ProjectApplication />}
+    </div>
+    return renderRoute(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      {children}
+    </EditorContextProvider>)
   })
 
   return router

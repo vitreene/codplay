@@ -1,5 +1,5 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { FileText, RefreshCw } from 'lucide-static'
 import { ElceDocument, createInitialDocument } from '../../domain/document/document-model'
 import type { PageId } from '../../domain/document/document-types'
@@ -253,75 +253,86 @@ interface PopupReaderState {
 /** Renders the popup toolbar, messages, and host for the real player composition. */
 function renderPopupReader(state: PopupReaderState): RemixNode {
   const { snapshot, error, pending, requestEditor } = state
-  return jsx('div', {
-    id: 'elce-popup-reader',
-    className: 'elce-popup-reader',
-    children: [
-      jsx('header', {
-        id: 'elce-popup-reader-header',
-        className: 'elce-popup-reader__header',
-        children: [
-          jsx('h1', { id: 'elce-popup-reader-title', children: 'Lecture Elcé' }),
-          jsx('div', {
-            id: 'elce-popup-reader-actions',
-            className: 'elce-popup-reader__actions',
-            children: [
-              jsx('button', {
-                id: 'elce-popup-reader-edited-page',
-                type: 'button',
-                title: 'Réafficher la page éditée',
-                'aria-label': 'Réafficher la page éditée',
-                disabled: snapshot === null || pending,
-                mix: on<HTMLButtonElement, 'click'>('click', () => requestEditor('show-edited-page')),
-                children: [
-                  renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon', 16),
-                  jsx('span', {
-                    id: 'elce-popup-reader-edited-page-label',
-                    className: 'elce-popup-reader__action-label',
-                    children: 'Réafficher la page éditée',
-                  }),
-                ],
-              }),
-              jsx('button', {
-                id: 'elce-popup-reader-sync',
-                type: 'button',
-                title: pending ? 'Synchronisation…' : 'Synchroniser',
-                'aria-label': pending ? 'Synchronisation…' : 'Synchroniser',
-                disabled: snapshot === null || pending,
-                mix: on<HTMLButtonElement, 'click'>('click', () => requestEditor('synchronize')),
-                children: [
-                  renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon', 16),
-                  jsx('span', {
-                    id: 'elce-popup-reader-sync-label',
-                    className: 'elce-popup-reader__action-label',
-                    children: pending ? 'Synchronisation…' : 'Synchroniser',
-                  }),
-                ],
-              }),
-            ],
-          }),
-        ],
-      }),
-      jsx('main', {
-        id: 'elce-popup-reader-main',
-        className: 'elce-popup-reader__main',
-        children: [
-          error === null ? null : jsx('p', { id: 'elce-popup-reader-error', role: 'alert', children: error }),
-          snapshot === null
-            ? jsx('p', { id: 'elce-popup-reader-loading', children: 'Chargement de la lecture…' })
-            : jsx('div', {
-                id: 'elce-player-stage',
-                className: 'elce-player-stage',
-                'aria-label': 'Prévisualisation du document',
-                children: isCatalogPage(snapshot.documentModel, snapshot.selectedPageId)
-                  ? jsx('p', {
-                      id: 'elce-player-catalog-message',
-                      children: 'Cette page est dans le catalogue et n’est pas diffusée.',
-                    })
-                  : null,
-              }),
-        ],
-      }),
-    ],
-  })
+  return <div
+    id="elce-popup-reader"
+    className="elce-popup-reader"
+  >
+    <header
+      id="elce-popup-reader-header"
+      className="elce-popup-reader__header"
+    >
+      <h1
+        id="elce-popup-reader-title"
+      >
+        Lecture Elcé
+      </h1>
+      <div
+        id="elce-popup-reader-actions"
+        className="elce-popup-reader__actions"
+      >
+        <button
+          id="elce-popup-reader-edited-page"
+          type="button"
+          title="Réafficher la page éditée"
+          aria-label="Réafficher la page éditée"
+          disabled={snapshot === null || pending}
+          mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('show-edited-page'))}
+        >
+          {renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon', 16)}
+          <span
+            id="elce-popup-reader-edited-page-label"
+            className="elce-popup-reader__action-label"
+          >
+            Réafficher la page éditée
+          </span>
+        </button>
+        <button
+          id="elce-popup-reader-sync"
+          type="button"
+          title={pending ? 'Synchronisation…' : 'Synchroniser'}
+          aria-label={pending ? 'Synchronisation…' : 'Synchroniser'}
+          disabled={snapshot === null || pending}
+          mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('synchronize'))}
+        >
+          {renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon', 16)}
+          <span
+            id="elce-popup-reader-sync-label"
+            className="elce-popup-reader__action-label"
+          >
+            {pending ? 'Synchronisation…' : 'Synchroniser'}
+          </span>
+        </button>
+      </div>
+    </header>
+    <main
+      id="elce-popup-reader-main"
+      className="elce-popup-reader__main"
+    >
+      {error === null ? null : <p
+        id="elce-popup-reader-error"
+        role="alert"
+      >
+        {error}
+      </p>}
+      {snapshot === null
+        ? <p
+          id="elce-popup-reader-loading"
+        >
+          Chargement de la lecture…
+        </p>
+        : <div
+          id="elce-player-stage"
+          className="elce-player-stage"
+          aria-label="Prévisualisation du document"
+        >
+          {isCatalogPage(snapshot.documentModel, snapshot.selectedPageId)
+            ? <p
+              id="elce-player-catalog-message"
+            >
+              Cette page est dans le catalogue et n’est pas diffusée.
+            </p>
+            : null}
+        </div>}
+    </main>
+  </div>
 }

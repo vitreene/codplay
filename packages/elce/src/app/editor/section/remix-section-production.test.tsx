@@ -2,7 +2,7 @@
 import type { Editor } from '@tiptap/core'
 import { createActor } from 'xstate'
 import { describe, expect, it, vi } from 'vitest'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { render } from 'remix/ui/test'
 import { BDC_TYPE } from '../../../config/document-config'
 import { EditorContextProvider } from '../../remix/editor-context'
@@ -19,19 +19,19 @@ class PendingMediaStore implements ElceDocumentStore {
     return null
   }
 
-  public async saveDocument(): Promise<void> {}
+  public async saveDocument(): Promise<void> { }
 
-  public async saveDocumentAndDeleteMedia(): Promise<void> {}
+  public async saveDocumentAndDeleteMedia(): Promise<void> { }
 
-  public async deleteDocument(): Promise<void> {}
+  public async deleteDocument(): Promise<void> { }
 
-  public async deleteMedia(): Promise<void> {}
+  public async deleteMedia(): Promise<void> { }
 
   public async loadSyncState(documentId: string) {
     return { documentId, remoteRevision: null, uploadedMediaIds: [], status: 'pending' as const }
   }
 
-  public async saveSyncState(): Promise<void> {}
+  public async saveSyncState(): Promise<void> { }
 
   public saveMedia(media: MediaBlob): Promise<void> {
     return new Promise((resolve) => this.pending.push({
@@ -56,11 +56,15 @@ describe('Remix production Section editor', () => {
     controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
-    const rendered = render(jsx(EditorContextProvider, {
-      controller,
-      actions,
-      children: jsx(RemixPageEditor, { onPreview: () => undefined, previewError: null }),
-    }))
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={actions}
+    >
+      <RemixPageEditor
+        onPreview={() => undefined}
+        previewError={null}
+      />
+    </EditorContextProvider>)
 
     const editor = getEditor(rendered.$('.ProseMirror'))
     const editorDom = editor.view.dom

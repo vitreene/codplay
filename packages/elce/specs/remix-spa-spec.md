@@ -9,7 +9,7 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 
 ## Composition
 
-- [`browser-entry.ts`](../src/app/remix/browser-entry.ts) compose le
+- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) compose le
   contrôleur XState, IndexedDB, la synchronisation de projet et une unique
   `EditorActionsFacade` pour l’application auteur. Sur une URL de popup, il ne
   crée pas de contrôleur ou de store auteur.
@@ -36,6 +36,10 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   Carte et Carousel existantes.
 - Les icônes Elcé sont créées à partir de `lucide-static` comme éléments SVG
   natifs ; aucun adaptateur d’icônes React n’est chargé.
+- Les vues Remix sont écrites en JSX dans des fichiers `.tsx`. TypeScript est
+  configuré avec `jsx: "react-jsx"` et `jsxImportSource: "remix/ui"` : le
+  runtime émis est celui de Remix (`remix/ui/jsx-runtime`), sans dépendance ni
+  import React.
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
@@ -64,32 +68,31 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 
 ## Preuves
 
-- [`workspace/page-editor.test.ts`](../src/app/remix/workspace/page-editor.test.ts)
+- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
   monte l’éditeur de production. Il vérifie l’ordre et l’unicité des cinq BDC,
   leurs éditions, les Cartes Carousel et leur réordonnancement, le déplacement
   d’un BDC, le changement de page, la Carte directe Flux/Diapo et la
   restitution des sélections enregistrées. Un parcours importe aussi des
   médias Question, Carte et Carousel par le stockage et la file XState réels.
-- [`workspace/chapter-settings.test.ts`](../src/app/remix/workspace/chapter-settings.test.ts)
+- [`workspace/chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
   vérifie le réglage enregistré d’un chapitre après remontage.
-- [`remix-section-production.test.ts`](../src/app/editor/section/remix-section-production.test.ts)
+- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie dans le même `RemixPageEditor` le contenu, le titre, les commandes
   Tiptap, le dépôt et la persistance d’une image, l’aperçu et le déplacement
   d’ancre, ainsi que la conservation de l’instance Editor et de son DOM.
-- [`project-application.test.ts`](../src/app/remix/project-application.test.ts)
+- [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie le montage de l’éditeur natif dans `ProjectApplication` et le
   remplacement de la zone centrale après sélection d’un chapitre.
 - [`remix-spa-router.test.ts`](../src/app/remix/remix-spa-router.test.ts)
   vérifie que l’URL de popup rend le lecteur sans monter l’application auteur.
-- [`popup-player.test.ts`](../src/app/player/popup-player.test.ts) exerce le
+- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) exerce le
   protocole de messages et le chargement du média serveur sans Blob IndexedDB.
 - Brave DevTools, le 8 octobre 2026, a ouvert `npm run dev:elce` sur
   `http://localhost:5176` puisque `localhost:5175` était occupé. La route a
-  rendu la liste des projets de l’API réutilisée. Dans le même contexte, Projet
-  1 a été ouvert et son popup natif a affiché la Diapo sélectionnée avec cinq
-  images complètes chargées depuis les URL API ; « Réafficher la page éditée »
-  a renvoyé cette page. Les consoles étaient vides et aucun asset React,
-  ReactDOM, `@react-refresh` ou `react/jsx-runtime` n’a été demandé.
+  rendu la liste des projets et l’éditeur depuis les entrées `.tsx`; les
+  16 modules de composants Remix ont été chargés avec succès. La console était
+  vide et aucun asset React ou ReactDOM n’a été demandé. Le parcours précédent
+  du même portage a aussi affiché le lecteur popup et ses cinq images serveur.
 - Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
-  bundle JavaScript fait `1 314,22 kB` minifiés (`372,16 kB` gzip) et conserve
+  bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
   l’avertissement Vite au-dessus de `500 kB`.

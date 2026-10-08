@@ -1,5 +1,5 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
-import { jsx } from 'remix/ui/jsx-runtime'
+
 import { Images, List } from 'lucide-static'
 import type { SnapshotFrom } from 'xstate'
 import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
@@ -19,7 +19,9 @@ import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from '.
 export function ProjectApplication(handle: Handle) {
   const { controller, actions } = handle.context.get(EditorContextProvider)
   if (controller === null || actions === null) {
-    return () => jsx('div', { id: 'elce-remix-project-app' })
+    return () => <div
+      id="elce-remix-project-app"
+    />
   }
 
   let view = selectProjectView(controller.getSnapshot())
@@ -143,129 +145,145 @@ function renderApplication(
 ): RemixNode {
   const editorVisible = view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active'
   const currentName = view.activeProject === null ? null : view.document.data.name
-  return jsx('div', {
-    id: 'elce-remix-project-app',
-    children: [
-      jsx('header', {
-        id: 'elce-project-header',
-        className: 'elce-project-header',
-        children: [
-          jsx('div', {
-            id: 'elce-project-header-brand',
-          className: 'elce-project-header-brand',
-            children: [
-              jsx('strong', { id: 'elce-project-brand-name', children: 'Elcé' }),
-              editorVisible ? renderWorkspaceAccess(workspace) : null,
-            ],
-          }),
-          jsx('details', {
-            id: 'elce-project-menu',
-            className: 'elce-project-menu',
-            children: [
-              jsx('summary', {
-                id: 'elce-project-menu-trigger',
-                children: currentName === null ? 'Projets' : currentName,
-              }),
-              jsx('div', {
-                id: 'elce-project-menu-panel',
-                className: 'elce-project-menu-panel',
-                children: [
-                  jsx('button', {
-                    id: 'elce-project-create',
-                    type: 'button',
-                    disabled: view.projectStatus === 'busy' || view.projectStatus === 'loading',
-                    mix: on<HTMLButtonElement, 'click'>('click', () => actions.createProject()),
-                    children: 'Nouveau projet',
-                  }),
-                  jsx('button', {
-                    id: 'elce-project-refresh',
-                    type: 'button',
-                    disabled: view.projectStatus === 'busy' || view.projectStatus === 'loading',
-                    mix: on<HTMLButtonElement, 'click'>('click', () => actions.refreshProjects()),
-                    children: 'Actualiser',
-                  }),
-                  view.activeProject === null ? null : jsx('button', {
-                    id: 'elce-project-close',
-                    type: 'button',
-                    disabled: view.projectStatus === 'busy',
-                    mix: on<HTMLButtonElement, 'click'>('click', () => actions.closeProject()),
-                    children: 'Fermer le projet',
-                  }),
-                  view.activeProject === null ? null : jsx('form', {
-                    id: 'elce-project-rename-form',
-                    className: 'elce-project-rename-form',
-                    mix: on<HTMLFormElement, 'submit'>('submit', (event) => {
-                      event.preventDefault()
-                      const form = event.currentTarget
-                      const name = new FormData(form).get('projectName')
-                      if (typeof name === 'string' && name.trim() !== '') actions.renameActiveProject(name.trim())
-                    }),
-                    children: [
-                      jsx('label', { id: 'elce-project-rename-label', htmlFor: 'elce-project-rename-input', children: 'Nom du projet' }),
-                      jsx('input', {
-                        id: 'elce-project-rename-input',
-                        name: 'projectName',
-                        type: 'text',
-                        defaultValue: currentName ?? '',
-                        maxLength: 120,
-                      }),
-                      jsx('button', { id: 'elce-project-rename-submit', type: 'submit', children: 'Renommer' }),
-                    ],
-                  }),
-                  jsx('ul', {
-                    id: 'elce-project-menu-list',
-                    className: 'elce-project-list elce-project-list--menu',
-                    children: projectRows(view, actions, 'menu'),
-                  }),
-                ],
-              }),
-            ],
-          }),
-          jsx('span', {
-            id: 'elce-project-sync-status',
-            className: 'elce-project-sync-status',
-            role: 'status',
-            'aria-live': 'polite',
-            children: editorVisible ? syncStatusLabel(view.syncStatus) : projectStatusLabel(view.projectStatus),
-          }),
-        ],
-      }),
-      editorVisible ? null : renderProjectSelection(view, actions),
-      renderEditorWorkspace({
-        view: view.editor,
-        actions,
-        pageEditorHost: editorVisible && view.editor.selectedChapter === undefined
-          ? jsx(RemixPageEditor, { onPreview: workspace.onPreview, previewError: workspace.previewError })
-          : null,
-        responsivePanel: workspace.responsivePanel,
-        dropTarget: workspace.dropTarget,
-        visible: editorVisible,
-        onSetResponsivePanel: workspace.setResponsivePanel,
-        onSetDropTarget: workspace.setDropTarget,
-        onSetDraggedEntry: workspace.setDraggedEntry,
-        getDraggedEntry: workspace.getDraggedEntry,
-        onPreview: workspace.onPreview,
-        previewError: workspace.previewError,
-        onMovePage: workspace.movePage,
-        onMoveChapter: workspace.moveChapter,
-      }),
-    ],
-  })
+  return <div
+    id="elce-remix-project-app"
+  >
+    <header
+      id="elce-project-header"
+      className="elce-project-header"
+    >
+      <div
+        id="elce-project-header-brand"
+        className="elce-project-header-brand"
+      >
+        <strong
+          id="elce-project-brand-name"
+        >
+          Elcé
+        </strong>
+        {editorVisible ? renderWorkspaceAccess(workspace) : null}
+      </div>
+      <details
+        id="elce-project-menu"
+        className="elce-project-menu"
+      >
+        <summary
+          id="elce-project-menu-trigger"
+        >
+          {currentName === null ? 'Projets' : currentName}
+        </summary>
+        <div
+          id="elce-project-menu-panel"
+          className="elce-project-menu-panel"
+        >
+          <button
+            id="elce-project-create"
+            type="button"
+            disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => actions.createProject())}
+          >
+            Nouveau projet
+          </button>
+          <button
+            id="elce-project-refresh"
+            type="button"
+            disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => actions.refreshProjects())}
+          >
+            Actualiser
+          </button>
+          {view.activeProject === null ? null : <button
+            id="elce-project-close"
+            type="button"
+            disabled={view.projectStatus === 'busy'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => actions.closeProject())}
+          >
+            Fermer le projet
+          </button>}
+          {view.activeProject === null ? null : <form
+            id="elce-project-rename-form"
+            className="elce-project-rename-form"
+            mix={on<HTMLFormElement, 'submit'>('submit', (event) => {
+              event.preventDefault()
+              const form = event.currentTarget
+              const name = new FormData(form).get('projectName')
+              if (typeof name === 'string' && name.trim() !== '') actions.renameActiveProject(name.trim())
+            })}
+          >
+            <label
+              id="elce-project-rename-label"
+              htmlFor="elce-project-rename-input"
+            >
+              Nom du projet
+            </label>
+            <input
+              id="elce-project-rename-input"
+              name="projectName"
+              type="text"
+              defaultValue={currentName ?? ''}
+              maxLength={120}
+            />
+            <button
+              id="elce-project-rename-submit"
+              type="submit"
+            >
+              Renommer
+            </button>
+          </form>}
+          <ul
+            id="elce-project-menu-list"
+            className="elce-project-list elce-project-list--menu"
+          >
+            {projectRows(view, actions, 'menu')}
+          </ul>
+        </div>
+      </details>
+      <span
+        id="elce-project-sync-status"
+        className="elce-project-sync-status"
+        role="status"
+        aria-live="polite"
+      >
+        {editorVisible ? syncStatusLabel(view.syncStatus) : projectStatusLabel(view.projectStatus)}
+      </span>
+    </header>
+    {editorVisible ? null : renderProjectSelection(view, actions)}
+    {renderEditorWorkspace({
+      view: view.editor,
+      actions,
+      pageEditorHost: editorVisible && view.editor.selectedChapter === undefined
+        ? <RemixPageEditor
+          onPreview={workspace.onPreview}
+          previewError={workspace.previewError}
+        />
+        : null,
+      responsivePanel: workspace.responsivePanel,
+      dropTarget: workspace.dropTarget,
+      visible: editorVisible,
+      onSetResponsivePanel: workspace.setResponsivePanel,
+      onSetDropTarget: workspace.setDropTarget,
+      onSetDraggedEntry: workspace.setDraggedEntry,
+      getDraggedEntry: workspace.getDraggedEntry,
+      onPreview: workspace.onPreview,
+      previewError: workspace.previewError,
+      onMovePage: workspace.movePage,
+      onMoveChapter: workspace.moveChapter,
+    })}
+  </div>
 }
 
 /** Renders the responsive panel commands beside the Elcé brand. */
 function renderWorkspaceAccess(
   workspace: ProjectApplicationWorkspaceState,
 ): RemixNode {
-  return jsx('nav', {
-    id: 'elce-responsive-panel-access',
-    className: 'elce-responsive-panel-access',
-    'aria-label': 'Panneaux de l’éditeur',
-    children: [
-      renderPanelToggle('outline', workspace.responsivePanel, workspace.setResponsivePanel),
-      renderPanelToggle('properties', workspace.responsivePanel, workspace.setResponsivePanel),
-    ],
-  })
+  return <nav
+    id="elce-responsive-panel-access"
+    className="elce-responsive-panel-access"
+    aria-label="Panneaux de l’éditeur"
+  >
+    {renderPanelToggle('outline', workspace.responsivePanel, workspace.setResponsivePanel)}
+    {renderPanelToggle('properties', workspace.responsivePanel, workspace.setResponsivePanel)}
+  </nav>
 }
 
 /** Renders one panel toggle using its documented breakpoint and accessible label. */
@@ -283,17 +301,18 @@ function renderPanelToggle(
   const className = responsivePanel === panel
     ? `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel} elce-responsive-panel-toggle--open`
     : `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel}`
-  return jsx('button', {
-    id,
-    className,
-    type: 'button',
-    'aria-label': label,
-    title,
-    'aria-expanded': responsivePanel === panel,
-    'aria-controls': targetId,
-    mix: on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(panel, id)),
-    children: renderLucideIcon(icon, `${id}-icon`, 18),
-  })
+  return <button
+    id={id}
+    className={className}
+    type="button"
+    aria-label={label}
+    title={title}
+    aria-expanded={responsivePanel === panel}
+    aria-controls={targetId}
+    mix={on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(panel, id))}
+  >
+    {renderLucideIcon(icon, `${id}-icon`, 18)}
+  </button>
 }
 
 /** Returns the close control that should receive focus after a drawer opens. */
@@ -308,48 +327,59 @@ function panelCloseButtonId(panel: Exclude<ResponsivePanel, null>): string {
 
 /** Renders the selection surface when no project is actively being edited. */
 function renderProjectSelection(view: ProjectApplicationView, actions: EditorActionsFacade): RemixNode {
-  return jsx('main', {
-    id: 'elce-project-selection',
-    className: 'elce-project-selection',
-    children: [
-      jsx('section', {
-        id: 'elce-project-selection-panel',
-        className: 'elce-project-selection-panel',
-        children: [
-          jsx('h1', { id: 'elce-project-selection-title', children: projectSelectionTitle(view) }),
-          view.projectError === null ? null : jsx('p', {
-            id: 'elce-project-error',
-            className: 'elce-project-error',
-            role: 'alert',
-            children: view.projectError,
-          }),
-          view.activeProject !== null && view.editAccess !== 'active'
-            ? jsx('p', {
-                id: 'elce-project-access-waiting',
-                role: 'status',
-                children: `En attente de l’accès au projet « ${view.activeProject.name} ». Fermez son autre fenêtre si elle ne libère pas l’accès.`,
-              })
-            : null,
-          view.projectStatus === 'loading' || view.projectStatus === 'busy'
-            ? jsx('p', { id: 'elce-project-loading', role: 'status', children: 'Chargement…' })
-            : null,
-          jsx('button', {
-            id: 'elce-project-create-empty',
-            className: 'elce-project-primary-action',
-            type: 'button',
-            disabled: view.projectStatus === 'busy' || view.projectStatus === 'loading',
-            mix: on<HTMLButtonElement, 'click'>('click', () => actions.createProject()),
-            children: 'Créer un projet',
-          }),
-          jsx('ul', {
-            id: 'elce-project-selection-list',
-            className: 'elce-project-list',
-            children: projectRows(view, actions, 'selection'),
-          }),
-        ],
-      }),
-    ],
-  })
+  return <main
+    id="elce-project-selection"
+    className="elce-project-selection"
+  >
+    <section
+      id="elce-project-selection-panel"
+      className="elce-project-selection-panel"
+    >
+      <h1
+        id="elce-project-selection-title"
+      >
+        {projectSelectionTitle(view)}
+      </h1>
+      {view.projectError === null ? null : <p
+        id="elce-project-error"
+        className="elce-project-error"
+        role="alert"
+      >
+        {view.projectError}
+      </p>}
+      {view.activeProject !== null && view.editAccess !== 'active'
+        ? <p
+          id="elce-project-access-waiting"
+          role="status"
+        >
+          {`En attente de l’accès au projet « ${view.activeProject.name} ». Fermez son autre fenêtre si elle ne libère pas l’accès.`}
+        </p>
+        : null}
+      {view.projectStatus === 'loading' || view.projectStatus === 'busy'
+        ? <p
+          id="elce-project-loading"
+          role="status"
+        >
+          Chargement…
+        </p>
+        : null}
+      <button
+        id="elce-project-create-empty"
+        className="elce-project-primary-action"
+        type="button"
+        disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+        mix={on<HTMLButtonElement, 'click'>('click', () => actions.createProject())}
+      >
+        Créer un projet
+      </button>
+      <ul
+        id="elce-project-selection-list"
+        className="elce-project-list"
+      >
+        {projectRows(view, actions, 'selection')}
+      </ul>
+    </section>
+  </main>
 }
 
 /** Renders project open and delete commands for one server-owned list. */
@@ -357,29 +387,35 @@ function projectRows(view: ProjectApplicationView, actions: EditorActionsFacade,
   return view.projects.map((project) => {
     const isActive = view.activeProject?.id === project.id
     const prefix = `elce-project-${surface}-${project.id}`
-    return jsx('li', {
-      id: `${prefix}-row`,
-      className: isActive ? 'elce-project-list-row elce-project-list-row--active' : 'elce-project-list-row',
-      children: [
-        jsx('span', { id: `${prefix}-name`, children: isActive ? view.document.data.name : project.name }),
-        jsx('button', {
-          id: `${prefix}-open`,
-          type: 'button',
-          disabled: isActive || view.projectStatus === 'busy' || view.projectStatus === 'loading',
-          mix: on<HTMLButtonElement, 'click'>('click', () => actions.openProject(project.id)),
-          children: isActive ? 'Ouvert' : 'Ouvrir',
-        }),
-        jsx('button', {
-          id: `${prefix}-delete`,
-          type: 'button',
-          disabled: view.projectStatus === 'busy' || view.projectStatus === 'loading',
-          mix: on<HTMLButtonElement, 'click'>('click', () => {
-            if (window.confirm(`Supprimer le projet « ${project.name} » ?`)) actions.deleteProject(project.id)
-          }),
-          children: 'Supprimer',
-        }),
-      ],
-    }, project.id)
+    return <li
+      key={project.id}
+      id={`${prefix}-row`}
+      className={isActive ? 'elce-project-list-row elce-project-list-row--active' : 'elce-project-list-row'}
+    >
+      <span
+        id={`${prefix}-name`}
+      >
+        {isActive ? view.document.data.name : project.name}
+      </span>
+      <button
+        id={`${prefix}-open`}
+        type="button"
+        disabled={isActive || view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+        mix={on<HTMLButtonElement, 'click'>('click', () => actions.openProject(project.id))}
+      >
+        {isActive ? 'Ouvert' : 'Ouvrir'}
+      </button>
+      <button
+        id={`${prefix}-delete`}
+        type="button"
+        disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+        mix={on<HTMLButtonElement, 'click'>('click', () => {
+          if (window.confirm(`Supprimer le projet « ${project.name} » ?`)) actions.deleteProject(project.id)
+        })}
+      >
+        Supprimer
+      </button>
+    </li>
   })
 }
 

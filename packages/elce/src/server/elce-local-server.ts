@@ -11,7 +11,7 @@ import { createElceHttpServer } from './elce-http-server'
 const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const MONOREPO_ROOT = resolve(ELCE_PACKAGE_ROOT, '../..')
 const ASSET_BASE_PATH = '/assets'
-const BROWSER_ENTRY = 'packages/elce/src/app/remix/browser-entry.ts'
+const BROWSER_ENTRY = 'packages/elce/src/app/remix/browser-entry.tsx'
 const STYLE_FILES = [
   'packages/elce/src/app/layout/app-layout.css',
   'packages/elce/src/app/editor/card/card-editor.css',
