@@ -2,8 +2,9 @@
 
 ## Statut
 
-**Machine métier implémentée et vérifiée. Le raccord des actions des BDC de
-résultat et de l’affichage des Questions dans le player reste à réaliser.**
+**Machine métier implémentée et vérifiée. Le calcul de l’issue et le montage
+de la branche correspondante sont raccordés au player ; les actions des BDC
+Résultat et la visibilité des réponses de Question restent à réaliser.**
 
 ## Contrat
 
@@ -33,10 +34,14 @@ L’action choisie dans la branche Réussite du BDC Résultat enverra
 `SUCCESS.REPLAY` uniquement si l’auteur a choisi la relecture. Aucun événement
 de relecture avec réponses n’existe depuis `failure`.
 
-La machine expose ce contrat métier ; le player n’est pas encore relié à son
-signal de visibilité. Les Questions, les réponses visibles et les actions des
-branches du BDC Résultat devront être raccordées au même état lors de
-l’intégration.
+La machine expose ce contrat métier. Dans le player, Sighty conserve les
+réponses validées dans son contexte, termine la machine après l’admission de la
+page de résultat et envoie l’événement de branche correspondant à la scène ; la
+story CodPlay de cette branche monte le BDC à son repère dans l’article. Les
+événements de bouton Recommencer/Relire ne sont pas encore consommés par le
+player, et `shouldRevealAnswers` ne pilote pas encore le rendu des Questions.
+Ces deux raccords restent requis pour intégrer entièrement les tentatives et
+la relecture.
 
 ## Preuves
 

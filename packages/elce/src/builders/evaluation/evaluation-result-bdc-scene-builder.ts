@@ -5,43 +5,82 @@ import type { Bdc, Page } from '../../domain/document/document-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 
 export type EvaluationResultBdcSceneBuild = Readonly<{
-  readonly markup: string
-  readonly story: StoryDoc<string>
+  readonly mountPartId: string
+  readonly mountMarkup: string
+  readonly stories: readonly StoryDoc<string>[]
 }>
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 
-/** Builds the shared CodPlay markup and outcome story for a Result BDC. */
+/** Builds one CodPlay story per outcome for a Result BDC. */
 export function buildEvaluationResultBdcScene(page: Page, bdc: Bdc): EvaluationResultBdcSceneBuild {
   if (bdc.evaluationResult == null) throw new Error(`Le bdc Résultat ${bdc.id} n’a pas de contenu.`)
   const prefix = `${page.id}:${bdc.id}`
   const partId = `${prefix}:evaluation-result`
-  const card = cardPresetBuilder.build(bdc.presetId, `${page.id}-${bdc.id}`, partId)
   const result = bdc.evaluationResult
 
   return {
-    markup: card.markup,
-    story: {
-      id: `${page.id}-${bdc.id}`,
-      persos: [
-        {
-          id: `${bdc.id}-result-card`,
-          type: 'layout',
-          initial: {
-            move: '@root',
-            className: 'elce-card--evaluation-result elce-evaluation-result--pending',
-            markup: card.markup,
-          },
-          actions: {
-            [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { className: 'elce-card--evaluation-result elce-evaluation-result--success' },
-            [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { className: 'elce-card--evaluation-result elce-evaluation-result--failure' },
-          },
-        },
-        ...resultBranchPersos(page, bdc, EVALUATION_RESULT_BRANCH.SUCCESS, result.success, card.zonePartIds, prefix),
-        ...resultBranchPersos(page, bdc, EVALUATION_RESULT_BRANCH.FAILURE, result.failure, card.zonePartIds, prefix),
-      ],
-    },
+    mountPartId: partId,
+    mountMarkup: `<!-- data-part="${partId}" -->`,
+    stories: [
+      createEvaluationResultBranchStory(page, bdc, partId, EVALUATION_RESULT_BRANCH.SUCCESS, result.success, prefix),
+      createEvaluationResultBranchStory(page, bdc, partId, EVALUATION_RESULT_BRANCH.FAILURE, result.failure, prefix),
+    ],
   }
+}
+
+/** Builds the requested result branch as an initially unmounted CodPlay story. */
+function createEvaluationResultBranchStory(
+  page: Page,
+  bdc: Bdc,
+  mountPartId: string,
+  branch: EvaluationResultBranch,
+  content: NonNullable<Bdc['evaluationResult']>['success'],
+  prefix: string,
+): StoryDoc<string> {
+  const branchPrefix = `${prefix}:${branch}`
+  const rootId = `${page.id}-${bdc.id}-${branch}`
+  const card = cardPresetBuilder.build(bdc.presetId, rootId, branchPrefix, {
+    branch: resultBranchMarkup(rootId, branchPrefix, branch),
+  })
+  const eventName = branch === EVALUATION_RESULT_BRANCH.SUCCESS
+    ? ELCE_EVENTS.EVALUATION_RESULT_SUCCESS
+    : ELCE_EVENTS.EVALUATION_RESULT_FAILURE
+
+  return {
+    id: rootId,
+    persos: [
+      {
+        id: `${bdc.id}-${branch}-result-card`,
+        type: 'layout',
+        initial: {
+          move: '@off',
+          className: 'elce-card--evaluation-result',
+          markup: card.markup,
+        },
+        actions: {
+          [eventName]: { move: { target: mountPartId } },
+        },
+      },
+      ...resultBranchPersos(page, bdc, branch, content, card.zonePartIds, branchPrefix),
+    ],
+  }
+}
+
+/** Creates the one visible section and its branch-specific CodPlay anchors. */
+function resultBranchMarkup(
+  rootId: string,
+  partPrefix: string,
+  branch: EvaluationResultBranch,
+): string {
+  const label = EVALUATION_RESULT_CONFIG[branch].label
+  return `
+    <section id="${rootId}-section" class="elce-evaluation-result__branch elce-evaluation-result__branch--${branch}">
+      <h2 id="${rootId}-title">${label}</h2>
+      <!-- data-part="${partPrefix}:${branch}-message" -->
+      <!-- data-part="${partPrefix}:${branch}-action" -->
+    </section>
+  `
 }
 
 /** Creates the message and optional action button for one Result branch. */

@@ -161,10 +161,12 @@ describe('Elcé Flux scene builder', () => {
       initial: {
         className: expect.stringContaining('elce-flux-card-root'),
         style: expect.objectContaining({
+          opacity: 1,
           position: 'absolute',
           'position-anchor': anchorNameFor('page-a:bdc-image-1:anchor'),
           width: '100%',
           aspectRatio: '4 / 3',
+          height: 'auto',
         }),
         move: { target: 'page-a:bdc-image-1:anchor' },
       },
@@ -450,8 +452,10 @@ describe('Elcé Flux scene builder', () => {
     ))
     const emptyPage = withResult.pages.find((candidate) => candidate.id === pageCommand.pageId)!
     const emptyBuild = buildFluxScene(emptyPage, withResult.bdcs)
-    const emptyStory = emptyBuild.sceneDoc.stories[`${pageCommand.pageId}-bdc-result-1`]
-    expect(emptyStory?.persos.some((perso) => perso.id.endsWith('-message'))).toBe(false)
+    const emptySuccessStory = emptyBuild.sceneDoc.stories[`${pageCommand.pageId}-bdc-result-1-success`]
+    const emptyFailureStory = emptyBuild.sceneDoc.stories[`${pageCommand.pageId}-bdc-result-1-failure`]
+    expect(emptySuccessStory?.persos.some((perso) => perso.id.endsWith('-message'))).toBe(false)
+    expect(emptyFailureStory?.persos.some((perso) => perso.id.endsWith('-message'))).toBe(false)
     const configured = applyDocumentCommand(withResult, {
       type: 'bdc.evaluation-result.update',
       bdcId: 'bdc-result-1',
@@ -462,11 +466,19 @@ describe('Elcé Flux scene builder', () => {
     })
     const page = configured.pages.find((candidate) => candidate.id === pageCommand.pageId)!
     const build = buildFluxScene(page, configured.bdcs)
-    const resultStory = build.sceneDoc.stories[`${page.id}-bdc-result-1`]
-    const resultPersos = resultStory?.persos ?? []
-    const resultLayout = resultPersos[0]
-    const successAction = resultPersos.find((perso) => perso.id === 'bdc-result-1-success-action')
-    const failureAction = resultPersos.find((perso) => perso.id === 'bdc-result-1-failure-action')
+    const successStory = build.sceneDoc.stories[`${page.id}-bdc-result-1-success`]
+    const failureStory = build.sceneDoc.stories[`${page.id}-bdc-result-1-failure`]
+    const pageStory = build.sceneDoc.stories[`${page.id}-page`]
+    const successPersos = successStory?.persos ?? []
+    const failurePersos = failureStory?.persos ?? []
+    const successLayout = successPersos[0]
+    const failureLayout = failurePersos[0]
+    const articleInitial = pageStory?.persos.find((perso) => perso.id === `${page.id}-article`)?.initial
+    const articleMarkup = articleInitial !== undefined && 'markup' in articleInitial ? String(articleInitial.markup) : ''
+    const mountPartId = `${page.id}:bdc-result-1:evaluation-result`
+    const mountMarker = `<!-- data-part="${mountPartId}" -->`
+    const successAction = successPersos.find((perso) => perso.id === 'bdc-result-1-success-action')
+    const failureAction = failurePersos.find((perso) => perso.id === 'bdc-result-1-failure-action')
     const codplay = new CodPlay({
       pauseOnDocumentHidden: false,
       engine: {
@@ -476,18 +488,32 @@ describe('Elcé Flux scene builder', () => {
       },
     })
 
-    expect(resultPersos.map((perso) => perso.id)).toEqual([
-      'bdc-result-1-result-card',
+    expect(successPersos.map((perso) => perso.id)).toEqual([
+      'bdc-result-1-success-result-card',
       'bdc-result-1-success-message',
       'bdc-result-1-success-action',
+    ])
+    expect(failurePersos.map((perso) => perso.id)).toEqual([
+      'bdc-result-1-failure-result-card',
       'bdc-result-1-failure-message',
       'bdc-result-1-failure-action',
     ])
-    expect(resultLayout?.initial).toMatchObject({ className: 'elce-card--evaluation-result elce-evaluation-result--pending' })
-    expect(resultLayout?.actions).toEqual({
-      [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { className: 'elce-card--evaluation-result elce-evaluation-result--success' },
-      [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { className: 'elce-card--evaluation-result elce-evaluation-result--failure' },
+    expect(successLayout?.initial).toMatchObject({
+      move: '@off',
+      markup: expect.stringContaining('elce-evaluation-result__branch--success'),
     })
+    expect(successLayout?.actions).toEqual({
+      [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { move: { target: mountPartId } },
+    })
+    expect(failureLayout?.initial).toMatchObject({
+      move: '@off',
+      markup: expect.stringContaining('elce-evaluation-result__branch--failure'),
+    })
+    expect(failureLayout?.actions).toEqual({
+      [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { move: { target: mountPartId } },
+    })
+    expect(articleMarkup.split(mountMarker)).toHaveLength(2)
+    expect(articleMarkup).not.toContain('elce-card--evaluation-result')
     expect(successAction?.emit?.click).toMatchObject({
       event: {
         name: ELCE_EVENTS.EVALUATION_RESULT_ACTION,

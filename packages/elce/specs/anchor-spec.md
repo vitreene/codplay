@@ -49,7 +49,10 @@ Le bdc commence après cette ligne et la marge supérieure. Les mots qui suivent
 l’ancre restent dans le flux normal : aucun retour forcé n’est exporté.
 La variable `--elce-anchor-padding` conserve le ratio métier. L’aperçu et le
 perso image utilisent `object-fit:cover`; le ratio du cadre est déduit de ce
-même padding. Dans le player,
+même padding. Pour une Carte ancrée au layout Photo, la racine suit ce ratio
+avec une hauteur automatique ; elle ne reprend pas la hauteur `100 %` utilisée
+par ce preset dans un Carousel. La réserve et le cadre gardent ainsi le même
+ratio, auquel s’ajoutent les marges configurées. Dans le player,
 le composant CodPlay `layout` replace le slot existant après la fin de la ligne
 visuelle et recalcule sa réservation quand la largeur change ; aucun code Elcé
 ne mesure ou ne déplace un nœud après le montage CodPlay. Le parseur statique
@@ -171,6 +174,21 @@ texte ou le média placé dessous.
   laisse passer le pointeur, et son point central atteint le contenu dessous.
   Le sélecteur restitue `photo-basic` et le contrôle d’image `cover`. La console
   Brave ne rapporte ni erreur ni avertissement.
+- Le 8 octobre 2026, Brave DevTools reproduit le défaut dans la preview réelle
+  de Page A du Projet 1, sans modifier le document : le slot réservait
+  `918 × 1462,75 px`, tandis que la racine Photo et son image ne faisaient que
+  `918 × 19 px`. La règle du preset `height:100%` se résolvait sur la ligne de
+  texte. La racine ancrée reçoit maintenant une hauteur automatique et son
+  aspect ratio détermine son cadre. Après rechargement, le cadre et l’image
+  mesurent `918 × 1430,75 px` dans la réserve, avec `16 px` de marge au-dessus
+  et au-dessous. À `960 px` de largeur de fenêtre, ils suivent le resize à
+  `598 × 932,01 px` ; le ratio du cadre (`0,64163`) correspond au ratio source
+  (`0,64162`). L’image répond `200` depuis l’URL serveur et garde le cadrage
+  `object-fit:cover` ; la console reste vide.
+- `flux-scene-builder.test.ts` vérifie le style de la scène et
+  `elce-player-composition.test.ts` celui du perso monté dans la composition
+  réelle. Les 35 tests ciblés et les 206 tests Elcé passent ; le typecheck et le
+  build réussissent.
 - [`flux-anchor-player-markup.test.ts`](../src/builders/flux/flux-anchor-player-markup.test.ts)
   vérifie que la projection conserve le texte, remplace l’ancre d’édition par
   un slot de flux inline à largeur nulle et conserve la cible logique du bdc.

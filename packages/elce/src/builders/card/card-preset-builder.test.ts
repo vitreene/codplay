@@ -22,8 +22,12 @@ describe('ElceCardPresetBuilder', () => {
 
   it('resolves every fixed preset to unique markup with identified elements and comment insertion anchors', () => {
     for (const preset of Object.values(CARD_PRESETS)) {
-      const first = builder.build(preset.id, `${preset.id}-first`, `${preset.id}:first`)
-      const second = builder.build(preset.id, `${preset.id}-second`, `${preset.id}:second`)
+      /** Supplies concrete branch markup for the dynamic Result preset slot. */
+      const createPresetContent = (prefix: string): Readonly<Record<string, string>> => preset.id === DEFAULT_PRESET_ID.EVALUATION_RESULT
+        ? { branch: `<section id="${prefix}-branch">${preset.zones.map((zone) => `<!-- data-part="${prefix}:${zone.id}" -->`).join('')}</section>` }
+        : {}
+      const first = builder.build(preset.id, `${preset.id}-first`, `${preset.id}:first`, createPresetContent(`${preset.id}:first`))
+      const second = builder.build(preset.id, `${preset.id}-second`, `${preset.id}:second`, createPresetContent(`${preset.id}:second`))
       const firstElements = Array.from(first.markup.matchAll(/<([a-z][\w-]*)([^>]*)>/gi))
 
       expect(first.markup).not.toContain('{{')

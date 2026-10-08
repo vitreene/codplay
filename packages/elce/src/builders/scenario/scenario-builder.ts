@@ -16,7 +16,14 @@ import {
 } from '../../config/document-config'
 import type { ElceDocument } from '../../domain/document/document-model'
 import type { Chapter, Page } from '../../domain/document/document-types'
-import { BDC_TYPE, CHAPTER_TYPE, DEFAULT_EVALUATION_THRESHOLD } from '../../config/document-config'
+import {
+  BDC_TYPE,
+  CHAPTER_TYPE,
+  DEFAULT_EVALUATION_SETTINGS,
+  DEFAULT_EVALUATION_THRESHOLD,
+} from '../../config/document-config'
+import { EvaluationMachine } from '../../domain/evaluation/evaluation-machine'
+import type { EvaluationMachineState } from '../../domain/evaluation/evaluation-machine-types'
 import { ElceChapterEvaluation } from '../../domain/evaluation/chapter-evaluation'
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
 import type { ElceSceneKey, ElceSlotName } from './scenario-builder-types'
@@ -33,6 +40,7 @@ type ElcePresentation = Readonly<{
 type ElceProgressContext = Readonly<{
   readonly finishedPages?: readonly string[]
   readonly questionResults?: Readonly<Record<string, boolean>>
+  readonly evaluationStates?: Readonly<Record<string, EvaluationMachineState>>
 }>
 
 const chapterEvaluation = new ElceChapterEvaluation()
@@ -75,7 +83,7 @@ export function buildScenario(
       views: {
         [ELCE_SCENARIO.ROOT_VIEW]: {
           action: ELCE_SCENARIO_HANDLERS.REFRESH_PRESENTATION,
-          actions: createScenarioActions(pageIds, pagePaths),
+      actions: createScenarioActions(pageIds, pagePaths),
           view: {
             scene: ELCE_SCENARIO.LAYOUT_SCENE,
             slots: {
@@ -103,7 +111,8 @@ export function buildScenario(
       [ELCE_SCENARIO_HANDLERS.OPEN_MENU_DRAWER]: openMenuDrawer,
       [ELCE_SCENARIO_HANDLERS.CLOSE_MENU_DRAWER]: closeMenuDrawer,
       [ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED]: markPageFinished,
-      [ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT]: recordQuestionResult,
+      [ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT]: createRecordQuestionResult(document),
+      [ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT]: createRefreshEvaluationResult(document),
     },
     guards: {
       [ELCE_SCENARIO_HANDLERS.PAGE_ACCESS]: createPageAccessGuard(pageIds, questionBdcByPage),
@@ -142,8 +151,14 @@ function createScenarioViews(
     accessBy: ELCE_SCENARIO_HANDLERS.PAGE_ACCESS,
     exitBy: ELCE_SCENARIO_HANDLERS.PAGE_EXIT,
     actions: {
-      [ELCE_EVENTS.NAVIGATION_NEXT]: { go: { direction: 'next' } },
-      [ELCE_EVENTS.NAVIGATION_PREVIOUS]: { go: { direction: 'previous' } },
+      [ELCE_EVENTS.NAVIGATION_NEXT]: {
+        go: { direction: 'next' },
+        action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
+      },
+      [ELCE_EVENTS.NAVIGATION_PREVIOUS]: {
+        go: { direction: 'previous' },
+        action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
+      },
       [ELCE_EVENTS.PAGE_FINISHED]: { action: ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED },
     [ELCE_EVENTS.QUESTION_ANSWERED]: { action: ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT },
   },
@@ -273,7 +288,10 @@ function createScenarioActions(
     [ELCE_EVENTS.MENU_DRAWER_CLOSE_REQUEST]: { action: ELCE_SCENARIO_HANDLERS.CLOSE_MENU_DRAWER },
   }
   for (const pageId of pageIds) {
-    actions[menuEvent(pageId)] = { go: { path: pagePathFromTable(pagePaths, pageId) } }
+    actions[menuEvent(pageId)] = {
+      go: { path: pagePathFromTable(pagePaths, pageId) },
+      action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
+    }
   }
   return actions
 }
@@ -317,16 +335,90 @@ async function markPageFinished(context: SightyActionContext<ElceSceneKey, ElceS
   await refreshPresentation(context)
 }
 
-/** Stores the validated Question result in Sighty progress and refreshes navigation. */
-async function recordQuestionResult(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
-  const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
-  if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
-  const payload = context.event.data as { pageId?: unknown; bdcId?: unknown; isCorrect?: unknown } | undefined
-  const expectedBdcId = readQuestionBdcIds(context).find((candidate) => candidate.pageId === pageId)?.bdcId
-  if (payload?.pageId !== pageId || payload.bdcId !== expectedBdcId || typeof payload.isCorrect !== 'boolean') return
-  const questionResults = readQuestionResults(context.context)
-  await context.updateContext({ questionResults: { ...questionResults, [pageId]: payload.isCorrect } })
-  await refreshPresentation(context)
+/** Stores a validated answer in the existing Sighty progress and Evaluation state. */
+function createRecordQuestionResult(document: ElceDocument) {
+  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
+    const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
+    if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
+    const payload = context.event.data as {
+      pageId?: unknown
+      bdcId?: unknown
+      isCorrect?: unknown
+      selectedAnswerIds?: unknown
+      expectedAnswerIds?: unknown
+    } | undefined
+    const expectedBdcId = readQuestionBdcIds(context).find((candidate) => candidate.pageId === pageId)?.bdcId
+    if (payload?.pageId !== pageId || payload.bdcId !== expectedBdcId || typeof payload.isCorrect !== 'boolean') return
+
+    const questionResults = readQuestionResults(context.context)
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    const chapter = page?.chapterId === null || page?.chapterId === undefined
+      ? undefined
+      : document.chapters.find((candidate) => candidate.id === page.chapterId && candidate.type === CHAPTER_TYPE.EVALUATION)
+    const evaluationStates = readEvaluationStates(context.context)
+    const state = chapter === undefined
+      ? undefined
+      : recordEvaluationAnswer(document, chapter, pageId, payload, evaluationStates[chapter.id])
+    await context.updateContext({
+      questionResults: { ...questionResults, [pageId]: payload.isCorrect },
+      ...(chapter === undefined || state === undefined
+        ? {}
+        : { evaluationStates: { ...evaluationStates, [chapter.id]: state } }),
+    })
+    await refreshPresentation(context)
+  }
+}
+
+/** Records the validated answer in its chapter's existing portable machine. */
+function recordEvaluationAnswer(
+  document: ElceDocument,
+  chapter: Chapter,
+  pageId: string,
+  payload: Readonly<{ selectedAnswerIds?: unknown; expectedAnswerIds?: unknown }>,
+  previousState: EvaluationMachineState | undefined,
+): EvaluationMachineState | undefined {
+  const selectedAnswerIds = readStringIds(payload.selectedAnswerIds)
+  const expectedAnswerIds = readStringIds(payload.expectedAnswerIds)
+  if (selectedAnswerIds === undefined || expectedAnswerIds === undefined) return previousState
+  const questionIds = evaluationQuestionPageIds(document, chapter)
+  if (questionIds.length === 0) return previousState
+  const machine = createEvaluationMachine(chapter, questionIds)
+  let state = previousState ?? machine.initialState()
+  if (state.value === 'ready') state = machine.transition(state, { type: 'START' })
+  return machine.transition(state, {
+    type: 'QUESTION.ANSWERED',
+    answer: { questionId: pageId, selectedAnswerIds, expectedAnswerIds },
+  })
+}
+
+/** Reads Sighty's result state on page entry and sends it to the Result story. */
+function createRefreshEvaluationResult(document: ElceDocument) {
+  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
+    await refreshPresentation(context)
+    const pageId = pageIdFromSceneKey(context.scenarioState.active?.sceneKey)
+    if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    if (page?.chapterId === null || page?.chapterId === undefined) return
+    const chapter = document.chapters.find((candidate) => candidate.id === page.chapterId && candidate.type === CHAPTER_TYPE.EVALUATION)
+    const resultBdcId = page.bdcIds.find((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === BDC_TYPE.EVALUATION_RESULT)
+    if (chapter === undefined || resultBdcId === undefined) return
+
+    const questionIds = evaluationQuestionPageIds(document, chapter)
+    if (questionIds.length === 0) return
+    const evaluationStates = readEvaluationStates(context.context)
+    let state = evaluationStates[chapter.id]
+    if (state === undefined || !questionIds.every((questionId) => state?.context.answers[questionId] !== undefined)) return
+    const machine = createEvaluationMachine(chapter, questionIds)
+    if (state.value === 'attempting') state = machine.transition(state, { type: 'COMPLETE' })
+    const passed = state.context.result?.passed
+    if (passed === null || passed === undefined) return
+    if (state !== evaluationStates[chapter.id]) {
+      await context.updateContext({ evaluationStates: { ...evaluationStates, [chapter.id]: state } })
+    }
+    await context.send(`scene-${pageId}` as ElceSceneKey, {
+      name: passed ? ELCE_EVENTS.EVALUATION_RESULT_SUCCESS : ELCE_EVENTS.EVALUATION_RESULT_FAILURE,
+    }, { scope: 'scene' })
+  }
 }
 
 /** Refreshes menu, title, and navigation from the active Sighty page. */
@@ -378,17 +470,24 @@ async function createPresentation(
   const activePageId = pageIdFromSceneKey(scenarioState.active?.sceneKey)
   const pageIndex = activePageId === undefined ? -1 : pageIds.indexOf(activePageId)
   const page = activePageId === undefined ? undefined : pageIds[pageIndex]
+  const nextPageId = pageIndex < 0 ? undefined : pageIds[pageIndex + 1]
   const previousAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
         { path: pagePathFromTable(pagePaths, page) },
       { name: ELCE_EVENTS.NAVIGATION_PREVIOUS, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
-  const nextAllowed = page === undefined
+  const nextExitAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
         { path: pagePathFromTable(pagePaths, page) },
       { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
+      )
+  const nextPageAllowed = nextPageId === undefined
+    ? false
+    : await scenarioState.canAccess(
+        { path: pagePathFromTable(pagePaths, nextPageId) },
+        { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
 
   const menu = await createMenuClassPatch(activePageId, pageIds, pagePaths, scenarioState)
@@ -397,7 +496,7 @@ async function createPresentation(
     menuClassPatch: menu.patch,
     menuPageStates: menu.states,
     previousAttributes: { type: 'button', disabled: pageIndex <= 0 || !previousAllowed },
-    nextAttributes: { type: 'button', disabled: pageIndex < 0 || pageIndex >= pageIds.length - 1 || !nextAllowed },
+    nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextPageAllowed },
     navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
       ? ''
       : `Page ${pageIndex + 1} sur ${pageIds.length}`,
@@ -461,6 +560,42 @@ function readQuestionResults(context: Readonly<Record<string, unknown>>): Readon
   const results = (context as ElceProgressContext).questionResults
   if (typeof results !== 'object' || results === null) return {}
   return Object.fromEntries(Object.entries(results).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'))
+}
+
+/** Reads the serialized Evaluation states stored in the existing Sighty context. */
+function readEvaluationStates(context: Readonly<Record<string, unknown>>): Readonly<Record<string, EvaluationMachineState>> {
+  const states = (context as ElceProgressContext).evaluationStates
+  if (typeof states !== 'object' || states === null) return {}
+  return states
+}
+
+/** Returns the string identifiers carried by a validated Question event. */
+function readStringIds(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value) || !value.every((candidate): candidate is string => typeof candidate === 'string')) return undefined
+  return value
+}
+
+/** Resolves the chapter's ordered Question pages for its Evaluation machine. */
+function evaluationQuestionPageIds(document: ElceDocument, chapter: Chapter): readonly string[] {
+  return chapter.pageIds.filter((pageId) => {
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    return page?.bdcIds.some((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === BDC_TYPE.QUESTION) === true
+  })
+}
+
+/** Creates the chapter machine with its authored settings and shared score threshold. */
+function createEvaluationMachine(
+  chapter: Chapter,
+  questionIds: readonly string[],
+): EvaluationMachine {
+  return new EvaluationMachine({
+    questionIds,
+    settings: {
+      threshold: chapter.evaluationThreshold ?? DEFAULT_EVALUATION_THRESHOLD,
+      attemptLimit: chapter.evaluationAttemptLimit ?? DEFAULT_EVALUATION_SETTINGS.attemptLimit,
+      retryScope: chapter.evaluationRetryScope ?? DEFAULT_EVALUATION_SETTINGS.retryScope,
+    },
+  })
 }
 
 /** Reads the static Question-to-page index stored in the scenario definition. */

@@ -15,7 +15,7 @@ import { createPageBottomMarkerPerso } from './page-bottom-marker'
 import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-bdc-scene-builder'
 import { ElceCardBdcSceneBuilder } from '../card/card-bdc-scene-builder'
 import type { CardBdcSceneBuild } from '../card/card-bdc-scene-builder'
-import { createRevelationAction } from '../revelation/revelation-action'
+import { createRevelationAction, createRevelationInitialStyle } from '../revelation/revelation-action'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -26,7 +26,7 @@ type FluxBdcMount = Readonly<{
   readonly paddingBottom?: string
   readonly questionResetEvent?: string
   readonly carouselBuild?: CarouselSceneBuild
-  readonly evaluationResultStory?: StoryDoc<string>
+  readonly evaluationResultStories?: readonly StoryDoc<string>[]
   readonly cardBuild?: CardBdcSceneBuild
 }>
 
@@ -132,9 +132,9 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
       `${page.id}-${mount.bdc.id}`,
       buildQuestionBdcStory(page.id, mount.bdc, mount.zonePartIds),
     ])),
-    ...Object.fromEntries(mounts.flatMap((mount) => mount.evaluationResultStory === undefined
+    ...Object.fromEntries(mounts.flatMap((mount) => mount.evaluationResultStories === undefined
       ? []
-      : [[mount.evaluationResultStory.id, mount.evaluationResultStory] as const])),
+      : mount.evaluationResultStories.map((story) => [story.id, story] as const))),
     ...Object.fromEntries(mounts.flatMap((mount) => mount.carouselBuild === undefined
       ? []
       : [[mount.carouselBuild.story.id, mount.carouselBuild.story] as const])),
@@ -205,11 +205,11 @@ function createBdcMount(
       const resultBuild = buildEvaluationResultBdcScene(page, bdc)
       return {
         bdc,
-        partId: `${page.id}:${bdc.id}:evaluation-result`,
+        partId: resultBuild.mountPartId,
         anchored: false,
-        markup: resultBuild.markup,
+        markup: resultBuild.mountMarkup,
         zonePartIds: {},
-        evaluationResultStory: resultBuild.story,
+        evaluationResultStories: resultBuild.stories,
       }
     }
     case BDC_TYPE.CAROUSEL: {
@@ -333,7 +333,9 @@ function createFluxCardPersos(
     'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
     width: '100%',
     ...(anchor.layoutId === DEFAULT_PRESET_ID.PHOTO
-      ? { aspectRatio }
+      // Anchored Photos resolve the Carousel's height:100% on the text line.
+      // Override it so aspectRatio determines the frame height.
+      ? { aspectRatio, height: 'auto' }
       : { height: anchorCardBlockSizeFor(anchor.layoutId, anchor.paddingBottom) }),
   }
   const root: PersoDoc<string> = {
@@ -342,7 +344,10 @@ function createFluxCardPersos(
     initial: {
       move: { target: targetPartId },
       className: `${cardBuild.rootClassName} elce-flux-card-root`,
-      style: anchor === undefined ? { width: '100%' } : anchoredStyle,
+      style: {
+        ...createRevelationInitialStyle(introRef),
+        ...(anchor === undefined ? { width: '100%' } : anchoredStyle),
+      },
       markup: cardBuild.markup,
     },
     emit: {

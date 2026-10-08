@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createPageCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../domain/commands/document-commands'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { ElceQuestionService } from '../domain/question/question-service'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
@@ -30,7 +30,11 @@ class ControlledIntersectionObserver {
   }
 
   deliver(entry: IntersectionEntry): void {
-    this.callback([entry as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+    this.deliverBatch([entry])
+  }
+
+  deliverBatch(entries: readonly IntersectionEntry[]): void {
+    this.callback(entries.map((entry) => entry as IntersectionObserverEntry), this as unknown as IntersectionObserver)
   }
 }
 
@@ -161,7 +165,7 @@ describe('Elcé player composition', () => {
     expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
   })
 
-  it('emits a standalone Diapo Card completion immediately and unlocks Next', async () => {
+  it('emits a standalone Diapo Card completion while an earlier unfinished page keeps the next page locked', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -233,11 +237,13 @@ describe('Elcé player composition', () => {
       sourceSceneKey: `scene-${diapoCommand.pageId}`,
       data: { pageId: diapoCommand.pageId },
     }))
-    expect(nextButton?.disabled).toBe(false)
+    expect(nextButton?.disabled).toBe(true)
+    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-card')?.getAttribute('data-locked'))
+      .toBe('true')
     expect(stage.querySelector('.elce-card--text-short')).not.toBeNull()
   })
 
-  it('emits the shared Page-bottom event when the final manual Diapo Carousel view appears', async () => {
+  it('emits the shared Page-bottom event without unlocking a next page past an unfinished earlier page', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -300,10 +306,12 @@ describe('Elcé player composition', () => {
       data: { pageId: diapoCommand.pageId },
     }))
     expect(publicEvents.some((event) => event.name === ELCE_EVENTS.SCENE_END)).toBe(false)
-    expect(nextButton?.disabled).toBe(false)
+    expect(nextButton?.disabled).toBe(true)
+    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-carousel')?.getAttribute('data-locked'))
+      .toBe('true')
   })
 
-  it('unlocks a Diapo Quiz only after validation and keeps its Question mounted', async () => {
+  it('publishes Diapo Quiz completion only after validation while preserving the earlier page access guard', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -357,7 +365,9 @@ describe('Elcé player composition', () => {
     validateButton?.click()
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-question-feedback')?.textContent).toMatch(/Bonne réponse|Réponse incorrecte/)
-    expect(nextButton?.disabled).toBe(false)
+    expect(nextButton?.disabled).toBe(true)
+    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-question')?.getAttribute('data-locked'))
+      .toBe('true')
     expect(stage.querySelector('.elce-card--question')).not.toBeNull()
     expect(publicEvents).toContainEqual(expect.objectContaining({
       name: ELCE_EVENTS.PAGE_FINISHED,
@@ -517,15 +527,23 @@ describe('Elcé player composition', () => {
     await flushCompositionFrames(pendingFrames)
 
     const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageBButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Diapo Carousel')
+    const pageCButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-after-diapo-replay')
     const pageAMarker = stage.querySelector('#page-a-bottom-marker')
     const pageAObserver = ControlledIntersectionObserver.instances.find((observer) => observer.targets.has(pageAMarker as Element))
+    expect(pageBButton?.getAttribute('data-locked')).toBe('true')
+    expect(pageCButton?.getAttribute('data-locked')).toBe('true')
     pageAObserver?.deliver({ target: pageAMarker as Element, intersectionRatio: 1, isIntersecting: true })
     await flushCompositionFrames(pendingFrames)
     expect(nextButton?.disabled).toBe(false)
+    expect(pageBButton?.getAttribute('data-locked')).toBe('false')
 
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Diapo Carousel')
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageCButton?.getAttribute('data-locked')).toBe('true')
     const carouselRoot = stage.querySelector('.elce-diapo-carousel-root')
     const finalView = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')[1]
     const finalDot = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')[1]
@@ -533,11 +551,15 @@ describe('Elcé player composition', () => {
     const completionObserver = ControlledIntersectionObserver.instances.find((observer) => observer.targets.has(completionMarker as Element))
     expect(carouselRoot).not.toBeNull()
     expect(completionObserver).toBeDefined()
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageCButton?.getAttribute('data-locked')).toBe('true')
 
     finalDot?.click()
     await flushCompositionFrames(pendingFrames)
     completionObserver?.deliver({ target: completionMarker as Element, intersectionRatio: 1, isIntersecting: true })
     await flushCompositionFrames(pendingFrames)
+    expect(pageCButton?.getAttribute('data-locked')).toBe('false')
+    expect(nextButton?.disabled).toBe(false)
     const diapoStructureBeforeLeaving = Array.from(carouselRoot?.querySelectorAll('*') ?? [])
       .map((element) => [element.tagName, element.id, element.textContent])
     const mediaSourcesBeforeLeaving = Array.from(carouselRoot?.querySelectorAll('img') ?? [])
@@ -744,6 +766,85 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-player-navigation__button--next')?.hasAttribute('disabled')).toBe(false)
   })
 
+  it('records scroll-end when an anchored Card outro shares its observer batch with the bottom marker', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    let documentModel = createInitialDocument()
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'media.add',
+      media: { id: 'media-scroll-card', name: 'scroll-card.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-scroll-card',
+      presetId: DEFAULT_PRESET_ID.PHOTO,
+      media: { id: 'media-scroll-card', name: 'scroll-card.png', mimeType: 'image/png', size: 10, caption: '' },
+      partId: 'page-a:bdc-scroll-card:anchor',
+      content: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Avant ' },
+            { type: 'elceAnchor', attrs: { bdcId: 'bdc-scroll-card', partId: 'page-a:bdc-scroll-card:anchor' } },
+            { type: 'text', text: ' après' },
+          ],
+        }],
+      },
+      markup: '<p id="section-scroll-text">Avant <span id="page-a:bdc-scroll-card:anchor" data-elce-anchor="true" data-bdc-id="bdc-scroll-card" data-part="page-a:bdc-scroll-card:anchor" style="display:inline-block;position:relative;padding-bottom:12rem;"></span> après</p>',
+    })
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-2',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { 'media-scroll-card': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+    await composition.initialize()
+
+    const marker = stage.querySelector('#page-a-bottom-marker')
+    const card = stage.querySelector('.elce-flux-card-root')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => (
+      candidate.targets.has(marker as Element) && candidate.targets.has(card as Element)
+    ))
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageBButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-b')
+
+    expect(observer).toBeDefined()
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageBButton?.getAttribute('data-locked')).toBe('true')
+
+    observer?.deliverBatch([
+      { target: card as Element, intersectionRatio: 1, isIntersecting: true },
+      { target: marker as Element, intersectionRatio: 0, isIntersecting: false },
+    ])
+    observer?.deliverBatch([
+      { target: card as Element, intersectionRatio: 0, isIntersecting: false },
+      { target: marker as Element, intersectionRatio: 1, isIntersecting: true },
+    ])
+    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    flushPendingFrames(pendingFrames)
+    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+
+    expect(nextButton?.disabled).toBe(false)
+    expect(pageBButton?.getAttribute('data-locked')).toBe('false')
+  })
+
   it('starts the selected page in the Sighty content slot', async () => {
     const stage = document.createElement('div')
     document.body.append(stage)
@@ -762,6 +863,161 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
     expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page B')
     expect(stage.querySelector('#page-a-scrollport')).toBeNull()
+  })
+
+  it('keeps Next disabled on a directly previewed Evaluation question while its next page is inaccessible', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const { documentModel, pageFId } = createEvaluationQuestionPages()
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: pageFId })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageGButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page G')
+    const answer = stage.querySelector<HTMLInputElement>('.elce-card--question input[type="radio"]')
+    const validateButton = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const marker = stage.querySelector(`#${pageFId}-bottom-marker`)
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
+
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    expect(nextButton?.disabled).toBe(true)
+    expect(answer).not.toBeNull()
+    expect(validateButton).not.toBeNull()
+    expect(observer).toBeDefined()
+
+    answer?.click()
+    await flushCompositionFrames(pendingFrames)
+    validateButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    expect(nextButton?.disabled).toBe(true)
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+  })
+
+  it('navigates from a completed Evaluation question to its accessible next page', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const { documentModel, pageFId } = createEvaluationQuestionPages()
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageFButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page F')
+    const pageAMarker = stage.querySelector('#page-a-bottom-marker')
+    const pageAObserver = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(pageAMarker as Element))
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A')
+    expect(pageFButton?.getAttribute('data-locked')).toBe('true')
+    expect(nextButton?.disabled).toBe(true)
+
+    pageAObserver?.deliver({ target: pageAMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+    expect(pageFButton?.getAttribute('data-locked')).toBe('false')
+    expect(nextButton?.disabled).toBe(false)
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+
+    const answer = stage.querySelector<HTMLInputElement>('.elce-card--question input[type="radio"]')
+    const validateButton = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const pageFMarker = stage.querySelector(`#${pageFId}-bottom-marker`)
+    const pageFObserver = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(pageFMarker as Element))
+    const pageGButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page G')
+    expect(answer).not.toBeNull()
+    expect(validateButton).not.toBeNull()
+    expect(pageFObserver).toBeDefined()
+
+    answer?.click()
+    await flushCompositionFrames(pendingFrames)
+    validateButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    pageFObserver?.deliver({ target: pageFMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+
+    expect(pageGButton?.getAttribute('data-locked')).toBe('false')
+    expect(nextButton?.disabled).toBe(false)
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page G')
+    const resultCards = stage.querySelectorAll<HTMLElement>('.elce-card--evaluation-result')
+    const resultCard = resultCards[0]
+    expect(resultCards).toHaveLength(1)
+    expect(resultCard?.querySelector('.elce-evaluation-result__branch--success')).not.toBeNull()
+    expect(resultCard?.querySelector('.elce-evaluation-result__branch--failure')).toBeNull()
+    expect(resultCard?.closest('.elce-flux-article')).not.toBeNull()
+    expect(resultCard?.textContent).toContain('Évaluation réussie.')
+  })
+
+  it('shows the failure branch on the Result page from the Sighty Evaluation state', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const { documentModel, pageFId } = createEvaluationQuestionPages()
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const pageAMarker = stage.querySelector('#page-a-bottom-marker')
+    const pageAObserver = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(pageAMarker as Element))
+    pageAObserver?.deliver({ target: pageAMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')?.click()
+    await flushCompositionFrames(pendingFrames)
+
+    const answers = stage.querySelectorAll<HTMLInputElement>('.elce-card--question input[type="radio"]')
+    const validateButton = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const pageFMarker = stage.querySelector(`#${pageFId}-bottom-marker`)
+    const pageFObserver = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(pageFMarker as Element))
+    answers[1]?.click()
+    await flushCompositionFrames(pendingFrames)
+    validateButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    pageFObserver?.deliver({ target: pageFMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')?.click()
+    await flushCompositionFrames(pendingFrames)
+
+    const resultCards = stage.querySelectorAll<HTMLElement>('.elce-card--evaluation-result')
+    const resultCard = resultCards[0]
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page G')
+    expect(resultCards).toHaveLength(1)
+    expect(resultCard?.querySelector('.elce-evaluation-result__branch--failure')).not.toBeNull()
+    expect(resultCard?.querySelector('.elce-evaluation-result__branch--success')).toBeNull()
+    expect(resultCard?.closest('.elce-flux-article')).not.toBeNull()
+    expect(resultCard?.textContent).toContain('Évaluation à reprendre.')
   })
 
   it('validates a wrong Question answer in CodPlay, then requires scroll-end before Next', async () => {
@@ -1059,7 +1315,10 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('[data-elce-anchor="true"]')).toBeNull()
     expect(stage.querySelector('[data-bdc-id="bdc-image-1"]')).toBeNull()
     expect(flowSlot?.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
-    expect(flowSlot?.querySelector('.elce-flux-card-root')?.parentElement).toBe(flowSlot)
+    const anchoredCard = flowSlot?.querySelector<HTMLElement>('.elce-flux-card-root')
+    expect(anchoredCard?.parentElement).toBe(flowSlot)
+    expect(anchoredCard?.style.height).toBe('auto')
+    expect(anchoredCard?.style.aspectRatio).toBe('4 / 3')
   })
 
   it('mounts a simple video bdc through the real CodPlay media component', async () => {
@@ -1090,6 +1349,38 @@ function createCardWithMedia(document: ReturnType<typeof createInitialDocument>,
     placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
   })
   return applyDocumentCommand(created, { type: 'bdc.card.media.set', bdcId, mediaId })
+}
+
+/** Creates an Evaluation chapter with two default Question pages after Page A. */
+function createEvaluationQuestionPages() {
+  const initialDocument = createInitialDocument()
+  let documentModel = applyDocumentCommand(initialDocument, createChapterCommand(
+    initialDocument,
+    'Évaluation',
+    CHAPTER_TYPE.EVALUATION,
+  ))
+  const evaluationChapterId = documentModel.chapters.at(-1)!.id
+  const placement = { kind: PAGE_LOCATION.CHAPTER, chapterId: evaluationChapterId } as const
+  const pageF = createDefaultPageCommand(documentModel, placement, 'Page F')
+  documentModel = applyDocumentCommand(documentModel, pageF)
+  const pageG = createDefaultPageCommand(documentModel, placement, 'Page G')
+  documentModel = applyDocumentCommand(documentModel, pageG)
+  documentModel = applyDocumentCommand(documentModel, { type: 'bdc.question.delete', bdcId: pageG.bdcId })
+  documentModel = applyDocumentCommand(documentModel, createSectionBdcCommand('bdc-result-text-g', pageG.pageId, 0))
+  documentModel = applyDocumentCommand(documentModel, createEvaluationResultBdcCommand(
+    'bdc-result-g',
+    pageG.pageId,
+    1,
+  ))
+  documentModel = applyDocumentCommand(documentModel, {
+    type: 'bdc.evaluation-result.update',
+    bdcId: 'bdc-result-g',
+    evaluationResult: {
+      success: { message: 'Évaluation réussie.', action: null },
+      failure: { message: 'Évaluation à reprendre.', action: null },
+    },
+  })
+  return { documentModel, pageFId: pageF.pageId }
 }
 
 /** Confirms CodPlay keeps every answer correction idle before validation or after reset. */

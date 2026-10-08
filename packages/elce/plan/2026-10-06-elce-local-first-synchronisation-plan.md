@@ -1,6 +1,9 @@
 # Elcé — plan de stockage local et synchronisation
 
-**Statut : Fixe.** Le périmètre local et le transfert des médias sont établis.
+**Statut : En cours — synchronisation automatique entre navigateurs acceptée le
+8 octobre 2026 ; les écritures concurrentes ne font pas partie du parcours
+retenu.** Le
+périmètre local et le transfert des médias sont établis.
 Le modèle persistant v4 est assez défini pour commencer SQLite. L’acceptation
 du raccord d’Évaluation au player reste un travail du POC, sans données de
 session à persister dans cette base ; les résultats de lecture seront traités
@@ -425,6 +428,41 @@ store média IndexedDB. Le projet d’essai et ses entrées locales ont été
 supprimés après vérification.
 Le menu et son raccord au coordinateur de synchronisation sont implémentés ;
 les preuves restantes sont suivies dans le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md).
+
+### 7. Synchronisation automatique entre navigateurs — acceptée, non implémentée
+
+Le même projet doit pouvoir rester ouvert dans plusieurs navigateurs et les
+modifications enregistrées dans l’un doivent parvenir automatiquement aux
+autres sans fermeture ni rechargement. Cette direction a été acceptée le
+8 octobre 2026. La règle d’usage retenue est qu’une seule page active reçoit
+les éditions de l’utilisateur ; la fusion de changements concurrents n’est pas
+demandée. Le flux doit réutiliser l’API projet, la révision serveur et l’acteur
+XState de chaque éditeur ; il ne crée pas un deuxième document, un cache
+partagé entre navigateurs ou un circuit de commandes éditoriales parallèle.
+
+Le contrat de révision existant reste un garde-fou pour une écriture inattendue
+depuis une copie obsolète : pas de dernier-écrit-gagnant ni de fusion. La copie
+locale en attente reste conservée et le conflit est signalé.
+
+**Constat du 8 octobre 2026 :** `ProjectSyncCoordinator` n’envoie que les
+écritures locales vers l’API ; aucun avis de modification distante n’est reçu
+par les éditeurs ouverts. Le bouton « Synchroniser » du popup ne concerne que
+le transfert entre son auteur et son lecteur. `ProjectSessionCoordinator`
+conserve la copie IndexedDB lorsqu’elle est `pending` ou `conflict`, ce qui
+protège une édition locale mais ne permet pas de recharger une version serveur
+depuis ces états. Le test utilisateur confirme l’absence de synchronisation
+entre deux navigateurs, y compris après une action manuelle ; le parcours
+manuel exact reste à identifier.
+
+**Acceptation :** ouvrir le même projet dans deux navigateurs distincts ;
+modifier sa page active dans l’un ; après confirmation de l’écriture serveur,
+vérifier que l’autre reçoit le nouveau document sans recharger, tout en gardant
+sa sélection de page si celle-ci existe encore. Vérifier ensuite le sens
+inverse et le retour après une coupure réseau. Conserver en non-régression le
+refus `If-Match` et la copie locale en cas d’écriture inattendue sur une
+révision dépassée. Cette tranche reste `En cours` tant que l’implémentation,
+les tests et une validation navigateur inter-navigateurs ne satisfont pas ces
+critères.
 
 ## Suites après le POC
 

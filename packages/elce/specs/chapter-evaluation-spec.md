@@ -3,8 +3,9 @@
 ## Statut
 
 **En cours — le calcul, la garde de scénario Sighty, les réglages du chapitre,
-la machine métier et l’édition auteur du BDC Résultat sont vérifiés. Le
-raccord de ses issues au player reste à réaliser.**
+la machine métier, l’édition du BDC Résultat et le montage de son issue dans le
+player sont vérifiés. L’intégration des actions Recommencer/Relire et de la
+visibilité des réponses reste à réaliser.**
 
 ## Contrat
 
@@ -47,18 +48,22 @@ commande `chapter.evaluation.settings.update`.
 
 La commande `bdc.evaluation-result.update` enregistre les deux branches et
 leurs actions ; `bdc.evaluation-result.delete` retire le BDC de la page. Le
-builder compile le BDC en une story CodPlay, mais n’affiche aucune branche tant
-que le runtime n’a pas indiqué le résultat. La machine portable qui gère les
-tentatives, la reprise après échec et la relecture après succès est décrite dans
-la [spécification de la machine d’Évaluation](evaluation-machine-spec.md). Les
-réglages du chapitre et les choix du BDC ne sont pas encore raccordés à cette
-machine dans le player ; les Questions n’y suivent donc pas encore les règles
-de reprise et de relecture.
+builder compile le BDC en deux stories CodPlay, une par issue. Chaque racine
+commence détachée (`move: '@off'`). À l’admission d’une page portant le BDC,
+l’action de route Sighty lit l’état d’Évaluation dans son contexte et envoie à
+la scène l’événement Réussite ou Échec ; la story correspondante déplace sa
+racine vers `mountPartId`, le repère du BDC dans l’article. L’autre story reste
+détachée. Aucune classe `pending` ni règle `display:none` ne choisit la branche.
+Le contrat portable des tentatives, de la reprise après échec et de la relecture
+après succès est décrit dans la
+[spécification de la machine d’Évaluation](evaluation-machine-spec.md). Les
+événements des actions Recommencer/Relire et la visibilité des réponses dans
+les Questions ne sont pas encore raccordés à cette machine dans le player.
 
-Les deux sections sémantiques Réussite/Échec et leurs titres restent présents.
-Un paragraphe de message n’est créé que si l’auteur a saisi un message ; un
-bouton n’est créé que si une action est choisie. Les commentaires de montage
-des messages et actions n’ajoutent pas de balises vides.
+La story montée contient la section sémantique et le titre de son issue. Un
+paragraphe de message n’est créé que si l’auteur a saisi un message ; un bouton
+n’est créé que si une action est choisie. Les commentaires de montage des
+messages et actions n’ajoutent pas de balises vides.
 
 `buildScenario` ajoute une garde au passage entre pages : chaque page doit
 d’abord avoir atteint son repère bas, et une page Question doit aussi avoir
@@ -90,7 +95,12 @@ La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
 [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) et
 [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts) ;
 sa compilation CodPlay l’est dans
-[`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts).
+[`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+et [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts).
+[`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+vérifie par le parcours Sighty/CodPlay que l’issue lue par Sighty au changement
+de page monte une seule branche à `mountPartId` dans l’article Flux, pour la
+réussite comme pour l’échec.
 [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
 vérifie dans la page Remix de production l’édition des messages et actions des
 branches Réussite et Échec par le service Résultat et la façade XState.

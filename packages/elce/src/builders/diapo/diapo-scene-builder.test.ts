@@ -205,12 +205,15 @@ describe('Elcé Diapo scene builder', () => {
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
     const build = buildDiapoScene(page, document.bdcs, { chapterType: CHAPTER_TYPE.EVALUATION })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
-    const resultStory = build.sceneDoc.stories[`${page.id}-bdc-diapo-result`]
+    const successStory = build.sceneDoc.stories[`${page.id}-bdc-diapo-result-success`]
+    const failureStory = build.sceneDoc.stories[`${page.id}-bdc-diapo-result-failure`]
     const pageHost = pageStory?.persos.find((perso) => perso.id === `${page.id}-diapo-content`)
     const hostMarkup = pageHost?.initial !== undefined && 'markup' in pageHost.initial
       ? String(pageHost.initial.markup)
       : ''
-    const resultCard = resultStory?.persos.find((perso) => perso.id === 'bdc-diapo-result-result-card')
+    const successCard = successStory?.persos.find((perso) => perso.id === 'bdc-diapo-result-success-result-card')
+    const failureCard = failureStory?.persos.find((perso) => perso.id === 'bdc-diapo-result-failure-result-card')
+    const resultMountPartId = `${page.id}:bdc-diapo-result:evaluation-result`
     const completionMarker = pageStory?.persos.find((perso) => perso.id.endsWith('-bottom-marker'))
     const codplay = new CodPlay({
       pauseOnDocumentHidden: false,
@@ -222,10 +225,21 @@ describe('Elcé Diapo scene builder', () => {
     })
 
     expect(page.bdcIds).toEqual(['bdc-diapo-result'])
-    expect(hostMarkup).toContain('elce-card--evaluation-result')
-    expect(resultCard?.actions).toEqual({
-      [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { className: 'elce-card--evaluation-result elce-evaluation-result--success' },
-      [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { className: 'elce-card--evaluation-result elce-evaluation-result--failure' },
+    expect(hostMarkup).toContain(`<!-- data-part="${resultMountPartId}" -->`)
+    expect(hostMarkup).not.toContain('elce-card--evaluation-result')
+    expect(successCard?.initial).toMatchObject({
+      move: '@off',
+      markup: expect.stringContaining('elce-evaluation-result__branch--success'),
+    })
+    expect(successCard?.actions).toEqual({
+      [ELCE_EVENTS.EVALUATION_RESULT_SUCCESS]: { move: { target: resultMountPartId } },
+    })
+    expect(failureCard?.initial).toMatchObject({
+      move: '@off',
+      markup: expect.stringContaining('elce-evaluation-result__branch--failure'),
+    })
+    expect(failureCard?.actions).toEqual({
+      [ELCE_EVENTS.EVALUATION_RESULT_FAILURE]: { move: { target: resultMountPartId } },
     })
     expect(completionMarker?.emit?.observe).toMatchObject({
       root: `${page.id}-diapo-scrollport`,

@@ -1,5 +1,5 @@
 import type { CardPreset } from './card-preset-types'
-import { DEFAULT_PRESET_ID, EVALUATION_RESULT_BRANCH, EVALUATION_RESULT_CONFIG } from './document-config'
+import { DEFAULT_PRESET_ID } from './document-config'
 
 /** Explicit preset configuration kept ready for a later preset editor. */
 export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
@@ -67,16 +67,7 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     allowedContent: ['text', 'bdc'],
     markupTemplate: `
       <article id="{{rootId}}" class="{{rootClassName}}">
-        <section id="{{rootId}}-success" class="elce-evaluation-result__branch elce-evaluation-result__branch--success">
-          <h2 id="{{rootId}}-success-title">${EVALUATION_RESULT_CONFIG[EVALUATION_RESULT_BRANCH.SUCCESS].label}</h2>
-          <!-- data-part="{{partPrefix}}:success-message" -->
-          <!-- data-part="{{partPrefix}}:success-action" -->
-        </section>
-        <section id="{{rootId}}-failure" class="elce-evaluation-result__branch elce-evaluation-result__branch--failure">
-          <h2 id="{{rootId}}-failure-title">${EVALUATION_RESULT_CONFIG[EVALUATION_RESULT_BRANCH.FAILURE].label}</h2>
-          <!-- data-part="{{partPrefix}}:failure-message" -->
-          <!-- data-part="{{partPrefix}}:failure-action" -->
-        </section>
+        {{content:branch}}
       </article>
     `,
     zones: [

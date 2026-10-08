@@ -3,8 +3,9 @@
 ## Statut
 
 **En cours — modèle, édition, projection CodPlay et Quiz simple sont couverts
-par tests et un essai Safari. La machine métier d’Évaluation est vérifiée ; son
-raccord aux résultats et à l’affichage du player reste à réaliser.**
+par tests et un essai Safari. La sélection et le montage de l’issue du BDC
+Résultat sont vérifiés ; le raccord de Recommencer/Relire et de l’affichage des
+réponses de Question à la machine reste à réaliser.**
 
 ## Contrat auteur
 
@@ -81,9 +82,14 @@ Questions fausses ou absentes peuvent être reprises si cette portée est
 choisie. Après une réussite, l’action de relecture choisie dans la branche
 Réussite du BDC Résultat ouvre toutes les Questions avec leurs réponses
 sélectionnées et attendues. Ce contrat est détaillé dans la
-[spécification de la machine d’Évaluation](evaluation-machine-spec.md). Le
-raccord du BDC Résultat et de l’affichage des Questions à la machine reste à
-faire ; le player actuel ne valide pas encore ce parcours.
+[spécification de la machine d’Évaluation](evaluation-machine-spec.md). À
+l’entrée d’une page qui porte le BDC Résultat, l’action de route Sighty lit
+l’issue de la machine dans son contexte et envoie l’événement de scène qui
+monte la story Réussite ou Échec à l’ancre du BDC. Le rendu des Questions ne
+consomme pas encore `shouldRevealAnswers` pour masquer les corrections pendant
+l’échec/la reprise ou les révéler lors d’une relecture. Les actions
+Recommencer/Relire du BDC ne sont pas encore raccordées aux transitions de la
+machine ; ces parcours restent à valider après leur intégration.
 
 Pour une page Flux avec Question, Sighty autorise « Suivant » seulement après
 le repère bas et la validation de la réponse ; la réponse peut être fausse.

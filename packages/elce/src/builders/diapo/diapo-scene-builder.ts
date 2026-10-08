@@ -103,8 +103,8 @@ export function buildDiapoScene(
             throw new Error(`Le BDC Résultat ${bdc.id} ne peut être projeté que dans une Diapo d’Évaluation.`)
         }
         const resultBuild = buildEvaluationResultBdcScene(page, bdc)
-        markup = resultBuild.markup
-        childStories = { [resultBuild.story.id]: resultBuild.story }
+        markup = resultBuild.mountMarkup
+        childStories = Object.fromEntries(resultBuild.stories.map((story) => [story.id, story]))
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
         pageBottomMarker = createPageBottomMarkerPerso({
           pageId: page.id,

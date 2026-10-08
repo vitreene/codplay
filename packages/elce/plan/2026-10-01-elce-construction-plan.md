@@ -36,11 +36,83 @@ preuves qui permettent de fermer chaque tranche.
 | 2 | Première lecture Flux dans Sighty/CodPlay | En cours | Une scène Flux réelle se lit via le scénario Sighty et son slot racine. Menu, lecture à la page courante, repère de fin, pages courtes et longues suivent les contrats de la démo 5. Un aller-retour A → B → A conserve chaque scène. |
 | 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
 | 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
-| 5 | Évaluation de chapitre | En cours — icône, édition, retrait et compilation CodPlay du BDC Résultat vérifiés ; intégration player restante. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
+| 5 | Évaluation de chapitre | En cours — résultat calculé par Sighty et montage de la branche Réussite/Échec dans CodPlay couverts par les tests de composition ; les actions Recommencer/Relire, la visibilité des réponses et le parcours Brave restent à valider. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
+
+### Décision acceptée — montage du BDC Résultat dans CodPlay
+
+Le player doit compiler une story CodPlay distincte pour Réussite et pour
+Échec. L’action de cycle de vie Sighty lit l’état d’Évaluation après l’admission
+de la page, puis envoie à la scène l’événement correspondant ; l’action
+CodPlay de la story concernée déclenche son montage. Chaque racine commence
+détachée (`move: '@off'`) et rejoint `mountPartId`, le marqueur commun du BDC
+dans l’article Flux. Aucune classe `pending` ni règle CSS `display:none` ne
+choisit la branche.
+
+La cible est `mountPartId`, le marqueur commun du BDC dans l’article Flux.
+CodPlay définit `move: '@root'` comme la racine de la scène ; l’utiliser ici
+sortirait le BDC de sa place dans le flux.
+
+Le routage actuel de CodPlay place un événement de cible `scene` sur la track
+globale et inclut cette track dans la projection de chaque story. Il n’y a pas
+de modification CodPlay à faire pour ce montage ; le correctif reste dans les
+builders Elcé et son action Sighty.
+
+**Preuve automatisée :** [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+parcourt la navigation Sighty et vérifie que Réussite ou Échec monte seul son
+contenu sous `mountPartId`. Les builders Flux et Diapo vérifient la structure
+des deux stories et leur action de montage. La vérification interactive Brave
+du Projet 1 reste en attente : l’auto-review a refusé l’action de sélection de
+page dans l’éditeur, car elle peut modifier les données du projet ; aucun
+contournement de ce refus n’est prévu.
+
+**Correction vérifiée le 8 octobre 2026 — tranche 3 :** la preview de Page A
+du Projet 1 réservait le bon ratio d’image, mais la règle `height:100%` de la
+Carte Photo limitait sa racine à la hauteur d’une ligne de texte. Le builder
+donne maintenant une hauteur automatique à la racine ancrée ; Brave confirme le
+ratio complet après rechargement et resize. La cause, les dimensions mesurées
+et les suites passées sont dans la [spécification d’ancre](../specs/anchor-spec.md).
+
+### Régression de fin de page et de navigation — 8 octobre 2026
+
+**Statut : En cours.** Dans Brave, Page A atteint le bas de son scrollport et
+son repère est visible, mais « Suivant » reste désactivé et Page B verrouillée.
+La sortie du perso racine de la Carte Photo produit une erreur de tween sans
+valeur de départ matérialisée ; son rejet interrompt le lot d’émissions
+`IntersectionObserver` avant l’événement `elce:page:finished`. Sans progression
+enregistrée pour Page A, Sighty garde les pages suivantes verrouillées. Sur un
+démarrage direct à Page B, « Suivant » peut être affiché actif alors que Page C
+reste inaccessible, car la présentation ne vérifie que la sortie de Page B.
+Sur le bundle servi par 5175, la preview directe de Page F reproduit la même
+incohérence après validation de la réponse : « Suivant » est actif, Page G garde
+`data-locked="true"`, et le clic ne change pas la page active.
+
+**Correction acceptée :** initialiser la racine de chaque Carte Flux aux valeurs
+stables de sa transition d’entrée pour que les actions de sortie existantes
+puissent matérialiser leur départ. Dans la présentation Sighty Elcé, n’activer
+« Suivant » que lorsque la garde de sortie courante et l’accès à la prochaine
+page l’autorisent. Garder le marqueur `emit.observe`, l’événement public et les
+gardes `canExit`/`canAccess` existants ; aucun nouveau relais ni changement
+CodPlay n’est prévu.
+
+**Acceptation :** une régression player envoie dans un même lot la sortie d’une
+Carte ancrée et l’entrée du repère bas ; l’événement atteint Sighty, le bouton
+s’active et Page B se déverrouille. Dans le parcours légitime Projet 1, terminer
+Page A, ouvrir la Diapo Page B, terminer son Carousel, vérifier le
+déverrouillage de Page C, puis cliquer « Suivant » et constater Page C. Un
+démarrage direct à Page B avec Page A inachevée ne doit pas présenter un bouton
+actif qui mène à une cible verrouillée. Compléter les tests Flux/Sighty ciblés,
+le typecheck, la suite Elcé, le build et le parcours Brave ; ne pas modifier les
+données du Projet 1.
+
+Complément d’acceptation pour Page F : après un démarrage direct à F et la
+validation de sa Question, « Suivant » reste désactivé tant que Page G demeure
+inaccessible. Dans le parcours accessible, valider la Question de F après les
+pages précédentes, vérifier l’accès à G, puis cliquer « Suivant » et constater
+Page G.
 
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
 contrat. Un échec de preuve garde la tranche « En cours » et bloque son

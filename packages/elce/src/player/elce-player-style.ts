@@ -703,12 +703,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   line-height: 1.5;
 }
 
-.elce-evaluation-result--pending .elce-evaluation-result__branch,
-.elce-evaluation-result--success .elce-evaluation-result__branch--failure,
-.elce-evaluation-result--failure .elce-evaluation-result__branch--success {
-  display: none;
-}
-
 .elce-flux-article > section p,
 .elce-flux-article > section h1,
 .elce-flux-article > section h2,

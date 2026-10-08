@@ -270,7 +270,13 @@ function validateQuestionAnswer(
       })),
       {
         name: ELCE_EVENTS.QUESTION_ANSWERED,
-        data: { pageId, bdcId: bdc.id, isCorrect },
+        data: {
+          pageId,
+          bdcId: bdc.id,
+          isCorrect,
+          selectedAnswerIds,
+          expectedAnswerIds: correctAnswerIds,
+        },
         visibility: 'public',
       },
       ...(completionEventName === undefined ? [] : [{

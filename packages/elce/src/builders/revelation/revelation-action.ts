@@ -1,10 +1,20 @@
 import {
   DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS as REVELATION_EVENT_DEFINITIONS,
+  EVENT_ACTION,
   type AutoCapsuleEventAction as RevelationEventAction,
   type AutoCapsuleEventDefinition as RevelationEventDefinition,
   type AutoCapsuleResolvedEvent as ResolvedRevelationEvent,
 } from '@codplay/capsule-automation'
 import type { RevelationTransitionRef } from '../../config/document-config-types'
+
+/** Returns the stable style state at which a configured reveal transition rests. */
+export function createRevelationInitialStyle(reference: RevelationTransitionRef): Record<string, string | number> {
+  const definition = REVELATION_EVENT_DEFINITIONS[reference]
+  if (definition === undefined) throw new Error(`Référence de révélation inconnue : ${reference}`)
+  const properties = definition.style?.[EVENT_ACTION.intro]
+  if (properties === undefined) return {}
+  return Object.fromEntries(Object.entries(properties).map(([property, tween]) => [property, tween.to]))
+}
 
 /** Builds a CodPlay action from one configured reveal transition. */
 export function createRevelationAction(

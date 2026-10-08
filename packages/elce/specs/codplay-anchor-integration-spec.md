@@ -102,6 +102,10 @@ calcule `hauteur / largeur × 100 %`, puis met à jour l’attribut `paddingBott
 par une transaction Tiptap. `SectionEditor` transmet cette modification au
 circuit de commandes XState déjà utilisé pour les changements de texte. Le
 même padding dimensionne le bdc en `cover` et la réserve du builder player.
+Pour une Carte ancrée au layout Photo, le builder donne aussi une hauteur
+automatique à sa racine : la règle `height:100%` du preset sert aux Cartes de
+Carousel et se résoudrait ici sur la ligne de texte, pas sur la réserve du
+slot. L’aspect ratio issu du padding fixe alors la hauteur du cadre image.
 
 La marge `ANCHOR.DEFAULT_BDC_MARGIN_TOP` est injectée dans la déclaration
 `inset-block-start`. Elle reste une constante de configuration et n’est pas
@@ -145,6 +149,11 @@ internes à CodPlay, conformément aux spécifications `layout`, `move` et
   `670 px` de largeur, `16 px` de marge en haut et en bas, le texte continu
   avant le média et sa reprise après celui-ci. Un démontage/remontage de la
   preview conserve un seul slot et un seul perso.
+- Brave DevTools confirme le 8 octobre 2026 sur Page A du Projet 1 que la
+  racine Photo et l’image gardent la hauteur déterminée par leur ratio après
+  rechargement et redimensionnement ; le slot conserve séparément les deux
+  marges configurées. Le détail des dimensions et de la réponse média est dans
+  la [spécification d’ancre Elcé](./anchor-spec.md).
 - Le cycle réel A → B → A a reproduit le déplacement des deux vidéos avant le
   texte au retour sur A. Après correction, Safari refait le cycle dans la vraie
   preview : le `innerHTML`, la structure des nœuds, le texte et l’ordre des deux

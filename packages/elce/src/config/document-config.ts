@@ -388,6 +388,7 @@ export const ELCE_SCENARIO_HANDLERS = {
   CLOSE_MENU_DRAWER: 'action:elce:close-menu-drawer',
   MARK_PAGE_FINISHED: 'action:elce:mark-page-finished',
   RECORD_QUESTION_RESULT: 'action:elce:record-question-result',
+  REFRESH_EVALUATION_RESULT: 'action:elce:refresh-evaluation-result',
   PAGE_ACCESS: 'guard:elce:page-access',
   PAGE_EXIT: 'guard:elce:page-exit',
 } as const
