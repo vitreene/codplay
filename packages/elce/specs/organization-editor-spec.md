@@ -2,11 +2,11 @@
 
 ## Statut
 
-**Fixe — création contextualisée, choix du type de chapitre, ordre mixte
-page/chapitre, déplacement par séparateurs, sélection centrale d’un chapitre
-et transfert du catalogue dans la colonne droite implémentés et vérifiés en
-test et dans Safari. La restauration des titres après rechargement reste dans
-le plan de l’organisation du scénario.**
+**Fixe — création contextualisée des chapitres et des pages Flux/Diapo, ordre
+mixte page/chapitre, déplacement par séparateurs, sélection centrale d’un
+chapitre et catalogue dans la colonne droite. Les surfaces Remix sont
+implémentées et vérifiées en tests ; la vérification Safari des réglages
+centraux reste ouverte dans le plan de migration.**
 
 Cette spécification décrit les commandes visibles pour créer des pages et des
 chapitres, ainsi que l’édition de leurs titres dans la zone centrale.
@@ -35,19 +35,20 @@ dépôt pour créer ou rejoindre un chapitre parent.
 
 Les actions de création sont des boutons Lucide sans libellé visible, avec nom
 accessible et infobulle. Dans l’en-tête « Scénario », deux icônes créent un
-chapitre standard ou un chapitre Évaluation ; une troisième crée une page à la
-racine. Une icône de page apparaît aussi dans chaque chapitre. Les boutons de
-création sont regroupés côte à côte ; la liste des pages racine reste sous cet
-en-tête, sans second titre « Pages à la racine ». La
+chapitre standard ou un chapitre Évaluation ; deux autres créent à la racine
+une page Flux ou une Diapo. Chaque chapitre propose séparément la création
+d’une page Flux et d’une Diapo. Les boutons de création sont regroupés côte à
+côte ; les pages racine restent sous cet en-tête, sans second titre « Pages à
+la racine ». La
 création d’un chapitre Évaluation passe le type au constructeur de commande
 documentaire, qui applique le seuil par défaut configuré de 80 %. Les deux
 types de chapitre et les pages sont créés par les commandes XState existantes.
 Chaque bouton de page envoie
 `page.create` avec son `PagePlacement` explicite : la
-création à la racine produit une page sans chapitre, celle du chapitre l’ajoute
-à ce chapitre. Aucune création ne choisit implicitement le premier chapitre.
-Sans nom fourni, la page reçoit le prochain nom automatique et devient la page
-sélectionnée.
+création à la racine produit une page sans chapitre du type indiqué, celle du
+chapitre l’ajoute à ce chapitre avec le type indiqué. Aucune création ne
+choisit implicitement le premier chapitre. Sans nom fourni, la page reçoit le
+prochain nom automatique et devient la page sélectionnée.
 
 Les listes des chapitres et des pages n’affichent pas de puces. Leur texte est
 plus petit que le titre « Scénario » ; la corbeille compacte reste au bord droit
@@ -123,11 +124,13 @@ dans le champ et aucune commande n’est envoyée. Le modèle met à jour son no
 sans changer les identifiants, l’ordre, l’affectation ou les BDC. La liste à
 gauche lit les noms actualisés depuis le document détenu par XState.
 
-Pour le raccordement de l’interface, `AppLayout` reçoit `EditorActionsFacade`
-pour les commandes durables et `selectEditorViewModel` pour les données
-dérivées. La façade transmet les intentions à l’acteur XState existant ; elle
-ne possède pas de document séparé. Les règles de whitelist, les gestes de
-glisser-déposer et leurs états visuels restent dans la vue auteur.
+Dans Remix, `ProjectApplication` compose le Scénario, les réglages centraux du
+chapitre et le catalogue depuis le sélecteur `selectEditorViewModel`. Les
+commandes passent par `EditorActionsFacade` vers l’acteur XState existant ; la
+vue ne possède pas de document séparé. Le glisser-déposer des pages utilise les
+séparateurs d’insertion. Le pont React temporaire ne rend plus que la zone de
+travail de la page sélectionnée ; il ne rend pas le Scénario, le catalogue ni
+les réglages de chapitre.
 
 ## Preuves
 
@@ -139,6 +142,13 @@ glisser-déposer et leurs états visuels restent dans la vue auteur.
   déplacement d’une page racine avant et après un chapitre, le réordonnancement d’un chapitre et des pages
   de chapitre par séparateurs, l’absence de dépôt sur les lignes, et l’édition
   centrale des titres via XState.
+- [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
+  vérifie les créations Flux et Diapo à la racine et dans un chapitre, l’ordre
+  mixte des entrées racine, les déplacements par séparateurs, les onglets du
+  catalogue et l’ouverture des réglages centraux d’un chapitre.
+- [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
+  vérifie que la sélection d’un chapitre par la surface Remix native met à
+  jour la zone centrale depuis le même acteur XState.
 - [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
   vérifie que l’événement `page.create` conserve le placement explicitement
   demandé et sélectionne la page produite, et que la sélection de chapitre
@@ -183,6 +193,12 @@ glisser-déposer et leurs états visuels restent dans la vue auteur.
   dans la colonne droite. Aucun réglage du document de navigateur n’a été
   modifié pendant ce contrôle. Le typecheck, les 16 fichiers de tests (111
   tests) et le build passent.
+- Safari Technology Preview via MCP vérifie dans la surface Remix la création
+  d’une Diapo à la racine, le dépôt sur un séparateur racine, les onglets du
+  catalogue et l’absence d’identifiants DOM dupliqués. Le test du runtime Remix
+  vérifie aussi la sélection de chapitre et le remplacement de la zone de
+  travail par ses réglages ; la lecture de ces réglages dans Safari reste à
+  confirmer.
 - `app-layout.test.tsx` vérifie qu’une page Évaluation expose une icône unique
   pour le BDC Résultat, que son clic crée un seul BDC avec ses deux branches,
   que les messages/actions modifiés passent par les commandes XState, et que sa

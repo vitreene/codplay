@@ -43,7 +43,9 @@ async function startRemixEditor(): Promise<void> {
     throw new Error('Remix did not render the temporary Elcé editor host.')
   }
 
-  const disposeEditor = host === null ? () => {} : mountElceEditor(host, controller, editorActions, { hideHeader: true })
+  const disposeEditor = host === null
+    ? () => {}
+    : mountElceEditor(host, controller, editorActions, { hideHeader: true, surface: 'remix-page-work-area' })
   window.addEventListener('pagehide', () => {
     void projectSession?.dispose().finally(() => {
       disposeEditor()

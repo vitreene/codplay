@@ -1,6 +1,6 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : En cours — étapes 0, 1, 2 et 3 Finies ; étape 4 commencée.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. Le menu et le cycle de vie de base des projets sont vérifiés ; le portage des autres surfaces auteur reste à faire. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
+**Statut : En cours — étapes 0, 1, 2 et 3 Finies ; étape 4 commencée.** Node minimum déclaré, Remix 3.0.0-rc.4 installé, routeur SPA et composition XState partagée vérifiés dans Safari Technology Preview via MCP. La gestion des projets, l’organisation du Scénario, les réglages de chapitre et le catalogue sont maintenant rendus par des surfaces Remix natives ; la zone de travail des pages et ses éditeurs restent dans le pont React temporaire. L’acceptation Safari des réglages centraux est encore ouverte. L’acceptation globale du POC ne bloque pas le portage de l’interface. Le schéma persistant est maintenant fixé dans le plan local-first et sa note de données.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
@@ -198,10 +198,25 @@ Porter l’affichage en gardant les commandes et l’ordre métier existants :
 
 Le détail du comportement vérifié est dans la
 [spécification de gestion du projet actif](../specs/project-session-spec.md).
-L’organisation des pages et les réglages de chapitre restent à porter avant
-les éditeurs Question, Résultat, Carte et Carousel.
 
-Un menu de gestion des projets se trouve au niveau du titre « Elcé ». Il permet de créer, ouvrir, fermer et supprimer des projets. L’exportation viendra plus tard. Cette liste de projets est distincte du catalogue de contenus (pages, BDC et médias) de l’éditeur. Le menu et ses vues sont portés dans Remix, sans ajouter une seconde source d’état ni un circuit de commandes parallèle.
+**Organisation du Scénario, réglages et catalogue — portage Remix en cours :**
+
+- [x] Rendre le Scénario, ses déplacements par séparateurs, les réglages
+  centraux de chapitre et le catalogue dans le runtime Remix, en s’abonnant au
+  même acteur XState et en utilisant `EditorActionsFacade`.
+- [x] Garder deux commandes distinctes de création à la racine : une page Flux
+  et une Diapo. Chaque chapitre propose également une page Flux ou une Diapo.
+  Le contrat d’organisation a été actualisé pour refléter ces commandes.
+- [x] Tests du workspace et de `ProjectApplication` : création contextualisée,
+  ordre mixte, déplacement par séparateurs, sélection de chapitre, onglets du
+  catalogue et remplacement de la zone centrale.
+- [x] Safari Technology Preview via MCP : Diapo racine, séparateur racine,
+  onglets du catalogue et absence d’identifiants DOM dupliqués.
+- [ ] Relire dans Safari les réglages centraux après sélection d’un chapitre ;
+  le MCP a laissé l’onglet perdre son focus et cette vérification reste
+  non concluante. Les tests runtime confirment déjà le rendu après sélection.
+
+Un menu de gestion des projets se trouve au niveau du titre « Elcé ». Il permet de créer, ouvrir, fermer et supprimer des projets. L’exportation viendra plus tard. Cette liste de projets est distincte du catalogue de contenus (pages, BDC et médias) de l’éditeur. Le menu, le Scénario, les réglages de chapitre et le catalogue sont portés dans Remix, sans ajouter une seconde source d’état ni un circuit de commandes parallèle.
 
 La liste des projets lit les résumés du serveur. Plusieurs onglets peuvent éditer indépendamment leurs projets. La base IndexedDB reste locale au navigateur et conserve une entrée distincte par projet ouvert ; ce n’est pas une réplication de la cache vers le serveur. `ProjectEditorLock` reste exclusif par projet : des projets différents peuvent être édités en parallèle, tandis qu’un même projet reste éditable par une seule fenêtre à la fois. Dans un onglet, le changement de projet attend l’accusé serveur du document et de ses médias ; en cas d’échec ou de conflit, le projet courant reste ouvert.
 

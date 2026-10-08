@@ -1,14 +1,18 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
 import { jsx } from 'remix/ui/jsx-runtime'
+import { Images, List } from 'lucide-static'
 import type { SnapshotFrom } from 'xstate'
 import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
 import type { controllerMachine } from '../controller/controller-machine'
 import { EditorContextProvider } from './editor-context'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { ProjectSessionStatus } from '../projects/project-session-types'
-import type { ElceAppContext } from '../controller/controller-types'
-
-type ProjectView = Pick<ElceAppContext, 'projects' | 'activeProject' | 'projectStatus' | 'projectError' | 'editAccess' | 'document' | 'syncStatus'>
+import { selectEditorViewModel } from '../selectors/editor-view-model'
+import { PopupPreviewHost } from '../player/popup-preview-host'
+import { renderEditorWorkspace } from './workspace/editor-workspace'
+import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
+import { renderLucideIcon } from './lucide-static-icon'
+import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './project-application-types'
 
 /** Renders the Remix project menu and shows the temporary editor only for an open project. */
 export function ProjectApplication(handle: Handle) {
@@ -18,19 +22,106 @@ export function ProjectApplication(handle: Handle) {
   }
 
   let view = selectProjectView(controller.getSnapshot())
+  let responsivePanel: ResponsivePanel = null
+  let dropTarget: string | null = null
+  let draggedEntry: DraggedScenarioEntry = null
+  let previewError: string | null = null
+  let returnFocusId: string | null = null
+  let popupPreviewHost: PopupPreviewHost | null = null
+
+  const setResponsivePanel = (panel: ResponsivePanel, triggerId?: string): void => {
+    if (panel !== null) returnFocusId = triggerId ?? returnFocusId
+    const focusId = panel === null ? returnFocusId : null
+    responsivePanel = panel
+    if (panel === null) returnFocusId = null
+    void handle.update().then(() => {
+      const targetId = panel === null ? focusId : panelCloseButtonId(panel)
+      if (targetId !== null) document.getElementById(targetId)?.focus()
+    })
+  }
+  const setDropTarget = (targetId: string | null): void => {
+    if (dropTarget === targetId) return
+    dropTarget = targetId
+    void handle.update()
+  }
+  const setDraggedEntry = (entry: DraggedScenarioEntry): void => {
+    draggedEntry = entry
+  }
+  const openPreview = (): void => {
+    previewError = null
+    popupPreviewHost ??= new PopupPreviewHost(controller)
+    if (!popupPreviewHost.open()) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
+    void handle.update()
+  }
   handle.queueTask(() => {
     const subscription = controller.subscribe((snapshot) => {
       view = selectProjectView(snapshot)
       void handle.update()
     })
-    handle.signal.addEventListener('abort', () => subscription.unsubscribe(), { once: true })
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (responsivePanel === null) return
+      if (event.key === 'Escape') {
+        setResponsivePanel(null)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const panelId = responsivePanel === 'outline' ? 'elce-outline' : 'elce-properties'
+      const panel = document.getElementById(panelId)
+      if (panel === null) return
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getClientRects().length > 0)
+      const first = focusable[0]
+      const last = focusable.at(-1)
+      if (first === undefined || last === undefined) return
+      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    const handleResize = (): void => {
+      switch (responsivePanel) {
+        case 'outline':
+          if (window.innerWidth > 800) setResponsivePanel(null)
+          return
+        case 'properties':
+          if (window.innerWidth > 1200) setResponsivePanel(null)
+          return
+        case null:
+          return
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', handleResize)
+    const dispose = (): void => {
+      subscription.unsubscribe()
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleResize)
+      popupPreviewHost?.destroy()
+    }
+    handle.signal.addEventListener('abort', dispose, { once: true })
   })
 
-  return () => renderApplication(view, actions)
+  return () => renderApplication(view, actions, {
+    responsivePanel,
+    dropTarget,
+    visible: view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active',
+    setResponsivePanel,
+    setDropTarget,
+    setDraggedEntry,
+    getDraggedEntry: () => draggedEntry,
+    onPreview: openPreview,
+    previewError,
+    movePage: (pageId, placement) => actions.movePage(pageId, placement),
+    moveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
+  })
 }
 
 /** Selects only project-management data from the XState-owned application snapshot. */
-function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): ProjectView {
+function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): ProjectApplicationView {
   return {
     projects: snapshot.context.projects,
     activeProject: snapshot.context.activeProject,
@@ -39,11 +130,16 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
     editAccess: snapshot.context.editAccess,
     document: snapshot.context.document,
     syncStatus: snapshot.context.syncStatus,
+    editor: selectEditorViewModel(snapshot),
   }
 }
 
 /** Renders the project switcher, project list, and preserved React work-area host. */
-function renderApplication(view: ProjectView, actions: EditorActionsFacade): RemixNode {
+function renderApplication(
+  view: ProjectApplicationView,
+  actions: EditorActionsFacade,
+  workspace: ProjectApplicationWorkspaceState,
+): RemixNode {
   const editorVisible = view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active'
   const currentName = view.activeProject === null ? null : view.document.data.name
   return jsx('div', {
@@ -55,8 +151,11 @@ function renderApplication(view: ProjectView, actions: EditorActionsFacade): Rem
         children: [
           jsx('div', {
             id: 'elce-project-header-brand',
-            className: 'elce-project-header-brand',
-            children: jsx('strong', { id: 'elce-project-brand-name', children: 'Elcé' }),
+          className: 'elce-project-header-brand',
+            children: [
+              jsx('strong', { id: 'elce-project-brand-name', children: 'Elcé' }),
+              editorVisible ? renderWorkspaceAccess(workspace) : null,
+            ],
           }),
           jsx('details', {
             id: 'elce-project-menu',
@@ -131,13 +230,81 @@ function renderApplication(view: ProjectView, actions: EditorActionsFacade): Rem
         ],
       }),
       editorVisible ? null : renderProjectSelection(view, actions),
-      jsx(ReactEditorTempBridge, { hidden: !editorVisible }),
+      renderEditorWorkspace({
+        view: view.editor,
+        actions,
+        pageEditorHost: jsx(ReactEditorTempBridge, { hidden: !editorVisible || view.editor.selectedChapter !== undefined }),
+        responsivePanel: workspace.responsivePanel,
+        dropTarget: workspace.dropTarget,
+        visible: editorVisible,
+        onSetResponsivePanel: workspace.setResponsivePanel,
+        onSetDropTarget: workspace.setDropTarget,
+        onSetDraggedEntry: workspace.setDraggedEntry,
+        getDraggedEntry: workspace.getDraggedEntry,
+        onPreview: workspace.onPreview,
+        previewError: workspace.previewError,
+        onMovePage: workspace.movePage,
+        onMoveChapter: workspace.moveChapter,
+      }),
     ],
   })
 }
 
+/** Renders the responsive panel commands beside the Elcé brand. */
+function renderWorkspaceAccess(
+  workspace: ProjectApplicationWorkspaceState,
+): RemixNode {
+  return jsx('nav', {
+    id: 'elce-responsive-panel-access',
+    className: 'elce-responsive-panel-access',
+    'aria-label': 'Panneaux de l’éditeur',
+    children: [
+      renderPanelToggle('outline', workspace.responsivePanel, workspace.setResponsivePanel),
+      renderPanelToggle('properties', workspace.responsivePanel, workspace.setResponsivePanel),
+    ],
+  })
+}
+
+/** Renders one panel toggle using its documented breakpoint and accessible label. */
+function renderPanelToggle(
+  panel: Exclude<ResponsivePanel, null>,
+  responsivePanel: ResponsivePanel,
+  setResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void,
+): RemixNode {
+  const outline = panel === 'outline'
+  const id = outline ? 'elce-outline-toggle' : 'elce-properties-toggle'
+  const label = outline ? 'Ouvrir le scénario' : 'Ouvrir les contenus disponibles'
+  const title = outline ? 'Scénario' : 'Contenus disponibles'
+  const targetId = outline ? 'elce-outline' : 'elce-properties'
+  const icon = outline ? List : Images
+  const className = responsivePanel === panel
+    ? `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel} elce-responsive-panel-toggle--open`
+    : `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel}`
+  return jsx('button', {
+    id,
+    className,
+    type: 'button',
+    'aria-label': label,
+    title,
+    'aria-expanded': responsivePanel === panel,
+    'aria-controls': targetId,
+    mix: on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(panel, id)),
+    children: renderLucideIcon(icon, `${id}-icon`, 18),
+  })
+}
+
+/** Returns the close control that should receive focus after a drawer opens. */
+function panelCloseButtonId(panel: Exclude<ResponsivePanel, null>): string {
+  switch (panel) {
+    case 'outline':
+      return 'elce-outline-close'
+    case 'properties':
+      return 'elce-properties-close'
+  }
+}
+
 /** Renders the selection surface when no project is actively being edited. */
-function renderProjectSelection(view: ProjectView, actions: EditorActionsFacade): RemixNode {
+function renderProjectSelection(view: ProjectApplicationView, actions: EditorActionsFacade): RemixNode {
   return jsx('main', {
     id: 'elce-project-selection',
     className: 'elce-project-selection',
@@ -183,7 +350,7 @@ function renderProjectSelection(view: ProjectView, actions: EditorActionsFacade)
 }
 
 /** Renders project open and delete commands for one server-owned list. */
-function projectRows(view: ProjectView, actions: EditorActionsFacade, surface: 'menu' | 'selection'): RemixNode[] {
+function projectRows(view: ProjectApplicationView, actions: EditorActionsFacade, surface: 'menu' | 'selection'): RemixNode[] {
   return view.projects.map((project) => {
     const isActive = view.activeProject?.id === project.id
     const prefix = `elce-project-${surface}-${project.id}`
@@ -244,7 +411,7 @@ function projectStatusLabel(status: ProjectSessionStatus): string {
 }
 
 /** Chooses a short heading from the actor-owned active project state. */
-function projectSelectionTitle(view: ProjectView): string {
+function projectSelectionTitle(view: ProjectApplicationView): string {
   switch (view.projectStatus) {
     case 'loading': return 'Chargement de vos projets'
     case 'opening': return `Ouverture de ${view.activeProject?.name ?? 'votre projet'}`

@@ -52,6 +52,17 @@ function syncStatusLabel(status: DocumentSyncState['status']): string {
   }
 }
 
+/** Selects a structural workspace class for the full or embedded page editor. */
+function workspaceClassName(hideHeader: boolean, surface: AppLayoutProps['surface']): string {
+  switch (surface) {
+    case 'remix-page-work-area':
+      return 'elce-workspace elce-workspace--external-header elce-workspace--remix-work-area'
+    case 'full':
+    case undefined:
+      return hideHeader ? 'elce-workspace elce-workspace--external-header' : 'elce-workspace'
+  }
+}
+
 /** Renders the chapter type icon and any label configured for that type. */
 function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
   const presentation = CHAPTER_TYPE_CONFIG[type]
@@ -65,7 +76,9 @@ function ChapterTypeMark({ type }: Readonly<{ type: ChapterType }>) {
 }
 
 /** Renders the Elcé work area from the controller-owned application state. */
-export function AppLayout({ controller, actions, hideHeader = false }: AppLayoutProps) {
+export function AppLayout({ controller, actions, hideHeader = false, surface = 'full' }: AppLayoutProps) {
+  const MainElement = surface === 'remix-page-work-area' ? 'div' : 'main'
+  const mainId = surface === 'remix-page-work-area' ? 'elce-react-page-work-area' : 'elce-main'
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [responsivePanel, setResponsivePanel] = useState<ResponsivePanel>(null)
@@ -651,7 +664,11 @@ export function AppLayout({ controller, actions, hideHeader = false }: AppLayout
 
   return (
     <Fragment>
-    <div id="elce-workspace" className={hideHeader ? 'elce-workspace elce-workspace--external-header' : 'elce-workspace'} inert={editAccess !== 'active'}>
+    <div
+      id="elce-workspace"
+      className={workspaceClassName(hideHeader, surface)}
+      inert={editAccess !== 'active'}
+    >
       {hideHeader ? null : <header id="elce-header" className="elce-header">
         <div id="elce-header-title" className="elce-header-title">
           <div id="elce-brand" className="elce-brand">
@@ -686,7 +703,8 @@ export function AppLayout({ controller, actions, hideHeader = false }: AppLayout
           </nav>
         </div>
       </header>}
-      <main id="elce-main" className="elce-main">
+      <MainElement id={mainId} className={surface === 'remix-page-work-area' ? 'elce-main elce-main--remix-work-area' : 'elce-main'}>
+        {surface === 'full' ? <>
         <section
           id="elce-outline"
           ref={outlineDrawerRef}
@@ -778,7 +796,8 @@ export function AppLayout({ controller, actions, hideHeader = false }: AppLayout
             />
           </section>
         </section>
-        <section id="elce-work-area" className="elce-panel elce-work-area">
+        </> : null}
+        {surface === 'remix-page-work-area' && selectedChapter !== undefined ? null : <section id="elce-work-area" className="elce-panel elce-work-area">
           <div id="elce-work-area-heading" className="elce-work-area-heading">
             <div id="elce-work-area-preview-row" className="elce-work-area-preview-row">
               <button id="elce-preview-open" type="button" onClick={openPreview}>
@@ -840,7 +859,8 @@ export function AppLayout({ controller, actions, hideHeader = false }: AppLayout
             </div>
           </div>
           {renderWorkAreaContent()}
-        </section>
+        </section>}
+        {surface === 'full' ? <>
         <aside
           id="elce-properties"
           ref={propertiesDrawerRef}
@@ -985,8 +1005,9 @@ export function AppLayout({ controller, actions, hideHeader = false }: AppLayout
                 </ul>
               </section>}
         </aside>
-      </main>
-      {responsivePanel !== null
+        </> : null}
+      </MainElement>
+      {surface === 'full' && responsivePanel !== null
         ? <button
             id="elce-responsive-panel-backdrop"
             className="elce-responsive-panel-backdrop"

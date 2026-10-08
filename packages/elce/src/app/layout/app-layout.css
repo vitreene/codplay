@@ -55,6 +55,11 @@ body {
   min-height: calc(100vh - 4rem);
 }
 
+.elce-workspace--remix-work-area {
+  min-height: 0;
+  height: auto;
+}
+
 .elce-header {
   display: flex;
   align-items: center;
@@ -260,6 +265,17 @@ body {
   gap: 1rem;
   width: 100%;
   padding: 1rem;
+}
+
+.elce-main--remix-work-area {
+  display: block;
+  min-height: 0;
+  padding: 0;
+}
+
+.elce-remix-editor-column,
+.elce-remix-page-editor-host {
+  min-width: 0;
 }
 
 .elce-panel {
