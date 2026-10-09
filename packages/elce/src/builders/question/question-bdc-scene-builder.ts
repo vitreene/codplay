@@ -81,7 +81,12 @@ export function buildQuestionBdcStory(
       prompt,
       instructions,
       ...answerPersos,
-      createQuestionValidatePerso(bdc.id, prefix, validationZone),
+      createQuestionValidatePerso(
+        bdc.id,
+        prefix,
+        validationZone,
+        question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
+      ),
       createQuestionFeedbackPerso(bdc.id, prefix, validationZone),
     ],
   }
@@ -168,13 +173,13 @@ function createQuestionAnswerPerso(
 }
 
 /** Creates the validate action in the preset's validation zone. */
-function createQuestionValidatePerso(bdcId: string, prefix: string, target: string): PersoDoc<string> {
+function createQuestionValidatePerso(bdcId: string, prefix: string, target: string, label: string): PersoDoc<string> {
   return {
     id: `${bdcId}-validate`,
     type: 'tag',
     initial: {
       tag: 'button',
-      content: QUESTION_DEFAULTS.VALIDATE_LABEL,
+      content: label,
       attr: { type: 'button', disabled: true },
       className: 'elce-question-validate',
       move: { target },

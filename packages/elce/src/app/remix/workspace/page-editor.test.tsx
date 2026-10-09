@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 
 import { render } from 'remix/ui/test'
-import { BDC_ORDER, BDC_TYPE, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../../config/document-config'
+import { BDC_LOCATION, BDC_ORDER, BDC_TYPE, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CATALOG_REFERENCE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../../config/document-config'
 import { controllerMachine } from '../../controller/controller-machine'
 import { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
 import { EditorContextProvider } from '../editor-context'
 import { RemixPageEditor } from './page-editor'
+import { selectEditorViewModel } from '../../selectors/editor-view-model'
+import { renderEditorWorkspace } from './editor-workspace'
 
 describe('Remix production page editor', () => {
   let cleanup: (() => void) | undefined
@@ -437,6 +439,77 @@ describe('Remix production page editor', () => {
       .toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value)
       .toBe(CAROUSEL_TRANSITION.ZOOM)
+  })
+
+  it('moves a catalogue Card into a compatible page and returns it through the page catalogue action', async () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const actions = new EditorActionsFacade(controller)
+    const page = controller.getSnapshot().context.document.pages[0]
+    if (page === undefined) throw new Error('The catalogue fixture has no page.')
+    controller.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.create',
+        bdcId: 'bdc-catalog-card',
+        bdcType: BDC_TYPE.CARD,
+        presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+        placement: { kind: BDC_LOCATION.CATALOG },
+      },
+    })
+
+    const mountWorkspace = () => render(<EditorContextProvider controller={controller} actions={actions}>
+      {renderEditorWorkspace({
+        view: selectEditorViewModel(controller.getSnapshot()),
+        actions,
+        pageEditorHost: <RemixPageEditor onPreview={() => undefined} previewError={null} />,
+        responsivePanel: null,
+        dropTarget: null,
+        visible: true,
+        onSetResponsivePanel: () => undefined,
+        onSetDropTarget: () => undefined,
+        onSetDraggedEntry: () => undefined,
+        getDraggedEntry: () => null,
+        onPreview: () => undefined,
+        previewError: null,
+        onMovePage: (pageId, placement) => actions.movePage(pageId, placement),
+        onMoveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
+      })}
+    </EditorContextProvider>)
+    let rendered = mountWorkspace()
+    cleanup = () => {
+      rendered.cleanup()
+      controller.stop()
+    }
+    await actOnRemix(rendered, () => Promise.resolve())
+
+    const reference = { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-catalog-card' }
+    const transfer = createDataTransfer()
+    const catalogSource = document.getElementById('elce-catalog-bdc-drag-bdc:bdc-catalog-card')
+    expect(catalogSource).not.toBeNull()
+    await actOnRemix(rendered, () => dispatchDrag(
+      catalogSource!,
+      'dragstart',
+      transfer,
+    ))
+    expect(transfer.getData(CATALOG_REFERENCE.MIME_TYPE)).toBe(JSON.stringify(reference))
+    await actOnRemix(rendered, () => dispatchDrag(rendered.$(`#elce-page-bdc-drop-${page.bdcIds.length}`)!, 'dragover', transfer))
+    await actOnRemix(rendered, () => dispatchDrag(rendered.$(`#elce-page-bdc-drop-${page.bdcIds.length}`)!, 'drop', transfer))
+
+    let documentModel = controller.getSnapshot().context.document
+    expect(documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds).toEqual([...page.bdcIds, 'bdc-catalog-card'])
+    expect(documentModel.data.catalogBdcIds).not.toContain('bdc-catalog-card')
+
+    rendered.cleanup()
+    rendered = mountWorkspace()
+    await actOnRemix(rendered, () => rendered.$('#elce-page-bdc-catalog-bdc-catalog-card')?.click())
+    documentModel = controller.getSnapshot().context.document
+    expect(documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds).toEqual(page.bdcIds)
+    expect(documentModel.data.catalogBdcIds).toContain('bdc-catalog-card')
+    rendered.cleanup()
+    rendered = mountWorkspace()
+    expect(rendered.$('[id="elce-catalog-bdc-drag-bdc:bdc-catalog-card"]')).not.toBeNull()
   })
 })
 

@@ -1,8 +1,10 @@
 # Elcé — plan de stockage local et synchronisation
 
-**Statut : En cours — synchronisation automatique entre navigateurs acceptée le
-8 octobre 2026 ; les écritures concurrentes ne font pas partie du parcours
-retenu.** Le
+**Statut : En cours — synchronisation automatique entre navigateurs implémentée ;
+la validation avec deux navigateurs distincts est en réserve depuis le 9 octobre
+2026, en attente d’une mise à jour de Firefox qui corrige l’erreur empêchant son
+fonctionnement via MCP.** Les écritures concurrentes ne font pas partie du
+parcours retenu. Le
 périmètre local et le transfert des médias sont établis.
 Le modèle persistant v4 est assez défini pour commencer SQLite. L’acceptation
 du raccord d’Évaluation au player reste un travail du POC, sans données de
@@ -429,7 +431,7 @@ supprimés après vérification.
 Le menu et son raccord au coordinateur de synchronisation sont implémentés ;
 les preuves restantes sont suivies dans le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md).
 
-### 7. Synchronisation automatique entre navigateurs — acceptée, non implémentée
+### 7. Synchronisation automatique entre navigateurs — implémentée, validation en réserve
 
 Le même projet doit pouvoir rester ouvert dans plusieurs navigateurs et les
 modifications enregistrées dans l’un doivent parvenir automatiquement aux
@@ -440,29 +442,48 @@ demandée. Le flux doit réutiliser l’API projet, la révision serveur et l’
 XState de chaque éditeur ; il ne crée pas un deuxième document, un cache
 partagé entre navigateurs ou un circuit de commandes éditoriales parallèle.
 
+Le délai local existant reste de 500 ms. Quand la page perd le focus, elle
+suspend les nouvelles commandes, termine et sauvegarde les commandes déjà
+acceptées, puis tente immédiatement de confirmer le document et ses médias sur
+le serveur avant de libérer son accès. Une erreur réseau conserve la copie
+locale en attente et n’empêche pas la libération. Une fenêtre visible mais
+sans focus ne demande pas le verrou et reste non éditable. Au retour du focus,
+après restauration du cache local et obtention de l’accès, l’éditeur compare le
+checkpoint local à la révision serveur. Si le cache local est synchronisé et
+que le serveur est plus récent, il installe ce document dans le même acteur
+XState, conserve la sélection de page encore valide et rétablit ses sources de
+média. Un cache `pending` ou `conflict` n’est jamais remplacé. Le changement de
+focus constitue donc le déclencheur de réception entre navigateurs ; aucun
+rechargement de page n’est requis.
+
 Le contrat de révision existant reste un garde-fou pour une écriture inattendue
 depuis une copie obsolète : pas de dernier-écrit-gagnant ni de fusion. La copie
 locale en attente reste conservée et le conflit est signalé.
 
-**Constat du 8 octobre 2026 :** `ProjectSyncCoordinator` n’envoie que les
-écritures locales vers l’API ; aucun avis de modification distante n’est reçu
-par les éditeurs ouverts. Le bouton « Synchroniser » du popup ne concerne que
-le transfert entre son auteur et son lecteur. `ProjectSessionCoordinator`
-conserve la copie IndexedDB lorsqu’elle est `pending` ou `conflict`, ce qui
-protège une édition locale mais ne permet pas de recharger une version serveur
-depuis ces états. Le test utilisateur confirme l’absence de synchronisation
-entre deux navigateurs, y compris après une action manuelle ; le parcours
-manuel exact reste à identifier.
+**État vérifié le 8 octobre 2026 :** le circuit est implémenté dans
+`ProjectEditorLock`, `ProjectSessionCoordinator`, `DocumentPersistence` et
+`ProjectSyncCoordinator`. Les tests couvrent le push immédiat au blur,
+l’installation d’une révision distante avant la reprise d’édition, l’attente
+d’une fenêtre visible sans focus et le retour du focus pendant un transfert de
+verrou en cours. Brave DevTools a exercé deux contextes isolés sur 5175 avec des
+événements blur/focus explicites dans les deux sens : les révisions 1 et 2 ont
+été reçues, les checkpoints sont revenus à `synced`, et aucun `PUT` périmé n’a
+été émis au moment de la réception. La sélection Page A est restée valide.
+Cette validation ne remplace pas encore l’essai entre deux navigateurs
+distincts avec leurs événements OS réels. Dans Brave, une édition gardée en
+`pending` après coupure réseau a aussi été envoyée après reconnexion et reprise
+du focus, sans modification serveur concurrente.
 
-**Acceptation :** ouvrir le même projet dans deux navigateurs distincts ;
-modifier sa page active dans l’un ; après confirmation de l’écriture serveur,
-vérifier que l’autre reçoit le nouveau document sans recharger, tout en gardant
-sa sélection de page si celle-ci existe encore. Vérifier ensuite le sens
-inverse et le retour après une coupure réseau. Conserver en non-régression le
-refus `If-Match` et la copie locale en cas d’écriture inattendue sur une
-révision dépassée. Cette tranche reste `En cours` tant que l’implémentation,
-les tests et une validation navigateur inter-navigateurs ne satisfont pas ces
-critères.
+**Vérification inter-navigateurs en réserve — décision du 9 octobre 2026 :**
+reprendre après une mise à jour de Firefox qui corrige l’erreur empêchant son
+fonctionnement via MCP. Ouvrir alors le même projet dans deux navigateurs
+distincts ; modifier la page active, vérifier que son blur confirme la
+sauvegarde serveur, puis vérifier que le focus de l’autre installe le document
+sans rechargement et conserve sa sélection valide. Refaire le parcours inverse
+avec des événements OS réels. Conserver en non-régression le refus `If-Match`
+et la copie locale en cas d’écriture inattendue sur une révision dépassée.
+Ne pas lancer Firefox avant la mise à jour. Cette vérification ne bloque pas le
+portage Remix, terminé dans son plan dédié.
 
 ## Suites après le POC
 

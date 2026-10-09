@@ -1,5 +1,5 @@
 import { Check, GripVertical, ImagePlus, Plus, Trash2, X } from 'lucide-static'
-import { CATALOG_REFERENCE, MEDIA_FILE_ACCEPT, QUESTION_TYPE_CONFIG, QUESTION_TYPE_OPTIONS } from '../../../config/document-config'
+import { CATALOG_REFERENCE, MEDIA_FILE_ACCEPT, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG, QUESTION_TYPE_OPTIONS } from '../../../config/document-config'
 import type { QuestionAnswer, QuestionType } from '../../../domain/question/question-types'
 import { on, type RemixNode } from 'remix/ui'
 
@@ -46,57 +46,68 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
         {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`, 16)}
       </button>
     </div>
-    <input
-      id={`elce-question-title-${bdcId}`}
-      className="elce-question-title"
-      aria-label="Titre facultatif de la question"
-      placeholder="Titre (facultatif)"
-      value={question.title}
-      mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setTitle(event.currentTarget.value))}
-    />
-    {renderQuestionMediaEditor(props)}
-    <textarea
-      id={`elce-question-prompt-${bdcId}`}
-      className="elce-question-prompt"
-      aria-label="Question"
-      placeholder="Écrire la question…"
-      rows={2}
-      value={question.prompt}
-      mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setPrompt(event.currentTarget.value))}
-    />
-    {typeConfig.note.length > 0
-      ? <p
-        id={`elce-question-multiple-note-${bdcId}`}
-        className="elce-question-multiple-note"
-      >
-        {typeConfig.note}
-      </p>
-      : null}
-    <ol
-      id={`elce-question-answers-${bdcId}`}
-      className="elce-question-answers"
+    <div
+      id={`elce-question-workspace-${bdcId}`}
+      className="elce-question-workspace"
     >
-      {question.answers.map((answer, index) => renderQuestionAnswer(answer, index, actions))}
-    </ol>
-    {typeConfig.editableAnswers
-      ? <button
-        id={`elce-question-add-answer-${bdcId}`}
-        className="elce-question-add-answer"
-        type="button"
-        mix={on<HTMLButtonElement, 'click'>('click', actions.addAnswer)}
+      {renderQuestionMediaEditor(props)}
+      <div
+        id={`elce-question-content-${bdcId}`}
+        className="elce-question-content"
       >
-        {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`, 15)}
-        {' Ajouter une réponse'}
-      </button>
-      : null}
-    <button
-      id={`elce-question-validate-preview-${bdcId}`}
-      className="elce-question-validation-preview"
-      type="button"
-      disabled={true}
-    >
-      Valider la réponse
-    </button>
+        <input
+          id={`elce-question-title-${bdcId}`}
+          className="elce-question-title"
+          aria-label="Titre facultatif de la question"
+          placeholder="Titre (facultatif)"
+          value={question.title}
+          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setTitle(event.currentTarget.value))}
+        />
+        <textarea
+          id={`elce-question-prompt-${bdcId}`}
+          className="elce-question-prompt"
+          aria-label="Question"
+          placeholder="Écrire la question…"
+          rows={2}
+          value={question.prompt}
+          mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setPrompt(event.currentTarget.value))}
+        />
+        <input
+          id={`elce-question-validation-label-${bdcId}`}
+          className="elce-question-validation-label"
+          type="text"
+          aria-label="Texte du bouton de validation"
+          placeholder="Texte du bouton de validation"
+          value={question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL}
+          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setValidationLabel(event.currentTarget.value))}
+        />
+        {typeConfig.note.length > 0
+          ? <p
+            id={`elce-question-multiple-note-${bdcId}`}
+            className="elce-question-multiple-note"
+          >
+            {typeConfig.note}
+          </p>
+          : null}
+        <ol
+          id={`elce-question-answers-${bdcId}`}
+          className="elce-question-answers"
+        >
+          {question.answers.map((answer, index) => renderQuestionAnswer(answer, index, actions))}
+        </ol>
+        {typeConfig.editableAnswers
+          ? <button
+            id={`elce-question-add-answer-${bdcId}`}
+            className="elce-question-add-answer"
+            type="button"
+            mix={on<HTMLButtonElement, 'click'>('click', actions.addAnswer)}
+          >
+            {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`, 15)}
+            {' Ajouter une réponse'}
+          </button>
+          : null}
+      </div>
+    </div>
   </article>
 }
 

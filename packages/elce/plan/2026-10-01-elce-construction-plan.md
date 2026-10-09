@@ -35,12 +35,65 @@ preuves qui permettent de fermer chaque tranche.
 | 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 font 14 px. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le catalogue « Contenus disponibles » occupe la colonne droite. Une page déplacée ne reconstruit pas les scènes. |
 | 2 | Première lecture Flux dans Sighty/CodPlay | En cours | Une scène Flux réelle se lit via le scénario Sighty et son slot racine. Menu, lecture à la page courante, repère de fin, pages courtes et longues suivent les contrats de la démo 5. Un aller-retour A → B → A conserve chaque scène. |
 | 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
-| 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
+| 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. En mode éditeur, l’illustration et la zone question-réponses sont côte à côte au rapport 25/75. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
 | 5 | Évaluation de chapitre | En cours — résultat calculé par Sighty et montage de la branche Réussite/Échec dans CodPlay couverts par les tests de composition ; les actions Recommencer/Relire, la visibilité des réponses et le parcours Brave restent à valider. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
+
+### Hiérarchie des titres dans l’éditeur Tiptap
+
+Dans le contenu d’une Section, `h1` doit être visuellement plus grand que `h2`.
+La règle générale `.elce-panel h1` donnait `1rem` à tous les `h1` du panneau,
+y compris ceux de Tiptap, tandis que `h2` gardait sa taille native. Des règles
+scopées au contenu Tiptap rétablissent `2em` pour `h1` et `1.5em` pour `h2`.
+
+**État : correction CSS appliquée ; vérification visuelle dans Brave en attente.**
+Transférer ce comportement dans la [spécification Section](../specs/section-editor-spec.md)
+après cette vérification.
+
+### Conserver la sélection pendant la mise en forme Tiptap
+
+Les commandes de la barre doivent appliquer l’enrichissement à la sélection
+ProseMirror courante sans la perdre. Le `mousedown` sur une commande empêche le
+déplacement natif du focus vers le bouton, selon le même mécanisme déjà utilisé
+par le bouton d’édition d’ancre. La commande existante continue d’appliquer le
+format via Tiptap et de restaurer le focus pour les activations clavier.
+
+**État : décision acceptée, réalisation en cours.** Vérifier dans l’éditeur de
+production qu’une sélection reste disponible après une mise en forme et qu’un
+enrichissement suivant s’applique toujours à cette même sélection avant de
+mettre à jour la spécification Section.
+
+### Décision acceptée — texte du bouton de validation Question
+
+En mode éditeur, le bouton de validation n’est pas affiché : seul son texte est
+proposé dans un champ éditable. Le libellé appartient au contenu de la Question,
+est sauvegardé par la façade et la commande Question existantes, puis projeté
+sur le vrai bouton de validation du player. Une Question v4 déjà enregistrée
+sans ce champ conserve le libellé configuré « Valider la réponse » jusqu’à sa
+modification. Le stockage SQLite du projet doit conserver ce libellé après
+réouverture et synchronisation.
+
+**État : accepté, réalisation et preuves en cours.** La sortie exige le champ
+éditable dans Remix sans bouton factice, le montage du libellé enregistré dans
+la story Question, et les parcours de sauvegarde locale et SQLite. Les preuves
+restent à ajouter ou à rejouer avant d’actualiser la spécification Question.
+
+### Décision acceptée — disposition Question dans l’éditeur
+
+Dans le mode éditeur, la zone d’illustration et la zone qui contient l’énoncé
+et les réponses s’affichent côte à côte. La zone illustration occupe 25 % de la
+largeur disponible et la zone question-réponses 75 %. Ce changement concerne
+uniquement l’éditeur Remix ; il ne modifie pas la projection ni la disposition
+du player.
+
+**État : accepté, réalisation en cours.** La sortie exige que le markup de
+l’éditeur regroupe les deux zones dans la même grille au rapport 25/75 et que
+les actions d’édition de la question et des réponses restent raccordées aux
+façades existantes. La validation de cette disposition reste à effectuer avant
+d’actualiser la spécification Question.
 
 ### Décision acceptée — montage du BDC Résultat dans CodPlay
 
@@ -102,11 +155,28 @@ CodPlay n’est prévu.
 Carte ancrée et l’entrée du repère bas ; l’événement atteint Sighty, le bouton
 s’active et Page B se déverrouille. Dans le parcours légitime Projet 1, terminer
 Page A, ouvrir la Diapo Page B, terminer son Carousel, vérifier le
-déverrouillage de Page C, puis cliquer « Suivant » et constater Page C. Un
-démarrage direct à Page B avec Page A inachevée ne doit pas présenter un bouton
-actif qui mène à une cible verrouillée. Compléter les tests Flux/Sighty ciblés,
-le typecheck, la suite Elcé, le build et le parcours Brave ; ne pas modifier les
-données du Projet 1.
+déverrouillage de Page C, puis cliquer « Suivant » et constater Page C. Quand
+la preview démarre directement sur une page choisie dans l’éditeur, cette page
+devient l’origine de la progression avant : « Suivant » attend les conditions
+de sortie Sighty de chaque page atteinte, puis déverrouille la suivante sans
+exiger la relecture des pages antérieures à l’origine. Cela couvre le départ
+direct à la Question D et l’accès à F après réponse et scroll-end de D. Cette
+origine ne remplit aucune progression ni réponse à la place de Sighty. Un BDC Résultat conserve son garde d’accès
+global : démarrer directement à la Question F ne rend pas G accessible tant que
+les pages antérieures nécessaires à l’évaluation restent inachevées. Compléter
+les tests Flux/Sighty ciblés, le typecheck, la suite Elcé, le build et le
+parcours Brave ; ne pas modifier les données du Projet 1.
+
+**État de l’extension : code appliqué, validation partielle.** La garde
+`PAGE_ACCESS` reçoit la page de départ de la preview et applique cette origine
+aux pages accessibles en avant ; les pages portant un BDC Résultat gardent le
+préfixe global. Les 28 tests de composition, le typecheck et le build passent.
+La suite complète compte 218 succès et un échec du test de persistance SQLite,
+qui ne peut pas ouvrir son listener local (`listen EPERM: operation not
+permitted 127.0.0.1`). Le parcours Brave de Projet 1 reste en attente :
+l’auto-review a rejeté deux fois la sélection de Page D, sans modification des
+données. Ne pas fermer la tranche avant le parcours navigateur autorisé et la
+résolution ou qualification de l’échec d’environnement.
 
 Complément d’acceptation pour Page F : après un démarrage direct à F et la
 validation de sa Question, « Suivant » reste désactivé tant que Page G demeure
@@ -669,6 +739,71 @@ intégration dépendante ; les travaux indépendants continuent.
 - Le réglage fin des durées auteur par vue restera dans le circuit existant
   Capsule Automation ; il ne bloque pas l’édition et l’insertion du BDC
   Carousel dans le POC.
+
+## Évolution acceptée — BDC disponibles au catalogue
+
+Le panneau « Blocs disponibles » doit pouvoir conserver tous les types de BDC
+du document, pas seulement les Cartes image/vidéo actuellement proposées comme
+ancres dans une Section. Cette whitelist d’ancrage est une restriction du
+circuit existant, distincte du placement général au catalogue. La Carte est
+également le premier BDC élargi à l’insertion dans le flux d’une Section, selon
+le cadrage ci-dessous.
+Le déplacement vers le catalogue et le retour vers une page doivent réutiliser
+les commandes documentaires existantes, conserver l’identité et le contenu du
+BDC, et respecter les contraintes de type de page et de parent.
+
+Déplacer un BDC conteneur conserve ses enfants dans la même relation : les
+Cartes ancrées restent dans leur Section et les Cartes de lecture restent dans
+leur Carousel. Le catalogue affiche le BDC conteneur comme une seule entrée ;
+il ne détache ni ne duplique ses enfants.
+
+**État : décision acceptée, réalisation en cours.** L’UI et les commandes
+utilisent `bdc.remove`, `bdc.move` et `bdc.anchor.attach` existants ; le contrôle
+de compatibilité de placement appelle le même `applyDocumentCommand`. Les tests
+ciblés couvrent les cinq types racines, la conservation des enfants, les Cartes
+Texte court sans média, les trois aperçus Carte hors Photo, et le glisser d’une
+Carte entre catalogue et page dans le workspace Remix. Les 62 tests ciblés,
+`typecheck`, `build` et `git diff --check` passent. Le dernier passage de la
+suite complète a échoué sur un test SQLite qui tente d’ouvrir un port local
+(`EPERM`). La validation Brave reste en attente : sur 5175, Projet 1 était
+verrouillé par une autre fenêtre ; le parcours temporaire n’a donc pas été
+exécuté. Après rechargement, la page Brave est restée vide. Rejouer les parcours
+catalogue, ancre Carte, persistance et retour quand le serveur 5175 et l’accès
+au projet permettent un test isolé. Ne pas toucher à 5173.
+
+## Évaluation — BDC insérables dans le flux d’une Section
+
+Le stockage au catalogue et l’insertion dans le texte sont deux capacités
+distinctes. Le premier doit accepter tous les types de BDC ; le second doit
+rester limité aux types qui ont un rôle et un rendu cohérents dans un flux.
+
+| BDC | Pertinence pour une insertion dans le texte | Décision de cadrage |
+| --- | --- | --- |
+| Carte | Convient aux citations et exergues ; les layouts de Carte existants conservent leur usage. Texte court est le cas d’usage initial. | Acceptée pour l’insertion dans le flux, en réutilisant le BDC Carte, son layout, ses champs, ses médias, les commandes d’ancre existantes et la projection Flux. L’aperçu auteur doit rendre le contenu du layout choisi. Aucun type « citation » séparé. |
+| Section / Texte | Une Section dans une autre Section introduirait un éditeur de flux imbriqué et une composition récursive. | Exclue. |
+| Carousel | Une séquence à vues et commandes dans le flux aurait une hauteur et un comportement de lecture distincts. | À décider après un besoin concret ; pas d’insertion implicite. |
+| Question | Le Quiz porte une validation, une réponse et des conditions de progression attachées à une page. | Pas candidate pour le besoin citation/exergue. Une insertion de Quiz demanderait un contrat de lecture séparé. |
+| Résultat d’évaluation | Ses branches dépendent de l’état d’Évaluation Sighty et de l’admission de la page de résultat. | Pas candidate pour le besoin citation/exergue ; conserver son montage dans le parcours d’évaluation. |
+
+Le chantier actif rend tous les layouts Carte existants disponibles comme
+ancres. Pour rédiger une citation ou une exergue, le layout Texte court est le
+cas de référence. L’aperçu Tiptap affiche les champs et le média compatibles
+avec le layout choisi ; le builder Flux et le player gardent leur projection
+Carte existante. Le projet « Graphe de données » pourra ajouter son BDC au
+catalogue et son éventuelle insertion dans le flux quand ce projet sera créé ;
+aucun type ni contrat Graphe n’est défini ici.
+
+Le réglage permettant de décaler la Carte par rapport au flux grâce à des
+marges adaptées est reporté à une évolution ultérieure. Son comportement
+n’est pas formalisé et ne fait pas partie de la première extension d’ancre.
+
+## Fonctionnalité à faire — copier, couper et coller un BDC
+
+Ajouter ultérieurement les commandes auteur copier/couper/coller d’un BDC.
+Cette fonctionnalité devra définir l’identité créée par la copie, le traitement
+des ressources média partagées et celui des BDC composites avant son
+implémentation. Elle reste dans la liste des fonctionnalités à faire et ne fait
+pas partie du changement de catalogue en cours.
 
 ## Décisions ouvertes
 

@@ -3,7 +3,9 @@
 ## Statut
 
 **En cours — ratio natif et continuité de l’image vérifiés ; le chargement et le
-montage d’une vidéo réelle ont aussi été vérifiés dans Safari.**
+montage d’une vidéo réelle ont aussi été vérifiés dans Safari. L’insertion des
+layouts Carte hors Photo est implémentée et couverte par les tests ciblés ; la
+validation du parcours complet dans Brave reste en cours.**
 
 Le 3 octobre 2026, le déplacement de l’ancre après « For » puis le resize de
 l’éditeur conservent « For the » sur une même ligne naturelle avant l’image.
@@ -17,20 +19,27 @@ des persos CodPlay est décrit dans la
 
 ## Contrat vérifié
 
-`ElceAnchorExtension` représente une insertion de bdc comme un nœud inline
+`ElceAnchorExtension` représente une insertion de BDC comme un nœud inline
 atomique et déplaçable. Ses attributs métier sont `bdcId`, `partId` et
 `paddingBottom`. L’extension ne stocke ni `mediaId` ni type de média :
-l’éditeur résout la Carte par `bdcId`, puis lit `card.mediaId` et le MIME de la
-ressource pour afficher son aperçu. L’éditeur affiche une prise déplaçable ;
+l’éditeur résout la Carte par `bdcId` et lit ses champs et son média courant.
+L’aperçu utilise le même `ElceCardPresetBuilder` et le même `CARD_PRESETS` que
+la projection Flux ; il affiche les champs de texte déclarés par le layout et
+les médias compatibles avec ce layout, en conservant ses réglages de position
+et de cadrage lorsqu’ils s’appliquent. Texte court peut donc servir aux
+citations et exergues sans introduire un type de BDC distinct. Les layouts
+Texte avec image et Image avec légende gardent leur gabarit Carte ; Photo reste
+le seul layout qui accepte une vidéo. L’éditeur affiche une prise déplaçable ;
 l’export statique produit un seul `span` avec `id`, `data-part`, `data-bdc-id`
-et `data-elce-anchor`. À la première insertion, le `padding-bottom` a un ratio
-provisoire défini dans la configuration. Après chargement de l’image, le
+et `data-elce-anchor`. À la première insertion Photo, le `padding-bottom` a un
+ratio provisoire défini dans la configuration. Après chargement de l’image, le
 NodeView calcule
 `hauteur intrinsèque / largeur intrinsèque × 100 %` et inscrit le résultat dans
-l’attribut de l’ancre par une transaction Tiptap. Le `padding-bottom` réservé
-garde ce ratio, auquel s’ajoutent la ligne d’insertion et les marges. Le player
-ajoute la marge supérieure `ANCHOR.DEFAULT_BDC_MARGIN_TOP`, également définie
-dans la configuration et non éditable dans le POC.
+l’attribut de l’ancre par une transaction Tiptap. Les autres layouts utilisent
+la réservation par défaut configurée. Le `padding-bottom` réservé comprend la
+ligne d’insertion et les marges ; le player ajoute la marge supérieure
+`ANCHOR.DEFAULT_BDC_MARGIN_TOP`, également définie dans la configuration et non
+éditable dans le POC.
 
 Le nœud ne crée aucun élément CodPlay et ne contient pas de HTML saisi par
 l’auteur. Une Carte ancrée est un BDC enfant de la Section qui l’emploie : son
@@ -154,7 +163,9 @@ texte ou le média placé dessous.
 
 - [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
   vérifie la conversion JSON → `span` statique, les attributs de ciblage,
-  l’aperçu de l’image et le déplacement d’une ancre image par le chemin complet
+  l’aperçu image Photo et les aperçus Texte court, Texte avec image et Image
+  avec légende. Les gabarits de ces aperçus viennent de `ElceCardPresetBuilder`.
+  Le test vérifie aussi le déplacement d’une ancre image par le chemin complet
   `dragstart` → ProseMirror → `drop` → commande de déplacement. Le test vérifie
   que le même BDC change de position et qu’un glisser en mode copie ne le
   duplique pas. Le test du retour couvre le cas Safari où `dragend` garde

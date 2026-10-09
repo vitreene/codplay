@@ -1,8 +1,17 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE } from '../../config/document-config'
-import { applyDocumentCommand } from '../commands/document-commands'
+import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
+import {
+  applyDocumentCommand,
+  createCarouselBdcCommand,
+  createChapterCommand,
+  createDefaultPageCommand,
+  createEvaluationResultBdcCommand,
+  createQuestionBdcCommand,
+  createSectionBdcCommand,
+  createStandaloneCardBdcCommand,
+} from '../commands/document-commands'
 import { createInitialDocument } from '../document/document-model'
 import { mediaTypeFromMimeType } from '../media/media-resource-service'
 import { ElceAnchorDropService } from './anchor-drop-service'
@@ -46,7 +55,7 @@ describe('ElceAnchorDropService', () => {
       bdcs: [{
         key: `${CATALOG_REFERENCE.BDC}:bdc-image-1`,
         name: 'photo.png',
-        mediaType: 'image',
+        bdcType: BDC_TYPE.CARD,
         reference: { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-image-1' },
       }],
       media: [{
@@ -56,6 +65,56 @@ describe('ElceAnchorDropService', () => {
         reference: { kind: CATALOG_REFERENCE.MEDIA, mediaId: 'media-image-1' },
       }],
     })
+  })
+
+  it('lists every root BDC type while restricting inline targets to Cards', () => {
+    const service = new ElceAnchorDropService()
+    let document = createInitialDocument()
+    const fluxPage = document.pages[0]
+    if (fluxPage === undefined) throw new Error('Le document ne contient pas de page Flux.')
+    const sectionBdcId = fluxPage.bdcIds[0]
+    if (sectionBdcId === undefined) throw new Error('La page Flux ne contient pas de Section.')
+    document = applyDocumentCommand(document, { type: 'bdc.remove', bdcId: sectionBdcId })
+    document = applyDocumentCommand(document, createSectionBdcCommand('bdc-page-section', fluxPage.id, 0))
+    document = applyDocumentCommand(document, createStandaloneCardBdcCommand('bdc-text-short', fluxPage.id, DEFAULT_PRESET_ID.TEXT_SHORT))
+    document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-question', fluxPage.id, 1))
+    document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-carousel', fluxPage.id, 2, 'bdc-carousel-card'))
+
+    const evaluationChapter = createChapterCommand(document, 'Évaluation', CHAPTER_TYPE.EVALUATION)
+    document = applyDocumentCommand(document, evaluationChapter)
+    const evaluationPage = createDefaultPageCommand(
+      document,
+      { kind: PAGE_LOCATION.CHAPTER, chapterId: evaluationChapter.chapterId },
+      'Résultat',
+    )
+    document = applyDocumentCommand(document, evaluationPage)
+    document = applyDocumentCommand(document, createEvaluationResultBdcCommand('bdc-result', evaluationPage.pageId, 1))
+    for (const bdcId of ['bdc-text-short', 'bdc-question', 'bdc-carousel', 'bdc-result']) {
+      document = applyDocumentCommand(document, { type: 'bdc.remove', bdcId })
+    }
+
+    const catalog = service.catalogContents(document)
+    expect(catalog.bdcs.map(({ bdcType }) => bdcType)).toEqual([
+      BDC_TYPE.SECTION,
+      BDC_TYPE.CARD,
+      BDC_TYPE.QUESTION,
+      BDC_TYPE.CAROUSEL,
+      BDC_TYPE.EVALUATION_RESULT,
+    ])
+    expect(service.createCatalogDropTarget(
+      document,
+      { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-text-short' },
+      fluxPage.id,
+      'bdc-page-section',
+    )).toMatchObject({ bdcId: 'bdc-text-short', presetId: DEFAULT_PRESET_ID.TEXT_SHORT })
+    for (const bdcId of ['bdc-question', 'bdc-carousel', 'bdc-result', sectionBdcId]) {
+      expect(service.createCatalogDropTarget(
+        document,
+        { kind: CATALOG_REFERENCE.BDC, bdcId },
+        fluxPage.id,
+        'bdc-page-section',
+      )).toBeNull()
+    }
   })
 
   it('moves a unique catalog bdc or creates a new bdc from a reusable media reference', () => {

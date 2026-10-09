@@ -1,6 +1,6 @@
 # Elcé — plan de transposition vers Remix 3
 
-**Statut : En cours — étapes 0 à 4 finies ; le portage Remix de l’étape 5 est appliqué. Une validation reste ouverte : relire une IndexedDB v4 existante après remplacement du serveur sur le même origin, sans remise à zéro.** L’auteur, le lecteur popup et les tests Elcé utilisent le runtime Remix sans React ; les composants et tests qui rendent du JSX sont en `.tsx`. `npm run dev:elce` lance l’asset server Remix et réutilise l’API Elcé active. Typecheck réussi, 206 tests réussis sur 206, build réussi ; le chunk JavaScript fait 1 314,76 kB minifiés (372,33 kB gzip) et conserve l’avertissement Vite au-dessus de 500 kB. Brave a vérifié la liste des projets depuis `localhost:5176`, l’ouverture du lecteur natif et ses images serveur depuis l’API ; après conversion TSX, les 16 modules de composants se chargent, la console est vide et aucun asset React/ReactDOM n’est demandé. Le port `localhost:5175` reste occupé par un ancien serveur Vite ; après rechargement, il renvoie `504 (Outdated Optimize Dep)`. Il n’a pas été arrêté et aucune base n’a été réinitialisée. L’auteur a reporté à une tranche ultérieure l’amélioration de reprise du verrou après un changement réel de visibilité : sans utilisateur en situation réelle, aucun développement ni test dédié n’est justifié. Cette décision ne bloque pas le portage.
+**Statut : Fini le 9 octobre 2026 — étapes 0 à 5 appliquées et validation de continuité sur l’origine existante terminée.** L’auteur, le lecteur popup et les tests Elcé utilisent Remix sans React ; les composants et tests qui rendent du JSX sont en `.tsx`. Sur `http://localhost:5175`, Brave a rechargé le lanceur Remix et restauré Projet 3 avec le checkpoint « Synchronisé ». Sans remise à zéro, l’IndexedDB existante `elce-poc` (schéma v2) contient toujours les documents v4 de Projet 3 et Projet 1. Le document Projet 1 conserve ses 2 chapitres, 7 pages, 15 BDC et 5 références média ; son checkpoint `synced` correspond à la révision serveur 93, et ses cinq images distantes se chargent. Après rechargement, la console Brave est vide. Cette vérification a utilisé `5175` pour l’interface et `5181` pour l’API. L’amélioration distincte de synchronisation entre navigateurs reste en réserve dans le [plan local-first](./2026-10-06-elce-local-first-synchronisation-plan.md) et ne bloque pas le portage Remix. La reprise du verrou après changement réel de visibilité reste reportée par décision de l’auteur.
 
 Ce plan complète le [plan de stockage local et synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md). Ce dernier reste l’autorité sur IndexedDB, SQLite, les révisions, les fichiers média et l’ordre de synchronisation.
 
@@ -361,7 +361,7 @@ Chaque surface d’édition passe par l’acteur et les commandes existants. Les
 
 **Sortie :** les parcours auteur fonctionnent dans le runtime Remix avec le même document ; la sortie vers le player Sighty/CodPlay utilise les sources média confirmées par URL serveur. Les comportements encore ouverts restent au plan.
 
-### 5. Retirer React du workspace Elcé — En cours, validation d’origine en attente
+### 5. Retirer React du workspace Elcé — Fini le 9 octobre 2026
 
 - [x] Rendre les contrôles du lecteur popup dans Remix, en gardant la fenêtre
   distincte, le protocole de synchronisation, le cycle de vie média et la
@@ -395,22 +395,27 @@ Chaque surface d’édition passe par l’acteur et les commandes existants. Les
   Le typecheck passe. Le build Vite réussit sur 581 modules ; le chunk
   JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et garde
   l’avertissement de taille supérieur à `500 kB`.
-- [ ] Relire les documents v4 déjà présents dans l’IndexedDB de
+- [x] Relire les documents v4 déjà présents dans l’IndexedDB de
   `http://localhost:5175/`, sans réinitialiser cette base ni perdre ses médias.
-  Le port 5175 reste occupé par un serveur Vite existant ; son rechargement Brave
-  a renvoyé `504 (Outdated Optimize Dep)` et une page vide, donc cette preuve
-  n’est pas valide. Le test sur `localhost:5176` ne peut pas la remplacer, car
-  un port différent forme un autre origin. Laisser ce serveur et ses données
-  intacts ; reprendre ce contrôle après son arrêt explicite, puis démarrer le
-  lanceur Remix sur `localhost:5175`.
+  Le serveur Elcé obsolète a été arrêté proprement, puis relancé avec
+  `ELCE_WEB_PORT=5175 npm run dev:elce` sur le même port ; il a réutilisé l’API
+  `5181`.
+  Brave a rechargé l’application sur le même origin : Projet 3 s’est restauré
+  avec le statut « Synchronisé ». La base `elce-poc` version 2 conserve Projet
+  1 en document v4 (2 chapitres, 7 pages, 15 BDC, 5 références média) et son
+  checkpoint `synced` à la révision 93 ; les cinq images distantes se sont
+  chargées. Après rechargement, l’application est toujours lisible et la
+  console est vide. Aucune base ni donnée de projet n’a été remise à zéro.
 - [x] Actualiser les spécifications de l’entrée Remix et du lecteur avec les
-  surfaces natives et les preuves validées. La continuité IndexedDB reste au
-  plan jusqu’au contrôle d’origine ci-dessus.
+  surfaces natives et les preuves validées. La continuité IndexedDB sur
+  `localhost:5175` est vérifiée ci-dessus.
 
-**Sortie provisoire :** le portage est appliqué, les surfaces Elcé et les tests
-sont sans React, et le nouveau lanceur Remix fonctionne. L’étape reste en
-cours uniquement pour la validation de continuité des données sur l’origine
-`localhost:5175` ; aucune base n’a été remise à zéro.
+**Sortie :** le portage est appliqué, les surfaces Elcé et les tests sont sans
+React, et le lanceur Remix a relu avec succès les données v4 de l’origine
+`localhost:5175` sans effacer IndexedDB ni perdre les références média. Les
+étapes 0 à 5 sont finies. La validation inter-navigateurs appartient au plan
+local-first et reste en réserve en attendant une mise à jour Firefox qui
+corrigera l’erreur empêchant son fonctionnement via MCP.
 
 ## Références
 

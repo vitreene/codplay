@@ -108,3 +108,17 @@ export function applyDocumentCommand(document: ElceDocument, command: DocumentCo
   assertDocumentInvariants(updated)
   return updated
 }
+
+/** Checks page-placement compatibility by applying the authoritative document command purely. */
+export function canMoveBdcToPage(document: ElceDocument, bdcId: string, pageId: string, index: number): boolean {
+  try {
+    applyDocumentCommand(document, {
+      type: 'bdc.move',
+      bdcId,
+      placement: { kind: BDC_LOCATION.PAGE, pageId, index },
+    })
+    return true
+  } catch {
+    return false
+  }
+}

@@ -14,5 +14,7 @@ export interface QuestionContent {
   readonly type: QuestionType
   readonly title: string
   readonly prompt: string
+  /** Absent only in Question values saved before the label became editable. */
+  readonly validationLabel?: string
   readonly answers: readonly QuestionAnswer[]
 }

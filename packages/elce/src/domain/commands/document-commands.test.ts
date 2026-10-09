@@ -6,6 +6,7 @@ import { ElceQuestionService } from '../../domain/question/question-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
+  canMoveBdcToPage,
   createChapterCommand,
   createChapterMoveCommand,
   createCardBdcCommand,
@@ -18,6 +19,114 @@ import {
 } from './document-commands'
 
 describe('Elcé document commands', () => {
+  it('stores every top-level BDC type in the catalogue and restores it to a compatible page', () => {
+    let document = createInitialDocument()
+    const fluxPage = document.pages[0]
+    if (fluxPage === undefined) throw new Error('Le document de test ne contient pas de page Flux.')
+    document = applyDocumentCommand(document, createStandaloneCardBdcCommand('bdc-catalog-card', fluxPage.id))
+    document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-catalog-question', fluxPage.id, 2))
+    document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-catalog-carousel', fluxPage.id, 3, 'bdc-carousel-child'))
+
+    const evaluationChapterCommand = createChapterCommand(document, 'Évaluation', CHAPTER_TYPE.EVALUATION)
+    document = applyDocumentCommand(document, evaluationChapterCommand)
+    const evaluationPageCommand = createDefaultPageCommand(
+      document,
+      { kind: PAGE_LOCATION.CHAPTER, chapterId: evaluationChapterCommand.chapterId },
+      'Page résultat',
+    )
+    document = applyDocumentCommand(document, evaluationPageCommand)
+    document = applyDocumentCommand(document, createEvaluationResultBdcCommand('bdc-catalog-result', evaluationPageCommand.pageId, 1))
+
+    for (const bdcId of [fluxPage.bdcIds[0]!, 'bdc-catalog-card', 'bdc-catalog-question', 'bdc-catalog-carousel', 'bdc-catalog-result']) {
+      document = applyDocumentCommand(document, { type: 'bdc.remove', bdcId })
+    }
+
+    expect(document.data.catalogBdcIds).toEqual([
+      fluxPage.bdcIds[0],
+      'bdc-catalog-card',
+      'bdc-catalog-question',
+      'bdc-catalog-carousel',
+      'bdc-catalog-result',
+    ])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-carousel-child')).toMatchObject({
+      parentBdcId: 'bdc-catalog-carousel',
+      pageId: null,
+    })
+    expect(document.data.catalogBdcIds).not.toContain('bdc-carousel-child')
+
+    expect(canMoveBdcToPage(document, fluxPage.bdcIds[0]!, fluxPage.id, 0)).toBe(true)
+    expect(canMoveBdcToPage(document, 'bdc-catalog-question', fluxPage.id, 2)).toBe(true)
+    expect(canMoveBdcToPage(document, 'bdc-catalog-result', evaluationPageCommand.pageId, 1)).toBe(true)
+    expect(canMoveBdcToPage(document, 'bdc-catalog-result', fluxPage.id, 0)).toBe(false)
+
+    document = applyDocumentCommand(document, { type: 'bdc.move', bdcId: fluxPage.bdcIds[0]!, placement: { kind: BDC_LOCATION.PAGE, pageId: fluxPage.id, index: 0 } })
+    document = applyDocumentCommand(document, { type: 'bdc.move', bdcId: 'bdc-catalog-card', placement: { kind: BDC_LOCATION.PAGE, pageId: fluxPage.id, index: 1 } })
+    document = applyDocumentCommand(document, { type: 'bdc.move', bdcId: 'bdc-catalog-question', placement: { kind: BDC_LOCATION.PAGE, pageId: fluxPage.id, index: 2 } })
+    document = applyDocumentCommand(document, { type: 'bdc.move', bdcId: 'bdc-catalog-carousel', placement: { kind: BDC_LOCATION.PAGE, pageId: fluxPage.id, index: 3 } })
+    document = applyDocumentCommand(document, { type: 'bdc.move', bdcId: 'bdc-catalog-result', placement: { kind: BDC_LOCATION.PAGE, pageId: evaluationPageCommand.pageId, index: 1 } })
+
+    const restoredFluxPage = document.pages.find((page) => page.id === fluxPage.id)
+    expect(restoredFluxPage?.bdcIds).toEqual([
+      fluxPage.bdcIds[0],
+      'bdc-catalog-card',
+      'bdc-catalog-question',
+      'bdc-catalog-carousel',
+    ])
+    expect(document.pages.find((page) => page.id === evaluationPageCommand.pageId)?.bdcIds).toEqual([
+      evaluationPageCommand.bdcId,
+      'bdc-catalog-result',
+    ])
+    expect(document.data.catalogBdcIds).toEqual([])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-carousel-child')?.parentBdcId).toBe('bdc-catalog-carousel')
+    assertDocumentInvariants(document)
+  })
+
+  it('keeps anchored Card children with a catalogued Section and deletes that composite together', () => {
+    let document = createInitialDocument()
+    const content = {
+      type: 'doc' as const,
+      content: [{
+        type: 'paragraph' as const,
+        content: [{
+          type: 'elceAnchor' as const,
+          attrs: { bdcId: 'bdc-text-card', partId: 'page-a:bdc-text-card:anchor' },
+        }],
+      }],
+    }
+    document = applyDocumentCommand(document, {
+      type: 'bdc.create',
+      bdcId: 'bdc-text-card',
+      bdcType: BDC_TYPE.CARD,
+      presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+      placement: { kind: BDC_LOCATION.CATALOG },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: 'bdc-text-card',
+      markup: '<p><span id="page-a:bdc-text-card:anchor" data-elce-anchor="true" data-bdc-id="bdc-text-card"></span></p>',
+      content,
+    })
+    document = applyDocumentCommand(document, { type: 'bdc.remove', bdcId: 'bdc-section-1' })
+
+    expect(document.data.catalogBdcIds).toEqual(['bdc-section-1'])
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-text-card')).toMatchObject({
+      parentBdcId: 'bdc-section-1',
+      pageId: null,
+    })
+    expect(canMoveBdcToPage(document, 'bdc-section-1', 'page-a', 0)).toBe(true)
+
+    document = applyDocumentCommand(document, { type: 'bdc.move', bdcId: 'bdc-section-1', placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 } })
+    expect(document.bdcs.find((bdc) => bdc.id === 'bdc-text-card')?.parentBdcId).toBe('bdc-section-1')
+    document = applyDocumentCommand(document, { type: 'bdc.remove', bdcId: 'bdc-section-1' })
+    document = applyDocumentCommand(document, { type: 'bdc.delete', bdcId: 'bdc-section-1' })
+
+    expect(document.bdcs).toEqual([])
+    expect(document.data.catalogBdcIds).toEqual([])
+    assertDocumentInvariants(document)
+  })
+
   it('places a standalone Card in the ordered BDC sequence of a Flux page', () => {
     const initial = createInitialDocument()
     const page = initial.pages[0]

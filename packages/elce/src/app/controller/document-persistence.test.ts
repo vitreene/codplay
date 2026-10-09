@@ -65,6 +65,48 @@ class MemoryDocumentStore implements ElceDocumentStore {
 }
 
 describe('Elcé document persistence boundary', () => {
+  it('installs a confirmed server document without marking it as a local edit', async () => {
+    const local = createInitialDocument()
+    const media = { id: 'media-server', name: 'remote.webp', mimeType: 'image/webp', size: 3, caption: '' }
+    const remote = applyDocumentCommand(
+      applyDocumentCommand(local, { type: 'document.rename', name: 'Version distante' }),
+      { type: 'media.add', media },
+    )
+    const store = new MemoryDocumentStore()
+    store.document = local
+    await store.saveSyncState({
+      documentId: local.id,
+      remoteRevision: 1,
+      uploadedMediaIds: [],
+      status: 'synced',
+    })
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    const persistence = await attachDocumentPersistence(actor, store, {
+      mediaSourceUrl: (documentId, mediaId) => `https://elce.test/api/projects/${documentId}/media/${mediaId}`,
+    })
+    actor.send({ type: 'editor.access.activate' })
+    store.document = remote
+    await store.saveSyncState({
+      documentId: remote.id,
+      remoteRevision: 2,
+      uploadedMediaIds: [media.id],
+      status: 'synced',
+    })
+
+    await persistence.installServerDocument(remote, [media.id])
+
+    expect(actor.getSnapshot().context.document.data.name).toBe('Version distante')
+    expect(actor.getSnapshot().context.syncStatus).toBe('synced')
+    expect(actor.getSnapshot().context.mediaSources[media.id]).toBe(
+      `https://elce.test/api/projects/${remote.id}/media/${media.id}`,
+    )
+    expect(store.document).toBe(remote)
+
+    persistence.detach()
+    actor.stop()
+  })
+
   it('restores the document and persists later controller commits', async () => {
     const stored = applyDocumentCommand(createInitialDocument(), { type: 'document.rename', name: 'Document restauré' })
     const store = new MemoryDocumentStore()

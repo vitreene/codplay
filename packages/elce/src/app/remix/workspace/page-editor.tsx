@@ -1,8 +1,9 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import { BadgeCheck, ClipboardCheck, FileText, Folder, GripVertical, Images, ListChecks, RectangleHorizontal } from 'lucide-static'
-import { BDC_ORDER, BDC_TYPE, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, PAGE_TYPE } from '../../../config/document-config'
+import { BDC_ORDER, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, PAGE_TYPE } from '../../../config/document-config'
 import type { Bdc, Chapter, Page } from '../../../domain/document/document-types'
+import { canMoveBdcToPage } from '../../../domain/commands/document-commands'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import { selectEditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
@@ -356,7 +357,7 @@ function renderBdcSeparator(id: string, index: number, state: PageEditorRenderSt
     className={active ? 'elce-page-bdc-drop elce-page-bdc-drop--active' : 'elce-page-bdc-drop'}
     aria-label="Déposer le bloc à cet endroit"
     mix={[
-      on<HTMLElement, 'dragover'>('dragover', (event) => dragOverBdcSeparator(event, id, state)),
+      on<HTMLElement, 'dragover'>('dragover', (event) => dragOverBdcSeparator(event, id, index, state)),
       on<HTMLElement, 'dragleave'>('dragleave', (event) => dragLeaveBdcSeparator(event, state)),
       on<HTMLElement, 'drop'>('drop', (event) => dropBdc(event, index, state)),
     ]}
@@ -452,11 +453,19 @@ function beginBdcDrag(event: DragEvent, bdcId: string, state: PageEditorRenderSt
 }
 
 /** Highlights a page separator only while a BDC is being dragged. */
-function dragOverBdcSeparator(event: DragEvent, targetId: string, state: PageEditorRenderState): void {
-  if (state.draggedBdcId() === null || event.dataTransfer === null) return
+function dragOverBdcSeparator(event: DragEvent, targetId: string, index: number, state: PageEditorRenderState): void {
+  const transfer = event.dataTransfer
+  if (transfer === null) return
+  const localBdcId = state.draggedBdcId()
+  const isCatalogBdc = transfer.effectAllowed === 'move'
+    && Array.from(transfer.types).includes(CATALOG_REFERENCE.MIME_TYPE)
+  if (localBdcId === null && !isCatalogBdc) return
+  const page = state.current.view.selectedPage
+  if (page === undefined) return
+  if (localBdcId !== null && !canMoveBdcToPage(state.current.view.documentModel, localBdcId, page.id, index)) return
   event.preventDefault()
   event.stopPropagation()
-  event.dataTransfer.dropEffect = 'move'
+  transfer.dropEffect = 'move'
   state.updateDropTarget(targetId)
 }
 
@@ -469,13 +478,35 @@ function dragLeaveBdcSeparator(event: DragEvent, state: PageEditorRenderState): 
 
 /** Moves the dragged BDC through the existing facade at the selected index. */
 function dropBdc(event: DragEvent, index: number, state: PageEditorRenderState): void {
-  const bdcId = state.draggedBdcId()
+  const bdcId = state.draggedBdcId() ?? catalogBdcIdFromTransfer(event.dataTransfer)
   const page = state.current.view.selectedPage
-  if (bdcId === null || page === undefined) return
+  if (bdcId === null || page === undefined) {
+    state.updateDropTarget(null)
+    return
+  }
+  if (!canMoveBdcToPage(state.current.view.documentModel, bdcId, page.id, index)) {
+    event.preventDefault()
+    event.stopPropagation()
+    state.updateDropTarget(null)
+    return
+  }
   event.preventDefault()
   event.stopPropagation()
   state.actions.moveBdc(bdcId, page.id, index)
   endBdcDrag(state)
+}
+
+/** Reads one unique BDC reference from a catalogue drag payload. */
+function catalogBdcIdFromTransfer(transfer: DataTransfer | null): string | null {
+  if (transfer === null || !Array.from(transfer.types).includes(CATALOG_REFERENCE.MIME_TYPE)) return null
+  try {
+    const reference: unknown = JSON.parse(transfer.getData(CATALOG_REFERENCE.MIME_TYPE))
+    if (typeof reference !== 'object' || reference === null) return null
+    const value = reference as { kind?: unknown; bdcId?: unknown }
+    return value.kind === CATALOG_REFERENCE.BDC && typeof value.bdcId === 'string' ? value.bdcId : null
+  } catch {
+    return null
+  }
 }
 
 /** Clears the transient BDC drag source and its highlighted separator. */

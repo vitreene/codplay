@@ -17,6 +17,7 @@ export interface ElceQuestionEditorActions {
   readonly setType: (type: QuestionType) => void
   readonly setTitle: (title: string) => void
   readonly setPrompt: (prompt: string) => void
+  readonly setValidationLabel: (label: string) => void
   readonly setAnswerLabel: (answerId: string, label: string) => void
   readonly setAnswerCorrect: (answerId: string, correct: boolean) => void
   readonly addAnswer: () => void

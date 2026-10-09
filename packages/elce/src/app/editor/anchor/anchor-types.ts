@@ -1,8 +1,8 @@
 import type { BdcId } from '../../../domain/document/document-types'
-import type { ElceAnchorDropTarget, ElceAnchorMediaPreview, ElceCatalogDropTarget } from '../../../domain/anchor/anchor-types'
+import type { ElceAnchorDropTarget, ElceAnchorCardPreview, ElceCatalogDropTarget } from '../../../domain/anchor/anchor-types'
 import type { ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 
-export type { ElceAnchorDropTarget, ElceCatalogDropTarget } from '../../../domain/anchor/anchor-types'
+export type { ElceAnchorCardPreview, ElceAnchorDropTarget, ElceCatalogDropTarget } from '../../../domain/anchor/anchor-types'
 
 export interface ElceAnchorAttributes {
   readonly bdcId: BdcId
@@ -20,7 +20,7 @@ export type ElceAnchorTransaction =
 export interface ElceAnchorExtensionOptions {
   readonly createFileDropTarget?: (file: File) => ElceAnchorDropTarget | null
   readonly createCatalogDropTarget?: (reference: ElceCatalogReference) => ElceCatalogDropTarget | null
-  readonly resolveCard?: (bdcId: BdcId) => ElceAnchorMediaPreview | null
+  readonly resolveCard?: (bdcId: BdcId) => ElceAnchorCardPreview | null
   readonly onEditCard?: (bdcId: BdcId) => void
   readonly registerNodeViewRefresh?: (bdcId: BdcId, refresh: () => void) => () => void
 }

@@ -360,6 +360,14 @@ export const controllerMachine = setup({
     'document.sync.status': {
       actions: assign(({ event }) => ({ syncStatus: event.status })),
     },
+    'project.summary.refresh': {
+      actions: assign(({ context, event }) => ({
+        activeProject: context.activeProject?.id === event.project.id ? event.project : context.activeProject,
+        projects: context.projects.some((project) => project.id === event.project.id)
+          ? context.projects.map((project) => project.id === event.project.id ? event.project : project)
+          : [...context.projects, event.project],
+      })),
+    },
     'project.access.error': { actions: 'markProjectAccessError' },
   },
   states: {

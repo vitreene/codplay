@@ -89,14 +89,16 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
         } else {
           await this.persistence.restoreCurrentDocument()
         }
+        await this.refreshFromServerOnFocus()
         controller.send({ type: 'editor.access.activate' })
         this.sync?.resume(controller.getSnapshot().context.document)
       },
       onAccessSuspending: async () => {
         controller.send({ type: 'editor.access.suspend' })
-        await this.sync?.suspend()
         await waitForControllerQuiescence(controller)
         await this.persistence?.flushLocalChanges()
+        await this.sync?.flushNow()
+        await this.sync?.suspend()
       },
       onAccessError: (error) => {
         controller.send({ type: 'project.access.error', message: errorMessage(error) })
@@ -104,6 +106,37 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
       },
     })
     this.lock.start()
+  }
+
+  /** Loads a newer confirmed server revision after this editor regains focus. */
+  public async refreshFromServerOnFocus(): Promise<void> {
+    const controller = this.controller
+    const projectId = this.activeProjectId
+    const persistence = this.persistence
+    if (controller === null || projectId === null || persistence === null) return
+    if (controller.getSnapshot().context.editAccess === 'active') return
+
+    try {
+      const checkpoint = await this.store.loadSyncState(projectId)
+      if (checkpoint.status !== 'synced' || checkpoint.remoteRevision === null) return
+
+      const projects = await this.api.listProjects()
+      const summary = projects.find((project) => project.id === projectId)
+      if (summary === undefined) return
+      if (summary.revision === checkpoint.remoteRevision) {
+        controller.send({ type: 'project.summary.refresh', project: summary })
+        return
+      }
+
+      const prepared = await this.prepareProject(summary)
+      const refreshedCheckpoint = await this.store.loadSyncState(projectId)
+      if (refreshedCheckpoint.status !== 'synced') return
+      if (refreshedCheckpoint.remoteRevision === checkpoint.remoteRevision) return
+      await persistence.installServerDocument(prepared.document, refreshedCheckpoint.uploadedMediaIds)
+      controller.send({ type: 'project.summary.refresh', project: prepared.project })
+    } catch (error) {
+      console.warn('La version serveur du projet Elcé n’a pas pu être relue ; la copie locale est conservée.', error)
+    }
   }
 
   /** Releases browser resources when the tab closes. */
@@ -225,6 +258,9 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     const cached = await this.store.loadDocument(summary.id)
     const checkpoint = await this.store.loadSyncState(summary.id)
     if (cached !== null && (checkpoint.status === 'pending' || checkpoint.status === 'conflict')) {
+      return { project: { ...summary, name: cached.data.name }, document: cached }
+    }
+    if (cached !== null && checkpoint.status === 'synced' && checkpoint.remoteRevision === summary.revision) {
       return { project: { ...summary, name: cached.data.name }, document: cached }
     }
 

@@ -77,6 +77,22 @@ export class ProjectSyncCoordinator {
     throw new Error('La synchronisation du document ne s’est pas terminée.')
   }
 
+  /** Flushes pending writes immediately or waits for an attempt already in progress. */
+  public async flushNow(): Promise<void> {
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    this.lastFailure = null
+    if (this.runningCompletion !== null) {
+      while (this.runningCompletion !== null) {
+        await this.runningCompletion
+        if (this.timer !== null) clearTimeout(this.timer)
+        this.timer = null
+      }
+      return
+    }
+    await this.flush()
+  }
+
   /** Stops new network writes and waits for the current write to settle. */
   public async suspend(): Promise<void> {
     this.suspended = true

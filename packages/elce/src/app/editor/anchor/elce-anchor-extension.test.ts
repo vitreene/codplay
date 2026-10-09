@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core'
 import { Fragment, Slice } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ANCHOR_RETURN, CATALOG_REFERENCE, DEFAULT_PRESET_ID } from '../../../config/document-config'
+import { ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID } from '../../../config/document-config'
 import { createElceAnchorExtension, ELCE_ANCHOR_TRANSACTION_META, ElceAnchorExtension } from './elce-anchor-extension'
 
 describe('Elcé anchor extension', () => {
@@ -96,7 +96,11 @@ describe('Elcé anchor extension', () => {
     const host = document.createElement('div')
     document.body.append(host)
     editor = new Editor({
-      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({ source: 'blob:image-1', type: 'image', layoutId: DEFAULT_PRESET_ID.PHOTO }) })],
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: { mediaId: 'media-image-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        layoutId: DEFAULT_PRESET_ID.PHOTO,
+        media: { source: 'blob:image-1', type: 'image' },
+      }) })],
       content: {
         type: 'doc',
         content: [{
@@ -109,6 +113,105 @@ describe('Elcé anchor extension', () => {
 
     const placeholder = host.querySelector('.elce-anchor-placeholder')
     expect(placeholder?.querySelector('.elce-anchor-bdc img.elce-anchor-media-preview')?.getAttribute('src')).toBe('blob:image-1')
+  })
+
+  it('renders authored text fields for a text Card inside its anchor preview', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: {
+          mediaId: null,
+          overline: 'Citation',
+          title: 'Un titre',
+          description: 'Une description',
+          message: 'Texte cité',
+          note: 'Source',
+          caption: '',
+          imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
+          imageFit: CARD_IMAGE_FIT.COVER,
+        },
+        layoutId: DEFAULT_PRESET_ID.TEXT_SHORT,
+        media: null,
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'bdc-text-1', partId: 'page-a:bdc-text-1:anchor' } }] }],
+      },
+    })
+    editor.mount(host)
+
+    const preview = host.querySelector('.elce-anchor-bdc article.elce-card--text-short')
+    expect(preview?.querySelector('.elce-card-text-short__overline')?.textContent).toBe('Citation')
+    expect(preview?.querySelector('.elce-card-text-short__title')?.textContent).toBe('Un titre')
+    expect(preview?.querySelector('.elce-card-text-short__message')?.textContent).toBe('Texte cité')
+    expect(preview?.querySelector('.elce-card-text-short__note')?.textContent).toBe('Source')
+  })
+
+  it('renders the existing Text with image layout, its content, and its compatible media', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: {
+          mediaId: 'media-image-1',
+          overline: 'Repère',
+          title: 'Titre',
+          description: 'Description',
+          message: 'Message',
+          note: 'Note',
+          caption: '',
+          imagePosition: CAROUSEL_IMAGE_POSITION.RIGHT,
+          imageFit: CARD_IMAGE_FIT.CONTAIN,
+        },
+        layoutId: DEFAULT_PRESET_ID.TEXT_IMAGE,
+        media: { source: 'blob:image-1', type: 'image' },
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'bdc-text-image', partId: 'page-a:bdc-text-image:anchor' } }] }],
+      },
+    })
+    editor.mount(host)
+
+    const preview = host.querySelector('.elce-anchor-bdc article.elce-card--text-image')
+    expect(preview?.classList.contains('elce-carousel-view--image-right')).toBe(true)
+    expect(preview?.querySelector('.elce-card-text-image__title')?.textContent).toBe('Titre')
+    expect(preview?.querySelector('.elce-card-text-image__message')?.textContent).toBe('Message')
+    const image = preview?.querySelector('.elce-carousel-text-image__image img')
+    expect(image?.getAttribute('src')).toBe('blob:image-1')
+    expect(image?.classList.contains('elce-anchor-card-media-preview--contain')).toBe(true)
+  })
+
+  it('renders the existing Image with caption layout and its caption and image', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: {
+          mediaId: 'media-image-2',
+          overline: '',
+          title: '',
+          description: '',
+          message: '',
+          note: '',
+          caption: 'Légende',
+          imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
+          imageFit: CARD_IMAGE_FIT.COVER,
+        },
+        layoutId: DEFAULT_PRESET_ID.IMAGE_CAPTION,
+        media: { source: 'blob:image-2', type: 'image' },
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'bdc-image-caption', partId: 'page-a:bdc-image-caption:anchor' } }] }],
+      },
+    })
+    editor.mount(host)
+
+    const preview = host.querySelector('.elce-anchor-bdc article.elce-card--image-caption')
+    expect(preview?.querySelector('.elce-card-image-caption__caption')?.textContent).toBe('Légende')
+    expect(preview?.querySelector('.elce-card-image-caption__image img')?.getAttribute('src')).toBe('blob:image-2')
   })
 
   it('creates an image anchor from one external file drop', () => {
@@ -228,7 +331,11 @@ describe('Elcé anchor extension', () => {
     document.body.append(host)
     let anchorChange: unknown
     editor = new Editor({
-      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({ source: 'blob:image-1', type: 'image', layoutId: DEFAULT_PRESET_ID.PHOTO }) })],
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: { mediaId: 'media-image-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        layoutId: DEFAULT_PRESET_ID.PHOTO,
+        media: { source: 'blob:image-1', type: 'image' },
+      }) })],
       content: {
         type: 'doc',
         content: [{

@@ -93,6 +93,13 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   16 modules de composants Remix ont été chargés avec succès. La console était
   vide et aucun asset React ou ReactDOM n’a été demandé. Le parcours précédent
   du même portage a aussi affiché le lecteur popup et ses cinq images serveur.
+- Le 9 octobre 2026, après remplacement du serveur Elcé sur le même port,
+  Brave DevTools a relu l’origine `http://localhost:5175` sans réinitialiser
+  IndexedDB. La base existante `elce-poc` (schéma v2) contient les documents
+  v4 de Projet 3 et Projet 1 ; ce dernier conserve 2 chapitres, 7 pages, 15 BDC,
+  5 références média et le checkpoint synchronisé à la révision 93. Les cinq
+  images serveur chargent. Après rechargement, Projet 3 est restauré et la
+  console ne contient aucune erreur.
 - Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
   bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
   l’avertissement Vite au-dessus de `500 kB`.

@@ -976,6 +976,20 @@ body {
   font-size: 0.82rem;
 }
 
+.elce-question-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  align-items: start;
+  gap: 0.55rem;
+}
+
+.elce-question-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
 .elce-evaluation-result-editor {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1058,6 +1072,7 @@ body {
 
 .elce-question-title,
 .elce-question-prompt,
+.elce-question-validation-label,
 .elce-question-answer-row input {
   width: 100%;
   min-width: 0;
@@ -1082,6 +1097,7 @@ body {
 
 .elce-question-title:focus,
 .elce-question-prompt:focus,
+.elce-question-validation-label:focus,
 .elce-question-answer-row input:focus {
   border-bottom-color: #46726b;
   outline: none;
@@ -1089,6 +1105,7 @@ body {
 
 .elce-question-title::placeholder,
 .elce-question-prompt::placeholder,
+.elce-question-validation-label::placeholder,
 .elce-question-answer-row input::placeholder {
   color: #8a9088;
 }
@@ -1174,17 +1191,6 @@ body {
   cursor: pointer;
   font: inherit;
   font-size: 0.8rem;
-}
-
-.elce-question-validation-preview {
-  align-self: flex-start;
-  padding: 0.45rem 0.7rem;
-  color: #fffdf8;
-  background: #46726b;
-  border: 0;
-  border-radius: 0.3rem;
-  font: inherit;
-  font-size: 0.78rem;
 }
 
 .elce-card--question .input__correction-icon:not(.is-correct):not(.is-incorrect):not(.is-missed-correct) {
@@ -1509,6 +1515,108 @@ body {
   object-fit: cover;
 }
 
+.elce-editor-content .elce-anchor-card-preview {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #fffdf8;
+  color: #263b3a;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-short {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.55rem 0.75rem;
+  text-align: center;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-areas: 'image content';
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-carousel-view--image-right {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-areas: 'content image';
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image .elce-carousel-text-image__image {
+  grid-area: image;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image .elce-carousel-text-image__content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  grid-area: content;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--image-caption {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.elce-editor-content .elce-anchor-card-preview .elce-anchor-card-media-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.elce-editor-content .elce-anchor-card-preview .elce-anchor-card-media-preview--contain {
+  object-fit: contain;
+}
+
+.elce-editor-content .elce-anchor-card-preview > p,
+.elce-editor-content .elce-anchor-card-preview > h2,
+.elce-editor-content .elce-anchor-card-preview > footer,
+.elce-editor-content .elce-anchor-card-preview .elce-carousel-text-image__content > p,
+.elce-editor-content .elce-anchor-card-preview .elce-carousel-text-image__content > h2,
+.elce-editor-content .elce-anchor-card-preview .elce-carousel-text-image__content > footer {
+  margin: 0;
+  overflow: hidden;
+}
+
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__title,
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__title {
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__overline,
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__note,
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__overline,
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__note {
+  color: #647670;
+  font-size: 0.7rem;
+}
+
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__description,
+.elce-editor-content .elce-anchor-card-preview .elce-card-image-caption__caption {
+  color: #52645f;
+  font-size: 0.75rem;
+}
+
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__message,
+.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__message {
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
 .elce-editor-content p,
 .elce-editor-content h1,
 .elce-editor-content h2,
@@ -1517,6 +1625,14 @@ body {
 .elce-editor-content h5,
 .elce-editor-content h6 {
   margin: 0.35rem 0;
+}
+
+.elce-editor-content h1 {
+  font-size: 2em;
+}
+
+.elce-editor-content h2 {
+  font-size: 1.5em;
 }
 
 @media (max-width: 1200px) {

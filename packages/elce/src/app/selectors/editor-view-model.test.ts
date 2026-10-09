@@ -46,7 +46,7 @@ describe('editor view model selector', () => {
     expect(view.catalogContents.bdcs).toEqual([{
       key: `${CATALOG_REFERENCE.BDC}:bdc-photo`,
       name: 'photo.jpg',
-      mediaType: 'image',
+      bdcType: BDC_TYPE.CARD,
       reference: { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-photo' },
     }])
     expect(view.catalogContents.media.map((entry) => entry.reference)).toEqual([

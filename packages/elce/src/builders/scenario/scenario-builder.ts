@@ -59,6 +59,10 @@ export function buildScenario(
       .find((bdc) => bdc?.type === BDC_TYPE.QUESTION)
     return question === undefined ? [] : [[page.id, question.id]]
   }))
+  const evaluationResultPageIds = new Set(document.pages.flatMap((page) => {
+    const hasEvaluationResult = page.bdcIds.some((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === BDC_TYPE.EVALUATION_RESULT)
+    return hasEvaluationResult ? [page.id] : []
+  }))
   const sceneCatalog: Record<string, SightySceneSourceValue> = {
     [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document.id),
     [ELCE_SCENARIO.MENU_SCENE]: createMenuScene(document),
@@ -115,7 +119,12 @@ export function buildScenario(
       [ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT]: createRefreshEvaluationResult(document),
     },
     guards: {
-      [ELCE_SCENARIO_HANDLERS.PAGE_ACCESS]: createPageAccessGuard(pageIds, questionBdcByPage),
+      [ELCE_SCENARIO_HANDLERS.PAGE_ACCESS]: createPageAccessGuard(
+        pageIds,
+        questionBdcByPage,
+        firstPageId,
+        evaluationResultPageIds,
+      ),
       [ELCE_SCENARIO_HANDLERS.PAGE_EXIT]: createPageExitGuard(document, pageIds, questionBdcByPage),
     },
   }
@@ -297,14 +306,25 @@ function createScenarioActions(
 }
 
 /** Creates the page access condition used by the menu and the content slot. */
-function createPageAccessGuard(pageIds: readonly string[], questionBdcByPage: Readonly<Record<string, string>>) {
+function createPageAccessGuard(
+  pageIds: readonly string[],
+  questionBdcByPage: Readonly<Record<string, string>>,
+  previewStartPageId: string,
+  evaluationResultPageIds: ReadonlySet<string>,
+) {
   return ({ sceneKey, event, context }: { sceneKey: ElceSceneKey; event?: { name: string }; context: Readonly<Record<string, unknown>> }): boolean => {
     const pageId = pageIdFromSceneKey(sceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
     if (event?.name === ELCE_EVENTS.RUNTIME_INITIALIZE) return true
     const pageIndex = pageIds.indexOf(pageId)
     if (pageIndex <= 0) return pageIndex === 0
-    return pageIds.slice(0, pageIndex).every((candidate) => isPageComplete(candidate, context, questionBdcByPage))
+    if (pageId === previewStartPageId) return true
+    const previewStartIndex = pageIds.indexOf(previewStartPageId)
+    const prefixStartIndex = pageIndex > previewStartIndex && !evaluationResultPageIds.has(pageId)
+      ? previewStartIndex
+      : 0
+    return pageIds.slice(prefixStartIndex, pageIndex)
+      .every((candidate) => isPageComplete(candidate, context, questionBdcByPage))
   }
 }
 

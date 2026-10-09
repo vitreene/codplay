@@ -34,15 +34,16 @@ export class ProjectEditorLock {
     this.channel = new BroadcastChannel(this.lockName)
   }
 
-  /** Starts lock requests when this window is visible and listens for handoffs. */
+  /** Starts lock requests only while this visible window has focus. */
   public start(): void {
     if (this.started) return
     this.started = true
     this.channel.addEventListener('message', this.onMessage)
     document.addEventListener('visibilitychange', this.onVisibilityChange)
+    window.addEventListener('blur', this.onBlur)
     window.addEventListener('focus', this.onFocus)
     window.addEventListener('pagehide', this.onPageHide)
-    if (document.visibilityState === 'visible') this.requestAccess()
+    if (this.pageCanEdit()) this.requestAccess()
     else this.lifecycle.onAccessWaiting()
   }
 
@@ -53,6 +54,7 @@ export class ProjectEditorLock {
     this.wantsAccess = false
     this.channel.removeEventListener('message', this.onMessage)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
+    window.removeEventListener('blur', this.onBlur)
     window.removeEventListener('focus', this.onFocus)
     window.removeEventListener('pagehide', this.onPageHide)
     await this.releaseAccess()
@@ -69,9 +71,15 @@ export class ProjectEditorLock {
     if (document.visibilityState === 'visible') this.requestAccess()
   }
 
+  /** Suspends editing and syncs the local document before this window loses focus. */
+  private readonly onBlur = (): void => {
+    this.wantsAccess = false
+    void this.releaseAccess()
+  }
+
   /** Requests an active project lock when focus returns to this window. */
   private readonly onFocus = (): void => {
-    if (document.visibilityState === 'visible') this.requestAccess()
+    this.requestAccess()
   }
 
   /** Releases ownership on page navigation or closure. */
@@ -92,20 +100,21 @@ export class ProjectEditorLock {
 
   /** Queues an exclusive native lock and announces the request to its current owner. */
   private requestAccess(): void {
-    if (!this.started || this.accessRequest !== null || document.visibilityState !== 'visible') return
+    if (!this.pageCanEdit()) return
     this.wantsAccess = true
+    if (this.accessRequest !== null) return
     this.lifecycle.onAccessWaiting()
     this.channel.postMessage({ type: 'request', projectId: this.projectId, senderId: this.instanceId } satisfies ProjectEditorLockMessage)
 
     this.accessRequest = navigator.locks.request(this.lockName, { mode: 'exclusive' }, async (lock) => {
-      if (lock === null || !this.wantsAccess || document.visibilityState !== 'visible') return
+      if (lock === null || !this.wantsAccess || !this.pageCanEdit()) return
       await this.holdAccess()
     }).catch((error: unknown) => {
       this.wantsAccess = false
       this.lifecycle.onAccessError(error)
     }).finally(() => {
       this.accessRequest = null
-      if (this.started && this.wantsAccess && document.visibilityState === 'visible') this.requestAccess()
+      if (this.wantsAccess && this.pageCanEdit()) this.requestAccess()
     })
   }
 
@@ -120,7 +129,7 @@ export class ProjectEditorLock {
     try {
       await this.lifecycle.onAccessGranted()
       this.grantReady = true
-      if (!this.wantsAccess || document.visibilityState !== 'visible') await this.releaseAccess()
+      if (!this.wantsAccess || !this.pageCanEdit()) await this.releaseAccess()
       await released
     } catch (error) {
       this.wantsAccess = false
@@ -131,6 +140,11 @@ export class ProjectEditorLock {
       this.grantReady = false
       this.releaseLock = null
     }
+  }
+
+  /** Checks whether this running editor window is currently eligible to edit. */
+  private pageCanEdit(): boolean {
+    return this.started && document.visibilityState === 'visible' && document.hasFocus()
   }
 
   /** Waits for XState and IndexedDB to settle before handing the lock over. */

@@ -3,7 +3,7 @@ import { on, ref, type RemixNode } from 'remix/ui'
 
 import { BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
 import type { Bdc, Page } from '../../../domain/document/document-types'
-import type { ElceAnchorMediaPreview } from '../../../domain/anchor/anchor-types'
+import type { ElceAnchorCardPreview } from '../../../domain/anchor/anchor-types'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
@@ -144,6 +144,7 @@ function renderToolbar(
     className="elce-section-toolbar"
     role="toolbar"
     aria-label="Mise en forme"
+    mix={on<HTMLDivElement, 'mousedown'>('mousedown', (event) => event.preventDefault())}
   >
     {buttons.map(({ suffix, label, icon, active, run }) => <button
       key={suffix}
@@ -208,16 +209,22 @@ function renderAnchorCardEditor(
   </section>
 }
 
-/** Resolves media presentation for an anchor from the current actor snapshot. */
-function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorMediaPreview | null {
+/** Resolves the Card layout, text and available media from the current actor snapshot. */
+function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorCardPreview | null {
   const card = view.documentModel.bdcs.find((candidate) => candidate.id === bdcId)
-  if (card?.type !== BDC_TYPE.CARD || card.card == null || card.card.mediaId === null) return null
-  const media = view.documentModel.medias.find((candidate) => candidate.id === card.card?.mediaId)
-  const source = view.mediaSources[card.card.mediaId]
-  const type = media === undefined ? null : mediaTypeFromMimeType(media.mimeType)
-  return media === undefined || source === undefined || type === null
-    ? null
-    : { source, type, layoutId: card.presetId as ElceAnchorMediaPreview['layoutId'] }
+  if (card?.type !== BDC_TYPE.CARD || card.card == null) return null
+  const mediaMetadata = card.card.mediaId === null
+    ? undefined
+    : view.documentModel.medias.find((candidate) => candidate.id === card.card?.mediaId)
+  const source = card.card.mediaId === null ? undefined : view.mediaSources[card.card.mediaId]
+  const mediaType = mediaMetadata === undefined ? null : mediaTypeFromMimeType(mediaMetadata.mimeType)
+  return {
+    content: card.card,
+    layoutId: card.presetId as ElceAnchorCardPreview['layoutId'],
+    media: mediaMetadata === undefined || source === undefined || mediaType === null
+      ? null
+      : { source, type: mediaType },
+  }
 }
 
 /** Compares finite toolbar state without allocating a reactive store. */

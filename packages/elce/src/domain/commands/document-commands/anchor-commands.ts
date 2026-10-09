@@ -83,24 +83,12 @@ export function attachCatalogBdc(
     default:
       fail(`Seule une Carte peut être insérée dans le texte : ${bdc.id}`)
   }
-  switch (bdc.presetId) {
-    case DEFAULT_PRESET_ID.PHOTO:
-      break
-    default:
-      fail(`La Carte ${bdc.id} n’est pas au layout Photo ou vidéo plein cadre.`)
-  }
-  switch (bdc.card?.mediaId) {
-    case null:
-      fail(`Le bdc ${bdc.id} ne référence aucun média.`)
-    default:
-      break
-  }
-  const media = document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
-  switch (media) {
-    case undefined:
-      fail(`Le média du bdc ${bdc.id} est introuvable.`)
-    default:
-      assertSupportedAnchorMediaType(mediaTypeFromMimeType(media.mimeType))
+  if (bdc.card === null || bdc.card === undefined) fail(`La Carte ${bdc.id} est incomplète.`)
+  if (bdc.presetId === DEFAULT_PRESET_ID.PHOTO) {
+    if (bdc.card.mediaId === null) fail(`La Carte Photo ${bdc.id} ne référence aucun média.`)
+    const media = document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+    if (media === undefined) fail(`Le média de la Carte ${bdc.id} est introuvable.`)
+    assertSupportedAnchorMediaType(mediaTypeFromMimeType(media.mimeType))
   }
   switch (anchorReferenceService.bdcIdsIn(command.content).includes(bdc.id)) {
     case true:

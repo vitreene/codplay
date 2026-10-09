@@ -1,4 +1,4 @@
-import { QUESTION_TYPE, QUESTION_TYPE_CONFIG } from '../../config/document-config'
+import { QUESTION_DEFAULTS, QUESTION_TYPE, QUESTION_TYPE_CONFIG } from '../../config/document-config'
 import { createStableId } from '../document/document-model'
 import type { QuestionAnswer, QuestionContent, QuestionType } from './question-types'
 
@@ -11,6 +11,7 @@ export class ElceQuestionService {
       type: QUESTION_TYPE.TRUE_FALSE,
       title: '',
       prompt: '',
+      validationLabel: QUESTION_DEFAULTS.VALIDATE_LABEL,
       answers: QUESTION_TYPE_CONFIG[QUESTION_TYPE.TRUE_FALSE].defaultAnswers.map((answer) => ({
         ...answer,
         id: createStableId('answer'),
@@ -36,6 +37,11 @@ export class ElceQuestionService {
   /** Updates the required question prompt. */
   public setPrompt(question: QuestionContent, prompt: string): QuestionContent {
     return { ...question, prompt }
+  }
+
+  /** Updates the label shown on the reader's Question validation button. */
+  public setValidationLabel(question: QuestionContent, validationLabel: string): QuestionContent {
+    return { ...question, validationLabel }
   }
 
   /** Updates one answer label while keeping its identity and correctness. */

@@ -3,7 +3,6 @@ import { BDC_TYPE } from '../../config/document-config'
 import type { MediaType } from '../../config/document-config-types'
 import type { ElceCatalogContents } from '../../domain/catalog/catalog-types'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
-import { ElcePageMediaService } from '../../domain/media/page-media-service'
 import { mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { Bdc, Chapter, MediaId, Page } from '../../domain/document/document-types'
 import type { ElceDocument } from '../../domain/document/document-model'
@@ -30,11 +29,9 @@ export interface EditorViewModel {
   readonly pageHasContent: boolean
   readonly mediaById: Readonly<Record<MediaId, Readonly<{ name: string; type: MediaType; source: string | null }>>>
   readonly catalogContents: ElceCatalogContents
-  readonly unanchoredMediaBdcs: readonly Bdc[]
 }
 
 const anchorDropService = new ElceAnchorDropService()
-const pageMediaService = new ElcePageMediaService()
 
 /** Selects the editor's derived data without changing the XState document. */
 export function selectEditorViewModel(snapshot: EditorSnapshot): EditorViewModel {
@@ -88,9 +85,6 @@ export function selectEditorViewModel(snapshot: EditorSnapshot): EditorViewModel
     pageHasContent: selectedPageBdcs.length > 0,
     mediaById,
     catalogContents: anchorDropService.catalogContents(documentModel),
-    unanchoredMediaBdcs: selectedPage === undefined || selectedChapter !== undefined
-      ? []
-      : pageMediaService.unanchoredMediaBdcs(documentModel, selectedPage),
   }
 }
 

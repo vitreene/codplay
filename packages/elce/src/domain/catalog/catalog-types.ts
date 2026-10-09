@@ -1,4 +1,5 @@
 import { CATALOG_REFERENCE, MEDIA_TYPE } from '../../config/document-config'
+import type { BdcType } from '../../config/document-config-types'
 import type { BdcId, MediaId, MediaMetadata, PageId } from '../document/document-types'
 
 export type ElceCatalogMediaType = typeof MEDIA_TYPE.IMAGE | typeof MEDIA_TYPE.VIDEO
@@ -10,7 +11,7 @@ export type ElceCatalogReference =
 export interface ElceCatalogBdcEntry {
   readonly key: string
   readonly name: string
-  readonly mediaType: ElceCatalogMediaType
+  readonly bdcType: BdcType
   readonly reference: Extract<ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.BDC }>
 }
 

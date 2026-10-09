@@ -51,6 +51,13 @@ l’ordre de lecture reprennent la séquence racine du document : les pages
 autonomes sont au même niveau que les chapitres. Les pages du catalogue restent
 exclues du scénario.
 
+La page sélectionnée dans l’éditeur au démarrage d’un instantané devient
+l’origine de sa progression en avant. Chaque page suivante s’ouvre après que
+les gardes Sighty de sortie et d’accès l’autorisent, sans exiger la complétion
+des pages antérieures à cette origine. Ces pages sautées ne reçoivent aucune
+progression ni réponse. Un BDC Résultat conserve son garde global et reste
+inaccessible tant que le parcours requis pour son évaluation n’est pas terminé.
+
 ## Preuves
 
 - [`ProjectApplication`](../src/app/remix/project-application.ts) ouvre le
@@ -74,7 +81,11 @@ exclues du scénario.
   résolution d’un média confirmé dont le Blob n’est plus présent en local.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie la réutilisation des sources de scènes inchangées après une
-  réorganisation et la reconstruction de la scène d’une page éditée.
+  réorganisation et la reconstruction de la scène d’une page éditée. Il
+  vérifie aussi le départ direct à la Question D, son achèvement par réponse et
+  scroll-end, l’accès à F, et le maintien du verrou de G tant que ses
+  prérequis globaux restent incomplets. Les contrôles de composition passent
+  tous les 28.
 - Brave DevTools, le 5 octobre 2026, a vérifié l’ouverture dans une fenêtre
   distincte, la navigation indépendante, la synchronisation manuelle, le
   retour à la page éditée et la synchronisation unique d’une nouvelle page.
@@ -89,6 +100,9 @@ exclues du scénario.
   chargées depuis leurs URL API. « Réafficher la page éditée » a réaffiché la
   même page. Les consoles étaient vides et aucun asset React, ReactDOM,
   `@react-refresh` ou `react/jsx-runtime` n’a été demandé.
-- Les tests du workspace Elcé, le typecheck et le build passent. Le build
-  signale un chunk JavaScript supérieur à 500 kB ; la validation du popup ne
-  réduit pas ce chunk.
+- Pour cette correction, le typecheck et le build passent ; le build signale un
+  chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
+  passe 28/28. La suite complète compte 218 succès et un échec d’environnement :
+  le test de persistance SQLite n’a pas pu ouvrir son listener local (`listen
+  EPERM: operation not permitted 127.0.0.1`). La vérification browser du départ
+  direct dans Projet 1 reste suivie au plan de construction.

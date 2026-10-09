@@ -154,9 +154,8 @@ export function assertDocumentInvariants(document: ElceDocument): void {
   for (const bdc of document.bdcs) {
     switch (bdc.type) {
       case BDC_TYPE.QUESTION: {
-        if (bdc.question === null || bdc.section !== null) fail(`Bdc Question incomplet : ${bdc.id}`)
+        if (bdc.question === null || bdc.section !== null || bdc.parentBdcId !== null) fail(`Bdc Question incomplet : ${bdc.id}`)
         questionService.assertValid(bdc.question)
-        if (bdc.pageId === null) fail(`Un bdc Question doit rester affecté à une page : ${bdc.id}`)
         if (bdc.question.mediaId !== null) assertQuestionMediaAllowed(document, bdc.question.mediaId)
         break
       }
@@ -169,9 +168,12 @@ export function assertDocumentInvariants(document: ElceDocument): void {
           || bdc.card != null) {
           fail(`Bdc Résultat incomplet : ${bdc.id}`)
         }
-        const page = bdc.pageId === null ? undefined : document.pages.find((candidate) => candidate.id === bdc.pageId)
-        if (page === undefined || !pageBelongsToEvaluationChapter(document, page)) {
-          fail(`Le BDC Résultat ${bdc.id} doit appartenir à une page d’un chapitre Évaluation.`)
+        if (bdc.parentBdcId !== null) fail(`Le BDC Résultat ${bdc.id} ne peut pas être enfant d’un autre BDC.`)
+        if (bdc.pageId !== null) {
+          const page = document.pages.find((candidate) => candidate.id === bdc.pageId)
+          if (page === undefined || !pageBelongsToEvaluationChapter(document, page)) {
+            fail(`Le BDC Résultat ${bdc.id} doit appartenir à une page d’un chapitre Évaluation.`)
+          }
         }
         evaluationResultService.assertValid(bdc.evaluationResult)
         break
@@ -181,7 +183,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
           fail(`Bdc Carousel incomplet : ${bdc.id}`)
         }
         carouselService.assertValid(bdc.carousel)
-        if (bdc.pageId === null || bdc.parentBdcId !== null) fail(`Un bdc Carousel doit rester affecté à une page : ${bdc.id}`)
+        if (bdc.parentBdcId !== null) fail(`Un bdc Carousel ne peut pas être enfant d’un autre BDC : ${bdc.id}`)
         break
       }
       case BDC_TYPE.CARD: {
@@ -231,12 +233,6 @@ export function assertDocumentInvariants(document: ElceDocument): void {
             default:
               switch (anchorBdc.type) {
                 case BDC_TYPE.CARD:
-                  switch (sectionBdc.pageId) {
-                    case null:
-                      fail(`Une Section hors page ne peut pas porter l’ancre ${anchorBdcId}.`)
-                    default:
-                      break
-                  }
                   switch (anchorBdc.parentBdcId) {
                     case sectionBdc.id:
                       break

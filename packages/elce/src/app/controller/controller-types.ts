@@ -48,6 +48,7 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'card.media.file.import'; bdcId: BdcId; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'document.replace'; document: ElceDocument }>
   | Readonly<{ type: 'document.sync.status'; status: DocumentSyncState['status'] }>
+  | Readonly<{ type: 'project.summary.refresh'; project: ElceProjectSummary }>
   | Readonly<{ type: 'editor.access.activate' }>
   | Readonly<{ type: 'editor.access.suspend' }>
   | Readonly<{ type: 'project.operation'; operation: ProjectSessionOperation }>

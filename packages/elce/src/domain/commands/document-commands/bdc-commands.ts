@@ -54,12 +54,17 @@ function cardForBdc(type: BdcType): CardContent | null {
   }
 }
 
-/** Deletes the unique bdc for a removed anchor and preserves its separate media resource. */
+/** Deletes a BDC and its owned children while preserving separate media resources. */
 export function deleteBdc(document: ElceDocument, bdcId: BdcId): ElceDocument {
   const bdc = findBdc(document, bdcId)
   let documentWithoutChildren = document
   if (bdc.type === BDC_TYPE.CAROUSEL && bdc.carousel != null) {
     for (const entry of bdc.carousel.cards) documentWithoutChildren = deleteBdc(documentWithoutChildren, entry.bdcId)
+  }
+  if (bdc.type === BDC_TYPE.SECTION) {
+    for (const child of document.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id)) {
+      documentWithoutChildren = deleteBdc(documentWithoutChildren, child.id)
+    }
   }
   return new ElceDocument({
     ...documentWithoutChildren.data,

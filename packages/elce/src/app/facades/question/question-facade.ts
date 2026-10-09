@@ -41,6 +41,15 @@ export class ElceQuestionFacade {
     this.update(bdcId, this.questionService.setPrompt(question, prompt))
   }
 
+  /** Updates the reader-facing validation button label. */
+  public setValidationLabel(
+    bdcId: BdcId,
+    question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>,
+    label: string,
+  ): void {
+    this.update(bdcId, this.questionService.setValidationLabel(question, label))
+  }
+
   /** Updates one response label. */
   public setAnswerLabel(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, answerId: string, label: string): void {
     this.update(bdcId, this.questionService.setAnswerLabel(question, answerId, label))

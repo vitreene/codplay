@@ -1,7 +1,9 @@
 import {
+  ANCHOR,
   ANCHOR_MEDIA_PRESETS,
   BDC_TYPE,
   CATALOG_REFERENCE,
+  DEFAULT_PRESET_ID,
   MEDIA_TYPE,
   PAGE_TYPE,
 } from '../../config/document-config'
@@ -13,43 +15,28 @@ import type {
   ElceCatalogContents,
   ElceCatalogDropTarget,
   ElceCatalogMediaEntry,
-  ElceCatalogMediaType,
   ElceCatalogReference,
 } from '../catalog/catalog-types'
 import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
 import type { Bdc, MediaMetadata, PageId } from '../document/document-types'
 
-type AnchorMediaPreset = typeof ANCHOR_MEDIA_PRESETS[typeof MEDIA_TYPE.IMAGE]
-  | typeof ANCHOR_MEDIA_PRESETS[typeof MEDIA_TYPE.VIDEO]
-
-type CatalogBdcContent = Readonly<{
-  bdc: Bdc
-  media: MediaMetadata
-  mediaType: ElceCatalogMediaType
-  preset: AnchorMediaPreset
-}>
-
 const mediaResourceService = new ElceMediaResourceService()
 
 /** Builds métier targets and commands for file and catalogue anchor drops. */
 export class ElceAnchorDropService {
-  /** Lists the unused media blocks and reusable media allowed by the editor. */
+  /** Lists every top-level BDC in the catalogue and its reusable media. */
   public catalogContents(document: ElceDocument): ElceCatalogContents {
     const bdcs: ElceCatalogBdcEntry[] = []
     const mediaEntries: ElceCatalogMediaEntry[] = []
     for (const bdcId of document.data.catalogBdcIds) {
-      const item = readCatalogBdcContent(document, bdcId)
-      switch (item) {
-        case null:
-          break
-        default:
-          bdcs.push({
-            key: `${CATALOG_REFERENCE.BDC}:${item.bdc.id}`,
-            name: item.media.name,
-            mediaType: item.mediaType,
-            reference: { kind: CATALOG_REFERENCE.BDC, bdcId: item.bdc.id },
-          })
-      }
+      const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+      if (bdc === undefined || bdc.pageId !== null || bdc.parentBdcId !== null) continue
+      bdcs.push({
+        key: `${CATALOG_REFERENCE.BDC}:${bdc.id}`,
+        name: catalogBdcName(document, bdc),
+        bdcType: bdc.type,
+        reference: { kind: CATALOG_REFERENCE.BDC, bdcId: bdc.id },
+      })
     }
     for (const media of document.medias) {
       switch (mediaTypeFromMimeType(media.mimeType)) {
@@ -211,95 +198,20 @@ function isFluxSection(document: ElceDocument, pageId: PageId, sectionBdcId: str
   }
 }
 
-/** Finds an available Photo Card together with its reusable media. */
-function readCatalogBdcContent(document: ElceDocument, bdcId: string): CatalogBdcContent | null {
-  switch (document.data.catalogBdcIds.includes(bdcId)) {
-    case false:
-      return null
-    case true:
-      break
-  }
+/** Finds one available Card and derives the reservation for its selected layout. */
+function readCatalogCard(document: ElceDocument, bdcId: string): Readonly<{ bdc: Bdc; paddingBottom: string }> | null {
+  if (!document.data.catalogBdcIds.includes(bdcId)) return null
   const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
-  switch (bdc) {
-    case undefined:
-      return null
-    default:
-      switch (bdc.pageId) {
-        case null:
-          break
-        default:
-          return null
-      }
+  if (bdc?.type !== BDC_TYPE.CARD || bdc.card == null || bdc.pageId !== null || bdc.parentBdcId !== null) return null
+  if (bdc.presetId !== DEFAULT_PRESET_ID.PHOTO) {
+    return { bdc, paddingBottom: ANCHOR.DEFAULT_PADDING_BOTTOM }
   }
-  switch (bdc) {
-    case undefined:
-      return null
-    default:
-      switch (bdc.type) {
-        case BDC_TYPE.CARD:
-          switch (bdc.presetId === ANCHOR_MEDIA_PRESETS[MEDIA_TYPE.IMAGE].presetId) {
-            case false:
-              return null
-            case true:
-              break
-          }
-          switch (bdc.card?.mediaId) {
-            case null:
-              return null
-            default: {
-              const media = document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
-              if (media === undefined) return null
-              const mediaType = mediaTypeFromMimeType(media.mimeType)
-              switch (mediaType) {
-                case MEDIA_TYPE.IMAGE:
-                case MEDIA_TYPE.VIDEO:
-                  return readMatchingCatalogMedia(document, bdc, mediaType, ANCHOR_MEDIA_PRESETS[mediaType])
-                default:
-                  return null
-              }
-            }
-          }
-        default:
-          return null
-      }
-  }
-}
-
-/** Matches a catalogue Card to the media and preset that can be anchored. */
-function readMatchingCatalogMedia(
-  document: ElceDocument,
-  bdc: Bdc,
-  mediaType: ElceCatalogMediaType,
-  preset: AnchorMediaPreset,
-): CatalogBdcContent | null {
-  switch (bdc.card?.mediaId) {
-    case null:
-      return null
-    default: {
-      const media = document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
-      switch (media) {
-        case undefined:
-          return null
-        default:
-          switch (mediaTypeFromMimeType(media.mimeType)) {
-            case mediaType:
-              switch (bdc.type) {
-                case BDC_TYPE.CARD:
-                  switch (bdc.presetId === preset.presetId) {
-                    case true:
-                      return { bdc, media, mediaType, preset }
-                    case false:
-                      return null
-                  }
-                default:
-                  return null
-              }
-            default:
-              return null
-          }
-      }
-    }
-  }
+  const media = bdc.card.mediaId === null
+    ? undefined
+    : document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+  const mediaType = media === undefined ? null : mediaTypeFromMimeType(media.mimeType)
+  if (mediaType !== MEDIA_TYPE.IMAGE && mediaType !== MEDIA_TYPE.VIDEO) return null
+  return { bdc, paddingBottom: ANCHOR_MEDIA_PRESETS[mediaType].blockSize }
 }
 
 /** Builds a target that moves one available bdc into this page's text. */
@@ -308,7 +220,7 @@ function createCatalogBdcDropTarget(
   reference: Extract<ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.BDC }>,
   pageId: PageId,
 ): ElceCatalogDropTarget | null {
-  const item = readCatalogBdcContent(document, reference.bdcId)
+  const item = readCatalogCard(document, reference.bdcId)
   switch (item) {
     case null:
       return null
@@ -318,11 +230,41 @@ function createCatalogBdcDropTarget(
         reference,
         pageId,
         bdcId: item.bdc.id,
-        presetId: item.preset.presetId,
+        presetId: item.bdc.presetId,
         partId: `${pageId}:${item.bdc.id}:anchor`,
-        paddingBottom: item.preset.blockSize,
+        paddingBottom: item.paddingBottom,
       }
   }
+}
+
+/** Chooses a readable catalogue name from the BDC's authored content. */
+function catalogBdcName(document: ElceDocument, bdc: Bdc): string {
+  switch (bdc.type) {
+    case BDC_TYPE.SECTION:
+      return bdc.section?.title.trim() || 'Texte'
+    case BDC_TYPE.CARD: {
+      const cardText = [bdc.card?.title, bdc.card?.overline, bdc.card?.message, bdc.card?.description, bdc.card?.caption, bdc.card?.note]
+        .find((value) => value?.trim().length)
+      if (cardText !== undefined) return cardText.trim()
+      const media = bdc.card?.mediaId === null || bdc.card?.mediaId === undefined
+        ? undefined
+        : document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+      return media?.name ?? 'Carte'
+    }
+    case BDC_TYPE.QUESTION:
+      return bdc.question?.title.trim() || 'Question'
+    case BDC_TYPE.EVALUATION_RESULT:
+      return 'Résultat d’évaluation'
+    case BDC_TYPE.CAROUSEL:
+      return 'Carousel'
+    default:
+      return assertNeverBdcType(bdc.type)
+  }
+}
+
+/** Keeps catalogue naming exhaustive when a BDC type is added. */
+function assertNeverBdcType(value: never): never {
+  throw new Error(`Type de BDC non pris en charge : ${String(value)}`)
 }
 
 /** Builds a unique Card target while retaining the referenced media resource. */

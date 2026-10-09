@@ -266,6 +266,7 @@ export class EditorActionsFacade {
       setType: (type) => this.questionFacade.setType(bdcId, question, type),
       setTitle: (title) => this.questionFacade.setTitle(bdcId, question, title),
       setPrompt: (prompt) => this.questionFacade.setPrompt(bdcId, question, prompt),
+      setValidationLabel: (label) => this.questionFacade.setValidationLabel(bdcId, question, label),
       setAnswerLabel: (answerId, label) => this.questionFacade.setAnswerLabel(bdcId, question, answerId, label),
       setAnswerCorrect: (answerId, correct) => this.questionFacade.setAnswerCorrect(bdcId, question, answerId, correct),
       addAnswer: () => this.questionFacade.addAnswer(bdcId, question),

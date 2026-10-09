@@ -6,6 +6,7 @@ import {
   CHAPTER_TYPE,
   DEFAULT_EVALUATION_SETTINGS,
   EVALUATION_RESULT_BRANCH,
+  QUESTION_DEFAULTS,
   SCENARIO_ENTRY_KIND,
 } from '../../../config/document-config'
 import type {
@@ -413,6 +414,7 @@ function bdcFromRows(
       type: stringValue(question, 'question_type') as NonNullable<Bdc['question']>['type'],
       title: nullableText(question, 'title') ?? '',
       prompt: stringValue(question, 'prompt'),
+      validationLabel: nullableText(question, 'validation_label') ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
       answers: answerRows
         .filter((answer) => answer.question_content_block_id === id)
         .sort(byPosition)
@@ -717,9 +719,11 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
     case BDC_TYPE.QUESTION: {
       const question = requireValue(bdc.question, `Question manquante : ${bdc.id}`)
       await queryRows(database, `
-        INSERT INTO questions (project_id, content_block_id, media_id, question_type, title, prompt)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, question.mediaId, question.type, nullableTextValue(question.title), question.prompt])
+        INSERT INTO questions (
+          project_id, content_block_id, media_id, question_type, title, prompt, validation_label
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [projectId, bdc.id, question.mediaId, question.type, nullableTextValue(question.title), question.prompt,
+        question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL])
       for (const [position, answer] of question.answers.entries()) {
         await queryRows(database, `
           INSERT INTO question_answers (

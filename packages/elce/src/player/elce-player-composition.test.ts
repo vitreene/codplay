@@ -165,7 +165,7 @@ describe('Elcé player composition', () => {
     expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
   })
 
-  it('emits a standalone Diapo Card completion while an earlier unfinished page keeps the next page locked', async () => {
+  it('emits a standalone Diapo Card completion and unlocks the next page from the selected preview start', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -189,6 +189,7 @@ describe('Elcé player composition', () => {
     documentModel = applyDocumentCommand(documentModel, createPageCommand({
       pageId: 'page-after-diapo-card',
       bdcId: 'bdc-after-diapo-card',
+      name: 'Après Diapo Carte',
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
     const stage = document.createElement('div')
@@ -237,13 +238,15 @@ describe('Elcé player composition', () => {
       sourceSceneKey: `scene-${diapoCommand.pageId}`,
       data: { pageId: diapoCommand.pageId },
     }))
-    expect(nextButton?.disabled).toBe(true)
+    expect(nextButton?.disabled).toBe(false)
     expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-card')?.getAttribute('data-locked'))
-      .toBe('true')
-    expect(stage.querySelector('.elce-card--text-short')).not.toBeNull()
+      .toBe('false')
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Après Diapo Carte')
   })
 
-  it('emits the shared Page-bottom event without unlocking a next page past an unfinished earlier page', async () => {
+  it('emits the shared Page-bottom event and unlocks the next page from the selected preview start', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -268,6 +271,7 @@ describe('Elcé player composition', () => {
     documentModel = applyDocumentCommand(documentModel, createPageCommand({
       pageId: 'page-after-diapo-carousel',
       bdcId: 'bdc-after-diapo-carousel',
+      name: 'Après Diapo Carousel',
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
     const stage = document.createElement('div')
@@ -306,12 +310,15 @@ describe('Elcé player composition', () => {
       data: { pageId: diapoCommand.pageId },
     }))
     expect(publicEvents.some((event) => event.name === ELCE_EVENTS.SCENE_END)).toBe(false)
-    expect(nextButton?.disabled).toBe(true)
+    expect(nextButton?.disabled).toBe(false)
     expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-carousel')?.getAttribute('data-locked'))
-      .toBe('true')
+      .toBe('false')
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Après Diapo Carousel')
   })
 
-  it('publishes Diapo Quiz completion only after validation while preserving the earlier page access guard', async () => {
+  it('publishes Diapo Quiz completion after validation and unlocks the next page from the selected preview start', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -335,6 +342,7 @@ describe('Elcé player composition', () => {
     documentModel = applyDocumentCommand(documentModel, createPageCommand({
       pageId: 'page-after-diapo-question',
       bdcId: 'bdc-after-diapo-question',
+      name: 'Après Diapo Quiz',
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
     const stage = document.createElement('div')
@@ -365,15 +373,18 @@ describe('Elcé player composition', () => {
     validateButton?.click()
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-question-feedback')?.textContent).toMatch(/Bonne réponse|Réponse incorrecte/)
-    expect(nextButton?.disabled).toBe(true)
+    expect(nextButton?.disabled).toBe(false)
     expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-question')?.getAttribute('data-locked'))
-      .toBe('true')
+      .toBe('false')
     expect(stage.querySelector('.elce-card--question')).not.toBeNull()
     expect(publicEvents).toContainEqual(expect.objectContaining({
       name: ELCE_EVENTS.PAGE_FINISHED,
       sourceSceneKey: `scene-${diapoCommand.pageId}`,
       data: { pageId: diapoCommand.pageId },
     }))
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Après Diapo Quiz')
   })
 
   it('mounts Card BDC media through its selected layout in the real player composition', async () => {
@@ -865,6 +876,61 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('#page-a-scrollport')).toBeNull()
   })
 
+  it('continues from a directly previewed Evaluation question to the next question after its Sighty gates', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const { documentModel, pageFId, precedingQuestionPageId } = createEvaluationQuestionPages('Page D')
+    if (precedingQuestionPageId === undefined) throw new Error('The fixture has no preceding Evaluation question.')
+
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: precedingQuestionPageId })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageFButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page F')
+    const pageGButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page G')
+    const answer = stage.querySelector<HTMLInputElement>('.elce-card--question input[type="radio"]')
+    const validateButton = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const pageDMarker = stage.querySelector(`#${precedingQuestionPageId}-bottom-marker`)
+    const pageDObserver = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(pageDMarker as Element))
+
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page D')
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageFButton?.getAttribute('data-locked')).toBe('true')
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    expect(answer).not.toBeNull()
+    expect(validateButton).not.toBeNull()
+    expect(pageDObserver).toBeDefined()
+
+    answer?.click()
+    await flushCompositionFrames(pendingFrames)
+    validateButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    pageDObserver?.deliver({ target: pageDMarker as Element, intersectionRatio: 1, isIntersecting: true })
+    await flushCompositionFrames(pendingFrames)
+
+    expect(nextButton?.disabled).toBe(false)
+    expect(pageFButton?.getAttribute('data-locked')).toBe('false')
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    expect(stage.querySelector(`#${pageFId}-scrollport`)).not.toBeNull()
+  })
+
   it('keeps Next disabled on a directly previewed Evaluation question while its next page is inaccessible', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -1351,8 +1417,8 @@ function createCardWithMedia(document: ReturnType<typeof createInitialDocument>,
   return applyDocumentCommand(created, { type: 'bdc.card.media.set', bdcId, mediaId })
 }
 
-/** Creates an Evaluation chapter with two default Question pages after Page A. */
-function createEvaluationQuestionPages() {
+/** Creates an Evaluation chapter with Page F and G, optionally preceded by another Question. */
+function createEvaluationQuestionPages(precedingQuestionName?: string) {
   const initialDocument = createInitialDocument()
   let documentModel = applyDocumentCommand(initialDocument, createChapterCommand(
     initialDocument,
@@ -1361,6 +1427,10 @@ function createEvaluationQuestionPages() {
   ))
   const evaluationChapterId = documentModel.chapters.at(-1)!.id
   const placement = { kind: PAGE_LOCATION.CHAPTER, chapterId: evaluationChapterId } as const
+  const precedingQuestion = precedingQuestionName === undefined
+    ? undefined
+    : createDefaultPageCommand(documentModel, placement, precedingQuestionName)
+  if (precedingQuestion !== undefined) documentModel = applyDocumentCommand(documentModel, precedingQuestion)
   const pageF = createDefaultPageCommand(documentModel, placement, 'Page F')
   documentModel = applyDocumentCommand(documentModel, pageF)
   const pageG = createDefaultPageCommand(documentModel, placement, 'Page G')
@@ -1380,7 +1450,11 @@ function createEvaluationQuestionPages() {
       failure: { message: 'Évaluation à reprendre.', action: null },
     },
   })
-  return { documentModel, pageFId: pageF.pageId }
+  return {
+    documentModel,
+    pageFId: pageF.pageId,
+    precedingQuestionPageId: precedingQuestion?.pageId,
+  }
 }
 
 /** Confirms CodPlay keeps every answer correction idle before validation or after reset. */

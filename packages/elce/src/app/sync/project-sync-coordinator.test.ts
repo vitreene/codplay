@@ -62,6 +62,56 @@ afterEach(() => {
 })
 
 describe('Elcé project synchronization', () => {
+  it('sends the latest locally saved revision immediately when a window blurs', async () => {
+    const document = applyDocumentCommand(createInitialDocument(), { type: 'document.rename', name: 'Sauvegarde au blur' })
+    const store = new MemoryDocumentStore()
+    await store.saveDocument(document)
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json(
+      { project: { id: document.id, name: document.data.name, revision: 0 } },
+      { status: 201, headers: { ETag: '"0"' } },
+    ))
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    actor.send({ type: 'document.replace', document })
+    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+
+    coordinator.schedule(document)
+    await coordinator.flushNow()
+
+    expect(request).toHaveBeenCalledOnce()
+    expect(store.syncState).toMatchObject({ remoteRevision: 0, status: 'synced' })
+
+    coordinator.destroy()
+    actor.stop()
+  })
+
+  it('does not queue a duplicate retry when blur arrives during a failed network write', async () => {
+    const document = applyDocumentCommand(createInitialDocument(), { type: 'document.rename', name: 'Sauvegarde hors ligne' })
+    const store = new MemoryDocumentStore()
+    await store.saveDocument(document)
+    let rejectRequest: (error: unknown) => void = () => {}
+    const pendingRequest = new Promise<Response>((_resolve, reject) => { rejectRequest = reject })
+    const request = vi.fn<typeof fetch>().mockReturnValue(pendingRequest)
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    actor.send({ type: 'document.replace', document })
+    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const reportError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    coordinator.schedule(document)
+    const blurFlush = coordinator.flushNow()
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce())
+    const overlappingBlurFlush = coordinator.flushNow()
+    rejectRequest(new TypeError('Network unavailable'))
+
+    await Promise.all([blurFlush, overlappingBlurFlush])
+    expect(request).toHaveBeenCalledOnce()
+    expect(store.syncState).toMatchObject({ status: 'pending' })
+    reportError.mockRestore()
+    coordinator.destroy()
+    actor.stop()
+  })
+
   it('creates the server document before uploading and then serves the image from its URL', async () => {
     const media = { id: 'media-photo', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' }
     const document = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })

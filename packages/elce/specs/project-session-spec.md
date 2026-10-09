@@ -31,8 +31,10 @@ de contenus de l’éditeur.
   Pour un autre projet, seul son projet serveur et son cache local sont ciblés.
 - Chaque onglet mémorise son propre projet actif. Les projets différents
   gardent des documents et des caches séparés ; un même projet reste protégé
-  par le verrou exclusif décrit dans la
-  [spécification d’accès entre fenêtres](./editor-window-access-spec.md).
+  par le verrou exclusif entre fenêtres du même profil navigateur. Entre deux
+  navigateurs, le coordinateur reçoit la révision serveur au retour du focus,
+  selon la
+  [spécification d’accès et de synchronisation par focus](./editor-window-access-spec.md).
 - Les requêtes de gestion passent de la vue Remix à `EditorActionsFacade`, puis
   à l’événement `project.operation` du même acteur XState. Le
   `ProjectSessionCoordinator` raccorde cet acteur à l’API, au cache, à la

@@ -13,6 +13,7 @@ export interface DocumentPersistenceOptions {
 export interface AttachedDocumentPersistence {
   flushLocalChanges(): Promise<void>
   restoreCurrentDocument(): Promise<void>
+  installServerDocument(document: ElceDocument, uploadedMediaIds: readonly MediaId[]): Promise<void>
   detach(): void
 }
 
@@ -86,6 +87,19 @@ export async function attachDocumentPersistence(
       if (lastSaveError !== null) throw lastSaveError
     },
     restoreCurrentDocument,
+    installServerDocument: async (document, uploadedMediaIds) => {
+      await pendingSave
+      if (lastSaveError !== null) throw lastSaveError
+
+      const currentDocument = controller.getSnapshot().context.document
+      if (currentDocument.id !== document.id) throw new Error('Le document serveur ne correspond pas au projet actif.')
+
+      revokeRegisteredMediaSources(controller)
+      persistedDocument = document
+      controller.send({ type: 'document.replace', document })
+      controller.send({ type: 'document.sync.status', status: 'synced' })
+      await restoreMediaSources(controller, document, store, uploadedMediaIds, options.mediaSourceUrl)
+    },
     detach: () => {
       subscription.unsubscribe()
       revokeRegisteredMediaSources(controller)

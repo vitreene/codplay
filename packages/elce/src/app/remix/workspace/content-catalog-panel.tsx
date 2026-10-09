@@ -1,6 +1,7 @@
 import { on, type RemixNode } from 'remix/ui'
 
-import { ANCHOR_RETURN, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE } from '../../../config/document-config'
+import { ANCHOR_RETURN, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE } from '../../../config/document-config'
+import type { BdcType } from '../../../config/document-config-types'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 import { Archive, GripVertical, Trash2, X } from 'lucide-static'
 import { renderLucideIcon } from '../lucide-static-icon'
@@ -117,14 +118,14 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
           id="elce-catalog-bdcs-description"
           className="elce-muted"
         >
-          Ces blocs ne sont utilisés sur aucune page. Déposer ici un bloc ancré le retire du texte et le rend disponible.
+          Le bouton d’archive sur chaque bloc de la page le renvoie ici. Déposer une Carte ancrée retire aussi son ancre.
         </p>
         {view.catalogContents.bdcs.length === 0
           ? <p
             id="elce-catalog-bdcs-empty"
             className="elce-muted"
           >
-            Aucun bloc image ou vidéo disponible.
+            Aucun bloc disponible.
           </p>
           : <ul
             id="elce-catalog-bdcs-list"
@@ -138,7 +139,7 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
                 id={`elce-catalog-bdc-actions-${entry.reference.bdcId}`}
                 className="elce-content-catalog-row"
               >
-                {renderCatalogReference(entry.reference, entry.name, entry.mediaType, 'bdc', entry.key)}
+                {renderCatalogReference(entry.reference, entry.name, catalogBdcLabel(entry.bdcType), 'bdc', entry.key)}
                 {renderDeleteButton(`elce-catalog-bdc-delete-${entry.reference.bdcId}`, `Supprimer définitivement le bloc ${entry.name}`, () => actions.deleteCatalogBdc(entry.reference.bdcId))}
               </div>
             </li>)}
@@ -170,47 +171,47 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
               key={entry.key}
               id={`elce-catalog-media-${entry.reference.mediaId}`}
             >
-              {renderCatalogReference(entry.reference, entry.name, entry.mediaType, 'media', entry.key)}
+              {renderCatalogReference(entry.reference, entry.name, catalogMediaLabel(entry.mediaType), 'media', entry.key)}
             </li>)}
           </ul>}
       </section>
     </section>
-    {view.unanchoredMediaBdcs.length === 0
+    {view.selectedChapter !== undefined || view.selectedPageBdcs.length === 0
       ? null
       : <section
-        id="elce-page-media"
+        id="elce-page-bdcs"
         className="elce-outline-group"
       >
         <h2
-          id="elce-page-media-title"
+          id="elce-page-bdcs-title"
         >
-          Médias dans la page
+          Blocs dans la page
         </h2>
         <ul
-          id="elce-page-media-list"
+          id="elce-page-bdcs-list"
           className="elce-media-catalog-list"
         >
-          {view.unanchoredMediaBdcs.map((bdc) => {
-            const media = view.documentModel.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+          {view.selectedPageBdcs.map((bdc) => {
+            const label = catalogBdcLabel(bdc.type)
             return <li
               key={bdc.id}
-              id={`elce-page-media-${bdc.id}`}
+              id={`elce-page-bdc-${bdc.id}`}
               className="elce-media-catalog-row"
             >
               <span
-                id={`elce-page-media-name-${bdc.id}`}
+                id={`elce-page-bdc-name-${bdc.id}`}
               >
-                {media?.name ?? bdc.type}
+                {label}
               </span>
               <button
-                id={`elce-page-media-catalog-${bdc.id}`}
+                id={`elce-page-bdc-catalog-${bdc.id}`}
                 className="elce-secondary-action"
                 type="button"
-                aria-label="Renvoyer au catalogue"
+                aria-label={`Renvoyer le bloc ${label} au catalogue`}
                 title="Renvoyer au catalogue"
                 mix={on<HTMLButtonElement, 'click'>('click', () => actions.returnBdcToCatalog(bdc.id))}
               >
-                {renderLucideIcon(Archive, `elce-page-media-catalog-icon-${bdc.id}`, 14)}
+                {renderLucideIcon(Archive, `elce-page-bdc-catalog-icon-${bdc.id}`, 14)}
               </button>
             </li>
           })}
@@ -223,7 +224,7 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
 function renderCatalogReference(
   reference: ElceCatalogReference,
   name: string,
-  mediaType: ElceCatalogMediaEntry['mediaType'],
+  typeLabel: string,
   referenceKind: 'bdc' | 'media',
   key: string,
 ): RemixNode {
@@ -233,11 +234,11 @@ function renderCatalogReference(
     type="button"
     draggable={true}
     aria-label={referenceKind === 'bdc'
-      ? `Insérer le bloc ${catalogMediaLabel(mediaType)} : ${name}`
-      : `Déposer le média ${catalogMediaLabel(mediaType)} : ${name}`}
+      ? `Déplacer le bloc ${typeLabel} : ${name}`
+      : `Déposer le média ${typeLabel} : ${name}`}
     title={referenceKind === 'bdc'
-      ? `Insérer le bloc ${catalogMediaLabel(mediaType)} : ${name}`
-      : `Déposer le média ${catalogMediaLabel(mediaType)} : ${name}`}
+      ? `Déplacer le bloc ${typeLabel} : ${name}`
+      : `Déposer le média ${typeLabel} : ${name}`}
     mix={on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => {
       const transfer = event.dataTransfer
       if (transfer === null) return
@@ -261,9 +262,7 @@ function renderCatalogReference(
     <small
       id={`elce-catalog-${referenceKind}-type-${key}`}
     >
-      {referenceKind === 'bdc'
-        ? `Bloc ${catalogMediaLabel(mediaType)} · unique`
-        : catalogMediaLabel(mediaType)}
+      {referenceKind === 'bdc' ? `Bloc ${typeLabel} · unique` : typeLabel}
     </small>
   </button>
 }
@@ -295,6 +294,22 @@ function catalogMediaLabel(mediaType: ElceCatalogMediaEntry['mediaType']): strin
       return 'image'
     case MEDIA_TYPE.VIDEO:
       return 'vidéo'
+  }
+}
+
+/** Gives each BDC type a stable label in the available-content panel. */
+function catalogBdcLabel(bdcType: BdcType): string {
+  switch (bdcType) {
+    case BDC_TYPE.SECTION:
+      return 'Texte'
+    case BDC_TYPE.CARD:
+      return 'Carte'
+    case BDC_TYPE.QUESTION:
+      return 'Quiz'
+    case BDC_TYPE.EVALUATION_RESULT:
+      return 'Résultat'
+    case BDC_TYPE.CAROUSEL:
+      return 'Carousel'
   }
 }
 

@@ -1,6 +1,7 @@
 import type { BdcId, MediaMetadata } from '../document/document-types'
 import type { ElceCatalogDropTarget, ElceCatalogMediaType } from '../catalog/catalog-types'
 import type { CardLayoutId } from '../../config/document-config-types'
+import type { CardContent } from '../card/card-types'
 
 export type { ElceCatalogDropTarget } from '../catalog/catalog-types'
 
@@ -14,10 +15,10 @@ export interface ElceAnchorDropTarget {
   readonly paddingBottom: string
 }
 
-export type ElceAnchorMediaPreview = Readonly<{
-  readonly source: string
-  readonly type: ElceCatalogMediaType
+export type ElceAnchorCardPreview = Readonly<{
+  readonly content: CardContent
   readonly layoutId: CardLayoutId
+  readonly media: Readonly<{ source: string; type: ElceCatalogMediaType }> | null
 }>
 
 /** Describes one serializable editor change handled by the anchor service. */

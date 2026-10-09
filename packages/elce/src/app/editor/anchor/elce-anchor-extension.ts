@@ -4,11 +4,14 @@ import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { dropPoint } from '@tiptap/pm/transform'
 import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { ANCHOR, ANCHOR_RETURN, CATALOG_REFERENCE, DEFAULT_PRESET_ID } from '../../../config/document-config'
+import { ANCHOR, ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID } from '../../../config/document-config'
+import { CARD_PRESETS } from '../../../config/presets'
+import { ElceCardPresetBuilder } from '../../../builders/card/card-preset-builder'
 import type { BdcId } from '../../../domain/document/document-types'
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 import type {
   ElceAnchorAttributes,
+  ElceAnchorCardPreview,
   ElceAnchorDropTarget,
   ElceAnchorExtensionOptions,
   ElceAnchorTransaction,
@@ -20,6 +23,7 @@ export const ELCE_ANCHOR_TRANSACTION_META = 'elceAnchorAction'
 
 const ELCE_ANCHOR_PLUGIN_KEY = new PluginKey('elceAnchorInteractions')
 const anchorRatioService = new ElceAnchorRatioService()
+const cardPresetBuilder = new ElceCardPresetBuilder()
 
 /** Creates the attributes shared by the editable anchor and its static export. */
 export function createElceAnchorAttributes(
@@ -28,6 +32,81 @@ export function createElceAnchorAttributes(
   paddingBottom: string = ANCHOR.DEFAULT_PADDING_BOTTOM,
 ): ElceAnchorAttributes {
   return { bdcId, partId, paddingBottom }
+}
+
+/** Renders a Card's existing layout and fields inside its authoring anchor. */
+function renderAnchorCardPreview(
+  container: HTMLElement,
+  preview: ElceAnchorCardPreview,
+  bdcId: string,
+  onPhotoImage: (image: HTMLImageElement) => void,
+): void {
+  const preset = CARD_PRESETS[preview.layoutId]
+  if (preset === undefined) return
+  const rootId = `${bdcId}-anchor-preview`
+  const partPrefix = `${bdcId}:anchor-preview`
+  const layout = cardPresetBuilder.build(preview.layoutId, rootId, partPrefix)
+  let markup = layout.markup
+  const textFields: Readonly<Record<string, string>> = {
+    overline: preview.content.overline,
+    title: preview.content.title,
+    description: preview.content.description,
+    message: preview.content.message,
+    note: preview.content.note,
+    caption: preview.content.caption,
+  }
+  for (const zone of preset.zones) {
+    const target = layout.zonePartIds[zone.id]
+    if (target === undefined) continue
+    const value = textFields[zone.id]
+    if (zone.content === 'text' && value !== undefined && value.trim().length > 0) {
+      const tagName = zone.id === 'title' ? 'h2' : zone.id === 'note' ? 'footer' : 'p'
+      const className = zone.className === undefined ? '' : ` class="${escapeHtmlAttribute(zone.className)}"`
+      const textMarkup = `<${tagName} id="${escapeHtmlAttribute(`${rootId}-${zone.id}`)}"${className}>${escapeHtmlText(value)}</${tagName}>`
+      markup = markup.replace(`<!-- data-part="${target}" -->`, textMarkup)
+      continue
+    }
+    if (zone.content === 'media') {
+      const mediaMarkup = createAnchorCardMediaMarkup(preview, bdcId)
+      if (mediaMarkup !== null) markup = markup.replace(`<!-- data-part="${target}" -->`, mediaMarkup)
+    }
+  }
+  container.innerHTML = markup
+  const root = container.firstElementChild
+  if (!(root instanceof HTMLElement)) return
+  root.classList.add('elce-anchor-card-preview')
+  if (preview.content.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT) root.classList.add('elce-carousel-view--image-right')
+  root.dataset.elceCardPreview = 'true'
+  if (preview.layoutId === DEFAULT_PRESET_ID.PHOTO) {
+    const image = root.querySelector('.elce-anchor-media-preview')
+    if (image instanceof HTMLImageElement) onPhotoImage(image)
+  }
+}
+
+/** Builds media markup only for the source types supported by the selected Card layout. */
+function createAnchorCardMediaMarkup(preview: ElceAnchorCardPreview, bdcId: string): string | null {
+  const media = preview.media
+  if (media === null) return null
+  const mediaId = `${bdcId}-anchor-preview-media`
+  const photoLayout = preview.layoutId === DEFAULT_PRESET_ID.PHOTO
+  if (media.type === 'image') {
+    const className = photoLayout
+      ? 'elce-anchor-media-preview'
+      : `elce-anchor-card-media-preview${preview.content.imageFit === CARD_IMAGE_FIT.CONTAIN ? ' elce-anchor-card-media-preview--contain' : ''}`
+    return `<img id="${escapeHtmlAttribute(mediaId)}" class="${className}" src="${escapeHtmlAttribute(media.source)}" draggable="false">`
+  }
+  if (media.type === 'video' && photoLayout) return `<video id="${escapeHtmlAttribute(mediaId)}" class="elce-anchor-media-preview" src="${escapeHtmlAttribute(media.source)}" controls></video>`
+  return null
+}
+
+/** Escapes authored plain text before placing it in preset-generated markup. */
+function escapeHtmlText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}
+
+/** Escapes an attribute value before placing it in preset-generated markup. */
+function escapeHtmlAttribute(value: string): string {
+  return escapeHtmlText(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;')
 }
 
 /** Builds the Elcé anchor node with the editor-specific drop and move hooks. */
@@ -114,15 +193,14 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       bdc.style.setProperty('inset-block-start', anchorEditorBlockPositionFor())
       bdc.style.width = '100%'
       let renderedCard = ''
-      /** Renders the current Card media while retaining the text-flow anchor DOM. */
+      /** Renders the selected Card layout while retaining the text-flow anchor DOM. */
       const renderCard = () => {
         const configuredPadding = String(currentNode.attrs.paddingBottom ?? ANCHOR.DEFAULT_PADDING_BOTTOM)
         const currentBdcId = String(currentNode.attrs.bdcId ?? '')
         const card = this.options.resolveCard?.(currentBdcId) ?? null
         const layoutId = card?.layoutId ?? DEFAULT_PRESET_ID.PHOTO
-        const mediaType = card?.type ?? null
-        const source = card?.source ?? null
-        const signature = `${configuredPadding}|${layoutId}|${mediaType ?? ''}|${source ?? ''}`
+        const mediaType = card?.media?.type ?? null
+        const signature = JSON.stringify([configuredPadding, card])
         dom.id = String(currentNode.attrs.partId ?? '')
         dom.dataset.bdcId = currentBdcId
         dom.dataset.part = String(currentNode.attrs.partId ?? '')
@@ -134,7 +212,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
         bdc.dataset.cardLayout = layoutId
         if (mediaType === null) delete bdc.dataset.mediaType
         else bdc.dataset.mediaType = mediaType
-        bdc.setAttribute('aria-label', mediaType === 'video' ? 'Bloc vidéo' : 'Bloc image')
+        bdc.setAttribute('aria-label', 'Aperçu de la carte ancrée')
         if (layoutId === DEFAULT_PRESET_ID.PHOTO) {
           bdc.style.height = 'auto'
           bdc.style.aspectRatio = mediaType === 'video'
@@ -147,32 +225,18 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
         if (signature === renderedCard) return
         renderedCard = signature
         bdc.replaceChildren()
-        if (source === null || mediaType === null) return
-        switch (mediaType) {
-          case 'image': {
-            const image = document.createElement('img')
-            image.className = 'elce-anchor-media-preview'
-            image.draggable = false
-            image.addEventListener('load', () => {
-              const latestCard = this.options.resolveCard?.(String(currentNode.attrs.bdcId ?? ''))
-              if (latestCard !== null && latestCard !== undefined) {
-                updateAnchorImageRatio(image, dom, bdc, view, getPos, latestCard.layoutId)
-              }
-            }, { once: true })
-            image.src = source
-            bdc.append(image)
-            if (image.complete && image.naturalWidth > 0) updateAnchorImageRatio(image, dom, bdc, view, getPos, layoutId)
-            break
+        if (card === null) return
+        renderAnchorCardPreview(bdc, card, currentBdcId, (image) => {
+          image.addEventListener('load', () => {
+            const latestCard = this.options.resolveCard?.(String(currentNode.attrs.bdcId ?? ''))
+            if (latestCard?.layoutId === DEFAULT_PRESET_ID.PHOTO) {
+              updateAnchorImageRatio(image, dom, bdc, view, getPos, latestCard.layoutId)
+            }
+          }, { once: true })
+          if (image.complete && image.naturalWidth > 0 && layoutId === DEFAULT_PRESET_ID.PHOTO) {
+            updateAnchorImageRatio(image, dom, bdc, view, getPos, layoutId)
           }
-          case 'video': {
-            const video = document.createElement('video')
-            video.className = 'elce-anchor-media-preview'
-            video.src = source
-            video.controls = true
-            bdc.append(video)
-            break
-          }
-        }
+        })
       }
       renderCard()
       const unregisterRefresh = this.options.registerNodeViewRefresh?.(bdcId, renderCard)

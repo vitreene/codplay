@@ -4,9 +4,9 @@
 
 **Fixe — création contextualisée des chapitres et des pages Flux/Diapo, ordre
 mixte page/chapitre, déplacement par séparateurs, sélection centrale d’un
-chapitre et catalogue dans la colonne droite. Les surfaces Remix sont
-implémentées et vérifiées en tests ; Brave DevTools a également vérifié les
-réglages centraux d’un chapitre Évaluation dans le parcours de production.**
+chapitre et catalogue dans la colonne droite. L’extension du catalogue aux BDC
+racines est implémentée et testée ; la validation Brave du parcours complet
+reste en cours dans le plan de construction.**
 
 Cette spécification décrit les commandes visibles pour créer des pages et des
 chapitres, ainsi que l’édition de leurs titres dans la zone centrale.
@@ -81,9 +81,11 @@ referme cette vue et rouvre l’éditeur de la page.
 
 La colonne droite précédemment intitulée « Propriétés » accueille la section
 « Contenus disponibles », avec les onglets « Blocs disponibles » et « Médias ».
-Les interactions de dépôt et de retrait restent identiques. Quand une page est
-sélectionnée, les médias de cette page non ancrés restent accessibles sous le
-catalogue dans cette même colonne.
+L’onglet « Blocs disponibles » liste tous les BDC racines du catalogue, un seul
+élément par conteneur ; il ne détache pas ses Cartes enfants. Quand une page est
+sélectionnée, le groupe « Blocs dans la page » permet de renvoyer chacun de ses
+BDC racines au catalogue. Les médias réutilisables restent dans leur onglet
+distinct. Le retour d’une Carte ancrée continue d’utiliser le circuit d’ancre.
 À 1200 px et moins, cette colonne est remplacée par un bouton d’accès à icône ;
 placé sur la même ligne que le titre « Elcé ». Ce bouton ouvre le même catalogue
 dans un tiroir depuis la droite. À 800 px et moins, le Scénario devient lui aussi
@@ -156,7 +158,9 @@ séparées.
 - [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
   vérifie les cinq types de BDC, l’ordre direct, l’édition des champs et médias,
   les Cartes enfants, le déplacement par séparateur, les placements directs de
-  Carte Flux et Diapo, le changement de page et le désabonnement XState.
+  Carte Flux et Diapo, le changement de page et le désabonnement XState. Un
+  parcours intégré du catalogue et de l’éditeur de page vérifie aussi le
+  déplacement d’une Carte disponible vers une page puis son retour au catalogue.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie l’édition Section et les parcours d’ancre/média dans le page editor
   de production.

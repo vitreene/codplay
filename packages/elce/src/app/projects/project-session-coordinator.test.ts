@@ -1,10 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createInitialDocument, ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocument as ElceDocumentModel } from '../../domain/document/document-model'
 import type { ElceProjectSummary } from '../../infrastructure/project-api/project-api-types'
 import { ElceProjectApiClient } from '../../infrastructure/project-api/project-api-client'
 import type { DocumentSyncState, ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
+import { createActor } from 'xstate'
+import { controllerMachine } from '../controller/controller-machine'
 import { ProjectSessionCoordinator } from './project-session-coordinator'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 class MemoryProjectStore implements ElceDocumentStore {
   public readonly documents = new Map<string, ElceDocumentModel>()
@@ -124,34 +130,122 @@ describe('Elcé project session lifecycle', () => {
     expect(remote.size).toBe(0)
     expect(request.mock.calls.map(([, init]) => init?.method ?? 'GET')).toEqual(['GET'])
   })
+
+  it('pushes on blur and installs a newer server revision when focus returns', async () => {
+    const initial = documentForProject('elce-document', 'Version initiale')
+    const remote = new Map([[initial.id, initial]])
+    const revisions = new Map([[initial.id, 0]])
+    const store = new MemoryProjectStore()
+    const { coordinator } = createCoordinator(remote, store, revisions)
+    const browser = installFakeBrowserEvents()
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
+
+    const firstRemoteUpdate = documentForProject(initial.id, 'Enregistré dans l’autre navigateur')
+    remote.set(initial.id, firstRemoteUpdate)
+    revisions.set(initial.id, 1)
+    browser.grantAccess(0)
+    await vi.waitFor(() => expect(actor.getSnapshot().context.document.data.name).toBe(firstRemoteUpdate.data.name))
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Sauvegardé au blur' } })
+    browser.setFocused(false)
+    browser.window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(remote.get(initial.id)?.data.name).toBe('Sauvegardé au blur'))
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('waiting'))
+    expect(revisions.get(initial.id)).toBe(2)
+
+    const secondRemoteUpdate = documentForProject(initial.id, 'Modifié dans le second navigateur')
+    remote.set(initial.id, secondRemoteUpdate)
+    revisions.set(initial.id, 3)
+    browser.setFocused(true)
+    browser.window.dispatchEvent(new Event('focus'))
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(2))
+    browser.grantAccess(1)
+
+    await vi.waitFor(() => expect(actor.getSnapshot().context.document.data.name).toBe(secondRemoteUpdate.data.name))
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+    expect(store.checkpoints.get(initial.id)).toMatchObject({ remoteRevision: 3, status: 'synced' })
+
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('waits for window focus before requesting project edit access', async () => {
+    const initial = documentForProject('elce-document', 'Fenêtre en arrière-plan')
+    const remote = new Map([[initial.id, initial]])
+    const revisions = new Map([[initial.id, 0]])
+    const store = new MemoryProjectStore()
+    const { coordinator } = createCoordinator(remote, store, revisions)
+    const browser = installFakeBrowserEvents(false)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).toBe(initial.id))
+    expect(browser.locks.request).not.toHaveBeenCalled()
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+
+    browser.setFocused(true)
+    browser.window.dispatchEvent(new Event('focus'))
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
+    browser.grantAccess(0)
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+
+    await coordinator.dispose()
+    actor.stop()
+  })
 })
 
 /** Creates the API fake and lifecycle coordinator used by the tests. */
 function createCoordinator(
   remote: Map<string, ElceDocumentModel>,
   store: MemoryProjectStore,
+  revisions: Map<string, number> = new Map(),
 ): Readonly<{ coordinator: ProjectSessionCoordinator; request: ReturnType<typeof vi.fn<typeof fetch>> }> {
   const request = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
     const url = new URL(input.toString())
     switch (`${init?.method ?? 'GET'} ${url.pathname}`) {
       case 'GET /api/projects':
-        return Response.json({ projects: [...remote.values()].map(summaryFor) })
+        return Response.json({ projects: [...remote.values()].map((document) => summaryFor(document, revisions.get(document.id) ?? 0)) })
       case 'POST /api/projects': {
         const data = JSON.parse(String(init?.body)) as Parameters<typeof ElceDocument.fromJSON>[0]
         const document = ElceDocument.fromJSON(data)
         remote.set(document.id, document)
-        return Response.json({ project: summaryFor(document) }, { status: 201, headers: { ETag: '"0"' } })
+        revisions.set(document.id, 0)
+        return Response.json({ project: summaryFor(document, 0) }, { status: 201, headers: { ETag: '"0"' } })
       }
       case `GET /api/projects/${decodeURIComponent(url.pathname.split('/').at(-1) ?? '')}`: {
         const projectId = decodeURIComponent(url.pathname.split('/').at(-1) ?? '')
         const document = remote.get(projectId)
         if (document === undefined) return Response.json({ error: 'project_not_found' }, { status: 404 })
-        return Response.json({ project: summaryFor(document), document: document.toJSON() }, {
-          headers: { ETag: '"0"' },
+        const revision = revisions.get(projectId) ?? 0
+        return Response.json({ project: summaryFor(document, revision), document: document.toJSON() }, {
+          headers: { ETag: `"${revision}"` },
         })
       }
+      case `PUT /api/projects/${decodeURIComponent(url.pathname.split('/').at(-2) ?? '')}/document`: {
+        const projectId = decodeURIComponent(url.pathname.split('/').at(-2) ?? '')
+        const currentRevision = revisions.get(projectId) ?? 0
+        if (init?.headers === undefined || new Headers(init.headers).get('If-Match') !== `"${currentRevision}"`) {
+          return Response.json({ error: 'revision_mismatch' }, { status: 412 })
+        }
+        const data = JSON.parse(String(init.body)) as Parameters<typeof ElceDocument.fromJSON>[0]
+        const document = ElceDocument.fromJSON(data)
+        const revision = currentRevision + 1
+        remote.set(projectId, document)
+        revisions.set(projectId, revision)
+        return Response.json({ project: summaryFor(document, revision) }, { headers: { ETag: `"${revision}"` } })
+      }
       case `DELETE /api/projects/${decodeURIComponent(url.pathname.split('/').at(-1) ?? '')}`: {
-        remote.delete(decodeURIComponent(url.pathname.split('/').at(-1) ?? ''))
+        const projectId = decodeURIComponent(url.pathname.split('/').at(-1) ?? '')
+        remote.delete(projectId)
+        revisions.delete(projectId)
         return new Response(null, { status: 204 })
       }
       default:
@@ -170,6 +264,44 @@ function documentForProject(id: string, name: string): ElceDocumentModel {
 }
 
 /** Maps the stable document identity to its server-owned project summary. */
-function summaryFor(document: ElceDocumentModel): ElceProjectSummary {
-  return { id: document.id, name: document.data.name, revision: 0 }
+function summaryFor(document: ElceDocumentModel, revision = 0): ElceProjectSummary {
+  return { id: document.id, name: document.data.name, revision }
+}
+
+/** Supplies focus, blur, document visibility, and manually granted Web Locks to lifecycle tests. */
+function installFakeBrowserEvents(initialFocus = true): Readonly<{
+  locks: { request: ReturnType<typeof vi.fn> }
+  window: EventTarget
+  setFocused(focused: boolean): void
+  grantAccess(index: number): void
+}> {
+  const windowTarget = new EventTarget()
+  let focused = initialFocus
+  const documentTarget = Object.assign(new EventTarget(), {
+    visibilityState: 'visible',
+    hasFocus: () => focused,
+  })
+  const grants: Array<() => void> = []
+  const request = vi.fn((_name: string, _options: unknown, callback: (lock: unknown) => Promise<void>) => new Promise<void>((resolve, reject) => {
+    grants.push(() => {
+      Promise.resolve(callback({ name: _name })).then(resolve, reject)
+    })
+  }))
+  class FakeBroadcastChannel extends EventTarget {
+    public constructor(_name: string) { super() }
+    public postMessage(_message: unknown): void {}
+    public close(): void {}
+  }
+
+  vi.stubGlobal('window', windowTarget)
+  vi.stubGlobal('document', documentTarget)
+  vi.stubGlobal('navigator', { locks: { request } })
+  vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel)
+  vi.stubGlobal('crypto', { randomUUID: () => 'test-editor' })
+  return {
+    locks: { request },
+    window: windowTarget,
+    setFocused: (nextFocused) => { focused = nextFocused },
+    grantAccess: (index) => grants[index]?.(),
+  }
 }

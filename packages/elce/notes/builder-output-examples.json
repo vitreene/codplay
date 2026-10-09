@@ -1,0 +1,3021 @@
+{
+  "metadata": {
+    "title": "Exemples de sorties JSON des builders Elcé",
+    "generatedFrom": "Invocations des builders actuels avec des exemples métier créés par les commandes Elcé.",
+    "fixtureMediaSource": "https://example.invalid est un domaine réservé, utilisé ici comme source de démonstration non chargeable.",
+    "functionSerialization": "Les callbacks CodPlay (straps) sont conservés comme chaînes source afin que le résultat reste du JSON valide ; les valeurs undefined suivent le comportement normal de JSON.stringify.",
+    "scope": "Un exemple par type de BDC ; sortie complète d’une scène Page Flux et d’une scène Diapo Carousel."
+  },
+  "fixtures": {
+    "fluxPage": {
+      "chapter": {
+        "id": "chapter-evaluation-example",
+        "name": "Évaluation exemple",
+        "type": "evaluation",
+        "pageIds": [
+          "page-flux-example"
+        ],
+        "evaluationThreshold": 0.8,
+        "evaluationAttemptLimit": null,
+        "evaluationRetryScope": "all-questions"
+      },
+      "page": {
+        "id": "page-flux-example",
+        "name": "Page exemple",
+        "type": "flux",
+        "chapterId": "chapter-evaluation-example",
+        "bdcIds": [
+          "bdc-question-example",
+          "bdc-section-example",
+          "bdc-result-example",
+          "bdc-card-direct-example",
+          "bdc-carousel-example"
+        ]
+      },
+      "bdcs": [
+        {
+          "id": "bdc-question-example",
+          "type": "question",
+          "presetId": "question-basic",
+          "pageId": "page-flux-example",
+          "parentBdcId": null,
+          "section": null,
+          "question": {
+            "mediaId": null,
+            "type": "choice",
+            "title": "Question exemple",
+            "prompt": "Quel est le rôle de cette story ?",
+            "answers": [
+              {
+                "id": "answer-example-correct",
+                "label": "Gérer la réponse et sa validation",
+                "correct": true
+              },
+              {
+                "id": "answer-example-incorrect",
+                "label": "Décrire uniquement le markup",
+                "correct": false
+              }
+            ]
+          },
+          "evaluationResult": null,
+          "carousel": null,
+          "card": null
+        },
+        {
+          "id": "bdc-section-example",
+          "type": "section",
+          "presetId": "section-basic",
+          "pageId": "page-flux-example",
+          "parentBdcId": null,
+          "section": {
+            "title": "Une Section",
+            "markup": "<p id=\"section-example-paragraph\">Texte de démonstration dans le flux.</p>",
+            "content": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "section-example-paragraph"
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Texte de démonstration dans le flux."
+                    }
+                  ]
+                }
+              ]
+            },
+            "revelation": {
+              "intro": null,
+              "outro": null
+            }
+          },
+          "question": null,
+          "evaluationResult": null,
+          "carousel": null,
+          "card": null
+        },
+        {
+          "id": "bdc-result-example",
+          "type": "evaluation-result",
+          "presetId": "evaluation-result-basic",
+          "pageId": "page-flux-example",
+          "parentBdcId": null,
+          "section": null,
+          "question": null,
+          "evaluationResult": {
+            "success": {
+              "message": "Évaluation réussie.",
+              "action": "replay"
+            },
+            "failure": {
+              "message": "Réessayez les questions.",
+              "action": "retry"
+            }
+          },
+          "carousel": null,
+          "card": null
+        },
+        {
+          "id": "bdc-card-direct-example",
+          "type": "card",
+          "presetId": "text-image-basic",
+          "pageId": "page-flux-example",
+          "parentBdcId": null,
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": null,
+          "card": {
+            "mediaId": "media-example-photo",
+            "overline": "Carte directe",
+            "title": "Une Carte dans le flux",
+            "description": "Le texte visible vient des persos projetés dans les zones du preset.",
+            "message": "Le média reste une ressource référencée.",
+            "note": "Exemple de projection.",
+            "caption": "Légende conservée, masquée par ce layout.",
+            "imagePosition": "left",
+            "imageFit": "cover"
+          }
+        },
+        {
+          "id": "bdc-carousel-example",
+          "type": "carousel",
+          "presetId": "carousel-basic",
+          "pageId": "page-flux-example",
+          "parentBdcId": null,
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": {
+            "defaultViewDurationMs": 4000,
+            "playbackMode": "automatic",
+            "repeatCount": 1,
+            "aspectRatio": {
+              "width": 16,
+              "height": 9
+            },
+            "revelation": {
+              "intro": null,
+              "outro": null
+            },
+            "cards": [
+              {
+                "bdcId": "bdc-carousel-photo-example",
+                "durationMs": 3000,
+                "introTransitionRef": null,
+                "outroTransitionRef": null
+              },
+              {
+                "bdcId": "bdc-carousel-text-example",
+                "durationMs": null,
+                "introTransitionRef": null,
+                "outroTransitionRef": null
+              }
+            ]
+          },
+          "card": null
+        },
+        {
+          "id": "bdc-carousel-photo-example",
+          "type": "card",
+          "presetId": "photo-basic",
+          "pageId": null,
+          "parentBdcId": "bdc-carousel-example",
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": null,
+          "card": {
+            "mediaId": "media-example-photo",
+            "overline": "",
+            "title": "",
+            "description": "",
+            "message": "",
+            "note": "",
+            "caption": "",
+            "imagePosition": "left",
+            "imageFit": "cover"
+          }
+        },
+        {
+          "id": "bdc-carousel-text-example",
+          "type": "card",
+          "presetId": "text-short-basic",
+          "pageId": null,
+          "parentBdcId": "bdc-carousel-example",
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": null,
+          "card": {
+            "mediaId": null,
+            "overline": "Deuxième vue",
+            "title": "Une Carte enfant",
+            "description": "La Carte reste un BDC identifié, ordonné par le Carousel.",
+            "message": "",
+            "note": "",
+            "caption": "",
+            "imagePosition": "left",
+            "imageFit": "cover"
+          }
+        }
+      ],
+      "mediaSources": {
+        "media-example-photo": "https://example.invalid/assets/photo-exemple.png"
+      },
+      "mediaTypes": {
+        "media-example-photo": "image"
+      }
+    },
+    "diapo": {
+      "page": {
+        "id": "page-diapo-example",
+        "name": "Diapo exemple",
+        "type": "diapo",
+        "chapterId": null,
+        "bdcIds": [
+          "bdc-diapo-carousel-example"
+        ]
+      },
+      "bdcs": [
+        {
+          "id": "bdc-diapo-carousel-example",
+          "type": "carousel",
+          "presetId": "carousel-basic",
+          "pageId": "page-diapo-example",
+          "parentBdcId": null,
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": {
+            "defaultViewDurationMs": 5000,
+            "playbackMode": "manual",
+            "repeatCount": 0,
+            "aspectRatio": {
+              "width": 16,
+              "height": 9
+            },
+            "revelation": {
+              "intro": null,
+              "outro": null
+            },
+            "cards": [
+              {
+                "bdcId": "bdc-diapo-photo-example",
+                "durationMs": null,
+                "introTransitionRef": null,
+                "outroTransitionRef": null
+              },
+              {
+                "bdcId": "bdc-diapo-text-example",
+                "durationMs": null,
+                "introTransitionRef": null,
+                "outroTransitionRef": null
+              }
+            ]
+          },
+          "card": null
+        },
+        {
+          "id": "bdc-diapo-photo-example",
+          "type": "card",
+          "presetId": "photo-basic",
+          "pageId": null,
+          "parentBdcId": "bdc-diapo-carousel-example",
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": null,
+          "card": {
+            "mediaId": "media-example-photo",
+            "overline": "",
+            "title": "",
+            "description": "",
+            "message": "",
+            "note": "",
+            "caption": "",
+            "imagePosition": "left",
+            "imageFit": "cover"
+          }
+        },
+        {
+          "id": "bdc-diapo-text-example",
+          "type": "card",
+          "presetId": "text-short-basic",
+          "pageId": null,
+          "parentBdcId": "bdc-diapo-carousel-example",
+          "section": null,
+          "question": null,
+          "evaluationResult": null,
+          "carousel": null,
+          "card": {
+            "mediaId": null,
+            "overline": "Deuxième vue",
+            "title": "Diapo Carousel",
+            "description": "Navigation et cartes sont projetées par la même story.",
+            "message": "",
+            "note": "",
+            "caption": "",
+            "imagePosition": "left",
+            "imageFit": "cover"
+          }
+        }
+      ],
+      "mediaSources": {
+        "media-example-photo": "https://example.invalid/assets/photo-exemple.png"
+      },
+      "mediaTypes": {
+        "media-example-photo": "image"
+      }
+    }
+  },
+  "bdcBuilderOutputs": {
+    "section": {
+      "builder": "buildFluxScene -> createSectionStory",
+      "inputBdcId": "bdc-section-example",
+      "output": {
+        "id": "page-flux-example-bdc-section-example",
+        "persos": [
+          {
+            "id": "page-flux-example-bdc-section-example-title",
+            "type": "tag",
+            "initial": {
+              "tag": "h2",
+              "content": "Une Section",
+              "move": {
+                "target": "page-flux-example:bdc-section-example:section:title"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "question": {
+      "builder": "buildFluxScene -> buildQuestionBdcStory",
+      "inputBdcId": "bdc-question-example",
+      "output": {
+        "id": "page-flux-example-bdc-question-example",
+        "state": {
+          "selectedAnswerIds": [],
+          "submitted": false
+        },
+        "straps": {
+          "page-flux-example:bdc-question-example:select-answer": {
+            "$type": "FunctionSource",
+            "source": "({ event, state }) => selectQuestionAnswer(prefix, question, state, event.data)"
+          },
+          "page-flux-example:bdc-question-example:validate-answer": {
+            "$type": "FunctionSource",
+            "source": "({ state }) => validateQuestionAnswer(pageId, bdc, prefix, question, state, completionEventName, completionEventData)"
+          },
+          "page-flux-example:bdc-question-example:reset-question": {
+            "$type": "FunctionSource",
+            "source": "({ state }) => resetQuestion(prefix, question, state)"
+          }
+        },
+        "listen": [
+          {
+            "on": "page-flux-example:bdc-question-example:answer:select",
+            "straps": [
+              "page-flux-example:bdc-question-example:select-answer"
+            ]
+          },
+          {
+            "on": "page-flux-example:bdc-question-example:validate",
+            "straps": [
+              "page-flux-example:bdc-question-example:validate-answer"
+            ]
+          },
+          {
+            "on": "page-flux-example:bdc-question-example:reset",
+            "straps": [
+              "page-flux-example:bdc-question-example:reset-question"
+            ]
+          }
+        ],
+        "persos": [
+          {
+            "id": "page-flux-example:bdc-question-example:title",
+            "type": "tag",
+            "initial": {
+              "tag": "h2",
+              "content": "Question exemple",
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:title"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example:bdc-question-example:prompt",
+            "type": "tag",
+            "initial": {
+              "tag": "legend",
+              "content": "Quel est le rôle de cette story ?",
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:question"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example:bdc-question-example:instructions",
+            "type": "tag",
+            "initial": {
+              "tag": "p",
+              "content": "Sélectionnez une réponse, puis validez.",
+              "className": "elce-question-instructions",
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:answers"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example-bdc-question-example-answer-answer-example-correct",
+            "type": "input",
+            "initial": {
+              "inputType": "radio",
+              "name": "page-flux-example:bdc-question-example:answer-group",
+              "value": "answer-example-correct",
+              "label": "Gérer la réponse et sa validation",
+              "hint": "",
+              "checked": false,
+              "disabled": false,
+              "visualState": "idle",
+              "selectionIcon": {
+                "className": "elce-question-answer__selection"
+              },
+              "correctionIcon": {
+                "className": "elce-question-answer__correction",
+                "correctContent": "✓",
+                "incorrectContent": "×",
+                "missedCorrectContent": "✓"
+              },
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:answers"
+              }
+            },
+            "emit": {
+              "change": {
+                "event": {
+                  "name": "page-flux-example:bdc-question-example:answer:select",
+                  "data": {
+                    "answerId": "answer-example-correct"
+                  }
+                }
+              }
+            },
+            "actions": {
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:selected": {
+                "selectedAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": true,
+                "visualState": "selected"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:idle": {
+                "selectedAnswerIds": [],
+                "checked": false,
+                "visualState": "idle"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:reset": {
+                "selectedAnswerIds": [],
+                "correctAnswerIds": [],
+                "checked": false,
+                "disabled": false,
+                "disableAnswers": false,
+                "showCorrection": false,
+                "visualState": "idle"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:revealed-correct": {
+                "selectedAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": true,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "revealed-correct"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:revealed-incorrect": {
+                "selectedAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": true,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "revealed-incorrect"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:revealed-missed-correct": {
+                "selectedAnswerIds": [],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": false,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "revealed-missed-correct"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-correct:locked": {
+                "selectedAnswerIds": [],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": false,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "disabled"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example-bdc-question-example-answer-answer-example-incorrect",
+            "type": "input",
+            "initial": {
+              "inputType": "radio",
+              "name": "page-flux-example:bdc-question-example:answer-group",
+              "value": "answer-example-incorrect",
+              "label": "Décrire uniquement le markup",
+              "hint": "",
+              "checked": false,
+              "disabled": false,
+              "visualState": "idle",
+              "selectionIcon": {
+                "className": "elce-question-answer__selection"
+              },
+              "correctionIcon": {
+                "className": "elce-question-answer__correction",
+                "correctContent": "✓",
+                "incorrectContent": "×",
+                "missedCorrectContent": "✓"
+              },
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:answers"
+              }
+            },
+            "emit": {
+              "change": {
+                "event": {
+                  "name": "page-flux-example:bdc-question-example:answer:select",
+                  "data": {
+                    "answerId": "answer-example-incorrect"
+                  }
+                }
+              }
+            },
+            "actions": {
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:selected": {
+                "selectedAnswerIds": [
+                  "answer-example-incorrect"
+                ],
+                "checked": true,
+                "visualState": "selected"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:idle": {
+                "selectedAnswerIds": [],
+                "checked": false,
+                "visualState": "idle"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:reset": {
+                "selectedAnswerIds": [],
+                "correctAnswerIds": [],
+                "checked": false,
+                "disabled": false,
+                "disableAnswers": false,
+                "showCorrection": false,
+                "visualState": "idle"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:revealed-correct": {
+                "selectedAnswerIds": [
+                  "answer-example-incorrect"
+                ],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": true,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "revealed-correct"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:revealed-incorrect": {
+                "selectedAnswerIds": [
+                  "answer-example-incorrect"
+                ],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": true,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "revealed-incorrect"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:revealed-missed-correct": {
+                "selectedAnswerIds": [],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": false,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "revealed-missed-correct"
+              },
+              "page-flux-example:bdc-question-example:answer:answer-example-incorrect:locked": {
+                "selectedAnswerIds": [],
+                "correctAnswerIds": [
+                  "answer-example-correct"
+                ],
+                "checked": false,
+                "disabled": true,
+                "disableAnswers": true,
+                "showCorrection": true,
+                "visualState": "disabled"
+              }
+            }
+          },
+          {
+            "id": "bdc-question-example-validate",
+            "type": "tag",
+            "initial": {
+              "tag": "button",
+              "content": "Valider la réponse",
+              "attr": {
+                "type": "button",
+                "disabled": true
+              },
+              "className": "elce-question-validate",
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:validation"
+              }
+            },
+            "emit": {
+              "click": {
+                "event": {
+                  "name": "page-flux-example:bdc-question-example:validate"
+                }
+              }
+            },
+            "actions": {
+              "page-flux-example:bdc-question-example:selection:available": {
+                "attr": {
+                  "type": "button",
+                  "disabled": false
+                }
+              },
+              "page-flux-example:bdc-question-example:selection:empty": {
+                "attr": {
+                  "type": "button",
+                  "disabled": true
+                }
+              },
+              "page-flux-example:bdc-question-example:resolved": {
+                "attr": {
+                  "type": "button",
+                  "disabled": true
+                }
+              }
+            }
+          },
+          {
+            "id": "bdc-question-example-feedback",
+            "type": "tag",
+            "initial": {
+              "tag": "p",
+              "content": "",
+              "attr": {
+                "hidden": true,
+                "aria-live": "polite"
+              },
+              "className": "elce-question-feedback",
+              "move": {
+                "target": "page-flux-example:bdc-question-example:question:validation"
+              }
+            },
+            "actions": {
+              "page-flux-example:bdc-question-example:feedback": {}
+            }
+          }
+        ]
+      }
+    },
+    "evaluationResult": {
+      "builder": "buildEvaluationResultBdcScene",
+      "inputBdcId": "bdc-result-example",
+      "output": {
+        "mountPartId": "page-flux-example:bdc-result-example:evaluation-result",
+        "mountMarkup": "<!-- data-part=\"page-flux-example:bdc-result-example:evaluation-result\" -->",
+        "stories": [
+          {
+            "id": "page-flux-example-bdc-result-example-success",
+            "persos": [
+              {
+                "id": "bdc-result-example-success-result-card",
+                "type": "layout",
+                "initial": {
+                  "move": "@off",
+                  "className": "elce-card--evaluation-result",
+                  "markup": "\n      <article id=\"page-flux-example-bdc-result-example-success\" class=\"elce-card elce-card--evaluation-result\">\n        \n    <section id=\"page-flux-example-bdc-result-example-success-section\" class=\"elce-evaluation-result__branch elce-evaluation-result__branch--success\">\n      <h2 id=\"page-flux-example-bdc-result-example-success-title\">Réussite</h2>\n      <!-- data-part=\"page-flux-example:bdc-result-example:success:success-message\" -->\n      <!-- data-part=\"page-flux-example:bdc-result-example:success:success-action\" -->\n    </section>\n  \n      </article>\n    "
+                },
+                "actions": {
+                  "elce:evaluation:result:success": {
+                    "move": {
+                      "target": "page-flux-example:bdc-result-example:evaluation-result"
+                    }
+                  }
+                }
+              },
+              {
+                "id": "bdc-result-example-success-message",
+                "type": "tag",
+                "initial": {
+                  "tag": "p",
+                  "content": "Évaluation réussie.",
+                  "move": {
+                    "target": "page-flux-example:bdc-result-example:success:success-message"
+                  }
+                }
+              },
+              {
+                "id": "bdc-result-example-success-action",
+                "type": "tag",
+                "initial": {
+                  "tag": "button",
+                  "content": "Relire les réponses",
+                  "attr": {
+                    "type": "button"
+                  },
+                  "move": {
+                    "target": "page-flux-example:bdc-result-example:success:success-action"
+                  }
+                },
+                "emit": {
+                  "click": {
+                    "event": {
+                      "name": "elce:evaluation:result:action",
+                      "data": {
+                        "pageId": "page-flux-example",
+                        "chapterId": "chapter-evaluation-example",
+                        "bdcId": "bdc-result-example",
+                        "branch": "success",
+                        "action": "replay",
+                        "prefix": "page-flux-example:bdc-result-example:success"
+                      },
+                      "visibility": "public"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": "page-flux-example-bdc-result-example-failure",
+            "persos": [
+              {
+                "id": "bdc-result-example-failure-result-card",
+                "type": "layout",
+                "initial": {
+                  "move": "@off",
+                  "className": "elce-card--evaluation-result",
+                  "markup": "\n      <article id=\"page-flux-example-bdc-result-example-failure\" class=\"elce-card elce-card--evaluation-result\">\n        \n    <section id=\"page-flux-example-bdc-result-example-failure-section\" class=\"elce-evaluation-result__branch elce-evaluation-result__branch--failure\">\n      <h2 id=\"page-flux-example-bdc-result-example-failure-title\">Échec</h2>\n      <!-- data-part=\"page-flux-example:bdc-result-example:failure:failure-message\" -->\n      <!-- data-part=\"page-flux-example:bdc-result-example:failure:failure-action\" -->\n    </section>\n  \n      </article>\n    "
+                },
+                "actions": {
+                  "elce:evaluation:result:failure": {
+                    "move": {
+                      "target": "page-flux-example:bdc-result-example:evaluation-result"
+                    }
+                  }
+                }
+              },
+              {
+                "id": "bdc-result-example-failure-message",
+                "type": "tag",
+                "initial": {
+                  "tag": "p",
+                  "content": "Réessayez les questions.",
+                  "move": {
+                    "target": "page-flux-example:bdc-result-example:failure:failure-message"
+                  }
+                }
+              },
+              {
+                "id": "bdc-result-example-failure-action",
+                "type": "tag",
+                "initial": {
+                  "tag": "button",
+                  "content": "Recommencer l’évaluation",
+                  "attr": {
+                    "type": "button"
+                  },
+                  "move": {
+                    "target": "page-flux-example:bdc-result-example:failure:failure-action"
+                  }
+                },
+                "emit": {
+                  "click": {
+                    "event": {
+                      "name": "elce:evaluation:result:action",
+                      "data": {
+                        "pageId": "page-flux-example",
+                        "chapterId": "chapter-evaluation-example",
+                        "bdcId": "bdc-result-example",
+                        "branch": "failure",
+                        "action": "retry",
+                        "prefix": "page-flux-example:bdc-result-example:failure"
+                      },
+                      "visibility": "public"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "card": {
+      "builder": "ElceCardBdcSceneBuilder.build",
+      "inputBdcId": "bdc-card-direct-example",
+      "output": {
+        "markup": "\n      <article id=\"page-flux-example-bdc-card-direct-example-card-bdc-card-direct-example\" class=\"elce-card elce-card--text-image\">\n        <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:root\" -->\n        <div id=\"page-flux-example-bdc-card-direct-example-card-bdc-card-direct-example-image\" class=\"elce-carousel-text-image__image\"><!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:image\" --></div>\n        <div id=\"page-flux-example-bdc-card-direct-example-card-bdc-card-direct-example-content\" class=\"elce-carousel-text-image__content\"><!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:content\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note\" -->\n        </div>\n      </article>\n    ",
+        "rootClassName": "elce-card elce-card--text-image",
+        "zonePartIds": {
+          "image": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:image",
+          "overline": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline",
+          "title": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title",
+          "description": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description",
+          "message": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message",
+          "note": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note"
+        },
+        "contentPersos": [
+          {
+            "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-overline",
+            "type": "tag",
+            "initial": {
+              "tag": "p",
+              "content": "Carte directe",
+              "className": "elce-card-text-image__overline",
+              "move": {
+                "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-title",
+            "type": "tag",
+            "initial": {
+              "tag": "h2",
+              "content": "Une Carte dans le flux",
+              "className": "elce-card-text-image__title",
+              "move": {
+                "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-description",
+            "type": "tag",
+            "initial": {
+              "tag": "p",
+              "content": "Le texte visible vient des persos projetés dans les zones du preset.",
+              "className": "elce-card-text-image__description",
+              "move": {
+                "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-message",
+            "type": "tag",
+            "initial": {
+              "tag": "p",
+              "content": "Le média reste une ressource référencée.",
+              "className": "elce-card-text-image__message",
+              "move": {
+                "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message"
+              }
+            }
+          },
+          {
+            "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-note",
+            "type": "tag",
+            "initial": {
+              "tag": "footer",
+              "content": "Exemple de projection.",
+              "className": "elce-card-text-image__note",
+              "move": {
+                "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note"
+              }
+            }
+          }
+        ],
+        "mediaPersos": [
+          {
+            "id": "card-bdc-card-direct-example-media-media-example-photo",
+            "type": "img",
+            "initial": {
+              "src": "https://example.invalid/assets/photo-exemple.png",
+              "alt": "",
+              "className": "elce-carousel-media",
+              "move": {
+                "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:image"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "carousel": {
+      "builder": "ElceCarouselSceneBuilder.build",
+      "inputBdcId": "bdc-carousel-example",
+      "inputCardIds": [
+        "bdc-carousel-photo-example",
+        "bdc-carousel-text-example"
+      ],
+      "output": {
+        "markup": "\n      <section id=\"page-flux-example-bdc-carousel-example\" class=\"elce-card elce-card--carousel\">\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:carousel:frame\" --><div id=\"page-flux-example-bdc-carousel-example-capsule\" class=\"elce-carousel-capsule elce-carousel-capsule__grid ac-grid-carousel-1x1-forced\" data-intro-transition=\"fade\" data-outro-transition=\"fade\" style=\"display:grid;grid-template-columns:1fr;grid-template-rows:1fr;aspect-ratio:16 / 9\"><!-- data-part=\"page-flux-example:bdc-carousel-example:carousel:capsule\" --></div>\n        <nav id=\"page-flux-example-bdc-carousel-example-navigation\" class=\"elce-carousel__navigation\" aria-label=\"Vues du carousel\"><!-- data-part=\"page-flux-example:bdc-carousel-example:carousel:navigation\" --></nav>\n      </section>\n    ",
+        "story": {
+          "id": "page-flux-example-bdc-carousel-example",
+          "state": {
+            "activeCardBdcId": "bdc-carousel-photo-example"
+          },
+          "persos": [
+            {
+              "id": "page-flux-example:bdc-carousel-example-card-bdc-carousel-photo-example",
+              "type": "layout",
+              "initial": {
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:carousel:capsule"
+                },
+                "className": "elce-carousel-view ac-cell-r1-c1 elce-card elce-card--photo elce-carousel-view--visible",
+                "attr": {
+                  "aria-hidden": false,
+                  "inert": false
+                },
+                "style": {
+                  "opacity": 1,
+                  "x": 0,
+                  "y": 0,
+                  "scale": 1
+                },
+                "markup": "\n      <article id=\"page-flux-example-bdc-carousel-example-card-bdc-carousel-photo-example\" class=\"elce-card elce-card--photo\">\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:root\" -->\n        <div id=\"page-flux-example-bdc-carousel-example-card-bdc-carousel-photo-example-media\" class=\"elce-carousel-photo__media\"><!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:media\" --></div>\n      </article>\n    "
+              },
+              "actions": {
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:selected": {
+                  "className": {
+                    "add": "elce-carousel-view--visible",
+                    "remove": "elce-carousel-view--hidden"
+                  },
+                  "attr": {
+                    "aria-hidden": "false",
+                    "inert": false
+                  },
+                  "style": {
+                    "opacity": {
+                      "from": 0,
+                      "to": 1,
+                      "duration": 300
+                    }
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:unselected": {
+                  "className": {
+                    "add": "elce-carousel-view--hidden",
+                    "remove": "elce-carousel-view--visible"
+                  },
+                  "attr": {
+                    "aria-hidden": "true",
+                    "inert": true
+                  },
+                  "style": {
+                    "opacity": {
+                      "to": 0,
+                      "duration": 300
+                    }
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:intro": {
+                  "className": {
+                    "add": "elce-carousel-view--visible",
+                    "remove": "elce-carousel-view--hidden"
+                  },
+                  "attr": {
+                    "aria-hidden": "false",
+                    "inert": false
+                  },
+                  "style": {
+                    "opacity": {
+                      "from": 0,
+                      "to": 1,
+                      "duration": 300
+                    }
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro": {
+                  "className": {
+                    "add": "elce-carousel-view--hidden",
+                    "remove": "elce-carousel-view--visible"
+                  },
+                  "attr": {
+                    "aria-hidden": "true",
+                    "inert": true
+                  },
+                  "style": {
+                    "opacity": {
+                      "to": 0,
+                      "duration": 300
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "page-flux-example:bdc-carousel-example-card-bdc-carousel-text-example",
+              "type": "layout",
+              "initial": {
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:carousel:capsule"
+                },
+                "className": "elce-carousel-view ac-cell-r1-c1 elce-card elce-card--text-short elce-carousel-view--hidden",
+                "attr": {
+                  "aria-hidden": true,
+                  "inert": true
+                },
+                "style": {
+                  "opacity": 0,
+                  "x": 0,
+                  "y": 0,
+                  "scale": 1
+                },
+                "markup": "\n      <article id=\"page-flux-example-bdc-carousel-example-card-bdc-carousel-text-example\" class=\"elce-card elce-card--text-short\">\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:root\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:message\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:note\" -->\n      </article>\n    "
+              },
+              "actions": {
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:selected": {
+                  "className": {
+                    "add": "elce-carousel-view--visible",
+                    "remove": "elce-carousel-view--hidden"
+                  },
+                  "attr": {
+                    "aria-hidden": "false",
+                    "inert": false
+                  },
+                  "style": {
+                    "opacity": {
+                      "from": 0,
+                      "to": 1,
+                      "duration": 300
+                    }
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:unselected": {
+                  "className": {
+                    "add": "elce-carousel-view--hidden",
+                    "remove": "elce-carousel-view--visible"
+                  },
+                  "attr": {
+                    "aria-hidden": "true",
+                    "inert": true
+                  },
+                  "style": {
+                    "opacity": {
+                      "to": 0,
+                      "duration": 300
+                    }
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro": {
+                  "className": {
+                    "add": "elce-carousel-view--visible",
+                    "remove": "elce-carousel-view--hidden"
+                  },
+                  "attr": {
+                    "aria-hidden": "false",
+                    "inert": false
+                  },
+                  "style": {
+                    "opacity": {
+                      "from": 0,
+                      "to": 1,
+                      "duration": 300
+                    }
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:outro": {
+                  "className": {
+                    "add": "elce-carousel-view--hidden",
+                    "remove": "elce-carousel-view--visible"
+                  },
+                  "attr": {
+                    "aria-hidden": "true",
+                    "inert": true
+                  },
+                  "style": {
+                    "opacity": {
+                      "to": 0,
+                      "duration": 300
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "page-flux-example:bdc-carousel-text-example-card-bdc-carousel-text-example-overline",
+              "type": "tag",
+              "initial": {
+                "tag": "p",
+                "content": "Deuxième vue",
+                "className": "elce-card-text-short__overline",
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline"
+                }
+              }
+            },
+            {
+              "id": "page-flux-example:bdc-carousel-text-example-card-bdc-carousel-text-example-title",
+              "type": "tag",
+              "initial": {
+                "tag": "h2",
+                "content": "Une Carte enfant",
+                "className": "elce-card-text-short__title",
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title"
+                }
+              }
+            },
+            {
+              "id": "page-flux-example:bdc-carousel-text-example-card-bdc-carousel-text-example-description",
+              "type": "tag",
+              "initial": {
+                "tag": "p",
+                "content": "La Carte reste un BDC identifié, ordonné par le Carousel.",
+                "className": "elce-card-text-short__description",
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description"
+                }
+              }
+            },
+            {
+              "id": "page-flux-example:bdc-carousel-example-dot-bdc-carousel-photo-example",
+              "type": "tag",
+              "initial": {
+                "tag": "button",
+                "content": "•",
+                "className": "elce-carousel-dot elce-carousel-dot--active",
+                "attr": {
+                  "type": "button",
+                  "aria-label": "Aller à la vue 1",
+                  "aria-current": "true"
+                },
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:carousel:navigation"
+                }
+              },
+              "emit": {
+                "click": {
+                  "event": {
+                    "name": "page-flux-example:bdc-carousel-example:select-card",
+                    "data": {
+                      "cardBdcId": "bdc-carousel-photo-example"
+                    },
+                    "visibility": "story"
+                  }
+                }
+              },
+              "actions": {
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:selected": {
+                  "className": {
+                    "add": "elce-carousel-dot--active",
+                    "remove": "elce-carousel-dot--inactive"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 1",
+                    "aria-current": "true"
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:unselected": {
+                  "className": {
+                    "add": "elce-carousel-dot--inactive",
+                    "remove": "elce-carousel-dot--active"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 1",
+                    "aria-current": "false"
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:intro": {
+                  "className": {
+                    "add": "elce-carousel-dot--active",
+                    "remove": "elce-carousel-dot--inactive"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 1",
+                    "aria-current": "true"
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro": {
+                  "className": {
+                    "add": "elce-carousel-dot--inactive",
+                    "remove": "elce-carousel-dot--active"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 1",
+                    "aria-current": "false"
+                  }
+                }
+              }
+            },
+            {
+              "id": "page-flux-example:bdc-carousel-example-dot-bdc-carousel-text-example",
+              "type": "tag",
+              "initial": {
+                "tag": "button",
+                "content": "•",
+                "className": "elce-carousel-dot elce-carousel-dot--inactive",
+                "attr": {
+                  "type": "button",
+                  "aria-label": "Aller à la vue 2",
+                  "aria-current": "false"
+                },
+                "move": {
+                  "target": "page-flux-example:bdc-carousel-example:carousel:navigation"
+                }
+              },
+              "emit": {
+                "click": {
+                  "event": {
+                    "name": "page-flux-example:bdc-carousel-example:select-card",
+                    "data": {
+                      "cardBdcId": "bdc-carousel-text-example"
+                    },
+                    "visibility": "story"
+                  }
+                }
+              },
+              "actions": {
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:selected": {
+                  "className": {
+                    "add": "elce-carousel-dot--active",
+                    "remove": "elce-carousel-dot--inactive"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 2",
+                    "aria-current": "true"
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:unselected": {
+                  "className": {
+                    "add": "elce-carousel-dot--inactive",
+                    "remove": "elce-carousel-dot--active"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 2",
+                    "aria-current": "false"
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro": {
+                  "className": {
+                    "add": "elce-carousel-dot--active",
+                    "remove": "elce-carousel-dot--inactive"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 2",
+                    "aria-current": "true"
+                  }
+                },
+                "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:outro": {
+                  "className": {
+                    "add": "elce-carousel-dot--inactive",
+                    "remove": "elce-carousel-dot--active"
+                  },
+                  "attr": {
+                    "type": "button",
+                    "aria-label": "Aller à la vue 2",
+                    "aria-current": "false"
+                  }
+                }
+              }
+            }
+          ],
+          "eventimes": [
+            {
+              "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro",
+              "startAt": 3000
+            },
+            {
+              "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro",
+              "startAt": 3000
+            },
+            {
+              "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:outro",
+              "startAt": 7000
+            },
+            {
+              "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:intro",
+              "startAt": 7000
+            },
+            {
+              "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro",
+              "startAt": 10000
+            },
+            {
+              "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro",
+              "startAt": 10000
+            }
+          ],
+          "straps": {
+            "page-flux-example:bdc-carousel-example:select-card": {
+              "$type": "FunctionSource",
+              "source": "({ event }) => {\n\t\tconst selectedBdcId = event.data?.cardBdcId;\n\t\tif (typeof selectedBdcId !== \"string\") return undefined;\n\t\tconst selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId);\n\t\tif (selectedEntry === undefined) return undefined;\n\t\treturn {\n\t\t\tupdate: { activeCardBdcId: selectedEntry.bdcId },\n\t\t\tevents: content.cards.map((entry) => ({ name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? \"selected\" : \"unselected\"}` }))\n\t\t};\n\t}"
+            }
+          },
+          "listen": [
+            {
+              "on": "page-flux-example:bdc-carousel-example:select-card",
+              "straps": [
+                "page-flux-example:bdc-carousel-example:select-card"
+              ]
+            }
+          ]
+        },
+        "mediaPersos": [
+          {
+            "id": "card-bdc-carousel-photo-example-media-media-example-photo",
+            "type": "img",
+            "initial": {
+              "src": "https://example.invalid/assets/photo-exemple.png",
+              "alt": "",
+              "className": "elce-carousel-media",
+              "move": {
+                "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:media"
+              }
+            }
+          }
+        ],
+        "styleSheet": ".ac-grid-carousel-1x1-forced{display:grid;grid-template-columns:1fr;grid-template-rows:1fr;}\n.ac-cell-r1-c1{grid-row:1 / span 1;grid-column:1 / span 1;}"
+      }
+    }
+  },
+  "sceneBuilderOutputs": {
+    "pageFlux": {
+      "builder": "buildFluxScene",
+      "output": {
+        "sceneDoc": {
+          "id": "elce-flux-page-flux-example",
+          "stories": {
+            "page-flux-example-page": {
+              "id": "page-flux-example-page",
+              "persos": [
+                {
+                  "id": "page-flux-example-scrollport",
+                  "type": "scroll-container",
+                  "initial": {
+                    "tag": "section",
+                    "attr": {
+                      "id": "page-flux-example-scrollport",
+                      "aria-label": "Contenu de la page"
+                    },
+                    "className": "elce-flux-scrollport",
+                    "style": {
+                      "width": "100%",
+                      "height": "100%",
+                      "minHeight": 0,
+                      "overflowY": "auto"
+                    },
+                    "move": "@root"
+                  }
+                },
+                {
+                  "id": "page-flux-example-article",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-flux-example-scrollport"
+                    },
+                    "className": "elce-flux-article",
+                    "style": {
+                      "display": "flex",
+                      "minHeight": "100%",
+                      "flexDirection": "column",
+                      "gap": "1.25rem",
+                      "padding": "2rem",
+                      "boxSizing": "border-box"
+                    },
+                    "markup": "<article id=\"page-flux-example-article\" class=\"elce-flux-article\">\n      <article id=\"page-flux-example-bdc-question-example\" class=\"elce-card elce-card--question\">\n        <header id=\"page-flux-example-bdc-question-example-title-host\"><!-- data-part=\"page-flux-example:bdc-question-example:question:title\" --></header>\n        <form id=\"page-flux-example-bdc-question-example-form\">\n          <fieldset id=\"page-flux-example-bdc-question-example-fieldset\">\n            <!-- data-part=\"page-flux-example:bdc-question-example:question:question\" -->\n            <div id=\"page-flux-example-bdc-question-example-answers\" class=\"elce-question-answers\"><!-- data-part=\"page-flux-example:bdc-question-example:question:answers\" --></div>\n          </fieldset>\n          <!-- data-part=\"page-flux-example:bdc-question-example:question:validation\" -->\n        </form>\n      </article>\n    \n      <section id=\"page-flux-example-bdc-section-example\" class=\"elce-card elce-card--section\">\n        <!-- data-part=\"page-flux-example:bdc-section-example:section:title\" -->\n        <div id=\"page-flux-example-bdc-section-example-body\"><!-- data-part=\"page-flux-example:bdc-section-example:section:body\" --><p id=\"section-example-paragraph\">Texte de démonstration dans le flux.</p></div>\n      </section>\n    <!-- data-part=\"page-flux-example:bdc-result-example:evaluation-result\" --><!-- data-part=\"page-flux-example:bdc-card-direct-example:card:mount\" -->\n      <section id=\"page-flux-example-bdc-carousel-example\" class=\"elce-card elce-card--carousel\">\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:carousel:frame\" --><div id=\"page-flux-example-bdc-carousel-example-capsule\" class=\"elce-carousel-capsule elce-carousel-capsule__grid ac-grid-carousel-1x1-forced\" data-intro-transition=\"fade\" data-outro-transition=\"fade\" style=\"display:grid;grid-template-columns:1fr;grid-template-rows:1fr;aspect-ratio:16 / 9\"><!-- data-part=\"page-flux-example:bdc-carousel-example:carousel:capsule\" --></div>\n        <nav id=\"page-flux-example-bdc-carousel-example-navigation\" class=\"elce-carousel__navigation\" aria-label=\"Vues du carousel\"><!-- data-part=\"page-flux-example:bdc-carousel-example:carousel:navigation\" --></nav>\n      </section>\n    <!-- data-part=\"page-flux-example:bottom\" --></article>",
+                    "flowReservations": []
+                  }
+                },
+                {
+                  "id": "page-flux-example-bottom-marker",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "span",
+                    "attr": {
+                      "id": "page-flux-example-bottom-marker",
+                      "aria-hidden": "true"
+                    },
+                    "style": {
+                      "display": "block",
+                      "width": "1px",
+                      "height": "1px",
+                      "marginTop": "auto",
+                      "opacity": 0
+                    },
+                    "move": {
+                      "target": "page-flux-example:bottom"
+                    }
+                  },
+                  "emit": {
+                    "observe": {
+                      "root": "page-flux-example-scrollport",
+                      "initial": "enter",
+                      "zone": {
+                        "threshold": 0
+                      },
+                      "enter": [
+                        {
+                          "name": "elce:page:finished",
+                          "data": {
+                            "pageId": "page-flux-example"
+                          },
+                          "visibility": "public"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example-bdc-card-direct-example-card",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:mount"
+                    },
+                    "className": "elce-card elce-card--text-image elce-flux-card-root",
+                    "style": {
+                      "opacity": 1,
+                      "width": "100%"
+                    },
+                    "markup": "\n      <article id=\"page-flux-example-bdc-card-direct-example-card-bdc-card-direct-example\" class=\"elce-card elce-card--text-image\">\n        <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:root\" -->\n        <div id=\"page-flux-example-bdc-card-direct-example-card-bdc-card-direct-example-image\" class=\"elce-carousel-text-image__image\"><!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:image\" --></div>\n        <div id=\"page-flux-example-bdc-card-direct-example-card-bdc-card-direct-example-content\" class=\"elce-carousel-text-image__content\"><!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:content\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message\" -->\n          <!-- data-part=\"page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note\" -->\n        </div>\n      </article>\n    "
+                  },
+                  "emit": {
+                    "observe": {
+                      "root": "page-flux-example-scrollport",
+                      "zone": {
+                        "threshold": 0
+                      },
+                      "enter": [
+                        {
+                          "name": "page-flux-example-bdc-card-direct-example-card:enter"
+                        }
+                      ],
+                      "leave": [
+                        {
+                          "name": "page-flux-example-bdc-card-direct-example-card:leave"
+                        }
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example-bdc-card-direct-example-card:enter": {
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example-bdc-card-direct-example-card:leave": {
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-overline",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Carte directe",
+                    "className": "elce-card-text-image__overline",
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-title",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "h2",
+                    "content": "Une Carte dans le flux",
+                    "className": "elce-card-text-image__title",
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-description",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Le texte visible vient des persos projetés dans les zones du preset.",
+                    "className": "elce-card-text-image__description",
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-message",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Le média reste une ressource référencée.",
+                    "className": "elce-card-text-image__message",
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-card-direct-example-card-bdc-card-direct-example-note",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "footer",
+                    "content": "Exemple de projection.",
+                    "className": "elce-card-text-image__note",
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note"
+                    }
+                  }
+                },
+                {
+                  "id": "card-bdc-card-direct-example-media-media-example-photo",
+                  "type": "img",
+                  "initial": {
+                    "src": "https://example.invalid/assets/photo-exemple.png",
+                    "alt": "",
+                    "className": "elce-carousel-media",
+                    "move": {
+                      "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:image"
+                    }
+                  }
+                },
+                {
+                  "id": "card-bdc-carousel-photo-example-media-media-example-photo",
+                  "type": "img",
+                  "initial": {
+                    "src": "https://example.invalid/assets/photo-exemple.png",
+                    "alt": "",
+                    "className": "elce-carousel-media",
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:media"
+                    }
+                  }
+                }
+              ]
+            },
+            "page-flux-example-bdc-section-example": {
+              "id": "page-flux-example-bdc-section-example",
+              "persos": [
+                {
+                  "id": "page-flux-example-bdc-section-example-title",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "h2",
+                    "content": "Une Section",
+                    "move": {
+                      "target": "page-flux-example:bdc-section-example:section:title"
+                    }
+                  }
+                }
+              ]
+            },
+            "page-flux-example-bdc-question-example": {
+              "id": "page-flux-example-bdc-question-example",
+              "state": {
+                "selectedAnswerIds": [],
+                "submitted": false
+              },
+              "straps": {
+                "page-flux-example:bdc-question-example:select-answer": {
+                  "$type": "FunctionSource",
+                  "source": "({ event, state }) => selectQuestionAnswer(prefix, question, state, event.data)"
+                },
+                "page-flux-example:bdc-question-example:validate-answer": {
+                  "$type": "FunctionSource",
+                  "source": "({ state }) => validateQuestionAnswer(pageId, bdc, prefix, question, state, completionEventName, completionEventData)"
+                },
+                "page-flux-example:bdc-question-example:reset-question": {
+                  "$type": "FunctionSource",
+                  "source": "({ state }) => resetQuestion(prefix, question, state)"
+                }
+              },
+              "listen": [
+                {
+                  "on": "page-flux-example:bdc-question-example:answer:select",
+                  "straps": [
+                    "page-flux-example:bdc-question-example:select-answer"
+                  ]
+                },
+                {
+                  "on": "page-flux-example:bdc-question-example:validate",
+                  "straps": [
+                    "page-flux-example:bdc-question-example:validate-answer"
+                  ]
+                },
+                {
+                  "on": "page-flux-example:bdc-question-example:reset",
+                  "straps": [
+                    "page-flux-example:bdc-question-example:reset-question"
+                  ]
+                }
+              ],
+              "persos": [
+                {
+                  "id": "page-flux-example:bdc-question-example:title",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "h2",
+                    "content": "Question exemple",
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:title"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-question-example:prompt",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "legend",
+                    "content": "Quel est le rôle de cette story ?",
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:question"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-question-example:instructions",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Sélectionnez une réponse, puis validez.",
+                    "className": "elce-question-instructions",
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:answers"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example-bdc-question-example-answer-answer-example-correct",
+                  "type": "input",
+                  "initial": {
+                    "inputType": "radio",
+                    "name": "page-flux-example:bdc-question-example:answer-group",
+                    "value": "answer-example-correct",
+                    "label": "Gérer la réponse et sa validation",
+                    "hint": "",
+                    "checked": false,
+                    "disabled": false,
+                    "visualState": "idle",
+                    "selectionIcon": {
+                      "className": "elce-question-answer__selection"
+                    },
+                    "correctionIcon": {
+                      "className": "elce-question-answer__correction",
+                      "correctContent": "✓",
+                      "incorrectContent": "×",
+                      "missedCorrectContent": "✓"
+                    },
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:answers"
+                    }
+                  },
+                  "emit": {
+                    "change": {
+                      "event": {
+                        "name": "page-flux-example:bdc-question-example:answer:select",
+                        "data": {
+                          "answerId": "answer-example-correct"
+                        }
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:selected": {
+                      "selectedAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": true,
+                      "visualState": "selected"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:idle": {
+                      "selectedAnswerIds": [],
+                      "checked": false,
+                      "visualState": "idle"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:reset": {
+                      "selectedAnswerIds": [],
+                      "correctAnswerIds": [],
+                      "checked": false,
+                      "disabled": false,
+                      "disableAnswers": false,
+                      "showCorrection": false,
+                      "visualState": "idle"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:revealed-correct": {
+                      "selectedAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": true,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "revealed-correct"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:revealed-incorrect": {
+                      "selectedAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": true,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "revealed-incorrect"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:revealed-missed-correct": {
+                      "selectedAnswerIds": [],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": false,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "revealed-missed-correct"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-correct:locked": {
+                      "selectedAnswerIds": [],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": false,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "disabled"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example-bdc-question-example-answer-answer-example-incorrect",
+                  "type": "input",
+                  "initial": {
+                    "inputType": "radio",
+                    "name": "page-flux-example:bdc-question-example:answer-group",
+                    "value": "answer-example-incorrect",
+                    "label": "Décrire uniquement le markup",
+                    "hint": "",
+                    "checked": false,
+                    "disabled": false,
+                    "visualState": "idle",
+                    "selectionIcon": {
+                      "className": "elce-question-answer__selection"
+                    },
+                    "correctionIcon": {
+                      "className": "elce-question-answer__correction",
+                      "correctContent": "✓",
+                      "incorrectContent": "×",
+                      "missedCorrectContent": "✓"
+                    },
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:answers"
+                    }
+                  },
+                  "emit": {
+                    "change": {
+                      "event": {
+                        "name": "page-flux-example:bdc-question-example:answer:select",
+                        "data": {
+                          "answerId": "answer-example-incorrect"
+                        }
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:selected": {
+                      "selectedAnswerIds": [
+                        "answer-example-incorrect"
+                      ],
+                      "checked": true,
+                      "visualState": "selected"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:idle": {
+                      "selectedAnswerIds": [],
+                      "checked": false,
+                      "visualState": "idle"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:reset": {
+                      "selectedAnswerIds": [],
+                      "correctAnswerIds": [],
+                      "checked": false,
+                      "disabled": false,
+                      "disableAnswers": false,
+                      "showCorrection": false,
+                      "visualState": "idle"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:revealed-correct": {
+                      "selectedAnswerIds": [
+                        "answer-example-incorrect"
+                      ],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": true,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "revealed-correct"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:revealed-incorrect": {
+                      "selectedAnswerIds": [
+                        "answer-example-incorrect"
+                      ],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": true,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "revealed-incorrect"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:revealed-missed-correct": {
+                      "selectedAnswerIds": [],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": false,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "revealed-missed-correct"
+                    },
+                    "page-flux-example:bdc-question-example:answer:answer-example-incorrect:locked": {
+                      "selectedAnswerIds": [],
+                      "correctAnswerIds": [
+                        "answer-example-correct"
+                      ],
+                      "checked": false,
+                      "disabled": true,
+                      "disableAnswers": true,
+                      "showCorrection": true,
+                      "visualState": "disabled"
+                    }
+                  }
+                },
+                {
+                  "id": "bdc-question-example-validate",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "Valider la réponse",
+                    "attr": {
+                      "type": "button",
+                      "disabled": true
+                    },
+                    "className": "elce-question-validate",
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:validation"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "page-flux-example:bdc-question-example:validate"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-question-example:selection:available": {
+                      "attr": {
+                        "type": "button",
+                        "disabled": false
+                      }
+                    },
+                    "page-flux-example:bdc-question-example:selection:empty": {
+                      "attr": {
+                        "type": "button",
+                        "disabled": true
+                      }
+                    },
+                    "page-flux-example:bdc-question-example:resolved": {
+                      "attr": {
+                        "type": "button",
+                        "disabled": true
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "bdc-question-example-feedback",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "",
+                    "attr": {
+                      "hidden": true,
+                      "aria-live": "polite"
+                    },
+                    "className": "elce-question-feedback",
+                    "move": {
+                      "target": "page-flux-example:bdc-question-example:question:validation"
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-question-example:feedback": {}
+                  }
+                }
+              ]
+            },
+            "page-flux-example-bdc-result-example-success": {
+              "id": "page-flux-example-bdc-result-example-success",
+              "persos": [
+                {
+                  "id": "bdc-result-example-success-result-card",
+                  "type": "layout",
+                  "initial": {
+                    "move": "@off",
+                    "className": "elce-card--evaluation-result",
+                    "markup": "\n      <article id=\"page-flux-example-bdc-result-example-success\" class=\"elce-card elce-card--evaluation-result\">\n        \n    <section id=\"page-flux-example-bdc-result-example-success-section\" class=\"elce-evaluation-result__branch elce-evaluation-result__branch--success\">\n      <h2 id=\"page-flux-example-bdc-result-example-success-title\">Réussite</h2>\n      <!-- data-part=\"page-flux-example:bdc-result-example:success:success-message\" -->\n      <!-- data-part=\"page-flux-example:bdc-result-example:success:success-action\" -->\n    </section>\n  \n      </article>\n    "
+                  },
+                  "actions": {
+                    "elce:evaluation:result:success": {
+                      "move": {
+                        "target": "page-flux-example:bdc-result-example:evaluation-result"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "bdc-result-example-success-message",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Évaluation réussie.",
+                    "move": {
+                      "target": "page-flux-example:bdc-result-example:success:success-message"
+                    }
+                  }
+                },
+                {
+                  "id": "bdc-result-example-success-action",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "Relire les réponses",
+                    "attr": {
+                      "type": "button"
+                    },
+                    "move": {
+                      "target": "page-flux-example:bdc-result-example:success:success-action"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "elce:evaluation:result:action",
+                        "data": {
+                          "pageId": "page-flux-example",
+                          "chapterId": "chapter-evaluation-example",
+                          "bdcId": "bdc-result-example",
+                          "branch": "success",
+                          "action": "replay",
+                          "prefix": "page-flux-example:bdc-result-example:success"
+                        },
+                        "visibility": "public"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "page-flux-example-bdc-result-example-failure": {
+              "id": "page-flux-example-bdc-result-example-failure",
+              "persos": [
+                {
+                  "id": "bdc-result-example-failure-result-card",
+                  "type": "layout",
+                  "initial": {
+                    "move": "@off",
+                    "className": "elce-card--evaluation-result",
+                    "markup": "\n      <article id=\"page-flux-example-bdc-result-example-failure\" class=\"elce-card elce-card--evaluation-result\">\n        \n    <section id=\"page-flux-example-bdc-result-example-failure-section\" class=\"elce-evaluation-result__branch elce-evaluation-result__branch--failure\">\n      <h2 id=\"page-flux-example-bdc-result-example-failure-title\">Échec</h2>\n      <!-- data-part=\"page-flux-example:bdc-result-example:failure:failure-message\" -->\n      <!-- data-part=\"page-flux-example:bdc-result-example:failure:failure-action\" -->\n    </section>\n  \n      </article>\n    "
+                  },
+                  "actions": {
+                    "elce:evaluation:result:failure": {
+                      "move": {
+                        "target": "page-flux-example:bdc-result-example:evaluation-result"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "bdc-result-example-failure-message",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Réessayez les questions.",
+                    "move": {
+                      "target": "page-flux-example:bdc-result-example:failure:failure-message"
+                    }
+                  }
+                },
+                {
+                  "id": "bdc-result-example-failure-action",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "Recommencer l’évaluation",
+                    "attr": {
+                      "type": "button"
+                    },
+                    "move": {
+                      "target": "page-flux-example:bdc-result-example:failure:failure-action"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "elce:evaluation:result:action",
+                        "data": {
+                          "pageId": "page-flux-example",
+                          "chapterId": "chapter-evaluation-example",
+                          "bdcId": "bdc-result-example",
+                          "branch": "failure",
+                          "action": "retry",
+                          "prefix": "page-flux-example:bdc-result-example:failure"
+                        },
+                        "visibility": "public"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "page-flux-example-bdc-carousel-example": {
+              "id": "page-flux-example-bdc-carousel-example",
+              "state": {
+                "activeCardBdcId": "bdc-carousel-photo-example"
+              },
+              "persos": [
+                {
+                  "id": "page-flux-example:bdc-carousel-example-card-bdc-carousel-photo-example",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:carousel:capsule"
+                    },
+                    "className": "elce-carousel-view ac-cell-r1-c1 elce-card elce-card--photo elce-carousel-view--visible",
+                    "attr": {
+                      "aria-hidden": false,
+                      "inert": false
+                    },
+                    "style": {
+                      "opacity": 1,
+                      "x": 0,
+                      "y": 0,
+                      "scale": 1
+                    },
+                    "markup": "\n      <article id=\"page-flux-example-bdc-carousel-example-card-bdc-carousel-photo-example\" class=\"elce-card elce-card--photo\">\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:root\" -->\n        <div id=\"page-flux-example-bdc-carousel-example-card-bdc-carousel-photo-example-media\" class=\"elce-carousel-photo__media\"><!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:media\" --></div>\n      </article>\n    "
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-carousel-example-card-bdc-carousel-text-example",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:carousel:capsule"
+                    },
+                    "className": "elce-carousel-view ac-cell-r1-c1 elce-card elce-card--text-short elce-carousel-view--hidden",
+                    "attr": {
+                      "aria-hidden": true,
+                      "inert": true
+                    },
+                    "style": {
+                      "opacity": 0,
+                      "x": 0,
+                      "y": 0,
+                      "scale": 1
+                    },
+                    "markup": "\n      <article id=\"page-flux-example-bdc-carousel-example-card-bdc-carousel-text-example\" class=\"elce-card elce-card--text-short\">\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:root\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:message\" -->\n        <!-- data-part=\"page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:note\" -->\n      </article>\n    "
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-carousel-text-example-card-bdc-carousel-text-example-overline",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Deuxième vue",
+                    "className": "elce-card-text-short__overline",
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-carousel-text-example-card-bdc-carousel-text-example-title",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "h2",
+                    "content": "Une Carte enfant",
+                    "className": "elce-card-text-short__title",
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-carousel-text-example-card-bdc-carousel-text-example-description",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "La Carte reste un BDC identifié, ordonné par le Carousel.",
+                    "className": "elce-card-text-short__description",
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description"
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-carousel-example-dot-bdc-carousel-photo-example",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "•",
+                    "className": "elce-carousel-dot elce-carousel-dot--active",
+                    "attr": {
+                      "type": "button",
+                      "aria-label": "Aller à la vue 1",
+                      "aria-current": "true"
+                    },
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:carousel:navigation"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "page-flux-example:bdc-carousel-example:select-card",
+                        "data": {
+                          "cardBdcId": "bdc-carousel-photo-example"
+                        },
+                        "visibility": "story"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "false"
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "false"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-flux-example:bdc-carousel-example-dot-bdc-carousel-text-example",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "•",
+                    "className": "elce-carousel-dot elce-carousel-dot--inactive",
+                    "attr": {
+                      "type": "button",
+                      "aria-label": "Aller à la vue 2",
+                      "aria-current": "false"
+                    },
+                    "move": {
+                      "target": "page-flux-example:bdc-carousel-example:carousel:navigation"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "page-flux-example:bdc-carousel-example:select-card",
+                        "data": {
+                          "cardBdcId": "bdc-carousel-text-example"
+                        },
+                        "visibility": "story"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "false"
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "false"
+                      }
+                    }
+                  }
+                }
+              ],
+              "eventimes": [
+                {
+                  "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro",
+                  "startAt": 3000
+                },
+                {
+                  "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro",
+                  "startAt": 3000
+                },
+                {
+                  "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:outro",
+                  "startAt": 7000
+                },
+                {
+                  "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:intro",
+                  "startAt": 7000
+                },
+                {
+                  "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-photo-example:outro",
+                  "startAt": 10000
+                },
+                {
+                  "name": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:intro",
+                  "startAt": 10000
+                }
+              ],
+              "straps": {
+                "page-flux-example:bdc-carousel-example:select-card": {
+                  "$type": "FunctionSource",
+                  "source": "({ event }) => {\n\t\tconst selectedBdcId = event.data?.cardBdcId;\n\t\tif (typeof selectedBdcId !== \"string\") return undefined;\n\t\tconst selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId);\n\t\tif (selectedEntry === undefined) return undefined;\n\t\treturn {\n\t\t\tupdate: { activeCardBdcId: selectedEntry.bdcId },\n\t\t\tevents: content.cards.map((entry) => ({ name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? \"selected\" : \"unselected\"}` }))\n\t\t};\n\t}"
+                }
+              },
+              "listen": [
+                {
+                  "on": "page-flux-example:bdc-carousel-example:select-card",
+                  "straps": [
+                    "page-flux-example:bdc-carousel-example:select-card"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "scrollPortId": "page-flux-example-scrollport",
+        "bottomMarkerId": "page-flux-example-bottom-marker",
+        "storyIds": [
+          "page-flux-example-page",
+          "page-flux-example-bdc-section-example",
+          "page-flux-example-bdc-question-example",
+          "page-flux-example-bdc-result-example-success",
+          "page-flux-example-bdc-result-example-failure",
+          "page-flux-example-bdc-carousel-example"
+        ],
+        "styleSheets": [
+          ".ac-grid-carousel-1x1-forced{display:grid;grid-template-columns:1fr;grid-template-rows:1fr;}\n.ac-cell-r1-c1{grid-row:1 / span 1;grid-column:1 / span 1;}"
+        ],
+        "questionReset": {
+          "eventName": "page-flux-example:bdc-question-example:reset"
+        }
+      }
+    },
+    "diapo": {
+      "builder": "buildDiapoScene",
+      "output": {
+        "sceneDoc": {
+          "id": "elce-diapo-page-diapo-example",
+          "stories": {
+            "page-diapo-example-diapo-page": {
+              "id": "page-diapo-example-diapo-page",
+              "state": {
+                "activeCardBdcId": "bdc-diapo-photo-example"
+              },
+              "persos": [
+                {
+                  "id": "page-diapo-example-bdc-diapo-carousel-example-diapo-end-scrollport",
+                  "type": "scroll-container",
+                  "initial": {
+                    "tag": "section",
+                    "attr": {
+                      "id": "page-diapo-example-bdc-diapo-carousel-example-diapo-end-scrollport",
+                      "aria-label": "Contenu du Carousel",
+                      "data-intro-transition": "fade",
+                      "data-outro-transition": "fade"
+                    },
+                    "className": "elce-card--carousel elce-diapo-content elce-diapo-carousel-root elce-carousel-capsule elce-carousel-capsule--scene elce-carousel-capsule__grid ac-grid-carousel-1x1-forced",
+                    "style": {
+                      "display": "grid",
+                      "gridTemplateColumns": "minmax(0, 1fr)",
+                      "gridTemplateRows": "minmax(0, 1fr) auto",
+                      "height": "100%",
+                      "width": "100%",
+                      "minWidth": 0,
+                      "minHeight": 0,
+                      "position": "relative",
+                      "overflow": "hidden",
+                      "containerType": "inline-size"
+                    },
+                    "move": "@root"
+                  }
+                },
+                {
+                  "id": "page-diapo-example-bdc-diapo-carousel-example-navigation-host",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-diapo-example-bdc-diapo-carousel-example-diapo-end-scrollport"
+                    },
+                    "className": "elce-carousel__navigation",
+                    "style": {
+                      "gridRow": "2",
+                      "gridColumn": "1"
+                    },
+                    "markup": "<nav id=\"page-diapo-example-bdc-diapo-carousel-example-navigation\" aria-label=\"Vues du carousel\"><!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:carousel:navigation\" --></nav>"
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-carousel-example-card-bdc-diapo-photo-example",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-diapo-example-bdc-diapo-carousel-example-diapo-end-scrollport"
+                    },
+                    "className": "elce-carousel-view ac-cell-r1-c1 elce-card elce-card--photo elce-carousel-photo__media elce-carousel-view--visible",
+                    "attr": {
+                      "aria-hidden": false,
+                      "inert": false
+                    },
+                    "style": {
+                      "opacity": 1,
+                      "x": 0,
+                      "y": 0,
+                      "scale": 1
+                    },
+                    "markup": "<div id=\"page-diapo-example-bdc-diapo-carousel-example-card-bdc-diapo-photo-example\" class=\"elce-carousel-photo__media\"><!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:root\" --><!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:media\" --></div>"
+                  },
+                  "actions": {
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-carousel-example-card-bdc-diapo-text-example",
+                  "type": "layout",
+                  "initial": {
+                    "move": {
+                      "target": "page-diapo-example-bdc-diapo-carousel-example-diapo-end-scrollport"
+                    },
+                    "className": "elce-carousel-view ac-cell-r1-c1 elce-card elce-card--text-short elce-carousel-view--hidden",
+                    "attr": {
+                      "aria-hidden": true,
+                      "inert": true
+                    },
+                    "style": {
+                      "opacity": 0,
+                      "x": 0,
+                      "y": 0,
+                      "scale": 1
+                    },
+                    "markup": "\n      <article id=\"page-diapo-example-bdc-diapo-carousel-example-card-bdc-diapo-text-example\" class=\"elce-card elce-card--text-short\">\n        <!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:root\" -->\n        <!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:overline\" -->\n        <!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:title\" -->\n        <!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:description\" -->\n        <!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:message\" -->\n        <!-- data-part=\"page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:note\" -->\n      </article>\n    "
+                  },
+                  "actions": {
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-view--visible",
+                        "remove": "elce-carousel-view--hidden"
+                      },
+                      "attr": {
+                        "aria-hidden": "false",
+                        "inert": false
+                      },
+                      "style": {
+                        "opacity": {
+                          "from": 0,
+                          "to": 1,
+                          "duration": 300
+                        }
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-view--hidden",
+                        "remove": "elce-carousel-view--visible"
+                      },
+                      "attr": {
+                        "aria-hidden": "true",
+                        "inert": true
+                      },
+                      "style": {
+                        "opacity": {
+                          "to": 0,
+                          "duration": 300
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-text-example-card-bdc-diapo-text-example-overline",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Deuxième vue",
+                    "className": "elce-card-text-short__overline",
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:overline"
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-text-example-card-bdc-diapo-text-example-title",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "h2",
+                    "content": "Diapo Carousel",
+                    "className": "elce-card-text-short__title",
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:title"
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-text-example-card-bdc-diapo-text-example-description",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "p",
+                    "content": "Navigation et cartes sont projetées par la même story.",
+                    "className": "elce-card-text-short__description",
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:description"
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-carousel-example-completion-marker",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "span",
+                    "attr": {
+                      "id": "page-diapo-example:bdc-diapo-carousel-example-completion-marker",
+                      "aria-hidden": "true"
+                    },
+                    "className": "elce-page-bottom-marker elce-carousel-completion-marker",
+                    "style": {
+                      "position": "absolute",
+                      "insetInlineEnd": 0,
+                      "insetBlockEnd": 0,
+                      "width": "1px",
+                      "height": "1px",
+                      "opacity": 0,
+                      "pointerEvents": "none"
+                    },
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:root"
+                    }
+                  },
+                  "emit": {
+                    "observe": {
+                      "root": "page-diapo-example-bdc-diapo-carousel-example-diapo-end-scrollport",
+                      "initial": "enter",
+                      "zone": {
+                        "threshold": 0
+                      },
+                      "enter": [
+                        {
+                          "name": "elce:page:finished",
+                          "data": {
+                            "pageId": "page-diapo-example"
+                          },
+                          "visibility": "public"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-carousel-example-dot-bdc-diapo-photo-example",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "•",
+                    "className": "elce-carousel-dot elce-carousel-dot--active",
+                    "attr": {
+                      "type": "button",
+                      "aria-label": "Aller à la vue 1",
+                      "aria-current": "true"
+                    },
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:carousel:navigation"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "page-diapo-example:bdc-diapo-carousel-example:select-card",
+                        "data": {
+                          "cardBdcId": "bdc-diapo-photo-example"
+                        },
+                        "visibility": "story"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "false"
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 1",
+                        "aria-current": "false"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "page-diapo-example:bdc-diapo-carousel-example-dot-bdc-diapo-text-example",
+                  "type": "tag",
+                  "initial": {
+                    "tag": "button",
+                    "content": "•",
+                    "className": "elce-carousel-dot elce-carousel-dot--inactive",
+                    "attr": {
+                      "type": "button",
+                      "aria-label": "Aller à la vue 2",
+                      "aria-current": "false"
+                    },
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:carousel:navigation"
+                    }
+                  },
+                  "emit": {
+                    "click": {
+                      "event": {
+                        "name": "page-diapo-example:bdc-diapo-carousel-example:select-card",
+                        "data": {
+                          "cardBdcId": "bdc-diapo-text-example"
+                        },
+                        "visibility": "story"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:selected": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:unselected": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "false"
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:intro": {
+                      "className": {
+                        "add": "elce-carousel-dot--active",
+                        "remove": "elce-carousel-dot--inactive"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "true"
+                      }
+                    },
+                    "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:outro": {
+                      "className": {
+                        "add": "elce-carousel-dot--inactive",
+                        "remove": "elce-carousel-dot--active"
+                      },
+                      "attr": {
+                        "type": "button",
+                        "aria-label": "Aller à la vue 2",
+                        "aria-current": "false"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "card-bdc-diapo-photo-example-media-media-example-photo",
+                  "type": "img",
+                  "initial": {
+                    "src": "https://example.invalid/assets/photo-exemple.png",
+                    "alt": "",
+                    "className": "elce-carousel-media",
+                    "move": {
+                      "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-photo-example:media"
+                    }
+                  }
+                }
+              ],
+              "eventimes": [],
+              "straps": {
+                "page-diapo-example:bdc-diapo-carousel-example:select-card": {
+                  "$type": "FunctionSource",
+                  "source": "({ event }) => {\n\t\tconst selectedBdcId = event.data?.cardBdcId;\n\t\tif (typeof selectedBdcId !== \"string\") return undefined;\n\t\tconst selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId);\n\t\tif (selectedEntry === undefined) return undefined;\n\t\treturn {\n\t\t\tupdate: { activeCardBdcId: selectedEntry.bdcId },\n\t\t\tevents: content.cards.map((entry) => ({ name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? \"selected\" : \"unselected\"}` }))\n\t\t};\n\t}"
+                }
+              },
+              "listen": [
+                {
+                  "on": "page-diapo-example:bdc-diapo-carousel-example:select-card",
+                  "straps": [
+                    "page-diapo-example:bdc-diapo-carousel-example:select-card"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "styleSheets": [
+          ".ac-grid-carousel-1x1-forced{display:grid;grid-template-columns:1fr;grid-template-rows:1fr;}\n.ac-cell-r1-c1{grid-row:1 / span 1;grid-column:1 / span 1;}"
+        ]
+      }
+    }
+  }
+}
