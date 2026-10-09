@@ -188,6 +188,7 @@ function buildCarousel(
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
     displayMode: 'scene',
+    storyId: `${page.id}-diapo-page`,
     completionEventRootId: `${page.id}-${carousel.id}-diapo-end-scrollport`,
   })
 }

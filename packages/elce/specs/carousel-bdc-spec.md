@@ -87,8 +87,11 @@ sont définies dans `CAROUSEL_CONFIG` : mode manuel, ratio 16:9, durée de cinq
 secondes, dix répétitions supplémentaires et fondu. Le nombre de répétitions va
 de 0 à 10 ; 0 correspond à un passage. En lecture automatique, une durée
 particulière remplace la durée commune pour l’entrée concernée. Les points
-permettent de sélectionner une carte dans les deux modes ; en automatique, la
-séquence temporisée continue après la sélection.
+permettent de sélectionner une carte dans les deux modes. Cliquer sur un point
+pendant la lecture automatique sélectionne cette Carte et interrompt la
+progression temporisée de l’instance courante : la lecture se poursuit en mode
+manuel et les clics suivants peuvent sélectionner d’autres Cartes. Cette
+bascule de lecture n’écrit pas dans le `playbackMode` enregistré du Carousel.
 Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
 Les valeurs affichées suivent le document courant. Une création utilise les
 défauts configurés ; après édition, le mode et la transition enregistrés restent
@@ -141,9 +144,16 @@ sont : la région `section`, la racine Carousel `section`, la racine Photo
 `AutoCapsule` fournit le type Carousel et les transitions ;
 `CapsuleDistribution` résout les plages construites depuis la durée commune et
 les durées particulières. Le mode automatique ajoute les occurrences finies
-dans `eventimes`. Les points émettent un événement CodPlay ; le strap et les
-actions des persos changent l’état visible et la navigation. Aucun minuteur ni
-état de lecture parallèle n’est ajouté dans React ou dans Elcé.
+dans `eventimes` sur la track de la story Carousel. Les points émettent un
+événement CodPlay ; le strap et les actions des persos changent l’état visible
+et la navigation. En mode automatique, le strap émet au clic le contrôle
+CodPlay `track:deactivate` pour la track effective de cette story : les
+eventimes suivants ne sont plus matérialisés, tandis que les sélections émises
+sur la track de strap restent disponibles. Un builder qui incorpore la story
+dans une autre scène transmet à Carousel son identité finale afin que le
+contrôle cible la même track que les eventimes. Le réglage métier
+`playbackMode` n’est pas modifié. Aucun minuteur ni état de lecture parallèle
+n’est ajouté dans React ou dans Elcé.
 
 ## Preuves
 
@@ -165,10 +175,21 @@ actions des persos changent l’état visible et la navigation. Aucun minuteur n
   le layout, les commentaires d’insertion et les plages Capsule, ainsi que dix
   passages automatiques supplémentaires finis ; CodPlay compile la scène.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
-  exécute le player réel en DOM de test : sélection manuelle, sélection durant
-  l’automatique, avancement temporisé, répétition, arrêt sur la dernière carte,
-  montage d’un média de carte et conservation de la structure et de la ressource
-  Photo après navigation de page et retour.
+  exécute le player réel en DOM de test : sélection manuelle, passage en lecture
+  manuelle après un clic pendant l’automatique, absence de double Carte/point
+  après les échéances et répétitions suivantes, maintien des sélections
+  ultérieures sur Flux et Diapo, y compris après le passage de la story Carousel
+  sous l’identité de page Diapo. Il vérifie aussi la fin fonctionnelle d’une
+  Diapo Carousel après sélection de sa dernière Carte, l’avancement temporisé,
+  la répétition, l’arrêt sur la dernière carte, le montage d’un média de carte et
+  la conservation de la structure et de la ressource Photo après navigation de
+  page et retour.
+- Brave DevTools sur 5175, le 9 octobre 2026, charge en lecture seule le
+  document du Projet 1 et initialise `ElcePlayerComposition` en mémoire sur
+  Page B, Diapo Carousel automatique à cinq vues. Après sélection de la vue 5,
+  l’échéance automatique suivante laisse une seule vue et un seul point actifs ;
+  un second clic sélectionne la vue 2. La révision reste 93 et le mode
+  enregistré reste `automatic`.
 - Brave DevTools, le 6 octobre 2026, vérifie sur l’application construite que
   l’auteur crée et ordonne des BDC Carte, édite les champs, change entre les
   quatre layouts sans perdre les valeurs, puis recharge l’éditeur. L’ordre,

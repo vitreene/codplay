@@ -6,6 +6,8 @@ import type { MediaType } from '../../config/document-config-types'
 export interface CarouselSceneBuildInput {
   readonly pageId: PageId
   readonly bdcId: BdcId
+  /** Supplies the final story identity when a parent scene embeds this Carousel. */
+  readonly storyId?: string
   readonly content: CarouselContent
   readonly cards: readonly Bdc[]
   readonly mediaSources: Readonly<Record<MediaId, string>>

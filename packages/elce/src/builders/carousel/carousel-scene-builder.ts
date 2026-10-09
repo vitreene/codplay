@@ -2,7 +2,7 @@ import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automa
 import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import type { StrapFunction } from 'codplay/runtime/player'
+import { TRACK_EVENT_DEACTIVATE, type StrapFunction } from 'codplay/runtime/player'
 import { CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
 import type { CarouselContent, CarouselCardEntry } from '../../domain/carousel/carousel-types'
 import type { Bdc } from '../../domain/document/document-types'
@@ -89,6 +89,7 @@ export class ElceCarouselSceneBuilder {
       ]
     })
     const selectionEvent = `${prefix}:select-card`
+    const storyId = input.storyId ?? `${pageId}-${bdcId}`
     const navigationPersos = content.cards.map((entry, index) => {
       const child = capsuleResult.children.find((candidate) => candidate.id === entry.bdcId)
       const bdc = input.cards.find((candidate) => candidate.id === entry.bdcId)
@@ -107,7 +108,7 @@ export class ElceCarouselSceneBuilder {
         },
       )
     const story: StoryDoc<string> = {
-      id: `${pageId}-${bdcId}`,
+      id: storyId,
       state: { activeCardBdcId: firstCardBdcId },
       persos: [
         ...(diapoRootId === undefined ? [] : [createDiapoCarouselRoot(
@@ -124,7 +125,7 @@ export class ElceCarouselSceneBuilder {
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
         ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
         : [],
-      straps: { [selectionEvent]: createSelectionStrap(prefix, content) },
+      straps: { [selectionEvent]: createSelectionStrap(prefix, content, storyId) },
       listen: [{ on: selectionEvent, straps: [selectionEvent] }],
     }
     return {
@@ -421,8 +422,8 @@ function createCarouselNavigationPerso(
   }
 }
 
-/** Builds the strap that records selected Card BDC identity and visibility actions. */
-function createSelectionStrap(prefix: string, content: CarouselContent): StrapFunction {
+/** Builds the strap that selects a Card and interrupts scheduled playback after a manual choice. */
+function createSelectionStrap(prefix: string, content: CarouselContent, storyId: string): StrapFunction {
   return ({ event }) => {
     const selectedBdcId = event.data?.cardBdcId
     if (typeof selectedBdcId !== 'string') return undefined
@@ -430,9 +431,18 @@ function createSelectionStrap(prefix: string, content: CarouselContent): StrapFu
     if (selectedEntry === undefined) return undefined
     return {
       update: { activeCardBdcId: selectedEntry.bdcId },
-      events: content.cards.map((entry) => ({
-        name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? 'selected' : 'unselected'}`,
-      })),
+      events: [
+        ...content.cards.map((entry) => ({
+          name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? 'selected' : 'unselected'}`,
+        })),
+        ...(content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
+          ? [{
+            name: TRACK_EVENT_DEACTIVATE,
+            data: { trackIds: [storyId] },
+            visibility: 'scene' as const,
+          }]
+          : []),
+      ],
     }
   }
 }

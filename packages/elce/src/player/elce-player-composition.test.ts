@@ -274,6 +274,16 @@ describe('Elcé player composition', () => {
       name: 'Après Diapo Carousel',
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === diapoCommand.bdcId)!.carousel!
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.carousel.update',
+      bdcId: diapoCommand.bdcId,
+      carousel: {
+        ...carousel,
+        playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+        defaultViewDurationMs: 5_000,
+      },
+    })
     const stage = document.createElement('div')
     document.body.append(stage)
     composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: diapoCommand.pageId })
@@ -669,7 +679,7 @@ describe('Elcé player composition', () => {
     expect(dots[1]?.getAttribute('aria-current')).toBe('true')
   })
 
-  it('selects the matching view when an automatic Carousel point is clicked', async () => {
+  it('switches an automatic Carousel to manual when a point is selected', async () => {
     const initialDocument = createInitialDocument()
     let withCarousel = applyDocumentCommand(initialDocument, createCarouselBdcCommand('bdc-carousel-auto-points', 'page-a', 1))
     withCarousel = applyDocumentCommand(withCarousel, createCardBdcCommand('bdc-carousel-auto-points-card-2', 'bdc-carousel-auto-points', 1, DEFAULT_PRESET_ID.TEXT_SHORT))
@@ -677,7 +687,12 @@ describe('Elcé player composition', () => {
     const documentModel = applyDocumentCommand(withCarousel, {
       type: 'bdc.carousel.update',
       bdcId: 'bdc-carousel-auto-points',
-      carousel: { ...carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC },
+      carousel: {
+        ...carousel,
+        playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+        defaultViewDurationMs: 300,
+        repeatCount: 1,
+      },
     })
     const stage = document.createElement('div')
     document.body.append(stage)
@@ -688,13 +703,90 @@ describe('Elcé player composition', () => {
     const views = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
     const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
     expect(dots[1]?.disabled).toBe(false)
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 350))
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
     dots[1]?.click()
     await new Promise<void>((resolve) => setTimeout(resolve, 40))
+    await new Promise<void>((resolve) => setTimeout(resolve, 300))
 
     expect(views[0]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
     expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(Array.from(views).filter((view) => view.classList.contains('elce-carousel-view--visible'))).toHaveLength(1)
+    expect(dots[0]?.getAttribute('aria-current')).toBe('false')
     expect(dots[1]?.getAttribute('aria-current')).toBe('true')
     expect(dots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
+
+    dots[0]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+    await new Promise<void>((resolve) => setTimeout(resolve, 300))
+
+    expect(views[0]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(views[1]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+    expect(Array.from(views).filter((view) => view.classList.contains('elce-carousel-view--visible'))).toHaveLength(1)
+    expect(dots[0]?.getAttribute('aria-current')).toBe('true')
+    expect(dots[1]?.getAttribute('aria-current')).toBe('false')
+    expect(documentModel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-auto-points')?.carousel?.playbackMode)
+      .toBe(CAROUSEL_PLAYBACK_MODE.AUTOMATIC)
+  })
+
+  it('stops automatic progression after selecting a Diapo Carousel point', async () => {
+    const initialDocument = createInitialDocument()
+    const diapoCommand = createDefaultPageCommand(
+      initialDocument,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Carousel automatique',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(initialDocument, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-diapo-carousel-auto-card-2',
+      diapoCommand.bdcId,
+      1,
+      DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === diapoCommand.bdcId)!.carousel!
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.carousel.update',
+      bdcId: diapoCommand.bdcId,
+      carousel: {
+        ...carousel,
+        playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+        defaultViewDurationMs: 300,
+        repeatCount: 1,
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: diapoCommand.pageId,
+    })
+
+    await composition.initialize()
+
+    const views = stage.querySelectorAll<HTMLElement>('.elce-carousel-view')
+    const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+    await new Promise<void>((resolve) => setTimeout(resolve, 350))
+    expect(views[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    dots[1]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+    await new Promise<void>((resolve) => setTimeout(resolve, 300))
+
+    expect(Array.from(views).filter((view) => view.classList.contains('elce-carousel-view--visible')))
+      .toEqual([views[1]])
+    expect(dots[0]?.getAttribute('aria-current')).toBe('false')
+    expect(dots[1]?.getAttribute('aria-current')).toBe('true')
+
+    dots[0]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+
+    expect(Array.from(views).filter((view) => view.classList.contains('elce-carousel-view--visible')))
+      .toEqual([views[0]])
+    expect(dots[0]?.getAttribute('aria-current')).toBe('true')
+    expect(dots[1]?.getAttribute('aria-current')).toBe('false')
   })
 
   it('renders each chapter label once through its CodPlay perso', async () => {

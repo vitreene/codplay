@@ -15,7 +15,10 @@ Quiz réutilise le builder et la story Question. Ces pages utilisent l’hôte
 plein cadre et le `scroll-container` de page Diapo.
 
 Pour un BDC Carousel, `buildDiapoScene` adopte la story construite par le
-builder Carousel comme story de la page. Sa racine unique est un
+builder Carousel comme story de la page et lui fournit son identité finale
+`${page.id}-diapo-page` dès sa construction. Les eventimes et le contrôle de
+track du strap de sélection ciblent donc la même story montée par la Diapo. Sa
+racine unique est un
 `scroll-container` CodPlay matérialisé en `section`. Il porte les rôles de
 layout Diapo, de cadre Carousel, de grille Capsule et de conteneur observé par
 le marqueur de fin. Les persos de carte ciblent directement cette racine ; la
@@ -94,9 +97,11 @@ fonctionnelle.
   publie le même nom et `{ pageId }`. Il vérifie également qu’une image liée à
   une Carte Carousel est montée dans la composition réelle d’une Diapo. Avec
   une page suivante, Sighty la déverrouille tandis que la scène Diapo reste
-  montée. Il vérifie aussi que structure DOM et source de l’image restent
-  identiques après navigation vers une autre page puis retour, que le replay
-  réactive la première carte et que le chemin image compte au plus six éléments.
+  montée. Le test automatique vérifie que la sélection d’un point Diapo arrête
+  aussi sa track effective et qu’un point suivant reste sélectionnable. Il
+  vérifie aussi que structure DOM et source de l’image restent identiques après
+  navigation vers une autre page puis retour, que le replay réactive la première
+  carte et que le chemin image compte au plus six éléments.
 - Safari MCP, le 7 octobre 2026, initialise une nouvelle composition Sighty/
   CodPlay en mémoire avec un Carousel et une Carte Photo contenant une image.
   Le chemin entre la région de contenu et `img.cp-img-inner` compte cinq

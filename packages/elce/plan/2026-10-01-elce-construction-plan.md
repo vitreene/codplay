@@ -729,6 +729,44 @@ intégration dépendante ; les travaux indépendants continuent.
   pour les vues concernées. Le mode manuel remplace les avances temporisées sans
   boucler ni couper la voix avant la sortie de la page.
 
+### Décision acceptée — un point du Carousel arrête l’automatique
+
+Cliquer sur un point sélectionne sa Carte et bascule la lecture de cette
+instance du Carousel en mode manuel. La progression temporisée s’interrompt
+immédiatement ; une Carte ou un point automatique ne doit plus redevenir actif
+après la sélection. Le clic suivant sur un autre point reste fonctionnel.
+Cette bascule est propre à la lecture en cours : elle ne modifie pas le réglage
+`playbackMode` enregistré dans le document.
+
+**Cause constatée :** le strap ciblait la track `${pageId}-${bdcId}` créée par
+le builder Carousel. `buildDiapoScene` remplace ensuite l’identité de sa story
+par `${pageId}-diapo-page` ; CodPlay n’a donc jamais désactivé la track effective
+de cette Diapo. Le test Flux passait, car son identité de story n’est pas
+remplacée. Brave sur la vraie Page B a reproduit la double vue après le clic.
+
+Le builder Carousel reçoit l’identité finale de story fournie par son parent
+quand il est incorporé. Le strap envoie `track:deactivate` à cette même track,
+en gardant les sorties de sélection dans le circuit strap existant. Ne pas
+ajouter de minuteur, d’état React ou un circuit de progression parallèle.
+
+**État : décision acceptée, correctif implémenté et vérifié.** Un test player
+Diapo a d’abord reproduit le doublon ; après correction, il vérifie qu’une
+sélection manuelle résiste au passage automatique suivant et qu’un clic
+ultérieur reste fonctionnel. Les suites composition player, builders Diapo et
+Flux passent (47 tests), ainsi que le typecheck, le build et `git diff --check`.
+Brave charge en lecture seule le document réel du Projet 1 et lance la
+composition Sighty/CodPlay sur Page B : après un clic sur la vue 5, la
+prochaine échéance laisse une seule vue active ; le clic suivant fonctionne.
+La révision serveur reste 93 et le mode enregistré reste `automatic`.
+
+Le serveur local avait figé ses assets au démarrage (`watch: false`) ; il a été
+redémarré uniquement sur 5175/5181 pour servir le changement. L’auto-review a
+bloqué le clic sur le bouton d’interface « Prévisualiser » comme pouvant
+modifier le projet ; la vérification Brave a donc construit le player réel en
+mémoire à partir du document serveur, sans action d’écriture. Recharger une
+fenêtre d’éditeur déjà ouverte est nécessaire pour qu’elle récupère les assets
+du serveur redémarré.
+
 ## Suite différée après le BDC Carousel
 
 - La scène Questions-Réponses complète, avec son comportement player et ses
