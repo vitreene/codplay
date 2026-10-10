@@ -636,11 +636,15 @@ scène à la composition active, publie l’enveloppe Sighty, puis envoie la mê
 demande au coordinateur de navigation.
 
 `SightyActionContext.send` utilise cette même passerelle pour cibler une
-occurrence active. La passerelle capture la position CodPlay courante, émet
-l’événement déclaré, restaure cette position et reprend la lecture si elle
-était active ; les patches d’une présentation ponctuelle sont ainsi
-matérialisés au point courant sans voie d’émission concurrente. Le test
-`runtime.spec.ts` vérifie cette matérialisation sur le DOM.
+occurrence active. La passerelle émet l’événement déclaré par le port
+`instance.events` sans lire ni modifier l’état de lecture CodPlay. Elle
+n’appelle pas `telco.seek()` ou `telco.play()` pour provoquer une présentation ;
+CodPlay applique les actions auteur de l’événement par son circuit normal de
+lecture et de présentation. Sighty ne force pas une projection synchrone par
+seek ; cette commande reste réservée à une intention explicite d’auteur ou
+d’utilisateur. Le test `runtime.spec.ts` vérifie l’événement transmis sans
+seek, et `runtime-features.spec.ts` vérifie l’effet de l’événement `entry` après
+sa présentation par la lecture normale de la scène.
 
 Pour `reset`, Sighty restaure une copie du contexte initial lorsque la liste
 contient `context` ou `all`. Il ne développe pas les autres clés et n’appelle
@@ -703,11 +707,12 @@ scénario auteur.
 Cette livraison suit le coordinateur de transition : la sélection est montée
 et liée avant l’émission ; les événements `entry` sont envoyés avant que la
 transition n’applique `showMode` et ne reprend la lecture de la scène. Les
-déclarations et leurs événements imbriqués sont copiés lors d’une mutation du
-scénario. Les tests de
+actions sont ensuite présentées par le cycle normal de lecture CodPlay, sans
+seek automatique. Les déclarations et leurs événements imbriqués sont copiés
+lors d’une mutation du scénario. Les tests de
 [`runtime-features.spec.ts`](../tests/runtime-features.spec.ts) couvrent un
 événement unique, une liste ordonnée, les actions CodPlay et la conservation de
-`event.data`.
+`event.data`, y compris après réadmission et présentation par la lecture normale.
 
 ### 7.2. `data`
 

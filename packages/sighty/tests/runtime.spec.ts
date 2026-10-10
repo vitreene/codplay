@@ -72,7 +72,7 @@ function createChildScene(sceneKey: Exclude<SceneKey, 'layout'>): SceneDoc<strin
   }
 }
 
-/** Creates the active target scene used to verify immediate action projection. */
+/** Creates the active target scene used by the gateway event-routing test. */
 function createGatewayMenuScene(): SceneDoc<string> {
   return {
     id: 'runtime-gateway-menu-scene',
@@ -98,7 +98,7 @@ function createGatewayMenuScene(): SceneDoc<string> {
   }
 }
 
-/** Builds one active scene action that sends a CodPlay patch through Sighty. */
+/** Builds one active scene action that sends a CodPlay event through Sighty. */
 function createGatewayScenario(): SightyScenarioDefinition<GatewaySceneKey, GatewaySlotName> {
   return {
     format: 'sighty',
@@ -513,7 +513,7 @@ describe('Sighty runtime slot selection', () => {
     unsubscribe()
   })
 
-  it('materializes an action event sent to the active scene at its current transport position', async () => {
+  it('forwards an action event to the active scene without seeking its transport', async () => {
     const stage = document.createElement('div')
     document.body.append(stage)
     gatewayProject = new Sighty({
@@ -531,14 +531,20 @@ describe('Sighty runtime slot selection', () => {
     })
 
     await gatewayProject.runtime.initialize()
-    await gatewayProject.runtime.play('layout')
-    expect(stage.querySelector('#gateway-menu-root')?.textContent).toBe('initial')
+    const menuInstance = gatewayProject.runtime.getInstance('menu')
+    if (menuInstance === undefined) throw new Error('Gateway menu instance is missing.')
+    const emit = vi.spyOn(menuInstance.events, 'emit')
+    const seek = vi.spyOn(menuInstance.telco, 'seek')
 
     expect(await gatewayProject.runtime.dispatch({
       name: 'runtime:send-content',
       sourceSceneKey: 'menu',
     })).toBe(true)
-    expect(stage.querySelector('#gateway-menu-root')?.textContent).toBe('updated')
+    expect(emit).toHaveBeenCalledWith(
+      { name: 'runtime:set-content', data: { content: 'updated' } },
+      { scope: 'story', storyId: 'main' },
+    )
+    expect(seek).not.toHaveBeenCalled()
   })
 
   it('sends host styles through CodPlay preload and releases them on destroy', async () => {

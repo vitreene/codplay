@@ -115,15 +115,17 @@ physiques restent internes au réconciliateur appelé par les transitions
 résolues depuis le scénario. Les contrôles de Demo 1 qui entretenaient cette
 ancienne voie ont été supprimés.
 
-#### B. Préservation de lecture recopiée
+#### B. Restauration automatique du transport après événement — écartée
 
-Le runtime possède déjà `sendToBinding()` qui capture la position et l’état de
-lecture, émet l’événement, repositionne puis reprend si nécessaire.
-Demo 4 possède une seconde implémentation de la même séquence dans
-`emitTelcoEvent()`.
-
-Les cibles et le contexte diffèrent, mais la garantie technique est la même.
-Elle doit appartenir à une passerelle commune, pas à deux fonctions locales.
+La passerelle capturait l’état de lecture, émettait un événement de scène,
+repositionnait l’instance avec `telco.seek()` puis la relançait si nécessaire.
+Cette restauration automatique est un abus de `seek` : l’envoi d’un événement
+ne doit pas manipuler la lecture courante. La décision utilisateur du
+2026-10-10 est de supprimer ce mécanisme de la passerelle. Les seeks explicites
+d’auteur ou d’utilisateur restent des commandes distinctes et valides.
+Une démo publiée ne doit pas dépendre de la restauration automatique ; les
+parcours des démos qui ont transité par cette passerelle restent sous vigilance
+lors des relectures.
 
 #### C. Allocation conservée, composition active et reset logique confondus
 
@@ -395,28 +397,25 @@ Créer une passerelle interne dédiée, par exemple
 - la résolution d’une scène unique ou d’une adresse de slot ;
 - la vérification de l’occurrence et de la liaison active ;
 - l’émission vers `instance.events` ;
-- la politique de préservation du transport ;
+- l’absence de manipulation automatique du transport ;
 - l’abandon si la sélection devient obsolète.
 
-La forme interne proposée est un seul service avec des requêtes explicites :
+La forme interne reste un seul service avec des requêtes explicites :
 
-    sendToSelection(selection, eventime, target, { transport: 'preserve' })
-    sendToActiveScene(sceneKey, eventime, target, { transport: 'current' })
+    sendToSelection(selection, eventime, target)
+    sendToActiveScene(sceneKey, eventime, target)
 
 Ces opérations sont strictement discrètes : une requête produit au plus un
 envoi d’événement pour une intention donnée. La passerelle ne doit jamais être
 appelée par une observation de progression à chaque frame, ni transformer une
 valeur continue en événement Sighty, en entrée de journal ou en
-progress:update. La préservation du transport entoure uniquement cet envoi
-ponctuel.
-
-Les valeurs `preserve` et `current` sont confirmées en M0 ; elles servent à
-rendre les différences de sémantique explicites sans recopier l’algorithme
-technique.
+progress:update. L’envoi ne lit ni ne modifie le transport CodPlay : aucun
+`getProgress`, `getState`, `telco.seek()` ou `telco.play()` automatique ne
+l’entoure.
 
 `sendToBinding()` et `sendToActiveScene()` deviennent des résolutions de
-cible minces vers cette passerelle. La sauvegarde de la position, le seek de
-restauration et la reprise éventuelle ne doivent exister qu’à un seul endroit.
+cible minces vers cette passerelle. Les commandes explicites de transport
+restent dans l’interface telco CodPlay et les commandes déclarées du couplage.
 
 Aucune API publique Sighty ciblée ne fait partie du plan. La surface publique
 reste le fichier déclaratif du scénario, ses actions et `dispatch`/`mutate` ;
@@ -597,9 +596,9 @@ Les invariants déjà arrêtés à contrôler sont notamment :
 - Demo 4 est la fixture prioritaire ; les démos 1 à 3 sont différées et ne
   constituent pas une gate.
 
-Le seul sujet à soumettre à une validation nouvelle est une politique de
-transport (`transport: 'preserve'` ou `transport: 'current'`) si sa sémantique
-n’est pas déjà acceptée. Le couplage n’ouvre pas une seconde autorité de
+La décision acceptée le 2026-10-10 est que l’envoi d’un événement de scène
+n’inspecte ni ne restaure le transport courant ; un seek reste explicite. Le
+couplage n’ouvre pas une seconde autorité de
 pilotage : ses déclarations et les événements publics de la scène telco sont
 traités par Sighty dans le contexte du scénario. L’accès d’intégration à
 `CodPlayTelco` reste, lui, le port CodPlay canonique déjà accepté.
@@ -623,7 +622,7 @@ déjà rattachées à un contrat accepté peuvent être corrigées.
 | Priorité des démos | Décision de reprise | Demo 4 est la fixture bloquante ; Demo 1 à 3 sont différées et non bloquantes |
 | `mountSlot`/`detachSlot` | Décision auteur du 2026-09-16 : le fichier déclaratif du scénario est la surface publique de composition | Primitives retirées de l’API ; montage et détachement conservés en interne uniquement |
 | Passerelle événementielle interne et couplage telco `on/off` | Passerelle interne déjà présente ; déclaration de couplage dans le scénario | Conforme après décision KISS : la scène telco émet les événements publics ; Sighty accroche en interne le binding actif ; `on`/`off` restent optionnels et volontaires, sans nouvelle API |
-| Événements ponctuels envoyés à une scène active | Contrat de passerelle §4.5 ; présentation explicite de la démo 5 | `sendToActiveScene` applique la politique `transport: 'current'` : l’émission conserve la position et réapplique immédiatement l’état CodPlay ; aucun appel démo ne pilote directement le player |
+| Événements ponctuels envoyés à une scène active | Contrat de passerelle §4.5 ; décision utilisateur du 2026-10-10 | La passerelle émet seulement l’événement CodPlay, sans capturer ni restaurer la lecture ; un test runtime vérifie que l’envoi ne déclenche pas `telco.seek()` |
 
 La spécification Sighty et le plan de reconstruction décrivent désormais le
 reset logique CodPlay sur l’instance conservée. Toute mention résiduelle de
@@ -646,10 +645,8 @@ Les décisions indépendantes déjà arrêtées sont maintenant appliquées :
   `CompositionTransition` ; le composition manager reçoit désormais le plan
   déjà calculé et ne possède aucune façade de montage public ;
 - `RuntimeSceneEventGateway` porte l’unique émission Sighty vers
-  `instance.events.emit`, avec la préservation ponctuelle du transport au même
-  endroit ; `sendToActiveScene` restaure désormais la position courante après
-  l’émission afin que les patches de présentation ponctuels soient matérialisés
-  immédiatement ;
+  `instance.events.emit` ; l’envoi ne capture ni ne restaure le transport
+  courant, et la présentation reste régie par le circuit d’événements CodPlay ;
 - l’énumération map/liste brute du graphe est partagée par
   `navigation/graph-entries.ts` et ne possède plus deux implémentations.
 - les primitives publiques `mountSlot`, `detachSlot` et `isSlotMounted` ont été
@@ -749,10 +746,10 @@ réutilisables indépendamment de l’état de montage.
 - couvrir scène sortie, scène répétée, occurrence ambiguë et événement
   obsolète.
 
-**Gate :** une seule implémentation de préservation du transport, un seul port
-telco CodPlay et aucun appel de démo qui ouvre une voie de commande concurrente.
-Les émissions d’événements inter-scènes passent également par la passerelle
-retenue.
+**Gate :** l’émission d’un événement ne commande pas automatiquement le
+transport ; un seul port telco CodPlay reste disponible pour les commandes
+explicites et aucun appel de démo n’ouvre une voie concurrente. Les émissions
+d’événements inter-scènes passent également par la passerelle retenue.
 
 ### M5 — configuration et utilitaires
 
@@ -835,7 +832,8 @@ Les recherches et revues de code doivent confirmer :
 - aucun `destroy`/`create` utilisé pour simuler un reset ;
 - une occurrence conservée garde son identité physique lors d’un reset ;
 - une seule passerelle de sortie vers `instance.events.emit` ;
-- une seule implémentation de préservation du transport ;
+- aucun transport sauvegardé/restauré automatiquement après un événement de
+  scène ;
 - une seule interface CodPlay d’exécution des commandes telco ;
 - aucun exécuteur Sighty concurrent ; Sighty ne fait que cibler et séquencer ;
 - aucun `idle ?? false` caché dans Sighty ;
@@ -876,10 +874,10 @@ introduire une commande parallèle ou contourner sa coordination.
 | M1 — opérations | En cours | file extraite dans `RuntimeOperationCoordinator` ; dispatch, contexte, reset, mutation et commandes de lecture partagent cette file ; les transitions sont verrouillées dès l’admission et les tentatives concurrentes sont rejetées |
 | M2 — transitions | En cours | plan unique transmis au réconciliateur ; pointeur `next`/`previous` à travers les bornes imbriquées et `exitBy` hérité vérifiés ; présentation physique séparée de la composition logique ; `replace` limité à la sortie active de la transition et accès `menu → scène` sans faux remplacement couverts par Demo 4 ; parcours complets à poursuivre |
 | M3 — cycle/reset | En cours | `instance.telco.reset()` est intégré à `showMode` et `runtime.reset()` ; le test d’intégration et la validation navigateur utilisateur de Demo 4 couvrent la remise à zéro de la scène sortante avant précédent/suivant ; les erreurs partielles et les autres validations de cycle de vie restent ouvertes |
-| M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 3 et Demo 4 passent par les actions déclarées et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
+| M4 — événements/telco | Fini | passerelle interne unique active ; les commandes telco restent explicites ; les tests vérifient l’envoi sans `telco.seek()` et l’effet des événements `entry` après leur présentation par la lecture normale ; Demo 3, Demo 4 et Quiz Hunt sont confirmées par l’utilisateur, Demo 2 et Demo 5 restent sous vigilance lors des relectures |
 | M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; `scenarioState.active` suit le pointeur à l’initialisation, aux navigations, aux replis, au reset et aux mutations ; revue globale à poursuivre sur les parcours différés |
 | M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée, avec hôtes physiques distincts pour le menu et le conteneur chapitre ; Demo 3 ne possède plus de relais direct ni de file locale et passe par l’action déclarée et la passerelle Sighty ; les démos 1 et 2 restent différées |
-| M7 — validation | En cours | Sighty : 47 tests et typecheck ; component-v2 : 48 tests et typecheck ; CodPlay : 711 tests et typecheck ; démos : typecheck et build ; le pointeur, ses bornes imbriquées, les guards hérités, `scenarioState.active`, la dérivation du graphe Demo 5 depuis `COURSE_PAGES` et la matérialisation des envois au transport courant sont couverts. Les régressions Demo 4 vérifient le fade sans translation du conteneur chapitre, la présence simultanée de scène + telco pendant le retour, le `replace` direct entre scènes et l’absence de faux `replace` après retour menu ; Safari MCP a validé le rechargement Demo 4, menu → scène A, pause/reprise, rewind, rejet d’une navigation rapide et le retour automatique C → menu sur `sequence:end`, sans warning/error. Demo 5 a parcouru les dix pages sur le build de prévisualisation, avec refus d’une cible verrouillée, déverrouillage par repères bas, trois réponses finales, félicitations et reset ; la matrice générale, le cycle de vie restant et les démos 1 à 3 restent différés |
+| M7 — validation | En cours | Sighty : 51 tests et typecheck ; component-v2 : 48 tests et typecheck ; CodPlay : 711 tests et typecheck ; démos : typecheck et build ; les tests vérifient l’envoi d’événement sans seek automatique et l’effet d’un événement `entry` après la lecture normale ; l’utilisateur confirme Demo 3, Demo 4 et Quiz Hunt. Demo 2 et Demo 5 restent sous vigilance lors des relectures ; la matrice générale, le cycle de vie restant et les démos 1 à 3 restent différés |
 
 Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
 du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.

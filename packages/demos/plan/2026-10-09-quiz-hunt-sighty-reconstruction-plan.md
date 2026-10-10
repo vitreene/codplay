@@ -459,21 +459,17 @@ sur cette instance ; cela ne confirme pas un preload avant ouverture. Le cache
 froid, l'action directe sur les contrôles, le replay et le cycle de masquage
 restent à valider ; cette observation ne ferme pas G5.
 
-**Cause identifiée dans le circuit de révélation — 2026-10-10 :** l'événement
-`questionRevealDue` déclenche l'action Sighty `createRevealQuestionAction`, qui
-envoie l'événement `:reveal` à la scène question active. La passerelle Sighty
-émet cet événement CodPlay puis appelle `telco.seek()` à la position qu'elle
-vient de capturer, même si l'émission immédiate a déjà présenté le changement à
-cette même position. Le seek parcourt `replayForSeek()` ; sa synchronisation
-`geometry-capture` force la mise à jour des composants, et la mise à jour du
-perso vidéo réécrit son `src` identique. Dans Safari, la réécriture de `src` sur
-le même nœud vidéo émet `emptied` puis `loadstart` et remet `currentTime` à zéro.
-Le déclencheur se trouve donc dans le circuit d'événement d'affichage en cours
-de lecture, pas dans `showMode`. Le parcours navigateur ciblé reste à capturer
-pour vérifier cette chaîne exacte sur l'événement `questionRevealDue`. La
-frontière de correction reste ouverte au
-[plan de représentation des composants CodPlay](../../codplay/plan/component-render-representation-plan.md),
-qui est encore `A relire` ; aucune modification de code n'est faite ici.
+**Résultat de l’investigation — 2026-10-10 :** `questionRevealDue` déclenche
+l’action Sighty `createRevealQuestionAction`, qui envoie `:reveal` à la scène
+question active. La passerelle ajoutait après cet événement un `telco.seek()`
+automatique à la position capturée. Ce seek était un abus structurel : après
+son retrait, l’utilisateur confirme que la vidéo Nostromo se lit normalement.
+La passerelle transmet maintenant l’événement sans capturer ni restaurer le
+transport ; les contrôles natifs et le seek explicite de l’utilisateur restent
+indépendants de la timeline générale. Cette observation confirme que le seek
+automatique n’est pas requis pour cette question. Elle ne ferme pas G5 : le
+préchargement à froid, les contrôles, le replay et le cycle de masquage restent
+à valider.
 
 Les observations Safari du 2026-10-09 et le timeout du service CodPlay `preload`
 portaient sur l'ancien perso `media`. Elles ne valident ni ne réfutent la voie
@@ -522,7 +518,7 @@ les parents des nouveaux `markup` auront un `id`.
 | Étape | Travail proposé | Preuve de passage | Statut |
 | --- | --- | --- | --- |
 | P0 — décisions | Structure, propriétaire de l'état, génération au lancement, preload vidéo, emplacement du jeton et suite Space Bubbles acceptés ; consigner les règles observées à préserver et garder les décisions propres aux étapes ultérieures dans G2–G5 | Décisions de P1 conservées ; G3 reporté après P3 ; aucun choix ouvert de P2/P3/P5 anticipé | En cours |
-| P1 — première verticale | Extraire le circuit de réponse réutilisable de Demo 5, puis créer le layout responsive sans titre global ni libellé « Panier », le menu caché pendant la question, deux questions générées au lancement dont Nostromo avec sa vidéo native, et la scène panier/minuteur conservée ; intégrer au registre Sighty commun | Vérifier l'absence des titres « Choisis une épreuve » et « Panier » ; ouvrir Nostromo et valider le tag vidéo `src`/`preload`/`autoplay`/`controls`, pause/seek/relecture natives et indépendance envers la timeline générale ; transmettre pause/play du décompte via Sighty sans modifier la lecture de la scène panier, répondre, voir le feedback, revenir et ouvrir l'autre question ; même occurrence panier et temps cohérent ; en portrait, la page n'a pas de bande vide sous la télécommande, la scène question garde la priorité avec défilement si nécessaire, et le menu réduit sa grille pour montrer le panier quand l'espace le permet ; sur mobile, mesurer des cases à la hauteur responsive du bouton de validation, une réserve d'extra fluide, un cadran à côté des cases et une taille de texte légèrement réduite ; en paysage, les cases occupent les deux colonnes du panier et le cadran de 8 rem se place dessous ; question à gauche et scène panier/minuteur à droite | En cours — Safari confirme les proportions et le layout à 390 px, 336 px, 817 px et 1440 px ; le parcours timer/question avait été exercé avec l'ancien perso `media`, mais le nouveau parcours tag/autoplay, sa disponibilité à froid et son cycle de masquage restent à valider en G5 |
+| P1 — première verticale | Extraire le circuit de réponse réutilisable de Demo 5, puis créer le layout responsive sans titre global ni libellé « Panier », le menu caché pendant la question, deux questions générées au lancement dont Nostromo avec sa vidéo native, et la scène panier/minuteur conservée ; intégrer au registre Sighty commun | Vérifier l'absence des titres « Choisis une épreuve » et « Panier » ; ouvrir Nostromo et valider le tag vidéo `src`/`preload`/`autoplay`/`controls`, pause/seek/relecture natives et indépendance envers la timeline générale ; transmettre pause/play du décompte via Sighty sans modifier la lecture de la scène panier, répondre, voir le feedback, revenir et ouvrir l'autre question ; même occurrence panier et temps cohérent ; en portrait, la page n'a pas de bande vide sous la télécommande, la scène question garde la priorité avec défilement si nécessaire, et le menu réduit sa grille pour montrer le panier quand l'espace le permet ; sur mobile, mesurer des cases à la hauteur responsive du bouton de validation, une réserve d'extra fluide, un cadran à côté des cases et une taille de texte légèrement réduite ; en paysage, les cases occupent les deux colonnes du panier et le cadran de 8 rem se place dessous ; question à gauche et scène panier/minuteur à droite | En cours — Safari confirme les proportions et le layout à 390 px, 336 px, 817 px et 1440 px ; l’utilisateur confirme que la vidéo Nostromo lit normalement depuis le retrait du seek automatique Sighty ; le preload à froid, les contrôles natifs et le cycle de masquage restent à valider en G5 |
 | P2 — jeu complet | Génération au lancement des 16 épreuves et 16 finales, seed, statuts et refus d'accès ; conserver la vidéo native de Nostromo validée en P1 | Catalogue complet avant le parcours, même tirage pour même seed, 4 couleurs, remplacement d'un mot de même couleur, aucune route vers une épreuve interdite | En cours — catalogue et progression testés dans Safari ; reste à revalider avec le parcours vidéo natif de P1/G5 |
 | P3 — finale et verdict | Sélection finale depuis le menu après fermeture de l'épreuve courante ; réussite et trois branches d'échec ; expiration concurrente selon G2 ; résultat en slot superposé plein cadre au-dessus du menu | Verdict unique ; feedback de 2 s terminé avant une défaite par expiration ; retour au menu avant l'activation finale ; panier, minuteur et branches exercés ; vérifier que le menu reste visible sous le fond translucide, que le root résultat couvre toute la scène, et que l'état caché/visible suit les issues ; parcours général validé avant étude G3 | En cours — Safari a validé la branche de victoire et la superposition plein cadre sur le runtime réel ; branches d'échec et expiration concurrente restent à exercer ; la voie tag/autoplay de P1/G5 reste à valider en navigation froide |
 | P4 — étude du dépôt inter-scènes | Après P3, cartographier la détection de cible déjà possible depuis le jeton de `scene-layout` vers le menu, avec les contrats et chemins existants | Note d'étude : frontières respectées, preuve ou limite des possibilités actuelles, chemin recommandé sans capacité CodPlay nouvelle ; sinon options rapportées à l'utilisateur | A relire — après P3 |

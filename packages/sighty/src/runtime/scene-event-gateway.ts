@@ -31,7 +31,7 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
     if (binding === undefined || !this.bindings.isCurrentBinding(binding)) return
     const instance = this.state.instances.get(occurrenceKeyForSelection(selection))
     if (instance === undefined) return
-    await this.emit(instance, eventime, { scope: 'scene' }, true)
+    await this.emit(instance, eventime, { scope: 'scene' })
   }
 
   /** Sends one action event to the unique active occurrence of a scene key. */
@@ -50,7 +50,7 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
     }
     const instance = this.state.instances.get(binding.occurrenceKey)
     if (instance === undefined) throw new Error(`L’instance Sighty ${sceneKey} est absente.`)
-    await this.emit(instance, eventime, target, true)
+    await this.emit(instance, eventime, target)
   }
 
   /** Sends one reset event to every retained occurrence of a scene key. */
@@ -64,31 +64,17 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
       const instance = this.state.instances.get(occurrenceKey)
       if (instance === undefined) continue
       for (const storyId of storyIds) {
-        await this.emit(instance, eventime, { scope: 'story', storyId }, true)
+        await this.emit(instance, eventime, { scope: 'story', storyId })
       }
     }
   }
 
-  /** Emits one event and optionally restores its CodPlay transport state. */
+  /** Emits one event without changing the CodPlay transport. */
   private async emit(
     instance: CodPlayInstance,
     eventime: CodPlayEventime,
     target: CodPlayEventimeTarget,
-    preserveTransport: boolean,
   ): Promise<void> {
-    const currentTimeMs = preserveTransport ? instance.telco.getProgress().timelineMs : undefined
-    const wasPlaying = preserveTransport && instance.telco.getState().status === 'playing'
     await instance.events.emit(eventime, target)
-    if (currentTimeMs === undefined) return
-    // TEMP: keep for the requested Demo 3 test; remove after its result is reviewed.
-    console.log('[Sighty diagnostic] automatic seek suppressed after scene event', {
-      event: eventime.name,
-      target,
-      currentTimeMs,
-      wasPlaying,
-    })
-    // TEMP: automatic seek disabled for the requested Demo 3 test.
-    // await instance.telco.seek(currentTimeMs)
-    if (wasPlaying && !instance.telco.getState().sequenceEnded) await instance.telco.play()
   }
 }
