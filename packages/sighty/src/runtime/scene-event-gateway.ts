@@ -80,7 +80,15 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
     const wasPlaying = preserveTransport && instance.telco.getState().status === 'playing'
     await instance.events.emit(eventime, target)
     if (currentTimeMs === undefined) return
-    await instance.telco.seek(currentTimeMs)
+    // TEMP: keep for the requested Demo 3 test; remove after its result is reviewed.
+    console.log('[Sighty diagnostic] automatic seek suppressed after scene event', {
+      event: eventime.name,
+      target,
+      currentTimeMs,
+      wasPlaying,
+    })
+    // TEMP: automatic seek disabled for the requested Demo 3 test.
+    // await instance.telco.seek(currentTimeMs)
     if (wasPlaying && !instance.telco.getState().sequenceEnded) await instance.telco.play()
   }
 }

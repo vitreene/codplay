@@ -70,6 +70,27 @@ trouvée pendant cette revue :
 - [ ] Mettre à jour la spécification media-sync uniquement si le parcours
       navigateur confirme un comportement supplémentaire.
 
+### Observation Safari — 2026-10-09
+
+Une nouvelle navigation de Quiz Hunt Sighty a échoué avant le montage initial.
+Un appel direct au service `createRuntimePreload()` avec la stratégie native
+`video`, l'URL Nostromo et le mode `author` a renvoyé
+`RUNTIME_PRELOAD_RESOURCES_UNAVAILABLE`, détail : `Preload timeout after
+10000ms`. Sur la même origine, l'URL répond `200` avec `video/mp4` et une
+requête Range répond `206`. Une sonde native `<video>` est restée à
+`readyState=0`, `networkState=3`, `currentSrc` vide, sans événement `canplay`
+ou `error` pendant 12 s. Deux nouvelles navigations ont reproduit l'échec sur
+`127.0.0.1` et `localhost`; un onglet antérieur garde un nœud préchargé à
+`readyState=4`.
+
+Cette preuve établit une divergence entre le handoff déjà observé sur un
+parcours préparé et une nouvelle initialisation Safari ; elle ne révèle pas
+encore la cause ni ne certifie un cache froid. Garder l'acceptation navigateur
+ouverte et déterminer pourquoi la sélection native de la ressource ne démarre
+pas. Ne pas contourner le résultat avec un mode `broadcast`, un preload HTML ou
+un changement local à la démo. Toute correction du cœur exige une décision
+acceptée dans ce plan et une autorisation explicite de l'utilisateur.
+
 La correction de dérive des médias non master reste une décision distincte à
 prendre après cette acceptation : mesurer d'abord les écarts réels et décider
 si une correction est requise, avec des garde-fous autour du lancement, de la
@@ -79,6 +100,8 @@ certifiée.
 ## Fermeture
 
 Ce plan reste `En cours` jusqu'à fermeture des preuves de service, validation
-Safari du handoff média et décision de livrer ou d'abandonner la façade `run()`.
+Safari du handoff média pour les usages CodPlay qui conservent le composant
+`media`, et décision de livrer ou d'abandonner la façade `run()`. Le parcours
+Quiz Hunt Nostromo en `tag` vidéo est suivi par son plan de démo.
 Les suites liées aux spécifications couvrent seulement leur périmètre certifié ;
 elles ne ferment pas les gates listées ici.

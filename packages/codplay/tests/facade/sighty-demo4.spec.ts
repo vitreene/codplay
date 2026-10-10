@@ -404,7 +404,7 @@ describe('Sighty graph navigation demo', () => {
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
   })
 
-  it('resets a reused content scene whenever it is entered', async () => {
+  it('resets outgoing scenes on navigation and re-admitted scenes on entry', async () => {
     vi.stubGlobal('Image', ImmediateImage)
     const stage = document.createElement('div')
     document.body.append(stage)
@@ -427,6 +427,12 @@ describe('Sighty graph navigation demo', () => {
     nextButton.click()
     await flushDemo4Relay()
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
+    expect(sceneA.telco.getProgress().timelineMs).toBeLessThan(1_000)
+
+    const sceneB = composition.runtime.getInstance('scene-b')
+    if (sceneB === undefined) throw new Error('Scene B instance is missing.')
+    await sceneB.telco.pause()
+    await sceneB.telco.seek(3_000)
 
     const previousButton = stage.querySelector<HTMLButtonElement>('.demo4-telco__button--previous')
     if (previousButton === null) throw new Error('Demo 4 previous control is missing.')
@@ -434,6 +440,7 @@ describe('Sighty graph navigation demo', () => {
     await flushDemo4Relay()
 
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-a')
+    expect(sceneB.telco.getProgress().timelineMs).toBeLessThan(1_000)
     const resetSceneA = composition.runtime.getInstance('scene-a')
     expect(resetSceneA).toBeDefined()
     expect(resetSceneA).toBe(sceneA)

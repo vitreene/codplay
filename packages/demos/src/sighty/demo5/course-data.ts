@@ -1,13 +1,14 @@
 import { COURSE_EVENTS } from './messages'
+import type {
+  QuizAnswerDefinition,
+  QuizQuestionDefinition,
+} from '../shared/quiz/answer-circuit'
 
 /** Identifies one of the three chapters shown in the course menu. */
 export type CourseChapterId = 'chapter-1' | 'chapter-2' | 'chapter-final'
 
-/** Describes one question option without coupling the course to another demo. */
-export type CourseAnswer = Readonly<{
-  id: string
-  label: string
-}>
+/** Keeps the course's public data name for the shared quiz answer contract. */
+export type CourseAnswer = QuizAnswerDefinition
 
 /** Describes one authored paragraph, with an optional local demo asset. */
 export type CourseSection = Readonly<{
@@ -17,13 +18,8 @@ export type CourseSection = Readonly<{
   video?: Readonly<{ src: string; title: string }>
 }>
 
-/** Describes one single-answer quiz page in the Sighty course. */
-export type CourseQuestion = Readonly<{
-  type: 'boolean' | 'single' | 'multiple'
-  prompt: string
-  answers: readonly CourseAnswer[]
-  correctAnswerIds: readonly string[]
-}>
+/** Keeps the course's public data name for the shared quiz question contract. */
+export type CourseQuestion = QuizQuestionDefinition
 
 /** Describes one content page, quiz page, or terminal course result. */
 export type CoursePage = Readonly<{

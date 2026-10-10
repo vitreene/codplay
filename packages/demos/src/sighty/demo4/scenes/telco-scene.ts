@@ -41,12 +41,20 @@ export const telcoScene: SceneDoc<string> = {
             move: { target: 'demo4:telco-controls' },
           },
           emit: {
-            click: {
-              event: {
-                name: DEMO4_NAVIGATION_INTENTS.previous,
-                visibility: 'public',
+            click: [
+              {
+                event: {
+                  name: DEMO4_NAVIGATION_INTENTS.resetCurrent,
+                  visibility: 'public',
+                },
               },
-            },
+              {
+                event: {
+                  name: DEMO4_NAVIGATION_INTENTS.previous,
+                  visibility: 'public',
+                },
+              },
+            ],
           },
           actions: {
             [DEMO4_TELCO_STATE_EVENTS.on]: { attr: { disabled: false } },
@@ -64,12 +72,20 @@ export const telcoScene: SceneDoc<string> = {
             move: { target: 'demo4:telco-controls' },
           },
           emit: {
-            click: {
-              event: {
-                name: DEMO4_NAVIGATION_INTENTS.next,
-                visibility: 'public',
+            click: [
+              {
+                event: {
+                  name: DEMO4_NAVIGATION_INTENTS.resetCurrent,
+                  visibility: 'public',
+                },
               },
-            },
+              {
+                event: {
+                  name: DEMO4_NAVIGATION_INTENTS.next,
+                  visibility: 'public',
+                },
+              },
+            ],
           },
           actions: {
             [DEMO4_TELCO_STATE_EVENTS.on]: { attr: { disabled: false } },

@@ -52,10 +52,37 @@ Le test confirme une source déclarée directement et l'ignorance d'une extensio
 inconnue ; il ne décide pas le traitement d'un `src` imbriqué dans une séquence
 d'action.
 
-Décider quelles formes auteur contribuent au manifeste, puis en fixer une
-preuve. La spécification auteur ne décrit pas encore la profondeur de cette
-découverte. Ne pas présenter le comportement observé du helper comme contrat
-complet avant cette décision.
+#### Correctif à prévoir — `src` d'un perso `tag`
+
+Statut : besoin accepté comme correctif futur ; la portée exacte de la
+découverte reste à cadrer et aucune modification n'est implémentée.
+
+Quiz Hunt a besoin d'une vidéo HTML native : son perso `tag` porte
+`initial.attr.src`, avec `controls` et `autoplay`, afin que le navigateur garde
+la lecture et ses contrôles. Cette source imbriquée n'entre pas dans
+`CompiledScene.resources` avec la découverte actuelle. Sighty ne peut donc pas
+la demander au service preload avant la matérialisation de la question ; le
+chargement natif commence alors à l'ouverture.
+
+Le correctif à prévoir est d'étendre le circuit existant de découverte du
+manifeste afin qu'il puisse reconnaître au minimum `initial.attr.src` d'un
+perso `tag` et l'exposer comme ressource compilée, pour que le préchargement
+Sighty existant puisse la traiter avant l'entrée dans la question. Cette note
+ne certifie ni la profondeur générale de parcours ni le handoff de la ressource
+préchargée au `<video>` natif. Il faudra valider dans le navigateur qu'on gagne
+bien la disponibilité avant ouverture sans lancer deux chargements. Aucun
+circuit de preload parallèle ni contournement local à la démo ne doit être
+ajouté.
+
+Avant le code, cadrer dans ce plan les formes auteur couvertes et leur
+classification, puis fixer une preuve : tests du builder et du codec pour la
+source incluse dans le manifeste, test d'intégration Sighty du préchargement
+avant matérialisation, et validation navigateur cache froid de la première
+image et de l'absence de chargement redondant. La spécification auteur ne
+décrit pas encore la profondeur de découverte ; ne pas présenter le comportement
+observé du helper comme contrat complet. Toute modification du cœur reste
+soumise à un plan accepté et à l'autorisation explicite requise par les règles
+du dépôt.
 
 ### Sémantique de `SceneDoc.defaults`
 

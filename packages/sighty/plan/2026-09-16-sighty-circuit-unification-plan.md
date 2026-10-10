@@ -538,6 +538,12 @@ des tâches du chemin critique actuel.
 - conserver `showMode: 'reset'` dans le fichier auteur ;
 - vérifier que ce reset remet l’état attendu à zéro sans changer l’identité
   de l’instance CodPlay ;
+- les boutons « Précédente » et « Suivante » envoient désormais la commande
+  `reset` du couplage à la scène sélectionnée avant l’intention de navigation ;
+  le test d’intégration Demo 4 vérifie le temps sortant à zéro dans les deux
+  directions et la réadmission de l’instance conservée ;
+- ce même trajet a été validé dans l’interface Demo 4 (confirmation utilisateur,
+  2026-10-10) ;
 - supprimer toute révision locale qui ne serait plus nécessaire après
   l’invalidation Sighty ;
 - faire transiter les changements de vue et les commandes par le runtime
@@ -869,7 +875,7 @@ introduire une commande parallèle ou contourner sa coordination.
 | M0 — audit | En cours | matrice de conformité établie ; les divergences sont rattachées aux contrats acceptés et aucune décision nouvelle ne porte le code appliqué |
 | M1 — opérations | En cours | file extraite dans `RuntimeOperationCoordinator` ; dispatch, contexte, reset, mutation et commandes de lecture partagent cette file ; les transitions sont verrouillées dès l’admission et les tentatives concurrentes sont rejetées |
 | M2 — transitions | En cours | plan unique transmis au réconciliateur ; pointeur `next`/`previous` à travers les bornes imbriquées et `exitBy` hérité vérifiés ; présentation physique séparée de la composition logique ; `replace` limité à la sortie active de la transition et accès `menu → scène` sans faux remplacement couverts par Demo 4 ; parcours complets à poursuivre |
-| M3 — cycle/reset | En cours | `instance.telco.reset()` est intégré à `showMode` et `runtime.reset()` ; Demo 4 prouve l’identité conservée et le reset de session, les erreurs partielles et validations navigateur restent ouvertes |
+| M3 — cycle/reset | En cours | `instance.telco.reset()` est intégré à `showMode` et `runtime.reset()` ; le test d’intégration et la validation navigateur utilisateur de Demo 4 couvrent la remise à zéro de la scène sortante avant précédent/suivant ; les erreurs partielles et les autres validations de cycle de vie restent ouvertes |
 | M4 — événements/telco | Fini | passerelle interne unique active ; les sept commandes telco, dont `reset`, sont couvertes par le couplage ; Demo 3 et Demo 4 passent par les actions déclarées et la passerelle interne, sans événement continu ni nouvelle API publique ; les signaux `on`/`off` restent optionnels et volontaires |
 | M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; `scenarioState.active` suit le pointeur à l’initialisation, aux navigations, aux replis, au reset et aux mutations ; revue globale à poursuivre sur les parcours différés |
 | M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée, avec hôtes physiques distincts pour le menu et le conteneur chapitre ; Demo 3 ne possède plus de relais direct ni de file locale et passe par l’action déclarée et la passerelle Sighty ; les démos 1 et 2 restent différées |

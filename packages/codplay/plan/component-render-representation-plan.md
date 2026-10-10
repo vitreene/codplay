@@ -19,6 +19,28 @@ mouvement ont leurs propres spécifications et plans.
       historique le posait comme invariant `f(t)`, mais les tests cités par la
       spécification ne couvrent pas ce point général ; le player garde par
       ailleurs sa propre gate sur la réutilisation de l'état logique.
+- [ ] Clarifier les réécritures d'attributs à effet de bord pendant un seek.
+      Dans Quiz Hunt, l'événement Sighty `questionRevealDue` lance
+      `createRevealQuestionAction`, qui envoie `:reveal` à la scène question via
+      `SightyActionContext.send`. La passerelle émet d'abord l'événement CodPlay,
+      puis appelle systématiquement `telco.seek()` à la position courante pour
+      préserver le transport. L'émission immédiate a déjà présenté l'événement
+      à cette position ; le seek de même position passe ensuite par
+      `replayForSeek()`, dont la synchronisation `geometry-capture` force la
+      mise à jour des composants. `TagComponent.update()` renvoie alors tout
+      `attr` vidéo à [`createHtmlAttrService()`](../src/services/attr/html-attr-service.ts),
+      qui réécrit `src` même inchangé. Dans Safari, une telle réécriture observée
+      sur le même nœud `<video>` déclenche `emptied`, `loadstart` et un retour à
+      `currentTime = 0`. L'anomalie est donc située sur le circuit
+      `send → émission → seek à position égale → réapplication de src`, pas sur
+      `showMode`. Décider à quelle frontière empêcher cette réapplication sans
+      perdre le transport ni la matérialisation de l'événement, et sans changer
+      le rechargement d'une source réellement modifiée. Preuve requise : exercer
+      l'événement de révélation dans Safari, confirmer le temps/la lecture de la
+      scène, l'identité du nœud, l'absence de réécriture identique de `src` et de
+      `emptied`/`loadstart`, puis vérifier qu'un nouveau `src` recharge bien le
+      média. Cette piste reste à relire ; aucun correctif core n'est autorisé par
+      ce constat seul.
 - [ ] Décider si les templates fournis par `BaseHTMLComponent.render()` doivent
       être filtrés avant parsing. Le texte antérieur exigeait un
       `readAndSanitize(template)` qui valide les balises et attributs. Le chemin
