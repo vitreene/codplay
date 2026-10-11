@@ -64,6 +64,7 @@ function createTrialButton(trial: QuizHuntTrial, tileNumber: number): MenuSceneP
     id: `quiz-hunt-menu-trial-${trial.id}-button`,
     type: 'button',
     'aria-label': label,
+    'data-quiz-hunt-trial-id': trial.id,
   }
   return {
     id: `quiz-hunt-menu-trial-${trial.id}`,

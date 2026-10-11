@@ -11,6 +11,19 @@ export const QUIZ_HUNT_EVENTS = {
   timerFeedbackFinished: 'quiz-hunt:timer:feedback-finished',
   questionRevealDue: 'quiz-hunt:question:reveal-due',
   questionReveal: 'quiz-hunt:question:reveal',
+  extraOfferDue: 'quiz-hunt:extra:offer-due',
+  extraWindowHideDue: 'quiz-hunt:extra:window-hide-due',
+  extraCollect: 'quiz-hunt:extra:collect',
+  extraShow: 'quiz-hunt:extra:show',
+  extraHide: 'quiz-hunt:extra:hide',
+  extraRetryHide: 'quiz-hunt:extra:retry-hide',
+  extraRetryHideDone: 'quiz-hunt:extra:retry-hide-done',
+  extraCollected: 'quiz-hunt:extra:collected',
+  extraDragStart: 'quiz-hunt:extra:drag:start',
+  extraDragTrack: 'quiz-hunt:extra:drag:track',
+  extraDragEnd: 'quiz-hunt:extra:drag:end',
+  extraDragCommit: 'quiz-hunt:extra:drag:commit',
+  extraDragReturn: 'quiz-hunt:extra:drag:return',
   trialAnswered: 'quiz-hunt:trial:answered',
   trialFeedbackFinished: 'quiz-hunt:trial:feedback-finished',
   finalAnswered: 'quiz-hunt:final:answered',
@@ -28,6 +41,16 @@ export const QUIZ_HUNT_EVENTS = {
 /** Creates the public menu intent for one stable trial id. */
 export function openTrialEvent(trialId: string): string {
   return `quiz-hunt:trial:open:${trialId}`
+}
+
+/** Creates the public retry intent for one failed trial selected by the token drop. */
+export function retryTrialEvent(trialId: string): string {
+  return `quiz-hunt:trial:retry:${trialId}`
+}
+
+/** Creates the public event that reopens a failed trial after the token hide animation. */
+export function retryTrialReadyEvent(trialId: string): string {
+  return `quiz-hunt:trial:retry-ready:${trialId}`
 }
 
 /** Creates the local button projection event for one trial's progress state. */
@@ -81,6 +104,11 @@ export function basketColorEvent(color: string): string {
 /** Creates the Sighty route path for one question view in the content slot. */
 export function trialViewPath(trialId: string): string {
   return `view-game/slot-content/view-trial-${trialId}`
+}
+
+/** Creates the Sighty route path that resets and immediately reveals one retried trial. */
+export function trialRetryViewPath(trialId: string): string {
+  return `view-game/slot-content/view-trial-${trialId}-retry`
 }
 
 /** Creates the Sighty route path for one generated final question. */

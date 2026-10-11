@@ -1,4 +1,5 @@
 import type { SceneDoc } from 'codplay/scene/types'
+import { correctionIconPartId, selectionIconPartId } from 'codplay/runtime/components/input'
 
 /** Describes one answer that can be selected in an authored quiz scene. */
 export type QuizAnswerDefinition = Readonly<{
@@ -32,6 +33,8 @@ export type QuizAnswerClassNames = Readonly<{
 export type QuizAnswerCircuitIds = Readonly<{
   persoPrefix: string
   eventPrefix: string
+  storyId?: string
+  iconContentMode?: 'component' | 'tag'
 }>
 
 type QuizPerso = SceneDoc<string>['stories'][string]['persos'][number]
@@ -46,18 +49,20 @@ export function createQuizLocalState(question: QuizQuestionDefinition): QuizLoca
   }
 }
 
-/** Creates all CodPlay answer inputs and their local visual state actions. */
+/** Creates answer inputs and optionally authored icon tags for public component slots. */
 export function createQuizAnswerPersos(
   question: QuizQuestionDefinition,
   ids: QuizAnswerCircuitIds,
   classNames: QuizAnswerClassNames,
 ): QuizPerso[] {
-  return question.answers.map((answer) => {
+  return question.answers.flatMap((answer): QuizPerso[] => {
     const correctAnswerIds = [...question.correctAnswerIds]
     const multiSelect = question.type === 'multiple'
     const answerEventPrefix = `${ids.eventPrefix}:answer:${answer.id}`
-    return {
-      id: `${ids.persoPrefix}-answer-${answer.id}`,
+    const answerPersoId = `${ids.persoPrefix}-answer-${answer.id}`
+    const usesTagIcons = ids.iconContentMode === 'tag'
+    const answerInput: QuizPerso = {
+      id: answerPersoId,
       type: 'input',
       initial: {
         inputType: multiSelect ? 'checkbox' : 'radio',
@@ -68,13 +73,15 @@ export function createQuizAnswerPersos(
         checked: false,
         disabled: false,
         visualState: 'idle',
-        selectionIcon: { className: classNames.selectionIcon },
-        correctionIcon: {
-          className: classNames.correctionIcon,
-          correctContent: '✓',
-          incorrectContent: '×',
-          missedCorrectContent: '✓',
-        },
+        ...(usesTagIcons ? {} : {
+          selectionIcon: { className: classNames.selectionIcon },
+          correctionIcon: {
+            className: classNames.correctionIcon,
+            correctContent: '✓',
+            incorrectContent: '×',
+            missedCorrectContent: '✓',
+          },
+        }),
         move: { target: `${ids.eventPrefix}:answers` },
       },
       emit: {
@@ -140,6 +147,70 @@ export function createQuizAnswerPersos(
         },
       },
     }
+    if (!usesTagIcons) return [answerInput]
+    const storyId = ids.storyId
+    if (storyId === undefined) {
+      throw new Error('Les icônes de réponse auteur nécessitent le storyId de leur slot input.')
+    }
+    return [
+      answerInput,
+      {
+        id: `${answerPersoId}__selection-icon`,
+        type: 'tag',
+        initial: {
+          tag: 'span',
+          content: '',
+          className: classNames.selectionIcon,
+          style: {
+            display: 'inline-block',
+            minWidth: '1ch',
+            marginInlineStart: '0.5em',
+            textAlign: 'center',
+          },
+          move: { target: selectionIconPartId(storyId, answerPersoId) },
+        },
+        actions: {
+          [`${answerEventPrefix}:selected`]: { content: '•' },
+          [`${answerEventPrefix}:idle`]: { content: '' },
+          [`${answerEventPrefix}:reset`]: { content: '' },
+        },
+      },
+      {
+        id: `${answerPersoId}__correction-icon`,
+        type: 'tag',
+        initial: {
+          tag: 'span',
+          content: '',
+          className: classNames.correctionIcon,
+          style: {
+            display: 'inline-block',
+            minWidth: '1ch',
+            marginInlineStart: '0.5em',
+            textAlign: 'center',
+            fontWeight: 700,
+          },
+          move: { target: correctionIconPartId(storyId, answerPersoId) },
+        },
+        actions: {
+          [`${answerEventPrefix}:revealed-correct`]: {
+            content: '✓',
+            className: `${classNames.correctionIcon} is-correct`,
+          },
+          [`${answerEventPrefix}:revealed-incorrect`]: {
+            content: '×',
+            className: `${classNames.correctionIcon} is-incorrect`,
+          },
+          [`${answerEventPrefix}:revealed-missed-correct`]: {
+            content: '✓',
+            className: `${classNames.correctionIcon} is-missed-correct`,
+          },
+          [`${answerEventPrefix}:reset`]: {
+            content: '',
+            className: classNames.correctionIcon,
+          },
+        },
+      },
+    ]
   })
 }
 

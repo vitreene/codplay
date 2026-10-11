@@ -2,12 +2,14 @@
 
 ## Statut et portée
 
-**En cours — P1, P2 et P3.** Les décisions de structure et le périmètre de la
+**En cours — P1, P2, P3, P5a et P5b.** Les décisions de structure et le périmètre de la
 première verticale sont acceptés. L'utilisateur a confirmé le 2026-10-09 la
 grille complète de 16 épreuves et, pour P3, le retour au menu avant l'activation
 de la finale ainsi que la fin du feedback avant le verdict d'expiration. La
-validation du gate G2/P3 reste à exercer avec le runtime réel. G3–G4 et
-P4–P7 restent à relire avant leur exécution. Le choix G5 d’une vidéo native
+validation du gate G2/P3 reste à exercer avec le runtime réel. G4 et P6–P7
+restent à relire avant leur exécution. L'étude P4 et la cible DOM sont
+acceptées. P5a et P5b sont engagés à la demande de l'utilisateur ; leur
+validation navigateur reste ouverte. Le choix G5 d’une vidéo native
 `tag` avec contrôles et autoplay est accepté le 2026-10-10 ; sa validation
 navigateur reste ouverte. Les constats V1 ci-dessous viennent de
 la lecture du code. Les preuves des capacités existantes restent celles des
@@ -41,10 +43,11 @@ dépend.
 | Activation de la finale | Fermer toute question en cours, revenir au menu, puis permettre au joueur d'activer la finale depuis ce menu ; aucune finale ne remplace directement une question visible | Fixe — à appliquer |
 | Expiration pendant le feedback d'épreuve | Le décompte continue pendant les 2 s de feedback ; si le budget atteint zéro pendant ce délai, laisser le feedback se terminer puis afficher la défaite | Fixe — à appliquer |
 | Présentation des scènes P1 | Transposer les éléments et classes CSS déjà présents dans la V1, sans ajout visuel ; supprimer le titre global « Choisis une épreuve » et le libellé « Panier » ; en paysage, question/quiz à gauche et scène panier/minuteur à droite, avec le cadran sous les cases pour leur laisser toute la largeur ; en portrait, question/quiz prioritaires, scène panier/minuteur sous la question et accessibles par défilement, cadran à côté des cases ; réduire légèrement la taille du texte des cases ; le panneau question défile jusqu'au formulaire ; le badge numéroté garde sa forme et sa couleur V1 en format puce de 2,5 rem ; cadran de 8 rem en paysage et étiré à la hauteur des deux rangées de cases en portrait | Fixe — appliquée et mesurée en Safari (voir P1) |
-| Compacter le panier sur mobile avec des valeurs fluides | Donner une taille fluide commune au bouton de validation et aux cases ; faire varier la réserve d'extra avec la largeur du viewport, dans les bornes prévues par la V1 ; étirer le cadran à la hauteur de la rangée qui contient les cases et le cadran | Fixe — étirement CSS appliqué et mesuré dans Safari à 390 px et 336 px |
+| Compacter le panier sur mobile avec des valeurs fluides | Donner une taille fluide commune au bouton de validation et aux cases ; en portrait mobile, réserver le point d'inventaire dans une colonne entre les cases et le cadran, sans ajouter de rangée sous le panier ; étirer le cadran à la hauteur du bloc des cases | Fixe — règles CSS appliquées ; dimensions panier/minuteur et placement en ligne vérifiés dans Safari à 390 px et 336 px |
 | Occuper la hauteur disponible pour Quiz Hunt | Une règle portée par le CSS Quiz Hunt et active seulement quand son layout est monté borne le cadre mobile au viewport, donne au stage tout l'espace restant sous l'en-tête et garde la télécommande en bas ; en portrait, le menu réduit sa grille au-dessus du panier, qui reste visible quand l'espace le permet ; les écrans trop courts défilent ; les autres démos et la feuille CSS commune restent inchangées | Fixe — hauteur appliquée, menu runtime à valider |
 | Propriétaire du jeton déplaçable | Le jeton et sa mécanique de saisie/glissement résident dans `scene-layout`, sur une couche visuelle au-dessus des scènes de contenu. La disponibilité, la consommation et les conséquences de jeu restent dans l'état Sighty | Fixe — à appliquer |
-| Dépôt du jeton sur le menu | La cible appartient à une autre scène. La résolution de cible inter-scènes reste à étudier après l'implémentation générale, à partir des possibilités déjà offertes par Sighty/CodPlay ; aucune évolution de `packages/codplay` n'est demandée | À étudier après P3 |
+| Dépôt du jeton sur le menu | Aucun circuit de dépôt inter-scènes n'est ajouté. Le DOM partagé peut seulement identifier l'item sous le pointeur ; son identité devient une intention de reprise traitée par Sighty, qui admet et réinitialise la question. Aucune évolution de `packages/codplay` n'est demandée | Fixe — décision utilisateur du 2026-10-10 ; à appliquer en P5b |
+| Reprise après dépôt valide du jeton | Animer le retrait du jeton sur au moins 150 px vers le haut en 0,8 s, puis réadmettre la question avec `showMode: 'reset'` et révéler immédiatement le formulaire, sans rejouer le délai d'indice de 3 s | Fixe — animation et reprise à 0,8 s ; parcours navigateur à valider en P5b |
 | Space Bubbles après mise en place et validation de Quiz Hunt | Porter le mini-jeu en V2 et l'ajouter comme épreuve dans un chantier ultérieur avec un plan distinct | Fixe — séquencement accepté |
 
 ## 1. Sources et circuits existants
@@ -94,6 +97,7 @@ l'intention ; elle ne remplace pas le contrat Sighty actuel.
 | [Demo 4](../src/sighty/demo4/scenario.ts) | Menu, transitions, remplacement et fin de scène | Ne pas recopier son carousel ni son reset global par défaut sans besoin |
 | [Demo 5](../src/sighty/demo5/scenario.ts) | Catalogue unique, guards, contexte métier, projection des contrôles | Le parcours après la dernière évolution de reset reste à valider |
 | [Quiz Demo 5](../src/sighty/demo5/scenes/quiz-page-scene.ts) | Sélection, validation, correction et événement public | Extraire le minimum réutilisable ; ne pas créer un troisième moteur de quiz |
+| [Quiz Series V2](../src/v2/demos/quiz-series/main.ts) | Persos `tag` auteur montés dans les slots d'icônes publics de `input` | Réutiliser l'affichage et le reset de contenu des tags ; le perso `tag` reste distinct du composant `input` |
 | [Chrono V2](../src/v2/demos/chrono/main.ts) | Affichage calculé par TweenAction, commandes discrètes | Ne prouve pas encore un minuteur persistant à travers un parcours Sighty |
 | [Layout commun](../src/sighty/layout/transport.ts) | Page, cycle de vie et télécommande existants | Play joue les scènes sélectionnées ; relaunch les rewind sans reset métier |
 
@@ -142,7 +146,8 @@ Les preuves de lecture principales sont les straps
   feedback et grille — a été confirmée par l'utilisateur le 2026-10-09.
 - Le commentaire du router annonce un retry immédiat, mais son exécution
   programme encore le délai d'indice et ne lit pas `retry` pour le supprimer.
-  Décider si une seconde tentative rejoue l'indice.
+  L'utilisateur a choisi le 2026-10-10 que la reprise V2 révèle immédiatement
+  la question, sans rejouer l'indice ; cette différence sera appliquée en P5b.
 - La finale ne remplace pas une question active : la question se ferme, le
   parcours revient au menu, puis le joueur active la finale. Si l'expiration
   arrive pendant le feedback d'une épreuve, le feedback de 2 s se termine avant
@@ -194,12 +199,13 @@ La scène de jeu `scene-layout` porte le jeton déplaçable et sa mécanique
 locale de saisie/glissement dans une surimpression qui reste visible pendant
 les changements de contenu. Sighty conserve l'état durable du jeton et ses
 conséquences de progression. Le menu demeure une instance distincte sous cette
-couche ; la reconnaissance du dépôt sur ses cibles n'est pas résolue par ce
-choix de composition et reste à l'étude en G3.
+couche ; la tuile sous le pointeur est reconnue dans le DOM partagé et son
+identité retourne à Sighty. L'admission et la règle de reprise restent à
+appliquer en P5b.
 
 | Responsabilité | État et comportement possédés | Relation avec Sighty |
 | --- | --- | --- |
-| Layout | Composition visuelle, slots, responsive et couche de déplacement du jeton | Rend le jeton au-dessus du contenu ; n'établit pas encore comment résoudre une cible du menu |
+| Layout | Composition visuelle, slots, responsive et couche de déplacement du jeton | Rend le jeton au-dessus du contenu ; la passerelle DOM transmet à Sighty l'identité de la tuile touchée |
 | Menu | Affichage des tuiles et intentions de choix | Projette les statuts et les réponses des guards ; ne recalcule pas l'accès |
 | Question | Indice, média, révélation, saisie, validation, correction, feedback | Publie les résultats et les instructions pause/play du minuteur à destination de Sighty |
 | Panier avec minuteur | Affichage des quatre mots, inventaire du jeton, bouton finale et décompte | Reçoit les projections et les instructions relayées par Sighty ; publie les intentions de jeu et l'expiration |
@@ -361,7 +367,7 @@ actuelle ne permet pas la règle retenue, enregistrer la preuve dans le plan
 Sighty propriétaire et arrêter cette intégration. Une file de navigation ou
 des tentatives périodiques locales au jeu ne constituent pas une correction.
 
-### G3 — Jeton et cible dans une autre scène
+### G3 — Jeton et cible DOM
 
 La frontière de responsabilité est décidée : le jeton et sa mécanique de
 saisie/glissement appartiennent à la scène de jeu `scene-layout`, en
@@ -370,31 +376,35 @@ résultat du dépôt et la nouvelle admission de l'épreuve appartiennent à la
 progression Sighty. Le menu reste une scène distincte.
 
 Le point délicat est la détection du dépôt sur une tuile du menu depuis cette
-surimpression. Le DOM partagé rend une mesure directe envisageable, mais elle
-franchit la frontière d'isolation entre instances. Cette possibilité est un
-constat à examiner, pas un mécanisme adopté ni une dispense du contrat.
+surimpression : la scène layout ne connaît pas les identifiants de la scène
+menu. La frontière interdit de piloter son instance ou de lui ajouter un
+circuit dédié. L'utilisateur autorise une concession limitée : demander au
+DOM partagé quel élément se trouve aux coordonnées du pointeur, puis transmettre
+à Sighty l'identité exposée par cet élément.
 
-**Étudier après l'implémentation générale P1–P3**, avant de coder le dépôt.
-Reprendre alors les contrats et adaptateurs existants Sighty/CodPlay pour
-identifier si la capture, la preview, les slots ou la composition exposent
-déjà un chemin qui donne la cible au layout sans accéder arbitrairement à
-l'instance menu. Le test S6 injecte sa destination ; il ne prouve pas la
-résolution géométrique dans le parcours pointeur/capture. Le contrat de capture
-`public` ne relaie pas non plus un événement vers une autre instance. Vérifier
-les comportements certifiés et les preuves restantes citées au §1 avant de
-conclure.
+**Étude P4 effectuée le 2026-10-10 :** la note
+[d'étude du dépôt du jeton](../notes/2026-10-10-quiz-hunt-token-drop-study.md)
+cartographie les contrats et leur limite. Aucun hit-test Sighty/CodPlay V2 ne
+donne au layout l'identité d'un perso d'une autre instance. L'utilisateur
+précise qu'aucun circuit de dépôt inter-scènes n'est attendu : la seule
+concession est une identification ponctuelle de l'item sous le pointeur dans le
+DOM partagé, suivie de la transmission de son identité à Sighty. Le scénario
+valide l'épreuve et le jeton, lance le retrait animé, puis publie l'événement de
+reprise après 0,8 s. Le retrait translate le jeton d'au moins 150 px vers le
+haut. La vue de reprise utilise `showMode: 'reset'`, consomme le jeton à
+l'admission et révèle immédiatement la question. Cette frontière est acceptée ;
+elle n'ajoute aucune capacité à `packages/codplay`.
 
-Ne pas ajouter de capacité à `packages/codplay`, appeler directement l'instance
-menu depuis le drag, ni introduire de secours par rectangles DOM avant cette
-étude. Si les circuits existants ne permettent pas le dépôt avec les frontières
-retenues, consigner les preuves et rapporter les options au lieu d'étendre le
-cœur ou de masquer l'écart dans la démo.
+L'identification DOM ne décide pas de la validité du dépôt et n'écrit pas
+l'état de jeu. Elle ne remplace pas le circuit Sighty : son unique résultat est
+l'identité de la tuile qui reçoit l'intention. Aucun appel à une instance
+inactive ni écriture directe dans `SceneDoc` n'est autorisé.
 
-Après décision sur le chemin de cible, exercer un vrai glissement depuis le
-layout vers le menu, un dépôt invalide, un resize et un changement de vue
-pendant la capture. Le retry passe par l'admission Sighty et un reset logique
-de question, sans écriture directe dans `SceneDoc`. Consommer le jeton après
-l'admission réussie évite sa perte sur une navigation refusée.
+Exercer un vrai glissement depuis le layout vers le menu, un dépôt invalide, un
+resize et un changement de vue pendant la capture. Le retry passe par
+l'admission Sighty et un reset logique de question, sans écriture directe dans
+`SceneDoc`. Le retrait animé doit s'achever avant cette admission ; le jeton
+n'est consommé qu'une fois la vue admise.
 
 ### G4 — Rejouer, rewind et Seek
 
@@ -518,20 +528,142 @@ les parents des nouveaux `markup` auront un `id`.
 | Étape | Travail proposé | Preuve de passage | Statut |
 | --- | --- | --- | --- |
 | P0 — décisions | Structure, propriétaire de l'état, génération au lancement, preload vidéo, emplacement du jeton et suite Space Bubbles acceptés ; consigner les règles observées à préserver et garder les décisions propres aux étapes ultérieures dans G2–G5 | Décisions de P1 conservées ; G3 reporté après P3 ; aucun choix ouvert de P2/P3/P5 anticipé | En cours |
-| P1 — première verticale | Extraire le circuit de réponse réutilisable de Demo 5, puis créer le layout responsive sans titre global ni libellé « Panier », le menu caché pendant la question, deux questions générées au lancement dont Nostromo avec sa vidéo native, et la scène panier/minuteur conservée ; intégrer au registre Sighty commun | Vérifier l'absence des titres « Choisis une épreuve » et « Panier » ; ouvrir Nostromo et valider le tag vidéo `src`/`preload`/`autoplay`/`controls`, pause/seek/relecture natives et indépendance envers la timeline générale ; transmettre pause/play du décompte via Sighty sans modifier la lecture de la scène panier, répondre, voir le feedback, revenir et ouvrir l'autre question ; même occurrence panier et temps cohérent ; en portrait, la page n'a pas de bande vide sous la télécommande, la scène question garde la priorité avec défilement si nécessaire, et le menu réduit sa grille pour montrer le panier quand l'espace le permet ; sur mobile, mesurer des cases à la hauteur responsive du bouton de validation, une réserve d'extra fluide, un cadran à côté des cases et une taille de texte légèrement réduite ; en paysage, les cases occupent les deux colonnes du panier et le cadran de 8 rem se place dessous ; question à gauche et scène panier/minuteur à droite | En cours — Safari confirme les proportions et le layout à 390 px, 336 px, 817 px et 1440 px ; l’utilisateur confirme que la vidéo Nostromo lit normalement depuis le retrait du seek automatique Sighty ; le preload à froid, les contrôles natifs et le cycle de masquage restent à valider en G5 |
+| P1 — première verticale | Extraire le circuit de réponse réutilisable de Demo 5, puis créer le layout responsive sans titre global ni libellé « Panier », le menu caché pendant la question, deux questions générées au lancement dont Nostromo avec sa vidéo native, et la scène panier/minuteur conservée ; intégrer au registre Sighty commun | Vérifier l'absence des titres « Choisis une épreuve » et « Panier » ; ouvrir Nostromo et valider le tag vidéo `src`/`preload`/`autoplay`/`controls`, pause/seek/relecture natives et indépendance envers la timeline générale ; transmettre pause/play du décompte via Sighty sans modifier la lecture de la scène panier, répondre, voir le feedback, revenir et ouvrir l'autre question ; même occurrence panier et temps cohérent ; en portrait, la page n'a pas de bande vide sous la télécommande, la scène question garde la priorité avec défilement si nécessaire, et le menu réduit sa grille pour montrer le panier quand l'espace le permet ; sur mobile, mesurer les cases à la hauteur responsive du bouton de validation, le point d'inventaire entre les cases et le minuteur, le cadran à la hauteur du bloc des deux rangées et une taille de texte légèrement réduite ; en paysage, les cases occupent les deux colonnes du panier et le cadran de 8 rem se place dessous ; question à gauche et scène panier/minuteur à droite | En cours — Safari confirme les proportions et le layout à 390 px, 336 px, 817 px et 1440 px ; l’utilisateur confirme que la vidéo Nostromo lit normalement depuis le retrait du seek automatique Sighty ; le preload à froid, les contrôles natifs et le cycle de masquage restent à valider en G5 |
 | P2 — jeu complet | Génération au lancement des 16 épreuves et 16 finales, seed, statuts et refus d'accès ; conserver la vidéo native de Nostromo validée en P1 | Catalogue complet avant le parcours, même tirage pour même seed, 4 couleurs, remplacement d'un mot de même couleur, aucune route vers une épreuve interdite | En cours — catalogue et progression testés dans Safari ; reste à revalider avec le parcours vidéo natif de P1/G5 |
 | P3 — finale et verdict | Sélection finale depuis le menu après fermeture de l'épreuve courante ; réussite et trois branches d'échec ; expiration concurrente selon G2 ; résultat en slot superposé plein cadre au-dessus du menu | Verdict unique ; feedback de 2 s terminé avant une défaite par expiration ; retour au menu avant l'activation finale ; panier, minuteur et branches exercés ; vérifier que le menu reste visible sous le fond translucide, que le root résultat couvre toute la scène, et que l'état caché/visible suit les issues ; parcours général validé avant étude G3 | En cours — Safari a validé la branche de victoire et la superposition plein cadre sur le runtime réel ; branches d'échec et expiration concurrente restent à exercer ; la voie tag/autoplay de P1/G5 reste à valider en navigation froide |
-| P4 — étude du dépôt inter-scènes | Après P3, cartographier la détection de cible déjà possible depuis le jeton de `scene-layout` vers le menu, avec les contrats et chemins existants | Note d'étude : frontières respectées, preuve ou limite des possibilités actuelles, chemin recommandé sans capacité CodPlay nouvelle ; sinon options rapportées à l'utilisateur | A relire — après P3 |
-| P5 — jeton et rattrapage | Achever l'offre, la collecte, l'overlay, le dépôt selon l'issue de P4, la consommation et la nouvelle tentative | Vrai pointeur et cible menu prouvés sur le runtime réel ; dépôt invalide, resize, navigation pendant capture, admission Sighty et reset de question exercés ; aucune modification CodPlay | A relire — dépend de P4 |
+| P4 — étude de la cible DOM | Après P3, cartographier les possibilités du DOM partagé et les chemins Sighty existants | Étude consignée ; décision utilisateur : identifier uniquement l'item sous le pointeur, puis transmettre son identité à Sighty ; aucune capacité CodPlay nouvelle | Fixe — décision acceptée le 2026-10-10 |
+| P5a — offre, collecte et jeton superposé | Montrer l'offre temporisée sur la question V1 tirée au sort, collecter le jeton dans `scene-layout`, conserver son inventaire dans l'état Sighty et suivre/réinitialiser sa saisie par la capture existante | Délais V1, clic de collecte, animation vers l'inventaire, conservation après fermeture de la fenêtre, position responsive, glissement et retour visuel exercés sur le runtime réel ; aucune modification CodPlay | En cours — Safari valide l'offre et le clic de collecte avec une courbe de 360 ms ; le point d'inventaire mobile est maintenant entre cases et minuteur, vérifié dans un DOM préparé ; conservation après fermeture, glissement, retour et parcours mobile de collecte restent à exercer |
+| P5b — cible menu, dépôt et reprise | Identifier l'item sous le pointeur dans le DOM partagé, transmettre son identité à Sighty, démarrer l'animation CodPlay du jeton depuis sa position de relâchement, le déplacer vers le haut d'au moins 150 px, puis réadmettre la question échouée avec reset et révélation immédiate après 0,8 s ; monter les icônes de réponse comme persos `tag` dans les slots publics `input` afin que le reset existant efface leur contenu | Vrai pointeur et cible menu prouvés sur le runtime réel ; dépôt valide : tweens CodPlay d'opacité et de déplacement vertical relatif d'au moins 150 px démarrent au point de relâchement, se terminent avant l'ouverture, admission Sighty, question pristine, révélation immédiate et consommation exercés ; dépôt invalide et annulation : retour visuel vers l'inventaire ; resize et navigation pendant capture exercés ; aucune modification CodPlay | En cours — `extraDragEnd` réapplique maintenant le style du `captureState` final par `listen → strap` avant les animations. Le retrait utilise des tweens de style CodPlay/ACE synchronisés à 0,8 s et un déplacement relatif de 150 px en `px`. Les tags de sélection et de correction utilisent les slots publics `input` et reçoivent le `:reset` par réponse déjà émis par la scène ; typecheck, build et test ciblé des slots passent. Safari n'a pas encore validé le retry : le clic automatisé sur une tuile est resté sur le menu dans deux serveurs locaux, donc le parcours de dépôt et l'état pristine restent à vérifier |
 | P6 — reprise et cycle | Nouvelle partie, commandes communes, occurrences conservées, sortie de démo | Deux parties successives, anciens événements sans effet, médias/captures/ressources nettoyés | A relire |
 | P7 — stabilisation | Matrice complète, spécification de la démo et documentation d'usage | Implémentation, preuves, spécification et suivi alignés | A relire |
 
+Le 2026-10-10, Safari a vérifié la nouvelle géométrie CSS avec le bouton
+temporairement placé dans l'outlet d'inventaire, sans ouvrir le panneau Info.
+À `390 px`, les cases occupent `87 px`, la piste du jeton `56 px` et le cadran
+`84 px` ; le jeton de `48 px` est entre cases et cadran sur leur rangée. À
+`336 px`, les cases font `66 px`, la piste `48 px` et le cadran `80 px` ; le
+jeton reste dans l'espace intermédiaire. Dans la vue courte, la scène doit
+défiler jusqu'au panier, puis le point est visible avec les cases et le cadran.
+Cette vérification prépare uniquement le DOM pour mesurer le placement ; le
+parcours runtime de collecte dans cette géométrie reste à valider en P5a.
+La même vérification préparée en portrait large (`900 × 1100 px`) conserve le
+point sur sa troisième rangée ; en paysage (`1280 × 800 px`), il reste dans sa
+rangée sous le panier. En paysage court (`800 × 500 px`), le point reste monté
+et devient visible après défilement de la page (`y=327–375 px` dans le viewport
+Safari de `396 px`). Ces breakpoints gardent leur disposition existante.
+
 P1 doit éprouver tôt la politique temporelle et le preload de la vraie vidéo.
-P4 est explicitement postérieur à l'implémentation générale P1–P3 ; P5 dépend
-de ses conclusions et ne commence pas avant elles. P3 et P5 ne sont pas
-remplacés par des boutons qui simulent une réussite, une expiration ou une
-cible de dépôt. Une livraison intermédiaire peut être examinée, mais ne vaut
-pas reconstruction complète du jeu.
+P4 est postérieur à l'implémentation générale P1–P3 ; son étude et la décision
+sur le DOM partagé sont consignées. P5a porte l'offre, la collecte et la saisie
+locale du jeton. P5b peut maintenant appliquer la cible DOM, puis laisse
+l'admission, la consommation et la révélation à Sighty.
+P3 et P5 ne sont pas remplacés par des boutons qui simulent une réussite, une
+expiration ou une cible de dépôt. Une livraison intermédiaire peut être
+examinée, mais ne vaut pas reconstruction complète du jeu.
+
+### État d'implémentation P5a/P5b — 2026-10-10
+
+Le code porte l'état de disponibilité et l'épreuve d'offre dans le contexte
+Sighty. La vue de l'épreuve tirée au sort programme l'offre au décalage V1 et
+sa fermeture trois secondes plus tard. `scene-layout` porte le bouton au style
+V1 et le suivi/réinitialisation locale par la capture V2. La source V1 vérifiée
+collecte le jeton avec la transition FLIP par défaut : 320 ms et `easeOutCubic`,
+sans courbe auteur. La demande de transposition ajoute en V2 une légère courbe
+avec la transition `path` existante et porte la durée à 360 ms, en gardant
+`outCubic`. Le point d'inventaire est une zone distincte portée par
+`scene-layout`. Jusqu'à `40 em` en portrait, il partage la rangée du panier :
+sa colonne se place après les deux colonnes de cases et avant le cadran, sans
+ajouter de rangée sous le panier. Le cadran et la cible partagent leurs pistes
+de grille responsives. Hors de ce breakpoint, le point garde sa rangée de
+3,5 rem sous le panier ; le layout peut défiler si la hauteur disponible ne
+suffit pas. Le glissement vers une cible menu ignore les
+événements pointeur seulement pour le jeton collecté. Le DOM CodPlay ne rend
+pas l'identifiant perso comme attribut `id` sur le bouton ; la détection du
+jeton utilise donc sa classe auteur stable. Au `pointerup` natif, l'intégration
+prend une copie de la pile DOM dans un listener `window` enregistré avant les
+sources CodPlay. Elle utilise `ownerDocument.elementsFromPoint` aux coordonnées
+de relâchement, en excluant le jeton capturé et ses descendants. Le listener
+`stage` transmet ensuite cette copie à Sighty après le passage des listeners
+CodPlay sur `window` ; ainsi, une remise à zéro visuelle du jeton ne peut
+masquer la cible relevée.
+`event.target` peut rester le jeton même au-dessus d'une tuile d'une autre
+scène. L'intégration transmet l'identité de
+`data-quiz-hunt-trial-id` à Sighty avec la source
+`scene-layout`. Sighty valide l'épreuve échouée au menu avec jeton disponible,
+envoie d'abord `extraRetryHide`, puis publie l'événement de reprise après 0,8 s ;
+l'action CodPlay anime l'opacité et translate le jeton d'au moins 150 px vers le
+haut depuis l'offset `px` capturé pendant les mêmes 0,8 s. Il n'y a plus de
+transition CSS pour ce retrait. La vue de reprise utilise `showMode: 'reset'`
+et révèle à `0 ms` ; le statut et le jeton ne sont consommés qu'à l'admission.
+
+À la fermeture de capture, CodPlay retire les actions live et place le dernier
+état privé dans `endEmit.data.captureState`. Le `listen` de `scene-layout` lit
+son offset CSS et émet `extraDragCommit` avec cet offset comme payload d'action.
+Le style final est donc matérialisé par l'événement ordinaire de la scène avant
+le retrait. La réussite anime le jeton depuis cet offset ; l'échec utilise le
+même offset comme départ de l'action existante `extraDragReturn` vers
+l'inventaire. La cible de retour est exprimée en `0px`, dans la même unité que
+la capture CSS matérialisée ; une cible numérique aurait été compilée en `cqw`
+et aurait fait échouer ACE pendant la reconstruction. Aucun déplacement DOM ni
+accès à une autre instance n'est ajouté. Cette correction reste à exercer sur
+le parcours navigateur réel.
+Le parcours navigateur qui avait mesuré l'animation de succès au point de dépôt
+précède ce branchement explicite ; sa réexécution après cette correction reste
+requise.
+
+La vue de reprise utilise déjà `showMode: 'reset'`. Un parcours précédent a
+remis les radios à blanc, réactivé le formulaire et masqué le feedback, mais les
+symboles `×` et `✓` sont restés rendus : la question n'était donc pas encore
+pristine. Les démos Quiz Series V2 et Quiz Hunt V1 montrent le circuit adapté :
+un perso `tag` auteur, distinct de `InputComponent` mais monté dans son slot
+d'icône public, possède le glyph et reçoit un événement qui remet son contenu à
+vide. Le strap de reset Sighty émet déjà un événement par réponse ; P5b réutilise
+ces événements pour vider sélection et correction. L'évolution ultérieure de
+`InputComponent` qui lui permettra de remettre à zéro son propre glyph généré
+est suivie séparément dans le
+[plan du composant input](../../codplay/plan/components-image-input-polygon-svg-plan.md).
+`packages/codplay` reste inchangé dans le chantier P5b.
+
+Un dépôt invalide ou un `pointercancel` déclenche séparément le retour visuel
+vers l'inventaire. La réexécution navigateur de l'animation de succès après
+matérialisation, la reprise complète avec question pristine, le retour invalide,
+le resize et la navigation pendant capture restent à valider.
+
+La capture native fournit des deltas de pointeur en pixels CSS. Or le contrat
+V2 qualifie les valeurs numériques de `style.x/y` en `cqw` ([unités V2](../../codplay/specs/unit-values-v2-spec.md)) : sur le stage mesuré à 1166 px,
+un delta numérique était donc multiplié par 11,66. Le track auteur transmet
+maintenant des chaînes en `px`. Un `pointermove` synthétique de `10 × 5` dans
+le chemin capture du navigateur a rendu `translate(10px, 5px)`.
+
+L'utilisateur confirme que le clic de collecte initial fonctionne. La
+trajectoire courbe de collecte, configurée en V2 sur 360 ms avec `outCubic`,
+a ensuite été exercée sous Safari avec la seed 1 : l'épreuve 6 a affiché
+l'offre, et le clic sur le jeton a produit le clone animé vers l'inventaire.
+Les positions DOM relevées pendant huit images montrent une déviation du
+segment direct, puis l'arrivée dans la case d'inventaire. La nouvelle géométrie
+Safari a ensuite été inspectée avec le jeton placé dans
+son outlet. En portrait, le panier (`y=427–535 px`) et le jeton (`y=555–603 px`) ne se
+chevauchent pas ; en paysage, le panier (`y=111–415 px`) et le jeton
+(`y=435–483 px`) ne se chevauchent pas. Ces mesures utilisent un état DOM
+préparé manuellement et ne valident pas encore le placement pendant la collecte
+réelle. Une vérification Safari sur le DOM actif a ensuite placé un élément
+temporaire au-dessus de la vraie tuile `arrakis`, lui a fait capturer un
+`pointerdown` natif puis a désactivé ses événements pointeur. Le `pointerup`
+natif est resté ciblé sur cet élément, tandis que `elementFromPoint` a retrouvé
+la tuile `arrakis` dans le stage. Cela valide l'identification DOM sous capture,
+pas le glissement du vrai jeton ni l'envoi à `runtime.dispatch`. Ces deux
+parcours, ainsi que l'admission de la reprise, restent à exercer.
+Le typecheck, le build des démos et les tests ciblés de capture CodPlay passent
+(3 fichiers, 29 tests). P5a et P5b restent `En cours` jusqu'à l'exercice
+navigateur actif des nouvelles corrections et des critères restants.
+
+Au clic de collecte, le runtime a signalé deux déclarations d'animation
+incompatibles : des tweens de style à `duration: 0` (ACE V2 exige une durée
+strictement positive) et le nom `easeOutCubic` (le catalogue ACE nomme cette
+courbe `outCubic`). Les styles x/y utilisent maintenant des valeurs immédiates.
+La collecte suit une légère trajectoire courbe de 360 ms avec `outCubic` ; le
+parcours réel et sa trajectoire ont été vérifiés sous Safari. Le hit-test DOM,
+les rejets, la réadmission et la révélation restent à valider.
 
 ### État des validations P1 — 2026-10-09
 
@@ -711,11 +843,11 @@ La matrice de validation doit couvrir :
   question sortie, remplacement dans le même slot,
   réadmission, couche de jeton portée par `scene-layout` pendant les
   changements de contenu, changement de démo et destruction. Si un reparent
-  devient nécessaire, consigner sa raison et l'exercer après l'étude P4.
+  devient nécessaire, consigner sa raison et l'exercer dans P5.
 - **Resize et capture :** grille, réponses, panier, vidéo et minuteur ; dépôt
   valide/invalide entre l'overlay de `scene-layout` et le menu, nouvelle mesure
-  de la cible et annulation pendant navigation, selon le mécanisme retenu après
-  P4.
+  de la cible et annulation pendant navigation, selon le mécanisme DOM/Sighty
+  accepté en P4.
 - **Persistance :** vérifier la conservation entre vues ; documenter que la
   sauvegarde de partie entre chargements reste hors périmètre, sans l'assimiler
   à une preuve de persistance sérialisée.

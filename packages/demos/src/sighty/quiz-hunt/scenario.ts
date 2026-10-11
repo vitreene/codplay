@@ -14,6 +14,8 @@ import {
   recordQuizHuntAnswer,
   recordQuizHuntFinalAnswer,
   recordQuizHuntTimer,
+  QUIZ_HUNT_EXTRA_HIDE_DURATION_MS,
+  QUIZ_HUNT_EXTRA_WINDOW_MS,
   QUIZ_HUNT_TIMER_BUDGET_MS,
 } from './game-rules'
 import {
@@ -23,7 +25,10 @@ import {
   finalViewPath,
   openFinalEvent,
   openTrialEvent,
+  retryTrialEvent,
+  retryTrialReadyEvent,
   trialFeedbackFinishedEvent,
+  trialRetryViewPath,
   trialViewPath,
   QUIZ_HUNT_EVENTS,
 } from './messages'
@@ -71,6 +76,10 @@ export function createQuizHuntScenario(
             [QUIZ_HUNT_EVENTS.timerPlay]: { action: 'action:quiz-hunt:timer-play' },
             [QUIZ_HUNT_EVENTS.timerPaused]: { action: 'action:quiz-hunt:record-timer' },
             [QUIZ_HUNT_EVENTS.questionRevealDue]: { action: 'action:quiz-hunt:reveal-question' },
+            [QUIZ_HUNT_EVENTS.extraOfferDue]: { action: 'action:quiz-hunt:extra-offer' },
+            [QUIZ_HUNT_EVENTS.extraWindowHideDue]: { action: 'action:quiz-hunt:extra-window-hide' },
+            [QUIZ_HUNT_EVENTS.extraCollect]: { action: 'action:quiz-hunt:extra-collect' },
+            [QUIZ_HUNT_EVENTS.extraDragReturn]: { action: 'action:quiz-hunt:extra-drag-return' },
             [QUIZ_HUNT_EVENTS.timerExpired]: {
               go: { path: MENU_PATH },
               action: 'action:quiz-hunt:record-timer-expiry',
@@ -119,6 +128,11 @@ export function createQuizHuntScenario(
       'action:quiz-hunt:timer-play': createTimerPlayAction(gameData),
       'action:quiz-hunt:record-timer': createRecordTimerAction(gameData),
       'action:quiz-hunt:reveal-question': createRevealQuestionAction(trials),
+      'action:quiz-hunt:extra-offer': createExtraOfferAction(gameData),
+      'action:quiz-hunt:extra-window-hide': createExtraWindowHideAction(gameData),
+      'action:quiz-hunt:extra-collect': createExtraCollectAction(gameData),
+      'action:quiz-hunt:extra-drag-return': createExtraDragReturnAction(),
+      'action:quiz-hunt:begin-trial-retry': createBeginTrialRetryAction(gameData),
       'action:quiz-hunt:record-answer': createRecordAnswerAction(gameData),
       'action:quiz-hunt:project-menu': createProjectAction(gameData),
       'action:quiz-hunt:record-timer-expiry': createRecordTimerExpiryAction(gameData),
@@ -155,18 +169,38 @@ function createTrialViews(
 ): Readonly<Record<string, SightyGraphView<QuizHuntSceneKey, QuizHuntSlotName>>> {
   const views: Record<string, SightyGraphView<QuizHuntSceneKey, QuizHuntSlotName>> = {}
   for (const trial of gameData.trials) {
+    const trialActions: NonNullable<SightyGraphView<QuizHuntSceneKey, QuizHuntSlotName>['actions']> = {
+      [trialFeedbackFinishedEvent(trial.id)]: {
+        go: { path: MENU_PATH },
+        action: 'action:quiz-hunt:finish-trial-feedback',
+      },
+      [trialAnsweredEventName(trial.id)]: { action: 'action:quiz-hunt:record-answer' },
+    }
     views[`view-trial-${trial.id}`] = {
       showMode: 'reset',
       accessBy: 'guard:quiz-hunt:trial-access',
       onDenied: { path: MENU_PATH },
-      entry: createTrialEntryEventime(trial),
-      actions: {
-        [trialFeedbackFinishedEvent(trial.id)]: {
-          go: { path: MENU_PATH },
-          action: 'action:quiz-hunt:finish-trial-feedback',
-        },
-        [trialAnsweredEventName(trial.id)]: { action: 'action:quiz-hunt:record-answer' },
+      entry: createTrialEntryEventime(trial, gameData),
+      actions: trialActions,
+      view: { scene: questionSceneKey(trial.id) },
+    }
+    views[`view-trial-${trial.id}-retry`] = {
+      showMode: 'reset',
+      accessBy: ({ event, sceneKey, context }) => {
+        if (
+          event?.sourceSceneKey !== 'scene-layout'
+          || event.name !== retryTrialReadyEvent(trial.id)
+          || sceneKey !== questionSceneKey(trial.id)
+        ) return false
+        const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
+        return progress.screen === 'menu'
+          && progress.feedbackPending === null
+          && progress.trialStatus[trial.id] === 'failed'
+          && progress.extraTokenAvailable
       },
+      onDenied: { path: MENU_PATH },
+      entry: createTrialEntryEventime(trial, gameData, true),
+      actions: trialActions,
       view: { scene: questionSceneKey(trial.id) },
     }
   }
@@ -196,25 +230,46 @@ function createFinalViews(
   return views
 }
 
-/** Sends question timer commands through public timeline events in the entry. */
-function createTrialEntryEventime(trial: QuizHuntTrial): CodPlayEventime {
+/** Schedules the question's timer commands and the drawn extra's V1 window on entry. */
+function createTrialEntryEventime(
+  trial: QuizHuntTrial,
+  gameData: QuizHuntGameData,
+  immediateReveal = false,
+): CodPlayEventime {
   const timerData = { trialId: trial.id }
+  const extraEvents = trial.id === gameData.draw.extraWordId
+    ? [
+      {
+        name: QUIZ_HUNT_EVENTS.extraOfferDue,
+        startAt: gameData.draw.extraOffsetMs,
+        visibility: 'public' as const,
+        data: timerData,
+      },
+      {
+        name: QUIZ_HUNT_EVENTS.extraWindowHideDue,
+        startAt: gameData.draw.extraOffsetMs + QUIZ_HUNT_EXTRA_WINDOW_MS,
+        visibility: 'public' as const,
+        data: timerData,
+      },
+    ]
+    : []
   return {
     name: enterTrialEvent(trial.id),
     events: [
       { name: QUIZ_HUNT_EVENTS.timerPause, startAt: 0, visibility: 'public', data: timerData },
       {
         name: QUIZ_HUNT_EVENTS.timerPlay,
-        startAt: trial.revealDelayMs,
+        startAt: immediateReveal ? 0 : trial.revealDelayMs,
         visibility: 'public',
         data: timerData,
       },
       {
         name: QUIZ_HUNT_EVENTS.questionRevealDue,
-        startAt: trial.revealDelayMs,
+        startAt: immediateReveal ? 0 : trial.revealDelayMs,
         visibility: 'public',
         data: timerData,
       },
+      ...extraEvents,
     ],
   }
 }
@@ -229,6 +284,13 @@ function createGameEventActions(
       go: { path: trialViewPath(trial.id) },
       action: 'action:quiz-hunt:enter-trial',
     }
+    actions[retryTrialEvent(trial.id)] = {
+      action: 'action:quiz-hunt:begin-trial-retry',
+    }
+    actions[retryTrialReadyEvent(trial.id)] = {
+      go: { path: trialRetryViewPath(trial.id) },
+      action: 'action:quiz-hunt:enter-trial',
+    }
   }
   for (const final of gameData.finals) {
     actions[openFinalEvent(final.id)] = {
@@ -237,6 +299,46 @@ function createGameEventActions(
     }
   }
   return actions
+}
+
+/** Animates the collected token out, then publishes the retry after the transition. */
+function createBeginTrialRetryAction(
+  gameData: QuizHuntGameData,
+): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function beginTrialRetry({ event, context, send }): Promise<void> {
+    const trial = gameData.trials.find((candidate) => event.name === retryTrialEvent(candidate.id))
+    if (trial === undefined || event.sourceSceneKey !== 'scene-layout') return
+    const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
+    if (
+      progress.screen !== 'menu'
+      || progress.feedbackPending !== null
+      || progress.trialStatus[trial.id] !== 'failed'
+      || !progress.extraTokenAvailable
+    ) return
+
+    await send('scene-layout', {
+      name: QUIZ_HUNT_EVENTS.extraRetryHide,
+      events: [{
+        name: QUIZ_HUNT_EVENTS.extraRetryHideDone,
+        startAt: QUIZ_HUNT_EXTRA_HIDE_DURATION_MS,
+        visibility: 'story',
+      }, {
+        name: retryTrialReadyEvent(trial.id),
+        startAt: QUIZ_HUNT_EXTRA_HIDE_DURATION_MS,
+        visibility: 'public',
+      }],
+    }, { scope: 'story', storyId: 'main' })
+  }
+}
+
+/** Returns a token to its inventory position after an invalid or cancelled drag. */
+function createExtraDragReturnAction(): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function returnExtraToken({ event, send }): Promise<void> {
+    if (event.sourceSceneKey !== 'scene-layout') return
+    await send('scene-layout', {
+      name: QUIZ_HUNT_EVENTS.extraDragReturn,
+    }, { scope: 'story', storyId: 'main' })
+  }
 }
 
 /** Projects durable progress to the active menu and persistent basket scenes. */
@@ -329,6 +431,56 @@ function createRevealQuestionAction(
   }
 }
 
+/** Offers the one V1-timed extra on its drawn trial and projects it to the layout scene. */
+function createExtraOfferAction(
+  gameData: QuizHuntGameData,
+): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function offerExtra({ event, context, updateContext, send }): Promise<void> {
+    const trialId = readTrialId(event.data)
+    if (
+      trialId !== gameData.draw.extraWordId
+      || event.sourceSceneKey !== questionSceneKey(trialId)
+    ) return
+    const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
+    if (progress.screen !== 'trial' || progress.extraOfferedOn !== null) return
+    await updateContext({ game: { ...progress, extraOfferedOn: trialId } })
+    await send('scene-layout', { name: QUIZ_HUNT_EVENTS.extraShow }, { scope: 'story', storyId: 'main' })
+  }
+}
+
+/** Closes an uncollected offer when its original three-second window expires. */
+function createExtraWindowHideAction(
+  gameData: QuizHuntGameData,
+): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function hideExtraWindow({ event, context, send }): Promise<void> {
+    const trialId = readTrialId(event.data)
+    if (
+      trialId !== gameData.draw.extraWordId
+      || event.sourceSceneKey !== questionSceneKey(trialId)
+    ) return
+    const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
+    if (progress.extraOfferedOn !== trialId || progress.extraTokenAvailable) return
+    await send('scene-layout', { name: QUIZ_HUNT_EVENTS.extraHide }, { scope: 'story', storyId: 'main' })
+  }
+}
+
+/** Collects the offered token once and moves its presentation into the layout inventory. */
+function createExtraCollectAction(
+  gameData: QuizHuntGameData,
+): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function collectExtra({ event, context, updateContext, send }): Promise<void> {
+    const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
+    if (
+      event.sourceSceneKey !== 'scene-layout'
+      || progress.screen !== 'trial'
+      || progress.extraOfferedOn !== gameData.draw.extraWordId
+      || progress.extraTokenAvailable
+    ) return
+    await updateContext({ game: { ...progress, extraTokenAvailable: true } })
+    await send('scene-layout', { name: QUIZ_HUNT_EVENTS.extraCollected }, { scope: 'story', storyId: 'main' })
+  }
+}
+
 /** Applies one public answer result to Sighty's progress and basket projection. */
 function createRecordAnswerAction(
   gameData: QuizHuntGameData,
@@ -393,11 +545,31 @@ function createEnterTrialAction(
   gameData: QuizHuntGameData,
 ): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
   return async function enterTrial({ event, context, updateContext, send }): Promise<void> {
-    const trial = gameData.trials.find((candidate) => event.name === openTrialEvent(candidate.id))
+    const retry = gameData.trials.some((candidate) => event.name === retryTrialReadyEvent(candidate.id))
+    const trial = gameData.trials.find((candidate) => (
+      event.name === openTrialEvent(candidate.id) || event.name === retryTrialReadyEvent(candidate.id)
+    ))
     if (trial === undefined) return
     const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
-    if (progress.trialStatus[trial.id] !== 'available') return
-    const nextProgress = { ...progress, screen: 'trial' as const }
+    if (retry) {
+      if (
+        event.sourceSceneKey !== 'scene-layout'
+        || progress.screen !== 'menu'
+        || progress.feedbackPending !== null
+        || progress.trialStatus[trial.id] !== 'failed'
+        || !progress.extraTokenAvailable
+      ) return
+    } else if (progress.trialStatus[trial.id] !== 'available') {
+      return
+    }
+    const nextProgress = {
+      ...progress,
+      ...(retry ? {
+        trialStatus: { ...progress.trialStatus, [trial.id]: 'available' as const },
+        extraTokenAvailable: false,
+      } : {}),
+      screen: 'trial' as const,
+    }
     await updateContext({ game: nextProgress })
     await projectBasketScene(gameData, nextProgress, send)
   }
@@ -457,6 +629,7 @@ function createFinishTrialFeedbackAction(
     if (trialId === undefined) return
     const progress = readQuizHuntProgress(context.game, gameData.trials, gameData.colors)
     if (progress.feedbackPending !== `trial:${trialId}`) return
+    const hideExtraOffer = progress.extraOfferedOn === trialId && !progress.extraTokenAvailable
     const showResult = progress.pendingTimerExpiry || progress.outcome !== null
     const nextProgress = {
       ...progress,
@@ -470,6 +643,9 @@ function createFinishTrialFeedbackAction(
     await send('scene-basket', {
       name: QUIZ_HUNT_EVENTS.timerFeedbackFinished,
     }, { scope: 'story', storyId: 'main' })
+    if (hideExtraOffer) {
+      await send('scene-layout', { name: QUIZ_HUNT_EVENTS.extraHide }, { scope: 'story', storyId: 'main' })
+    }
     await projectMenuAndBasket(gameData, nextProgress, send)
     if (showResult) await projectResultScene(gameData, nextProgress, send)
   }

@@ -116,17 +116,37 @@ dans le [plan P1](../plan/2026-10-09-quiz-hunt-sighty-reconstruction-plan.md#ét
 
 Au breakpoint mobile `40 em`, le bouton de validation et les cases couleur
 partagent une taille de bloc fluide (`clamp(2rem, 10.7vw, 2.375rem)`). Le texte
-des cases reste légèrement réduit (`0,9 em`). La réserve à l'emplacement de
-l'extra varie avec le viewport
-(`clamp(2.5rem, 14.36vw, 3.5rem)`) ; elle ne met pas en œuvre le jeton ni son
-dépôt. En portrait, les cases et le cadran partagent une rangée de grille et le
-cadran carré s'étire sur la hauteur des deux lignes de cases et leur espacement.
-Dans Safari, à `390 px` de large,
-les cases et le bouton mesurent `38 px`, les rangées et le cadran `84 px`, la
-réserve `56 px` et le bloc panier/minuteur `108 px`. À `336 px`, les mêmes
-mesures deviennent `36 px`, `80 px`, `48 px` et `104 px`, sans débordement
-horizontal. Les mesures et les limites de cette vérification sont consignées
-dans la [validation P1](../plan/2026-10-09-quiz-hunt-sighty-reconstruction-plan.md#état-des-validations-p1--2026-10-09).
+des cases reste légèrement réduit (`0,9 em`). Quand le jeton est dans
+l'inventaire, le layout réserve sa piste entre les deux colonnes de cases et le
+cadran avec une largeur fluide (`clamp(2.5rem, 14.36vw, 3.5rem)`). Le point
+d'inventaire et le minuteur restent sur la rangée des cases ; aucune rangée
+supplémentaire n'est ajoutée sous le panier en portrait mobile. En portrait, les
+cases et le cadran partagent une rangée de grille et le cadran carré s'étire sur
+la hauteur des deux lignes de cases et leur espacement. Dans Safari, à `390 px`
+de large, les cases et le bouton mesurent `38 px`, les rangées et le cadran
+`84 px`, la piste du jeton `56 px` et le bloc panier/minuteur `108 px`. À `336
+px`, les mêmes mesures deviennent `36 px`, `80 px`, `48 px` et `104 px`, sans
+débordement horizontal. Le DOM de test préparé place le jeton de `48 px` entre
+les cases et le cadran aux deux largeurs. Les mesures et les limites de cette
+vérification sont consignées dans la [validation P1](../plan/2026-10-09-quiz-hunt-sighty-reconstruction-plan.md#état-des-validations-p1--2026-10-09) ; la collecte réelle du jeton dans cette disposition reste à valider.
+Au-delà du breakpoint mobile portrait, le point conserve son outlet dédié :
+troisième rangée en portrait large et rangée sous le panier en paysage. Les
+vues courtes gardent le défilement qui permet de l'atteindre.
+
+## Collecte du jeton
+
+La scène `scene-layout` porte le jeton et le déplace vers son outlet d'inventaire
+au clic accepté par Sighty. Cette transition utilise le `move` V2 existant avec
+une légère trajectoire courbe (`M 0 0 A 1.25 1.25 0 0 1 1 0`), `outCubic` et
+une durée de `360 ms`. La source V1 présente dans le dépôt utilise le FLIP par
+défaut (`320 ms`, `easeOutCubic`) sans trajectoire auteur ; la courbe et le léger
+ralentissement sont un ajustement demandé pour cette transposition V2.
+
+Dans Safari, la seed `1` a ouvert l'épreuve `icarus-ii` (tuile 6), affiché
+l'offre, puis déclenché le clic de collecte. Les rectangles DOM relevés sur le
+clone de transition pendant huit images montrent une déviation par rapport au
+trajet direct et l'arrivée au point d'inventaire. Le parcours réel est conservé
+dans l'[état P5a du plan](../plan/2026-10-09-quiz-hunt-sighty-reconstruction-plan.md).
 
 ## Éléments de preuve
 

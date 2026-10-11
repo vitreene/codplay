@@ -21,6 +21,18 @@ Les contrats vérifiés sont séparés par composant :
 - [ ] Input : valider dans un parcours quiz réel les états natifs, la sélection
       et la désactivation des réponses, la révélation de correction et les
       classes de résultat. Compléter la preuve du parcours quiz intégré.
+- [ ] Input — évolution différée, reset propre du glyph généré : permettre à
+      `InputComponent` d'effacer son propre texte de correction lorsque l'état
+      revient à `idle`, sans effacer un perso enfant monté dans le slot
+      `correctionIcon`. Dans le runtime actuel,
+      `InputComponent.applyCorrectionIcon()` ne projette plus le contenu dès
+      qu'un enfant existe dans le slot. Quiz Hunt résout son besoin immédiat par
+      un perso `tag` auteur monté dans ce slot et réinitialisé par l'événement
+      quiz existant ; cette évolution du composant n'est donc pas un prérequis
+      du chantier Sighty. Avant de l'implémenter, définir comment le composant
+      distingue son texte projeté d'un enfant auteur et établir son propre
+      parcours d'acceptation ; ne pas modifier le contrat vérifié avant
+      implémentation et validation.
 - [ ] Décider si l'export V2 `resolveInputStandardActions` fait partie du contrat
       auteur public : il est exposé par le sous-chemin `runtime/components/input`
       et porte les actions quiz compatibles V1, mais aucun consommateur ni test

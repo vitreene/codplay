@@ -11,6 +11,7 @@ import {
 import { resolveQuizHuntColorStyle } from '../../../v1/scenes/quiz-hunt/color-palette'
 import type { QuizHuntFinal, QuizHuntTrial } from '../game-data'
 import {
+  enterTrialEvent,
   finalAnsweredEvent,
   finalFeedbackFinishedEvent,
   trialAnsweredEvent,
@@ -39,6 +40,7 @@ function createQuizQuestionScene(
   const isFinal = mode === 'final'
   const prefix = isFinal ? `quiz-hunt:final:${source.id}` : `quiz-hunt:question:${source.id}`
   const revealEvent = isFinal ? undefined : `${prefix}:reveal`
+  const entryEvent = isFinal ? undefined : enterTrialEvent(source.id)
   const persos: QuestionScenePerso[] = [
     createQuestionLayout(source, prefix, mode),
     createQuestionBadge(source, prefix, tileNumber, isFinal),
@@ -46,8 +48,10 @@ function createQuizQuestionScene(
     createQuestionHint(source, prefix),
     createQuestionFieldset(prefix, revealEvent, isFinal),
     ...createQuizAnswerPersos(source.question, {
+      storyId: 'main',
       persoPrefix: `${prefix}-quiz`,
       eventPrefix: prefix,
+      iconContentMode: 'tag',
     }, {
       selectionIcon: 'quiz-hunt-answer-icon quiz-hunt-answer-icon-selection',
       correctionIcon: 'quiz-hunt-answer-icon quiz-hunt-answer-icon-correction',
@@ -66,6 +70,9 @@ function createQuizQuestionScene(
         state: { ...createQuizLocalState(source.question), revealed: isFinal },
         straps: {
           ...(isFinal ? {} : {
+            'quiz-hunt-question-reset': createQuestionResetStrap(source as QuizHuntTrial, prefix),
+          }),
+          ...(isFinal ? {} : {
             'quiz-hunt-question-reveal': ({ state }) => {
               if (state.revealed === true) return undefined
               return { update: { revealed: true }, events: [{ name: revealEvent! }] }
@@ -78,6 +85,7 @@ function createQuizQuestionScene(
           'quiz-hunt-question-submit-answer': createAnswerSubmissionStrap(source, prefix, mode),
         },
         listen: [
+          ...(entryEvent === undefined ? [] : [{ on: entryEvent, straps: ['quiz-hunt-question-reset'] }]),
           ...(isFinal ? [] : [{ on: revealEvent!, straps: ['quiz-hunt-question-reveal'] }]),
           { on: `${prefix}:answer:select`, straps: ['quiz-hunt-question-select-answer'] },
           { on: `${prefix}:validate`, straps: ['quiz-hunt-question-submit-answer'] },
@@ -226,6 +234,7 @@ function createQuestionFieldset(
     actions: {
       ...(revealEvent === undefined ? {} : { [revealEvent]: { className: { remove: 'is-hidden' } } }),
       [`${prefix}:resolved`]: { attr: { disabled: true } },
+      [`${prefix}:reset`]: { attr: { disabled: false } },
     },
   }
 }
@@ -354,6 +363,29 @@ function createAnswerSubmissionStrap(
       }),
     ]
   }
+}
+
+/** Clears one question's local selection, correction, lock, and feedback on entry. */
+function createQuestionResetStrap(
+  source: QuizHuntTrial,
+  prefix: string,
+): StrapFunction {
+  return () => ({
+    update: { ...createQuizLocalState(source.question), revealed: false },
+    events: [
+      { name: `${prefix}:selection:empty` },
+      ...source.question.answers.map((answer) => ({ name: `${prefix}:answer:${answer.id}:reset` })),
+      { name: `${prefix}:reset` },
+      {
+        name: `${prefix}:feedback`,
+        data: {
+          content: '',
+          attr: { hidden: true },
+          className: 'quiz-hunt-question-result',
+        },
+      },
+    ],
+  })
 }
 
 /** Selects the public feedback-completion event for a trial or final question. */

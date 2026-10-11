@@ -1,6 +1,9 @@
 import type { QuizHuntFinal, QuizHuntTrial } from './game-data'
 
 export const QUIZ_HUNT_TIMER_BUDGET_MS = 180_000
+export const QUIZ_HUNT_EXTRA_WINDOW_MS = 3_000
+// Matches the token opacity/translate transition in quiz-hunt/responsive.css.
+export const QUIZ_HUNT_EXTRA_HIDE_DURATION_MS = 800
 
 export type QuizHuntTrialStatus = 'available' | 'success' | 'failed'
 export type QuizHuntGameScreen = 'menu' | 'trial' | 'final' | 'result'
@@ -11,6 +14,8 @@ export type QuizHuntProgress = Readonly<{
   trialStatus: Readonly<Record<string, QuizHuntTrialStatus>>
   basket: Readonly<Record<string, string | null>>
   timerRemainingMs: number
+  extraOfferedOn: string | null
+  extraTokenAvailable: boolean
   finalAttemptedWordIds: readonly string[]
   feedbackPending: string | null
   pendingTimerExpiry: boolean
@@ -30,6 +35,8 @@ export function createInitialQuizHuntProgress(
     trialStatus,
     basket,
     timerRemainingMs: QUIZ_HUNT_TIMER_BUDGET_MS,
+    extraOfferedOn: null,
+    extraTokenAvailable: false,
     finalAttemptedWordIds: [],
     feedbackPending: null,
     pendingTimerExpiry: false,
@@ -60,6 +67,9 @@ export function readQuizHuntProgress(
   const timerRemainingMs = typeof candidate.timerRemainingMs === 'number'
     ? Math.max(0, Math.min(QUIZ_HUNT_TIMER_BUDGET_MS, candidate.timerRemainingMs))
     : QUIZ_HUNT_TIMER_BUDGET_MS
+  const extraOfferedOn = typeof candidate.extraOfferedOn === 'string' && trialIds.has(candidate.extraOfferedOn)
+    ? candidate.extraOfferedOn
+    : null
   const finalAttemptedWordIds = Array.isArray(candidate.finalAttemptedWordIds)
     ? candidate.finalAttemptedWordIds.filter((trialId): trialId is string => typeof trialId === 'string' && trialIds.has(trialId))
     : []
@@ -70,6 +80,8 @@ export function readQuizHuntProgress(
     trialStatus,
     basket,
     timerRemainingMs,
+    extraOfferedOn,
+    extraTokenAvailable: candidate.extraTokenAvailable === true,
     finalAttemptedWordIds,
     feedbackPending: typeof candidate.feedbackPending === 'string' ? candidate.feedbackPending : null,
     pendingTimerExpiry: candidate.pendingTimerExpiry === true,
