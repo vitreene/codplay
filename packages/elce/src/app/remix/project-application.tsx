@@ -1,6 +1,5 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
-import { Images, List } from 'lucide-static'
 import type { SnapshotFrom } from 'xstate'
 import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
 import type { controllerMachine } from '../controller/controller-machine'
@@ -12,7 +11,6 @@ import { PopupPreviewHost } from '../player/popup-preview-host'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
 import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
-import { renderLucideIcon } from './lucide-static-icon'
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './project-application-types'
 
 /** Renders project management and the native Remix authoring workspace. */
@@ -38,8 +36,7 @@ export function ProjectApplication(handle: Handle) {
     responsivePanel = panel
     if (panel === null) returnFocusId = null
     void handle.update().then(() => {
-      const targetId = panel === null ? focusId : panelCloseButtonId(panel)
-      if (targetId !== null) document.getElementById(targetId)?.focus()
+      if (panel === null && focusId !== null) document.getElementById(focusId)?.focus()
     })
   }
   const setDropTarget = (targetId: string | null): void => {
@@ -62,28 +59,7 @@ export function ProjectApplication(handle: Handle) {
       void handle.update()
     })
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (responsivePanel === null) return
-      if (event.key === 'Escape') {
-        setResponsivePanel(null)
-        return
-      }
-      if (event.key !== 'Tab') return
-      const panelId = responsivePanel === 'outline' ? 'elce-outline' : 'elce-properties'
-      const panel = document.getElementById(panelId)
-      if (panel === null) return
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-      )).filter((element) => element.getClientRects().length > 0)
-      const first = focusable[0]
-      const last = focusable.at(-1)
-      if (first === undefined || last === undefined) return
-      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
-        event.preventDefault()
-        first.focus()
-      }
+      if (event.key === 'Escape' && responsivePanel !== null) setResponsivePanel(null)
     }
     const handleResize = (): void => {
       switch (responsivePanel) {
@@ -147,6 +123,7 @@ function renderApplication(
   const currentName = view.activeProject === null ? null : view.document.data.name
   return <div
     id="elce-remix-project-app"
+    className={editorVisible ? 'elce-remix-project-app elce-remix-project-app--editing' : 'elce-remix-project-app'}
   >
     <header
       id="elce-project-header"
@@ -161,7 +138,6 @@ function renderApplication(
         >
           Elcé
         </strong>
-        {editorVisible ? renderWorkspaceAccess(workspace) : null}
       </div>
       <details
         id="elce-project-menu"
@@ -270,59 +246,6 @@ function renderApplication(
       onMoveChapter: workspace.moveChapter,
     })}
   </div>
-}
-
-/** Renders the responsive panel commands beside the Elcé brand. */
-function renderWorkspaceAccess(
-  workspace: ProjectApplicationWorkspaceState,
-): RemixNode {
-  return <nav
-    id="elce-responsive-panel-access"
-    className="elce-responsive-panel-access"
-    aria-label="Panneaux de l’éditeur"
-  >
-    {renderPanelToggle('outline', workspace.responsivePanel, workspace.setResponsivePanel)}
-    {renderPanelToggle('properties', workspace.responsivePanel, workspace.setResponsivePanel)}
-  </nav>
-}
-
-/** Renders one panel toggle using its documented breakpoint and accessible label. */
-function renderPanelToggle(
-  panel: Exclude<ResponsivePanel, null>,
-  responsivePanel: ResponsivePanel,
-  setResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void,
-): RemixNode {
-  const outline = panel === 'outline'
-  const id = outline ? 'elce-outline-toggle' : 'elce-properties-toggle'
-  const label = outline ? 'Ouvrir le scénario' : 'Ouvrir les contenus disponibles'
-  const title = outline ? 'Scénario' : 'Contenus disponibles'
-  const targetId = outline ? 'elce-outline' : 'elce-properties'
-  const icon = outline ? List : Images
-  const className = responsivePanel === panel
-    ? `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel} elce-responsive-panel-toggle--open`
-    : `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel}`
-  return <button
-    id={id}
-    className={className}
-    type="button"
-    aria-label={label}
-    title={title}
-    aria-expanded={responsivePanel === panel}
-    aria-controls={targetId}
-    mix={on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(panel, id))}
-  >
-    {renderLucideIcon(icon, `${id}-icon`, 18)}
-  </button>
-}
-
-/** Returns the close control that should receive focus after a drawer opens. */
-function panelCloseButtonId(panel: Exclude<ResponsivePanel, null>): string {
-  switch (panel) {
-    case 'outline':
-      return 'elce-outline-close'
-    case 'properties':
-      return 'elce-properties-close'
-  }
 }
 
 /** Renders the selection surface when no project is actively being edited. */

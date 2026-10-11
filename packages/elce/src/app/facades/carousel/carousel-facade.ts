@@ -1,6 +1,6 @@
 import { CAROUSEL_CONFIG, CARD_LAYOUT_IDS, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
-import { createCardBdcCommand } from '../../../domain/commands/document-commands'
+import { createCardBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
 import type { ElceCarouselEditorActions, ElceCarouselFacadeOptions } from './carousel-facade-types'
 import type { CarouselContent } from '../../../domain/carousel/carousel-types'
 import { createStableId } from '../../../domain/document/document-model'
@@ -25,7 +25,7 @@ export class ElceCarouselFacade {
     this.cardFacade = new ElceCardFacade(options)
   }
 
-  /** Creates actions bound to the current Carousel settings and Card BDCs. */
+  /** Creates actions bound to the current Carousel settings and child BDCs. */
   public createEditorActions(
     bdcId: BdcId,
     content: CarouselContent,
@@ -104,11 +104,22 @@ export class ElceCarouselFacade {
         ))
         this.selectCard(cardBdcId)
       },
+      addStatisticalGraph: () => {
+        const graphBdcId = createStableId('bdc-statistical-graph')
+        this.dispatch(createStatisticalGraphCarouselBdcCommand(graphBdcId, bdcId, content.cards.length))
+        this.selectCard(graphBdcId)
+      },
       removeCard: (cardBdcId, selectedBdcId) => {
         const next = this.carouselService.removeCard(content, cardBdcId)
         if (next === content) return
         this.dispatch({ type: 'bdc.card.delete', bdcId: cardBdcId })
         if (selectedBdcId === cardBdcId) this.selectCard(next.cards[0]?.bdcId ?? null)
+      },
+      removeStatisticalGraph: (graphBdcId, selectedBdcId) => {
+        const next = this.carouselService.removeCard(content, graphBdcId)
+        if (next === content) return
+        this.dispatch({ type: 'bdc.statistical-graph.delete', bdcId: graphBdcId })
+        if (selectedBdcId === graphBdcId) this.selectCard(next.cards[0]?.bdcId ?? null)
       },
       moveCard: (cardBdcId, index) => updateCarouselFrom((current) => this.carouselService.moveCard(current, cardBdcId, index)),
       setDefaultViewDurationSeconds: (seconds) => updateCarouselFrom((current) => this.carouselService.setDefaultViewDuration(current, seconds * 1000)),

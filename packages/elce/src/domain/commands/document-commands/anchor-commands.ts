@@ -3,8 +3,8 @@ import { ElceDocument } from '../../../domain/document/document-model'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import type { Bdc } from '../../../domain/document/document-types'
 import type { DocumentCommand } from '../document-command-types'
-import { fail, findFluxPage, placeCardInSection, findBdc, requireSectionData, placeBdc } from './command-helpers'
-import { findAnchorSection, updateSectionContent, findAnchorSectionForCard } from './section-commands'
+import { fail, findFluxPage, placeIllustrationInSection, findBdc, requireSectionData, placeBdc } from './command-helpers'
+import { findAnchorSection, updateSectionContent, findAnchorSectionForIllustration } from './section-commands'
 import { anchorReferenceService, cardService } from './services'
 
 /** Verifies the Card type and media category before a drop is attached. */
@@ -53,7 +53,7 @@ export function createAnchoredBdc(
     card: { ...cardService.createDefault(CAROUSEL_CONFIG.defaultImagePosition), mediaId: media.id },
   }
   const withEntities = new ElceDocument({ ...withMedia.data, bdcs: [...withMedia.bdcs, bdc] })
-  const withPlacement = placeCardInSection(withEntities, bdc, command.sectionBdcId)
+  const withPlacement = placeIllustrationInSection(withEntities, bdc, command.sectionBdcId)
   return updateSectionContent(withPlacement, command.sectionBdcId, undefined, command.markup, command.content)
 }
 
@@ -79,16 +79,19 @@ export function attachCatalogBdc(
   }
   switch (bdc.type) {
     case BDC_TYPE.CARD:
+      if (bdc.card === null || bdc.card === undefined) fail(`La Carte ${bdc.id} est incomplète.`)
+      if (bdc.presetId === DEFAULT_PRESET_ID.PHOTO) {
+        if (bdc.card.mediaId === null) fail(`La Carte Photo ${bdc.id} ne référence aucun média.`)
+        const media = document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+        if (media === undefined) fail(`Le média de la Carte ${bdc.id} est introuvable.`)
+        assertSupportedAnchorMediaType(mediaTypeFromMimeType(media.mimeType))
+      }
+      break
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      if (bdc.statisticalGraph == null) fail(`Le Graphe statistique ${bdc.id} est incomplet.`)
       break
     default:
-      fail(`Seule une Carte peut être insérée dans le texte : ${bdc.id}`)
-  }
-  if (bdc.card === null || bdc.card === undefined) fail(`La Carte ${bdc.id} est incomplète.`)
-  if (bdc.presetId === DEFAULT_PRESET_ID.PHOTO) {
-    if (bdc.card.mediaId === null) fail(`La Carte Photo ${bdc.id} ne référence aucun média.`)
-    const media = document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
-    if (media === undefined) fail(`Le média de la Carte ${bdc.id} est introuvable.`)
-    assertSupportedAnchorMediaType(mediaTypeFromMimeType(media.mimeType))
+      fail(`Seules les Cartes et les Graphes statistiques peuvent être insérés dans le texte : ${bdc.id}`)
   }
   switch (anchorReferenceService.bdcIdsIn(command.content).includes(bdc.id)) {
     case true:
@@ -102,7 +105,7 @@ export function attachCatalogBdc(
     default:
       fail(`Le bdc ${bdc.id} est déjà ancré dans cette Section.`)
   }
-  const placed = placeCardInSection(document, bdc, section.id)
+  const placed = placeIllustrationInSection(document, bdc, section.id)
   return updateSectionContent(placed, command.sectionBdcId, undefined, command.markup, command.content)
 }
 
@@ -112,7 +115,7 @@ export function moveAnchoredBdc(
   command: Extract<DocumentCommand, { type: 'bdc.anchor.move' }>,
 ): ElceDocument {
   const anchorBdc = findBdc(document, command.anchorBdcId)
-  const pageId = findAnchorSectionForCard(document, anchorBdc, command.sectionBdcId)
+  const pageId = findAnchorSectionForIllustration(document, anchorBdc, command.sectionBdcId)
   findAnchorSection(document, command.sectionBdcId, pageId)
   if (!anchorReferenceService.bdcIdsIn(command.content).includes(command.anchorBdcId)) fail(`Le déplacement a perdu l’ancre ${command.anchorBdcId}.`)
   return updateSectionContent(document, command.sectionBdcId, undefined, command.markup, command.content)
@@ -124,7 +127,7 @@ export function removeAnchoredBdc(
   command: Extract<DocumentCommand, { type: 'bdc.anchor.remove' }>,
 ): ElceDocument {
   const anchorBdc = findBdc(document, command.anchorBdcId)
-  const pageId = findAnchorSectionForCard(document, anchorBdc, command.sectionBdcId)
+  const pageId = findAnchorSectionForIllustration(document, anchorBdc, command.sectionBdcId)
   const section = findAnchorSection(document, command.sectionBdcId, pageId)
   if (!anchorReferenceService.bdcIdsIn(requireSectionData(section).content).includes(command.anchorBdcId)) {
     fail(`L’ancre ${command.anchorBdcId} est introuvable dans sa Section.`)
@@ -139,7 +142,7 @@ export function returnAnchoredBdc(
   command: Extract<DocumentCommand, { type: 'bdc.anchor.return' }>,
 ): ElceDocument {
   const anchorBdc = findBdc(document, command.anchorBdcId)
-  const pageId = findAnchorSectionForCard(document, anchorBdc, command.sectionBdcId)
+  const pageId = findAnchorSectionForIllustration(document, anchorBdc, command.sectionBdcId)
   const section = findAnchorSection(document, command.sectionBdcId, pageId)
   if (!anchorReferenceService.bdcIdsIn(requireSectionData(section).content).includes(anchorBdc.id)) {
     fail(`L’ancre ${anchorBdc.id} est introuvable dans sa Section.`)

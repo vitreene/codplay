@@ -2,11 +2,11 @@
 
 ## Statut
 
-**Fixe — création contextualisée des chapitres et des pages Flux/Diapo, ordre
-mixte page/chapitre, déplacement par séparateurs, sélection centrale d’un
-chapitre et catalogue dans la colonne droite. L’extension du catalogue aux BDC
-racines est implémentée et testée ; la validation Brave du parcours complet
-reste en cours dans le plan de construction.**
+**En cours — création contextualisée des chapitres et des pages Flux/Diapo,
+ordre mixte page/chapitre, déplacement par séparateurs, sélection centrale d’un
+chapitre et catalogue dans la colonne droite. Le geste de retour d’un BDC posé
+au catalogue vient d’être remplacé ; son parcours de validation reste ouvert
+dans le plan de construction.**
 
 Cette spécification décrit les commandes visibles pour créer des pages et des
 chapitres, ainsi que l’édition de leurs titres dans la zone centrale.
@@ -33,13 +33,12 @@ dépôt pour créer ou rejoindre un chapitre parent.
 
 ## Contrat
 
-Les actions de création sont des boutons Lucide sans libellé visible, avec nom
-accessible et infobulle. Dans l’en-tête « Scénario », deux icônes créent un
-chapitre standard ou un chapitre Évaluation ; deux autres créent à la racine
-une page Flux ou une Diapo. Chaque chapitre propose séparément la création
-d’une page Flux et d’une Diapo. Les boutons de création sont regroupés côte à
-côte ; les pages racine restent sous cet en-tête, sans second titre « Pages à
-la racine ». La
+Dans le bandeau du Scénario, les quatre actions de création affichent un
+libellé sous l’icône : « Chapitre », « Éval. », « Page » et « Diapo ». Les
+actions Page et Diapo intégrées aux lignes de chapitre restent iconographiques,
+avec nom accessible et infobulle complets. Les boutons de création du bandeau
+sont regroupés côte à côte ; les pages racine restent sous cet en-tête, sans
+second titre « Pages à la racine ». La
 création d’un chapitre Évaluation passe le type au constructeur de commande
 documentaire, qui applique le seuil par défaut configuré de 80 %. Les deux
 types de chapitre et les pages sont créés par les commandes XState existantes.
@@ -62,8 +61,9 @@ automatique est « Évaluation » au lieu de « Chapitre N ». Le nom reste
 modifiable. L’action d’ajout de page utilise l’icône Lucide FilePlus de 14 px
 dans un bouton carré de 1,35 rem, à peine plus grand que le bouton de
 suppression de 1,25 rem. L’icône Lucide Trash2 du bouton de suppression a la
-même taille de 14 px. L’écart vertical entre les lignes de l’arborescence est
-de 0,1 rem.
+même taille de 14 px. Ces dimensions restent adaptées à chaque action ; les
+icônes gardent 2 px de padding interne et 4 px d’écart avec leur élément voisin.
+L’écart vertical entre les lignes de l’arborescence est de 0,1 rem.
 
 Dans la zone centrale, le titre de la page sélectionnée est éditable. Si cette
 page appartient à un chapitre, le titre de ce chapitre apparaît au-dessus et
@@ -82,27 +82,38 @@ referme cette vue et rouvre l’éditeur de la page.
 La colonne droite précédemment intitulée « Propriétés » accueille la section
 « Contenus disponibles », avec les onglets « Blocs disponibles » et « Médias ».
 L’onglet « Blocs disponibles » liste tous les BDC racines du catalogue, un seul
-élément par conteneur ; il ne détache pas ses Cartes enfants. Quand une page est
-sélectionnée, le groupe « Blocs dans la page » permet de renvoyer chacun de ses
-BDC racines au catalogue. Les médias réutilisables restent dans leur onglet
-distinct. Le retour d’une Carte ancrée continue d’utiliser le circuit d’ancre.
-À 1200 px et moins, cette colonne est remplacée par un bouton d’accès à icône ;
-placé sur la même ligne que le titre « Elcé ». Ce bouton ouvre le même catalogue
-dans un tiroir depuis la droite. À 800 px et moins, le Scénario devient lui aussi
-un tiroir, ouvert par son icône placée avant celle du catalogue. Ces deux tiroirs
-sont exclusifs. Entre 801 et 1200 px, le Scénario reste dans la colonne gauche et
-la zone de travail centrale souple occupe l’espace restant ; à 800 px et moins,
-elle occupe toute la largeur disponible. Les boutons restent dans le bandeau du
-titre, dans le flux normal de la page. Chaque tiroir se ferme par son bouton,
-par Échap ou en cliquant le fond, puis rend le focus à son bouton d’accès.
-Au-delà de 1200 px, les trois colonnes restent visibles et les boutons d’accès
-disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
+élément par conteneur ; il ne détache pas ses Cartes enfants. Pour rendre
+disponible un BDC racine posé sur la page, l’auteur le fait glisser depuis sa
+poignée de placement vers l’onglet « Blocs disponibles ». Aucun groupe ni bouton
+de retour par BDC n’est affiché dans la colonne. Les médias réutilisables
+restent dans leur onglet distinct. Le retour d’une Carte ancrée continue
+d’utiliser le circuit d’ancre.
 
-Au-dessus des BDC de la page Flux, les icônes « Texte » et « Quiz » ajoutent
-respectivement un BDC Section et un BDC Question à la fin de leur séquence.
-L’icône Quiz utilise ListChecks, sans point d’interrogation. La Question reste
-unique par page ; après son ajout, son icône est désactivée. Une page créée dans
-un chapitre Évaluation reçoit déjà son BDC Question initial ; une page d’un
+À 1200 px et moins, la colonne « Contenus disponibles » est masquée et son
+bouton iconique sans fond ni contour apparaît au bord droit de la zone centrale.
+L’ouverture ajoute la colonne de contenus à droite et réduit la zone centrale,
+qui reste visible. À 800 px et moins, les deux panneaux latéraux sont masqués
+au départ ; leurs commandes iconiques sans fond ni contour encadrent la zone
+centrale. Ouvrir Scénario ajoute sa colonne à gauche ; ouvrir Contenus disponibles
+ajoute sa colonne à droite. Un seul panneau latéral peut être ouvert à la fois.
+Les commandes restent de vrais boutons accessibles, avec un nom décrivant
+l’action, `aria-expanded` et `aria-controls` ; Échap ferme le panneau et rend le
+focus à sa commande. Les panneaux occupent la grille et ne recouvrent pas la page
+centrale. Aucune surcouche ne masque la page ni ne piège le focus.
+
+Entre 801 et 1200 px, Scénario reste dans la colonne gauche ; lorsque le panneau
+Contenus disponibles est ouvert, les trois colonnes restent côte à côte. À 800 px
+et moins, le panneau ouvert et la zone centrale occupent chacun une colonne ;
+quand les deux panneaux sont fermés, la zone centrale occupe toute la largeur.
+Au-delà de 1200 px, les trois colonnes restent visibles et les commandes
+responsive disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
+
+La barre d’ajout de page affiche les libellés « Texte », « Quiz »,
+« Carousel », « Carte » et « Graphe » sous leurs icônes. Le nom accessible et
+l’infobulle de chaque bouton gardent la description complète. Le bouton Quiz
+utilise ListChecks, sans point d’interrogation. La Question reste unique par
+page ; après son ajout, son bouton est désactivé. Une page créée dans un
+chapitre Évaluation reçoit déjà son BDC Question initial ; une page d’un
 chapitre standard reçoit un BDC Section.
 
 Sur une page Flux d’un chapitre Évaluation, une icône BadgeCheck ajoute à la
@@ -160,7 +171,18 @@ séparées.
   les Cartes enfants, le déplacement par séparateur, les placements directs de
   Carte Flux et Diapo, le changement de page et le désabonnement XState. Un
   parcours intégré du catalogue et de l’éditeur de page vérifie aussi le
-  déplacement d’une Carte disponible vers une page puis son retour au catalogue.
+  déplacement d’une Carte disponible vers une page puis son retour au catalogue
+  en la faisant glisser depuis sa poignée de placement vers l’onglet « Blocs
+  disponibles ».
+- Le 9 octobre 2026, Brave confirme dans l’éditeur que la colonne ne contient
+  plus le groupe « Blocs dans la page » : le retour au catalogue se fait depuis
+  la poignée de placement du BDC.
+- Le 9 octobre 2026, Brave vérifie le layout responsive sur 5175 : à 1024 px,
+  l’ouverture de Contenus disponibles garde les trois colonnes visibles ; à
+  390 px, les deux panneaux fermés laissent la zone centrale seule, et chaque
+  panneau ouvert prend sa propre colonne (137/205 px pour Scénario,
+  205/137 px pour Contenus disponibles). Échap ferme le panneau et rend le
+  focus au bouton. Le document ne déborde pas horizontalement.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie l’édition Section et les parcours d’ancre/média dans le page editor
   de production.
@@ -195,11 +217,10 @@ séparées.
   utilisé pour le test. Le type, le seuil et les réglages persistés sont
   vérifiés dans [`chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
   contre le document détenu par XState.
-- Le 4 octobre, Safari MCP confirme les boîtes SVG de 14 × 14 px pour FilePlus
-  et Trash2 dans la liste ; le CSS empêche le flex de réduire la corbeille.
-  `app-layout.test.tsx` vérifie qu’un chapitre d’évaluation reçoit le nom
-  « Évaluation » sans texte de type dupliqué et que ses icônes d’ajout et de
-  suppression mesurent 14 px.
+- Le 9 octobre, Brave sur 5175 confirme dans l’arborescence le rendu uniforme
+  des icônes FilePlus et Trash2 en 14 × 14 px, avec leurs gabarits distincts
+  conservés. Les icônes de type de chapitre et de page dans la zone centrale
+  mesurent également 14 × 14 px.
 - Le 4 octobre, Safari MCP crée une page temporaire dans un chapitre standard,
   supprime son BDC Texte initial, confirme que la page reste éditable et ajoute
   une Question avec l’icône ListChecks. La page temporaire est ensuite supprimée.
@@ -226,11 +247,7 @@ séparées.
   temporaire et vérifie dans la zone centrale le seuil fixe de 80 %, les
   tentatives illimitées et la reprise de toutes les questions. Le projet de
   validation est supprimé ensuite.
-- Le 6 octobre 2026, Brave vérifie le repli à 1024 px : la zone centrale passe
-  de 384 à 688 px et le panneau devient un accès latéral. À 390 × 844 px, les
-  colonnes restantes s’empilent et le bouton reste accessible ; le tiroir
-  conserve le catalogue et les médias, et Échap le ferme en restaurant le
-  focus. À 1408 px, les trois colonnes restent visibles.
+- À 1408 px, les trois colonnes restent visibles.
 - Le 4 octobre, Safari MCP a sélectionné une page Flux d’Évaluation, ajouté le
   BDC Résultat avec son icône BadgeCheck puis supprimé le bloc temporaire depuis
   sa corbeille. Le retrait a conservé la séquence précédente de la page.

@@ -43,7 +43,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
         title="Supprimer la question"
         mix={on<HTMLButtonElement, 'click'>('click', actions.deleteQuestion)}
       >
-        {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`, 16)}
+        {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`, 14)}
       </button>
     </div>
     <div
@@ -59,7 +59,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           id={`elce-question-title-${bdcId}`}
           className="elce-question-title"
           aria-label="Titre facultatif de la question"
-          placeholder="Titre (facultatif)"
+          placeholder="Titre"
           value={question.title}
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setTitle(event.currentTarget.value))}
         />
@@ -98,12 +98,19 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
         {typeConfig.editableAnswers
           ? <button
             id={`elce-question-add-answer-${bdcId}`}
-            className="elce-question-add-answer"
+            className="elce-question-add-answer elce-add-content-action"
             type="button"
+            aria-label="Ajouter une réponse"
+            title="Ajouter une réponse"
             mix={on<HTMLButtonElement, 'click'>('click', actions.addAnswer)}
           >
-            {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`, 15)}
-            {' Ajouter une réponse'}
+            {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`, 14)}
+            <span
+              id={`elce-question-add-answer-label-${bdcId}`}
+              className="elce-add-content-action__label"
+            >
+              Réponse
+            </span>
           </button>
           : null}
       </div>
@@ -148,9 +155,21 @@ function renderQuestionMediaEditor(props: QuestionEditorProps): RemixNode {
         />
       : <span
         id={`elce-question-illustration-prompt-${bdcId}`}
+        className="elce-media-add-prompt"
       >
-        {renderLucideIcon(ImagePlus, `elce-question-illustration-icon-${bdcId}`, 17)}
-        {media?.name ?? 'Illustration facultative · déposer un média ici'}
+        {renderLucideIcon(ImagePlus, `elce-question-illustration-icon-${bdcId}`, 14)}
+        <span
+          id={`elce-question-illustration-label-${bdcId}`}
+          className="elce-media-add-prompt__label"
+        >
+          Illustration
+        </span>
+        <span
+          id={`elce-question-illustration-hint-${bdcId}`}
+          className="elce-media-add-prompt__hint"
+        >
+          {media?.name ?? 'Déposer ici'}
+        </span>
       </span>}
     {media !== null
       ? <button
@@ -164,7 +183,7 @@ function renderQuestionMediaEditor(props: QuestionEditorProps): RemixNode {
           actions.clearMedia()
         })}
       >
-        {renderLucideIcon(X, `elce-question-media-clear-icon-${bdcId}`, 15)}
+        {renderLucideIcon(X, `elce-question-media-clear-icon-${bdcId}`, 14)}
       </button>
       : null}
   </label>
@@ -243,7 +262,7 @@ function renderQuestionAnswer(
         transfer.setData(ANSWER_DRAG_MIME_TYPE, answer.id)
       })}
     >
-      {renderLucideIcon(GripVertical, `elce-question-answer-drag-icon-${answer.id}`, 15)}
+      {renderLucideIcon(GripVertical, `elce-question-answer-drag-icon-${answer.id}`, 14)}
     </button>
     <input
       id={`elce-question-answer-label-${answer.id}`}
@@ -261,7 +280,7 @@ function renderQuestionAnswer(
       title={answer.correct ? 'Réponse juste' : 'Marquer juste'}
       mix={on<HTMLButtonElement, 'click'>('click', () => actions.setAnswerCorrect(answer.id, !answer.correct))}
     >
-      {renderLucideIcon(Check, `elce-question-answer-correct-icon-${answer.id}`, 16)}
+      {renderLucideIcon(Check, `elce-question-answer-correct-icon-${answer.id}`, 14)}
     </button>
     <button
       id={`elce-question-answer-delete-${answer.id}`}
@@ -272,7 +291,7 @@ function renderQuestionAnswer(
       disabled={!actions.canRemoveAnswer(answer.id)}
       mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeAnswer(answer.id))}
     >
-      {renderLucideIcon(Trash2, `elce-question-answer-delete-icon-${answer.id}`, 15)}
+      {renderLucideIcon(Trash2, `elce-question-answer-delete-icon-${answer.id}`, 14)}
     </button>
   </li>
 }

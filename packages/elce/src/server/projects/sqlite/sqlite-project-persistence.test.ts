@@ -14,8 +14,9 @@ import {
   EVALUATION_RETRY_SCOPE,
   PAGE_LOCATION,
   PAGE_TYPE,
+  STATISTICAL_GRAPH_RENDERING,
 } from '../../../config/document-config'
-import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/commands/document-commands'
+import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../../../domain/document/document-model'
 import type { ElceDocument as ElceDocumentClass } from '../../../domain/document/document-model'
 import { createElceApiRouter } from '../../api-router'
@@ -427,6 +428,31 @@ function createRelationalFixture(): ElceDocumentClass {
     type: 'bdc.card.media.set',
     bdcId: 'bdc-card-message',
     mediaId: 'media-image',
+  })
+  document = applyDocumentCommand(document, createStatisticalGraphCarouselBdcCommand(
+    'bdc-statistical-graph',
+    'bdc-carousel',
+    2,
+  ))
+  const graphContent = document.bdcs.find((bdc) => bdc.id === 'bdc-statistical-graph')?.statisticalGraph
+  if (graphContent == null) throw new Error('Le BDC Graphe de test doit avoir son contenu par défaut.')
+  document = applyDocumentCommand(document, {
+    type: 'bdc.statistical-graph.update',
+    bdcId: 'bdc-statistical-graph',
+    statisticalGraph: {
+      ...graphContent,
+      rendering: STATISTICAL_GRAPH_RENDERING.LINE,
+      overline: '2026',
+      title: 'Population',
+      editorialText: 'Source locale',
+      categories: [{ ...graphContent.categories[0]!, label: 'Nord' }],
+      series: [{ ...graphContent.series[0]!, label: 'Habitants' }],
+      values: [{
+        categoryId: graphContent.categories[0]!.id,
+        seriesId: graphContent.series[0]!.id,
+        value: 1250.5,
+      }],
+    },
   })
   document = applyDocumentCommand(document, {
     type: 'bdc.question.media.set',

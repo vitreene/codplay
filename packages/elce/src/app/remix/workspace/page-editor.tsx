@@ -1,6 +1,6 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
-import { BadgeCheck, ClipboardCheck, FileText, Folder, GripVertical, Images, ListChecks, RectangleHorizontal } from 'lucide-static'
+import { Activity, BadgeCheck, ClipboardCheck, FileText, Folder, GripVertical, Images, ListChecks, RectangleHorizontal } from 'lucide-static'
 import { BDC_ORDER, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, PAGE_TYPE } from '../../../config/document-config'
 import type { Bdc, Chapter, Page } from '../../../domain/document/document-types'
 import { canMoveBdcToPage } from '../../../domain/commands/document-commands'
@@ -9,6 +9,7 @@ import { selectEditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import { EditorContextProvider } from '../editor-context'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { getPageTypeIcon } from './page-type-icon.ts'
 import type { RemixRenderHandle } from '../remix-render-handle'
 import { SectionTiptapAdapter } from '../../editor/section/section-editor-tiptap-adapter'
 import type { SectionToolbarState } from '../../editor/section/section-editor-tiptap'
@@ -18,6 +19,7 @@ import { renderRemixEvaluationResultEditor } from '../../editor/evaluation-resul
 import { renderRemixCardEditor } from '../../editor/card/remix-card-editor'
 import { RemixCarouselEditor } from '../../editor/carousel/remix-carousel-editor'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
+import { renderRemixStatisticalGraphEditor } from '../../editor/statistical-graph/remix-statistical-graph-editor'
 
 const chapterTypeIcons = {
   folder: Folder,
@@ -39,15 +41,15 @@ export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
   const toolbarStates = new Map<string, SectionToolbarState>()
   let draggedBdcId: string | null = null
   let dropTargetId: string | null = null
-  let editingAnchorCardId: string | null = null
+  let editingAnchorBdcId: string | null = null
 
   const updateDropTarget = (targetId: string | null): void => {
     if (dropTargetId === targetId) return
     dropTargetId = targetId
     if (!handle.signal.aborted) void handle.update()
   }
-  const setEditingAnchorCard = (bdcId: string | null): void => {
-    editingAnchorCardId = bdcId
+  const setEditingAnchorBdc = (bdcId: string | null): void => {
+    editingAnchorBdcId = bdcId
     if (!handle.signal.aborted) void handle.update()
   }
 
@@ -77,8 +79,8 @@ export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
     setDraggedBdcId: (bdcId) => { draggedBdcId = bdcId },
     dropTargetId: () => dropTargetId,
     updateDropTarget,
-    editingAnchorCardId,
-    setEditingAnchorCard,
+    editingAnchorBdcId,
+    setEditingAnchorBdc,
     onPreview: handle.props.onPreview,
     previewError: handle.props.previewError,
   })
@@ -94,8 +96,8 @@ interface PageEditorRenderState {
   readonly setDraggedBdcId: (bdcId: string | null) => void
   readonly dropTargetId: () => string | null
   readonly updateDropTarget: (targetId: string | null) => void
-  readonly editingAnchorCardId: string | null
-  readonly setEditingAnchorCard: (bdcId: string | null) => void
+  readonly editingAnchorBdcId: string | null
+  readonly setEditingAnchorBdc: (bdcId: string | null) => void
   readonly onPreview: () => void
   readonly previewError: string | null
 }
@@ -112,6 +114,8 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
   const canCreateCarousel = page?.type === PAGE_TYPE.FLUX
     || (page?.type === PAGE_TYPE.DIAPO && !view.pageHasContent && !view.pageHasCarousel)
   const canCreateStandaloneCard = page?.type === PAGE_TYPE.FLUX
+    || (page?.type === PAGE_TYPE.DIAPO && !view.pageHasContent)
+  const canCreateStatisticalGraph = page?.type === PAGE_TYPE.FLUX
     || (page?.type === PAGE_TYPE.DIAPO && !view.pageHasContent)
 
   const addSection = (): void => {
@@ -132,6 +136,10 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
   const addStandaloneCard = (): void => {
     if (page === undefined || !canCreateStandaloneCard) return
     actions.createStandaloneCard(page.id)
+  }
+  const addStatisticalGraph = (): void => {
+    if (page === undefined || !canCreateStatisticalGraph) return
+    actions.createStatisticalGraph(page.id, page.bdcIds.length)
   }
 
   return <section
@@ -158,12 +166,13 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
           id="elce-work-area-actions"
           className="elce-work-area-actions"
         >
-          {renderCreateButton('elce-section-create', 'Ajouter un bloc texte', FileText, !canCreateSection, addSection)}
-          {renderCreateButton('elce-question-create', 'Ajouter un bloc quiz', ListChecks, !canCreateQuestion, addQuestion)}
-          {renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', Images, !canCreateCarousel, addCarousel)}
-          {page === undefined ? null : renderCreateButton('elce-card-create', 'Ajouter une carte', RectangleHorizontal, !canCreateStandaloneCard, addStandaloneCard)}
+          {renderCreateButton('elce-section-create', 'Ajouter un bloc texte', 'Texte', FileText, !canCreateSection, addSection)}
+          {renderCreateButton('elce-question-create', 'Ajouter un bloc quiz', 'Quiz', ListChecks, !canCreateQuestion, addQuestion)}
+          {renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', 'Carousel', Images, !canCreateCarousel, addCarousel)}
+          {page === undefined ? null : renderCreateButton('elce-card-create', 'Ajouter une carte', 'Carte', RectangleHorizontal, !canCreateStandaloneCard, addStandaloneCard)}
+          {page === undefined ? null : renderCreateButton('elce-statistical-graph-create', 'Ajouter un graphe statistique', 'Graphe', Activity, !canCreateStatisticalGraph, addStatisticalGraph)}
           {canCreateEvaluationResult
-            ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', BadgeCheck, false, addEvaluationResult)
+            ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)
             : null}
         </div>
       </div>
@@ -200,24 +209,31 @@ function renderPreviewControls(onPreview: () => void, previewError: string | nul
   </div>
 }
 
-/** Renders one icon-only author command with the existing labels. */
+/** Renders one compact author command with a short visible label and full accessible name. */
 function renderCreateButton(
   id: string,
   label: string,
+  visibleLabel: string,
   icon: Parameters<typeof renderLucideIcon>[0],
   disabled: boolean,
   run: () => void,
 ): RemixNode {
   return <button
     id={id}
-    className="elce-icon-action"
+    className="elce-add-content-action"
     type="button"
     aria-label={label}
     title={label}
     disabled={disabled}
     mix={on<HTMLButtonElement, 'click'>('click', run)}
   >
-    {renderLucideIcon(icon, `${id}-icon`, 17)}
+    {renderLucideIcon(icon, `${id}-icon`, 14)}
+    <span
+      id={`${id}-label`}
+      className="elce-add-content-action__label"
+    >
+      {visibleLabel}
+    </span>
   </button>
 }
 
@@ -274,6 +290,13 @@ function renderPageTitle(page: Page | undefined, actions: EditorActionsFacade): 
     id="elce-work-area-title"
     className="elce-work-area-page-title"
   >
+    <span
+      id={`elce-page-type-mark-${page.id}`}
+      className="elce-page-type-mark"
+      aria-hidden={true}
+    >
+      {renderLucideIcon(getPageTypeIcon(page.type), `elce-page-type-icon-${page.id}`, 14)}
+    </span>
     <input
       id={`elce-page-title-${page.id}`}
       className="elce-inline-title-input"
@@ -328,17 +351,17 @@ function renderPageBdcList(page: Page, view: EditorViewModel, actions: EditorAct
           >
             <button
               id={`elce-page-bdc-drag-${bdc.id}`}
-              className="elce-page-bdc__drag"
+              className="elce-bdc-icon-button elce-page-bdc__drag"
               type="button"
               draggable={true}
-              aria-label="Déplacer le bloc dans la page"
-              title="Glisser pour déplacer"
+              aria-label="Déplacer le bloc"
+              title="Glisser pour déplacer ou rendre disponible"
               mix={[
                 on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => beginBdcDrag(event, bdc.id, state)),
                 on<HTMLButtonElement, 'dragend'>('dragend', () => endBdcDrag(state)),
               ]}
             >
-              {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdc.id}`, 15)}
+              {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdc.id}`, 14)}
             </button>
             {renderBdcEditor(bdc, page, view, actions, state)}
           </div>,
@@ -381,9 +404,9 @@ function renderBdcEditor(
       return renderRemixSectionEditor(bdc, page, view, actions, {
         adapters: state.sectionAdapters,
         toolbarStates: state.toolbarStates,
-        selectedAnchorCardId: state.editingAnchorCardId,
-        onEditAnchorCard: state.setEditingAnchorCard,
-        onCloseAnchorCard: () => state.setEditingAnchorCard(null),
+        selectedAnchorBdcId: state.editingAnchorBdcId,
+        onEditAnchorBdc: state.setEditingAnchorBdc,
+        onCloseAnchorBdc: () => state.setEditingAnchorBdc(null),
         handle: state.handle,
         current: state.current,
       })
@@ -413,20 +436,21 @@ function renderBdcEditor(
       )
     case BDC_TYPE.CAROUSEL: {
       if (bdc.carousel === null || bdc.carousel === undefined) return null
-      const cards = bdc.carousel.cards.flatMap((entry) => {
-        const card = view.documentModel.bdcs.find((candidate) => candidate.id === entry.bdcId)
-        return card === undefined ? [] : [card]
+      const views = bdc.carousel.cards.flatMap((entry) => {
+        const child = view.documentModel.bdcs.find((candidate) => candidate.id === entry.bdcId)
+        return child === undefined ? [] : [child]
       })
       return <RemixCarouselEditor
         bdcId={bdc.id}
         content={bdc.carousel}
-        cards={cards}
+        bdcs={views}
         selectedCardBdcId={view.selectedCarouselCardBdcId}
         mediaById={view.mediaById}
+        createStatisticalGraphActions={(childBdcId, graph) => actions.createStatisticalGraphEditorActions(childBdcId, graph)}
         actions={actions.createCarouselEditorActions(
           bdc.id,
           bdc.carousel,
-          cards,
+          views,
           view.documentModel.data.revelationDefaults,
         )}
       />
@@ -437,6 +461,13 @@ function renderBdcEditor(
         view,
         actions.createCardEditorActions(view.documentModel.bdcs),
         () => actions.deleteCard(bdc.id),
+      )
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      if (bdc.statisticalGraph == null) return null
+      return renderRemixStatisticalGraphEditor(
+        bdc,
+        actions.createStatisticalGraphEditorActions(bdc.id, bdc.statisticalGraph),
+        () => actions.deleteStatisticalGraph(bdc.id),
       )
     default:
       return null

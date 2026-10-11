@@ -4,12 +4,14 @@ import type { Bdc, Page } from '../../domain/document/document-types'
 import { ElceCardBdcSceneBuilder } from '../card/card-bdc-scene-builder'
 import { ElceCarouselSceneBuilder } from '../carousel/carousel-scene-builder'
 import { createPageBottomMarkerPerso } from '../flux/page-bottom-marker'
+import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistical-graph-scene-builder'
 import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/question-bdc-scene-builder'
 import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-bdc-scene-builder'
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
 const carouselSceneBuilder = new ElceCarouselSceneBuilder()
+const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
 /** Builds a no-scroll Diapo scene with one direct BDC and its existing builder. */
 export function buildDiapoScene(
@@ -70,6 +72,17 @@ export function buildDiapoScene(
           targetPartId: `${page.id}:bottom`,
         })
         pagePersos = [...cardBuild.contentPersos, ...cardBuild.mediaPersos]
+        break
+      }
+      case BDC_TYPE.STATISTICAL_GRAPH: {
+        markup = statisticalGraphSceneBuilder.build(bdc, `${page.id}-${bdc.id}-graph`).markup
+        bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
+        pageBottomMarker = createPageBottomMarkerPerso({
+          pageId: page.id,
+          markerId: `${page.id}-diapo-bottom-marker`,
+          rootId: scrollPortId,
+          targetPartId: `${page.id}:bottom`,
+        })
         break
       }
       case BDC_TYPE.QUESTION: {
@@ -167,7 +180,7 @@ export function buildDiapoScene(
   }
 }
 
-/** Projects the Diapo's one supported Carousel BDC with its Card children. */
+/** Projects the Diapo's one supported Carousel BDC with its illustration children. */
 function buildCarousel(
   page: Page,
   carousel: Bdc,
@@ -175,16 +188,16 @@ function buildCarousel(
   options: DiapoSceneBuildOptions,
 ) {
   if (carousel.carousel == null) throw new Error(`Le BDC Carousel ${carousel.id} de la Diapo est incomplet.`)
-  const cards = carousel.carousel.cards.map((entry) => {
-    const card = bdcs.find((candidate) => candidate.id === entry.bdcId)
-    if (card === undefined) throw new Error(`La carte ${entry.bdcId} du Carousel ${carousel.id} est introuvable.`)
-    return card
+  const views = carousel.carousel.cards.map((entry) => {
+    const child = bdcs.find((candidate) => candidate.id === entry.bdcId)
+    if (child === undefined) throw new Error(`La vue ${entry.bdcId} du Carousel ${carousel.id} est introuvable.`)
+    return child
   })
   return carouselSceneBuilder.build({
     pageId: page.id,
     bdcId: carousel.id,
     content: carousel.carousel,
-    cards,
+    cards: views,
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
     displayMode: 'scene',

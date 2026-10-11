@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAssetServer } from 'remix/assets'
+import { uiHmr } from 'remix/ui-hmr/assets'
 import { createRouter } from 'remix/router'
 import { createRequestListener } from 'remix/node-fetch-server'
 import { DEFAULT_ELCE_API_ORIGIN, ELCE_API_PORT } from '../config/api-config'
@@ -16,6 +17,7 @@ const STYLE_FILES = [
   'packages/elce/src/app/layout/app-layout.css',
   'packages/elce/src/app/editor/card/card-editor.css',
   'packages/elce/src/app/editor/carousel/carousel-editor.css',
+  'packages/elce/src/app/editor/statistical-graph/statistical-graph.css',
   'packages/elce/src/app/player/popup-player.css',
 ] as const
 
@@ -54,6 +56,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
   await mkdir(dataDirectory, { recursive: true })
 
   const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development'
+  const enableHmr = isDevelopment && process.env.REMIX_NODE_HMR === '1'
   const assets = createAssetServer({
     rootDir: MONOREPO_ROOT,
     basePath: ASSET_BASE_PATH,
@@ -76,9 +79,16 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
     ],
     denyFiles: ['packages/elce/src/**/*.test.*', 'packages/elce/src/server/**'],
     allowPackages: BROWSER_PACKAGES,
+    hmr: enableHmr
+      ? {
+          channel: createReloadingBrowserHmrChannel,
+          moduleImporter: 'remix/multiple-import-maps-polyfill',
+        }
+      : undefined,
+    scripts: { loaders: enableHmr ? [uiHmr()] : undefined },
     sourceMaps: isDevelopment ? 'external' : undefined,
     minify: !isDevelopment,
-    watch: false,
+    watch: enableHmr ? { poll: true, pollInterval: 250 } : false,
   })
 
   let api: Awaited<ReturnType<typeof createElceHttpServer>> | null = null
@@ -113,6 +123,10 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
 
     webServer = createServer(createRequestListener((request) => router.fetch(request)))
     const webPort = await listenOnNextPort(webServer, preferredWebPort, webHost)
+    if (enableHmr) {
+      const { emitServerReady } = await import('remix/node-hmr/runtime')
+      emitServerReady()
+    }
 
     let closed = false
     return {
@@ -137,6 +151,23 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       assets.close(),
     ])
     throw cause
+  }
+}
+
+/** Routes Remix asset changes through the existing channel as browser reloads. */
+async function createReloadingBrowserHmrChannel() {
+  const { createBrowserHmrChannel } = await import('remix/node-hmr/runtime')
+  const channel = await createBrowserHmrChannel()
+  return {
+    url: channel.url,
+    close: () => channel.close(),
+    updateWatchedFiles: (delta: Parameters<typeof channel.updateWatchedFiles>[0]) => channel.updateWatchedFiles(delta),
+    onFileEvents(handler: Parameters<typeof channel.onFileEvents>[0]) {
+      return channel.onFileEvents(async (events) => {
+        const updates = await handler(events)
+        return updates.length > 0 ? [{ type: 'reload' as const }] : []
+      })
+    },
   }
 }
 

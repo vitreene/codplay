@@ -31,8 +31,8 @@ La surface Tiptap propose dans le POC :
   infobulle pour chaque commande. Les boutons exposent l’état actif de la
   sélection courante via Tiptap (`aria-pressed` et `data-active`) ; un titre H3
   et un texte italique marquent donc simultanément leurs commandes respectives ;
-- un champ de titre séparé et facultatif, présenté comme un placeholder
-  discret ;
+- un champ de titre séparé et facultatif, présenté avec le placeholder
+  « Titre » ;
 - un placeholder discret dans la zone de contenu vide.
 
 Chaque modification passe par la commande `bdc.section.update` du contrôleur

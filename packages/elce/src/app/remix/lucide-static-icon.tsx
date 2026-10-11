@@ -1,12 +1,14 @@
 import type { RemixNode } from 'remix/ui'
 
 /** Converts a trusted Lucide SVG asset into native Remix elements. */
-export function renderLucideIcon(svg: string, id: string, size: number): RemixNode {
+export function renderLucideIcon(svg: string, id: string, size: 14): RemixNode {
   const root = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement
   if (root.localName !== 'svg') throw new Error('Lucide asset is not an SVG element.')
+  const { class: assetClass, ...attributes } = svgAttributes(root)
 
   return <svg
-    {...svgAttributes(root)}
+    {...attributes}
+    className={assetClass === undefined ? 'elce-ui-icon' : `${assetClass} elce-ui-icon`}
     id={id}
     width={size}
     height={size}

@@ -1,23 +1,19 @@
 import { on, type RemixNode } from 'remix/ui'
 
-import { ANCHOR_RETURN, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE } from '../../../config/document-config'
+import { ANCHOR_RETURN, BDC_ORDER, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, MEDIA_TYPE } from '../../../config/document-config'
 import type { BdcType } from '../../../config/document-config-types'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
-import { Archive, GripVertical, Trash2, X } from 'lucide-static'
+import { GripVertical, Trash2 } from 'lucide-static'
 import { renderLucideIcon } from '../lucide-static-icon'
 import type { ContentCatalogPanelProps } from './catalog-panel-types'
 
 /** Renders the available BDC and reusable media tabs in the existing right panel. */
 export function renderContentCatalogPanel(props: ContentCatalogPanelProps): RemixNode {
-  const { view, actions, responsivePanel, dropTarget, onSetResponsivePanel, onSetDropTarget } = props
-  // Remix's `aside` role type omits the `dialog` role used by the responsive drawer.
-  const responsiveDrawerRole = responsivePanel === 'properties'
-    ? 'dialog' as unknown as JSX.IntrinsicElements['aside']['role']
-    : undefined
+  const { view, actions, responsivePanel, dropTarget, onSetDropTarget } = props
   const onDragOverAvailableBdcs = (event: DragEvent): void => {
-    if (!hasTransferType(event, ANCHOR_RETURN.MIME_TYPE)) return
     const transfer = event.dataTransfer
     if (transfer === null) return
+    if (!hasTransferType(event, BDC_ORDER.MIME_TYPE) && !hasTransferType(event, ANCHOR_RETURN.MIME_TYPE)) return
     event.preventDefault()
     event.stopPropagation()
     transfer.dropEffect = 'move'
@@ -29,22 +25,23 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
     onSetDropTarget(null)
   }
   const onDropAvailableBdcs = (event: DragEvent): void => {
-    if (!hasTransferType(event, ANCHOR_RETURN.MIME_TYPE)) return
     const transfer = event.dataTransfer
     if (transfer === null) return
+    const bdcId = pageBdcIdFromTransfer(transfer, view.selectedPageBdcs.map((bdc) => bdc.id))
+    const isAnchorReturn = hasTransferType(event, ANCHOR_RETURN.MIME_TYPE)
+    if (bdcId === null && !isAnchorReturn) return
     event.preventDefault()
     event.stopPropagation()
     transfer.dropEffect = 'move'
     onSetDropTarget(null)
+    if (bdcId !== null) actions.returnBdcToCatalog(bdcId)
     if (view.catalogTab !== CATALOG_TAB.AVAILABLE_BDCS) actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)
   }
 
   return <aside
     id="elce-properties"
     className="elce-panel elce-properties"
-    data-drawer-open={responsivePanel === 'properties'}
-    role={responsiveDrawerRole}
-    aria-modal={responsivePanel === 'properties' ? true : undefined}
+    data-panel-open={responsivePanel === 'properties'}
     aria-labelledby="elce-content-catalog-title"
   >
     <section
@@ -60,15 +57,6 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
         >
           Contenus disponibles
         </h1>
-        <button
-          id="elce-properties-close"
-          className="elce-responsive-panel-close elce-properties-close"
-          type="button"
-          aria-label="Fermer les contenus disponibles"
-          mix={on<HTMLButtonElement, 'click'>('click', () => onSetResponsivePanel(null))}
-        >
-          {renderLucideIcon(X, 'elce-properties-close-icon', 18)}
-        </button>
       </header>
       <div
         id="elce-content-catalog-tabs"
@@ -118,7 +106,7 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
           id="elce-catalog-bdcs-description"
           className="elce-muted"
         >
-          Le bouton d’archive sur chaque bloc de la page le renvoie ici. Déposer une Carte ancrée retire aussi son ancre.
+          Faire glisser la poignée de placement d’un bloc de la page vers cet onglet le rend disponible ici. Déposer un bloc illustratif ancré retire aussi son ancre.
         </p>
         {view.catalogContents.bdcs.length === 0
           ? <p
@@ -176,47 +164,6 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
           </ul>}
       </section>
     </section>
-    {view.selectedChapter !== undefined || view.selectedPageBdcs.length === 0
-      ? null
-      : <section
-        id="elce-page-bdcs"
-        className="elce-outline-group"
-      >
-        <h2
-          id="elce-page-bdcs-title"
-        >
-          Blocs dans la page
-        </h2>
-        <ul
-          id="elce-page-bdcs-list"
-          className="elce-media-catalog-list"
-        >
-          {view.selectedPageBdcs.map((bdc) => {
-            const label = catalogBdcLabel(bdc.type)
-            return <li
-              key={bdc.id}
-              id={`elce-page-bdc-${bdc.id}`}
-              className="elce-media-catalog-row"
-            >
-              <span
-                id={`elce-page-bdc-name-${bdc.id}`}
-              >
-                {label}
-              </span>
-              <button
-                id={`elce-page-bdc-catalog-${bdc.id}`}
-                className="elce-secondary-action"
-                type="button"
-                aria-label={`Renvoyer le bloc ${label} au catalogue`}
-                title="Renvoyer au catalogue"
-                mix={on<HTMLButtonElement, 'click'>('click', () => actions.returnBdcToCatalog(bdc.id))}
-              >
-                {renderLucideIcon(Archive, `elce-page-bdc-catalog-icon-${bdc.id}`, 14)}
-              </button>
-            </li>
-          })}
-        </ul>
-      </section>}
   </aside>
 }
 
@@ -287,6 +234,13 @@ function hasTransferType(event: DragEvent, type: string): boolean {
   return transfer !== null && Array.from(transfer.types).includes(type)
 }
 
+/** Resolves a drag from the selected page's placement handle. */
+function pageBdcIdFromTransfer(transfer: DataTransfer, pageBdcIds: readonly string[]): string | null {
+  if (!Array.from(transfer.types).includes(BDC_ORDER.MIME_TYPE)) return null
+  const bdcId = transfer.getData(BDC_ORDER.MIME_TYPE)
+  return pageBdcIds.includes(bdcId) ? bdcId : null
+}
+
 /** Gives the catalog a compact label for an image or video. */
 function catalogMediaLabel(mediaType: ElceCatalogMediaEntry['mediaType']): string {
   switch (mediaType) {
@@ -310,6 +264,8 @@ function catalogBdcLabel(bdcType: BdcType): string {
       return 'Résultat'
     case BDC_TYPE.CAROUSEL:
       return 'Carousel'
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      return 'Graphe statistique'
   }
 }
 

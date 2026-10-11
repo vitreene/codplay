@@ -46,6 +46,14 @@ export const BDC_TYPE = {
   EVALUATION_RESULT: 'evaluation-result',
   CAROUSEL: 'carousel',
   CARD: 'card',
+  STATISTICAL_GRAPH: 'statistical-graph',
+} as const
+
+export const STATISTICAL_GRAPH_RENDERING = {
+  BAR: 'bar',
+  LINE: 'line',
+  PIE: 'pie',
+  TABLE: 'table',
 } as const
 
 export const EVALUATION_RESULT_BRANCH = {
@@ -194,7 +202,14 @@ export const DEFAULT_PRESET_ID = {
   QUESTION: 'question-basic',
   EVALUATION_RESULT: 'evaluation-result-basic',
   IMAGE_CAPTION: 'image-caption',
+  STATISTICAL_GRAPH_ABOVE_TEXT: 'statistical-graph-above-text',
+  STATISTICAL_GRAPH_SIDE_BY_SIDE: 'statistical-graph-side-by-side',
 } as const
+
+export const STATISTICAL_GRAPH_LAYOUT_IDS = [
+  DEFAULT_PRESET_ID.STATISTICAL_GRAPH_ABOVE_TEXT,
+  DEFAULT_PRESET_ID.STATISTICAL_GRAPH_SIDE_BY_SIDE,
+] as const
 
 export const CAROUSEL_PLAYBACK_MODE = {
   AUTOMATIC: 'automatic',

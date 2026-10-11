@@ -4,6 +4,8 @@ import type { CarouselAspectRatio, CarouselContent } from '../../../domain/carou
 import type { Bdc } from '../../../domain/document/document-types'
 import type { ElceCardEditorActions } from '../card/card-facade-types'
 import type { ElceMediaImport } from '../../../domain/media/media-resource-types'
+import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
+import type { StatisticalGraphEditorActions } from '../statistical-graph/statistical-graph-facade-types'
 
 export interface ElceCarouselFacadeOptions {
   readonly dispatch: (command: DocumentCommand) => void
@@ -14,7 +16,9 @@ export interface ElceCarouselFacadeOptions {
 export interface ElceCarouselEditorActions extends ElceCardEditorActions {
   readonly selectCard: (bdcId: string) => void
   readonly addCard: () => void
+  readonly addStatisticalGraph: () => void
   readonly removeCard: (bdcId: string, selectedBdcId: string | null) => void
+  readonly removeStatisticalGraph: (bdcId: string, selectedBdcId: string | null) => void
   readonly moveCard: (bdcId: string, index: number) => void
   readonly setDefaultViewDurationSeconds: (seconds: number) => void
   readonly setPlaybackMode: (mode: CarouselPlaybackMode) => void
@@ -30,8 +34,9 @@ export interface ElceCarouselEditorActions extends ElceCardEditorActions {
 export interface ElceCarouselEditorProps {
   readonly bdcId: string
   readonly content: CarouselContent
-  readonly cards: readonly Bdc[]
+  readonly bdcs: readonly Bdc[]
   readonly selectedCardBdcId: string | null
   readonly mediaById: Readonly<Record<string, Readonly<{ name: string; type: MediaType; source: string | null }>>>
+  readonly createStatisticalGraphActions: (bdcId: string, content: StatisticalGraphContent) => StatisticalGraphEditorActions
   readonly actions: ElceCarouselEditorActions
 }

@@ -25,17 +25,17 @@
 .elce-popup-reader__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--elce-icon-gap);
 }
 
 .elce-popup-reader__actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: var(--elce-icon-gap);
   border: 1px solid #c5d7d2;
   border-radius: 0.35rem;
-  padding: 0.4rem 0.7rem;
+  padding: var(--elce-icon-padding);
   color: #263b3a;
   background: #f8f5ef;
   cursor: pointer;
@@ -45,6 +45,12 @@
 .elce-popup-reader__actions button:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+
+.elce-popup-reader .elce-player-menu-toggle svg,
+.elce-popup-reader .elce-player-menu-close svg {
+  width: var(--elce-icon-size);
+  height: var(--elce-icon-size);
 }
 
 .elce-popup-reader__main {
@@ -64,7 +70,7 @@
     width: 2.5rem;
     min-width: 2.5rem;
     min-height: 2.5rem;
-    padding: 0.4rem;
+    padding: var(--elce-icon-padding);
   }
 
   .elce-popup-reader__action-label {

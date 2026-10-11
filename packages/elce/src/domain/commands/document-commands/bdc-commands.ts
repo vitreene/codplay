@@ -1,7 +1,9 @@
-import { BDC_LOCATION, BDC_TYPE, CARD_LAYOUT_IDS, CAROUSEL_CONFIG, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../../config/document-config'
-import type { BdcType, CardLayoutId } from '../../../config/document-config-types'
+import { BDC_LOCATION, BDC_TYPE, CARD_LAYOUT_IDS, CAROUSEL_CONFIG, DEFAULT_PRESET_ID, PAGE_TYPE, STATISTICAL_GRAPH_LAYOUT_IDS } from '../../../config/document-config'
+import type { BdcType, CardLayoutId, StatisticalGraphLayoutId } from '../../../config/document-config-types'
 import { createEmptyRichTextDocument, ElceDocument } from '../../../domain/document/document-model'
 import type { CardContent } from '../../../domain/card/card-types'
+import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
+import { assertStatisticalGraphContent, createDefaultStatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-service'
 import type { EvaluationResultContent } from '../../../domain/evaluation/evaluation-result-types'
 import type { CarouselContent } from '../../../domain/carousel/carousel-types'
 import type { Bdc, BdcId } from '../../../domain/document/document-types'
@@ -52,6 +54,11 @@ function cardForBdc(type: BdcType): CardContent | null {
     default:
       return null
   }
+}
+
+/** Creates the default statistical graph data for its BDC type. */
+function statisticalGraphForBdc(type: BdcType): StatisticalGraphContent | null {
+  return type === BDC_TYPE.STATISTICAL_GRAPH ? createDefaultStatisticalGraphContent() : null
 }
 
 /** Deletes a BDC and its owned children while preserving separate media resources. */
@@ -107,8 +114,9 @@ export function createBdc(document: ElceDocument, command: Extract<DocumentComma
       && command.bdcType !== BDC_TYPE.CAROUSEL
       && command.bdcType !== BDC_TYPE.QUESTION
       && command.bdcType !== BDC_TYPE.CARD
-      && command.bdcType !== BDC_TYPE.EVALUATION_RESULT) {
-      fail('Une Diapo accepte un Carousel, un Quiz, une Carte autonome ou un Résultat d’Évaluation.')
+      && command.bdcType !== BDC_TYPE.EVALUATION_RESULT
+      && command.bdcType !== BDC_TYPE.STATISTICAL_GRAPH) {
+      fail('Une Diapo accepte un Carousel, un Quiz, une Carte, un Graphe ou un Résultat d’Évaluation.')
     }
   }
   switch (command.bdcType) {
@@ -140,6 +148,13 @@ export function createBdc(document: ElceDocument, command: Extract<DocumentComma
       if (!CARD_LAYOUT_IDS.includes(command.presetId as CardLayoutId)
         || command.initialCardBdcId !== undefined) {
         fail('Un BDC Carte utilise un layout configuré et ne reçoit pas de carte initiale.')
+      }
+      break
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      if (!STATISTICAL_GRAPH_LAYOUT_IDS.includes(command.presetId as StatisticalGraphLayoutId)
+        || command.initialCardBdcId !== undefined
+        || command.initialCardOptions !== undefined) {
+        fail('Un BDC Graphe utilise un layout configuré et ne reçoit pas de carte initiale.')
       }
       break
     case BDC_TYPE.EVALUATION_RESULT:
@@ -185,6 +200,7 @@ export function createBdc(document: ElceDocument, command: Extract<DocumentComma
     default:
       break
   }
+  const statisticalGraph = statisticalGraphForBdc(command.bdcType)
   const bdc: Bdc = {
     id: command.bdcId,
     type: command.bdcType,
@@ -200,6 +216,7 @@ export function createBdc(document: ElceDocument, command: Extract<DocumentComma
     card: command.initialCardOptions === undefined
       ? cardForBdc(command.bdcType)
       : cardService.createDefault(command.initialCardOptions.imagePosition, command.initialCardOptions.imageFit),
+    ...(statisticalGraph === null ? {} : { statisticalGraph }),
   }
   const withParent = placeBdc(new ElceDocument({ ...document.data, bdcs: [...document.bdcs, bdc] }), bdc, command.placement)
   if (bdc.type !== BDC_TYPE.CAROUSEL || command.initialCardBdcId === undefined) return withParent
@@ -218,6 +235,49 @@ export function createBdc(document: ElceDocument, command: Extract<DocumentComma
   if (withParent.bdcs.some((candidate) => candidate.id === initialCard.id)) fail(`Bdc déjà présent : ${initialCard.id}`)
   const withCard = new ElceDocument({ ...withParent.data, bdcs: [...withParent.bdcs, initialCard] })
   return placeBdc(withCard, initialCard, { kind: BDC_LOCATION.PARENT, parentBdcId: bdc.id })
+}
+
+/** Updates all authored statistical graph fields through the document command path. */
+export function updateStatisticalGraph(
+  document: ElceDocument,
+  bdcId: BdcId,
+  statisticalGraph: StatisticalGraphContent,
+): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
+    fail(`Le bdc ${bdcId} n’est pas un Graphe statistique complet.`)
+  }
+  assertStatisticalGraphContent(statisticalGraph)
+  return withBdc(document, { ...bdc, statisticalGraph })
+}
+
+/** Selects one configured Statistical Graph layout without changing its data. */
+export function setStatisticalGraphLayout(
+  document: ElceDocument,
+  bdcId: BdcId,
+  layoutId: StatisticalGraphLayoutId,
+): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
+    fail(`Le bdc ${bdcId} n’est pas un Graphe statistique complet.`)
+  }
+  if (!STATISTICAL_GRAPH_LAYOUT_IDS.includes(layoutId)) fail(`Layout de graphe inconnu : ${layoutId}`)
+  return withBdc(document, { ...bdc, presetId: layoutId })
+}
+
+/** Permanently removes one Graph BDC, preserving the parent placement rules. */
+export function deleteStatisticalGraph(document: ElceDocument, bdcId: BdcId): ElceDocument {
+  const bdc = findBdc(document, bdcId)
+  if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH) fail(`Seul un BDC Graphe peut être supprimé par cette commande : ${bdcId}`)
+  if (bdc.parentBdcId !== null) {
+    const parent = findBdc(document, bdc.parentBdcId)
+    if (parent.type === BDC_TYPE.SECTION) fail('Un Graphe ancré doit être retiré par son ancre.')
+    if (parent.type === BDC_TYPE.CAROUSEL && (parent.carousel?.cards.length ?? 0) <= 1) {
+      fail('Un Carousel doit conserver au moins une vue.')
+    }
+    if (parent.type !== BDC_TYPE.CAROUSEL) fail(`Le parent du Graphe ${bdc.id} ne permet pas sa suppression.`)
+  }
+  return deleteBdc(document, bdc.id)
 }
 
 /** Updates Question text and response definitions through a single command. */
@@ -264,7 +324,7 @@ export function updateCarousel(document: ElceDocument, bdcId: BdcId, carousel: C
   const currentIds = bdc.carousel.cards.map((entry) => entry.bdcId).sort()
   const nextIds = carousel.cards.map((entry) => entry.bdcId).sort()
   if (currentIds.length !== nextIds.length || currentIds.some((id, index) => id !== nextIds[index])) {
-    fail('Une mise à jour Carousel ne peut ni ajouter ni retirer ses BDC Carte.')
+    fail('Une mise à jour Carousel ne peut ni ajouter ni retirer ses BDC enfants.')
   }
   return withBdc(document, { ...bdc, carousel })
 }

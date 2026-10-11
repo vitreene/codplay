@@ -4,7 +4,7 @@ import type { BdcId } from '../document/document-types'
 import type { CarouselAspectRatio, CarouselContent } from './carousel-types'
 import type { RevelationTransitionDefaults } from '../document/document-types'
 
-/** Owns Carousel playback settings and its ordered Card relationships. */
+/** Owns Carousel playback settings and its ordered illustration BDC relationships. */
 export class ElceCarouselService {
   /** Creates default playback settings with one initial Card child. */
   public createDefault(initialCardBdcId: BdcId): CarouselContent {
@@ -18,18 +18,18 @@ export class ElceCarouselService {
     }
   }
 
-  /** Adds a Card relationship at the end of the Carousel sequence. */
+  /** Adds one child relationship at the end of the Carousel sequence. */
   public addCard(content: CarouselContent, bdcId: BdcId): CarouselContent {
     return { ...content, cards: [...content.cards, { bdcId, durationMs: null, introTransitionRef: null, outroTransitionRef: null }] }
   }
 
-  /** Removes one Card relationship while retaining at least one presentation. */
+  /** Removes one child relationship while retaining at least one presentation. */
   public removeCard(content: CarouselContent, bdcId: BdcId): CarouselContent {
     if (content.cards.length <= 1) return content
     return { ...content, cards: content.cards.filter((entry) => entry.bdcId !== bdcId) }
   }
 
-  /** Reorders a Card relationship before the requested sequence index. */
+  /** Reorders one child relationship before the requested sequence index. */
   public moveCard(content: CarouselContent, bdcId: BdcId, index: number): CarouselContent {
     const sourceIndex = content.cards.findIndex((entry) => entry.bdcId === bdcId)
     if (sourceIndex < 0) return content
@@ -45,7 +45,7 @@ export class ElceCarouselService {
     return { ...content, defaultViewDurationMs: durationMs }
   }
 
-  /** Sets or clears one Card entry's duration override. */
+  /** Sets or clears one child entry's duration override. */
   public setCardDuration(content: CarouselContent, bdcId: BdcId, durationMs: number | null): CarouselContent {
     return {
       ...content,
@@ -85,9 +85,9 @@ export class ElceCarouselService {
     return entry?.[0] as CarouselTransition | undefined ?? null
   }
 
-  /** Validates Carousel settings and unique ordered Card relationships. */
+  /** Validates Carousel settings and unique ordered child BDC relationships. */
   public assertValid(content: CarouselContent): void {
-    if (content.cards.length === 0) throw new Error('Un BDC Carousel doit contenir au moins une carte.')
+    if (content.cards.length === 0) throw new Error('Un BDC Carousel doit contenir au moins une vue.')
     if (!Number.isFinite(content.defaultViewDurationMs) || content.defaultViewDurationMs <= 0) {
       throw new Error('La durée par défaut d’une vue Carousel doit être positive.')
     }
@@ -101,13 +101,13 @@ export class ElceCarouselService {
       || content.aspectRatio.width <= 0 || content.aspectRatio.height <= 0) {
       throw new Error('Le ratio du Carousel doit avoir deux valeurs positives.')
     }
-    const cardBdcIds = content.cards.map((entry) => entry.bdcId)
-    if (new Set(cardBdcIds).size !== cardBdcIds.length) {
-      throw new Error('Un BDC Carte ne peut apparaître qu’une fois dans un Carousel.')
+    const childBdcIds = content.cards.map((entry) => entry.bdcId)
+    if (new Set(childBdcIds).size !== childBdcIds.length) {
+      throw new Error('Un même BDC ne peut apparaître qu’une fois dans un Carousel.')
     }
     for (const entry of content.cards) {
       if (entry.durationMs !== null && (!Number.isFinite(entry.durationMs) || entry.durationMs <= 0)) {
-        throw new Error(`La durée de la carte ${entry.bdcId} doit être positive.`)
+        throw new Error(`La durée de la vue ${entry.bdcId} doit être positive.`)
       }
       assertTransitionOverride(entry.introTransitionRef)
       assertTransitionOverride(entry.outroTransitionRef)

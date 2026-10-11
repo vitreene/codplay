@@ -3,12 +3,12 @@ import { anchorNameFor, anchorReservationFor } from '../../anchor/anchor-positio
 import type { FluxAnchorMarkupTarget } from './flux-anchor-player-markup-types'
 
 /** Replaces editor-only anchor markup with a structural CodPlay flow slot. */
-export function projectFluxPlayerMarkup(markup: string): string {
+export function projectFluxPlayerMarkup(markup: string, paddingBottomByBdcId: Readonly<Record<string, string>> = {}): string {
   const anchorPattern = new RegExp(
     `<span\\b(?=[^>]*\\b${ANCHOR.DATA_ATTRIBUTE}\\s*=\\s*["']true["'])[^>]*>[\\s\\S]*?<\\/span>`,
     'gi',
   )
-  return markup.replace(anchorPattern, (anchorMarkup) => createFlowSlotMarkup(anchorMarkup))
+  return markup.replace(anchorPattern, (anchorMarkup) => createFlowSlotMarkup(anchorMarkup, paddingBottomByBdcId))
 }
 
 /** Reads the bdc and CodPlay part identifiers exported by Section anchors. */
@@ -26,9 +26,10 @@ export function readFluxAnchorTargets(markup: string): readonly FluxAnchorMarkup
 }
 
 /** Creates the inline flow reservation that receives the bdc in the player. */
-function createFlowSlotMarkup(anchorMarkup: string): string {
+function createFlowSlotMarkup(anchorMarkup: string, paddingBottomByBdcId: Readonly<Record<string, string>>): string {
   const partId = readMarkupAttribute(anchorMarkup, 'data-part') ?? ''
-  const paddingBottom = readPaddingBottom(anchorMarkup)
+  const bdcId = readMarkupAttribute(anchorMarkup, 'data-bdc-id') ?? ''
+  const paddingBottom = paddingBottomByBdcId[bdcId] ?? readPaddingBottom(anchorMarkup)
   const slotId = `${partId}-flow-slot`
   return `<span id="${slotId}" class="elce-flow-slot" data-part="${partId}" style="display:inline-block;width:0;height:0;position:static;${ANCHOR.PADDING_VARIABLE}:${paddingBottom};padding-bottom:${anchorReservationFor(paddingBottom)};margin-inline-end:${ANCHOR.FLOW_BREAK_MARGIN};vertical-align:baseline;anchor-name:${anchorNameFor(partId)};"></span>`
 }

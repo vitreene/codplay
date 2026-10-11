@@ -10,6 +10,8 @@ import {
   createPageMoveCommand,
   createSectionBdcCommand,
   createStandaloneCardBdcCommand,
+  createStatisticalGraphBdcCommand,
+  createStatisticalGraphCarouselBdcCommand,
 } from '../../domain/commands/document-commands'
 import type { DocumentCommand, PagePlacement } from '../../domain/commands/document-command-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
@@ -18,6 +20,7 @@ import type { Bdc, BdcId, ChapterId, PageId, RevelationTransitionDefaults } from
 import type { ElceSectionChange, ElceAnchorDropTarget } from '../../domain/anchor/anchor-types'
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { QuestionContent } from '../../domain/question/question-types'
+import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
 import type { ElceMediaImport } from '../../domain/media/media-resource-types'
 import type { ProjectSessionOperation } from '../projects/project-session-types'
 import { controllerMachine } from '../controller/controller-machine'
@@ -28,6 +31,8 @@ import { ElceCarouselFacade, createCarouselBdcId } from './carousel/carousel-fac
 import type { ElceCarouselEditorActions } from './carousel/carousel-facade-types'
 import { ElceQuestionFacade } from './question/question-facade'
 import type { ElceQuestionEditorActions } from './question/question-facade-types'
+import { StatisticalGraphFacade } from './statistical-graph/statistical-graph-facade'
+import type { StatisticalGraphEditorActions } from './statistical-graph/statistical-graph-facade-types'
 
 /** Routes authoring intentions through the existing XState actor and facades. */
 export class EditorActionsFacade {
@@ -36,6 +41,7 @@ export class EditorActionsFacade {
   private readonly cardFacade: ElceCardFacade
   private readonly carouselFacade: ElceCarouselFacade
   private readonly questionFacade: ElceQuestionFacade
+  private readonly statisticalGraphFacade: StatisticalGraphFacade
 
   public constructor(controller: Actor<typeof controllerMachine>) {
     this.controller = controller
@@ -64,6 +70,7 @@ export class EditorActionsFacade {
         media: mediaImport.media,
       }),
     })
+    this.statisticalGraphFacade = new StatisticalGraphFacade({ dispatch })
   }
 
   /** Sends a project lifecycle intention through the owning XState actor. */
@@ -146,7 +153,7 @@ export class EditorActionsFacade {
     this.apply({ type: 'bdc.move', bdcId, placement: { kind: BDC_LOCATION.PAGE, pageId, index } })
   }
 
-  /** Removes an anchored BDC from its text flow and returns it to the catalogue. */
+  /** Moves one top-level page BDC into the reusable catalogue. */
   public returnBdcToCatalog(bdcId: BdcId): void {
     this.apply({ type: 'bdc.remove', bdcId })
   }
@@ -179,6 +186,28 @@ export class EditorActionsFacade {
   /** Creates a standalone Card BDC on the requested page. */
   public createStandaloneCard(pageId: PageId): void {
     this.apply(createStandaloneCardBdcCommand(createStableId('bdc-card'), pageId))
+  }
+
+  /** Creates a Statistical Graph BDC at its ordered page position. */
+  public createStatisticalGraph(pageId: PageId, index: number): void {
+    this.apply(createStatisticalGraphBdcCommand(createStableId('bdc-statistical-graph'), pageId, index))
+  }
+
+  /** Creates a Statistical Graph as one ordered Carousel view. */
+  public createCarouselStatisticalGraph(carouselBdcId: BdcId, index: number): BdcId {
+    const bdcId = createStableId('bdc-statistical-graph')
+    this.apply(createStatisticalGraphCarouselBdcCommand(bdcId, carouselBdcId, index))
+    return bdcId
+  }
+
+  /** Creates graph edit callbacks for one current document BDC. */
+  public createStatisticalGraphEditorActions(bdcId: BdcId, content: StatisticalGraphContent): StatisticalGraphEditorActions {
+    return this.statisticalGraphFacade.createEditorActions(bdcId, content)
+  }
+
+  /** Deletes a standalone or Carousel Graph through its typed command. */
+  public deleteStatisticalGraph(bdcId: BdcId): void {
+    this.apply({ type: 'bdc.statistical-graph.delete', bdcId })
   }
 
   /** Renames a page through the document command boundary. */

@@ -1,10 +1,11 @@
-# Elcé — BDC Carousel et BDC Carte
+# Elcé — BDC Carousel, Carte et Graphe statistique
 
 ## Statut
 
-**Fixe — Carousel à enfants BDC Carte, modèle v4, implémenté et vérifié le
-7 octobre 2026.** L’insertion du Carousel dans un BDC Texte reste hors de cette
-tranche. Son emploi comme BDC par défaut d’une Diapo est décrit dans la
+**Fixe — Carousel v4 avec vues enfant Carte et Graphe statistique.** La vue
+Graphe a été ajoutée et vérifiée dans Brave le 9 octobre 2026. L’insertion du
+Carousel dans un BDC Texte reste hors de cette tranche. Son emploi comme BDC
+par défaut d’une Diapo est décrit dans la
 [spécification du builder Diapo](./diapo-scene-builder-spec.md).
 
 ## Rôle et modèle métier
@@ -12,20 +13,25 @@ tranche. Son emploi comme BDC par défaut d’une Diapo est décrit dans la
 Dans une page Flux, le BDC Carousel occupe une place dans la séquence ordonnée
 des BDC. Dans une page Diapo, il peut occuper l’unique emplacement BDC direct.
 Dans les deux cas, il porte les réglages de présentation et référence une
-séquence ordonnée de BDC Carte enfants. Chaque Carte enfant a le Carousel comme
-parent ; elle ne figure donc pas dans `page.bdcIds` ni dans le catalogue. Le
+séquence ordonnée de vues enfant Carte ou Graphe statistique. Chaque vue enfant
+a le Carousel comme parent ; elle ne figure donc pas dans `page.bdcIds` ni dans
+le catalogue. Le
 modèle BDC Carte peut aussi être placé directement dans la séquence d’une page
 Flux ou comme unique BDC direct d’une Diapo ; ces Cartes autonomes n’ont pas de
 parent Carousel et figurent alors dans `page.bdcIds`. La Diapo créée par défaut
-avec un Carousel doit d’abord en retirer ce BDC avant d’accepter la Carte
-directe. Aucun BDC Carte n’est placé au catalogue. Les changements de layout
-ne créent pas un nouveau BDC.
+avec un Carousel doit d’abord en retirer ce BDC avant d’accepter un BDC direct.
+Le BDC Graphe peut aussi être direct en Flux ou Diapo, ou ancré dans une
+Section ; ses données et ses rendus sont décrits dans la
+[spécification du Graphe statistique](./statistical-graph-spec.md). Aucun BDC
+Carte n’est placé au catalogue. Les changements de layout ne créent pas un
+nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
-nombre fini de répétitions, le ratio, la transition et les entrées
-`{ bdcId, durationMs }`. La durée particulière appartient à l’entrée du
+nombre fini de répétitions, le ratio, la transition et la liste ordonnée
+`cards` d’entrées `{ bdcId, durationMs }`. Chaque entrée référence un BDC Carte
+ou Graphe statistique enfant. La durée particulière appartient à l’entrée du
 Carousel ; `null` signifie que la durée commune s’applique. Un Carousel doit
-contenir au moins un BDC Carte.
+contenir au moins une vue.
 
 Chaque BDC Carte porte dans `card` tous les champs : surtitre (`overline`),
 titre, description, message (250 caractères maximum), note, légende et
@@ -44,18 +50,19 @@ l’éditeur ni par le builder Carte et a été retiré ; les champs de texte co
 restent dans le preset Texte court prévu à cet effet.
 
 À la création du Carousel, la même commande crée son premier BDC Carte
-identifié en layout Texte court. Un BDC Carte peut être déplacé vers un autre
+identifié en layout Texte court. L’auteur peut ensuite ajouter une vue Graphe
+statistique dans la même séquence. Un BDC Carte peut être déplacé vers un autre
 Carousel par le placement parent existant : son identifiant, son layout, ses
 champs et son média sont conservés ; l’entrée du Carousel de destination reçoit
 sa durée par défaut (`null`). Le déplacement est refusé si le Carousel source
-deviendrait vide, car chaque Carousel conserve au moins une carte. La suppression
-d’un Carousel supprime ses BDC Carte enfants, mais conserve les ressources
-média. La suppression d’une carte unitaire est également refusée lorsqu’elle
-laisserait son Carousel vide.
+deviendrait vide, car chaque Carousel conserve au moins une vue. La suppression
+d’un Carousel supprime ses vues enfant ; les ressources média des Cartes restent
+conservées. Le retrait d’une vue est également refusé lorsqu’il laisserait son
+Carousel vide.
 
 Le preset `carousel-basic` fournit le cadre responsive et sa navigation. Le
 Carousel n’ajoute ni un format de page Diapo ni une story CodPlay au modèle
-métier. Les contenus des cartes restent des données de BDC Elcé ; les builders
+métier. Les contenus des vues restent des données de BDC Elcé ; les builders
 les projettent dans les parts du preset. Les placements directs de Carte en
 Flux et en Diapo partagent le même BDC ; la restriction à un seul BDC direct de
 Diapo est décrite dans la [spécification du builder Diapo](./diapo-scene-builder-spec.md).
@@ -68,18 +75,21 @@ XState et les services métier ; la vue ne conserve pas une seconde copie du
 document.
 
 `EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) expose les
-intentions Carousel et Carte à l’éditeur, puis délègue aux façades existantes.
+intentions Carousel, Carte et Graphe à l’éditeur, puis délègue aux façades existantes.
 `ElceCarouselFacade` (`app/facades/carousel/`) orchestre les réglages du
 Carousel et délègue les champs des Cartes à `ElceCardFacade`
 (`app/facades/card/`). Les mêmes actions de Carte servent aux BDC directs de
 Flux ou Diapo et aux Cartes enfants du Carousel.
 
-L’auteur peut ajouter, supprimer et réordonner les BDC Carte, choisir leur
-layout, éditer les champs communs, la position d’image, la référence média et
-la durée propre à chaque entrée. Les quatre layouts utilisent le même BDC
-Carte. Les valeurs masquées restent éditables après retour à un layout qui les
-affiche. Les médias arrivent depuis le catalogue ou l’import existant ; aucun
-nouveau circuit média n’est créé.
+L’auteur peut ajouter, supprimer et réordonner les vues Carte et Graphe
+statistique dans la même séquence. Les quatre layouts et leurs champs restent
+propres aux BDC Carte ; le Graphe conserve son éditeur, ses données et son
+layout. Chaque entrée conserve sa durée propre. Les valeurs masquées des Cartes
+restent éditables après retour à un layout qui les affiche. Les médias arrivent
+depuis le catalogue ou l’import existant ; aucun nouveau circuit média n’est
+créé.
+Les boutons d’ajout de vue affichent « Carte » et « Graphe » sous leur icône ;
+leur nom accessible conserve la description complète.
 
 Le Carousel règle aussi le mode, la durée commune, le ratio, la transition et
 le nombre de passages automatiques supplémentaires. Les valeurs initiales
@@ -87,10 +97,10 @@ sont définies dans `CAROUSEL_CONFIG` : mode manuel, ratio 16:9, durée de cinq
 secondes, dix répétitions supplémentaires et fondu. Le nombre de répétitions va
 de 0 à 10 ; 0 correspond à un passage. En lecture automatique, une durée
 particulière remplace la durée commune pour l’entrée concernée. Les points
-permettent de sélectionner une carte dans les deux modes. Cliquer sur un point
-pendant la lecture automatique sélectionne cette Carte et interrompt la
+permettent de sélectionner une vue dans les deux modes. Cliquer sur un point
+pendant la lecture automatique sélectionne cette vue et interrompt la
 progression temporisée de l’instance courante : la lecture se poursuit en mode
-manuel et les clics suivants peuvent sélectionner d’autres Cartes. Cette
+manuel et les clics suivants peuvent sélectionner d’autres vues. Cette
 bascule de lecture n’écrit pas dans le `playbackMode` enregistré du Carousel.
 Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
 Les valeurs affichées suivent le document courant. Une création utilise les
@@ -103,9 +113,10 @@ du projet.
 
 `ElceFluxSceneBuilder` conserve la place du Carousel dans la page Flux et lui
 transmet les BDC du document. `ElceCarouselSceneBuilder` résout les IDs des
-enfants dans `CarouselContent.cards`, puis délègue chaque carte à
-`ElceCardBdcSceneBuilder`. `ElceCardPresetBuilder` reste propriétaire du
-markup fixe de chaque layout. Les persos de texte et de média CodPlay ciblent
+enfants dans `CarouselContent.cards`, puis délègue chaque Carte à
+`ElceCardBdcSceneBuilder` et chaque Graphe à
+`ElceStatisticalGraphSceneBuilder`. `ElceCardPresetBuilder` reste propriétaire
+du markup fixe de chaque layout Carte. Les persos de texte et de média CodPlay ciblent
 les ancres commentaire `<!-- data-part="…" -->` générées pour le BDC Carte
 sélectionné. Les champs texte sont insérés directement sous leur élément
 parent comme `h2`, paragraphe ou `footer`, avec leur classe de style issue du
@@ -167,6 +178,13 @@ n’est ajouté dans React ou dans Elcé.
 - [`carousel-service.test.ts`](../src/domain/carousel/carousel-service.test.ts) vérifie
   l’ajout, le retrait, le réordonnancement des IDs et la conservation de la
   durée de chaque entrée lors du réordonnancement.
+- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+  compile une vue Graphe enfant via le builder Carousel réel et vérifie sa place
+  dans la séquence et son rôle de vue finale.
+- Le 9 octobre 2026, Brave DevTools crée une vue Graphe dans l’éditeur Remix,
+  recharge le document, puis la sélectionne dans la preview. Le builder monte
+  son SVG nommé et son tableau sémantique ; le point active cette vue et l’ordre
+  Carte puis Graphe reste enregistré après rechargement.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie la
   création du Carousel, l’édition de cartes identifiées, leurs layouts et
   l’attachement de média par les commandes de l’éditeur.

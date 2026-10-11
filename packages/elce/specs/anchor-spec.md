@@ -2,10 +2,9 @@
 
 ## Statut
 
-**En cours — ratio natif et continuité de l’image vérifiés ; le chargement et le
-montage d’une vidéo réelle ont aussi été vérifiés dans Safari. L’insertion des
-layouts Carte hors Photo est implémentée et couverte par les tests ciblés ; la
-validation du parcours complet dans Brave reste en cours.**
+**En cours — insertion des Cartes et du Graphe statistique par le circuit
+d’ancre partagé. La réserve Tableau/SVG du Graphe est vérifiée dans Brave ; les
+parcours média et layouts Carte restent en cours de validation.**
 
 Le 3 octobre 2026, le déplacement de l’ancre après « For » puis le resize de
 l’éditeur conservent « For the » sur une même ligne naturelle avant l’image.
@@ -22,7 +21,8 @@ des persos CodPlay est décrit dans la
 `ElceAnchorExtension` représente une insertion de BDC comme un nœud inline
 atomique et déplaçable. Ses attributs métier sont `bdcId`, `partId` et
 `paddingBottom`. L’extension ne stocke ni `mediaId` ni type de média :
-l’éditeur résout la Carte par `bdcId` et lit ses champs et son média courant.
+l’éditeur résout le BDC par `bdcId`. Une Carte utilise son preset et ses médias ;
+un Graphe statistique utilise son builder de scène.
 L’aperçu utilise le même `ElceCardPresetBuilder` et le même `CARD_PRESETS` que
 la projection Flux ; il affiche les champs de texte déclarés par le layout et
 les médias compatibles avec ce layout, en conservant ses réglages de position
@@ -42,19 +42,25 @@ ligne d’insertion et les marges ; le player ajoute la marge supérieure
 éditable dans le POC.
 
 Le nœud ne crée aucun élément CodPlay et ne contient pas de HTML saisi par
-l’auteur. Une Carte ancrée est un BDC enfant de la Section qui l’emploie : son
+l’auteur. Une Carte ou un Graphe statistique ancré est un BDC enfant de la
+Section qui l’emploie : son
 `parentBdcId` désigne la Section, `pageId` vaut `null` et son identifiant
 n’apparaît pas dans `page.bdcIds`. Le builder Flux relit les ancres exportées
-dans les Sections : si le `data-bdc-id` correspond à cette Carte enfant,
+dans les Sections : si le `data-bdc-id` correspond à ce BDC enfant,
 l’ancre d’édition est remplacée par un `span` de flux inline à
 largeur nulle, porteur du `data-part` et de la réservation verticale. Le
 `span` d’ancrage propre à l’éditeur et ses attributs métier ne sont pas rendus
-dans le player. Le perso média CodPlay est monté directement dans ce slot et
-aucun hôte média frère n’est ajouté. Dans l’éditeur, la NodeView aligne le haut
+dans le player. Le BDC est monté directement dans ce slot et aucun hôte frère
+n’est ajouté. Dans l’éditeur, la NodeView aligne le haut
 de l’ancre sur le haut de la ligne (`vertical-align:top`) et réserve par son
 `padding-bottom` le ratio intrinsèque de l’image, une ligne (`1lh`) et deux
 marges configurées.
-Le bdc commence après cette ligne et la marge supérieure. Les mots qui suivent
+
+Pour un Graphe ancré, le même slot réserve `100%` de la largeur de ligne en mode
+Tableau et `56.25%` pour un rendu SVG. Le Tableau garde sa hauteur naturelle ;
+ses cellules visibles partagent la taille de police calculée pour le contenu le
+plus contraignant.
+Pour une Carte, le bdc commence après cette ligne et la marge supérieure. Les mots qui suivent
 l’ancre restent dans le flux normal : aucun retour forcé n’est exporté.
 La variable `--elce-anchor-padding` conserve le ratio métier. L’aperçu et le
 perso image utilisent `object-fit:cover`; le ratio du cadre est déduit de ce
@@ -71,7 +77,8 @@ Le dépôt d’un fichier image ou vidéo passe par `EditorActionsFacade`
 (`app/facades/editor-actions-facade.ts`), qui délègue à la façade spécialisée
 `ElceAnchorDropFacade` (`app/facades/anchor/`) avant le contrôleur XState.
 Cette façade délègue à `ElceAnchorDropService` les cibles métier et la création
-de commande ; le service métier applique la whitelist et décrit le bdc. La
+de commande ; le service métier applique la whitelist Carte/Graphe et décrit le
+BDC. La
 machine XState séquence ensuite la sauvegarde dans `ElceDocumentStore`, la
 création du bdc, l’insertion de l’ancre et l’enregistrement de la source de
 lecture. Les changements de contenu, le déplacement et la suppression d’une
@@ -120,12 +127,13 @@ chaque BDC ancré qui n’est plus référencé est supprimé dans la même comm
 et son média reste conservé. Le BDC est le transport unique d’une insertion ;
 il référence la ressource média réutilisable au lieu de la remplacer.
 La suppression d’une Section par `bdc.section.delete` applique la même règle à
-toutes ses ancres : les Cartes enfants ancrées sont supprimées avec la Section,
+toutes ses ancres : les Cartes et Graphes statistiques enfants sont supprimés
+avec la Section,
 leurs ressources média restent disponibles.
 `applyDocumentCommand` vérifie les invariants avant de rendre chaque nouveau
-document : une ancre référence une seule Carte enfant de sa Section, et une
-Carte ancrée ne peut pas être déplacée vers le catalogue ou une autre page sans
-retirer son ancre. ProseMirror applique
+document : une ancre référence un seul BDC Carte ou Graphe statistique enfant
+de sa Section, qui ne peut pas être déplacé vers le catalogue ou une autre page
+sans retirer son ancre. ProseMirror applique
 `transformPasted` aux collages et aussi à la tranche d’un glisser-déposer avant
 d’appeler `handleDrop`. Au `dragstart`, l’extension mémorise la position de
 l’ancre source ; si cette tranche contient cette ancre locale, le filtre la
@@ -152,8 +160,8 @@ rafraîchissement : quand XState met à jour la source média sans changer le JS
 de la Section, l’image ou la vidéo apparaît dans le même DOM ProseMirror, sans
 remonter l’éditeur.
 
-Dans l’éditeur Remix, l’action « Modifier la carte ancrée » ouvre l’éditeur
-partagé du même BDC. Un conteneur de positionnement couvre la largeur de la
+Dans l’éditeur Remix, l’action « Modifier le bloc illustratif ancré » ouvre
+l’éditeur partagé du même BDC. Un conteneur de positionnement couvre la largeur de la
 ligne et laisse passer les pointeurs ; seul le bouton de `1.75rem` est
 interactif. Le SVG décoratif ne capte pas lui-même le pointeur, qui arrive donc
 sur le bouton. Cette cible étroite permet d’utiliser l’icône sans recouvrir le
@@ -210,7 +218,11 @@ texte ou le média placé dessous.
   vérifie le montage de l’image dans le slot projeté par le runtime réel
   Sighty/CodPlay.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
-  vérifie la whitelist et la construction des cibles et commandes métier.
+  vérifie les cibles et commandes métier pour l’insertion d’une Carte ou d’un
+  Graphe statistique.
+- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+  vérifie le slot de Section, la réserve Tableau/SVG et le montage de la story
+du Graphe par le builder Flux réel.
 - [`anchor-drop-facade.test.ts`](../src/app/facades/anchor/anchor-drop-facade.test.ts)
   vérifie le transfert de l’intention Section vers le contrôleur.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)

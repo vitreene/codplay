@@ -104,11 +104,10 @@ function renderCardLayoutSelect(bdcId: BdcId, presetId: string, actions: ElceCar
     <span
       id={`${idPrefix}-card-layout-caption-${bdcId}`}
     >
-      Représentation
+      Disposition
     </span>
     <select
       id={`${idPrefix}-card-layout-${bdcId}`}
-      aria-label="Représentation de cette carte"
       mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setCardLayout(bdcId, event.currentTarget.value as CardLayoutId))}
     >
       {CARD_LAYOUT_OPTIONS.map((option) => <option
@@ -316,7 +315,7 @@ function renderCardMediaEditor(
   const acceptedTypes = canUseVideo ? MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO : MEDIA_FILE_ACCEPT.IMAGE
   const pickerLabel = canUseVideo ? 'Choisir une ou plusieurs images ou vidéos' : 'Choisir une ou plusieurs images'
   const isVideoPreview = media?.type === MEDIA_TYPE.VIDEO && media.source !== null
-  const fileTriggerContent = renderFileTriggerContent(bdcId, card, media, canUseVideo, idPrefix)
+  const fileTriggerContent = renderFileTriggerContent(bdcId, card, media, idPrefix)
 
   /** Imports only media accepted by the active layout through its Card actions. */
   const importFiles = (files: readonly File[]): void => {
@@ -458,7 +457,7 @@ function renderCardMediaEditor(
           title="Retirer le média"
           mix={on<HTMLButtonElement, 'click'>('click', () => actions.clearMedia(bdcId))}
         >
-          {renderLucideIcon(X, `${idPrefix}-media-clear-icon-${bdcId}`, 15)}
+          {renderLucideIcon(X, `${idPrefix}-media-clear-icon-${bdcId}`, 14)}
         </button>}
     </div>
   </div>
@@ -469,22 +468,15 @@ function renderFileTriggerContent(
   bdcId: BdcId,
   card: CardContent,
   media: RemixCardEditorFieldsProps['mediaById'][string] | undefined,
-  canUseVideo: boolean,
   idPrefix: string,
 ): RemixNode {
   switch (media) {
     case undefined:
-      return [
-        renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`, 18),
-        canUseVideo ? 'Déposer des images ou vidéos' : 'Déposer des images',
-      ]
+      return renderMediaAddPrompt(bdcId, idPrefix, 'Déposer ici')
     default:
       switch (media.source) {
         case null:
-          return [
-            renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`, 18),
-            media.name,
-          ]
+          return renderMediaAddPrompt(bdcId, idPrefix, media.name)
         default:
           switch (media.type) {
             case MEDIA_TYPE.IMAGE:
@@ -506,4 +498,26 @@ function renderFileTriggerContent(
           }
       }
   }
+}
+
+/** Renders the short label and drop hint for an empty media selection target. */
+function renderMediaAddPrompt(bdcId: BdcId, idPrefix: string, hint: string): RemixNode {
+  return <span
+    id={`${idPrefix}-media-add-prompt-${bdcId}`}
+    className="elce-media-add-prompt"
+  >
+    {renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`, 14)}
+    <span
+      id={`${idPrefix}-media-add-label-${bdcId}`}
+      className="elce-media-add-prompt__label"
+    >
+      Média
+    </span>
+    <span
+      id={`${idPrefix}-media-add-hint-${bdcId}`}
+      className="elce-media-add-prompt__hint"
+    >
+      {hint}
+    </span>
+  </span>
 }

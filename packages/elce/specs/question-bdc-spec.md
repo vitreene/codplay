@@ -14,7 +14,8 @@ place à l’endroit voulu dans cette séquence. Une page ne peut contenir qu’
 Question dans le POC. Une page Diapo peut aussi accueillir une Question comme
 son unique BDC direct ; elle n’est pas une carte enfant de Carousel. Le titre
 et l’illustration sont facultatifs ; l’énoncé, les réponses et la validation
-sont requis par le preset Question.
+sont requis par le preset Question. Le champ du titre facultatif affiche le
+placeholder « Titre ».
 
 Une page Flux créée dans un chapitre Évaluation reçoit un BDC Question par
 défaut ; une page de chapitre standard ou une page racine reçoit un BDC

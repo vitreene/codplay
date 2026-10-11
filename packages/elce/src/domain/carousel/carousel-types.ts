@@ -7,7 +7,7 @@ export interface CarouselAspectRatio {
   readonly height: number
 }
 
-export interface CarouselCardEntry {
+export interface CarouselBdcEntry {
   readonly bdcId: BdcId
   readonly durationMs: number | null
   readonly introTransitionRef: RevelationTransitionRef | null
@@ -21,5 +21,6 @@ export interface CarouselContent {
   readonly repeatCount?: number
   readonly aspectRatio: CarouselAspectRatio
   readonly revelation: RevelationTransitionOverrides
-  readonly cards: readonly CarouselCardEntry[]
+  /** Ordered Card and Statistical Graph views, retained under the v4 field name. */
+  readonly cards: readonly CarouselBdcEntry[]
 }

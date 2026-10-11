@@ -278,7 +278,7 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           disabled={snapshot === null || pending}
           mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('show-edited-page'))}
         >
-          {renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon', 16)}
+          {renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon', 14)}
           <span
             id="elce-popup-reader-edited-page-label"
             className="elce-popup-reader__action-label"
@@ -294,7 +294,7 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           disabled={snapshot === null || pending}
           mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('synchronize'))}
         >
-          {renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon', 16)}
+          {renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon', 14)}
           <span
             id="elce-popup-reader-sync-label"
             className="elce-popup-reader__action-label"

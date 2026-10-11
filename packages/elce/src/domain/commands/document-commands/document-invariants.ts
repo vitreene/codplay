@@ -1,10 +1,11 @@
-import { BDC_TYPE, CARD_LAYOUT_IDS, DEFAULT_PRESET_ID, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../../config/document-config'
-import type { CardLayoutId } from '../../../config/document-config-types'
+import { BDC_TYPE, CARD_LAYOUT_IDS, DEFAULT_PRESET_ID, PAGE_TYPE, SCENARIO_ENTRY_KIND, STATISTICAL_GRAPH_LAYOUT_IDS } from '../../../config/document-config'
+import type { CardLayoutId, StatisticalGraphLayoutId } from '../../../config/document-config-types'
 import { ElceDocument } from '../../../domain/document/document-model'
 import type { BdcId, PageId } from '../../../domain/document/document-types'
 import { fail, pageBelongsToEvaluationChapter, requireSectionData } from './command-helpers'
 import { assertQuestionMediaAllowed, assertCardMediaAllowed } from './media-commands'
 import { anchorReferenceService, questionService, evaluationResultService, carouselService, cardService } from './services'
+import { assertStatisticalGraphContent } from '../../statistical-graph/statistical-graph-service'
 
 /** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: ElceDocument): void {
@@ -29,8 +30,9 @@ export function assertDocumentInvariants(document: ElceDocument): void {
       if (child === undefined) fail(`Bdc Carte inconnue dans le Carousel ${parent.id} : ${entry.bdcId}`)
       if (bdcIds.has(child.id)) fail(`Bdc placé deux fois : ${child.id}`)
       bdcIds.add(child.id)
-      if (child.type !== BDC_TYPE.CARD || child.parentBdcId !== parent.id || child.pageId !== null) {
-        fail(`Affectation de carte incohérente : ${child.id}`)
+      if ((child.type !== BDC_TYPE.CARD && child.type !== BDC_TYPE.STATISTICAL_GRAPH)
+        || child.parentBdcId !== parent.id || child.pageId !== null) {
+        fail(`Affectation de vue Carousel incohérente : ${child.id}`)
       }
     }
   }
@@ -43,8 +45,9 @@ export function assertDocumentInvariants(document: ElceDocument): void {
       if (child === undefined) fail(`Ancre sans BDC Carte associé : ${anchorBdcId}`)
       if (bdcIds.has(child.id)) fail(`BDC placé deux fois : ${child.id}`)
       bdcIds.add(child.id)
-      if (child.type !== BDC_TYPE.CARD || child.parentBdcId !== section.id || child.pageId !== null) {
-        fail(`Affectation de Carte inline incohérente : ${child.id}`)
+      if ((child.type !== BDC_TYPE.CARD && child.type !== BDC_TYPE.STATISTICAL_GRAPH)
+        || child.parentBdcId !== section.id || child.pageId !== null) {
+        fail(`Affectation de BDC illustratif inline incohérente : ${child.id}`)
       }
     }
   }
@@ -132,6 +135,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
             case BDC_TYPE.CAROUSEL:
             case BDC_TYPE.QUESTION:
             case BDC_TYPE.CARD:
+            case BDC_TYPE.STATISTICAL_GRAPH:
               return false
             case BDC_TYPE.EVALUATION_RESULT:
               return !pageBelongsToEvaluationChapter(document, page)
@@ -154,7 +158,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
   for (const bdc of document.bdcs) {
     switch (bdc.type) {
       case BDC_TYPE.QUESTION: {
-        if (bdc.question === null || bdc.section !== null || bdc.parentBdcId !== null) fail(`Bdc Question incomplet : ${bdc.id}`)
+        if (bdc.question === null || bdc.section !== null || bdc.parentBdcId !== null || bdc.statisticalGraph != null) fail(`Bdc Question incomplet : ${bdc.id}`)
         questionService.assertValid(bdc.question)
         if (bdc.question.mediaId !== null) assertQuestionMediaAllowed(document, bdc.question.mediaId)
         break
@@ -165,7 +169,8 @@ export function assertDocumentInvariants(document: ElceDocument): void {
           || bdc.section !== null
           || bdc.question !== null
           || bdc.carousel != null
-          || bdc.card != null) {
+          || bdc.card != null
+          || bdc.statisticalGraph != null) {
           fail(`Bdc Résultat incomplet : ${bdc.id}`)
         }
         if (bdc.parentBdcId !== null) fail(`Le BDC Résultat ${bdc.id} ne peut pas être enfant d’un autre BDC.`)
@@ -179,7 +184,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
         break
       }
       case BDC_TYPE.CAROUSEL: {
-        if (bdc.carousel === null || bdc.carousel === undefined || bdc.section !== null || bdc.question !== null || bdc.card != null) {
+        if (bdc.carousel === null || bdc.carousel === undefined || bdc.section !== null || bdc.question !== null || bdc.card != null || bdc.statisticalGraph != null) {
           fail(`Bdc Carousel incomplet : ${bdc.id}`)
         }
         carouselService.assertValid(bdc.carousel)
@@ -189,7 +194,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
       case BDC_TYPE.CARD: {
         if (bdc.card === null || bdc.card === undefined || bdc.section !== null || bdc.question !== null
           || bdc.evaluationResult != null
-          || bdc.carousel != null || (bdc.pageId !== null && bdc.parentBdcId !== null)) {
+          || bdc.carousel != null || bdc.statisticalGraph != null || (bdc.pageId !== null && bdc.parentBdcId !== null)) {
           fail(`Bdc Carte incomplet : ${bdc.id}`)
         }
         if (bdc.parentBdcId !== null) {
@@ -210,10 +215,35 @@ export function assertDocumentInvariants(document: ElceDocument): void {
         if (bdc.card.mediaId !== null) assertCardMediaAllowed(document, bdc.card.mediaId)
         break
       }
+      case BDC_TYPE.STATISTICAL_GRAPH: {
+        if (bdc.statisticalGraph == null || bdc.section !== null || bdc.question !== null
+          || bdc.evaluationResult != null || bdc.carousel != null || bdc.card != null) {
+          fail(`Bdc Graphe statistique incomplet : ${bdc.id}`)
+        }
+        if (!STATISTICAL_GRAPH_LAYOUT_IDS.includes(bdc.presetId as StatisticalGraphLayoutId)) {
+          fail(`Layout de graphe inconnu : ${bdc.presetId}`)
+        }
+        if (bdc.parentBdcId !== null) {
+          const parent = bdcById.get(bdc.parentBdcId)
+          switch (parent?.type) {
+            case BDC_TYPE.CAROUSEL:
+            case BDC_TYPE.SECTION:
+              break
+            default:
+              fail(`Le parent du Graphe ${bdc.id} doit être un Carousel ou une Section.`)
+          }
+        }
+        if (bdc.pageId !== null && document.pages.find((page) => page.id === bdc.pageId) === undefined) {
+          fail(`La page du Graphe ${bdc.id} est absente.`)
+        }
+        assertStatisticalGraphContent(bdc.statisticalGraph)
+        break
+      }
       default:
         if (bdc.card != null || bdc.parentBdcId !== null) fail(`Un bdc ${bdc.type} ne peut pas être un enfant de conteneur : ${bdc.id}`)
         if (bdc.question !== null) fail(`Un bdc ${bdc.type} ne peut pas porter de Question : ${bdc.id}`)
         if (bdc.carousel != null) fail(`Un bdc ${bdc.type} ne peut pas porter un Carousel : ${bdc.id}`)
+        if (bdc.statisticalGraph != null) fail(`Un bdc ${bdc.type} ne peut pas porter un Graphe statistique : ${bdc.id}`)
     }
   }
 
@@ -233,16 +263,17 @@ export function assertDocumentInvariants(document: ElceDocument): void {
             default:
               switch (anchorBdc.type) {
                 case BDC_TYPE.CARD:
+                case BDC_TYPE.STATISTICAL_GRAPH:
                   switch (anchorBdc.parentBdcId) {
                     case sectionBdc.id:
                       break
                     default:
-                      fail(`La Carte ancrée ${anchorBdcId} doit rester enfant de sa Section.`)
+                      fail(`Le BDC illustratif ancré ${anchorBdcId} doit rester enfant de sa Section.`)
                   }
-                  if (anchorBdc.pageId !== null) fail(`La Carte ancrée ${anchorBdcId} ne peut pas être placée directement dans une page.`)
+                  if (anchorBdc.pageId !== null) fail(`Le BDC illustratif ancré ${anchorBdcId} ne peut pas être placé directement dans une page.`)
                   break
                 default:
-                  fail(`Seules les Cartes peuvent être ancrées : ${anchorBdcId}`)
+                  fail(`Seules les Cartes et les Graphes statistiques peuvent être ancrés : ${anchorBdcId}`)
               }
           }
           referencedAnchorBdcIds.add(anchorBdcId)

@@ -1,9 +1,9 @@
 import { EVENT_ACTION } from '@codplay/capsule-automation'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION, MEDIA_TYPE, PAGE_TYPE } from '../../config/document-config'
+import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { Bdc, BdcId, Page } from '../../domain/document/document-types'
 import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
-import { anchorCardBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor } from '../../anchor/anchor-position'
+import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../domain/anchor/anchor-ratio-service'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { FluxAnchorTarget } from './flux-anchor-player-markup-types'
@@ -16,6 +16,7 @@ import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-b
 import { ElceCardBdcSceneBuilder } from '../card/card-bdc-scene-builder'
 import type { CardBdcSceneBuild } from '../card/card-bdc-scene-builder'
 import { createRevelationAction, createRevelationInitialStyle } from '../revelation/revelation-action'
+import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistical-graph-scene-builder'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -34,6 +35,7 @@ const anchorRatioService = new ElceAnchorRatioService()
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const carouselSceneBuilder = new ElceCarouselSceneBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
+const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
 /** Builds an Elcé Flux scene from the métier page without creating a player circuit. */
 export function buildFluxScene(
@@ -62,25 +64,45 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
   }
   const pageContents = pageBdcs.filter((bdc): bdc is Bdc => bdc !== undefined)
   const anchorTargets = readAnchorTargets(pageContents, bdcs)
-  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options))
+  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options, anchorTargets))
 
   const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
   const bottomMarkerId = `${page.id}-bottom-marker`
   const articleMarkup = `<article id="${articleId}" class="elce-flux-article">${mounts.map((mount) => mount.markup).join('')}<!-- data-part="${page.id}:bottom" --></article>`
   const pageMediaPersos = mounts.flatMap((mount) => createMediaPersos(page, mount, scrollPortId, options))
-  const anchoredCardPersos = anchorTargets.flatMap((target) => {
-    const card = bdcs.find((candidate) => candidate.id === target.bdcId)
+  const anchoredIllustrationPersos = anchorTargets.flatMap((target) => {
+    const illustration = bdcs.find((candidate) => candidate.id === target.bdcId)
     const section = pageContents.find((candidate) => candidate.id === target.sectionBdcId)
-    if (card === undefined || section?.type !== BDC_TYPE.SECTION || section.section === null) {
-      throw new Error(`La Carte ancrée ${target.bdcId} ou sa Section est introuvable.`)
+    if (illustration === undefined || section?.type !== BDC_TYPE.SECTION || section.section === null) {
+      throw new Error(`Le BDC illustratif ancré ${target.bdcId} ou sa Section est introuvable.`)
     }
-    const cardBuild = buildFluxCard(page, section.id, card, options)
-    return createFluxCardPersos(page, card, cardBuild, target.partId, scrollPortId, options, {
-      paddingBottom: target.paddingBottom,
-      layoutId: target.layoutId,
-      revelation: section.section.revelation,
-    })
+    const anchor = { paddingBottom: target.paddingBottom, layoutId: target.layoutId, revelation: section.section.revelation }
+    switch (illustration.type) {
+      case BDC_TYPE.CARD: {
+        const cardBuild = buildFluxCard(page, section.id, illustration, options)
+        return createFluxCardPersos(page, illustration, cardBuild, target.partId, scrollPortId, options, anchor)
+      }
+      case BDC_TYPE.STATISTICAL_GRAPH: {
+        const graphBuild = statisticalGraphSceneBuilder.build(
+          illustration,
+          `${page.id}-${section.id}-${illustration.id}-anchor`,
+          target.partId,
+        )
+        return createFluxGraphPersos(
+          page,
+          illustration,
+          graphBuild.markup,
+          graphBuild.rootClassName,
+          target.partId,
+          scrollPortId,
+          anchor,
+          options.revelationDefaults ?? DEFAULT_PROJECT_REVELATION,
+        )
+      }
+      default:
+        throw new Error(`Le BDC ${illustration.id} ne peut pas être ancré comme illustration.`)
+    }
   })
 
   const pageStory: StoryDoc<string> = {
@@ -118,7 +140,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
         targetPartId: `${page.id}:bottom`,
       }),
       ...pageMediaPersos,
-      ...anchoredCardPersos,
+      ...anchoredIllustrationPersos,
     ],
   }
 
@@ -155,6 +177,7 @@ function createBdcMount(
   bdc: Bdc,
   allBdcs: readonly Bdc[],
   options: FluxSceneBuildOptions,
+  anchorTargets: readonly FluxAnchorTarget[],
 ): FluxBdcMount {
   switch (bdc.type) {
     case BDC_TYPE.SECTION: {
@@ -164,7 +187,14 @@ function createBdcMount(
         bdc.presetId,
         sectionId,
         partId,
-        { body: projectFluxPlayerMarkup(bdc.section?.markup ?? '') },
+        {
+          body: projectFluxPlayerMarkup(
+            bdc.section?.markup ?? '',
+            Object.fromEntries(anchorTargets
+              .filter((target) => target.sectionBdcId === bdc.id)
+              .map((target) => [target.bdcId, target.paddingBottom])),
+          ),
+        },
       )
       return {
         bdc,
@@ -239,6 +269,16 @@ function createBdcMount(
         }
       }
     }
+    case BDC_TYPE.STATISTICAL_GRAPH: {
+      const graphBuild = statisticalGraphSceneBuilder.build(bdc, `${page.id}-${bdc.id}-graph`)
+      return {
+        bdc,
+        partId: `${page.id}:${bdc.id}:statistical-graph`,
+        anchored: false,
+        markup: graphBuild.markup,
+        zonePartIds: {},
+      }
+    }
     case BDC_TYPE.CARD:
       throw new Error(`Le BDC Carte ${bdc.id} doit être projeté par son BDC conteneur.`)
     default:
@@ -252,14 +292,22 @@ function readAnchorTargets(bdcs: readonly Bdc[], allBdcs: readonly Bdc[]): reado
     switch (bdc.type) {
       case BDC_TYPE.SECTION:
         return readFluxAnchorTargets(bdc.section?.markup ?? '').map((target) => {
-          const card = allBdcs.find((candidate) => candidate.id === target.bdcId)
-          if (card?.type !== BDC_TYPE.CARD) throw new Error(`La Carte de l’ancre ${target.bdcId} est introuvable.`)
-          return { ...target, layoutId: card.presetId, sectionBdcId: bdc.id }
+          const illustration = allBdcs.find((candidate) => candidate.id === target.bdcId)
+          if (illustration === undefined
+            || (illustration.type !== BDC_TYPE.CARD && illustration.type !== BDC_TYPE.STATISTICAL_GRAPH)) {
+            throw new Error(`Le BDC illustratif de l’ancre ${target.bdcId} est introuvable.`)
+          }
+          const paddingBottom = illustration.type === BDC_TYPE.STATISTICAL_GRAPH && illustration.statisticalGraph != null
+            ? statisticalGraphAnchorPaddingBottom(illustration.statisticalGraph.rendering)
+            : target.paddingBottom
+          return { ...target, paddingBottom, layoutId: illustration.presetId, sectionBdcId: bdc.id }
         })
       case BDC_TYPE.QUESTION:
       case BDC_TYPE.EVALUATION_RESULT:
       case BDC_TYPE.CAROUSEL:
       case BDC_TYPE.CARD:
+        return []
+      case BDC_TYPE.STATISTICAL_GRAPH:
         return []
       default:
         return assertNeverBdcType(bdc.type)
@@ -286,6 +334,8 @@ function createMediaPersos(
       return []
     case BDC_TYPE.CAROUSEL:
       return mount.carouselBuild?.mediaPersos ?? []
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      return []
     default:
       return assertNeverBdcType(mount.bdc.type)
   }
@@ -336,7 +386,7 @@ function createFluxCardPersos(
       // Anchored Photos resolve the Carousel's height:100% on the text line.
       // Override it so aspectRatio determines the frame height.
       ? { aspectRatio, height: 'auto' }
-      : { height: anchorCardBlockSizeFor(anchor.layoutId, anchor.paddingBottom) }),
+      : { height: anchorIllustrationBlockSizeFor(anchor.layoutId, anchor.paddingBottom) }),
   }
   const root: PersoDoc<string> = {
     id: cardId,
@@ -364,6 +414,64 @@ function createFluxCardPersos(
     },
   }
   return [root, ...cardBuild.contentPersos, ...cardBuild.mediaPersos]
+}
+
+/** Projects an anchored Statistical Graph into the existing Section anchor target. */
+function createFluxGraphPersos(
+  page: Page,
+  bdc: Bdc,
+  markup: string,
+  rootClassName: string,
+  targetPartId: string,
+  scrollPortId: string,
+  anchor: Readonly<{ paddingBottom: string; layoutId: string; revelation: NonNullable<Bdc['section']>['revelation'] }>,
+  projectRevelation: NonNullable<FluxSceneBuildOptions['revelationDefaults']>,
+): readonly PersoDoc<string>[] {
+  if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
+    throw new Error(`Le bdc ${bdc.id} n’est pas un Graphe statistique complet.`)
+  }
+  const introRef = anchor.revelation.intro ?? projectRevelation.intro
+  const outroRef = anchor.revelation.outro ?? projectRevelation.outro
+  const graphId = `${page.id}-${bdc.id}-graph`
+  const layoutClass = bdc.presetId === DEFAULT_PRESET_ID.STATISTICAL_GRAPH_SIDE_BY_SIDE
+    ? 'elce-statistical-graph--side-by-side'
+    : 'elce-statistical-graph--above-text'
+  const renderingClass = `elce-statistical-graph--${bdc.statisticalGraph.rendering}`
+  const enterEvent = `${graphId}:enter`
+  const leaveEvent = `${graphId}:leave`
+  const root: PersoDoc<string> = {
+    id: graphId,
+    type: 'layout',
+    initial: {
+      move: { target: targetPartId },
+      className: `${rootClassName} ${layoutClass} ${renderingClass} elce-flux-graph-root`,
+      style: {
+        position: 'absolute',
+        'position-anchor': anchorNameFor(targetPartId),
+        'inset-inline-start': 0,
+        'inset-inline-end': 0,
+        'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
+        width: '100%',
+        height: 'auto',
+        ...(bdc.statisticalGraph.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? {} : { aspectRatio: '16 / 9' }),
+        ...createRevelationInitialStyle(introRef),
+      },
+      markup,
+    },
+    emit: {
+      observe: {
+        root: scrollPortId,
+        zone: { threshold: 0 },
+        enter: [{ name: enterEvent }],
+        leave: [{ name: leaveEvent }],
+      },
+    },
+    actions: {
+      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
+      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
+    },
+  }
+  return [root]
 }
 
 /** Mounts the question's reusable illustration media into its configured card zone. */

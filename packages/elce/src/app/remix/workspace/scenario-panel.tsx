@@ -1,26 +1,25 @@
 import { on, type RemixNode } from 'remix/ui'
 
-import { ClipboardCheck, FilePlus, Folder, FolderPlus, GripVertical, Presentation, Trash2, X } from 'lucide-static'
+import { ClipboardCheck, Folder, FolderPlus, GripVertical, Trash2 } from 'lucide-static'
 import { CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../../config/document-config'
 import type { PageType } from '../../../config/document-config-types'
 import type { PagePlacement } from '../../../domain/commands/document-command-types'
 import type { Chapter, Page } from '../../../domain/document/document-types'
 import type { ScenarioEntry } from '../../../domain/scenario/scenario-entry-types'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { getPageTypeIcon } from './page-type-icon.ts'
 import type { ScenarioPanelProps } from './scenario-panel-types'
 
 /** Renders the ordered scenario and its native Remix page/chapter controls. */
 export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
   const { workspace } = props
-  const { view, actions, responsivePanel, onSetResponsivePanel } = workspace
+  const { view, actions, responsivePanel } = workspace
   const selectedPageId = view.selectedChapter === undefined ? view.selectedPage?.id : undefined
 
   return <section
     id="elce-outline"
     className="elce-panel elce-outline"
-    data-drawer-open={responsivePanel === 'outline'}
-    role={responsivePanel === 'outline' ? 'dialog' : undefined}
-    aria-modal={responsivePanel === 'outline' ? true : undefined}
+    data-panel-open={responsivePanel === 'outline'}
     aria-labelledby="elce-outline-title"
   >
     <div
@@ -36,44 +35,40 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
         id="elce-outline-actions"
         className="elce-outline-actions"
       >
-        {renderIconButton('elce-create-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].createLabel, FolderPlus, () => actions.createChapter(view.documentModel))}
-        {renderIconButton('elce-create-evaluation-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel, ClipboardCheck, () => actions.createEvaluationChapter(view.documentModel))}
-        {renderIconButton('elce-create-scenario-page', 'Ajouter une Page à la racine du scénario', FilePlus, () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX), 14)}
-        {renderIconButton('elce-create-scenario-diapo', 'Ajouter une Diapo à la racine du scénario', Presentation, () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO), 16)}
+        {renderIconButton('elce-create-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].createLabel, FolderPlus, () => actions.createChapter(view.documentModel), 14, 'elce-icon-action', 'Chapitre')}
+        {renderIconButton('elce-create-evaluation-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel, ClipboardCheck, () => actions.createEvaluationChapter(view.documentModel), 14, 'elce-icon-action', 'Éval.')}
+        {renderIconButton('elce-create-scenario-page', 'Ajouter une Page à la racine du scénario', getPageTypeIcon(PAGE_TYPE.FLUX), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX), 14, 'elce-icon-action', 'Page')}
+        {renderIconButton('elce-create-scenario-diapo', 'Ajouter une Diapo à la racine du scénario', getPageTypeIcon(PAGE_TYPE.DIAPO), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO), 14, 'elce-icon-action', 'Diapo')}
       </div>
-      <button
-        id="elce-outline-close"
-        className="elce-responsive-panel-close elce-outline-close"
-        type="button"
-        aria-label="Fermer le scénario"
-        mix={on<HTMLButtonElement, 'click'>('click', () => onSetResponsivePanel(null))}
-      >
-        {renderLucideIcon(X, 'elce-outline-close-icon', 18)}
-      </button>
     </div>
-    <p
-      id="elce-document-name"
+    <div
+      id="elce-outline-scroll-content"
+      className="elce-outline-scroll-content"
     >
-      {view.documentModel.data.name}
-    </p>
-    <p
-      id="elce-page-dnd-help"
-      className="elce-muted"
-    >
-      Glissez une page pour la déplacer ou la réordonner.
-    </p>
-    {renderScenarioEntryList(props, view.documentModel.data.scenarioEntries)}
-    <section
-      id="elce-catalog-pages"
-      className="elce-outline-group"
-    >
-      <h2
-        id="elce-catalog-pages-title"
+      <p
+        id="elce-document-name"
       >
-        Catalogue de pages
-      </h2>
-      {renderPageList(props, 'elce-catalog-page-list', view.documentModel.data.catalogPageIds, 'Déposer une page ici', () => ({ kind: PAGE_LOCATION.CATALOG }), selectedPageId)}
-    </section>
+        {view.documentModel.data.name}
+      </p>
+      <p
+        id="elce-page-dnd-help"
+        className="elce-muted"
+      >
+        Glissez une page pour la déplacer ou la réordonner.
+      </p>
+      {renderScenarioEntryList(props, view.documentModel.data.scenarioEntries)}
+      <section
+        id="elce-catalog-pages"
+        className="elce-outline-group"
+      >
+        <h2
+          id="elce-catalog-pages-title"
+        >
+          Catalogue de pages
+        </h2>
+        {renderPageList(props, 'elce-catalog-page-list', view.documentModel.data.catalogPageIds, 'Déposer une page ici', () => ({ kind: PAGE_LOCATION.CATALOG }), selectedPageId)}
+      </section>
+    </div>
   </section>
 }
 
@@ -166,8 +161,8 @@ function renderChapterItem(props: ScenarioPanelProps, chapter: Chapter): RemixNo
         id={`elce-chapter-actions-${chapter.id}`}
         className="elce-outline-item-actions"
       >
-        {renderIconButton(`elce-create-page-${chapter.id}`, `Ajouter une Page dans ${chapter.name}`, FilePlus, () => onAddChapterPage(chapter.id, PAGE_TYPE.FLUX), 14, 'elce-location-page-action')}
-        {renderIconButton(`elce-create-diapo-${chapter.id}`, `Ajouter une Diapo dans ${chapter.name}`, Presentation, () => onAddChapterPage(chapter.id, PAGE_TYPE.DIAPO), 16, 'elce-location-page-action')}
+        {renderIconButton(`elce-create-page-${chapter.id}`, `Ajouter une Page dans ${chapter.name}`, getPageTypeIcon(PAGE_TYPE.FLUX), () => onAddChapterPage(chapter.id, PAGE_TYPE.FLUX), 14, 'elce-location-page-action')}
+        {renderIconButton(`elce-create-diapo-${chapter.id}`, `Ajouter une Diapo dans ${chapter.name}`, getPageTypeIcon(PAGE_TYPE.DIAPO), () => onAddChapterPage(chapter.id, PAGE_TYPE.DIAPO), 14, 'elce-location-page-action')}
         {renderDeleteButton(`elce-chapter-delete-${chapter.id}`, () => actions.deleteChapter(chapter.id), chapter.pageIds.length > 0)}
       </div>
     </div>
@@ -314,17 +309,23 @@ function renderChapterTypeIcon(chapter: Chapter): RemixNode {
   }
 }
 
-/** Renders an accessible compact action button with a Lucide icon. */
-function renderIconButton(id: string, label: string, icon: string, action: () => void, size = 17, className = 'elce-icon-action'): RemixNode {
+/** Renders an accessible compact action button, with an optional short visible label. */
+function renderIconButton(id: string, label: string, icon: string, action: () => void, size: 14 = 14, className = 'elce-icon-action', visibleLabel?: string): RemixNode {
   return <button
     id={id}
-    className={className}
+    className={visibleLabel === undefined ? className : `elce-add-content-action ${className}`}
     type="button"
     aria-label={label}
     title={label}
     mix={on<HTMLButtonElement, 'click'>('click', action)}
   >
     {renderLucideIcon(icon, `${id}-icon`, size)}
+    {visibleLabel === undefined ? null : <span
+      id={`${id}-label`}
+      className="elce-add-content-action__label"
+    >
+      {visibleLabel}
+    </span>}
   </button>
 }
 

@@ -38,7 +38,7 @@ preuves qui permettent de fermer chaque tranche.
 | 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. En mode éditeur, l’illustration et la zone question-réponses sont côte à côte au rapport 25/75. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
 | 5 | Évaluation de chapitre | En cours — résultat calculé par Sighty et montage de la branche Réussite/Échec dans CodPlay couverts par les tests de composition ; les actions Recommencer/Relire, la visibilité des réponses et le parcours Brave restent à valider. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
-| 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
+| 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le bandeau des réglages a reçu une correction CSS le 9 octobre : libellés au-dessus des champs, valeurs non compressées, chevrons reculés et défilement horizontal si nécessaire ; la durée par vue porte le libellé « Durée (sec.) ». Le contrôle visuel Brave reste en attente. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
@@ -65,6 +65,12 @@ format via Tiptap et de restaurer le focus pour les activations clavier.
 production qu’une sélection reste disponible après une mise en forme et qu’un
 enrichissement suivant s’applique toujours à cette même sélection avant de
 mettre à jour la spécification Section.
+
+### Boutons compacts de la barre Tiptap — décision acceptée
+
+Réduire le padding des commandes de mise en forme sans changer leurs icônes,
+leurs états actifs ni leurs actions. Le padding CSS est réduit le 9 octobre
+2026 ; contrôle visuel dans Brave en attente.
 
 ### Décision acceptée — texte du bouton de validation Question
 
@@ -190,21 +196,136 @@ intégration dépendante ; les travaux indépendants continuent.
 
 ### Catalogue responsive de l’éditeur — implémenté et vérifié
 
-- À 1200 px et moins, le bouton icône du catalogue est dans la ligne du titre
-  « Elcé » et ouvre le tiroir droit. À 800 px et moins, une icône Scénario la
-  précède dans cette ligne et ouvre un tiroir gauche. Les tiroirs sont exclusifs,
-  se ferment par leur bouton, Échap ou clic sur le fond, puis rendent le focus à
-  leur bouton. Les icônes sont dans le flux normal, sans position fixe ni sticky.
-- Entre 801 et 1200 px, la colonne Scénario reste visible et la zone de travail
-  centrale flexible utilise la largeur restante ; à 800 px et moins, elle prend
-  toute la largeur disponible. À plus de 1200 px, les trois colonnes restent
-  visibles et les icônes responsive sont masquées. Le bandeau ne montre que
-  « Elcé », sans libellé POC ni état technique.
-- Brave DevTools vérifie à 390 × 844 px les deux boutons en haut, l’ouverture
-  indépendante des tiroirs gauche et droit, leur fermeture par Échap et le retour
-  du focus. À 1024 px, le Scénario reste à 288 px et l’espace central atteint
-  688 px ; à 1408 px, les trois colonnes mesurent 288/768/288 px. Le comportement
-  appartient au layout React de l’éditeur, hors scène CodPlay.
+- À 1200 px et moins, Contenus disponibles est masqué au départ ; sa commande
+  iconique sans fond ni contour se trouve au bord droit de la zone centrale.
+  À 800 px et moins, les deux panneaux latéraux sont masqués au départ et leurs
+  commandes encadrent la zone centrale. `responsivePanel` reste l’état exclusif
+  existant : ouvrir un panneau ajoute sa colonne à gauche ou à droite et réduit
+  la zone centrale sans la masquer ni la recouvrir.
+- Les commandes restent de vrais boutons accessibles avec nom, `aria-expanded`
+  et `aria-controls`. Échap ferme le panneau et rend le focus à sa commande ;
+  aucune surcouche, fenêtre modale ou capture du focus n’est utilisée. Le
+  défilement indépendant reste suivi dans la tranche dédiée ci-dessous.
+- Entre 801 et 1200 px, Scénario reste à gauche ; quand le catalogue est ouvert,
+  les trois colonnes restent visibles. À 800 px et moins, le panneau ouvert et
+  la zone centrale occupent chacun une colonne ; fermés, les deux panneaux
+  laissent toute la largeur à la zone centrale. À plus de 1200 px, les trois
+  colonnes restent visibles et les commandes responsive disparaissent. Le
+  bandeau ne montre que « Elcé ». Le comportement appartient au layout Remix,
+  hors scène CodPlay.
+- Brave confirme à 390 × 844 px la zone centrale seule quand les panneaux sont
+  fermés, puis l’ouverture exclusive de Scénario (137 px / 205 px) et de
+  Contenus disponibles (205 px / 137 px), sans débordement horizontal. Échap
+  ferme le panneau et rend le focus à sa commande. À 1024 px, la vue fermée garde
+  Scénario à 288 px et le centre à 688 px ; la vue ouverte mesurée précédemment
+  garde les trois colonnes à 288/384/288 px. Le test visuel ouvert à 1024 px a
+  précédé le dernier ajustement, limité au breakpoint mobile. Typecheck passe et
+  `git diff --check` est propre. Le contrat vérifié figure dans la
+  [spécification Organisation](../specs/organization-editor-spec.md).
+- À 390 px, la règle responsive de masquage perdait contre le sélecteur plus
+  spécifique qui impose `display:flex` au Scénario pendant l’édition ; le panneau
+  fermé restait donc dans la grille et repoussait la zone centrale. Le sélecteur
+  de masquage est maintenant limité au panneau latéral fermé dans l’espace auteur.
+
+### Défilement indépendant des colonnes — décision acceptée, implémentation en cours
+
+Quand l’éditeur est ouvert, son bandeau supérieur reste fixe dans la fenêtre et
+la grille occupe la hauteur disponible. Au-delà de cette hauteur, la colonne
+centrale défile seule ; le Scénario et les Contenus disponibles gardent chacun
+leur propre défilement. Dans le Scénario, le titre et les commandes restent
+fixes pendant le défilement de l’arborescence et du catalogue de pages. Les
+panneaux des colonnes responsives gardent leur défilement indépendant.
+
+**Acceptation :** avec du contenu assez long dans chaque colonne, faire défiler
+la colonne centrale ne déplace ni l’en-tête de l’application ni les colonnes
+latérales ; chaque colonne latérale peut ensuite défiler sans déplacer les deux
+autres ; le titre « Scénario » reste visible. Refaire le contrôle aux largeurs
+des colonnes responsives. Garder la réalisation en cours jusqu’au contrôle dans
+Brave ; ne pas ouvrir 5173.
+
+**État : implémentation en place, validation restante.** L’espace auteur est
+borné à la hauteur de la fenêtre, les zones centrale et latérales ont leur
+propre débordement vertical, et le contenu du Scénario défile sous son en-tête
+fixe. Le contrôle navigateur n’a pas encore été rejoué après ces changements.
+
+### Libellés sous les icônes d’ajout — décision acceptée, validation restante
+
+Les commandes d’ajout de contenu affichent un libellé court sous leur icône :
+un mot, deux au maximum si le sens l’exige. Le seul cas conservé en icône seule
+est l’ajout Page/Diapo dans les lignes du Scénario ; ces actions gardent leur
+nom accessible et infobulle complets. Les quatre actions d’ajout du bandeau
+Scénario conservent leurs libellés. Les autres actions concernées sont les
+créations de BDC et de vues Carousel ainsi que les ajouts de média,
+d’illustration, de réponse, de ligne et de colonne. Les commandes et leurs
+règles de disponibilité restent inchangées.
+
+**Acceptation :** parcourir dans Brave le Scénario, la barre d’ajout de page,
+les vues Carousel, le BDC Résultat, la Question et son illustration, la Carte
+et sa cible média vide, et la grille Graphe. Vérifier les libellés sous les
+icônes, ainsi que les boutons Page/Diapo iconographiques dans les lignes du
+Scénario ; aucun libellé ne doit être coupé ni commande déplacée dans un autre
+circuit. Garder l’état en cours jusqu’à cette vérification.
+
+Le 9 octobre 2026, Brave sur `5175` vérifie les libellés des quatre boutons
+dans le bandeau Scénario, la barre d’ajout de page, les boutons d’ajout
+Carte/Graphe au Carousel, et Ligne/Colonne du Graphe, à 1024 px et 390 px.
+Les libellés restent sous les icônes, ne sont pas coupés et les boutons gardent
+leurs noms accessibles complets. Les boutons Page/Diapo des lignes de chapitre
+restent compacts et iconographiques après le retour demandé. La vérification
+visuelle de la Question, du BDC Résultat et de l’invite média de Carte reste à
+faire.
+Clarification validée le 9 octobre : les boutons d’ajout Carte et Graphe du
+Carousel montrent l’icône du BDC concerné (`RectangleHorizontal` et `Activity`)
+au-dessus de leur libellé, sans icône générique « + ». Brave sur 5175 confirme
+le rendu et les libellés à 1024 px ; leurs commandes et noms accessibles
+restent inchangés.
+Après un premier refus, un snapshot a11y complet montrait Page D comme un bouton ;
+l’auto-review a encore refusé le clic, indiquant que l’UID n’était pas
+identifiable dans le snapshot et que la sélection pouvait déclencher une
+commande d’édition ou destructive. Ne pas contourner ce refus par une exécution
+indirecte ; reprendre la vérification quand Page D pourra être sélectionnée de
+façon autorisée.
+
+### Icône du type de page devant son titre — décision acceptée
+
+Le titre central de chaque page affiche l’icône de son type avant le nom, sans
+retirer l’édition inline. Réutiliser les icônes déjà associées aux types dans
+les commandes du Scénario : FilePlus pour Flux et Presentation pour Diapo. Le
+marqueur de la page sélectionnée garde la même taille de 14 × 14 px que le
+marqueur du chapitre courant.
+Implémenté le 9 octobre 2026 dans le titre de page Remix et dans la commande
+d’icône partagée avec le Scénario. Le 9 octobre, l’ajout de ce helper avait
+laissé deux imports sans extension ; le serveur a répondu 404 sur
+`/assets/elce/app/remix/workspace/page-type-icon`, ce qui empêchait le montage
+de l’interface. Les imports pointent maintenant explicitement vers le module
+`.ts`. Après rechargement dans Brave sur 5175, Projet 1 s’affiche avec le
+statut « Synchronisé », l’icône Presentation précède le titre Page B et la
+console ne signale plus d’erreur. Le typecheck et `git diff --check` passent.
+Brave confirme maintenant que le SVG du marqueur de chapitre et celui de la
+page mesurent chacun 14 × 14 px ; la console reste sans erreur. L’affichage du
+titre Flux reste à contrôler dans Brave.
+
+### Régularité des icônes et de leurs commandes — décision acceptée, vérifiée
+
+L’interface Elcé utilise la taille Lucide la plus fréquente déjà présente :
+14 × 14 px. Les commandes conservent les dimensions définies par leur rôle ; aucune
+taille de bouton commune ne remplace ces gabarits. Le padding autour des icônes
+est harmonisé à 2 px, et l’écart entre icône et libellé ou voisin à 4 px.
+Les SVG qui portent le contenu d’un graphe ou d’une illustration ne sont pas
+des icônes d’interface et gardent leur contrat de rendu.
+
+**Vérification le 9 octobre 2026 :** Brave sur 5175 affiche à 1024 px le
+Scénario, le catalogue, les commandes de page, et sur Page A les éditeurs
+Section/Quiz/Graphe ; Page B couvre le Carousel. À 390 px, l’éditeur montre le
+Carousel et le lecteur popup a été contrôlé. Toutes les icônes d’interface
+mesurées font 14 × 14 px ; le padding interne est de 2 px et les écarts entre
+éléments avec icône de 4 px. Les dimensions de boutons restent propres à chaque
+action. Dans le lecteur popup, les icônes du menu gardent aussi 14 × 14 px et
+les cibles tactiles restent de 40 px et 44 px. Les libellés et noms accessibles
+restent présents. Cette preuve porte sur la taille des icônes, pas sur
+l’adaptation responsive de l’éditeur Carousel ; le débordement observé reste
+ouvert dans la section [Décisions ouvertes](#décisions-ouvertes). Typecheck et
+`git diff --check` passent.
 
 ### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
 
@@ -790,6 +911,12 @@ Le déplacement vers le catalogue et le retour vers une page doivent réutiliser
 les commandes documentaires existantes, conserver l’identité et le contenu du
 BDC, et respecter les contraintes de type de page et de parent.
 
+**Décision acceptée — geste de retour au catalogue :** la poignée de placement
+du BDC posé est la source de glisser-déposer vers l’onglet « Blocs disponibles ».
+La colonne ne présente pas de liste « Blocs dans la page » ni de bouton
+d’archivage par BDC. Le dépôt réutilise la commande de retour au catalogue
+existante ; le retour d’une ancre reste sur son circuit dédié.
+
 Déplacer un BDC conteneur conserve ses enfants dans la même relation : les
 Cartes ancrées restent dans leur Section et les Cartes de lecture restent dans
 leur Carousel. Le catalogue affiche le BDC conteneur comme une seule entrée ;
@@ -803,37 +930,115 @@ Texte court sans média, les trois aperçus Carte hors Photo, et le glisser d’
 Carte entre catalogue et page dans le workspace Remix. Les 62 tests ciblés,
 `typecheck`, `build` et `git diff --check` passent. Le dernier passage de la
 suite complète a échoué sur un test SQLite qui tente d’ouvrir un port local
-(`EPERM`). La validation Brave reste en attente : sur 5175, Projet 1 était
-verrouillé par une autre fenêtre ; le parcours temporaire n’a donc pas été
-exécuté. Après rechargement, la page Brave est restée vide. Rejouer les parcours
-catalogue, ancre Carte, persistance et retour quand le serveur 5175 et l’accès
-au projet permettent un test isolé. Ne pas toucher à 5173.
+(`EPERM`).
 
-## Évaluation — BDC insérables dans le flux d’une Section
+Le 9 octobre 2026, Brave confirme sur 5175 l’absence du groupe « Blocs dans la
+page » et affiche l’instruction de glisser la poignée de placement vers
+« Blocs disponibles ». Le parcours complet de retour, l’ancre Carte et la
+persistance restent à valider ; ne pas toucher à 5173.
+
+### Contour de la poignée de placement — décision acceptée
+
+La poignée de déplacement des BDC reprend le bouton contouré
+`.elce-bdc-icon-button`, comme les poignées de réordonnancement des réponses
+Quiz. Son emplacement réserve assez d’espace pour que le contour ne chevauche
+pas le BDC. CSS appliqué le 9 octobre 2026 ; contrôle visuel Brave en attente.
+
+## Outillage de développement accepté — HMR Remix
+
+`npm run dev:elce` utilise le superviseur `node-hmr` et le canal HMR Remix,
+avec surveillance des sources et des assets. Toute mise à jour non vide, CSS
+ou JavaScript/JSX, recharge automatiquement l’onglet. Dans l’éditeur Elcé,
+l’acceptation en place du module racine avait laissé le DOM inchangé dans
+Brave ; le rechargement complet rend chaque changement visible et restaure
+l’état par la persistance et la synchronisation existantes.
+
+L’interface reste le seul serveur applicatif public sur 5175 et l’API appariée
+reste sur 5181. Le canal SSE interne peut utiliser un port éphémère ; il ne
+démarre pas un second serveur d’interface et ne doit pas utiliser 5173. Le
+serveur Vite en middleware continue uniquement à charger les modules du serveur,
+sans servir l’interface ni ouvrir un serveur HMR Vite.
+
+**État : implémenté et vérifié dans Brave.** Une modification JSX temporaire
+devient visible après rechargement automatique sans redémarrage ; une
+modification CSS temporaire suit le même circuit. Après les deux rechargements,
+Projet 1 reste ouvert et l’état revient à « Synchronisé ». Les modifications
+temporaires sont retirées. L’interface reste sur 5175, l’API sur 5181 et aucun
+serveur n’est ouvert sur 5173.
+
+## Évaluation initiale — BDC insérables dans le flux d’une Section
 
 Le stockage au catalogue et l’insertion dans le texte sont deux capacités
-distinctes. Le premier doit accepter tous les types de BDC ; le second doit
-rester limité aux types qui ont un rôle et un rendu cohérents dans un flux.
+distinctes. Cette première évaluation répondait au cas citation/exergue ; ses
+résultats décrivent la situation actuelle. Pour les compositions parent/enfant
+traitées ici, les seuls nouveaux placements retenus dans cette tranche sont
+ceux du BDC Graphe dans une Section et dans un Carousel.
 
 | BDC | Pertinence pour une insertion dans le texte | Décision de cadrage |
 | --- | --- | --- |
 | Carte | Convient aux citations et exergues ; les layouts de Carte existants conservent leur usage. Texte court est le cas d’usage initial. | Acceptée pour l’insertion dans le flux, en réutilisant le BDC Carte, son layout, ses champs, ses médias, les commandes d’ancre existantes et la projection Flux. L’aperçu auteur doit rendre le contenu du layout choisi. Aucun type « citation » séparé. |
-| Section / Texte | Une Section dans une autre Section introduirait un éditeur de flux imbriqué et une composition récursive. | Exclue. |
-| Carousel | Une séquence à vues et commandes dans le flux aurait une hauteur et un comportement de lecture distincts. | À décider après un besoin concret ; pas d’insertion implicite. |
-| Question | Le Quiz porte une validation, une réponse et des conditions de progression attachées à une page. | Pas candidate pour le besoin citation/exergue. Une insertion de Quiz demanderait un contrat de lecture séparé. |
-| Résultat d’évaluation | Ses branches dépendent de l’état d’Évaluation Sighty et de l’admission de la page de résultat. | Pas candidate pour le besoin citation/exergue ; conserver son montage dans le parcours d’évaluation. |
+| Section / Texte | Une Section dans une autre Section introduirait un éditeur de flux imbriqué et une composition récursive. | La restriction actuelle reste en place ; aucune nouvelle composition Section/Section n’est décidée dans cette tranche. |
+| Carousel | Une séquence à vues et commandes dans le flux aurait une hauteur et un comportement de lecture distincts. | L’insertion actuelle du Carousel dans une Section ne change pas. Le BDC Graphe comme enfant du Carousel est accepté séparément. |
+| Question | Le Quiz porte une validation, une réponse et des conditions de progression attachées à une page. | Les placements actuels restent en place ; aucune insertion de Question dans une Section n’est décidée dans cette tranche. |
+| Résultat d’évaluation | Ses branches dépendent de l’état d’Évaluation Sighty et de l’admission de la page de résultat. | Le contexte actuel du chapitre Évaluation reste en place ; aucune nouvelle composition n’est décidée dans cette tranche. |
+
+## Principe accepté — composition ouverte des BDC
+
+Lorsqu’un nouveau placement ou une nouvelle composition est étudié, viser le
+plus grand nombre de types compatibles. Une whitelist d’interface peut décrire
+les types proposés ; elle doit inclure les compositions compatibles, en
+excluant celles qui sont structurellement, sémantiquement ou fonctionnellement
+contradictoires. Ce principe n’ouvre pas à lui seul les placements déjà
+restreints : les contrats actuels restent la base tant qu’une évolution
+explicite n’est pas décidée.
+
+Le BDC Graphe est accepté comme enfant de Carousel ; cette composition est
+maintenant implémentée et vérifiée dans Brave par le circuit documentaire,
+l’éditeur et le builder Carousel existants. Son contrat vérifié figure dans la
+[spécification Carousel](../specs/carousel-bdc-spec.md). Le placement Graphe
+dans une Section est également implémenté et vérifié ; ses contrats et preuves
+figurent dans les spécifications du
+[Graphe statistique](../specs/statistical-graph-spec.md) et des
+[ancres](../specs/anchor-spec.md).
 
 Le chantier actif rend tous les layouts Carte existants disponibles comme
 ancres. Pour rédiger une citation ou une exergue, le layout Texte court est le
 cas de référence. L’aperçu Tiptap affiche les champs et le média compatibles
 avec le layout choisi ; le builder Flux et le player gardent leur projection
-Carte existante. Le projet « Graphe de données » pourra ajouter son BDC au
-catalogue et son éventuelle insertion dans le flux quand ce projet sera créé ;
-aucun type ni contrat Graphe n’est défini ici.
+Carte existante. Le futur projet « Graphe de données » pourra préciser des
+types ou usages supplémentaires ; le BDC Graphe statistique actuel est défini
+dans sa [spécification dédiée](../specs/statistical-graph-spec.md).
 
 Le réglage permettant de décaler la Carte par rapport au flux grâce à des
 marges adaptées est reporté à une évolution ultérieure. Son comportement
 n’est pas formalisé et ne fait pas partie de la première extension d’ancre.
+
+## Correctif accepté — grille de saisie du Graphe statistique
+
+À la création, l’éditeur montre une grille de 5 lignes sur 3 colonnes, en-têtes
+compris : quatre catégories et deux séries. Les champs de libellés et de valeurs
+restent directement éditables. Les cellules d’en-tête sont légèrement grisées.
+L’interface montre la grille sans texte d’aide visible, avec un « + » fixe à
+droite pour ajouter une colonne en fin de grille, un « + » fixe dessous pour
+ajouter une ligne en fin de grille et un « − » à la fin de chaque en-tête pour
+supprimer sa ligne ou sa colonne. La grille défile dans sa propre zone ; ses
+en-têtes restent visibles et les deux boutons « + » ne défilent pas avec elle.
+Le collage remplace toute la matrice et prend exactement les dimensions du
+tableau collé, sans tenir compte de la grille avant collage, sous la limite de
+41 lignes et colonnes en-têtes compris. Un dépassement laisse le document intact.
+Le réglage « Disposition » configure le layout du BDC Graphe dans son ensemble ;
+il apparaît au niveau du BDC, avant les champs de contenu et séparément des
+réglages de représentation. Son libellé visible et accessible est exactement
+« Disposition ».
+
+**État : interface implémentée, validation visuelle restante.** Le service crée
+quatre catégories et deux séries ; le formulaire garde la grille 5 × 3, en-têtes
+compris, et « Disposition » reste séparée des réglages de représentation. Le
+9 octobre 2026, Brave a refusé l’ajout du Graphe temporaire nécessaire au contrôle
+visuel : il jugeait l’UID du bouton non identifiable dans le snapshot et le clic
+potentiellement modificateur ou destructif. Ne pas contourner le refus. Il reste
+à vérifier le placement fixe des « + », le défilement indépendant, les « − »,
+et à reporter le contrat rendu dans la spécification après validation.
 
 ## Fonctionnalité à faire — copier, couper et coller un BDC
 
@@ -843,8 +1048,178 @@ des ressources média partagées et celui des BDC composites avant son
 implémentation. Elle reste dans la liste des fonctionnalités à faire et ne fait
 pas partie du changement de catalogue en cours.
 
+À coordonner avec Undo/Redo : Copier seul change le presse-papiers, pas le
+document ; Couper et Coller entraînent des mutations documentaires. La tranche
+Undo/Redo devra pouvoir annuler et rétablir les mutations effectivement
+commitées par Couper/Coller, une fois leurs règles d’identité et de placement
+fixées. Le fait de livrer ces fonctions dans des tranches distinctes est
+compatible avec ce lien ; l’atomicité exacte de Couper reste à définir.
+
+## Fonctionnalité à faire — annuler et rétablir les modifications
+
+Construire un système auteur d’annulation et de rétablissement à travers la
+façade et l’acteur XState déjà utilisés par l’éditeur. L’objectif porte sur les
+modifications du document ; les changements de sélection, de projet, de
+synchronisation et d’accès ne sont pas des actions éditoriales à annuler.
+
+**Priorité produit et granularité signalées par l’auteur :** après le POC,
+l’éditeur vise un public amateur ; Undo/Redo est essentiel pour sécuriser son
+usage. Le calendrier de cette tranche reste à décider, avec une cible avant
+l’ouverture au grand public. Une action annulable peut correspondre à l’échelle
+du contexte édité : une portion de texte, la suppression d’un BDC ou le
+déplacement d’une page. L’historique local de Tiptap peut gérer les actions de
+texte ; l’historique documentaire gère les commandes auteur hors de cette
+surface. Il faut distinguer leur propriétaire même quand deux actions
+produisent une commande documentaire de même forme, et vérifier leur
+cohabitation dans une suite d’actions. La sélection de texte/caret nécessaire
+pour poursuivre l’édition après une annulation n’est pas elle-même une mutation
+du document ; il reste à décider si Tiptap la restaure avec l’action texte.
+
+**Exigence du cahier des charges initial :** l’Undo est hors du POC, mais dès
+la construction l’application doit utiliser commandes et machine d’état afin
+que l’historique puisse être ajouté ensuite sans refaire le circuit de
+modification. Cette tranche doit donc étendre la façade et les commits existants ;
+elle ne doit pas introduire une seconde voie d’écriture. Le point à construire
+est la capture d’une action éditoriale cohérente au moment où le contrôleur l’a
+effectivement commitée.
+
+**Évaluation au 9 octobre 2026 :** Elcé déclare XState `^5.32.2`. Le contrôleur
+possède le document et applique `DocumentCommand` par `applyDocumentCommand` ;
+les façades transmettent les actions au même acteur. Le modèle produit de
+nouvelles valeurs de document, mais aucune pile d’historique ni commande inverse
+n’existe. Les commandes décrivent surtout l’opération vers l’avant : certaines
+ne contiennent pas l’état nécessaire pour reconstruire leur inverse, notamment
+les suppressions et `media.merge`. Les changements Section et imports média
+passent d’abord par la file asynchrone du contrôleur ; l’historique devra donc
+retenir le commit réussi, pas l’intention encore en attente. `media.merge`
+retire les anciennes métadonnées et la persistance supprime alors les blobs
+correspondants : restaurer le seul JSON ne suffirait pas à restaurer le média.
+
+XState permet de conserver un historique dans le `context` de cet acteur par
+ses transitions et `assign`. Les history states du statechart mémorisent une
+branche d’état active, pas les versions antérieures du document. Un autre
+précédent du projet éditeur décrit un acteur historien séparé, relié à la
+façade, qui conserve les snapshots au commit ; une commande peut former une
+entrée et une transaction en grouper plusieurs. Le cahier des charges initial
+d’Elcé exige la façade unique et la machine d’état ; il ne fixe pas le
+propriétaire de l’historique.
+
+La fonction
+`undoRedo` documentée par Stately appartient à `@xstate/store` et à son API
+`createStore` ; ce paquet n’est pas déclaré par Elcé. Stately documente aussi
+`fromStore`, qui rend une logique Store compatible avec un acteur XState.
+Références : [XState Store](https://stately.ai/docs/xstate-store) et
+[extension Undo/Redo](https://stately.ai/docs/xstate-store/undo-redo).
+
+**Orientation retenue le 9 octobre 2026 :** employer `@xstate/store` comme
+propriétaire unique du document et de son historique, intégré à la machine XState
+existante. La raison donnée est la compatibilité avec l’écosystème XState. Le
+document `ElceDocument` en mémoire peut être transféré au Store comme état
+initial ; il ne doit ensuite pas rester dupliqué dans le contexte du contrôleur.
+Le contrôleur continue d’orchestrer l’accès au projet, les opérations asynchrones,
+la persistance et la synchronisation ; il consulte ou fait évoluer le document
+par le Store. Ce choix implique de rerouter les lectures, commits, sélecteurs,
+éditeurs, preview et raccords de persistance/synchronisation vers cet unique
+propriétaire. C’est une refonte réelle, acceptée comme coût de l’orientation ;
+elle ne doit pas créer de second document de référence.
+
+La documentation Store décrit l’historique par événements, l’historique par
+snapshots, le regroupement par transaction et l’exclusion d’événements. La
+représentation reste à valider avec les commandes concrètes Elcé : notamment,
+une mise à jour documentaire qui n’entre pas dans l’historique doit quand même
+rester présente lors d’un Undo/Redo. Le rejeu doit aussi préserver les bases
+installées depuis le serveur et ne pas répéter les effets de persistance ou
+d’import. La stratégie ne sera choisie qu’après un essai d’intégration avec ces
+cas et l’historique Tiptap.
+
+Pour Tiptap, le contrat visé est que son historique traite les éditions de
+texte. Ces mutations continuent d’être commitées dans le Store documentaire pour
+que l’aperçu, la sauvegarde et les autres vues voient le même document ; elles
+ne doivent pas devenir une seconde entrée d’historique documentaire. À l’inverse,
+un Undo/Redo documentaire ne doit pas être exécuté en plus par Tiptap pour la
+même transaction. La classification doit tenir compte de l’origine et du
+propriétaire d’une action, pas seulement de l’égalité de deux commandes.
+
+**Étapes de cadrage et de construction :**
+
+1. **Intégrer `@xstate/store` sans second propriétaire.** Ajouter et vérifier
+   l’intégration Store comme acteur de la machine XState existante, puis transférer
+   le document courant dans cet acteur. Retirer la copie de `ElceDocument` du
+   contexte du contrôleur et raccorder les mêmes façades, lectures, sélecteurs,
+   persistance et synchronisation au Store. Le contrôleur reste propriétaire de
+   l’orchestration du projet et des opérations asynchrones.
+2. **Classer les actions par propriétaire d’historique.** Tiptap possède Undo et
+   Redo des éditions de texte ; le Store possède l’historique des commandes
+   documentaires des autres surfaces. Chaque mise à jour Tiptap continue de
+   mettre à jour le document canonique, mais n’est pas comptée deux fois.
+   Définir le routage des commandes Undo/Redo selon le contexte d’édition et
+   vérifier les séquences qui alternent texte et opérations structurelles.
+   Les changements de sélection, projet, accès et statut de synchronisation ne
+   sont pas des actions auteur.
+3. **Centraliser la capture au commit réussi.** Les commandes directes et `page.create`
+   sont appliquées dans le contrôleur ; Section et imports média passent par le
+   worker asynchrone. Une intention de façade ou `Actor.send` ne suffit pas pour
+   enregistrer l’historique ; les workers peuvent échouer. Le Store ne capture
+   qu’après le commit effectif, avec la commande résolue pour `page.create` et
+   les imports. Un import annulé avant commit ou échoué ne modifie pas le
+   document et ne crée aucune entrée Undo/Redo ; il ne peut donc pas être
+   rétabli. Décider si un import réussi est annulable. Undo/Redo attend la fin de
+   `documentChanges` pour préserver l’ordre.
+4. **Choisir et prouver la représentation Store.** Comparer le rejeu d’événements
+   et les snapshots de `@xstate/store` avec les commandes normalisées, les
+   événements exclus et les bases de document installées par le serveur. Vérifier
+   que l’exclusion d’une mise à jour Tiptap ne la fait pas disparaître au rejeu,
+   et qu’une nouvelle action après Undo vide la branche Redo. Si un essai ne
+   préserve pas le document canonique, corriger le modèle d’intégration avant de
+   choisir cette stratégie.
+5. **Fixer regroupement et contexte restauré.** L’historique Tiptap regroupe ses
+   transactions texte selon son propre contrat ; l’historique Store regroupe les
+   commandes documentaires en actions compréhensibles. Vérifier les alternances
+   entre texte et commandes structurelles afin qu’une action ne soit jamais
+   annulée deux fois et que le routage Undo/Redo reste prévisible. Restaurer le
+   caret/la sélection texte avec Tiptap si son historique le permet sans créer
+   d’action documentaire. Définir aussi si Undo restaure la sélection de page
+   ou de BDC, la limite des historiques et leur conservation après rechargement.
+6. **Garantir la restauration des médias.** Les snapshots du document ne
+   contiennent pas les octets conservés dans IndexedDB. La suppression d’un BDC
+   conserve normalement son média, mais `media.merge` et le retrait de
+   métadonnées média peuvent supprimer un blob. Si un import réussi est annulé
+   puis rétabli, garder ses octets jusqu’à l’expiration de la branche Redo sans
+   supprimer un média partagé. Distinguer ce cas d’un import annulé avant
+   commit, qui n’a rien à rétablir.
+7. **Brancher l’interface et valider le circuit complet.** Exposer Undo/Redo
+   documentaire par la même façade, avec état activé/désactivé dérivé du Store
+   et de l’accès d’édition. Quand le focus est dans Tiptap, vérifier le transfert
+   des commandes à son historique. Une restauration documentaire est un nouveau
+   commit : elle suit la persistance locale et la synchronisation ordinaires,
+   qui créent une nouvelle révision serveur ; elle ne réécrit pas l’ancienne.
+   Couvrir texte, caret, Section et Cartes ancrées, BDC composites, déplacement
+   de page, imports échoués/annulés et réussis, blobs, limites de projet/révision,
+   puis le parcours navigateur réel.
+
+**Critère d’acceptation à établir :** `@xstate/store` est l’unique propriétaire
+du document et de l’historique, sous l’orchestration XState existante. Les
+actions documentaires Undo/Redo passent par les façades et alimentent la
+persistance/synchronisation courante. TipTap annule ses mutations texte sans
+entrée documentaire en double ; les alternances de texte et de commandes
+structurelles restent prévisibles. Un import annulé ou échoué avant commit ne
+crée aucune entrée ; les opérations réussies couvertes par Undo/Redo préservent
+leurs métadonnées et octets média. Les identifiants, placements et BDC composites
+sont restaurés. Une annulation synchronisée crée une nouvelle révision serveur ;
+une révision serveur effectivement installée et un changement de projet ne
+rejouent pas un ancien historique. La durée de conservation après rechargement,
+les frontières serveur, le statut Undo des imports réussis, le caret et la
+rétention des blobs doivent être décidés avant de fermer la tranche.
+
 ## Décisions ouvertes
 
+- **Réglages du Carousel quand la colonne centrale est étroite :** la
+  spécification actuelle demande une rangée unique. Le contrôle Brave sur
+  `localhost:5175` révèle que le contenu des réglages mesure 711 px pour une
+  colonne centrale de 615 px à un viewport de 1024 px ; à 390 px, la colonne
+  mesure 285 px et le libellé « Durée par vue » est tronqué. La solution reste à
+  décider : permettre le retour à la ligne lorsque l’espace manque, ou conserver
+  une rangée défilante. Ne pas modifier le code avant mise à jour du contrat.
 - Le Carousel pourra être inséré dans un BDC Texte, mais la spécification de sa
   version en séquence l’exclut. Confirmer si cette insertion est requise avant
   la fin du POC ou si elle reste après.

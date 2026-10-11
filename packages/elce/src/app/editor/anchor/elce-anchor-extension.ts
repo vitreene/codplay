@@ -4,7 +4,7 @@ import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { dropPoint } from '@tiptap/pm/transform'
 import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { ANCHOR, ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID } from '../../../config/document-config'
+import { ANCHOR, ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID, STATISTICAL_GRAPH_RENDERING } from '../../../config/document-config'
 import { CARD_PRESETS } from '../../../config/presets'
 import { ElceCardPresetBuilder } from '../../../builders/card/card-preset-builder'
 import type { BdcId } from '../../../domain/document/document-types'
@@ -16,14 +16,16 @@ import type {
   ElceAnchorExtensionOptions,
   ElceAnchorTransaction,
 } from './anchor-types'
-import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor } from '../../../anchor/anchor-position'
+import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../../anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../../domain/anchor/anchor-ratio-service'
+import { ElceStatisticalGraphSceneBuilder } from '../../../builders/statistical-graph/statistical-graph-scene-builder'
 
 export const ELCE_ANCHOR_TRANSACTION_META = 'elceAnchorAction'
 
 const ELCE_ANCHOR_PLUGIN_KEY = new PluginKey('elceAnchorInteractions')
 const anchorRatioService = new ElceAnchorRatioService()
 const cardPresetBuilder = new ElceCardPresetBuilder()
+const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
 /** Creates the attributes shared by the editable anchor and its static export. */
 export function createElceAnchorAttributes(
@@ -41,6 +43,13 @@ function renderAnchorCardPreview(
   bdcId: string,
   onPhotoImage: (image: HTMLImageElement) => void,
 ): void {
+  if (preview.kind === 'statistical-graph') {
+    const graphBuild = statisticalGraphSceneBuilder.buildContent(preview.content, preview.layoutId, `${bdcId}-anchor-preview`)
+    container.innerHTML = graphBuild.markup
+    const graph = container.firstElementChild
+    if (graph instanceof HTMLElement) graph.classList.add('elce-anchor-card-preview')
+    return
+  }
   const preset = CARD_PRESETS[preview.layoutId]
   if (preset === undefined) return
   const rootId = `${bdcId}-anchor-preview`
@@ -85,6 +94,7 @@ function renderAnchorCardPreview(
 
 /** Builds media markup only for the source types supported by the selected Card layout. */
 function createAnchorCardMediaMarkup(preview: ElceAnchorCardPreview, bdcId: string): string | null {
+  if (preview.kind === 'statistical-graph') return null
   const media = preview.media
   if (media === null) return null
   const mediaId = `${bdcId}-anchor-preview-media`
@@ -199,21 +209,28 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
         const currentBdcId = String(currentNode.attrs.bdcId ?? '')
         const card = this.options.resolveCard?.(currentBdcId) ?? null
         const layoutId = card?.layoutId ?? DEFAULT_PRESET_ID.PHOTO
-        const mediaType = card?.media?.type ?? null
+        const mediaType = card === null || card.kind === 'statistical-graph' ? null : card.media?.type ?? null
+        const reservationPadding = card?.kind === 'statistical-graph'
+          ? statisticalGraphAnchorPaddingBottom(card.content.rendering)
+          : configuredPadding
         const signature = JSON.stringify([configuredPadding, card])
         dom.id = String(currentNode.attrs.partId ?? '')
         dom.dataset.bdcId = currentBdcId
         dom.dataset.part = String(currentNode.attrs.partId ?? '')
-        dom.style.setProperty(ANCHOR.PADDING_VARIABLE, configuredPadding)
-        dom.style.paddingBottom = anchorEditorReservationFor(configuredPadding, layoutId)
+        dom.style.setProperty(ANCHOR.PADDING_VARIABLE, reservationPadding)
+        dom.style.paddingBottom = anchorEditorReservationFor(reservationPadding, layoutId)
         dom.style.setProperty('anchor-name', anchorNameFor(String(currentNode.attrs.partId ?? '')))
         bdc.id = `${currentBdcId}-editor-bdc`
         bdc.dataset.bdcId = currentBdcId
         bdc.dataset.cardLayout = layoutId
         if (mediaType === null) delete bdc.dataset.mediaType
         else bdc.dataset.mediaType = mediaType
-        bdc.setAttribute('aria-label', 'Aperçu de la carte ancrée')
-        if (layoutId === DEFAULT_PRESET_ID.PHOTO) {
+        bdc.setAttribute('aria-label', 'Aperçu du bloc illustratif ancré')
+        if (card?.kind === 'statistical-graph') {
+          bdc.style.height = 'auto'
+          if (card.content.rendering === STATISTICAL_GRAPH_RENDERING.TABLE) bdc.style.removeProperty('aspect-ratio')
+          else bdc.style.aspectRatio = '16 / 9'
+        } else if (layoutId === DEFAULT_PRESET_ID.PHOTO) {
           bdc.style.height = 'auto'
           bdc.style.aspectRatio = mediaType === 'video'
             ? '16 / 9'
@@ -260,8 +277,8 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
       editButton.draggable = false
       editButton.contentEditable = 'false'
       editButton.id = `${bdcId}-anchor-edit`
-      editButton.setAttribute('aria-label', 'Modifier la carte ancrée')
-      editButton.title = 'Modifier la carte'
+      editButton.setAttribute('aria-label', 'Modifier le bloc illustratif ancré')
+      editButton.title = 'Modifier le bloc illustratif'
       editButton.append(createAnchorEditIcon(`${bdcId}-anchor-edit-icon`))
       editButton.addEventListener('mousedown', (event) => event.preventDefault())
       editButton.addEventListener('click', (event) => {

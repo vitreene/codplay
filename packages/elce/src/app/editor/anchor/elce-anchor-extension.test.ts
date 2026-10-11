@@ -4,7 +4,8 @@ import { Editor } from '@tiptap/core'
 import { Fragment, Slice } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID } from '../../../config/document-config'
+import { ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID, STATISTICAL_GRAPH_RENDERING } from '../../../config/document-config'
+import { createDefaultStatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-service'
 import { createElceAnchorExtension, ELCE_ANCHOR_TRANSACTION_META, ElceAnchorExtension } from './elce-anchor-extension'
 
 describe('Elcé anchor extension', () => {
@@ -113,6 +114,34 @@ describe('Elcé anchor extension', () => {
 
     const placeholder = host.querySelector('.elce-anchor-placeholder')
     expect(placeholder?.querySelector('.elce-anchor-bdc img.elce-anchor-media-preview')?.getAttribute('src')).toBe('blob:image-1')
+  })
+
+  it('gives an anchored Graph table natural height and reserves its text width', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const graph = { ...createDefaultStatisticalGraphContent(), rendering: STATISTICAL_GRAPH_RENDERING.TABLE }
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        kind: 'statistical-graph',
+        content: graph,
+        layoutId: DEFAULT_PRESET_ID.STATISTICAL_GRAPH_ABOVE_TEXT,
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'elceAnchor', attrs: { bdcId: 'graph-table', partId: 'page-a:graph-table:anchor' } }],
+        }],
+      },
+    })
+    editor.mount(host)
+
+    const anchor = host.querySelector('.elce-anchor-placeholder')
+    const graphPreview = anchor?.querySelector('.elce-anchor-bdc')
+    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 100%')
+    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(100% + (1lh + 1rem + 1rem))')
+    expect(graphPreview?.getAttribute('style')).not.toContain('aspect-ratio: 16 / 9')
+    expect(graphPreview?.querySelector('.elce-statistical-graph--table table')).not.toBeNull()
   })
 
   it('renders authored text fields for a text Card inside its anchor preview', () => {

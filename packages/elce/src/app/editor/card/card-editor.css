@@ -24,7 +24,7 @@
   height: 2rem;
   margin-left: auto;
   place-items: center;
-  padding: 0;
+  padding: var(--elce-icon-padding);
   border: 1px solid #d6d3ca;
   border-radius: 0.4rem;
   color: #8b5652;

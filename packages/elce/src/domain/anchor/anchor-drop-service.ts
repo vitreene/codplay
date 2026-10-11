@@ -19,6 +19,7 @@ import type {
 } from '../catalog/catalog-types'
 import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
 import type { Bdc, MediaMetadata, PageId } from '../document/document-types'
+import { statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
 
 const mediaResourceService = new ElceMediaResourceService()
 
@@ -198,11 +199,17 @@ function isFluxSection(document: ElceDocument, pageId: PageId, sectionBdcId: str
   }
 }
 
-/** Finds one available Card and derives the reservation for its selected layout. */
-function readCatalogCard(document: ElceDocument, bdcId: string): Readonly<{ bdc: Bdc; paddingBottom: string }> | null {
+/** Finds one available illustration BDC and derives its inline reservation. */
+function readCatalogIllustration(document: ElceDocument, bdcId: string): Readonly<{ bdc: Bdc; paddingBottom: string }> | null {
   if (!document.data.catalogBdcIds.includes(bdcId)) return null
   const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
-  if (bdc?.type !== BDC_TYPE.CARD || bdc.card == null || bdc.pageId !== null || bdc.parentBdcId !== null) return null
+  if (bdc === undefined || bdc.pageId !== null || bdc.parentBdcId !== null) return null
+  if (bdc.type === BDC_TYPE.STATISTICAL_GRAPH) {
+    return bdc.statisticalGraph == null
+      ? null
+      : { bdc, paddingBottom: statisticalGraphAnchorPaddingBottom(bdc.statisticalGraph.rendering) }
+  }
+  if (bdc.type !== BDC_TYPE.CARD || bdc.card == null) return null
   if (bdc.presetId !== DEFAULT_PRESET_ID.PHOTO) {
     return { bdc, paddingBottom: ANCHOR.DEFAULT_PADDING_BOTTOM }
   }
@@ -220,7 +227,7 @@ function createCatalogBdcDropTarget(
   reference: Extract<ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.BDC }>,
   pageId: PageId,
 ): ElceCatalogDropTarget | null {
-  const item = readCatalogCard(document, reference.bdcId)
+  const item = readCatalogIllustration(document, reference.bdcId)
   switch (item) {
     case null:
       return null
@@ -257,6 +264,8 @@ function catalogBdcName(document: ElceDocument, bdc: Bdc): string {
       return 'Résultat d’évaluation'
     case BDC_TYPE.CAROUSEL:
       return 'Carousel'
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      return bdc.statisticalGraph?.title.trim() || 'Graphe statistique'
     default:
       return assertNeverBdcType(bdc.type)
   }

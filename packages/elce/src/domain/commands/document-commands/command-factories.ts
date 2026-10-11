@@ -1,5 +1,5 @@
 import { BDC_LOCATION, BDC_TYPE, CAROUSEL_CONFIG, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE } from '../../../config/document-config'
-import type { CardLayoutId, PageType } from '../../../config/document-config-types'
+import type { CardLayoutId, PageType, StatisticalGraphLayoutId } from '../../../config/document-config-types'
 import { ElceDocument, nextChapterName, createStableId } from '../../../domain/document/document-model'
 import type { CardPresentationOptions } from '../../../domain/card/card-types'
 import type { BdcId, Chapter, ChapterId, PageId } from '../../../domain/document/document-types'
@@ -185,5 +185,37 @@ export function createStandaloneCardBdcCommand(
     presetId: layoutId,
     placement: { kind: BDC_LOCATION.PAGE, pageId },
     ...(initialCardOptions === undefined ? {} : { initialCardOptions }),
+  }
+}
+
+/** Creates a Statistical Graph BDC at its explicit position in a page. */
+export function createStatisticalGraphBdcCommand(
+  bdcId: BdcId,
+  pageId: PageId,
+  index: number,
+  layoutId: StatisticalGraphLayoutId = DEFAULT_PRESET_ID.STATISTICAL_GRAPH_ABOVE_TEXT,
+): Extract<DocumentCommand, { type: 'bdc.create' }> {
+  return {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.STATISTICAL_GRAPH,
+    presetId: layoutId,
+    placement: { kind: BDC_LOCATION.PAGE, pageId, index },
+  }
+}
+
+/** Creates a Statistical Graph BDC in one Carousel sequence position. */
+export function createStatisticalGraphCarouselBdcCommand(
+  bdcId: BdcId,
+  carouselBdcId: BdcId,
+  index: number,
+  layoutId: StatisticalGraphLayoutId = DEFAULT_PRESET_ID.STATISTICAL_GRAPH_ABOVE_TEXT,
+): Extract<DocumentCommand, { type: 'bdc.create' }> {
+  return {
+    type: 'bdc.create',
+    bdcId,
+    bdcType: BDC_TYPE.STATISTICAL_GRAPH,
+    presetId: layoutId,
+    placement: { kind: BDC_LOCATION.PARENT, parentBdcId: carouselBdcId, index },
   }
 }

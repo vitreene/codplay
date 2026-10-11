@@ -2,6 +2,7 @@ import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, AlignLeft, Al
 import { on, ref, type RemixNode } from 'remix/ui'
 
 import { BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
+import type { CardLayoutId } from '../../../config/document-config-types'
 import type { Bdc, Page } from '../../../domain/document/document-types'
 import type { ElceAnchorCardPreview } from '../../../domain/anchor/anchor-types'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
@@ -13,13 +14,14 @@ import { RemixCardEditorFields } from '../card/remix-card-editor-fields'
 import { SectionTiptapAdapter } from './section-editor-tiptap-adapter'
 import { EMPTY_SECTION_TOOLBAR_STATE } from './section-editor-tiptap'
 import type { SectionToolbarState } from './section-editor-tiptap'
+import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
 
 export interface RemixSectionEditorBindings {
   readonly adapters: Map<string, SectionTiptapAdapter>
   readonly toolbarStates: Map<string, SectionToolbarState>
-  readonly selectedAnchorCardId: string | null
-  readonly onEditAnchorCard: (bdcId: string) => void
-  readonly onCloseAnchorCard: () => void
+  readonly selectedAnchorBdcId: string | null
+  readonly onEditAnchorBdc: (bdcId: string) => void
+  readonly onCloseAnchorBdc: () => void
   readonly handle: RemixRenderHandle
   readonly current: { view: EditorViewModel }
 }
@@ -34,8 +36,9 @@ export function renderRemixSectionEditor(
 ): RemixNode {
   const section = bdc.section
   if (bdc.type !== BDC_TYPE.SECTION || section === null) return null
-  const anchorCards = view.documentModel.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id && candidate.type === BDC_TYPE.CARD)
-  const editingAnchorCard = anchorCards.find((card) => card.id === state.selectedAnchorCardId)
+  const anchorIllustrations = view.documentModel.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id
+    && (candidate.type === BDC_TYPE.CARD || candidate.type === BDC_TYPE.STATISTICAL_GRAPH))
+  const editingAnchorBdc = anchorIllustrations.find((illustration) => illustration.id === state.selectedAnchorBdcId)
   const cardActions = actions.createCardEditorActions(view.documentModel.bdcs)
   const toolbarState = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
   const handle = state.handle
@@ -54,7 +57,7 @@ export function renderRemixSectionEditor(
         id={`elce-section-title-${bdc.id}`}
         className="elce-section-title-input"
         aria-label="Titre de section"
-        placeholder="Titre (facultatif)"
+        placeholder="Titre"
         value={section.title}
         mix={on<HTMLInputElement, 'input'>('input', (event) => state.adapters.get(bdc.id)?.updateTitle(event.currentTarget.value))}
       />
@@ -66,7 +69,7 @@ export function renderRemixSectionEditor(
         title="Supprimer le bloc texte"
         mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
       >
-        {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`, 16)}
+        {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`, 14)}
       </button>
     </div>
     {renderToolbar(bdc.id, toolbarState, state.adapters, handle)}
@@ -88,7 +91,7 @@ export function renderRemixSectionEditor(
               bdc.id,
             ),
             resolveCard: (anchorBdcId) => resolveAnchorCard(current.view, anchorBdcId),
-            onEditCard: state.onEditAnchorCard,
+            onEditCard: state.onEditAnchorBdc,
           },
           onChange: (change) => actions.submitSectionChange(bdc.id, change),
           onToolbarState: (next) => {
@@ -106,9 +109,9 @@ export function renderRemixSectionEditor(
         }, { once: true })
       })}
     />
-    {editingAnchorCard === undefined
+    {editingAnchorBdc === undefined
       ? null
-      : renderAnchorCardEditor(editingAnchorCard, view, cardActions, state.onCloseAnchorCard)}
+      : renderAnchorCardEditor(editingAnchorBdc, view, cardActions, state.onCloseAnchorBdc, actions)}
   </section>
 }
 
@@ -162,7 +165,7 @@ function renderToolbar(
         if (!handle.signal.aborted) void handle.update()
       })}
     >
-      {renderLucideIcon(icon, `elce-section-${suffix}-icon-${bdcId}`, 15)}
+      {renderLucideIcon(icon, `elce-section-${suffix}-icon-${bdcId}`, 14)}
     </button>)}
   </div>
 }
@@ -173,7 +176,40 @@ function renderAnchorCardEditor(
   view: EditorViewModel,
   actions: ReturnType<EditorActionsFacade['createCardEditorActions']>,
   close: () => void,
+  editorActions: EditorActionsFacade,
 ): RemixNode {
+  if (card.type === BDC_TYPE.STATISTICAL_GRAPH && card.statisticalGraph != null) {
+    return <section
+      id={`elce-anchor-card-editor-${card.id}`}
+      className="elce-anchor-card-editor"
+      aria-label="Modifier le graphe statistique ancré"
+    >
+      <header
+        id={`elce-anchor-card-editor-header-${card.id}`}
+        className="elce-anchor-card-editor__header"
+      >
+        <h3
+          id={`elce-anchor-card-editor-title-${card.id}`}
+        >
+          Graphe statistique
+        </h3>
+        <button
+          id={`elce-anchor-card-editor-close-${card.id}`}
+          className="elce-bdc-icon-button"
+          type="button"
+          aria-label="Fermer l’édition du graphe"
+          title="Fermer"
+          mix={on<HTMLButtonElement, 'click'>('click', close)}
+        >
+          {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`, 14)}
+        </button>
+      </header>
+      {renderRemixStatisticalGraphEditor(
+        card,
+        editorActions.createStatisticalGraphEditorActions(card.id, card.statisticalGraph),
+      )}
+    </section>
+  }
   return <section
     id={`elce-anchor-card-editor-${card.id}`}
     className="elce-anchor-card-editor"
@@ -212,6 +248,13 @@ function renderAnchorCardEditor(
 /** Resolves the Card layout, text and available media from the current actor snapshot. */
 function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorCardPreview | null {
   const card = view.documentModel.bdcs.find((candidate) => candidate.id === bdcId)
+  if (card?.type === BDC_TYPE.STATISTICAL_GRAPH && card.statisticalGraph != null) {
+    return {
+      kind: 'statistical-graph',
+      content: card.statisticalGraph,
+      layoutId: card.presetId as Extract<ElceAnchorCardPreview, { kind: 'statistical-graph' }>['layoutId'],
+    }
+  }
   if (card?.type !== BDC_TYPE.CARD || card.card == null) return null
   const mediaMetadata = card.card.mediaId === null
     ? undefined
@@ -220,7 +263,7 @@ function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorCard
   const mediaType = mediaMetadata === undefined ? null : mediaTypeFromMimeType(mediaMetadata.mimeType)
   return {
     content: card.card,
-    layoutId: card.presetId as ElceAnchorCardPreview['layoutId'],
+    layoutId: card.presetId as CardLayoutId,
     media: mediaMetadata === undefined || source === undefined || mediaType === null
       ? null
       : { source, type: mediaType },

@@ -59,6 +59,8 @@ export function selectEditorViewModel(snapshot: EditorSnapshot): EditorViewModel
             return bdc.carousel == null ? [] : [bdc]
           case BDC_TYPE.CARD:
             return bdc.card == null ? [] : [bdc]
+          case BDC_TYPE.STATISTICAL_GRAPH:
+            return bdc.statisticalGraph == null ? [] : [bdc]
           default:
             return []
         }

@@ -503,7 +503,11 @@ describe('Remix production page editor', () => {
 
     rendered.cleanup()
     rendered = mountWorkspace()
-    await actOnRemix(rendered, () => rendered.$('#elce-page-bdc-catalog-bdc-catalog-card')?.click())
+    const pageBdcTransfer = createDataTransfer()
+    await actOnRemix(rendered, () => dispatchDrag(rendered.$('#elce-page-bdc-drag-bdc-catalog-card')!, 'dragstart', pageBdcTransfer))
+    expect(pageBdcTransfer.getData(BDC_ORDER.MIME_TYPE)).toBe('bdc-catalog-card')
+    await actOnRemix(rendered, () => dispatchDrag(rendered.$('#elce-content-catalog-tab-bdcs')!, 'dragover', pageBdcTransfer))
+    await actOnRemix(rendered, () => dispatchDrag(rendered.$('#elce-content-catalog-tab-bdcs')!, 'drop', pageBdcTransfer))
     documentModel = controller.getSnapshot().context.document
     expect(documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds).toEqual(page.bdcIds)
     expect(documentModel.data.catalogBdcIds).toContain('bdc-catalog-card')

@@ -31,6 +31,10 @@ Chaque commande associe une icône à son libellé. À 800 px et en dessous, le
 libellé visible est masqué et l’icône reste seule. Le texte reste disponible
 dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icône
 et le libellé sont visibles ensemble.
+Les icônes d’interface du lecteur, y compris l’ouverture et la fermeture du
+sommaire Sighty/CodPlay, sont rendues en 14 × 14 px dans l’application Elcé.
+Les boutons gardent leur gabarit propre : la barre conserve ses cibles de 40 px
+sur mobile et le menu garde ses cibles tactiles de 44 px.
 
 Chaque instantané reçu monte une nouvelle composition du lecteur. La
 progression, les réponses et l’historique restent locaux à cette session de
@@ -100,6 +104,10 @@ inaccessible tant que le parcours requis pour son évaluation n’est pas termin
   chargées depuis leurs URL API. « Réafficher la page éditée » a réaffiché la
   même page. Les consoles étaient vides et aucun asset React, ReactDOM,
   `@react-refresh` ou `react/jsx-runtime` n’a été demandé.
+- Brave DevTools, le 9 octobre 2026, confirme sur 5175 que les commandes de la
+  barre et les icônes d’ouverture/fermeture du sommaire mesurent 14 × 14 px. À
+  390 px, la barre garde des boutons de 40 px et le menu des boutons de 44 px ;
+  à 1280 px, les commandes conservent leurs libellés et noms accessibles.
 - Pour cette correction, le typecheck et le build passent ; le build signale un
   chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
   passe 28/28. La suite complète compte 218 succès et un échec d’environnement :

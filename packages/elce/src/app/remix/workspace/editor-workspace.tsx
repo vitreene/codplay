@@ -1,4 +1,5 @@
 import { on, type RemixNode } from 'remix/ui'
+import { Images, List } from 'lucide-static'
 
 import { PAGE_LOCATION, SCENARIO_ENTRY_KIND } from '../../../config/document-config'
 import type { PagePlacement } from '../../../domain/commands/document-command-types'
@@ -6,6 +7,7 @@ import type { ScenarioEntry } from '../../../domain/scenario/scenario-entry-type
 import { renderChapterSettings } from './chapter-settings'
 import { renderContentCatalogPanel } from './content-catalog-panel'
 import { renderScenarioPanel } from './scenario-panel'
+import { renderLucideIcon } from '../lucide-static-icon'
 import type { EditorWorkspaceViewProps } from './editor-workspace-types'
 import type { ScenarioPanelProps } from './scenario-panel-types'
 
@@ -25,46 +27,94 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
   const center = props.view.selectedChapter === undefined
     ? <div
       id="elce-remix-page-editor-host-container"
-      className="elce-remix-page-editor-host"
+      className="elce-remix-page-editor-host elce-remix-center-column"
     >
       {props.pageEditorHost}
     </div>
-    : renderChapterSettings({
-      chapter: props.view.selectedChapter,
-      actions: props.actions,
-      onPreview: props.onPreview,
-      previewError: props.previewError,
-    })
+    : <div
+      id="elce-remix-chapter-settings-host"
+      className="elce-remix-center-column"
+    >
+      {renderChapterSettings({
+        chapter: props.view.selectedChapter,
+        actions: props.actions,
+        onPreview: props.onPreview,
+        previewError: props.previewError,
+      })}
+    </div>
+
+  const panelStateClass = props.responsivePanel === null
+    ? ''
+    : ` elce-main--${props.responsivePanel}-open`
 
   return <div
     id="elce-remix-editor-workspace"
   >
     <main
       id="elce-main"
-      className="elce-main"
+      className={`elce-main${panelStateClass}`}
       hidden={!props.visible}
     >
       {renderScenarioPanel(scenarioProps)}
-      {center}
+      <div
+        id="elce-remix-center-layout"
+        className="elce-remix-center-layout"
+      >
+        {renderWorkspaceAccess(props)}
+        {center}
+      </div>
       {renderContentCatalogPanel({
         view: props.view,
         actions: props.actions,
         responsivePanel: props.responsivePanel,
         dropTarget: props.dropTarget,
-        onSetResponsivePanel: (panel) => props.onSetResponsivePanel(panel),
         onSetDropTarget: props.onSetDropTarget,
       })}
     </main>
-    {props.responsivePanel === null
-      ? null
-      : <button
-        id="elce-responsive-panel-backdrop"
-        className="elce-responsive-panel-backdrop"
-        type="button"
-        aria-label={props.responsivePanel === 'outline' ? 'Fermer le scénario' : 'Fermer les contenus disponibles'}
-        mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetResponsivePanel(null))}
-      />}
   </div>
+}
+
+/** Renders the icon-only controls on the outer edges of the center column. */
+function renderWorkspaceAccess(
+  props: Pick<EditorWorkspaceViewProps, 'responsivePanel' | 'onSetResponsivePanel'>,
+): RemixNode {
+  return <nav
+    id="elce-responsive-panel-access"
+    className="elce-responsive-panel-access"
+    aria-label="Panneaux de l’éditeur"
+  >
+    {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
+    {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
+  </nav>
+}
+
+/** Renders one unframed panel toggle while preserving its button semantics. */
+function renderPanelToggle(
+  panel: 'outline' | 'properties',
+  responsivePanel: EditorWorkspaceViewProps['responsivePanel'],
+  setResponsivePanel: EditorWorkspaceViewProps['onSetResponsivePanel'],
+): RemixNode {
+  const isOpen = responsivePanel === panel
+  const panelLabel = panel === 'outline' ? 'le scénario' : 'les contenus disponibles'
+  const label = `${isOpen ? 'Fermer' : 'Ouvrir'} ${panelLabel}`
+  const id = panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
+  const targetId = panel === 'outline' ? 'elce-outline' : 'elce-properties'
+  const icon = panel === 'outline' ? List : Images
+  const className = isOpen
+    ? `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel} elce-responsive-panel-toggle--open`
+    : `elce-responsive-panel-toggle elce-responsive-panel-toggle--${panel}`
+  return <button
+    id={id}
+    className={className}
+    type="button"
+    aria-label={label}
+    title={label}
+    aria-expanded={isOpen}
+    aria-controls={targetId}
+    mix={on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(isOpen ? null : panel, id))}
+  >
+    {renderLucideIcon(icon, `${id}-icon`, 14)}
+  </button>
 }
 
 /** Starts a native page or chapter drag and stores its typed source. */

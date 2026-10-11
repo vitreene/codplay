@@ -231,8 +231,9 @@ export function placeBdc(document: ElceDocument, bdc: Bdc, placement: BdcPlaceme
     }
     case BDC_LOCATION.PARENT: {
       const parent = findBdc(withoutBdc, placement.parentBdcId)
-      if (bdc.type !== BDC_TYPE.CARD || parent.type !== BDC_TYPE.CAROUSEL || parent.carousel == null) {
-        fail('Un BDC Carousel accepte uniquement des BDC Carte comme enfants.')
+      if ((bdc.type !== BDC_TYPE.CARD && bdc.type !== BDC_TYPE.STATISTICAL_GRAPH)
+        || parent.type !== BDC_TYPE.CAROUSEL || parent.carousel == null) {
+        fail('Un BDC Carousel accepte des Cartes et des Graphes statistiques comme enfants.')
       }
       const carousel = {
         ...parent.carousel,
@@ -249,11 +250,12 @@ export function placeBdc(document: ElceDocument, bdc: Bdc, placement: BdcPlaceme
   }
 }
 
-/** Places one Card as an anchored child of a Section without altering its text. */
-export function placeCardInSection(document: ElceDocument, bdc: Bdc, sectionBdcId: BdcId): ElceDocument {
+/** Places one illustration BDC as an anchored child of a Section. */
+export function placeIllustrationInSection(document: ElceDocument, bdc: Bdc, sectionBdcId: BdcId): ElceDocument {
   const section = findBdc(document, sectionBdcId)
-  if (bdc.type !== BDC_TYPE.CARD || section.type !== BDC_TYPE.SECTION || section.section === null) {
-    fail('Seule une Carte peut être ancrée dans un BDC Texte.')
+  if ((bdc.type !== BDC_TYPE.CARD && bdc.type !== BDC_TYPE.STATISTICAL_GRAPH)
+    || section.type !== BDC_TYPE.SECTION || section.section === null) {
+    fail('Une Section accepte les illustrations Carte et Graphe statistique.')
   }
   const withoutBdc = new ElceDocument({
     ...document.data,

@@ -1,4 +1,4 @@
-import { GripVertical, Plus, Trash2 } from 'lucide-static'
+import { Activity, GripVertical, RectangleHorizontal, Trash2 } from 'lucide-static'
 import {
   CAROUSEL_ASPECT_RATIO_OPTIONS,
   CAROUSEL_CONFIG,
@@ -14,8 +14,9 @@ import { on, type Handle, type RemixNode } from 'remix/ui'
 import type { ElceCarouselEditorProps } from '../../facades/carousel/carousel-facade-types'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
 import { RemixCardEditorFields } from '../card/remix-card-editor-fields'
+import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
 
-/** Renders Carousel settings and ordered child Cards in the Remix runtime. */
+/** Renders Carousel settings and its ordered illustration BDCs in the Remix runtime. */
 export function RemixCarouselEditor(handle: Handle<ElceCarouselEditorProps>) {
   let draggedCardBdcId: string | null = null
   return () => renderCarouselEditor(handle.props, {
@@ -31,15 +32,15 @@ interface CarouselEditorTransientState {
   readonly clearDraggedCard: () => void
 }
 
-/** Builds settings, tab order and the selected Card editor from one snapshot. */
+/** Builds settings, view order and the selected child BDC editor from one snapshot. */
 function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEditorTransientState): RemixNode {
-  const { bdcId, content, cards, selectedCardBdcId, actions } = props
-  const cardById = new Map(cards.map((bdc) => [bdc.id, bdc]))
-  const orderedCards = content.cards.flatMap((entry) => {
-    const bdc = cardById.get(entry.bdcId)
+  const { bdcId, content, bdcs, selectedCardBdcId, actions } = props
+  const bdcById = new Map(bdcs.map((bdc) => [bdc.id, bdc]))
+  const orderedViews = content.cards.flatMap((entry) => {
+    const bdc = bdcById.get(entry.bdcId)
     return bdc === undefined ? [] : [{ entry, bdc }]
   })
-  const selected = orderedCards.find(({ bdc }) => bdc.id === selectedCardBdcId) ?? orderedCards[0]
+  const selected = orderedViews.find(({ bdc }) => bdc.id === selectedCardBdcId) ?? orderedViews[0]
 
   return <section
     id={`elce-carousel-editor-${bdcId}`}
@@ -72,19 +73,41 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
       id={`elce-carousel-card-tabs-${bdcId}`}
       className="elce-carousel-editor__views"
       role="tablist"
-      aria-label="Cartes du Carousel"
+      aria-label="Vues du Carousel"
     >
       {[
-        ...orderedCards.map(({ bdc }, index) => renderCardTab(bdcId, bdc, index, bdc.id === selected?.bdc.id, actions, state)),
+        ...orderedViews.map(({ bdc }, index) => renderCardTab(bdcId, bdc, index, bdc.id === selected?.bdc.id, actions, state)),
         <button
           id={`elce-carousel-card-add-${bdcId}`}
-          className="elce-carousel-editor__view-add"
+          className="elce-carousel-editor__view-add elce-add-content-action"
           type="button"
           aria-label="Ajouter une carte"
           title="Ajouter une carte"
           mix={on<HTMLButtonElement, 'click'>('click', actions.addCard)}
         >
-          {renderLucideIcon(Plus, `elce-carousel-card-add-icon-${bdcId}`, 16)}
+          {renderLucideIcon(RectangleHorizontal, `elce-carousel-card-add-icon-${bdcId}`, 14)}
+          <span
+            id={`elce-carousel-card-add-label-${bdcId}`}
+            className="elce-add-content-action__label"
+          >
+            Carte
+          </span>
+        </button>,
+        <button
+          id={`elce-carousel-graph-add-${bdcId}`}
+          className="elce-carousel-editor__view-add elce-add-content-action"
+          type="button"
+          aria-label="Ajouter un graphe statistique"
+          title="Ajouter un graphe statistique"
+          mix={on<HTMLButtonElement, 'click'>('click', actions.addStatisticalGraph)}
+        >
+          {renderLucideIcon(Activity, `elce-carousel-graph-add-icon-${bdcId}`, 14)}
+          <span
+            id={`elce-carousel-graph-add-label-${bdcId}`}
+            className="elce-add-content-action__label"
+          >
+            Graphe
+          </span>
         </button>,
       ]}
     </div>
@@ -93,7 +116,7 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
         id={`elce-carousel-empty-${bdcId}`}
         className="elce-carousel-editor__empty"
       >
-        Ajoutez une carte pour commencer.
+        Ajoutez une vue pour commencer.
       </p>
       : renderSelectedCard(props, selected, selectedCardBdcId)}
   </section>
@@ -266,7 +289,7 @@ function renderCarouselSettings(props: ElceCarouselEditorProps): RemixNode {
   </div>
 }
 
-/** Renders one selectable tab that can also reorder its Carousel Card. */
+/** Renders one selectable view tab that can also reorder its Carousel BDC. */
 function renderCardTab(
   carouselBdcId: string,
   bdc: Bdc,
@@ -304,7 +327,7 @@ function renderCardTab(
   </button>
 }
 
-/** Starts a Card reorder using the existing Carousel MIME type. */
+/** Starts a child BDC reorder using the existing Carousel MIME type. */
 function startCardDrag(event: DragEvent, bdcId: string, state: CarouselEditorTransientState): void {
   const transfer = event.dataTransfer
   if (transfer === null) return
@@ -313,7 +336,7 @@ function startCardDrag(event: DragEvent, bdcId: string, state: CarouselEditorTra
   transfer.setData(CAROUSEL_CONFIG.cardDragMimeType, bdcId)
 }
 
-/** Moves the dragged Card to its target index through the Carousel facade. */
+/** Moves the dragged Carousel BDC to its target index through the Carousel facade. */
 function dropCard(event: DragEvent, index: number, actions: ElceCarouselEditorProps['actions'], state: CarouselEditorTransientState): void {
   const transfer = event.dataTransfer
   if (transfer === null) return
@@ -324,58 +347,68 @@ function dropCard(event: DragEvent, index: number, actions: ElceCarouselEditorPr
   state.clearDraggedCard()
 }
 
-/** Renders the shared fields and per-Card duration for the selected child. */
+/** Renders the selected Card or Graph editor and its per-view duration. */
 function renderSelectedCard(
   props: ElceCarouselEditorProps,
   selected: { readonly entry: ElceCarouselEditorProps['content']['cards'][number]; readonly bdc: Bdc },
   selectedCardBdcId: string | null,
 ): RemixNode {
   const { content, mediaById, actions } = props
+  const durationControl = <label
+    id={`elce-carousel-card-duration-label-${selected.bdc.id}`}
+    className="elce-carousel-editor__view-duration"
+  >
+    <span
+      id={`elce-carousel-card-duration-caption-${selected.bdc.id}`}
+    >
+      Durée (sec.)
+    </span>
+    <input
+      id={`elce-carousel-card-duration-${selected.bdc.id}`}
+      type="number"
+      min="0.1"
+      step="0.1"
+      placeholder={String(content.defaultViewDurationMs / 1000)}
+      aria-label="Durée particulière de cette vue en secondes"
+      value={selected.entry.durationMs === null ? '' : selected.entry.durationMs / 1000}
+      mix={on<HTMLInputElement, 'input'>('input', (event) => submitOptionalPositiveNumber(event.currentTarget.value, selected.bdc.id, actions.setCardDurationSeconds))}
+    />
+  </label>
   return <div
     id={`elce-carousel-card-editor-${selected.bdc.id}`}
     className="elce-carousel-editor__view-content"
     role="tabpanel"
   >
-    <RemixCardEditorFields
-      bdc={selected.bdc}
-      mediaById={mediaById}
-      actions={actions}
-      idPrefix="elce-carousel"
-      imageAspectRatio={content.aspectRatio}
-      allowMultipleMediaFiles={true}
-      importMediaFiles={actions.importMediaFiles}
-      toolbarContent={<label
-        id={`elce-carousel-card-duration-label-${selected.bdc.id}`}
-        className="elce-carousel-editor__view-duration"
-      >
-        <span
-          id={`elce-carousel-card-duration-caption-${selected.bdc.id}`}
+    {selected.bdc.type === 'card'
+      ? <RemixCardEditorFields
+        bdc={selected.bdc}
+        mediaById={mediaById}
+        actions={actions}
+        idPrefix="elce-carousel"
+        imageAspectRatio={content.aspectRatio}
+        allowMultipleMediaFiles={true}
+        importMediaFiles={actions.importMediaFiles}
+        toolbarContent={durationControl}
+        toolbarEnd={<button
+          id={`elce-carousel-card-delete-${selected.bdc.id}`}
+          className="elce-carousel-editor__delete"
+          type="button"
+          aria-label="Supprimer cette carte"
+          title="Supprimer cette carte"
+          disabled={content.cards.length <= 1}
+          mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeCard(selected.bdc.id, selectedCardBdcId))}
         >
-          Durée de la vue · secondes
-        </span>
-        <input
-          id={`elce-carousel-card-duration-${selected.bdc.id}`}
-          type="number"
-          min="0.1"
-          step="0.1"
-          placeholder={String(content.defaultViewDurationMs / 1000)}
-          aria-label="Durée particulière de cette vue en secondes"
-          value={selected.entry.durationMs === null ? '' : selected.entry.durationMs / 1000}
-          mix={on<HTMLInputElement, 'input'>('input', (event) => submitOptionalPositiveNumber(event.currentTarget.value, selected.bdc.id, actions.setCardDurationSeconds))}
-        />
-      </label>}
-      toolbarEnd={<button
-        id={`elce-carousel-card-delete-${selected.bdc.id}`}
-        className="elce-carousel-editor__delete"
-        type="button"
-        aria-label="Supprimer cette carte"
-        title="Supprimer cette carte"
-        disabled={content.cards.length <= 1}
-        mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeCard(selected.bdc.id, selectedCardBdcId))}
-      >
-        {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`, 15)}
-      </button>}
-    />
+          {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`, 14)}
+        </button>}
+      />
+      : selected.bdc.type === 'statistical-graph' && selected.bdc.statisticalGraph != null
+        ? renderRemixStatisticalGraphEditor(
+          selected.bdc,
+          props.createStatisticalGraphActions(selected.bdc.id, selected.bdc.statisticalGraph),
+          () => actions.removeStatisticalGraph(selected.bdc.id, selectedCardBdcId),
+          durationControl,
+        )
+        : null}
   </div>
 }
 

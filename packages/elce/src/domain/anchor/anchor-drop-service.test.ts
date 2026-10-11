@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import {
   applyDocumentCommand,
   createCarouselBdcCommand,
@@ -10,6 +10,7 @@ import {
   createEvaluationResultBdcCommand,
   createQuestionBdcCommand,
   createSectionBdcCommand,
+  createStatisticalGraphBdcCommand,
   createStandaloneCardBdcCommand,
 } from '../commands/document-commands'
 import { createInitialDocument } from '../document/document-model'
@@ -67,7 +68,7 @@ describe('ElceAnchorDropService', () => {
     })
   })
 
-  it('lists every root BDC type while restricting inline targets to Cards', () => {
+  it('lists every root BDC type and allows Cards or Graphs as inline illustrations', () => {
     const service = new ElceAnchorDropService()
     let document = createInitialDocument()
     const fluxPage = document.pages[0]
@@ -79,6 +80,7 @@ describe('ElceAnchorDropService', () => {
     document = applyDocumentCommand(document, createStandaloneCardBdcCommand('bdc-text-short', fluxPage.id, DEFAULT_PRESET_ID.TEXT_SHORT))
     document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-question', fluxPage.id, 1))
     document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-carousel', fluxPage.id, 2, 'bdc-carousel-card'))
+    document = applyDocumentCommand(document, createStatisticalGraphBdcCommand('bdc-graph', fluxPage.id, 3))
 
     const evaluationChapter = createChapterCommand(document, 'Évaluation', CHAPTER_TYPE.EVALUATION)
     document = applyDocumentCommand(document, evaluationChapter)
@@ -89,7 +91,7 @@ describe('ElceAnchorDropService', () => {
     )
     document = applyDocumentCommand(document, evaluationPage)
     document = applyDocumentCommand(document, createEvaluationResultBdcCommand('bdc-result', evaluationPage.pageId, 1))
-    for (const bdcId of ['bdc-text-short', 'bdc-question', 'bdc-carousel', 'bdc-result']) {
+    for (const bdcId of ['bdc-text-short', 'bdc-question', 'bdc-carousel', 'bdc-result', 'bdc-graph']) {
       document = applyDocumentCommand(document, { type: 'bdc.remove', bdcId })
     }
 
@@ -100,6 +102,7 @@ describe('ElceAnchorDropService', () => {
       BDC_TYPE.QUESTION,
       BDC_TYPE.CAROUSEL,
       BDC_TYPE.EVALUATION_RESULT,
+      BDC_TYPE.STATISTICAL_GRAPH,
     ])
     expect(service.createCatalogDropTarget(
       document,
@@ -107,6 +110,26 @@ describe('ElceAnchorDropService', () => {
       fluxPage.id,
       'bdc-page-section',
     )).toMatchObject({ bdcId: 'bdc-text-short', presetId: DEFAULT_PRESET_ID.TEXT_SHORT })
+    const graphTarget = service.createCatalogDropTarget(
+      document,
+      { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-graph' },
+      fluxPage.id,
+      'bdc-page-section',
+    )
+    expect(graphTarget).toMatchObject({ bdcId: 'bdc-graph', paddingBottom: '56.25%' })
+    const graph = document.bdcs.find((bdc) => bdc.id === 'bdc-graph')
+    if (graph?.statisticalGraph == null) throw new Error('Le BDC Graphe doit porter son contenu métier.')
+    document = applyDocumentCommand(document, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: 'bdc-graph',
+      statisticalGraph: { ...graph.statisticalGraph, rendering: STATISTICAL_GRAPH_RENDERING.TABLE },
+    })
+    expect(service.createCatalogDropTarget(
+      document,
+      { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-graph' },
+      fluxPage.id,
+      'bdc-page-section',
+    )).toMatchObject({ bdcId: 'bdc-graph', paddingBottom: '100%' })
     for (const bdcId of ['bdc-question', 'bdc-carousel', 'bdc-result', sectionBdcId]) {
       expect(service.createCatalogDropTarget(
         document,

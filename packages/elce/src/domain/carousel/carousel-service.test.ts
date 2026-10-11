@@ -37,7 +37,7 @@ describe('ElceCarouselService', () => {
       .toThrow('ne peut apparaître qu’une fois')
     expect(() => service.assertValid({ ...carousel, cards: [{ bdcId: 'card-1', durationMs: 0, introTransitionRef: null, outroTransitionRef: null }] }))
       .toThrow('doit être positive')
-    expect(() => service.assertValid({ ...carousel, cards: [] })).toThrow('au moins une carte')
+    expect(() => service.assertValid({ ...carousel, cards: [] })).toThrow('au moins une vue')
   })
 
   it('updates playback and frame settings without changing Card relationships', () => {

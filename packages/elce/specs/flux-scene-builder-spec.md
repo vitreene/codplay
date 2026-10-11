@@ -17,8 +17,8 @@ Le montage d’un Carousel dans la séquence Flux est décrit dans la
 ## Contrat
 
 `buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
-ordonnée de BDC Section, Question, Résultat, Carte ou Carousel, selon les
-contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;
+ordonnée de BDC Section, Question, Résultat, Carte, Graphe statistique ou
+Carousel, selon les contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;
 son rendu image ou vidéo vient du MIME de cette ressource. Les Cartes peuvent
 être des BDC directs de la page ou des enfants d’une Section ou d’un Carousel.
 Une Carte ancrée appartient à sa Section et n’est pas un BDC direct de page.
@@ -43,6 +43,10 @@ supplantée par ce calcul. Pour une image ancrée, la valeur conservée dans le
 padding donne le ratio du cadre et de la réserve ; le perso image utilise
 `object-fit:cover`. Il produit un
 `SceneDoc` avec :
+
+Un Graphe statistique ancré utilise ce même slot et cette réservation Flux. Le
+mode Tableau garde sa hauteur naturelle et réserve `100%` de la largeur du
+slot ; les rendus SVG réservent `56.25%`. Aucun hôte parallèle n’est ajouté.
 
 - un perso `scroll-container` racine, placé sur `@root` ;
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
@@ -146,6 +150,9 @@ builders ne déclarent que leur comportement d’exécution.
   Carte enfant dans le slot projeté depuis une ancre exportée. Il vérifie aussi la
   projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
   leurs médias selon le layout et les plages automatiques finies.
+- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+  vérifie les placements Graphe direct Flux et ancré en Section par les
+  builders réels.
 - [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
   vérifie les presets, les identifiants des éléments parents, les commentaires
   d’insertion, l’identité des zones et l’omission des textes facultatifs vides.

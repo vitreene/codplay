@@ -25,7 +25,11 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - `RemixPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
   déplacement, les titres éditables, les commandes de création et le nettoyage
   au changement de page. Il rend dans Remix Section, Question, Résultat, Carte
-  directe et Carousel à chaque ligne BDC.
+  directe et Carousel à chaque ligne BDC. Les marqueurs de type du chapitre
+  courant et de la page sélectionnée mesurent tous deux 14 × 14 px. L’échelle
+  commune des icônes Lucide de l’interface est 14 × 14 px ; les commandes
+  conservent leurs dimensions propres à leur rôle, avec 2 px de padding autour
+  des icônes seules et 4 px d’écart entre l’icône et son libellé ou voisin.
 - La Section utilise `renderRemixSectionEditor` et `SectionTiptapAdapter`.
   Remix rend le titre, les commandes et les ancres ; `@tiptap/core` garde le
   DOM ProseMirror. Les transactions, dépôts média, déplacements d’ancres et
@@ -33,7 +37,9 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - `RemixCardEditorFields` est partagé par les Cartes directes Flux/Diapo et les
   Cartes enfants du Carousel. Les réglages et l’ordre des enfants restent dans
   `RemixCarouselEditor`. Les champs et imports média empruntent les façades
-  Carte et Carousel existantes.
+  Carte et Carousel existantes. Dans la barre des vues, l’ajout d’une Carte
+  montre l’icône Carte et l’ajout d’un Graphe son icône Graphe ; le libellé
+  court reste sous l’icône.
 - Les icônes Elcé sont créées à partir de `lucide-static` comme éléments SVG
   natifs ; aucun adaptateur d’icônes React n’est chargé.
 - Les vues Remix sont écrites en JSX dans des fichiers `.tsx`. TypeScript est
@@ -43,6 +49,14 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+- En développement, [`dev-elce.mjs`](../scripts/dev-elce.mjs) lance le
+  superviseur `remix/node-hmr`. Le canal HMR Remix surveille les assets ; toute
+  mise à jour non vide, JSX ou CSS, déclenche un rechargement automatique de
+  l’onglet. Ce choix évite qu’une acceptation de module racine laisse un DOM
+  périmé dans l’éditeur. Le rechargement reprend l’état du projet par les
+  mécanismes existants de persistance et de synchronisation. L’interface reste
+  sur 5175 et l’API sur 5181 ; le flux HMR utilise son canal local interne,
+  sans serveur Vite navigateur supplémentaire.
 
 ## Invariants
 
@@ -100,6 +114,11 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   5 références média et le checkpoint synchronisé à la révision 93. Les cinq
   images serveur chargent. Après rechargement, Projet 3 est restauré et la
   console ne contient aucune erreur.
+- Le 9 octobre 2026, Brave vérifie le HMR sur 5175 : une modification JSX
+  temporaire devient visible après rechargement automatique sans redémarrer le
+  serveur ; une règle CSS temporaire est également appliquée automatiquement.
+  Après chaque rechargement, Projet 1 reste ouvert et l’état revient à
+  « Synchronisé ». Les deux modifications de vérification sont retirées.
 - Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
   bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
   l’avertissement Vite au-dessus de `500 kB`.

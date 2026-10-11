@@ -4,6 +4,7 @@ import type { QuestionContent } from '../question/question-types'
 import type { EvaluationResultContent } from '../evaluation/evaluation-result-types'
 import type { CarouselContent } from '../carousel/carousel-types'
 import type { CardContent } from '../card/card-types'
+import type { StatisticalGraphContent } from '../statistical-graph/statistical-graph-types'
 
 export type ChapterId = string
 export type PageId = string
@@ -76,6 +77,7 @@ export interface Bdc {
   readonly evaluationResult?: EvaluationResultContent | null
   readonly carousel?: CarouselContent | null
   readonly card?: CardContent | null
+  readonly statisticalGraph?: StatisticalGraphContent | null
 }
 
 export interface MediaMetadata {

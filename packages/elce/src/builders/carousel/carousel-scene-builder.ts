@@ -3,29 +3,37 @@ import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { TRACK_EVENT_DEACTIVATE, type StrapFunction } from 'codplay/runtime/player'
-import { CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
-import type { CarouselContent, CarouselCardEntry } from '../../domain/carousel/carousel-types'
+import { BDC_TYPE, CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
+import type { CarouselContent, CarouselBdcEntry } from '../../domain/carousel/carousel-types'
 import type { Bdc } from '../../domain/document/document-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import { ElceCardBdcSceneBuilder } from '../card/card-bdc-scene-builder'
-import type { CardBdcSceneBuild } from '../card/card-bdc-scene-builder'
+import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistical-graph-scene-builder'
 import { createPageBottomMarkerPerso } from '../flux/page-bottom-marker'
 import { createResolvedRevelationAction } from '../revelation/revelation-action'
 import type { CarouselSceneBuild, CarouselSceneBuildInput } from './carousel-scene-builder-types'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
+const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
-type ScheduledCard = Readonly<{
-  readonly entry: CarouselCardEntry
+type CarouselViewBuild = Readonly<{
+  readonly markup: string
+  readonly rootClassName: string
+  readonly contentPersos: readonly PersoDoc<string>[]
+  readonly mediaPersos: readonly PersoDoc<string>[]
+}>
+
+type ScheduledView = Readonly<{
+  readonly entry: CarouselBdcEntry
   readonly bdc: Bdc
   readonly startMs: number
   readonly endMs: number
 }>
 
-/** Builds a Carousel scene whose ordered children are first-class Card BDCs. */
+/** Builds a Carousel scene whose ordered children use the existing Capsule sequence. */
 export class ElceCarouselSceneBuilder {
-  /** Projects Carousel settings and Card BDCs into a CodPlay story. */
+  /** Projects Carousel settings and illustrative BDCs into a CodPlay story. */
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
     const { pageId, bdcId, content } = input
     const displayMode = input.displayMode ?? 'content'
@@ -74,15 +82,15 @@ export class ElceCarouselSceneBuilder {
     })
     const capsuleResult = capsule.resolve()
     const firstCardBdcId = content.cards[0]?.bdcId ?? null
-    const cardBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildCard(input, entry.bdc, displayMode === 'scene')]))
+    const viewBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildView(input, entry.bdc, displayMode === 'scene')]))
     const lastCardBdcId = capsuleResult.children.at(-1)?.id
     const cardMountTarget = diapoRootId ?? capsulePartId
     const cardPersos = capsuleResult.children.flatMap((child) => {
       const entry = schedule.find((candidate) => candidate.bdc.id === child.id)
-      const cardBuild = cardBuilds.get(child.id)
-      if (entry === undefined || cardBuild === undefined) throw new Error(`La carte Carousel ${child.id} est introuvable.`)
+      const viewBuild = viewBuilds.get(child.id)
+      if (entry === undefined || viewBuild === undefined) throw new Error(`La vue Carousel ${child.id} est introuvable.`)
       return [
-        ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, cardBuild, firstCardBdcId, displayMode === 'scene'),
+        ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, viewBuild, firstCardBdcId, displayMode === 'scene'),
         ...(diapoRootId !== undefined && child.id === lastCardBdcId
           ? [createCarouselCompletionMarker(input.pageId, input.bdcId, child.id, diapoRootId)]
           : []),
@@ -93,7 +101,7 @@ export class ElceCarouselSceneBuilder {
     const navigationPersos = content.cards.map((entry, index) => {
       const child = capsuleResult.children.find((candidate) => candidate.id === entry.bdcId)
       const bdc = input.cards.find((candidate) => candidate.id === entry.bdcId)
-      if (child === undefined || bdc === undefined) throw new Error(`La carte Carousel ${entry.bdcId} n’a pas de placement résolu.`)
+      if (child === undefined || bdc === undefined) throw new Error(`La vue Carousel ${entry.bdcId} n’a pas de placement résolu.`)
       return createCarouselNavigationPerso(prefix, navigationPartId, child, bdc, index, firstCardBdcId, selectionEvent)
     })
     const card = displayMode === 'scene'
@@ -131,19 +139,21 @@ export class ElceCarouselSceneBuilder {
     return {
       markup: card?.markup ?? '',
       story,
-      mediaPersos: [...cardBuilds.values()].flatMap((build) => build.mediaPersos),
+      mediaPersos: [...viewBuilds.values()].flatMap((build) => build.mediaPersos),
       styleSheet: capsuleResult.styleSheet,
     }
   }
 }
 
 /** Resolves Carousel entry durations into the ranges consumed by CapsuleDistribution. */
-function resolveCardSchedule(input: CarouselSceneBuildInput): readonly ScheduledCard[] {
+function resolveCardSchedule(input: CarouselSceneBuildInput): readonly ScheduledView[] {
   const cardById = new Map(input.cards.map((bdc) => [bdc.id, bdc]))
   let endMs = 0
   const authoredBounds = input.content.cards.map((entry) => {
     const bdc = cardById.get(entry.bdcId)
-    if (bdc === undefined || bdc.type !== 'card') throw new Error(`Le BDC Carte ${entry.bdcId} est introuvable.`)
+    if (bdc === undefined || (bdc.type !== 'card' && bdc.type !== 'statistical-graph')) {
+      throw new Error(`Le BDC ${entry.bdcId} du Carousel est introuvable ou non illustratif.`)
+    }
     const durationMs = entry.durationMs ?? input.content.defaultViewDurationMs
     const startMs = endMs
     endMs += durationMs
@@ -166,16 +176,27 @@ function resolveCardSchedule(input: CarouselSceneBuildInput): readonly Scheduled
   })
 }
 
-/** Builds one Card layout and content projection using the shared Card BDC builder. */
-function buildCard(input: CarouselSceneBuildInput, bdc: Bdc, photoMediaRoot: boolean): CardBdcSceneBuild {
-  return cardBdcSceneBuilder.build({
-    pageId: input.pageId,
-    containerBdcId: input.bdcId,
-    bdc,
-    mediaSources: input.mediaSources,
-    mediaTypes: input.mediaTypes,
-    photoMediaRoot,
-  })
+/** Builds one supported illustration view using its existing BDC scene builder. */
+function buildView(input: CarouselSceneBuildInput, bdc: Bdc, photoMediaRoot: boolean): CarouselViewBuild {
+  switch (bdc.type) {
+    case BDC_TYPE.CARD:
+      return cardBdcSceneBuilder.build({
+        pageId: input.pageId,
+        containerBdcId: input.bdcId,
+        bdc,
+        mediaSources: input.mediaSources,
+        mediaTypes: input.mediaTypes,
+        photoMediaRoot,
+      })
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      return statisticalGraphSceneBuilder.build(
+        bdc,
+        `${input.pageId}-${input.bdcId}-graph-${bdc.id}`,
+        `${input.pageId}:${input.bdcId}:card:${bdc.id}`,
+      )
+    default:
+      throw new Error(`Le BDC ${bdc.id} n’est pas une illustration prise en charge par Carousel.`)
+  }
 }
 
 /** Observes the final visible Diapo Carousel Card through the shared Page event. */
@@ -303,7 +324,7 @@ function createCarouselCardPersos(
   capsulePartId: string,
   child: ReturnType<AutoCapsule['resolve']>['children'][number],
   bdc: Bdc,
-  cardBuild: CardBdcSceneBuild,
+  cardBuild: CarouselViewBuild,
   firstCardBdcId: string | null,
   photoMediaRoot: boolean,
 ): readonly PersoDoc<string>[] {

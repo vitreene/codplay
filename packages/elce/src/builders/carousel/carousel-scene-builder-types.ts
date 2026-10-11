@@ -9,6 +9,7 @@ export interface CarouselSceneBuildInput {
   /** Supplies the final story identity when a parent scene embeds this Carousel. */
   readonly storyId?: string
   readonly content: CarouselContent
+  /** Supplies Card and Statistical Graph BDCs referenced by the existing Carousel entries. */
   readonly cards: readonly Bdc[]
   readonly mediaSources: Readonly<Record<MediaId, string>>
   readonly mediaTypes: Readonly<Record<MediaId, MediaType>>

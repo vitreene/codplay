@@ -15,10 +15,11 @@ export function findAnchorSection(document: ElceDocument, sectionBdcId: BdcId, p
   return section
 }
 
-/** Resolves the page of the Section that currently owns an anchored Card. */
-export function findAnchorSectionForCard(document: ElceDocument, bdc: Bdc, sectionBdcId: BdcId): PageId {
-  if (bdc.type !== BDC_TYPE.CARD || bdc.parentBdcId !== sectionBdcId || bdc.pageId !== null) {
-    fail(`La Carte ${bdc.id} n’est pas ancrée dans la Section ${sectionBdcId}.`)
+/** Resolves the page of the Section that currently owns an anchored illustration. */
+export function findAnchorSectionForIllustration(document: ElceDocument, bdc: Bdc, sectionBdcId: BdcId): PageId {
+  if ((bdc.type !== BDC_TYPE.CARD && bdc.type !== BDC_TYPE.STATISTICAL_GRAPH)
+    || bdc.parentBdcId !== sectionBdcId || bdc.pageId !== null) {
+    fail(`Le BDC illustratif ${bdc.id} n’est pas ancré dans la Section ${sectionBdcId}.`)
   }
   const section = findBdc(document, sectionBdcId)
   if (section.type !== BDC_TYPE.SECTION || section.pageId === null || section.section === null) {
@@ -51,16 +52,17 @@ export function updateSectionContent(
     const anchorBdc = findBdc(document, anchorBdcId)
     switch (anchorBdc.type) {
       case BDC_TYPE.CARD:
+      case BDC_TYPE.STATISTICAL_GRAPH:
         switch (anchorBdc.parentBdcId) {
           case sectionBdcId:
             break
           default:
-            fail(`La Carte ancrée ${anchorBdcId} doit appartenir à la Section ${sectionBdcId}.`)
+            fail(`Le BDC illustratif ancré ${anchorBdcId} doit appartenir à la Section ${sectionBdcId}.`)
         }
-        if (anchorBdc.pageId !== null) fail(`La Carte ancrée ${anchorBdcId} ne peut pas être placée directement dans une page.`)
+        if (anchorBdc.pageId !== null) fail(`Le BDC illustratif ancré ${anchorBdcId} ne peut pas être placé directement dans une page.`)
         break
       default:
-        fail(`Seules les Cartes peuvent être ancrées : ${anchorBdcId}`)
+        fail(`Seules les Cartes et les Graphes statistiques peuvent être ancrés : ${anchorBdcId}`)
     }
   }
 
@@ -123,16 +125,17 @@ export function deleteSection(document: ElceDocument, bdcId: BdcId): ElceDocumen
     const anchorBdc = findBdc(updated, anchorBdcId)
     switch (anchorBdc.type) {
       case BDC_TYPE.CARD:
+      case BDC_TYPE.STATISTICAL_GRAPH:
         switch (anchorBdc.parentBdcId) {
           case section.id:
             updated = deleteBdc(updated, anchorBdc.id)
             break
           default:
-            fail(`La Carte ancrée ${anchorBdcId} doit rester enfant de sa Section.`)
+            fail(`Le BDC illustratif ancré ${anchorBdcId} doit rester enfant de sa Section.`)
         }
         break
       default:
-        fail(`Seules les Cartes peuvent être ancrées : ${anchorBdcId}`)
+        fail(`Seules les Cartes et les Graphes statistiques peuvent être ancrés : ${anchorBdcId}`)
     }
   }
   return deleteBdc(updated, section.id)

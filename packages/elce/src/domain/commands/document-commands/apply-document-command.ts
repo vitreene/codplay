@@ -2,7 +2,7 @@ import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../../config/document-
 import { ElceDocument } from '../../../domain/document/document-model'
 import type { DocumentCommand } from '../document-command-types'
 import { createChapter, renameChapter, updateChapterEvaluationSettings, moveChapter, deleteChapter, createPage, renamePage, movePage, deletePage } from './page-commands'
-import { createBdc, deleteCatalogBdc, updateQuestion, updateEvaluationResult, updateCarousel, updateCard, setCardLayout, deleteCard, deleteQuestion, deleteEvaluationResult, deleteCarousel } from './bdc-commands'
+import { createBdc, deleteCatalogBdc, updateQuestion, updateEvaluationResult, updateCarousel, updateCard, updateStatisticalGraph, setStatisticalGraphLayout, deleteStatisticalGraph, setCardLayout, deleteCard, deleteQuestion, deleteEvaluationResult, deleteCarousel } from './bdc-commands'
 import { moveBdc, createAnchoredBdc, attachCatalogBdc, moveAnchoredBdc, removeAnchoredBdc, returnAnchoredBdc } from './anchor-commands'
 import { findBdc, fail } from './command-helpers'
 import { updateSectionContent, deleteSection, updateSectionRevelation } from './section-commands'
@@ -58,6 +58,12 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return updateCarousel(document, command.bdcId, command.carousel)
     case 'bdc.card.update':
       return updateCard(document, command.bdcId, command.card)
+    case 'bdc.statistical-graph.update':
+      return updateStatisticalGraph(document, command.bdcId, command.statisticalGraph)
+    case 'bdc.statistical-graph.layout.set':
+      return setStatisticalGraphLayout(document, command.bdcId, command.layoutId)
+    case 'bdc.statistical-graph.delete':
+      return deleteStatisticalGraph(document, command.bdcId)
     case 'bdc.card.layout.set':
       return setCardLayout(document, command.bdcId, command.layoutId)
     case 'bdc.card.media.set':

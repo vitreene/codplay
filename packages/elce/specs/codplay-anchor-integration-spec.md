@@ -107,6 +107,11 @@ automatique à sa racine : la règle `height:100%` du preset sert aux Cartes de
 Carousel et se résoudrait ici sur la ligne de texte, pas sur la réserve du
 slot. L’aspect ratio issu du padding fixe alors la hauteur du cadre image.
 
+Un Graphe statistique utilise le même slot inline. Le mode Tableau réserve la
+largeur de la ligne et garde sa hauteur naturelle ; un rendu SVG réserve une
+hauteur de `56.25%` de cette largeur. Le builder fournit ces valeurs à la
+réservation Flux existante, sans modifier le cœur CodPlay.
+
 La marge `ANCHOR.DEFAULT_BDC_MARGIN_TOP` est injectée dans la déclaration
 `inset-block-start`. Elle reste une constante de configuration et n’est pas
 éditable dans le POC.

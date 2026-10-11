@@ -1,10 +1,11 @@
 import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-config'
-import type { BdcType, CardLayoutId, EvaluationRetryScope, PageType } from '../../config/document-config-types'
+import type { BdcType, CardLayoutId, EvaluationRetryScope, PageType, StatisticalGraphLayoutId } from '../../config/document-config-types'
 import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RevelationTransitionDefaults, RevelationTransitionOverrides, RichTextDocument } from '../../domain/document/document-types'
 import type { QuestionContent } from '../../domain/question/question-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { CardContent, CardPresentationOptions } from '../../domain/card/card-types'
+import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
 
 export type PagePlacement =
   | Readonly<{ kind: typeof PAGE_LOCATION.CHAPTER; chapterId: ChapterId; index?: number }>
@@ -70,6 +71,9 @@ export type DocumentCommand =
   | Readonly<{ type: 'bdc.evaluation-result.update'; bdcId: BdcId; evaluationResult: EvaluationResultContent }>
   | Readonly<{ type: 'bdc.carousel.update'; bdcId: BdcId; carousel: CarouselContent }>
   | Readonly<{ type: 'bdc.card.update'; bdcId: BdcId; card: CardContent }>
+  | Readonly<{ type: 'bdc.statistical-graph.update'; bdcId: BdcId; statisticalGraph: StatisticalGraphContent }>
+  | Readonly<{ type: 'bdc.statistical-graph.layout.set'; bdcId: BdcId; layoutId: StatisticalGraphLayoutId }>
+  | Readonly<{ type: 'bdc.statistical-graph.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.card.layout.set'; bdcId: BdcId; layoutId: CardLayoutId }>
   | Readonly<{ type: 'bdc.card.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.card.media.attach'; bdcId: BdcId; media: MediaMetadata }>

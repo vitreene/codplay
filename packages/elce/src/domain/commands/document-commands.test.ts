@@ -491,7 +491,7 @@ describe('Elcé document commands', () => {
       type: 'bdc.move',
       bdcId: 'bdc-card-source-first',
       placement: { kind: BDC_LOCATION.PARENT, parentBdcId: 'bdc-carousel-target', index: 0 },
-    })).toThrow('Un BDC Carousel doit contenir au moins une carte.')
+    })).toThrow('Un BDC Carousel doit contenir au moins une vue.')
   })
 
   it('rejects evaluation data on a Card BDC', () => {

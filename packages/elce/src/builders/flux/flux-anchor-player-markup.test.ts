@@ -35,4 +35,14 @@ describe('Flux player anchor markup', () => {
     expect(projected).toContain('padding-bottom:calc(75% + 1rem)')
     expect(projected).not.toContain('calc(calc(')
   })
+
+  it('projects an authored graph size for the same existing flow slot', () => {
+    const markup = '<p id="text"><span data-elce-anchor="true" data-bdc-id="graph-1" data-part="part:graph"></span></p>'
+
+    const projected = projectFluxPlayerMarkup(markup, { 'graph-1': '100%' })
+
+    expect(projected).toContain('--elce-anchor-padding:100%')
+    expect(projected).toContain('padding-bottom:calc(100% + 1rem)')
+    expect(projected).toContain('data-part="part:graph"')
+  })
 })

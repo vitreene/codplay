@@ -7,6 +7,5 @@ export interface ContentCatalogPanelProps {
   readonly actions: EditorActionsFacade
   readonly responsivePanel: ResponsivePanel
   readonly dropTarget: string | null
-  readonly onSetResponsivePanel: (panel: ResponsivePanel) => void
   readonly onSetDropTarget: (targetId: string | null) => void
 }
