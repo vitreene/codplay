@@ -18,21 +18,40 @@ de contenus de l’éditeur.
 - Le champ du nom actif envoie `document.rename` par `EditorActionsFacade`.
   Le document reste détenu par l’acteur XState et suit la synchronisation
   habituelle.
-- « Ouvrir » prépare la copie locale ou relit le document serveur, attend la
+- « Ouvrir » prépare la révision serveur pour une page lectrice, attend la
   synchronisation du projet courant, puis transfère l’édition au projet choisi.
   Toute commande déjà acceptée avant l’ouverture finit d’abord son écriture
   locale ; cette révision fait partie de l’instantané synchronisé. En cas
   d’échec ou de conflit, le projet courant et sa copie locale restent ouverts.
-  L’éditeur ne devient actif qu’après obtention de son `ProjectEditorLock`.
+  L’éditeur ne devient actif qu’après obtention de son `ProjectEditorLock`, du
+  droit serveur et de l’installation de la révision confirmée. Une copie
+  locale `pending` reste dans IndexedDB sans remplacer la vue lectrice.
 - « Fermer » attend la synchronisation, libère le verrou et supprime la copie
   IndexedDB du projet actif. Le projet et son document restent sur le serveur.
 - « Supprimer » demande une confirmation. Pour le projet actif, la suppression
   serveur est confirmée avant le retrait du verrou et de la copie IndexedDB.
-  Pour un autre projet, seul son projet serveur et son cache local sont ciblés.
+  Pour un autre projet, seul son projet serveur et son cache local sont ciblés ;
+  la suppression prend d’abord son propre droit serveur.
+- « Enregistrer sous… » crée une identité de projet indépendante depuis le
+  document confirmé affiché, sans modifier le projet source. Une copie locale
+  garde les identifiants de ses médias et, pour les fichiers absents, l’identité
+  de leur projet source. Elle peut rester éditable hors connexion. À la reprise,
+  l’adaptateur relit ces fichiers par l’API source et utilise le coordinateur
+  documentaire et média existant pour publier la copie. Un fichier source
+  introuvable laisse la copie locale en attente avec une indication explicite.
+  Si la synchronisation du projet source a échoué, « Enregistrer la copie
+  locale sous… » prend explicitement le cache `pending` ou `conflict`, le
+  conserve sous une autre identité, puis peut libérer le droit du projet
+  source sans publier cette ancienne valeur. La copie du serveur reste intacte.
+  Cette action n’est proposée que lorsqu’une copie locale non confirmée existe.
+  Une copie de secours rouverte en arrière-plan affiche immédiatement son
+  contenu local en lecture seule ; le focus reste nécessaire pour acquérir
+  l’édition, puis tenter sa publication.
 - Chaque onglet mémorise son propre projet actif. Les projets différents
   gardent des documents et des caches séparés ; un même projet reste protégé
   par le verrou exclusif entre fenêtres du même profil navigateur. Entre deux
-  navigateurs, le coordinateur reçoit la révision serveur au retour du focus,
+  navigateurs, le droit serveur exclut aussi une deuxième édition et le
+  coordinateur reçoit la révision confirmée au retour du focus,
   selon la
   [spécification d’accès et de synchronisation par focus](./editor-window-access-spec.md).
 - Les requêtes de gestion passent de la vue Remix à `EditorActionsFacade`, puis
@@ -68,6 +87,12 @@ de contenus de l’éditeur.
 - Les tests du coordinateur couvrent la création, la fermeture sans suppression
   serveur, la suppression d’un projet inactif sans perte de l’accès courant et
   le démarrage sur un catalogue vide.
+- Les tests du coordinateur couvrent aussi la création d’une copie depuis une
+  page lectrice, l’édition locale hors connexion, sa publication au retour du
+  réseau et la correction d’une identité copiée par duplication d’onglet. Le
+  test réseau vérifie la récupération d’un média depuis son projet source et
+  conserve le checkpoint en attente si ce média a disparu. Une copie rouverte
+  sans focus reste visible sans devenir éditable.
 - Safari Technology Preview via MCP vérifie le renommage, la création,
   l’ouverture, la fermeture, la suppression active et inactive, ainsi que le
   rechargement qui restaure « Document Elcé ». Deux onglets ont repris chacun

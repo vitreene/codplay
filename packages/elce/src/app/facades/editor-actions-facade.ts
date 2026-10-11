@@ -114,6 +114,21 @@ export class EditorActionsFacade {
     this.manageProjects({ kind: 'create' })
   }
 
+  /** Starts an independent project from the confirmed document on screen. */
+  public saveAs(name: string): void {
+    this.manageProjects({ kind: 'save-as', name })
+  }
+
+  /** Preserves an unpublished local revision as a distinct project. */
+  public saveLocalAs(name: string): void {
+    this.manageProjects({ kind: 'save-local-as', name })
+  }
+
+  /** Rechecks a waiting project's server revision and editing right. */
+  public retryProjectAccess(): void {
+    this.controller.send({ type: 'project.access.retry' })
+  }
+
   /** Opens a selected project after the current project is confirmed saved. */
   public openProject(projectId: string): void {
     this.manageProjects({ kind: 'open', projectId })

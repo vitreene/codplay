@@ -64,6 +64,34 @@ describe('Elcé project editor focus lock', () => {
     window.dispatchEvent(new Event('focus'))
     expect(lock.request).toHaveBeenCalledTimes(1)
   })
+
+  it('retains the native lock after a failed handoff and retries without acquiring another one', async () => {
+    const { lock, requests, setFocused, grantAccess } = installBrowserLock(true)
+    const onAccessSuspending = vi.fn()
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockResolvedValue(undefined)
+    const onAccessError = vi.fn()
+    const editorLock = new ProjectEditorLock('project-failed-handoff', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted: vi.fn(async () => {}),
+      onAccessSuspending,
+      onAccessError,
+    })
+
+    editorLock.start()
+    grantAccess(0)
+    setFocused(false)
+    window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(onAccessError).toHaveBeenCalledWith(expect.any(Error)))
+    expect(lock.request).toHaveBeenCalledTimes(1)
+    expect(requests[0]?.resolve).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new Event('online'))
+    await vi.waitFor(() => expect(onAccessSuspending).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(requests[0]?.resolve).toHaveBeenCalledTimes(1))
+    expect(lock.request).toHaveBeenCalledTimes(1)
+    await editorLock.stop()
+  })
 })
 
 /** Installs browser focus and lock primitives for editor-lock tests. */
@@ -80,7 +108,7 @@ function installBrowserLock(initialFocus: boolean): Readonly<{
   })
   const requests: PendingLockRequest[] = []
   const request = vi.fn((_name: string, _options: unknown, callback: PendingLockRequest['callback']) => new Promise<void>((resolve, reject) => {
-    requests.push({ callback, resolve, reject })
+    requests.push({ callback, resolve: vi.fn(resolve), reject })
   }))
 
   class FakeBroadcastChannel extends EventTarget {

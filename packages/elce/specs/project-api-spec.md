@@ -29,7 +29,8 @@ Remix quand cette étape sera appliquée. Pour lancer l’API seule :
 Pour les requêtes navigateur, le serveur autorise les origines HTTP de boucle
 locale (`localhost`, `127.0.0.1` et `[::1]`), quelle que soit leur origine de
 port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
-`DELETE` et les en-têtes `Content-Type` et `If-Match`. Il expose `ETag` à
+`DELETE` et les en-têtes `Content-Type`, `If-Match`, `X-Elce-Page-Id` et
+`X-Elce-Edit-Grant`. Il expose `ETag` à
 l’éditeur. Un prévol d’une origine hors boucle locale est refusé.
 
 ## Requêtes et réponses
@@ -39,10 +40,13 @@ l’éditeur. Un prévol d’une origine hors boucle locale est refusé.
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
 | `POST /api/projects` | `ElceDocumentData` v4 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
-| `PATCH /api/projects/:projectId` | `{ "name": string }` | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
-| `DELETE /api/projects/:projectId` | — | `204` |
-| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v4 et `If-Match: "<revision>"` | `200 { "project" }` et l’ETag de la nouvelle révision |
-| `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
+| `POST /api/projects/:projectId/edit-access` | `{ "pageId": string }` | `200 { "grantId": string }` ; une répétition par la page détentrice retrouve le même droit |
+| `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
+| `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
+| `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
+| `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
+| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v4, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
 Le corps JSON transporté est le document v4 structuré produit par
@@ -54,6 +58,16 @@ Les documents reçus passent par `ElceDocument.fromJSON()` puis
 identifiant que `:projectId`. Un remplacement n’est appliqué que si la révision
 envoyée dans `If-Match` est la révision courante.
 
+Les écritures d’un projet existant (`PATCH`, `DELETE`, `PUT document`, `PUT
+media`) et la libération du droit présentent la paire
+`X-Elce-Page-Id`/`X-Elce-Edit-Grant`. SQLite garde une seule paire par projet.
+L’acquisition d’une autre page renvoie `409 edit_access_occupied` ; un ancien
+droit ne peut plus écrire après libération et réacquisition. Le contrôle du
+droit et la mutation documentaire se font dans la même transaction. Le `PUT`
+média revérifie la paire dans la transaction qui publie sa clé de fichier ;
+un fichier refusé est retiré. La création d’un nouveau projet reste libre,
+pour permettre une copie indépendante.
+
 ## Erreurs
 
 Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
@@ -63,6 +77,8 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 | `400` | `invalid_request` | JSON, document v4, identifiant ou nom de type invalide |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
+| `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
+| `428` | `edit_access_required` | Une mutation n’a pas présenté les deux en-têtes de droit |
 | `412` | `revision_mismatch` | La révision de `If-Match` est périmée ; aucune écriture n’est faite |
 | `428` | `if_match_required` | Un remplacement de document doit fournir sa révision |
 | `400` | `invalid_media_body` / `media_size_mismatch` | Le corps fichier manque ou sa taille ne correspond pas aux métadonnées SQLite |
@@ -94,6 +110,8 @@ font dans une transaction. Le remplacement incrémente la révision uniquement
 si `If-Match` correspond à la révision courante. Une sauvegarde du document
 préserve la clé de stockage et l’empreinte déjà enregistrées pour les médias
 qui restent présents.
+La migration `20261011180000_add_project_edit_access` conserve le détenteur et
+l’identifiant du droit dans `projects`, y compris après réouverture de SQLite.
 
 ## Fichiers média
 
@@ -169,3 +187,12 @@ La couverture de l’adaptateur navigateur est dans
 Les routes sont enregistrées dans
 [`api-router.ts`](../src/server/api-router.ts) ; les contrôleurs média et leur
 frontière de persistance sont dans `src/server/media/`.
+
+Le test SQLite vérifie qu’une deuxième page reçoit `409`, qu’un ancien droit
+ne peut plus enregistrer après transfert, et que le droit persiste après
+redémarrage. Il simule aussi la perte de la première réponse d’acquisition
+après commit : une nouvelle demande de la même page retrouve le droit initial.
+Le test HTTP complet, exécuté avec un port local autorisé, vérifie
+également les uploads avec les en-têtes requis et le prévol CORS. Le parcours
+Safari d’octobre 2026 a confirmé qu’une page lectrice ne prend pas le droit
+détenu par une autre page et qu’une copie obtient son propre droit.

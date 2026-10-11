@@ -15,9 +15,12 @@ export function createElceApiRouter(persistence: ProjectPersistence, media?: Med
   router.get('/api/projects', () => projects.listProjects())
   router.post('/api/projects', ({ request }) => projects.createProject(request))
   router.get('/api/projects/:projectId', ({ params }) => projects.getProject(params.projectId!))
+  router.post('/api/projects/:projectId/edit-access', ({ request, params }) => projects.acquireEditAccess(request, params.projectId!))
+  router.get('/api/projects/:projectId/edit-access', ({ request, params }) => projects.hasEditAccess(request, params.projectId!))
+  router.delete('/api/projects/:projectId/edit-access', ({ request, params }) => projects.releaseEditAccess(request, params.projectId!))
   router.patch('/api/projects/:projectId', ({ request, params }) => projects.renameProject(request, params.projectId!))
-  router.delete('/api/projects/:projectId', async ({ params }) => {
-    const response = await projects.deleteProject(params.projectId!)
+  router.delete('/api/projects/:projectId', async ({ request, params }) => {
+    const response = await projects.deleteProject(request, params.projectId!)
     if (response.status === 204) await media?.removeUnreferencedFiles()
     return response
   })

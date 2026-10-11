@@ -6,7 +6,7 @@ interface ProjectEditorLockMessage {
 
 export interface ProjectEditorLockLifecycle {
   onAccessWaiting(): void
-  onAccessGranted(): Promise<void>
+  onAccessGranted(): Promise<boolean | void>
   onAccessSuspending(): Promise<void>
   onAccessError(error: unknown): void
 }
@@ -25,6 +25,7 @@ export class ProjectEditorLock {
   private wantsAccess = false
   private started = false
   private releaseTask: Promise<void> | null = null
+  private releaseFailed = false
 
   public constructor(projectId: string, lifecycle: ProjectEditorLockLifecycle) {
     this.projectId = projectId
@@ -42,6 +43,7 @@ export class ProjectEditorLock {
     document.addEventListener('visibilitychange', this.onVisibilityChange)
     window.addEventListener('blur', this.onBlur)
     window.addEventListener('focus', this.onFocus)
+    window.addEventListener('online', this.onOnline)
     window.addEventListener('pagehide', this.onPageHide)
     if (this.pageCanEdit()) this.requestAccess()
     else this.lifecycle.onAccessWaiting()
@@ -50,14 +52,15 @@ export class ProjectEditorLock {
   /** Suspends this window before releasing its project lock. */
   public async stop(): Promise<void> {
     if (!this.started) return
-    this.started = false
     this.wantsAccess = false
+    await this.releaseAccess()
+    this.started = false
     this.channel.removeEventListener('message', this.onMessage)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
     window.removeEventListener('blur', this.onBlur)
     window.removeEventListener('focus', this.onFocus)
+    window.removeEventListener('online', this.onOnline)
     window.removeEventListener('pagehide', this.onPageHide)
-    await this.releaseAccess()
     this.channel.close()
   }
 
@@ -65,27 +68,42 @@ export class ProjectEditorLock {
   private readonly onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') {
       this.wantsAccess = false
-      void this.releaseAccess()
+      void this.releaseAccess().catch(() => undefined)
       return
     }
-    if (document.visibilityState === 'visible') this.requestAccess()
+    if (document.visibilityState === 'visible') this.retry()
   }
 
   /** Suspends editing and syncs the local document before this window loses focus. */
   private readonly onBlur = (): void => {
     this.wantsAccess = false
-    void this.releaseAccess()
+    void this.releaseAccess().catch(() => undefined)
   }
 
   /** Requests an active project lock when focus returns to this window. */
   private readonly onFocus = (): void => {
+    this.retry()
+  }
+
+  /** Retries an unfinished handoff when the network becomes available. */
+  private readonly onOnline = (): void => {
+    this.retry()
+  }
+
+  /** Retries a retained lock handoff or requests an available local lock. */
+  public retry(): void {
+    if (this.pageCanEdit()) this.wantsAccess = true
+    if (this.ownsLock && this.grantReady) {
+      if (this.releaseFailed) void this.releaseAccess().catch(() => undefined)
+      return
+    }
     this.requestAccess()
   }
 
   /** Releases ownership on page navigation or closure. */
   private readonly onPageHide = (): void => {
     this.wantsAccess = false
-    void this.releaseAccess()
+    void this.releaseAccess().catch(() => undefined)
   }
 
   /** Yields to a visible same-origin window that explicitly requests ownership. */
@@ -94,7 +112,7 @@ export class ProjectEditorLock {
     if (message === null || message.projectId !== this.projectId || message.senderId === this.instanceId) return
     if (this.ownsLock) {
       this.wantsAccess = false
-      void this.releaseAccess()
+      void this.releaseAccess().catch(() => undefined)
     }
   }
 
@@ -127,9 +145,14 @@ export class ProjectEditorLock {
     this.grantReady = false
 
     try {
-      await this.lifecycle.onAccessGranted()
+      const granted = await this.lifecycle.onAccessGranted()
+      if (granted === false) {
+        this.wantsAccess = false
+        release()
+        return
+      }
       this.grantReady = true
-      if (!this.wantsAccess || !this.pageCanEdit()) await this.releaseAccess()
+      if (!this.wantsAccess || !this.pageCanEdit()) await this.releaseAccess().catch(() => undefined)
       await released
     } catch (error) {
       this.wantsAccess = false
@@ -155,10 +178,13 @@ export class ProjectEditorLock {
     this.releaseTask = (async () => {
       try {
         await this.lifecycle.onAccessSuspending()
+        this.releaseFailed = false
         this.grantReady = false
         this.releaseLock?.()
       } catch (error) {
+        this.releaseFailed = true
         this.lifecycle.onAccessError(error)
+        throw error
       } finally {
         this.releaseTask = null
       }

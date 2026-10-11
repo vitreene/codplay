@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codplay/exclusive-sync": "*",
     "@codplay/capsule-automation": "*",
     "@codplay/component-v2": "*",
     "@codplay/scene-factory": "*",

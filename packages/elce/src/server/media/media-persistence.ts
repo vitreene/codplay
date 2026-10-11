@@ -1,3 +1,5 @@
+import type { ProjectEditGrant } from '../projects/project-persistence'
+
 /** Describes one media row and its optional server-side file reference. */
 export interface StoredMediaResource {
   readonly id: string
@@ -16,9 +18,13 @@ export type StoreMediaFileResult =
   | Readonly<{ kind: 'media-changed' }>
   | Readonly<{ kind: 'media-already-has-file' }>
   | Readonly<{ kind: 'duplicate-content'; existingMediaId: string }>
+  | Readonly<{ kind: 'edit-access-lost' }>
 
 /** Defines the SQLite operations needed by the media HTTP controller. */
 export interface MediaPersistence {
+  /** Checks the claimed right before accepting an upload stream. */
+  hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean>
+
   /** Loads media metadata and its optional server file key. */
   findMediaFile(projectId: string, mediaId: string): Promise<StoredMediaResource | null>
 
@@ -32,5 +38,6 @@ export interface MediaPersistence {
     expectedSize: number,
     storageKey: string,
     contentSha256: string,
+    grant: ProjectEditGrant,
   ): Promise<StoreMediaFileResult>
 }

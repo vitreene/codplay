@@ -1,4 +1,5 @@
 import { rawSql } from 'remix/data-table'
+import { randomUUID } from 'node:crypto'
 import type { Database, DataManipulationResult } from 'remix/data-table'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import {
@@ -20,7 +21,7 @@ import type {
 import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
 import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/commands/document-commands'
 import { ElceDocument } from '../../../domain/document/document-model'
-import type { ProjectPersistence, ProjectSummary, StoredProject } from '../project-persistence'
+import type { AcquireProjectEditResult, DeleteProjectResult, EditProjectResult, ProjectEditGrant, ProjectPersistence, ProjectSummary, StoredProject } from '../project-persistence'
 import type {
   CreateProjectResult,
   SaveProjectDocumentResult,
@@ -49,6 +50,45 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   /** Creates the repository around an already migrated Remix SQLite database. */
   public constructor(database: SqliteDatabase) {
     this.database = database
+  }
+
+  /** Reserves one project atomically and reuses a live grant for the same page. */
+  public async acquireEditAccess(projectId: string, pageId: string): Promise<AcquireProjectEditResult> {
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction,
+        'SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ?', [projectId])
+      const row = rows[0]
+      if (row === undefined) return { kind: 'not-found' }
+      const owner = nullableText(row, 'edit_page_id')
+      const currentGrant = nullableText(row, 'edit_grant_id')
+      if (owner === pageId && currentGrant !== null) return { kind: 'granted', grantId: currentGrant }
+      if (owner !== null) return { kind: 'occupied' }
+      const grantId = randomUUID()
+      await queryRows(transaction,
+        'UPDATE projects SET edit_page_id = ?, edit_grant_id = ? WHERE project_id = ?',
+        [pageId, grantId, projectId])
+      return { kind: 'granted', grantId }
+    })
+  }
+
+  /** Reports whether the exact page grant still owns a project. */
+  public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    const rows = await queryRows(this.database,
+      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?',
+      [projectId, grant.pageId, grant.grantId])
+    return rows.length > 0
+  }
+
+  /** Releases only the exact current grant, preserving a later owner's right. */
+  public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction, `
+        UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
+        RETURNING project_id
+      `, [projectId, grant.pageId, grant.grantId])
+      return rows.length > 0
+    })
   }
 
   /** Lists project summaries without loading their content tables. */
@@ -100,8 +140,10 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     expectedSize: number,
     storageKey: string,
     contentSha256: string,
+    grant: ProjectEditGrant,
   ): Promise<StoreMediaFileResult> {
     return this.database.transaction(async (transaction) => {
+      if (await editGrantState(transaction, projectId, grant) !== 'held') return { kind: 'edit-access-lost' }
       const rows = await queryRows(transaction, `
         SELECT size_bytes, storage_key, content_sha256
         FROM media_resources
@@ -173,10 +215,13 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   }
 
   /** Renames a document through its existing domain command and increments its revision. */
-  public async renameProject(projectId: string, name: string): Promise<ProjectSummary | null> {
+  public async renameProject(projectId: string, name: string, grant: ProjectEditGrant): Promise<EditProjectResult> {
     return this.database.transaction(async (transaction) => {
+      const access = await editGrantState(transaction, projectId, grant)
+      if (access === 'not-found') return { kind: 'not-found' }
+      if (access === 'lost') return { kind: 'edit-access-lost' }
       const stored = await readStoredProject(transaction, projectId)
-      if (stored === null) return null
+      if (stored === null) return { kind: 'not-found' }
 
       const document = applyDocumentCommand(stored.document, { type: 'document.rename', name })
       const updated = await queryRows(transaction, `
@@ -186,21 +231,21 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         RETURNING project_id, name, revision
       `, [document.data.name, new Date().toISOString(), projectId])
 
-      return projectSummaryFromRow(requireRow(updated[0], 'Project update did not return a row'))
+      return { kind: 'updated', project: projectSummaryFromRow(requireRow(updated[0], 'Project update did not return a row')) }
     })
   }
 
   /** Deletes one project and its relational document rows. */
-  public async deleteProject(projectId: string): Promise<boolean> {
+  public async deleteProject(projectId: string, grant: ProjectEditGrant): Promise<DeleteProjectResult> {
     return this.database.transaction(async (transaction) => {
-      const existing = await queryRows(transaction,
-        'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
-      if (existing.length === 0) return false
+      const access = await editGrantState(transaction, projectId, grant)
+      if (access === 'not-found') return 'not-found'
+      if (access === 'lost') return 'edit-access-lost'
 
       await clearDocumentRows(transaction, projectId)
       await queryRows(transaction, 'DELETE FROM media_resources WHERE project_id = ?', [projectId])
       await queryRows(transaction, 'DELETE FROM projects WHERE project_id = ?', [projectId])
-      return true
+      return 'deleted'
     })
   }
 
@@ -209,8 +254,12 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     projectId: string,
     expectedRevision: number,
     document: ElceDocument,
+    grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult> {
     return this.database.transaction(async (transaction) => {
+      const access = await editGrantState(transaction, projectId, grant)
+      if (access === 'not-found') return { kind: 'not-found' }
+      if (access === 'lost') return { kind: 'edit-access-lost' }
       const now = new Date().toISOString()
       const updated = await queryRows(transaction, `
         UPDATE projects
@@ -877,6 +926,21 @@ async function clearDocumentRows(database: ProjectDatabase, projectId: string): 
   await queryRows(database, 'DELETE FROM catalog_pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM chapters WHERE project_id = ?', [projectId])
+}
+
+/** Reads the exact editing grant inside the transaction that will mutate data. */
+async function editGrantState(
+  database: ProjectDatabase,
+  projectId: string,
+  grant: ProjectEditGrant,
+): Promise<'held' | 'lost' | 'not-found'> {
+  const rows = await queryRows(database,
+    'SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ?', [projectId])
+  const row = rows[0]
+  if (row === undefined) return 'not-found'
+  return nullableText(row, 'edit_page_id') === grant.pageId
+    && nullableText(row, 'edit_grant_id') === grant.grantId
+    ? 'held' : 'lost'
 }
 
 /** Returns all rows from a parameterized Remix SQL statement. */

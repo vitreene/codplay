@@ -143,6 +143,7 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
     activeProject: snapshot.context.activeProject,
     projectStatus: snapshot.context.projectStatus,
     projectError: snapshot.context.projectError,
+    recoverableLocalCopy: snapshot.context.recoverableLocalCopy,
     editAccess: snapshot.context.editAccess,
     document: snapshot.context.document,
     history: snapshot.context.history,
@@ -160,6 +161,7 @@ function renderApplication(
   runHistoryAction: (kind: 'undo' | 'redo') => void,
 ): RemixNode {
   const editorVisible = view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active'
+  const projectVisible = view.activeProject !== null && view.projectStatus !== 'loading' && view.projectStatus !== 'busy'
   const currentName = view.activeProject === null ? null : view.document.data.name
   return <div
     id="elce-remix-project-app"
@@ -209,6 +211,28 @@ function renderApplication(
             Actualiser
           </button>
           {view.activeProject === null ? null : <button
+            id="elce-project-save-as"
+            type="button"
+            disabled={view.projectStatus === 'busy'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => {
+              const name = window.prompt('Nom de la copie', `${currentName ?? 'Projet'} (copie)`)
+              if (name?.trim()) actions.saveAs(name.trim())
+            })}
+          >
+            Enregistrer sous…
+          </button>}
+          {view.activeProject === null || !view.recoverableLocalCopy ? null : <button
+            id="elce-project-save-local-as"
+            type="button"
+            disabled={view.projectStatus === 'busy'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => {
+              const name = window.prompt('Nom de la copie locale', `${currentName ?? 'Projet'} (copie locale)`)
+              if (name?.trim()) actions.saveLocalAs(name.trim())
+            })}
+          >
+            Enregistrer la copie locale sous…
+          </button>}
+          {view.activeProject === null ? null : <button
             id="elce-project-close"
             type="button"
             disabled={view.projectStatus === 'busy'}
@@ -216,7 +240,7 @@ function renderApplication(
           >
             Fermer le projet
           </button>}
-          {view.activeProject === null ? null : <form
+          {view.activeProject === null || !editorVisible ? null : <form
             id="elce-project-rename-form"
             className="elce-project-rename-form"
             mix={on<HTMLFormElement, 'submit'>('submit', (event) => {
@@ -289,14 +313,25 @@ function renderApplication(
         role="status"
         aria-live="polite"
       >
-        {editorVisible ? syncStatusLabel(view.syncStatus) : projectStatusLabel(view.projectStatus)}
+        {editorVisible ? syncStatusLabel(view.syncStatus) : projectVisible ? 'Lecture seule' : projectStatusLabel(view.projectStatus)}
       </span>
     </header>
-    {editorVisible ? null : renderProjectSelection(view, actions)}
+    {view.activeProject === null ? renderProjectSelection(view, actions) : null}
+    {projectVisible && !editorVisible ? <p id="elce-project-reader-status" role="status">
+      {view.projectError ?? `Lecture seule : ${view.activeProject!.name}. L’édition reste ouverte dans une autre page.`}
+    </p> : null}
+    {projectVisible && !editorVisible ? <button
+      id="elce-project-access-retry"
+      type="button"
+      mix={on<HTMLButtonElement, 'click'>('click', () => actions.retryProjectAccess())}
+    >
+      Réessayer l’accès
+    </button> : null}
+    {editorVisible && view.projectError !== null ? <p id="elce-project-copy-warning" role="alert">{view.projectError}</p> : null}
     {renderEditorWorkspace({
       view: view.editor,
       actions,
-      pageEditorHost: editorVisible && view.editor.selectedChapter === undefined
+      pageEditorHost: projectVisible && view.editor.selectedChapter === undefined
         ? <RemixPageEditor
           onPreview={workspace.onPreview}
           previewError={workspace.previewError}
@@ -304,7 +339,8 @@ function renderApplication(
         : null,
       responsivePanel: workspace.responsivePanel,
       dropTarget: workspace.dropTarget,
-      visible: editorVisible,
+      visible: projectVisible,
+      editable: editorVisible,
       onSetResponsivePanel: workspace.setResponsivePanel,
       onSetDropTarget: workspace.setDropTarget,
       onSetDraggedEntry: workspace.setDraggedEntry,

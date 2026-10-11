@@ -10,6 +10,7 @@
       "ace/*": ["../codplay/src/ace/*"],
       "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
+      "@codplay/exclusive-sync": ["../authoring/exclusive-sync/src/index.ts"],
       "@codplay/scene-factory/capsule-distribution": ["../authoring/scene-factory/src/capsule-distribution.ts"],
       "@codplay/scene-factory/capsule-preset": ["../authoring/scene-factory/src/capsule-preset.ts"],
       "@codplay/sighty": ["../sighty/src/index.ts"],

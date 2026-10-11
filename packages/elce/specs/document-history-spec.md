@@ -38,6 +38,12 @@ copie sans modifier le document ni l’historique. Quand le serveur signale un
 média déjà présent, `media.merge` réécrit les états concernés de l’historique
 au lieu de devenir un geste auteur supplémentaire.
 
+À chaque démarrage de l’éditeur, le store IndexedDB supprime les blobs qui ne
+sont référencés par aucun document local. Les médias encore référencés par un
+autre cache projet sont conservés. Ainsi, une image retirée par Undo reste
+rétablissable pendant la session courante, mais ses octets ne sont pas gardés
+après un rechargement si aucun document local ne les référence.
+
 ## Preuves
 
 - [`document-history.test.ts`](../src/app/history/document-history.test.ts)
@@ -49,6 +55,9 @@ au lieu de devenir un geste auteur supplémentaire.
   couvre la rétention des octets entre Annuler et Rétablir, leur libération,
   la limite de l’historique et la différence entre retour de focus inchangé et
   installation d’un autre document.
+- [`document-store.test.ts`](../src/infrastructure/indexed-db/document-store.test.ts)
+  vérifie que le nettoyage garde les médias utilisés par n’importe quel cache
+  projet et retire les blobs orphelins.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   couvre les boutons, le titre non validé, le raccourci synthétique Rétablir
   et le bouton distinct d’arrêt d’un import.
@@ -57,5 +66,7 @@ au lieu de devenir un geste auteur supplémentaire.
   l’ordre inverse et a redonné le focus à la Section de Page A. Un titre non
   validé s’est annulé en un clic. Une illustration importée s’est retirée par
   Annuler puis réaffichée par Rétablir avec une image décodable. Le raccourci
-  Undo a été vérifié par événement clavier synthétique ; la frappe physique
-  reste au plan d’acceptation.
+  Undo a d’abord été vérifié par événement clavier synthétique.
+- Le test manuel de l’interface a ensuite confirmé les boutons Annuler,
+  les raccourcis clavier physiques, l’annulation d’une image et la purge des
+  blobs orphelins après rechargement.

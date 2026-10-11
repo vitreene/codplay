@@ -15,6 +15,7 @@ export interface EditorWorkspaceViewProps {
   readonly responsivePanel: ResponsivePanel
   readonly dropTarget: string | null
   readonly visible: boolean
+  readonly editable?: boolean
   readonly onSetResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void
   readonly onSetDropTarget: (targetId: string | null) => void
   readonly onSetDraggedEntry: (entry: DraggedScenarioEntry) => void

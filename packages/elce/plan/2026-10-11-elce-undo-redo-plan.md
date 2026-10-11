@@ -53,16 +53,16 @@ de contrôle vide l'historique du navigateur piloté.
    nettoie ses données provisoires et ne déclenche pas l'Undo d'un geste
    antérieur. Une fois l'import validé localement, l'Undo documentaire prend le
    relais, même si la synchronisation réseau continue.
-5. [ ] **Raccorder l'interface.** Afficher des boutons globaux Annuler/Rétablir
+5. [x] **Raccorder l'interface.** Afficher des boutons globaux Annuler/Rétablir
    avec leur disponibilité réelle. Router les raccourcis depuis les surfaces
    Tiptap et les champs natifs vers ce même circuit, sans double annulation.
-6. [ ] **Valider et documenter.** Tester l'acteur, la persistance locale, les
-   médias avant/après upload, la déduplication, les échecs de quota, l'accès
-   suspendu, le changement de projet, le remplacement serveur, les boutons et
-   les raccourcis dans la page réelle. Vérifier aussi que le nettoyage au
-   démarrage conserve les médias référencés par tous les documents locaux.
-   Mettre à jour les spécifications propriétaires uniquement après
-   vérification de chaque comportement.
+   L'utilisateur a vérifié les boutons et les raccourcis clavier réels.
+6. [ ] **Terminer l'acceptation.** Vérifier dans l'interface les autres
+   commandes structurelles et réglages, l'accès suspendu et les changements de
+   projet. Tester le transfert entre deux navigateurs, le cycle Undo/Redo d'un
+   média déjà envoyé au serveur, et le nettoyage quand plusieurs onglets
+   partagent IndexedDB. Mettre à jour les spécifications propriétaires après
+   vérification de ces derniers comportements.
 
 ## Saisie non encore validée
 
@@ -75,26 +75,28 @@ raccourcis.
 ## État d’acceptation du 11 octobre 2026
 
 L’ordre Section → page → Section, le retour entre pages, le titre non validé,
-les boutons, l’import d’illustration et son Annuler/Rétablir ont été exercés
-dans Safari sur un projet d’essai supprimé ensuite. Les tests ciblés couvrent
-également l’arrêt d’un import pendant l’écriture, le quota, la rétention des
-octets, la limite de 100 gestes, la fusion d’un média doublon et la conservation
-de l’historique lors d’un retour de focus sans changement. La
+les boutons et l’import d’illustration avec Annuler/Rétablir ont été exercés
+dans Safari sur un projet d’essai supprimé ensuite. L'utilisateur a également
+validé les raccourcis clavier physiques, l'annulation d'une image et la purge
+des blobs orphelins après rechargement. Les tests ciblés couvrent l’arrêt d’un
+import pendant l’écriture, le quota, la rétention des octets, la limite de 100
+gestes, la fusion d’un média doublon, la conservation de l’historique au retour
+de focus inchangé et le choix des blobs à purger. La
 [spécification de l’historique](../specs/document-history-spec.md) décrit ces
 comportements vérifiés.
 
 Restent à valider avant de clore : les autres commandes structurelles et champs
-de réglage dans l’interface, la frappe physique des raccourcis, le transfert
-entre deux navigateurs, le cycle complet d’un média déjà transféré au serveur
-puis annulé et rétabli, et le nettoyage des blobs orphelins après un
-rechargement. La suite Elcé présente sept échecs préexistants du player ; le
-test SQLite/API passe avec accès au port local, comme avant cette tranche.
+de réglage dans l’interface, le transfert entre deux navigateurs, le cycle
+complet d’un média déjà transféré au serveur puis annulé et rétabli, et l'effet
+du nettoyage partagé entre plusieurs onglets. La suite Elcé présente sept
+échecs préexistants du player ; le test SQLite/API passe avec accès au port
+local, comme avant cette tranche.
 
 ## Décision validée : octets après rechargement
 
 Les blobs conservés uniquement pour Rétablir ne survivent pas au rechargement.
 Au démarrage, balayer les médias en IndexedDB et supprimer ceux qui ne sont
 référencés par aucun document local. Cette règle laisse intacts les documents
-et médias encore présents dans les caches projet. Le balayage est une
-validation obligatoire de la tranche, car IndexedDB est partagé entre les
-onglets de même origine.
+et médias encore présents dans les caches projet. La purge après rechargement
+a été validée par l'utilisateur. Le comportement entre plusieurs onglets reste
+à valider, car IndexedDB est partagé entre eux.

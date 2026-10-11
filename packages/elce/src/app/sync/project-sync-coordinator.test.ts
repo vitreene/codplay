@@ -6,6 +6,7 @@ import type { DocumentSyncState, ElceDocumentStore, MediaBlob } from '../../infr
 import { ElceProjectApiClient } from '../../infrastructure/project-api/project-api-client'
 import { createActor } from 'xstate'
 import { controllerMachine } from '../controller/controller-machine'
+import { attachDocumentPersistence } from '../controller/document-persistence'
 import { ProjectSyncCoordinator } from './project-sync-coordinator'
 
 class MemoryDocumentStore implements ElceDocumentStore {
@@ -73,7 +74,7 @@ describe('Elcé project synchronization', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
     actor.send({ type: 'document.replace', document })
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
 
     coordinator.schedule(document)
     await coordinator.flushNow()
@@ -95,7 +96,7 @@ describe('Elcé project synchronization', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
     actor.send({ type: 'document.replace', document })
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
     const reportError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     coordinator.schedule(document)
@@ -134,7 +135,7 @@ describe('Elcé project synchronization', () => {
     })
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
 
     coordinator.schedule(document)
     await waitForSync()
@@ -178,7 +179,7 @@ describe('Elcé project synchronization', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
     actor.send({ type: 'media.source.register', mediaId: media.id, source: 'blob:video-local' })
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
 
     coordinator.schedule(document)
     await waitForSync()
@@ -188,6 +189,129 @@ describe('Elcé project synchronization', () => {
     expect(store.syncState).toMatchObject({ uploadedMediaIds: [media.id], status: 'synced' })
     expect(actor.getSnapshot().context.mediaSources[media.id]).toBe('blob:video-local')
 
+    coordinator.destroy()
+    actor.stop()
+  })
+
+  it('recovers missing copy media from its recorded source project before upload', async () => {
+    const media = { id: 'media-copy', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' }
+    const document = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })
+    const store = new MemoryDocumentStore()
+    store.document = document
+    await store.saveSyncState({
+      documentId: document.id, remoteRevision: 0, uploadedMediaIds: [], status: 'pending',
+      independentCopyOf: 'source-project', mediaSourceProjectIds: { [media.id]: 'source-project' },
+    })
+    const request = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const path = new URL(input.toString()).pathname
+      if (path === `/api/projects/source-project/media/${media.id}`) return new Response(new Blob(['img'], { type: media.mimeType }))
+      if (init?.method === 'PUT' && path.endsWith('/document')) {
+        return Response.json({ project: { id: document.id, name: document.data.name, revision: 1 } }, { headers: { ETag: '"1"' } })
+      }
+      if (init?.method === 'PUT' && path.endsWith(`/media/${media.id}`)) {
+        return Response.json({ media: { id: media.id, url: path } }, { status: 201 })
+      }
+      throw new Error(`Requête inattendue : ${path}`)
+    })
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    actor.send({ type: 'document.replace', document })
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
+    coordinator.schedule(document)
+    await coordinator.waitUntilCurrentDocumentSynced()
+    expect(request.mock.calls.map(([input, init]) => `${init?.method ?? 'GET'} ${new URL(input.toString()).pathname}`)).toEqual([
+      `PUT /api/projects/${document.id}/document`,
+      `GET /api/projects/source-project/media/${media.id}`,
+      `PUT /api/projects/${document.id}/media/${media.id}`,
+    ])
+    expect(store.syncState).toMatchObject({ status: 'synced', uploadedMediaIds: [media.id] })
+    coordinator.destroy()
+    actor.stop()
+  })
+
+  it('keeps a reloaded rescue copy pending when its source media has disappeared', async () => {
+    const media = { id: 'missing-source-media', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' }
+    const document = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })
+    const store = new MemoryDocumentStore()
+    store.document = document
+    await store.saveSyncState({
+      documentId: document.id, remoteRevision: 0, uploadedMediaIds: [], status: 'pending',
+      independentCopyOf: 'source-project', mediaSourceProjectIds: { [media.id]: 'source-project' },
+    })
+    const request = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const path = new URL(input.toString()).pathname
+      if (init?.method === 'PUT' && path.endsWith('/document')) {
+        return Response.json({ project: { id: document.id, name: document.data.name, revision: 1 } }, { headers: { ETag: '"1"' } })
+      }
+      if (path === `/api/projects/source-project/media/${media.id}`) {
+        return Response.json({ error: 'media_not_found' }, { status: 404 })
+      }
+      throw new Error(`Requête inattendue : ${path}`)
+    })
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    actor.send({ type: 'document.replace', document })
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
+    const reportError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    coordinator.schedule(document)
+    await expect(coordinator.waitUntilCurrentDocumentSynced()).rejects.toMatchObject({
+      code: 'source_media_unavailable', mediaId: media.id,
+    })
+    expect(store.syncState).toMatchObject({ remoteRevision: 1, status: 'pending', uploadedMediaIds: [] })
+    expect(request.mock.calls.some(([input, init]) => init?.method === 'PUT'
+      && new URL(input.toString()).pathname.endsWith(`/media/${media.id}`))).toBe(false)
+
+    reportError.mockRestore()
+    coordinator.destroy()
+    actor.stop()
+  })
+
+  it('completes a duplicate upload merge after author commands are suspended', async () => {
+    const canonical = { id: 'media-canonical', name: 'one.webp', mimeType: 'image/webp', size: 3, caption: '' }
+    const duplicate = { id: 'media-duplicate', name: 'two.webp', mimeType: 'image/webp', size: 3, caption: '' }
+    let document = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media: canonical })
+    document = applyDocumentCommand(document, { type: 'media.add', media: duplicate })
+    const store = new MemoryDocumentStore()
+    store.document = document
+    store.media.set(duplicate.id, new Blob(['img'], { type: duplicate.mimeType }))
+    await store.saveSyncState({ documentId: document.id, remoteRevision: 0, uploadedMediaIds: [canonical.id], status: 'pending' })
+    let resolveUpload!: (response: Response) => void
+    const upload = new Promise<Response>((resolve) => { resolveUpload = resolve })
+    let revision = 0
+    const request = vi.fn<typeof fetch>().mockImplementation(async (_input, init) => {
+      if (init?.method === 'PUT' && new URL(_input.toString()).pathname.endsWith('/document')) {
+        revision += 1
+        return Response.json({ project: { id: document.id, name: document.data.name, revision } }, { headers: { ETag: `"${revision}"` } })
+      }
+      if (init?.method === 'PUT') return upload
+      throw new Error('Requête inattendue dans le test de fusion média.')
+    })
+    const project = { id: document.id, name: document.data.name, revision: 0 }
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: {
+      rememberedProjectId: () => null,
+      perform: async () => ({ projects: [project], activeProject: project, document, status: 'opening' as const, editAccess: 'waiting' as const }),
+      startLock: () => {},
+      dispose: async () => {},
+    } } })
+    actor.start()
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).toBe(document.id))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
+    const persistence = await attachDocumentPersistence(actor, store, { onLocalSave: (next) => coordinator.schedule(next) })
+    actor.send({ type: 'editor.access.activate' })
+    coordinator.schedule(actor.getSnapshot().context.document)
+    const completed = coordinator.waitUntilCurrentDocumentSynced(() => persistence.flushLocalChanges())
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+    actor.send({ type: 'editor.access.suspend' })
+    resolveUpload(Response.json({ error: 'media_already_exists', mediaId: canonical.id }, { status: 409 }))
+    await completed
+
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual([canonical.id])
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+    expect(actor.getSnapshot().context.history.past).toHaveLength(0)
+    expect(store.syncState).toMatchObject({ status: 'synced', remoteRevision: 2 })
+    persistence.detach()
     coordinator.destroy()
     actor.stop()
   })
@@ -217,7 +341,7 @@ describe('Elcé project synchronization', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
     actor.send({ type: 'document.replace', document })
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
 
     coordinator.schedule(document)
     let completed = false
@@ -251,7 +375,7 @@ describe('Elcé project synchronization', () => {
     ))
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, renamed.id))
 
     await store.saveDocument(renamed)
     coordinator.schedule(original)
@@ -281,7 +405,7 @@ describe('Elcé project synchronization', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
     actor.send({ type: 'document.replace', document: local })
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, local.id))
 
     await store.saveDocument(local)
     await store.saveSyncState({ documentId: local.id, remoteRevision: 4, uploadedMediaIds: [], status: 'pending' })
@@ -306,7 +430,7 @@ describe('Elcé project synchronization', () => {
     ))
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, local.id))
 
     await coordinator.suspend()
     coordinator.schedule(local)
@@ -337,7 +461,7 @@ describe('Elcé project synchronization', () => {
     const actor = createActor(controllerMachine, { input: { documentStore: store } })
     actor.start()
     actor.send({ type: 'document.replace', document })
-    const coordinator = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://127.0.0.1:5181', request))
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, document.id))
 
     await store.saveDocument(document)
     coordinator.schedule(document)
@@ -359,4 +483,15 @@ describe('Elcé project synchronization', () => {
 /** Waits beyond the configured debounce so the queued network job can finish. */
 async function waitForSync(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 600))
+}
+
+/** Grants a fixture client without changing the request sequence under test. */
+async function grantedApi(request: ReturnType<typeof vi.fn<typeof fetch>>, projectId: string): Promise<ElceProjectApiClient> {
+  const routed = vi.fn<typeof fetch>((input, init) => {
+    if (new URL(input.toString()).pathname.endsWith('/edit-access')) return Promise.resolve(Response.json({ grantId: 'test-grant' }))
+    return request(input, init)
+  })
+  const api = new ElceProjectApiClient('http://127.0.0.1:5181', routed)
+  await api.acquireEditAccess(projectId, 'test-page')
+  return api
 }

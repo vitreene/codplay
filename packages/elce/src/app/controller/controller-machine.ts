@@ -312,6 +312,7 @@ export const controllerMachine = setup({
         activeProject: output.activeProject,
         projectStatus: output.status,
         projectError: null,
+        recoverableLocalCopy: output.activeProject?.id === context.activeProject?.id ? context.recoverableLocalCopy : false,
         pendingProjectOperation: null,
         projectOperationHadAccess: false,
         editAccess: context.projectOperationHadAccess ? output.editAccess : 'waiting',
@@ -362,6 +363,7 @@ export const controllerMachine = setup({
     activeProject: null,
     projectStatus: 'loading',
     projectError: null,
+    recoverableLocalCopy: false,
     pendingProjectOperation: null,
     projectOperationHadAccess: false,
   }),
@@ -411,6 +413,15 @@ export const controllerMachine = setup({
     'document.sync.status': {
       actions: assign(({ event }) => ({ syncStatus: event.status })),
     },
+    'document.sync.merge': {
+      guard: ({ context, event }) => context.activeProject?.id === event.projectId
+        && context.document.id === event.projectId,
+      actions: assign(({ context, event }) => commitCommand(context, {
+        type: 'media.merge',
+        canonicalMediaId: event.canonicalMediaId,
+        duplicateMediaIds: [event.duplicateMediaId],
+      }, null, false, false)),
+    },
     'project.summary.refresh': {
       actions: assign(({ context, event }) => ({
         activeProject: context.activeProject?.id === event.project.id ? event.project : context.activeProject,
@@ -419,7 +430,19 @@ export const controllerMachine = setup({
           : [...context.projects, event.project],
       })),
     },
+    'project.reader.ready': {
+      actions: assign(({ context }) => ({
+        projectStatus: context.activeProject !== null && context.projectStatus === 'opening' ? 'active' as const : context.projectStatus,
+      })),
+    },
     'project.access.error': { actions: 'markProjectAccessError' },
+    'project.sync.warning': { actions: assign(({ event }) => ({ projectError: event.message })) },
+    'project.local-copy.availability': {
+      actions: assign(({ context, event }) => ({
+        recoverableLocalCopy: context.activeProject?.id === event.projectId ? event.available : context.recoverableLocalCopy,
+      })),
+    },
+    'project.access.retry': { actions: ({ context }) => context.projectSession?.retryAccess?.() },
   },
   states: {
     suspended: {

@@ -2,6 +2,7 @@ import { assertDocumentInvariants } from '../../domain/commands/document-command
 import { ELCE_DOCUMENT_VERSION, ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentData } from '../../domain/document/document-types'
 import type { ProjectPersistence, ProjectSummary } from './project-persistence'
+import { lostProjectEditGrant, missingProjectEditGrant, projectEditGrantFrom } from './project-edit-grant'
 
 const API_ERROR = {
   INVALID_REQUEST: 'invalid_request',
@@ -21,6 +22,36 @@ export class ProjectApiController {
 
   public constructor(persistence: ProjectPersistence) {
     this.persistence = persistence
+  }
+
+  /** Reserves editing for one page, or reports the current owner's exclusion. */
+  public async acquireEditAccess(request: Request, projectId: string): Promise<Response> {
+    const body = await readJsonBody(request)
+    if (body.kind === 'invalid' || !isRecord(body.value)
+      || typeof body.value.pageId !== 'string' || body.value.pageId.length === 0) {
+      return apiError(API_ERROR.INVALID_REQUEST, 400)
+    }
+    const result = await this.persistence.acquireEditAccess(projectId, body.value.pageId)
+    switch (result.kind) {
+      case 'granted': return Response.json({ grantId: result.grantId })
+      case 'occupied': return apiError('edit_access_occupied', 409)
+      case 'not-found': return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
+    }
+  }
+
+  /** Checks a grant after a lost release response without acquiring anew. */
+  public async hasEditAccess(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    return Response.json({ held: await this.persistence.hasEditAccess(projectId, grant) })
+  }
+
+  /** Releases only the current page grant. */
+  public async releaseEditAccess(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    return await this.persistence.releaseEditAccess(projectId, grant)
+      ? new Response(null, { status: 204 }) : lostProjectEditGrant()
   }
 
   /** Returns project summaries without loading their document bodies. */
@@ -62,34 +93,44 @@ export class ProjectApiController {
 
   /** Renames a project and returns the revision produced by persistence. */
   public async renameProject(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
     const body = await readJsonBody(request)
     if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
 
     const name = projectNameFrom(body.value)
     if (name.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
 
-    const project = await this.persistence.renameProject(projectId, name.value)
-    switch (project) {
-      case null:
+    const result = await this.persistence.renameProject(projectId, name.value, grant)
+    switch (result.kind) {
+      case 'not-found':
         return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
-      default:
-        return projectResponse(project)
+      case 'edit-access-lost':
+        return lostProjectEditGrant()
+      case 'updated':
+        return projectResponse(result.project)
     }
   }
 
   /** Deletes a project and reports whether the identifier existed. */
-  public async deleteProject(projectId: string): Promise<Response> {
-    const deleted = await this.persistence.deleteProject(projectId)
+  public async deleteProject(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    const deleted = await this.persistence.deleteProject(projectId, grant)
     switch (deleted) {
-      case false:
+      case 'not-found':
         return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
-      case true:
+      case 'edit-access-lost':
+        return lostProjectEditGrant()
+      case 'deleted':
         return new Response(null, { status: 204 })
     }
   }
 
   /** Replaces a project document only when its current revision matches If-Match. */
   public async saveDocument(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
     const revision = revisionFrom(request.headers.get('If-Match'))
     switch (revision.kind) {
       case 'missing':
@@ -108,8 +149,10 @@ export class ProjectApiController {
       return apiError(API_ERROR.INVALID_REQUEST, 400)
     }
 
-    const result = await this.persistence.saveDocument(projectId, revision.revision, parsed.document)
+    const result = await this.persistence.saveDocument(projectId, revision.revision, parsed.document, grant)
     switch (result.kind) {
+      case 'edit-access-lost':
+        return lostProjectEditGrant()
       case 'not-found':
         return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
       case 'revision-mismatch':

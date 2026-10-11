@@ -1,7 +1,8 @@
 import { createActor } from 'xstate'
 import type { Actor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { assertDocumentInvariants } from '../../domain/commands/document-commands'
+import { applyDocumentCommand, assertDocumentInvariants } from '../../domain/commands/document-commands'
+import { createInitialDocument } from '../../domain/document/document-model'
 import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
@@ -135,6 +136,35 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-canonical'])
     expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-question-merge')?.question?.mediaId).toBe('media-canonical')
     assertDocumentInvariants(actor.getSnapshot().context.document)
+    actor.stop()
+  })
+
+  it('finishes an upload duplicate merge while author commands are suspended', async () => {
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'media.add', media: { id: 'media-canonical', name: 'one.png', mimeType: 'image/png', size: 3, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add', media: { id: 'media-duplicate', name: 'two.png', mimeType: 'image/png', size: 3, caption: '' },
+    })
+    const project = { id: document.id, name: document.data.name, revision: 0 }
+    const actor = createActor(controllerMachine, { input: { projectSession: {
+      rememberedProjectId: () => null,
+      perform: async () => ({ projects: [project], activeProject: project, document, status: 'opening' as const, editAccess: 'waiting' as const }),
+      startLock: () => {},
+      dispose: async () => {},
+    } } })
+    actor.start()
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await flush()
+    actor.send({ type: 'editor.access.activate' })
+    actor.send({ type: 'editor.access.suspend' })
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Refusé' } })
+    actor.send({ type: 'document.sync.merge', projectId: document.id, canonicalMediaId: 'media-canonical', duplicateMediaId: 'media-duplicate' })
+
+    expect(actor.getSnapshot().context.document.data.name).toBe(document.data.name)
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-canonical'])
+    expect(actor.getSnapshot().context.history.past).toHaveLength(0)
     actor.stop()
   })
 

@@ -54,6 +54,7 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       id="elce-main"
       className={`elce-main${panelStateClass}`}
       hidden={!props.visible}
+      inert={props.editable === false}
     >
       {renderScenarioPanel(scenarioProps)}
       <div

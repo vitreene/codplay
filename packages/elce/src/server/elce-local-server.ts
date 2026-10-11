@@ -28,6 +28,7 @@ const BROWSER_PACKAGES = [
   '@codplay/sighty',
   '@codplay/component-v2',
   '@codplay/capsule-automation',
+  '@codplay/exclusive-sync',
   '@codplay/scene-factory',
   '@tiptap/core',
   '@tiptap/extension-subscript',
@@ -67,6 +68,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       component: 'packages/authoring/component-v2/src',
       sceneFactory: 'packages/authoring/scene-factory/src',
       capsuleAutomation: 'packages/authoring/capsule-automation/src',
+      exclusiveSync: 'packages/authoring/exclusive-sync/src',
       vendor: 'node_modules',
     },
     allowFiles: [
@@ -76,6 +78,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       'packages/authoring/component-v2/src/**',
       'packages/authoring/scene-factory/src/**',
       'packages/authoring/capsule-automation/src/**',
+      'packages/authoring/exclusive-sync/src/**',
     ],
     denyFiles: ['packages/elce/src/**/*.test.*', 'packages/elce/src/server/**'],
     allowPackages: BROWSER_PACKAGES,

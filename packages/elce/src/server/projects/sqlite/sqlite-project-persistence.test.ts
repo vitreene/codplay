@@ -19,6 +19,7 @@ import {
 import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../../../domain/document/document-model'
 import type { ElceDocument as ElceDocumentClass } from '../../../domain/document/document-model'
+import { ElceProjectApiClient } from '../../../infrastructure/project-api/project-api-client'
 import { createElceApiRouter } from '../../api-router'
 import { createElceHttpServer } from '../../elce-http-server'
 import { MediaApiController } from '../../media/media-api-controller'
@@ -74,6 +75,7 @@ describe('SQLite project persistence through the Remix API', () => {
     })
     const created = await router.fetch(jsonRequest('POST', '/api/projects', original.toJSON()))
     expect(created.status).toBe(201)
+    const grant = await reserve(router, original.id)
 
     await database.exec(rawSql(
       'UPDATE media_resources SET storage_key = ?, content_sha256 = ? WHERE project_id = ? AND media_id = ?',
@@ -82,13 +84,13 @@ describe('SQLite project persistence through the Remix API', () => {
 
     const renamed = applyDocumentCommand(original, { type: 'document.rename', name: 'Nom modifié' })
     const saved = await router.fetch(jsonRequest(
-      'PUT', `/api/projects/${original.id}/document`, renamed.toJSON(), { 'If-Match': '"0"' },
+      'PUT', `/api/projects/${original.id}/document`, renamed.toJSON(), { 'If-Match': '"0"', ...grant },
     ))
     expect(saved.status).toBe(200)
     expect(saved.headers.get('ETag')).toBe('"1"')
 
     const stale = await router.fetch(jsonRequest(
-      'PUT', `/api/projects/${original.id}/document`, original.toJSON(), { 'If-Match': '"0"' },
+      'PUT', `/api/projects/${original.id}/document`, original.toJSON(), { 'If-Match': '"0"', ...grant },
     ))
     expect(stale.status).toBe(412)
 
@@ -99,6 +101,79 @@ describe('SQLite project persistence through the Remix API', () => {
       [original.id],
     ))
     expect(mediaRows.rows).toEqual([{ storage_key: 'image-1.webp', content_sha256: 'a'.repeat(64) }])
+  })
+
+  it('excludes another page and rejects an old grant after release and reacquisition', async () => {
+    database = await openProjectDatabase(':memory:')
+    const router = createElceApiRouter(new SqliteProjectPersistence(database))
+    const document = createDocumentWithId('project-exclusive')
+    await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+    const first = await router.fetch(jsonRequest('POST', '/api/projects/project-exclusive/edit-access', { pageId: 'page-a' }))
+    const firstGrant = (await first.json() as { grantId: string }).grantId
+    const occupied = await router.fetch(jsonRequest('POST', '/api/projects/project-exclusive/edit-access', { pageId: 'page-b' }))
+    expect(occupied.status).toBe(409)
+    const firstHeaders = { 'X-Elce-Page-Id': 'page-a', 'X-Elce-Edit-Grant': firstGrant }
+    const released = await router.fetch(new Request('http://elce.test/api/projects/project-exclusive/edit-access', {
+      method: 'DELETE', headers: firstHeaders,
+    }))
+    expect(released.status).toBe(204)
+    const second = await router.fetch(jsonRequest('POST', '/api/projects/project-exclusive/edit-access', { pageId: 'page-b' }))
+    const secondGrant = (await second.json() as { grantId: string }).grantId
+    expect(secondGrant).not.toBe(firstGrant)
+    const stale = await router.fetch(jsonRequest('PUT', '/api/projects/project-exclusive/document', document.toJSON(), {
+      'If-Match': '"0"', ...firstHeaders,
+    }))
+    expect(stale.status).toBe(409)
+    expect(await stale.json()).toEqual({ error: 'edit_access_lost' })
+    const current = await router.fetch(jsonRequest('PUT', '/api/projects/project-exclusive/document', document.toJSON(), {
+      'If-Match': '"0"', 'X-Elce-Page-Id': 'page-b', 'X-Elce-Edit-Grant': secondGrant,
+    }))
+    expect(current.status).toBe(200)
+  })
+
+  it('returns the same grant when an acquisition response is lost after commit', async () => {
+    database = await openProjectDatabase(':memory:')
+    const router = createElceApiRouter(new SqliteProjectPersistence(database))
+    const document = createDocumentWithId('project-lost-acquisition')
+    await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+
+    let committedGrant: string | null = null
+    let loseResponse = true
+    const request = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const response = await router.fetch(new Request(input, init))
+      if (loseResponse && init?.method === 'POST' && new URL(input.toString()).pathname.endsWith('/edit-access')) {
+        loseResponse = false
+        committedGrant = (await response.json() as { grantId: string }).grantId
+        throw new TypeError('Acquisition response lost after commit')
+      }
+      return response
+    }
+    const client = new ElceProjectApiClient('http://elce.test', request)
+    await expect(client.acquireEditAccess(document.id, 'page-a')).rejects.toThrow('response lost')
+    expect((await client.acquireEditAccess(document.id, 'page-a'))?.grantId).toBe(committedGrant)
+
+    const otherPage = await router.fetch(jsonRequest('POST', `/api/projects/${document.id}/edit-access`, { pageId: 'page-b' }))
+    expect(otherPage.status).toBe(409)
+  })
+
+  it('rejects a late media publication from a grant released during its upload', async () => {
+    database = await openProjectDatabase(':memory:')
+    const persistence = new SqliteProjectPersistence(database)
+    const router = createElceApiRouter(persistence)
+    const document = applyDocumentCommand(createDocumentWithId('project-late-media'), {
+      type: 'media.add', media: { id: 'media-late', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' },
+    })
+    await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+    const headers = await reserve(router, document.id)
+    const released = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}/edit-access`, {
+      method: 'DELETE', headers,
+    }))
+    expect(released.status).toBe(204)
+    const result = await persistence.storeMediaFile(document.id, 'media-late', 3, 'unpublished-key', 'a'.repeat(64), {
+      pageId: headers['X-Elce-Page-Id'], grantId: headers['X-Elce-Edit-Grant'],
+    })
+    expect(result).toEqual({ kind: 'edit-access-lost' })
+    expect((await persistence.findMediaFile(document.id, 'media-late'))?.storageKey).toBeNull()
   })
 
   it('streams media through SQLite and Remix FileStorage, including native byte ranges', async () => {
@@ -170,16 +245,23 @@ describe('SQLite project persistence through the Remix API', () => {
         body: JSON.stringify(document.toJSON()),
       })
       expect(projectResponse.status).toBe(201)
+      const accessResponse = await fetch(`${origin}/api/projects/${document.id}/edit-access`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pageId: 'test-page' }),
+      })
+      const access = await accessResponse.json() as { grantId: string }
+      const grant = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': access.grantId }
 
       const imageUrl = `${origin}/api/projects/${document.id}/media/media-upload-image`
       const oversizedUpload = await fetch(imageUrl, {
         method: 'PUT',
+        headers: grant,
         body: new Blob([imageBytes, new Uint8Array([0])], { type: 'image/webp' }),
       })
       expect(oversizedUpload.status).toBe(400)
 
       const uploadedImage = await fetch(imageUrl, {
         method: 'PUT',
+        headers: grant,
         body: new Blob([imageBytes], { type: 'image/webp' }),
       })
       expect(uploadedImage.status).toBe(201)
@@ -196,6 +278,7 @@ describe('SQLite project persistence through the Remix API', () => {
       const videoUrl = `${origin}/api/projects/${document.id}/media/media-upload-video`
       const uploadedVideo = await fetch(videoUrl, {
         method: 'PUT',
+        headers: grant,
         body: new Blob([videoBytes], { type: 'video/mp4' }),
       })
       expect(uploadedVideo.status).toBe(201)
@@ -207,6 +290,7 @@ describe('SQLite project persistence through the Remix API', () => {
 
       const repeatedUpload = await fetch(imageUrl, {
         method: 'PUT',
+        headers: grant,
         body: new Blob([imageBytes], { type: 'image/webp' }),
       })
       expect(repeatedUpload.status).toBe(204)
@@ -215,6 +299,7 @@ describe('SQLite project persistence through the Remix API', () => {
       const duplicateImageBytes = new TextEncoder().encode('elce-other-content')
       const uploadedDuplicateImage = await fetch(duplicateImageUrl, {
         method: 'PUT',
+        headers: grant,
         body: new Blob([duplicateImageBytes], { type: 'image/webp' }),
       })
       expect(uploadedDuplicateImage.status).toBe(201)
@@ -226,14 +311,14 @@ describe('SQLite project persistence through the Remix API', () => {
       })
       const mergedDocument = await fetch(`${origin}/api/projects/${document.id}/document`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'If-Match': '"0"' },
+        headers: { 'Content-Type': 'application/json', 'If-Match': '"0"', ...grant },
         body: JSON.stringify(document.toJSON()),
       })
       expect(mergedDocument.status).toBe(200)
       const removedDuplicateFile = await fetch(duplicateImageUrl)
       expect(removedDuplicateFile.status).toBe(404)
 
-      const deletedProject = await fetch(`${origin}/api/projects/${document.id}`, { method: 'DELETE' })
+      const deletedProject = await fetch(`${origin}/api/projects/${document.id}`, { method: 'DELETE', headers: grant })
       expect(deletedProject.status).toBe(204)
     } finally {
       await api.close()
@@ -263,14 +348,15 @@ describe('SQLite project persistence through the Remix API', () => {
       media: { id: 'media-duplicate', name: 'two.webp', mimeType: 'image/webp', size: bytes.byteLength, caption: '' },
     })
     await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+    const grant = await reserve(router, document.id)
 
     const canonical = await router.fetch(new Request(
       `http://elce.test/api/projects/${document.id}/media/media-canonical`,
-      { method: 'PUT', body: new Blob([bytes], { type: 'image/webp' }) },
+      { method: 'PUT', headers: grant, body: new Blob([bytes], { type: 'image/webp' }) },
     ))
     const duplicate = await router.fetch(new Request(
       `http://elce.test/api/projects/${document.id}/media/media-duplicate`,
-      { method: 'PUT', body: new Blob([bytes], { type: 'image/webp' }) },
+      { method: 'PUT', headers: grant, body: new Blob([bytes], { type: 'image/webp' }) },
     ))
 
     expect(canonical.status).toBe(201)
@@ -286,6 +372,8 @@ describe('SQLite project persistence through the Remix API', () => {
     const second = createDocumentWithId('project-second')
     await router.fetch(jsonRequest('POST', '/api/projects', first.toJSON()))
     await router.fetch(jsonRequest('POST', '/api/projects', second.toJSON()))
+    const firstGrant = await reserve(router, first.id)
+    const secondGrant = await reserve(router, second.id)
 
     const listed = await router.fetch(new Request('http://elce.test/api/projects'))
     expect(listed.status).toBe(200)
@@ -296,11 +384,11 @@ describe('SQLite project persistence through the Remix API', () => {
       ]),
     })
 
-    const renamed = await router.fetch(jsonRequest('PATCH', '/api/projects/project-first', { name: 'Projet renommé' }))
+    const renamed = await router.fetch(jsonRequest('PATCH', '/api/projects/project-first', { name: 'Projet renommé' }, firstGrant))
     expect(renamed.status).toBe(200)
     expect(renamed.headers.get('ETag')).toBe('"1"')
 
-    const deleted = await router.fetch(new Request('http://elce.test/api/projects/project-second', { method: 'DELETE' }))
+    const deleted = await router.fetch(new Request('http://elce.test/api/projects/project-second', { method: 'DELETE', headers: secondGrant }))
     expect(deleted.status).toBe(204)
     const missing = await router.fetch(new Request('http://elce.test/api/projects/project-second'))
     expect(missing.status).toBe(404)
@@ -318,12 +406,17 @@ describe('SQLite project persistence through the Remix API', () => {
     const second = createDocumentWithId('project-persistent-second')
     const secondCreated = await router.fetch(jsonRequest('POST', '/api/projects', second.toJSON()))
     expect(secondCreated.status).toBe(201)
+    const heldGrant = await reserve(router, document.id)
 
     await database.close()
     database = undefined
     database = await openProjectDatabase(filename)
 
     const reopenedRouter = createElceApiRouter(new SqliteProjectPersistence(database))
+    const occupiedAfterRestart = await reopenedRouter.fetch(jsonRequest('POST', `/api/projects/${document.id}/edit-access`, { pageId: 'other-page' }))
+    expect(occupiedAfterRestart.status).toBe(409)
+    const stillHeld = await reopenedRouter.fetch(new Request(`http://elce.test/api/projects/${document.id}/edit-access`, { headers: heldGrant }))
+    expect(await stillHeld.json()).toEqual({ held: true })
     const reopenedList = await reopenedRouter.fetch(new Request('http://elce.test/api/projects'))
     expect(await reopenedList.json()).toMatchObject({
       projects: expect.arrayContaining([
@@ -346,6 +439,13 @@ describe('SQLite project persistence through the Remix API', () => {
 /** Returns a valid initial document with a stable identifier for API assertions. */
 function createDocumentWithId(id: string): ElceDocumentClass {
   return ElceDocument.fromJSON({ ...createInitialDocument().toJSON(), id })
+}
+
+/** Reserves the exact project grant used by a SQLite route fixture. */
+async function reserve(router: ReturnType<typeof createElceApiRouter>, projectId: string): Promise<Record<string, string>> {
+  const response = await router.fetch(jsonRequest('POST', `/api/projects/${projectId}/edit-access`, { pageId: 'test-page' }))
+  const body = await response.json() as { grantId: string }
+  return { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': body.grantId }
 }
 
 /** Builds a v4 fixture that exercises independent ordering and nested placements. */

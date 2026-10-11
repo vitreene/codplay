@@ -66,6 +66,41 @@ class MemoryProjectStore implements ElceDocumentStore {
 }
 
 describe('Elcé project session lifecycle', () => {
+  it('replaces a cloned reload identity when another living tab answers its probe', async () => {
+    const channels = new Set<EventTarget & { postMessage(data: unknown): void; close(): void }>()
+    class IdentityChannel extends EventTarget {
+      public constructor(_name: string) { super(); channels.add(this) }
+      public postMessage(data: unknown): void {
+        for (const channel of channels) if (channel !== this) channel.dispatchEvent(new MessageEvent('message', { data }))
+      }
+      public close(): void { channels.delete(this) }
+    }
+    const session = (): Storage => {
+      const values = new Map([['elce-edit-page-id', 'copied-page']])
+      return {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => { values.set(key, value) },
+        removeItem: (key) => { values.delete(key) },
+        clear: () => { values.clear() },
+        key: (index) => [...values.keys()][index] ?? null,
+        get length() { return values.size },
+      }
+    }
+    const ids = ['instance-a', 'instance-b', 'new-page-b']
+    vi.stubGlobal('window', new EventTarget())
+    vi.stubGlobal('BroadcastChannel', IdentityChannel)
+    vi.stubGlobal('performance', { getEntriesByType: () => [{ type: 'reload' }] })
+    vi.stubGlobal('crypto', { randomUUID: () => ids.shift() })
+    const firstStorage = session()
+    const secondStorage = session()
+    const first = new ProjectSessionCoordinator(new MemoryProjectStore(), undefined, firstStorage)
+    const second = new ProjectSessionCoordinator(new MemoryProjectStore(), undefined, secondStorage)
+    expect(firstStorage.getItem('elce-edit-page-id')).toBe('copied-page')
+    expect(secondStorage.getItem('elce-edit-page-id')).toBe('new-page-b')
+    await first.dispose()
+    await second.dispose()
+  })
+
   it('creates a uniquely identified project and closes it without deleting the server copy', async () => {
     const remote = new Map<string, ElceDocumentModel>()
     const store = new MemoryProjectStore()
@@ -96,7 +131,7 @@ describe('Elcé project session lifecycle', () => {
     remote.set(current.id, current)
     remote.set(inactive.id, inactive)
     const store = new MemoryProjectStore()
-    const { coordinator } = createCoordinator(remote, store)
+    const { coordinator, request } = createCoordinator(remote, store)
     const currentSummary = summaryFor(current)
     const inactiveSummary = summaryFor(inactive)
     await coordinator.perform({ kind: 'open', projectId: current.id }, createInitialDocument(), null, 'waiting', false)
@@ -111,6 +146,7 @@ describe('Elcé project session lifecycle', () => {
     expect(remote.has(current.id)).toBe(true)
     expect(store.deletedProjects).toEqual([inactive.id])
     expect(inactiveSummary.id).toBe(inactive.id)
+    expect(request.mock.calls.some(([url, init]) => init?.method === 'DELETE' && new URL(url.toString()).pathname.endsWith('/edit-access'))).toBe(false)
   })
 
   it('does not create a project during bootstrap when the server list is empty', async () => {
@@ -175,6 +211,45 @@ describe('Elcé project session lifecycle', () => {
     actor.stop()
   })
 
+  it('keeps the source grant after three failed publication attempts and releases it on network recovery', async () => {
+    const initial = documentForProject('source-network-failure', 'Version confirmée')
+    const remote = new Map([[initial.id, initial]])
+    const store = new MemoryProjectStore()
+    const network = { online: true }
+    const { coordinator, request } = createCoordinator(remote, store, new Map(), network)
+    const browser = installFakeBrowserEvents()
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    const reportError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    actor.start()
+    await coordinator.attach(actor)
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: initial.id } })
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
+    browser.grantAccess(0)
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Travail en attente' } })
+    await vi.waitFor(() => expect(store.documents.get(initial.id)?.data.name).toBe('Travail en attente'))
+    network.online = false
+    browser.setFocused(false)
+    browser.window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(actor.getSnapshot().context.projectError).toContain('serveur est injoignable'))
+    expect(remote.get(initial.id)?.data.name).toBe('Version confirmée')
+
+    network.online = true
+    const competing = await request(new URL(`http://elce.test/api/projects/${initial.id}/edit-access`), {
+      method: 'POST', body: JSON.stringify({ pageId: 'page-b' }),
+    })
+    expect(competing.status).toBe(409)
+    browser.window.dispatchEvent(new Event('online'))
+    await vi.waitFor(() => expect(remote.get(initial.id)?.data.name).toBe('Travail en attente'))
+    await vi.waitFor(() => expect(request.mock.calls.some(([url, init]) => init?.method === 'DELETE'
+      && new URL(url.toString()).pathname.endsWith('/edit-access'))).toBe(true))
+
+    reportError.mockRestore()
+    await coordinator.dispose()
+    actor.stop()
+  })
+
   it('waits for window focus before requesting project edit access', async () => {
     const initial = documentForProject('elce-document', 'Fenêtre en arrière-plan')
     const remote = new Map([[initial.id, initial]])
@@ -200,6 +275,143 @@ describe('Elcé project session lifecycle', () => {
     await coordinator.dispose()
     actor.stop()
   })
+
+  it('opens Save As as an independent editable copy of the confirmed reader document', async () => {
+    const source = documentForProject('source-project', 'Document confirmé')
+    const remote = new Map([[source.id, source]])
+    const store = new MemoryProjectStore()
+    const { coordinator } = createCoordinator(remote, store)
+    const browser = installFakeBrowserEvents(false)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: source.id } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).toBe(source.id))
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+
+    actor.send({ type: 'project.operation', operation: { kind: 'save-as', name: 'Copie indépendante' } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).not.toBe(source.id))
+    const copyId = actor.getSnapshot().context.activeProject!.id
+    expect(actor.getSnapshot().context.document.data.name).toBe('Copie indépendante')
+    expect(store.checkpoints.get(copyId)).toMatchObject({ independentCopyOf: source.id, status: 'pending' })
+    expect(remote.get(source.id)?.data.name).toBe('Document confirmé')
+
+    browser.setFocused(true)
+    browser.window.dispatchEvent(new Event('focus'))
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
+    browser.grantAccess(0)
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+    expect(remote.get(copyId)?.data.name).toBe('Copie indépendante')
+
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('preserves a conflicted local cache separately from the confirmed reader version', async () => {
+    const source = documentForProject('source-conflict', 'Version serveur')
+    const local = documentForProject(source.id, 'Version locale non publiée')
+    const remote = new Map([[source.id, source]])
+    const store = new MemoryProjectStore()
+    store.documents.set(source.id, local)
+    store.checkpoints.set(source.id, { documentId: source.id, remoteRevision: 0, uploadedMediaIds: [], status: 'conflict' })
+    const { coordinator } = createCoordinator(remote, store)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+    const opened = await coordinator.perform({ kind: 'open', projectId: source.id }, createInitialDocument(), null, 'waiting', false)
+    expect(opened.document?.data.name).toBe('Version serveur')
+
+    const copied = await coordinator.perform({ kind: 'save-local-as', name: 'Sauvetage local' }, opened.document!, opened.activeProject, 'waiting', false)
+    expect(copied.document?.data.name).toBe('Sauvetage local')
+    expect(copied.document?.id).not.toBe(source.id)
+    expect(store.documents.get(source.id)?.data.name).toBe('Version locale non publiée')
+    expect(remote.get(source.id)?.data.name).toBe('Version serveur')
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('offers recovery for a conflicted cache while displaying the confirmed reader document', async () => {
+    const source = documentForProject('source-reader-conflict', 'Version serveur')
+    const local = documentForProject(source.id, 'Version locale en conflit')
+    const remote = new Map([[source.id, source]])
+    const store = new MemoryProjectStore()
+    store.documents.set(source.id, local)
+    store.checkpoints.set(source.id, { documentId: source.id, remoteRevision: 0, uploadedMediaIds: [], status: 'conflict' })
+    const { coordinator } = createCoordinator(remote, store)
+    installFakeBrowserEvents(false)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: source.id } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.recoverableLocalCopy).toBe(true))
+    expect(actor.getSnapshot().context.document.data.name).toBe('Version serveur')
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('keeps an independent Save As copy editable when the server is unavailable', async () => {
+    const source = documentForProject('source-offline', 'Version serveur')
+    const remote = new Map([[source.id, source]])
+    const store = new MemoryProjectStore()
+    const network = { online: true }
+    const { coordinator } = createCoordinator(remote, store, new Map(), network)
+    const browser = installFakeBrowserEvents(false)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: source.id } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).toBe(source.id))
+
+    network.online = false
+    actor.send({ type: 'project.operation', operation: { kind: 'save-as', name: 'Copie de secours' } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).not.toBe(source.id))
+    const copyId = actor.getSnapshot().context.activeProject!.id
+    browser.setFocused(true)
+    browser.window.dispatchEvent(new Event('focus'))
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
+    browser.grantAccess(0)
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Travail local' } })
+    await vi.waitFor(() => expect(store.documents.get(copyId)?.data.name).toBe('Travail local'))
+    expect(remote.get(source.id)?.data.name).toBe('Version serveur')
+    expect(remote.has(copyId)).toBe(false)
+
+    network.online = true
+    browser.window.dispatchEvent(new Event('online'))
+    await vi.waitFor(() => expect(remote.get(copyId)?.data.name).toBe('Travail local'))
+    await vi.waitFor(() => expect(store.checkpoints.get(copyId)?.status).toBe('synced'))
+    expect(actor.getSnapshot().context.editAccess).toBe('active')
+
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('shows a reloaded rescue copy while it waits for focus without enabling editing', async () => {
+    const copy = documentForProject('reloaded-rescue-copy', 'Copie locale')
+    const store = new MemoryProjectStore()
+    store.documents.set(copy.id, copy)
+    store.checkpoints.set(copy.id, {
+      documentId: copy.id, remoteRevision: null, uploadedMediaIds: [], status: 'pending',
+      independentCopyOf: 'source-project',
+    })
+    const { coordinator } = createCoordinator(new Map(), store)
+    const browser = installFakeBrowserEvents(false)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: copy.id } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.projectStatus).toBe('active'))
+    expect(actor.getSnapshot().context.document.data.name).toBe('Copie locale')
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+    expect(browser.locks.request).not.toHaveBeenCalled()
+
+    await coordinator.dispose()
+    actor.stop()
+  })
 })
 
 /** Creates the API fake and lifecycle coordinator used by the tests. */
@@ -207,15 +419,35 @@ function createCoordinator(
   remote: Map<string, ElceDocumentModel>,
   store: MemoryProjectStore,
   revisions: Map<string, number> = new Map(),
+  network: { online: boolean } = { online: true },
 ): Readonly<{ coordinator: ProjectSessionCoordinator; request: ReturnType<typeof vi.fn<typeof fetch>> }> {
+  const grants = new Map<string, string>()
   const request = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+    if (!network.online) throw new TypeError('Network unavailable')
     const url = new URL(input.toString())
+    const accessMatch = /^\/api\/projects\/([^/]+)\/edit-access$/.exec(url.pathname)
+    if (accessMatch !== null) {
+      const projectId = decodeURIComponent(accessMatch[1])
+      if (init?.method === 'POST') {
+        if (grants.has(projectId)) return Response.json({ error: 'edit_access_occupied' }, { status: 409 })
+        grants.set(projectId, 'test-grant')
+        return Response.json({ grantId: 'test-grant' })
+      }
+      const held = grants.get(projectId) === new Headers(init?.headers).get('X-Elce-Edit-Grant')
+      if (init?.method === 'DELETE') {
+        if (!held) return Response.json({ error: 'edit_access_lost' }, { status: 409 })
+        grants.delete(projectId)
+        return new Response(null, { status: 204 })
+      }
+      return Response.json({ held })
+    }
     switch (`${init?.method ?? 'GET'} ${url.pathname}`) {
       case 'GET /api/projects':
         return Response.json({ projects: [...remote.values()].map((document) => summaryFor(document, revisions.get(document.id) ?? 0)) })
       case 'POST /api/projects': {
         const data = JSON.parse(String(init?.body)) as Parameters<typeof ElceDocument.fromJSON>[0]
         const document = ElceDocument.fromJSON(data)
+        if (remote.has(document.id)) return Response.json({ error: 'project_already_exists' }, { status: 409 })
         remote.set(document.id, document)
         revisions.set(document.id, 0)
         return Response.json({ project: summaryFor(document, 0) }, { status: 201, headers: { ETag: '"0"' } })

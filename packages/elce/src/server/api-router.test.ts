@@ -3,6 +3,7 @@ import { applyDocumentCommand } from '../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../domain/document/document-model'
 import type {
   CreateProjectResult,
+  ProjectEditGrant,
   ProjectPersistence,
   ProjectSummary,
   SaveProjectDocumentResult,
@@ -67,8 +68,9 @@ describe('Elcé project API Fetch router', () => {
     const persistence = new MemoryProjectPersistence()
     const router = createElceApiRouter(persistence)
     await persistence.createProject(documentWithId('project-rename'))
+    const grant = await reserve(router, 'project-rename')
 
-    const response = await router.fetch(jsonRequest('PATCH', '/api/projects/project-rename', { name: 'Nouveau nom' }))
+    const response = await router.fetch(jsonRequest('PATCH', '/api/projects/project-rename', { name: 'Nouveau nom' }, grant))
 
     expect(response.status).toBe(200)
     expect(response.headers.get('ETag')).toBe('"1"')
@@ -84,10 +86,12 @@ describe('Elcé project API Fetch router', () => {
     const router = createElceApiRouter(persistence)
     const document = documentWithId('project-save')
     await persistence.createProject(document)
+    const grant = await reserve(router, 'project-save')
     const renamed = applyDocumentCommand(document, { type: 'document.rename', name: 'Enregistré' })
 
     const saved = await router.fetch(jsonRequest('PUT', '/api/projects/project-save/document', renamed.toJSON(), {
       'If-Match': '"0"',
+      ...grant,
     }))
     expect(saved.status).toBe(200)
     expect(saved.headers.get('ETag')).toBe('"1"')
@@ -97,6 +101,7 @@ describe('Elcé project API Fetch router', () => {
 
     const stale = await router.fetch(jsonRequest('PUT', '/api/projects/project-save/document', document.toJSON(), {
       'If-Match': '"0"',
+      ...grant,
     }))
     expect(stale.status).toBe(412)
     expect(await stale.json()).toEqual({ error: 'revision_mismatch' })
@@ -107,13 +112,16 @@ describe('Elcé project API Fetch router', () => {
   it('rejects a missing or malformed revision and a document id that differs from the route', async () => {
     const router = createElceApiRouter(new MemoryProjectPersistence())
     const document = documentWithId('project-path-mismatch')
+    const grant = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': 'test-grant' }
 
-    const missingRevision = await router.fetch(jsonRequest('PUT', '/api/projects/project-path-mismatch/document', document.toJSON()))
+    const missingRevision = await router.fetch(jsonRequest('PUT', '/api/projects/project-path-mismatch/document', document.toJSON(), grant))
     const malformedRevision = await router.fetch(jsonRequest('PUT', '/api/projects/project-path-mismatch/document', document.toJSON(), {
       'If-Match': '0',
+      ...grant,
     }))
     const mismatchedId = await router.fetch(jsonRequest('PUT', '/api/projects/other-project/document', document.toJSON(), {
       'If-Match': '"0"',
+      ...grant,
     }))
 
     expect(missingRevision.status).toBe(428)
@@ -139,9 +147,10 @@ describe('Elcé project API Fetch router', () => {
     const persistence = new MemoryProjectPersistence()
     const router = createElceApiRouter(persistence)
     await persistence.createProject(documentWithId('project-delete'))
+    const grant = await reserve(router, 'project-delete')
 
-    const deleted = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE' }))
-    const missing = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE' }))
+    const deleted = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE', headers: grant }))
+    const missing = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE', headers: grant }))
 
     expect(deleted.status).toBe(204)
     expect(missing.status).toBe(404)
@@ -162,9 +171,40 @@ function jsonRequest(method: string, path: string, body: unknown, headers: Heade
   })
 }
 
+/** Reserves a fixture project and returns its authenticated mutation headers. */
+async function reserve(router: ReturnType<typeof createElceApiRouter>, projectId: string): Promise<Record<string, string>> {
+  const response = await router.fetch(jsonRequest('POST', `/api/projects/${projectId}/edit-access`, { pageId: 'test-page' }))
+  const body = await response.json() as { grantId: string }
+  return { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': body.grantId }
+}
+
 /** Provides isolated route-level behavior without claiming SQLite coverage. */
 class MemoryProjectPersistence implements ProjectPersistence {
   private readonly projects = new Map<string, StoredProject>()
+  private readonly grants = new Map<string, ProjectEditGrant>()
+
+  /** Reserves a fixture project for one page. */
+  public async acquireEditAccess(projectId: string, pageId: string) {
+    if (!this.projects.has(projectId)) return { kind: 'not-found' as const }
+    const current = this.grants.get(projectId)
+    if (current !== undefined && current.pageId !== pageId) return { kind: 'occupied' as const }
+    const grantId = current?.grantId ?? 'test-grant'
+    this.grants.set(projectId, { pageId, grantId })
+    return { kind: 'granted' as const, grantId }
+  }
+
+  /** Checks the exact fixture grant. */
+  public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    const current = this.grants.get(projectId)
+    return current?.pageId === grant.pageId && current.grantId === grant.grantId
+  }
+
+  /** Releases the exact fixture grant. */
+  public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    if (!await this.hasEditAccess(projectId, grant)) return false
+    this.grants.delete(projectId)
+    return true
+  }
 
   /** Lists summaries from the fixture-owned projects. */
   public async listProjects(): Promise<readonly ProjectSummary[]> {
@@ -190,23 +230,26 @@ class MemoryProjectPersistence implements ProjectPersistence {
   }
 
   /** Renames the fixture document through the established domain command. */
-  public async renameProject(projectId: string, name: string): Promise<ProjectSummary | null> {
+  public async renameProject(projectId: string, name: string, grant: ProjectEditGrant) {
     const stored = this.projects.get(projectId)
+    if (stored === undefined) return { kind: 'not-found' as const }
+    if (!await this.hasEditAccess(projectId, grant)) return { kind: 'edit-access-lost' as const }
     switch (stored) {
-      case undefined:
-        return null
       default: {
         const document = applyDocumentCommand(stored.document, { type: 'document.rename', name })
         const project = { ...stored.project, name, revision: stored.project.revision + 1 }
         this.projects.set(projectId, { project, document })
-        return project
+        return { kind: 'updated' as const, project }
       }
     }
   }
 
   /** Removes a fixture project and reports whether it existed. */
-  public async deleteProject(projectId: string): Promise<boolean> {
-    return this.projects.delete(projectId)
+  public async deleteProject(projectId: string, grant: ProjectEditGrant) {
+    if (!this.projects.has(projectId)) return 'not-found' as const
+    if (!await this.hasEditAccess(projectId, grant)) return 'edit-access-lost' as const
+    this.projects.delete(projectId)
+    return 'deleted' as const
   }
 
   /** Replaces a fixture document only when the expected revision is current. */
@@ -214,12 +257,14 @@ class MemoryProjectPersistence implements ProjectPersistence {
     projectId: string,
     expectedRevision: number,
     document: ElceDocument,
+    grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult> {
     const stored = this.projects.get(projectId)
     switch (stored) {
       case undefined:
         return { kind: 'not-found' }
       default:
+        if (!await this.hasEditAccess(projectId, grant)) return { kind: 'edit-access-lost' }
         switch (stored.project.revision === expectedRevision) {
           case false:
             return { kind: 'revision-mismatch' }

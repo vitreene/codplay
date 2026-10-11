@@ -1,9 +1,9 @@
 # Elcé — plan de stockage local et synchronisation
 
-**Statut : En cours — synchronisation automatique entre navigateurs implémentée ;
-la validation avec deux navigateurs distincts est en réserve depuis le 9 octobre
-2026, en attente d’une mise à jour de Firefox qui corrige l’erreur empêchant son
-fonctionnement via MCP.** Les écritures concurrentes ne font pas partie du
+**Statut : En cours — le circuit local, le droit exclusif et le suivi des
+révisions sont implémentés ; leur validation réelle entre deux navigateurs reste
+à faire selon le plan ciblé de la tranche 7.** La validation avec deux
+navigateurs distincts reste à faire. Les écritures concurrentes ne font pas partie du
 parcours retenu. Le
 périmètre local et le transfert des médias sont établis.
 Le modèle persistant v4 est assez défini pour commencer SQLite. L’acceptation
@@ -431,7 +431,7 @@ supprimés après vérification.
 Le menu et son raccord au coordinateur de synchronisation sont implémentés ;
 les preuves restantes sont suivies dans le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md).
 
-### 7. Synchronisation automatique entre navigateurs — implémentée, validation en réserve
+### 7. Synchronisation automatique entre navigateurs — implémentée, validation en cours
 
 Le même projet doit pouvoir rester ouvert dans plusieurs navigateurs et les
 modifications enregistrées dans l’un doivent parvenir automatiquement aux
@@ -442,6 +442,7 @@ demandée. Le flux doit réutiliser l’API projet, la révision serveur et l’
 XState de chaque éditeur ; il ne crée pas un deuxième document, un cache
 partagé entre navigateurs ou un circuit de commandes éditoriales parallèle.
 
+**Circuit de publication conservé et complété par le droit exclusif.**
 Le délai local existant reste de 500 ms. Quand la page perd le focus, elle
 suspend les nouvelles commandes, termine et sauvegarde les commandes déjà
 acceptées, puis tente immédiatement de confirmer le document et ses médias sur
@@ -484,6 +485,96 @@ avec des événements OS réels. Conserver en non-régression le refus `If-Match
 et la copie locale en cas d’écriture inattendue sur une révision dépassée.
 Ne pas lancer Firefox avant la mise à jour. Cette vérification ne bloque pas le
 portage Remix, terminé dans son plan dédié.
+
+**Règle impérative confirmée :** un seul éditeur peut détenir l’édition active
+d’un document à la fois, même entre deux navigateurs. Les autres pages peuvent
+afficher le document en lecture seule et doivent suivre les versions confirmées
+par le serveur pendant que l’édition active reste ouverte ; elles ne peuvent
+pas éditer leur cache local. Au `blur` comme à la fermeture de l’édition active,
+son état courant est enregistré avant le transfert. La page en lecture seule
+qui reçoit ensuite le focus recharge cette version du serveur avant de devenir
+éditable. L’accès initial ou repris synchronise également le document avant
+d’activer l’édition. Undo reste local et n’est jamais transféré.
+
+**Raccord implémenté, validation inter-navigateurs réelle en cours :** le droit
+SQLite exclut une deuxième page et chaque mutation le vérifie. Au `blur`, A
+suspend ses commandes, attend la sauvegarde locale et la confirmation serveur
+du document et de ses médias, puis libère son droit. Une erreur garde A
+propriétaire et B lectrice. B affiche la révision confirmée, la relit au focus
+et peut créer une copie indépendante. Les contrats vérifiés se trouvent dans
+les [spécifications d’accès](../specs/editor-window-access-spec.md),
+[d’API](../specs/project-api-spec.md) et de
+[session](../specs/project-session-spec.md). Les vérifications encore requises
+sont dans le [plan ciblé](./2026-10-11-elce-acces-exclusif-inter-navigateurs-plan.md).
+
+**Décisions acceptées et appliquées :** à chaque accès ou reprise d’un
+document, terminer une synchronisation avec le serveur avant de réactiver
+l’édition ; l’historique Undo reste local et ne fait pas partie de la
+synchronisation. Si les tentatives échouent à plusieurs reprises, expliquer la
+cause connue et proposer des actions. Pour un conflit de révision, expliquer
+qu’une version plus récente est présente sur le serveur, demander de fermer les
+autres éditions avant de réessayer et proposer « Enregistrer sous… » pour
+préserver la copie locale dans un projet distinct. Ne jamais écraser
+silencieusement l’une des versions. L’éditeur doit effectuer cette
+synchronisation avant de rendre le document éditable.
+
+**Décision confirmée :** « Enregistrer sous… » crée un projet indépendant à
+partir de la révision confirmée affichée par B, avec un nouvel identifiant et
+ses médias récupérés depuis leur projet source ; la
+version serveur du projet source reste intacte. En mode de secours hors
+connexion, cette copie devient immédiatement éditable localement même si
+certains médias ne sont plus dans le cache. Ces médias sont signalés comme
+indisponibles et récupérés au retour du réseau ; la copie n'est confirmée sur
+le serveur qu'après publication du document et des médias nécessaires.
+
+**Décision confirmée pour récupérer un conflit :** fermer l’édition qui détient
+l’état courant doit d’abord enregistrer cet état. La fenêtre qui reste ouverte
+recharge ensuite le document enregistré depuis le serveur avant de reprendre
+l’édition. La reprise ne renvoie donc pas une ancienne copie locale par-dessus
+la révision serveur. Si cet enregistrement échoue, conserver la copie locale et
+proposer « Enregistrer sous… » pour la préserver dans un projet indépendant.
+
+**Protocole de synchronisation en validation :** le
+[plan ciblé d’accès exclusif entre navigateurs](./2026-10-11-elce-acces-exclusif-inter-navigateurs-plan.md)
+décrit le droit serveur, la frontière réutilisable, le transfert, les
+frontières à corriger, l'ordre de travail et les validations requises.
+
+**Décision confirmée en cas de perte de synchronisation :** la page B ne peut
+pas éditer le document source tant que la page A détient l’édition, même si A
+n’arrive plus à synchroniser. B attend le rétablissement de la synchronisation
+ou choisit « Enregistrer sous… » depuis la dernière version confirmée qu’elle
+affiche. Cette action crée une copie indépendante avec un nouvel identifiant et
+ses médias ; B peut continuer à travailler localement sur cette copie. A garde
+le droit du document source, avec ses commandes suspendues tant que la sortie
+et sa synchronisation restent inachevées. Après trois tentatives automatiques d’erreurs
+réseau récupérables, expliquer la cause et proposer ces actions. Une révision
+périmée (`412`) ne se résout pas en répétant la même écriture.
+
+**Convention retenue par équivalence fonctionnelle :** Elcé reprend le principe
+du verrou exclusif documenté par SharePoint, Dropbox et Git LFS — un détenteur,
+des lecteurs, une copie indépendante possible — sans reprendre leur architecture
+ni leur échelle ([SharePoint](https://support.microsoft.com/en-us/sharepoint/documents-and-library/check-out-check-in-or-discard-changes-to-files-in-a-sharepoint-library),
+[Dropbox](https://help.dropbox.com/organize/file-locking),
+[Git LFS](https://github.com/git-lfs/git-lfs/blob/main/docs/api/locking.md)).
+Le droit appartient à une session de page, pas au navigateur : après fermeture
+de A, un nouvel onglet, même dans le même navigateur, doit resynchroniser le
+document et obtenir le droit avant d’éditer. Une disparition inattendue de A
+ne transfère aucun droit à B : B reste en lecture seule sur le document source
+et utilise « Enregistrer sous… » pour poursuivre dans une copie indépendante.
+B ne peut pas demander de reprise forcée du document source, qui peut rester
+verrouillé tant que A n'a pas pu revenir et libérer son droit. Aucun transfert
+fondé uniquement sur l’expiration d’un délai n’est retenu. Le parcours de
+transfert normal est fixé dans le plan ciblé.
+
+**Acceptation visée :** dans deux navigateurs, A détient l’édition et B affiche
+le document en lecture seule ; les révisions enregistrées par A apparaissent
+chez B sans lui accorder l’édition. Au `blur` de A, vérifier que sa sauvegarde
+est confirmée avant que B, une fois au premier plan, recharge la version
+serveur et devienne éditable. Refaire le parcours à la fermeture de A. Vérifier
+aussi une perte réseau, la disparition inattendue de A, la conservation locale
+après échec d’enregistrement et « Enregistrer sous… » avec ses médias. Les
+parcours réels à deux navigateurs et les cas de reprise extrêmes restent à
+vérifier ; leur protocole est fixé dans le plan ciblé.
 
 ## Suites après le POC
 

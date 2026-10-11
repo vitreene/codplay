@@ -30,6 +30,7 @@ export interface ElceAppContext {
   readonly activeProject: ElceProjectSummary | null
   readonly projectStatus: ProjectSessionStatus
   readonly projectError: string | null
+  readonly recoverableLocalCopy: boolean
   readonly pendingProjectOperation: ProjectSessionOperation | null
   readonly projectOperationHadAccess: boolean
 }
@@ -54,8 +55,13 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'card.media.file.import'; bdcId: BdcId; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'document.replace'; document: ElceDocument }>
   | Readonly<{ type: 'document.sync.status'; status: DocumentSyncState['status'] }>
+  | Readonly<{ type: 'document.sync.merge'; projectId: string; canonicalMediaId: MediaId; duplicateMediaId: MediaId }>
   | Readonly<{ type: 'project.summary.refresh'; project: ElceProjectSummary }>
+  | Readonly<{ type: 'project.reader.ready' }>
   | Readonly<{ type: 'editor.access.activate' }>
   | Readonly<{ type: 'editor.access.suspend' }>
   | Readonly<{ type: 'project.operation'; operation: ProjectSessionOperation }>
   | Readonly<{ type: 'project.access.error'; message: string }>
+  | Readonly<{ type: 'project.sync.warning'; message: string }>
+  | Readonly<{ type: 'project.local-copy.availability'; projectId: string; available: boolean }>
+  | Readonly<{ type: 'project.access.retry' }>

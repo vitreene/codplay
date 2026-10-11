@@ -282,7 +282,13 @@ describe('Elcé project operations in the application actor', () => {
     actor.send({ type: 'project.operation', operation: { kind: 'open', projectId: currentProject.id } })
     await flushActor()
 
-    const sync = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://elce.test', request))
+    const grantRequest = vi.fn<typeof fetch>((input, init) => {
+      if (new URL(input.toString()).pathname.endsWith('/edit-access')) return Promise.resolve(Response.json({ grantId: 'test-grant' }))
+      return request(input, init)
+    })
+    const api = new ElceProjectApiClient('http://elce.test', grantRequest)
+    await api.acquireEditAccess(currentProject.id, 'test-page')
+    const sync = new ProjectSyncCoordinator(actor, store, api)
     let persistence: AttachedDocumentPersistence | null = null
     persistence = await attachDocumentPersistence(actor, store, {
       onLocalSave: (document) => sync.schedule(document),

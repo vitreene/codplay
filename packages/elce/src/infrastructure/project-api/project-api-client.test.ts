@@ -22,22 +22,22 @@ describe('Elcé project API client', () => {
   it('renames a project through its server route', async () => {
     const project: ElceProjectSummary = { id: 'project/a', name: 'Nouveau nom', revision: 4 }
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ project }, { headers: { ETag: '"4"' } }))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, project.id)
 
     await expect(api.renameProject(project.id, project.name)).resolves.toEqual(project)
     expect(request).toHaveBeenCalledWith(new URL('/api/projects/project%2Fa', apiOrigin), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...grantHeaders },
       body: JSON.stringify({ name: project.name }),
     })
   })
 
   it('deletes a project after a no-content server response', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, 'project/a')
 
     await expect(api.deleteProject('project/a')).resolves.toBeUndefined()
-    expect(request).toHaveBeenCalledWith(new URL('/api/projects/project%2Fa', apiOrigin), { method: 'DELETE' })
+    expect(request).toHaveBeenCalledWith(new URL('/api/projects/project%2Fa', apiOrigin), { method: 'DELETE', headers: grantHeaders })
   })
 
   it('reads a structured server document and its revision', async () => {
@@ -92,12 +92,12 @@ describe('Elcé project API client', () => {
       { project: { id: document.id, name: document.data.name, revision: 5 } },
       { headers: { ETag: '"5"' } },
     ))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, document.id)
 
     await expect(api.saveDocument(document, 4)).resolves.toBe(5)
     expect(request.mock.calls[0]?.[1]).toMatchObject({
       method: 'PUT',
-      headers: { 'If-Match': '"4"', 'Content-Type': 'application/json' },
+      headers: { 'If-Match': '"4"', 'Content-Type': 'application/json', ...grantHeaders },
     })
   })
 
@@ -107,13 +107,13 @@ describe('Elcé project API client', () => {
       { media: { id: media.id, url: `/api/projects/elce-document/media/${media.id}` } },
       { status: 201 },
     ))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, 'elce-document')
     const blob = new Blob(['img'], { type: media.mimeType })
 
     await expect(api.uploadMedia('elce-document', media, blob)).resolves.toBe(
       `${apiOrigin}/api/projects/elce-document/media/media-image`,
     )
-    expect(request.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', headers: { 'Content-Type': 'image/webp' }, body: blob })
+    expect(request.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', headers: { 'Content-Type': 'image/webp', ...grantHeaders }, body: blob })
   })
 
   it('preserves a canonical duplicate media identifier from the API error', async () => {
@@ -122,9 +122,22 @@ describe('Elcé project API client', () => {
       { error: 'media_already_exists', mediaId: 'media-canonical' },
       { status: 409 },
     ))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, 'elce-document')
 
     await expect(api.uploadMedia('elce-document', media, new Blob(['img'])))
       .rejects.toMatchObject({ code: 'media_already_exists', mediaId: 'media-canonical' })
   })
 })
+
+const grantHeaders = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': 'test-grant' }
+
+/** Gives an isolated client a server grant before testing a mutation. */
+async function grantedApi(request: ReturnType<typeof vi.fn<typeof fetch>>, projectId: string): Promise<ElceProjectApiClient> {
+  const routed = vi.fn<typeof fetch>((input, init) => {
+    if (new URL(input.toString()).pathname.endsWith('/edit-access')) return Promise.resolve(Response.json({ grantId: 'test-grant' }))
+    return request(input, init)
+  })
+  const api = new ElceProjectApiClient(apiOrigin, routed)
+  await api.acquireEditAccess(projectId, 'test-page')
+  return api
+}
