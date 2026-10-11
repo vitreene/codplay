@@ -1,7 +1,15 @@
 import type { SceneDoc } from 'codplay/scene/types'
 import type { CompiledRecord } from 'codplay'
-import type { CoursePage, CourseQuestion } from '../course-data'
+import type { CoursePage } from '../course-data'
 import { COURSE_EVENTS } from '../messages'
+import {
+  createQuizAnswerPersos,
+  createQuizCorrectionEvents,
+  createQuizLocalState,
+  readSelectedQuizAnswers,
+  resolveQuizAnswer,
+  selectQuizAnswer,
+} from '../../shared/quiz/answer-circuit'
 import {
   createPageBottomMarker,
   createPageScrollPort,
@@ -9,13 +17,6 @@ import {
   pageBottomPartId,
   pageScrollPortId,
 } from './page-support'
-
-type QuizState = Readonly<{
-  question: CourseQuestion
-  selectedAnswerIds: readonly string[]
-  submitted: boolean
-  solutionsExposed: boolean
-}>
 
 /** Builds one independent quiz scene using CodPlay input, listen, and straps. */
 export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
@@ -29,7 +30,13 @@ export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
     createQuizArticle(page, prefix),
     createQuestionPrompt(page, prefix),
     createQuestionInstructions(page, prefix),
-    ...createAnswerPersos(page, prefix),
+    ...createQuizAnswerPersos(page.question, {
+      persoPrefix: `${page.id}-quiz`,
+      eventPrefix: prefix,
+    }, {
+      selectionIcon: 'demo5-quiz__selection-icon',
+      correctionIcon: 'demo5-quiz__correction-icon',
+    }),
     createValidateButton(page, prefix),
     createQuestionFeedback(page, prefix),
     createPageBottomMarker(page.id),
@@ -41,12 +48,7 @@ export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
       main: {
         id: 'main',
         initial: { move: '@root' },
-        state: {
-          question: page.question,
-          selectedAnswerIds: [],
-          submitted: false,
-          solutionsExposed: false,
-        } satisfies QuizState,
+        state: createQuizLocalState(page.question),
         straps: {
           'course-quiz-select-answer': ({ event, state }) =>
             selectQuizAnswer(prefix, page.question!, state, event.data),
@@ -136,100 +138,6 @@ function createQuestionInstructions(page: CoursePage, prefix: string): CoursePer
   }
 }
 
-/** Creates all radio or checkbox answer persos for this standalone question. */
-function createAnswerPersos(page: CoursePage, prefix: string): CoursePerso[] {
-  return page.question!.answers.map((answer) => createAnswerPerso(page, prefix, answer.id, answer.label))
-}
-
-/** Creates one CodPlay input and its selected, idle, and correction actions. */
-function createAnswerPerso(page: CoursePage, prefix: string, answerId: string, label: string): CoursePerso {
-  const question = page.question!
-  const correctAnswerIds = [...question.correctAnswerIds]
-  const multiSelect = question.type === 'multiple'
-  return {
-    id: `${page.id}-quiz-answer-${answerId}`,
-    type: 'input',
-    initial: {
-      inputType: multiSelect ? 'checkbox' : 'radio',
-      name: `${page.id}-quiz-answer-group`,
-      value: answerId,
-      label,
-      hint: '',
-      checked: false,
-      disabled: false,
-      visualState: 'idle',
-      selectionIcon: { className: 'demo5-quiz__selection-icon' },
-      correctionIcon: {
-        className: 'demo5-quiz__correction-icon',
-        correctContent: '✓',
-        incorrectContent: '×',
-        missedCorrectContent: '✓',
-      },
-      move: { target: `${prefix}:answers` },
-    },
-    emit: {
-      change: { event: { name: `${prefix}:answer:select`, data: { answerId } } },
-    },
-    actions: {
-      [`${prefix}:answer:${answerId}:selected`]: {
-        selectedAnswerIds: [answerId],
-        checked: true,
-        visualState: 'selected',
-      },
-      [`${prefix}:answer:${answerId}:idle`]: {
-        selectedAnswerIds: [],
-        checked: false,
-        visualState: 'idle',
-      },
-      [`${prefix}:answer:${answerId}:reset`]: {
-        selectedAnswerIds: [],
-        correctAnswerIds: [],
-        checked: false,
-        disabled: false,
-        disableAnswers: false,
-        showCorrection: false,
-        visualState: 'idle',
-      },
-      [`${prefix}:answer:${answerId}:revealed-correct`]: {
-        selectedAnswerIds: [answerId],
-        correctAnswerIds,
-        checked: true,
-        disabled: true,
-        disableAnswers: true,
-        showCorrection: true,
-        visualState: 'revealed-correct',
-      },
-      [`${prefix}:answer:${answerId}:revealed-incorrect`]: {
-        selectedAnswerIds: [answerId],
-        correctAnswerIds,
-        checked: true,
-        disabled: true,
-        disableAnswers: true,
-        showCorrection: true,
-        visualState: 'revealed-incorrect',
-      },
-      [`${prefix}:answer:${answerId}:revealed-missed-correct`]: {
-        selectedAnswerIds: [],
-        correctAnswerIds,
-        checked: false,
-        disabled: true,
-        disableAnswers: true,
-        showCorrection: true,
-        visualState: 'revealed-missed-correct',
-      },
-      [`${prefix}:answer:${answerId}:locked`]: {
-        selectedAnswerIds: [],
-        correctAnswerIds,
-        checked: false,
-        disabled: true,
-        disableAnswers: true,
-        showCorrection: true,
-        visualState: 'disabled',
-      },
-    },
-  }
-}
-
 /** Creates the validation button and its enabled/disabled result states. */
 function createValidateButton(page: CoursePage, prefix: string): CoursePerso {
   return {
@@ -269,35 +177,6 @@ function createQuestionFeedback(page: CoursePage, prefix: string): CoursePerso {
   }
 }
 
-/** Updates the selected answer and emits the input actions for every option. */
-function selectQuizAnswer(
-  prefix: string,
-  question: CourseQuestion,
-  state: Readonly<Record<string, unknown>>,
-  eventData: Record<string, unknown> | undefined,
-) {
-  const payload = eventData as { answerId?: unknown } | undefined
-  if (state.submitted === true || state.solutionsExposed === true || typeof payload?.answerId !== 'string') return undefined
-  if (!question.answers.some((answer) => answer.id === payload.answerId)) return undefined
-
-  const selectedBefore = readSelectedAnswers(state.selectedAnswerIds)
-  const selectedAnswerIds = question.type === 'multiple'
-    ? selectedBefore.includes(payload.answerId)
-      ? selectedBefore.filter((answerId) => answerId !== payload.answerId)
-      : [...selectedBefore, payload.answerId]
-    : [payload.answerId]
-  const selected = new Set(selectedAnswerIds)
-  return {
-    update: { selectedAnswerIds },
-    events: [
-      { name: selectedAnswerIds.length > 0 ? `${prefix}:selection:available` : `${prefix}:selection:empty` },
-      ...question.answers.map((answer) => ({
-        name: `${prefix}:answer:${answer.id}:${selected.has(answer.id) ? 'selected' : 'idle'}`,
-      })),
-    ],
-  }
-}
-
 /** Resolves the selected set, displays correction, and publishes the quiz result. */
 function validateQuizAnswer(
   page: CoursePage,
@@ -305,10 +184,9 @@ function validateQuizAnswer(
   state: Readonly<Record<string, unknown>>,
 ) {
   const question = page.question!
-  const selectedAnswerIds = readSelectedAnswers(state.selectedAnswerIds)
-  if (state.submitted === true || state.solutionsExposed === true || selectedAnswerIds.length === 0) return undefined
-
-  const isCorrect = hasSameAnswerSet([...question.correctAnswerIds], selectedAnswerIds)
+  const resolution = resolveQuizAnswer(question, state)
+  if (resolution === undefined) return undefined
+  const { selectedAnswerIds, isCorrect } = resolution
   const feedbackMessage = page.id === 'chapter-1-quiz'
     ? isCorrect
       ? 'Bonne réponse ! Le chapitre 2 est maintenant accessible.'
@@ -326,7 +204,7 @@ function validateQuizAnswer(
       },
     },
     { name: `${prefix}:resolved` },
-    ...createAnswerResolutionEvents(question, prefix, selectedAnswerIds),
+    ...createQuizCorrectionEvents(question, prefix, selectedAnswerIds),
     {
       name: COURSE_EVENTS.quizAnswered,
       data: { pageId: page.id, isCorrect },
@@ -357,7 +235,7 @@ function applyQuizReplayReset(
 
   const selectedAnswerIds = shouldResetQuiz
     ? []
-    : readSelectedAnswers(state.selectedAnswerIds)
+    : readSelectedQuizAnswers(state.selectedAnswerIds)
   const events: Array<{ name: string; data?: CompiledRecord }> = []
   if (shouldResetQuiz) {
     events.push(
@@ -369,7 +247,7 @@ function applyQuizReplayReset(
   if (shouldExposeSolutions) {
     events.push(
       { name: `${prefix}:resolved` },
-      ...createAnswerResolutionEvents(question, prefix, selectedAnswerIds),
+      ...createQuizCorrectionEvents(question, prefix, selectedAnswerIds),
     )
   }
 
@@ -382,34 +260,4 @@ function applyQuizReplayReset(
     },
     events,
   }
-}
-
-/** Returns the answer-state events for a participant's selection and corrections. */
-function createAnswerResolutionEvents(
-  question: CourseQuestion,
-  prefix: string,
-  selectedAnswerIds: readonly string[],
-): Array<{ name: string }> {
-  const selected = new Set(selectedAnswerIds)
-  const correct = new Set(question.correctAnswerIds)
-  return question.answers.map((answer) => {
-    if (selected.has(answer.id) && correct.has(answer.id)) {
-      return { name: `${prefix}:answer:${answer.id}:revealed-correct` }
-    }
-    if (selected.has(answer.id)) return { name: `${prefix}:answer:${answer.id}:revealed-incorrect` }
-    if (correct.has(answer.id)) return { name: `${prefix}:answer:${answer.id}:revealed-missed-correct` }
-    return { name: `${prefix}:answer:${answer.id}:locked` }
-  })
-}
-
-/** Accepts only string ids from the runtime state snapshot. */
-function readSelectedAnswers(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((answerId): answerId is string => typeof answerId === 'string') : []
-}
-
-/** Compares selected and correct ids without depending on their order. */
-function hasSameAnswerSet(expectedIds: string[], actualIds: string[]): boolean {
-  if (expectedIds.length !== actualIds.length) return false
-  const expected = new Set(expectedIds)
-  return actualIds.every((answerId) => expected.has(answerId))
 }

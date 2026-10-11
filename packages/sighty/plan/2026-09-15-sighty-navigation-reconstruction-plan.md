@@ -41,10 +41,11 @@ Le CSS auteur des scènes de diffusion est intégré ; plusieurs décisions runt
   existant, avant le montage ; une scène retirée libère son slot.
 
 - La passerelle `RuntimeSceneEventGateway` est l’unique sortie d’événements
-  vers CodPlay. Les actions qui ciblent une scène active conservent la position
-  courante, réappliquent immédiatement l’état après l’émission et reprennent la
-  lecture si elle était active ; le test runtime de matérialisation couvre ce
-  contrat.
+  vers CodPlay. Les actions qui ciblent une scène active transmettent l’événement
+  sans sauvegarder ni restaurer le transport ; les actions CodPlay suivent le
+  cycle normal de lecture et de présentation. Les tests runtime couvrent
+  l’absence de seek automatique et l’effet des événements `entry` après la
+  lecture normale.
 - La correction et la revalidation de la démo 5 sont terminées :
   `COURSE_PAGES` est l'unique source des entrées de page, le graphe des
   chapitres, les routes du menu et les scènes de page en sont dérivés dans

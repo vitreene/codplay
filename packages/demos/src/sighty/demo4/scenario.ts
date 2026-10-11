@@ -100,6 +100,7 @@ export const sightyScenario: SightyScenarioDefinition<SightyDemo4SceneKey, Sight
                   controllerSlot: "slot-telco",
                   controlledSlot: "slot-scene",
                   commands: {
+                    [DEMO4_NAVIGATION_INTENTS.resetCurrent]: "reset",
                     [DEMO4_PLAYBACK_INTENTS.toggle]: "togglePlay",
                     [DEMO4_PLAYBACK_INTENTS.rewind]: "rewind",
                     [DEMO4_PROGRESS_INTENTS.seek]: ["pause", "seek"],

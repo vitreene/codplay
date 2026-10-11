@@ -642,7 +642,9 @@ describe('Sighty runtime feature reconstruction', () => {
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
     const open = project.runtime.getInstance('open')
     if (open === undefined) throw new Error('La scène open de test est absente.')
-    expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
+    await vi.waitFor(() => {
+      expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
+    })
     await project.runtime.updateContext({ title: 'changed' })
     expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
     await open.telco.pause()
@@ -651,6 +653,9 @@ describe('Sighty runtime feature reconstruction', () => {
     await project.runtime.dispatch({ name: 'feature:leave-open', sourceSceneKey: 'open' })
     await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
 
+    await vi.waitFor(() => {
+      expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
+    })
     expect(project.runtime.getInstance('open')).toBe(open)
     expect(document.querySelector('#feature-open-root')?.textContent).toBe('initial')
     expect(open.telco.getProgress().timelineMs).toBeLessThan(1_000)

@@ -7,6 +7,7 @@ export const DEMO4_MENU_INTENTS = {
 
 /** Public intentions emitted by the scene navigation telco. */
 export const DEMO4_NAVIGATION_INTENTS = {
+  resetCurrent: 'sighty-demo4:navigation:reset-current',
   previous: 'sighty-demo4:navigation:previous',
   next: 'sighty-demo4:navigation:next',
 } as const
