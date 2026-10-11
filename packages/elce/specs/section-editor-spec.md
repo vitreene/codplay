@@ -37,6 +37,9 @@ La surface Tiptap propose dans le POC :
 
 Chaque modification passe par la commande `bdc.section.update` du contrôleur
 XState, avec le JSON éditable et le HTML statique correspondant.
+L’[historique documentaire](./document-history-spec.md) reçoit aussi la
+sélection Tiptap avant et après chaque transaction ; l’Undo local de Tiptap
+reste désactivé pour préserver une chronologie commune aux pages et aux blocs.
 La corbeille du titre envoie `bdc.section.delete` au même contrôleur. Cette
 commande retire la Section de sa page, supprime les Cartes ancrées qui lui
 appartiennent et conserve leurs ressources média réutilisables.

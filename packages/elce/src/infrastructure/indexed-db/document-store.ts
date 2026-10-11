@@ -114,6 +114,39 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
     await transactionDone
   }
 
+  /** Removes local media bytes not referenced by any cached project document. */
+  public async deleteOrphanedMedia(): Promise<void> {
+    const database = await this.databasePromise
+    const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE], 'readwrite')
+    const transactionDone = transactionComplete(transaction)
+    const documents = transaction.objectStore(DOCUMENT_STORE)
+    const media = transaction.objectStore(MEDIA_STORE)
+    const documentsRequest = documents.getAll()
+    const mediaKeysRequest = media.getAllKeys()
+    let storedDocuments: Record<string, unknown>[] | null = null
+    let mediaKeys: IDBValidKey[] | null = null
+
+    /** Deletes only after both sides of the local document/media index are available. */
+    const removeOrphans = (): void => {
+      if (storedDocuments === null || mediaKeys === null) return
+      const stringMediaKeys = mediaKeys.filter((key): key is string => typeof key === 'string')
+      const orphanedIds = new Set(orphanedMediaIds(storedDocuments, stringMediaKeys))
+      for (const mediaId of mediaKeys) {
+        if (typeof mediaId !== 'string' || orphanedIds.has(mediaId)) media.delete(mediaId)
+      }
+    }
+
+    documentsRequest.onsuccess = () => {
+      storedDocuments = documentsRequest.result as Record<string, unknown>[]
+      removeOrphans()
+    }
+    mediaKeysRequest.onsuccess = () => {
+      mediaKeys = mediaKeysRequest.result
+      removeOrphans()
+    }
+    await transactionDone
+  }
+
   /** Loads the saved remote revision and whether the local document needs sync. */
   public async loadSyncState(documentId: string): Promise<DocumentSyncState> {
     const database = await this.databasePromise
@@ -198,7 +231,7 @@ function saveProjectDocument(
   const sync = transaction.objectStore(SYNC_STORE)
   for (const mediaId of removedMediaIds) media.delete(mediaId)
   documents.put(document.toJSON())
-  markDocumentPending(sync, document.id)
+  markDocumentPending(sync, document.id, new Set(document.medias.map((item) => item.id)))
 }
 
 /** Reads media identifiers from a stored document without requiring its version. */
@@ -211,15 +244,24 @@ function mediaIdsFrom(stored: Record<string, unknown>): MediaId[] {
   })
 }
 
+/** Lists stored media keys absent from every local project document. */
+export function orphanedMediaIds(
+  storedDocuments: readonly Record<string, unknown>[],
+  storedMediaIds: readonly MediaId[],
+): MediaId[] {
+  const referencedMediaIds = new Set(storedDocuments.flatMap(mediaIdsFrom))
+  return storedMediaIds.filter((mediaId) => !referencedMediaIds.has(mediaId))
+}
+
 /** Marks a document dirty without discarding a saved conflict or server revision. */
-function markDocumentPending(syncStore: IDBObjectStore, documentId: string): void {
+function markDocumentPending(syncStore: IDBObjectStore, documentId: string, mediaIds: ReadonlySet<MediaId>): void {
   const request = syncStore.get(documentId)
   request.onsuccess = () => {
     const stored = request.result as DocumentSyncState | undefined
     syncStore.put({
       documentId,
       remoteRevision: stored?.remoteRevision ?? null,
-      uploadedMediaIds: stored?.uploadedMediaIds ?? [],
+      uploadedMediaIds: stored?.uploadedMediaIds.filter((mediaId) => mediaIds.has(mediaId)) ?? [],
       status: stored?.status === 'conflict' ? 'conflict' : 'pending',
     } satisfies DocumentSyncState)
   }

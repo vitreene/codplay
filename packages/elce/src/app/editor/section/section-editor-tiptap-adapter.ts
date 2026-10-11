@@ -12,25 +12,44 @@ import {
 } from './section-editor-tiptap'
 import type { SectionToolbarState } from './section-editor-tiptap'
 import { createElceAnchorExtension } from '../anchor/elce-anchor-extension'
+import type { SectionChangeSelection } from '../../facades/anchor/anchor-drop-facade'
+import type { SectionSelection } from '../../history/document-history'
 
 export interface SectionTiptapAdapterOptions {
   readonly bdcId: string
   readonly section: SectionContent
   readonly anchorOptions: ElceAnchorExtensionOptions
-  readonly onChange: (change: ElceSectionChange) => void
+  readonly onChange: (change: ElceSectionChange, selection?: SectionChangeSelection) => void
   readonly onToolbarState: (state: SectionToolbarState) => void
 }
 
 /** Owns a Tiptap Editor lifecycle while keeping document changes in Elcé commands. */
 export class SectionTiptapAdapter {
   public readonly editor: Editor
+  private readonly bdcId: string
   private section: SectionContent
   private readonly anchorNodeViewRefreshers = new Set<() => void>()
-  private readonly onChange: (change: ElceSectionChange) => void
+  private readonly onChange: (change: ElceSectionChange, selection?: SectionChangeSelection) => void
   private readonly onToolbarState: (state: SectionToolbarState) => void
   private lastToolbarState = EMPTY_SECTION_TOOLBAR_STATE
+  private beforeSelection: SectionSelection | undefined
+  /** Captures the old selection before Tiptap applies an author transaction. */
+  private readonly onBeforeTransaction = ({ editor }: EditorEvents['beforeTransaction']): void => {
+    this.beforeSelection = {
+      sectionBdcId: this.bdcId,
+      anchor: editor.state.selection.anchor,
+      head: editor.state.selection.head,
+    }
+  }
   private readonly onUpdate = ({ editor, transaction }: EditorEvents['update']): void => {
-    this.onChange(sectionChangeFromTransaction(editor, transaction, this.section.title))
+    this.onChange(sectionChangeFromTransaction(editor, transaction, this.section.title), {
+      before: this.beforeSelection,
+      after: {
+        sectionBdcId: this.bdcId,
+        anchor: editor.state.selection.anchor,
+        head: editor.state.selection.head,
+      },
+    })
   }
   private readonly onTransaction = ({ editor }: EditorEvents['transaction']): void => {
     const next = readSectionToolbarState(editor)
@@ -40,6 +59,7 @@ export class SectionTiptapAdapter {
   }
 
   public constructor(host: HTMLElement, options: SectionTiptapAdapterOptions) {
+    this.bdcId = options.bdcId
     this.section = options.section
     this.onChange = options.onChange
     this.onToolbarState = options.onToolbarState
@@ -64,6 +84,7 @@ export class SectionTiptapAdapter {
         },
       },
     })
+    this.editor.on('beforeTransaction', this.onBeforeTransaction)
     this.editor.on('update', this.onUpdate)
     this.editor.on('transaction', this.onTransaction)
     this.editor.mount(host)
@@ -90,8 +111,18 @@ export class SectionTiptapAdapter {
     })
   }
 
+  /** Restores the caret or range from one global document-history position. */
+  public restoreSelection(selection: SectionSelection): void {
+    const max = this.editor.state.doc.content.size
+    const from = Math.max(0, Math.min(max, Math.min(selection.anchor, selection.head)))
+    const to = Math.max(0, Math.min(max, Math.max(selection.anchor, selection.head)))
+    this.editor.commands.setTextSelection({ from, to })
+    this.editor.commands.focus()
+  }
+
   /** Unsubscribes from Tiptap and destroys its ProseMirror view. */
   public destroy(): void {
+    this.editor.off('beforeTransaction', this.onBeforeTransaction)
     this.editor.off('update', this.onUpdate)
     this.editor.off('transaction', this.onTransaction)
     this.anchorNodeViewRefreshers.clear()

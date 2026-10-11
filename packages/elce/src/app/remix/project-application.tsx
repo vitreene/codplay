@@ -2,7 +2,7 @@ import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import type { SnapshotFrom } from 'xstate'
 import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
-import type { controllerMachine } from '../controller/controller-machine'
+import { isImportChange, type controllerMachine } from '../controller/controller-machine'
 import { EditorContextProvider } from './editor-context'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { ProjectSessionStatus } from '../projects/project-session-types'
@@ -53,6 +53,13 @@ export function ProjectApplication(handle: Handle) {
     if (!popupPreviewHost.open()) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
     void handle.update()
   }
+  /** Routes either button or shortcut through the same controller gesture. */
+  const runHistoryAction = (kind: 'undo' | 'redo'): void => {
+    if (view.activeProject === null || view.projectStatus !== 'active' || view.editAccess !== 'active') return
+    if (kind === 'undo') commitFocusedInlineTitle()
+    if (kind === 'undo') actions.undo()
+    else actions.redo()
+  }
   handle.queueTask(() => {
     const subscription = controller.subscribe((snapshot) => {
       view = selectProjectView(snapshot)
@@ -60,6 +67,15 @@ export function ProjectApplication(handle: Handle) {
     })
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && responsivePanel !== null) setResponsivePanel(null)
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return
+      if (view.activeProject === null || view.projectStatus !== 'active' || view.editAccess !== 'active') return
+      event.preventDefault()
+      event.stopPropagation()
+      runHistoryAction(event.shiftKey ? 'redo' : 'undo')
+    }
+    /** Refreshes button availability while an inline title is still dirty. */
+    const handleInput = (event: Event): void => {
+      if (event.target instanceof HTMLInputElement && isInlineTitle(event.target)) void handle.update()
     }
     const handleResize = (): void => {
       switch (responsivePanel) {
@@ -73,11 +89,13 @@ export function ProjectApplication(handle: Handle) {
           return
       }
     }
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('input', handleInput)
     window.addEventListener('resize', handleResize)
     const dispose = (): void => {
       subscription.unsubscribe()
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('input', handleInput)
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
     }
@@ -96,7 +114,26 @@ export function ProjectApplication(handle: Handle) {
     previewError,
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
     moveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
-  })
+  }, runHistoryAction)
+}
+
+/** Detects the two inline titles that commit their edits on blur. */
+function isInlineTitle(input: HTMLInputElement): boolean {
+  return input.id.startsWith('elce-page-title-') || input.id.startsWith('elce-chapter-title-')
+}
+
+/** Commits the active dirty title before Undo enters the global history. */
+function commitFocusedInlineTitle(): void {
+  const active = document.activeElement
+  if (active instanceof HTMLInputElement && isInlineTitle(active)) active.blur()
+}
+
+/** Reports a local title edit that has not yet reached the controller. */
+function hasDirtyInlineTitle(): boolean {
+  if (typeof document === 'undefined') return false
+  const active = document.activeElement
+  return active instanceof HTMLInputElement && isInlineTitle(active)
+    && active.value.trim() !== active.defaultValue.trim()
 }
 
 /** Selects only project-management data from the XState-owned application snapshot. */
@@ -108,6 +145,8 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
     projectError: snapshot.context.projectError,
     editAccess: snapshot.context.editAccess,
     document: snapshot.context.document,
+    history: snapshot.context.history,
+    importPending: snapshot.matches('processingDocumentChange') && isImportChange(snapshot.context.documentChanges[0]),
     syncStatus: snapshot.context.syncStatus,
     editor: selectEditorViewModel(snapshot),
   }
@@ -118,6 +157,7 @@ function renderApplication(
   view: ProjectApplicationView,
   actions: EditorActionsFacade,
   workspace: ProjectApplicationWorkspaceState,
+  runHistoryAction: (kind: 'undo' | 'redo') => void,
 ): RemixNode {
   const editorVisible = view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active'
   const currentName = view.activeProject === null ? null : view.document.data.name
@@ -214,6 +254,35 @@ function renderApplication(
           </ul>
         </div>
       </details>
+      {editorVisible ? <div
+        id="elce-history-actions"
+        className="elce-history-actions"
+      >
+        <button
+          id="elce-history-undo"
+          type="button"
+          disabled={view.history.past.length === 0 && !hasDirtyInlineTitle()}
+          mix={on<HTMLButtonElement, 'click'>('click', () => runHistoryAction('undo'))}
+        >
+          Annuler
+        </button>
+        <button
+          id="elce-history-redo"
+          type="button"
+          disabled={view.history.future.length === 0}
+          mix={on<HTMLButtonElement, 'click'>('click', () => runHistoryAction('redo'))}
+        >
+          Rétablir
+        </button>
+      </div> : null}
+      {editorVisible && view.importPending ? <button
+        id="elce-import-cancel"
+        className="elce-import-cancel"
+        type="button"
+        mix={on<HTMLButtonElement, 'click'>('click', () => actions.cancelImport())}
+      >
+        Annuler l’import
+      </button> : null}
       <span
         id="elce-project-sync-status"
         className="elce-project-sync-status"

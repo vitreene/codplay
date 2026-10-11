@@ -3,9 +3,15 @@ import { ElceAnchorDropService } from '../../../domain/anchor/anchor-drop-servic
 import type { ElceDocument } from '../../../domain/document/document-model'
 import type { ElceCatalogContents, ElceCatalogDropTarget, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 import type { PageId } from '../../../domain/document/document-types'
+import type { SectionSelection } from '../../history/document-history'
+
+export interface SectionChangeSelection {
+  readonly before?: SectionSelection
+  readonly after?: SectionSelection
+}
 
 export interface ElceAnchorChangeDispatcher {
-  dispatch(sectionBdcId: string, change: ElceSectionChange): void
+  dispatch(sectionBdcId: string, change: ElceSectionChange, selection?: SectionChangeSelection): void
 }
 
 /** Isolates the editor-to-controller gesture boundary for anchored bdc drops. */
@@ -39,7 +45,7 @@ export class ElceAnchorDropFacade {
   }
 
   /** Sends the complete drop/edit intention to the XState command boundary. */
-  public submitSectionChange(sectionBdcId: string, change: ElceSectionChange): void {
-    this.dispatcher.dispatch(sectionBdcId, change)
+  public submitSectionChange(sectionBdcId: string, change: ElceSectionChange, selection?: SectionChangeSelection): void {
+    this.dispatcher.dispatch(sectionBdcId, change, selection)
   }
 }

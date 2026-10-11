@@ -25,6 +25,7 @@ import type { ElceMediaImport } from '../../domain/media/media-resource-types'
 import type { ProjectSessionOperation } from '../projects/project-session-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { ElceAnchorDropFacade } from './anchor/anchor-drop-facade'
+import type { SectionChangeSelection } from './anchor/anchor-drop-facade'
 import { ElceCardFacade } from './card/card-facade'
 import type { ElceCardEditorActions } from './card/card-facade-types'
 import { ElceCarouselFacade, createCarouselBdcId } from './carousel/carousel-facade'
@@ -46,14 +47,19 @@ export class EditorActionsFacade {
   public constructor(controller: Actor<typeof controllerMachine>) {
     this.controller = controller
     const dispatch = (command: DocumentCommand): void => {
-      this.controller.send({ type: 'document.apply', command })
+      this.apply(command)
     }
     const importCardMedia = (bdcId: BdcId, mediaImport: ElceMediaImport): void => {
       this.controller.send({ type: 'card.media.file.import', bdcId, file: mediaImport.file, media: mediaImport.media })
     }
 
     this.anchorFacade = new ElceAnchorDropFacade({
-      dispatch: (sectionBdcId, change) => this.controller.send({ type: 'section.change', sectionBdcId, change }),
+      dispatch: (sectionBdcId, change, selection) => this.controller.send({
+        type: 'section.change', sectionBdcId, change,
+        historyGroupKey: change.kind === 'content' ? focusedTextFieldKey(`section:${sectionBdcId}`) ?? undefined : undefined,
+        selectionBefore: selection?.before,
+        selectionAfter: selection?.after,
+      }),
     })
     this.cardFacade = new ElceCardFacade({ dispatch, importMedia: importCardMedia })
     this.carouselFacade = new ElceCarouselFacade({
@@ -76,6 +82,21 @@ export class EditorActionsFacade {
   /** Sends a project lifecycle intention through the owning XState actor. */
   public manageProjects(operation: ProjectSessionOperation): void {
     this.controller.send({ type: 'project.operation', operation })
+  }
+
+  /** Undoes the most recent accepted document gesture in the controller. */
+  public undo(): void {
+    this.controller.send({ type: 'history.undo' })
+  }
+
+  /** Replays the next gesture from the controller's Redo branch. */
+  public redo(): void {
+    this.controller.send({ type: 'history.redo' })
+  }
+
+  /** Cancels only the active file preparation, leaving document history intact. */
+  public cancelImport(): void {
+    this.controller.send({ type: 'import.cancel' })
   }
 
   /** Starts the server-owned project list and restores this tab's selection. */
@@ -285,8 +306,8 @@ export class EditorActionsFacade {
   }
 
   /** Sends a Section transaction through the existing XState anchor event. */
-  public submitSectionChange(sectionBdcId: BdcId, change: ElceSectionChange): void {
-    this.anchorFacade.submitSectionChange(sectionBdcId, change)
+  public submitSectionChange(sectionBdcId: BdcId, change: ElceSectionChange, selection?: SectionChangeSelection): void {
+    this.anchorFacade.submitSectionChange(sectionBdcId, change, selection)
   }
 
   /** Creates Question editor callbacks for one current BDC. */
@@ -330,6 +351,15 @@ export class EditorActionsFacade {
 
   /** Applies one existing document command through the controller actor. */
   private apply(command: DocumentCommand): void {
-    this.controller.send({ type: 'document.apply', command })
+    this.controller.send({ type: 'document.apply', command, historyGroupKey: focusedTextFieldKey(`command:${command.type}`) ?? undefined })
   }
+}
+
+/** Identifies a native text field or Tiptap surface for short typing groups. */
+function focusedTextFieldKey(prefix: string): string | null {
+  if (typeof document === 'undefined') return null
+  const active = document.activeElement
+  if (!(active instanceof HTMLElement) || active.id === '') return null
+  if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active.isContentEditable)) return null
+  return `${prefix}:${active.id}`
 }

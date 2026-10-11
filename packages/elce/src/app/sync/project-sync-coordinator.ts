@@ -6,6 +6,7 @@ import type { DocumentSyncState, ElceDocumentStore } from '../../infrastructure/
 import { ElceProjectApiClient, ElceProjectApiError } from '../../infrastructure/project-api/project-api-client'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Actor } from 'xstate'
+import { retainedHistoryMediaIds } from '../history/document-history'
 
 /** Coalesces local saves into serialized project and media API requests. */
 export class ProjectSyncCoordinator {
@@ -192,7 +193,8 @@ export class ProjectSyncCoordinator {
         status: 'pending',
       }
       await this.store.saveSyncState(syncState)
-      if (mediaTypeFromMimeType(media.mimeType) === MEDIA_TYPE.IMAGE) {
+      if (mediaTypeFromMimeType(media.mimeType) === MEDIA_TYPE.IMAGE
+        && !retainedHistoryMediaIds(this.controller.getSnapshot().context.history).has(media.id)) {
         await this.store.deleteMedia([media.id])
         this.replaceMediaSource(media.id, source)
       }
@@ -240,6 +242,7 @@ export class ProjectSyncCoordinator {
     this.controller.send({
       type: 'document.apply',
       command: { type: 'media.merge', canonicalMediaId: error.mediaId, duplicateMediaIds: [duplicateMediaId] },
+      recordHistory: false,
     })
     return true
   }

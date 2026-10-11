@@ -118,6 +118,28 @@ body {
   letter-spacing: 0.02em;
 }
 
+.elce-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.elce-history-actions button,
+.elce-import-cancel {
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  color: #f8f5ef;
+  background: transparent;
+  border: 1px solid #b9c9c1;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.elce-history-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .elce-project-menu {
   position: relative;
   min-width: 12rem;
@@ -1839,6 +1861,31 @@ body {
 }
 
 @media (max-width: 800px) {
+  .elce-project-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .elce-project-menu {
+    flex: 1 1 9rem;
+    min-width: 0;
+  }
+
+  .elce-history-actions {
+    order: 3;
+  }
+
+  .elce-import-cancel {
+    order: 4;
+  }
+
+  .elce-project-sync-status {
+    order: 5;
+    flex: 1 1 auto;
+    text-align: right;
+  }
+
   .elce-main {
     grid-template-columns: 1fr;
   }

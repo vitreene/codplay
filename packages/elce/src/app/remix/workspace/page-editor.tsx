@@ -55,6 +55,7 @@ export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
 
   handle.queueTask(() => {
     const subscription = controller.subscribe((snapshot) => {
+      const previousRestore = current.view.historyRestore
       current.view = selectEditorViewModel(snapshot)
       const page = current.view.selectedPage
       if (page !== undefined) {
@@ -64,7 +65,11 @@ export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
           }
         }
       }
-      if (!handle.signal.aborted) void handle.update()
+      if (!handle.signal.aborted) void handle.update().then(() => {
+        const restore = current.view.historyRestore
+        if (restore === null || restore === previousRestore || restore.selection === null) return
+        sectionAdapters.get(restore.selection.sectionBdcId)?.restoreSelection(restore.selection)
+      })
     })
     handle.signal.addEventListener('abort', () => subscription.unsubscribe(), { once: true })
   })

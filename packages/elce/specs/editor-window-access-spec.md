@@ -48,6 +48,9 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   et installe le document serveur dans le même acteur XState. Le contrôleur
   conserve la page sélectionnée si elle existe encore. Une copie locale
   `pending` ou `conflict` n’est jamais remplacée par le serveur.
+- Une copie locale identique au document courant ne vide pas
+  l’[historique documentaire](./document-history-spec.md) lors d’un simple
+  retour de focus. L’installation d’un document différent le vide.
 - La révision HTTP et `If-Match` détectent une écriture faite depuis une copie
   périmée. Il n’y a ni dernier-écrit-gagnant ni fusion de documents.
 - Enregistrer, supprimer ou rejeter un ancien format de document ne retire pas

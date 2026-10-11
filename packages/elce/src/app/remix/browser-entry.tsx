@@ -13,6 +13,13 @@ import { ProjectSessionCoordinator } from '../projects/project-session-coordinat
 async function startRemixEditor(): Promise<void> {
   const isPopupPlayer = new URLSearchParams(window.location.search).has(POPUP_PREVIEW_SESSION_PARAM)
   const documentStore = isPopupPlayer ? null : new IndexedDbDocumentStore()
+  if (documentStore !== null) {
+    try {
+      await documentStore.deleteOrphanedMedia()
+    } catch (error) {
+      console.error('Le nettoyage des médias locaux Elcé a échoué.', error)
+    }
+  }
   const projectApi = isPopupPlayer ? null : new ElceProjectApiClient()
   const projectSession = documentStore === null || projectApi === null
     ? null

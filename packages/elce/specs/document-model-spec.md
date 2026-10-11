@@ -206,10 +206,11 @@ sont admis. Après le dépôt, le service ne propose plus ce BDC comme disponibl
 
 `attachDocumentPersistence` sérialise les écritures du document. Lorsqu’une
 commande retire des métadonnées média, le raccord de persistance appelle
-`ElceDocumentStore.saveDocumentAndDeleteMedia`. `IndexedDbDocumentStore`
-enregistre le document et supprime les blobs correspondants dans une seule
-transaction `readwrite` couvrant les deux magasins IndexedDB. L’opération de
-fusion reste déclenchée par `document.apply` dans la machine XState ; le
+`ElceDocumentStore.saveDocumentAndDeleteMedia` pour les blobs dont
+l’[historique documentaire](./document-history-spec.md) n’a plus besoin.
+`IndexedDbDocumentStore` enregistre le document et supprime ces blobs dans une
+seule transaction `readwrite` couvrant les deux magasins IndexedDB. L’opération
+de fusion reste déclenchée par `document.apply` dans la machine XState ; le
 raccord ne choisit pas quels médias fusionner.
 
 `flushLocalChanges()` relit le document courant de l’acteur XState avant

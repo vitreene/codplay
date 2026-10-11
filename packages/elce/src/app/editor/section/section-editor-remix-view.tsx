@@ -93,7 +93,7 @@ export function renderRemixSectionEditor(
             resolveCard: (anchorBdcId) => resolveAnchorCard(current.view, anchorBdcId),
             onEditCard: state.onEditAnchorBdc,
           },
-          onChange: (change) => actions.submitSectionChange(bdc.id, change),
+          onChange: (change, selection) => actions.submitSectionChange(bdc.id, change, selection),
           onToolbarState: (next) => {
             const previous = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
             if (sameToolbarState(previous, next)) return
@@ -102,6 +102,9 @@ export function renderRemixSectionEditor(
           },
         })
         state.adapters.set(bdc.id, adapter)
+        if (current.view.historyRestore?.selection?.sectionBdcId === bdc.id) {
+          adapter.restoreSelection(current.view.historyRestore.selection)
+        }
         signal.addEventListener('abort', () => {
           if (state.adapters.get(bdc.id) === adapter) state.adapters.delete(bdc.id)
           state.toolbarStates.delete(bdc.id)
