@@ -131,6 +131,64 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(current.status).toBe(200)
   })
 
+  it('renews a live lease and lets another page recover it after expiry', async () => {
+    database = await openProjectDatabase(':memory:')
+    const router = createElceApiRouter(new SqliteProjectPersistence(database))
+    const document = createDocumentWithId('project-expired-edit-lease')
+    await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+    const first = await router.fetch(jsonRequest('POST', `/api/projects/${document.id}/edit-access`, { pageId: 'page-a' }))
+    const firstGrant = (await first.json() as { grantId: string }).grantId
+    const firstHeaders = { 'X-Elce-Page-Id': 'page-a', 'X-Elce-Edit-Grant': firstGrant }
+
+    const renewed = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}/edit-access`, {
+      method: 'PUT', headers: firstHeaders,
+    }))
+    expect(renewed.status).toBe(204)
+
+    await database.exec(rawSql(
+      'UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ?', [Date.now() - 1, document.id],
+    ))
+    const lateRenewal = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}/edit-access`, {
+      method: 'PUT', headers: firstHeaders,
+    }))
+    expect(lateRenewal.status).toBe(409)
+
+    const recovered = await router.fetch(jsonRequest('POST', `/api/projects/${document.id}/edit-access`, { pageId: 'page-b' }))
+    expect(recovered.status).toBe(200)
+    const body = await recovered.json() as { grantId: string; recovered: boolean }
+    expect(body.recovered).toBe(true)
+    expect(body.grantId).not.toBe(firstGrant)
+
+    const staleWrite = await router.fetch(jsonRequest(
+      'PUT', `/api/projects/${document.id}/document`, document.toJSON(), { 'If-Match': '"0"', ...firstHeaders },
+    ))
+    expect(staleWrite.status).toBe(409)
+  })
+
+  it('lets the temporary force control replace a live grant and rejects its old writes', async () => {
+    database = await openProjectDatabase(':memory:')
+    const router = createElceApiRouter(new SqliteProjectPersistence(database))
+    const document = createDocumentWithId('project-forced-edit-recovery')
+    await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+    const first = await router.fetch(jsonRequest('POST', `/api/projects/${document.id}/edit-access`, { pageId: 'page-a' }))
+    const firstGrant = (await first.json() as { grantId: string }).grantId
+    const firstHeaders = { 'X-Elce-Page-Id': 'page-a', 'X-Elce-Edit-Grant': firstGrant }
+
+    const forced = await router.fetch(jsonRequest(
+      'POST', `/api/projects/${document.id}/edit-access`, { pageId: 'page-b', force: true },
+    ))
+    expect(forced.status).toBe(200)
+    const body = await forced.json() as { grantId: string; recovered: boolean }
+    expect(body.recovered).toBe(true)
+    expect(body.grantId).not.toBe(firstGrant)
+
+    const staleWrite = await router.fetch(jsonRequest(
+      'PUT', `/api/projects/${document.id}/document`, document.toJSON(), { 'If-Match': '"0"', ...firstHeaders },
+    ))
+    expect(staleWrite.status).toBe(409)
+    expect(await staleWrite.json()).toEqual({ error: 'edit_access_lost' })
+  })
+
   it('returns the same grant when an acquisition response is lost after commit', async () => {
     database = await openProjectDatabase(':memory:')
     const router = createElceApiRouter(new SqliteProjectPersistence(database))

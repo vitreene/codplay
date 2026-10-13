@@ -26,6 +26,7 @@ interface ApiErrorResponse {
 
 interface EditAccessResponse {
   readonly grantId: string
+  readonly recovered?: boolean
 }
 
 interface EditAccessStateResponse {
@@ -59,20 +60,40 @@ export class ElceProjectApiClient {
   }
 
   /** Reserves editing for one page and remembers the returned server grant. */
-  public async acquireEditAccess(projectId: string, pageId: string): Promise<Readonly<{ grantId: string }> | null> {
+  public async acquireEditAccess(
+    projectId: string,
+    pageId: string,
+    force = false,
+  ): Promise<Readonly<{ grantId: string; recovered: boolean }> | null> {
     const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/edit-access`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pageId }),
+      body: JSON.stringify({ pageId, ...(force ? { force: true } : {}) }),
     })
     if (response.status === 409) {
       const body = await response.json().catch(() => null) as Partial<ApiErrorResponse> | null
       if (body?.error === 'edit_access_occupied') return null
       throw new ElceProjectApiError(response.status, body?.error ?? 'request_failed')
     }
-    const { grantId } = await readResponseJson<EditAccessResponse>(response)
+    const { grantId, recovered = false } = await readResponseJson<EditAccessResponse>(response)
     this.grants.set(projectId, { pageId, grantId })
-    return { grantId }
+    return { grantId, recovered }
+  }
+
+  /** Renews the current grant and reports when another page already replaced it. */
+  public async renewEditAccess(projectId: string): Promise<boolean> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/edit-access`), {
+      method: 'PUT',
+      headers: this.editHeaders(projectId),
+    })
+    if (response.status === 204) return true
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null) as Partial<ApiErrorResponse> | null
+      if (body?.error === 'edit_access_lost') return false
+      throw new ElceProjectApiError(response.status, body?.error ?? 'request_failed')
+    }
+    await readResponseJson<never>(response)
+    return false
   }
 
   /** Checks ownership after an ambiguous release response. */

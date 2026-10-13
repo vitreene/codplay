@@ -539,16 +539,17 @@ proposer « Enregistrer sous… » pour la préserver dans un projet indépendan
 décrit le droit serveur, la frontière réutilisable, le transfert, les
 frontières à corriger, l'ordre de travail et les validations requises.
 
-**Décision confirmée en cas de perte de synchronisation :** la page B ne peut
-pas éditer le document source tant que la page A détient l’édition, même si A
-n’arrive plus à synchroniser. B attend le rétablissement de la synchronisation
-ou choisit « Enregistrer sous… » depuis la dernière version confirmée qu’elle
-affiche. Cette action crée une copie indépendante avec un nouvel identifiant et
-ses médias ; B peut continuer à travailler localement sur cette copie. A garde
-le droit du document source, avec ses commandes suspendues tant que la sortie
-et sa synchronisation restent inachevées. Après trois tentatives automatiques d’erreurs
-réseau récupérables, expliquer la cause et proposer ces actions. Une révision
-périmée (`412`) ne se résout pas en répétant la même écriture.
+**Règle corrigée le 12 octobre 2026 — récupération après perte de connexion :**
+un droit détenu ne peut pas rendre le projet inaccessible indéfiniment. Si le
+serveur ne détecte plus la page détentrice, son droit doit devenir récupérable ;
+une autre page peut acquérir un droit neuf après avoir relu la dernière révision
+confirmée. L’ancien droit est clôturé et ses écritures sont refusées. La reprise
+explicite ou après expiration donne priorité à la version serveur et ne crée pas
+de copie automatique des changements non confirmés ; ce choix temporaire est
+détaillé dans le [plan ciblé d’accès exclusif](./2026-10-11-elce-acces-exclusif-inter-navigateurs-plan.md).
+Après trois tentatives automatiques d’erreurs réseau récupérables, expliquer la
+cause et proposer la voie de reprise. Une révision périmée (`412`) ne se résout
+pas en répétant la même écriture.
 
 **Convention retenue par équivalence fonctionnelle :** Elcé reprend le principe
 du verrou exclusif documenté par SharePoint, Dropbox et Git LFS — un détenteur,
@@ -557,14 +558,11 @@ ni leur échelle ([SharePoint](https://support.microsoft.com/en-us/sharepoint/do
 [Dropbox](https://help.dropbox.com/organize/file-locking),
 [Git LFS](https://github.com/git-lfs/git-lfs/blob/main/docs/api/locking.md)).
 Le droit appartient à une session de page, pas au navigateur : après fermeture
-de A, un nouvel onglet, même dans le même navigateur, doit resynchroniser le
-document et obtenir le droit avant d’éditer. Une disparition inattendue de A
-ne transfère aucun droit à B : B reste en lecture seule sur le document source
-et utilise « Enregistrer sous… » pour poursuivre dans une copie indépendante.
-B ne peut pas demander de reprise forcée du document source, qui peut rester
-verrouillé tant que A n'a pas pu revenir et libérer son droit. Aucun transfert
-fondé uniquement sur l’expiration d’un délai n’est retenu. Le parcours de
-transfert normal est fixé dans le plan ciblé.
+de A, un nouvel onglet, même dans le même navigateur, doit obtenir le droit
+avant d’éditer. La reprise après disparition inattendue du détenteur suit
+maintenant le principe accepté ci-dessus ; son mécanisme, les critères de
+forçage et la récupération des écritures non confirmées sont détaillés dans le
+plan ciblé d’accès exclusif.
 
 **Acceptation visée :** dans deux navigateurs, A détient l’édition et B affiche
 le document en lecture seule ; les révisions enregistrées par A apparaissent

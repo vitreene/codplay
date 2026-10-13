@@ -292,6 +292,7 @@ export const controllerMachine = setup({
         projectOperationHadAccess: context.editAccess === 'active',
         projectStatus: event.operation.kind === 'bootstrap' ? 'loading' : 'busy',
         projectError: null,
+        accessRecoveryAvailable: false,
         editAccess: 'waiting',
       }
     }),
@@ -311,7 +312,8 @@ export const controllerMachine = setup({
         projects: output.projects,
         activeProject: output.activeProject,
         projectStatus: output.status,
-        projectError: null,
+        projectError: output.projectError ?? null,
+        accessRecoveryAvailable: false,
         recoverableLocalCopy: output.activeProject?.id === context.activeProject?.id ? context.recoverableLocalCopy : false,
         pendingProjectOperation: null,
         projectOperationHadAccess: false,
@@ -333,6 +335,13 @@ export const controllerMachine = setup({
     markProjectAccessError: assign(({ event }) => ({
       projectStatus: 'error' as const,
       projectError: event.type === 'project.access.error' ? event.message : null,
+      accessRecoveryAvailable: false,
+      editAccess: 'waiting' as const,
+    })),
+    markProjectAccessRecovery: assign(({ event }) => ({
+      projectStatus: 'error' as const,
+      projectError: event.type === 'project.access.recovery' ? event.message : null,
+      accessRecoveryAvailable: true,
       editAccess: 'waiting' as const,
     })),
   },
@@ -363,6 +372,7 @@ export const controllerMachine = setup({
     activeProject: null,
     projectStatus: 'loading',
     projectError: null,
+    accessRecoveryAvailable: false,
     recoverableLocalCopy: false,
     pendingProjectOperation: null,
     projectOperationHadAccess: false,
@@ -436,6 +446,7 @@ export const controllerMachine = setup({
       })),
     },
     'project.access.error': { actions: 'markProjectAccessError' },
+    'project.access.recovery': { actions: 'markProjectAccessRecovery' },
     'project.sync.warning': { actions: assign(({ event }) => ({ projectError: event.message })) },
     'project.local-copy.availability': {
       actions: assign(({ context, event }) => ({
@@ -443,6 +454,7 @@ export const controllerMachine = setup({
       })),
     },
     'project.access.retry': { actions: ({ context }) => context.projectSession?.retryAccess?.() },
+    'project.access.force': { actions: ({ context }) => context.projectSession?.forceAccess?.() },
   },
   states: {
     suspended: {
@@ -453,6 +465,7 @@ export const controllerMachine = setup({
             editAccess: 'active',
             projectStatus: context.activeProject === null ? context.projectStatus : 'active',
             projectError: null,
+            accessRecoveryAvailable: false,
           })),
           target: 'ready',
         },

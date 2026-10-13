@@ -5,7 +5,7 @@ import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-w
 
 export type ProjectApplicationView = Pick<
   ElceAppContext,
-  'projects' | 'activeProject' | 'projectStatus' | 'projectError' | 'recoverableLocalCopy' | 'editAccess' | 'document' | 'syncStatus' | 'history'
+  'projects' | 'activeProject' | 'projectStatus' | 'projectError' | 'accessRecoveryAvailable' | 'recoverableLocalCopy' | 'editAccess' | 'document' | 'syncStatus' | 'history'
 > & Readonly<{ editor: EditorViewModel; importPending: boolean }>
 
 export interface ProjectApplicationWorkspaceState {

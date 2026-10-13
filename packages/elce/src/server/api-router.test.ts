@@ -184,13 +184,18 @@ class MemoryProjectPersistence implements ProjectPersistence {
   private readonly grants = new Map<string, ProjectEditGrant>()
 
   /** Reserves a fixture project for one page. */
-  public async acquireEditAccess(projectId: string, pageId: string) {
+  public async acquireEditAccess(projectId: string, pageId: string, force = false) {
     if (!this.projects.has(projectId)) return { kind: 'not-found' as const }
     const current = this.grants.get(projectId)
-    if (current !== undefined && current.pageId !== pageId) return { kind: 'occupied' as const }
-    const grantId = current?.grantId ?? 'test-grant'
+    if (!force && current !== undefined && current.pageId !== pageId) return { kind: 'occupied' as const }
+    const grantId = !force && current?.pageId === pageId ? current.grantId : 'test-grant'
     this.grants.set(projectId, { pageId, grantId })
-    return { kind: 'granted' as const, grantId }
+    return { kind: 'granted' as const, grantId, recovered: force || current !== undefined }
+  }
+
+  /** Renews a fixture grant while it remains the current owner. */
+  public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    return this.hasEditAccess(projectId, grant)
   }
 
   /** Checks the exact fixture grant. */

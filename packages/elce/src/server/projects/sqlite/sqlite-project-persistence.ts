@@ -2,6 +2,7 @@ import { rawSql } from 'remix/data-table'
 import { randomUUID } from 'node:crypto'
 import type { Database, DataManipulationResult } from 'remix/data-table'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
+import { PROJECT_EDIT_LEASE_MS } from '../../../config/api-config'
 import {
   BDC_TYPE,
   CHAPTER_TYPE,
@@ -53,37 +54,57 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   }
 
   /** Reserves one project atomically and reuses a live grant for the same page. */
-  public async acquireEditAccess(projectId: string, pageId: string): Promise<AcquireProjectEditResult> {
+  public async acquireEditAccess(projectId: string, pageId: string, force = false): Promise<AcquireProjectEditResult> {
     return this.database.transaction(async (transaction) => {
       const rows = await queryRows(transaction,
-        'SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ?', [projectId])
+        'SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ?', [projectId])
       const row = rows[0]
       if (row === undefined) return { kind: 'not-found' }
       const owner = nullableText(row, 'edit_page_id')
       const currentGrant = nullableText(row, 'edit_grant_id')
-      if (owner === pageId && currentGrant !== null) return { kind: 'granted', grantId: currentGrant }
-      if (owner !== null) return { kind: 'occupied' }
+      const expiresAt = nullableNumber(row, 'edit_lease_expires_at')
+      const now = Date.now()
+      const live = owner !== null && currentGrant !== null && expiresAt !== null && expiresAt > now
+      if (!force && live && owner === pageId) {
+        await queryRows(transaction,
+          'UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ?', [now + PROJECT_EDIT_LEASE_MS, projectId])
+        return { kind: 'granted', grantId: currentGrant, recovered: false }
+      }
+      if (!force && live) return { kind: 'occupied' }
       const grantId = randomUUID()
       await queryRows(transaction,
-        'UPDATE projects SET edit_page_id = ?, edit_grant_id = ? WHERE project_id = ?',
-        [pageId, grantId, projectId])
-      return { kind: 'granted', grantId }
+        'UPDATE projects SET edit_page_id = ?, edit_grant_id = ?, edit_lease_expires_at = ? WHERE project_id = ?',
+        [pageId, grantId, now + PROJECT_EDIT_LEASE_MS, projectId])
+      return { kind: 'granted', grantId, recovered: force || owner !== null }
     })
   }
 
   /** Reports whether the exact page grant still owns a project. */
   public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
     const rows = await queryRows(this.database,
-      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?',
-      [projectId, grant.pageId, grant.grantId])
+      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND edit_lease_expires_at > ?',
+      [projectId, grant.pageId, grant.grantId, Date.now()])
     return rows.length > 0
+  }
+
+  /** Renews a still-live grant atomically and refuses renewal after expiration. */
+  public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    const now = Date.now()
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction, `
+        UPDATE projects SET edit_lease_expires_at = ?
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND edit_lease_expires_at > ?
+        RETURNING project_id
+      `, [now + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId, now])
+      return rows.length > 0
+    })
   }
 
   /** Releases only the exact current grant, preserving a later owner's right. */
   public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
     return this.database.transaction(async (transaction) => {
       const rows = await queryRows(transaction, `
-        UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL
+        UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL, edit_lease_expires_at = NULL
         WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
         RETURNING project_id
       `, [projectId, grant.pageId, grant.grantId])
@@ -935,11 +956,13 @@ async function editGrantState(
   grant: ProjectEditGrant,
 ): Promise<'held' | 'lost' | 'not-found'> {
   const rows = await queryRows(database,
-    'SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ?', [projectId])
+    'SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ?', [projectId])
   const row = rows[0]
   if (row === undefined) return 'not-found'
+  const expiresAt = nullableNumber(row, 'edit_lease_expires_at')
   return nullableText(row, 'edit_page_id') === grant.pageId
     && nullableText(row, 'edit_grant_id') === grant.grantId
+    && expiresAt !== null && expiresAt > Date.now()
     ? 'held' : 'lost'
 }
 

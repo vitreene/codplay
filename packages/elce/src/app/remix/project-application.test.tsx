@@ -13,6 +13,48 @@ import { EditorContextProvider } from './editor-context'
 import { ProjectApplication } from './project-application'
 
 describe('Remix project application', () => {
+  it('keeps ordinary read-only status quiet until access recovery is needed', async () => {
+    const project = { id: 'reader-project', name: 'Projet en lecture', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
+
+    const actions = new EditorActionsFacade(controller)
+    const rendered = render(<EditorContextProvider controller={controller} actions={actions}>
+      <ProjectApplication />
+    </EditorContextProvider>)
+
+    expect(rendered.$('#elce-project-sync-status')?.textContent).toBe('Lecture seule')
+    expect(rendered.$('#elce-project-reader-status')).toBeNull()
+    expect(rendered.$('#elce-project-access-retry')).toBeNull()
+    expect(rendered.$('#elce-project-access-force')).toBeNull()
+
+    await rendered.act(() => controller.send({
+      type: 'project.access.recovery',
+      message: 'L’accès n’a pas pu être repris après plusieurs tentatives.',
+    }))
+    expect(rendered.$('#elce-project-reader-status')?.textContent).toBe('L’accès n’a pas pu être repris après plusieurs tentatives.')
+    expect(rendered.$('#elce-project-access-retry')).not.toBeNull()
+    expect(rendered.$('#elce-project-access-force')).not.toBeNull()
+
+    await rendered.act(() => controller.send({ type: 'editor.access.activate' }))
+    expect(rendered.$('#elce-project-reader-status')).toBeNull()
+    expect(rendered.$('#elce-project-access-retry')).toBeNull()
+    expect(rendered.$('#elce-project-access-force')).toBeNull()
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
   it('shows a distinct cancellation button only while a file import is pending', async () => {
     const project = { id: 'import-cancel-project', name: 'Import à annuler', revision: 0 }
     const projectSession: ProjectSessionPort = {

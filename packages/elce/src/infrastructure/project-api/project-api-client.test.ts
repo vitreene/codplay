@@ -19,6 +19,27 @@ describe('Elcé project API client', () => {
     expect(request).toHaveBeenCalledWith(new URL('/api/projects', apiOrigin))
   })
 
+  it('renews its grant and can request the temporary force path', async () => {
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ grantId: 'test-grant', recovered: true }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    const api = new ElceProjectApiClient(apiOrigin, request)
+
+    await expect(api.acquireEditAccess('project-a', 'page-a', true)).resolves.toEqual({
+      grantId: 'test-grant', recovered: true,
+    })
+    await expect(api.renewEditAccess('project-a')).resolves.toBe(true)
+
+    expect(request.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ pageId: 'page-a', force: true }),
+    })
+    expect(request.mock.calls[1]).toEqual([
+      new URL('/api/projects/project-a/edit-access', apiOrigin),
+      { method: 'PUT', headers: { 'X-Elce-Page-Id': 'page-a', 'X-Elce-Edit-Grant': 'test-grant' } },
+    ])
+  })
+
   it('renames a project through its server route', async () => {
     const project: ElceProjectSummary = { id: 'project/a', name: 'Nouveau nom', revision: 4 }
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ project }, { headers: { ETag: '"4"' } }))

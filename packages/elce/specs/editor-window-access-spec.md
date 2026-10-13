@@ -36,6 +36,11 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   document et de tous ses médias avant de libérer le droit serveur, puis le
   Web Lock. Un `media.merge` issu d’un upload déjà accepté peut terminer sous
   suspension, sans entrée Undo ni nouvelle commande auteur.
+- La barrière de synchronisation attend le flush local, puis publie le document
+  courant de l’acteur XState. Si ce flush ou une normalisation interne remplace
+  l'objet document, elle planifie cette valeur désormais persistée et attend sa
+  confirmation avant de poursuivre. Sans flush local confirmé, un document
+  courant différent de la dernière valeur planifiée reste refusé.
 - `blur` suspend les nouvelles commandes, attend la fin des commandes déjà
   acceptées et des écritures IndexedDB, puis confirme le document et les
   médias sans attendre le délai local de 500 ms. Une requête en cours est
@@ -47,6 +52,20 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
 - `visibilitychange` vers `hidden` suspend également l’édition et libère le
   verrou après la même sauvegarde locale. Au retour visible ou du focus, la
   fenêtre demande le verrou quand elle possède effectivement le focus.
+- Le droit serveur porte un bail de 12 secondes, renouvelé toutes les
+  3 secondes par la page détentrice. Si un renouvellement échoue, la page se
+  suspend immédiatement ; après expiration, une page lectrice peut obtenir un
+  nouveau droit et relire la dernière révision confirmée. Les anciennes paires
+  restent refusées.
+- Le bouton temporaire « Forcer l’accès » permet à une page lectrice de
+  remplacer immédiatement le droit serveur, même si son bail est encore actif.
+  Dans le même profil, `BroadcastChannel` suspend l’ancien détenteur ; dans un
+  autre navigateur, l’ancien détenteur le découvre au prochain renouvellement.
+  Le nouveau détenteur installe la révision confirmée avant d’activer l’édition.
+- Une reprise forcée ou après expiration fait de la révision serveur la valeur
+  de référence et remplace le cache local de la page entrante. Elle ne crée pas
+  de copie de secours ni d’accusé de réception supplémentaire ; les changements
+  locaux non confirmés ne sont pas récupérés automatiquement par ce chemin.
 - Une page sans droit affiche la révision confirmée, avec la surface auteur
   `inert`. Elle conserve séparément sa copie IndexedDB `pending` ou `conflict`
   et relève les révisions du catalogue quand elle est visible, toutes les deux
@@ -66,11 +85,18 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
 - Le contenu éditorial reste dans l’acteur XState. La persistance IndexedDB,
   `ProjectSyncCoordinator` et `ProjectEditorLock` gèrent leur cycle de vie ; ils
   ne changent pas le document en dehors des événements XState.
-- Tant que le droit n’est pas acquis, la surface auteur est `inert`, montre le
-  document confirmé et propose « Réessayer l’accès » et « Enregistrer sous… ».
-  Si un document local reste `pending` ou `conflict`, « Enregistrer la copie
-  locale sous… » apparaît indépendamment d’un éventuel message d’erreur.
-  Aucun événement d’édition de cette page ne peut modifier le document source.
+- Sans droit d’édition, la surface auteur est `inert` et montre le document
+  confirmé. L’état ordinaire reste indiqué par « Lecture seule » : les refus
+  `edit_access_occupied` et la perte du droit d’une autre page ne montrent pas
+  de message d’erreur ni de commandes d’accès. Une interaction dans une page
+  visible et focalisée déclenche d’abord la reprise automatique. Après trois
+  tentatives de reprise consécutives échouées, l’interface montre un message de
+  récupération et les commandes « Réessayer l’accès » et « Forcer l’accès ».
+  Une reprise réussie efface cet état. Les erreurs réelles de réseau ou de
+  synchronisation gardent leur message propre. Si un document local reste
+  `pending` ou `conflict`, « Enregistrer la copie locale sous… » apparaît
+  indépendamment. Aucun événement d’édition de cette page ne peut modifier le
+  document source.
 - Web Locks et `BroadcastChannel` coordonnent les fenêtres du même profil.
   Une identité de page issue d’une recharge peut être conservée dans
   `sessionStorage` ; une identité copiée dans un onglet vivant est remplacée
@@ -117,7 +143,8 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   pendant le transfert du verrou déclenche une nouvelle demande.
   [`project-sync-coordinator.test.ts`](../src/app/sync/project-sync-coordinator.test.ts)
   vérifie qu’un blur qui arrive pendant une écriture n’ajoute pas une seconde
-  tentative réseau.
+  tentative réseau et que le document courant, remplacé dans XState, est publié
+  après le flush local.
 - Dans Safari Technology Preview, deux onglets sur le même document ont
   transféré le verrou au changement d’onglet, puis l’ont transféré au retour.
   Une requête `BroadcastChannel` a aussi fait libérer le verrou alors que la
@@ -136,6 +163,13 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   révision périmée. Ces événements synthétiques valident le circuit de
   l’application, mais pas le changement réel de focus entre deux navigateurs
   distincts ; cette preuve reste au plan de synchronisation.
+- Les tests SQLite couvrent le renouvellement du bail, sa récupération après
+  expiration, le forçage d’un détenteur actif et le refus d’une écriture avec
+  l’ancien droit. Brave sur 5175 a actionné « Forcer l’accès » depuis une page
+  lectrice sur un projet temporaire : elle est redevenue éditable et une
+  écriture du droit remplacé a reçu `409 edit_access_lost`. Le projet temporaire
+  a ensuite été supprimé. Cette vérification n’établit pas le transfert de
+  focus entre deux navigateurs réels ; cette preuve reste au plan.
 - Safari Technology Preview a exercé directement `IndexedDbDocumentStore` sur
   deux entrées projet dans une base temporaire : sauvegarder ou supprimer l’une
   a préservé le document, le checkpoint et les médias de l’autre. Le rejet
@@ -156,3 +190,11 @@ réellement masqués ; la validation réelle avec deux navigateurs demeure au
 Les régressions ciblées vérifient aussi le Web Lock retenu après une sortie
 échouée, sa libération au retour du réseau, et la disponibilité de la copie
 locale sur la vue lectrice malgré l’installation du document confirmé.
+
+Les tests [`project-editor-lock.test.ts`](../src/app/sync/project-editor-lock.test.ts)
+et [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
+vérifient la priorité sur interaction, l’absence de message et de commandes
+d’accès dans le lecteur ordinaire, l’apparition du secours après trois échecs
+et son effacement après acquisition. Brave sur 5175 a également confirmé que
+le lecteur ordinaire ne montre que « Lecture seule ». Le transfert entre les
+deux fenêtres Brave reste à confirmer dans le plan d’accès exclusif.

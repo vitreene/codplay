@@ -28,15 +28,24 @@ export class ProjectApiController {
   public async acquireEditAccess(request: Request, projectId: string): Promise<Response> {
     const body = await readJsonBody(request)
     if (body.kind === 'invalid' || !isRecord(body.value)
-      || typeof body.value.pageId !== 'string' || body.value.pageId.length === 0) {
+      || typeof body.value.pageId !== 'string' || body.value.pageId.length === 0
+      || body.value.force !== undefined && typeof body.value.force !== 'boolean') {
       return apiError(API_ERROR.INVALID_REQUEST, 400)
     }
-    const result = await this.persistence.acquireEditAccess(projectId, body.value.pageId)
+    const result = await this.persistence.acquireEditAccess(projectId, body.value.pageId, body.value.force === true)
     switch (result.kind) {
-      case 'granted': return Response.json({ grantId: result.grantId })
+      case 'granted': return Response.json({ grantId: result.grantId, recovered: result.recovered })
       case 'occupied': return apiError('edit_access_occupied', 409)
       case 'not-found': return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
     }
+  }
+
+  /** Renews the caller's live grant without extending an expired right. */
+  public async renewEditAccess(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    return await this.persistence.renewEditAccess(projectId, grant)
+      ? new Response(null, { status: 204 }) : lostProjectEditGrant()
   }
 
   /** Checks a grant after a lost release response without acquiring anew. */

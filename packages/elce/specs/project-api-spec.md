@@ -40,8 +40,9 @@ l’éditeur. Un prévol d’une origine hors boucle locale est refusé.
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
 | `POST /api/projects` | `ElceDocumentData` v4 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
-| `POST /api/projects/:projectId/edit-access` | `{ "pageId": string }` | `200 { "grantId": string }` ; une répétition par la page détentrice retrouve le même droit |
+| `POST /api/projects/:projectId/edit-access` | `{ "pageId": string, "force"?: true }` | `200 { "grantId": string, "recovered": boolean }` ; une répétition normale par la page détentrice retrouve son droit ; `force: true` le remplace |
 | `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
+| `PUT /api/projects/:projectId/edit-access` | En-têtes du droit courant | `204` si le bail est renouvelé ; `409 edit_access_lost` sinon |
 | `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
 | `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
 | `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
@@ -61,12 +62,15 @@ envoyée dans `If-Match` est la révision courante.
 Les écritures d’un projet existant (`PATCH`, `DELETE`, `PUT document`, `PUT
 media`) et la libération du droit présentent la paire
 `X-Elce-Page-Id`/`X-Elce-Edit-Grant`. SQLite garde une seule paire par projet.
-L’acquisition d’une autre page renvoie `409 edit_access_occupied` ; un ancien
-droit ne peut plus écrire après libération et réacquisition. Le contrôle du
-droit et la mutation documentaire se font dans la même transaction. Le `PUT`
-média revérifie la paire dans la transaction qui publie sa clé de fichier ;
-un fichier refusé est retiré. La création d’un nouveau projet reste libre,
-pour permettre une copie indépendante.
+L’acquisition d’une autre page renvoie `409 edit_access_occupied` tant que le
+bail est actif ; un ancien droit ne peut plus écrire après libération,
+expiration ou réacquisition. Le contrôle du droit et la mutation documentaire
+se font dans la même transaction. Le `PUT` média revérifie la paire dans la
+transaction qui publie sa clé de fichier ; un fichier refusé est retiré. La
+création d’un nouveau projet reste libre, pour permettre une copie indépendante.
+Une acquisition après expiration ou avec `force: true` retourne un droit neuf
+et `recovered: true`; l’éditeur relit alors la dernière révision confirmée
+avant d’activer ses commandes.
 
 ## Erreurs
 
@@ -112,6 +116,11 @@ préserve la clé de stockage et l’empreinte déjà enregistrées pour les mé
 qui restent présents.
 La migration `20261011180000_add_project_edit_access` conserve le détenteur et
 l’identifiant du droit dans `projects`, y compris après réouverture de SQLite.
+La migration `20261012120000_add_project_edit_lease` ajoute son échéance. Le
+serveur accorde un bail de 12 secondes ; la page détentrice le renouvelle toutes
+les 3 secondes. Après expiration, toute autre page peut acquérir un droit neuf.
+`force: true` remplace aussi immédiatement un bail encore actif. Les requêtes
+présentant l’ancien droit restent refusées.
 
 ## Fichiers média
 
@@ -171,6 +180,9 @@ utilisées par l’application : lister, créer, lire, renommer, supprimer,
 enregistrer le document et transférer un média. Ses tests vérifient les chemins
 HTTP, les méthodes, les corps, les ETags et la remontée de l’identifiant média
 canonique en cas de doublon.
+Ils vérifient aussi le renouvellement du bail et l’envoi du forçage. Les tests
+SQLite couvrent le renouvellement, l’expiration, la reprise forcée et le refus
+d’une écriture de l’ancienne paire.
 
 Le 8 octobre, `npm run dev:elce` a démarré ensemble l’entrée Vite et le listener
 API. Le port `5175` étant occupé, Vite a servi l’entrée sur `5176` ; les requêtes

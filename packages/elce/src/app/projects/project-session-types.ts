@@ -19,6 +19,7 @@ export interface ProjectSessionResult {
   readonly document: ElceDocument | null
   readonly status: ProjectSessionStatus
   readonly editAccess: 'waiting' | 'active'
+  readonly projectError?: string | null
 }
 
 export interface ProjectSessionPort {
@@ -32,5 +33,6 @@ export interface ProjectSessionPort {
   ): Promise<ProjectSessionResult>
   startLock(projectId: string): void
   retryAccess?(): void
+  forceAccess?(): void
   dispose(): Promise<void>
 }

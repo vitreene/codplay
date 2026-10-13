@@ -65,6 +65,119 @@ describe('Elcé project editor focus lock', () => {
     expect(lock.request).toHaveBeenCalledTimes(1)
   })
 
+  it('takes the explicit force path without waiting for the browser lock', async () => {
+    const { lock, setFocused } = installBrowserLock(false)
+    const onAccessGranted = vi.fn(async () => {})
+    const editorLock = new ProjectEditorLock('project-forced-lock', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending: vi.fn(async () => {}),
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    setFocused(true)
+    editorLock.forceAccess()
+
+    await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledWith(true))
+    expect(lock.request).not.toHaveBeenCalled()
+    await editorLock.stop()
+  })
+
+  it('requests edit priority after interaction when the reader confirms it is synchronized', async () => {
+    const { lock, setFocused } = installBrowserLock(false)
+    const onAccessPriorityRequest = vi.fn(async () => true)
+    const onAccessGranted = vi.fn(async () => false)
+    const editorLock = new ProjectEditorLock('project-interaction-priority', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending: vi.fn(async () => {}),
+      onAccessPriorityRequest,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    setFocused(true)
+    window.dispatchEvent(new Event('pointerdown'))
+
+    await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledWith(true))
+    expect(onAccessPriorityRequest).toHaveBeenCalledTimes(1)
+    expect(lock.request).not.toHaveBeenCalled()
+    await editorLock.stop()
+  })
+
+  it('shows access recovery only after three failed priority requests from interaction', async () => {
+    const { setFocused } = installBrowserLock(false)
+    const onAccessPriorityRequest = vi.fn(async () => true)
+    const onAccessGranted = vi.fn(async () => false)
+    const onAccessRecoveryRequired = vi.fn()
+    const editorLock = new ProjectEditorLock('project-recovery-after-interaction', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending: vi.fn(async () => {}),
+      onAccessPriorityRequest,
+      onAccessRecoveryRequired,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    setFocused(true)
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      window.dispatchEvent(new Event('pointerdown'))
+      await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledTimes(attempt))
+      if (attempt < 3) expect(onAccessRecoveryRequired).not.toHaveBeenCalled()
+    }
+
+    expect(onAccessPriorityRequest).toHaveBeenCalledTimes(3)
+    await vi.waitFor(() => expect(onAccessRecoveryRequired).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'edit_access_occupied' }),
+    ))
+    await editorLock.stop()
+  })
+
+  it('does not preempt another editor when the reader is not synchronized', async () => {
+    const { lock, setFocused } = installBrowserLock(false)
+    const onAccessPriorityRequest = vi.fn(async () => false)
+    const onAccessGranted = vi.fn(async () => {})
+    const editorLock = new ProjectEditorLock('project-unsynchronized-reader', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending: vi.fn(async () => {}),
+      onAccessPriorityRequest,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    setFocused(true)
+    window.dispatchEvent(new Event('keydown'))
+
+    await vi.waitFor(() => expect(onAccessPriorityRequest).toHaveBeenCalledTimes(1))
+    expect(onAccessGranted).not.toHaveBeenCalled()
+    expect(lock.request).not.toHaveBeenCalled()
+    await editorLock.stop()
+  })
+
+  it('suspends a same-origin owner when another page broadcasts a force takeover', async () => {
+    const { grantAccess, broadcastMessage } = installBrowserLock(true)
+    const onAccessGranted = vi.fn(async () => {})
+    const onAccessLost = vi.fn(async () => {})
+    const editorLock = new ProjectEditorLock('project-force-message', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending: vi.fn(async () => {}),
+      onAccessLost,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    grantAccess(0)
+    await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledTimes(1))
+    broadcastMessage({ type: 'force', projectId: 'project-force-message', senderId: 'other-page' })
+
+    await vi.waitFor(() => expect(onAccessLost).toHaveBeenCalledWith(expect.any(Error)))
+    await editorLock.stop()
+  })
+
   it('retains the native lock after a failed handoff and retries without acquiring another one', async () => {
     const { lock, requests, setFocused, grantAccess } = installBrowserLock(true)
     const onAccessSuspending = vi.fn()
@@ -100,6 +213,7 @@ function installBrowserLock(initialFocus: boolean): Readonly<{
   requests: PendingLockRequest[]
   setFocused(focused: boolean): void
   grantAccess(index: number): void
+  broadcastMessage(message: unknown): void
 }> {
   const windowTarget = new EventTarget()
   const documentTarget = Object.assign(new EventTarget(), {
@@ -111,8 +225,9 @@ function installBrowserLock(initialFocus: boolean): Readonly<{
     requests.push({ callback, resolve: vi.fn(resolve), reject })
   }))
 
+  const channels: FakeBroadcastChannel[] = []
   class FakeBroadcastChannel extends EventTarget {
-    public constructor(_name: string) { super() }
+    public constructor(_name: string) { super(); channels.push(this) }
     public postMessage(_message: unknown): void {}
     public close(): void {}
   }
@@ -127,6 +242,11 @@ function installBrowserLock(initialFocus: boolean): Readonly<{
     lock: { request },
     requests,
     setFocused: (focused) => { initialFocus = focused },
+    broadcastMessage: (message) => {
+      for (const channel of channels) {
+        channel.dispatchEvent(Object.assign(new Event('message'), { data: message }))
+      }
+    },
     grantAccess: (index) => {
       const pending = requests[index]
       if (pending === undefined) throw new Error(`No lock request exists at index ${index}.`)

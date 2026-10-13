@@ -129,6 +129,11 @@ export class EditorActionsFacade {
     this.controller.send({ type: 'project.access.retry' })
   }
 
+  /** Takes the temporary emergency path to replace another page's edit grant. */
+  public forceProjectAccess(): void {
+    this.controller.send({ type: 'project.access.force' })
+  }
+
   /** Opens a selected project after the current project is confirmed saved. */
   public openProject(projectId: string): void {
     this.manageProjects({ kind: 'open', projectId })

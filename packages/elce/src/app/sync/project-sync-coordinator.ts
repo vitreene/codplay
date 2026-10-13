@@ -52,7 +52,10 @@ export class ProjectSyncCoordinator {
       await flushLocal?.()
       const document = this.controller.getSnapshot().context.document
       if (this.latestDocument !== document) {
-        throw new Error('Le document courant doit être enregistré localement avant sa synchronisation.')
+        if (flushLocal === undefined) {
+          throw new Error('Le document courant doit être enregistré localement avant sa synchronisation.')
+        }
+        this.schedule(document)
       }
       if (this.timer !== null) clearTimeout(this.timer)
       this.timer = null

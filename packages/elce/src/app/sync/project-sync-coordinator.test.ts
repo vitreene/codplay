@@ -316,6 +316,35 @@ describe('Elcé project synchronization', () => {
     actor.stop()
   })
 
+  it('publishes the current document after local flush when XState replaced its object', async () => {
+    const original = createInitialDocument()
+    const current = applyDocumentCommand(original, { type: 'document.rename', name: 'Version locale enregistrée' })
+    const store = new MemoryDocumentStore()
+    await store.saveDocument(current)
+    await store.saveSyncState({
+      documentId: current.id, remoteRevision: 0, uploadedMediaIds: [], status: 'pending',
+    })
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json(
+      { project: { id: current.id, name: current.data.name, revision: 1 } },
+      { headers: { ETag: '"1"' } },
+    ))
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    actor.send({ type: 'document.replace', document: original })
+    const coordinator = new ProjectSyncCoordinator(actor, store, await grantedApi(request, current.id))
+
+    coordinator.schedule(original)
+    actor.send({ type: 'document.replace', document: current })
+    await coordinator.waitUntilCurrentDocumentSynced(async () => { await store.saveDocument(current) })
+
+    expect(request).toHaveBeenCalledOnce()
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toMatchObject({ name: current.data.name })
+    expect(store.syncState).toMatchObject({ remoteRevision: 1, status: 'synced' })
+
+    coordinator.destroy()
+    actor.stop()
+  })
+
   it('waits for the server document and media acknowledgements before allowing a project change', async () => {
     const media = { id: 'media-before-switch', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' }
     const document = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })

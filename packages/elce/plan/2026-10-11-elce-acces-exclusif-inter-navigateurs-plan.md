@@ -1,8 +1,8 @@
 # Elcé — accès exclusif entre navigateurs
 
-**Statut : Fixe pour la conception, implémentation et validation en cours.**
-Les règles acceptées sont ci-dessous. Les comportements mis en place et
-vérifiés figurent dans les spécifications propriétaires ; les preuves
+**Statut : décisions de reprise et de forçage acceptées le 12 octobre 2026 ; implémentation et validation en cours.**
+Les comportements mis en place et vérifiés figurent dans les spécifications
+propriétaires ; les décisions acceptées mais non appliquées et les preuves
 inter-navigateurs restantes sont suivies dans ce plan.
 
 ## Résultat attendu
@@ -13,10 +13,23 @@ et restent en lecture seule. Au changement de focus, la page sortante termine
 ses commandes, enregistre le document et ses médias, puis libère l'édition
 seulement après confirmation du serveur. La page entrante relit alors cette
 révision avant de permettre une commande. L'historique Undo reste local.
-Si la page détentrice disparaît sans libérer son droit, l'autre page reste en
-lecture seule sur le document source ; elle peut poursuivre son travail par
-« Enregistrer sous… » sur une copie indépendante de la dernière révision
-confirmée. Elle ne reprend pas de force le document source.
+**Décisions acceptées le 12 octobre 2026 :** le serveur attribue un bail
+renouvelable au détenteur. Quand il cesse de recevoir les renouvellements, le
+droit devient automatiquement récupérable et une autre page peut reprendre le
+projet avec un identifiant de droit neuf. La nouvelle page relit la révision
+confirmée avant d'activer l'édition ; l'ancien droit est clôturé et ne peut
+plus écrire. Le forçage n'ajoute pas de copie automatique ni de circuit de
+préservation ; il ne récupère pas automatiquement les changements locaux non
+confirmés.
+
+« Forcer l'accès » est un secours temporaire, disponible même si le bail paraît
+encore actif : il révoque immédiatement le droit courant et permet à la page
+demandeuse de reprendre le projet. L'ancienne page passe en lecture seule ;
+ses opérations avec l'ancien droit sont refusées par le serveur.
+Chaque utilisation répétée signale un défaut du mécanisme normal à diagnostiquer ;
+le forçage n'est pas le fonctionnement attendu après la phase de mise au point.
+Retirer cette issue temporaire quand les validations démontrent que l'accès
+normal reste récupérable après perte de connexion.
 
 La règle est inscrite dans le [plan de synchronisation](./2026-10-06-elce-local-first-synchronisation-plan.md).
 Les contrats actuellement vérifiés sont l'[accès par fenêtre](../specs/editor-window-access-spec.md),
@@ -145,7 +158,13 @@ de conclure : la libération peut avoir réussi malgré l'erreur réseau. Une
 panne réseau récupérable reçoit trois tentatives ; un
 `412` est signalé sans répéter la même écriture. B doit suivre les révisions
 confirmées tandis qu'elle reste lectrice et retenter l'accès lorsqu'elle est
-visible. La disparition brutale de A ne transfère pas son droit à B.
+visible. Le serveur détecte la disparition du détenteur par l'expiration d'un
+bail renouvelé tant que la page détient le droit. La page suivante obtient un
+droit neuf et relit la révision confirmée. Le bouton temporaire « Forcer
+l'accès » peut révoquer immédiatement un bail encore actif. Dans les deux cas,
+une ancienne paire doit être refusée même si la page A revient ; les changements
+non confirmés de cette ancienne page ne sont ni fusionnés ni copiés par ce
+secours.
 Si la sortie échoue alors que A détient encore le Web Lock local, un retour de
 focus ou du réseau reprend la sortie sur cette même session ; il n'attend pas
 une nouvelle acquisition du Web Lock. Après une réponse de libération perdue,
@@ -221,6 +240,24 @@ doit passer par le circuit de préchargement Sighty/CodPlay. Garder le statut
 `En cours` jusqu'à ces preuves ; ne pas présenter le transfert réel entre deux
 navigateurs comme validé par les seuls signaux synthétiques.
 
+### Vérification Brave du 12 octobre 2026
+
+Le `405` observé sur le renouvellement venait de l'instance API déjà ouverte,
+qui n'avait pas chargé la nouvelle route. Le redémarrage du processus Elcé
+existant a rechargé ensemble l'éditeur sur `5175` et son API sur `5181`, sans
+lancer `5173` ni une seconde instance.
+
+Sur un projet temporaire, Brave a actionné « Forcer l'accès » après le
+remplacement du droit par une page simulée. L'éditeur est redevenu actif et une
+écriture avec le droit remplacé a reçu `409 edit_access_lost`. Le projet
+temporaire a ensuite été supprimé. Cinquante-cinq tests ciblés passent pour le
+verrou, l'API, SQLite, le coordinateur de session et la synchronisation ; le
+typecheck Elcé est vert.
+
+La manipulation de pages Brave ne prouve pas le transfert réel entre deux
+navigateurs. Cette validation reste en attente, conformément à la consigne de
+ne pas lancer Firefox tant que son MCP ne fonctionne pas.
+
 ## Travail à réaliser, dans cet ordre
 
 1. **Définir puis éprouver la frontière métier commune.** Identifier dans les
@@ -269,13 +306,19 @@ navigateurs comme validé par les seuls signaux synthétiques.
    comme la version serveur. Relever la liste toutes les deux secondes tant
    que la page lectrice est visible et vérifier que cela cesse lorsqu'elle
    n'est plus lectrice.
-5. **Ajouter les sorties de conflit.** Afficher la raison connue et les
-   actions possibles après les tentatives prévues. « Enregistrer sous… » part
-   de la dernière révision confirmée affichée par B, crée un nouveau projet et
-   laisse le document source intact. Ce parcours s'applique aussi si A
-   disparaît sans libérer son droit ; B ne peut pas révoquer A pour reprendre
-   le document source. La copie locale non confirmée de A reste récupérable
-   si A perd son droit pour une autre raison. En mode de secours hors connexion,
+5. **Reprise après détenteur perdu et secours temporaire — implémentés ;
+   validation inter-navigateurs restante.** Le serveur renouvelle le bail du
+   détenteur et permet l'acquisition d'un droit neuf après son expiration. Le
+   contrôle temporaire « Forcer l'accès » révoque un droit avant son expiration.
+   La page entrante lit la dernière révision confirmée avant d'activer les
+   commandes ; l'ancien droit est clôturé. Les écritures, uploads et opérations
+   projet de l'ancien détenteur sont refusés. Aucun instantané, accusé de
+   réception ou circuit de copie supplémentaire n'est ajouté au forçage ; il
+   installe la révision serveur et ne préserve pas automatiquement les
+   changements non confirmés. Toute utilisation répétée reste un signal pour
+   diagnostiquer une panne de la reprise normale.
+   « Enregistrer sous… » part de la dernière révision confirmée affichée par B,
+   crée un nouveau projet et laisse le document source intact. En mode de secours hors connexion,
    créer la copie locale éditable sans attendre les médias absents. Elle garde
    le nouvel identifiant du projet, les identifiants des médias et, pour chaque
    fichier manquant, l'identifiant de son projet source afin de le relire plus
@@ -288,12 +331,13 @@ navigateurs comme validé par les seuls signaux synthétiques.
 
 ## Récupérations retenues
 
-**Décision confirmée, appliquée ; validation de fermeture brutale restante :** après une disparition inattendue de A,
-B utilise « Enregistrer sous… » pour travailler sur une copie indépendante.
-B ne peut ni hériter silencieusement du droit de A, ni demander une reprise
-forcée du document source. Aucun transfert fondé uniquement sur l'expiration
-d'un délai n'est retenu. Le document source peut donc rester verrouillé tant
-que A n'a pas pu revenir et libérer son droit.
+**Décision appliquée le 12 octobre 2026 ; validation inter-navigateurs restante :**
+le droit est récupéré automatiquement après expiration du bail renouvelable.
+Le forçage manuel est un secours temporaire qui révoque immédiatement un droit
+actif et installe la révision serveur avant l'édition. Il ne fait ni copie ni
+isolation automatique des changements non confirmés. Une utilisation fréquente
+signale un problème sous-jacent à corriger. Retirer le forçage temporaire après
+validation durable de la reprise normale.
 
 **Décision confirmée, appliquée ; validation complète des médias restante :** hors connexion, B n'a pas nécessairement
 les octets des médias confirmés : leur Blob peut avoir été retiré d'IndexedDB
@@ -331,9 +375,12 @@ pas dans la classe commune.
   serveur et exerce le préchargement Sighty/CodPlay réel avant sa lecture. Si
   aucune source ne peut être fournie, son erreur reste visible et aucune
   prévisualisation incomplète n'est présentée comme prête.
-- Après disparition inattendue de A, B reste sans droit sur le document source
-  et peut continuer dans une copie créée par « Enregistrer sous… », sans
-  révocation forcée de A ni transfert automatique après un délai.
+- Après perte de connexion de A, le bail expire et B peut obtenir un droit neuf.
+  Le bouton temporaire peut aussi révoquer le bail immédiatement. B relit le
+  serveur avant toute édition ; une requête tardive de A avec l'ancien droit est
+  refusée. Le forçage ne copie pas automatiquement les changements non
+  confirmés. Vérifier que son usage reste exceptionnel et diagnostiquer toute
+  répétition.
 - Hors connexion, B peut éditer sa copie locale avec des médias signalés comme
   indisponibles. Après retour du réseau, ces médias sont récupérés et la copie
   n'est déclarée synchronisée qu'après confirmation du document et des médias.
@@ -346,3 +393,95 @@ pas dans la classe commune.
   Ajouter les tests ciblés des frontières, puis typecheck, tests, build et
   parcours navigateur réel. Après validation, mettre à jour les trois
   spécifications propriétaires et retirer de ce plan les décisions appliquées.
+
+## Correction du 12 octobre 2026 — reprise et anciens formats
+
+**Statut : reprise de session vérifiée sur le parcours mono-fenêtre ; récupération d'un cache local ancien implémentée et vérifiée ; transfert réel entre navigateurs toujours en cours.** Le contrôleur capture le droit
+d'édition avant de suspendre les commandes pour une opération projet. Le
+coordinateur doit utiliser cette valeur capturée pour attendre la
+synchronisation du projet actif ; la valeur transitoire `waiting` ne doit pas
+faire échouer la création, l'ouverture, la fermeture ou la suppression active.
+Lors d'un rechargement du même onglet, l'ancien coordinateur ferme son canal
+d'identité avant d'attendre la libération réseau : sa réponse tardive ne doit
+pas faire traiter le nouvel état du même onglet comme une deuxième fenêtre.
+Après une sauvegarde locale confirmée, l'attente de publication doit aussi
+prendre le document courant de l'acteur XState si son objet a changé depuis le
+dernier `schedule()` ; sans confirmation de sauvegarde locale, le garde existant
+continue de refuser la publication.
+
+**Décision acceptée le 12 octobre pour un cache local de version non prise en
+charge :** lors de l'ouverture d'un projet présent dans le catalogue serveur,
+lire d'abord sa version serveur. Si elle est prise en charge, supprimer le
+cache local de ce projet (document, checkpoint et médias locaux associés),
+recréer ce cache depuis le document confirmé du serveur, puis ouvrir le projet
+normalement. Ne pas convertir ni publier l'ancien cache. Si la lecture serveur
+échoue, conserver le cache local et laisser le catalogue accessible afin que
+l'utilisateur puisse réessayer ou supprimer le projet. Cette récupération
+concerne les projets du serveur ; elle ne supprime pas une copie locale
+indépendante qui n'existe pas sur le serveur.
+
+**Validation du cache local terminée le 12 octobre 2026 :** les tests du
+coordinateur couvrent l'ouverture depuis le catalogue et la conservation du
+cache en cas d'échec de lecture serveur. Brave sur `5175` a rechargé le projet
+avec un cache local v2 : le document serveur v4 et sa révision ont remplacé le
+cache ciblé, le checkpoint est `synced`, l'éditeur s'est ouvert et aucune
+écriture du document serveur n'a été émise.
+
+**Constat de focus du 12 octobre :** l'onglet Brave utilisé pour le contrôle
+avait reçu le droit et renouvelait son bail. Dans ce contexte MCP, la page
+rapportait encore `document.hasFocus() === true` après que l'utilisateur avait
+focalisé Firefox ; elle n'a donc pas libéré le droit au changement de focus
+réel. Après navigation de cet onglet vers `about:blank`, ses renouvellements
+ont cessé et le bail est devenu récupérable après expiration. L'acquisition
+depuis Firefox n'a pas pu être observée puisque cette page est hors du contrôle
+du MCP. Garder la validation inter-navigateurs en `En cours` ; ne pas confondre
+le focus déclaré par l'onglet automatisé avec le focus réel du poste.
+
+**Décision acceptée le 12 octobre — priorité d'édition sur interaction :** une
+page lectrice visible et focalisée qui reçoit une interaction utilisateur
+(pointeur ou clavier) demande immédiatement la priorité d'édition. Avant de
+prendre le droit, elle relit la dernière révision confirmée et vérifie que sa
+copie locale ne porte pas de changements `pending` ou `conflict`. Si ces
+conditions sont satisfaites, elle reprend le droit serveur par le chemin de
+révocation existant, installe la révision serveur, puis active les commandes.
+La page sortante devient lectrice et ses anciennes écritures sont refusées.
+Un simple événement `focus`, une page masquée ou le relevé périodique ne
+révoquent pas un détenteur. Si la révision ne peut pas être confirmée ou que la
+copie locale est en attente, la page reste lectrice et conserve les actions de
+récupération existantes.
+
+**Décision d'interface acceptée le 12 octobre — état lecteur ordinaire :** une
+page sans droit reste simplement indiquée comme « Lecture seule ». Les refus
+`edit_access_occupied` et la perte du droit d'une autre page sont des états
+ordinaires de coordination ; ils n'affichent ni message d'échec ni boutons
+d'accès. Une interaction déclenche d'abord la reprise automatique. Le message
+d'échec et les commandes de secours n'apparaissent qu'après trois reprises
+consécutives déclenchées par interaction qui échouent. Une reprise réussie
+réinitialise cet état ; les erreurs réelles de réseau et de synchronisation
+gardent leurs messages propres.
+
+**Acceptation à couvrir :** une interaction pointeur ou clavier dans une page
+lectrice synchronisée lui donne le droit sans attendre l'expiration du bail ;
+elle montre la dernière révision confirmée avant d'activer l'édition. Une
+lecture serveur en échec ou un cache local `pending`/`conflict` ne déclenche pas
+de reprise automatique. Une ancienne écriture du détenteur révoqué reçoit
+`409 edit_access_lost`. Le focus passif et les tentatives périodiques ne
+révoquent pas le droit. Un lecteur initial ne montre que son état de lecture
+seule, sans message `edit_access_lost` ni commandes de secours. Celles-ci
+restent absentes pendant les deux premiers échecs de reprise et apparaissent au
+troisième ; une reprise réussie les efface.
+
+**Validation Brave du 12 octobre :** les tests ciblés du verrou et de
+l’interface (12 tests) ainsi que le typecheck Elcé passent. Sur un projet
+temporaire dont l’identifiant serveur a été vérifié, le titre d’une page a été
+modifié dans la fenêtre éditrice ; le blur du champ l’a publié à la révision 1.
+Un second contexte Brave isolé a reçu ce titre en lecture seule, puis une
+interaction lui a transféré l’édition ; la première fenêtre est repassée en
+lecture seule. Le projet temporaire a ensuite été supprimé.
+
+Cette validation ne couvre pas encore le changement de focus natif entre la
+fenêtre Brave normale et la fenêtre privée fournie : `select_page` n’a produit
+ni `blur` ni `focus` dans les pages contrôlées, et les deux signalaient encore
+`document.hasFocus() === true`. La fenêtre privée existante, dont le champ de
+titre avait une valeur locale différente de son `defaultValue`, a été laissée
+intacte. Garder l’acceptation du focus natif en cours ; ne pas lancer Firefox.

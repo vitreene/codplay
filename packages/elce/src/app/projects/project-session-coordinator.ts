@@ -39,6 +39,7 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
   private exclusive: ExclusiveSyncSession<ElceDocumentModel> | null = null
   private readerTimer: ReturnType<typeof setInterval> | null = null
   private readonly independentCopies = new Set<string>()
+  private forceNextAcquire = false
 
   public constructor(
     store: ElceDocumentStore,
@@ -76,7 +77,7 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     operation: ProjectSessionOperation,
     document: ElceDocumentModel,
     activeProject: ElceProjectSummary | null,
-    editAccess: 'waiting' | 'active',
+    _editAccess: 'waiting' | 'active',
     hadEditAccess: boolean,
   ): Promise<ProjectSessionResult> {
     switch (operation.kind) {
@@ -85,17 +86,17 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
       case 'refresh':
         return this.projectList(activeProject, hadEditAccess)
       case 'create':
-        return this.createProject(document, editAccess === 'active')
+        return this.createProject(document, hadEditAccess)
       case 'save-as':
         return this.saveAs(document, activeProject, operation.name)
       case 'save-local-as':
         return this.saveLocalAs(activeProject, operation.name)
       case 'open':
-        return this.openProject(operation.projectId, document, activeProject, editAccess, hadEditAccess)
+        return this.openProject(operation.projectId, document, activeProject, hadEditAccess)
       case 'close':
-        return this.closeProject(document, activeProject, editAccess)
+        return this.closeProject(document, activeProject, hadEditAccess)
       case 'delete':
-        return this.deleteProject(operation.projectId, document, activeProject, editAccess, hadEditAccess)
+        return this.deleteProject(operation.projectId, document, activeProject, hadEditAccess)
     }
   }
 
@@ -103,11 +104,15 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
   public startLock(projectId: string): void {
     const controller = this.requireController()
     let confirmedCache: ConfirmedValue<ElceDocumentModel> | null = null
+    let recoveredGrant = false
     this.exclusive = new ExclusiveSyncSession<ElceDocumentModel>({
       acquire: async () => {
         await this.identityReady
         if (this.independentCopies.has(projectId)) await this.createIndependentRemoteCopy(projectId)
-        return this.api.acquireEditAccess(projectId, this.pageId)
+        const grant = await this.api.acquireEditAccess(projectId, this.pageId, this.forceNextAcquire)
+        this.forceNextAcquire = false
+        recoveredGrant = grant?.recovered ?? false
+        return grant
       },
       release: async () => this.api.releaseEditAccess(projectId),
       stillHeld: async () => {
@@ -124,6 +129,22 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
         return confirmedCache
       },
       publishPending: async () => {
+        if (recoveredGrant) {
+          await this.sync?.suspend()
+          this.persistence?.detach()
+          this.persistence = null
+          const remote = await this.api.readProject(projectId)
+          await this.store.saveDocument(remote.document)
+          await this.store.saveSyncState({
+            documentId: projectId,
+            remoteRevision: remote.revision,
+            uploadedMediaIds: remote.document.medias.map((media) => media.id),
+            status: 'synced',
+          })
+          confirmedCache = { value: remote.document, revision: remote.revision }
+          await this.installConfirmedProject(projectId, confirmedCache)
+          recoveredGrant = false
+        }
         if (this.persistence === null) {
           const checkpoint = await this.store.loadSyncState(projectId)
           if (checkpoint.status === 'synced' && checkpoint.remoteRevision !== null) {
@@ -156,7 +177,14 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     })
     this.lock = new ProjectEditorLock(projectId, {
       onAccessWaiting: () => controller.send({ type: 'editor.access.suspend' }),
-      onAccessGranted: async () => {
+      onAccessPriorityRequest: async () => {
+        if (this.activeProjectId !== projectId || this.independentCopies.has(projectId) || this.exclusive === null) return false
+        await this.exclusive.refreshReader()
+        const checkpoint = await this.store.loadSyncState(projectId)
+        return checkpoint.status === 'synced' && checkpoint.remoteRevision !== null
+      },
+      onAccessGranted: async (force = false) => {
+        this.forceNextAcquire = force
         try {
           return await this.exclusive?.requestEdit() ?? false
         } catch (error) {
@@ -189,7 +217,21 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
         this.persistence?.detach()
         this.persistence = null
       },
+      onAccessHeartbeat: async () => this.api.renewEditAccess(projectId),
+      onAccessLost: async () => {
+        controller.send({ type: 'editor.access.suspend' })
+        await this.persistence?.flushLocalChanges()
+        this.persistence?.detach()
+        this.persistence = null
+        void this.sync?.suspend().catch((error: unknown) => {
+          console.warn('La synchronisation Elcé n’a pas pu être suspendue après la perte du droit.', error)
+        })
+      },
+      onAccessRecoveryRequired: (error) => {
+        controller.send({ type: 'project.access.recovery', message: accessRecoveryMessage(error) })
+      },
       onAccessError: (error) => {
+        if (isExpectedAccessTransition(error)) return
         controller.send({ type: 'project.access.error', message: errorMessage(error) })
         void this.refreshLocalCopyAvailability(projectId).catch(() => undefined)
         console.error('Le verrou d’édition Elcé n’a pas pu être transféré.', error)
@@ -227,8 +269,15 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     this.lock?.retry()
   }
 
+  /** Uses the temporary emergency path to replace a blocked project grant. */
+  public forceAccess(): void {
+    void this.lock?.forceAccess()
+  }
+
   /** Releases browser resources when the tab closes. */
   public async dispose(): Promise<void> {
+    this.pageIdentityChannel?.removeEventListener('message', this.onPageIdentityMessage)
+    this.pageIdentityChannel?.close()
     this.stopReaderRefresh()
     await this.lock?.stop()
     this.lock = null
@@ -238,28 +287,43 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     this.sync?.destroy()
     this.sync = null
     this.controller = null
-    this.pageIdentityChannel?.removeEventListener('message', this.onPageIdentityMessage)
-    this.pageIdentityChannel?.close()
   }
 
   /** Loads the server list and restores only this tab's remembered project. */
   private async bootstrap(rememberedProjectId: string | null): Promise<ProjectSessionResult> {
+    let unsupportedRememberedCacheError: unknown = null
     if (rememberedProjectId !== null) {
-      const cached = await this.store.loadDocument(rememberedProjectId)
-      const checkpoint = await this.store.loadSyncState(rememberedProjectId)
-      if (cached !== null && checkpoint.independentCopyOf !== undefined && checkpoint.status !== 'synced') {
-        this.independentCopies.add(rememberedProjectId)
-        this.activeProjectId = rememberedProjectId
-        const project = { id: cached.id, name: cached.data.name, revision: checkpoint.remoteRevision ?? 0 }
-        return result([project], project, cached, 'opening', 'waiting')
+      try {
+        const cached = await this.store.loadDocument(rememberedProjectId)
+        const checkpoint = await this.store.loadSyncState(rememberedProjectId)
+        if (cached !== null && checkpoint.independentCopyOf !== undefined && checkpoint.status !== 'synced') {
+          this.independentCopies.add(rememberedProjectId)
+          this.activeProjectId = rememberedProjectId
+          const project = { id: cached.id, name: cached.data.name, revision: checkpoint.remoteRevision ?? 0 }
+          return result([project], project, cached, 'opening', 'waiting')
+        }
+      } catch (error) {
+        if (!isUnsupportedDocumentCacheError(error)) {
+          const projects = await this.api.listProjects()
+          return result(projects, null, null, 'list', 'waiting', errorMessage(error))
+        }
+        unsupportedRememberedCacheError = error
       }
     }
     const projects = await this.api.listProjects()
     const remembered = rememberedProjectId === null ? null : projects.find((entry) => entry.id === rememberedProjectId) ?? null
+    if (unsupportedRememberedCacheError !== null && remembered === null) {
+      return result(projects, null, null, 'list', 'waiting', errorMessage(unsupportedRememberedCacheError))
+    }
     const initialPocProject = projects.find((entry) => entry.id === 'elce-document') ?? null
     const target = remembered ?? initialPocProject
     if (target === null) return result(projects, null, null, 'list', 'waiting')
-    const prepared = await this.prepareProject(target)
+    let prepared: PreparedProject
+    try {
+      prepared = await this.prepareProject(target)
+    } catch (error) {
+      return result(projects, null, null, 'list', 'waiting', errorMessage(error))
+    }
     this.rememberProject(prepared.project.id)
     this.activeProjectId = prepared.project.id
     return result(
@@ -345,14 +409,13 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     projectId: string,
     document: ElceDocumentModel,
     activeProject: ElceProjectSummary | null,
-    editAccess: 'waiting' | 'active',
     hadEditAccess: boolean,
   ): Promise<ProjectSessionResult> {
     const projects = await this.api.listProjects()
     const summary = projects.find((entry) => entry.id === projectId)
     if (summary === undefined) throw new Error('Ce projet n’existe plus sur le serveur.')
     if (this.activeProjectId === projectId && activeProject?.id === projectId) {
-      return result(projects, summary, null, 'active', hadEditAccess ? 'active' : editAccess)
+      return result(projects, summary, null, 'active', hadEditAccess ? 'active' : 'waiting')
     }
 
     const prepared = await this.prepareProject(summary)
@@ -367,12 +430,12 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
   private async closeProject(
     document: ElceDocumentModel,
     activeProject: ElceProjectSummary | null,
-    editAccess: 'waiting' | 'active',
+    hadEditAccess: boolean,
   ): Promise<ProjectSessionResult> {
     if (activeProject === null || this.activeProjectId === null) {
       return this.projectList(null, false)
     }
-    await this.ensureCurrentProjectSynced(document, editAccess === 'active')
+    await this.ensureCurrentProjectSynced(document, hadEditAccess)
     const projects = await this.api.listProjects()
     await this.releaseCurrentProject(true)
     return result(projects, null, null, 'list', 'waiting')
@@ -383,11 +446,10 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
     projectId: string,
     document: ElceDocumentModel,
     activeProject: ElceProjectSummary | null,
-    editAccess: 'waiting' | 'active',
     hadEditAccess: boolean,
   ): Promise<ProjectSessionResult> {
     const deletingActive = activeProject?.id === projectId
-    if (deletingActive) await this.ensureCurrentProjectSynced(document, editAccess === 'active')
+    if (deletingActive) await this.ensureCurrentProjectSynced(document, hadEditAccess)
     await this.identityReady
     const temporaryGrant = deletingActive ? null : await this.api.acquireEditAccess(projectId, this.pageId)
     if (!deletingActive && temporaryGrant === null) throw new Error('Ce projet est en cours d’édition dans une autre page.')
@@ -402,15 +464,38 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
       }
     }
     if (deletingActive) await this.releaseCurrentProject(true)
-    else await this.store.deleteDocument(projectId)
+    else {
+      await this.store.deleteDocument(projectId)
+      if (this.rememberedProjectId() === projectId) this.forgetProject()
+    }
     const projects = (await this.api.listProjects()).filter((entry) => entry.id !== projectId)
     if (deletingActive) return result(projects, null, null, 'list', 'waiting')
-    return result(projects, activeProject, null, activeProject === null ? 'list' : 'active', hadEditAccess ? 'active' : editAccess)
+    return result(projects, activeProject, null, activeProject === null ? 'list' : 'active', hadEditAccess ? 'active' : 'waiting')
   }
 
   /** Loads the confirmed revision while preserving any unpublished local copy. */
   private async prepareProject(summary: ElceProjectSummary): Promise<PreparedProject> {
-    const cached = await this.store.loadDocument(summary.id)
+    let cached: ElceDocumentModel | null
+    try {
+      cached = await this.store.loadDocument(summary.id)
+    } catch (error) {
+      if (!isUnsupportedDocumentCacheError(error)) throw error
+
+      const remote = await this.api.readProject(summary.id)
+      await this.store.deleteDocument(summary.id)
+      await this.store.saveDocument(remote.document)
+      await this.store.saveSyncState({
+        documentId: remote.document.id,
+        remoteRevision: remote.revision,
+        uploadedMediaIds: remote.document.medias.map((media) => media.id),
+        status: 'synced',
+      })
+      return {
+        project: { ...summary, name: remote.document.data.name, revision: remote.revision },
+        document: remote.document,
+      }
+    }
+
     const checkpoint = await this.store.loadSyncState(summary.id)
     if (cached !== null && checkpoint.independentCopyOf !== undefined) {
       this.independentCopies.add(summary.id)
@@ -443,8 +528,14 @@ export class ProjectSessionCoordinator implements ProjectSessionPort {
   private async ensureCurrentProjectSynced(document: ElceDocumentModel, shouldWait: boolean): Promise<void> {
     if (this.activeProjectId === null) return
     if (shouldWait) {
-      await this.persistence?.flushLocalChanges()
-      await this.sync?.waitUntilCurrentDocumentSynced()
+      const sync = this.sync
+      if (sync === null) {
+        await this.persistence?.flushLocalChanges()
+        return
+      }
+      await sync.waitUntilCurrentDocumentSynced(async () => {
+        await this.persistence?.flushLocalChanges()
+      })
       return
     }
     const checkpoint = await this.store.loadSyncState(document.id)
@@ -615,6 +706,11 @@ function editPageId(session: Storage | null): string {
   return id
 }
 
+/** Identifies a local cache format error that can be recovered from the server. */
+function isUnsupportedDocumentCacheError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('Version de document Elcé non supportée :')
+}
+
 /** Retries transient publication failures without repeating a confirmed conflict. */
 async function retryPublish(publish: () => Promise<void>): Promise<void> {
   let lastError: unknown
@@ -649,8 +745,9 @@ function result(
   document: ElceDocumentModel | null,
   status: ProjectSessionResult['status'],
   editAccess: ProjectSessionResult['editAccess'],
+  projectError: string | null = null,
 ): ProjectSessionResult {
-  return { projects, activeProject, document, status, editAccess }
+  return { projects, activeProject, document, status, editAccess, projectError }
 }
 
 /** Waits for imports and local writes to settle before a lock handoff. */
@@ -684,4 +781,20 @@ function errorMessage(error: unknown): string {
     return 'Le serveur est injoignable. Réessayez l’accès lorsque la connexion revient, ou utilisez « Enregistrer sous… ».'
   }
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Recognizes ordinary access changes that should not be presented as errors. */
+function isExpectedAccessTransition(error: unknown): boolean {
+  if (error instanceof ElceProjectApiError) {
+    return error.code === 'edit_access_lost' || error.code === 'edit_access_occupied'
+  }
+  return error instanceof Error && (error.message === 'edit_access_lost' || error.message === 'edit_access_occupied')
+}
+
+/** Replaces internal access codes with a recovery message after repeated requests. */
+function accessRecoveryMessage(error: unknown): string {
+  if (isExpectedAccessTransition(error)) {
+    return 'L’accès n’a pas pu être repris après plusieurs tentatives.'
+  }
+  return errorMessage(error)
 }

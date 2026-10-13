@@ -36,7 +36,7 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
     this.databasePromise = this.openDatabase()
   }
 
-  /** Loads one project cache and removes only that cache when rejecting v3. */
+  /** Loads one project cache and keeps unsupported source data available for deletion. */
   public async loadDocument(documentId: string): Promise<ElceDocument | null> {
     const database = await this.databasePromise
     const transaction = database.transaction([DOCUMENT_STORE, MEDIA_STORE, SYNC_STORE], 'readwrite')
@@ -50,9 +50,8 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
 
     switch (stored.version) {
       case 3: {
-        removeProjectCache(transaction, documentId, mediaIdsFrom(stored))
         await transactionDone
-        return null
+        throw new Error(`Version de document Elcé non supportée : ${String(stored.version)}`)
       }
       case ELCE_DOCUMENT_VERSION:
         await transactionDone
@@ -195,28 +194,6 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
-  }
-}
-
-/** Removes one rejected or deleted project without affecting other caches. */
-function removeProjectCache(
-  transaction: IDBTransaction,
-  documentId: string,
-  removedMediaIds: readonly MediaId[],
-): void {
-  const documents = transaction.objectStore(DOCUMENT_STORE)
-  const request = documents.getAll()
-  request.onsuccess = () => {
-    const stored = request.result as Record<string, unknown>[]
-    const otherDocuments = stored.filter((candidate) => candidate.id !== documentId)
-    const retainedMediaIds = new Set(otherDocuments.flatMap(mediaIdsFrom))
-    const media = transaction.objectStore(MEDIA_STORE)
-
-    for (const mediaId of removedMediaIds) {
-      if (!retainedMediaIds.has(mediaId)) media.delete(mediaId)
-    }
-    documents.delete(documentId)
-    transaction.objectStore(SYNC_STORE).delete(documentId)
   }
 }
 

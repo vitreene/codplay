@@ -77,6 +77,7 @@ export function ProjectApplication(handle: Handle) {
     const handleInput = (event: Event): void => {
       if (event.target instanceof HTMLInputElement && isInlineTitle(event.target)) void handle.update()
     }
+    document.addEventListener('click', closeProjectMenuOnOutsideClick, true)
     const handleResize = (): void => {
       switch (responsivePanel) {
         case 'outline':
@@ -96,6 +97,7 @@ export function ProjectApplication(handle: Handle) {
       subscription.unsubscribe()
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('input', handleInput)
+      document.removeEventListener('click', closeProjectMenuOnOutsideClick, true)
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
     }
@@ -115,6 +117,13 @@ export function ProjectApplication(handle: Handle) {
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
     moveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
   }, runHistoryAction)
+}
+
+/** Closes the native project disclosure when a click lands outside it. */
+function closeProjectMenuOnOutsideClick(event: MouseEvent): void {
+  const menu = document.getElementById('elce-project-menu')
+  if (!(menu instanceof HTMLDetailsElement) || !menu.open) return
+  if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false
 }
 
 /** Detects the two inline titles that commit their edits on blur. */
@@ -143,6 +152,7 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
     activeProject: snapshot.context.activeProject,
     projectStatus: snapshot.context.projectStatus,
     projectError: snapshot.context.projectError,
+    accessRecoveryAvailable: snapshot.context.accessRecoveryAvailable,
     recoverableLocalCopy: snapshot.context.recoverableLocalCopy,
     editAccess: snapshot.context.editAccess,
     document: snapshot.context.document,
@@ -317,15 +327,22 @@ function renderApplication(
       </span>
     </header>
     {view.activeProject === null ? renderProjectSelection(view, actions) : null}
-    {projectVisible && !editorVisible ? <p id="elce-project-reader-status" role="status">
-      {view.projectError ?? `Lecture seule : ${view.activeProject!.name}. L’édition reste ouverte dans une autre page.`}
+    {projectVisible && !editorVisible && view.projectError !== null ? <p id="elce-project-reader-status" role="status">
+      {view.projectError}
     </p> : null}
-    {projectVisible && !editorVisible ? <button
+    {projectVisible && !editorVisible && view.accessRecoveryAvailable ? <button
       id="elce-project-access-retry"
       type="button"
       mix={on<HTMLButtonElement, 'click'>('click', () => actions.retryProjectAccess())}
     >
       Réessayer l’accès
+    </button> : null}
+    {projectVisible && !editorVisible && view.accessRecoveryAvailable ? <button
+      id="elce-project-access-force"
+      type="button"
+      mix={on<HTMLButtonElement, 'click'>('click', () => actions.forceProjectAccess())}
+    >
+      Forcer l’accès
     </button> : null}
     {editorVisible && view.projectError !== null ? <p id="elce-project-copy-warning" role="alert">{view.projectError}</p> : null}
     {renderEditorWorkspace({

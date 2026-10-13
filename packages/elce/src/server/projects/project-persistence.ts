@@ -20,7 +20,7 @@ export interface ProjectEditGrant {
 }
 
 export type AcquireProjectEditResult =
-  | Readonly<{ kind: 'granted'; grantId: string }>
+  | Readonly<{ kind: 'granted'; grantId: string; recovered: boolean }>
   | Readonly<{ kind: 'occupied' }>
   | Readonly<{ kind: 'not-found' }>
 
@@ -45,8 +45,11 @@ export type SaveProjectDocumentResult =
 
 /** Defines the storage operations used by the project HTTP controller. */
 export interface ProjectPersistence {
-  /** Reserves one project for a page, or returns its existing reservation. */
-  acquireEditAccess(projectId: string, pageId: string): Promise<AcquireProjectEditResult>
+  /** Reserves one project for a page, or returns its existing live reservation. */
+  acquireEditAccess(projectId: string, pageId: string, force?: boolean): Promise<AcquireProjectEditResult>
+
+  /** Renews a live page grant for the configured lease period. */
+  renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean>
 
   /** Checks whether one grant still owns editing, without acquiring it. */
   hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean>

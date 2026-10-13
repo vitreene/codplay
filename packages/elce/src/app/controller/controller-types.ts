@@ -30,6 +30,7 @@ export interface ElceAppContext {
   readonly activeProject: ElceProjectSummary | null
   readonly projectStatus: ProjectSessionStatus
   readonly projectError: string | null
+  readonly accessRecoveryAvailable: boolean
   readonly recoverableLocalCopy: boolean
   readonly pendingProjectOperation: ProjectSessionOperation | null
   readonly projectOperationHadAccess: boolean
@@ -62,6 +63,8 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'editor.access.suspend' }>
   | Readonly<{ type: 'project.operation'; operation: ProjectSessionOperation }>
   | Readonly<{ type: 'project.access.error'; message: string }>
+  | Readonly<{ type: 'project.access.recovery'; message: string }>
   | Readonly<{ type: 'project.sync.warning'; message: string }>
   | Readonly<{ type: 'project.local-copy.availability'; projectId: string; available: boolean }>
   | Readonly<{ type: 'project.access.retry' }>
+  | Readonly<{ type: 'project.access.force' }>
