@@ -6,6 +6,12 @@
   flex-direction: column;
 }
 
+.elce-popup-reader--network-preview {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
 .elce-popup-reader__header {
   display: flex;
   align-items: center;
@@ -58,6 +64,21 @@
   flex: 1;
   min-height: 0;
   padding: 0.75rem;
+}
+
+.elce-popup-reader__main--network-preview {
+  padding: 0;
+}
+
+.elce-popup-reader--network-preview .elce-player-stage {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.elce-popup-reader--network-preview .elce-player-layout {
+  height: 100%;
+  min-height: 0;
 }
 
 .elce-popup-reader__main .elce-player-stage {

@@ -5,7 +5,11 @@ import type { Actor } from 'xstate'
 import { controllerMachine } from '../controller/controller-machine'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { PopupPlayer } from '../player/popup-player'
-import { POPUP_PREVIEW_PAGE_PARAM, POPUP_PREVIEW_SESSION_PARAM } from '../player/popup-preview-messages'
+import {
+  POPUP_PREVIEW_PAGE_PARAM,
+  POPUP_PREVIEW_PROJECT_PARAM,
+  POPUP_PREVIEW_SESSION_PARAM,
+} from '../player/popup-preview-messages'
 import { EditorContextProvider } from './editor-context'
 import { ProjectApplication } from './project-application'
 
@@ -16,12 +20,20 @@ export function createElceSpaRouter(
 ) {
   const searchParams = new URLSearchParams(window.location.search)
   const sessionId = searchParams.get(POPUP_PREVIEW_SESSION_PARAM)
-  const popupPlayer = sessionId === null || sessionId.length === 0
-    ? null
-    : <PopupPlayer
-      sessionId={sessionId}
+  const projectId = searchParams.get(POPUP_PREVIEW_PROJECT_PARAM)
+  const popupPlayer = projectId !== null && projectId.length > 0
+    ? <PopupPlayer
+      sessionId={null}
+      projectId={projectId}
       startPageId={searchParams.get(POPUP_PREVIEW_PAGE_PARAM)}
     />
+    : sessionId === null || sessionId.length === 0
+      ? null
+      : <PopupPlayer
+        sessionId={sessionId}
+        projectId={null}
+        startPageId={searchParams.get(POPUP_PREVIEW_PAGE_PARAM)}
+      />
   const router = createRouter({
     middleware: [render()],
     defaultHandler({ render: renderRoute }) {

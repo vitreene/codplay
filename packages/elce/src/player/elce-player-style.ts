@@ -323,6 +323,17 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   flex-direction: column;
 }
 
+.elce-diapo-content > .elce-card--question > .elce-question-illustration {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  margin: 0;
+  overflow: hidden;
+}
+
 .elce-diapo-content > .elce-card--question > form {
   display: flex;
   min-height: 0;
@@ -603,7 +614,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   aspect-ratio: 4 / 3;
   position: relative;
   overflow: hidden;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .elce-flux-image > img {
@@ -612,7 +623,8 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  max-height: none;
+  object-fit: contain;
 }
 
 .elce-flux-video {

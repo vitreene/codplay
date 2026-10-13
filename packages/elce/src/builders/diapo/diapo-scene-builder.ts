@@ -227,7 +227,7 @@ function createQuestionMediaPerso(
         initial: {
           src: source,
           className: 'elce-diapo-question-media',
-          img: { style: { display: 'block', width: '100%', maxHeight: '28vh', objectFit: 'contain' } },
+          img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' } },
           move: { target },
         },
       }]

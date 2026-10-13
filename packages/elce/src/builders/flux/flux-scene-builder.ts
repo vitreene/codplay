@@ -524,7 +524,6 @@ function createImagePerso(
 ): PersoDoc<string> {
   const imageId = `${page.id}-${bdc.id}-image`
   const enterEvent = `${imageId}:enter`
-  const leaveEvent = `${imageId}:leave`
   const aspectRatio = anchored
     ? anchorRatioService.imageAspectRatio(paddingBottom)
     : ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO
@@ -548,21 +547,20 @@ function createImagePerso(
           }
         : { translateX: '0%' },
       img: {
-        style: { display: 'block', width: '100%', aspectRatio, objectFit: 'cover' },
+        style: { display: 'block', width: '100%', aspectRatio, objectFit: 'contain' },
       },
       move: { target: articlePartId },
     },
     emit: {
       observe: {
         root: scrollPortId,
+        initial: 'enter',
         zone: { threshold: 0 },
-        enter: [{ name: enterEvent }],
-        leave: [{ name: leaveEvent }],
+        enter: [{ name: enterEvent, once: true }],
       },
     },
     actions: {
       [enterEvent]: { style: { translateX: { from: '-112%', to: '0%', duration: 1000, ease: 'outCubic' } } },
-      [leaveEvent]: { style: { translateX: { from: '0%', to: '-112%', duration: 820, ease: 'inCubic' } } },
     },
   }
 }

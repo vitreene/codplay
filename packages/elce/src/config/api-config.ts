@@ -7,6 +7,7 @@ export const PROJECT_EDIT_LEASE_MS = 12_000
 declare global {
   interface Window {
     __ELCE_API_ORIGIN__?: string
+    __ELCE_PREVIEW_ORIGIN__?: string | null
   }
 }
 

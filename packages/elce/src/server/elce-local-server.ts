@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,7 +52,13 @@ export interface ElceLocalServer {
 export async function startElceLocalServer(): Promise<ElceLocalServer> {
   const preferredWebPort = Number(process.env.ELCE_WEB_PORT ?? 5175)
   const preferredApiPort = Number(process.env.ELCE_API_PORT ?? ELCE_API_PORT)
-  const webHost = process.env.ELCE_WEB_HOST ?? 'localhost'
+  const networkPreviewEnabled = process.env.ELCE_NETWORK_PREVIEW === '1'
+  const networkPreviewOrigin = networkPreviewEnabled ? process.env.ELCE_PREVIEW_ORIGIN : undefined
+  if (networkPreviewEnabled && networkPreviewOrigin === undefined) {
+    throw new Error('La preview réseau Elcé doit recevoir une origine LAN configurée.')
+  }
+  const webHost = process.env.ELCE_WEB_HOST ?? (networkPreviewEnabled ? '0.0.0.0' : 'localhost')
+  const apiHost = process.env.ELCE_API_HOST ?? (networkPreviewEnabled ? '0.0.0.0' : '127.0.0.1')
   const dataDirectory = resolve(ELCE_PACKAGE_ROOT, process.env.ELCE_DATA_DIRECTORY ?? '.elce-data')
   await mkdir(dataDirectory, { recursive: true })
 
@@ -99,13 +105,9 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
   try {
     const entry = await assets.getScriptEntry(BROWSER_ENTRY)
     const styles = await Promise.all(STYLE_FILES.map((styleFile) => assets.getHref(styleFile)))
-    const apiStart = await startOrReuseApi(preferredApiPort, dataDirectory)
+    const apiStart = await startOrReuseApi(preferredApiPort, dataDirectory, apiHost, networkPreviewOrigin)
     api = apiStart.server
     const apiPort = apiStart.port
-    const apiOrigin = process.env.VITE_ELCE_API_ORIGIN ?? (
-      apiPort === ELCE_API_PORT ? DEFAULT_ELCE_API_ORIGIN : `http://127.0.0.1:${apiPort}`
-    )
-    const documentHtml = renderDocumentHtml(entry, styles, apiOrigin)
     const router = createRouter({
       defaultHandler({ request }) {
         const path = new URL(request.url).pathname
@@ -115,6 +117,8 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
         if (request.method !== 'GET' && request.method !== 'HEAD') {
           return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
         }
+        const apiOrigin = apiOriginForRequest(request, apiPort, networkPreviewOrigin)
+        const documentHtml = renderDocumentHtml(entry, styles, apiOrigin, networkPreviewOrigin ?? null)
         return new Response(request.method === 'HEAD' ? null : documentHtml, {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
@@ -124,8 +128,17 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       },
     })
 
-    webServer = createServer(createRequestListener((request) => router.fetch(request)))
-    const webPort = await listenOnNextPort(webServer, preferredWebPort, webHost)
+    const requestListener = createRequestListener((request) => router.fetch(request))
+    webServer = createServer((request, response) => {
+      if (networkPreviewOrigin !== undefined && !isLoopbackAddress(request.socket.remoteAddress)
+        && !isNetworkPreviewRequest(request, networkPreviewOrigin)) {
+        response.writeHead(404)
+        response.end()
+        return
+      }
+      requestListener(request, response)
+    })
+    const webPort = await listenOnNextPort(webServer, preferredWebPort, webHost, networkPreviewEnabled ? 1 : 10)
     if (enableHmr) {
       const { emitServerReady } = await import('remix/node-hmr/runtime')
       emitServerReady()
@@ -178,8 +191,13 @@ async function createReloadingBrowserHmrChannel() {
 async function startOrReuseApi(
   port: number,
   dataDirectory: string,
+  host: string,
+  networkPreviewOrigin: string | undefined,
 ): Promise<{ readonly server: Awaited<ReturnType<typeof createElceHttpServer>> | null; readonly port: number; readonly reusesExistingApi: boolean }> {
   if (port !== 0 && !(await isPortAvailable(port, '127.0.0.1'))) {
+    if (networkPreviewOrigin !== undefined) {
+      throw new Error(`Le port API ${port} est déjà occupé. Arrête le serveur local actuel avant de lancer la preview réseau.`)
+    }
     if (!(await isElceApiAvailable(port))) {
       throw new Error(`Le port API ${port} est occupé par un service qui ne répond pas à l’API Elcé.`)
     }
@@ -189,13 +207,14 @@ async function startOrReuseApi(
   const server = await createElceHttpServer({
     databaseFile: resolve(dataDirectory, 'elce.sqlite'),
     mediaDirectory: resolve(dataDirectory, 'media'),
+    networkPreviewOrigin,
   })
   try {
-    const actualPort = await listen(server.server, port, '127.0.0.1')
+    const actualPort = await listen(server.server, port, host)
     return { server, port: actualPort, reusesExistingApi: false }
   } catch (cause) {
     await server.close()
-    if (isAddressInUse(cause) && await isElceApiAvailable(port)) {
+    if (networkPreviewOrigin === undefined && isAddressInUse(cause) && await isElceApiAvailable(port)) {
       return { server: null, port, reusesExistingApi: true }
     }
     throw cause
@@ -230,9 +249,38 @@ async function isElceApiAvailable(port: number): Promise<boolean> {
   }
 }
 
+/** Resolves the browser API origin without sending a mobile client to its own loopback. */
+function apiOriginForRequest(request: Request, apiPort: number, networkPreviewOrigin: string | undefined): string {
+  if (process.env.VITE_ELCE_API_ORIGIN !== undefined) return process.env.VITE_ELCE_API_ORIGIN
+  const requestHost = request.headers.get('host')
+  if (networkPreviewOrigin !== undefined && requestHost !== null) {
+    const requestHostname = new URL(`http://${requestHost}`).hostname
+    const networkHostname = new URL(networkPreviewOrigin).hostname
+    if (requestHostname === networkHostname) return `http://${networkHostname}:${apiPort}`
+  }
+  return apiPort === ELCE_API_PORT ? DEFAULT_ELCE_API_ORIGIN : `http://127.0.0.1:${apiPort}`
+}
+
+/** Allows LAN requests only for the configured preview document and its assets. */
+function isNetworkPreviewRequest(request: IncomingMessage, previewOrigin: string): boolean {
+  const previewUrl = new URL(previewOrigin)
+  if (request.headers.host !== previewUrl.host) return false
+  const requestUrl = new URL(request.url ?? '/', previewOrigin)
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false
+  if (requestUrl.pathname === ASSET_BASE_PATH || requestUrl.pathname.startsWith(`${ASSET_BASE_PATH}/`)) return true
+  return requestUrl.pathname === '/' && requestUrl.searchParams.has('elce-preview-project')
+}
+
+/** Treats IPv4 and IPv6 loopback connections as local editor requests. */
+function isLoopbackAddress(address: string | undefined): boolean {
+  return address === '127.0.0.1'
+    || address === '::1'
+    || address?.startsWith('::ffff:127.') === true
+}
+
 /** Tries the preferred interface port and increments it only when already occupied. */
-async function listenOnNextPort(server: Server, preferredPort: number, host: string): Promise<number> {
-  const attempts = preferredPort === 0 ? 1 : 10
+async function listenOnNextPort(server: Server, preferredPort: number, host: string, attempts = 10): Promise<number> {
+  attempts = preferredPort === 0 ? 1 : attempts
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const port = preferredPort === 0 ? 0 : preferredPort + attempt
     try {
@@ -259,12 +307,14 @@ function renderDocumentHtml(
   entry: Awaited<ReturnType<ReturnType<typeof createAssetServer>['getScriptEntry']>>,
   styles: readonly string[],
   apiOrigin: string,
+  previewOrigin: string | null,
 ): string {
   const styleLinks = styles.map((href, index) =>
     `<link id="elce-style-${index + 1}" rel="stylesheet" href="${escapeHtmlAttribute(href)}">`,
   ).join('\n    ')
   const importMap = escapeInlineScript(JSON.stringify(entry.importMap))
   const browserApiOrigin = escapeInlineScript(JSON.stringify(apiOrigin))
+  const browserPreviewOrigin = escapeInlineScript(JSON.stringify(previewOrigin))
   const preloads = entry.preloads.map((href, index) =>
     `<link id="elce-module-preload-${index + 1}" rel="modulepreload" href="${escapeHtmlAttribute(href)}">`,
   ).join('\n    ')
@@ -277,7 +327,7 @@ function renderDocumentHtml(
     <title id="elce-document-title">Elcé — éditeur</title>
     ${styleLinks}
     <script id="elce-import-map" type="importmap">${importMap}</script>
-    <script id="elce-api-configuration">window.__ELCE_API_ORIGIN__ = ${browserApiOrigin};</script>
+    <script id="elce-api-configuration">window.__ELCE_API_ORIGIN__ = ${browserApiOrigin}; window.__ELCE_PREVIEW_ORIGIN__ = ${browserPreviewOrigin};</script>
     ${preloads}
   </head>
   <body id="elce-document-body">

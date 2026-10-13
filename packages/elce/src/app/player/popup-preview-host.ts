@@ -2,6 +2,7 @@ import type { Actor } from 'xstate'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { ElceDocumentData, PageId } from '../../domain/document/document-types'
 import {
+  POPUP_PREVIEW_PROJECT_PARAM,
   POPUP_PREVIEW_PAGE_PARAM,
   POPUP_PREVIEW_SESSION_PARAM,
   isPopupPreviewRequest,
@@ -25,9 +26,22 @@ export class PopupPreviewHost {
   public open(): boolean {
     this.destroy()
     const context = this.controller.getSnapshot().context
+    const pageId = context.selectedPageId ?? context.document.pages[0]?.id ?? null
+
+    if (window.__ELCE_PREVIEW_ORIGIN__ !== undefined && window.__ELCE_PREVIEW_ORIGIN__ !== null) {
+      const url = new URL(window.__ELCE_PREVIEW_ORIGIN__)
+      url.searchParams.set(POPUP_PREVIEW_PROJECT_PARAM, context.document.id)
+      if (pageId === null) url.searchParams.delete(POPUP_PREVIEW_PAGE_PARAM)
+      else url.searchParams.set(POPUP_PREVIEW_PAGE_PARAM, pageId)
+      const popup = window.open(url.href, 'elce-player-preview', 'popup,width=1280,height=840')
+      if (popup === null) return false
+      this.popup = popup
+      popup.focus()
+      return true
+    }
+
     const sessionId = crypto.randomUUID()
     const url = new URL(window.location.href)
-    const pageId = context.selectedPageId ?? context.document.pages[0]?.id ?? null
     url.searchParams.set(POPUP_PREVIEW_SESSION_PARAM, sessionId)
     if (pageId !== null) url.searchParams.set(POPUP_PREVIEW_PAGE_PARAM, pageId)
     window.addEventListener('message', this.receiveMessage)

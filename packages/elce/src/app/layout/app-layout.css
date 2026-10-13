@@ -1240,7 +1240,7 @@ body {
   color: #8a9088;
 }
 
-.elce-question-illustration {
+.elce-question-editor .elce-question-illustration {
   position: relative;
   display: flex;
   min-height: 4rem;
@@ -1255,7 +1255,7 @@ body {
   font-size: 0.8rem;
 }
 
-.elce-question-illustration > span {
+.elce-question-editor .elce-question-illustration > span {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1270,7 +1270,7 @@ body {
   gap: var(--elce-icon-gap);
 }
 
-.elce-question-illustration .elce-media-add-prompt {
+.elce-question-editor .elce-question-illustration .elce-media-add-prompt {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1293,11 +1293,10 @@ body {
   text-align: center;
 }
 
-.elce-question-illustration img,
-.elce-question-illustration video {
+.elce-question-editor .elce-question-illustration img,
+.elce-question-editor .elce-question-illustration video {
   display: block;
   width: 100%;
-  max-height: 16rem;
   object-fit: cover;
 }
 

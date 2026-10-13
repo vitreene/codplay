@@ -159,7 +159,7 @@ export class ElceProjectApiClient {
 
   /** Reads one server document and its current revision. */
   public async readProject(documentId: string): Promise<Readonly<{ document: ElceDocument; revision: number }>> {
-    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(documentId)}`))
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(documentId)}`), { cache: 'no-store' })
     const body = await readResponseJson<ProjectDocumentResponse>(response)
     return { document: ElceDocument.fromJSON(body.document), revision: revisionFrom(response) }
   }

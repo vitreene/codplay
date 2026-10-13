@@ -259,6 +259,48 @@ describe('Elcé Flux scene builder', () => {
     codplay.destroy()
   })
 
+  it('fills the Question illustration frame and runs its entrance event once', () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-question-image', name: 'question.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const withQuestion = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-image',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const question = withQuestion.bdcs.find((bdc) => bdc.id === 'bdc-question-image')!.question!
+    const withIllustration = applyDocumentCommand(withQuestion, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-question-image',
+      question: { ...question, mediaId: 'media-question-image' },
+    })
+    const build = buildFluxScene(withIllustration.pages[0]!, withIllustration.bdcs, {
+      mediaSources: { 'media-question-image': 'blob:question-image' },
+      mediaTypes: { 'media-question-image': MEDIA_TYPE.IMAGE },
+    })
+    const image = build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-bdc-question-image-image')
+
+    expect(image).toMatchObject({
+      type: 'img',
+      initial: {
+        src: 'blob:question-image',
+        img: { style: { width: '100%', aspectRatio: '4 / 3', objectFit: 'contain' } },
+      },
+      emit: { observe: {
+        root: 'page-a-scrollport',
+        initial: 'enter',
+        enter: [{ name: 'page-a-bdc-question-image-image:enter', once: true }],
+      } },
+      actions: {
+        'page-a-bdc-question-image-image:enter': expect.objectContaining({ style: expect.any(Object) }),
+      },
+    })
+    expect(image?.emit).not.toHaveProperty('observe.leave')
+  })
+
   it('projects identified Card BDCs through AutoCapsule, CodPlay stories, and reusable media persos', () => {
     const carouselService = new ElceCarouselService()
     const initial = createInitialDocument()

@@ -101,6 +101,70 @@ les actions d’édition de la question et des réponses restent raccordées aux
 façades existantes. La validation de cette disposition reste à effectuer avant
 d’actualiser la spécification Question.
 
+### Décision acceptée — illustration d’une Question Flux
+
+Dans le player, la photo d’une Question utilise `contain`, en Flux comme en
+Diapo. En Flux, elle reste dans son cadre `4:3` ; en Diapo, son cadre flexible
+est réservé par le layout et l’image le remplit en largeur et en hauteur. Les
+styles du sélecteur de média restent propres à l’éditeur ; ni l’éditeur ni le
+player n’imposent de hauteur maximale fixe à cette image. Son effet
+d’apparition se déclenche une seule fois, y compris lorsque la photo est déjà
+visible au démarrage ; quitter le cadre ne relance pas l’effet et ne fait pas
+disparaître la photo. Réutiliser l’observation `emit.observe` existante et son
+option `once`, sans modifier CodPlay ni le comportement des autres médias.
+
+**État : effet appliqué et vérifié le 13 octobre 2026 ; cadrage Flux `contain`
+mis à jour et vérifié par les builders, rendu visuel encore à confirmer.** Le
+test ciblé Flux, le typecheck et le build Elcé passent. Brave sur le port 5175
+avait confirmé pour la Question réelle de « Document Elcé », page « Titre »,
+que cadre, wrapper et image font tous 512 × 384 px ; l’entrée se joue une fois
+et une sortie puis un retour dans le viewport ne la rejouent pas. Cette
+observation précédait `contain` et ne vérifie que l’effet et la géométrie.
+
+### Revue en cours — occupation des images selon leur contexte
+
+Le cadre Flux de l’illustration Question est en `4:3` avec `contain`.
+Cette règle ne décrit pas les autres surfaces : l’éditeur Question conserve
+actuellement le ratio intrinsèque de l’image dans sa colonne 25 %. Pour la
+Question Diapo, décision acceptée le 13 octobre : garder `contain`, réserver
+la zone de l’illustration dans le layout plein écran avec Flex, et faire
+remplir cette zone par l’image à `100 %` en largeur et en hauteur. Le plafond
+`28vh` du builder doit disparaître ; l’illustration et le formulaire se
+partagent l’espace disponible après le titre.
+
+Les Cartes Carousel disposent déjà du réglage `imageFit` (`cover` ou
+`contain`) dans leurs cadres de layout ; l’aperçu média de l’éditeur non
+proportionnel a un plafond de `18rem`, tandis que les layouts proportionnels
+remplissent leur cadre. L’acceptation visuelle des trois autres layouts reste
+à effectuer dans le parcours navigateur indiqué plus bas. Les Cartes Photo
+ancrées suivent déjà le ratio intrinsèque réservé par l’ancre et le rendu
+`cover` ; la parité de cadrage vidéo est suivie séparément dans la
+spécification Ancre.
+
+Brave, le 13 octobre, mesure dans « Document Elcé » une illustration Question
+éditeur de `189 × 246 px` avec sa photo intrinsèque à `187 × 244 px`, puis le
+cadre et l’image Question Flux à `512 × 384 px`. Cette mesure Flux précédait
+le cadrage `contain` et n’en valide pas l’apparence. La Carte Photo sélectionnée
+en `contain` a un cadre proportionnel de `791 × 445 px` dans l’éditeur et
+`916 × 515 px` dans le player ; l’image remplit ces boîtes et garde le cadrage
+`contain` dans les deux surfaces. Ces mesures ne couvrent ni la Question Diapo
+ni les autres layouts Carte.
+
+**État : application en cours.** Les builders Flux et Diapo appliquent
+`contain` ; les deux tests ciblés passent (20 tests), ainsi que le typecheck et
+le build Elcé. La validation Brave reste à faire sur un viewport large et
+étroit. Le 13 octobre,
+le parcours n’a pas pu être constitué : la Diapo temporaire créée dans Brave
+contenait encore son Carousel par défaut, et l’auto-review de l’outil a refusé
+le clic sur son bouton de suppression, y compris après un nouveau snapshot.
+Le projet temporaire a ensuite été supprimé ; l’API ne liste plus que
+« Document Elcé ». Aucune mesure du rendu Question Diapo n’a donc été prise,
+et l’ancienne mesure Flux a été prise avec `cover`. La spécification Question
+décrit maintenant le cadrage Flux `contain` et ses tests de builder ; compléter
+les preuves visuelles Flux/Diapo après leur validation. La revue contextuelle
+des autres layouts Carte reste ouverte selon les acceptations déjà listées
+dans ce plan.
+
 ### Décision acceptée — montage du BDC Résultat dans CodPlay
 
 Le player doit compiler une story CodPlay distincte pour Réussite et pour
@@ -1039,6 +1103,30 @@ visuel : il jugeait l’UID du bouton non identifiable dans le snapshot et le cl
 potentiellement modificateur ou destructif. Ne pas contourner le refus. Il reste
 à vérifier le placement fixe des « + », le défilement indépendant, les « − »,
 et à reporter le contrat rendu dans la spécification après validation.
+
+## Évolution demandée — tableau de saisie du Graphe
+
+Le 13 octobre 2026, l’auteur demande une interface inspirée de l’outil Graphe
+d’Illustrator : la taille du tableau suit les données ; deux icônes activent ou
+désactivent séparément les intitulés de colonne et de ligne ; le collage traite
+la première ligne et la première colonne comme intitulés lorsque leurs options
+sont actives. Pour la navigation clavier, Tab passe à la cellule suivante de la
+même ligne, Entrée/Retour à la cellule suivante de la même colonne, et les
+flèches déplacent la sélection d’une cellule.
+
+Cette demande remplace le cadrage précédent des boutons d’ajout/suppression et
+du plafond fixe 40 × 40 ; la [spécification Graphe](../specs/statistical-graph-spec.md)
+décrit encore le contrat implémenté, et ne doit être actualisée qu’après
+implémentation et vérification.
+
+**État : A relire — clarification nécessaire avant le code.** Préciser si la
+grille s’agrandit aussi pendant la saisie manuelle et comment une cellule
+sélectionnée entre en édition ; confirmer le comportement lorsque les
+intitulés sont désactivés (données fournies à leur place et libellés générés)
+ainsi que le déplacement aux bords du tableau. La limite des dimensions et la
+forme des commandes qui remplacent les contrôles actuels doivent suivre cette
+décision. Aucun changement d’implémentation n’est autorisé avant cette
+clarification.
 
 ## Fonctionnalité à faire — copier, couper et coller un BDC
 

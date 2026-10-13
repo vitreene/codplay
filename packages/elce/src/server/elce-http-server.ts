@@ -12,6 +12,7 @@ import { SqliteProjectPersistence } from './projects/sqlite/sqlite-project-persi
 export interface ElceHttpServerOptions {
   readonly databaseFile: string
   readonly mediaDirectory: string
+  readonly networkPreviewOrigin?: string
 }
 
 /** Exposes the Node listener and its asynchronous resource cleanup. */
@@ -39,7 +40,14 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
     const router = createElceApiRouter(persistence, media)
     const requestListener = createRequestListener((request) => router.fetch(request))
     const server = createServer((request, response) => {
-      if (answerLocalCors(request, response)) return
+      const networkPreviewOrigin = options.networkPreviewOrigin
+      if (networkPreviewOrigin !== undefined && !isLoopbackAddress(request.socket.remoteAddress)
+        && !isNetworkPreviewApiRead(request, networkPreviewOrigin)) {
+        response.writeHead(403)
+        response.end()
+        return
+      }
+      if (answerLocalCors(request, response, networkPreviewOrigin)) return
       requestListener(request, response)
     })
 
@@ -61,21 +69,52 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
 }
 
 /** Handles local-browser CORS for the editor's direct API requests. */
-function answerLocalCors(request: IncomingMessage, response: ServerResponse): boolean {
+function answerLocalCors(
+  request: IncomingMessage,
+  response: ServerResponse,
+  networkPreviewOrigin?: string,
+): boolean {
   const origin = request.headers.origin
-  const isLocalOrigin = origin !== undefined && isLoopbackOrigin(origin)
-  if (isLocalOrigin) {
+  const isLoopback = origin !== undefined && isLoopbackOrigin(origin)
+  const isNetworkPreview = origin !== undefined && origin === networkPreviewOrigin
+  const isAllowedOrigin = isLoopback || isNetworkPreview
+  if (isAllowedOrigin && origin !== undefined) {
     response.setHeader('Access-Control-Allow-Origin', origin)
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    response.setHeader('Access-Control-Allow-Methods', isNetworkPreview
+      ? 'GET, HEAD, OPTIONS'
+      : 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match, X-Elce-Page-Id, X-Elce-Edit-Grant')
     response.setHeader('Access-Control-Expose-Headers', 'ETag')
     response.setHeader('Access-Control-Max-Age', '600')
     response.setHeader('Vary', 'Origin')
   }
   if (request.method !== 'OPTIONS') return false
-  response.writeHead(isLocalOrigin ? 204 : 403)
+  const requestedMethod = request.headers['access-control-request-method']
+  const allowedNetworkPreflight = isNetworkPreview && (requestedMethod === 'GET' || requestedMethod === 'HEAD')
+  response.writeHead(isLoopback || allowedNetworkPreflight ? 204 : 403)
   response.end()
   return true
+}
+
+/** Restricts LAN requests to document and media reads used by the standalone preview. */
+function isNetworkPreviewApiRead(request: IncomingMessage, previewOrigin: string): boolean {
+  const url = new URL(request.url ?? '/', 'http://localhost')
+  const projectPath = /^\/api\/projects\/[^/]+$/.test(url.pathname)
+  const mediaPath = /^\/api\/projects\/[^/]+\/media\/[^/]+$/.test(url.pathname)
+  const originMatches = request.headers.origin === previewOrigin
+  const isRead = request.method === 'GET' || request.method === 'HEAD'
+  if (isRead && projectPath && originMatches) return true
+  if (isRead && mediaPath && (originMatches || request.headers.origin === undefined)) return true
+  const requestedMethod = request.headers['access-control-request-method']
+  return request.method === 'OPTIONS' && projectPath && originMatches
+    && (requestedMethod === 'GET' || requestedMethod === 'HEAD')
+}
+
+/** Treats IPv4 and IPv6 loopback connections as local editor requests. */
+function isLoopbackAddress(address: string | undefined): boolean {
+  return address === '127.0.0.1'
+    || address === '::1'
+    || address?.startsWith('::ffff:127.') === true
 }
 
 /** Accepts browser origins on loopback only, keeping this local API private. */

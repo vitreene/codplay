@@ -12,7 +12,8 @@ import { isPopupPreviewResponse, type PopupPreviewRequest } from './popup-previe
 import { createPlayerPreviewComposition, isCatalogPage } from './player-preview'
 
 type PopupPlayerProps = Readonly<{
-  sessionId: string
+  sessionId: string | null
+  projectId?: string | null
   startPageId: PageId | null
 }>
 
@@ -56,9 +57,22 @@ async function loadMediaSources(
   return sources
 }
 
+/** Resolves every media resource from the synchronized project's existing API URLs. */
+function loadServerMediaSources(
+  documentModel: ElceDocument,
+  api: ElceProjectApiClient,
+): Readonly<Record<string, string>> {
+  return Object.fromEntries(documentModel.medias.map((media) => [
+    media.id,
+    api.mediaUrl(documentModel.id, media.id),
+  ]))
+}
+
 /** Renders the independent popup while preserving the existing XState message protocol. */
 export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   const { sessionId, startPageId } = handle.props
+  const projectId = handle.props.projectId ?? null
+  const isNetworkPreview = projectId !== null
   let readerSnapshot: ReaderSnapshot | null = null
   let error: string | null = null
   let pending = false
@@ -66,7 +80,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   const sceneCache: ElcePageSceneCache = new Map()
   let composition: ElcePlayerComposition | null = null
   let requestId = 0
-  let pendingRequest: PendingRequest | null = { id: 0, type: 'ready' }
+  let pendingRequest: PendingRequest | null = sessionId === null ? null : { id: 0, type: 'ready' }
 
   /** Refreshes the native Remix view while its component is still mounted. */
   const update = (): void => {
@@ -75,6 +89,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
 
   /** Requests a fresh editor snapshot or its selected page through the opener. */
   const requestEditor = (type: PopupPreviewRequest['type']): void => {
+    if (sessionId === null) return
     if (pendingRequest !== null && pendingRequest.type !== 'ready') return
     if (window.opener === null || window.opener.closed) {
       error = 'La fenêtre de l’éditeur est fermée. Rouvre la lecture depuis l’éditeur.'
@@ -129,15 +144,24 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     const api = new ElceProjectApiClient()
     let disposed = false
     let receivedEditorSnapshot = false
+    let fallbackTimer: number | null = null
 
-    /** Loads one editor or persisted document into the reader's own media context. */
-    const presentDocument = async (documentModel: ElceDocument, selectedPageId: PageId | null): Promise<void> => {
+    /** Loads an editor snapshot or synchronized project into the real player. */
+    const presentDocument = async (
+      documentModel: ElceDocument,
+      selectedPageId: PageId | null,
+      fromServer: boolean,
+    ): Promise<void> => {
       try {
-        const mediaSources = await loadMediaSources(documentModel, store, api, sourceUrls)
+        const mediaSources = fromServer
+          ? loadServerMediaSources(documentModel, api)
+          : await loadMediaSources(documentModel, store, api, sourceUrls)
         if (disposed || handle.signal.aborted) return
         const nextSnapshot = {
           documentModel,
-          selectedPageId,
+          selectedPageId: selectedPageId !== null && documentModel.pages.some((page) => page.id === selectedPageId)
+            ? selectedPageId
+            : null,
           mediaSources,
         }
         await presentSnapshot(nextSnapshot)
@@ -157,13 +181,14 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
 
     /** Accepts only messages from the editor that opened this reader session. */
     const receiveMessage = (event: MessageEvent): void => {
+      if (sessionId === null) return
       if (event.origin !== window.location.origin || event.source !== window.opener) return
       if (!isPopupPreviewResponse(event.data) || event.data.sessionId !== sessionId) return
       if (event.data.requestId !== pendingRequest?.id) return
       if (event.data.type === 'snapshot') {
         if (event.data.requestId === 0) receivedEditorSnapshot = true
         try {
-          void presentDocument(ElceDocument.fromJSON(event.data.document), event.data.selectedPageId)
+          void presentDocument(ElceDocument.fromJSON(event.data.document), event.data.selectedPageId, false)
         } catch (cause: unknown) {
           pendingRequest = null
           pending = false
@@ -198,31 +223,42 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       }
     }
 
-    window.addEventListener('message', receiveMessage)
-    window.opener?.postMessage({ type: 'ready', sessionId, requestId: 0 }, window.location.origin)
-    const fallbackTimer = window.setTimeout(() => {
-      if (receivedEditorSnapshot || readerSnapshot !== null) return
-      void store.loadDocument(createInitialDocument().id).then((stored) => {
-        if (disposed || receivedEditorSnapshot) return
-        if (stored === null) {
-          pendingRequest = null
-          error = 'Aucun document Elcé n’est disponible pour la lecture.'
-          update()
-          return
-        }
-        void presentDocument(stored, startPageId)
+    if (isNetworkPreview && projectId !== null) {
+      void api.readProject(projectId).then(({ document: documentModel }) => {
+        if (!disposed) void presentDocument(documentModel, startPageId, true)
       }).catch((cause: unknown) => {
-        if (!disposed) {
-          pendingRequest = null
+        if (!disposed && !handle.signal.aborted) {
           error = cause instanceof Error ? cause.message : 'La lecture du document a échoué.'
           update()
         }
       })
-    }, 3000)
+    } else if (sessionId !== null) {
+      window.addEventListener('message', receiveMessage)
+      window.opener?.postMessage({ type: 'ready', sessionId, requestId: 0 }, window.location.origin)
+      fallbackTimer = window.setTimeout(() => {
+        if (receivedEditorSnapshot || readerSnapshot !== null) return
+        void store.loadDocument(createInitialDocument().id).then((stored) => {
+          if (disposed || receivedEditorSnapshot) return
+          if (stored === null) {
+            pendingRequest = null
+            error = 'Aucun document Elcé n’est disponible pour la lecture.'
+            update()
+            return
+          }
+          void presentDocument(stored, startPageId, false)
+        }).catch((cause: unknown) => {
+          if (!disposed) {
+            pendingRequest = null
+            error = cause instanceof Error ? cause.message : 'La lecture du document a échoué.'
+            update()
+          }
+        })
+      }, 3000)
+    }
 
     const dispose = (): void => {
       disposed = true
-      window.clearTimeout(fallbackTimer)
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer)
       window.removeEventListener('message', receiveMessage)
       composition?.destroy()
       composition = null
@@ -240,6 +276,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     error,
     pending,
     requestEditor,
+    isNetworkPreview,
   })
 }
 
@@ -248,16 +285,17 @@ interface PopupReaderState {
   readonly error: string | null
   readonly pending: boolean
   readonly requestEditor: (type: PopupPreviewRequest['type']) => void
+  readonly isNetworkPreview: boolean
 }
 
 /** Renders the popup toolbar, messages, and host for the real player composition. */
 function renderPopupReader(state: PopupReaderState): RemixNode {
-  const { snapshot, error, pending, requestEditor } = state
+  const { snapshot, error, pending, requestEditor, isNetworkPreview } = state
   return <div
     id="elce-popup-reader"
-    className="elce-popup-reader"
+    className={isNetworkPreview ? 'elce-popup-reader elce-popup-reader--network-preview' : 'elce-popup-reader'}
   >
-    <header
+    {isNetworkPreview ? null : <header
       id="elce-popup-reader-header"
       className="elce-popup-reader__header"
     >
@@ -303,10 +341,10 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           </span>
         </button>
       </div>
-    </header>
+    </header>}
     <main
       id="elce-popup-reader-main"
-      className="elce-popup-reader__main"
+      className={isNetworkPreview ? 'elce-popup-reader__main elce-popup-reader__main--network-preview' : 'elce-popup-reader__main'}
     >
       {error === null ? null : <p
         id="elce-popup-reader-error"
@@ -314,18 +352,18 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
       >
         {error}
       </p>}
-      {snapshot === null
+      {snapshot === null && !isNetworkPreview
         ? <p
           id="elce-popup-reader-loading"
         >
           Chargement de la lecture…
         </p>
-        : <div
+        : snapshot === null ? null : <div
           id="elce-player-stage"
           className="elce-player-stage"
           aria-label="Prévisualisation du document"
         >
-          {isCatalogPage(snapshot.documentModel, snapshot.selectedPageId)
+          {!isNetworkPreview && isCatalogPage(snapshot.documentModel, snapshot.selectedPageId)
             ? <p
               id="elce-player-catalog-message"
             >

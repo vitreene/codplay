@@ -4,7 +4,7 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
-import { BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
+import { BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
 import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { buildDiapoScene } from './diapo-scene-builder'
@@ -173,6 +173,40 @@ describe('Elcé Diapo scene builder', () => {
       straps: [`${page.id}:bdc-diapo-question:reset-question`],
     })
     expect(build.questionReset).toEqual({ eventName: `${page.id}:bdc-diapo-question:reset` })
+  })
+
+  it('fills the flexible Diapo Question illustration zone with contain', () => {
+    const initial = createInitialDocument()
+    const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
+    let document = applyDocumentCommand(initial, pageCommand)
+    document = applyDocumentCommand(document, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
+    document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question-image', pageCommand.pageId, 0))
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-diapo-question-image', name: 'question.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const question = document.bdcs.find((bdc) => bdc.id === 'bdc-diapo-question-image')!.question!
+    document = applyDocumentCommand(document, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-diapo-question-image',
+      question: { ...question, mediaId: 'media-diapo-question-image' },
+    })
+    const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
+    const build = buildDiapoScene(page, document.bdcs, {
+      mediaSources: { 'media-diapo-question-image': 'https://example.test/question.png' },
+      mediaTypes: { 'media-diapo-question-image': MEDIA_TYPE.IMAGE },
+    })
+    const story = build.sceneDoc.stories[`${page.id}-bdc-diapo-question-image`]
+    const image = story?.persos.find((perso) => perso.id === 'bdc-diapo-question-image-diapo-illustration-media-diapo-question-image')
+
+    expect(image).toMatchObject({
+      type: 'img',
+      initial: {
+        src: 'https://example.test/question.png',
+        img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' } },
+      },
+    })
+    expect(image?.initial).not.toHaveProperty('img.style.maxHeight')
   })
 
   it('projects one Result BDC as the only direct Diapo content in an Evaluation chapter', () => {

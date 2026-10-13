@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev-elce.mjs",
+    "dev:network": "ELCE_NETWORK_PREVIEW=1 node scripts/dev-elce.mjs",
     "dev:api": "node scripts/dev-api.mjs",
     "build": "vite build",
     "preview": "vite preview",
