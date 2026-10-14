@@ -9,15 +9,18 @@ ensuite sa valeur structurée et la persiste. Le routeur ne crée pas un second
 document initial.
 
 Cette spécification décrit le contrat HTTP du routeur et du contrôleur. La
-frontière `ProjectPersistence` isole le stockage ; ce contrat ne transforme pas
-le document complet en colonne JSON de SQLite.
+frontière `ProjectPersistence` isole le stockage ; ce contrat ne transforme
+pas le document complet en colonne JSON de SQLite. Le contenu métier du BDC
+Graphe statistique est l’exception : `StatisticalGraphContent` est conservé en
+JSON opaque dans `statistical_graphs.content_json`. Les métadonnées communes
+d’identité et de placement de ce BDC restent relationnelles.
 
 ## Accès direct depuis l’éditeur
 
 L’éditeur appelle l’API depuis le navigateur, sans proxy Vite. L’origine par
 défaut est `http://127.0.0.1:5181` ; `VITE_ELCE_API_ORIGIN` permet de la
-remplacer pour l’environnement local. Le serveur de développement écoute sur
-`127.0.0.1` uniquement.
+remplacer pour l’environnement local. En lancement normal, le serveur de
+développement écoute sur `127.0.0.1` uniquement.
 
 Pendant le portage Remix, `npm run dev:elce` à la racine démarre ensemble
 l’éditeur Vite sur le port `5175` et cette API sur le port `5181`, en réutilisant
@@ -26,12 +29,22 @@ le plan de transposition prévoit son remplacement par les scripts du serveur
 Remix quand cette étape sera appliquée. Pour lancer l’API seule :
 `npm run dev:api --workspace=@codplay/elce`.
 
+Pour essayer le lecteur sur un téléphone du même réseau local, la commande
+racine `npm run dev:elce:network` lance l’interface et l’API sur les ports
+`5175` et `5181`, liées aux interfaces réseau de la machine. Le lancement
+choisit une IPv4 privée active et imprime les adresses de preview et d’API.
+Ce mode est opt-in ; il ne change pas le lancement local habituel.
+
 Pour les requêtes navigateur, le serveur autorise les origines HTTP de boucle
 locale (`localhost`, `127.0.0.1` et `[::1]`), quelle que soit leur origine de
 port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
 `DELETE` et les en-têtes `Content-Type`, `If-Match`, `X-Elce-Page-Id` et
-`X-Elce-Edit-Grant`. Il expose `ETag` à
-l’éditeur. Un prévol d’une origine hors boucle locale est refusé.
+`X-Elce-Edit-Grant`. Il expose `ETag` à l’éditeur. En mode réseau, seule
+l’origine exacte de la preview est autorisée pour les lectures du document et
+de ses médias. Les clients non locaux ne peuvent pas lister les projets, lire
+les droits d’édition ni effectuer des mutations ; le serveur refuse les autres
+requêtes avant le routeur API. Le prévol réseau accepte uniquement `GET` et
+`HEAD`.
 
 ## Requêtes et réponses
 
@@ -52,7 +65,9 @@ l’éditeur. Un prévol d’une origine hors boucle locale est refusé.
 
 Le corps JSON transporté est le document v4 structuré produit par
 `ElceDocument.toJSON()`. L’adaptateur de persistance le projette vers les
-tables ; seul le JSON riche de Tiptap reste un champ JSON en base.
+tables ; le JSON riche de Tiptap et le contenu complet du BDC Graphe sont les
+deux champs JSON en base. Les autres BDC, dont Question/Réponses, conservent
+leurs projections relationnelles.
 
 Les documents reçus passent par `ElceDocument.fromJSON()` puis
 `assertDocumentInvariants()`. Le corps d’un remplacement doit porter le même
@@ -97,15 +112,19 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 `remix/data-table/sqlite`. À l’ouverture, `openProjectDatabase()` applique les
 migrations SQL chargées avec `loadMigrations()` de Remix. Les migrations créent
 les tables relationnelles du modèle v4 ; aucune table ne contient le document
-Elcé entier en JSON. Seuls `sections.content_json` et `sections.markup_html`
-gardent respectivement le JSON Tiptap et son export HTML.
+Elcé entier en JSON. `sections.content_json` garde le JSON Tiptap et
+`sections.markup_html` son export HTML. `statistical_graphs` garde le contenu
+complet du Graphe dans `content_json` ; les tables `graph_categories`,
+`graph_series` et `graph_values` sont supprimées. Question/Réponses conserve
+les tables `questions` et `question_answers`.
 
 Le dépôt restitue le document à partir des lignes `projects`, `chapters`,
 `pages`, `scenario_entries`, `catalog_pages`, `media_resources`,
-`content_blocks`, `content_block_placements` et de leurs tables de détail.
-L’ordre des entrées de scénario, des pages de chapitre, des BDC et des médias
-est conservé par les positions relationnelles. Les réglages Évaluation sont
-des colonnes facultatives du chapitre. Les Cartes et les Questions portent
+`content_blocks`, `content_block_placements`, `statistical_graphs.content_json`
+et des tables de détail des BDC relationnels. L’ordre des entrées de scénario,
+des pages de chapitre, des BDC et des médias est conservé par les positions
+relationnelles. Les réglages Évaluation sont des colonnes facultatives du
+chapitre. Les Cartes et les Questions portent
 leurs références média distinctes ; la ressource garde le type MIME, la clé
 de fichier serveur et l’empreinte optionnelle.
 
@@ -121,6 +140,11 @@ serveur accorde un bail de 12 secondes ; la page détentrice le renouvelle toute
 les 3 secondes. Après expiration, toute autre page peut acquérir un droit neuf.
 `force: true` remplace aussi immédiatement un bail encore actif. Les requêtes
 présentant l’ancien droit restent refusées.
+
+La migration `20261013120000_store_statistical_graph_json` convertit les lignes
+relationnelles des Graphes existants en `StatisticalGraphContent` JSON puis
+supprime leurs trois tables de détail. Sa migration inverse recrée les lignes
+relationnelles. Les lignes Question/Réponses ne sont pas touchées.
 
 ## Fichiers média
 
@@ -190,6 +214,9 @@ HTTP vers `http://localhost:5176/` et
 `http://127.0.0.1:5181/api/projects` ont répondu avec la page Elcé et la liste
 vide attendue. L’arrêt du lanceur a libéré les deux ports.
 
+La migration Graphe et son aller-retour, y compris la conservation de
+Question/Réponses, sont vérifiés par
+[`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts).
 La couverture API est dans
 [`api-router.test.ts`](../src/server/api-router.test.ts) et la couverture
 relationnelle dans
@@ -208,3 +235,7 @@ Le test HTTP complet, exécuté avec un port local autorisé, vérifie
 également les uploads avec les en-têtes requis et le prévol CORS. Le parcours
 Safari d’octobre 2026 a confirmé qu’une page lectrice ne prend pas le droit
 détenu par une autre page et qu’une copie obtient son propre droit.
+
+Le 13 octobre 2026, Brave a vérifié depuis l’origine LAN de la preview que la
+lecture de `GET /api/projects/elce-document` répond `200`, tandis que
+`GET /api/projects` et le prévol `PUT` du document répondent `403`.

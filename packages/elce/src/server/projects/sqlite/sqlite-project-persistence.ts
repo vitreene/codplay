@@ -338,7 +338,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
     sectionRows, questionRows, answerRows, resultRows, carouselRows, cardRows,
-    statisticalGraphRows, graphCategoryRows, graphSeriesRows, graphValueRows] = await Promise.all([
+    statisticalGraphRows] = await Promise.all([
     queryRows(database, 'SELECT * FROM chapters WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM pages WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM scenario_entries WHERE project_id = ?', [projectId]),
@@ -353,9 +353,6 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     queryRows(database, 'SELECT * FROM carousels WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM cards WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM statistical_graphs WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM graph_categories WHERE project_id = ? ORDER BY position', [projectId]),
-    queryRows(database, 'SELECT * FROM graph_series WHERE project_id = ? ORDER BY position', [projectId]),
-    queryRows(database, 'SELECT * FROM graph_values WHERE project_id = ?', [projectId]),
   ])
 
   const placementsByBlock = new Map(placementRows.map((row) => [stringValue(row, 'content_block_id'), row]))
@@ -377,9 +374,6 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     carouselsByBlock,
     cardsByBlock,
     statisticalGraphsByBlock,
-    graphCategoryRows,
-    graphSeriesRows,
-    graphValueRows,
     placementRows,
   ))
   const data: ElceDocumentData = {
@@ -466,9 +460,6 @@ function bdcFromRows(
   carouselsByBlock: ReadonlyMap<string, SqlRow>,
   cardsByBlock: ReadonlyMap<string, SqlRow>,
   statisticalGraphsByBlock: ReadonlyMap<string, SqlRow>,
-  graphCategoryRows: readonly SqlRow[],
-  graphSeriesRows: readonly SqlRow[],
-  graphValueRows: readonly SqlRow[],
   allPlacementRows: readonly SqlRow[],
 ): Bdc {
   const id = stringValue(row, 'content_block_id')
@@ -479,13 +470,7 @@ function bdcFromRows(
   const carousel = carouselsByBlock.get(id)
   const card = cardsByBlock.get(id)
   const statisticalGraph = statisticalGraphsByBlock.get(id)
-  const statisticalGraphContent = statisticalGraphContentFromRows(
-    id,
-    statisticalGraph,
-    graphCategoryRows,
-    graphSeriesRows,
-    graphValueRows,
-  )
+  const statisticalGraphContent = statisticalGraphContentFromRow(statisticalGraph)
 
   return {
     id,
@@ -555,39 +540,10 @@ function bdcFromRows(
   }
 }
 
-/** Recreates one Graph from its normalized detail, label, and sparse value rows. */
-function statisticalGraphContentFromRows(
-  bdcId: string,
-  graph: SqlRow | undefined,
-  categoryRows: readonly SqlRow[],
-  seriesRows: readonly SqlRow[],
-  valueRows: readonly SqlRow[],
-): StatisticalGraphContent | null {
+/** Parses the opaque JSON payload stored for one Graph BDC. */
+function statisticalGraphContentFromRow(graph: SqlRow | undefined): StatisticalGraphContent | null {
   if (graph === undefined) return null
-  return {
-    rendering: stringValue(graph, 'rendering') as StatisticalGraphContent['rendering'],
-    overline: nullableText(graph, 'overline') ?? '',
-    title: nullableText(graph, 'title') ?? '',
-    categoryAxisLabel: nullableText(graph, 'category_axis_label') ?? '',
-    seriesAxisLabel: nullableText(graph, 'series_axis_label') ?? '',
-    editorialText: nullableText(graph, 'editorial_text') ?? '',
-    pieSeriesId: nullableText(graph, 'pie_series_id'),
-    categories: categoryRows
-      .filter((row) => row.graph_content_block_id === bdcId)
-      .sort(byPosition)
-      .map((row) => ({ id: stringValue(row, 'category_id'), label: nullableText(row, 'label') ?? '' })),
-    series: seriesRows
-      .filter((row) => row.graph_content_block_id === bdcId)
-      .sort(byPosition)
-      .map((row) => ({ id: stringValue(row, 'series_id'), label: nullableText(row, 'label') ?? '' })),
-    values: valueRows
-      .filter((row) => row.graph_content_block_id === bdcId)
-      .map((row) => ({
-        categoryId: stringValue(row, 'category_id'),
-        seriesId: stringValue(row, 'series_id'),
-        value: numberValue(row, 'value'),
-      })),
-  }
+  return JSON.parse(stringValue(graph, 'content_json')) as StatisticalGraphContent
 }
 
 /** Reconstructs both result branches when a result BDC has persisted rows. */
@@ -907,33 +863,9 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
       const graph = requireValue(bdc.statisticalGraph, `Graphe statistique manquant : ${bdc.id}`)
       await queryRows(database, `
         INSERT INTO statistical_graphs (
-          project_id, content_block_id, rendering, overline, title,
-          category_axis_label, series_axis_label, editorial_text, pie_series_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, graph.rendering, nullableTextValue(graph.overline), nullableTextValue(graph.title),
-        nullableTextValue(graph.categoryAxisLabel), nullableTextValue(graph.seriesAxisLabel),
-        nullableTextValue(graph.editorialText), graph.pieSeriesId])
-      for (const [position, category] of graph.categories.entries()) {
-        await queryRows(database, `
-          INSERT INTO graph_categories (
-            project_id, graph_content_block_id, category_id, position, label
-          ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, category.id, position, nullableTextValue(category.label)])
-      }
-      for (const [position, series] of graph.series.entries()) {
-        await queryRows(database, `
-          INSERT INTO graph_series (
-            project_id, graph_content_block_id, series_id, position, label
-          ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, series.id, position, nullableTextValue(series.label)])
-      }
-      for (const value of graph.values) {
-        await queryRows(database, `
-          INSERT INTO graph_values (
-            project_id, graph_content_block_id, category_id, series_id, value
-          ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, value.categoryId, value.seriesId, value.value])
-      }
+          project_id, content_block_id, content_json
+        ) VALUES (?, ?, ?)
+      `, [projectId, bdc.id, JSON.stringify(graph)])
       return
     }
   }

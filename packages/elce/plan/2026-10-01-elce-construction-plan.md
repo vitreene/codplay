@@ -1077,57 +1077,6 @@ Le réglage permettant de décaler la Carte par rapport au flux grâce à des
 marges adaptées est reporté à une évolution ultérieure. Son comportement
 n’est pas formalisé et ne fait pas partie de la première extension d’ancre.
 
-## Correctif accepté — grille de saisie du Graphe statistique
-
-À la création, l’éditeur montre une grille de 5 lignes sur 3 colonnes, en-têtes
-compris : quatre catégories et deux séries. Les champs de libellés et de valeurs
-restent directement éditables. Les cellules d’en-tête sont légèrement grisées.
-L’interface montre la grille sans texte d’aide visible, avec un « + » fixe à
-droite pour ajouter une colonne en fin de grille, un « + » fixe dessous pour
-ajouter une ligne en fin de grille et un « − » à la fin de chaque en-tête pour
-supprimer sa ligne ou sa colonne. La grille défile dans sa propre zone ; ses
-en-têtes restent visibles et les deux boutons « + » ne défilent pas avec elle.
-Le collage remplace toute la matrice et prend exactement les dimensions du
-tableau collé, sans tenir compte de la grille avant collage, sous la limite de
-41 lignes et colonnes en-têtes compris. Un dépassement laisse le document intact.
-Le réglage « Disposition » configure le layout du BDC Graphe dans son ensemble ;
-il apparaît au niveau du BDC, avant les champs de contenu et séparément des
-réglages de représentation. Son libellé visible et accessible est exactement
-« Disposition ».
-
-**État : interface implémentée, validation visuelle restante.** Le service crée
-quatre catégories et deux séries ; le formulaire garde la grille 5 × 3, en-têtes
-compris, et « Disposition » reste séparée des réglages de représentation. Le
-9 octobre 2026, Brave a refusé l’ajout du Graphe temporaire nécessaire au contrôle
-visuel : il jugeait l’UID du bouton non identifiable dans le snapshot et le clic
-potentiellement modificateur ou destructif. Ne pas contourner le refus. Il reste
-à vérifier le placement fixe des « + », le défilement indépendant, les « − »,
-et à reporter le contrat rendu dans la spécification après validation.
-
-## Évolution demandée — tableau de saisie du Graphe
-
-Le 13 octobre 2026, l’auteur demande une interface inspirée de l’outil Graphe
-d’Illustrator : la taille du tableau suit les données ; deux icônes activent ou
-désactivent séparément les intitulés de colonne et de ligne ; le collage traite
-la première ligne et la première colonne comme intitulés lorsque leurs options
-sont actives. Pour la navigation clavier, Tab passe à la cellule suivante de la
-même ligne, Entrée/Retour à la cellule suivante de la même colonne, et les
-flèches déplacent la sélection d’une cellule.
-
-Cette demande remplace le cadrage précédent des boutons d’ajout/suppression et
-du plafond fixe 40 × 40 ; la [spécification Graphe](../specs/statistical-graph-spec.md)
-décrit encore le contrat implémenté, et ne doit être actualisée qu’après
-implémentation et vérification.
-
-**État : A relire — clarification nécessaire avant le code.** Préciser si la
-grille s’agrandit aussi pendant la saisie manuelle et comment une cellule
-sélectionnée entre en édition ; confirmer le comportement lorsque les
-intitulés sont désactivés (données fournies à leur place et libellés générés)
-ainsi que le déplacement aux bords du tableau. La limite des dimensions et la
-forme des commandes qui remplacent les contrôles actuels doivent suivre cette
-décision. Aucun changement d’implémentation n’est autorisé avant cette
-clarification.
-
 ## Fonctionnalité à faire — copier, couper et coller un BDC
 
 Ajouter ultérieurement les commandes auteur copier/couper/coller d’un BDC.

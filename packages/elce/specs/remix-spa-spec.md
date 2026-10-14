@@ -13,7 +13,7 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   contrôleur XState, IndexedDB, la synchronisation de projet et une unique
   `EditorActionsFacade` pour l’application auteur. Sur une URL de popup, il ne
   crée pas de contrôleur ou de store auteur.
-- [`remix-spa-router.ts`](../src/app/remix/remix-spa-router.ts) place l’acteur
+- [`remix-spa-router.tsx`](../src/app/remix/remix-spa-router.tsx) place l’acteur
   et la façade auteur dans `EditorContextProvider`, puis rend
   `ProjectApplication`. Sur l’URL de popup, la même route rend directement
   `PopupPlayer` dans Remix, sans import dynamique d’une entrée historique.
@@ -49,6 +49,16 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+- Le mode réseau opt-in `npm run dev:elce:network` sert les mêmes ports `5175`
+  et `5181` sur l’IPv4 privée active. Le serveur Web n’affiche aux clients
+  réseau que les assets nécessaires et la route `/` avec le paramètre
+  `elce-preview-project` ; l’application auteur reste locale. Le bouton
+  « Prévisualiser » ouvre cette route avec l’identifiant du projet et la page
+  sélectionnée. `browser-entry.tsx` ne monte alors ni contrôleur auteur ni
+  stockage IndexedDB ; `PopupPlayer` lit la dernière révision confirmée par
+  l’API et utilise les médias serveur. Un rechargement récupère la version
+  courante ; la preview n’est pas poussée en direct pendant qu’elle reste
+  ouverte.
 - En développement, [`dev-elce.mjs`](../scripts/dev-elce.mjs) lance le
   superviseur `remix/node-hmr`. Le canal HMR Remix surveille les assets ; toute
   mise à jour non vide, JSX ou CSS, déclenche un rechargement automatique de
@@ -119,6 +129,12 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   serveur ; une règle CSS temporaire est également appliquée automatiquement.
   Après chaque rechargement, Projet 1 reste ouvert et l’état revient à
   « Synchronisé ». Les deux modifications de vérification sont retirées.
+- Le 13 octobre 2026, Brave vérifie le lancement réseau sur 5175/5181 et
+  l’ouverture du lecteur `elce-document` depuis l’éditeur. En émulation mobile
+  390 × 844, la page « Titre » et ses médias s’affichent sans en-tête Elcé ni
+  actions de synchronisation. La lecture API retourne la révision serveur 10.
+  L’API refuse la liste des projets et le prévol d’une mutation. Le téléphone
+  physique reste à vérifier sur le réseau local.
 - Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
   bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
   l’avertissement Vite au-dessus de `500 kB`.

@@ -9,7 +9,7 @@ import { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import { renderRemixStatisticalGraphEditor } from './remix-statistical-graph-editor'
 
 describe('Remix Statistical Graph editor', () => {
-  it('commits numeric cell input and reports oversized paste without changing the matrix', async () => {
+  it('commits numeric cell input and accepts a paste beyond 40 data rows', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
     controller.send({ type: 'editor.access.activate' })
@@ -49,9 +49,10 @@ describe('Remix Statistical Graph editor', () => {
     })
 
     document = controller.getSnapshot().context.document
-    const rejectedGraph = document.bdcs.find((entry) => entry.id === graphBdc.id)?.statisticalGraph
-    expect(rejectedGraph?.values).toEqual(editedGraph?.values)
-    expect(rendered.$(`#elce-statistical-graph-grid-error-${graphBdc.id}`)?.textContent).toContain('41')
+    const pastedGraph = document.bdcs.find((entry) => entry.id === graphBdc.id)?.statisticalGraph
+    expect(pastedGraph?.categories).toHaveLength(41)
+    expect(pastedGraph?.series).toHaveLength(1)
+    expect(rendered.$(`#elce-statistical-graph-grid-error-${graphBdc.id}`)?.textContent).toBe('')
 
     rendered.cleanup()
     controller.stop()

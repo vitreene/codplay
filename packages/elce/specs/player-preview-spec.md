@@ -49,6 +49,22 @@ et peut réutiliser son cache HTTP. Tant qu’un transfert reste en attente, le
 lecteur crée une URL objet depuis le Blob conservé localement. Après
 confirmation du transfert d’une image, le Blob n’est pas requis par le lecteur.
 
+### Preview réseau sur mobile
+
+Le lancement local opt-in `npm run dev:elce:network` publie une origine de
+preview sur l’adresse IPv4 privée de la machine. Depuis « Prévisualiser »,
+`PopupPreviewHost` ouvre cette origine avec l’identifiant du projet et la page
+sélectionnée. Cette URL autonome ne reçoit pas de copie IndexedDB :
+`PopupPlayer` relit le document confirmé par le serveur avec une requête sans
+cache et utilise les URL serveur des médias. Recharger cette URL récupère la
+dernière révision synchronisée ; les changements qui ne sont pas encore
+confirmés par le serveur n’y apparaissent pas.
+
+Cette route masque l’en-tête Elcé et la barre d’actions de la preview. Le lecteur
+occupe la hauteur disponible sans marge extérieure. Le sommaire et les
+commandes de navigation du lecteur Sighty/CodPlay restent présents pour
+parcourir le document.
+
 Le lecteur rend le menu, le titre de page, le contenu Flux et la navigation
 précédente/suivante avec les compositions Sighty/CodPlay existantes. Le menu et
 l’ordre de lecture reprennent la séquence racine du document : les pages
@@ -108,6 +124,15 @@ inaccessible tant que le parcours requis pour son évaluation n’est pas termin
   barre et les icônes d’ouverture/fermeture du sommaire mesurent 14 × 14 px. À
   390 px, la barre garde des boutons de 40 px et le menu des boutons de 44 px ;
   à 1280 px, les commandes conservent leurs libellés et noms accessibles.
+- Brave DevTools, le 13 octobre 2026, a ouvert depuis l’éditeur synchronisé
+  `elce-document`, page « Titre », l’URL réseau
+  `http://192.168.1.47:5175/?elce-preview-project=elce-document&elce-preview-page=page-a`.
+  L’API a répondu `200` à la lecture du document, révision 10, et les médias
+  visibles ont chargé. À 390 × 844, l’en-tête et les actions de preview sont
+  absents ; le lecteur occupe l’écran et garde ses commandes de navigation.
+  L’API refuse la liste des projets (`403`) et un prévol d’écriture (`403`).
+  Brave émule ici un téléphone ; l’accès depuis un téléphone réel reste à
+  vérifier sur le même réseau local.
 - Pour cette correction, le typecheck et le build passent ; le build signale un
   chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
   passe 28/28. La suite complète compte 218 succès et un échec d’environnement :

@@ -29,6 +29,7 @@ export class ElceStatisticalGraphSceneBuilder {
     partId?: string,
   ): StatisticalGraphSceneBuild {
     const titleId = `${rootId}-svg-title`
+    const renderingContent = transposeStatisticalGraphContent(content)
     const title = content.title.trim() || 'Graphe statistique'
     const visibleTitle = content.title.trim().length > 0
       ? `<h2 id="${rootId}-heading" class="elce-statistical-graph__title">${escapeHtml(content.title)}</h2>`
@@ -36,9 +37,9 @@ export class ElceStatisticalGraphSceneBuilder {
     const overline = content.overline.trim().length === 0
       ? ''
       : `<p id="${rootId}-overline" class="elce-statistical-graph__overline">${escapeHtml(content.overline)}</p>`
-    const chart = content.rendering === STATISTICAL_GRAPH_RENDERING.TABLE
-      ? renderVisibleTable(content, rootId)
-      : `${renderSvgChart(content, rootId, titleId)}${renderAccessibleTable(content, rootId)}`
+    const chart = renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE
+      ? renderVisibleTable(renderingContent, rootId)
+      : `${renderSvgChart(renderingContent, rootId, titleId)}${renderAccessibleTable(renderingContent, rootId)}`
     const layoutClass = layoutId === 'statistical-graph-side-by-side'
       ? 'elce-statistical-graph--side-by-side'
       : 'elce-statistical-graph--above-text'
@@ -51,10 +52,32 @@ export class ElceStatisticalGraphSceneBuilder {
   }
 }
 
+/** Creates a render-only graph projection with categories and series swapped. */
+function transposeStatisticalGraphContent(content: StatisticalGraphContent): StatisticalGraphContent {
+  if (content.transposeEnabled === false) return content
+  return {
+    ...content,
+    categoryAxisLabel: content.seriesAxisLabel,
+    seriesAxisLabel: content.categoryAxisLabel,
+    pieSeriesId: content.pieCategoryId ?? content.categories[0]?.id ?? null,
+    pieCategoryId: content.pieSeriesId,
+    categories: content.series.map((series) => ({ id: series.id, label: series.label })),
+    series: content.categories.map((category) => ({ id: category.id, label: category.label })),
+    values: content.values.map((entry) => ({
+      categoryId: entry.seriesId,
+      seriesId: entry.categoryId,
+      value: entry.value,
+    })),
+  }
+}
+
 /** Renders an SVG chart with density-limited axis labels and compact series cues. */
 function renderSvgChart(content: StatisticalGraphContent, rootId: string, titleId: string): string {
   const descriptionId = `${rootId}-description`
   const title = content.title.trim() || 'Graphe statistique'
+  const transpositionDescription = content.transposeEnabled !== false
+    ? ' Les catégories et les séries sont transposées.'
+    : ''
   const axisLabel = content.categoryAxisLabel.trim().length === 0
     ? ''
     : `<text id="${rootId}-category-axis-label" class="elce-statistical-graph__axis-label" x="500" y="486" text-anchor="middle">${escapeHtml(content.categoryAxisLabel)}</text>`
@@ -65,7 +88,7 @@ function renderSvgChart(content: StatisticalGraphContent, rootId: string, titleI
     ? renderPie(content, rootId)
     : renderCartesian(content, rootId)
   const legend = renderLegend(content, rootId)
-  return `<div id="${rootId}-chart-frame" class="elce-statistical-graph__chart-frame"><svg id="${rootId}-svg" class="elce-statistical-graph__svg" viewBox="0 0 1000 500" role="img" aria-labelledby="${titleId} ${descriptionId}" preserveAspectRatio="xMidYMid meet"><title id="${titleId}">${escapeHtml(title)}</title><desc id="${descriptionId}">${renderingDescription(content.rendering)}. Le tableau détaillé des données suit le graphique.</desc>${graphic}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : axisLabel}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : seriesLabel}</svg>${legend}</div>`
+  return `<div id="${rootId}-chart-frame" class="elce-statistical-graph__chart-frame"><svg id="${rootId}-svg" class="elce-statistical-graph__svg" viewBox="0 0 1000 500" role="img" aria-labelledby="${titleId} ${descriptionId}" preserveAspectRatio="xMidYMid meet"><title id="${titleId}">${escapeHtml(title)}</title><desc id="${descriptionId}">${renderingDescription(content.rendering)}.${transpositionDescription} Le tableau détaillé des données suit le graphique.</desc>${graphic}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : axisLabel}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : seriesLabel}</svg>${legend}</div>`
 }
 
 /** Draws grouped bars or lines from the same sparse values used by the data table. */
@@ -204,18 +227,28 @@ function pieSectorPath(centerX: number, centerY: number, radius: number, start: 
 /** Renders concise, density-limited series or category color keys. */
 function renderLegend(content: StatisticalGraphContent, rootId: string): string {
   const isPie = content.rendering === STATISTICAL_GRAPH_RENDERING.PIE
+  const legendLabel = isPie
+    ? content.transposeEnabled !== false ? 'Séries' : 'Catégories'
+    : content.transposeEnabled !== false ? 'Catégories' : 'Séries'
   const entries = isPie
     ? content.categories.map((category, index) => ({ id: category.id, label: category.label, colorIndex: index }))
       .filter((entry) => (content.values.find((value) => value.categoryId === entry.id && value.seriesId === content.pieSeriesId)?.value ?? 0) > 0)
     : content.series.map((series, index) => ({ id: series.id, label: series.label, colorIndex: index }))
-  const density = labelDensity(entries.length)
-  const selectedEntries = entries.filter((_entry, index) => index % density === 0 || index === entries.length - 1)
-  return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${isPie ? 'Catégories' : 'Séries'}">${selectedEntries.map((entry) => `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark" style="background-color:${graphColor(entry.colorIndex)}"></span><span id="${rootId}-legend-label-${entry.id}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span></li>`).join('')}</ul>`
+  const namedEntries = entries.filter((entry) => entry.label.trim().length > 0)
+  if (namedEntries.length === 0) return ''
+  const density = labelDensity(namedEntries.length)
+  const selectedEntries = namedEntries.filter((_entry, index) => index % density === 0 || index === namedEntries.length - 1)
+  return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${legendLabel}">${selectedEntries.map((entry) => `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark" style="background-color:${graphColor(entry.colorIndex)}"></span><span id="${rootId}-legend-label-${entry.id}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span></li>`).join('')}</ul>`
 }
 
-/** Renders the data table as either visible HTML or a visually hidden alternative. */
+/** Renders only populated category rows in the visible Table representation. */
 function renderVisibleTable(content: StatisticalGraphContent, rootId: string): string {
-  return `${renderAxisCaptions(content, rootId)}${renderTable(content, rootId, 'elce-statistical-graph__table')}`
+  const populatedCategoryIds = new Set(content.values.map((entry) => entry.categoryId))
+  const visibleContent = {
+    ...content,
+    categories: content.categories.filter((category) => populatedCategoryIds.has(category.id)),
+  }
+  return `${renderAxisCaptions(content, rootId)}${renderTable(visibleContent, rootId, 'elce-statistical-graph__table')}`
 }
 
 /** Renders the required semantic alternative after an SVG chart. */

@@ -7,7 +7,7 @@ const builder = new ElceStatisticalGraphSceneBuilder()
 
 describe('Statistical Graph scene builder', () => {
   it('renders the selected Table as visible HTML and chooses one font size for all cells', () => {
-    const build = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE), 'statistical-graph-above-text', 'table-graph')
+    const build = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, { transposeEnabled: false }), 'statistical-graph-above-text', 'table-graph')
 
     expect(build.markup).toContain('<table id="table-graph-table" class="elce-statistical-graph__table" style="--statistical-graph-series-count:2;--statistical-graph-category-count:1;--statistical-graph-max-value-length:1;--statistical-graph-max-row-heading-length:6;--statistical-graph-max-series-heading-length:10">')
     expect(build.markup).toContain('<th id="table-graph-series-0" scope="col" title="Population">Population</th>')
@@ -21,7 +21,7 @@ describe('Statistical Graph scene builder', () => {
 
   it('marks wide visible tables for responsive dense layout while preserving every series label', () => {
     const series = Array.from({ length: 40 }, (_unused, index) => ({ id: `s${index}`, label: `Série ${index + 1}` }))
-    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, { series }), 'statistical-graph-above-text', 'dense-table').markup
+    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, { series, transposeEnabled: false }), 'statistical-graph-above-text', 'dense-table').markup
 
     expect(markup).toContain('class="elce-statistical-graph__table elce-statistical-graph__table--dense" style="--statistical-graph-series-count:40;--statistical-graph-category-count:1;--statistical-graph-max-value-length:1;--statistical-graph-max-row-heading-length:6;--statistical-graph-max-series-heading-length:8"')
     expect(markup).toContain('id="dense-table-category-0" class="elce-statistical-graph__row-heading" scope="row" title="Nord">Nord</th>')
@@ -32,14 +32,85 @@ describe('Statistical Graph scene builder', () => {
   it('uses the dense layout for tall tables and includes the longest content in the shared fit size', () => {
     const categories = Array.from({ length: 40 }, (_unused, index) => ({ id: `c${index}`, label: `Catégorie ${index + 1}` }))
     const series = [{ id: 's1', label: 'Valeur A' }, { id: 's2', label: 'Valeur B' }]
+    const values = categories.map((category, index) => ({
+      categoryId: category.id,
+      seriesId: 's1',
+      value: index === categories.length - 1 ? 1600 : index,
+    }))
     const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
       categories,
       series,
-      values: [{ categoryId: 'c39', seriesId: 's1', value: 1600 }],
+      values,
+      transposeEnabled: false,
     }), 'statistical-graph-above-text', 'tall-table').markup
 
     expect(markup).toContain('class="elce-statistical-graph__table elce-statistical-graph__table--dense" style="--statistical-graph-series-count:2;--statistical-graph-category-count:40;--statistical-graph-max-value-length:5;--statistical-graph-max-row-heading-length:12;--statistical-graph-max-series-heading-length:8"')
     expect(markup).toContain('id="tall-table-cell-39-0" title="1 600">1 600</td>')
+  })
+
+  it('transposes the table and its axis headings by default', () => {
+    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
+      categories: [{ id: 'c1', label: 'Nord' }, { id: 'c2', label: 'Sud' }],
+      series: [{ id: 's1', label: 'Population' }, { id: 's2', label: 'Surface' }],
+      values: [
+        { categoryId: 'c1', seriesId: 's1', value: 0 },
+        { categoryId: 'c2', seriesId: 's2', value: 42 },
+      ],
+    }), 'statistical-graph-above-text', 'transposed-table').markup
+
+    expect(markup).toContain('id="transposed-table-table-category-axis" class="elce-statistical-graph__table-axis">Habitants</p>')
+    expect(markup).toContain('id="transposed-table-table-series-axis" class="elce-statistical-graph__table-axis">Région</p>')
+    expect(markup).toContain('id="transposed-table-series-0" scope="col" title="Nord">Nord</th>')
+    expect(markup).toContain('id="transposed-table-category-0" class="elce-statistical-graph__row-heading" scope="row" title="Population">Population</th>')
+    expect(markup).toContain('id="transposed-table-cell-0-0" title="0">0</td>')
+    expect(markup).toContain('id="transposed-table-cell-1-1" title="42">42</td>')
+  })
+
+  it('shows only populated table rows and treats zero as data', () => {
+    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
+      transposeEnabled: false,
+      categories: [
+        { id: 'empty', label: 'Vide' },
+        { id: 'zero', label: 'Zéro' },
+        { id: 'value', label: 'Valeur' },
+      ],
+      values: [
+        { categoryId: 'zero', seriesId: 's1', value: 0 },
+        { categoryId: 'value', seriesId: 's2', value: 3 },
+      ],
+    }), 'statistical-graph-above-text', 'populated-table').markup
+
+    expect(markup).not.toContain('title="Vide">Vide</th>')
+    expect(markup).toContain('id="populated-table-category-0" class="elce-statistical-graph__row-heading" scope="row" title="Zéro">Zéro</th>')
+    expect(markup).toContain('id="populated-table-cell-0-0" title="0">0</td>')
+    expect(markup).toContain('id="populated-table-category-1" class="elce-statistical-graph__row-heading" scope="row" title="Valeur">Valeur</th>')
+  })
+
+  it('uses the selected category for a transposed pie and keeps only named legend entries', () => {
+    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.PIE, {
+      categories: [{ id: 'c1', label: 'Nord' }, { id: 'c2', label: 'Sud' }],
+      series: [{ id: 's1', label: 'Population' }, { id: 's2', label: 'Surface' }],
+      values: [
+        { categoryId: 'c1', seriesId: 's1', value: 5 },
+        { categoryId: 'c2', seriesId: 's1', value: 0 },
+        { categoryId: 'c2', seriesId: 's2', value: 9 },
+      ],
+      pieCategoryId: 'c2',
+    }), 'statistical-graph-above-text', 'transposed-pie').markup
+
+    expect(markup).toContain('id="transposed-pie-legend" class="elce-statistical-graph__legend" aria-label="Séries"')
+    expect(markup).toContain('id="transposed-pie-legend-label-s2" class="elce-statistical-graph__legend-label">Surface</span>')
+    expect(markup).not.toContain('id="transposed-pie-legend-label-s1"')
+    expect(markup.match(/class="elce-statistical-graph__sector"/g)).toHaveLength(1)
+  })
+
+  it('omits chart legends when no applicable label is named', () => {
+    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.BAR, {
+      transposeEnabled: false,
+      series: [{ id: 's1', label: ' ' }, { id: 's2', label: '' }],
+    }), 'statistical-graph-above-text', 'unlabeled-chart').markup
+
+    expect(markup).not.toContain('id="unlabeled-chart-legend"')
   })
 
   it('exposes each SVG mode by its title and keeps the same semantic data table', () => {

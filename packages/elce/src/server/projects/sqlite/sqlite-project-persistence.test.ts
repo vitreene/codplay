@@ -3,7 +3,9 @@ import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { rawSql } from 'remix/data-table'
+import { loadMigrations } from 'remix/data-table/migrations/node'
 import {
   BDC_LOCATION,
   BDC_TYPE,
@@ -26,6 +28,7 @@ import { MediaApiController } from '../../media/media-api-controller'
 import { createMediaFileStorage } from '../../media/media-file-storage'
 import { openProjectDatabase } from './project-database'
 import { SqliteProjectPersistence } from './sqlite-project-persistence'
+import { createSqliteDatabase } from 'remix/data-table/sqlite'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 
 describe('SQLite project persistence through the Remix API', () => {
@@ -63,6 +66,123 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(restored.bdcs.toSorted(compareById)).toEqual(document.bdcs.toSorted(compareById))
     expect(restored.data.revelationDefaults).toEqual(document.data.revelationDefaults)
     assertDocumentInvariants(restored)
+  })
+
+  it('migrates relational Graph rows to JSON and back without changing Question/Réponses', async () => {
+    database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
+    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    await database.migrate(migrations, { to: '20261013110000_add-statistical-graph-transposition' })
+    const projectId = 'project-graph-json-migration'
+    await database.exec(rawSql(
+      `INSERT INTO projects (
+        project_id, name, format_version, revision, created_at, updated_at,
+        default_intro_transition_ref, default_outro_transition_ref
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [projectId, 'Migration Graphe', 4, 0, '2026-10-14', '2026-10-14', 'fade', 'fade'],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id)
+       VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
+      [projectId, 'bdc-graph', BDC_TYPE.STATISTICAL_GRAPH, DEFAULT_PRESET_ID.STATISTICAL_GRAPH_ABOVE_TEXT,
+        projectId, 'bdc-question', BDC_TYPE.QUESTION, DEFAULT_PRESET_ID.QUESTION],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO statistical_graphs (
+        project_id, content_block_id, rendering, overline, title,
+        category_axis_label, series_axis_label, editorial_text, pie_series_id, pie_category_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [projectId, 'bdc-graph', STATISTICAL_GRAPH_RENDERING.PIE, '2026', 'Population',
+        'Région', 'Habitants', 'Source locale', 'series-1', null],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO graph_categories (project_id, graph_content_block_id, category_id, position, label)
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [projectId, 'bdc-graph', 'category-1', 0, 'Nord',
+        projectId, 'bdc-graph', 'category-2', 1, 'Sud'],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO graph_series (project_id, graph_content_block_id, series_id, position, label)
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [projectId, 'bdc-graph', 'series-1', 0, 'Population',
+        projectId, 'bdc-graph', 'series-2', 1, 'Surface'],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO graph_values (project_id, graph_content_block_id, category_id, series_id, value)
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [projectId, 'bdc-graph', 'category-1', 'series-1', 1250.5,
+        projectId, 'bdc-graph', 'category-2', 'series-2', 0],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO questions (project_id, content_block_id, media_id, question_type, title, prompt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [projectId, 'bdc-question', null, 'multiple-choice', 'Question', 'Choisir une réponse'],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO question_answers (
+        project_id, question_content_block_id, answer_id, position, label, is_correct
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [projectId, 'bdc-question', 'answer-1', 0, 'Réponse', 1],
+    ))
+    const questionRowsBefore = await database.exec(rawSql(
+      'SELECT * FROM questions WHERE project_id = ?', [projectId],
+    ))
+    const answerRowsBefore = await database.exec(rawSql(
+      'SELECT * FROM question_answers WHERE project_id = ?', [projectId],
+    ))
+    await database.migrate(migrations)
+
+    const graphRows = await database.exec(rawSql(
+      'SELECT content_json FROM statistical_graphs WHERE project_id = ? AND content_block_id = ?',
+      [projectId, 'bdc-graph'],
+    ))
+    const graphJson = graphRows.rows?.[0]?.content_json
+    expect(typeof graphJson).toBe('string')
+    expect(JSON.parse(String(graphJson))).toEqual({
+      rendering: STATISTICAL_GRAPH_RENDERING.PIE,
+      transposeEnabled: true,
+      columnLabelsEnabled: true,
+      rowLabelsEnabled: true,
+      overline: '2026',
+      title: 'Population',
+      categoryAxisLabel: 'Région',
+      seriesAxisLabel: 'Habitants',
+      editorialText: 'Source locale',
+      pieSeriesId: 'series-1',
+      pieCategoryId: 'category-1',
+      categories: [
+        { id: 'category-1', label: 'Nord' },
+        { id: 'category-2', label: 'Sud' },
+      ],
+      series: [
+        { id: 'series-1', label: 'Population' },
+        { id: 'series-2', label: 'Surface' },
+      ],
+      values: [
+        { categoryId: 'category-1', seriesId: 'series-1', value: 1250.5 },
+        { categoryId: 'category-2', seriesId: 'series-2', value: 0 },
+      ],
+    })
+
+    const detailTables = await database.exec(rawSql(
+      `SELECT name FROM sqlite_master WHERE type = 'table'
+       AND name IN ('graph_categories', 'graph_series', 'graph_values') ORDER BY name`,
+    ))
+    expect(detailTables.rows).toEqual([])
+
+    expect((await database.exec(rawSql('SELECT * FROM questions WHERE project_id = ?', [projectId]))).rows)
+      .toEqual(questionRowsBefore.rows)
+    expect((await database.exec(rawSql('SELECT * FROM question_answers WHERE project_id = ?', [projectId]))).rows)
+      .toEqual(answerRowsBefore.rows)
+
+    await database.migrate(migrations, { direction: 'down', step: 1 })
+    const relationalValues = await database.exec(rawSql(
+      'SELECT category_id, series_id, value FROM graph_values WHERE project_id = ? ORDER BY category_id',
+      [projectId],
+    ))
+    expect(relationalValues.rows).toEqual([
+      { category_id: 'category-1', series_id: 'series-1', value: 1250.5 },
+      { category_id: 'category-2', series_id: 'series-2', value: 0 },
+    ])
   })
 
   it('preserves server media metadata and rejects stale document revisions atomically', async () => {
@@ -600,6 +720,8 @@ function createRelationalFixture(): ElceDocumentClass {
     statisticalGraph: {
       ...graphContent,
       rendering: STATISTICAL_GRAPH_RENDERING.LINE,
+      columnLabelsEnabled: false,
+      rowLabelsEnabled: true,
       overline: '2026',
       title: 'Population',
       editorialText: 'Source locale',

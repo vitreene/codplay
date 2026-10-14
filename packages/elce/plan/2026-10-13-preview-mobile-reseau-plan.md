@@ -1,7 +1,7 @@
 # Elcé — preview mobile sur le réseau local
 
-**Statut : En cours.** Le contrat est accepté ; l’entrée réseau, le lecteur
-autonome et sa validation restent à appliquer.
+**Statut : En cours.** Le mode réseau, le lecteur autonome et les vérifications
+Brave sont appliqués. Il reste à confirmer l’accès depuis un téléphone réel.
 
 ## Objectif
 
@@ -14,7 +14,8 @@ Sighty/CodPlay déjà utilisé par la preview.
   serveur. Un rechargement de l’URL relit la version la plus récente.
 - L’URL identifie le document et la page de départ choisie dans l’éditeur.
 - Le lecteur autonome ne montre ni titre de contexte, ni barre de synchronisation,
-  ni commandes propres à l’éditeur. Il occupe l’écran disponible.
+  ni commandes propres à l’éditeur. Il occupe l’écran disponible ; le sommaire
+  et la navigation propres au lecteur Sighty/CodPlay restent utilisables.
 - La machine sert le lecteur et son API en mode réseau local opt-in ; les ports
   applicatifs restent `5175` et `5181`. Le lancement normal conserve les adresses
   de boucle locale. Aucun serveur sur `5173` n’est lancé ni modifié.
@@ -26,21 +27,19 @@ Sighty/CodPlay déjà utilisé par la preview.
 
 ## Travail et acceptation
 
-1. Ajouter un mode de lancement réseau qui choisit l’adresse IPv4 active, garde
-   les ports `5175` et `5181`, et fournit les origines publique de preview et
-   d’API au document Remix.
-2. Ouvrir depuis l’éditeur une route autonome portant l’identifiant du document
-   et la page de départ. Elle lit le document serveur, emploie les URL de médias
-   déjà servies par l’API et réutilise la composition de lecteur existante.
-3. Réserver l’accès non local à cette route et aux lectures API nécessaires ;
-   refuser les mutations réseau et ne pas rendre l’éditeur sur l’origine LAN.
-4. Vérifier sur l’origine LAN que l’URL affiche la page choisie sans bandeau ni
-   commandes, que les médias confirmés chargent, qu’un rechargement lit la
-   dernière révision serveur et que l’API refuse les écritures réseau. Garder
-   deux pages Brave au plus ; ne pas lancer Firefox.
-5. Mettre à jour les spécifications `player-preview` et `remix-spa` uniquement
-   après vérification du comportement. Mettre le présent plan à jour avec les
-   preuves restantes.
+1. [x] Le mode de lancement choisit l’adresse IPv4 privée active, garde les
+   ports `5175` et `5181` et fournit les origines réseau à Remix.
+2. [x] L’action Preview ouvre l’identifiant du document et la page sélectionnée ;
+   le lecteur autonome relit le document et ses médias depuis le serveur.
+3. [x] Les clients réseau ne peuvent pas lister ni modifier les projets ;
+   l’éditeur reste inaccessible sur l’origine LAN.
+4. [x] Brave vérifie la route LAN en émulation mobile à 390 × 844, le chargement
+   des médias et du document à la révision 10, ainsi que les refus API `403`.
+   [ ] Confirmer depuis un téléphone réel connecté au même réseau ; garder deux
+   pages Brave au plus et ne pas lancer Firefox.
+5. [x] Les spécifications `player-preview`, `project-api` et `remix-spa`
+   reflètent le comportement vérifié. Le plan reste ouvert jusqu’à l’essai sur
+   téléphone.
 
 ## Invariants
 
