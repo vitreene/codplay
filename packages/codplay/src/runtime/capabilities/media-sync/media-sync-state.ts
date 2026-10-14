@@ -2,6 +2,7 @@ import type { CompiledScene } from '../../../scene/compiled'
 import { buildTrackRegistry, resolveStoryTrackId } from '../../player/pipeline'
 import type { SolvedPerso, SolvedScene } from '../../player/pipeline'
 import type { MediaRuntimeState } from './media-sync-types'
+import type { MediaSync } from '../../components/media'
 
 /** Registers the media states visible in one solved scene without touching playback. */
 export function initializeMediaStates(
@@ -13,7 +14,7 @@ export function initializeMediaStates(
   for (const perso of Object.values(scene.persos)) {
     if (perso.type !== 'media') continue
     activeIds.add(perso.key)
-    const initialMaster = readInitialMaster(scene.scene, perso)
+    const sync = readInitialSync(scene.scene, perso)
     const trackId = resolveStoryTrackId({ id: perso.storyId })
     const trackActive = tracks.tracks[trackId]?.active ?? true
     const previous = mediaById.get(perso.key)
@@ -23,7 +24,7 @@ export function initializeMediaStates(
         storyId: perso.storyId,
         trackId,
         trackActive,
-        isMaster: initialMaster,
+        sync,
         logicalState: 'idle',
         sequenceStartMs: null,
         sourceStartMs: 0,
@@ -37,7 +38,7 @@ export function initializeMediaStates(
       previous.storyId = perso.storyId
       previous.trackId = trackId
       previous.trackActive = trackActive
-      previous.isMaster = initialMaster
+      previous.sync = sync
     }
   }
   for (const runtimeItemId of mediaById.keys()) {
@@ -45,8 +46,8 @@ export function initializeMediaStates(
   }
 }
 
-/** Reads the media master flag from the immutable compiled perso declaration. */
-export function readInitialMaster(scene: CompiledScene, perso: SolvedPerso): boolean {
+/** Reads the clock relationship from the immutable compiled media declaration. */
+export function readInitialSync(scene: CompiledScene, perso: SolvedPerso): MediaSync {
   const compiledPerso = scene.scene.stories[perso.storyId]?.persos.find((candidate) => candidate.id === perso.persoId)
-  return compiledPerso?.initial.master === true
+  return (compiledPerso?.initial.sync as MediaSync | undefined) ?? 'auto'
 }

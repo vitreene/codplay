@@ -50,7 +50,7 @@ export type {
   InputState,
   ResolvedInputState,
 } from './input'
-export type { MediaAction, MediaInitial, MediaPartState, MediaState, MediaTag, MediaTransition } from './media'
+export type { MediaAction, MediaInitial, MediaPartState, MediaState, MediaSync, MediaTag, MediaTransition } from './media'
 export type {
   PolygonAction,
   PolygonCompiledMorphOptions,

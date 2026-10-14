@@ -51,6 +51,47 @@ modification du cœur.
    suffit à démontrer le pont ; sinon, faire décider l’extension avant de
    l’implémenter.
 
+## Extension différée — relation d’horloges `sync`
+
+**Décision acceptée le 14 octobre 2026 ; réalisation différée à la demande
+de l’utilisateur.** La relation `sync` discutée pour `media` doit également
+être considérée pour les composants apparentés aux médias Rive, Three.js et
+Lottie, avec deux valeurs seulement :
+
+- `auto`, par défaut : pilotage temporel par CodPlay, correspondant au
+  comportement actuel ;
+- `independent` : progression temporelle indépendante, avec maintien des
+  commandes explicites prises en charge par l’intégration.
+
+Ces familles ne proposeront pas `master`. Le mode indépendant de `media`
+est maintenant vérifié dans la
+[spécification média](../specs/media-sync-v2-spec.md) ; l’extension aux tiers
+reste suivie ici.
+Leurs profils ne sont pas présentés comme possédant déjà cette propriété.
+Pour Lottie, le comportement de référence reste le périmètre de pilotage
+CodPlay décidé plus haut ; cette mention ne certifie pas une intégration
+Lottie déjà implémentée et vérifiée.
+
+Avant une future réalisation, ce plan devra fixer :
+
+- la portée de `sync` dans chaque intégration : hôte, animations linéaires,
+  state machine ou composants logiques concernés, sans l’ajouter
+  indistinctement à tous les persos ;
+- le raccord du temps indépendant aux circuits existants de présentation et
+  de commit. La décision n’autorise pas une seconde boucle de rendu, un
+  nouveau player ou une horloge privée par composant ;
+- le traitement des commandes existantes, des transitions de transport de
+  scène et des frontières de montage, masquage et destruction ;
+- la validation auteur des deux valeurs admises, du défaut `auto` et du refus
+  de `master`, puis les preuves réelles de continuité en mode indépendant et
+  de non-régression du mode `auto`.
+
+La réalisation devra étendre les circuits identifiés par les spécifications
+et respecter leurs propriétaires. Toute lacune générique sera cadrée dans le
+[plan du pont](./2026-09-18-third-party-render-target-codplay-plan.md)
+avant modification du cœur. Cette extension reste au plan ; les
+spécifications ne seront enrichies qu’après implémentation et vérification.
+
 ## Parcours d’acceptation restant
 
 Les validations transverses et leur ordre sont détaillés dans le

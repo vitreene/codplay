@@ -111,6 +111,12 @@ du projet.
 
 ## Projection et lecture
 
+Une vidéo Carte utilise `media` en `sync: 'independent'`, avec ses contrôles
+natifs. Le `STOP` de sortie de page est porté par la composition du lecteur,
+selon la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+Cette règle de sortie de page n’ajoute pas de transport à la sélection d’une
+vue Carousel.
+
 `ElceFluxSceneBuilder` conserve la place du Carousel dans la page Flux et lui
 transmet les BDC du document. `ElceCarouselSceneBuilder` résout les IDs des
 enfants dans `CarouselContent.cards`, puis délègue chaque Carte à

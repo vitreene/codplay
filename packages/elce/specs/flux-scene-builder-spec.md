@@ -16,6 +16,11 @@ Le montage d’un Carousel dans la séquence Flux est décrit dans la
 
 ## Contrat
 
+Les vidéos sont projetées comme `media` avec `sync: 'independent'` et leurs
+contrôles/broadcasts existants. Le temps CodPlay ne conduit pas leur lecture.
+Le `STOP` de sortie de page appartient à la composition du lecteur, décrit
+dans la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+
 `buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
 ordonnée de BDC Section, Question, Résultat, Carte, Graphe ou
 Carousel, selon les contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;

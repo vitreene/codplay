@@ -4,6 +4,9 @@ import type { MediaTransition } from '../component-surface-types'
 /** Native media element kinds supported by the unified media component. */
 export type MediaTag = 'audio' | 'video'
 
+/** Selects the relationship between native media time and the CodPlay clock. */
+export type MediaSync = 'auto' | 'master' | 'independent'
+
 /** Properties projected onto the persistent native audio or video element. */
 export type MediaPartState = BaseComponentVisualData
 
@@ -12,7 +15,7 @@ export type MediaInitial = BaseComponentVisualData & Readonly<{
   src: string
   tag?: MediaTag
   controls?: boolean
-  master?: boolean
+  sync?: MediaSync
   video?: MediaPartState
 }>
 

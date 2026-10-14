@@ -18,8 +18,9 @@ export function applyBroadcastOccurrence(
   if (state === undefined) return
   state.trackId = occurrence.trackId
   state.trackActive = occurrence.trackActive
+  const component = getMediaComponent(state.runtimeItemId)
   if (occurrence.broadcast.type === 'START') {
-    if (state.isMaster) pausePreviousMasters(state, occurrence.action.startAt, mediaById, getMediaComponent)
+    if (state.sync === 'master') pausePreviousMasters(state, occurrence.action.startAt, mediaById, getMediaComponent)
     state.logicalState = 'playing'
     state.sequenceStartMs = occurrence.action.startAt
     state.sourceStartMs = clampMediaMs(occurrence.broadcast.startAt ?? 0)
@@ -30,24 +31,41 @@ export function applyBroadcastOccurrence(
     state.activationOrder = nextActivation()
     state.needsResync = true
     state.transition = occurrence.broadcast.transition ?? null
-    const component = getMediaComponent(state.runtimeItemId)
     component?.setPlaybackWindow?.(
       state.sourceStartMs,
       component === undefined ? state.sourceEndMs : resolveEffectiveEndMs(state, component),
     )
+    if (state.sync === 'independent') {
+      component?.seekTo(state.sourceStartMs)
+      component?.play()
+      state.needsResync = false
+    }
     return
   }
 
   if (occurrence.broadcast.type === 'PAUSE') {
-    state.frozenMediaMs = resolveExpectedMediaMs(state, occurrence.action.startAt, getMediaComponent)
+    state.frozenMediaMs = state.sync === 'independent'
+      ? component?.getCurrentTimeMs() ?? state.frozenMediaMs
+      : resolveExpectedMediaMs(state, occurrence.action.startAt, getMediaComponent)
     state.logicalState = 'paused'
     state.needsResync = true
+    if (state.sync === 'independent') {
+      component?.pause()
+      state.needsResync = false
+    }
     return
   }
 
-  state.frozenMediaMs = resolveExpectedMediaMs(state, occurrence.action.startAt, getMediaComponent)
+  state.frozenMediaMs = 0
+  state.sourceStartMs = 0
+  state.sourceEndMs = null
   state.logicalState = 'stopped'
   state.needsResync = true
+  component?.setPlaybackWindow?.(0, null)
+  if (state.sync === 'independent') {
+    component?.stopAt(0)
+    state.needsResync = false
+  }
 }
 
 /** Pauses every previously active master before a newly started master takes over. */
@@ -58,7 +76,7 @@ function pausePreviousMasters(
   getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const previous of mediaById.values()) {
-    if (previous === nextMaster || !previous.isMaster || previous.logicalState !== 'playing') continue
+    if (previous === nextMaster || previous.sync !== 'master' || previous.logicalState !== 'playing') continue
     previous.frozenMediaMs = resolveExpectedMediaMs(previous, timelineMs, getMediaComponent)
     previous.logicalState = 'paused'
     previous.needsResync = true
@@ -96,6 +114,8 @@ export function syncTimeline(
     if (component === undefined) continue
 
     applyMediaTransition(state, timelineMs, component)
+
+    if (state.sync === 'independent') continue
 
     if (state.logicalState === 'idle') {
       if (state.needsResync) {
@@ -160,6 +180,7 @@ export function pauseActivePlayback(
   getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const state of mediaById.values()) {
+    if (state.sync === 'independent') continue
     if (state.logicalState === 'idle' || state.logicalState === 'stopped') continue
     state.frozenMediaMs = resolveExpectedMediaMs(state, timelineMs, getMediaComponent)
     state.logicalState = 'paused'
@@ -175,7 +196,7 @@ export function resolveTimelineFromMaster(
   getMediaComponent: MediaComponentSurfaceResolver,
 ): number {
   const activeMaster = [...mediaById.values()]
-    .filter((state) => state.isMaster && state.logicalState === 'playing')
+    .filter((state) => state.sync === 'master' && state.logicalState === 'playing')
     .filter((state) => state.trackActive)
     .sort((left, right) => right.activationOrder - left.activationOrder)[0]
   if (activeMaster === undefined || activeMaster.sequenceStartMs === null) return fallbackTimelineMs
@@ -194,6 +215,7 @@ export function resetPlaybackStates(
   getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const state of mediaById.values()) {
+    if (state.sync === 'independent') continue
     const component = getMediaComponent(state.runtimeItemId)
     if (state.logicalState !== 'idle') component?.pause()
     component?.setPlaybackWindow?.(0, null)

@@ -3,6 +3,7 @@ import type {
   MediaComponentSurface,
   MediaTransition,
 } from '../../components/component-surface-types'
+import type { MediaSync } from '../../components/media'
 
 /** Compatibility name for the typed media surface consumed by media-sync. */
 export type MediaSyncRuntimeComponent = MediaComponentSurface
@@ -21,7 +22,7 @@ export type MediaRuntimeState = {
   storyId: string
   trackId: string
   trackActive: boolean
-  isMaster: boolean
+  sync: MediaSync
   logicalState: MediaLogicalState
   sequenceStartMs: number | null
   sourceStartMs: number

@@ -78,7 +78,54 @@ des pages antérieures à cette origine. Ces pages sautées ne reçoivent aucune
 progression ni réponse. Un BDC Résultat conserve son garde global et reste
 inaccessible tant que le parcours requis pour son évaluation n’est pas terminé.
 
+## Lecture des vidéos et sortie de page
+
+Les builders Flux et Diapo déclarent leurs vidéos `media` avec
+`initial.sync: 'independent'`. Elles conservent leurs contrôles natifs et les
+broadcasts déclarés par leur builder ; leur temps ne suit pas celui de la
+scène. Le défaut générique CodPlay reste `auto`, selon la
+[spécification média](../../codplay/specs/media-sync-v2-spec.md).
+
+`ElcePlayerComposition` observe le changement du slot de contenu par
+`runtime.onSlotChange`. Elle conserve le handle public de l’occurrence
+précédente et lui adresse un événement privé par `instance.events.emit`, dans
+chaque story contenant ses médias indépendants. Le catalogue déclare dans ces
+stories le broadcast `STOP` et son `listen`, pour le livrer même après leur
+pause par Sighty. Les cibles viennent du snapshot logique existant ; aucun
+accès au nœud vidéo ne commande la lecture.
+
+Cette sortie arrête et remet à zéro ensemble. Le retour sur la page n’ajoute
+pas une commande de reset : ses éventuelles commandes d’entrée existantes
+restent celles du builder. La destruction désabonne cette observation et
+détruit les ressources du lecteur.
+
 ## Preuves
+
+### Médias indépendants
+
+- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  exerce une vidéo Carte dans la composition Sighty/CodPlay réelle : fin de
+  page par l’adaptateur d’observation, clic Suivant, `STOP` à zéro, clic
+  Précédent et réutilisation du même nœud et de la même source à zéro.
+- Les tests [Flux](../src/builders/flux/flux-scene-builder.test.ts) et
+  [Diapo](../src/builders/diapo/diapo-scene-builder.test.ts) couvrent aussi le
+  mode indépendant des vidéos de Question et les commandes de viewport Flux
+  conservées. Leurs 22 tests passent le 14 octobre 2026.
+- Safari MCP, le 14 octobre 2026, monte un document et un MP4 produits pour la
+  validation, sans modifier un projet enregistré. Les clics Suivant puis
+  Précédent donnent A → B → A ; à la sortie comme au retour, la vidéo est
+  suspendue à zéro, avec le même nœud et la même source, sans erreur du
+  lecteur. L’onglet MCP étant masqué, la fixture utilise un ordonnanceur de
+  frames par timer et injecte le signal public de fin de page dans Sighty.
+  Ce parcours vérifie navigation et transport média ; il ne certifie pas
+  l’observation native du bas de page en onglet masqué.
+- Vérification du 14 octobre : typecheck et build réussis. La suite complète
+  compte 293 succès et 9 échecs, tous reproduits sur `HEAD` avant changement :
+  sept assertions de composition/navigation, une attente de paramètres fetch
+  et un listener SQLite refusé par l’environnement (`listen EPERM`). Les
+  suites globales restent donc à corriger séparément.
+
+### Preuves antérieures de preview
 
 - [`ProjectApplication`](../src/app/remix/project-application.ts) ouvre le
   popup depuis la page sélectionnée et détruit sa liaison à la fermeture de

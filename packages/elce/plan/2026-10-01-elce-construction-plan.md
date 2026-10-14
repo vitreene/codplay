@@ -165,6 +165,31 @@ les preuves visuelles Flux/Diapo après leur validation. La revue contextuelle
 des autres layouts Carte reste ouverte selon les acceptations déjà listées
 dans ce plan.
 
+### Médias indépendants — tranche réalisée le 14 octobre 2026
+
+Les builders emploient `media.sync: 'independent'`. La sortie de page utilise
+le circuit existant Sighty/CodPlay pour envoyer `STOP`, arrêt et remise à zéro
+ensemble ; aucune réinitialisation supplémentaire au retour. Le contrat et
+les preuves sont transférés à la [spécification preview](../specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page)
+et à la [spécification CodPlay](../../codplay/specs/media-sync-v2-spec.md).
+Les typechecks et le build passent ; le cycle A → B → A est vérifié par test et
+Safari. Neuf échecs de la suite générale sont reproduits avant modification
+et restent distincts de cette tranche. L’agrandissement et les intégrations
+tierces restent différés.
+
+### Agrandissement des contenus dans le viewport — enquête à relire
+
+Le [plan dédié](./2026-10-14-elce-viewport-expansion-plan.md) étudie le clic
+d’agrandissement et le retour interpolé dans le lecteur Elcé : images d’abord,
+vidéos ensuite, puis Graphes et autres parties. Le viewport de la page est
+visé ; la fermeture d’un Carousel conserve sa nouvelle sélection. Comparer
+un perso hôte régulier et une capacité externe en réutilisant `move` et les
+circuits d’interaction existants. Les vidéos sont libres par défaut, sans lien
+avec une timeline de scène ; le replay du parcours Elcé est hors périmètre de
+ce dispositif. Le raccord vidéo et le correctif CodPlay reporté depuis Quiz
+Hunt sont référencés dans le plan dédié. **A relire :** architecture et détails
+d’acceptation à valider, aucune implémentation engagée.
+
 ### Décision acceptée — montage du BDC Résultat dans CodPlay
 
 Le player doit compiler une story CodPlay distincte pour Réussite et pour

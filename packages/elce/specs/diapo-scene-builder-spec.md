@@ -86,6 +86,13 @@ fonctionnelle.
 
 ## Preuves
 
+Les vidéos Carte et Question sont projetées en `sync: 'independent'` avec
+leurs contrôles natifs. La composition du lecteur assure le `STOP` de sortie
+de page, selon la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+Le test du builder couvre les illustrations image et vidéo de Question ; le
+test de composition et Safari couvrent le cycle de sortie/retour d’une vidéo
+Carte le 14 octobre 2026.
+
 - [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
   vérifie les types de BDC acceptés, la story unique du Carousel Diapo, sa
   racine `scroll-container`, le placement direct des cartes et de la

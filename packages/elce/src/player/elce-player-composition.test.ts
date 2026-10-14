@@ -1495,6 +1495,83 @@ describe('Elcé player composition', () => {
 
     expect(stage.querySelector('.elce-carousel-photo__media video')).not.toBeNull()
   })
+
+  it('stops an independent video on page exit and reuses it at zero on return', async () => {
+    let frameTime = performance.now()
+    const paused = new WeakMap<HTMLMediaElement, boolean>()
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      paused.set(this, false)
+      return Promise.resolve()
+    })
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
+      paused.set(this, true)
+    })
+    vi.spyOn(HTMLMediaElement.prototype, 'paused', 'get').mockImplementation(function (this: HTMLMediaElement) {
+      return paused.get(this) ?? true
+    })
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    let documentModel = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'owned-video', name: 'owned.mp4', mimeType: 'video/mp4', size: 10, caption: '' },
+    })
+    documentModel = createCardWithMedia(documentModel, 'owned-card', 'owned-video')
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-b', bdcId: 'owned-section-b', name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const errors: string[] = []
+    composition = new ElcePlayerComposition({
+      stage, document: documentModel, mediaSources: { 'owned-video': 'blob:owned-video' },
+      onLog: (message, level) => { if (level === 'error') errors.push(message) },
+    })
+    await composition.initialize()
+    const video = stage.querySelector('video')!
+    const source = video.src
+    await video.play()
+    video.currentTime = 3.8
+    const marker = stage.querySelector('#page-a-bottom-marker')!
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker))!
+    observer.deliver({ target: marker, intersectionRatio: 1, isIntersecting: true })
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')?.disabled).toBe(false)
+    })
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    flushPendingFrames(pendingFrames, frameTime += 50)
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
+      expect(video.paused).toBe(true)
+      expect(video.currentTime).toBe(0)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    flushPendingFrames(pendingFrames, frameTime += 50)
+    const previous = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')!
+    expect(previous.disabled).toBe(false)
+    previous.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(stage.querySelector('#page-a-scrollport')).not.toBeNull()
+    })
+    expect(stage.querySelector('video')).toBe(video)
+    expect(video.src).toBe(source)
+    expect(video.currentTime).toBe(0)
+    expect(video.paused).toBe(true)
+    expect(errors).toEqual([])
+  })
 })
 
 /** Creates a directly placed Photo Card whose media reference belongs to Card data. */

@@ -281,7 +281,7 @@ function createObservedSectionVideo(
         tag: 'video',
         src: video.src,
         controls: true,
-        master: false,
+        sync: 'auto',
         className: 'demo5-page__video',
         style: { position: 'relative', width: '100%', maxWidth: '36rem' },
         video: {

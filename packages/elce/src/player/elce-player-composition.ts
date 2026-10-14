@@ -18,6 +18,7 @@ import type { ElceDocument } from '../domain/document/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
 import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
+import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
 
@@ -32,6 +33,7 @@ export class ElcePlayerComposition {
   private readonly options: ElcePlayerCompositionOptions
   private destroyed = false
   private removeMenuDrawerListeners: (() => void) | undefined
+  private removePageMediaPlayback: (() => void) | undefined
 
   /** Builds one player composition from the current métier document. */
   public constructor(options: ElcePlayerCompositionOptions) {
@@ -66,6 +68,9 @@ export class ElcePlayerComposition {
   /** Initializes Sighty and starts the persistent layout and current page. */
   public async initialize(): Promise<void> {
     await this.sighty.runtime.initialize()
+    this.removePageMediaPlayback = bindPageMediaPlayback(this.sighty.runtime, (error) => {
+      this.options.onLog?.(`Arrêt des médias de la page impossible : ${String(error)}`, 'error')
+    })
     await this.sighty.runtime.play(ELCE_SCENARIO.LAYOUT_SCENE)
     this.bindMenuDrawer()
     const refreshed = await this.sighty.runtime.dispatch({ name: ELCE_EVENTS.PRESENTATION_REFRESH })
@@ -79,6 +84,8 @@ export class ElcePlayerComposition {
     this.destroyed = true
     this.removeMenuDrawerListeners?.()
     this.removeMenuDrawerListeners = undefined
+    this.removePageMediaPlayback?.()
+    this.removePageMediaPlayback = undefined
     this.sighty.runtime.destroy()
   }
 
@@ -249,8 +256,9 @@ export function createPageSceneCatalog(
     }, sceneChapterType)
     pageStyleSheets.push(...scene.styleSheets)
     const questionReset = scene.questionReset
-    const source: SightySceneSourceValue = questionReset === undefined ? scene.sceneDoc : {
-      sceneDoc: scene.sceneDoc,
+    const sceneDoc = withPageMediaStop(scene.sceneDoc)
+    const source: SightySceneSourceValue = questionReset === undefined ? sceneDoc : {
+      sceneDoc,
       onReset: (keys: readonly string[]) => keys.includes('all') || keys.includes('quiz')
         ? { name: questionReset.eventName, data: { keys: [...keys] } }
         : undefined,
