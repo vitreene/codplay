@@ -16,6 +16,7 @@ import { validateHtmlElementMethodActions } from '../builders/markup-validation/
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
+import { ELCE_VIEWPORT_EXPANSION_STYLE_SHEET } from '../builders/viewport-expansion/viewport-expansion-style.ts'
 import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
 import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
@@ -60,7 +61,7 @@ export class ElcePlayerComposition {
           htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
           pauseOnDocumentHidden: false,
         },
-        styles: [{ slot: 'elce-player-layout', cssText: [ELCE_PLAYER_STYLE_SHEET, ...pageSceneCatalog.styleSheets].join('\n') }],
+        styles: [{ slot: 'elce-player-layout', cssText: [ELCE_PLAYER_STYLE_SHEET, ELCE_VIEWPORT_EXPANSION_STYLE_SHEET, ...pageSceneCatalog.styleSheets].join('\n') }],
       },
     })
   }

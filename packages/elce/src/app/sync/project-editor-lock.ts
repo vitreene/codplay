@@ -5,6 +5,7 @@ type ProjectEditorLockMessage =
   | Readonly<{ type: 'force'; projectId: string; senderId: string }>
 
 const ACCESS_RECOVERY_FAILURE_LIMIT = 3
+const FILE_PICKER_FOCUS_FALLBACK_MS = 50
 
 export interface ProjectEditorLockLifecycle {
   onAccessWaiting(): void
@@ -37,6 +38,10 @@ export class ProjectEditorLock {
   private forceInProgress = false
   private priorityRequest: Promise<void> | null = null
   private priorityFailureCount = 0
+  private filePickerOpen = false
+  private filePickerEventReceived = false
+  private filePickerHandoffPending = false
+  private filePickerFocusTimer: ReturnType<typeof setTimeout> | null = null
 
   public constructor(projectId: string, lifecycle: ProjectEditorLockLifecycle) {
     this.projectId = projectId
@@ -52,6 +57,9 @@ export class ProjectEditorLock {
     this.started = true
     this.channel.addEventListener('message', this.onMessage)
     document.addEventListener('visibilitychange', this.onVisibilityChange)
+    document.addEventListener('click', this.onFilePickerClick, true)
+    document.addEventListener('change', this.onFilePickerEnd, true)
+    document.addEventListener('cancel', this.onFilePickerEnd, true)
     window.addEventListener('blur', this.onBlur)
     window.addEventListener('focus', this.onFocus)
     window.addEventListener('pointerdown', this.onUserInteraction, true)
@@ -83,34 +91,69 @@ export class ProjectEditorLock {
     this.started = false
     this.channel.removeEventListener('message', this.onMessage)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
+    document.removeEventListener('click', this.onFilePickerClick, true)
+    document.removeEventListener('change', this.onFilePickerEnd, true)
+    document.removeEventListener('cancel', this.onFilePickerEnd, true)
     window.removeEventListener('blur', this.onBlur)
     window.removeEventListener('focus', this.onFocus)
     window.removeEventListener('pointerdown', this.onUserInteraction, true)
     window.removeEventListener('keydown', this.onUserInteraction, true)
     window.removeEventListener('online', this.onOnline)
     window.removeEventListener('pagehide', this.onPageHide)
+    this.clearFilePickerFocusTimer()
     this.channel.close()
   }
 
   /** Requests or releases access as this window changes visibility. */
   private readonly onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') {
+      if (this.filePickerOpen) return
       this.wantsAccess = false
       void this.releaseAccess().catch(() => undefined)
       return
     }
-    if (document.visibilityState === 'visible') this.retry()
+    if (document.visibilityState === 'visible') {
+      if (this.filePickerOpen && this.pageCanEdit()) {
+        if (this.filePickerEventReceived) this.finishFilePicker()
+        else this.scheduleFilePickerFocusFallback()
+        return
+      }
+      this.retry()
+    }
   }
 
-  /** Suspends editing and syncs the local document before this window loses focus. */
+  /** Suspends editing on focus loss unless the native file chooser is still open. */
   private readonly onBlur = (): void => {
+    if (this.filePickerOpen) return
     this.wantsAccess = false
     void this.releaseAccess().catch(() => undefined)
   }
 
-  /** Requests an active project lock when focus returns to this window. */
+  /** Closes a returned file chooser or requests an active lock after ordinary focus loss. */
   private readonly onFocus = (): void => {
+    if (this.filePickerOpen) {
+      if (this.filePickerEventReceived) this.finishFilePicker()
+      else this.scheduleFilePickerFocusFallback()
+      return
+    }
     this.retry()
+  }
+
+  /** Tracks a file picker interaction before its native dialog can move focus. */
+  private readonly onFilePickerClick = (event: Event): void => {
+    if (!isFileInputEvent(event)) return
+    this.clearFilePickerFocusTimer()
+    this.filePickerOpen = true
+    this.filePickerEventReceived = false
+  }
+
+  /** Records selection after input handlers and closes the focus exception when focus returns. */
+  private readonly onFilePickerEnd = (event: Event): void => {
+    if (!this.filePickerOpen || !isFileInputEvent(event)) return
+    queueMicrotask(() => {
+      this.filePickerEventReceived = true
+      if (this.pageCanEdit()) this.finishFilePicker()
+    })
   }
 
   /** Requests edit priority after interaction in a confirmed, focused reader. */
@@ -164,6 +207,10 @@ export class ProjectEditorLock {
       return
     }
     if (this.ownsAccess) {
+      if (this.filePickerOpen) {
+        this.filePickerHandoffPending = true
+        return
+      }
       this.wantsAccess = false
       void this.releaseAccess().catch(() => undefined)
     }
@@ -282,6 +329,38 @@ export class ProjectEditorLock {
     return this.started && document.visibilityState === 'visible' && document.hasFocus()
   }
 
+  /** Delays picker completion briefly so a browser can dispatch its file change event first. */
+  private scheduleFilePickerFocusFallback(): void {
+    this.clearFilePickerFocusTimer()
+    this.filePickerFocusTimer = setTimeout(() => {
+      this.filePickerFocusTimer = null
+      this.finishFilePicker()
+    }, FILE_PICKER_FOCUS_FALLBACK_MS)
+  }
+
+  /** Ends the focus exception and performs any normal access handoff that was waiting. */
+  private finishFilePicker(): void {
+    if (!this.filePickerOpen) return
+    if (!this.pageCanEdit()) return
+    this.filePickerOpen = false
+    this.filePickerEventReceived = false
+    this.clearFilePickerFocusTimer()
+    if (this.filePickerHandoffPending) {
+      this.filePickerHandoffPending = false
+      this.wantsAccess = false
+      void this.releaseAccess().catch(() => undefined)
+      return
+    }
+    this.retry()
+  }
+
+  /** Clears the fallback timer used when a native chooser returns focus without a file event. */
+  private clearFilePickerFocusTimer(): void {
+    if (this.filePickerFocusTimer === null) return
+    clearTimeout(this.filePickerFocusTimer)
+    this.filePickerFocusTimer = null
+  }
+
   /** Waits for XState and IndexedDB to settle before handing the lock over. */
   private async releaseAccess(): Promise<void> {
     if (!this.ownsAccess || !this.grantReady || this.releaseLock === null) return
@@ -304,6 +383,13 @@ export class ProjectEditorLock {
     })()
     return this.releaseTask
   }
+}
+
+/** Recognizes click, change, or cancel events from an input type=file. */
+function isFileInputEvent(event: Event): boolean {
+  const target = event.composedPath()[0]
+  return typeof target === 'object' && target !== null
+    && 'type' in target && (target as { type?: unknown }).type === 'file'
 }
 
 /** Accepts only recognized handoff messages for this project. */

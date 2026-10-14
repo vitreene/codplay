@@ -6,7 +6,9 @@
 entre navigateurs est implémentée et sa validation réelle à deux navigateurs
 reste en cours.** La suspension XState, la reprise IndexedDB, la paire de droit
 serveur et le transfert par événements sont vérifiés par les tests ciblés et
-un parcours Safari avec signaux de focus synthétiques.
+un parcours Safari avec signaux de focus synthétiques. Les tests vérifient
+aussi que le droit reste actif si la sélection ou l’annulation précède le retour
+du focus. Le dialogue système réel reste à valider dans un navigateur.
 
 ## Rôle
 
@@ -49,9 +51,21 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   réseau ou du focus reprend la sortie sur la même session, y compris si le
   focus a été perdu juste après l’acquisition du Web Lock ; un conflit de
   révision n’est pas répété comme une panne réseau.
+- Quand un clic sur `input[type="file"]` ouvre le sélecteur natif, le verrou
+  conserve le droit serveur et le Web Lock à travers le `blur` et le passage
+  éventuel à `hidden`. Le `change` ou `cancel` est traité après les gestionnaires
+  de l’input. Si la page n’a pas encore retrouvé le focus, le verrou et l’accès
+  XState restent actifs jusqu’au retour d’une page visible et focalisée ; cela
+  évite une suspension transitoire pendant la soumission de l’import. Une
+  demande de transfert ordinaire reçue pendant cette séquence attend sa fin,
+  puis reprend la suspension et la synchronisation normales. Si le navigateur
+  n’émet aucun événement de sélection, le retour du focus ferme l’exception
+  après un bref délai. Le forçage explicite et la fermeture de page gardent
+  leurs règles actuelles.
 - `visibilitychange` vers `hidden` suspend également l’édition et libère le
-  verrou après la même sauvegarde locale. Au retour visible ou du focus, la
-  fenêtre demande le verrou quand elle possède effectivement le focus.
+  verrou après la même sauvegarde locale, sauf pendant le sélecteur natif décrit
+  ci-dessus. Au retour visible ou du focus, la fenêtre demande le verrou quand
+  elle possède effectivement le focus.
 - Le droit serveur porte un bail de 12 secondes, renouvelé toutes les
   3 secondes par la page détentrice. Si un renouvellement échoue, la page se
   suspend immédiatement ; après expiration, une page lectrice peut obtenir un
@@ -145,6 +159,15 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   vérifie qu’un blur qui arrive pendant une écriture n’ajoute pas une seconde
   tentative réseau et que le document courant, remplacé dans XState, est publié
   après le flush local.
+- [`project-editor-lock.test.ts`](../src/app/sync/project-editor-lock.test.ts)
+  vérifie le maintien du droit pendant le sélecteur, le traitement d’un
+  transfert concurrent après `change`, les retours de focus et de visibilité
+  avant ou après `change`/`cancel`, l’annulation et la reprise du blur ordinaire.
+  Le test du
+  [page editor](../src/app/remix/workspace/page-editor.test.tsx) relie ce blur
+  au vrai input Remix et confirme qu’un JPG choisi avant le retour du focus
+  rejoint le document par la file XState existante sans suspendre l’accès.
+  La boîte de dialogue système réelle reste à valider dans un navigateur.
 - Dans Safari Technology Preview, deux onglets sur le même document ont
   transféré le verrou au changement d’onglet, puis l’ont transféré au retour.
   Une requête `BroadcastChannel` a aussi fait libérer le verrou alors que la

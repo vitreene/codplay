@@ -1,4 +1,4 @@
-import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
+import type { StoryDoc } from 'codplay/scene/types'
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { MediaId, PageId, BdcId, Bdc, RevelationTransitionDefaults } from '../../domain/document/document-types'
 import type { MediaType } from '../../config/document-config-types'
@@ -21,6 +21,5 @@ export interface CarouselSceneBuildInput {
 export interface CarouselSceneBuild {
   readonly markup: string
   readonly story: StoryDoc<string>
-  readonly mediaPersos: readonly PersoDoc<string>[]
   readonly styleSheet: string
 }

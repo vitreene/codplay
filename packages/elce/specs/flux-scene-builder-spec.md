@@ -65,6 +65,14 @@ slot ; les rendus SVG réservent `56.25%`. Aucun hôte parallèle n’est ajout�
   paragraphe ;
 - l’article occupe au minimum toute la zone de contenu et sa hauteur augmente
   avec le texte, tandis que le scrollport porte le défilement ;
+- le scrollport utilise le snap CSS vertical par proximité. Les racines des BDC
+  directs — Carte, Carousel, Graphe, Question, Résultat et Section — s’alignent
+  au début du scrollport lorsqu’un défilement se termine à proximité. Les
+  Cartes et Graphes ancrés dans une Section ne sont pas des points de snap
+  distincts ; le repère bas non plus. Un BDC plus haut que le viewport reste
+  librement défilable et le navigateur peut le laisser légèrement décalé de sa
+  tête, même après un arrêt proche. Aucun gestionnaire de snap JavaScript n’est
+  ajouté ;
 - un perso marqueur observant le scrollport et émettant l’événement public
   `elce:page:finished` avec l’identifiant de page ; la déclaration demande aussi
   `initial: 'enter'` pour qu’un repère déjà visible signale immédiatement la
@@ -183,3 +191,10 @@ builders ne déclarent que leur comportement d’exécution.
   test, ainsi que
   le montage de Cartes avec les composants `img` et `media`, d’une Carte dans
   une ancre de texte et d’un média selon le layout de Carte.
+- Safari MCP le 14 octobre 2026 vérifie le snap natif du scrollport Flux sur
+  une Section, un Carousel et une Question directs. La tête du Carousel de
+  `406 px` rejoint le haut après un arrêt à `6 px` ; la Question de `664 px`
+  dans un viewport de `449 px` reste à `6 px` et se défile librement jusqu’à
+  `220 px` dans son contenu. En bas de page, le repère reste visible à la fin
+  du scroll et n’est pas une cible de snap. Ce comportement natif est accepté
+  dans le [plan de construction](../plan/2026-10-01-elce-construction-plan.md).

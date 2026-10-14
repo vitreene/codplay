@@ -101,7 +101,7 @@ describe('Elcé Flux scene builder', () => {
     })
 
     const pagePersos = build.sceneDoc.stories['page-a-page']?.persos ?? []
-    expect(pagePersos).toHaveLength(5)
+    expect(pagePersos).toHaveLength(6)
     expect(pagePersos[3]).toMatchObject({
       type: 'layout',
       initial: {
@@ -113,6 +113,7 @@ describe('Elcé Flux scene builder', () => {
       type: 'img',
       initial: { src: 'blob:image-1', move: { target: 'page-a:bdc-image-1:card:bdc-image-1:media' } },
     })
+    expect(pagePersos[5]).toMatchObject({ type: 'layout', id: 'page-a-page-viewport-expansion-host' })
   })
 
   it('mounts an image bdc at the exported anchor inside the text flow', () => {
@@ -385,14 +386,15 @@ describe('Elcé Flux scene builder', () => {
       expect.objectContaining({ initial: expect.objectContaining({ content: 'Légende de l’image', move: { target: 'page-a:bdc-carousel-1:card:bdc-card-2:caption' } }) }),
       expect.objectContaining({ initial: expect.objectContaining({ move: { target: `page-a:bdc-carousel-1:carousel:capsule` }, className: expect.stringContaining('elce-carousel-view--image-right') }) }),
     ]))
-    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'card-bdc-card-2-media-media-carousel-image')).toMatchObject({
+    expect(carouselStory?.persos.find((perso) => perso.id === 'card-bdc-card-2-media-media-carousel-image')).toMatchObject({
       type: 'img',
       initial: { src: 'blob:carousel-image', move: { target: 'page-a:bdc-carousel-1:card:bdc-card-2:image' } },
     })
-    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === `card-${firstCardBdcId}-media-media-carousel-image`)).toMatchObject({
+    expect(carouselStory?.persos.find((perso) => perso.id === `card-${firstCardBdcId}-media-media-carousel-image`)).toMatchObject({
       type: 'img',
       initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:card:${firstCardBdcId}:image` } },
     })
+    expect(carouselStory?.persos.some((perso) => perso.id === 'page-a-bdc-carousel-1-viewport-expansion-host')).toBe(true)
     expect(build.styleSheets[0]).toContain('ac-grid-carousel')
     expect(codplay.build({ scene: build.sceneDoc }).ok).toBe(true)
     codplay.destroy()
@@ -437,7 +439,7 @@ describe('Elcé Flux scene builder', () => {
     expect(restoredStory?.persos).toEqual(expect.arrayContaining([
       expect.objectContaining({ initial: expect.objectContaining({ content: 'Titre gardé' }) }),
     ]))
-    expect(restoredBuild.sceneDoc.stories['page-a-page']?.persos).toEqual(expect.arrayContaining([
+    expect(restoredStory?.persos).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: `card-${cardBdcId}-media-media-hidden-image`, type: 'img' }),
     ]))
 

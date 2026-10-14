@@ -245,8 +245,37 @@ Le plan ne garde que les gates d’application encore ouvertes :
       styles seule : aucun snapshot géométrique, aucune lecture de rectangle et
       aucun graphe motion n’est créé ; voir
       [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts).
-- [ ] Vérifier que les occurrences compilées, live et reconstruites par Seek
-      empruntent le même chemin de préparation.
+- [x] Transmettre le `hostRoot` du slot comme racine effective de la scène
+      enfant pour `@root` et le fallback motion, puis restaurer la racine de
+      création au détachement. Le runner détruit les ressources motion de
+      l'ancienne racine ; le montage suivant prépare le nouvel overlay dans son
+      slot. Vérifié dans `tests/facade/foreign-mount.spec.ts` avec une scène
+      multi-racines créée sans `root`, un move compilé et un move live, puis
+      détachement/remontage ; l'instance à `root` explicite vérifie la
+      restauration. Le rebinding du résolveur est aussi couvert par
+      `tests/runtime/runner-html/motion-container.spec.ts`.
+- [x] Aligner l'overlay fixed sur la racine motion effective et vérifier
+      l'interpolation Safari après montage dans un slot. Avant correction,
+      Safari mesurait le slot à `(285, 137)`, la couche absolute à `(0, 0)` et
+      la pose cible à `(-285, -137)`. Le présentateur applique maintenant la
+      transformation racine→couche fixed ; `motion-presentation-host.spec.ts`
+      vérifie la racine static décalée et l'endpoint viewport. Les tests host,
+      montage enfant et position passent (`45/45`). Le 14 octobre, Safari visible
+      mesure la cible à `(0, 0)`, `1024 × 664 px` et montre le clone parcourir
+      l'aller et le retour jusqu'aux rectangles source et cible, sans cadre
+      isolé ni saut observé ; les frames et mesures sont dans la
+      [note d'enquête Elcé](../../elce/notes/2026-10-14-elce-viewport-expansion-enquete.md).
+- [ ] Valider les non-régressions parent/enfant et reparent, puis le resize.
+      La mesure Safari couvre le déplacement dans le slot Elcé, pas encore ces
+      cas de composition ni la recapture géométrique après resize.
+- [ ] Achever la comparaison Play/Seek et déterminer pourquoi les parcours
+      Seek sans montage ne préparent pas toujours leur overlay. Les échecs
+      actuels touchent `facade.spec.ts` (quatre assertions dépendant de Seek)
+      et `flip-stress-motion.spec.ts` (`seek(1500)`) ; ils sont distincts du
+      changement de racine, dont les chemins Play compilé/live passent. La
+      preview Elcé reste le parcours navigateur d’acceptation pour vérifier
+      l’interpolation après montage. Voir la
+      [note d’enquête Elcé](../../elce/notes/2026-10-14-elce-viewport-expansion-enquete.md).
 - [ ] Achever et valider la partition des groupes par toutes les stories
       touchées : un reset retire entièrement les groupes concernés et leurs
       ressources ; un Seek antérieur ne les reconstruit que si la frame le

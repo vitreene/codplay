@@ -17,6 +17,7 @@ import { ElceCardBdcSceneBuilder } from '../card/card-bdc-scene-builder'
 import type { CardBdcSceneBuild } from '../card/card-bdc-scene-builder'
 import { createRevelationAction, createRevelationInitialStyle } from '../revelation/revelation-action'
 import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistical-graph-scene-builder'
+import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -29,6 +30,7 @@ type FluxBdcMount = Readonly<{
   readonly carouselBuild?: CarouselSceneBuild
   readonly evaluationResultStories?: readonly StoryDoc<string>[]
   readonly cardBuild?: CardBdcSceneBuild
+  readonly graphVisualPersos?: readonly PersoDoc<string>[]
 }>
 
 const anchorRatioService = new ElceAnchorRatioService()
@@ -93,6 +95,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
           page,
           illustration,
           graphBuild.markup,
+          graphBuild.mediaPersos,
           graphBuild.rootClassName,
           target.partId,
           scrollPortId,
@@ -161,9 +164,10 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
       ? []
       : [[mount.carouselBuild.story.id, mount.carouselBuild.story] as const])),
   }
+  const sceneDoc = addViewportExpansionToScene({ id: `elce-flux-${page.id}`, stories })
   const questionMount = mounts.find((mount) => mount.bdc.type === BDC_TYPE.QUESTION)
   return {
-    sceneDoc: { id: `elce-flux-${page.id}`, stories },
+    sceneDoc,
     scrollPortId,
     bottomMarkerId,
     storyIds: Object.keys(stories),
@@ -270,13 +274,19 @@ function createBdcMount(
       }
     }
     case BDC_TYPE.STATISTICAL_GRAPH: {
-      const graphBuild = statisticalGraphSceneBuilder.build(bdc, `${page.id}-${bdc.id}-graph`)
+      const graphPartId = `${page.id}:${bdc.id}:statistical-graph`
+      const graphBuild = statisticalGraphSceneBuilder.build(
+        bdc,
+        `${page.id}-${bdc.id}-graph`,
+        graphPartId,
+      )
       return {
         bdc,
-        partId: `${page.id}:${bdc.id}:statistical-graph`,
+        partId: graphPartId,
         anchored: false,
         markup: graphBuild.markup,
         zonePartIds: {},
+        graphVisualPersos: graphBuild.mediaPersos,
       }
     }
     case BDC_TYPE.CARD:
@@ -333,9 +343,9 @@ function createMediaPersos(
     case BDC_TYPE.EVALUATION_RESULT:
       return []
     case BDC_TYPE.CAROUSEL:
-      return mount.carouselBuild?.mediaPersos ?? []
-    case BDC_TYPE.STATISTICAL_GRAPH:
       return []
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      return mount.graphVisualPersos ?? []
     default:
       return assertNeverBdcType(mount.bdc.type)
   }
@@ -421,6 +431,7 @@ function createFluxGraphPersos(
   page: Page,
   bdc: Bdc,
   markup: string,
+  visualPersos: readonly PersoDoc<string>[],
   rootClassName: string,
   targetPartId: string,
   scrollPortId: string,
@@ -471,7 +482,7 @@ function createFluxGraphPersos(
       [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
     },
   }
-  return [root]
+  return [root, ...visualPersos]
 }
 
 /** Mounts the question's reusable illustration media into its configured card zone. */

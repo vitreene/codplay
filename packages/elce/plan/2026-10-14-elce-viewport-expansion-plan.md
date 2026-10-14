@@ -1,35 +1,30 @@
 # Elcé — agrandissement dans le viewport
 
-> **Statut : A relire.** Cadrage accepté ; décisions 1 à 5 ouvertes. Aucune implémentation engagée.
+> **Statut : En cours.** Images et Carousel intégrés. Les tests du player couvrent le Graphe direct, ancré et dans le Carousel. Typecheck et build passent ; suite Elcé : 302 réussites, 9 échecs (7 navigation/scroll, 1 assertion API sur `cache: no-store`, 1 SQLite `EPERM`). L’agrandissement vidéo attend un déclencheur séparé des commandes natives et le traitement des événements d’observation causés par `move`.
 
-## Cadrage accepté
+## Décisions retenues
 
-- Image : interpoler sa représentation depuis sa position et sa taille d’origine vers le centre du viewport, à la plus grande taille qui y tient sans déformer son ratio. Second clic : retour interpolé. Le navigateur reste visible.
-- Cible et contenu restent dans la même scène. La projection `position: fixed` de la cible occupe le viewport ; elle est distincte de l’ancre qui réserve la place du BDC dans le Flux.
-- Ordre : image, vidéo, Graphe. Dans le Carousel agrandi, flèches et swipe parcourent ces vues seulement (Cartes texte ignorées) ; garder la sélection à la fermeture.
-- Entrée : perso régulier `layout` + `move` + événements existants. Capacité externe seulement si un manque est prouvé.
-- Vidéo : préserver `media.sync: 'independent'` et `STOP` à la sortie de page. Le replay Elcé n’est pas un critère.
+- Périmètre : image, vidéo et Graphe. Le Graphe s’agrandit aussi bien directement que dans le Carousel. Les vues texte du Carousel sont ignorées ; ses vues image, vidéo et Graphe sont parcourues.
+- Déplacer le contenu vers une cible `layout` `position: fixed`, dans la même scène ; `move` interpole entre la place d’origine et le viewport. L’image conserve son ratio. La cible couvre le viewport et les commandes Elcé sur un fond noir opaque.
+- Garder la réserve de la source dans le Flux, neutraliser le scroll pendant l’agrandissement et utiliser `move` pour l’aller-retour. Un nouveau clic retargete immédiatement le mouvement.
+- Fermer au clic ou avec Échap ; rendre le focus au média qui a ouvert l’agrandissement après le retour.
+- Dans un Carousel agrandi, flèches et swipe parcourent les vues image, vidéo et Graphe, conservent la sélection à la fermeture et s’arrêtent aux extrémités. Suspendre l’auto à l’ouverture ; le reprendre à la fermeture si aucun choix manuel n’a eu lieu.
+- Vidéo : un bouton distinct « Agrandir » apparaît au survol, en haut à droite de la vidéo ; son clic ouvre l’agrandissement sans détourner les commandes natives. Conserver `media.sync: 'independent'` ; l’agrandissement ne change ni lecture/pause, ni position, ni son. À la sortie de page, `STOP` arrête la vidéo et la remet à zéro.
+- Graphe : agrandir seulement la visualisation — SVG ou Tableau — sans le titre ni le commentaire ; préserver son contenu accessible.
+- Réutiliser le perso régulier `layout`, `move` et les événements existants. Ne modifier le cœur CodPlay qu’avec un plan propriétaire accepté et une autorisation explicite.
+- Rive, Three.js et Lottie restent hors de cette tranche.
 
-## Décisions ouvertes — dans l’ordre
+## Actions ordonnées
 
-1. **Élément déplacé** — perso `img` ou cadre contenant avec l’image à `width: 100%` ; conserver le résultat visuel défini ci-dessus.
-2. **Place source** — choisir comment conserver l’emplacement d’origine pendant le déplacement, pour les contenus directs et ancrés. Le Flux reste stable ; le scroll de page est neutralisé jusqu’à la fermeture.
-3. **Second clic en cours d’animation** — retarget depuis la frame courante ou attendre la fin.
-4. **Carousel** — identifier la vue affichée en modes manuel/automatique ; choisir arrêt ou boucle aux extrémités et si l’auto continue pendant l’agrandissement.
-5. **Interactions** — fixer swipe horizontal et suppression du clic synthétisé, Échap et focus ; préserver les contrôles natifs de la vidéo.
-
-**Gate :** relire et accepter ces décisions avant le code fonctionnel. Si le test d’accrochage révèle un manque CodPlay, arrêter la tranche ; toute évolution core exige son plan propriétaire accepté et une autorisation explicite.
-
-## Étapes
-
-1. **Prouver l’accrochage** dans le lecteur réel : cible fixe dans la même scène que la source, couvrant le viewport et mesurable aux bornes du mouvement. Tester image directe et ancrée avec les commandes Elcé.
-2. **Implémenter et accepter l’image** avec les circuits existants (`événement → dispatcher → strap/action → move → matérialisation`). Vérifier centrage, ratio, ouverture/fermeture, Flux stable, scroll neutralisé puis réactivé, navigation Carousel et sélection conservée.
-3. **Ajouter la vidéo** : vérifier nœud, temps courant, lecture, son et contrôles natifs ; à la sortie, vérifier que `STOP` arrête et remet à zéro, sans commande supplémentaire au retour.
-4. **Ajouter le Graphe** : décider alors si l’agrandissement contient le rendu seul ou aussi titre/commentaire ; vérifier SVG et Tableau.
-5. **Valider et documenter** dans Sighty/CodPlay : frontières affectées (parent/enfant/reparent, Play/Seek, resize, persistance, cycle de vie), tests, typecheck, build et navigateur. À la fin, écrire la spec du comportement vérifié ; ajouter éventuellement un README d’usage avec exemple. Retirer le plan quand aucune décision ni validation ne reste.
+1. **Intégrer les images Flux et Diapo** via leur story et la cible viewport — fait ; tests joueur couvrent l’image directe, l’image ancrée, l’illustration Question et l’image de Carousel Diapo.
+2. **Étendre le Carousel** avec flèches, swipe, limites et suspension/reprise de l’auto — fait ; tests joueur couvrent navigation image seule et reprise sans choix manuel.
+3. **Valider le `move` après correction de l’alignement** : la cible fixed et le slot transmis comme root effectif sont en place ; les tests host/montage/position passent (`45/45`). Safari visible confirme l’aller et le retour : la cible reste à `(0, 0)`, `1024 × 664 px` ; le clone rejoint ces dimensions au cours des frames et revient à la source `(318, 206)`, `660 × 371 px`, sans cadre isolé ni saut observé. Il reste à valider les cas parent/enfant, reparent et resize. Les échecs Seek CodPlay restent suivis dans le [plan CodPlay motion](../../codplay/plan/motion-live-discovery-invalidation-plan.md).
+4. **Étendre au média vidéo** avec le bouton « Agrandir » distinct en haut à droite au survol. Safari retargete les clics des commandes natives et de la surface vers `video` ; le bouton séparé porte donc l’ouverture. Préserver le nœud, les contrôles et l’état natifs ; vérifier leur usage en mode agrandi. Le `move` hors du root d’observation produit `leave`/`PAUSE`, puis `enter`/`START` au retour ; résoudre cet effet en gardant les pauses dues au scroll. Vérifier aussi `STOP` et le retour à zéro en sortie de page.
+5. **Étendre au Graphe** pour les placements direct, ancré et Carousel ; agrandir seulement SVG ou Tableau. Les trois placements passent dans le player, avec texte éditorial conservé et navigation Carousel Graph↔image. La vérification visuelle Safari reste à faire dans un onglet visible.
+6. **Après validation**, écrire la spécification Elcé avec le comportement vérifié et ses preuves, puis retirer ce plan et les notes préparatoires.
 
 ## Contrats à réutiliser
 
-- Elcé : [ancre](../specs/anchor-spec.md), [Carousel](../specs/carousel-bdc-spec.md), [Graphe](../specs/statistical-graph-spec.md), [preview et STOP](../specs/player-preview-spec.md).
-- CodPlay : [`img`](../../codplay/specs/image-component-v2-spec.md), [`move`](../../codplay/specs/move-v2-spec.md), [`layout`](../../codplay/specs/layout-component-spec.md), [motion](../../codplay/specs/motion-frame-v2-spec.md), [`media.sync`](../../codplay/specs/media-sync-v2-spec.md).
-- [Notes d’enquête](../notes/2026-10-14-elce-viewport-expansion-enquete.md) — raisonnement et preuves de l’enquête.
+- Elcé : [ancre](../specs/anchor-spec.md), [Carousel](../specs/carousel-bdc-spec.md), [Graphe](../specs/statistical-graph-spec.md), [Flux](../specs/flux-scene-builder-spec.md), [Diapo](../specs/diapo-scene-builder-spec.md), [preview et STOP](../specs/player-preview-spec.md).
+- CodPlay : [`img`](../../codplay/specs/image-component-v2-spec.md), [`media.sync`](../../codplay/specs/media-sync-v2-spec.md), [`move`](../../codplay/specs/move-v2-spec.md), [`layout`](../../codplay/specs/layout-component-spec.md), [événements](../../codplay/specs/event-pipeline-v2-spec.md), [capture](../../codplay/specs/capture-v2-spec.md), [straps](../../codplay/specs/strap-execution-v2-spec.md).
+- Raisonnement et preuves de l’enquête : [notes](../notes/2026-10-14-elce-viewport-expansion-enquete.md).

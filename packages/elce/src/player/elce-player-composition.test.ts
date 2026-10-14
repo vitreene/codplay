@@ -2,13 +2,14 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand } from '../domain/commands/document-commands'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { ElceQuestionService } from '../domain/question/question-service'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
 import type { ElcePageSceneCache } from './player-composition-types'
 
 type IntersectionEntry = Pick<IntersectionObserverEntry, 'target' | 'intersectionRatio' | 'isIntersecting'>
+type PointerMovement = Readonly<{ movementX?: number; movementY?: number }>
 
 /** Delivers deterministic native-shaped intersection callbacks to the real adapter. */
 class ControlledIntersectionObserver {
@@ -42,6 +43,24 @@ class ControlledIntersectionObserver {
 function flushPendingFrames(pendingFrames: FrameRequestCallback[], timestamp = 0): void {
   const callbacks = pendingFrames.splice(0)
   for (const callback of callbacks) callback(timestamp)
+}
+
+/** Dispatches one pointer sample through the real browser capture source. */
+function dispatchPointerEvent(target: EventTarget, type: string, movement: PointerMovement = {}): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    pointerId: { value: 1 },
+    clientX: { value: 0 },
+    clientY: { value: 0 },
+    movementX: { value: movement.movementX ?? 0 },
+    movementY: { value: movement.movementY ?? 0 },
+  })
+  target.dispatchEvent(event)
+}
+
+/** Waits for the player event queue to apply a native interaction. */
+async function waitForPlayerActions(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 35))
 }
 
 describe('Elcé player composition', () => {
@@ -143,7 +162,10 @@ describe('Elcé player composition', () => {
     expect(carousel.playbackMode).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     const stage = document.createElement('div')
     document.body.append(stage)
-    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+    })
 
     await composition.initialize()
 
@@ -464,6 +486,7 @@ describe('Elcé player composition', () => {
       startPageId: diapoCommand.pageId,
       mediaSources: { 'media-diapo-carousel-card': source },
     })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
 
     await composition.initialize()
 
@@ -485,6 +508,23 @@ describe('Elcé player composition', () => {
     expect(carouselRoot?.parentElement).toBe(contentSlot)
     expect(imagePath.at(-1)).toBe(contentSlot)
     expect(imagePath.length).toBeLessThanOrEqual(6)
+
+    const imageRoot = photoView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(imageRoot?.parentElement).toBe(viewportHost)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(document.activeElement).toBe(imageRoot)
   })
 
   it('keeps a Diapo Carousel composition unchanged after navigating away and back', async () => {
@@ -632,7 +672,10 @@ describe('Elcé player composition', () => {
     })
     const stage = document.createElement('div')
     document.body.append(stage)
-    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+    })
 
     await composition.initialize()
     await new Promise<void>((resolve) => setTimeout(resolve, 450))
@@ -822,14 +865,13 @@ describe('Elcé player composition', () => {
     composition = new ElcePlayerComposition({ stage, document: documentModel })
 
     await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
 
     const marker = stage.querySelector('#page-a-bottom-marker')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
     expect(observer).toBeDefined()
     observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
-    flushPendingFrames(pendingFrames)
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    await flushCompositionFrames(pendingFrames)
 
     expect(stage.querySelector('.elce-player-navigation__button--next')?.hasAttribute('disabled')).toBe(false)
   })
@@ -855,6 +897,7 @@ describe('Elcé player composition', () => {
     composition = new ElcePlayerComposition({ stage, document: documentModel })
 
     await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
 
     const marker = stage.querySelector('#page-a-bottom-marker')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
@@ -862,9 +905,7 @@ describe('Elcé player composition', () => {
     expect(observer).toBeDefined()
     observer?.deliver({ target: marker as Element, intersectionRatio: 0, isIntersecting: false })
     observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
-    flushPendingFrames(pendingFrames)
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    await flushCompositionFrames(pendingFrames)
 
     expect(stage.querySelector('.elce-player-navigation__button--next')?.hasAttribute('disabled')).toBe(false)
   })
@@ -919,6 +960,7 @@ describe('Elcé player composition', () => {
       mediaSources: { 'media-scroll-card': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
     })
     await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
 
     const marker = stage.querySelector('#page-a-bottom-marker')
     const card = stage.querySelector('.elce-flux-card-root')
@@ -940,12 +982,14 @@ describe('Elcé player composition', () => {
       { target: card as Element, intersectionRatio: 0, isIntersecting: false },
       { target: marker as Element, intersectionRatio: 1, isIntersecting: true },
     ])
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
-    flushPendingFrames(pendingFrames)
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    await flushCompositionFrames(pendingFrames)
 
     expect(nextButton?.disabled).toBe(false)
     expect(pageBButton?.getAttribute('data-locked')).toBe('false')
+    pageBButton?.click()
+    await flushCompositionFrames(pendingFrames)
+
+    expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
   })
 
   it('starts the selected page in the Sighty content slot', async () => {
@@ -966,6 +1010,30 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
     expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page B')
     expect(stage.querySelector('#page-a-scrollport')).toBeNull()
+  })
+
+  it('routes a page-button click in the table of contents through Sighty', async () => {
+    const initialDocument = createInitialDocument()
+    const documentModel = applyDocumentCommand(initialDocument, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-2',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: 'page-b' })
+
+    await composition.initialize()
+
+    const pageAButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-a')
+    expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
+    expect(pageAButton).not.toBeNull()
+    pageAButton?.click()
+    await waitForPlayerActions()
+
+    expect(stage.querySelector('#page-a-scrollport')).not.toBeNull()
+    expect(stage.querySelector('#page-b-scrollport')).toBeNull()
   })
 
   it('continues from a directly previewed Evaluation question to the next question after its Sighty gates', async () => {
@@ -1425,10 +1493,448 @@ describe('Elcé player composition', () => {
       document: documentModel,
       mediaSources: { 'media-image-1': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
     })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
 
     await composition.initialize()
 
     expect(stage.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
+  })
+
+  it('opens a direct image in the viewport and closes it with Escape through the real player', async () => {
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-expanded-image', name: 'expanded.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const documentModel = createCardWithMedia(withMedia, 'bdc-expanded-image', 'media-expanded-image')
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-expanded-image': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const imageRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const scrollport = stage.querySelector<HTMLElement>('.elce-flux-scrollport')
+    expect(imageRoot).not.toBeNull()
+    const focusImage = vi.spyOn(imageRoot!, 'focus')
+    expect(viewportHost).not.toBeNull()
+    expect(viewportHost?.id).toMatch(/-frame$/)
+    expect(viewportHost?.style.position).toBe('fixed')
+    expect(viewportHost?.style.inset).toBe('0px')
+    expect(viewportHost?.style.width).toBe('100vw')
+    expect(viewportHost?.style.height).toBe('100vh')
+    expect(scrollport).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    expect(viewportHost?.getAttribute('aria-hidden')).toBe('false')
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closing')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    dispatchPointerEvent(viewportHost!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(false)
+    expect(focusImage).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(imageRoot)
+  })
+
+  it('moves only a direct Graph visualization and leaves its title and commentary in place', async () => {
+    let documentModel = applyDocumentCommand(
+      createInitialDocument(),
+      createStatisticalGraphBdcCommand('bdc-expanded-graph', 'page-a', 0),
+    )
+    const graph = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-expanded-graph')
+    if (graph?.statisticalGraph == null) throw new Error('The fixture Graph has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: graph.id,
+      statisticalGraph: {
+        ...graph.statisticalGraph,
+        title: 'Ventes par région',
+        editorialText: 'Les ventes progressent au nord.',
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const graphRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="graph"]')
+    const figure = stage.querySelector<HTMLElement>('.elce-statistical-graph')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const scrollport = stage.querySelector<HTMLElement>('.elce-flux-scrollport')
+    expect(graphRoot).not.toBeNull()
+    expect(graphRoot?.parentElement).toBe(figure?.querySelector('.elce-statistical-graph__visual'))
+    expect(figure?.textContent).toContain('Ventes par région')
+    expect(figure?.textContent).toContain('Les ventes progressent au nord.')
+
+    dispatchPointerEvent(graphRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    expect(graphRoot?.parentElement?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(graphRoot?.querySelector('svg')).not.toBeNull()
+    expect(graphRoot?.querySelector('.elce-statistical-graph__table--visually-hidden')).not.toBeNull()
+    expect(figure?.textContent).toContain('Ventes par région')
+    expect(figure?.textContent).toContain('Les ventes progressent au nord.')
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(false)
+    expect(graphRoot?.parentElement).toBe(figure?.querySelector('.elce-statistical-graph__visual'))
+    expect(document.activeElement).toBe(graphRoot)
+  })
+
+  it('expands a Graph view inside a Carousel and keeps its text with the selected view', async () => {
+    let documentModel = applyDocumentCommand(
+      createInitialDocument(),
+      createCarouselBdcCommand('bdc-graph-carousel', 'page-a', 1),
+    )
+    documentModel = applyDocumentCommand(documentModel, createStatisticalGraphCarouselBdcCommand(
+      'bdc-carousel-graph', 'bdc-graph-carousel', 0,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-carousel-image', 'bdc-graph-carousel', 2, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'media.add',
+      media: { id: 'media-carousel-graph-image', name: 'graph-carousel.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: 'bdc-carousel-image', mediaId: 'media-carousel-graph-image',
+    })
+    const graph = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-graph')
+    if (graph?.statisticalGraph == null) throw new Error('The fixture Carousel Graph has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: graph.id,
+      statisticalGraph: {
+        ...graph.statisticalGraph,
+        title: 'Ventes par région',
+        editorialText: 'Les ventes progressent au nord.',
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-carousel-graph-image': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const graphRoot = stage.querySelector<HTMLElement>('.elce-carousel-view--visible [data-elce-viewport-content="graph"]')
+    const graphView = graphRoot?.closest<HTMLElement>('.elce-carousel-view')
+    const figure = graphRoot?.closest<HTMLElement>('.elce-statistical-graph')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const previousButton = stage.querySelector<HTMLButtonElement>('.elce-viewport-expansion__arrow--previous')
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-viewport-expansion__arrow--next')
+    expect(graphRoot).not.toBeNull()
+    expect(graphView?.id).toContain('bdc-carousel-graph')
+    expect(previousButton).not.toBeNull()
+    expect(nextButton).not.toBeNull()
+
+    dispatchPointerEvent(graphRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(graphRoot?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(graphRoot?.querySelector('svg')).not.toBeNull()
+    expect(figure?.textContent).toContain('Ventes par région')
+    expect(figure?.textContent).toContain('Les ventes progressent au nord.')
+
+    dispatchPointerEvent(nextButton!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain('bdc-carousel-image')
+    expect(viewportHost?.querySelector('[data-elce-viewport-content="image"]')).not.toBeNull()
+    expect(graphView?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+
+    dispatchPointerEvent(previousButton!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain('bdc-carousel-graph')
+    expect(graphRoot?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(graphView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(graphView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(graphRoot?.closest('.elce-carousel-view')).toBe(graphView)
+    expect(document.activeElement).toBe(graphRoot)
+  })
+
+  it('expands only the visualization of a Graph anchored in a Flux Section', async () => {
+    let documentModel = applyDocumentCommand(
+      createInitialDocument(),
+      createStatisticalGraphBdcCommand('bdc-anchor-graph', 'page-a', 1),
+    )
+    const graph = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-anchor-graph')
+    if (graph?.statisticalGraph == null) throw new Error('The fixture anchored Graph has no content.')
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.move', bdcId: graph.id, placement: { kind: BDC_LOCATION.CATALOG } })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: graph.id,
+      statisticalGraph: {
+        ...graph.statisticalGraph,
+        title: 'Ventes ancrées',
+        editorialText: 'Commentaire ancré.',
+      },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: graph.id,
+      markup: '<p id="section-anchor-graph-text">Avant <span id="page-a:bdc-anchor-graph:anchor" data-elce-anchor="true" data-bdc-id="bdc-anchor-graph" data-part="page-a:bdc-anchor-graph:anchor" style="display:inline-block;position:relative;padding-bottom:12rem;"></span> après</p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: graph.id, partId: 'page-a:bdc-anchor-graph:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const flowSlot = stage.querySelector<HTMLElement>('.elce-flow-slot')
+    const graphRoot = flowSlot?.querySelector<HTMLElement>('[data-elce-viewport-content="graph"]')
+    const figure = graphRoot?.closest<HTMLElement>('.elce-statistical-graph')
+    const sectionText = stage.querySelector<HTMLElement>('#section-anchor-graph-text')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(graphRoot).not.toBeNull()
+    expect(sectionText?.textContent).toContain('Avant')
+    expect(sectionText?.textContent).toContain('après')
+
+    dispatchPointerEvent(graphRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(graphRoot?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(figure?.textContent).toContain('Ventes ancrées')
+    expect(figure?.textContent).toContain('Commentaire ancré.')
+    expect(sectionText?.textContent).toContain('Avant')
+    expect(sectionText?.textContent).toContain('après')
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+
+    expect(graphRoot?.closest('.elce-flow-slot')).toBe(flowSlot)
+    expect(document.activeElement).toBe(graphRoot)
+  })
+
+  it('navigates only image views by arrow and swipe in an expanded Carousel', async () => {
+    const initialDocument = createInitialDocument()
+    let documentModel = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-carousel-expansion', name: 'carousel.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, createCarouselBdcCommand('bdc-expansion-carousel', 'page-a', 1))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-expansion-text', 'bdc-expansion-carousel', 1, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-expansion-last-image', 'bdc-expansion-carousel', 2, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    const firstImageBdcId = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-expansion-carousel')!.carousel!.cards[0]!.bdcId
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.layout.set', bdcId: firstImageBdcId, layoutId: DEFAULT_PRESET_ID.PHOTO,
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: firstImageBdcId, mediaId: 'media-carousel-expansion',
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: 'bdc-expansion-last-image', mediaId: 'media-carousel-expansion',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-carousel-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const firstImageRoot = stage.querySelector<HTMLElement>('.elce-carousel-view--visible [data-elce-viewport-content="image"]')
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-viewport-expansion__arrow--next')
+    const scrollport = stage.querySelector<HTMLElement>('.elce-flux-scrollport')
+    expect(firstImageRoot).not.toBeNull()
+    expect(nextButton).not.toBeNull()
+    expect(scrollport).not.toBeNull()
+    dispatchPointerEvent(firstImageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(nextButton?.disabled).toBe(false)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+
+    dispatchPointerEvent(nextButton!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain('bdc-expansion-last-image')
+    const lastImageRoot = viewportHost?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    expect(lastImageRoot).not.toBeNull()
+    expect(firstImageRoot?.getAttribute('aria-pressed')).toBe('false')
+    expect(lastImageRoot?.getAttribute('aria-pressed')).toBe('true')
+    expect(nextButton?.disabled).toBe(true)
+
+    dispatchPointerEvent(viewportHost!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointermove', { movementX: 64 })
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain(firstImageBdcId)
+    expect(firstImageRoot?.getAttribute('aria-pressed')).toBe('true')
+    expect(lastImageRoot?.getAttribute('aria-pressed')).toBe('false')
+    expect(nextButton?.disabled).toBe(false)
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(false)
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain(firstImageBdcId)
+    expect(document.activeElement).toBe(stage.querySelector('.elce-carousel-view--visible [data-elce-viewport-content="image"]'))
+  })
+
+  it('pauses an automatic Carousel while expanded and resumes it on close without a manual selection', async () => {
+    const initialDocument = createInitialDocument()
+    let documentModel = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-auto-expansion', name: 'auto-expansion.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, createCarouselBdcCommand('bdc-auto-expansion', 'page-a', 1))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-auto-expansion-last', 'bdc-auto-expansion', 1, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-auto-expansion')!
+    const firstImageBdcId = carousel.carousel!.cards[0]!.bdcId
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-auto-expansion',
+      carousel: { ...carousel.carousel!, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, defaultViewDurationMs: 180, repeatCount: 0 },
+    })
+    for (const bdcId of [firstImageBdcId, 'bdc-auto-expansion-last']) {
+      documentModel = applyDocumentCommand(documentModel, { type: 'bdc.card.layout.set', bdcId, layoutId: DEFAULT_PRESET_ID.PHOTO })
+      documentModel = applyDocumentCommand(documentModel, { type: 'bdc.card.media.set', bdcId, mediaId: 'media-auto-expansion' })
+    }
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-auto-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const views = Array.from(stage.querySelectorAll<HTMLElement>('.elce-carousel-view'))
+    const firstView = views.find((view) => view.id.includes(firstImageBdcId))
+    const firstImage = firstView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const secondView = views.find((view) => view.id.includes('bdc-auto-expansion-last'))
+    expect(firstImage).not.toBeNull()
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    dispatchPointerEvent(firstImage!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 240))
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(secondView?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 260))
+
+    expect(secondView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    const secondImage = secondView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    expect(secondImage).not.toBeNull()
+    dispatchPointerEvent(secondImage!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    dispatchPointerEvent(viewportHost!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointermove', { movementX: 64 })
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 260))
+
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
   })
 
   it('mounts an image bdc inside its exported text anchor', async () => {
@@ -1477,6 +1983,125 @@ describe('Elcé player composition', () => {
     expect(anchoredCard?.parentElement).toBe(flowSlot)
     expect(anchoredCard?.style.height).toBe('auto')
     expect(anchoredCard?.style.aspectRatio).toBe('4 / 3')
+
+    const imageRoot = flowSlot?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const flowReservation = flowSlot?.getAttribute('style')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(flowSlot?.getAttribute('style')).toBe(flowReservation)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(imageRoot?.closest('.elce-flux-card-root')).not.toBeNull()
+    expect(document.activeElement).toBe(imageRoot)
+  })
+
+  it('opens and closes a direct Diapo image through the shared viewport move', async () => {
+    const initialDocument = createInitialDocument()
+    const withMedia = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-diapo-direct-expansion', name: 'diapo-direct.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const diapoCommand = createDefaultPageCommand(
+      withMedia,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo image directe',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(withMedia, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createStandaloneCardBdcCommand(
+      'bdc-diapo-direct-expansion', diapoCommand.pageId, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: 'bdc-diapo-direct-expansion', mediaId: 'media-diapo-direct-expansion',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: diapoCommand.pageId,
+      mediaSources: {
+        'media-diapo-direct-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const imageRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(document.activeElement).toBe(imageRoot)
+  })
+
+  it('opens and closes a Diapo Question illustration in its owning story', async () => {
+    const initialDocument = createInitialDocument()
+    const withMedia = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-diapo-question-expansion', name: 'question.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const diapoCommand = createDefaultPageCommand(
+      withMedia,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Question image',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(withMedia, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createQuestionBdcCommand(
+      'bdc-diapo-question-expansion', diapoCommand.pageId, 0,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.question.media.set', bdcId: 'bdc-diapo-question-expansion', mediaId: 'media-diapo-question-expansion',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: diapoCommand.pageId,
+      mediaSources: {
+        'media-diapo-question-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const imageRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(document.activeElement).toBe(imageRoot)
   })
 
   it('mounts a simple video bdc through the real CodPlay media component', async () => {

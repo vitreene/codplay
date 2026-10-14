@@ -296,6 +296,17 @@ ne pas lancer Firefox tant que son MCP ne fonctionne pas.
    au retour du réseau sans attendre une nouvelle acquisition native.
    Couvrir le `409` média qui requiert `media.merge` pendant une suspension,
    avant de considérer le transfert comme terminé.
+   **Décision acceptée le 14 octobre — sélecteur de fichier natif :** garder
+   le droit serveur et le Web Lock pendant le dialogue déclenché par un input
+   fichier, même si la fenêtre perd le focus ou devient masquée. Si `change` ou
+   `cancel` arrive avant le retour du focus, garder aussi l’accès XState actif
+   jusqu’au retour d’une page visible et focalisée ; un transfert ordinaire
+   demandé pendant cette séquence attend sa fermeture. La sélection est ainsi
+   envoyée au contrôleur actif avant le transfert. Le forçage explicite et la
+   fermeture de page gardent leurs règles actuelles. Tests automatiques du
+   verrou et du chemin Remix/XState appliqués le 14 octobre ; la sélection et
+   l’annulation par le dialogue système réel restent à valider dans un
+   navigateur, avec le transfert concurrent et le blur ordinaire hors sélecteur.
 4. **Faire suivre la révision confirmée aux lecteurs.** Réutiliser la liste
    légère des projets pour détecter un changement de révision pendant que la
    page lectrice est ouverte et visible, puis lire et installer le document par

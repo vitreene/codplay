@@ -1,12 +1,14 @@
 import { BDC_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { Bdc } from '../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
+import type { PersoDoc } from 'codplay/scene/types'
+import { VIEWPORT_EXPANSION_CONTENT_ATTR } from '../viewport-expansion/viewport-expansion-builder.ts'
 
 export interface StatisticalGraphSceneBuild {
   readonly markup: string
   readonly rootClassName: string
   readonly contentPersos: readonly []
-  readonly mediaPersos: readonly []
+  readonly mediaPersos: readonly PersoDoc<string>[]
 }
 
 const graphColors = ['#326c64', '#c27b3a', '#5376a2', '#a64f4f', '#7a6599', '#7f8f45', '#4c8491', '#bd6688']
@@ -47,8 +49,41 @@ export class ElceStatisticalGraphSceneBuilder {
       ? ''
       : `<div id="${rootId}-editorial" class="elce-statistical-graph__editorial">${renderParagraphs(content.editorialText, `${rootId}-editorial`)}</div>`
     const rootPart = partId === undefined ? '' : `<!-- data-part="${escapeHtml(partId)}:root" -->`
-    const markup = `<figure id="${rootId}" class="elce-statistical-graph ${layoutClass} elce-statistical-graph--${content.rendering}">${rootPart}${overline}${visibleTitle}<div id="${rootId}-body" class="elce-statistical-graph__body"><div id="${rootId}-visual" class="elce-statistical-graph__visual">${chart}</div>${textPanel}</div></figure>`
-    return { markup, rootClassName: 'elce-statistical-graph', contentPersos: [], mediaPersos: [] }
+    const visualPartId = partId === undefined ? undefined : `${partId}:visual`
+    const visualMarkup = visualPartId === undefined
+      ? chart
+      : `<!-- data-part="${escapeHtml(visualPartId)}" -->`
+    const visualClassName = `elce-statistical-graph__visual${content.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? ' elce-statistical-graph__visual--table' : ''}`
+    const markup = `<figure id="${rootId}" class="elce-statistical-graph ${layoutClass} elce-statistical-graph--${content.rendering}">${rootPart}${overline}${visibleTitle}<div id="${rootId}-body" class="elce-statistical-graph__body"><div id="${rootId}-visual" class="${visualClassName}">${visualMarkup}</div>${textPanel}</div></figure>`
+    const mediaPersos = visualPartId === undefined
+      ? []
+      : [createViewportGraphPerso(rootId, visualPartId, chart, content.rendering)]
+    return { markup, rootClassName: 'elce-statistical-graph', contentPersos: [], mediaPersos }
+  }
+}
+
+/** Creates the moveable visual while the graph title and commentary stay in their source layout. */
+function createViewportGraphPerso(
+  rootId: string,
+  targetPartId: string,
+  chart: string,
+  rendering: StatisticalGraphContent['rendering'],
+): PersoDoc<string> {
+  const className = `elce-statistical-graph__visual-content${rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? ' elce-statistical-graph__visual-content--table' : ''}`
+  return {
+    id: `${rootId}-viewport-visual`,
+    type: 'layout',
+    initial: {
+      move: { target: targetPartId },
+      className,
+      attr: {
+        [VIEWPORT_EXPANSION_CONTENT_ATTR]: 'graph',
+        role: 'group',
+        tabindex: '0',
+      },
+      style: { width: '100%', minWidth: 0, minHeight: 0 },
+      markup: `<div id="${rootId}-visual-content" class="${className}" ${VIEWPORT_EXPANSION_CONTENT_ATTR}="graph" role="group" tabindex="0">${chart}</div>`,
+    },
   }
 }
 

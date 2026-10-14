@@ -12,9 +12,9 @@ const IDENTITY: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 function findTestOverlayLayer(root: Element): HTMLElement | undefined {
   const candidates = root.querySelectorAll<HTMLElement>('*')
   return Array.from(candidates).find((candidate) => (
-    candidate.style.position === 'absolute'
-      && candidate.style.width === '100%'
-      && candidate.style.height === '100%'
+    candidate.style.position === 'fixed'
+      && candidate.style.width === '100vw'
+      && candidate.style.height === '100vh'
       && candidate.style.pointerEvents === 'none'
       && candidate.style.zIndex === '20'
   ))
@@ -110,6 +110,70 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     expect(source.style.visibility).toBe('hidden')
     expect(findTestOverlayLayer(root)?.children).toHaveLength(1)
     host.destroy()
+    root.remove()
+  })
+
+  it('maps reparent poses from an offset static root into viewport coordinates', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    root.style.position = 'static'
+    root.style.width = '982px'
+    root.style.height = '541px'
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const originalRect = HTMLElement.prototype.getBoundingClientRect
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === root) return createDomRect(285, 137, 982, 541)
+      if (this instanceof HTMLElement && this.style.position === 'fixed') return createDomRect(0, 0, 1280, 756)
+      return originalRect.call(this)
+    })
+    const rootPose = {
+      ...createPose(0),
+      rect: { left: 285, top: 137, width: 982, height: 541 },
+      origin: { x: 285, y: 137 },
+      localWidth: 982,
+      localHeight: 541,
+    }
+    const sourcePose = {
+      ...createPose(33),
+      rect: { left: 33, top: 26, width: 916, height: 515 },
+      origin: { x: 33, y: 26 },
+      localWidth: 916,
+      localHeight: 515,
+    }
+    const viewportPose = {
+      ...createPose(-285),
+      rect: { left: -285, top: -137, width: 1280, height: 756 },
+      origin: { x: -285, y: -137 },
+      localWidth: 1280,
+      localHeight: 756,
+    }
+    const host = new HtmlMotionPresentationHost(root, () => source)
+
+    host.commit(createFrame([{
+      ...createItem('item'),
+      pose: sourcePose,
+      motionRootPose: rootPose,
+    }]))
+    const layer = findTestOverlayLayer(root)
+    const ghost = findTestGhost(root)
+    expect(layer?.parentElement).toBe(root)
+    expect(layer?.style.transform).toBe('matrix(1, 0, 0, 1, 285, 137)')
+    expect(ghost?.style.transform).toBe('matrix(1, 0, 0, 1, 33, 26)')
+
+    host.commit(createFrame([{
+      ...createItem('item'),
+      pose: viewportPose,
+      motionRootPose: rootPose,
+    }]))
+    expect(findTestGhost(root)).toBe(ghost)
+    expect(ghost?.style.width).toBe('1280px')
+    expect(ghost?.style.height).toBe('756px')
+    expect(ghost?.style.transform).toBe('matrix(1, 0, 0, 1, -285, -137)')
+
+    host.destroy()
+    rectSpy.mockRestore()
     root.remove()
   })
 
@@ -873,6 +937,21 @@ function createPose(x: number): HtmlPose {
     frameWidth: 20,
     frameHeight: 20,
   }
+}
+
+/** Builds a DOMRect-like value for deterministic browser geometry mocks. */
+function createDomRect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+    toJSON: () => ({ left, top, width, height }),
+  } as DOMRect
 }
 
 /** Creates one natural layout containing the destination dimensions. */

@@ -60,10 +60,7 @@ describe('Remix production Section editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor
-        onPreview={() => undefined}
-        previewError={null}
-      />
+      <RemixPageEditor />
     </EditorContextProvider>)
 
     const editor = getEditor(rendered.$('.ProseMirror'))

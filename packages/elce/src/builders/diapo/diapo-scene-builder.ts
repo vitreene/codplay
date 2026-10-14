@@ -8,6 +8,7 @@ import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistic
 import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/question-bdc-scene-builder'
 import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-bdc-scene-builder'
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
+import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
 
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
 const carouselSceneBuilder = new ElceCarouselSceneBuilder()
@@ -29,15 +30,13 @@ export function buildDiapoScene(
 
   if (bdc?.type === BDC_TYPE.CAROUSEL) {
     const carouselBuild = buildCarousel(page, bdc, bdcs, options)
-    const pageStory: StoryDoc<string> = {
-      ...carouselBuild.story,
-      id: storyId,
-      persos: [...(carouselBuild.story.persos ?? []), ...carouselBuild.mediaPersos],
-    }
+    const pageStory: StoryDoc<string> = { ...carouselBuild.story, id: storyId }
     return {
       sceneDoc: {
-        id: `elce-diapo-${page.id}`,
-        stories: { [storyId]: pageStory },
+        ...addViewportExpansionToScene({
+          id: `elce-diapo-${page.id}`,
+          stories: { [storyId]: pageStory },
+        }),
       },
       styleSheets: [carouselBuild.styleSheet],
     }
@@ -75,7 +74,13 @@ export function buildDiapoScene(
         break
       }
       case BDC_TYPE.STATISTICAL_GRAPH: {
-        markup = statisticalGraphSceneBuilder.build(bdc, `${page.id}-${bdc.id}-graph`).markup
+        const graphBuild = statisticalGraphSceneBuilder.build(
+          bdc,
+          `${page.id}-${bdc.id}-graph`,
+          `${page.id}:${bdc.id}:statistical-graph`,
+        )
+        markup = graphBuild.markup
+        pagePersos = graphBuild.mediaPersos
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
         pageBottomMarker = createPageBottomMarkerPerso({
           pageId: page.id,
@@ -170,11 +175,12 @@ export function buildDiapoScene(
       ...pagePersos,
     ],
   }
+  const sceneDoc = addViewportExpansionToScene({
+    id: `elce-diapo-${page.id}`,
+    stories: { [pageStory.id]: pageStory, ...childStories },
+  })
   return {
-    sceneDoc: {
-      id: `elce-diapo-${page.id}`,
-      stories: { [pageStory.id]: pageStory, ...childStories },
-    },
+    sceneDoc,
     styleSheets,
     ...(questionReset === undefined ? {} : { questionReset }),
   }

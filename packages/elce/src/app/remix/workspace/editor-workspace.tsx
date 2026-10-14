@@ -38,8 +38,6 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       {renderChapterSettings({
         chapter: props.view.selectedChapter,
         actions: props.actions,
-        onPreview: props.onPreview,
-        previewError: props.previewError,
       })}
     </div>
 
@@ -77,16 +75,41 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
 
 /** Renders the icon-only controls on the outer edges of the center column. */
 function renderWorkspaceAccess(
-  props: Pick<EditorWorkspaceViewProps, 'responsivePanel' | 'onSetResponsivePanel'>,
+  props: Pick<EditorWorkspaceViewProps, 'responsivePanel' | 'onSetResponsivePanel' | 'onPreview' | 'previewError'>,
 ): RemixNode {
-  return <nav
-    id="elce-responsive-panel-access"
-    className="elce-responsive-panel-access"
-    aria-label="Panneaux de l’éditeur"
+  return <div
+    id="elce-workspace-access-area"
+    className="elce-workspace-access-area"
   >
-    {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
-    {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
-  </nav>
+    <nav
+      id="elce-responsive-panel-access"
+      className="elce-responsive-panel-access"
+      aria-label="Commandes de l’éditeur"
+    >
+      {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
+      {renderPreviewButton(props.onPreview)}
+      {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
+    </nav>
+    {props.previewError === null ? null : <p
+      id="elce-preview-open-error"
+      className="elce-workspace-access-error"
+      role="alert"
+    >
+      {props.previewError}
+    </p>}
+  </div>
+}
+
+/** Renders the preview action alongside the editor's panel controls. */
+function renderPreviewButton(onPreview: () => void): RemixNode {
+  return <button
+    id="elce-preview-open"
+    className="elce-preview-open-button"
+    type="button"
+    mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
+  >
+    Prévisualiser
+  </button>
 }
 
 /** Renders one unframed panel toggle while preserving its button semantics. */

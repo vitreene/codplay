@@ -50,7 +50,8 @@ structurelle dans la scène n’est pas son emplacement visuel d’arrivée.
 La cible à tester est un perso `layout` de la scène active, avec
 `position: fixed; inset: 0` et un niveau d’empilement qui le place devant les
 slots de menu, titre et navigation. Il fournit une projection mesurable à la
-taille du viewport ; son fond peut être transparent. Le contenu original
+taille du viewport. Décision utilisateur : son fond est noir et opaque pour
+masquer le projet derrière lui. Le contenu original
 rejoint cette cible de la même scène avec une transition `move`, puis rejoint
 sa cible d’origine avec la transition inverse.
 La destination de retour et la présentation ordinaire viennent de la scène
@@ -106,13 +107,49 @@ retour à zéro sont vérifiés dans la [spécification preview](../specs/player
 indépendante ; le type de source et la relation d’horloges sont des
 préoccupations distinctes.
 
+### Commandes natives et déclencheur vidéo
+
+Safari Technology Preview sur le lecteur Elcé `localhost:5175` a été sondé le
+14 octobre avec une vidéo MP4 temporaire produite par `MediaRecorder` et
+`controls` natif. Un clic sur la commande Play produit, au document, des
+événements `pointerdown`, `pointerup` et `click` dont `target` est `VIDEO` et
+dont `composedPath()` ne révèle que l’élément vidéo et ses ancêtres. Le chemin
+DOM est donc identique à un clic de surface ; le déclencheur actuel basé sur
+`pointerdown` ne peut pas préserver cette distinction.
+
+Le balisage natif et les événements DOM observés n’exposent pas de part dédiée
+aux commandes UA. Décision utilisateur : un bouton séparé « Agrandir », affiché
+au survol en haut à droite de la vidéo, déclenche l’ouverture ; il ne dépend pas
+de la distinction impossible entre commande et surface vidéo. Le plan garde à
+valider la conservation des commandes pendant le mode agrandi et l’effet
+`leave`/`PAUSE` causé par le déplacement. L’élément d’essai a été retiré de la
+page après le relevé.
+
+Le même test Safari a vérifié l’observation liée à la vidéo Flux. Un target
+enfant d’un root observé passe à `isIntersecting: false` quand `move` le
+reparent hors de ce root, même si sa boîte fixed recouvre le root ; son retour
+produit `isIntersecting: true`. Le builder Flux déclare respectivement
+`leave → PAUSE` et `enter → START`. Ces transitions artificielles changeraient
+la lecture native à l’ouverture puis au retour. La tranche vidéo doit les
+supprimer pendant les deux mouvements tout en conservant les transitions de
+visibilité dues au scroll ; ce point est suivi dans l’action 4 du plan.
+
+### Graphe comme projection viewport
+
+Le builder extrait SVG/table dans un perso `layout` distinct ; le titre et le
+commentaire restent dans la figure source. Les tests du player réel passent
+pour un Graphe direct, ancré dans un slot Flux, et enfant d’un Carousel. Ils
+vérifient le retour de focus, la présence du texte éditorial, le maintien du
+slot d’ancrage et la navigation Graph↔image en sautant la vue texte. La
+validation visuelle Safari de ces placements reste à faire.
+
 Les captures géométriques internes éventuelles de motion restent à analyser :
 elles ne doivent pas réassigner une source identique ou modifier la lecture
 native. Ce contrôle de continuité n’ajoute pas un parcours utilisateur de
 Seek/replay à Elcé. Si le cœur est modifié, ses obligations de non-régression
 propres restent suivies dans son plan propriétaire.
 
-## Preuves de l’enquête et limites
+## Diagnostic de l’interpolation
 
 La lecture des contrats a été complétée sur leurs lacunes par :
 [`ImageComponent`](../../codplay/src/runtime/components/image/image-component.ts),
@@ -142,7 +179,114 @@ node ../../node_modules/vitest/vitest.mjs run \
 
 Ces 30 tests vérifient des mécanismes déjà présents. Ils ne prouvent pas la
 fonctionnalité d’agrandissement, son intégration Elcé ou ses extensions vidéo
-et Graphe. Aucun parcours navigateur de cette fonctionnalité n’a été réalisé.
-Les spécifications vérifiées restent inchangées ; aucun parcours navigateur de
-l’agrandissement n’a encore eu lieu. Les comportements ajoutés par ce projet
-seront décrits dans sa spécification après validation complète.
+et Graphe.
+
+Safari MCP, le 14 octobre 2026, ouvre la preview réelle du serveur Elcé dans
+une seule instance Safari Technology Preview. Sur la page contenant un
+Carousel Photo, une cible DOM temporaire est insérée sous
+`.elce-flux-scrollport`, dans la scène de la page. Avec `position: fixed`,
+`inset: 0` et un niveau d’empilement élevé, son rectangle égale le viewport
+`1280 × 756 px`. `elementFromPoint()` retourne cette cible au-dessus du bandeau
+de preview, du menu, du titre, de la navigation et aux bords du viewport. Les
+ancêtres incluent `overflow: auto` et `overflow: hidden`, mais aucun
+`transform`, `perspective`, `filter`, `contain`, `will-change` ou contexte
+d’isolation ; ils ne contraignent pas cette projection fixe. Une seconde
+mesure sur le viewport étroit effectif `390 × 760 px` donne le même résultat.
+L’image du Carousel utilisée pour la mesure charge avec une taille intrinsèque
+de `339 × 450 px`. Safari rapporte également un `404` sans URL dans sa console ;
+une autre image de la page a `naturalWidth: 0`, mais l’association entre cette
+ressource et le `404` n’est pas confirmée. La cible temporaire est retirée à la
+fin de chaque mesure.
+
+Dans cette même preview, déplacer temporairement la racine média de la vue
+Photo du Carousel vers cette cible puis la remettre à sa place conserve le
+cadre source à `916 × 515 px` et la hauteur du Flux à `1355 px`. Le slot parent
+garde donc sa réserve pour ce cas Carousel. Cette manipulation DOM ne passe
+pas par l’action CodPlay `move` et ne couvre pas encore une image directe ou
+ancrée.
+
+Cette preuve valide la projection CSS et son empilement dans le lecteur réel ;
+la manipulation DOM initiale ne validait pas le perso CodPlay `layout` ni le
+`move` réel. Le circuit d’agrandissement est intégré aux builders Flux et
+Diapo. Les tests de composition couvrent le chemin `emit` → événement → strap →
+actions pour les images directes, ancrées, de Question et de Carousel Diapo.
+
+Le défaut Safari venait du root motion conservé à la création. Dans Sighty,
+l’occurrence enfant est créée avant que la racine DOM du slot existe. Le montage
+résout ensuite ce slot et le transmet explicitement au runner comme root effectif
+de la scène enfant : les cibles `@root`, le résolveur motion et le présentateur
+utilisent le même nœud. Au détachement, la racine de création est restaurée.
+Cette relation est vérifiée par les tests compilé/live de
+[foreign-mount](../../codplay/tests/facade/foreign-mount.spec.ts) et le test du
+[résolveur motion](../../codplay/tests/runtime/runner-html/motion-container.spec.ts).
+
+Le compte rendu utilisateur signale que l’interpolation du Carousel apparaît
+dans un petit cadre isolé en haut à gauche, puis que le plein viewport le
+remplace. La mesure Safari du 2026-10-14, avant l’alignement de la couche,
+reproduit et explique le défaut :
+
+| Élément | Rectangle Safari à `1280 × 756` |
+| --- | --- |
+| Slot racine effectif `#elce-document-content-region` | `(285, 137)`, `982 × 541`, `position: static` |
+| Photo avant agrandissement | `(318, 163)`, `916 × 515` |
+| Cible `-frame` fixed | `(0, 0)`, `1280 × 756` |
+| Couche overlay créée sous le slot | `(0, 0)`, `1280 × 756`, `offsetParent: #elce-document-body` |
+| Clone en fin de mouvement, juste avant son retrait | `(-285, -137)`, `1280 × 756` |
+
+Les poses du clone sont localisées par rapport au slot ; à l’endpoint, le point
+viewport `(0, 0)` devient donc `(-285, -137)`. La couche `position: absolute`
+est enfant du slot mais, celui-ci étant `static`, son origine CSS est celle du
+body/viewport. Les mesures à chaque frame montrent le clone glisser vers les
+valeurs négatives pendant environ `300 ms`, alors que la vraie cible fixed reste
+à `(0, 0)` et devient visible à la fin. Cela correspond précisément au petit
+cadre en haut à gauche puis au remplacement observés. La taille de la cible
+était correcte ; c’est l’origine écran de la couche overlay du présentateur
+CodPlay qui ne correspond pas au repère de la racine motion.
+
+Cette preuve est Safari sur le vrai player, pas une projection DOM simulée. Le
+correctif appartient au présentateur motion CodPlay ; le plan propriétaire
+`move` reçoit une action dédiée pour aligner le repère de la couche et valider
+les frames initiale, intermédiaires, finale et inverse. Aucun contrat de
+spécification n’est ajouté avant que ce comportement soit implémenté et vérifié.
+
+### Mesure Safari du déplacement dans la couche alignée
+
+Dans Safari Technology Preview visible, au viewport CSS de `1024 × 664 px`
+(`devicePixelRatio: 2`), la photo source mesure `(318, 206)`, `660 × 371.25 px`.
+La cible fixed et le contenu monté dedans mesurent déjà `(0, 0)`,
+`1024 × 664 px`. La couche overlay a la matrice `translate(285px, 137px)`, ce
+qui la place dans le repère de la racine motion décalée.
+
+Les frames capturées en `requestAnimationFrame` montrent l’aller continu : à
+25 ms, le clone mesure `(206.3, 133.6)`, `787.9 × 474.1 px` ; à 97 ms,
+`(81.2, 52.6)`, `931.1 × 589.3 px` ; à 181 ms, `(16.8, 10.9)`,
+`1004.8 × 648.5 px` ; à 297 ms, `(0, 0)`, `1024 × 664 px`. La couche atteint
+son opacité finale, puis le clone est retiré une fois superposé à la vraie
+cible. Le retour suit le trajet inverse : à 22 ms, `(100.4, 65)`,
+`909.1 × 571.6 px` ; à 134 ms, `(270.3, 175.1)`, `714.6 × 415.1 px` ; à
+302 ms, le clone rejoint `(318, 206)`, `660 × 371.25 px`, avant son retrait.
+
+Le petit cadre isolé en haut à gauche n’apparaît pas sur ces deux parcours.
+L’alignement racine→couche résout le décalage mesuré avant correction ; le
+comportement de la cible reste bien celui demandé : elle occupe le viewport
+avant le déplacement, tandis que `move` interpole le clone entre la taille de
+la source et celle de la cible. La capture finale montre la photo centrée,
+conservant son ratio, sur fond noir.
+
+Le scroll du Flux restait actif dans le premier parcours Safari. Le scrollport
+vit dans la story de page ; le strap d’agrandissement vit dans la story du
+Carousel. Sa sortie `visibility: 'scene'` déclenche bien les règles de scène,
+mais reste sur la track de sa story et n’est pas matérialisée dans l’autre
+story. Le builder Elcé émet maintenant une requête depuis le strap puis utilise
+un `listen.emit` de scène pour publier le verrouillage ou le déverrouillage sur
+la track globale, conformément au pipeline existant. Ce relais ne modifie pas le
+cœur CodPlay.
+
+La régression réelle du Carousel et le test d’image directe passent. Dans Safari,
+le scrollport a `overflow-y: hidden` pendant l’agrandissement ; un geste de
+scroll ne le déplace pas. Après Échap, il revient à `overflow-y: auto`, l’image
+retourne à sa source et le focus lui est rendu.
+
+Le parcours façade Flip Stress échoue encore sur `seek(1500)` sans overlay ;
+quatre assertions dépendant de Seek échouent aussi dans `facade.spec.ts`. Ces
+anomalies restent distinctes au [plan CodPlay motion](../../codplay/plan/motion-live-discovery-invalidation-plan.md).

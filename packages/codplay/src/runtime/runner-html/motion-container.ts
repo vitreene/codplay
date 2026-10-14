@@ -17,7 +17,7 @@ export type HtmlMotionContainerSceneInput = Readonly<{
 
 /** Resolves local motion containers without adding an author-facing contract. */
 export class HtmlMotionContainerResolver {
-  private readonly root: Element
+  private root: Element
   private readonly persoNodes: ReadonlyMap<string, unknown>
   private readonly keys = new WeakMap<Element, string>()
   private nextKey = 1
@@ -29,6 +29,15 @@ export class HtmlMotionContainerResolver {
   ) {
     this.root = root
     this.persoNodes = persoNodes
+    this.elementsByKey.set(this.keyFor(root), root)
+  }
+
+  /** Rebinds the scene root used by root-local motion boundaries after mounting. */
+  setRoot(root: Element): void {
+    if (this.root === root) return
+    this.root = root
+    this.elementsByKey.clear()
+    this.elementsByKey.set(this.keyFor(root), root)
   }
 
   /** Resolves the persistent presentation container owned by one story. */

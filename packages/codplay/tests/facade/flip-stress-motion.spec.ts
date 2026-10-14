@@ -15,9 +15,9 @@ function createManualScheduler(): CodPlayFrameScheduler {
 /** Finds the unmarked overlay layer by its presentation contract. */
 function findTestOverlayLayer(root: Element): HTMLElement | undefined {
   return Array.from(root.querySelectorAll<HTMLElement>('*')).find((candidate) => (
-    candidate.style.position === 'absolute'
-      && candidate.style.width === '100%'
-      && candidate.style.height === '100%'
+    candidate.style.position === 'fixed'
+      && candidate.style.width === '100vw'
+      && candidate.style.height === '100vh'
       && candidate.style.pointerEvents === 'none'
       && candidate.style.zIndex === '20'
   ))

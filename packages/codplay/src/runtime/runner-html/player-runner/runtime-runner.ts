@@ -493,13 +493,15 @@ export class HtmlPlayerRunner {
     if (this.mountContainer === container) {
       return
     }
+    const hadCapturedMotion = this.motionController.hasCapturedMotionBoundaries()
     this.mountContainer = container
+    this.motionController.setRoot(container)
     for (const targetId of this.rootTargetIds) {
       this.nodes.targetNodes.set(targetId, container)
     }
     this.materializer.invalidateStructure?.()
     if (this.player.getSolvedScene() !== undefined) {
-      this.player.refresh()
+      this.player.refresh({ emitMotionOccurrences: hadCapturedMotion })
     }
   }
 

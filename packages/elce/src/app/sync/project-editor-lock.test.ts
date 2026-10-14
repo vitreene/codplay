@@ -48,6 +48,110 @@ describe('Elcé project editor focus lock', () => {
     await editorLock.stop()
   })
 
+  it('keeps edit access while the native file picker is open and imports before a queued handoff', async () => {
+    const fileInput = { type: 'file' } as HTMLInputElement
+    const { requests, setFocused, setVisible, grantAccess, broadcastMessage, dispatchFileInputEvent } = installBrowserLock(true)
+    const sequence: string[] = []
+    const onAccessGranted = vi.fn(async () => {})
+    const onAccessSuspending = vi.fn(async () => { sequence.push('suspend') })
+    const editorLock = new ProjectEditorLock('project-file-picker-handoff', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    grantAccess(0)
+    await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledOnce())
+
+    document.addEventListener('change', () => { sequence.push('change') })
+    dispatchFileInputEvent('click', fileInput)
+    setFocused(false)
+    setVisible(false)
+    window.dispatchEvent(new Event('blur'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    broadcastMessage({ type: 'request', projectId: 'project-file-picker-handoff', senderId: 'waiting-editor' })
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+
+    dispatchFileInputEvent('change', fileInput)
+    await Promise.resolve()
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+    expect(requests[0]?.resolve).not.toHaveBeenCalled()
+
+    setFocused(true)
+    window.dispatchEvent(new Event('focus'))
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+    setVisible(true)
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.waitFor(() => expect(onAccessSuspending).toHaveBeenCalledOnce())
+
+    expect(sequence).toEqual(['change', 'suspend'])
+    await vi.waitFor(() => expect(requests[0]?.resolve).toHaveBeenCalledOnce())
+    await editorLock.stop()
+  })
+
+  it('retains edit access when the picker returns focus before its change event', async () => {
+    const fileInput = { type: 'file' } as HTMLInputElement
+    const { setFocused, grantAccess, dispatchFileInputEvent } = installBrowserLock(true)
+    const onAccessGranted = vi.fn(async () => {})
+    const onAccessSuspending = vi.fn(async () => {})
+    const editorLock = new ProjectEditorLock('project-file-picker-focus-order', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    grantAccess(0)
+    await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledOnce())
+
+    dispatchFileInputEvent('click', fileInput)
+    setFocused(false)
+    window.dispatchEvent(new Event('blur'))
+    setFocused(true)
+    window.dispatchEvent(new Event('focus'))
+    dispatchFileInputEvent('change', fileInput)
+    await Promise.resolve()
+
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+    await editorLock.stop()
+  })
+
+  it('ends a canceled picker focus exception so a later ordinary blur releases access', async () => {
+    const fileInput = { type: 'file' } as HTMLInputElement
+    const { setFocused, grantAccess, dispatchFileInputEvent } = installBrowserLock(true)
+    const onAccessGranted = vi.fn(async () => {})
+    const onAccessSuspending = vi.fn(async () => {})
+    const editorLock = new ProjectEditorLock('project-file-picker-cancel', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted,
+      onAccessSuspending,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    grantAccess(0)
+    await vi.waitFor(() => expect(onAccessGranted).toHaveBeenCalledOnce())
+
+    dispatchFileInputEvent('click', fileInput)
+    setFocused(false)
+    window.dispatchEvent(new Event('blur'))
+    dispatchFileInputEvent('cancel', fileInput)
+    await Promise.resolve()
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+
+    setFocused(true)
+    window.dispatchEvent(new Event('focus'))
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+
+    setFocused(false)
+    window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(onAccessSuspending).toHaveBeenCalledOnce())
+    await editorLock.stop()
+  })
+
   it('does not request a lock for a visible but unfocused window', () => {
     const { lock, setFocused } = installBrowserLock(false)
     const editorLock = new ProjectEditorLock('project-background-window', {
@@ -212,8 +316,10 @@ function installBrowserLock(initialFocus: boolean): Readonly<{
   lock: { request: ReturnType<typeof vi.fn> }
   requests: PendingLockRequest[]
   setFocused(focused: boolean): void
+  setVisible(visible: boolean): void
   grantAccess(index: number): void
   broadcastMessage(message: unknown): void
+  dispatchFileInputEvent(type: 'click' | 'change' | 'cancel', input: HTMLInputElement): void
 }> {
   const windowTarget = new EventTarget()
   const documentTarget = Object.assign(new EventTarget(), {
@@ -242,10 +348,16 @@ function installBrowserLock(initialFocus: boolean): Readonly<{
     lock: { request },
     requests,
     setFocused: (focused) => { initialFocus = focused },
+    setVisible: (visible) => { documentTarget.visibilityState = visible ? 'visible' : 'hidden' },
     broadcastMessage: (message) => {
       for (const channel of channels) {
         channel.dispatchEvent(Object.assign(new Event('message'), { data: message }))
       }
+    },
+    dispatchFileInputEvent: (type, input) => {
+      const event = new Event(type, { bubbles: true })
+      Object.defineProperty(event, 'composedPath', { value: () => [input] })
+      documentTarget.dispatchEvent(event)
     },
     grantAccess: (index) => {
       const pending = requests[index]

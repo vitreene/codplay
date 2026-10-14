@@ -16,11 +16,16 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const initial = createInitialDocument()
     const flux = applyDocumentCommand(initial, createStatisticalGraphBdcCommand('graph-flux', 'page-a', 1))
     const fluxBuild = buildFluxScene(flux.pages.find((page) => page.id === 'page-a')!, flux.bdcs)
-    const article = fluxBuild.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-article')
+    const fluxStory = fluxBuild.sceneDoc.stories['page-a-page']
+    const article = fluxStory?.persos.find((perso) => perso.id === 'page-a-article')
+    const fluxVisual = fluxStory?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const fluxMarkup = article?.initial !== undefined && 'markup' in article.initial ? String(article.initial.markup) : ''
+    const fluxVisualMarkup = fluxVisual?.initial !== undefined && 'markup' in fluxVisual.initial ? String(fluxVisual.initial.markup) : ''
 
     expect(fluxMarkup).toContain('id="page-a-graph-flux-graph"')
-    expect(fluxMarkup).toContain('<svg')
+    expect(fluxMarkup).toContain('data-part="page-a:graph-flux:statistical-graph:visual"')
+    expect(fluxMarkup).not.toContain('<svg')
+    expect(fluxVisualMarkup).toContain('<svg')
     expect(compileScene(fluxBuild.sceneDoc).ok).toBe(true)
 
     const diapoPage = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, 'Graphe', PAGE_TYPE.DIAPO)
@@ -28,11 +33,16 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     diapo = applyDocumentCommand(diapo, { type: 'bdc.carousel.delete', bdcId: diapoPage.bdcId })
     diapo = applyDocumentCommand(diapo, createStatisticalGraphBdcCommand('graph-diapo', diapoPage.pageId, 0))
     const diapoBuild = buildDiapoScene(diapo.pages.find((page) => page.id === diapoPage.pageId)!, diapo.bdcs)
-    const diapoHost = diapoBuild.sceneDoc.stories[`${diapoPage.pageId}-diapo-page`]?.persos.find((perso) => perso.id === `${diapoPage.pageId}-diapo-content`)
+    const diapoStory = diapoBuild.sceneDoc.stories[`${diapoPage.pageId}-diapo-page`]
+    const diapoHost = diapoStory?.persos.find((perso) => perso.id === `${diapoPage.pageId}-diapo-content`)
+    const diapoVisual = diapoStory?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const diapoMarkup = diapoHost?.initial !== undefined && 'markup' in diapoHost.initial ? String(diapoHost.initial.markup) : ''
+    const diapoVisualMarkup = diapoVisual?.initial !== undefined && 'markup' in diapoVisual.initial ? String(diapoVisual.initial.markup) : ''
 
     expect(diapoMarkup).toContain(`id="${diapoPage.pageId}-graph-diapo-graph"`)
-    expect(diapoMarkup).toContain('<svg')
+    expect(diapoMarkup).toContain(`data-part="${diapoPage.pageId}:graph-diapo:statistical-graph:visual"`)
+    expect(diapoMarkup).not.toContain('<svg')
+    expect(diapoVisualMarkup).toContain('<svg')
     expect(compileScene(diapoBuild.sceneDoc).ok).toBe(true)
   })
 
@@ -47,14 +57,18 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const build = buildDiapoScene(page, document.bdcs)
     const story = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const graphView = story?.persos.find((perso) => perso.id === `${page.id}:${pageCommand.bdcId}-card-graph-slide`)
+    const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const graphMarkup = graphView?.initial !== undefined && 'markup' in graphView.initial ? String(graphView.initial.markup) : ''
+    const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
     const completion = story?.persos.find((perso) => perso.id.endsWith('-completion-marker'))
 
     expect(document.bdcs.find((bdc) => bdc.id === pageCommand.bdcId)?.carousel?.cards.map((entry) => entry.bdcId)).toEqual([
       firstCardId,
       'graph-slide',
     ])
-    expect(graphMarkup).toContain('<svg')
+    expect(graphMarkup).toContain(`data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:visual"`)
+    expect(graphMarkup).not.toContain('<svg')
+    expect(graphVisualMarkup).toContain('<svg')
     expect(graphMarkup).toContain(`<!-- data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:root" -->`)
     expect(completion?.emit?.observe).toMatchObject({ root: `${page.id}-${pageCommand.bdcId}-diapo-end-scrollport` })
     expect(compileScene(build.sceneDoc).ok).toBe(true)
@@ -95,6 +109,8 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const articleMarkup = article?.initial !== undefined && 'markup' in article.initial ? String(article.initial.markup) : ''
     const graphRoot = story?.persos.find((perso) => perso.id === 'page-a-graph-anchor-graph')
+    const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
+    const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
 
     expect(document.bdcs.find((bdc) => bdc.id === 'graph-anchor')?.parentBdcId).toBe('bdc-section-1')
     expect(articleMarkup).toContain('class="elce-flow-slot"')
@@ -104,8 +120,10 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(graphRoot?.initial).toMatchObject({
       move: { target: partId },
       style: { aspectRatio: '16 / 9' },
-      markup: expect.stringContaining('<svg'),
+      markup: expect.stringContaining(`data-part="${partId}:visual"`),
     })
+    expect(graphVisual?.initial).toMatchObject({ move: { target: `${partId}:visual` } })
+    expect(graphVisualMarkup).toContain('<svg')
     const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial
       ? String(graphRoot.initial.className)
       : ''
@@ -145,6 +163,8 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const story = build.sceneDoc.stories['page-a-page']
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const graphRoot = story?.persos.find((perso) => perso.id === 'page-a-graph-table-anchor-graph')
+    const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
+    const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
     const graphStyle = graphRoot?.initial !== undefined && 'style' in graphRoot.initial ? graphRoot.initial.style : undefined
 
     expect(article?.initial).toMatchObject({
@@ -155,7 +175,8 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(graphRoot?.initial).toMatchObject({
       className: expect.stringContaining('elce-statistical-graph--table'),
     })
-    expect(graphRoot?.initial).toMatchObject({ markup: expect.stringContaining('<table') })
+    expect(graphRoot?.initial).toMatchObject({ markup: expect.stringContaining(`data-part="${partId}:visual"`) })
+    expect(graphVisualMarkup).toContain('<table')
     expect(compileScene(build.sceneDoc).ok).toBe(true)
   })
 })

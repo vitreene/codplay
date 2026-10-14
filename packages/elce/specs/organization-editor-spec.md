@@ -108,6 +108,16 @@ quand les deux panneaux sont fermés, la zone centrale occupe toute la largeur.
 Au-delà de 1200 px, les trois colonnes restent visibles et les commandes
 responsive disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
 
+La barre de commandes située au-dessus de la zone centrale garde « Prévisualiser »
+à toutes les largeurs. Les commandes des panneaux partagent cette barre quand
+elles sont affichées : à 800 px et moins, la commande Scénario est à gauche,
+Prévisualiser au milieu et Contenus disponibles à droite ; entre 801 et
+1200 px, Prévisualiser précède la commande Contenus disponibles à droite.
+Au-delà de 1200 px, seul
+« Prévisualiser » reste dans cette barre, les deux panneaux étant visibles.
+L’erreur d’ouverture de la fenêtre de lecture y reste annoncée avec `role="alert"`.
+Le bouton continue d’appeler la même action de preview du workspace.
+
 La barre d’ajout de page affiche les libellés « Texte », « Quiz »,
 « Carousel », « Carte » et « Graphe » sous leurs icônes. Le nom accessible et
 l’infobulle de chaque bouton gardent la description complète. Le bouton Quiz
@@ -162,6 +172,9 @@ séparées.
   vérifie les créations Flux et Diapo à la racine et dans un chapitre, l’ordre
   mixte des entrées racine, les déplacements par séparateurs, les onglets du
   catalogue et l’ouverture des réglages centraux d’un chapitre.
+  Il confirme aussi que l’unique bouton « Prévisualiser » reste dans la barre
+  de commandes en vue page et chapitre, appelle l’action du workspace et garde
+  son alerte d’ouverture à cet emplacement.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie que la sélection d’un chapitre par la surface Remix native met à
   jour la zone centrale depuis le même acteur XState et que la zone page active

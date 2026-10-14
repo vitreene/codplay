@@ -19,6 +19,29 @@ describe('Statistical Graph scene builder', () => {
     expect(build.markup).not.toContain('visually-hidden">0</td>')
   })
 
+  it('separates the rendered visual from the graph title and commentary for scene movement', () => {
+    const build = builder.buildContent(
+      createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, { transposeEnabled: false }),
+      'statistical-graph-above-text',
+      'movable-graph',
+      'page-a:graph',
+    )
+    const visual = build.mediaPersos[0]
+
+    expect(build.markup).toContain('<h2 id="movable-graph-heading"')
+    expect(build.markup).toContain('<div id="movable-graph-editorial"')
+    expect(build.markup).toContain('<div id="movable-graph-visual" class="elce-statistical-graph__visual elce-statistical-graph__visual--table"><!-- data-part="page-a:graph:visual" --></div>')
+    expect(build.markup).not.toContain('movable-graph-table')
+    expect(visual).toMatchObject({
+      type: 'layout',
+      initial: {
+        move: { target: 'page-a:graph:visual' },
+        attr: { 'data-elce-viewport-content': 'graph', role: 'group', tabindex: '0' },
+      },
+    })
+    expect(visual?.initial?.markup).toContain('<table id="movable-graph-table"')
+  })
+
   it('marks wide visible tables for responsive dense layout while preserving every series label', () => {
     const series = Array.from({ length: 40 }, (_unused, index) => ({ id: `s${index}`, label: `Série ${index + 1}` }))
     const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {

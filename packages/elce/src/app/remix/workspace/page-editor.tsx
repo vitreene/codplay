@@ -26,13 +26,8 @@ const chapterTypeIcons = {
   'clipboard-check': ClipboardCheck,
 } as const
 
-export interface RemixPageEditorProps {
-  readonly onPreview: () => void
-  readonly previewError: string | null
-}
-
 /** Renders the selected page and all of its BDC editors in Remix. */
-export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
+export function RemixPageEditor(handle: Handle) {
   const { controller, actions } = handle.context.get(EditorContextProvider)
   if (controller === null || actions === null) return () => null
 
@@ -86,8 +81,6 @@ export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
     updateDropTarget,
     editingAnchorBdcId,
     setEditingAnchorBdc,
-    onPreview: handle.props.onPreview,
-    previewError: handle.props.previewError,
   })
 }
 
@@ -103,8 +96,6 @@ interface PageEditorRenderState {
   readonly updateDropTarget: (targetId: string | null) => void
   readonly editingAnchorBdcId: string | null
   readonly setEditingAnchorBdc: (bdcId: string | null) => void
-  readonly onPreview: () => void
-  readonly previewError: string | null
 }
 
 /** Renders the page title, author commands, and ordered BDC sequence. */
@@ -155,7 +146,6 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
       id="elce-work-area-heading"
       className="elce-work-area-heading"
     >
-      {renderPreviewControls(state.onPreview, state.previewError)}
       <div
         id="elce-work-area-title-row"
         className="elce-work-area-title-row"
@@ -190,28 +180,6 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
       </p>
       : renderPageBdcList(page, view, actions, state)}
   </section>
-}
-
-/** Renders the page preview command and any popup-blocking error. */
-function renderPreviewControls(onPreview: () => void, previewError: string | null): RemixNode {
-  return <div
-    id="elce-work-area-preview-row"
-    className="elce-work-area-preview-row"
-  >
-    <button
-      id="elce-preview-open"
-      type="button"
-      mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
-    >
-      Prévisualiser
-    </button>
-    {previewError === null ? null : <p
-      id="elce-preview-open-error"
-      role="alert"
-    >
-      {previewError}
-    </p>}
-  </div>
 }
 
 /** Renders one compact author command with a short visible label and full accessible name. */

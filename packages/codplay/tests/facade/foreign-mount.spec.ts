@@ -64,6 +64,66 @@ function createChildScene(content = 'child'): SceneDoc<string> {
   }
 }
 
+/** Declares a multi-root child whose compiled move uses a reparent overlay. */
+function createMovingChildScene(): SceneDoc<string> {
+  return {
+    id: 'foreign-moving-child-scene',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'source-container',
+          type: 'layout',
+          initial: {
+            move: '@root',
+            markup: '<section><div data-part="source"></div></section>',
+          },
+        }, {
+          id: 'target-container',
+          type: 'layout',
+          initial: {
+            move: '@root',
+            markup: '<section><div data-part="target"></div></section>',
+          },
+        }, {
+          id: 'moving-item',
+          type: 'tag',
+          initial: {
+            tag: 'article',
+            move: { target: 'source' },
+            content: 'moving child',
+          },
+          actions: {
+            transfer: {
+              move: {
+                target: 'target',
+                reparent: true,
+                transition: { duration: 100, ease: 'linear' },
+              },
+            },
+          },
+        }],
+        eventimes: [{ name: 'transfer', startAt: 100 }],
+      },
+    },
+    listen: [],
+    eventimes: [],
+    tracks: {},
+  }
+}
+
+/** Reuses the move contract while exposing it only to live event discovery. */
+function createLiveMovingChildScene(): SceneDoc<string> {
+  const scene = createMovingChildScene()
+  const main = scene.stories.main
+  if (main === undefined) throw new Error('Foreign live motion story is missing.')
+  return {
+    ...scene,
+    eventimes: [{ name: 'sequence:end', startAt: 1_000 }],
+    stories: { main: { ...main, eventimes: [] } },
+  }
+}
+
 /** Creates one autonomous child instance with a distinct public identity. */
 function createChildInstance(codplay: CodPlay, instanceId: string, content: string): CodPlayInstance {
   const build = codplay.build({ scene: createChildScene(content) })
@@ -99,6 +159,17 @@ function createForeignInstances(codplay: CodPlay): Readonly<{
     functions: childBuild.functions,
   })
   return { layout, child, layoutRoot }
+}
+
+/** Finds the transient overlay owned by one root-local motion host. */
+function findTestOverlayLayer(root: Element): HTMLElement | undefined {
+  return Array.from(root.querySelectorAll<HTMLElement>('*')).find((candidate) => (
+    candidate.style.position === 'fixed'
+      && candidate.style.width === '100vw'
+      && candidate.style.height === '100vh'
+      && candidate.style.pointerEvents === 'none'
+      && candidate.style.zIndex === '20'
+  ))
 }
 
 describe('CodPlay instance foreign mount', () => {
@@ -143,6 +214,141 @@ describe('CodPlay instance foreign mount', () => {
     mount.detach()
     expect(hostRoot.contains(childRoot)).toBe(false)
     expect(codplay.instances.get('child-1')).toBe(child)
+  })
+
+  it('uses the addressed slot as the motion root of a child created without a root', async () => {
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const layoutBuild = codplay.build({ scene: createLayoutScene() })
+    const childBuild = codplay.build({ scene: createMovingChildScene() })
+    if (!layoutBuild.ok || !childBuild.ok) throw new Error('Foreign motion scenes did not compile.')
+
+    const layoutRoot = document.createElement('main')
+    document.body.append(layoutRoot)
+    const layout = codplay.instances.create({
+      instanceId: 'motion-layout',
+      compiledScene: layoutBuild.compiledScene,
+      functions: layoutBuild.functions,
+      root: layoutRoot,
+    })
+    const child = codplay.instances.create({
+      instanceId: 'motion-child',
+      compiledScene: childBuild.compiledScene,
+      functions: childBuild.functions,
+    })
+    const hostRoot = layoutRoot.firstElementChild
+    if (!(hostRoot instanceof HTMLElement)) throw new Error('Foreign host root is missing.')
+
+    const mount = codplay.instances.mount({
+      host: { instanceId: layout.instanceId, storyId: 'main', persoId: 'body-host' },
+      childInstanceId: child.instanceId,
+    })
+    codplay.engine.advance(0)
+    await child.telco.play()
+    codplay.engine.advance(150)
+
+    const overlay = findTestOverlayLayer(hostRoot)
+    expect(overlay).toBeDefined()
+    expect(overlay?.parentElement).toBe(hostRoot)
+    expect(overlay?.children).toHaveLength(1)
+
+    mount.detach()
+    expect(overlay?.isConnected).toBe(false)
+
+    const remount = codplay.instances.mount({
+      host: { instanceId: layout.instanceId, storyId: 'main', persoId: 'body-host' },
+      childInstanceId: child.instanceId,
+    })
+    expect(hostRoot.querySelector('article')?.textContent).toBe('moving child')
+    remount.detach()
+  })
+
+  it('uses the addressed slot as the motion root for a live move', async () => {
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const layoutBuild = codplay.build({ scene: createLayoutScene() })
+    const childBuild = codplay.build({ scene: createLiveMovingChildScene() })
+    if (!layoutBuild.ok || !childBuild.ok) throw new Error('Foreign live motion scenes did not compile.')
+
+    const layoutRoot = document.createElement('main')
+    document.body.append(layoutRoot)
+    const layout = codplay.instances.create({
+      instanceId: 'live-motion-layout',
+      compiledScene: layoutBuild.compiledScene,
+      functions: layoutBuild.functions,
+      root: layoutRoot,
+    })
+    const child = codplay.instances.create({
+      instanceId: 'live-motion-child',
+      compiledScene: childBuild.compiledScene,
+      functions: childBuild.functions,
+    })
+    const hostRoot = layoutRoot.firstElementChild
+    if (!(hostRoot instanceof HTMLElement)) throw new Error('Foreign host root is missing.')
+
+    const mount = codplay.instances.mount({
+      host: { instanceId: layout.instanceId, storyId: 'main', persoId: 'body-host' },
+      childInstanceId: child.instanceId,
+    })
+    await child.events.emit(
+      { name: 'transfer', visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+    codplay.engine.advance(0)
+    await child.telco.play()
+    codplay.engine.advance(1)
+
+    const overlay = findTestOverlayLayer(hostRoot)
+    expect(overlay).toBeDefined()
+    expect(overlay?.parentElement).toBe(hostRoot)
+    expect(overlay?.children).toHaveLength(1)
+    mount.detach()
+  })
+
+  it('restores the creation root after detaching and remounting a scene', () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const layoutBuild = codplay.build({ scene: createLayoutScene() })
+    const childBuild = codplay.build({ scene: createChildScene() })
+    if (!layoutBuild.ok || !childBuild.ok) throw new Error('Foreign mount scenes did not compile.')
+
+    const layoutRoot = document.createElement('main')
+    const childRoot = document.createElement('aside')
+    document.body.append(layoutRoot, childRoot)
+    const layout = codplay.instances.create({
+      instanceId: 'restore-layout',
+      compiledScene: layoutBuild.compiledScene,
+      functions: layoutBuild.functions,
+      root: layoutRoot,
+    })
+    const child = codplay.instances.create({
+      instanceId: 'restore-child',
+      compiledScene: childBuild.compiledScene,
+      functions: childBuild.functions,
+      root: childRoot,
+    })
+    const hostRoot = layoutRoot.firstElementChild
+    const content = childRoot.querySelector('article')
+    if (!(hostRoot instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+      throw new Error('Foreign mount roots were not materialized.')
+    }
+
+    const mountRequest = {
+      host: { instanceId: layout.instanceId, storyId: 'main', persoId: 'body-host' },
+      childInstanceId: child.instanceId,
+    } as const
+    const firstMount = codplay.instances.mount(mountRequest)
+    expect(content.parentElement).toBe(hostRoot)
+    firstMount.detach()
+    expect(content.parentElement).toBe(childRoot)
+
+    const secondMount = codplay.instances.mount(mountRequest)
+    expect(content.parentElement).toBe(hostRoot)
+    secondMount.detach()
+    expect(content.parentElement).toBe(childRoot)
   })
 
   it('detaches the relation before destroying a child while preserving the host instance', () => {

@@ -261,6 +261,12 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  scroll-snap-type: y proximity;
+}
+
+.elce-flux-article > .elce-card,
+.elce-flux-article > .elce-statistical-graph {
+  scroll-snap-align: start;
 }
 
 .elce-flux-article {

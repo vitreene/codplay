@@ -12,6 +12,14 @@ import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistic
 import { createPageBottomMarkerPerso } from '../flux/page-bottom-marker'
 import { createResolvedRevelationAction } from '../revelation/revelation-action'
 import type { CarouselSceneBuild, CarouselSceneBuildInput } from './carousel-scene-builder-types'
+import {
+  addViewportExpansionToStory,
+  carouselViewCollapsedEvent,
+  carouselViewExpandedEvent,
+  carouselViewportCurrentEvent,
+  isViewportExpansionPerso,
+  type ViewportExpansionCarouselView,
+} from '../viewport-expansion/viewport-expansion-builder.ts'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
@@ -85,6 +93,13 @@ export class ElceCarouselSceneBuilder {
     const viewBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildView(input, entry.bdc, displayMode === 'scene')]))
     const lastCardBdcId = capsuleResult.children.at(-1)?.id
     const cardMountTarget = diapoRootId ?? capsulePartId
+    const mediaPersos = [...viewBuilds.values()].flatMap((build) => build.mediaPersos)
+    const expandableViews: readonly ViewportExpansionCarouselView[] = schedule.flatMap((entry) => {
+      const viewBuild = viewBuilds.get(entry.bdc.id)
+      return viewBuild?.mediaPersos
+        .filter(isViewportExpansionPerso)
+        .map((perso) => ({ bdcId: entry.bdc.id, persoId: perso.id })) ?? []
+    })
     const cardPersos = capsuleResult.children.flatMap((child) => {
       const entry = schedule.find((candidate) => candidate.bdc.id === child.id)
       const viewBuild = viewBuilds.get(child.id)
@@ -117,7 +132,7 @@ export class ElceCarouselSceneBuilder {
       )
     const story: StoryDoc<string> = {
       id: storyId,
-      state: { activeCardBdcId: firstCardBdcId },
+      state: { activeCardBdcId: firstCardBdcId, manualCarouselSelection: false },
       persos: [
         ...(diapoRootId === undefined ? [] : [createDiapoCarouselRoot(
           diapoRootId,
@@ -128,18 +143,24 @@ export class ElceCarouselSceneBuilder {
         )]),
         ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
+        ...mediaPersos,
         ...navigationPersos,
       ],
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
         ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
         : [],
-      straps: { [selectionEvent]: createSelectionStrap(prefix, content, storyId) },
+      straps: { [selectionEvent]: createSelectionStrap(prefix, content, storyId, expandableViews) },
       listen: [{ on: selectionEvent, straps: [selectionEvent] }],
     }
+    const expandedStory = addViewportExpansionToStory(story, {
+      selectionEvent,
+      views: expandableViews,
+      automatic: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+      trackId: storyId,
+    })
     return {
       markup: card?.markup ?? '',
-      story,
-      mediaPersos: [...viewBuilds.values()].flatMap((build) => build.mediaPersos),
+      story: expandedStory,
       styleSheet: capsuleResult.styleSheet,
     }
   }
@@ -444,18 +465,53 @@ function createCarouselNavigationPerso(
 }
 
 /** Builds the strap that selects a Card and interrupts scheduled playback after a manual choice. */
-function createSelectionStrap(prefix: string, content: CarouselContent, storyId: string): StrapFunction {
-  return ({ event }) => {
-    const selectedBdcId = event.data?.cardBdcId
-    if (typeof selectedBdcId !== 'string') return undefined
+function createSelectionStrap(
+  prefix: string,
+  content: CarouselContent,
+  storyId: string,
+  expandableViews: readonly ViewportExpansionCarouselView[],
+): StrapFunction {
+  return ({ event, state }) => {
+    let selectedBdcId = typeof event.data?.cardBdcId === 'string' ? event.data.cardBdcId : undefined
+    const direction = event.data?.direction
+    if (selectedBdcId === undefined && (direction === 'previous' || direction === 'next')) {
+      const activeBdcId = typeof state.activeCardBdcId === 'string' ? state.activeCardBdcId : undefined
+      const currentViewIndex = expandableViews.findIndex((view) => view.bdcId === activeBdcId)
+      const nextViewIndex = currentViewIndex + (direction === 'next' ? 1 : -1)
+      if (currentViewIndex < 0 || nextViewIndex < 0 || nextViewIndex >= expandableViews.length) return undefined
+      selectedBdcId = expandableViews[nextViewIndex]?.bdcId
+    }
+    if (selectedBdcId === undefined) return undefined
     const selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId)
     if (selectedEntry === undefined) return undefined
+    const selectedView = expandableViews.find((view) => view.bdcId === selectedEntry.bdcId)
+    const expandedContentId = typeof state.expandedContentId === 'string' ? state.expandedContentId : undefined
+    if (expandedContentId !== undefined && selectedView === undefined) return undefined
+    const previousView = expandedContentId === undefined
+      ? undefined
+      : expandableViews.find((view) => view.persoId === expandedContentId)
+    const expandedEvents = expandedContentId === undefined || selectedView === undefined
+      ? []
+      : [
+          ...(previousView === undefined || previousView.bdcId === selectedView.bdcId
+            ? []
+            : [{ name: carouselViewCollapsedEvent(storyId, previousView.bdcId) }]),
+          ...(previousView?.bdcId === selectedView.bdcId
+            ? []
+            : [{ name: carouselViewExpandedEvent(storyId, selectedView.bdcId) }]),
+          { name: carouselViewportCurrentEvent(storyId, selectedView.bdcId) },
+        ]
     return {
-      update: { activeCardBdcId: selectedEntry.bdcId },
+      update: {
+        activeCardBdcId: selectedEntry.bdcId,
+        manualCarouselSelection: true,
+        ...(expandedContentId === undefined || selectedView === undefined ? {} : { expandedContentId: selectedView.persoId }),
+      },
       events: [
         ...content.cards.map((entry) => ({
           name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? 'selected' : 'unselected'}`,
         })),
+        ...expandedEvents,
         ...(content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
           ? [{
             name: TRACK_EVENT_DEACTIVATE,

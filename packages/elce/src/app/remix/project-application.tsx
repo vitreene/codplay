@@ -349,10 +349,7 @@ function renderApplication(
       view: view.editor,
       actions,
       pageEditorHost: projectVisible && view.editor.selectedChapter === undefined
-        ? <RemixPageEditor
-          onPreview={workspace.onPreview}
-          previewError={workspace.previewError}
-        />
+        ? <RemixPageEditor />
         : null,
       responsivePanel: workspace.responsivePanel,
       dropTarget: workspace.dropTarget,
