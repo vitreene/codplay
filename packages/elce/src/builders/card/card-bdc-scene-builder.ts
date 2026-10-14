@@ -168,6 +168,7 @@ function createCardVideoPerso(bdcId: BdcId, mediaId: MediaId, source: string, ta
       tag: 'video',
       src: source,
       controls: true,
+      sync: 'independent',
       media: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'cover' } },
       move: { target },
     },

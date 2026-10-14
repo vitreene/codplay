@@ -202,7 +202,7 @@ describe('Elcé Flux scene builder', () => {
 
     expect(videoPerso).toMatchObject({
       type: 'media',
-      initial: { tag: 'video', src: 'blob:video-1', controls: true, move: { target: 'page-a:bdc-video-1:card:bdc-video-1:media' } },
+      initial: { tag: 'video', src: 'blob:video-1', controls: true, sync: 'independent', move: { target: 'page-a:bdc-video-1:card:bdc-video-1:media' } },
     })
   })
 
@@ -259,10 +259,10 @@ describe('Elcé Flux scene builder', () => {
     codplay.destroy()
   })
 
-  it('fills the Question illustration frame and runs its entrance event once', () => {
+  it.each([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO])('projects the Question %s illustration with its existing viewport commands', (mediaType) => {
     const withMedia = applyDocumentCommand(createInitialDocument(), {
       type: 'media.add',
-      media: { id: 'media-question-image', name: 'question.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-question-image', name: 'question', mimeType: mediaType === MEDIA_TYPE.IMAGE ? 'image/png' : 'video/mp4', size: 10, caption: '' },
     })
     const withQuestion = applyDocumentCommand(withMedia, {
       type: 'bdc.create',
@@ -279,26 +279,35 @@ describe('Elcé Flux scene builder', () => {
     })
     const build = buildFluxScene(withIllustration.pages[0]!, withIllustration.bdcs, {
       mediaSources: { 'media-question-image': 'blob:question-image' },
-      mediaTypes: { 'media-question-image': MEDIA_TYPE.IMAGE },
+      mediaTypes: { 'media-question-image': mediaType },
     })
-    const image = build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-bdc-question-image-image')
+    const image = build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.type === (mediaType === MEDIA_TYPE.IMAGE ? 'img' : 'media'))
 
     expect(image).toMatchObject({
-      type: 'img',
+      type: mediaType === MEDIA_TYPE.IMAGE ? 'img' : 'media',
       initial: {
         src: 'blob:question-image',
-        img: { style: { width: '100%', aspectRatio: '4 / 3', objectFit: 'contain' } },
+        ...(mediaType === MEDIA_TYPE.IMAGE
+          ? { img: { style: { width: '100%', aspectRatio: '4 / 3', objectFit: 'contain' } } }
+          : { sync: 'independent', controls: true }),
       },
-      emit: { observe: {
+      emit: mediaType === MEDIA_TYPE.IMAGE ? { observe: {
         root: 'page-a-scrollport',
         initial: 'enter',
-        enter: [{ name: 'page-a-bdc-question-image-image:enter', once: true }],
+        enter: [{ name: `${image?.id}:enter`, once: true }],
+      } } : { observe: {
+        root: 'page-a-scrollport',
+        enter: [{ name: `${image?.id}:fully-visible` }],
+        leave: [{ name: `${image?.id}:half-hidden` }],
       } },
-      actions: {
-        'page-a-bdc-question-image-image:enter': expect.objectContaining({ style: expect.any(Object) }),
+      actions: mediaType === MEDIA_TYPE.IMAGE ? {
+        [`${image?.id}:enter`]: expect.objectContaining({ style: expect.any(Object) }),
+      } : {
+        [`${image?.id}:fully-visible`]: { broadcast: { type: 'START' } },
+        [`${image?.id}:half-hidden`]: { broadcast: { type: 'PAUSE' } },
       },
     })
-    expect(image?.emit).not.toHaveProperty('observe.leave')
+    if (mediaType === MEDIA_TYPE.IMAGE) expect(image?.emit).not.toHaveProperty('observe.leave')
   })
 
   it('projects identified Card BDCs through AutoCapsule, CodPlay stories, and reusable media persos', () => {

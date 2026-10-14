@@ -175,7 +175,7 @@ describe('Elcé Diapo scene builder', () => {
     expect(build.questionReset).toEqual({ eventName: `${page.id}:bdc-diapo-question:reset` })
   })
 
-  it('fills the flexible Diapo Question illustration zone with contain', () => {
+  it.each([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO])('projects the flexible Diapo Question %s illustration', (mediaType) => {
     const initial = createInitialDocument()
     const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
     let document = applyDocumentCommand(initial, pageCommand)
@@ -183,7 +183,7 @@ describe('Elcé Diapo scene builder', () => {
     document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question-image', pageCommand.pageId, 0))
     document = applyDocumentCommand(document, {
       type: 'media.add',
-      media: { id: 'media-diapo-question-image', name: 'question.png', mimeType: 'image/png', size: 10, caption: '' },
+      media: { id: 'media-diapo-question-image', name: 'question', mimeType: mediaType === MEDIA_TYPE.IMAGE ? 'image/png' : 'video/mp4', size: 10, caption: '' },
     })
     const question = document.bdcs.find((bdc) => bdc.id === 'bdc-diapo-question-image')!.question!
     document = applyDocumentCommand(document, {
@@ -194,16 +194,18 @@ describe('Elcé Diapo scene builder', () => {
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
     const build = buildDiapoScene(page, document.bdcs, {
       mediaSources: { 'media-diapo-question-image': 'https://example.test/question.png' },
-      mediaTypes: { 'media-diapo-question-image': MEDIA_TYPE.IMAGE },
+      mediaTypes: { 'media-diapo-question-image': mediaType },
     })
     const story = build.sceneDoc.stories[`${page.id}-bdc-diapo-question-image`]
     const image = story?.persos.find((perso) => perso.id === 'bdc-diapo-question-image-diapo-illustration-media-diapo-question-image')
 
     expect(image).toMatchObject({
-      type: 'img',
+      type: mediaType === MEDIA_TYPE.IMAGE ? 'img' : 'media',
       initial: {
         src: 'https://example.test/question.png',
-        img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' } },
+        ...(mediaType === MEDIA_TYPE.IMAGE
+          ? { img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' } } }
+          : { sync: 'independent', controls: true, video: { style: { objectFit: 'contain' } } }),
       },
     })
     expect(image?.initial).not.toHaveProperty('img.style.maxHeight')

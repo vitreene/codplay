@@ -209,7 +209,7 @@ export function createScene(): SceneDoc<string> {
 						initial: {
 							tag: 'audio',
 							src: '/assets/1_7b_e.mp3',
-							master: true,
+							sync: 'master',
 							move: { target: AVATAR_STAGE_ID },
 							video: { style: { display: 'none' } },
 						},

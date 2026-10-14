@@ -67,7 +67,7 @@ function createAudioPerso(): ScenePerso {
 		initial: {
 			tag: 'video',
 			src: '/assets/uBMXdJ0AyY.mp3',
-			master: false,
+			sync: 'auto',
 			className: 'preload-media-audio',
 			video: { style: { display: 'none' } },
 			move: { target: 'media-container:cell-audio' },
@@ -86,7 +86,7 @@ function createVideoPerso(): ScenePerso {
 		initial: {
 			tag: 'video',
 			src: '/assets/LcXkmXyuZQ.mp4',
-			master: false,
+			sync: 'auto',
 			className: 'preload-media-video',
 			video: {
 				style: { objectFit: 'cover', display: 'block' },

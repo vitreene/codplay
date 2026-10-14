@@ -72,7 +72,7 @@ export function createScene(): SceneDoc<string> {
             initial: {
               tag: 'video',
               src: '/assets/1_7b_e.mp3',
-              master: true,
+              sync: 'master',
               move: { target: 'rive-coach-stage' },
               style: {
                 position: 'absolute',

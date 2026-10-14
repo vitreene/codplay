@@ -583,7 +583,7 @@ function createVideoPerso(
       tag: 'video',
       src: source,
       controls: true,
-      master: false,
+      sync: 'independent',
       className: 'elce-flux-video',
       style: anchored
         ? {

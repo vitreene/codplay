@@ -239,6 +239,7 @@ function createQuestionMediaPerso(
           tag: 'video',
           src: source,
           controls: true,
+          sync: 'independent',
           className: 'elce-diapo-question-media',
           video: { style: { display: 'block', width: '100%', maxHeight: '28vh', objectFit: 'contain' } },
           move: { target },
