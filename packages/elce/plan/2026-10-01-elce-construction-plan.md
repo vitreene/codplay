@@ -177,18 +177,18 @@ Safari. Neuf échecs de la suite générale sont reproduits avant modification
 et restent distincts de cette tranche. L’agrandissement et les intégrations
 tierces restent différés.
 
-### Agrandissement des contenus dans le viewport — enquête à relire
+### Agrandissement des contenus dans le viewport — A relire
 
-Le [plan dédié](./2026-10-14-elce-viewport-expansion-plan.md) étudie le clic
-d’agrandissement et le retour interpolé dans le lecteur Elcé : images d’abord,
-vidéos ensuite, puis Graphes et autres parties. Le viewport de la page est
-visé ; la fermeture d’un Carousel conserve sa nouvelle sélection. Comparer
-un perso hôte régulier et une capacité externe en réutilisant `move` et les
-circuits d’interaction existants. Les vidéos sont libres par défaut, sans lien
-avec une timeline de scène ; le replay du parcours Elcé est hors périmètre de
-ce dispositif. Le raccord vidéo et le correctif CodPlay reporté depuis Quiz
-Hunt sont référencés dans le plan dédié. **A relire :** architecture et détails
-d’acceptation à valider, aucune implémentation engagée.
+Le [plan de réalisation](./2026-10-14-elce-viewport-expansion-plan.md) porte
+les décisions ouvertes, les étapes, les gates et le chemin d’acceptation de
+l’agrandissement interpolé dans le lecteur Elcé : images d’abord, vidéos
+ensuite, puis Graphes. Les [notes d’enquête](../notes/2026-10-14-elce-viewport-expansion-enquete.md)
+conservent le contexte technique et le raisonnement ; elles ne font pas office
+de plan ni de spécification. La cible reste dans la même scène que la source ;
+sa projection `position: fixed` occupe le viewport. La fermeture du Carousel
+conserve sa sélection. Les vidéos restent indépendantes
+de la timeline ; le replay du parcours Elcé est hors périmètre. Aucune
+implémentation d’agrandissement n’est engagée.
 
 ### Décision acceptée — montage du BDC Résultat dans CodPlay
 
