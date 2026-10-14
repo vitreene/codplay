@@ -1,4 +1,4 @@
-# Elcé — BDC Graphe statistique
+# Elcé — BDC Graphe
 
 ## Statut
 
@@ -64,9 +64,11 @@ sont dessinés en SVG sans bibliothèque de graphique. Leur image porte un nom
 accessible lié au titre et une courte description ; le même modèle fournit
 une table HTML sémantique accessible. Le mode Tableau n’émet pas de SVG et
 affiche la matrice HTML avec ses libellés, son `caption` et ses en-têtes
-scopés ; seules les lignes qui contiennent au moins une valeur sont visibles.
-Zéro compte comme une valeur. L’alternative sémantique des rendus SVG conserve
-les dimensions complètes de la matrice.
+scopés ; seules les lignes contenant une valeur sont visibles et les colonnes
+s’arrêtent à la dernière colonne contenant une valeur dans l’orientation
+affichée. Les cellules vides avant cette limite restent visibles. Zéro compte
+comme une valeur. L’alternative sémantique des rendus SVG conserve les
+dimensions complètes de la matrice.
 
 La légende conserve uniquement les entrées nommées et disparaît quand aucune
 entrée applicable n’a de nom. Dans les secteurs transposés, elle identifie les
@@ -145,6 +147,12 @@ modifié.
   de l’aperçu ; la console ne contient ni erreur ni avertissement. Les icônes
   d’intitulés ont la même couleur, le même fond, la même bordure, les mêmes
   dimensions et la même classe SVG que les commandes de texte de la Section.
+- Le 14 octobre 2026, après correction des bornes du Tableau transposé, les
+  cinq fichiers de tests Graphe et persistance passent : 34 tests réussis et
+  un test réseau média ignoré. Typecheck et build passent. Dans l’aperçu Brave,
+  le tableau s’arrête aux lignes 2024–2025 et aux colonnes Nord–Sud ; la colonne
+  intérieure vide Centre est conservée, sans ligne 2026 ni colonne Est. La
+  console ne contient ni erreur ni avertissement.
 - La suite complète du paquet donne 288 tests réussis et 9 échecs dans les
   tests de composition du lecteur, du client API et du serveur média. Ces
   échecs sont hors des fichiers Graphe modifiés ; le test média échoue sur

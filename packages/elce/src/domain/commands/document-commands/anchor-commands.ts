@@ -88,7 +88,7 @@ export function attachCatalogBdc(
       }
       break
     case BDC_TYPE.STATISTICAL_GRAPH:
-      if (bdc.statisticalGraph == null) fail(`Le Graphe statistique ${bdc.id} est incomplet.`)
+      if (bdc.statisticalGraph == null) fail(`Le Graphe ${bdc.id} est incomplet.`)
       break
     default:
       fail(`Seules les Cartes et les Graphes statistiques peuvent être insérés dans le texte : ${bdc.id}`)

@@ -1,5 +1,5 @@
 import { ANCHOR } from '../../config/document-config'
-import { anchorNameFor, anchorReservationFor } from '../../anchor/anchor-position'
+import { anchorNameFor, anchorReservationFor } from '../../app/anchor/anchor-position'
 import type { FluxAnchorMarkupTarget } from './flux-anchor-player-markup-types'
 
 /** Replaces editor-only anchor markup with a structural CodPlay flow slot. */

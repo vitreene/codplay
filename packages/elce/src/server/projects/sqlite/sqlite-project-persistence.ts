@@ -860,7 +860,7 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
       return
     }
     case BDC_TYPE.STATISTICAL_GRAPH: {
-      const graph = requireValue(bdc.statisticalGraph, `Graphe statistique manquant : ${bdc.id}`)
+      const graph = requireValue(bdc.statisticalGraph, `Graphe manquant : ${bdc.id}`)
       await queryRows(database, `
         INSERT INTO statistical_graphs (
           project_id, content_block_id, content_json

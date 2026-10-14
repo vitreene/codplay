@@ -185,7 +185,7 @@ function renderAnchorCardEditor(
     return <section
       id={`elce-anchor-card-editor-${card.id}`}
       className="elce-anchor-card-editor"
-      aria-label="Modifier le graphe statistique ancré"
+      aria-label="Modifier le graphe ancré"
     >
       <header
         id={`elce-anchor-card-editor-header-${card.id}`}
@@ -194,7 +194,7 @@ function renderAnchorCardEditor(
         <h3
           id={`elce-anchor-card-editor-title-${card.id}`}
         >
-          Graphe statistique
+          Graphe
         </h3>
         <button
           id={`elce-anchor-card-editor-close-${card.id}`}

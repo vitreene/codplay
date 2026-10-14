@@ -35,7 +35,7 @@ page d’un chapitre Évaluation. Une Carte peut occuper directement une page,
 être conservée au catalogue, ou être enfant d’un Carousel ou inline d’une
 Section ; le JSON Tiptap porte alors sa position exacte. Une Carte
 porte son layout dans `presetId`, ses valeurs et sa référence média facultative
-dans `card.mediaId`. Un Graphe statistique peut occuper directement une page,
+dans `card.mediaId`. Un Graphe peut occuper directement une page,
 être conservé au catalogue, ou être enfant d’un Carousel ou inline d’une
 Section. Une Question porte son illustration facultative dans
 `question.mediaId`. Les ressources média sont indépendantes et peuvent être
@@ -86,7 +86,7 @@ retourne une nouvelle valeur après vérification de ses invariants. Elles couvr
 la création, le renommage et le déplacement de chapitres et de pages, le
 déplacement et le retrait au catalogue des bdc, la suppression définitive
 d’une page ou d’un bdc disponible, la mise à jour d’une Section, d’une Question,
-d’un Résultat, d’un Carousel ou d’un Graphe statistique, l’ajout de métadonnées
+d’un Résultat, d’un Carousel ou d’un Graphe, l’ajout de métadonnées
 média et le renommage du document.
 La suppression définitive d’une page supprime ses bdc, mais conserve les médias
 du catalogue. `bdc.delete` ne peut supprimer qu’un BDC inutilisé et présent dans
@@ -98,18 +98,18 @@ pas des entrées de catalogue autonomes. La suppression définitive d’un
 conteneur du catalogue supprime aussi ses BDC enfants, mais conserve les
 ressources média.
 `bdc.section.delete` supprime un BDC Section affecté à une page et ses BDC
-Carte ou Graphe statistique enfants référencés par des ancres ; les ressources média restent dans le
+Carte ou Graphe enfants référencés par des ancres ; les ressources média restent dans le
 catalogue. `bdc.question.delete` supprime le BDC Question de sa page et
 conserve son illustration média. `bdc.evaluation-result.delete` retire de la
 page le BDC Résultat affecté ; il ne le remet pas au catalogue. La commande
 `bdc.evaluation-result.update` édite ensemble ses branches Réussite et Échec ;
 le service métier vérifie qu’une action choisie est permise pour sa branche.
 `bdc.carousel.update` remplace les réglages et l’ordre des entrées, sans
-modifier l’ensemble des BDC Carte et Graphe statistique enfants. `bdc.card.update`,
+modifier l’ensemble des BDC Carte et Graphe enfants. `bdc.card.update`,
 `bdc.card.layout.set`, `bdc.card.media.set` et `bdc.card.media.attach` modifient
 une carte identifiée sans dupliquer une ressource existante.
 `bdc.carousel.card.delete` retire un BDC Carte enfant, mais refuse de vider le
-Carousel. `bdc.carousel.delete` retire le parent et ses BDC Carte et Graphe statistique enfants en
+Carousel. `bdc.carousel.delete` retire le parent et ses BDC Carte et Graphe enfants en
 conservant les médias référencés. `bdc.move` peut déplacer une carte vers un
 autre Carousel ; l’opération enlève son ancienne relation parent/enfant et en
 crée une nouvelle tout en gardant le BDC Carte lui-même.
@@ -153,11 +153,11 @@ dupliquées.
 
 `assertDocumentInvariants()` vérifie les affectations uniques, les références
 page/BDC et parent/enfant, les données propres au type de BDC, et l’intégrité
-des ancres : une référence désigne une Carte ou un Graphe statistique enfant de
+des ancres : une référence désigne une Carte ou un Graphe enfant de
 la même page, sans doublon dans une ou plusieurs Sections. Tout BDC racine peut être conservé au
 catalogue ; les règles d’affectation par page et de chapitre restent appliquées
 par les mêmes invariants. Une Carte a exactement un emplacement : une page, le
-catalogue, un parent Carousel ou une Section. Un Graphe statistique suit les
+catalogue, un parent Carousel ou une Section. Un Graphe suit les
 mêmes emplacements racines, Carousel ou Section. La Carte porte son layout,
 ses champs et, si nécessaire, `card.mediaId`. Une Question porte son illustration dans
 `question.mediaId`. Une Diapo contient au plus un BDC direct parmi les types
@@ -254,14 +254,14 @@ serveur.
   Carousel ou d’une Section catalogués.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
   vérifie les six types racines au catalogue et la dépose d’une Carte ou d’un
-  Graphe statistique dans le texte.
+  Graphe dans le texte.
 - [`page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
   vérifie dans le workspace Remix le glisser d’une Carte disponible vers une
   page compatible et son retour par l’action « Renvoyer au catalogue ».
 - [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
   vérifie Carousel, Carte et Question en Diapo ;
   [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
-  vérifie le Graphe statistique direct en Diapo.
+  vérifie le Graphe direct en Diapo.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
   actions icônes accessibles de création à la racine et dans un chapitre,
   l’emplacement produit, ainsi que l’édition centrale des noms de page et de

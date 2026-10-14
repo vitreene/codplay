@@ -17,7 +17,7 @@ Le montage d’un Carousel dans la séquence Flux est décrit dans la
 ## Contrat
 
 `buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
-ordonnée de BDC Section, Question, Résultat, Carte, Graphe statistique ou
+ordonnée de BDC Section, Question, Résultat, Carte, Graphe ou
 Carousel, selon les contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;
 son rendu image ou vidéo vient du MIME de cette ressource. Les Cartes peuvent
 être des BDC directs de la page ou des enfants d’une Section ou d’un Carousel.
@@ -44,7 +44,7 @@ padding donne le ratio du cadre et de la réserve ; le perso image utilise
 `object-fit:cover`. Il produit un
 `SceneDoc` avec :
 
-Un Graphe statistique ancré utilise ce même slot et cette réservation Flux. Le
+Un Graphe ancré utilise ce même slot et cette réservation Flux. Le
 mode Tableau garde sa hauteur naturelle et réserve `100%` de la largeur du
 slot ; les rendus SVG réservent `56.25%`. Aucun hôte parallèle n’est ajouté.
 

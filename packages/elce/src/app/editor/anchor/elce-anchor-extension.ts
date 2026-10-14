@@ -16,7 +16,7 @@ import type {
   ElceAnchorExtensionOptions,
   ElceAnchorTransaction,
 } from './anchor-types'
-import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../../anchor/anchor-position'
+import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../../domain/anchor/anchor-ratio-service'
 import { ElceStatisticalGraphSceneBuilder } from '../../../builders/statistical-graph/statistical-graph-scene-builder'
 

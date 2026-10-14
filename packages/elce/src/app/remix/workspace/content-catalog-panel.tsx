@@ -265,7 +265,7 @@ function catalogBdcLabel(bdcType: BdcType): string {
     case BDC_TYPE.CAROUSEL:
       return 'Carousel'
     case BDC_TYPE.STATISTICAL_GRAPH:
-      return 'Graphe statistique'
+      return 'Graphe'
   }
 }
 

@@ -1062,7 +1062,7 @@ l’éditeur et le builder Carousel existants. Son contrat vérifié figure dans
 [spécification Carousel](../specs/carousel-bdc-spec.md). Le placement Graphe
 dans une Section est également implémenté et vérifié ; ses contrats et preuves
 figurent dans les spécifications du
-[Graphe statistique](../specs/statistical-graph-spec.md) et des
+[Graphe](../specs/statistical-graph-spec.md) et des
 [ancres](../specs/anchor-spec.md).
 
 Le chantier actif rend tous les layouts Carte existants disponibles comme
@@ -1070,7 +1070,7 @@ ancres. Pour rédiger une citation ou une exergue, le layout Texte court est le
 cas de référence. L’aperçu Tiptap affiche les champs et le média compatibles
 avec le layout choisi ; le builder Flux et le player gardent leur projection
 Carte existante. Le futur projet « Graphe de données » pourra préciser des
-types ou usages supplémentaires ; le BDC Graphe statistique actuel est défini
+types ou usages supplémentaires ; le BDC Graphe actuel est défini
 dans sa [spécification dédiée](../specs/statistical-graph-spec.md).
 
 Le réglage permettant de décaler la Carte par rapport au flux grâce à des

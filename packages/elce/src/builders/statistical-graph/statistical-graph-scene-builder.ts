@@ -16,7 +16,7 @@ export class ElceStatisticalGraphSceneBuilder {
   /** Builds the selected SVG chart or visible HTML table and its semantic data table. */
   public build(bdc: Bdc, rootId = `elce-${bdc.id}-graph`, partId?: string): StatisticalGraphSceneBuild {
     if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
-      throw new Error(`Le BDC ${bdc.id} n’est pas un Graphe statistique complet.`)
+      throw new Error(`Le BDC ${bdc.id} n’est pas un Graphe complet.`)
     }
     return this.buildContent(bdc.statisticalGraph, bdc.presetId, rootId, partId)
   }
@@ -30,7 +30,7 @@ export class ElceStatisticalGraphSceneBuilder {
   ): StatisticalGraphSceneBuild {
     const titleId = `${rootId}-svg-title`
     const renderingContent = transposeStatisticalGraphContent(content)
-    const title = content.title.trim() || 'Graphe statistique'
+    const title = content.title.trim() || 'Graphe'
     const visibleTitle = content.title.trim().length > 0
       ? `<h2 id="${rootId}-heading" class="elce-statistical-graph__title">${escapeHtml(content.title)}</h2>`
       : `<h2 id="${rootId}-heading" class="elce-statistical-graph__title elce-statistical-graph__visually-hidden">${escapeHtml(title)}</h2>`
@@ -74,7 +74,7 @@ function transposeStatisticalGraphContent(content: StatisticalGraphContent): Sta
 /** Renders an SVG chart with density-limited axis labels and compact series cues. */
 function renderSvgChart(content: StatisticalGraphContent, rootId: string, titleId: string): string {
   const descriptionId = `${rootId}-description`
-  const title = content.title.trim() || 'Graphe statistique'
+  const title = content.title.trim() || 'Graphe'
   const transpositionDescription = content.transposeEnabled !== false
     ? ' Les catégories et les séries sont transposées.'
     : ''
@@ -241,12 +241,18 @@ function renderLegend(content: StatisticalGraphContent, rootId: string): string 
   return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${legendLabel}">${selectedEntries.map((entry) => `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark" style="background-color:${graphColor(entry.colorIndex)}"></span><span id="${rootId}-legend-label-${entry.id}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span></li>`).join('')}</ul>`
 }
 
-/** Renders only populated category rows in the visible Table representation. */
+/** Bounds the visible Table to populated rows and the last populated column. */
 function renderVisibleTable(content: StatisticalGraphContent, rootId: string): string {
   const populatedCategoryIds = new Set(content.values.map((entry) => entry.categoryId))
+  const seriesIndexById = new Map(content.series.map((series, index) => [series.id, index]))
+  const lastPopulatedSeriesIndex = content.values.reduce(
+    (lastIndex, entry) => Math.max(lastIndex, seriesIndexById.get(entry.seriesId) ?? -1),
+    -1,
+  )
   const visibleContent = {
     ...content,
     categories: content.categories.filter((category) => populatedCategoryIds.has(category.id)),
+    series: content.series.slice(0, lastPopulatedSeriesIndex + 1),
   }
   return `${renderAxisCaptions(content, rootId)}${renderTable(visibleContent, rootId, 'elce-statistical-graph__table')}`
 }
@@ -258,7 +264,7 @@ function renderAccessibleTable(content: StatisticalGraphContent, rootId: string)
 
 /** Creates a correctly scoped data table from the normalized graph matrix. */
 function renderTable(content: StatisticalGraphContent, rootId: string, className: string): string {
-  const title = content.title.trim() || 'Graphe statistique'
+  const title = content.title.trim() || 'Graphe'
   const isVisible = !className.includes('--visually-hidden')
   const denseClass = !isVisible || Math.max(content.series.length, content.categories.length) < 12
     ? ''

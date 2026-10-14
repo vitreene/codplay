@@ -218,7 +218,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
       case BDC_TYPE.STATISTICAL_GRAPH: {
         if (bdc.statisticalGraph == null || bdc.section !== null || bdc.question !== null
           || bdc.evaluationResult != null || bdc.carousel != null || bdc.card != null) {
-          fail(`Bdc Graphe statistique incomplet : ${bdc.id}`)
+          fail(`Bdc Graphe incomplet : ${bdc.id}`)
         }
         if (!STATISTICAL_GRAPH_LAYOUT_IDS.includes(bdc.presetId as StatisticalGraphLayoutId)) {
           fail(`Layout de graphe inconnu : ${bdc.presetId}`)
@@ -243,7 +243,7 @@ export function assertDocumentInvariants(document: ElceDocument): void {
         if (bdc.card != null || bdc.parentBdcId !== null) fail(`Un bdc ${bdc.type} ne peut pas être un enfant de conteneur : ${bdc.id}`)
         if (bdc.question !== null) fail(`Un bdc ${bdc.type} ne peut pas porter de Question : ${bdc.id}`)
         if (bdc.carousel != null) fail(`Un bdc ${bdc.type} ne peut pas porter un Carousel : ${bdc.id}`)
-        if (bdc.statisticalGraph != null) fail(`Un bdc ${bdc.type} ne peut pas porter un Graphe statistique : ${bdc.id}`)
+        if (bdc.statisticalGraph != null) fail(`Un bdc ${bdc.type} ne peut pas porter un Graphe : ${bdc.id}`)
     }
   }
 

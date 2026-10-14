@@ -69,7 +69,7 @@ export function renderRemixStatisticalGraphEditor(
   return <section
     id={`elce-statistical-graph-editor-${bdc.id}`}
     className="elce-statistical-graph-editor"
-    aria-label="Éditeur de graphe statistique"
+    aria-label="Éditeur de graphe"
   >
     <header
       id={`elce-statistical-graph-editor-heading-${bdc.id}`}
@@ -78,7 +78,7 @@ export function renderRemixStatisticalGraphEditor(
       <h3
         id={`elce-statistical-graph-editor-title-${bdc.id}`}
       >
-        Graphe statistique
+        Graphe
       </h3>
       <div
         id={`elce-statistical-graph-editor-header-actions-${bdc.id}`}

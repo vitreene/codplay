@@ -28,6 +28,9 @@ describe('Remix Statistical Graph editor', () => {
       actions.createStatisticalGraphEditorActions(graphBdc.id, initialGraph),
     ))
 
+    expect(rendered.$(`#elce-statistical-graph-editor-${graphBdc.id}`)?.getAttribute('aria-label')).toBe('Éditeur de graphe')
+    expect((rendered.$(`#elce-statistical-graph-editor-title-${graphBdc.id}`)?.textContent ?? '').trim()).toBe('Graphe')
+
     await rendered.act(() => {
       const cell = rendered.$('[aria-label="Valeur catégorie 1, série 1"]') as HTMLInputElement | null
       if (cell === null) throw new Error('The graph editor fixture has no first value cell.')

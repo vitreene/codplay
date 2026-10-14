@@ -3,7 +3,7 @@ import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { Bdc, BdcId, Page } from '../../domain/document/document-types'
 import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
-import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
+import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../domain/anchor/anchor-ratio-service'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { FluxAnchorTarget } from './flux-anchor-player-markup-types'
@@ -428,7 +428,7 @@ function createFluxGraphPersos(
   projectRevelation: NonNullable<FluxSceneBuildOptions['revelationDefaults']>,
 ): readonly PersoDoc<string>[] {
   if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
-    throw new Error(`Le bdc ${bdc.id} n’est pas un Graphe statistique complet.`)
+    throw new Error(`Le bdc ${bdc.id} n’est pas un Graphe complet.`)
   }
   const introRef = anchor.revelation.intro ?? projectRevelation.intro
   const outroRef = anchor.revelation.outro ?? projectRevelation.outro

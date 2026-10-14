@@ -1,5 +1,5 @@
-import { ANCHOR, DEFAULT_PRESET_ID, STATISTICAL_GRAPH_LAYOUT_IDS, STATISTICAL_GRAPH_RENDERING } from '../config/document-config'
-import type { StatisticalGraphContent } from '../domain/statistical-graph/statistical-graph-types'
+import { ANCHOR, DEFAULT_PRESET_ID, STATISTICAL_GRAPH_LAYOUT_IDS, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
+import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
 
 /** Returns the CSS anchor name shared by one Elcé insertion point and its bdc. */
 export function anchorNameFor(partId: string): string {

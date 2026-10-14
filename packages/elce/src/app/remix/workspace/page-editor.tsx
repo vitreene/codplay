@@ -175,7 +175,7 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
           {renderCreateButton('elce-question-create', 'Ajouter un bloc quiz', 'Quiz', ListChecks, !canCreateQuestion, addQuestion)}
           {renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', 'Carousel', Images, !canCreateCarousel, addCarousel)}
           {page === undefined ? null : renderCreateButton('elce-card-create', 'Ajouter une carte', 'Carte', RectangleHorizontal, !canCreateStandaloneCard, addStandaloneCard)}
-          {page === undefined ? null : renderCreateButton('elce-statistical-graph-create', 'Ajouter un graphe statistique', 'Graphe', Activity, !canCreateStatisticalGraph, addStatisticalGraph)}
+          {page === undefined ? null : renderCreateButton('elce-statistical-graph-create', 'Ajouter un graphe', 'Graphe', Activity, !canCreateStatisticalGraph, addStatisticalGraph)}
           {canCreateEvaluationResult
             ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)
             : null}

@@ -19,7 +19,7 @@ import type {
 } from '../catalog/catalog-types'
 import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
 import type { Bdc, MediaMetadata, PageId } from '../document/document-types'
-import { statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
+import { statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
 
 const mediaResourceService = new ElceMediaResourceService()
 
@@ -265,7 +265,7 @@ function catalogBdcName(document: ElceDocument, bdc: Bdc): string {
     case BDC_TYPE.CAROUSEL:
       return 'Carousel'
     case BDC_TYPE.STATISTICAL_GRAPH:
-      return bdc.statisticalGraph?.title.trim() || 'Graphe statistique'
+      return bdc.statisticalGraph?.title.trim() || 'Graphe'
     default:
       return assertNeverBdcType(bdc.type)
   }

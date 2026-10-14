@@ -11,7 +11,7 @@ document initial.
 Cette spécification décrit le contrat HTTP du routeur et du contrôleur. La
 frontière `ProjectPersistence` isole le stockage ; ce contrat ne transforme
 pas le document complet en colonne JSON de SQLite. Le contenu métier du BDC
-Graphe statistique est l’exception : `StatisticalGraphContent` est conservé en
+Graphe est l’exception : `StatisticalGraphContent` est conservé en
 JSON opaque dans `statistical_graphs.content_json`. Les métadonnées communes
 d’identité et de placement de ce BDC restent relationnelles.
 

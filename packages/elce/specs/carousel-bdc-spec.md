@@ -1,8 +1,8 @@
-# Elcé — BDC Carousel, Carte et Graphe statistique
+# Elcé — BDC Carousel, Carte et Graphe
 
 ## Statut
 
-**Fixe — Carousel v4 avec vues enfant Carte et Graphe statistique.** La vue
+**Fixe — Carousel v4 avec vues enfant Carte et Graphe.** La vue
 Graphe a été ajoutée et vérifiée dans Brave le 9 octobre 2026. L’insertion du
 Carousel dans un BDC Texte reste hors de cette tranche. Son emploi comme BDC
 par défaut d’une Diapo est décrit dans la
@@ -13,7 +13,7 @@ par défaut d’une Diapo est décrit dans la
 Dans une page Flux, le BDC Carousel occupe une place dans la séquence ordonnée
 des BDC. Dans une page Diapo, il peut occuper l’unique emplacement BDC direct.
 Dans les deux cas, il porte les réglages de présentation et référence une
-séquence ordonnée de vues enfant Carte ou Graphe statistique. Chaque vue enfant
+séquence ordonnée de vues enfant Carte ou Graphe. Chaque vue enfant
 a le Carousel comme parent ; elle ne figure donc pas dans `page.bdcIds` ni dans
 le catalogue. Le
 modèle BDC Carte peut aussi être placé directement dans la séquence d’une page
@@ -22,14 +22,14 @@ parent Carousel et figurent alors dans `page.bdcIds`. La Diapo créée par défa
 avec un Carousel doit d’abord en retirer ce BDC avant d’accepter un BDC direct.
 Le BDC Graphe peut aussi être direct en Flux ou Diapo, ou ancré dans une
 Section ; ses données et ses rendus sont décrits dans la
-[spécification du Graphe statistique](./statistical-graph-spec.md). Aucun BDC
+[spécification du Graphe](./statistical-graph-spec.md). Aucun BDC
 Carte n’est placé au catalogue. Les changements de layout ne créent pas un
 nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
 nombre fini de répétitions, le ratio, la transition et la liste ordonnée
 `cards` d’entrées `{ bdcId, durationMs }`. Chaque entrée référence un BDC Carte
-ou Graphe statistique enfant. La durée particulière appartient à l’entrée du
+ou Graphe enfant. La durée particulière appartient à l’entrée du
 Carousel ; `null` signifie que la durée commune s’applique. Un Carousel doit
 contenir au moins une vue.
 

@@ -5,7 +5,7 @@
 Le builder projette une page Elcé de type `diapo` en scène CodPlay. La Diapo
 contient au plus un BDC direct. Sa création propose un BDC Carousel ; l’auteur
 peut le remplacer par un BDC Carte autonome, un BDC Question (Quiz) ou un
-Graphe statistique. Les cartes et Graphes d’un Carousel réutilisent leurs BDC
+Graphe. Les cartes et Graphes d’un Carousel réutilisent leurs BDC
 Elcé dans une page Flux.
 
 ## Scène et lecture
@@ -93,7 +93,7 @@ fonctionnelle.
   de la dernière Carte et les commentaires d’insertion sans attribut
   `data-part` sur les éléments.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
-  vérifie le montage du Graphe statistique comme BDC direct d’une Diapo.
+  vérifie le montage du Graphe comme BDC direct d’une Diapo.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie le chemin player réel avec Sighty/CodPlay : le marqueur Carte et le
   Quiz émettent `elce:page:finished`, et la dernière vue d’un Carousel manuel

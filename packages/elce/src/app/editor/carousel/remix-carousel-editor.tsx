@@ -97,8 +97,8 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
           id={`elce-carousel-graph-add-${bdcId}`}
           className="elce-carousel-editor__view-add elce-add-content-action"
           type="button"
-          aria-label="Ajouter un graphe statistique"
-          title="Ajouter un graphe statistique"
+          aria-label="Ajouter un graphe"
+          title="Ajouter un graphe"
           mix={on<HTMLButtonElement, 'click'>('click', actions.addStatisticalGraph)}
         >
           {renderLucideIcon(Activity, `elce-carousel-graph-add-icon-${bdcId}`, 14)}

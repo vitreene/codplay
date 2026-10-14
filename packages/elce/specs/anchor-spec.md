@@ -2,7 +2,7 @@
 
 ## Statut
 
-**En cours — insertion des Cartes et du Graphe statistique par le circuit
+**En cours — insertion des Cartes et du Graphe par le circuit
 d’ancre partagé. La réserve Tableau/SVG du Graphe est vérifiée dans Brave ; les
 parcours média et layouts Carte restent en cours de validation.**
 
@@ -22,7 +22,7 @@ des persos CodPlay est décrit dans la
 atomique et déplaçable. Ses attributs métier sont `bdcId`, `partId` et
 `paddingBottom`. L’extension ne stocke ni `mediaId` ni type de média :
 l’éditeur résout le BDC par `bdcId`. Une Carte utilise son preset et ses médias ;
-un Graphe statistique utilise son builder de scène.
+un Graphe utilise son builder de scène.
 L’aperçu utilise le même `ElceCardPresetBuilder` et le même `CARD_PRESETS` que
 la projection Flux ; il affiche les champs de texte déclarés par le layout et
 les médias compatibles avec ce layout, en conservant ses réglages de position
@@ -42,7 +42,7 @@ ligne d’insertion et les marges ; le player ajoute la marge supérieure
 éditable dans le POC.
 
 Le nœud ne crée aucun élément CodPlay et ne contient pas de HTML saisi par
-l’auteur. Une Carte ou un Graphe statistique ancré est un BDC enfant de la
+l’auteur. Une Carte ou un Graphe ancré est un BDC enfant de la
 Section qui l’emploie : son
 `parentBdcId` désigne la Section, `pageId` vaut `null` et son identifiant
 n’apparaît pas dans `page.bdcIds`. Le builder Flux relit les ancres exportées
@@ -131,7 +131,7 @@ toutes ses ancres : les Cartes et Graphes statistiques enfants sont supprimés
 avec la Section,
 leurs ressources média restent disponibles.
 `applyDocumentCommand` vérifie les invariants avant de rendre chaque nouveau
-document : une ancre référence un seul BDC Carte ou Graphe statistique enfant
+document : une ancre référence un seul BDC Carte ou Graphe enfant
 de sa Section, qui ne peut pas être déplacé vers le catalogue ou une autre page
 sans retirer son ancre. ProseMirror applique
 `transformPasted` aux collages et aussi à la tranche d’un glisser-déposer avant
@@ -219,7 +219,7 @@ texte ou le média placé dessous.
   Sighty/CodPlay.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
   vérifie les cibles et commandes métier pour l’insertion d’une Carte ou d’un
-  Graphe statistique.
+  Graphe.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   vérifie le slot de Section, la réserve Tableau/SVG et le montage de la story
 du Graphe par le builder Flux réel.

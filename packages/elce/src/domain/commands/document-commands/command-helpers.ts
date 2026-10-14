@@ -255,7 +255,7 @@ export function placeIllustrationInSection(document: ElceDocument, bdc: Bdc, sec
   const section = findBdc(document, sectionBdcId)
   if ((bdc.type !== BDC_TYPE.CARD && bdc.type !== BDC_TYPE.STATISTICAL_GRAPH)
     || section.type !== BDC_TYPE.SECTION || section.section === null) {
-    fail('Une Section accepte les illustrations Carte et Graphe statistique.')
+    fail('Une Section accepte les illustrations Carte et Graphe.')
   }
   const withoutBdc = new ElceDocument({
     ...document.data,
