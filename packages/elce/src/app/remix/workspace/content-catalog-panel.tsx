@@ -5,11 +5,13 @@ import type { BdcType } from '../../../config/document-config-types'
 import type { ElceCatalogMediaEntry, ElceCatalogReference } from '../../../domain/catalog/catalog-types'
 import { GripVertical, Trash2 } from 'lucide-static'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { renderProfileTokenInsertion } from '../../editor/profile/profile-token-insertion'
 import type { ContentCatalogPanelProps } from './catalog-panel-types'
 
 /** Renders the available BDC and reusable media tabs in the existing right panel. */
 export function renderContentCatalogPanel(props: ContentCatalogPanelProps): RemixNode {
-  const { view, actions, responsivePanel, dropTarget, onSetDropTarget } = props
+  const { view, actions, responsivePanel, profileTokenTargetId, dropTarget, onSetDropTarget } = props
+  const canShowProfileTab = profileTokenTargetId !== null && view.documentModel.data.profile.properties.length > 0
   const onDragOverAvailableBdcs = (event: DragEvent): void => {
     const transfer = event.dataTransfer
     if (transfer === null) return
@@ -55,7 +57,7 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
         <h1
           id="elce-content-catalog-title"
         >
-          Contenus disponibles
+          Contenus
         </h1>
       </header>
       <div
@@ -89,6 +91,16 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
         >
           Médias
         </button>
+        {canShowProfileTab ? <button
+          id="elce-content-catalog-tab-profile"
+          className={view.catalogTab === CATALOG_TAB.PROFILE ? 'elce-content-catalog-tab elce-content-catalog-tab--active' : 'elce-content-catalog-tab'}
+          type="button"
+          aria-pressed={view.catalogTab === CATALOG_TAB.PROFILE}
+          aria-controls="elce-catalog-profile"
+          mix={on<HTMLButtonElement, 'click'>('click', () => actions.selectCatalogTab(CATALOG_TAB.PROFILE))}
+        >
+          Profil
+        </button> : null}
       </div>
       <section
         id="elce-catalog-bdcs"
@@ -162,6 +174,18 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
               {renderCatalogReference(entry.reference, entry.name, catalogMediaLabel(entry.mediaType), 'media', entry.key)}
             </li>)}
           </ul>}
+      </section>
+      <section
+        id="elce-catalog-profile"
+        className="elce-content-catalog-panel"
+        aria-label="Variables de profil"
+        hidden={view.catalogTab !== CATALOG_TAB.PROFILE || !canShowProfileTab}
+      >
+        {profileTokenTargetId === null ? null : renderProfileTokenInsertion(
+          'elce-profile-token-insertion',
+          view.documentModel.data.profile.properties,
+          profileTokenTargetId,
+        )}
       </section>
     </section>
   </aside>

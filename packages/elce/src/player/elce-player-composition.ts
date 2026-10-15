@@ -11,7 +11,7 @@ import type { ChapterType } from '../config/document-config-types'
 import { buildFluxScene } from '../builders/flux/flux-scene-builder'
 import type { FluxSceneBuildOptions } from '../builders/flux/flux-scene-builder-types'
 import { buildDiapoScene } from '../builders/diapo/diapo-scene-builder'
-import { buildScenario } from '../builders/scenario/scenario-builder'
+import { buildScenario, scenarioContextFromTestState } from '../builders/scenario/scenario-builder'
 import { validateHtmlElementMethodActions } from '../builders/markup-validation/html-element-method-validation'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
@@ -20,6 +20,8 @@ import { ELCE_VIEWPORT_EXPANSION_STYLE_SHEET } from '../builders/viewport-expans
 import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
 import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
+import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import type { TestAnswerState } from '../domain/summary-profile/test-state-types'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
 
@@ -39,8 +41,13 @@ export class ElcePlayerComposition {
   /** Builds one player composition from the current métier document. */
   public constructor(options: ElcePlayerCompositionOptions) {
     this.options = options
-    const pageSceneCatalog = createPageSceneCatalog(options.document, options.mediaSources, options.sceneCache)
-    const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId)
+    const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
+    const pageSceneCatalog = createPageSceneCatalog(options.document, options.mediaSources, options.sceneCache, testState.questionAnswers)
+    const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId, {
+      testState,
+      mediaSources: options.mediaSources,
+      onTestStateChange: options.onTestStateChange,
+    })
     for (const warning of validateHtmlElementMethodActions(scenario.scenes ?? {})) {
       options.onLog?.(warning, 'warn')
     }
@@ -49,6 +56,7 @@ export class ElcePlayerComposition {
       scenario,
       runtime: {
         root: options.stage,
+        context: scenarioContextFromTestState(testState),
         instanceIds,
         codplay: {
           engine: {
@@ -200,6 +208,7 @@ export function createPageSceneCatalog(
   document: ElceDocument,
   mediaSources: ElcePlayerCompositionOptions['mediaSources'],
   cache?: ElcePageSceneCache,
+  questionAnswers: Readonly<Record<string, TestAnswerState>> = {},
 ): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>>; styleSheets: readonly string[] }> {
   const pageStyleSheets: string[] = []
   const pageIds = scenarioPageIds(document)
@@ -253,6 +262,7 @@ export function createPageSceneCatalog(
     const scene = buildPageScene(page, document.bdcs, {
       mediaSources: pageMediaSources,
       mediaTypes: pageMediaTypes,
+      questionAnswers,
       revelationDefaults: document.data.revelationDefaults,
     }, sceneChapterType)
     pageStyleSheets.push(...scene.styleSheets)

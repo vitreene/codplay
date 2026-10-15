@@ -240,6 +240,7 @@ function renderCardContent(
           placeholder="Légende facultative"
           aria-label="Légende"
           value={card.caption}
+          data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCaption(bdcId, event.currentTarget.value))}
         />
       </div>
@@ -278,6 +279,7 @@ function renderShortTextFields(bdcId: BdcId, card: CardContent, actions: ElceCar
           aria-label={label}
           maxLength={CAROUSEL_CONFIG.textShortMessageMaxLength}
           value={card[field]}
+          data-elce-profile-token-target="true"
           mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setCardText(bdcId, field, event.currentTarget.value))}
         />
         : <input
@@ -286,6 +288,7 @@ function renderShortTextFields(bdcId: BdcId, card: CardContent, actions: ElceCar
           placeholder={label}
           aria-label={label}
           value={card[field]}
+          data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCardText(bdcId, field, event.currentTarget.value))}
         />),
       <small

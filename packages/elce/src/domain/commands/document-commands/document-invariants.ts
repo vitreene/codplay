@@ -6,6 +6,7 @@ import { fail, pageBelongsToEvaluationChapter, requireSectionData } from './comm
 import { assertQuestionMediaAllowed, assertCardMediaAllowed } from './media-commands'
 import { anchorReferenceService, questionService, evaluationResultService, carouselService, cardService } from './services'
 import { assertStatisticalGraphContent } from '../../statistical-graph/statistical-graph-service'
+import { assertSummaryProfileInvariants } from '../../summary-profile/profile-rules'
 
 /** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: ElceDocument): void {
@@ -284,4 +285,5 @@ export function assertDocumentInvariants(document: ElceDocument): void {
         break
     }
   }
+  assertSummaryProfileInvariants(document)
 }

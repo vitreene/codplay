@@ -32,7 +32,7 @@ preuves qui permettent de fermer chaque tranche.
 | Ordre | Tranche | État | Critère de sortie |
 | --- | --- | --- | --- |
 | 0 | Application et workspace | En cours | Lancement à froid, preview, typecheck, tests et build fonctionnent depuis le workspace Elcé ; le navigateur restaure le document et ses médias. |
-| 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 font 14 px. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le catalogue « Contenus disponibles » occupe la colonne droite. Une page déplacée ne reconstruit pas les scènes. |
+| 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 font 14 px. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le panneau « Contenus » occupe la colonne droite et expose les variables de profil dans le contexte d’édition pertinent. Une page déplacée ne reconstruit pas les scènes. |
 | 2 | Première lecture Flux dans Sighty/CodPlay | En cours | Une scène Flux réelle se lit via le scénario Sighty et son slot racine. Le scroll s’aligne par proximité sur le début de chaque BDC direct. Menu, lecture à la page courante, repère de fin, pages courtes et longues suivent les contrats de la démo 5. Un aller-retour A → B → A conserve chaque scène. |
 | 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
 | 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. En mode éditeur, l’illustration et la zone question-réponses sont côte à côte au rapport 25/75. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
@@ -279,13 +279,25 @@ inaccessible. Dans le parcours accessible, valider la Question de F après les
 pages précédentes, vérifier l’accès à G, puis cliquer « Suivant » et constater
 Page G.
 
-### Snap de proximité des BDC Flux — terminé le 14 octobre 2026
+### Snap des BDC Flux — retrait demandé le 15 octobre 2026
 
-- Le choix accepté est le snap CSS `proximity` sur les racines directes Carte,
-  Carousel, Graphe, Question, Résultat et Section. Les BDC ancrés et le repère
-  bas ne sont pas des cibles distinctes. Les BDC plus hauts que le viewport
-  restent librement défilables et peuvent rester légèrement décalés de leur
-  tête ; preuve et contrat dans la [spécification Flux](../specs/flux-scene-builder-spec.md).
+**Statut : CSS retiré et vérifié automatiquement le 15 octobre 2026 ;
+confirmation navigateur par l’auteur en attente.** Lors de ses vérifications,
+l’auteur a reproduit un recul du scroll quand un BDC dépasse la hauteur du
+viewport, ce qui empêche de lire le document. Cette observation invalide la
+précédente acceptation visuelle. La règle `scroll-snap-type: y proximity`
+laisse le navigateur décider quand déclencher l’alignement ; CSS n’expose pas
+de seuil réglable par l’auteur
+([CSS Scroll Snap, §4.1.2](https://www.w3.org/TR/css-scroll-snap-1/#scroll-snap-type)).
+
+- Décision appliquée : retirer le snap du scrollport Flux et les alignements
+  des BDC directs. Le défilement natif reste libre ; aucun snap JavaScript ni
+  nouveau paramètre n’est ajouté.
+- Le style Flux ne déclare plus `scroll-snap-type` ni `scroll-snap-align`. Les
+  41 tests de composition, le typecheck et le build passent.
+- Confirmation navigateur restante : parcourir un BDC plus haut que le viewport
+  et vérifier l’absence de recul, puis vérifier que la navigation et le repère
+  de fin de page fonctionnent toujours.
 
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
 contrat. Un échec de preuve garde la tranche « En cours » et bloque son
@@ -293,7 +305,7 @@ intégration dépendante ; les travaux indépendants continuent.
 
 ### Catalogue responsive de l’éditeur — implémenté et vérifié
 
-- À 1200 px et moins, Contenus disponibles est masqué au départ ; sa commande
+- À 1200 px et moins, Contenus est masqué au départ ; sa commande
   iconique sans fond ni contour se trouve au bord droit de la zone centrale.
   À 800 px et moins, les deux panneaux latéraux sont masqués au départ et leurs
   commandes encadrent la zone centrale. `responsivePanel` reste l’état exclusif
@@ -313,13 +325,13 @@ intégration dépendante ; les travaux indépendants continuent.
 - La commande « Prévisualiser » reste toujours visible dans la barre au-dessus
   de la zone centrale. Aux largeurs où les accès de panneaux s’affichent, ils
   partagent cette barre : Scénario à gauche, preview au milieu et Contenus
-  disponibles à droite jusqu’à 800 px ; preview puis accès Contenus disponibles
+  disponibles à droite jusqu’à 800 px ; preview puis accès Contenus
   à droite entre 801 et 1200 px. Le test de
   [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
   vérifie le placement, l’action et la présence dans la vue de chapitre.
 - Brave confirme à 390 × 844 px la zone centrale seule quand les panneaux sont
   fermés, puis l’ouverture exclusive de Scénario (137 px / 205 px) et de
-  Contenus disponibles (205 px / 137 px), sans débordement horizontal. Échap
+  Contenus (205 px / 137 px), sans débordement horizontal. Échap
   ferme le panneau et rend le focus à sa commande. À 1024 px, la vue fermée garde
   Scénario à 288 px et le centre à 688 px ; la vue ouverte mesurée précédemment
   garde les trois colonnes à 288/384/288 px. Le test visuel ouvert à 1024 px a
@@ -335,7 +347,7 @@ intégration dépendante ; les travaux indépendants continuent.
 
 Quand l’éditeur est ouvert, son bandeau supérieur reste fixe dans la fenêtre et
 la grille occupe la hauteur disponible. Au-delà de cette hauteur, la colonne
-centrale défile seule ; le Scénario et les Contenus disponibles gardent chacun
+centrale défile seule ; le Scénario et les Contenus gardent chacun
 leur propre défilement. Dans le Scénario, le titre et les commandes restent
 fixes pendant le défilement de l’arborescence et du catalogue de pages. Les
 panneaux des colonnes responsives gardent leur défilement indépendant.
@@ -1290,248 +1302,20 @@ rétention des blobs doivent être décidés avant de fermer la tranche.
 
 ## Extension Sommaire profils et contraintes
 
-**Statut : Fixe pour le cadrage fonctionnel — plan détaillé à rédiger et
-valider ; aucune réalisation de l’extension engagée.** L’analyse et son raisonnement sont dans la
-[note préparatoire](../notes/2026-10-14-sommaire-profils-contraintes.md).
+**Statut : En cours — intégration Elcé terminée ; 345 tests, typecheck et build
+passent. Le parcours navigateur réseau et sa validation mobile restent à faire.**
 
-Décisions acceptées le 14 octobre 2026, non appliquées :
+- [Plan Sommaire et profils](2026-10-14-elce-sommaire-profils-plan.md) : étapes,
+  acceptation et points restant à vérifier.
+- [Spécification Sommaire et profils](../specs/summary-profile-spec.md) :
+  comportements intégrés et vérifiés.
+- [Notes d’enquête](../notes/2026-10-14-sommaire-profils-contraintes.md) et
+  [étude des raccords](../notes/2026-10-14-sommaire-profils-etude-raccords.md) :
+  exploration et raisons des choix.
 
-- Le Sommaire est unique et spécial au niveau projet, hors de l’ordre
-  précédent/suivant ; ses présentations menu et racine partagent les réglages.
-- Après validation du profil au lancement normal, ouvrir le Sommaire racine
-  s’il est activé ; sinon ouvrir la première page retenue.
-- Le choix « retour au Sommaire » en fin de chapitre exige le Sommaire racine ;
-  il n’utilise pas le menu comme destination de remplacement.
-- En mode « niveaux seuls », afficher les chapitres sans leurs pages internes
-  et conserver les pages autonomes de la racine.
-- Cliquer un chapitre en mode « niveaux seuls » ouvre sa première page retenue,
-  si l’accès au chapitre est autorisé.
-- L’auteur choisit l’option « accès permanent au Sommaire ». Activée, elle
-  autorise le retour sans terminer la page courante, sans valider de progression.
-- Pour la première réalisation, le Sommaire racine utilise un bloc de liste
-  défilant en colonnes sur une page. Ne pas réaliser de pagination dans cette
-  étape. Mettre au point progressivement l’interface et le dispositif selon
-  les options d’affichage, la navigation page/chapitre, les dimensions et la
-  typographie. Préserver l’unicité du Sommaire et son exclusion de l’ordre
-  précédent/suivant. Le plan détaillé doit porter les étapes d’ajustement et
-  l’acceptation du défilement, des colonnes et des variantes d’affichage.
-- Le lecteur renseigne son profil initial une fois pour toute la consultation
-  et ne peut pas le modifier manuellement pendant celle-ci. Une modification
-  manuelle nécessiterait de recommencer entièrement ; elle est hors périmètre
-  actuel. Les futures évaluations pourront compléter ou remplacer les mêmes
-  propriétés, selon la décision Qualifications ci-dessous.
-- Seules les pages et Questions retenues pour le profil comptent pour
-  l’achèvement et le score. Les contenus exclus ne sont pas enregistrés comme
-  lus ou répondus et les Questions exclues ne sont pas pénalisées.
-- Retirer automatiquement une page sans BDC retenu après masquage, puis un
-  chapitre sans page retenue. Aucun retrait n’enregistre de progression fictive.
-- Les contenus exclus par le profil sont masqués dans le Sommaire et le
-  parcours ; les contenus en attente d’un prérequis de lecture restent visibles
-  et verrouillés.
-- La contrainte de profil est une condition d’accès. Le masquage est sa
-  présentation habituelle et ne remplace pas le contrôle d’accès.
-- Le filtrage par profil est uniquement une règle de masquage à la construction
-  de la consultation, fixée pour celle-ci. La frontière technique de cette
-  construction reste à préciser dans le plan détaillé.
-- Un formulaire unique est défini par projet. Les règles testent directement
-  les réponses du lecteur ; aucun profil nommé intermédiaire n’est prévu.
-- Une option choisit les propriétés qui apparaissent dans la page Profil.
-  Celle-ci est une page de quiz enrichie ; elle n’est pas obligatoire si toutes
-  les données nécessaires au profilage proviennent d’évaluations. L’alimentation
-  par évaluations reste différée selon la décision Qualifications.
-  Le contrat Question actuel couvre un seul BDC par page, des réponses à choix
-  et leur correction. La page Profil collecte plusieurs propriétés sur la
-  même page, avec validation globale des champs obligatoires et types, sans
-  bonne/mauvaise réponse, correction ou score. Une alternative proposée est un
-  composant Formulaire externe dérivé des mécanismes du Quiz. Le plan doit
-  comparer ces voies et identifier les parties communes indépendantes du rendu,
-  en conservant un seul contexte de profil et une seule admission Sighty.
-- Une règle générale « après lecture du chapitre précédent » ne référence pas
-  un chapitre précis : elle désigne le précédent chapitre retenu après
-  filtrage. Dans C → A → B, si A est masqué, B attend C ; A n’est pas enregistré
-  comme achevé et son exclusion ne constitue pas une erreur.
-- Pour une dépendance qui nomme explicitement un chapitre exclu, signaler
-  l’incohérence à l’auteur et exiger sa correction. La distinction avec la
-  règle générale est confirmée.
-- Une contrainte de profil comporte une seule condition à la fois. Pour les
-  choix : « est »/« n’est pas » avec une ou plusieurs options ; pour un nombre :
-  `<`, `>`, `=` et `!=` ; pour le texte : `=` et `!=` uniquement. Les conditions
-  complexes sont différées jusqu’à un besoin explicite.
-- Pour les choix, le critère courant est « au moins une correspondance ».
-  Préparer sa représentation comme option explicite dans le modèle et le code,
-  extensible à d’autres critères de sélection, sans sélecteur dans l’interface
-  actuelle et sans implémenter les autres critères maintenant. « N’est pas »
-  signifie aucune correspondance.
-- L’auteur choisit obligatoire ou facultatif pour chaque propriété. L’interface
-  de création du profil accepte une valeur par défaut si elle est facultative.
-  Un champ facultatif laissé vide prend cette valeur par défaut, utilisée par
-  les contraintes et étiquettes. Sans défaut, sa valeur reste absente ; le
-  défaut n’est pas obligatoire. Une valeur absente ne satisfait aucune
-  comparaison, même `!=` ou « n’est pas ».
-- Les comparaisons de texte ignorent la casse et les espaces de début et de fin.
-- Le lecteur est anonyme pendant la phase de test. Le mode définitif recevra
-  un utilisateur complet déjà existant ; les besoins seront précisés
-  progressivement. La gestion d’un lot d’utilisateurs de test reste différée.
-- En mode auteur, un utilisateur de test est persistant. Une modale permet de
-  reconfigurer son profil avec tous les paramètres disponibles et de remettre
-  sa progression à zéro. Sans RAZ, la reconfiguration conserve progression et
-  réponses puis reconstruit le parcours ; les contenus masqués sont ignorés et
-  les nouveaux contenus restent à lire. La RAZ progression efface progression
-  et réponses, en conservant le profil. La RAZ profil remet les champs à leur
-  défaut ou à vide sans défaut, en conservant progression et réponses. Profil,
-  progression et réponses persistent après fermeture et réouverture. Cet outil
-  auteur ne change pas le profil initial fixe de la consultation lecteur.
-  La pérennisation de cet outil au-delà de
-  la phase de test est envisagée, à confirmer avant le plan détaillé.
-- La modale auteur permet d’activer ou de désactiver le profilage pour la
-  prévisualisation. Le désactiver ignore les conditions de profil et les
-  contraintes de lecture pour explorer librement. S’il reste actif et que la
-  page éditée est exclue, signaler l’exclusion et donner accès à la modale pour
-  ajuster le test, sans afficher cette page interdite.
-- Les étiquettes de profil sont disponibles dans tous les champs de contenu
-  textuel, notamment titres, Sections, Cartes et Questions.
-- Une étiquette sans valeur ni défaut est remplacée par du texte vide en lecture.
-- Les variantes de blocs de texte selon le genre et le pluriel sont souhaitées
-  mais différées ; aucune gestion de ces variantes n’est incluse maintenant.
-- Les règles sont héritées par défaut ; une exception locale remplace
-  explicitement la règle de la même famille et conserve les autres familles.
-- Masquer un chapitre masque tout son contenu ; une exception de profil sur
-  une page ne peut pas la rétablir dans ce chapitre masqué.
-- Le masquage BDC par profil à la construction est cadré ; sa visibilité
-  évolutive sera revue lors de la réalisation différée des qualifications.
-- Appliquer une règle à un chapitre entièrement sélectionné crée une règle
-  héritée, applicable aussi aux futures pages. Une sélection partielle vise
-  uniquement les pages choisies.
-
-Qualifications — préparation du modèle acceptée, réalisation différée : acquérir des
-qualifications à partir de progression et/ou de résultats à un ou plusieurs
-questionnaires, ouvrir de nouvelles parties et masquer des parties déjà
-utilisées, notamment des chapitres de positionnement. Une partie du document
-peut compléter le profil à la place ou en complément du formulaire initial.
-Prévoir plusieurs étapes successives de dévoilement, sans limiter le modèle
-à une seule étape initiale. Les évaluations pourront compléter ou remplacer les
-mêmes propriétés du profil. Exemple : une propriété `grade` reçoit « junior »
-pour 1 à 5 réponses justes, « medium » pour 6 à 10 et « senior » au-delà de 10.
-Dans cet exemple, `grade` est alimenté par l’évaluation et n’est pas accessible
-dans le formulaire de profil. Préparer la distinction entre les propriétés
-du profil et les champs proposés à la saisie, avec des références communes
-pour les contraintes et les étiquettes.
-Ces plages illustrent l’affectation selon un résultat, sans imposer des seuils
-génériques. Préparer le modèle pour l’alimentation des propriétés par la saisie
-et par les résultats ; reporter le moteur d’affectation, les plages et le
-dévoilement évolutif. Les détails d’acquisition et de visibilité des BDC seront
-cadrés lors de cette réalisation différée.
-
-Orientation acceptée pour cette évolution : le profil dynamique amende le
-contexte du scénario selon les résultats ; les gardes utilisent ce contexte
-pour décider de la visibilité et de l’accès. Prolonger le contexte et le
-circuit de gardes existants. Le contrat Sighty actuel n’applique pas
-automatiquement cette décision au rendu après `updateContext`, et une vue déjà
-active reste admise. Le futur plan de réalisation devra préciser la mise à
-jour du Sommaire, de la composition et des BDC, ainsi que la destination d’une
-page devenue masquée ; aucune nouvelle API ou évolution du cœur n’est décidée.
-
-Travail dérivé accepté, non appliqué : rendre la liste du Sommaire par un
-composant externe accueilli dans un `slot` CodPlay, sous forme de classe ou de
-fonction, avec conservation des propriétés actuelles et stylage facilité.
-Ce travail reste distinct, mais doit être engagé si le développement à produire
-nécessite de modifier le Sommaire actuel.
-Conserver la source des entrées, l’évaluateur des gardes et la navigation Sighty.
-La spécification `slot` et le plan foreign doivent déterminer le raccord : le
-montage public vérifié couvre une instance CodPlay enfant et ne certifie pas
-un widget HTML générique. Fixer la frontière, la tranche et l’acceptation avant
-réalisation ; cette piste ne constitue pas une autorisation de modifier le core.
-
-Le cadrage fonctionnel est fixé pour préparer le plan détaillé. Celui-ci devra
-porter le bloc de Sommaire défilant en colonnes, le raccord du composant externe quand le
-travail est déclenché, le choix du raccord de collecte pour la page Profil,
-la validation des prérequis, la persistance du test auteur, les étiquettes et
-la préparation du modèle de qualifications. Les qualifications, variantes
-grammaticales et ACL restent différées. Les études de raccord et les preuves
-à obtenir demeurent des gates du plan détaillé avant réalisation.
-Le plan détaillé devra fixer les invariants et preuves du parcours réel avant
-toute réalisation. Ces décisions ne modifient pas les contrats actuellement
-vérifiés du modèle, du lecteur ou des Évaluations.
-
-### Étude des raccords sans réalisation
-
-**Étude documentaire réalisée — propositions techniques A relire avant
-toute réalisation dépendante.** L’[étude dédiée](../notes/2026-10-14-sommaire-profils-etude-raccords.md)
-analyse les contrats et les consommateurs actuels ; aucun code, test ou contrat
-certifié n’a été modifié pour cette étude.
-
-L’[inventaire technique](../notes/2026-10-14-sommaire-profils-inventaire-technique.md)
-recense les tables et rattachements, éléments d’interface, formats de données,
-échanges et cycles de vie encore à définir. Il sert de liste de préparation
-aux approfondissements ci-dessous ; les noms, schémas et signatures proposés
-ne constituent pas des contrats validés. Leur choix et leur acceptation restent
-à inscrire dans le plan détaillé avant réalisation.
-
-Constats qui déterminent le futur plan :
-
-- Le Sommaire actuel appartient à `scenario-builder.ts` : `createMenuScene`,
-  `createPresentation` et `refreshPresentation`. Les nouvelles fonctions de
-  filtrage et présentation nécessitent sa modification ; le déclencheur
-  accepté du travail dérivé de liste externe est donc présent.
-- Les gardes Elcé d’accès et sortie, les routes et les décisions de présentation
-  utilisent déjà Sighty. Les prolonger avec les règles configurées, sans créer
-  un second évaluateur ni un routeur de liste.
-- Le cache de scènes dépend du contenu, des médias et transitions ; la
-  construction dépendant du profil doit être prise en compte avant réutilisation.
-- L’événement Question transporte les réponses sélectionnées, mais les Quiz
-  ordinaires conservent seulement leur booléen de correction dans le contexte.
-  Le contrat de restitution dans les contrôles est à définir.
-- L’API de projets, le stockage documentaire et le protocole popup ne portent
-  pas encore l’état de consultation utilisateur demandé.
-
-| Sujet | Proposition ou décision à relire | Acceptation à inscrire dans le plan détaillé |
-| --- | --- | --- |
-| Modèle documentaire | Fixer version et traitement des documents existants ; définitions et règles suivent les commandes et l’historique auteur. | Aller-retour stockage, Undo/Redo, références conservées après renommage et déplacement. |
-| Projection de consultation | Dériver un même ensemble retenu pour scénario, scènes, menu et calcul d’Évaluation ; prolonger la projection d’ancres pour les enfants masqués. | Filtrage racine/enfant, pages et chapitres vides, ordre et score cohérents, document auteur intact. |
-| Sommaire externe | Déterminer le raccord du fournisseur HTML au slot par les surfaces prévues. Le montage façade vérifié est interinstances CodPlay ; il ne tranche pas ce raccord générique. | Montage, actualisation, clic par Sighty, défilement/colonnes, focus, détachement et destruction. |
-| Page Profil | Comparer une extension de collecte du Quiz et un composant Formulaire externe dérivé de ses mécanismes. Identifier les parties communes indépendantes du rendu ; fixer montage, cycle et transmission au contexte, sans calcul juste/faux. | Plusieurs champs, validation globale, défauts, absence, publication des valeurs et admission Sighty sans score ; aucun autre circuit de profil ou de navigation. |
-| Étiquettes | Choisir une représentation stable dans les champs simples et Tiptap et une résolution commune de lecture. Fixer suppression des propriétés référencées et dépendances du cache. | Texte littéral, références stables, ancres et formatage conservés, réadmission et changement du profil de test. |
-| Consultation persistante | Définir la frontière de stockage utilisateur distincte du document, la propriété de l’état entre auteur/popup et la restitution métier dans les contrôles. | Fermeture/réouverture avec profil, accès et choix visibles cohérents ; RAZ indépendantes sans revalidation fictive. |
-
-Décisions complémentaires acceptées le 14 octobre 2026, non appliquées :
-
-- Carousel dont tous les enfants sont masqués : le retirer de la consultation
-  puis appliquer le retrait des pages et chapitres vides. C’est un cas limite
-  que l’auteur doit éviter ; le document éditorial conserve les contenus et
-  son invariant de Carousel non vide.
-- Les résultats de test sont précaires. Conserver la réponse après changement
-  des seuls libellés, mais invalider uniquement la réponse et les résultats
-  dépendants lorsque les choix, identités ou correction deviennent incompatibles.
-  Prévoir une preuve de conservation des autres réponses et données du test.
-
-Couverture de l’étude : le besoin fonctionnel complet est parcouru, mais le
-cadrage technique n’est pas exhaustif. La confiance supérieure à 95 % annoncée
-concerne la compréhension du besoin pour préparer le plan, pas une conception
-technique entièrement arrêtée ni une validation d’intégration.
-
-Approfondissements à réaliser avant de fermer les gates correspondantes :
-
-- Interface auteur : rattacher la vue de réglages du Sommaire, la définition
-  des propriétés et l’éditeur de règles aux sélections, façades et commandes
-  XState existantes ; préciser la sélection hiérarchique à trois états et
-  l’édition simultanée de valeurs différentes.
-- Modèle : arrêter les formes sérialisées des propriétés, des contraintes et
-  étiquettes, leurs références et leur suppression, puis la stratégie de
-  version et de migration. Préparer les qualifications sans réaliser leur moteur.
-- Composants externes : arrêter le raccord du fournisseur au slot et ses
-  responsabilités de cycle, puis choisir entre collecte du Quiz et Formulaire
-  externe. Leurs contrats précis ne sont pas encore validés.
-- Consultation : arrêter le stockage utilisateur, la propriété de l’état entre
-  auteur et lecteur, les routes nécessaires et la restitution dans les contrôles.
-- Acceptation : transformer la matrice de l’étude en fixtures propres et
-  parcours ciblés, avec les cas parent/enfant, navigation, relecture, cache,
-  resize, persistance et destruction ; les preuves réelles restent à produire.
-
-La persistance depuis la preview réseau en lecture seule n’est pas décidée par
-la persistance du test auteur. Préciser ce périmètre si nécessaire, sans ouvrir
-implicitement les écritures réseau du projet. Les signatures, routes et schémas
-techniques restent à fixer dans le plan détaillé. Une évolution du cœur CodPlay
-exige toujours son autorisation spécifique et un plan accepté.
+Qualifications dynamiques, variantes grammaticales, ACL et lot d’utilisateurs
+restent différés. Les formats internes intégrés sont disponibles pour relecture
+auteur ultérieure.
 
 ## Décisions ouvertes
 

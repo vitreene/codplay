@@ -7,6 +7,7 @@ import type { PagePlacement } from '../../../domain/commands/document-command-ty
 import type { Chapter, Page } from '../../../domain/document/document-types'
 import type { ScenarioEntry } from '../../../domain/scenario/scenario-entry-types'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { SUMMARY_PROFILE_ACCESS_ICON } from '../summary-profile-access-icon'
 import { getPageTypeIcon } from './page-type-icon.ts'
 import type { ScenarioPanelProps } from './scenario-panel-types'
 
@@ -39,6 +40,18 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
         {renderIconButton('elce-create-evaluation-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel, ClipboardCheck, () => actions.createEvaluationChapter(view.documentModel), 14, 'elce-icon-action', 'Éval.')}
         {renderIconButton('elce-create-scenario-page', 'Ajouter une Page à la racine du scénario', getPageTypeIcon(PAGE_TYPE.FLUX), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX), 14, 'elce-icon-action', 'Page')}
         {renderIconButton('elce-create-scenario-diapo', 'Ajouter une Diapo à la racine du scénario', getPageTypeIcon(PAGE_TYPE.DIAPO), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO), 14, 'elce-icon-action', 'Diapo')}
+        <button
+          id="elce-summary-profile-open"
+          className="elce-add-content-action elce-icon-action"
+          type="button"
+          aria-label="Sommaire"
+          title="Sommaire"
+          aria-pressed={workspace.summarySettingsOpen}
+          mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(!workspace.summarySettingsOpen))}
+        >
+          {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-summary-profile-open-icon', 14)}
+          <span id="elce-summary-profile-open-label" className="elce-add-content-action__label">Sommaire</span>
+        </button>
       </div>
     </div>
     <div

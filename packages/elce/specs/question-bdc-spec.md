@@ -41,6 +41,13 @@ garde le titre et l’énoncé. Les invariants sont contrôlés par
 `ElceQuestionService` et lors des commandes documentaires, pas par le composant
 de rendu.
 
+Après validation, l’événement `elce:question:answered` publie les identifiants
+des réponses présentes (`answerIds`), sélectionnées (`selectedAnswerIds`) et
+attendues (`expectedAnswerIds`), avec le résultat. L’état de test s’en sert
+pour réadmettre la réponse après réouverture ; le changement de libellé seul
+ne l’invalide pas, tandis qu’un changement d’identités ou de correction la
+retire.
+
 La zone Illustration du preset accepte une ressource image ou vidéo du
 catalogue, ou un fichier local. Un fichier suit l’import média partagé et la
 Question conserve la référence réutilisable ; l’opération n’ajoute pas un BDC

@@ -14,10 +14,14 @@ import type { SectionToolbarState } from './section-editor-tiptap'
 import { createElceAnchorExtension } from '../anchor/elce-anchor-extension'
 import type { SectionChangeSelection } from '../../facades/anchor/anchor-drop-facade'
 import type { SectionSelection } from '../../history/document-history'
+import type { ProfileProperty } from '../../../domain/summary-profile/summary-profile-types'
+import { createProfileLabelExtension } from '../profile/profile-label-extension'
+import { PROFILE_TOKEN_INSERT_EVENT } from '../profile/profile-token-events'
 
 export interface SectionTiptapAdapterOptions {
   readonly bdcId: string
   readonly section: SectionContent
+  readonly profileProperties: readonly ProfileProperty[]
   readonly anchorOptions: ElceAnchorExtensionOptions
   readonly onChange: (change: ElceSectionChange, selection?: SectionChangeSelection) => void
   readonly onToolbarState: (state: SectionToolbarState) => void
@@ -57,6 +61,11 @@ export class SectionTiptapAdapter {
     this.lastToolbarState = next
     this.onToolbarState(next)
   }
+  /** Routes the shared profile-variable control into this rich-text selection. */
+  private readonly onProfileTokenInsert = (event: Event): void => {
+    const propertyId = (event as CustomEvent<{ propertyId?: unknown }>).detail?.propertyId
+    if (typeof propertyId === 'string') this.insertProfileLabel(propertyId)
+  }
 
   public constructor(host: HTMLElement, options: SectionTiptapAdapterOptions) {
     this.bdcId = options.bdcId
@@ -67,6 +76,7 @@ export class SectionTiptapAdapter {
       element: null,
       extensions: [
         ...SECTION_EDITOR_EXTENSIONS,
+        createProfileLabelExtension(options.profileProperties),
         createElceAnchorExtension({
           ...options.anchorOptions,
           registerNodeViewRefresh: (_bdcId, refresh) => {
@@ -81,6 +91,7 @@ export class SectionTiptapAdapter {
           id: `elce-editor-content-${options.bdcId}`,
           class: 'elce-editor-content',
           'data-placeholder': 'Écrire le contenu…',
+          'data-elce-profile-token-target': 'true',
         },
       },
     })
@@ -88,6 +99,7 @@ export class SectionTiptapAdapter {
     this.editor.on('update', this.onUpdate)
     this.editor.on('transaction', this.onTransaction)
     this.editor.mount(host)
+    this.editor.view.dom.addEventListener(PROFILE_TOKEN_INSERT_EVENT, this.onProfileTokenInsert)
     this.lastToolbarState = readSectionToolbarState(this.editor)
     this.onToolbarState(this.lastToolbarState)
   }
@@ -111,6 +123,14 @@ export class SectionTiptapAdapter {
     })
   }
 
+  /** Inserts a stable profile-property label at the active rich-text selection. */
+  public insertProfileLabel(propertyId: string): void {
+    this.editor.chain().focus().insertContent({
+      type: 'profileLabel',
+      attrs: { profilePropertyId: propertyId },
+    }).run()
+  }
+
   /** Restores the caret or range from one global document-history position. */
   public restoreSelection(selection: SectionSelection): void {
     const max = this.editor.state.doc.content.size
@@ -125,6 +145,7 @@ export class SectionTiptapAdapter {
     this.editor.off('beforeTransaction', this.onBeforeTransaction)
     this.editor.off('update', this.onUpdate)
     this.editor.off('transaction', this.onTransaction)
+    this.editor.view.dom.removeEventListener(PROFILE_TOKEN_INSERT_EVENT, this.onProfileTokenInsert)
     this.anchorNodeViewRefreshers.clear()
     this.editor.destroy()
   }

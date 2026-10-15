@@ -8,8 +8,9 @@ import {
   CHAPTER_TYPE_CONFIG,
 } from '../../config/document-config'
 import type { Bdc, Chapter, ElceDocumentData, MediaMetadata, Page, PageId, RichTextDocument } from './document-types'
+import { INITIAL_PROFILE_DEFINITION, INITIAL_SUMMARY_SETTINGS } from '../summary-profile/summary-profile-types'
 
-export const ELCE_DOCUMENT_VERSION = 4 as const
+export const ELCE_DOCUMENT_VERSION = 5 as const
 
 /** Creates the empty rich-text document used by a new Section. */
 export function createEmptyRichTextDocument(): RichTextDocument {
@@ -163,6 +164,8 @@ export function createInitialDocument(): ElceDocument {
     version: ELCE_DOCUMENT_VERSION,
     name: 'Document Elcé',
     revelationDefaults: DEFAULT_PROJECT_REVELATION,
+    summary: INITIAL_SUMMARY_SETTINGS,
+    profile: INITIAL_PROFILE_DEFINITION,
     chapters: [chapter],
     pages: [page],
     scenarioEntries: [{ kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }],

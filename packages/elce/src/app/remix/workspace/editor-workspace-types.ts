@@ -13,10 +13,15 @@ export interface EditorWorkspaceViewProps {
   readonly actions: EditorActionsFacade
   readonly pageEditorHost: RemixNode
   readonly responsivePanel: ResponsivePanel
+  readonly summarySettingsOpen: boolean
+  readonly profileTokenTargetId: string | null
+  readonly authoringError: string | null
   readonly dropTarget: string | null
   readonly visible: boolean
   readonly editable?: boolean
   readonly onSetResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void
+  readonly onSetSummarySettingsOpen: (open: boolean) => void
+  readonly onSetAuthoringError: (error: string | null) => void
   readonly onSetDropTarget: (targetId: string | null) => void
   readonly onSetDraggedEntry: (entry: DraggedScenarioEntry) => void
   readonly getDraggedEntry: () => DraggedScenarioEntry

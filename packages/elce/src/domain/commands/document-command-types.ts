@@ -6,6 +6,7 @@ import type { EvaluationResultContent } from '../../domain/evaluation/evaluation
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { CardContent, CardPresentationOptions } from '../../domain/card/card-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
+import type { ProfileDefinition, SummarySettings } from '../../domain/summary-profile/summary-profile-types'
 
 export type PagePlacement =
   | Readonly<{ kind: typeof PAGE_LOCATION.CHAPTER; chapterId: ChapterId; index?: number }>
@@ -80,6 +81,7 @@ export type DocumentCommand =
   | Readonly<{ type: 'bdc.card.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
+  | Readonly<{ type: 'summary.background.media.attach'; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.section.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.section.revelation.update'; bdcId: BdcId; revelation: RevelationTransitionOverrides }>
@@ -128,4 +130,6 @@ export type DocumentCommand =
   | Readonly<{ type: 'media.add'; media: MediaMetadata }>
   | Readonly<{ type: 'media.merge'; canonicalMediaId: MediaId; duplicateMediaIds: readonly MediaId[] }>
   | Readonly<{ type: 'document.revelation.update'; revelationDefaults: RevelationTransitionDefaults }>
+  | Readonly<{ type: 'summary.settings.update'; summary: SummarySettings }>
+  | Readonly<{ type: 'profile.definition.update'; profile: ProfileDefinition }>
   | Readonly<{ type: 'document.rename'; name: string }>

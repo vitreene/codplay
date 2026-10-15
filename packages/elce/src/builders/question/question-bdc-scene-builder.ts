@@ -4,6 +4,7 @@ import type { CardPresetBuild } from '../card/card-preset-builder-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { Bdc } from '../../domain/document/document-types'
 import type { QuestionAnswer, QuestionContent } from '../../domain/question/question-types'
+import type { TestAnswerState } from '../../domain/summary-profile/test-state-types'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 
@@ -36,6 +37,7 @@ export function buildQuestionBdcStory(
   zones: Readonly<Record<string, string>>,
   completionEventName?: string,
   completionEventData?: Readonly<Record<string, unknown>>,
+  initialAnswer?: TestAnswerState,
 ): StoryDoc<string> {
   const question = bdc.question
   if (question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
@@ -54,10 +56,15 @@ export function buildQuestionBdcStory(
   )
   const resetEvent = `${prefix}:reset`
   const validationZone = requireQuestionZone(zones, 'validation', bdc.id)
-  const answerPersos = question.answers.map((answer) => createQuestionAnswerPerso(pageId, bdc, prefix, answer, question, answersZone))
+  const answerPersos = question.answers.map((answer) => createQuestionAnswerPerso(
+    pageId, bdc, prefix, answer, question, answersZone, initialAnswer,
+  ))
   return {
     id: `${pageId}-${bdc.id}`,
-    state: { selectedAnswerIds: [], submitted: false } satisfies QuestionStoryState,
+    state: {
+      selectedAnswerIds: initialAnswer?.selectedAnswerIds ?? [],
+      submitted: initialAnswer !== undefined,
+    } satisfies QuestionStoryState,
     straps: {
       [`${prefix}:select-answer`]: ({ event, state }) => selectQuestionAnswer(prefix, question, state, event.data),
       [`${prefix}:validate-answer`]: ({ state }) => validateQuestionAnswer(
@@ -87,7 +94,7 @@ export function buildQuestionBdcStory(
         validationZone,
         question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
       ),
-      createQuestionFeedbackPerso(bdc.id, prefix, validationZone),
+      createQuestionFeedbackPerso(bdc.id, prefix, validationZone, initialAnswer),
     ],
   }
 }
@@ -121,8 +128,16 @@ function createQuestionAnswerPerso(
   answer: QuestionAnswer,
   question: QuestionContent,
   answersZone: string,
+  initialAnswer?: TestAnswerState,
 ): PersoDoc<string> {
   const correctAnswerIds = question.answers.filter((candidate) => candidate.correct).map((candidate) => candidate.id)
+  const selectedAnswerIds = new Set(initialAnswer?.selectedAnswerIds ?? [])
+  const expectedAnswerIds = new Set(initialAnswer?.expectedAnswerIds ?? [])
+  const selected = selectedAnswerIds.has(answer.id)
+  const submitted = initialAnswer !== undefined
+  const visualState = !submitted ? selected ? 'selected' : 'idle'
+    : selected ? expectedAnswerIds.has(answer.id) ? 'revealed-correct' : 'revealed-incorrect'
+      : expectedAnswerIds.has(answer.id) ? 'revealed-missed-correct' : 'disabled'
   return {
     id: `${pageId}-${bdc.id}-answer-${answer.id}`,
     type: 'input',
@@ -132,9 +147,10 @@ function createQuestionAnswerPerso(
       value: answer.id,
       label: answer.label,
       hint: '',
-      checked: false,
-      disabled: false,
-      visualState: 'idle',
+      checked: selected,
+      disabled: submitted,
+      ...(submitted ? { selectedAnswerIds: [...selectedAnswerIds], correctAnswerIds, disableAnswers: true, showCorrection: true } : {}),
+      visualState,
       selectionIcon: { className: 'elce-question-answer__selection' },
       correctionIcon: {
         className: 'elce-question-answer__correction',
@@ -194,14 +210,20 @@ function createQuestionValidatePerso(bdcId: string, prefix: string, target: stri
 }
 
 /** Creates the live result text beneath the Question validation button. */
-function createQuestionFeedbackPerso(bdcId: string, prefix: string, target: string): PersoDoc<string> {
+function createQuestionFeedbackPerso(
+  bdcId: string,
+  prefix: string,
+  target: string,
+  answer?: TestAnswerState,
+): PersoDoc<string> {
+  const message = answer === undefined ? '' : answer.isCorrect ? 'Bonne réponse.' : 'Réponse incorrecte.'
   return {
     id: `${bdcId}-feedback`,
     type: 'tag',
     initial: {
       tag: 'p',
-      content: '',
-      attr: { hidden: true, 'aria-live': 'polite' },
+      content: message,
+      attr: { hidden: answer === undefined, 'aria-live': 'polite' },
       className: 'elce-question-feedback',
       move: { target },
     },
@@ -279,6 +301,7 @@ function validateQuestionAnswer(
           pageId,
           bdcId: bdc.id,
           isCorrect,
+          answerIds: question.answers.map((candidate) => candidate.id),
           selectedAnswerIds,
           expectedAnswerIds: correctAnswerIds,
         },

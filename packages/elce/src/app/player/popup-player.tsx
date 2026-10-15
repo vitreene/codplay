@@ -8,8 +8,13 @@ import { ElceProjectApiClient } from '../../infrastructure/project-api/project-a
 import type { ElcePageSceneCache } from '../../player/player-composition-types'
 import type { ElcePlayerComposition } from '../../player/elce-player-composition'
 import { renderLucideIcon } from '../remix/lucide-static-icon'
+import { SUMMARY_PROFILE_ACCESS_ICON } from '../remix/summary-profile-access-icon'
 import { isPopupPreviewResponse, type PopupPreviewRequest } from './popup-preview-messages'
 import { createPlayerPreviewComposition, isCatalogPage } from './player-preview'
+import { ProjectTestStateSession } from './project-test-state-session'
+import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
+import { projectReaderDocument } from '../../domain/summary-profile/reader-projection'
+import { reconcileProjectTestState } from '../../domain/summary-profile/test-state-reconciliation'
 
 type PopupPlayerProps = Readonly<{
   sessionId: string | null
@@ -21,6 +26,7 @@ type ReaderSnapshot = Readonly<{
   documentModel: ElceDocument
   selectedPageId: PageId | null
   mediaSources: Readonly<Record<string, string>>
+  testState: ProjectTestState
 }>
 
 type PendingRequest = Readonly<{
@@ -76,6 +82,10 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   let readerSnapshot: ReaderSnapshot | null = null
   let error: string | null = null
   let pending = false
+  let testStateNotice: string | null = null
+  let testControlsOpen = false
+  let testStateSession: ProjectTestStateSession | null = null
+  let conflictPresented = false
   const sourceUrls = new Map<string, string>()
   const sceneCache: ElcePageSceneCache = new Map()
   let composition: ElcePlayerComposition | null = null
@@ -85,6 +95,73 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   /** Refreshes the native Remix view while its component is still mounted. */
   const update = (): void => {
     if (!handle.signal.aborted) void handle.update()
+  }
+
+  /** Saves a committed reader change using the independent server test-state revision. */
+  const saveTestState = async (
+    state: ProjectTestState,
+    options: Readonly<{ rebuild?: boolean; resetSelection?: boolean }> = {},
+  ): Promise<void> => {
+    const current = readerSnapshot
+    const submittedNow = current !== null && !current.testState.profileSubmitted && state.profileSubmitted
+    if (current !== null) readerSnapshot = { ...current, testState: state }
+    const rebuild = options.rebuild === true || submittedNow
+    const selectedPageId = options.resetSelection === true || submittedNow ? null : current?.selectedPageId ?? null
+    update()
+    if (testStateSession === null) {
+      if (rebuild && readerSnapshot !== null) await presentSnapshot({ ...readerSnapshot, selectedPageId, testState: state })
+      return
+    }
+    try {
+      const result = await testStateSession.save(state)
+      if (result.kind === 'conflict') {
+        testStateNotice = 'Le test a changé dans une autre fenêtre. La version serveur a été rechargée.'
+        const latest = readerSnapshot
+        if (latest !== null && !conflictPresented) {
+          conflictPresented = true
+          await presentSnapshot({ ...latest, testState: result.state })
+        }
+        return
+      }
+      if (!testStateSession.isPersisted) {
+        testStateNotice = 'Le projet doit être synchronisé au serveur pour enregistrer le test.'
+      }
+    } catch (cause: unknown) {
+      testStateNotice = cause instanceof Error ? cause.message : 'L’état de test n’a pas pu être enregistré.'
+    }
+    if (rebuild && readerSnapshot !== null) {
+      await presentSnapshot({ ...readerSnapshot, selectedPageId, testState: state })
+    }
+    update()
+  }
+
+  /** Clears only profile answers, leaving page and question progress intact. */
+  const resetTestProfile = (): void => {
+    if (readerSnapshot === null) return
+    const state = { ...readerSnapshot.testState, profileSubmitted: false, profileValues: {} }
+    testControlsOpen = false
+    void saveTestState(state, { rebuild: true, resetSelection: true })
+  }
+
+  /** Clears only page completion, Question answers and Evaluation attempts. */
+  const resetTestProgress = (): void => {
+    if (readerSnapshot === null) return
+    const state = {
+      ...readerSnapshot.testState,
+      finishedPageIds: [],
+      questionAnswers: {},
+      evaluationStates: {},
+    }
+    testControlsOpen = false
+    void saveTestState(state, { rebuild: true })
+  }
+
+  /** Toggles profile filtering while preserving independently stored progress. */
+  const toggleProfileMode = (enabled: boolean): void => {
+    if (readerSnapshot === null) return
+    const state = { ...readerSnapshot.testState, profileEnabled: enabled }
+    testControlsOpen = false
+    void saveTestState(state, { rebuild: true })
   }
 
   /** Requests a fresh editor snapshot or its selected page through the opener. */
@@ -108,6 +185,16 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   const presentSnapshot = async (nextSnapshot: ReaderSnapshot): Promise<void> => {
     if (handle.signal.aborted) return
     readerSnapshot = nextSnapshot
+    if (nextSnapshot.selectedPageId !== null && nextSnapshot.testState.profileEnabled && nextSnapshot.testState.profileSubmitted) {
+      const readerDocument = projectReaderDocument(
+        nextSnapshot.documentModel,
+        nextSnapshot.testState.profileValues,
+        nextSnapshot.testState.profileEnabled,
+      )
+      if (!readerDocument.pages.some((page) => page.id === nextSnapshot.selectedPageId)) {
+        testStateNotice = 'La page sélectionnée est exclue par le profil du test auteur.'
+      }
+    }
     error = null
     await handle.update()
     if (handle.signal.aborted) return
@@ -125,6 +212,8 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       documentModel: nextSnapshot.documentModel,
       selectedPageId: nextSnapshot.selectedPageId,
       mediaSources: nextSnapshot.mediaSources,
+      testState: nextSnapshot.testState,
+      onTestStateChange: (state) => { void saveTestState(state) },
       sceneCache,
     })
     if (composition !== null) {
@@ -157,12 +246,31 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
           ? loadServerMediaSources(documentModel, api)
           : await loadMediaSources(documentModel, store, api, sourceUrls)
         if (disposed || handle.signal.aborted) return
+        testStateSession = await ProjectTestStateSession.open(api, documentModel.id, { allowOffline: !isNetworkPreview })
+        conflictPresented = false
+        const storedTestState = testStateSession.state
+        let testState = reconcileProjectTestState(documentModel, storedTestState)
+        if (testState !== storedTestState) {
+          try {
+            const result = await testStateSession.save(testState)
+            if (result.kind === 'conflict') {
+              testStateNotice = 'Le test a changé dans une autre fenêtre. La version serveur a été rechargée.'
+              conflictPresented = true
+              testState = reconcileProjectTestState(documentModel, result.state)
+            } else {
+              testState = result.state
+            }
+          } catch (cause: unknown) {
+            testStateNotice = cause instanceof Error ? cause.message : 'L’état de test n’a pas pu être enregistré.'
+          }
+        }
         const nextSnapshot = {
           documentModel,
           selectedPageId: selectedPageId !== null && documentModel.pages.some((page) => page.id === selectedPageId)
             ? selectedPageId
             : null,
           mediaSources,
+          testState,
         }
         await presentSnapshot(nextSnapshot)
         if (disposed || handle.signal.aborted) return
@@ -277,6 +385,12 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     pending,
     requestEditor,
     isNetworkPreview,
+    testStateNotice,
+    testControlsOpen,
+    onToggleTestControls: () => { testControlsOpen = !testControlsOpen; update() },
+    onResetTestProfile: resetTestProfile,
+    onResetTestProgress: resetTestProgress,
+    onToggleProfileMode: toggleProfileMode,
   })
 }
 
@@ -286,6 +400,12 @@ interface PopupReaderState {
   readonly pending: boolean
   readonly requestEditor: (type: PopupPreviewRequest['type']) => void
   readonly isNetworkPreview: boolean
+  readonly testStateNotice: string | null
+  readonly testControlsOpen: boolean
+  readonly onToggleTestControls: () => void
+  readonly onResetTestProfile: () => void
+  readonly onResetTestProgress: () => void
+  readonly onToggleProfileMode: (enabled: boolean) => void
 }
 
 /** Renders the popup toolbar, messages, and host for the real player composition. */
@@ -308,6 +428,18 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
         id="elce-popup-reader-actions"
         className="elce-popup-reader__actions"
       >
+        <button
+          id="elce-popup-reader-test-controls"
+          type="button"
+          title="Accéder au profil et aux réglages du test auteur"
+          aria-expanded={state.testControlsOpen}
+          aria-controls="elce-popup-reader-test-panel"
+          disabled={snapshot === null || pending}
+          mix={on<HTMLButtonElement, 'click'>('click', state.onToggleTestControls)}
+        >
+          {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-popup-reader-test-controls-icon', 14)}
+          Test auteur
+        </button>
         <button
           id="elce-popup-reader-edited-page"
           type="button"
@@ -342,6 +474,29 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
         </button>
       </div>
     </header>}
+    {isNetworkPreview || !state.testControlsOpen || snapshot === null ? null : <section
+      id="elce-popup-reader-test-panel"
+      className="elce-popup-reader__test-panel"
+      role="dialog"
+      aria-label="Réglages du test auteur"
+    >
+      <label id="elce-popup-reader-profile-mode-label" htmlFor="elce-popup-reader-profile-mode">
+        <input
+          id="elce-popup-reader-profile-mode"
+          type="checkbox"
+          checked={snapshot.testState.profileEnabled}
+          mix={on<HTMLInputElement, 'change'>('change', (event) => state.onToggleProfileMode(event.currentTarget.checked))}
+        />
+        Appliquer le profil et ses filtres
+      </label>
+      <button id="elce-popup-reader-reset-profile" type="button" mix={on<HTMLButtonElement, 'click'>('click', state.onResetTestProfile)}>
+        Réinitialiser le profil
+      </button>
+      <button id="elce-popup-reader-reset-progress" type="button" mix={on<HTMLButtonElement, 'click'>('click', state.onResetTestProgress)}>
+        Réinitialiser la progression
+      </button>
+      {state.testStateNotice === null ? null : <p id="elce-popup-reader-test-notice" role="status">{state.testStateNotice}</p>}
+    </section>}
     <main
       id="elce-popup-reader-main"
       className={isNetworkPreview ? 'elce-popup-reader__main elce-popup-reader__main--network-preview' : 'elce-popup-reader__main'}

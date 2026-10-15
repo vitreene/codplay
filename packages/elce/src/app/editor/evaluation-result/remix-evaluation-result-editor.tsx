@@ -72,6 +72,7 @@ function renderResultBranch(
       placeholder={branchConfig.messagePlaceholder}
       rows={2}
       value={content[branch].message}
+      data-elce-profile-token-target="true"
       mix={on<HTMLTextAreaElement, 'input'>('input', (event) => updateMessage(content, branch, event.currentTarget.value, onChange))}
     />
     <select

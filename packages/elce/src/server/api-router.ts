@@ -1,6 +1,7 @@
 import { createRouter } from 'remix/router'
 import { MediaApiController } from './media/media-api-controller'
 import { ProjectApiController } from './projects/project-api-controller'
+import { ProjectTestStateApiController } from './projects/project-test-state-api-controller'
 import type { ProjectPersistence } from './projects/project-persistence'
 
 /** Creates the server Fetch router and registers the project catalog API. */
@@ -11,6 +12,7 @@ export function createElceApiRouter(persistence: ProjectPersistence, media?: Med
     },
   })
   const projects = new ProjectApiController(persistence)
+  const testState = new ProjectTestStateApiController(persistence)
 
   router.get('/api/projects', () => projects.listProjects())
   router.post('/api/projects', ({ request }) => projects.createProject(request))
@@ -30,6 +32,8 @@ export function createElceApiRouter(persistence: ProjectPersistence, media?: Med
     if (response.status === 200) await media?.removeUnreferencedFiles()
     return response
   })
+  router.get('/api/projects/:projectId/test-state', ({ params }) => testState.read(params.projectId!))
+  router.put('/api/projects/:projectId/test-state', ({ request, params }) => testState.write(request, params.projectId!))
   if (media !== undefined) {
     router.put('/api/projects/:projectId/media/:mediaId', ({ request, params }) =>
       media.upload(request, params.projectId!, params.mediaId!))

@@ -9,6 +9,8 @@ import { EditorContextProvider } from '../../remix/editor-context'
 import { controllerMachine } from '../../controller/controller-machine'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
 import { EditorActionsFacade } from '../../facades/editor-actions-facade'
+import type { ProfileProperty } from '../../../domain/summary-profile/summary-profile-types'
+import { renderProfileTokenInsertion } from '../profile/profile-token-insertion'
 import { RemixPageEditor } from '../../remix/workspace/page-editor'
 
 class PendingMediaStore implements ElceDocumentStore {
@@ -55,17 +57,33 @@ describe('Remix production Section editor', () => {
     controller.start()
     controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
+    const profileProperty: ProfileProperty = {
+      id: 'profile-audience',
+      name: 'audience',
+      label: 'Public',
+      type: 'text',
+      required: false,
+      choices: [],
+    }
+    actions.updateProfileDefinition({
+      ...controller.getSnapshot().context.document.data.profile,
+      properties: [profileProperty],
+    })
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
-    const rendered = render(<EditorContextProvider
-      controller={controller}
-      actions={actions}
-    >
-      <RemixPageEditor />
-    </EditorContextProvider>)
+    const rendered = render(<div id="elce-section-test-host">
+      {renderProfileTokenInsertion('elce-profile-test-tools', [profileProperty], 'elce-editor-content-bdc-section-1')}
+      <EditorContextProvider
+        controller={controller}
+        actions={actions}
+      >
+        <RemixPageEditor />
+      </EditorContextProvider>
+    </div>)
 
     const editor = getEditor(rendered.$('.ProseMirror'))
     const editorDom = editor.view.dom
     expect(rendered.$('#elce-section-toolbar-bdc-section-1')).not.toBeNull()
+    expect(rendered.$('#elce-section-profile-label-bdc-section-1-profile-audience')).toBeNull()
 
     await rendered.act(() => {
       editor.commands.insertContent('<h3><em>Texte édité</em></h3>')
@@ -93,6 +111,18 @@ describe('Remix production Section editor', () => {
     })
     const editedTextMarks = controller.getSnapshot().context.document.bdcs[0]?.section?.content.content?.[0]?.content?.[0]?.marks?.map(({ type }) => type)
     expect(editedTextMarks).toEqual(expect.arrayContaining(['italic', 'bold']))
+
+    await rendered.act(() => {
+      const end = editor.state.doc.content.size - 1
+      editor.commands.focus()
+      editor.commands.setTextSelection(end)
+      const insert = rendered.$('#elce-profile-test-tools-profile-audience')
+      insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const sectionAfterProfileLabel = controller.getSnapshot().context.document.bdcs[0]?.section
+    expect(JSON.stringify(sectionAfterProfileLabel?.content)).toContain('"profilePropertyId":"profile-audience"')
+    expect(sectionAfterProfileLabel?.markup).toContain('data-elce-profile-property="profile-audience"')
 
     const posAtCoords = vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
     const file = new File(['image bytes'], 'photo.png', { type: 'image/png' })

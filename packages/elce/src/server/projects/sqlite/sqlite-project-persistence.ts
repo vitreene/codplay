@@ -20,11 +20,13 @@ import type {
   RichTextDocument,
 } from '../../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
+import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../../../domain/summary-profile/test-state-types'
 import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/commands/document-commands'
 import { ElceDocument } from '../../../domain/document/document-model'
 import type { AcquireProjectEditResult, DeleteProjectResult, EditProjectResult, ProjectEditGrant, ProjectPersistence, ProjectSummary, StoredProject } from '../project-persistence'
 import type {
   CreateProjectResult,
+  SaveProjectTestStateResult,
   SaveProjectDocumentResult,
 } from '../project-persistence'
 import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from '../../media/media-persistence'
@@ -201,15 +203,16 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     })
   }
 
-  /** Creates a project from its browser-owned v4 document unless its id already exists. */
+  /** Creates a project from its browser-owned v5 document unless its id already exists. */
   public async createProject(document: ElceDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
       const inserted = await queryRows(transaction, `
         INSERT INTO projects (
           project_id, name, format_version, revision, created_at, updated_at,
-          default_intro_transition_ref, default_outro_transition_ref
-        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+          default_intro_transition_ref, default_outro_transition_ref,
+          summary_json, profile_json
+        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(project_id) DO NOTHING
         RETURNING project_id
       `, [
@@ -220,6 +223,8 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         now,
         document.data.revelationDefaults.intro,
         document.data.revelationDefaults.outro,
+        JSON.stringify(document.data.summary),
+        JSON.stringify(document.data.profile),
       ])
 
       switch (inserted.length) {
@@ -285,7 +290,8 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
       const updated = await queryRows(transaction, `
         UPDATE projects
         SET name = ?, format_version = ?, revision = revision + 1, updated_at = ?,
-            default_intro_transition_ref = ?, default_outro_transition_ref = ?
+            default_intro_transition_ref = ?, default_outro_transition_ref = ?,
+            summary_json = ?, profile_json = ?
         WHERE project_id = ? AND revision = ?
         RETURNING project_id, name, revision
       `, [
@@ -294,6 +300,8 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         now,
         document.data.revelationDefaults.intro,
         document.data.revelationDefaults.outro,
+        JSON.stringify(document.data.summary),
+        JSON.stringify(document.data.profile),
         projectId,
         expectedRevision,
       ])
@@ -311,19 +319,64 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
       }
     })
   }
+
+  /** Reads the separate author-preview state with its own revision. */
+  public async readTestState(projectId: string): Promise<VersionedProjectTestState | null> {
+    const projects = await queryRows(this.database, 'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+    if (projects.length === 0) return null
+    const rows = await queryRows(this.database,
+      'SELECT revision, state_json FROM project_test_states WHERE project_id = ?', [projectId])
+    const row = rows[0]
+    if (row === undefined) return { state: INITIAL_PROJECT_TEST_STATE, revision: 0 }
+    return {
+      state: parseJsonColumn<ProjectTestState>(row, 'state_json'),
+      revision: numberValue(row, 'revision'),
+    }
+  }
+
+  /** Saves author-preview state with an atomic compare-and-swap revision check. */
+  public async saveTestState(
+    projectId: string,
+    expectedRevision: number,
+    state: ProjectTestState,
+  ): Promise<SaveProjectTestStateResult> {
+    return this.database.transaction(async (transaction) => {
+      const projects = await queryRows(transaction, 'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+      if (projects.length === 0) return { kind: 'not-found' }
+      const rows = await queryRows(transaction,
+        'SELECT revision FROM project_test_states WHERE project_id = ?', [projectId])
+      const currentRevision = rows[0] === undefined ? 0 : numberValue(rows[0], 'revision')
+      if (currentRevision !== expectedRevision) return { kind: 'revision-mismatch' }
+
+      const revision = currentRevision + 1
+      const updatedAt = new Date().toISOString()
+      if (rows[0] === undefined) {
+        await queryRows(transaction, `
+          INSERT INTO project_test_states (project_id, revision, state_json, updated_at)
+          VALUES (?, ?, ?, ?)
+        `, [projectId, revision, JSON.stringify(state), updatedAt])
+      } else {
+        await queryRows(transaction, `
+          UPDATE project_test_states SET revision = ?, state_json = ?, updated_at = ?
+          WHERE project_id = ? AND revision = ?
+        `, [revision, JSON.stringify(state), updatedAt, projectId, expectedRevision])
+      }
+      return { kind: 'saved', value: { state, revision } }
+    })
+  }
 }
 
-/** Reconstructs the project summary and the v4 document from normalized rows. */
+/** Reconstructs the project summary and the v5 document from normalized rows. */
 async function readStoredProject(database: ProjectDatabase, projectId: string): Promise<StoredProject | null> {
   const projectRows = await queryRows(database, `
     SELECT project_id, name, format_version, revision,
-           default_intro_transition_ref, default_outro_transition_ref
+           default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json
     FROM projects WHERE project_id = ?
   `, [projectId])
   if (projectRows.length === 0) return null
 
   const projectRow = projectRows[0]!
-  if (numberValue(projectRow, 'format_version') !== 4) {
+  if (numberValue(projectRow, 'format_version') !== 5) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -333,7 +386,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   }
 }
 
-/** Reads the relational records and assembles their ElceDocument v4 value. */
+/** Reads the relational records and assembles their ElceDocument v5 value. */
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<ElceDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
@@ -378,12 +431,14 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
   ))
   const data: ElceDocumentData = {
     id: projectId,
-    version: 4,
+    version: 5,
     name: stringValue(projectRow, 'name'),
     revelationDefaults: {
       intro: stringValue(projectRow, 'default_intro_transition_ref') as ElceDocumentData['revelationDefaults']['intro'],
       outro: stringValue(projectRow, 'default_outro_transition_ref') as ElceDocumentData['revelationDefaults']['outro'],
     },
+    summary: parseJsonColumn(projectRow, 'summary_json'),
+    profile: parseJsonColumn(projectRow, 'profile_json'),
     chapters,
     pages,
     scenarioEntries: scenarioRows
@@ -932,6 +987,16 @@ function stringValue(row: SqlRow, key: string): string {
   const value = row[key]
   if (typeof value !== 'string') throw new Error(`Valeur texte invalide en base : ${key}`)
   return value
+}
+
+/** Parses one JSON document column from SQLite. */
+function parseJsonColumn<Value>(row: SqlRow, key: string): Value {
+  const value = stringValue(row, key)
+  try {
+    return JSON.parse(value) as Value
+  } catch {
+    throw new Error(`Valeur JSON invalide en base : ${key}`)
+  }
 }
 
 /** Reads an optional string field and normalizes SQL NULL. */

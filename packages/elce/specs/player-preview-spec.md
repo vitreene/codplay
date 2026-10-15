@@ -36,9 +36,17 @@ sommaire Sighty/CodPlay, sont rendues en 14 × 14 px dans l’application Elcé.
 Les boutons gardent leur gabarit propre : la barre conserve ses cibles de 40 px
 sur mobile et le menu garde ses cibles tactiles de 44 px.
 
+La popup auteur propose « Test auteur » pour ouvrir les réglages du profil et
+de la progression. Son icône Lucide List est la même que celle du bouton
+« Sommaire » dans l’éditeur.
+
 Chaque instantané reçu monte une nouvelle composition du lecteur. La
-progression, les réponses et l’historique restent locaux à cette session de
-lecture et ne sont pas persistés.
+navigation et l’historique restent propres à cette session. L’état du test —
+profil, progression et réponses — est chargé et enregistré séparément du
+document ; la popup auteur et la preview réseau utilisent le même état serveur.
+La popup locale peut fonctionner sans persistance lorsque le serveur est
+indisponible. Le contrat détaillé figure dans la
+[spécification Sommaire et profils](./summary-profile-spec.md).
 
 Le document de l’éditeur reste la source unique. La communication entre les
 fenêtres transporte des demandes et des instantanés ; elle ne crée ni document,
@@ -72,11 +80,14 @@ autonomes sont au même niveau que les chapitres. Les pages du catalogue restent
 exclues du scénario.
 
 La page sélectionnée dans l’éditeur au démarrage d’un instantané devient
-l’origine de sa progression en avant. Chaque page suivante s’ouvre après que
-les gardes Sighty de sortie et d’accès l’autorisent, sans exiger la complétion
-des pages antérieures à cette origine. Ces pages sautées ne reçoivent aucune
-progression ni réponse. Un BDC Résultat conserve son garde global et reste
-inaccessible tant que le parcours requis pour son évaluation n’est pas terminé.
+l’origine de sa progression en avant. Le réglage du Sommaire `endpage | free`
+détermine si la complétion est requise pour Suivant et l’accès direct aux pages
+ultérieures ; `endpage` est le défaut. `free` retire cette attente pour les
+pages ordinaires, mais les gardes Sighty continuent d’appliquer la Visibilité,
+les prérequis de chapitre et les règles d’Évaluation. Un BDC Résultat conserve
+son garde global et reste inaccessible tant que le parcours requis pour son
+évaluation n’est pas terminé. Les pages antérieures à l’origine de preview ne
+reçoivent aucune progression ni réponse.
 
 ## Lecture des vidéos et sortie de page
 
@@ -145,7 +156,8 @@ détruit les ressources du lecteur.
   sélection de la page courante.
 - [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) vérifie la
   synchronisation unique lorsqu’une page éditée vient d’être créée et la
-  résolution d’un média confirmé dont le Blob n’est plus présent en local.
+  résolution d’un média confirmé dont le Blob n’est plus présent en local. Il
+  vérifie aussi l’icône partagée du bouton « Test auteur ».
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie la réutilisation des sources de scènes inchangées après une
   réorganisation et la reconstruction de la scène d’une page éditée. Il

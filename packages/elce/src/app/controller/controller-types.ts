@@ -54,6 +54,7 @@ export type ElceControllerEvent =
   | Readonly<{ type: 'import.cancel' }>
   | Readonly<{ type: 'question.media.file.import'; bdcId: string; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'card.media.file.import'; bdcId: BdcId; file: File; media: MediaMetadata }>
+  | Readonly<{ type: 'summary.media.file.import'; file: File; media: MediaMetadata }>
   | Readonly<{ type: 'document.replace'; document: ElceDocument }>
   | Readonly<{ type: 'document.sync.status'; status: DocumentSyncState['status'] }>
   | Readonly<{ type: 'document.sync.merge'; projectId: string; canonicalMediaId: MediaId; duplicateMediaId: MediaId }>

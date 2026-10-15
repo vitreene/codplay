@@ -18,6 +18,7 @@ export const BDC_LOCATION = {
 export const CATALOG_TAB = {
   AVAILABLE_BDCS: 'available-bdcs',
   MEDIA: 'media',
+  PROFILE: 'profile',
 } as const
 
 export const CATALOG_REFERENCE = {
@@ -368,6 +369,14 @@ export const ELCE_SCENARIO = {
   TITLE_SLOT: 'slot-title',
   CONTENT_SLOT: 'slot-content',
   NAVIGATION_SLOT: 'slot-navigation',
+  SUMMARY_ENTRY_VIEW: 'summary-root',
+  PROFILE_ENTRY_VIEW: 'profile-form',
+  SUMMARY_SCENE: 'scene-summary',
+  SUMMARY_MENU_SCENE: 'scene-summary-menu',
+  SUMMARY_MENU_SLOT: 'slot-summary-menu',
+  PROFILE_FORM_SCENE: 'scene-profile-form',
+  PROFILE_COMPLETE_SCENE: 'scene-profile-complete',
+  PROFILE_COMPLETE_ENTRY_VIEW: 'profile-complete',
   EMPTY_ENTRY_VIEW: 'empty-scenario-entry',
   EMPTY_PAGE: 'empty',
 } as const
@@ -379,6 +388,10 @@ export const ELCE_EVENTS = {
   MENU_DRAWER_OPEN: 'elce:menu:drawer:open',
   MENU_DRAWER_CLOSE: 'elce:menu:drawer:close',
   MENU_DRAWER_CLOSE_REQUEST: 'elce:menu:drawer:close-request',
+  MENU_SUMMARY: 'elce:menu:summary',
+  PROFILE_CHANGED: 'elce:profile:changed',
+  PROFILE_SUBMIT: 'elce:profile:submit',
+  PROFILE_ERROR: 'elce:profile:error',
   NAVIGATION_NEXT: 'elce:navigation:next',
   NAVIGATION_PREVIOUS: 'elce:navigation:previous',
   PAGE_FINISHED: 'elce:page:finished',
@@ -394,6 +407,7 @@ export const ELCE_EVENTS = {
   PRESENTATION_NAVIGATION_PREVIOUS: 'elce:presentation:navigation-previous',
   PRESENTATION_NAVIGATION_NEXT: 'elce:presentation:navigation-next',
   PRESENTATION_NAVIGATION_STATUS: 'elce:presentation:navigation-status',
+  PRESENTATION_MENU_SUMMARY: 'elce:presentation:menu-summary',
 } as const
 
 /** Names the declared Sighty handlers used by the Elcé document scenario. */
@@ -404,6 +418,8 @@ export const ELCE_SCENARIO_HANDLERS = {
   MARK_PAGE_FINISHED: 'action:elce:mark-page-finished',
   RECORD_QUESTION_RESULT: 'action:elce:record-question-result',
   REFRESH_EVALUATION_RESULT: 'action:elce:refresh-evaluation-result',
+  SAVE_PROFILE_VALUES: 'action:elce:save-profile-values',
+  SUBMIT_PROFILE: 'action:elce:submit-profile',
   PAGE_ACCESS: 'guard:elce:page-access',
   PAGE_EXIT: 'guard:elce:page-exit',
 } as const

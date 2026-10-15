@@ -565,6 +565,45 @@ describe('Elcé controller', () => {
     actor.stop()
   })
 
+  it('imports a Sommaire background through the shared persisted-media pipeline', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const service = new ElceMediaResourceService()
+    const mediaImport = service.createImport(new File(['background image'], 'background.png', { type: 'image/png' }))
+    if (mediaImport === null) throw new Error('Le service média doit accepter le fichier image de test.')
+    startActiveActor(actor)
+
+    actor.send({
+      type: 'summary.media.file.import',
+      file: mediaImport.file,
+      media: mediaImport.media,
+    })
+    await flush()
+    expect(store.pending.map(({ media }) => media.id)).toEqual([mediaImport.media.id])
+    expect(actor.getSnapshot().context.document.medias).toHaveLength(0)
+    store.pending[0]?.resolve()
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    expect(document.medias).toEqual([mediaImport.media])
+    expect(document.data.summary.backgroundMediaId).toBe(mediaImport.media.id)
+    expect(actor.getSnapshot().context.mediaSources[mediaImport.media.id]).toMatch(/^blob:/)
+    assertDocumentInvariants(document)
+
+    const duplicateImport = service.createImport(new File(['background image'], 'autre-nom.png', { type: 'image/png' }))
+    if (duplicateImport === null) throw new Error('Le fichier image identique doit être accepté.')
+    actor.send({
+      type: 'summary.media.file.import',
+      file: duplicateImport.file,
+      media: duplicateImport.media,
+    })
+    await flush()
+    expect(store.pending).toHaveLength(1)
+    expect(actor.getSnapshot().context.document.medias).toEqual([mediaImport.media])
+    expect(actor.getSnapshot().context.document.data.summary.backgroundMediaId).toBe(mediaImport.media.id)
+    actor.stop()
+  })
+
   it('attaches an available catalog bdc through the XState anchor command path', async () => {
     const actor = createActor(controllerMachine, { input: {} })
     const service = new ElceAnchorDropService()

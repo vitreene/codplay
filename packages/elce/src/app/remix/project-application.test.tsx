@@ -6,6 +6,7 @@ import { render } from 'remix/ui/test'
 import { CHAPTER_TYPE } from '../../config/document-config'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
+import type { ProfileProperty } from '../../domain/summary-profile/summary-profile-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { ProjectSessionPort } from '../projects/project-session-types'
@@ -131,6 +132,19 @@ describe('Remix project application', () => {
     const documentModel = controller.getSnapshot().context.document
     const page = documentModel.pages[0]
     if (page === undefined) throw new Error('La fixture de la page Remix est vide.')
+    const profileProperty: ProfileProperty = {
+      id: 'profile-audience',
+      name: 'audience',
+      label: 'Public',
+      type: 'text',
+      required: false,
+      choices: [],
+    }
+    actions.updateProfileDefinition({
+      ...controller.getSnapshot().context.document.data.profile,
+      properties: [profileProperty],
+      fieldPropertyIds: [profileProperty.id],
+    })
     actions.createQuestion(documentModel, page.id, page.bdcIds.length)
     const questionId = controller.getSnapshot().context.document.pages[0]?.bdcIds[1]
     if (questionId === undefined) throw new Error('La fixture de la page Remix ne contient pas de Question.')
@@ -146,6 +160,8 @@ describe('Remix project application', () => {
     expect(rendered.$('#elce-work-area-title')).not.toBeNull()
     expect(rendered.$('#elce-remix-section-editor-host-bdc-section-1')).not.toBeNull()
     expect(rendered.$(`#elce-question-editor-${questionId}`)).not.toBeNull()
+    expect(rendered.$('#elce-content-catalog-title')?.textContent).toBe('Contenus')
+    expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull()
 
     await rendered.act(() => rendered.$('#elce-history-undo')?.click())
     expect(controller.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === questionId)).toBe(false)
@@ -166,6 +182,26 @@ describe('Remix project application', () => {
       key: 'z', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true,
     })))
     expect(controller.getSnapshot().context.document.pages[0]?.name).toBe('Titre en attente')
+
+    const prompt = rendered.$(`#elce-question-prompt-${questionId}`) as HTMLTextAreaElement | null
+    if (prompt === null) throw new Error('La Question de test doit contenir son champ texte.')
+    await rendered.act(() => {
+      prompt.focus()
+      prompt.setSelectionRange(0, prompt.value.length)
+    })
+    await vi.waitFor(() => expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull())
+    await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.click())
+    await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion-profile-audience')).not.toBeNull())
+    await rendered.act(() => {
+      const insert = rendered.$('#elce-profile-token-insertion-profile-audience')
+      insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect((rendered.$(`#elce-question-prompt-${questionId}`) as HTMLTextAreaElement).value).toBe('{{profile:profile-audience}}')
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.prompt).toBe('{{profile:profile-audience}}')
+
+    await rendered.act(() => (rendered.$('#elce-preview-open') as HTMLButtonElement).focus())
+    await vi.waitFor(() => expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull())
 
     rendered.cleanup()
     controller.stop()

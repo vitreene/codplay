@@ -2,6 +2,7 @@ import type { ElceQuestionEditorActions } from '../../facades/question/question-
 import type { MediaMetadata } from '../../../domain/document/document-types'
 import type { QuestionContent } from '../../../domain/question/question-types'
 import type { SupportedMediaType } from '../../../domain/media/media-resource-service'
+import type { ProfileProperty } from '../../../domain/summary-profile/summary-profile-types'
 
 export interface QuestionEditorProps {
   readonly bdcId: string
@@ -10,5 +11,6 @@ export interface QuestionEditorProps {
   readonly mediaType: SupportedMediaType | null
   readonly mediaSource: string | null
   readonly actions: ElceQuestionEditorActions
+  readonly profileProperties: readonly ProfileProperty[]
   readonly onCatalogReference: (value: string) => void
 }

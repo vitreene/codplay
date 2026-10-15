@@ -1,4 +1,5 @@
 import type { ElceDocument } from '../../domain/document/document-model'
+import type { ProjectTestState, VersionedProjectTestState } from '../../domain/summary-profile/test-state-types'
 
 /** Describes the public project fields returned by the local API. */
 export interface ProjectSummary {
@@ -31,6 +32,11 @@ export type EditProjectResult =
 
 export type DeleteProjectResult = 'deleted' | 'not-found' | 'edit-access-lost'
 
+export type SaveProjectTestStateResult =
+  | Readonly<{ kind: 'saved'; value: VersionedProjectTestState }>
+  | Readonly<{ kind: 'revision-mismatch' }>
+  | Readonly<{ kind: 'not-found' }>
+
 /** Describes the result of creating a project with a document identifier. */
 export type CreateProjectResult =
   | Readonly<{ kind: 'created'; project: ProjectSummary }>
@@ -60,7 +66,7 @@ export interface ProjectPersistence {
   /** Lists project identifiers, names, and current revisions. */
   listProjects(): Promise<readonly ProjectSummary[]>
 
-  /** Loads a project and its reconstructed v4 document. */
+  /** Loads a project and its reconstructed v5 document. */
   findProject(projectId: string): Promise<StoredProject | null>
 
   /** Creates revision zero unless the document identifier is already stored. */
@@ -79,4 +85,14 @@ export interface ProjectPersistence {
     document: ElceDocument,
     grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult>
+
+  /** Reads the author's separate preview state, or null when the project is missing. */
+  readTestState(projectId: string): Promise<VersionedProjectTestState | null>
+
+  /** Atomically stores preview state when its independent revision matches. */
+  saveTestState(
+    projectId: string,
+    expectedRevision: number,
+    state: ProjectTestState,
+  ): Promise<SaveProjectTestStateResult>
 }

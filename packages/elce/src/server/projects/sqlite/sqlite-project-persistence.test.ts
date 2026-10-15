@@ -20,6 +20,7 @@ import {
 } from '../../../config/document-config'
 import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../../../domain/document/document-model'
+import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState } from '../../../domain/summary-profile/test-state-types'
 import type { ElceDocument as ElceDocumentClass } from '../../../domain/document/document-model'
 import { ElceProjectApiClient } from '../../../infrastructure/project-api/project-api-client'
 import { createElceApiRouter } from '../../api-router'
@@ -42,7 +43,7 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('migrates a fresh database and round-trips the v4 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v5 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new SqliteProjectPersistence(database)
     const router = createElceApiRouter(persistence)
@@ -65,7 +66,58 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(restored.medias).toEqual(document.medias)
     expect(restored.bdcs.toSorted(compareById)).toEqual(document.bdcs.toSorted(compareById))
     expect(restored.data.revelationDefaults).toEqual(document.data.revelationDefaults)
+    expect(restored.data.summary).toEqual(document.data.summary)
+    expect(restored.data.profile).toEqual(document.data.profile)
     assertDocumentInvariants(restored)
+  })
+
+  it('adds the default page continuation mode without overwriting an existing choice', async () => {
+    database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
+    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    await database.migrate(migrations, { to: '20261014100000_add_summary_profile_test_state' })
+
+    await database.exec(rawSql(
+      `INSERT INTO projects (
+        project_id, name, format_version, revision, created_at, updated_at,
+        default_intro_transition_ref, default_outro_transition_ref
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['project-summary-default', 'Sommaire par défaut', 5, 0, '2026-10-15', '2026-10-15', 'fade', 'fade'],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO projects (
+        project_id, name, format_version, revision, created_at, updated_at,
+        default_intro_transition_ref, default_outro_transition_ref, summary_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['project-summary-free', 'Sommaire libre', 5, 0, '2026-10-15', '2026-10-15', 'fade', 'fade',
+        JSON.stringify({ title: 'Libre', pageContinuationMode: 'free' })],
+    ))
+
+    await database.migrate(migrations)
+
+    const rows = await database.exec(rawSql(
+      'SELECT project_id, summary_json FROM projects ORDER BY project_id',
+    ))
+    const summaries = new Map(rows.rows?.map((row) => [
+      String(row.project_id), JSON.parse(String(row.summary_json)) as Record<string, unknown>,
+    ]))
+    expect(summaries.get('project-summary-default')).toMatchObject({ pageContinuationMode: 'endpage' })
+    expect(summaries.get('project-summary-free')).toMatchObject({ title: 'Libre', pageContinuationMode: 'free' })
+  })
+
+  it('persists test state separately and rejects a stale state revision', async () => {
+    database = await openProjectDatabase(':memory:')
+    const persistence = new SqliteProjectPersistence(database)
+    const document = createDocumentWithId('project-preview-state')
+    await persistence.createProject(document)
+
+    expect(await persistence.readTestState(document.id)).toEqual({ state: INITIAL_PROJECT_TEST_STATE, revision: 0 })
+    const state: ProjectTestState = { ...INITIAL_PROJECT_TEST_STATE, profileValues: { name: 'Ada' } }
+    expect(await persistence.saveTestState(document.id, 0, state)).toEqual({
+      kind: 'saved', value: { state, revision: 1 },
+    })
+    expect(await persistence.saveTestState(document.id, 0, INITIAL_PROJECT_TEST_STATE)).toEqual({ kind: 'revision-mismatch' })
+    expect(await persistence.findProject(document.id)).toMatchObject({ project: { revision: 0 } })
+    expect(await persistence.readTestState(document.id)).toEqual({ state, revision: 1 })
   })
 
   it('migrates relational Graph rows to JSON and back without changing Question/Réponses', async () => {
@@ -78,7 +130,7 @@ describe('SQLite project persistence through the Remix API', () => {
         project_id, name, format_version, revision, created_at, updated_at,
         default_intro_transition_ref, default_outro_transition_ref
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [projectId, 'Migration Graphe', 4, 0, '2026-10-14', '2026-10-14', 'fade', 'fade'],
+      [projectId, 'Migration Graphe', 5, 0, '2026-10-14', '2026-10-14', 'fade', 'fade'],
     ))
     await database.exec(rawSql(
       `INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id)
@@ -174,7 +226,7 @@ describe('SQLite project persistence through the Remix API', () => {
     expect((await database.exec(rawSql('SELECT * FROM question_answers WHERE project_id = ?', [projectId]))).rows)
       .toEqual(answerRowsBefore.rows)
 
-    await database.migrate(migrations, { direction: 'down', step: 1 })
+    await database.migrate(migrations, { direction: 'down', step: 3 })
     const relationalValues = await database.exec(rawSql(
       'SELECT category_id, series_id, value FROM graph_values WHERE project_id = ? ORDER BY category_id',
       [projectId],
@@ -626,7 +678,7 @@ async function reserve(router: ReturnType<typeof createElceApiRouter>, projectId
   return { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': body.grantId }
 }
 
-/** Builds a v4 fixture that exercises independent ordering and nested placements. */
+/** Builds a v5 fixture that exercises independent ordering and nested placements. */
 function createRelationalFixture(): ElceDocumentClass {
   let document = createInitialDocument()
   document = applyDocumentCommand(document, {

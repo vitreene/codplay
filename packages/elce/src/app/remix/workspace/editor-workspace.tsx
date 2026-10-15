@@ -10,6 +10,7 @@ import { renderScenarioPanel } from './scenario-panel'
 import { renderLucideIcon } from '../lucide-static-icon'
 import type { EditorWorkspaceViewProps } from './editor-workspace-types'
 import type { ScenarioPanelProps } from './scenario-panel-types'
+import { renderSummaryProfileSettings } from './summary-profile-settings'
 
 /** Composes the native Remix scenario, chapter-settings and catalog surfaces. */
 export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNode {
@@ -24,7 +25,18 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
     onDropPage: (event, placement) => dropPageEntry(event, placement, props),
     onDragLeave: (event) => dragLeaveSeparator(event, props.onSetDropTarget),
   }
-  const center = props.view.selectedChapter === undefined
+  const center = props.summarySettingsOpen
+    ? <div id="elce-summary-profile-settings-host" className="elce-remix-center-column">
+      {renderSummaryProfileSettings({
+        document: props.view.documentModel,
+        mediaSources: props.view.mediaSources,
+        actions: props.actions,
+        error: props.authoringError,
+        onClose: () => props.onSetSummarySettingsOpen(false),
+        onError: props.onSetAuthoringError,
+      })}
+    </div>
+    : props.view.selectedChapter === undefined
     ? <div
       id="elce-remix-page-editor-host-container"
       className="elce-remix-page-editor-host elce-remix-center-column"
@@ -66,6 +78,7 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
         view: props.view,
         actions: props.actions,
         responsivePanel: props.responsivePanel,
+        profileTokenTargetId: props.profileTokenTargetId,
         dropTarget: props.dropTarget,
         onSetDropTarget: props.onSetDropTarget,
       })}
@@ -119,7 +132,7 @@ function renderPanelToggle(
   setResponsivePanel: EditorWorkspaceViewProps['onSetResponsivePanel'],
 ): RemixNode {
   const isOpen = responsivePanel === panel
-  const panelLabel = panel === 'outline' ? 'le scénario' : 'les contenus disponibles'
+  const panelLabel = panel === 'outline' ? 'le scénario' : 'les contenus'
   const label = `${isOpen ? 'Fermer' : 'Ouvrir'} ${panelLabel}`
   const id = panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
   const targetId = panel === 'outline' ? 'elce-outline' : 'elce-properties'

@@ -10,9 +10,14 @@ export type ProjectApplicationView = Pick<
 
 export interface ProjectApplicationWorkspaceState {
   readonly responsivePanel: ResponsivePanel
+  readonly summarySettingsOpen: boolean
+  readonly profileTokenTargetId: string | null
+  readonly authoringError: string | null
   readonly dropTarget: string | null
   readonly visible: boolean
   readonly setResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void
+  readonly setSummarySettingsOpen: (open: boolean) => void
+  readonly setAuthoringError: (error: string | null) => void
   readonly setDropTarget: (targetId: string | null) => void
   readonly setDraggedEntry: (entry: DraggedScenarioEntry) => void
   readonly getDraggedEntry: () => DraggedScenarioEntry

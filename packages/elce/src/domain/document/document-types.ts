@@ -5,6 +5,7 @@ import type { EvaluationResultContent } from '../evaluation/evaluation-result-ty
 import type { CarouselContent } from '../carousel/carousel-types'
 import type { CardContent } from '../card/card-types'
 import type { StatisticalGraphContent } from '../statistical-graph/statistical-graph-types'
+import type { ProfileDefinition, SummarySettings } from '../summary-profile/summary-profile-types'
 
 export type ChapterId = string
 export type PageId = string
@@ -90,9 +91,11 @@ export interface MediaMetadata {
 
 export interface ElceDocumentData {
   readonly id: string
-  readonly version: 4
+  readonly version: 5
   readonly name: string
   readonly revelationDefaults: RevelationTransitionDefaults
+  readonly summary: SummarySettings
+  readonly profile: ProfileDefinition
   readonly chapters: readonly Chapter[]
   readonly pages: readonly Page[]
   readonly scenarioEntries: readonly ScenarioEntry[]

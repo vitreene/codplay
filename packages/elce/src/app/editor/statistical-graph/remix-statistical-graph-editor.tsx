@@ -253,6 +253,7 @@ function renderTextField(
         id={id}
         aria-label={label}
         value={value}
+        data-elce-profile-token-target="true"
         mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setText(field, event.currentTarget.value))}
       />
       : <input
@@ -260,6 +261,7 @@ function renderTextField(
         type="text"
         aria-label={label}
         value={value}
+        data-elce-profile-token-target="true"
         mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setText(field, event.currentTarget.value))}
       />}
   </label>
@@ -537,6 +539,7 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
                     type="text"
                     aria-label={`Nom de la série ${seriesIndex + 1}`}
                     value={value}
+                    data-elce-profile-token-target="true"
                     mix={[onGridFocus(position), onGridInput(position), onGridKeydown(position)]}
                   />
                 </th>
@@ -562,6 +565,7 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
                     type="text"
                     aria-label={`Nom de la catégorie ${categoryIndex + 1}`}
                     value={category?.label ?? ''}
+                    data-elce-profile-token-target="true"
                     mix={[
                       onGridFocus({ rowIndex, columnIndex: 0 }),
                       onGridInput({ rowIndex, columnIndex: 0 }),

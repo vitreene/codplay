@@ -3,7 +3,7 @@
 ## Rôle
 
 Le routeur Fetch Remix expose les opérations du catalogue local des projets.
-Un projet correspond à un `ElceDocument` v4 : son identifiant et son nom sont
+Un projet correspond à un `ElceDocument` v5 : son identifiant et son nom sont
 ceux du document. Le navigateur crée le document initial ; le serveur reçoit
 ensuite sa valeur structurée et la persiste. Le routeur ne crée pas un second
 document initial.
@@ -39,19 +39,19 @@ Pour les requêtes navigateur, le serveur autorise les origines HTTP de boucle
 locale (`localhost`, `127.0.0.1` et `[::1]`), quelle que soit leur origine de
 port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
 `DELETE` et les en-têtes `Content-Type`, `If-Match`, `X-Elce-Page-Id` et
-`X-Elce-Edit-Grant`. Il expose `ETag` à l’éditeur. En mode réseau, seule
-l’origine exacte de la preview est autorisée pour les lectures du document et
-de ses médias. Les clients non locaux ne peuvent pas lister les projets, lire
-les droits d’édition ni effectuer des mutations ; le serveur refuse les autres
-requêtes avant le routeur API. Le prévol réseau accepte uniquement `GET` et
-`HEAD`.
+`X-Elce-Edit-Grant`. Il expose `ETag` à l’éditeur. En mode réseau, l’origine
+exacte de la preview peut lire le document et son état test, lire ses médias,
+et écrire uniquement l’état test. Les mutations du document et des médias,
+l’index des projets et les droits d’édition restent refusés depuis cette
+origine. Le prévol réseau autorise `GET` et `HEAD` pour les lectures du
+document, et `GET`, `HEAD` et `PUT` pour l’état test.
 
 ## Requêtes et réponses
 
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
-| `POST /api/projects` | `ElceDocumentData` v4 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
+| `POST /api/projects` | `ElceDocumentData` v5 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
 | `POST /api/projects/:projectId/edit-access` | `{ "pageId": string, "force"?: true }` | `200 { "grantId": string, "recovered": boolean }` ; une répétition normale par la page détentrice retrouve son droit ; `force: true` le remplace |
 | `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
@@ -59,15 +59,22 @@ requêtes avant le routeur API. Le prévol réseau accepte uniquement `GET` et
 | `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
 | `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
 | `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
-| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v4, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v5, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `GET /api/projects/:projectId/test-state` | — | `200 { "state" }` et un ETag de révision indépendant |
+| `PUT /api/projects/:projectId/test-state` | `{ "state": ProjectTestState }`, `If-Match: "<revision>"` | `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
-Le corps JSON transporté est le document v4 structuré produit par
+Le corps JSON transporté est le document v5 structuré produit par
 `ElceDocument.toJSON()`. L’adaptateur de persistance le projette vers les
 tables ; le JSON riche de Tiptap et le contenu complet du BDC Graphe sont les
 deux champs JSON en base. Les autres BDC, dont Question/Réponses, conservent
 leurs projections relationnelles.
+
+L’état auteur lu par `GET /test-state` est initialisé à `{ schemaVersion: 1 }`
+et à la révision `0` lorsqu’aucune ligne n’existe encore. Son premier `PUT`
+crée la ligne. Cette ressource ne demande pas le droit d’édition documentaire
+et n’incrémente pas la révision du projet.
 
 Les documents reçus passent par `ElceDocument.fromJSON()` puis
 `assertDocumentInvariants()`. Le corps d’un remplacement doit porter le même
@@ -93,7 +100,7 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 
 | Statut | Code | Sens |
 | --- | --- | --- |
-| `400` | `invalid_request` | JSON, document v4, identifiant ou nom de type invalide |
+| `400` | `invalid_request` | JSON, document v5, identifiant ou nom de type invalide |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
 | `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
@@ -111,12 +118,17 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 `SqliteProjectPersistence` implémente `ProjectPersistence` avec
 `remix/data-table/sqlite`. À l’ouverture, `openProjectDatabase()` applique les
 migrations SQL chargées avec `loadMigrations()` de Remix. Les migrations créent
-les tables relationnelles du modèle v4 ; aucune table ne contient le document
+les tables relationnelles du modèle v5 ; aucune table ne contient le document
 Elcé entier en JSON. `sections.content_json` garde le JSON Tiptap et
 `sections.markup_html` son export HTML. `statistical_graphs` garde le contenu
 complet du Graphe dans `content_json` ; les tables `graph_categories`,
 `graph_series` et `graph_values` sont supprimées. Question/Réponses conserve
-les tables `questions` et `question_answers`.
+les tables `questions` et `question_answers`. Les colonnes `summary_json` et
+`profile_json` enregistrent les réglages du Sommaire et du profil. La table
+`project_test_states` conserve séparément le JSON de test auteur et sa révision.
+La migration `20261015100000_add_summary_page_continuation_mode` complète les
+réglages existants avec `pageContinuationMode: "endpage"` seulement quand cette
+clé manque ; elle préserve une valeur déjà enregistrée.
 
 Le dépôt restitue le document à partir des lignes `projects`, `chapters`,
 `pages`, `scenario_entries`, `catalog_pages`, `media_resources`,
@@ -186,10 +198,11 @@ ni circuit de lecture Elcé.
 
 ## Vérification
 
-`ProjectApiController` délègue les lectures et mutations à `ProjectPersistence`.
+`ProjectApiController` délègue les lectures et mutations documentaires à
+`ProjectPersistence`; `ProjectTestStateApiController` traite l’état test séparé.
 Les tests couvrent les opérations API avec le dépôt isolé, puis avec SQLite
 Remix en mémoire. Une base fichier est fermée puis rouverte ; les projets
-restent lisibles et le document v4 conserve ses relations et ordres. La
+restent lisibles et le document v5 conserve ses relations et ordres. La
 révision périmée est refusée sans perdre les métadonnées de stockage média.
 
 `createElceHttpServer()` assemble le listener Node, le routeur Fetch Remix,

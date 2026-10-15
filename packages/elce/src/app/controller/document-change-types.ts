@@ -13,6 +13,7 @@ export type ElceDocumentChange =
   | Readonly<{ kind: 'anchor'; operation: ElceAnchorChange; historyGroupKey?: string; recordedAt: number; selectionBefore?: SectionSelection; selectionAfter?: SectionSelection }>
   | Readonly<{ kind: 'question-media-import'; bdcId: BdcId; file: File; media: MediaMetadata }>
   | Readonly<{ kind: 'card-media-import'; bdcId: BdcId; file: File; media: MediaMetadata }>
+  | Readonly<{ kind: 'summary-media-import'; file: File; media: MediaMetadata }>
   | Readonly<{ kind: 'command'; command: DocumentCommand; historyGroupKey?: string; recordHistory?: boolean; recordedAt: number }>
   | Readonly<{ kind: 'page-create'; placement: PagePlacement; pageType?: PageType; name?: string }>
   | Readonly<{ kind: 'history-undo' }>

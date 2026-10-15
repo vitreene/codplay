@@ -1,5 +1,5 @@
 import type { Actor } from 'xstate'
-import { BDC_LOCATION, CHAPTER_TYPE, PAGE_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, CHAPTER_TYPE, MEDIA_TYPE, PAGE_TYPE } from '../../config/document-config'
 import type { CatalogTabType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import {
   createChapterCommand,
@@ -21,7 +21,9 @@ import type { ElceSectionChange, ElceAnchorDropTarget } from '../../domain/ancho
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { QuestionContent } from '../../domain/question/question-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
+import type { ProfileDefinition, SummarySettings } from '../../domain/summary-profile/summary-profile-types'
 import type { ElceMediaImport } from '../../domain/media/media-resource-types'
+import { ElceMediaResourceService, mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ProjectSessionOperation } from '../projects/project-session-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { ElceAnchorDropFacade } from './anchor/anchor-drop-facade'
@@ -43,6 +45,7 @@ export class EditorActionsFacade {
   private readonly carouselFacade: ElceCarouselFacade
   private readonly questionFacade: ElceQuestionFacade
   private readonly statisticalGraphFacade: StatisticalGraphFacade
+  private readonly mediaResourceService = new ElceMediaResourceService()
 
   public constructor(controller: Actor<typeof controllerMachine>) {
     this.controller = controller
@@ -268,6 +271,23 @@ export class EditorActionsFacade {
     retryScope: EvaluationRetryScope,
   ): void {
     this.apply({ type: 'chapter.evaluation.settings.update', chapterId, attemptLimit, retryScope })
+  }
+
+  /** Saves the unique reader-facing summary settings through document history. */
+  public updateSummarySettings(summary: SummarySettings): void {
+    this.apply({ type: 'summary.settings.update', summary })
+  }
+
+  /** Imports an image through the shared persisted-media change pipeline for the Sommaire background. */
+  public importSummaryBackgroundFile(file: File): void {
+    const mediaImport = this.mediaResourceService.createImport(file)
+    if (mediaImport === null || mediaTypeFromMimeType(mediaImport.media.mimeType) !== MEDIA_TYPE.IMAGE) return
+    this.controller.send({ type: 'summary.media.file.import', file: mediaImport.file, media: mediaImport.media })
+  }
+
+  /** Saves profile fields and constraints through document history. */
+  public updateProfileDefinition(profile: ProfileDefinition): void {
+    this.apply({ type: 'profile.definition.update', profile })
   }
 
   /** Saves both outcomes of a Result BDC. */

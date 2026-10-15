@@ -7,6 +7,7 @@ import { MediaApiController } from './media/media-api-controller'
 import { createMediaFileStorage, removeUnreferencedMediaFiles } from './media/media-file-storage'
 import { openProjectDatabase } from './projects/sqlite/project-database'
 import { SqliteProjectPersistence } from './projects/sqlite/sqlite-project-persistence'
+import { isNetworkPreviewApiRequestAllowed } from './network-preview-api-policy'
 
 /** Supplies the filesystem locations owned by one local Elcé server. */
 export interface ElceHttpServerOptions {
@@ -42,7 +43,12 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
     const server = createServer((request, response) => {
       const networkPreviewOrigin = options.networkPreviewOrigin
       if (networkPreviewOrigin !== undefined && !isLoopbackAddress(request.socket.remoteAddress)
-        && !isNetworkPreviewApiRead(request, networkPreviewOrigin)) {
+        && !isNetworkPreviewApiRequestAllowed({
+          method: request.method ?? 'GET',
+          pathname: new URL(request.url ?? '/', 'http://localhost').pathname,
+          origin: request.headers.origin,
+          requestedMethod: request.headers['access-control-request-method'],
+        }, networkPreviewOrigin)) {
         response.writeHead(403)
         response.end()
         return
@@ -68,7 +74,7 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
   }
 }
 
-/** Handles local-browser CORS for the editor's direct API requests. */
+/** Handles CORS for local editor requests and the opt-in preview origin. */
 function answerLocalCors(
   request: IncomingMessage,
   response: ServerResponse,
@@ -81,7 +87,7 @@ function answerLocalCors(
   if (isAllowedOrigin && origin !== undefined) {
     response.setHeader('Access-Control-Allow-Origin', origin)
     response.setHeader('Access-Control-Allow-Methods', isNetworkPreview
-      ? 'GET, HEAD, OPTIONS'
+      ? 'GET, HEAD, PUT, OPTIONS'
       : 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match, X-Elce-Page-Id, X-Elce-Edit-Grant')
     response.setHeader('Access-Control-Expose-Headers', 'ETag')
@@ -90,24 +96,13 @@ function answerLocalCors(
   }
   if (request.method !== 'OPTIONS') return false
   const requestedMethod = request.headers['access-control-request-method']
-  const allowedNetworkPreflight = isNetworkPreview && (requestedMethod === 'GET' || requestedMethod === 'HEAD')
+  const testStatePath = /^\/api\/projects\/[^/]+\/test-state$/.test(new URL(request.url ?? '/', 'http://localhost').pathname)
+  const allowedNetworkPreflight = isNetworkPreview
+    && (requestedMethod === 'GET' || requestedMethod === 'HEAD'
+      || requestedMethod === 'PUT' && testStatePath)
   response.writeHead(isLoopback || allowedNetworkPreflight ? 204 : 403)
   response.end()
   return true
-}
-
-/** Restricts LAN requests to document and media reads used by the standalone preview. */
-function isNetworkPreviewApiRead(request: IncomingMessage, previewOrigin: string): boolean {
-  const url = new URL(request.url ?? '/', 'http://localhost')
-  const projectPath = /^\/api\/projects\/[^/]+$/.test(url.pathname)
-  const mediaPath = /^\/api\/projects\/[^/]+\/media\/[^/]+$/.test(url.pathname)
-  const originMatches = request.headers.origin === previewOrigin
-  const isRead = request.method === 'GET' || request.method === 'HEAD'
-  if (isRead && projectPath && originMatches) return true
-  if (isRead && mediaPath && (originMatches || request.headers.origin === undefined)) return true
-  const requestedMethod = request.headers['access-control-request-method']
-  return request.method === 'OPTIONS' && projectPath && originMatches
-    && (requestedMethod === 'GET' || requestedMethod === 'HEAD')
 }
 
 /** Treats IPv4 and IPv6 loopback connections as local editor requests. */

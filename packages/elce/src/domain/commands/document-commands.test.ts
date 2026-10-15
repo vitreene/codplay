@@ -19,6 +19,19 @@ import {
 } from './document-commands'
 
 describe('Elcé document commands', () => {
+  it('attaches only an image as the Sommaire background', () => {
+    const document = createInitialDocument()
+    const image = { id: 'media-summary-image', name: 'fond.jpg', mimeType: 'image/jpeg', size: 10, caption: '' }
+    const updated = applyDocumentCommand(document, { type: 'summary.background.media.attach', media: image })
+
+    expect(updated.medias).toEqual([image])
+    expect(updated.data.summary.backgroundMediaId).toBe(image.id)
+    expect(() => applyDocumentCommand(document, {
+      type: 'summary.background.media.attach',
+      media: { ...image, id: 'media-summary-video', name: 'fond.mp4', mimeType: 'video/mp4' },
+    })).toThrow('ne peut pas servir de fond au Sommaire')
+  })
+
   it('stores every top-level BDC type in the catalogue and restores it to a compatible page', () => {
     let document = createInitialDocument()
     const fluxPage = document.pages[0]

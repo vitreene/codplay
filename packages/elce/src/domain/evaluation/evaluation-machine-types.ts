@@ -14,6 +14,7 @@ export interface EvaluationSettings {
 
 export interface EvaluationAnswer {
   readonly questionId: string
+  readonly answerIds: readonly string[]
   readonly selectedAnswerIds: readonly string[]
   readonly expectedAnswerIds: readonly string[]
 }

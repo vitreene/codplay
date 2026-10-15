@@ -2,9 +2,9 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v4 ; les détails Carte, Question et Graphe
-statistique, les placements page/catalogue/parent, le catalogue générique, les
-commandes et invariants sont vérifiés le 9 octobre 2026.**
+**Fixe — modèle documentaire v5 ; les structures générales, les commandes et
+invariants de placement sont vérifiés. Sommaire et profils sont décrits dans
+la [spécification dédiée](./summary-profile-spec.md).**
 
 Cette spécification couvre le document métier manipulé par l’application et
 la voie de modification utilisée par l’interface. La projection des cartes
@@ -13,7 +13,7 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 4 contient des tableaux de chapitres, pages, BDC et
+Un `ElceDocument` version 5 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
@@ -44,9 +44,11 @@ catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de l
 masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
 propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument.fromJSON()` accepte uniquement la version 4 et rejette les
-versions 1, 2 et 3 sans conversion. Le POC ne conserve pas de migration depuis
-le format précédent.
+`ElceDocument` v5 ajoute `data.summary` et `data.profile` ; leur structure et
+leurs invariants sont décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
+`ElceDocument.fromJSON()` accepte uniquement la version courante et rejette
+les versions précédentes sans conversion. Le projet ne conserve pas de
+compatibilité documentaire legacy.
 
 Les valeurs de placement et les constantes de configuration sont déclarées
 dans [`document-config.ts`](../src/config/document-config.ts), leurs types
@@ -77,7 +79,7 @@ il est créé atomiquement avec un BDC Carte enfant au layout initial
 métier.
 
 `ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
-4. Les octets des médias sont conservés à part par la frontière IndexedDB.
+5. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 ## Commandes
 

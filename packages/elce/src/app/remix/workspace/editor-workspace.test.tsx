@@ -143,6 +143,66 @@ describe('Remix editor workspace', () => {
     cleanup()
     controller.stop()
   })
+
+  it('opens the Sommaire and profile editor and commits a stable profile property through XState', async () => {
+    const { controller, mount, cleanup, setProfileTokenTargetId } = createWorkspace()
+    let rendered = mount()
+
+    expect(rendered.$('#elce-summary-profile-open')?.getAttribute('aria-label')).toBe('Sommaire')
+    expect(rendered.$('#elce-summary-profile-open-icon')?.classList.contains('lucide-list')).toBe(true)
+    await rendered.act(() => rendered.$('#elce-summary-profile-open')?.dispatchEvent(new Event('click', { bubbles: true })))
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-summary-profile-settings-title')?.textContent).toBe('Sommaire')
+    expect((rendered.$('#elce-summary-title') as HTMLInputElement | null)?.value).toBe('Sommaire')
+
+    await rendered.act(() => rendered.$('#elce-profile-property-add')?.dispatchEvent(new Event('click', { bubbles: true })))
+    expect(controller.getSnapshot().context.document.data.profile.properties).toHaveLength(1)
+    expect(controller.getSnapshot().context.document.data.profile.fieldPropertyIds).toEqual([
+      controller.getSnapshot().context.document.data.profile.properties[0]?.id,
+    ])
+    const propertyId = controller.getSnapshot().context.document.data.profile.properties[0]?.id
+    if (propertyId === undefined) throw new Error('The profile property was not created.')
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-profile-property-list')?.children).toHaveLength(1)
+
+    await rendered.act(() => rendered.$('#elce-summary-profile-open')?.dispatchEvent(new Event('click', { bubbles: true })))
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-content-catalog-title')?.textContent).toBe('Contenus')
+    expect(rendered.$('#elce-workspace-profile-token-insertion')).toBeNull()
+    expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull()
+    setProfileTokenTargetId('elce-test-profile-target')
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-content-catalog-tab-profile')?.textContent).toBe('Profil')
+    await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.dispatchEvent(new Event('click', { bubbles: true })))
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-content-catalog-tab-profile')?.getAttribute('aria-pressed')).toBe('true')
+    expect(rendered.$(`#elce-profile-token-insertion-${propertyId}`)).not.toBeNull()
+
+    const target = rendered.$('#elce-test-profile-target') as HTMLTextAreaElement
+    target.focus()
+    target.setSelectionRange(8, 13)
+    await rendered.act(() => {
+      const insert = rendered.$(`#elce-profile-token-insertion-${propertyId}`)
+      insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(target.value).toBe(`Bonjour {{profile:${propertyId}}}`)
+
+    setProfileTokenTargetId(null)
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull()
+    expect(rendered.$('#elce-catalog-profile')?.hasAttribute('hidden')).toBe(true)
+
+    rendered.cleanup()
+    cleanup()
+    controller.stop()
+  })
 })
 
 /** Creates a local XState fixture and renders a fresh native workspace view. */
@@ -153,6 +213,9 @@ function createWorkspace(onPreview: () => void = () => undefined, previewError: 
   const actions = new EditorActionsFacade(controller)
   actions.createEvaluationChapter(controller.getSnapshot().context.document)
   let responsivePanel: ResponsivePanel = null
+  let summarySettingsOpen = false
+  let profileTokenTargetId: string | null = null
+  let authoringError: string | null = null
   let dropTarget: string | null = null
   let draggedEntry: DraggedScenarioEntry = null
 
@@ -162,13 +225,18 @@ function createWorkspace(onPreview: () => void = () => undefined, previewError: 
     {renderEditorWorkspace({
       view: selectEditorViewModel(controller.getSnapshot()),
       actions,
-      pageEditorHost: <div
-        id="elce-test-page-editor"
-      />,
+      pageEditorHost: <div id="elce-test-page-editor">
+        <textarea id="elce-test-profile-target" data-elce-profile-token-target="true" defaultValue="Bonjour monde" />
+      </div>,
       responsivePanel,
+      summarySettingsOpen,
+      profileTokenTargetId,
+      authoringError,
       dropTarget,
       visible: true,
       onSetResponsivePanel: (panel) => { responsivePanel = panel },
+      onSetSummarySettingsOpen: (open) => { summarySettingsOpen = open },
+      onSetAuthoringError: (error) => { authoringError = error },
       onSetDropTarget: (target) => { dropTarget = target },
       onSetDraggedEntry: (entry) => { draggedEntry = entry },
       getDraggedEntry: () => draggedEntry,
@@ -180,11 +248,14 @@ function createWorkspace(onPreview: () => void = () => undefined, previewError: 
   </div>)
   const cleanup = (): void => {
     responsivePanel = null
+    summarySettingsOpen = false
+    profileTokenTargetId = null
+    authoringError = null
     dropTarget = null
     draggedEntry = null
   }
 
-  return { controller, mount, cleanup }
+  return { controller, mount, cleanup, setProfileTokenTargetId: (targetId: string | null) => { profileTokenTargetId = targetId } }
 }
 
 /** Creates the small native DataTransfer surface used by browser drag events. */

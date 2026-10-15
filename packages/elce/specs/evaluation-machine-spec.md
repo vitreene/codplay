@@ -16,8 +16,10 @@ autonome ni stockage : le runtime hôte conserve l’état et lui transmet les
 Les paramètres sont le seuil, le nombre maximal de tentatives (première
 tentative incluse, `null` sans limite) et la portée de reprise : toutes les
 Questions ou seulement celles dont la réponse était fausse ou absente. Une
-réponse validée contient les identifiants sélectionnés et attendus. Une
-Question sans réponse compte comme fausse dans le score global. La machine
+réponse validée contient les identifiants sélectionnés et attendus, ainsi que
+les identifiants des choix présents dans la Question. Ces derniers servent à
+réconcilier l’état test avec le document modifié et ne changent pas le calcul
+du score. Une Question sans réponse compte comme fausse dans le score global. La machine
 réutilise `ElceChapterEvaluation` pour calculer ce score et ne duplique pas sa
 règle.
 

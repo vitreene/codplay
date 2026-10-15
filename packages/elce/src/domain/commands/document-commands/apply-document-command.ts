@@ -6,7 +6,7 @@ import { createBdc, deleteCatalogBdc, updateQuestion, updateEvaluationResult, up
 import { moveBdc, createAnchoredBdc, attachCatalogBdc, moveAnchoredBdc, removeAnchoredBdc, returnAnchoredBdc } from './anchor-commands'
 import { findBdc, fail } from './command-helpers'
 import { updateSectionContent, deleteSection, updateSectionRevelation } from './section-commands'
-import { setCardMedia, attachCardMedia, setQuestionMedia, attachQuestionMedia, mergeMedia } from './media-commands'
+import { setCardMedia, attachCardMedia, setQuestionMedia, attachQuestionMedia, attachSummaryBackgroundMedia, mergeMedia } from './media-commands'
 import { updateDocumentRevelation } from './revelation-commands'
 import { assertDocumentInvariants } from './document-invariants'
 
@@ -76,6 +76,8 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return setQuestionMedia(document, command.bdcId, command.mediaId)
     case 'bdc.question.media.attach':
       return attachQuestionMedia(document, command.bdcId, command.media)
+    case 'summary.background.media.attach':
+      return attachSummaryBackgroundMedia(document, command.media)
     case 'bdc.question.delete':
       return deleteQuestion(document, command.bdcId)
     case 'bdc.section.delete':
@@ -103,6 +105,10 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return mergeMedia(document, command.canonicalMediaId, command.duplicateMediaIds)
     case 'document.revelation.update':
       return updateDocumentRevelation(document, command.revelationDefaults)
+    case 'summary.settings.update':
+      return new ElceDocument({ ...document.data, summary: command.summary })
+    case 'profile.definition.update':
+      return new ElceDocument({ ...document.data, profile: command.profile })
     case 'document.rename':
       return new ElceDocument({ ...document.data, name: command.name })
   }

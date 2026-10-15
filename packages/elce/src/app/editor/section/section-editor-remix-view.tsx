@@ -59,6 +59,7 @@ export function renderRemixSectionEditor(
         aria-label="Titre de section"
         placeholder="Titre"
         value={section.title}
+        data-elce-profile-token-target="true"
         mix={on<HTMLInputElement, 'input'>('input', (event) => state.adapters.get(bdc.id)?.updateTitle(event.currentTarget.value))}
       />
       <button
@@ -82,6 +83,7 @@ export function renderRemixSectionEditor(
         const adapter = new SectionTiptapAdapter(host as HTMLElement, {
           bdcId: bdc.id,
           section,
+          profileProperties: current.view.documentModel.data.profile.properties,
           anchorOptions: {
             createFileDropTarget: (file) => actions.createSectionFileDropTarget(file, current.view.selectedPage?.id ?? page.id),
             createCatalogDropTarget: (reference) => actions.createSectionCatalogDropTarget(

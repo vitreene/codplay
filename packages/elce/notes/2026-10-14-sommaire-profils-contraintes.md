@@ -9,19 +9,17 @@ pages. Les BDC peuvent recevoir des contraintes similaires et leurs contenus
 peuvent reprendre des valeurs du profil. Les qualifications étendent ce besoin
 à un dévoilement progressif fondé sur la progression et les résultats.
 
-Le cadrage fonctionnel permet de préparer le plan détaillé. Les décisions
-acceptées mais non appliquées sont suivies dans le
-[plan de construction](../plan/2026-10-01-elce-construction-plan.md#extension-sommaire-profils-et-contraintes).
-Les choix de raccord et les preuves d’acceptation seront portés dans ce plan ;
-les spécifications conserveront uniquement les comportements implémentés et
-vérifiés.
+Le cadrage fonctionnel a été traduit en étapes dans le
+[plan Sommaire et profils](../plan/2026-10-14-elce-sommaire-profils-plan.md).
+Les formats internes sont intégrés pour relecture ultérieure ; la spécification
+dédiée conserve les comportements implémentés et vérifiés.
 
-L’[étude des raccords](2026-10-14-sommaire-profils-etude-raccords.md) identifie
-les propriétaires actuels, les extensions nécessaires et les chemins de
-validation. Ses propositions techniques restent à relire dans le plan.
+L’[étude des raccords](2026-10-14-sommaire-profils-etude-raccords.md) conserve
+les raisons des frontières techniques retenues. Les formats internes et la
+validation restante sont suivis dans le plan dédié.
 
 L’[inventaire technique](2026-10-14-sommaire-profils-inventaire-technique.md)
-recense les tables, interfaces, formats et échanges encore à préciser.
+conserve le relevé des tables, interfaces et formats étudiés.
 
 ## Périmètre fonctionnel
 
@@ -51,10 +49,11 @@ courante ; ce retour ne valide ni page ni chapitre. En mode « niveaux seuls »,
 cliquer un chapitre ouvre sa première page retenue si son accès est autorisé.
 
 L’auteur choisit par une option quelles propriétés apparaissent dans la page
-Profil. Cette page est une page de quiz enrichie pour recueillir les valeurs
-du profil. Elle peut être omise lorsque toutes les données nécessaires au
-profilage sont obtenues par une évaluation. Les règles testent directement les
-propriétés ; aucun profil nommé regroupant des conditions n’est prévu.
+Profil. Cette page collecte plusieurs valeurs sans correction ni score ; le
+choix intégré est un Formulaire séparé du BDC Question. Elle peut être omise
+lorsque toutes les données nécessaires au profilage sont obtenues par une
+évaluation. Les règles testent directement les propriétés ; aucun profil nommé
+regroupant des conditions n’est prévu.
 La page Profil peut demander un pseudo, un âge, un genre grammatical ou des
 choix tels qu’une catégorie de métier et des habilitations. L’auteur définit
 pour chaque propriété un type texte, nombre, choix multiple ou choix unique,
@@ -68,8 +67,9 @@ est hors périmètre actuel. La future qualification par évaluations pourra
 compléter ou remplacer ces mêmes propriétés ; elle est différée.
 Le filtrage par profil est une règle de masquage à la construction de la
 consultation. Il définit un ensemble stable de contenus retenus ; les accès
-évoluent ensuite selon les conditions de lecture. La frontière technique de
-cette construction sera précisée dans le plan détaillé.
+évoluent ensuite selon les conditions de lecture. Le lecteur construit cette
+projection une seule fois pour le Sommaire, les scènes, les routes et
+l’Évaluation ; le contrat vérifié est dans la spécification dédiée.
 
 Depuis le Sommaire, l’auteur définit des contraintes au niveau des pages ou
 des chapitres. Toutes les pages sont visibles par défaut. Les contraintes de
@@ -121,11 +121,10 @@ plus de 10 « senior ». Ces plages illustrent le besoin, sans imposer les seuil
 du futur mécanisme ni décider le cas zéro. Dans cet exemple, `grade` est alimenté
 par l’évaluation et n’est pas accessible dans le formulaire de profil.
 
-Le prochain plan doit préparer la place de cette évolution dans le modèle ;
-sa réalisation est reportée. Les critères d’affectation par plages, les règles
-d’acquisition et les changements de visibilité seront cadrés lors de cette
-réalisation. Le modèle devra permettre d’alimenter une propriété par la saisie
-initiale puis par les résultats, sans figer toutes ses valeurs comme immuables.
+La réalisation des qualifications est reportée. Les critères d’affectation par
+plages, les règles d’acquisition et les changements de visibilité seront cadrés
+dans un futur travail. Le modèle prépare l’alimentation des propriétés par la
+saisie initiale puis par les résultats, sans figer leurs valeurs.
 Le modèle des propriétés du profil couvre donc aussi des propriétés absentes
 de la page Profil. Une option choisit lesquelles sont présentées à la saisie ;
 les mêmes références servent aux résultats, contraintes et étiquettes. La page
@@ -138,12 +137,12 @@ les propriétés mises à jour pour décider de la visibilité et de l’accès.
 Cette évolution doit prolonger le contexte et le circuit de gardes existants,
 sans créer une seconde définition du profil ou un circuit autonome de droits.
 
-La traduction de la décision en affichage reste à cadrer dans la réalisation
-différée. Le contrat actuel Sighty exécute les gardes d’accès et de sortie ;
+La traduction d’une qualification dynamique en affichage reste à cadrer dans
+ce travail différé. Le contrat Sighty exécute les gardes d’accès et de sortie ;
 il ne garantit pas un masquage du rendu après une simple mise à jour du contexte,
-et une sélection déjà active reste admise. La mise à jour du Sommaire, des BDC
-et de la page active devra donc emprunter une présentation et une composition
-explicitement définies, en réutilisant les décisions des mêmes gardes.
+et une sélection déjà active reste admise. Le futur travail devra donc définir
+la mise à jour du Sommaire, des BDC et de la page active en réutilisant les
+décisions des mêmes gardes.
 
 Une évolution ultérieure introduit des ACL pour les fonctions de profil,
 l’éditeur et l’accès universel des administrateurs.
@@ -155,7 +154,8 @@ racine ordonnée mêlant pages autonomes et chapitres. Chaque chapitre conserve
 son ordre de pages. Les pages du catalogue restent hors scénario. Les formats
 de page actuellement définis sont Flux et Diapo ; le Sommaire proposé est une
 extension de ce modèle. Son rôle spécial hors précédent/suivant est accepté,
-mais sa représentation documentaire reste à définir dans le futur plan.
+et son modèle unique est maintenant décrit dans la spécification Sommaire et
+profils.
 
 Le [lecteur](../specs/player-preview-spec.md) utilise la composition réelle
 Sighty/CodPlay. Menu et navigation reprennent la séquence documentaire. La
@@ -203,16 +203,13 @@ le registre média existant.
 La première réalisation utilise un bloc défilant, avec une disposition en
 colonnes, sur une seule page Sommaire. La pagination automatique devrait
 composer avec les options d’affichage, la navigation page/chapitre, la taille
-disponible et les choix typographiques. Le bloc défilant permet de mettre au
-point progressivement l’interface et le dispositif à partir des usages réels.
-
-Le plan doit prévoir des étapes d’ajustement de la disposition et du stylage,
-avec vérification des variantes d’affichage et des tailles de vue. Aucun
-mécanisme de pagination n’est à réaliser dans cette première étape.
+disponible et les choix typographiques ; le bloc défilant garde ces dimensions
+simples pour cette première version. La validation visuelle restante est
+suivie dans le plan dédié.
 
 ### Liste rendue par un composant externe
 
-La liste du Sommaire est envisagée comme un composant externe accueilli dans
+La liste du Sommaire est acceptée comme composant externe accueilli dans
 un `slot` CodPlay, afin de simplifier sa gestion. Le composant prendra la forme
 d’une classe ou d’une fonction, conservera les propriétés actuelles du Sommaire
 et facilitera son stylage. Ce travail est distinct ; si le développement des
@@ -225,14 +222,13 @@ projection du parcours ; ses interactions empruntent l’admission Sighty.
 Le [composant slot](../../codplay/specs/slot-component-spec.md) accueille une
 représentation foreign opaque. La façade `instances.mount` vérifiée monte les
 racines d’une instance CodPlay enfant ; elle ne certifie pas le montage public
-d’un widget HTML générique. Le
-[plan foreign](../../codplay/plan/foreign-scene-component-plan.md) conserve des
-décisions ouvertes sur ce raccord. Le futur plan devra vérifier le raccord
-applicable et préciser l’acceptation avant de réaliser le composant externe.
+d’un widget HTML générique. Elcé utilise des scènes CodPlay enfants montées
+dans les slots Sighty. Les tests de composition couvrent leur montage, leurs
+routes et leur destruction ; la validation navigateur reste au plan actif.
 
-L’acceptation devra couvrir le montage, le détachement, la destruction, les
-changements de profil de test, le défilement et les colonnes, le clavier et le focus, ainsi que
-la concordance du menu et de la page racine avec les décisions Sighty.
+Le montage, les routes et la destruction sont couverts par les tests de
+composition. Défilement, colonnes, clavier et focus restent des aspects de
+validation visuelle ; le Sommaire et le menu partagent les décisions Sighty.
 
 ### Définition du profil et valeurs du lecteur
 
@@ -244,17 +240,12 @@ libellés.
 
 Les propriétés du profil sont définies indépendamment de leur affichage dans
 la page Profil. L’auteur choisit par une option leur présence dans cette page.
-Leur alimentation par évaluation reste une réalisation différée. Le
-[BDC Question actuel](../specs/question-bdc-spec.md) ne couvre pas encore cette
-collecte enrichie : il est unique par page, propose des choix et impose des
-réponses justes. La page Profil recueille plusieurs propriétés sur une même
-page et valide globalement les champs obligatoires et les types, sans bonne
-ou mauvaise réponse, correction ou score. Le futur plan doit porter cette
-collecte avant réalisation. Une alternative est un composant Formulaire
-externe dérivé des mécanismes du Quiz, partageant les parties pertinentes de
-la collecte sans étendre le rôle évaluatif du BDC Question. Le choix du rendu
-et les mécanismes communs doivent être examinés dans le plan ; aucun circuit
-de profil ou de navigation parallèle n’est proposé.
+Leur alimentation par évaluation reste une réalisation différée. Le BDC
+Question impose une réponse juste/faux et un score ; il ne convient donc pas
+comme propriétaire de la collecte Profil. Le Formulaire recueille plusieurs
+propriétés sur une même page et valide globalement les champs obligatoires et
+les types, sans bonne ou mauvaise réponse, correction ou score. Son contrat et
+son raccord sont décrits dans la spécification Sommaire et profils.
 
 Les quatre types proposés suffisent pour une première version. L’auteur choisit
 le caractère obligatoire ou facultatif de chaque propriété. L’interface de
@@ -324,8 +315,8 @@ résiduel ni un chapitre artificiellement achevé.
 
 Si un prérequis nomme explicitement A alors qu’A est exclu pour le lecteur,
 l’incohérence doit être signalée à l’auteur et corrigée. Cette exigence concerne
-uniquement les dépendances explicites. Les modalités de détection et de
-signalement et les cycles de dépendances restent à préciser. Le profil fixe
+uniquement les dépendances explicites. Une règle qui crée une boucle de
+prérequis est refusée et l’auteur voit la chaîne à corriger. Le profil fixe
 évite une modification de l’ensemble retenu pendant le parcours.
 
 La première page du chapitre suivant doit suivre le parcours retenu pour le
@@ -401,58 +392,19 @@ actif et que la page éditée est exclue, signaler cette exclusion et donner acc
 page interdite. Ce mode auteur ne définit pas le comportement de consultation
 du lecteur.
 
-Les modalités de stockage et de restauration restent à cadrer.
+Décision acceptée : l’état de test auteur est stocké sur le serveur, séparé du
+document, et l’aperçu réseau peut le lire et l’enregistrer par une route dédiée.
+Le schéma et la révision serveur sont intégrés comme formats internes pour
+relecture ultérieure ; leur comportement vérifié est décrit dans la
+spécification Sommaire et profils.
 Les réponses déclaratives du profil ne peuvent pas prouver des droits
 d’administration : les futures ACL doivent utiliser les permissions de
 l’utilisateur fourni.
 
-## Travaux à porter dans le plan
+## Références actuelles
 
-Le plan détaillé doit transformer le cadrage en tranches et preuves, avec les
-études de raccord suivantes :
-
-- Intégration du bloc défilant en colonnes et valeurs par défaut
-  des options de présentation et d’accès permanent. Le composant externe est
-  un travail distinct à engager dès qu’une modification du Sommaire actuel
-  est nécessaire.
-- Choix entre extension de la collecte du Quiz et composant Formulaire externe
-  dérivé de ses mécanismes ; partage des parties indépendantes du rendu et
-  raccord de validation au contexte et à l’admission Sighty.
-- Validation et signalement des prérequis explicites incohérents et des
-  dépendances circulaires.
-- Présentation des valeurs différentes dans une sélection multiple et effet
-  des déplacements sur les règles propres et héritées.
-- Modalités de persistance de l’utilisateur de test et articulation avec la
-  persistance définitive et SCORM.
-- Comportement des étiquettes à la relecture et au reset avec le même profil ;
-  variantes grammaticales différées.
-- Préparation du modèle pour l’alimentation future des propriétés de profil
-  par évaluations ; réalisation des qualifications, variantes grammaticales
-  et ACL différée.
-
-## Ordre envisageable et preuves nécessaires
-
-L’ordre envisageable commence par le modèle de propriétés et les raccords
-identifiés, puis le Sommaire et ses présentations, la page Profil, les
-contraintes chapitre/page/BDC et les étiquettes. La modale auteur et la
-persistance du profil, de la progression et des réponses de test font partie
-du périmètre immédiat. La préparation des qualifications accompagne le modèle,
-mais leur moteur, le dévoilement évolutif, les variantes grammaticales et les
-ACL restent différés. L’étude du composant externe doit précéder les changements
-de Sommaire qui déclenchent ce travail dérivé.
-
-Les preuves devront couvrir le parcours réel Sighty/CodPlay : menu et racine,
-navigation directe et précédente/suivante, gardes d’accès et de sortie,
-chapitres et pages masqués, exceptions, Questions et résultats, maintien du
-profil fixe, Play, Seek, relecture, reset, resize, mobile et cycle de vie. Le modèle,
-les commandes, l’historique documentaire et la persistance devront conserver
-définitions et références après renommage, déplacement et restauration.
-
-Le Sommaire doit également être accepté avec les deux modes d’affichage,
-des listes longues et des choix typographiques variés, en contrôlant le
-défilement, la disposition en colonnes, la navigation page/chapitre et le focus.
-
-Le futur plan devra identifier les propriétaires et invariants de chaque
-tranche, ses preuves et les dépendances avec les travaux encore en cours. Toute
-évolution nécessaire du cœur CodPlay restera soumise à une autorisation
-explicite et à un plan accepté.
+Le [plan Sommaire et profils](../plan/2026-10-14-elce-sommaire-profils-plan.md)
+porte l’ordre de réalisation et la validation navigateur encore attendue. La
+[spécification dédiée](../specs/summary-profile-spec.md) décrit les
+comportements vérifiés. Les qualifications, variantes grammaticales et ACL
+restent différées.

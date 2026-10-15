@@ -1,5 +1,6 @@
 import { ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentData, MediaId, MediaMetadata } from '../../domain/document/document-types'
+import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
 import { elceApiOrigin } from '../../config/api-config'
 import type { ElceProjectSummary } from './project-api-types'
 
@@ -31,6 +32,10 @@ interface EditAccessResponse {
 
 interface EditAccessStateResponse {
   readonly held: boolean
+}
+
+interface TestStateResponse {
+  readonly state: ProjectTestState
 }
 
 /** Carries the HTTP status and API code to the local synchronization adapter. */
@@ -176,6 +181,26 @@ export class ElceProjectApiClient {
       body: JSON.stringify(document.toJSON()),
     })
     await readResponseJson<ProjectResponse>(response)
+    return revisionFrom(response)
+  }
+
+  /** Reads the author preview state with its independent server revision. */
+  public async readTestState(projectId: string): Promise<Readonly<{ state: ProjectTestState; revision: number }>> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/test-state`), {
+      cache: 'no-store',
+    })
+    const body = await readResponseJson<TestStateResponse>(response)
+    return { state: body.state, revision: revisionFrom(response) }
+  }
+
+  /** Writes preview-only state against the revision previously returned by readTestState. */
+  public async saveTestState(projectId: string, state: ProjectTestState, revision: number): Promise<number> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/test-state`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-Match': `"${revision}"` },
+      body: JSON.stringify({ state }),
+    })
+    await readResponseJson<TestStateResponse>(response)
     return revisionFrom(response)
   }
 

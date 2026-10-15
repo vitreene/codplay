@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { applyDocumentCommand } from '../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../domain/document/document-model'
+import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../domain/summary-profile/test-state-types'
 import type {
   CreateProjectResult,
   ProjectEditGrant,
   ProjectPersistence,
   ProjectSummary,
   SaveProjectDocumentResult,
+  SaveProjectTestStateResult,
   StoredProject,
 } from './projects/project-persistence'
 import { createElceApiRouter } from './api-router'
@@ -143,6 +145,34 @@ describe('Elcé project API Fetch router', () => {
     expect(unsupportedVersion.status).toBe(400)
   })
 
+  it('reads and saves test state on its independent revision and rejects stale writes', async () => {
+    const persistence = new MemoryProjectPersistence()
+    const router = createElceApiRouter(persistence)
+    await persistence.createProject(documentWithId('project-test-state'))
+
+    const initial = await router.fetch(new Request('http://elce.test/api/projects/project-test-state/test-state'))
+    expect(initial.headers.get('ETag')).toBe('"0"')
+    expect(await initial.json()).toEqual({ state: INITIAL_PROJECT_TEST_STATE })
+
+    const nextState: ProjectTestState = {
+      ...INITIAL_PROJECT_TEST_STATE,
+      profileValues: { name: 'Ada' },
+    }
+    const saved = await router.fetch(jsonRequest('PUT', '/api/projects/project-test-state/test-state', { state: nextState }, {
+      'If-Match': '"0"',
+    }))
+    expect(saved.status).toBe(200)
+    expect(saved.headers.get('ETag')).toBe('"1"')
+
+    const stale = await router.fetch(jsonRequest('PUT', '/api/projects/project-test-state/test-state', { state: INITIAL_PROJECT_TEST_STATE }, {
+      'If-Match': '"0"',
+    }))
+    expect(stale.status).toBe(412)
+    const current = await router.fetch(new Request('http://elce.test/api/projects/project-test-state/test-state'))
+    expect(current.headers.get('ETag')).toBe('"1"')
+    expect(await current.json()).toEqual({ state: nextState })
+  })
+
   it('deletes a project and reports when it is already absent', async () => {
     const persistence = new MemoryProjectPersistence()
     const router = createElceApiRouter(persistence)
@@ -157,7 +187,7 @@ describe('Elcé project API Fetch router', () => {
   })
 })
 
-/** Creates an isolated v4 document fixture for API tests. */
+/** Creates an isolated v5 document fixture for API tests. */
 function documentWithId(id: string): ElceDocument {
   return new ElceDocument({ ...createInitialDocument().toJSON(), id })
 }
@@ -182,6 +212,7 @@ async function reserve(router: ReturnType<typeof createElceApiRouter>, projectId
 class MemoryProjectPersistence implements ProjectPersistence {
   private readonly projects = new Map<string, StoredProject>()
   private readonly grants = new Map<string, ProjectEditGrant>()
+  private readonly testStates = new Map<string, VersionedProjectTestState>()
 
   /** Reserves a fixture project for one page. */
   public async acquireEditAccess(projectId: string, pageId: string, force = false) {
@@ -254,6 +285,7 @@ class MemoryProjectPersistence implements ProjectPersistence {
     if (!this.projects.has(projectId)) return 'not-found' as const
     if (!await this.hasEditAccess(projectId, grant)) return 'edit-access-lost' as const
     this.projects.delete(projectId)
+    this.testStates.delete(projectId)
     return 'deleted' as const
   }
 
@@ -280,5 +312,25 @@ class MemoryProjectPersistence implements ProjectPersistence {
           }
         }
     }
+  }
+
+  /** Reads preview state independently from the project document revision. */
+  public async readTestState(projectId: string): Promise<VersionedProjectTestState | null> {
+    if (!this.projects.has(projectId)) return null
+    return this.testStates.get(projectId) ?? { state: INITIAL_PROJECT_TEST_STATE, revision: 0 }
+  }
+
+  /** Stores preview state only when its independent revision matches. */
+  public async saveTestState(
+    projectId: string,
+    expectedRevision: number,
+    state: ProjectTestState,
+  ): Promise<SaveProjectTestStateResult> {
+    if (!this.projects.has(projectId)) return { kind: 'not-found' }
+    const current = this.testStates.get(projectId) ?? { state: INITIAL_PROJECT_TEST_STATE, revision: 0 }
+    if (current.revision !== expectedRevision) return { kind: 'revision-mismatch' }
+    const value = { state, revision: current.revision + 1 }
+    this.testStates.set(projectId, value)
+    return { kind: 'saved', value }
   }
 }

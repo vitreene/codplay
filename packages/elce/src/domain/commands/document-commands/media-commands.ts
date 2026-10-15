@@ -1,4 +1,4 @@
-import { BDC_TYPE } from '../../../config/document-config'
+import { BDC_TYPE, MEDIA_TYPE } from '../../../config/document-config'
 import { ElceDocument } from '../../../domain/document/document-model'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import type { BdcId, MediaId, MediaMetadata } from '../../../domain/document/document-types'
@@ -49,6 +49,19 @@ export function attachQuestionMedia(document: ElceDocument, bdcId: BdcId, media:
   if (document.medias.some((candidate) => candidate.id === media.id)) fail(`Média déjà présent : ${media.id}`)
   const withMedia = new ElceDocument({ ...document.data, medias: [...document.medias, media] })
   return setQuestionMedia(withMedia, bdcId, media.id)
+}
+
+/** Stores an imported image and assigns it as the Sommaire background atomically. */
+export function attachSummaryBackgroundMedia(document: ElceDocument, media: MediaMetadata): ElceDocument {
+  if (document.medias.some((candidate) => candidate.id === media.id)) fail(`Média déjà présent : ${media.id}`)
+  if (mediaTypeFromMimeType(media.mimeType) !== MEDIA_TYPE.IMAGE) {
+    fail(`Le média ${media.id} ne peut pas servir de fond au Sommaire.`)
+  }
+  return new ElceDocument({
+    ...document.data,
+    medias: [...document.medias, media],
+    summary: { ...document.data.summary, backgroundMediaId: media.id },
+  })
 }
 
 /** Keeps Question illustrations inside the media types supported by its card. */

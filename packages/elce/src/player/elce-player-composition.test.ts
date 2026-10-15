@@ -5,7 +5,11 @@ import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_P
 import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { ElceQuestionService } from '../domain/question/question-service'
+import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import type { ProfileDefinition } from '../domain/summary-profile/summary-profile-types'
+import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
+import { createPlayerPreviewComposition } from '../app/player/player-preview'
 import type { ElcePageSceneCache } from './player-composition-types'
 
 type IntersectionEntry = Pick<IntersectionObserverEntry, 'target' | 'intersectionRatio' | 'isIntersecting'>
@@ -123,6 +127,282 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-player-menu__page-button')?.getAttribute('data-active')).toBe('true')
     expect(stage.querySelector('.elce-flux-scrollport')).not.toBeNull()
     expect(stage.querySelector('.elce-flux-article')).not.toBeNull()
+  })
+
+  it('validates the profile form and routes a valid submission to the root summary', async () => {
+    const initial = createInitialDocument()
+    const profile: ProfileDefinition = {
+      properties: [{
+        id: 'profile-display-name',
+        name: 'display_name',
+        label: 'Nom',
+        type: 'text',
+        required: true,
+        choices: [],
+      }, {
+        id: 'profile-age',
+        name: 'age',
+        label: 'Âge',
+        type: 'number',
+        required: false,
+        choices: [],
+      }, {
+        id: 'profile-role',
+        name: 'role',
+        label: 'Rôle',
+        type: 'choice-one',
+        required: true,
+        choices: [
+          { id: 'role-author', label: 'Auteur' },
+          { id: 'role-reader', label: 'Lecteur' },
+        ],
+      }, {
+        id: 'profile-topics',
+        name: 'topics',
+        label: 'Sujets',
+        type: 'choice-many',
+        required: false,
+        choices: [
+          { id: 'topic-code', label: 'Code' },
+          { id: 'topic-art', label: 'Art' },
+        ],
+      }],
+      fieldPropertyIds: ['profile-display-name', 'profile-age', 'profile-role', 'profile-topics'],
+      constraints: [],
+      readingConstraints: [],
+    }
+    let documentModel = applyDocumentCommand(initial, { type: 'profile.definition.update', profile })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'summary.settings.update',
+      summary: { ...documentModel.data.summary, showAtRoot: true },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const testStates: ProjectTestState[] = []
+    const profileComposition = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: null,
+      mediaSources: {},
+      testState: INITIAL_PROJECT_TEST_STATE,
+      onTestStateChange: (state) => { testStates.push(state) },
+    })
+    if (profileComposition === null) throw new Error('La composition de prévisualisation du profil est absente.')
+    composition = profileComposition
+
+    await profileComposition.initialize()
+
+    expect(stage.querySelector('.elce-profile-form')).not.toBeNull()
+    const submit = stage.querySelector<HTMLButtonElement>('.elce-profile-form__submit')
+    submit?.click()
+    await waitForPlayerActions()
+    expect(stage.querySelector('.elce-profile-form__field')?.textContent).toContain('Nom')
+    expect(stage.querySelector('[role="status"]')?.textContent).toContain('Nom est obligatoire.')
+    expect(stage.querySelector('.elce-summary--root')).toBeNull()
+
+    const input = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="text"]')
+    expect(input).not.toBeNull()
+    if (input === null || submit === null) throw new Error('Le formulaire Profil ne s’est pas monté.')
+    input.value = 'Ada'
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    const ageInput = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="number"]')
+    const roleInput = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="radio"][value="role-author"]')
+    const topicInputs = stage.querySelectorAll<HTMLInputElement>('.elce-profile-form input[type="checkbox"]')
+    expect(ageInput).not.toBeNull()
+    expect(roleInput).not.toBeNull()
+    expect(topicInputs).toHaveLength(2)
+    if (ageInput === null || roleInput === null) throw new Error('Les champs Profil typés ne se sont pas montés.')
+    ageInput.value = '35'
+    ageInput.dispatchEvent(new Event('change', { bubbles: true }))
+    roleInput.checked = true
+    roleInput.dispatchEvent(new Event('change', { bubbles: true }))
+    const topicCode = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="checkbox"][value="topic-code"]')
+    const topicArt = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="checkbox"][value="topic-art"]')
+    expect(topicCode).not.toBeNull()
+    expect(topicArt).not.toBeNull()
+    if (topicCode === null || topicArt === null) throw new Error('Les choix multiples du profil sont absents.')
+    topicCode.checked = true
+    topicCode.dispatchEvent(new Event('change', { bubbles: true }))
+    topicArt.checked = true
+    topicArt.dispatchEvent(new Event('change', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(testStates.at(-1)).toMatchObject({
+      profileValues: {
+        'profile-display-name': 'Ada',
+        'profile-age': 35,
+        'profile-role': 'role-author',
+        'profile-topics': ['topic-code', 'topic-art'],
+      },
+    })
+    submit.click()
+    await waitForPlayerActions()
+
+    expect(stage.querySelector('.elce-player-profile-complete')).not.toBeNull()
+    const submittedState = testStates.at(-1)
+    expect(submittedState).toMatchObject({
+      profileSubmitted: true,
+      profileValues: {
+        'profile-display-name': 'Ada',
+        'profile-age': 35,
+        'profile-role': 'role-author',
+        'profile-topics': ['topic-code', 'topic-art'],
+      },
+    })
+    if (submittedState === undefined) throw new Error('La validation du profil n’a pas publié son état test.')
+
+    profileComposition.destroy()
+    const submittedComposition = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: null,
+      mediaSources: {},
+      testState: submittedState,
+    })
+    if (submittedComposition === null) throw new Error('La composition de prévisualisation après profil est absente.')
+    composition = submittedComposition
+    await submittedComposition.initialize()
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+  })
+
+  it('routes the active page to the root summary from its menu link', async () => {
+    const initial = createInitialDocument()
+    const documentModel = applyDocumentCommand(initial, {
+      type: 'summary.settings.update',
+      summary: { ...initial.data.summary, showAtRoot: true, showInMenu: true, permanentAccess: true },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const playerComposition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: documentModel.pages[0]?.id,
+    })
+    composition = playerComposition
+
+    await playerComposition.initialize()
+
+    expect(stage.querySelector('.elce-summary--root')).toBeNull()
+    const summaryLink = stage.querySelector<HTMLButtonElement>('.elce-player-menu__chapter-button')
+    expect(summaryLink).not.toBeNull()
+    expect(summaryLink?.textContent).toContain('Sommaire')
+    summaryLink?.click()
+    await waitForPlayerActions()
+
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+  })
+
+  it('keeps a profile-locked page in the summary and blocks its menu entry', async () => {
+    const initial = createInitialDocument()
+    const withPage = applyDocumentCommand(initial, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-b',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const documentModel = applyDocumentCommand(withPage, {
+      type: 'profile.definition.update',
+      profile: {
+        ...withPage.data.profile,
+        properties: [{
+          id: 'profile-region', name: 'region', label: 'Région', type: 'text', required: false, choices: [],
+        }],
+        constraints: [{
+          id: 'locked-page',
+          target: { kind: 'page', id: 'page-b' },
+          conditions: [{
+            propertyId: 'profile-region',
+            condition: { kind: 'text', operator: 'equals', value: 'teacher' },
+            joinWithNext: null,
+          }],
+          unmetBehavior: 'lock',
+        }],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const testState: ProjectTestState = {
+      ...INITIAL_PROJECT_TEST_STATE,
+      profileEnabled: true,
+      profileSubmitted: true,
+      profileValues: { 'profile-region': 'student' },
+    }
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: 'page-b',
+      mediaSources: {},
+      testState,
+    })
+    if (preview === null) throw new Error('La composition de prévisualisation est absente.')
+    composition = preview
+
+    await preview.initialize()
+
+    const pageEntry = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-b"]')
+    expect(pageEntry).not.toBeNull()
+    expect(pageEntry?.getAttribute('data-locked')).toBe('true')
+    expect(pageEntry?.getAttribute('aria-label')).toBe('Page B, verrouillé')
+    expect(pageEntry?.disabled).toBe(true)
+    pageEntry?.click()
+    await waitForPlayerActions()
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A')
+  })
+
+  it('shows a locked chapter entry when its chapter visibility condition fails', async () => {
+    const initial = createInitialDocument()
+    const withChapter = applyDocumentCommand(initial, {
+      type: 'chapter.create', chapterId: 'chapter-2', name: 'Chapitre 2',
+    })
+    const withPage = applyDocumentCommand(withChapter, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-b',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-2' },
+    }))
+    const withSummary = applyDocumentCommand(withPage, {
+      type: 'summary.settings.update',
+      summary: { ...withPage.data.summary, displayMode: 'chapters', showAtRoot: true },
+    })
+    const documentModel = applyDocumentCommand(withSummary, {
+      type: 'profile.definition.update',
+      profile: {
+        ...withSummary.data.profile,
+        properties: [{
+          id: 'profile-region', name: 'region', label: 'Région', type: 'text', required: false, choices: [],
+        }],
+        constraints: [{
+          id: 'locked-chapter',
+          target: { kind: 'chapter', id: 'chapter-2' },
+          conditions: [{
+            propertyId: 'profile-region',
+            condition: { kind: 'text', operator: 'equals', value: 'teacher' },
+            joinWithNext: null,
+          }],
+          unmetBehavior: 'lock',
+        }],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: 'page-b',
+      mediaSources: {},
+      testState: {
+        ...INITIAL_PROJECT_TEST_STATE,
+        profileEnabled: true,
+        profileSubmitted: true,
+        profileValues: { 'profile-region': 'student' },
+      },
+    })
+    if (preview === null) throw new Error('La composition de prévisualisation est absente.')
+    composition = preview
+
+    await preview.initialize()
+
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+    const chapterEntry = stage.querySelector<HTMLButtonElement>('.elce-summary__entry-button[data-page-id="page-b"]')
+    expect(chapterEntry?.textContent).toBe('Chapitre 2')
+    expect(chapterEntry?.getAttribute('data-locked')).toBe('true')
+    expect(chapterEntry?.getAttribute('aria-label')).toBe('Chapitre 2, verrouillé')
+    expect(chapterEntry?.disabled).toBe(true)
   })
 
   it('plays the default Question BDC of a page created in an Evaluation chapter', async () => {
@@ -261,7 +541,7 @@ describe('Elcé player composition', () => {
       data: { pageId: diapoCommand.pageId },
     }))
     expect(nextButton?.disabled).toBe(false)
-    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-card')?.getAttribute('data-locked'))
+    expect(stage.querySelector('.elce-player-menu__page-button[data-page-id="page-after-diapo-card"]')?.getAttribute('data-locked'))
       .toBe('false')
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
@@ -343,7 +623,7 @@ describe('Elcé player composition', () => {
     }))
     expect(publicEvents.some((event) => event.name === ELCE_EVENTS.SCENE_END)).toBe(false)
     expect(nextButton?.disabled).toBe(false)
-    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-carousel')?.getAttribute('data-locked'))
+    expect(stage.querySelector('.elce-player-menu__page-button[data-page-id="page-after-diapo-carousel"]')?.getAttribute('data-locked'))
       .toBe('false')
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
@@ -406,7 +686,7 @@ describe('Elcé player composition', () => {
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-question-feedback')?.textContent).toMatch(/Bonne réponse|Réponse incorrecte/)
     expect(nextButton?.disabled).toBe(false)
-    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-question')?.getAttribute('data-locked'))
+    expect(stage.querySelector('.elce-player-menu__page-button[data-page-id="page-after-diapo-question"]')?.getAttribute('data-locked'))
       .toBe('false')
     expect(stage.querySelector('.elce-card--question')).not.toBeNull()
     expect(publicEvents).toContainEqual(expect.objectContaining({
@@ -590,7 +870,7 @@ describe('Elcé player composition', () => {
     const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
     const pageBButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
       .find((button) => button.textContent === 'Diapo Carousel')
-    const pageCButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-after-diapo-replay')
+    const pageCButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-after-diapo-replay"]')
     const pageAMarker = stage.querySelector('#page-a-bottom-marker')
     const pageAObserver = ControlledIntersectionObserver.instances.find((observer) => observer.targets.has(pageAMarker as Element))
     expect(pageBButton?.getAttribute('data-locked')).toBe('true')
@@ -839,9 +1119,8 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    const chapterHeading = stage.querySelector('#elce-menu-chapter-heading-chapter-1')
-    expect(chapterHeading?.querySelectorAll('.elce-player-menu__chapter-button')).toHaveLength(1)
-    expect(chapterHeading?.textContent?.trim()).toBe('Chapitre 1')
+    expect(stage.querySelectorAll('.elce-player-menu__group-title')).toHaveLength(1)
+    expect(stage.querySelector('.elce-player-menu__group-title')?.textContent?.trim()).toBe('Chapitre 1')
   })
 
   it('routes the initial visible bottom marker through CodPlay for a short Flux page', async () => {
@@ -968,7 +1247,7 @@ describe('Elcé player composition', () => {
       candidate.targets.has(marker as Element) && candidate.targets.has(card as Element)
     ))
     const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
-    const pageBButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-b')
+    const pageBButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-b"]')
 
     expect(observer).toBeDefined()
     expect(nextButton?.disabled).toBe(true)
@@ -1026,7 +1305,7 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    const pageAButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-a')
+    const pageAButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-a"]')
     expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
     expect(pageAButton).not.toBeNull()
     pageAButton?.click()
@@ -1134,6 +1413,42 @@ describe('Elcé player composition', () => {
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+  })
+
+  it('keeps an Evaluation Result inaccessible in free page continuation mode', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const fixture = createEvaluationQuestionPages()
+    const documentModel = applyDocumentCommand(fixture.documentModel, {
+      type: 'summary.settings.update',
+      summary: { ...fixture.documentModel.data.summary, pageContinuationMode: 'free' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: fixture.pageFId })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageGButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page G')
+
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    pageGButton?.click()
+    await flushCompositionFrames(pendingFrames)
+
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    expect(stage.querySelector('.elce-card--evaluation-result')).toBeNull()
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
   })
 
   it('navigates from a completed Evaluation question to its accessible next page', async () => {
@@ -1423,7 +1738,7 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('#page-c-article .elce-question-feedback')?.textContent).toBe('Bonne réponse.')
     expectQuestionCorrection(stage.querySelector('#page-c-article')!, { correct: 2, incorrect: 0, missedCorrect: 0 })
 
-    const chapterMenuButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__chapter-button')
+    const chapterMenuButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-a"]')
     expect(chapterMenuButton).not.toBeNull()
     chapterMenuButton?.click()
     for (let pass = 0; pass < 4; pass += 1) {

@@ -22,6 +22,7 @@ export function renderChapterSettings({ chapter, actions }: RemixChapterSettings
       aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
       title={CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel}
       defaultValue={chapter.name}
+      data-elce-profile-token-target="true"
       key={`${chapter.id}:${chapter.name}`}
       mix={[
         on<HTMLInputElement, 'blur'>('blur', (event) => commitChapterName(event.currentTarget, chapter, actions)),

@@ -29,7 +29,7 @@ describe('EvaluationMachine', () => {
     expect(retry.context.activeQuestionIds).toEqual(['q2', 'q3'])
     expect(retry.context.attempt).toBe(2)
     expect(retry.context.answers).toEqual({
-      q1: { questionId: 'q1', selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
+      q1: { questionId: 'q1', answerIds: ['a'], selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
     })
     expect(retry.context.result).toBeNull()
     expect(machine.shouldRevealAnswers(retry)).toBe(false)
@@ -77,8 +77,8 @@ describe('EvaluationMachine', () => {
     expect(state.value).toBe('reviewing')
     expect(state.context.activeQuestionIds).toEqual(['q1', 'q2'])
     expect(state.context.answers).toEqual({
-      q1: { questionId: 'q1', selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
-      q2: { questionId: 'q2', selectedAnswerIds: ['b'], expectedAnswerIds: ['b'] },
+      q1: { questionId: 'q1', answerIds: ['a'], selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
+      q2: { questionId: 'q2', answerIds: ['b'], selectedAnswerIds: ['b'], expectedAnswerIds: ['b'] },
     })
     expect(machine.shouldRevealAnswers(state)).toBe(true)
 
@@ -152,6 +152,7 @@ function answer(
   selectedAnswerIds: readonly string[],
   expectedAnswerIds: readonly string[],
 ) {
-  const value: EvaluationAnswer = { questionId, selectedAnswerIds, expectedAnswerIds }
+  const answerIds = [...new Set([...selectedAnswerIds, ...expectedAnswerIds])]
+  const value: EvaluationAnswer = { questionId, answerIds, selectedAnswerIds, expectedAnswerIds }
   return machine.transition(state, { type: 'QUESTION.ANSWERED', answer: value })
 }

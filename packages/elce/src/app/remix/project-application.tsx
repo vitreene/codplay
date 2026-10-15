@@ -7,6 +7,7 @@ import { EditorContextProvider } from './editor-context'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { ProjectSessionStatus } from '../projects/project-session-types'
 import { selectEditorViewModel } from '../selectors/editor-view-model'
+import { CATALOG_TAB } from '../../config/document-config'
 import { PopupPreviewHost } from '../player/popup-preview-host'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
@@ -24,6 +25,9 @@ export function ProjectApplication(handle: Handle) {
 
   let view = selectProjectView(controller.getSnapshot())
   let responsivePanel: ResponsivePanel = null
+  let summarySettingsOpen = false
+  let profileTokenTargetId: string | null = null
+  let authoringError: string | null = null
   let dropTarget: string | null = null
   let draggedEntry: DraggedScenarioEntry = null
   let previewError: string | null = null
@@ -42,6 +46,24 @@ export function ProjectApplication(handle: Handle) {
   const setDropTarget = (targetId: string | null): void => {
     if (dropTarget === targetId) return
     dropTarget = targetId
+    void handle.update()
+  }
+  const setSummarySettingsOpen = (open: boolean): void => {
+    summarySettingsOpen = open
+    authoringError = null
+    void handle.update()
+  }
+  /** Keeps profile-variable insertion available only for the active text target. */
+  const setProfileTokenTarget = (targetId: string | null): void => {
+    if (profileTokenTargetId === targetId) return
+    profileTokenTargetId = targetId
+    if (targetId === null && view.editor.catalogTab === CATALOG_TAB.PROFILE) {
+      actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)
+    }
+    void handle.update()
+  }
+  const setAuthoringError = (error: string | null): void => {
+    authoringError = error
     void handle.update()
   }
   const setDraggedEntry = (entry: DraggedScenarioEntry): void => {
@@ -77,6 +99,28 @@ export function ProjectApplication(handle: Handle) {
     const handleInput = (event: Event): void => {
       if (event.target instanceof HTMLInputElement && isInlineTitle(event.target)) void handle.update()
     }
+    /** Tracks the text or rich-text field whose profile variable can be inserted. */
+    const handleProfileTokenFocusIn = (event: FocusEvent): void => {
+      if (event.target instanceof Element) {
+        const target = event.target.closest<HTMLElement>('[data-elce-profile-token-target="true"]')
+        if (target !== null && target.id.length > 0) {
+          setProfileTokenTarget(target.id)
+          return
+        }
+        if (event.target.closest('#elce-properties, #elce-properties-toggle') !== null) return
+      }
+      setProfileTokenTarget(null)
+    }
+    /** Clears the insertion context when the author clicks outside its field and panel. */
+    const handleProfileTokenPointerDown = (event: PointerEvent): void => {
+      if (!(event.target instanceof Element)) {
+        setProfileTokenTarget(null)
+        return
+      }
+      if (event.target.closest('[data-elce-profile-token-target="true"]') !== null
+        || event.target.closest('#elce-properties, #elce-properties-toggle') !== null) return
+      setProfileTokenTarget(null)
+    }
     document.addEventListener('click', closeProjectMenuOnOutsideClick, true)
     const handleResize = (): void => {
       switch (responsivePanel) {
@@ -92,11 +136,15 @@ export function ProjectApplication(handle: Handle) {
     }
     document.addEventListener('keydown', handleKeyDown, true)
     document.addEventListener('input', handleInput)
+    document.addEventListener('focusin', handleProfileTokenFocusIn, true)
+    document.addEventListener('pointerdown', handleProfileTokenPointerDown, true)
     window.addEventListener('resize', handleResize)
     const dispose = (): void => {
       subscription.unsubscribe()
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('input', handleInput)
+      document.removeEventListener('focusin', handleProfileTokenFocusIn, true)
+      document.removeEventListener('pointerdown', handleProfileTokenPointerDown, true)
       document.removeEventListener('click', closeProjectMenuOnOutsideClick, true)
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
@@ -106,9 +154,14 @@ export function ProjectApplication(handle: Handle) {
 
   return () => renderApplication(view, actions, {
     responsivePanel,
+    summarySettingsOpen,
+    profileTokenTargetId,
+    authoringError,
     dropTarget,
     visible: view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active',
     setResponsivePanel,
+    setSummarySettingsOpen,
+    setAuthoringError,
     setDropTarget,
     setDraggedEntry,
     getDraggedEntry: () => draggedEntry,
@@ -352,10 +405,15 @@ function renderApplication(
         ? <RemixPageEditor />
         : null,
       responsivePanel: workspace.responsivePanel,
+      summarySettingsOpen: workspace.summarySettingsOpen,
+      profileTokenTargetId: workspace.profileTokenTargetId,
+      authoringError: workspace.authoringError,
       dropTarget: workspace.dropTarget,
       visible: projectVisible,
       editable: editorVisible,
       onSetResponsivePanel: workspace.setResponsivePanel,
+      onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
+      onSetAuthoringError: workspace.setAuthoringError,
       onSetDropTarget: workspace.setDropTarget,
       onSetDraggedEntry: workspace.setDraggedEntry,
       getDraggedEntry: workspace.getDraggedEntry,

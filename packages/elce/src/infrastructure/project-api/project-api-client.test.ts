@@ -3,6 +3,7 @@ import { createInitialDocument } from '../../domain/document/document-model'
 import type { MediaMetadata } from '../../domain/document/document-types'
 import { ElceProjectApiClient } from './project-api-client'
 import type { ElceProjectSummary } from './project-api-types'
+import { INITIAL_PROJECT_TEST_STATE } from '../../domain/summary-profile/test-state-types'
 
 const apiOrigin = 'http://127.0.0.1:5181'
 
@@ -70,7 +71,26 @@ describe('Elcé project API client', () => {
     const api = new ElceProjectApiClient(apiOrigin, request)
 
     await expect(api.readProject(document.id)).resolves.toEqual({ document, revision: 7 })
-    expect(request).toHaveBeenCalledWith(new URL(`/api/projects/${document.id}`, apiOrigin))
+    expect(request).toHaveBeenCalledWith(new URL(`/api/projects/${document.id}`, apiOrigin), { cache: 'no-store' })
+  })
+
+  it('reads and writes test state using its separate server revision', async () => {
+    const state = { ...INITIAL_PROJECT_TEST_STATE, profileSubmitted: true }
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ state }, { headers: { ETag: '"3"' } }))
+      .mockResolvedValueOnce(Response.json({ state }, { headers: { ETag: '"4"' } }))
+    const api = new ElceProjectApiClient(apiOrigin, request)
+
+    await expect(api.readTestState('project-a')).resolves.toEqual({ state, revision: 3 })
+    await expect(api.saveTestState('project-a', state, 3)).resolves.toBe(4)
+    expect(request.mock.calls).toEqual([
+      [new URL('/api/projects/project-a/test-state', apiOrigin), { cache: 'no-store' }],
+      [new URL('/api/projects/project-a/test-state', apiOrigin), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'If-Match': '"3"' },
+        body: JSON.stringify({ state }),
+      }],
+    ])
   })
 
   it('calls the browser fetch function with its global receiver', async () => {

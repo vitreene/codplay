@@ -74,6 +74,7 @@ describe('Remix popup reader synchronization controls', () => {
       startPageId="page-a"
     />)
     cleanup = rendered.cleanup
+    expect(rendered.$('#elce-popup-reader-test-controls-icon')?.classList.contains('lucide-list')).toBe(true)
 
     const originalDocument = createInitialDocument()
     await rendered.act(() => dispatchResponse(opener, {

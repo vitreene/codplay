@@ -1,10 +1,10 @@
 import { assign, fromPromise, setup } from 'xstate'
 import { applyDocumentCommand, createDefaultPageCommand } from '../../domain/commands/document-commands'
 import type { DocumentCommand } from '../../domain/commands/document-command-types'
-import { BDC_TYPE, CATALOG_TAB } from '../../config/document-config'
+import { BDC_TYPE, CATALOG_TAB, MEDIA_TYPE } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
-import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
+import { ElceMediaResourceService, mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ElceDocumentChange } from './document-change-types'
 import type { ChapterId, MediaMetadata, PageId } from '../../domain/document/document-types'
 import type { ElceAppContext, ElceControllerEvent, ElceControllerInput } from './controller-types'
@@ -89,26 +89,31 @@ const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentCh
         case 'anchor-return':
           return { operation, source: null, mediaCreated: false }
       }
-    case 'question-media-import': {
-      if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
-      const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store, signal)
-      return {
-        operation: { ...operation, media },
-        source: created ? createObjectUrl(operation.file) : null,
-        mediaCreated: created,
-      }
-    }
-    case 'card-media-import': {
-      if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
-      const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store, signal)
-      return {
-        operation: { ...operation, media },
-        source: created ? createObjectUrl(operation.file) : null,
-        mediaCreated: created,
-      }
-    }
+    case 'question-media-import':
+    case 'card-media-import':
+    case 'summary-media-import':
+      return persistMediaImport(operation, input, signal)
   }
 })
+
+/** Persists one accepted image or video through the shared media import path. */
+async function persistMediaImport(
+  operation: Extract<ElceDocumentChange, { kind: 'question-media-import' | 'card-media-import' | 'summary-media-import' }>,
+  input: DocumentChangeWorkerInput,
+  signal: AbortSignal,
+): Promise<DocumentChangeWorkerOutput> {
+  if (operation.kind === 'summary-media-import'
+    && mediaTypeFromMimeType(operation.media.mimeType) !== MEDIA_TYPE.IMAGE) {
+    throw new Error('Seules les images peuvent servir de fond au Sommaire.')
+  }
+  if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
+  const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store, signal)
+  return {
+    operation: { ...operation, media },
+    source: created ? createObjectUrl(operation.file) : null,
+    mediaCreated: created,
+  }
+}
 
 /** Reuses an exact media resource or persists the imported bytes once. */
 async function resolveImportedMedia(
@@ -219,6 +224,16 @@ function commandForChange(
             mediaId: operation.media.id,
           }
       }
+    case 'summary-media-import':
+      switch (mediaCreated) {
+        case true:
+          return { type: 'summary.background.media.attach' as const, media: operation.media }
+        case false:
+          return {
+            type: 'summary.settings.update' as const,
+            summary: { ...document.data.summary, backgroundMediaId: operation.media.id },
+          }
+      }
   }
 }
 
@@ -238,6 +253,8 @@ function documentChangeForEvent(event: ElceControllerEvent): ElceDocumentChange 
       return { kind: 'question-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
     case 'card.media.file.import':
       return { kind: 'card-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
+    case 'summary.media.file.import':
+      return { kind: 'summary-media-import', file: event.file, media: event.media }
     case 'document.apply':
       return { kind: 'command', command: event.command, historyGroupKey: event.historyGroupKey, recordHistory: event.recordHistory, recordedAt: Date.now() }
     case 'page.create':
@@ -498,6 +515,7 @@ export const controllerMachine = setup({
         'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
         'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
         'card.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'summary.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
       },
     },
     processingDocumentChange: {
@@ -528,6 +546,7 @@ export const controllerMachine = setup({
         'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
         'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
         'card.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'summary.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
       },
     },
     nextDocumentChange: {
@@ -577,6 +596,7 @@ export const controllerMachine = setup({
 export function isImportChange(change: ElceDocumentChange | undefined): boolean {
   return change?.kind === 'card-media-import'
     || change?.kind === 'question-media-import'
+    || change?.kind === 'summary-media-import'
     || (change?.kind === 'anchor' && change.operation.change.kind === 'file-drop')
 }
 
@@ -719,8 +739,8 @@ function updateMediaSources(
           return mediaSources
       }
     case 'question-media-import':
-      return mediaSourceAddition(mediaSources, operation.media.id, source)
     case 'card-media-import':
+    case 'summary-media-import':
       return mediaSourceAddition(mediaSources, operation.media.id, source)
     case 'command':
     case 'page-create':

@@ -1,9 +1,10 @@
-import { Check, GripVertical, ImagePlus, Plus, Trash2, X } from 'lucide-static'
-import { CATALOG_REFERENCE, MEDIA_FILE_ACCEPT, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG, QUESTION_TYPE_OPTIONS } from '../../../config/document-config'
+import { Check, GripVertical, Plus, Trash2 } from 'lucide-static'
+import { MEDIA_FILE_ACCEPT, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG, QUESTION_TYPE_OPTIONS } from '../../../config/document-config'
 import type { QuestionAnswer, QuestionType } from '../../../domain/question/question-types'
 import { on, type RemixNode } from 'remix/ui'
 
 import type { QuestionEditorProps } from './question-editor-types'
+import { renderRemixMediaPicker } from '../media/remix-media-picker'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
 
 const ANSWER_DRAG_MIME_TYPE = 'application/x-elce-question-answer+json'
@@ -61,6 +62,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           aria-label="Titre facultatif de la question"
           placeholder="Titre"
           value={question.title}
+          data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setTitle(event.currentTarget.value))}
         />
         <textarea
@@ -70,6 +72,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           placeholder="Écrire la question…"
           rows={2}
           value={question.prompt}
+          data-elce-profile-token-target="true"
           mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setPrompt(event.currentTarget.value))}
         />
         <input
@@ -79,6 +82,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           aria-label="Texte du bouton de validation"
           placeholder="Texte du bouton de validation"
           value={question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL}
+          data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setValidationLabel(event.currentTarget.value))}
         />
         {typeConfig.note.length > 0
@@ -121,105 +125,22 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
 /** Renders the optional Question media picker, preview and catalogue drop target. */
 function renderQuestionMediaEditor(props: QuestionEditorProps): RemixNode {
   const { bdcId, media, mediaType, mediaSource, actions, onCatalogReference } = props
-  return <label
-    id={`elce-question-illustration-${bdcId}`}
-    className="elce-question-illustration"
-    mix={[
-      on<HTMLLabelElement, 'dragover'>('dragover', (event) => acceptQuestionMediaDrag(event)),
-      on<HTMLLabelElement, 'drop'>('drop', (event) => dropQuestionMedia(event, actions.importMedia, onCatalogReference)),
-    ]}
-  >
-    <input
-      id={`elce-question-illustration-file-${bdcId}`}
-      className="elce-visually-hidden"
-      type="file"
-      accept={MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO}
-      aria-label="Choisir une illustration"
-      mix={on<HTMLInputElement, 'change'>('change', (event) => {
-        const file = event.currentTarget.files?.[0]
-        if (file !== undefined) actions.importMedia(file)
-        event.currentTarget.value = ''
-      })}
-    />
-    {media !== null && mediaSource !== null
-      ? mediaType === 'image'
-        ? <img
-          id={`elce-question-media-image-${bdcId}`}
-          src={mediaSource}
-          alt=""
-        />
-        : <video
-          id={`elce-question-media-video-${bdcId}`}
-          src={mediaSource}
-          controls={true}
-        />
-      : <span
-        id={`elce-question-illustration-prompt-${bdcId}`}
-        className="elce-media-add-prompt"
-      >
-        {renderLucideIcon(ImagePlus, `elce-question-illustration-icon-${bdcId}`, 14)}
-        <span
-          id={`elce-question-illustration-label-${bdcId}`}
-          className="elce-media-add-prompt__label"
-        >
-          Illustration
-        </span>
-        <span
-          id={`elce-question-illustration-hint-${bdcId}`}
-          className="elce-media-add-prompt__hint"
-        >
-          {media?.name ?? 'Déposer ici'}
-        </span>
-      </span>}
-    {media !== null
-      ? <button
-        id={`elce-question-media-clear-${bdcId}`}
-        className="elce-bdc-icon-button elce-question-media-clear"
-        type="button"
-        aria-label="Retirer l’illustration"
-        title="Retirer l’illustration"
-        mix={on<HTMLButtonElement, 'click'>('click', (event) => {
-          event.preventDefault()
-          actions.clearMedia()
-        })}
-      >
-        {renderLucideIcon(X, `elce-question-media-clear-icon-${bdcId}`, 14)}
-      </button>
-      : null}
-  </label>
-}
-
-/** Enables native file and catalogue drags over the Question illustration area. */
-function acceptQuestionMediaDrag(event: DragEvent): void {
-  const transfer = event.dataTransfer
-  if (transfer === null) return
-  const types = Array.from(transfer.types)
-  if (types.includes('Files') || types.includes(CATALOG_REFERENCE.MIME_TYPE)) {
-    event.preventDefault()
-    transfer.dropEffect = 'copy'
-  }
-}
-
-/** Routes a Question illustration drop to the existing file or catalogue action. */
-function dropQuestionMedia(
-  event: DragEvent,
-  importMedia: QuestionEditorProps['actions']['importMedia'],
-  onCatalogReference: QuestionEditorProps['onCatalogReference'],
-): void {
-  const transfer = event.dataTransfer
-  if (transfer === null) return
-  const file = transfer.files[0]
-  if (file !== undefined) {
-    event.preventDefault()
-    event.stopPropagation()
-    importMedia(file)
-    return
-  }
-  const reference = transfer.getData(CATALOG_REFERENCE.MIME_TYPE)
-  if (reference.length === 0) return
-  event.preventDefault()
-  event.stopPropagation()
-  onCatalogReference(reference)
+  return renderRemixMediaPicker({
+    idPrefix: 'elce-question',
+    idKey: bdcId,
+    className: 'elce-question-illustration',
+    accept: MEDIA_FILE_ACCEPT.IMAGE_AND_VIDEO,
+    ariaLabel: 'Choisir une illustration',
+    promptLabel: 'Illustration',
+    emptyHint: 'Déposer ici',
+    removeLabel: 'Retirer l’illustration',
+    media,
+    mediaType,
+    mediaSource,
+    onImport: actions.importMedia,
+    onClear: actions.clearMedia,
+    onCatalogReference,
+  })
 }
 
 /** Renders one ordered answer with its correction and drag controls. */
@@ -269,6 +190,7 @@ function renderQuestionAnswer(
       aria-label={`Réponse ${answerNumber}`}
       placeholder={`Réponse ${answerNumber}`}
       value={answer.label}
+      data-elce-profile-token-target="true"
       mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setAnswerLabel(answer.id, event.currentTarget.value))}
     />
     <button

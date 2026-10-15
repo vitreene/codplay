@@ -224,6 +224,7 @@ function renderPageChapterTitle(chapter: Chapter, actions: EditorActionsFacade):
       aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
       title={CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel}
       defaultValue={chapter.name}
+      data-elce-profile-token-target="true"
       key={`${chapter.id}:${chapter.name}`}
       mix={[
         on<HTMLInputElement, 'blur'>('blur', (event) => commitInlineName(event.currentTarget, chapter.name, (name) => actions.renameChapter(chapter.id, name))),
@@ -277,6 +278,7 @@ function renderPageTitle(page: Page | undefined, actions: EditorActionsFacade): 
       aria-label="Titre de la page"
       title="Modifier le titre de la page"
       defaultValue={page.name}
+      data-elce-profile-token-target="true"
       key={`${page.id}:${page.name}`}
       mix={[
         on<HTMLInputElement, 'blur'>('blur', (event) => commitInlineName(event.currentTarget, page.name, (name) => actions.renamePage(page.id, name))),
@@ -396,6 +398,7 @@ function renderBdcEditor(
         mediaType: media === null ? null : mediaTypeFromMimeType(media.mimeType),
         mediaSource: mediaId === null ? null : view.mediaSources[mediaId] ?? null,
         actions: actions.createQuestionEditorActions(bdc.id, bdc.question),
+        profileProperties: view.documentModel.data.profile.properties,
         onCatalogReference: (reference) => actions.attachQuestionMediaReference(bdc.id, reference),
       })
     }
