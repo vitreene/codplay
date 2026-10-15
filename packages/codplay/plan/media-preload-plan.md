@@ -12,18 +12,21 @@ Ce plan garde les décisions acceptées mais non appliquées, les points à
 trancher et leurs critères d'acceptation. Il ne recopie pas les contrats déjà
 vérifiés.
 
-## Décision acquise, implémentation ouverte
+## Diffusion d'un paquet — décision retenue, implémentation ouverte
 
-Une future façade `run()` de diffusion autonome enchaîne le chargement explicite
-des ressources, l'initialisation synchrone du player, puis `play()` :
+La précision utilisateur du 2026-10-15 retient une préparation publique
+`await cp.init()`, puis un lancement explicite `cp.play()` après
+`new CodPlay(root, scenePath)`. Elle remplace, pour l'export d'une scène,
+l'ancienne proposition d'une façade `run()` combinant préparation et lecture.
+La [feuille de route d'export, §8](./2026-10-15-export-diffusion-plan.md#8-initialisation-côté-site-à-prouver)
+porte la forme et l'acceptation ; aucune de ces méthodes n'est encore livrée.
 
-```text
-preload.load(manifest) -> player.init() -> player.play()
-```
-
-Elle ne rend pas le preload implicite dans `init()` et ne modifie pas la
-surface du service `RuntimePreload`. La façade `run()` n'est pas encore exposée
-par `CodPlay`.
+L'initialisation **publique** asynchrone du paquet prépare les bibliothèques,
+charge les ressources, les enregistre puis crée et initialise l'occurrence
+par le circuit existant. L'initialisation **interne** du player conserve son
+contrat synchrone ; aucun preload implicite n'y est ajouté. Le service
+`RuntimePreload` reste distinct. Les règles complémentaires de cycle restent
+à relire dans le plan d'export.
 
 ## Décision acceptée, application non planifiée — source média en direct
 
@@ -247,8 +250,8 @@ certifiée.
 
 Ce plan reste `En cours` jusqu'à fermeture des preuves de service, validation
 Safari du handoff média, revue puis acceptation ou abandon des commandes vidéo
-par broadcasts dédiés après `START`, et décision de livrer ou d'abandonner la
-façade `run()`.
+par broadcasts dédiés après `START`, et acceptation de l'entrée publique
+de diffusion suivie au plan d'export.
 La tranche média indépendante Elcé est réalisée ; l’agrandissement reste
 au plan Elcé dédié.
 Les suites liées aux spécifications couvrent seulement leur périmètre certifié ;

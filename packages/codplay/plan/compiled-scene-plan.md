@@ -45,6 +45,13 @@ suivis au [plan Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstru
 
 ### Découverte du manifeste de ressources
 
+L'[enquête d'export du 2026-10-15](./2026-10-15-export-diffusion-plan.md)
+confirme par le build public l'absence de `initial.attr.src`, des URLs CSS
+et des fichiers référencés par `href` dans le manifeste. Le plan d'export
+conserve les décisions à prendre sur les dépendances nécessaires au paquet,
+leur distinction avec le preload et leur relocalisation ; aucune extension
+du cœur n'est implémentée par cette enquête.
+
 Le builder examine actuellement `src` sur les objets `initial` et les objets
 d'action de premier niveau. Le commentaire de `collectResource()` annonce un
 parcours récursif, mais son implémentation ne parcourt pas les objets imbriqués.

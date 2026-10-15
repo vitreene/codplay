@@ -1,6 +1,7 @@
-# Façade CodPlay V2 — décision d'extension restante
+# Façade CodPlay V2 — extensions restantes
 
-> Statut : En cours uniquement pour la décision d'observation de `snapshot`.
+> Statut : En cours pour l'observation de `snapshot` et l'entrée de diffusion
+> d'un paquet de scène ; aucune de ces extensions n'est encore implémentée.
 > Le contrat public actuellement implémenté et vérifié est dans la
 > [spécification façade](../specs/facade-v2-spec.md).
 
@@ -23,6 +24,30 @@ spécifications et plans dédiés :
 
 Les contrôles navigateur sont suivis par les plans des comportements concernés.
 Aucune gate navigateur propre à la façade n'est définie au-delà de ces parcours.
+
+## Entrée d'un paquet de scène — forme demandée, non implémentée
+
+L'utilisateur demande `new CodPlay(root, scenePath)`, une préparation
+`await cp.init()` et une lecture `cp.play()`, directement sur l'objet CodPlay.
+La forme et l'acceptation sont suivies dans la
+[feuille de route d'export, §8](./2026-10-15-export-diffusion-plan.md#8-initialisation-côté-site-à-prouver).
+Le choix retient une préparation asynchrone explicite ; le constructeur
+historique et le multi-instance doivent rester couverts par les tests.
+
+Le raccord doit prolonger `codplay-facade.ts` et ses types, avec une logique
+dédiée de chargement dans un dossier de feature de la façade si nécessaire.
+Il réutilise le catalogue, le preload, le registre d'instances et la telco ;
+il ne crée pas une seconde classe de player ni un second propriétaire CodPlay.
+Les règles complémentaires de cycle et les détails d'export encore ouverts
+restent dans le plan d'export. Cette entrée ne change pas la spec vérifiée et
+n'autorise pas à elle seule du code dépendant des décisions `A relire`.
+
+L'[audit de compatibilité auteur](./2026-10-15-export-diffusion-plan.md#audit-de-compatibilité-avec-le-mode-auteur--2026-10-15)
+ne trouve pas de collision de noms. Il ajoute la gate de conservation du
+constructeur par options, du mode auteur sans init public, du ciblage telco
+et de la propriété de destruction. La coexistence auteur/diffusion devra
+être prouvée avant de certifier la surcharge ; les échecs actuels de validation
+éditeur y sont explicitement distingués de cette extension non implémentée.
 
 ## Décision non prise : observation des changements de snapshot
 
