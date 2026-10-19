@@ -41,10 +41,13 @@ export {
   extractFunction,
   finalizeFunctionCollection,
   type CompiledFunctionCollection,
+  type CompiledFunctionSourceReference,
 } from './function-extractor'
 export {
   SceneBuilder,
   type SceneBuildFailure,
+  type SceneBuildFunctionReference,
+  type SceneBuildResourceReference,
   type SceneBuildResult,
   type SceneBuildSuccess,
   type SceneBuilderOptions,

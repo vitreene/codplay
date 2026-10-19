@@ -11,6 +11,7 @@ import {
   extractCompiledRecord,
   extractFunction,
 } from './function-extractor'
+import type { CompiledFunctionSourceReference } from './function-extractor'
 import type { AuthorFunction } from '../types'
 import type {
   CompiledCaptureDeclaration,
@@ -22,25 +23,27 @@ import type {
 } from './types'
 
 type ExtractionState = Parameters<typeof extractFunction>[2]
+type SourcePath = CompiledFunctionSourceReference['path']
 
 /** Compiles one perso emit declaration and extracts every capture function. */
 export function compileEmitDeclaration(
   declaration: AuthorEmitDeclaration | undefined,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath = [],
 ): CompiledEmitDeclaration | undefined {
   if (declaration === undefined) return undefined
   return Object.fromEntries(
     Object.entries(declaration).map(([trigger, rule]) => {
       if (trigger === 'observe') {
         if (Array.isArray(rule)) throw new Error('emit.observe accepts one declaration.')
-        return [trigger, compileScrollObservation(rule as AuthorScrollObservationDeclaration, `${scope}.observe`, state)]
+        return [trigger, compileScrollObservation(rule as AuthorScrollObservationDeclaration, `${scope}.observe`, state, [...sourcePath, trigger])]
       }
       return [
         trigger,
         Array.isArray(rule)
-          ? rule.map((entry, index) => compileEmitRule(entry as AuthorEmitRule, `${scope}.${trigger}[${index}]`, state))
-          : compileEmitRule(rule as AuthorEmitRule, `${scope}.${trigger}`, state),
+          ? rule.map((entry, index) => compileEmitRule(entry as AuthorEmitRule, `${scope}.${trigger}[${index}]`, state, [...sourcePath, trigger, index]))
+          : compileEmitRule(rule as AuthorEmitRule, `${scope}.${trigger}`, state, [...sourcePath, trigger]),
       ]
     }),
   )
@@ -51,24 +54,25 @@ function compileEmitRule(
   rule: AuthorEmitRule,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath,
 ): CompiledEmitRule {
   if (!('event' in rule)) throw new Error(`Scroll observation must be declared directly as emit.observe: ${scope}`)
   const base = {
     ...(rule.ref === undefined ? {} : { ref: rule.ref }),
     ...(rule.keyCode === undefined ? {} : { keyCode: rule.keyCode }),
     ...(rule.preventDefault === undefined ? {} : { preventDefault: rule.preventDefault }),
-    data: rule.data === undefined ? undefined : extractCompiledRecord(rule.data, `${scope}.data`, state),
+    data: rule.data === undefined ? undefined : extractCompiledRecord(rule.data, `${scope}.data`, state, [...sourcePath, 'data']),
   }
   if (rule.capture === undefined) {
     return {
       ...base,
-      event: compileEmitEvent(rule.event, `${scope}.event`, state),
+      event: compileEmitEvent(rule.event, `${scope}.event`, state, [...sourcePath, 'event']),
     }
   }
   return {
     ...base,
-    event: compileCaptureEvent(rule.event, `${scope}.event`, state),
-    capture: compileCaptureDeclaration(rule.capture, `${scope}.capture`, state),
+    event: compileCaptureEvent(rule.event, `${scope}.event`, state, [...sourcePath, 'event']),
+    capture: compileCaptureDeclaration(rule.capture, `${scope}.capture`, state, [...sourcePath, 'capture']),
   }
 }
 
@@ -77,6 +81,7 @@ function compileScrollObservation(
   declaration: AuthorScrollObservationDeclaration,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath,
 ): CompiledScrollObservation {
   return {
     ...(declaration.root === undefined ? {} : { root: declaration.root }),
@@ -84,10 +89,10 @@ function compileScrollObservation(
     ...(declaration.liveAction === undefined ? {} : { liveAction: declaration.liveAction }),
     ...(declaration.zone === undefined ? {} : { zone: { ...declaration.zone } }),
     ...(declaration.enter === undefined ? {} : {
-      enter: declaration.enter.map((event, index) => compileScrollObservationEvent(event, `${scope}.enter[${index}]`, state)),
+      enter: declaration.enter.map((event, index) => compileScrollObservationEvent(event, `${scope}.enter[${index}]`, state, [...sourcePath, 'enter', index])),
     }),
     ...(declaration.leave === undefined ? {} : {
-      leave: declaration.leave.map((event, index) => compileScrollObservationEvent(event, `${scope}.leave[${index}]`, state)),
+      leave: declaration.leave.map((event, index) => compileScrollObservationEvent(event, `${scope}.leave[${index}]`, state, [...sourcePath, 'leave', index])),
     }),
   }
 }
@@ -97,9 +102,10 @@ function compileScrollObservationEvent(
   event: AuthorScrollObservationEvent,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath,
 ): CompiledEmitEvent & Readonly<{ once?: true }> {
   return {
-    ...compileEmitEvent(event, scope, state),
+    ...compileEmitEvent(event, scope, state, sourcePath),
     ...(event.once === true ? { once: true as const } : {}),
   }
 }
@@ -109,10 +115,11 @@ function compileEmitEvent(
   event: AuthorEmitEvent,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath,
 ): CompiledEmitEvent {
   return {
     name: event.name,
-    ...(event.data === undefined ? {} : { data: extractCompiledRecord(event.data, `${scope}.data`, state) }),
+    ...(event.data === undefined ? {} : { data: extractCompiledRecord(event.data, `${scope}.data`, state, [...sourcePath, 'data']) }),
     ...(event.visibility === undefined ? {} : { visibility: event.visibility }),
     ...(event.mode === undefined ? {} : { mode: event.mode }),
   }
@@ -123,10 +130,11 @@ function compileCaptureEvent(
   event: AuthorCaptureEvent,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath,
 ): CompiledCaptureEvent {
   return {
     name: event.name,
-    ...(event.data === undefined ? {} : { data: extractCompiledRecord(event.data, `${scope}.data`, state) }),
+    ...(event.data === undefined ? {} : { data: extractCompiledRecord(event.data, `${scope}.data`, state, [...sourcePath, 'data']) }),
     ...(event.visibility === undefined ? {} : { visibility: event.visibility }),
     ...(event.mode === undefined ? {} : { mode: event.mode }),
   }
@@ -137,6 +145,7 @@ function compileCaptureDeclaration(
   declaration: AuthorCaptureDeclaration,
   scope: string,
   state: ExtractionState,
+  sourcePath: SourcePath,
 ): CompiledCaptureDeclaration {
   return {
     trackOn: declaration.trackOn === undefined ? undefined : [...declaration.trackOn],
@@ -144,15 +153,15 @@ function compileCaptureDeclaration(
     stateScope: declaration.stateScope,
     initCaptureStateRef: declaration.initCaptureState === undefined
       ? undefined
-      : extractFunction(declaration.initCaptureState as AuthorFunction, `${scope}.initCaptureState`, state),
+      : extractFunction(declaration.initCaptureState as AuthorFunction, `${scope}.initCaptureState`, state, [...sourcePath, 'initCaptureState']),
     trackCommandRef: declaration.trackCommand === undefined
       ? undefined
-      : extractFunction(declaration.trackCommand as AuthorFunction, `${scope}.trackCommand`, state),
+      : extractFunction(declaration.trackCommand as AuthorFunction, `${scope}.trackCommand`, state, [...sourcePath, 'trackCommand']),
     endEmit: declaration.endEmit === undefined
       ? undefined
-      : compileCaptureEvent(declaration.endEmit, `${scope}.endEmit`, state),
+      : compileCaptureEvent(declaration.endEmit, `${scope}.endEmit`, state, [...sourcePath, 'endEmit']),
     endCaptureRef: declaration.endCapture === undefined
       ? undefined
-      : extractFunction(declaration.endCapture as AuthorFunction, `${scope}.endCapture`, state),
+      : extractFunction(declaration.endCapture as AuthorFunction, `${scope}.endCapture`, state, [...sourcePath, 'endCapture']),
   }
 }

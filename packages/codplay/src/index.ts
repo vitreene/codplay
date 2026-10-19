@@ -44,6 +44,8 @@ export type {
   CodPlayInstanceOptions,
   CodPlayModules,
   CodPlayLibraries,
+  CodPlayLoadMethod,
+  CodPlayLoadOptions,
   CodPlayOptions,
   CodPlayProjectionApi,
   CodPlayProjectionResult,
@@ -101,6 +103,8 @@ export type {
 export type { CompiledFunctionCollection } from './scene/compiled'
 export type {
   CompiledResourceManifest,
+  SceneBuildFunctionReference,
+  SceneBuildResourceReference,
   CompiledLengthValue,
   CompiledRel,
   CompiledRecord,

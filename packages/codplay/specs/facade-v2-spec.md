@@ -59,6 +59,44 @@ Le [test de façade](../tests/facade/facade.spec.ts) et le
 [test de transfert média](../tests/facade/media-preload-handoff.spec.ts) les
 exercent.
 
+### Chargement d'un paquet de scène
+
+`await player.load(scenePath, { root })` charge une occurrence d'un paquet
+média, CSS, fontes locales et fonctions auteur, avec feuille et module de
+fonctions optionnels, puis retourne son `CodPlayInstance` après préparation.
+`root` est un sélecteur CSS ou un
+`HTMLElement`. `load()` réutilise le moteur, le service de preload,
+l'enregistrement des ressources et le registre d'instances de ce même
+propriétaire. Le CSS passe par le canal `preload.css.set()` existant : il est
+installé dans le `head`, scoped au `root` et retiré quand l'occurrence est
+détruite. Avant la création, `load()` vérifie les `@font-face` du manifeste et
+attend leur chargement effectif ; une face absente ou en échec rejette l'appel.
+`load()` ne démarre pas la lecture ; l'appelant utilise ensuite
+`await instance.telco.play()`. Plusieurs chargements retournent des instances
+distinctes. Elles partagent l'engine du propriétaire : une avance de son
+horloge fait avancer les occurrences actives ; `pause`, `seek` et la destruction
+d'une occurrence ne stoppent ni ne déplacent les autres. Le test du chargeur et
+la [démo à deux occurrences](../../demos/scene-export/README.md) vérifient ce
+parcours. Les familles et les critères de disponibilité certifiés sont
+délimités par la
+[spécification du paquet de scène](./scene-package-export-v1-spec.md).
+
+Si le manifeste déclare `scene/functions.mjs`, `load()` l'importe et crée le
+contexte de fonctions/straps vérifié avant `instances.create()`. Un même
+propriétaire et une même URL canonique de paquet partagent ce contexte entre
+leurs occurrences ; les propriétaires différents ont des closures isolées.
+Le contexte est libéré par `codplay.destroy()`. Le navigateur vérifie
+l'exécution de `scene.onStart` après `instance.telco.play()` ainsi qu'un clic
+DOM traversant un transform de story, un strap externe de story, un événement
+transformé vers la portée scène et un strap externe de scène. Les deux sorties
+publiques arrivent dans `instance.events.onEvent`. La preuve couvre cette
+verticale ; les autres callbacks, capture, Seek et replay restent au
+[plan d'export R8](../plan/2026-10-15-export-diffusion-plan.md#r8--fonctions-codplay-et-imports).
+Les suites
+[`scene-package-loader.spec.ts`](../tests/facade/scene-package-loader.spec.ts)
+et [`cli.spec.mjs`](../tools/scene-export/tests/cli.spec.mjs) vérifient le
+transport, les références et les portées de ces contextes.
+
 `codplay.instances.get`, `destroy` et `mount` sont les opérations publiques du
 registre. `mount` adresse un perso hôte `slot` dans une instance et y attache
 les racines matérialisées d'une instance enfant ; le handle retourné détache

@@ -6,6 +6,7 @@ import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { BaseComponent, TagComponent } from '../../../src/runtime/components'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import { compileMovePath, SceneBuilder } from '../../../src/scene/compiled'
+import type { CompiledRecord } from '../../../src/scene/compiled'
 import { SCENE_BUILD_CONFIG } from '../../../src/scene/config/scene-build'
 import type { SceneDoc } from '../../../src/scene/types'
 import { demoSceneFixtures } from '../../fixtures/demo-scene-fixtures'
@@ -485,7 +486,10 @@ describe('SceneBuilder', () => {
         },
       },
     }
-    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
 
     const result = builder.build(scene)
 
@@ -495,6 +499,15 @@ describe('SceneBuilder', () => {
       expect(JSON.stringify(result.compiledScene)).not.toContain('=>')
       expect(result.compiledScene.scene.init).toMatchObject({ ref: expect.stringContaining('fn:') })
       expect(result.compiledScene.scene.stories.main.listen[0]?.transform).toHaveLength(1)
+      const referencesByPath = new Map(result.functionReferences?.map((reference) => [JSON.stringify(reference.path), reference.ref]))
+      expect(referencesByPath.get(JSON.stringify(['init']))).toBe(result.compiledScene.scene.init?.ref)
+      expect(referencesByPath.get(JSON.stringify(['stories', 'main', 'listen', 0, 'transform', 0])))
+        .toBe(result.compiledScene.scene.stories.main.listen[0]?.transform?.[0]?.ref)
+      expect(referencesByPath.get(JSON.stringify([
+        'stories', 'main', 'persos', 0, 'actions', 'start', 'style', 'opacity',
+      ]))).toBe((((result.compiledScene.scene.stories.main.persos[0]?.actions.start as CompiledRecord | undefined)
+        ?.style as CompiledRecord | undefined)?.opacity as { ref?: string } | undefined)?.ref)
+      expect(result.functionReferences).toHaveLength(3)
     }
   })
 
@@ -628,7 +641,10 @@ describe('SceneBuilder', () => {
             id: 'media',
             type: 'text',
             initial: { src: '/assets/sound.mp3' },
-            actions: { unknown: { src: '/assets/runtime.bin' } },
+            actions: {
+              unknown: { src: '/assets/runtime.bin' },
+              exportOnlyAudio: { src: '/assets/runtime.m4a' },
+            },
           }],
         },
       },
@@ -640,6 +656,338 @@ describe('SceneBuilder', () => {
         expect.objectContaining({ url: '/assets/sound.mp3', type: 'audio' }),
       ])
     }
+  })
+
+  it('returns export-only media references for initial, future and native tag sources', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'export-resource-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [
+            {
+              id: 'poster',
+              type: 'img',
+              initial: { src: '/media/cover.png', img: { attr: { src: '/media/texture.webp' } } },
+              actions: {
+                replace: [{ action: { src: '/media/next.png', img: { attr: { src: '/media/swap.webp' } } }, startAt: 500 }],
+              },
+            },
+            {
+              id: 'clip',
+              type: 'media',
+              initial: { tag: 'video', src: '/media/intro.mp4' },
+              actions: { change: { src: '/media/finale.webm' } },
+            },
+            {
+              id: 'audio',
+              type: 'media',
+              initial: { tag: 'audio', src: '/media/narration.m4a' },
+              actions: {},
+            },
+            {
+              id: 'native-video',
+              type: 'tag',
+              initial: { tag: 'video', attr: { src: '/media/native.mp4', controls: true } },
+            },
+          ],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: '/media/cover.png', type: 'image' },
+      { url: '/media/texture.webp', type: 'image' },
+      { url: '/media/next.png', type: 'image' },
+      { url: '/media/swap.webp', type: 'image' },
+      { url: '/media/intro.mp4', type: 'video' },
+      { url: '/media/finale.webm', type: 'video' },
+      { url: '/media/narration.m4a', type: 'audio' },
+      { url: '/media/native.mp4', type: 'video' },
+    ])
+    expect(result.compiledScene.requirements.resources).toEqual(
+      result.compiledScene.resources.entries.map(({ url }) => url),
+    )
+    expect(result.resourceReferences).toEqual([
+      { url: '/media/cover.png', type: 'image', path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'src'] },
+      { url: '/media/texture.webp', type: 'image', path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'img', 'attr', 'src'] },
+      { url: '/media/next.png', type: 'image', path: ['scene', 'stories', 'main', 'persos', 0, 'actions', 'replace', 0, 'action', 'src'] },
+      { url: '/media/swap.webp', type: 'image', path: ['scene', 'stories', 'main', 'persos', 0, 'actions', 'replace', 0, 'action', 'img', 'attr', 'src'] },
+      { url: '/media/intro.mp4', type: 'video', path: ['scene', 'stories', 'main', 'persos', 1, 'initial', 'src'] },
+      { url: '/media/finale.webm', type: 'video', path: ['scene', 'stories', 'main', 'persos', 1, 'actions', 'change', 'src'] },
+      { url: '/media/narration.m4a', type: 'audio', path: ['scene', 'stories', 'main', 'persos', 2, 'initial', 'src'] },
+      { url: '/media/native.mp4', type: 'video', path: ['scene', 'stories', 'main', 'persos', 3, 'initial', 'attr', 'src'] },
+    ])
+    expect(result.compiledScene).not.toHaveProperty('resourceReferences')
+  })
+
+  it('classifies exported media sources by each URL extension, independent of the tag hint', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'export-media-tag-hint-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'sound-and-picture',
+            type: 'media',
+            initial: { tag: 'video', src: '/media/narration.mp3' },
+            actions: { switch: { src: '/media/clip.mp4' } },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: '/media/narration.mp3', type: 'audio' },
+      { url: '/media/clip.mp4', type: 'video' },
+    ])
+    expect(result.resourceReferences?.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: '/media/narration.mp3', type: 'audio' },
+      { url: '/media/clip.mp4', type: 'video' },
+    ])
+  })
+
+  it('blocks export when a known media source type conflicts with its consumer', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'unsupported-export-resource',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'picture', type: 'img', initial: { src: '/media/photo.mp4' } }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors).toContainEqual(expect.objectContaining({
+      code: 'CODPLAY_EXPORT_MEDIA_REFERENCE_UNSUPPORTED',
+      details: expect.objectContaining({
+        refs: { sceneId: 'unsupported-export-resource', storyId: 'main', persoId: 'picture' },
+        context: expect.objectContaining({
+          path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'src'],
+          componentType: 'img',
+          url: '/media/photo.mp4',
+        }),
+      }),
+    }))
+  })
+
+  it('includes static media sources from sequenced future actions', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'export-sequenced-media-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'audio',
+            type: 'media',
+            initial: { tag: 'audio', src: '/media/intro.mp3' },
+            actions: {
+              replace: [{ action: { src: '/media/late.mp3#t=0.5' }, startAt: 2_000 }],
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: '/media/intro.mp3', type: 'audio' },
+      { url: '/media/late.mp3#t=0.5', type: 'audio' },
+    ])
+    expect(result.resourceReferences?.at(-1)).toEqual({
+      url: '/media/late.mp3#t=0.5',
+      type: 'audio',
+      path: ['scene', 'stories', 'main', 'persos', 0, 'actions', 'replace', 0, 'action', 'src'],
+    })
+  })
+
+  it('blocks markup resources while collecting CSS URL resources from inline styles', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'unclosed-export-resource-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [
+            {
+              id: 'markup-layout',
+              type: 'layout',
+              initial: { markup: '<video src="/media/markup.mp4"></video>' },
+              actions: {},
+            },
+            {
+              id: 'background',
+              type: 'tag',
+              initial: { tag: 'div', style: { backgroundImage: 'url("/media/background.png")' } },
+              actions: {},
+            },
+          ],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'CODPLAY_EXPORT_MEDIA_REFERENCE_UNSUPPORTED',
+        details: expect.objectContaining({
+          refs: { sceneId: 'unclosed-export-resource-scene', storyId: 'main', persoId: 'markup-layout' },
+          context: expect.objectContaining({
+            path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'markup'],
+          }),
+        }),
+      }),
+    ]))
+  })
+
+  it('returns exact compiler paths for inline style image references without changing the CSS value', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'inline-style-export-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'background',
+            type: 'tag',
+            initial: { tag: 'div', style: { backgroundImage: 'linear-gradient(black, transparent), url("/media/background.png")' } },
+            actions: { change: { style: { maskImage: 'url(/media/mask.svg)' } } },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: '/media/background.png', type: 'image' },
+      { url: '/media/mask.svg', type: 'image' },
+    ])
+    expect(result.resourceReferences).toEqual([
+      {
+        url: '/media/background.png',
+        type: 'image',
+        path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'style', 'backgroundImage'],
+        cssValue: 'url("/media/background.png")',
+      },
+      {
+        url: '/media/mask.svg',
+        type: 'image',
+        path: ['scene', 'stories', 'main', 'persos', 0, 'actions', 'change', 'style', 'maskImage'],
+        cssValue: 'url(/media/mask.svg)',
+      },
+    ])
+    expect(result.compiledScene.scene.stories.main.persos[0]?.initial.style)
+      .toEqual({ backgroundImage: 'linear-gradient(black, transparent), url("/media/background.png")' })
+  })
+
+  it('blocks native resource tags and stylesheet markup outside the media closure', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'unclosed-native-resource-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [
+            { id: 'stylesheet', type: 'tag', initial: { tag: 'link', attr: { rel: 'stylesheet', href: '/scene.css' } } },
+            { id: 'embedded-page', type: 'tag', initial: { tag: 'iframe', attr: { src: '/nested.html' } } },
+            { id: 'inline-stylesheet', type: 'tag', initial: { tag: 'style', content: '.scene { color: red }' } },
+          ],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'CODPLAY_EXPORT_MEDIA_REFERENCE_UNSUPPORTED',
+        details: expect.objectContaining({
+          refs: { sceneId: 'unclosed-native-resource-scene', storyId: 'main', persoId: 'stylesheet' },
+          context: expect.objectContaining({ path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'attr', 'href'] }),
+        }),
+      }),
+      expect.objectContaining({
+        code: 'CODPLAY_EXPORT_MEDIA_REFERENCE_UNSUPPORTED',
+        details: expect.objectContaining({
+          refs: { sceneId: 'unclosed-native-resource-scene', storyId: 'main', persoId: 'embedded-page' },
+          context: expect.objectContaining({ path: ['scene', 'stories', 'main', 'persos', 1, 'initial', 'attr', 'src'] }),
+        }),
+      }),
+      expect.objectContaining({
+        code: 'CODPLAY_EXPORT_MEDIA_REFERENCE_UNSUPPORTED',
+        details: expect.objectContaining({
+          refs: { sceneId: 'unclosed-native-resource-scene', storyId: 'main', persoId: 'inline-stylesheet' },
+          context: expect.objectContaining({ path: ['scene', 'stories', 'main', 'persos', 2, 'initial', 'tag'] }),
+        }),
+      }),
+    ]))
+  })
+
+  it('keeps navigation hrefs outside the preload resource manifest in export builds', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'export-navigation-link-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'manual-link',
+            type: 'tag',
+            initial: { tag: 'a', attr: { href: './manual.pdf', download: '' } },
+            actions: { reveal: { attr: { href: './appendix' } } },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries).toEqual([])
+    expect(result.resourceReferences).toEqual([])
+    expect(result.compiledScene.scene.stories.main.persos[0]?.initial.attr).toEqual({
+      href: './manual.pdf',
+      download: '',
+    })
+    expect(result.compiledScene.scene.stories.main.persos[0]?.actions.reveal).toEqual({
+      attr: { href: './appendix' },
+    })
   })
 
   it('derives ModuleService requirements from component capability declarations', () => {
@@ -760,7 +1108,10 @@ describe('SceneBuilder', () => {
     })
     const trackCommand = () => ({ actions: [{ name: 'drag' }] })
     const endCapture = () => ({ events: [{ name: 'drag:stored', visibility: 'story' as const }] })
-    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
 
     const result = builder.build({
       id: 'capture-compiled-scene',
@@ -809,6 +1160,11 @@ describe('SceneBuilder', () => {
     expect(result.functions[compiledCapture!.initCaptureStateRef!.ref]).toBe(initCaptureState)
     expect(result.functions[compiledCapture!.trackCommandRef!.ref]).toBe(trackCommand)
     expect(result.functions[compiledCapture!.endCaptureRef!.ref]).toBe(endCapture)
+    expect(result.functionReferences?.map(({ path }) => path)).toEqual([
+      ['stories', 'main', 'persos', 0, 'emit', 'pointerdown', 'capture', 'initCaptureState'],
+      ['stories', 'main', 'persos', 0, 'emit', 'pointerdown', 'capture', 'trackCommand'],
+      ['stories', 'main', 'persos', 0, 'emit', 'pointerdown', 'capture', 'endCapture'],
+    ])
   })
 
   it('rejects cascade on capture start and end events', () => {

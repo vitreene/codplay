@@ -32,6 +32,8 @@ export type {
   CodPlayInstanceOptions,
   CodPlayModules,
   CodPlayLibraries,
+  CodPlayLoadMethod,
+  CodPlayLoadOptions,
   CodPlayOptions,
   CodPlayProjectionApi,
   CodPlayProjectionResult,

@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+packages/demos/public/exports/scene-export/
+packages/demos/public/codplay-player/
 packages/elce/.elce-data/
 
 # Editor directories and files

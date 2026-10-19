@@ -21,7 +21,7 @@ celui-ci ne remplace pas les spécifications ou plans actifs.
 | Domaine | Spécification(s) normative(s) | Suivi actif |
 |---|---|---|
 | Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Plan CompiledScene](./compiled-scene-plan.md) |
-| Export d'une scène CodPlay | — | [Feuille de route par ressource](./2026-10-15-export-diffusion-plan.md) — décisions et implémentation `A relire`, Sighty/Elcé hors tranche |
+| Export d'une scène CodPlay | [Paquet de diffusion](../specs/scene-package-export-v1-spec.md) | [Feuille de route par ressource](./2026-10-15-export-diffusion-plan.md) — médias/CSS et tranche core-only vérifiés, transport des fonctions en cours (D4/R8), autres familles et cycle d'exécution restant, Sighty/Elcé hors tranche |
 | Reconstruction, engine et player | [Reconstruction logique](../specs/runtime-reconstruction-v2-spec.md), [Engine/Player](../specs/engine-player-v2-spec.md) | [Plan Player](./player-engine-plan.md) |
 | Façade et instances | [Façade](../specs/facade-v2-spec.md) | [Plan façade](./facade-engine-instance-plan.md) |
 | Diagnostics structurés | [Diagnostics](../specs/diagnostics-v2-spec.md) | — |

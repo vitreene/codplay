@@ -7,6 +7,8 @@ import type {
   CompiledFunctionCollection,
   CompiledRecord,
   CompiledScene,
+  SceneBuildFunctionReference,
+  SceneBuildResourceReference,
 } from '../scene/compiled'
 import type { SceneDoc } from '../scene/types'
 import type {
@@ -103,6 +105,8 @@ export type CodPlayCompileInput = Readonly<{
 export type CodPlayCompileOptions = Readonly<{
   createdAt?: string
   schemaVersion?: string
+  /** Enables strict export diagnostics and returns source-reference paths outside the scene JSON. */
+  export?: boolean
 }>
 
 /** Successful public compilation result reused by instance creation. */
@@ -110,6 +114,8 @@ export type CodPlayCompileSuccess = Readonly<{
   ok: true
   compiledScene: CompiledScene
   functions: CompiledFunctionCollection
+  resourceReferences?: readonly SceneBuildResourceReference[]
+  functionReferences?: readonly SceneBuildFunctionReference[]
   diagnostics: DiagnosticReport
 }>
 
@@ -404,6 +410,11 @@ export type CodPlayInstanceOptions = CodPlayInstanceOptionsBase & Readonly<{
   root?: HTMLElement
 }>
 
+/** Root accepted by a scene-package load in a site diffusion flow. */
+export type CodPlayLoadOptions = Readonly<{
+  root: HTMLElement | string
+}>
+
 /** Public instance boundary; runtime classes and materializer internals stay hidden. */
 export type CodPlayInstance = Readonly<{
   readonly instanceId: string
@@ -455,6 +466,12 @@ export type CodPlayInstances = Readonly<{
   destroy: (instanceId: string) => void
 }>
 
+/** Loads one exported scene package and returns its prepared, paused occurrence. */
+export type CodPlayLoadMethod = (
+  scenePath: string,
+  options: CodPlayLoadOptions,
+) => Promise<CodPlayInstance>
+
 /** Public shared-resource registration surface. */
 export type CodPlayResources = Readonly<{
   register: (resources: CodPlayResourceRegistration) => void
@@ -485,6 +502,7 @@ export type CodPlayBuildMethod = (
 /** Public CodPlay owner boundary. */
 export type CodPlayApi = Readonly<{
   readonly build: CodPlayBuildMethod
+  readonly load: CodPlayLoadMethod
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules

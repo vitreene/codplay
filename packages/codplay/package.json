@@ -9,11 +9,14 @@
   },
   "scripts": {
     "bench": "vitest bench bench/ace",
+    "build:player": "node tools/player-build/cli.mjs",
+    "export": "node tools/scene-export/cli.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "animejs": "^4.5.0",
+    "postcss": "^8.5.15",
     "typescript": "~6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"

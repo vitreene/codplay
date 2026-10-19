@@ -12,21 +12,35 @@ Ce plan garde les décisions acceptées mais non appliquées, les points à
 trancher et leurs critères d'acceptation. Il ne recopie pas les contrats déjà
 vérifiés.
 
-## Diffusion d'un paquet — décision retenue, implémentation ouverte
+## Diffusion d'un paquet — tranche média implémentée, gates restantes ouvertes
 
-La précision utilisateur du 2026-10-15 retient une préparation publique
-`await cp.init()`, puis un lancement explicite `cp.play()` après
-`new CodPlay(root, scenePath)`. Elle remplace, pour l'export d'une scène,
-l'ancienne proposition d'une façade `run()` combinant préparation et lecture.
-La [feuille de route d'export, §8](./2026-10-15-export-diffusion-plan.md#8-initialisation-côté-site-à-prouver)
-porte la forme et l'acceptation ; aucune de ces méthodes n'est encore livrée.
+Le contrat public `CodPlay.load(scenePath, { root })` et le démarrage par
+`instance.telco.play()` sont décrits par la
+[spécification du paquet média](../specs/scene-package-export-v1-spec.md).
+`load()` utilise `engine.prepareScene()`, le service `RuntimePreload` en mode
+strict `author`, `resources.register()` et le registre d'instances existants.
+Il attend les images matérialisées décodées et les médias natifs à
+`readyState >= 3`, puis retourne une occurrence prête sans lancer la lecture.
+Il n'ajoute pas un circuit de preload parallèle.
 
-L'initialisation **publique** asynchrone du paquet prépare les bibliothèques,
-charge les ressources, les enregistre puis crée et initialise l'occurrence
-par le circuit existant. L'initialisation **interne** du player conserve son
-contrat synchrone ; aucun preload implicite n'y est ajouté. Le service
-`RuntimePreload` reste distinct. Les règles complémentaires de cycle restent
-à relire dans le plan d'export.
+Le parcours a été vérifié sur sortie statique de production/cache froid dans
+Brave/Chromium pour les images initiales et tardives, l'audio, la vidéo et les
+tags natifs. Audio et vidéo atteignaient `readyState=4` avant le retour de
+`load()` ; les changements tardifs ont utilisé les ressources du paquet. La
+console était vide et les ressources scène venaient du dossier exporté.
+Un second passage a coupé le réseau après que `load()` a résolu, puis lancé la
+scène et ses changements tardifs d'image, d'audio et de vidéo : les nœuds
+préparés ont joué les ressources empaquetées sans erreur média. Cela ne valide
+pas encore le cycle Seek/replay, la destruction, deux occurrences ou Safari.
+L'inspection du même parcours a aussi révélé qu'un nœud vidéo préchargé pour
+une action future reste visible dans `document.body`, hors du `root` d'instance,
+jusqu'à son activation. Deux chargements sur le même owner reproduisent ce
+placement. Cette divergence de propriété est suivie au
+[plan d'export, R3](./2026-10-15-export-diffusion-plan.md#r3--audio-et-vidéo)
+et bloque la clôture média.
+Safari, les cycles Seek/replay/destruction et la fermeture des autres familles
+restent à vérifier au
+[plan d'export](./2026-10-15-export-diffusion-plan.md).
 
 ## Décision acceptée, application non planifiée — source média en direct
 
@@ -83,9 +97,10 @@ car des timestamps remis à zéro rendent l’observation des commandes instable
   captures géométriques et les déplacements interpolés. Une vidéo liée à la
   timeline pourrait relever plus tard d’un BDC spécifique, sans décision de
   construction dans cette tranche.
-- La découverte de `initial.attr.src`, reportée du portage Quiz Hunt, reste
-  au [plan CompiledScene](./compiled-scene-plan.md#correctif-à-prévoir--src-dun-perso-tag).
-  Elle est distincte du mode indépendant de `media`, maintenant vérifié.
+- La fermeture des médias de scène `tag.attr.src` fait maintenant partie de la
+  tranche d'export CodPlay et est suivie au
+  [plan CompiledScene](./compiled-scene-plan.md#références-média-du-paquet-de-diffusion).
+  Elle ne change pas le comportement du mode indépendant `media`.
 
 ## Commandes vidéo par broadcasts dédiés — A relire
 

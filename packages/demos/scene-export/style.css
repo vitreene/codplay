@@ -1,0 +1,72 @@
+#scene-export-document,
+#scene-export-body {
+  min-height: 100%;
+}
+
+#scene-export-body {
+  margin: 0;
+  background: #101b24;
+  color: #f4f2ec;
+  font: 16px/1.5 system-ui, sans-serif;
+}
+
+#scene-export-main {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+#scene-export-title,
+#scene-export-status,
+#scene-export-stage {
+  margin: 0;
+}
+
+#scene-export-stage {
+  display: grid;
+  width: min(92vw, 1040px);
+  gap: 1rem;
+}
+
+.scene-export-occurrence {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #527181;
+  border-radius: 0.75rem;
+  background: #172833;
+}
+
+.scene-export-occurrence h2,
+.scene-export-occurrence p {
+  margin: 0;
+}
+
+.scene-export-root {
+  width: 100%;
+  height: min(68vh, 560px);
+  min-height: 360px;
+}
+
+#scene-export-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+#scene-export-controls button {
+  padding: 0.7rem 1.2rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: #edbb54;
+  color: #172833;
+  font: inherit;
+  cursor: pointer;
+}
+
+#scene-export-controls button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}

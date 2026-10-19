@@ -1,9 +1,11 @@
 # Façade CodPlay V2 — extensions restantes
 
-> Statut : En cours pour l'observation de `snapshot` et l'entrée de diffusion
-> d'un paquet de scène ; aucune de ces extensions n'est encore implémentée.
-> Le contrat public actuellement implémenté et vérifié est dans la
-> [spécification façade](../specs/facade-v2-spec.md).
+> Statut : En cours pour l'observation de `snapshot` et la fermeture complète
+> des familles du paquet de diffusion. Le chargement média/CSS/fontes est
+> vérifié ; le transport des fonctions auteur est en cours en R8. Son contrat
+> vérifié est dans la
+> [spécification façade](../specs/facade-v2-spec.md) et la
+> [spécification du paquet](../specs/scene-package-export-v1-spec.md).
 
 ## Autorité et périmètre
 
@@ -25,29 +27,25 @@ spécifications et plans dédiés :
 Les contrôles navigateur sont suivis par les plans des comportements concernés.
 Aucune gate navigateur propre à la façade n'est définie au-delà de ces parcours.
 
-## Entrée d'un paquet de scène — forme demandée, non implémentée
+## Chargement d'un paquet de scène
 
-L'utilisateur demande `new CodPlay(root, scenePath)`, une préparation
-`await cp.init()` et une lecture `cp.play()`, directement sur l'objet CodPlay.
-La forme et l'acceptation sont suivies dans la
-[feuille de route d'export, §8](./2026-10-15-export-diffusion-plan.md#8-initialisation-côté-site-à-prouver).
-Le choix retient une préparation asynchrone explicite ; le constructeur
-historique et le multi-instance doivent rester couverts par les tests.
+`CodPlay.load(scenePath, { root })` charge un paquet média sur un propriétaire
+`CodPlay` existant et retourne l'instance prête de cette scène. La lecture
+continue par `instance.telco.play()`. `root` accepte un sélecteur CSS ou un
+`HTMLElement`. Le chargement utilise le même engine, preload, registre de
+ressources et registre d'instances que le mode auteur ; il ne crée pas un
+player parallèle.
 
-Le raccord doit prolonger `codplay-facade.ts` et ses types, avec une logique
-dédiée de chargement dans un dossier de feature de la façade si nécessaire.
-Il réutilise le catalogue, le preload, le registre d'instances et la telco ;
-il ne crée pas une seconde classe de player ni un second propriétaire CodPlay.
-Les règles complémentaires de cycle et les détails d'export encore ouverts
-restent dans le plan d'export. Cette entrée ne change pas la spec vérifiée et
-n'autorise pas à elle seule du code dépendant des décisions `A relire`.
-
-L'[audit de compatibilité auteur](./2026-10-15-export-diffusion-plan.md#audit-de-compatibilité-avec-le-mode-auteur--2026-10-15)
-ne trouve pas de collision de noms. Il ajoute la gate de conservation du
-constructeur par options, du mode auteur sans init public, du ciblage telco
-et de la propriété de destruction. La coexistence auteur/diffusion devra
-être prouvée avant de certifier la surcharge ; les échecs actuels de validation
-éditeur y sont explicitement distingués de cette extension non implémentée.
+Cette tranche est implémentée et vérifiée pour les médias image/audio/vidéo,
+CSS et fontes décrits par la
+[spécification du paquet de scène](../specs/scene-package-export-v1-spec.md).
+Le module de fonctions auteur est chargé et passé à l'instance selon D4 ;
+`onStart` est vérifié dans le navigateur, mais l'exécution des straps externes
+par `listen` reste ouverte au [plan d'export](./2026-10-15-export-diffusion-plan.md).
+Le constructeur
+`new CodPlay(options)`, `build()` et la création manuelle d'instances restent
+inchangés ; le test de chargement garde une instance auteur vivante pendant
+l'ajout d'une occurrence de diffusion.
 
 ## Décision non prise : observation des changements de snapshot
 
