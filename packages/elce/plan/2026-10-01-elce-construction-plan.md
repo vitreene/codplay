@@ -27,6 +27,16 @@ Les contrats détaillés et vérifiés sont dans les
 [spécifications Elcé](../specs/). Ce plan fixe leur ordre d’application et les
 preuves qui permettent de fermer chaque tranche.
 
+## Étude distincte — articulation des mods
+
+Le [sujet Mods](../mods/index.md) regroupe les études d’une application
+auteur unique et du réemploi des contenus. Le
+[plan de reconfiguration](../mods/plan/2026-10-20-elce-mods-reconfiguration-plan.md)
+réunit les conclusions et décisions de cette étude ; les choix techniques
+non arrêtés y restent **A relire**. L’[étude technique Learning](../mods/notes/2026-10-20-learning-extraction-study.md)
+détaille les découpages et raccords envisagés. Les contrats et acceptations du
+présent plan restent propriétaires du mod actuel, désormais nommé Learning.
+
 ## Ordre et critères de sortie
 
 | Ordre | Tranche | État | Critère de sortie |
@@ -1136,6 +1146,10 @@ Cette fonctionnalité devra définir l’identité créée par la copie, le trai
 des ressources média partagées et celui des BDC composites avant son
 implémentation. Elle reste dans la liste des fonctionnalités à faire et ne fait
 pas partie du changement de catalogue en cours.
+
+Le réemploi de contenus entre projets et mods doit être coordonné avec ce
+contrat de copie, selon D5 du
+[plan de reconfiguration](../mods/plan/2026-10-20-elce-mods-reconfiguration-plan.md).
 
 À coordonner avec Undo/Redo : Copier seul change le presse-papiers, pas le
 document ; Couper et Coller entraînent des mutations documentaires. La tranche
