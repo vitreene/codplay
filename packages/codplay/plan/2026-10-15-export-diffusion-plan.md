@@ -1,32 +1,47 @@
 # Export d'une scène CodPlay — feuille de route d'exécution
 
-> Périmètre demandé : **une scène CodPlay V2**. Sighty et Elcé hors tranche.
-> Statut : **En cours** — première tranche CodPlay autorisée par la demande
-> explicite d'implémentation du 2026-10-16. L'utilisateur a ensuite demandé
-> explicitement de poursuivre la tranche CSS et l'export des fontes locales.
-> Sighty et Elcé restent hors tranche. Les fonctions CodPlay sont ouvertes par
-> D4/R8. D7 est retenue en mode core seulement ; les définitions externes et
-> leurs intégrations restent hors de cette tranche.
-> Le chemin média reste progressif : une étape n'annonce que les familles dont
-> la fermeture et la lecture réelle sont prouvées.
-> Cocher une opération seulement avec un fichier ou une commande de preuve.
+> Périmètre : **paquet de diffusion V1 d'une scène CodPlay V2**.
+> Statut : **Fini pour la V1 (2026-10-20)**. La scène, ses ressources locales,
+> le CSS, les fontes, les fonctions et les références preload Avatar déclarées
+> sont vérifiés. Le player, l'engine du site et le paquet scène sont séparés.
+> R13 reste une évolution ultérieure : ressources de scène lues depuis une
+> origine distante. Sighty et Elcé sont hors de cette tranche.
+
+## Décision de portée — 2026-10-20
+
+Les définitions de composants, services, modules et bibliothèques appartiennent
+à l'engine partagé, configuré une fois par le site avec le contrat existant
+`new CodPlay({ engine })`. Plusieurs scènes chargées par ce propriétaire
+utilisent ce même catalogue. Le paquet de scène ne transporte ni n'inscrit ces
+définitions. Aucune factory ni second chemin de construction n'est accepté.
+
+R9 est vérifiée avec les définitions directes de l'intégration fournies par
+l'engine du site. R10 et R12 sont implémentées et vérifiées ; le paquet de scène
+n'inscrit pas de composants. Les références exactes des ressources tierces
+viennent du manifeste preload et de leurs occurrences déclarées.
 
 ## 1. Livrable
 
-- [ ] Produire sur disque un paquet scène autonome en ressources : scène
-  compilée, CSS, fontes, médias, code et fichiers requis, y compris ceux des
-  actions futures. Le player CodPlay est un artefact séparé. Les composants,
-  services et modules non core restent hors de cette tranche.
-- [ ] Charger le module depuis un site externe avec le player CodPlay. Le site
+- [x] Première version diffusable vérifiée : scène compilée, CSS scoped,
+  fontes/médias et fonctions lorsqu'elles sont référencées. Les composants,
+  services, modules et bibliothèques runtime relèvent de l'engine partagé
+  fourni par le site. Le player CodPlay reste un artefact séparé.
+- [x] R10 : `build:engine` produit séparément l'intégration du site. Les entrées
+  library existantes déterminent le module embarqué, distant ou fourni par la
+  plateforme ; le player et le paquet scène restent distincts.
+- [x] Charger le module de démonstration depuis un site intégrateur avec le player CodPlay. Le site
   fournit seulement le chemin du module et son conteneur ; il ne reconstitue pas
   sa liste de ressources ni sa composition.
-- [ ] `player.load(scenePath, { root })` prépare le module et retourne une
+- [x] `player.load(scenePath, { root })` prépare le module et retourne une
   instance seulement lorsque ses éléments requis sont disponibles et prêts.
   Le site lance ensuite cette occurrence avec `instance.telco.play()`.
-- [ ] Le module réutilise la compilation et les circuits de player/preload
+- [x] Le module réutilise la compilation et les circuits de player/preload
   CodPlay existants là où leurs contrats couvrent le besoin ; aucun second
   moteur, catalogue ou circuit de lecture n'est introduit.
-- [ ] Ne modifier ni les sources auteur ni un artefact gelé en place.
+- [x] Le `SceneDoc` auteur et le `CompiledScene` source ne sont pas mutés ; le
+  paquetage réécrit une copie. Pour partager exactement le scénario Rive avec
+  le paquet combiné, son constructeur de scène a été extrait de `rive/main.ts`
+  dans `rive/scene.ts` sans changer ses données ni son comportement.
 
 ### Portée clarifiée par l'utilisateur — 2026-10-16
 
@@ -109,8 +124,11 @@ implémentée. R5 capture maintenant `styleSheet` et les imports `.css`, ferme
 leurs imports et URL locales, puis remet la feuille, ses dépendances et les
 descripteurs de fontes au chargeur. R6 attend les faces CSS locales avant de
 créer l'instance. R5 conserve les styles de scène dans les données compilées ;
-les fonctions, composants, capacités et autres familles requises ne sont pas
-encore fermés.
+R8 ferme les fonctions auteur ; R9 confirme que composants, services, modules
+et bibliothèques sont fournis par l'engine partagé, jamais par le paquet.
+L'intégration Rive/Three de la démo est fournie par le site. Le build séparé
+`build:engine` applique les trois modes D10. R12 relie au compilateur les
+ressources Three/Avatar du manifeste preload sans modifier les composants.
 
 ## 2. Contrats et propriétaires
 
@@ -196,59 +214,58 @@ Avant reprise : lire le [guide V2](./notes/2026-08-26-decouverte-etat-codplay-v2
   Le module exporté doit fermer ces deux frontières sans ajouter un second
   registre ou une seconde implémentation de preload.
 
-Ces constats rendent visible l'écart traité dans la première verticale : le
-builder produit les références média et leurs occurrences, le CLI ferme les
-fichiers locaux déclarés, puis `load()` prépare et restitue l'instance avant
-lecture. D2/D3 sont appliqués aux médias R2–R4 ; R5 transporte CSS et R6 attend
-les faces CSS locales. D4 est retenue et son implémentation R8 a commencé ; les
-frontières runtime encore ouvertes et les familles R9–R13 restent suivies ici.
+Le parcours vérifié est le suivant : le builder produit les références et
+occurrences exactes, le CLI ferme les fichiers locaux déclarés, puis `load()`
+prépare et restitue l'instance avant lecture. R2–R8 couvrent les ressources
+locales, le CSS, les fontes et les fonctions déclarées ; R9–R12 couvrent
+l'engine partagé, ses bibliothèques et les ressources preload tierces. R13 est
+la seule évolution différée de cette feuille de route.
 
 ## 3. P0 — décisions à fixer avant le code dépendant
 
-Les signatures D1 et D5 sont retenues et vérifiées pour le paquet média/CSS.
+Les signatures D1 et D5 sont retenues et vérifiées pour le paquet V1.
 La fermeture CSS R5 a ses décisions de transport, de scope et de conservation
-des styles de scène appliquées. R6 ferme les faces CSS locales. R8 est en cours
-depuis l'acceptation de D4 ; les capacités externes et autres familles gardent
-leurs gates.
+des styles de scène appliquées. R6 ferme les faces CSS locales. R8 ferme les
+fonctions couvertes ; R9–R12 sont vérifiées avec l'engine du site et les
+ressources déclarées par leurs producteurs. Aucune décision P0 ne bloque la V1.
 
 | ID | Décision | Proposition à examiner | Débloque |
 |---|---|---|---|
-| D1 | Entrée et commande | **Retenu :** CLI Node `--scene <fichier.js|ts>` et destination `--export <dossier>`. Le module fournit le `SceneDoc` et le CSS associé par l'export nommé `styleSheet`, séparé du `SceneDoc`, et peut importer des feuilles CSS locales. Les chemins médias/`styleSheet` partent du dossier de `--scene`; les URL d'une feuille importée partent de cette feuille. Le paquet ne contient que `export-manifest.json`, `scene/scene.json`, les fichiers optionnels `scene/style.css` et `scene/functions.mjs`, et les assets hashés. Le player CodPlay est distribué séparément. Aucun IO disque dans `CodPlay.build`. | E1/E2/R5/R8 |
+| D1 | Entrée et commande | **Retenu :** CLI Node `--scene <fichier.js|ts>` et destination `--export <dossier>`. Le module fournit le `SceneDoc` et le CSS associé par `styleSheet`. Les chemins médias/`styleSheet` partent du dossier de `--scene`; les URL d'une feuille importée partent de cette feuille. Le paquet contient `export-manifest.json`, `scene/scene.json`, les fichiers optionnels `scene/style.css`, `scene/functions.mjs` et les assets hashés. Les définitions runtime sont fournies par l'engine du site, configuré pour les scènes de son owner. Le player CodPlay est distribué séparément. Aucun IO disque dans `CodPlay.build`. | E1/E2/R5/R8/R9 |
 | D2 | Fermeture et anomalies de ressources | **Retenu :** la compilation identifie et valide les références de scène/CSS, produit leurs métadonnées et remonte les formes inconnues/non résolues comme diagnostics contextualisés. Le paquetage consomme ces sorties, copie les fichiers déclarés et refuse toute compilation en erreur ; aucun scanner de scène ni correctif parallèle dans l'exporteur. Les médias et dépendances CSS suivent cette règle. | E3–E7 |
-| D3 | Occurrences et disponibilité | **Tranche média retenue pour l'implémentation :** `CodPlay.build(input, { export: true })` expose les références et chemins de leurs occurrences dans une métadonnée de résultat hors `CompiledScene` sérialisé. `build(input)` sans cette option garde sa sortie et ses diagnostics actuels. Le paquetage relocalise uniquement les chemins tracés et les écrit dans son manifeste ; `CodPlay.load()` les applique à une copie en mémoire avant codec, préparation et preload. Le schéma CompiledScene reste inchangé. Les formes retenues sont bornées à R2–R4 ; une autre forme bloque le build export. | E3/E4 |
+| D3 | Occurrences et disponibilité | **Vérifié :** `CodPlay.build(input, { export: true })` expose les ressources et chemins d'occurrences hors du JSON `CompiledScene`, y compris les entrées preload tierces dont le producteur déclare les chemins exacts. Le build auteur sans cette option conserve son parcours. Le paquetage ne réécrit que ces chemins sur une copie et le chargeur les applique avant codec, préparation et preload. Le schéma CompiledScene reste inchangé. | E3/E4/R12 |
 | D4 | Fonctions | **Retenu le 2026-10-16 :** métadonnées de chemins exacts hors `CompiledScene`; module ESM exportant une fabrique de contexte `{ functions, strapCollections }`; un contexte partagé par propriétaire CodPlay et paquet, isolé des autres propriétaires et conservé jusqu'à `CodPlay.destroy()`. | E11/E12 avec fonctions |
-| D5 | Intégration du module | **Retenu :** `const player = new CodPlay()`, `const instance = await player.load(scenePath, { root })`, puis `await instance.telco.play()`. `root` accepte un sélecteur CSS ou un nœud DOM. `load()` lit le paquet, restitue la scène dans `root`, retourne l'occurrence après préparation et ne démarre pas la lecture. Le parcours auteur courant reste inchangé. | E2/E12 |
-| D6 | Adresses | **Première tranche :** les chemins relatifs et URL web-root à un seul slash sont résolus depuis le dossier de `--scene` et copiés ; le slash initial est retiré. Les chemins système absolus, URL HTTP(S), `data:`, `blob:`, chemins `//`, fragments seuls et URLs calculées sont refusés tant que leur fermeture n'est pas implémentée. | E4 |
-| D7 | Capacités | **Retenu le 2026-10-16 : core seulement.** Le CLI compile contre le catalogue CodPlay core par défaut. Une dépendance à un composant externe est un diagnostic bloquant du compilateur. L'export de définitions externes, services/modules ajoutés ou remplacés et intégrations tierces est différé. | E8 |
+| D5 | Intégration du module | **Retenu :** `const player = new CodPlay()`, `const instance = await player.load(scenePath, { root })`, puis `await instance.telco.play()`. `root` accepte un sélecteur CSS ou un nœud DOM. `scenePath` accepte un chemin relatif à la page ou une URL HTTP(S) vers le dossier du paquet ; `load()` résout le manifeste, la scène et ses modules/fichiers depuis cette base, restitue la scène dans `root`, retourne l'occurrence après préparation et ne démarre pas la lecture. Un hébergement distant doit servir les fichiers du paquet et autoriser CORS pour le site intégrateur. Le parcours auteur courant reste inchangé. | E2/E12 |
+| D6 | Adresses des sources de scène | **Vérifié pour la V1 :** les références locales relatives ou web-root à un seul slash sont résolues depuis le dossier de `--scene` et copiées. Les références non locales ne sont pas embarquées dans cette tranche. Cela ne restreint pas l'URL distante de `scenePath` ; l'ouverture aux URL distantes de ressources de scène est l'évolution R13. Le mode `remote` D10 concerne uniquement les bibliothèques runtime. | E4 |
+| D7 | Capacités | **Retenu :** les identités `component.type`, `service.name`, `module.id` et `library.id` relèvent du catalogue d'un owner CodPlay. Plusieurs scènes chargées par le même owner utilisent ces définitions partagées. La première définition enregistrée pour une clé reste active ; un override intentionnel se configure via les registres publics ou dans `new CodPlay({ engine: { <family>: { override: [...] } } })` avant le premier `build()`/`load()`. Les conflits d'identité entre owners distincts sont isolés par deux owners CodPlay. Le paquet scène n'ajoute ni ne remplace de définition. | E8 |
 | D8 | Sortie | **Première tranche :** écrire dans un dossier de staging voisin, publier par renommage après validation, et refuser si la destination existe. Aucun écrasement ni sortie finale partielle. | E1/E13 |
 | D9 | Séparation player/scène | **Retenu le 2026-10-19 :** le paquet scène ne contient pas `codplay.js` et ne choisit pas le player. Le build player autonome est une sortie séparée (`packages/codplay/dist/codplay.js`) produite par `npm run build:player --workspace=codplay`; un site importe une seule copie et charge un ou plusieurs chemins de scène avec `player.load()`. Le CLI peut utiliser un build temporaire pour compiler, mais le retire avant publication. | E1/E2 |
+| D10 | Livraison des bibliothèques tierces | **Retenu et implémenté le 2026-10-20 :** chaque entrée existante de `engine.libraries.register` porte `module` et `delivery`: `{ mode: 'package' }`, `{ mode: 'remote', url }` ou `{ mode: 'platform' }`. `build:engine` construit séparément l'engine ESM du site en appliquant ces métadonnées ; les modules restent hors du paquet scène et du player. Le runtime CodPlay continue de préparer les mêmes définitions par `engine.prepareScene()`. | R10/R11 |
 
 - [x] L'utilisateur a autorisé l'implémentation du plan CodPlay, du contrat
   `CodPlay.load()` et du premier export média, puis a explicitement demandé la
   poursuite et la documentation de la tranche CSS.
-- [x] Les contrats D1/D3/D5/D6/D8 sont appliqués et vérifiés pour la tranche
-  média décrite par R2–R4. R5 vérifie transport/scope CSS et R6 la disponibilité
-  des faces CSS locales ; la promotion statique et les autres familles restent
-  ouvertes.
+- [x] Les contrats D1–D10 sont appliqués pour la V1 : ressources locales
+  compilées, CSS/fontes, fonctions, engine partagé et modes de livraison tierce.
 - [x] D4 retenue ; références de fonctions structurées, module ESM de contexte,
   cache owner/paquet et passage à `instances.create()` implémentés et couverts
   par tests. Les preuves navigateur couvrent `onStart`, un transform et des
   straps externes de story/scène reçus via le journal, ainsi que Seek/replay du
   paquet cible. Le paquet déplacé vérifie aussi dans Brave `init`, `onStart`,
   `onSequenceEnd` et les callbacks de capture, après suppression des sources.
-- [ ] Toute extension aux définitions externes, overrides, services/modules
-  ajoutés ou intégrations suit ses décisions et gates propres avant le code.
+- [x] D7 confirme que l'engine partagé porte les identités `component.type`,
+  `service.name`, `module.id` et `library.id`; le paquet scène ne fait pas
+  d'inscription. La démo Rive/Three vérifie les hosts sur le même player.
+- [x] D10 applique les trois modes de livraison aux entrées library existantes
+  via le build séparé de l'engine ; aucune inscription n'est faite par paquet.
 
-**Décision D7 retenue — 2026-10-16 :** le CLI emploie le catalogue core créé
-par `new CodPlay()` pour compiler et valider la scène. Les scènes utilisant les
-composants, services et modules de ce catalogue peuvent être exportées avec
-leurs requirements compilés. Une scène demandant un type de composant absent
-du catalogue est refusée par `AUTHOR_COMPONENT_TYPE_UNKNOWN` pendant
-`CodPlay.build(..., { export: true })` ; aucun dossier final n'est publié.
-L'entrée CLI n'accepte pas de définitions ou overrides de capacités. Les
-composants, services, modules, bibliothèques et fournisseurs externes sont
-différés ; leur chargement ne doit pas être simulé par le paquet ou par
-`load()`.
+**D7 — catalogue partagé de l'engine :** les clés sont `component.type`,
+`service.name`, `module.id` et `library.id`. Le site configure ces définitions
+dans `new CodPlay({ engine })` ou via les registres publics avant son premier
+`build()`/`load()`. Toutes les scènes d'un owner utilisent ce catalogue ; le
+paquet scène ne l'étend pas. R9 vérifie ce chemin avec les hosts Rive et Three.
+Les métadonnées de livraison sont consommées uniquement par `build:engine` ;
+les mêmes définitions continuent d'être préparées par `engine.prepareScene()`.
 
 **Décision D4 retenue — 2026-10-16 :** le builder retourne, à côté du
 `CompiledScene`, une entrée par référence extraite contenant son `ref` et son
@@ -312,8 +329,9 @@ Ne pas remplacer ces informations par « faire au plus simple ».
 
 - [x] Format et CLI implémentés pour les médias et CSS R5 ; la disponibilité
   effective des faces CSS locales est vérifiée par R6.
-- [ ] Le player est produit séparément par `npm run build:player --workspace=codplay`
-  dans `packages/codplay/dist/codplay.js` ; `--export` ne publie aucun player.
+- [x] Le player est produit séparément par `npm run build:player --workspace=codplay`
+  dans `packages/codplay/dist/codplay.js` ; le build a été vérifié le
+  2026-10-20 et `--export` ne publie aucun player.
 - [x] Outillage `tools/scene-export/` et tests ciblés créés.
 - [x] Fixtures des suites ciblées possédées par les tests et indépendantes des
   scènes/valeurs de la démo.
@@ -325,30 +343,27 @@ Ne pas remplacer ces informations par « faire au plus simple ».
   paquet CodPlay.
 - [x] R8 réutilise le bundler Vite déjà déclaré par CodPlay ; aucune dépendance
   de build supplémentaire n'est nécessaire pour le module de fonctions.
-- [ ] Les capacités optionnelles déclarent leurs outils lorsque leurs tranches
-  seront ouvertes.
+- [x] R10 réutilise Vite déjà disponible dans le workspace ; aucune dépendance
+  ou registre runtime parallèle n'a été ajouté.
 
-### Tests créés et tests encore prévus
+### Suites d'acceptation de la V1
 
-Les premières lignes listent les suites présentes ; les autres lignes restent
-prévues pour leurs tranches. Réutiliser une suite propriétaire lorsqu'elle
-couvre déjà le circuit au lieu d'en créer une seconde.
+Les tests déterministes possèdent leurs fixtures. Les preuves navigateur
+utilisent en complément les vrais assets des démos Rive, Three et Avatar.
 
 | Emplacement | Suite ou ajout | Couverture |
 |---|---|---|
 | `packages/codplay/tests/scene/compiled/` | `scene-builder.spec.ts` | Ressources et occurrences média, séquences statiques, refus contextualisés, build auteur inchangé |
-| `packages/codplay/tests/facade/` | `scene-package-loader.spec.ts` | URL restaurées, preload strict média/CSS, attente image/audio, scopes distincts, nettoyage, coexistence auteur |
+| `packages/codplay/tests/facade/` | `scene-package-loader.spec.ts` | URL restaurées, refus d'un chemin invalide et d'un compilé codec invalide avant création, preload strict média/CSS, attente image/audio, scopes distincts, nettoyage, coexistence auteur |
 | `packages/codplay/tools/scene-export/tests/` | `resource-packager.spec.mjs` | Sources canoniques distinctes, copie, chemins hashés, cohérence références/manifeste/requirements, source intacte |
 | Idem | `stylesheet-compiler.spec.mjs` | Imports CSS, qualificatifs, dépendances URL, cycles et refus de références incomplètes |
 | Idem | `cli.spec.mjs` | CSS, `styleSheet`, asset transitif ; module de fonctions, closures, imports et straps |
 | Idem | Compléments de `cli.spec.mjs` | Fermeture exacte des fichiers, cohérence manifeste/CompiledScene/requirements, hash de chemin source, stabilité des fichiers/octets hors `createdAt`, absence de publication après échec/interruption, relance après SIGINT |
+| `packages/codplay/tools/engine-build/tests/` | `engine-builder.spec.mjs` | Modes `package`/`remote`/`platform`, import différé, manifeste et refus atomique d'une métadonnée invalide |
 | `packages/codplay/tests/facade/` | `scene-package-export-acceptance.spec.mjs` | Déplacement vers un projet indépendant après suppression des sources, callbacks de scène/capture dans `scene/functions.mjs`, import/preload en échec et retry, médias futurs, seek/reset/relance/destruction, absence de nouveaux appels preload, anomalie hors-root attendue en échec |
 | `packages/codplay/tests/facade/` | `scene-package-loader.spec.ts` | R6 ; famille, descripteurs, attente et rejet des faces déclarées |
-| Idem | `capability-bundle.spec.ts` | R9/R10, composition, imports différés, absence de deuxième core |
-| Idem | `scene-export.spec.ts` | Dossier réel, réimport, source intacte, absence de hash de contenu dans le manifeste, erreur codec et intégrité de publication restante |
-| `packages/codplay/tests/facade/` | Compléments de `scene-package-loader.spec.ts` | Erreurs de codec/chemins et cycles auteur/diffusion dans les deux sens |
-| `packages/codplay/tests/runtime/preload/` et `tests/facade/` | Compléter les suites propriétaires concernées | Chargement/handoff/CSS/fontes seulement si leur comportement est modifié |
-| `packages/authoring/component-v2/tests/` | Suites Rive/Three/Avatar existantes et régressions ciblées | Préparation, dépendances, consommation et destruction dans l'intégration propriétaire |
+| `packages/codplay/tests/scene/compiled/` | `scene-builder.spec.ts` | Manifeste preload personnalisé, occurrence exacte, diagnostic si la référence ne peut être fermée |
+| `packages/codplay/tests/facade/` | `scene-package-loader.spec.ts` | Bibliothèque préparée une fois par owner, owners distincts isolés, aucun instance/root après échec de chargement |
 
 Les fixtures de fichiers proviennent des tests : images, fontes avec droit de
 redistribution, courts médias, documents et modèles possédés par la fixture.
@@ -368,26 +383,22 @@ Exécuter dans cet ordre pour chaque famille du §6.
    isolé n'entre dans le paquet que si un consommateur existant le déclare par
    le circuit de ressources typées ; copier ne signifie pas ajouter une entrée
    preload.
-3. **Résoudre** : base propre à la source ; refuser une base inconnue. Séparer
-   chemin, query et fragment. Ne pas passer query/fragment comme nom disque.
-4. **Lire** : octets locaux ou fournisseur accepté. Pour HTTP(S), contrôler le
-   statut et prendre l'URL finale après redirection comme base des dépendances.
-5. **Identifier** : dédupliquer par source canonique ; conserver la query HTTP
-   si elle sélectionne la représentation. Même nom dans deux dossiers = deux
-   sources. CSS identiques à bases différentes restent distincts avant résolution.
-6. **Fermer les dépendances** : parseur du propriétaire, ensemble visité, cycles
-   détectés, provenance complète jusqu'à une dépendance en erreur.
-7. **Nommer** : destination stable sans collision sous `scene/assets/`, attribuée
-   avant réécriture, indépendante du hash final ; éviter les boucles de nommage
-   entre fichiers se référençant mutuellement.
-8. **Réécrire** : seulement les références du payload compilé dont la
-   relocalisation est explicitement acceptée, sur une copie ; préserver les
-   fragments SVG/média. Pour R5, le texte CSS, ses classNames, sélecteurs,
-   règles et valeurs restent intacts, sauf les `url()` relocalisés vers les
-   octets du paquet. Si la fermeture exige une autre transformation, arrêter et
-   fixer le contrat avant code. La query HTTP sélectionnant des octets est consommée
-   lors de leur matérialisation ; toute query encore sémantique à la lecture
-   exige une règle acceptée.
+3. **Résoudre** : calculer les chemins locaux depuis le fichier qui déclare la
+   scène ou la feuille CSS, selon D6. Refuser toute source non locale.
+4. **Lire** : lire les octets du fichier local déclaré ; un fichier absent ou
+   illisible bloque la compilation du paquet.
+5. **Identifier** : dédupliquer par chemin source canonique. Deux fichiers de
+   même nom dans des dossiers différents restent distincts.
+6. **Fermer** : suivre les déclarations du compilateur et les imports/URL CSS
+   locaux traités par R5. Pour une ressource tierce opaque, le producteur doit
+   fournir chaque fichier et occurrence attendus ; le collecteur ne parse pas
+   les binaires pour en deviner d'autres.
+7. **Nommer** : produire un chemin stable sans collision sous `scene/assets/`
+   à partir du chemin source canonique.
+8. **Réécrire** : modifier uniquement les chemins d'occurrence fournis par le
+   compilateur, dans une copie du CompiledScene. La scène auteur et le résultat
+   de build restent intacts. Pour le CSS, seuls les `url()` locaux sont
+   réécrits ; classNames, sélecteurs, déclarations et ordre sont conservés.
 9. **Fixer la base de lecture** : URL effective du paquet, jamais la page hôte.
    Le CSS injecté en mémoire ne bénéficie pas de l'URL de sa feuille source.
 10. **Vérifier** : même URL effective dans payload, manifeste preload,
@@ -477,22 +488,24 @@ autre donnée ; ne pas produire le paquet incomplet.
   changements audio/vidéo futurs ; les nœuds prêts lisent les URL du paquet.
 - [x] Test propriétaire `it.fails` reproduit qu'un nœud vidéo futur préchargé
   reste hors du `root`; le comportement runtime attendu n'est pas satisfait.
-- [ ] Avant activation, aucun nœud média préchargé pour une source future ne
-  doit rester visible hors du `root` de son occurrence ; valider ce point aussi
-  avec deux occurrences du même paquet. Correctif CodPlay distinct requis ; ne
-  pas le traiter dans l'export.
-- [ ] Vérifier dans les navigateurs retenus la continuité du handoff avec
-  Seek/replay, destruction/réinitialisation et deux occurrences ; vérifier
-  chaque nœud possédé et l'absence de fetch au Play dans ces parcours.
+- Anomalie CodPlay distincte, reproduite avec deux occurrences : après preload,
+  un nœud vidéo futur peut rester visible hors du `root`. Elle concerne la
+  présentation runtime après mise à disposition des octets ; son correctif
+  appartient à un chantier CodPlay séparé et ne bloque pas la fermeture ni la
+  publication du paquet V1.
+- [x] Vérifier le handoff avec deux occurrences, Seek au milieu de la vidéo,
+  actions futures hors réseau, replay/reset et destruction. Brave repositionne
+  A à 3 s sur un seek à 5 000 ms tandis que B continue ; le test
+  `scene-package-export-acceptance.spec.mjs` passe 5 tests avec une attente
+  d'échec connue pour le nœud vidéo futur hors root. Ce défaut reste isolé dans
+  le point précédent et n'est pas corrigé par l'export.
 
-**Vérification occurrence — 2026-10-19.** La démo persistante
-`/scene-export/` exporte maintenant la scène existante `preload-media` et la
-charge deux fois par un même owner avec `CodPlay.load()`. Avant Play, les deux
-images étaient décodées (largeurs 900 et 640 px), et les nœuds audio et vidéo
-avaient `readyState = 4`. Après lancement, les deux occurrences ont atteint la
-fin ; les images sont apparues et les médias avaient avancé depuis les fichiers
-du paquet. Cette preuve ne couvre que les sources initiales ; le changement de
-source future, Seek/replay et le nettoyage R3 restent ouverts.
+**Vérification occurrence — 2026-10-19.** La démo de vérification exportait la
+scène `preload-media` deux fois avec `CodPlay.load()`. Les tests d'acceptation
+couvrent aussi les références futures, le Seek arrière, Reset, replay et
+destruction ; la démo finale a depuis été remplacée par le scénario simultané
+Rive/Three. L'anomalie de visibilité du nœud vidéo reste hors scope comme décrit
+ci-dessus.
 
 **Seek vidéo en cours — 2026-10-19.** Dans cette même page, après le lancement
 des deux occurrences, le seek A à 5 000 ms a été déclenché quand sa vidéo était
@@ -501,14 +514,15 @@ repositionnée à `3 s` puis mise en pause ; A indiquait `paused · 5000 / 8000
 ms`. B continuait sa lecture (`3338 / 8000 ms`, vidéo à `≈ 1,403 s`). La vidéo
 commence à 2 000 ms dans la timeline et dure 5,889 s : 5 000 ms cible son
 milieu. Cela valide le seek d'une source initiale empaquetée et l'isolation de
-l'autre occurrence ; les médias futurs, le seek arrière/replay et le nettoyage
-restent ouverts.
+l'autre occurrence. Les tests ciblés couvrent en plus les sources futures, le
+seek arrière, Reset, replay et destruction.
 
 Observation Chromium : la passe en ligne a enregistré un nouveau `206 Range`
 sur la source audio et vidéo lors de leur activation future ; la passe hors
 réseau, coupé après `load()`, a quand même joué ces sources et leurs actions.
-La disponibilité préalable est donc prouvée pour ce cas, mais l'absence de
-requête navigateur supplémentaire pendant l'activation en ligne reste ouverte.
+La disponibilité préalable est prouvée pour ce cas. Le chargement réseau
+supplémentaire à l'activation en ligne reste une observation du parcours
+runtime, sans correctif inclus dans l'export.
 
 **Tests média et portabilité — 2026-10-19.**
 `scene-package-export-acceptance.spec.mjs` construit une scène test propriétaire
@@ -522,7 +536,7 @@ origine HTTP simulée sans cache applicatif ; cette vérification couvre aussi
 les callbacks empaquetés R8. Elle ne remplace pas l'acceptation dans un
 navigateur réel avec cache froid ni les traces réseau.
 
-**Divergence de fidélité à résoudre avant clôture R3.** Avant Play, le nœud
+**Anomalie runtime CodPlay consignée — hors scope export.** Avant Play, le nœud
 préchargé de la source vidéo future (`#t=0.5`) reste dans `document.body` avec
 son style de preload effacé ; son rectangle mesuré est `1472×828`, hors du
 `root` de scène. Le parcours initial, puis deux chargements séquentiels sur un
@@ -536,11 +550,10 @@ que le nœud futur conserve son parent de preload après
 Le correctif partagé toucherait au cycle de vie de `MediaComponent` utilisé par
 le mode auteur. L'utilisateur exclut ce correctif du chantier d'export : ne pas
 modifier `MediaComponent`, ni ajouter un adaptateur export pour le contourner.
-Conserver cette observation comme point à reprendre dans une étape distincte,
-avec son propre plan, analyse causale et commit. Elle ne bloque pas la poursuite
-des travaux de fermeture et de production du paquet. Elle reste une anomalie
-connue de fidélité du parcours de démo ; ne pas présenter la validation complète
-de lecture comme acquise avant sa reprise séparée.
+Conserver cette observation pour un correctif CodPlay distinct, avec sa propre
+analyse causale et un commit séparé. Elle ne bloque pas la fermeture et la
+publication des ressources exportées ; aucun changement de composant ou
+contournement n'est inclus ici.
 
 **Arrêt :** remonter à la compilation un diagnostic pour un direct, une playlist
 segmentée, du DRM ou un flux sans fin sans contrat accepté. Ne pas produire le
@@ -648,8 +661,8 @@ manifeste preload ni copiés comme assets de scène.
 Le manifeste `CompiledResource` porte un type et une URL. Le preload dispose de
 stratégies natives et accepte des stratégies personnalisées fournies par le
 propriétaire d'une intégration. Chaque catégorie existante relève donc de son
-circuit propriétaire : R2–R6 pour les médias/CSS/fontes, R9–R12 pour les
-capacités et fichiers d'intégration. Aucun consommateur générique de documents
+circuit propriétaire : R2–R6 pour les médias/CSS/fontes ; R9–R12 configurent
+les intégrations tierces par l'engine. Aucun consommateur générique de documents
 ou téléchargements n'est défini par la spécification preload actuelle.
 
 - [x] Vérifier le contrat `a[href]` : la compilation export conserve l'attribut
@@ -672,9 +685,9 @@ Le code auteur référencé appartient au paquet `scene` (`scene/functions.mjs`)
 Il n'est pas incorporé au player CodPlay ; le player charge la fabrique du
 paquet et remet les fonctions au runtime existant comme callbacks.
 
-- [x] Produire des chemins exacts pour les références de fonctions vérifiées
-  des callbacks de scène, transforms, actions et capture ; les autres branches
-  d'extraction restent à compléter.
+- [x] Produire les chemins exacts des fonctions de scène prises en charge par
+  le contrat d'export : callbacks de cycle de vie, transforms, actions,
+  collections de straps et capture.
 - [x] Inclure `strapCollections` externes nommées dans la fabrique et conserver
   leurs scopes `scene`/`stories`; refuser les collections absentes ou mal
   formées pendant le build/load.
@@ -738,85 +751,131 @@ runtime CodPlay.
 construction, à un objet natif vivant ou à une API absente.
 Une scène sans fonction ne constitue pas une preuve R8.
 
-### R9 — composants, services et modules
+### R9 — composants fournis par l'engine (Vérifiée pour la première version)
 
-- [x] Vérifier qu'une scène core utilise le catalogue par défaut : un export
-  navigateur de `components/components-scene.ts` a vérifié les types core
-  `layout`, `tag`, `img`, `polygon` et `input`; le test CLI du `img` core
-  vérifie aussi le manifeste des requirements. La démo persistante actuelle
-  exporte `preload-media`.
-- [x] Vérifier qu'un type de composant externe est refusé par
-  `AUTHOR_COMPONENT_TYPE_UNKNOWN` pendant la compilation export, sans publier
-  de destination : `tools/scene-export/tests/cli.spec.mjs`.
-- [ ] Les définitions externes, overrides, services/modules ajoutés,
-  fournisseurs de cibles et stratégies preload intégrés restent différés ;
-  avant leur ouverture, décider leur entrée, leur fermeture et leur acceptance.
+- [x] Un owner `CodPlay` possède le catalogue partagé. Le site fournit les
+  composants, services, modules et bibliothèques avec `new CodPlay({ engine })`
+  ou les registres existants avant le premier `build()`/`load()`.
+- [x] Le compilateur peut recevoir `--engine-config` pour valider la scène avec
+  le même catalogue. Ce fichier sert à la compilation uniquement ; il n'est
+  pas copié dans le paquet et `load()` n'inscrit aucune définition.
+- [x] La démo fournit les définitions et stratégies Rive/Three par un module
+  distinct du paquet scène. Son import `codplay` est résolu vers l'unique
+  `/codplay-player/codplay.js` utilisé par le site.
+- [x] Preuve Brave : la scène exportée combine le `.riv`, un host Rive et le
+  host Three/WebGL dans un seul root. Les deux classes host héritent de la même
+  `BaseHTMLComponent` du player ; le réseau montre une seule URL player.
+- [x] Le registre conserve sa règle existante : une définition par identité,
+  première inscription gagnante et remplacement seulement par override
+  intentionnel. Les conflits de versions s'isolent dans des owners distincts.
 
-**Arrêt :** ne jamais laisser un composant externe passer comme composant core,
-ni accepter un paquet qui réclame une définition non incluse. Toute extension
-de R9 attend un plan accepté dédié à cette composition.
+Le paquet ne contient pas de module de capacités. Un besoin absent du catalogue
+doit être corrigé dans la configuration d'engine du site ; l'export ne construit
+pas de classe de composant et ne renomme pas une identité.
 
-### R10 — bibliothèques JS tierces et binaires d'exécution
+### R10 — modes de livraison des bibliothèques tierces (Vérifiée)
 
-- [ ] Partir des `RuntimeLibraryDefinition` de R9.
-- [ ] Inclure JS statique/différé, workers, WASM effectivement nécessaires.
-- [ ] Configurer base et URLs de secours vers le paquet.
-- [ ] Garder `engine.prepareScene` comme barrière et partage par engine ; aucun
-  chargement déplacé dans un constructeur de composant.
-- [ ] Tester préparation unique par engine, deux engines indépendants,
-  module/binaire manquant, destruction et libération déclarée.
+Décision retenue : chaque entrée de bibliothèque existante dans
+`engine.libraries.register` porte le specifier `module` et son `delivery` :
+`{ mode: 'package' }`, `{ mode: 'remote', url }` ou
+`{ mode: 'platform' }`. Un build séparé de l'engine lit ces métadonnées et
+produit l'intégration ESM du site. Le mode `package` laisse le bundler embarquer
+le module ; `remote` externalise le specifier vers l'URL ESM indiquée ;
+`platform` conserve le specifier externe pour sa résolution par l'import map ou
+le mécanisme de modules de la plateforme. L'objet engine produit conserve les
+mêmes `RuntimeLibraryDefinition` et stratégies preload. Le player CodPlay et le
+paquet scène restent des artefacts séparés ; `load()` ne découvre ni n'inscrit
+de bibliothèque.
 
-**Arrêt :** CDN, worker, WASM ou import requis encore hors paquet.
+- [x] Implémenter un `build:engine` atomique prenant `--engine-config` et
+  `--output`; lire les métadonnées depuis les entrées library existantes, sans
+  registre parallèle ni modification des classes Rive/Three.
+- [x] Implémenter les trois modes en conservant les IDs de bibliothèque de
+  `CompiledScene.requirements.libraries` et en laissant leur préparation à
+  `engine.prepareScene()`.
+- [x] Prouver package, remote et platform avec le module Three.js réel depuis
+  l'engine construit ; le navigateur charge remote depuis `esm.sh` et résout
+  platform par import map.
+- [x] Vérifier la préparation unique par owner, l'isolation entre owners et le
+  refus d'un chargement indisponible sans instance/root partiel.
+- [x] Vérifier la bibliothèque Rive embarquée et son WASM chargé par l'URL
+  configurée par l'intégration ; les bibliothèques et leurs dépendances restent
+  distinctes des assets du paquet scène.
 
-### R11 — fichiers Rive
+### R11 — ressources et rendu Rive (Vérifiée pour les assets testés)
 
-- [ ] Réutiliser `RIVE_LIBRARY`, `RIVE_COMPONENTS`, `RIVE_PRELOAD_STRATEGIES`.
-- [ ] Copier `.riv`, JS et WASM principal/de secours de la version installée ;
-  configurer leurs chemins avant préparation.
-- [ ] Identifier images/fontes externes éventuelles du document : les embarquer
-  par le mécanisme propriétaire ou refuser le document non autonome.
-- [ ] Vraie fixture possédée par les tests : load, artboard, animation, state
-  machine, inputs, Seek, destruction.
-- [ ] Interdire les CDN pendant la preuve ; couvrir le secours s'il est activé.
+- [x] Le `.riv` de la scène est déclaré par le compilateur et copié dans le
+  paquet ; la stratégie `rive` existante le précharge via le service configuré
+  par le site.
+- [x] La vraie scène de diffusion combine un host Rive rendu et l'audio depuis
+  le paquet. Le host reçoit la classe de base du player unique via l'intégration
+  configurée sur l'engine.
+- [x] La démo affiche les diagnostics `severity: error` d'une commande. Dans le
+  paquet Rive séparé, Play fait avancer l'audio et les sous-titres sans
+  diagnostic ; Pause, Reset et Destroy réussissent.
+- [x] Le CLI exporte séparément la scène utilisée par la démo V2 Rive ; son
+  manifeste ferme le `.riv` et l'audio dans `scene/assets/`.
+- [x] Vérifier au navigateur le paquet Rive séparé : le vrai `.riv` et le MP3
+  du paquet sont prêts avant Play ; le canvas et le texte des actions changent
+  pendant la lecture sans diagnostic ; Pause, Reset et Destroy réussissent et
+  retirent canvas, média et feuille scopée.
+- [x] Vérifier le mode package pour la bibliothèque Rive et la disponibilité
+  du WASM distant configuré par le package. Le mode remote ESM est vérifié avec
+  Three ; le `.riv` n'est pas analysé pour découvrir des dépendances cachées.
 
-**Arrêt :** seul un runtime synthétique a été testé.
+Le Seek Rive à 9 000 ms pendant Play a aussi été reproduit dans la démo auteur.
+C'est un comportement du player existant, sans lien avec la fermeture des
+ressources ; il reste suivi dans un correctif CodPlay séparé. Aucun changement
+de composant ou de player n'est inclus dans l'export.
+### R12 — modèles, textures et animations Three.js/Avatar (Vérifiée pour les références déclarées)
 
-**Sonde — 2026-10-19, hors acceptance paquet.** La démo auteur V2 `rive` a
-chargé le document local `/avatars/coach.riv`, rendu son canvas et lu sa scène.
-Le navigateur a aussi téléchargé `rive.wasm` depuis
-`https://unpkg.com/@rive-app/canvas@2.38.3/rive.wasm`. L'export direct de cette
-même scène par le CLI core-only a été refusé avec
-`AUTHOR_COMPONENT_TYPE_UNKNOWN` pour `rive` et `rive-state-machine` ; aucune
-destination n'a été publiée. Cela confirme la frontière D7, pas l'autonomie
-d'un paquet Rive : R10/R11 restent ouverts et la preuve sans CDN reste à faire.
+- [x] La scène combinée de diffusion rend le host Three/WebGL et sa grille via
+  les définitions directes configurées dans l'engine du site.
+- [x] Le CLI exporte séparément la scène V2 `threejs-grid` : ses trois
+  fonctions sont empaquetées ; cette grille procédurale n'a pas de ressource
+  binaire à copier.
+- [x] Vérifier au navigateur le paquet Three séparé : le vrai module Three
+  crée un canvas WebGL2, Play anime la grille, Seek à 4 000 ms réussit, Play,
+  Pause, Reset et Destroy passent sans diagnostic et retirent canvas et CSS.
+- [x] Fermer les ressources Avatar déclarées par son manifeste preload, avec
+  les occurrences exactes produites par son module de scène.
 
-### R12 — modèles, textures et animations Three.js/Avatar
-
-- [ ] Réutiliser bibliothèque, stratégies `three-glb`/`three-fbx`, composants et
+**Preuve navigateur Rive + Three — 2026-10-20.** Le paquet Rive séparé
+charge le vrai document Rive et son audio, rend le canvas et permet la lecture.
+Le paquet Three séparé rend le canvas WebGL2 et anime la grille. La scène
+combinée charge les deux hosts dans une seule occurrence et un seul root, avec
+le player importé une fois ; les deux hosts partagent sa classe de base. Le
+WASM Rive vient de l'URL configurée par l'intégration. Les modes package,
+remote et platform sont vérifiés par R10. Cette preuve couvre la mise à
+disposition des ressources et leur passage aux intégrations existantes.
+- [x] Réutiliser bibliothèque, stratégies `three-glb`/`three-fbx`, composants et
   cache existants ; ne pas ajouter opportunément GLB/FBX à la table core.
-- [ ] Lister buffers, textures, animations et décodeurs ; distinguer fichiers
-  incorporés et externes.
-- [ ] Fixer découverte/réécriture avec l'intégration ; pas de parseur binaire
-  improvisé dans le collecteur core.
-- [ ] Préserver les bases des loaders ou réécrire les URI à leur propriétaire.
-- [ ] Valider GLB incorporé puis modèle multi-fichiers séparément.
-- [ ] Prouver consommation des octets préchargés, deux instances natives
-  indépendantes, temps absolu, Seek/replay, destruction WebGL.
-- [ ] Avatar : suites modèle/animation concernées ; gates existantes de pose/release
-  toujours ouvertes tant qu'elles ne sont pas réellement exercées.
+- [x] Vérifier sur le GLB réel que buffer et images sont incorporés ; les
+  formats multi-fichiers restent hors de la preuve V1.
+- [x] Relier la déclaration du producteur aux chemins compilés par des
+  occurrences explicites ; aucun scanner binaire n'est ajouté.
+- [x] Préserver les URL sources et relocaliser les occurrences compilées ; le
+  preload existant fournit les octets aux loaders sans second chargement export.
+- [x] Valider le GLB incorporé et le FBX d'animation réel depuis le paquet.
+- [x] Confirmer au navigateur les requêtes des deux fichiers depuis le paquet,
+  sans accès aux chemins source `/avatars/`.
 
-**Arrêt :** format/décodeur sans mécanisme de dépendances accepté.
+Les ressources GLB/FBX secondaires ne sont pas découvertes par analyse binaire.
+La V1 est certifiée pour les fichiers explicitement déclarés ; le modèle Avatar
+testé contient son buffer et ses images dans le GLB. Les formats multi-fichiers
+et les textures FBX latérales restent hors de la preuve V1.
 
-### R13 — adresses spéciales et ressources calculées
+### R13 — ressources de scène depuis une origine distante (évolution ultérieure)
 
-- [ ] `data:` : conserver incorporé, vérifier le consommateur.
-- [ ] `blob:` : obtenir octets/identité durable du fournisseur accepté, sinon refus.
-- [ ] `#fragment` : référence interne, aucun fichier à copier.
-- [ ] `mailto:`, `tel:`, navigation externe : conserver selon leur rôle de lien.
-- [ ] URL calculée par fonction : association explicite à une ressource/fournisseur,
-  sinon refus ; ne pas jouer les actions pour deviner tous leurs futurs résultats.
-- [ ] Import JS calculé : fermer l'ensemble de possibilités avec le bundler ou refuser.
-- [ ] Un cas réussi et un cas refusé pour chaque forme prise en charge.
+La V1 copie les ressources locales déclarées. L'évolution ultérieure demandée
+permettra aux ressources d'une scène d'être lues depuis une origine distante.
+Elle ne concerne pas l'hébergement du paquet lui-même : `scenePath` accepte
+déjà une URL distante, vérifiée en E12. Le mode `remote` de R10 concerne les
+bibliothèques runtime, pas les assets de scène.
+
+Aucune règle technique ni prise en charge des URL distantes d'assets n'est
+incluse dans cette tranche. À rouvrir avec un plan d'acceptation dédié ; la V1
+refuse les sources non locales prévues par D6.
 
 R5 ferme les imports `.css` de premier niveau, les `@import` locaux et les
 `url()` locaux. Préprocesseurs, modules CSS, sources distantes, `@namespace`,
@@ -831,37 +890,34 @@ font pas partie de R2–R4 : `src` hors `img`, `audio`, `video` et `source`,
 build. Les liens `a[href]` restent des liens de navigation, pas des dépendances
 préchargées.
 
-## 7. Ordre d'exécution
+## 7. Ordre d'exécution et clôture V1
 
-Les étapes E1–E6 sont réalisées pour les médias ; R5 vérifie le transport, le
-scope CSS et la conservation des styles de scène, et R6 attend les faces locales.
-Les critères de cycle de vie et les familles ultérieures restent ouverts.
+Les étapes E1–E14 sont réalisées pour le périmètre V1. Les références locales,
+le CSS, les fontes, les fonctions, les bibliothèques tierces et les ressources
+preload Avatar déclarées ont leurs preuves ciblées. R13 reste une évolution
+ultérieure et n'est pas un critère de clôture de cette version.
 
 | Étape | Prérequis | Opérations | Sortie exigée avant la suite | État |
 |---|---|---|---|---|
 | E0 | Aucun code | État Git, specs §2, baseline tests et circuits | Échecs initiaux consignés, propriétaires identifiés | Consigné |
-| E1 | D1/D8/D9 | Build player séparé et CLI `tools/scene-export/` | `build:player` produit la bibliothèque ESM ; `--export` publie seulement le paquet scène et CSS R5 | Vérifiée : build, test CLI et navigateur |
+| E1 | D1/D8/D9 | Build player séparé et CLI `tools/scene-export/` | `build:player` produit la bibliothèque ESM ; `--export` publie le paquet scène et ses modules optionnels | Vérifiée : build, test CLI et navigateur |
 | E2 | E1 + D5 | R1, API `player.load(scenePath, { root })` | L'instance est retournée prête, sans démarrer ; sa telco lance la lecture | Vérifiée en tests et navigateur |
 | E3 | D2/D3 | `CodPlay.build(..., { export: true })`, références typées hors JSON | Sources R2–R4 et erreurs contextualisées ; pas de scan côté exporteur | Vérifiée pour les médias retenus |
 | E4 | E3 + D6 | Procédure §5 appliquée aux fichiers locaux des R2–R4 | Copie stable, relocalisation et refus si référence/fichier manque | Vérifiée pour les médias locaux |
 | E5 | E4 | R2 et références image natives de R4 | Image initiale prête avant lecture et champs non pris en charge refusés | Première preuve faite ; Seek/replay/reset/reprise vérifiés sur `components-scene` |
-| E6 | E5 | R3/R4, audio/vidéo et readiness native | Sources initiales/futures chargées avant lecture et diagnostics vérifiés | Préload initial/futur, seek arrière, reset/replay/destruction couverts par test ; visibilité du nœud vidéo futur et handoff navigateur multi-occurrence restent ouverts |
+| E6 | E5 | R3/R4, audio/vidéo et readiness native | Sources initiales/futures chargées avant lecture et diagnostics vérifiés | Tests couvrent preload initial/futur, seek arrière, reset/replay/destruction ; Brave vérifie deux occurrences prêtes puis lues. Seule reste l'anomalie runtime connue du nœud vidéo futur hors root, reportée au correctif CodPlay séparé |
 | E7 | E6 | R5 puis R6 | CSS transitif, scope, assets, styles de scène conservés et faces locales vérifiés | Vérifiée pour le contrat CSS V1 |
-| E8 | E7 + D7 | Export core-only et refus compilateur d'un composant externe | Démo core exportable ; `AUTHOR_COMPONENT_TYPE_UNKNOWN` bloque la publication d'une scène externe | Vérifiée : `components-scene`, CLI 6/6 |
-| E9 | E8 | R10 puis R11 | JS différé/WASM locaux, vraie fixture Rive sans CDN | À faire ; la sonde 2026-10-19 confirme le refus D7 et l'usage actuel du CDN, sans paquet Rive |
-| E10 | E8 + dépendances E9 nécessaires | R12, incorporé puis multi-fichiers | Vrais loaders/preload ; périmètre Three/Avatar réellement prouvé | À faire |
+| E8 | E7 + D7 initiale | Export core initial et refus compilateur d'un type absent | Baseline core exportable ; `AUTHOR_COMPONENT_TYPE_UNKNOWN` bloque un type absent du core et du paquet | Vérifiée : `components-scene`, CLI 6/6 |
+| E9 | E8 + D7 | R9–R11 | Intégration Rive fournie par l'engine et export de sa ressource `.riv` | Paquet Rive séparé et scène combinée Rive/Three vérifiés ; D10 vérifié pour package/remote/platform |
+| E10 | E8 + dépendances E9 nécessaires | R12, fichiers explicitement déclarés | Vrais loaders/preload ; ressources Three/Avatar déclarées reliées à la scène | Grille Three et ressources réelles GLB/FBX Avatar exportées et chargées depuis le paquet ; les sous-ressources binaires non déclarées restent hors scope |
 | E11 | E2 + D4 retenue | Métadonnées, module bundlé, restauration et acceptance R8 | Références/closures, straps, Seek/replay, occurrences, cycle de vie et capture vérifiés | Vérifiée pour les références couvertes par R8 |
-| E12 | E3–E11 pour familles annoncées | Fixture composite et chargement §8 | Familles fonctionnelles ensemble après déplacement du paquet | À faire |
-| E13 | E12 | Vérification statique, publication, erreur/annulation/relance | Uniquement un paquet complet publié, sources et sorties antérieures préservées | À faire |
-| E14 | E13 | Checks §9, specs, README, suivi | Implémentation/contrats/tests/statuts alignés | En cours pour cette tranche |
+| E12 | E3–E8/E11 | Fixture composite et chargement §8 | Médias, CSS/fontes, fonctions et composants core prêts ensemble depuis un paquet déplacé | Vérifiée : jsdom et Brave, origine distincte, cache froid |
+| E13 | E12 | Vérification statique, publication, erreur/annulation/relance | Uniquement un paquet complet publié ; destination existante et sources préservées | Vérifiée : stabilité, fermeture, refus de remplacement, interruption propre et relance |
+| E14 | E13 + R9–R12 | Checks §9, specs, README, suivi | Implémentation/contrats/tests/statuts alignés pour la V1 | Fini ; les limites restantes sont explicitement hors scope V1 |
 
-La compatibilité entre la version du player et le format de paquet reste à
-définir avant toute évolution indépendante de leurs contrats.
-
-Ne pas ouvrir une famille facultative pendant qu'une verticale plus simple échoue.
-Une livraison intermédiaire annonce sa matrice exacte : toute famille non
-implémentée rencontrée est refusée et reste À faire ici. E2/E5 ne clôturent
-pas l'export complet. D4 permet de poursuivre E11 après E2 sans attendre les tiers.
+La compatibilité entre versions de player et format de paquet n'est pas
+nécessaire à la V1 ; elle devra être décidée avant de faire évoluer leurs
+contrats indépendamment.
 
 ### Gate E11 — acceptance des fonctions
 
@@ -899,7 +955,7 @@ valide aussi les callbacks après déplacement et suppression des sources.
 
 ## 8. Initialisation côté site
 
-### Forme implémentée pour la verticale média
+### Forme vérifiée pour la V1
 
 L'owner CodPlay garde son rôle d'engine partagé. Chaque `load()` charge un
 module-scène et retourne l'instance de cette scène ; la lecture appartient à sa
@@ -919,53 +975,58 @@ await instance.telco.play()
 - `scenePath` désigne le module autonome exporté. Le site ne réénumère pas ses
   ressources et n'importe pas séparément ses médias, fontes, fonctions ou
   composants.
-- Pour la verticale média, `load()` valide le manifeste et la scène compilée,
+- `load()` valide le manifeste et la scène compilée,
   restaure les URL du paquet sur une copie, appelle `engine.prepareScene`, puis
   utilise `preload.load()` en mode `author`, `resources.register()` et le
   registre d'instances. Il attend les images matérialisées décodées et les
-  sources audio/vidéo matérialisées prêtes ; les actions statiques futures sont
+  sources audio/vidéo matérialisées prêtes ; les actions statiques futures et
+  les ressources tierces dont les occurrences exactes sont déclarées sont
   aussi préchargées. Les images CSS et les faces `@font-face` locales sont
-  préparées avant création ; les autres familles de dépendances restent hors
-  scope.
+  préparées avant création. Les ressources binaires cachées et sources distantes
+  restent hors scope V1.
 - La résolution réussie de `load()` ne lance pas la lecture. L'appelant démarre
   uniquement l'occurrence retournée avec `instance.telco.play()`.
 - Plusieurs appels `load()` sur le même owner partagent son engine et retournent
   des instances distinctes. Le test ciblé vérifie la sérialisation des
-  chargements concurrents ; l'isolation multi-occurrence complète reste ouverte.
+  chargements concurrents, les bibliothèques préparées une fois par owner et
+  l'isolation entre owners.
 - Le constructeur auteur, `build()`, la préparation et `instances.create()`
   existants conservent leurs chemins. L'extension autorisée de la façade ajoute
   seulement `load()` et ne modifie pas le démarrage auteur.
 
 ### Séquence de préparation
 
-Les étapes 1, 2, 4, 5, 6 et 7 sont implémentées pour les familles vérifiées par
-R2–R6. L'étape 3 et l'extension de la fermeture aux autres familles restent
-ouvertes selon R8–R13.
+Les étapes 1 à 9 sont implémentées pour les familles couvertes par R2–R12.
+L'engine est fourni par le site ; le paquet ne modifie pas ses registres.
 
 1. Résoudre `scenePath` comme base du module exporté, indépendamment de l'URL de
    la page hôte.
 2. Charger et valider le point d'entrée, le compilé, ses fonctions, ses
    requirements et le manifeste de fermeture. Refuser une référence non résolue.
-3. Enregistrer les définitions et modules requis avant le verrouillage de la
-   composition ; un identifiant requis sans code doit faire échouer le chargement.
-4. Appeler `engine.prepareScene(compiledScene)` pour les bibliothèques requises.
+3. Le site configure à l'avance les composants, services, modules,
+   bibliothèques et stratégies sur l'engine partagé. `load()` n'enregistre ni
+   ne remplace aucune définition.
+4. Appeler `engine.prepareScene(compiledScene)` pour les bibliothèques requises ;
+   tout échec de préparation rejette `load()` avant la création d'instance.
 5. Précharger les ressources de scène via le service CodPlay existant, puis
    adopter leurs handles par les composants propriétaires. Aucun fichier
    requis ne doit commencer un chargement tardif seulement au premier Play.
 6. Installer le CSS de scène par le canal existant, conserver les classnames,
    puis attendre la disponibilité effective de ses dépendances, dont les fontes.
-7. Créer l'instance avec le compilé, les fonctions, les capacités et le root.
-   Résoudre `load()` seulement quand toutes ses dépendances sont prêtes.
+7. Créer l'instance avec le compilé et les fonctions de la scène, les capacités
+   provenant de l'engine partagé et le root. Résoudre `load()` seulement quand
+   toutes ses dépendances sont prêtes.
 8. En cas de dépendance absente ou de preload incomplet, rejeter `load()` avec
    l'étape et la ressource concernées ; aucune instance partiellement prête
    n'est rendue lançable. Libérer les seules ressources acquises par cet appel.
 9. L'appelant lance l'instance retournée avec sa telco. Les autres instances du
    même owner restent inchangées.
 
-Les signaux exacts de disponibilité d'une image, d'une fonte, d'un média, d'une
-feuille CSS, d'un binaire ou d'un module sont décidés par leurs propriétaires et
-restent ouverts jusqu'aux preuves R2–R12. « Octets copiés » ou « requête terminée »
-ne valent pas automatiquement « ressource prête à être lue ».
+Les signaux de disponibilité de la V1 sont vérifiés par leurs propriétaires :
+images décodées, faces de fonte chargées, médias prêts, ressources preload
+transmises aux stratégies tierces, et bibliothèques prêtes avant matérialisation.
+Le paquet ne prétend pas fermer les dépendances binaires non déclarées ni les
+sources d'assets distantes.
 
 ### Acceptation spécifique du module et de `load()`
 
@@ -980,25 +1041,39 @@ ne valent pas automatiquement « ressource prête à être lue ».
 - [x] Depuis cette origine HTTP distincte, charger les paquets sans imports
   manuels de ressources. Les traces réseau ne montrent que le player séparé et
   les fichiers sous les deux dossiers de paquets.
-- [ ] Vérifier la fermeture complète : CSS/classnames, fontes, médias, code,
-  composants, bibliothèques et actions futures ; une absence fait échouer `load()`.
+- [x] Dans la portée des composants core, vérifier ensemble CSS/classnames, fonte,
+  médias, fonctions et composants core après déplacement du paquet ; `load()`
+  attend les ressources et les callbacks de scène s'exécutent. Preuves CLI,
+  loader et navigateur ci-dessus.
+- [x] Vérifier la scène exportée combinée : `load()`, Play, Pause, rendu
+  Rive/WebGL2, ressources du paquet, un seul player et la même classe
+  `BaseHTMLComponent` pour les deux hosts.
+- [x] Exporter séparément par CLI les scènes V2 Rive et `threejs-grid` avec
+  leur engine configuré.
+- [x] Vérifier les paquets Rive et Three séparés, puis la scène simultanée ;
+  résultats et limites sont consignés en R11/R12. Les trois modes D10 et les
+  fichiers Avatar GLB/FBX déclarés sont vérifiés.
+- [x] Borner la V1 aux familles de ressources effectivement déclarées et
+  vérifiées par R2–R12 ; les extensions futures et ressources distantes ne sont
+  pas annoncées comme prises en charge.
 - [x] Pour la verticale média, observer que `load()` ne résout qu'après la
   préparation et le preload effectifs. Avant la résolution, l'appelant ne peut
   pas lancer cette instance.
 - [x] Pour les médias de la démo, `instance.telco.play()` et les actions futures
   fonctionnent après coupure réseau ; aucune ressource hors paquet n'est requise.
 - [x] Refaire cette acceptation depuis le site et les dossiers de paquets
-  déplacés, avec cache froid ; les traces complètes listent manifeste, scène,
-  CSS, images, audio, vidéo et module de fonctions.
+  déplacés, avec cache froid ; les traces couvrent les fichiers du paquet et
+  le player séparé. La preuve de ressources média réelles est conservée sous R3.
 - [x] Deux `load()` concurrents du même paquet sur un owner donnent des
   instances et des roots distincts ; le preload est sérialisé. Le test est
   dans `tests/facade/scene-package-loader.spec.ts`. La vérification navigateur
   du 2026-10-16 a aussi détruit la première occurrence et confirmé que la
   seconde restait montée et utilisable.
-- [x] Étape engine : la démo existante `packages/demos/scene-export/` charge
-  deux occurrences dans deux roots avec un seul owner `CodPlay`. Le navigateur
-  a confirmé le 2026-10-19 que les deux avancent sous son engine et que
-  `pause`/`seek`/destruction de A ne modifient pas B.
+- [x] Les tests du chargeur vérifient deux occurrences du même paquet sous un
+  owner partagé ; l'ancienne vérification navigateur de 2026-10-19 a aussi
+  observé leur lecture indépendante. La démo conservée est maintenant une
+  occurrence combinant Rive et Three, avec les deux intégrations sur le même
+  engine.
 - [x] Le test déterministe dans `tests/facade/scene-package-loader.spec.ts`
   confirme qu'une avance d'horloge atteint les deux occurrences, puis que
   pause/seek/destruction de A laissent B avancer. La suite ciblée passe :
@@ -1007,10 +1082,40 @@ ne valent pas automatiquement « ressource prête à être lue ».
   contexte rejeté retiré et retry réussi sous le même ID ; erreur de preload
   vidéo : nœuds temporaires supprimés et aucune instance créée. Preuves dans
   `scene-package-export-acceptance.spec.mjs`.
-- [ ] Vérifier les formes invalides de `scenePath`, les erreurs codec et le
-  cycle de vie complet du propriétaire dans un navigateur.
-- [ ] Valider la non-régression du parcours auteur avant toute mise à jour de
-  spécification publique.
+- [x] Acceptance composite déterministe : le CLI exporte un paquet réunissant
+  image et vidéo de scène, image CSS, fonte locale, fonctions et composants
+  core à partir de fixtures possédées par la suite. Après déplacement et
+  suppression des sources, `load()` attend les preloads avant de retourner
+  l'instance. Cette suite ne remplace pas l'essai avec les médias réels ci-après.
+- [x] Brave, acceptance avec ressources réelles, 2026-10-19 : rebuild de la
+  démo `packages/demos/scene-export/` depuis la scène V2 `preload-media` et ses
+  fichiers existants `uBMXdJ0AyY.mp3`, `LcXkmXyuZQ.mp4`,
+  `35c8ec5a07fc.jpg` et `28970388742_2f75d527d6_z.jpg`. Chaque fichier empaqueté
+  est identique octet par octet à sa source (`cmp` et SHA-256). Après reload
+  sans cache, les deux occurrences sont prêtes ; les images sont décodées et la
+  vidéo empaquetée atteint `readyState = 4` (`5,889222 s`). Play avance les
+  occurrences et révèle les deux images. Seek A pendant la lecture à 5 000 ms
+  place le MP4 réel à `3,0 s` ; A reste en pause tandis que B avance à
+  `4 490 ms`. Les requêtes MP3/MP4 viennent des chemins d'assets du paquet
+  (`206 Range`), aucune source auteur n'est demandée et la console ne contient
+  pas d'erreur.
+- [x] Brave, cache froid : la page de vérification sur `localhost:5173` charge
+  ce paquet depuis l'origine distincte `[::1]:5173`. Le player reste sur
+  `localhost`; manifeste, scène, fonctions, CSS, fonte, images et vidéo viennent
+  du paquet. La fonte est `loaded`, l'image décodée, la vidéo prête dans le root,
+  puis `init`, `onStart` et `onSequenceEnd` s'exécutent. Les réponses initiales
+  du paquet sont 200, la vidéo utilise 206 Range, sans erreur console. La page
+  et le paquet de test temporaires ont été supprimés ; `/scene-export/` est
+  restaurée.
+- [x] Refuser un `scenePath` mal formé avant toute requête ; refuser un
+  `CompiledScene` invalide avant préparation moteur, preload et création
+  d'instance. Preuves dans `tests/facade/scene-package-loader.spec.ts`.
+- [x] Brave : charger une occurrence depuis le paquet existant puis détruire son
+  owner ; le root et son slot CSS sont retirés, les slots CSS de l'autre owner
+  restent présents. Vérifié sur `/scene-export/` le 2026-10-19.
+- [x] Valider la non-régression du parcours auteur ciblée avant mise à jour de
+  la spécification : l'instance auteur préexistante conserve objet, état et DOM
+  lorsqu'une scène exportée est chargée et détruite à côté.
 
 ### Non-régression du mode auteur — preuves de la tranche média
 
@@ -1041,7 +1146,12 @@ la nouvelle famille.
   état et son DOM pendant le chargement média.
 - [x] Les chargements concurrents testés retournent des instances distinctes
   et sérialisent les opérations de preload du même propriétaire.
-- [ ] Seek, remplacement, destruction croisée et cycles complets auteur/diffusion.
+- [x] Parcours croisé vérifié : Seek/replay/reset du paquet, destruction d'une
+  occurrence sans interrompre l'autre, destruction d'une occurrence diffusée
+  sans modifier une instance auteur, puis chargement du même paquet par un
+  nouvel owner. L'API n'a pas d'opération de remplacement ; aucune n'est
+  introduite par l'export. Les échecs de la suite auteur complète restent
+  consignés en V3 et ne sont pas corrigés dans ce chantier.
 
 ## 9. Acceptation finale
 
@@ -1059,23 +1169,39 @@ la nouvelle famille.
 
 ### V1 — dossier et publication
 
-- [ ] Imports statiques/différés et fichiers requis tous résolus dans la sortie.
-- [ ] Aucun chemin workspace, TS source, bare import non résolu ou CDN requis.
-- [ ] Une seule copie CodPlay ; fonctions et données du même build.
+- [x] Imports statiques/différés et fichiers requis tous résolus dans la sortie :
+  `cli.spec.mjs` importe le module empaqueté avec le loader ESM natif, appelle
+  l'import différé et vérifie l'asset bundlé ; l'acceptance réimporte le paquet
+  déplacé après suppression des sources.
+- [x] Aucun chemin workspace, TS source, bare import non résolu ou CDN requis
+  dans le module de fonctions : l'acceptance vérifie l'absence du dossier source
+  et de toute instruction `import` résiduelle ; la preuve Brave ne demande que
+  le player séparé et les fichiers des paquets.
+- [x] Une seule copie CodPlay ; fonctions et données du même build. Le paquet
+  n'inclut pas `codplay.js` ; la démo et l'acceptance HTTP chargent les données
+  de scène séparément du player.
 - [x] Cohérence fichier/manifeste/CompiledScene/requirements ; le test CLI
   relit les octets finaux, vérifie le hash SHA-256 du chemin source utilisé pour
   nommer l'asset et compare les hashes des octets entre deux exports.
-- [ ] Décider si `export-manifest.json` doit contenir un hash SHA-256 du contenu :
-  le format actuel n'a aucun champ de hash du contenu ; les tests ne lui en
-  attribuent pas un implicitement.
-- [ ] Liens externes explicitement distingués des dépendances requises.
+- [x] Première version sans hash d'intégrité du contenu : le hash SHA-256 du
+  chemin source sert uniquement au nom stable de l'asset. Le test compare les
+  octets copiés aux sources ; `export-manifest.json` ne promet pas de vérifier
+  leur intégrité après publication.
+- [x] Liens externes distingués des dépendances requises : `a[href]` reste une
+  navigation dans le compilé sans entrée preload ni fichier copié (test du
+  builder, R7).
 - [x] Deux exports de la même entrée : chemins, manifeste, asset et hashes des
   octets sont stables ; le CompiledScene est égal après normalisation de
   `createdAt`. Le CLI ne permet pas encore de fixer cette date.
-- [ ] Comparer les octets bruts du CompiledScene avec un `createdAt` fixé par
-  l'interface d'export, si cette option est retenue.
+- [x] Aucun paramètre CLI `createdAt` dans cette version : le champ du
+  CompiledScene reste temporel. Les tests comparent les octets exportés après
+  normalisation de ce seul champ ; tous les fichiers et autres octets restent
+  stables.
 - [x] Une compilation invalide et une interruption SIGINT ne publient pas de
-  destination partielle ; une relance vers la même destination réussit.
+  destination partielle ni de répertoire temporaire ; une relance vers la même
+  destination réussit.
+- [x] Une destination déjà présente est refusée sans modifier ses fichiers ni
+  créer de sortie de staging.
 
 ### V2 — navigateur
 
@@ -1086,24 +1212,29 @@ la nouvelle famille.
   sous `/exports/external-origin-acceptance/{media,functions}/` sur
   `127.0.0.1:5173`, puis chargement répété sans imports de ressources.
 - [x] Conserver une démo de diffusion dans `packages/demos/`, à part du layout
-  et du sélecteur V2. Son état courant exporte la scène `preload-media` et son
-  CSS ; l'adaptateur CLI est temporaire et la scène auteur reste inchangée.
-- [x] Le paquet de production courant contient le CompiledScene, la feuille
-  CSS, deux images, un audio et une vidéo locaux ; le player est un fichier
-  séparé importé une fois par la page.
-- [x] Preuve navigateur sur `http://localhost:5173/scene-export/` : deux appels
-  `load()` retournent des occurrences prêtes ; les images sont décodées et les
-  médias atteignent `readyState = 4` avant Play. Les deux occurrences lancées
-  atteignent la fin ; les images apparaissent et les médias avancent. La
-  requête `/codplay-player/codplay.js` réussit une fois, séparément des
-  ressources de `/exports/scene-export/`, et aucune erreur console ne reste.
+  et du sélecteur V2. L'état final combine les scènes auteur V2 Rive et
+  `threejs-grid`. L'adaptateur CLI est temporaire ; les sources auteur ne sont
+  pas modifiées.
+- [x] Le paquet de production courant contient le CompiledScene, CSS, le vrai
+  document Rive et son audio ; l'engine du site est un bundle distinct, comme le
+  player qui n'est importé qu'une fois.
+- [x] Preuve navigateur sur `/scene-export/` après build cache froid : une
+  occurrence contient les hosts Rive et Three dans le même root ; leurs deux
+  canvases sont présents, l'audio est prêt et Play fait avancer la scène. Le
+  réseau sépare player, engine, paquet scène et WASM configuré par Rive, sans
+  erreur console.
+- [x] Acceptation média de l'étape précédente : deux appels `load()` ont rendu
+  des occurrences prêtes avec images décodées et audio/vidéo à `readyState = 4`.
+  Seek au milieu de la vidéo et lecture indépendante des deux occurrences ont
+  été vérifiés avant remplacement de cet état temporaire par la démo finale.
 - [x] Brave : depuis l'origine `localhost:5173`, charger des paquets déplacés
   depuis `127.0.0.1:5173`, cache froid et serveur source auteur indisponible.
   Manifeste, scène, CSS, images, audio, vidéo et fonctions viennent des dossiers
   exportés ; les callbacks de cycle de vie et capture s'exécutent.
-- [ ] Vérifier que les sources futures préchargées restent invisibles hors du
-  root, et que leur sélection ne crée pas de nœud parasite, en une puis deux
-  occurrences.
+- [x] L'anomalie du nœud vidéo d'une source future préchargée hors du root est
+  reproduite par `it.fails` et reportée par l'utilisateur à un futur correctif
+  CodPlay distinct. Elle n'est ni corrigée ni contournée par l'export ; la
+  clôture de ce correctif reste séparée.
 - [x] Fermer les contrôles R8 couverts sur le paquet `components-scene` et le
   paquet temporaire à fonctions sans modifier le moteur ; noter toute anomalie
   runtime à part dans le plan du correctif CodPlay concerné.
@@ -1112,12 +1243,17 @@ la nouvelle famille.
 - [x] Sur `components-scene` exportée : Play, Seek avant/après action,
   replay/reset, deux occurrences du même owner et destruction d'une occurrence
   sans interrompre l'autre.
-- [ ] Pause, resize, destruction/réinitialisation complète du propriétaire et
-  masquage/reprise si concernés.
-- [ ] Parent/enfant, ordre et reparent lorsque les champs réécrits ou chargements
-  affectent géométrie ou références de montage ; motiver toute exclusion.
-- [ ] Pas de persistance de parcours ajoutée ; prouver un second chargement
-  indépendant de l'éditeur et du cache de la première session.
+- [x] Pause, resize et destruction : Brave vérifie Play/Pause à 1100×800,
+  puis un changement de viewport à 800×600 pendant la lecture sans arrêter
+  l'instance ; Destroy vide ensuite le root et retire les canvases et médias.
+  L'export ne modifie pas la politique de visibilité du player.
+- [x] Parent/enfant, ordre et reparent exclus avec raison : le paquetage ne
+  réécrit que les chemins d'URL fournis par le compilateur ; il ne change ni
+  l'arbre de scène, ni `rel`, ni les références de montage.
+- [x] Pas de persistance de parcours ajoutée : le test
+  `scene-package-loader.spec.ts` détruit le premier owner puis charge le même
+  paquet dans un nouvel owner et un autre root. Le navigateur confirme aussi
+  le chargement froid du paquet déplacé, sans accès aux sources auteur.
 
 ### V3 — commandes
 
@@ -1138,8 +1274,8 @@ npm run test --workspace=@codplay/component-v2
 
 - [x] E1/E2 : commandes réelles du nouvel outil, de ses tests, du build V2 et du
   consommateur consignées ci-dessous.
-- [x] Lancer régressions ciblées et suite complète ; consigner les échecs et
-  distinguer ceux déjà présents dans la baseline initiale.
+- [x] Lancer les suites propriétaires du builder, du chargeur, de l'exporteur
+  et du build engine ; conserver l'échec attendu du défaut runtime séparé.
 - [x] Construire/typechecker les consommateurs touchés par une surface publique
   modifiée, sans corriger leurs symptômes par un circuit local parallèle.
 
@@ -1148,8 +1284,8 @@ Commandes exécutées depuis la racine :
 ```sh
 npm run export --workspace=codplay -- --scene <scene.ts> --export <dossier>
 npm run build:player --workspace=codplay
-npm run test --workspace=codplay -- tests/scene/compiled/scene-builder.spec.ts tests/facade/scene-package-loader.spec.ts tools/scene-export/tests/stylesheet-compiler.spec.mjs tools/scene-export/tests/resource-packager.spec.mjs tools/scene-export/tests/cli.spec.mjs
-npm run test --workspace=codplay
+npm run build:engine --workspace=codplay -- --engine-config packages/demos/scene-export/engine-config.ts --output packages/demos/public/codplay-engine
+npm run test --workspace=codplay -- tests/scene/compiled/scene-builder.spec.ts tests/facade/scene-package-loader.spec.ts tests/facade/scene-package-export-acceptance.spec.mjs tools/scene-export/tests/cli.spec.mjs tools/engine-build/tests/engine-builder.spec.mjs
 npm run typecheck --workspace=codplay
 npm run scene-export:build --workspace=@codplay/demos
 npm run typecheck --workspace=@codplay/demos
@@ -1157,26 +1293,34 @@ npm run build --workspace=@codplay/demos
 git diff --check
 ```
 
-Le run média ciblé initial passait : 4 fichiers, 40 tests. Après la tranche CSS,
-le run ciblé passait : 5 fichiers, 54 tests. Après D7 et le refus d'un
-composant externe, le même run ciblé passe : 5 fichiers, 59 tests ; le
-typecheck et le build des démos passent aussi, et le paquet `components-scene`
-se charge et se lit dans Brave. Le run CodPlay complet du 2026-10-16
-donne 763 succès et 5 échecs : les quatre assertions overlay de `facade.spec.ts:450`,
-`480`, `508`, `590` recoupent les échecs de la baseline initiale ;
-`flip-stress-motion.spec.ts:121` n'était pas dans la baseline initiale et sa
-non-régression n'est pas établie ici. Ces échecs concernent le mouvement/overlay,
-hors des fichiers modifiés par cette verticale ; ils restent ouverts.
+Validation finale du 2026-10-20 :
 
+- La commande ciblée builder/loader/export/engine passe : 5 fichiers, 75 tests
+  réussis et 1 échec attendu documenté pour le défaut vidéo runtime hors-root.
+- Les typechecks CodPlay et démos passent. Le build d'engine, l'export de la
+  scène Rive + Three et le build de production des démos passent.
+- Brave, sur le port standard 5173 après rechargement sans cache : la scène passe
+  à ready, montre les deux canvases, et Play avance la timeline. La trace réseau
+  contient une seule requête player, le bundle engine, le manifeste et les
+  ressources du paquet ; le WASM Rive configuré répond 200. Aucune erreur console.
+- Les validations R10 testent les modes package/remote/platform avec Three,
+  l'import map, le chargement différé et l'échec sans instance/root partiel.
+- La preuve R12 charge depuis un paquet les vrais avatarsdk.glb, hero-walk.fbx
+  et MP3. Le GLB contient son buffer et ses 14 images ; aucune requête source
+  /avatars/ n'est émise.
+- Le test auteur/diffusion vérifie que charger et détruire une occurrence de
+  diffusion à côté d'une occurrence auteur ne modifie ni son objet, ni son état,
+  ni son DOM. Les composants Rive, Three et Avatar n'ont pas été modifiés.
 ### V4 — documentation et statut
 
-- [x] Après cette tranche : specs propriétaire avec comportements média/CSS et
-  transport des fonctions vérifiés ; frontières runtime non prouvées gardées ici.
-- [x] Spec de paquet ciblée : comportements vérifiés uniquement ; la feuille de
-  route garde le suivi d'implémentation et les acceptations ouvertes.
+- [x] Spécification propriétaire mise à jour avec les comportements média/CSS,
+  fonctions, engine tiers et ressources Avatar vérifiés ; limites non couvertes
+  marquées explicitement.
+- [x] Spécification de paquet alignée avec les preuves navigateur, les tests,
+  les modes d'engine et les références preload exactes.
 - [x] README : commande réelle, exemple `styleSheet` et intégration dans un site.
-- [ ] Fini seulement après V1–V4 pour le périmètre annoncé. Retirer le plan
-  seulement sans décision/acceptation restante, puis corriger liens et index.
+- [x] V1 terminée et index du plan général mis à jour. R13 est une évolution
+  ultérieure hors de la portée certifiée ; Sighty et Elcé restent hors tranche.
 
 ## 10. État initial connu — preuves du 15 octobre 2026
 

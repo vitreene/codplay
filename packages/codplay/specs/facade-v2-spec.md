@@ -16,9 +16,13 @@ un registre de ressources et un registre d'instances. Les options `engine`
 composent les définitions initiales des familles `components`, `services`,
 `modules` et `libraries`. Les registres publics `codplay.components`,
 `codplay.services`, `codplay.modules` et `codplay.libraries` partagent ce même
-catalogue ; `register` et `override` sont disponibles jusqu'au premier `build`
-ou `instances.create`. Ensuite, la composition est verrouillée. Une opération
-de registre refusée renvoie son résultat structuré et publie un diagnostic.
+catalogue ; `register` et `override` sont disponibles jusqu'au premier `build`,
+`instances.create` ou `load()`. `load()` verrouille les registres publics dès
+l'appel, avant son travail asynchrone. Ensuite, la composition auteur est
+verrouillée. Une opération de registre refusée renvoie son résultat structuré
+et publie un diagnostic. Un paquet de scène ne modifie pas le catalogue ; les
+composants et bibliothèques tiers nécessaires doivent déjà être configurés dans
+l'engine partagé avant `load()`.
 Les options `htmlHost` relient les sources propres au navigateur sans les
 inscrire dans le catalogue de modules.
 
@@ -71,15 +75,31 @@ propriétaire. Le CSS passe par le canal `preload.css.set()` existant : il est
 installé dans le `head`, scoped au `root` et retiré quand l'occurrence est
 détruite. Avant la création, `load()` vérifie les `@font-face` du manifeste et
 attend leur chargement effectif ; une face absente ou en échec rejette l'appel.
+Les stratégies de preload tierces sont fournies par l'intégration configurée
+sur le même owner, comme les définitions correspondantes ; le paquet scène ne
+les ajoute pas.
 `load()` ne démarre pas la lecture ; l'appelant utilise ensuite
 `await instance.telco.play()`. Plusieurs chargements retournent des instances
 distinctes. Elles partagent l'engine du propriétaire : une avance de son
 horloge fait avancer les occurrences actives ; `pause`, `seek` et la destruction
 d'une occurrence ne stoppent ni ne déplacent les autres. Le test du chargeur et
-la [démo à deux occurrences](../../demos/scene-export/README.md) vérifient ce
-parcours. Les familles et les critères de disponibilité certifiés sont
-délimités par la
+le test d'acceptance du paquet vérifient ce parcours. La démo de diffusion
+conservée vérifie une occurrence qui combine Rive et Three.js. Les familles et
+les critères de disponibilité certifiés sont délimités par la
 [spécification du paquet de scène](./scene-package-export-v1-spec.md).
+
+### Identité des hosts HTML tiers
+
+Une intégration qui fournit un host HTML doit employer l'unique
+`BaseHTMLComponent` exporté par le même module `codplay` que celui qui construit
+l'owner. `HtmlComponentMaterializer` reconnaît cette frontière par
+`instanceof BaseHTMLComponent` ; si le bundle d'intégration embarque une seconde
+copie de CodPlay, son host n'est pas matérialisable. Le bundle du site doit donc
+laisser `codplay` externe et résoudre son import vers le fichier du player déjà
+chargé. Les hosts spécialisés Rive et Three restent des classes distinctes,
+mais héritent de cette même classe de base. L'acceptance navigateur R9 du
+[plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r9--composants-fournis-par-lengine)
+vérifie leur matérialisation et une seule URL player.
 
 Si le manifeste déclare `scene/functions.mjs`, `load()` l'importe et crée le
 contexte de fonctions/straps vérifié avant `instances.create()`. Un même

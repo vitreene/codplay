@@ -77,9 +77,15 @@ export class CodPlay implements CodPlayApi {
     }
     this.preload = createRuntimePreload(options.preload ?? {})
     this.load = (scenePath, loadOptions) => {
+      this.#engineOwner.lockCapabilityRegistries()
       const instanceId = `codplay-load-${++this.#loadCounter}`
       const result = this.#loadQueue.then(async () => {
-        const loaded = await loadScenePackage(this, scenePath, loadOptions.root, instanceId)
+        const loaded = await loadScenePackage(
+          this,
+          scenePath,
+          loadOptions.root,
+          instanceId,
+        )
         if (loaded.cssSlot !== undefined) this.#scenePackageCssSlots.set(instanceId, loaded.cssSlot)
         return loaded.instance
       })

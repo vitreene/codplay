@@ -39,6 +39,12 @@ player parallèle.
 Cette tranche est implémentée et vérifiée pour les médias image/audio/vidéo,
 CSS et fontes décrits par la
 [spécification du paquet de scène](../specs/scene-package-export-v1-spec.md).
+Le premier appel à `load()` verrouille immédiatement les registres publics.
+Les composants et bibliothèques sont fournis par l'engine partagé, configuré
+avant le chargement ; toutes les scènes d'un même owner utilisent les mêmes
+définitions. La voie d'ajout de capacités par paquet et ses factories sont
+retirées par la décision du 2026-10-20. Le retrait du code et la reprise des
+preuves d'intégration sont suivis en R9–R12 du plan d'export.
 Le module de fonctions auteur est chargé et passé à l'instance selon D4 ;
 `onStart` est vérifié dans le navigateur, mais l'exécution des straps externes
 par `listen` reste ouverte au [plan d'export](./2026-10-15-export-diffusion-plan.md).

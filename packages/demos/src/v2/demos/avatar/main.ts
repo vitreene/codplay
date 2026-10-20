@@ -315,3 +315,19 @@ export const preloadManifest: CompiledResourceManifest = {
 		},
 	],
 };
+
+/** Links the existing preload entries to the Avatar source fields they serve. */
+export const preloadResourceOccurrences = [
+	{
+		entryIndex: 0,
+		storyId: 'main',
+		persoId: AVATAR_ID,
+		path: ['initial', 'src'],
+	},
+	{
+		entryIndex: 1,
+		storyId: 'main',
+		persoId: AVATAR_ID,
+		path: ['initial', 'animations', 'walk', 'src'],
+	},
+] as const;

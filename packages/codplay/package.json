@@ -9,6 +9,7 @@
   },
   "scripts": {
     "bench": "vitest bench bench/ace",
+    "build:engine": "node tools/engine-build/cli.mjs",
     "build:player": "node tools/player-build/cli.mjs",
     "export": "node tools/scene-export/cli.mjs",
     "test": "vitest run",

@@ -5,7 +5,7 @@ import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } fr
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { exportScenePackage } from '../cli.mjs'
+import { exportScenePackage, parseArguments } from '../cli.mjs'
 
 const temporaryDirectories = []
 
@@ -14,6 +14,18 @@ afterEach(async () => {
 })
 
 describe('scene export command', () => {
+  it('parses the scene source and destination', () => {
+    expect(parseArguments([
+      '--scene', './src/scene.ts',
+      '--engine-config', './src/engine.ts',
+      '--export', './public/scene',
+    ])).toEqual({
+      scene: './src/scene.ts',
+      destination: './public/scene',
+      engineConfig: './src/engine.ts',
+    })
+  })
+
   it('captures imported CSS and publishes its transitive local resources', async () => {
     const directory = await createTemporaryDirectory()
     const sceneFile = path.join(directory, 'scene.ts')
@@ -74,6 +86,68 @@ describe('scene export command', () => {
     expect(packagedImage.occurrences).toEqual([['scene', 'stories', 'main', 'persos', 0, 'initial', 'src']])
     expect(compiledScene.scene.stories.main.persos[0].initial.src).toBe(packagedImage.sceneUrl)
     expect(await readFile(path.join(destination, packagedImage.file), 'utf8')).toBe(imageSource)
+  })
+
+  it('packages custom binary resources declared by preload and rewrites their exact scene fields', async () => {
+    const directory = await createTemporaryDirectory()
+    const sceneFile = path.join(directory, 'scene.ts')
+    const destination = path.join(directory, 'exported-scene')
+    const modelBytes = Buffer.from([0x67, 0x6c, 0x54, 0x46, 1, 2, 3])
+    const motionBytes = Buffer.from([0x46, 0x42, 0x58, 0, 4, 5, 6])
+    await writeFile(path.join(directory, 'actor.glb'), modelBytes)
+    await writeFile(path.join(directory, 'walk.fbx'), motionBytes)
+    await writeFile(sceneFile, [
+      'export const preloadManifest = { entries: [',
+      "  { url: '/actor.glb', type: 'three-glb', policy: { cache: 'default', priority: 'high' } },",
+      "  { url: '/walk.fbx', type: 'three-fbx', policy: { cache: 'default', priority: 'normal' } },",
+      '] }',
+      'export const preloadResourceOccurrences = [',
+      "  { entryIndex: 0, storyId: 'main', persoId: 'avatar', path: ['initial', 'src'] },",
+      "  { entryIndex: 1, storyId: 'main', persoId: 'avatar', path: ['initial', 'animations', 'walk', 'src'] },",
+      ']',
+      'export const scene = { id: "custom-binary-resources", stories: { main: { id: "main", persos: [',
+      '{ id: "avatar", type: "tag", initial: { tag: "div", src: "/actor.glb", animations: { walk: { src: "/walk.fbx" } } } },',
+      '] } } }',
+      '',
+    ].join('\n'))
+
+    await exportScenePackage({ sceneFile, destination, workingDirectory: directory })
+
+    const manifest = JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8'))
+    const compiledScene = JSON.parse(await readFile(path.join(destination, manifest.scene), 'utf8'))
+    expect(manifest.resources.map(({ type, occurrences }) => ({ type, occurrences }))).toEqual([
+      {
+        type: 'three-glb',
+        occurrences: [['scene', 'stories', 'main', 'persos', 0, 'initial', 'src']],
+      },
+      {
+        type: 'three-fbx',
+        occurrences: [['scene', 'stories', 'main', 'persos', 0, 'initial', 'animations', 'walk', 'src']],
+      },
+    ])
+    expect(compiledScene.resources.entries.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: manifest.resources[0].sceneUrl, type: 'three-glb' },
+      { url: manifest.resources[1].sceneUrl, type: 'three-fbx' },
+    ])
+    expect(await readFile(path.join(destination, manifest.resources[0].file))).toEqual(modelBytes)
+    expect(await readFile(path.join(destination, manifest.resources[1].file))).toEqual(motionBytes)
+  })
+
+  it('returns an unmapped custom preload entry as a compiler error', async () => {
+    const directory = await createTemporaryDirectory()
+    const sceneFile = path.join(directory, 'scene.ts')
+    const destination = path.join(directory, 'exported-scene')
+    await writeFile(path.join(directory, 'actor.glb'), Buffer.from('glTF fixture'))
+    await writeFile(sceneFile, [
+      "export const preloadManifest = { entries: [{ url: '/actor.glb', type: 'three-glb', policy: { cache: 'default' } }] }",
+      "export const scene = { id: 'unmapped-custom-preload', stories: { main: { id: 'main', persos: [{ id: 'actor', type: 'tag', initial: { tag: 'div' } }] } } }",
+      '',
+    ].join('\n'))
+
+    await expect(exportScenePackage({ sceneFile, destination, workingDirectory: directory }))
+      .rejects.toThrow('CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED')
+    await expect(access(destination)).rejects.toThrow()
+    expect((await readdir(directory)).sort()).toEqual(['actor.glb', 'scene.ts'])
   })
 
   it('rejects a scene that requires a component outside the core catalog', async () => {
@@ -157,6 +231,22 @@ describe('scene export command', () => {
     expect(await readFile(assetFile)).toEqual(assetBytes)
   })
 
+  it('preserves an existing export destination without creating staging output', async () => {
+    const directory = await createTemporaryDirectory()
+    const sceneFile = path.join(directory, 'scene.ts')
+    const destination = path.join(directory, 'existing-scene')
+    const sentinel = path.join(destination, 'owner.txt')
+    await mkdir(destination, { recursive: true })
+    await writeFile(sceneFile, "export const scene = { id: 'overwrite-refusal', stories: { main: { id: 'main', persos: [] } } }\n")
+    await writeFile(sentinel, 'preserve this existing directory')
+
+    await expect(exportScenePackage({ sceneFile, destination, workingDirectory: directory }))
+      .rejects.toThrow('Export destination already exists:')
+
+    expect(await readFile(sentinel, 'utf8')).toBe('preserve this existing directory')
+    expect((await readdir(directory)).sort()).toEqual(['existing-scene', 'scene.ts'])
+  })
+
   it('leaves no published package when the export process is interrupted and allows a retry', async () => {
     const directory = await createTemporaryDirectory()
     const sceneFile = path.join(directory, 'scene.mjs')
@@ -186,6 +276,7 @@ describe('scene export command', () => {
 
     expect(exit.signal === 'SIGINT' || exit.code === 130).toBe(true)
     await expect(access(destination)).rejects.toThrow()
+    expect((await readdir(directory)).sort()).toEqual(['export-started', 'scene.mjs'])
     await writeFile(sceneFile, "export const scene = { id: 'retry-export', stories: { main: { id: 'main', persos: [] } } }\n")
     await exportScenePackage({ sceneFile, destination, workingDirectory: directory })
     expect(JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8')).scene)

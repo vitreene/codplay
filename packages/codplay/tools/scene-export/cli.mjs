@@ -16,7 +16,7 @@ export function parseArguments(args) {
   const options = new Map()
   for (let index = 0; index < args.length; index += 1) {
     const name = args[index]
-    if (name !== '--scene' && name !== '--export') {
+    if (name !== '--scene' && name !== '--export' && name !== '--engine-config') {
       throw new Error(`Unknown option: ${name}`)
     }
     const value = args[index + 1]
@@ -27,18 +27,21 @@ export function parseArguments(args) {
   const scene = options.get('--scene')
   const destination = options.get('--export')
   if (scene === undefined || destination === undefined) {
-    throw new Error('Usage: codplay export --scene <scene.js|scene.ts> --export <directory>')
+    throw new Error('Usage: codplay export --scene <scene.js|scene.ts> [--engine-config <engine.js|engine.ts>] --export <directory>')
   }
-  return { scene, destination }
+  return { scene, destination, engineConfig: options.get('--engine-config') }
 }
 
 /** Builds and atomically publishes one scene package from a JavaScript or TypeScript scene module. */
-export async function exportScenePackage({ sceneFile, destination, workingDirectory = process.cwd() }) {
+export async function exportScenePackage({ sceneFile, engineConfigFile, destination, workingDirectory = process.cwd(), signal }) {
   const absoluteSceneFile = path.resolve(workingDirectory, sceneFile)
+  const absoluteEngineConfigFile = engineConfigFile === undefined
+    ? undefined
+    : path.resolve(workingDirectory, engineConfigFile)
   const absoluteDestination = path.resolve(workingDirectory, destination)
-  await assertSceneFile(absoluteSceneFile)
+  await assertSceneFile(absoluteSceneFile, 'Scene')
+  if (absoluteEngineConfigFile !== undefined) await assertSceneFile(absoluteEngineConfigFile, 'Engine configuration')
   await assertDestinationMissing(absoluteDestination)
-
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
   const parentDirectory = path.dirname(absoluteDestination)
   await mkdir(parentDirectory, { recursive: true })
@@ -48,82 +51,102 @@ export async function exportScenePackage({ sceneFile, destination, workingDirect
 
   try {
     playerBuildDirectory = await mkdtemp(path.join(parentDirectory, '.codplay-player-build-'))
-    const playerFile = await buildCodPlayLibrary(playerBuildDirectory)
-    const codplayModule = await import(pathToFileURL(playerFile).href)
-    const sourceBundleDirectory = path.join(stageDirectory, '.scene-source')
-    await buildSceneAndCodec(packageRoot, absoluteSceneFile, sourceBundleDirectory)
-    globalThis[capturedStylesheetKey] = []
-    let sceneModule
-    try {
-      sceneModule = await import(pathToFileURL(path.join(sourceBundleDirectory, 'scene.mjs')).href)
-    } finally {
-      var importedStylesheets = globalThis[capturedStylesheetKey]
-      delete globalThis[capturedStylesheetKey]
-    }
-    const codecModule = await import(pathToFileURL(path.join(sourceBundleDirectory, 'codec.mjs')).href)
-    await rm(sourceBundleDirectory, { recursive: true, force: true })
-    const scene = resolveSceneExport(sceneModule)
-    const stylesheetInputs = [...(importedStylesheets ?? [])]
-    if (sceneModule.styleSheet !== undefined) {
-      stylesheetInputs.push({ sourceFile: absoluteSceneFile, cssText: sceneModule.styleSheet })
-    }
-    const compiledStyleSheet = stylesheetInputs.length === 0
-      ? undefined
-      : await compileStyleSheets(stylesheetInputs, absoluteSceneFile)
+    const exportOperation = (async () => {
+      const playerFile = await buildCodPlayLibrary(playerBuildDirectory)
+      const codplayModule = await import(pathToFileURL(playerFile).href)
+      const sourceBundleDirectory = path.join(stageDirectory, '.scene-source')
+      await buildSceneAndCodec(packageRoot, absoluteSceneFile, sourceBundleDirectory)
+      globalThis[capturedStylesheetKey] = []
+      let sceneModule
+      try {
+        sceneModule = await import(pathToFileURL(path.join(sourceBundleDirectory, 'scene.mjs')).href)
+      } finally {
+        var importedStylesheets = globalThis[capturedStylesheetKey]
+        delete globalThis[capturedStylesheetKey]
+      }
+      const codecModule = await import(pathToFileURL(path.join(sourceBundleDirectory, 'codec.mjs')).href)
+      await rm(sourceBundleDirectory, { recursive: true, force: true })
+      let engineCapabilities
+      if (absoluteEngineConfigFile !== undefined) {
+        const engineBundleDirectory = path.join(stageDirectory, '.engine-config')
+        await buildEngineConfig(packageRoot, absoluteEngineConfigFile, engineBundleDirectory)
+        const engineModule = await import(pathToFileURL(path.join(engineBundleDirectory, 'engine.mjs')).href)
+        if (!isRecord(engineModule.engineCapabilities)) {
+          throw new Error('Engine configuration module must export an engineCapabilities object.')
+        }
+        engineCapabilities = engineModule.engineCapabilities
+        await rm(engineBundleDirectory, { recursive: true, force: true })
+      }
+      const scene = resolveSceneExport(sceneModule)
+      const stylesheetInputs = [...(importedStylesheets ?? [])]
+      if (sceneModule.styleSheet !== undefined) {
+        stylesheetInputs.push({ sourceFile: absoluteSceneFile, cssText: sceneModule.styleSheet })
+      }
+      const compiledStyleSheet = stylesheetInputs.length === 0
+        ? undefined
+        : await compileStyleSheets(stylesheetInputs, absoluteSceneFile)
 
-    player = new codplayModule.CodPlay({
-      frameScheduler: { request: () => 0, cancel: () => undefined },
-    })
-    const buildResult = player.build({ scene }, { export: true })
-    if (!buildResult.ok) throw new Error(formatDiagnostics(buildResult.diagnostics.errors))
-    const strapCollectionsExported = Object.hasOwn(sceneModule, 'strapCollections')
-    const strapCollections = resolveStrapCollections(sceneModule, strapCollectionsExported)
-    const strapIssues = codecModule.validateStrapCollections(
-      buildResult.compiledScene,
-      strapCollections,
-      buildResult.functions,
-    )
-    if (strapIssues.length > 0) {
-      throw new Error(strapIssues.map((issue) => `${issue.code}: ${issue.message}`).join('\n'))
-    }
+      const playerOptions = {
+        frameScheduler: { request: () => 0, cancel: () => undefined },
+        ...(engineCapabilities === undefined ? {} : { engine: engineCapabilities }),
+      }
+      player = new codplayModule.CodPlay(playerOptions)
+      const buildResult = player.build({ scene }, {
+        export: true,
+        preloadManifest: sceneModule.preloadManifest,
+        preloadResourceOccurrences: sceneModule.preloadResourceOccurrences,
+      })
+      if (!buildResult.ok) throw new Error(formatDiagnostics(buildResult.diagnostics.errors))
+      const strapCollectionsExported = Object.hasOwn(sceneModule, 'strapCollections')
+      const strapCollections = resolveStrapCollections(sceneModule, strapCollectionsExported)
+      const strapIssues = codecModule.validateStrapCollections(
+        buildResult.compiledScene,
+        strapCollections,
+        buildResult.functions,
+      )
+      if (strapIssues.length > 0) {
+        throw new Error(strapIssues.map((issue) => `${issue.code}: ${issue.message}`).join('\n'))
+      }
 
-    const packaged = await packageResources({
-      sourceFile: absoluteSceneFile,
-      compiledScene: buildResult.compiledScene,
-      resourceReferences: buildResult.resourceReferences ?? [],
-      stageDirectory,
-    })
-    const packagedStyleSheet = await packageStyleSheet({ compiledStyleSheet, stageDirectory })
-    const functionReferences = buildResult.functionReferences ?? []
-    const packagedFunctions = functionReferences.length > 0 || strapCollectionsExported
-      ? await buildFunctionModule({
-        packageRoot,
-        sceneFile: absoluteSceneFile,
-        functionReferences,
+      const packaged = await packageResources({
+        sourceFile: absoluteSceneFile,
+        compiledScene: buildResult.compiledScene,
+        resourceReferences: buildResult.resourceReferences ?? [],
         stageDirectory,
       })
-      : undefined
-    const codec = new codecModule.CompiledSceneCodec({ diagnosticOutput: () => undefined })
-    const sceneJson = codec.encode(packaged.compiledScene)
-    await writeFile(path.join(stageDirectory, 'scene/scene.json'), sceneJson)
+      const packagedStyleSheet = await packageStyleSheet({ compiledStyleSheet, stageDirectory })
+      const functionReferences = buildResult.functionReferences ?? []
+      const packagedFunctions = functionReferences.length > 0 || strapCollectionsExported
+        ? await buildFunctionModule({
+          packageRoot,
+          sceneFile: absoluteSceneFile,
+          functionReferences,
+          stageDirectory,
+        })
+        : undefined
+      const codec = new codecModule.CompiledSceneCodec({ diagnosticOutput: () => undefined })
+      const sceneJson = codec.encode(packaged.compiledScene)
+      await writeFile(path.join(stageDirectory, 'scene/scene.json'), sceneJson)
 
-    await writeFile(path.join(stageDirectory, 'export-manifest.json'), JSON.stringify({
-      format: 'codplay.scene-package.v1',
-      scene: 'scene/scene.json',
-      functions: packagedFunctions === undefined ? [] : {
-        file: 'scene/functions.mjs',
-        references: functionReferences,
-      },
-      resources: packaged.resources,
-      ...(packagedStyleSheet === undefined ? {} : { styleSheet: packagedStyleSheet }),
-    }, null, 2))
-    await assertDestinationMissing(absoluteDestination)
-    await rename(stageDirectory, absoluteDestination)
-    return {
-      destination: absoluteDestination,
-      resourceCount: packaged.resources.length + (packagedStyleSheet?.resources.length ?? 0)
-        + (packagedFunctions?.assetCount ?? 0),
-    }
+      await writeFile(path.join(stageDirectory, 'export-manifest.json'), JSON.stringify({
+        format: 'codplay.scene-package.v1',
+        scene: 'scene/scene.json',
+        functions: packagedFunctions === undefined ? [] : {
+          file: 'scene/functions.mjs',
+          references: functionReferences,
+        },
+        resources: packaged.resources,
+        ...(packagedStyleSheet === undefined ? {} : { styleSheet: packagedStyleSheet }),
+      }, null, 2))
+      await assertDestinationMissing(absoluteDestination)
+      await rename(stageDirectory, absoluteDestination)
+      return {
+        destination: absoluteDestination,
+        resourceCount: packaged.resources.length + (packagedStyleSheet?.resources.length ?? 0)
+          + (packagedFunctions?.assetCount ?? 0),
+      }
+    })()
+    return await raceWithAbort(exportOperation, signal)
   } catch (error) {
     await rm(stageDirectory, { recursive: true, force: true })
     throw error
@@ -133,6 +156,49 @@ export async function exportScenePackage({ sceneFile, destination, workingDirect
     }
     player?.destroy()
   }
+}
+
+/** Bundles a static engine configuration for compilation without adding it to the scene package. */
+async function buildEngineConfig(packageRoot, engineConfigFile, outDirectory) {
+  await build({
+    configFile: path.join(packageRoot, 'vite.config.ts'),
+    root: packageRoot,
+    logLevel: 'error',
+    ssr: { noExternal: true },
+    build: {
+      ssr: true,
+      rollupOptions: {
+        input: { engine: engineConfigFile },
+        output: { format: 'es', entryFileNames: '[name].mjs' },
+      },
+      outDir: outDirectory,
+      emptyOutDir: true,
+      target: 'node24',
+    },
+  })
+}
+
+/** Races one package build against the CLI interrupt without discarding cleanup. */
+async function raceWithAbort(operation, signal) {
+  if (signal === undefined) return await operation
+  if (signal.aborted) throw createAbortError()
+  let onAbort
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(createAbortError())
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    return await Promise.race([operation, aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+/** Creates the internal error used when the caller cancels an export. */
+function createAbortError() {
+  const error = new Error('Scene export interrupted.')
+  error.name = 'AbortError'
+  return error
 }
 
 /** Bundles one external JavaScript or TypeScript scene module for execution by the Node CLI. */
@@ -205,27 +271,40 @@ function hasUrlImportQuery(source) {
 /** Bundles author code into a factory so each owner/package gets fresh closures. */
 async function buildFunctionModule({ packageRoot, sceneFile, functionReferences, stageDirectory }) {
   const bundleDirectory = path.join(stageDirectory, '.scene-functions')
+  const sourceDirectory = path.join(stageDirectory, '.scene-function-source')
+  const entryFile = path.join(sourceDirectory, 'functions-entry.mjs')
   const contextName = '__codplayScenePackageSource'
-  await build({
-    configFile: path.join(packageRoot, 'vite.config.ts'),
-    root: packageRoot,
-    logLevel: 'error',
-    plugins: [stylesheetRuntimePlugin()],
-    build: {
-      lib: {
-        entry: sceneFile,
-        formats: ['iife'],
-        name: contextName,
-        fileName: 'functions-bundle',
+  await mkdir(sourceDirectory, { recursive: true })
+  await writeFile(entryFile, [
+    'import * as sourceModule from ' + JSON.stringify(pathToFileURL(sceneFile).href) + ';',
+    'export const scene = sourceModule.scene;',
+    'export const strapCollections = sourceModule.strapCollections;',
+    '',
+  ].join('\n'))
+  try {
+    await build({
+      configFile: path.join(packageRoot, 'vite.config.ts'),
+      root: packageRoot,
+      logLevel: 'error',
+      plugins: [stylesheetRuntimePlugin()],
+      build: {
+        lib: {
+          entry: entryFile,
+          formats: ['iife'],
+          name: contextName,
+          fileName: 'functions-bundle',
+        },
+        outDir: bundleDirectory,
+        emptyOutDir: true,
+        minify: true,
+        target: 'es2022',
+        assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+        assetsDir: 'functions-assets',
       },
-      outDir: bundleDirectory,
-      emptyOutDir: true,
-      minify: false,
-      target: 'es2022',
-      assetsInlineLimit: Number.MAX_SAFE_INTEGER,
-      assetsDir: 'functions-assets',
-    },
-  })
+    })
+  } finally {
+    await rm(sourceDirectory, { recursive: true, force: true })
+  }
 
   const emittedFiles = await readdir(bundleDirectory)
   const bundleFile = emittedFiles.find((file) => file.endsWith('.js'))
@@ -387,15 +466,15 @@ function resolveSceneExport(module) {
 }
 
 /** Confirms the scene input exists and is a regular source file. */
-async function assertSceneFile(sceneFile) {
+async function assertSceneFile(sceneFile, label) {
   const metadata = await lstat(sceneFile).catch((error) => {
     if (error?.code === 'ENOENT') return undefined
     throw error
   })
-  if (metadata === undefined || !metadata.isFile()) throw new Error(`Scene module is not a file: ${sceneFile}`)
+  if (metadata === undefined || !metadata.isFile()) throw new Error(`${label} module is not a file: ${sceneFile}`)
   const extension = path.extname(sceneFile).toLowerCase()
   if (extension !== '.js' && extension !== '.mjs' && extension !== '.ts' && extension !== '.mts') {
-    throw new Error('Scene module must use .js, .mjs, .ts or .mts.')
+    throw new Error(`${label} module must use .js, .mjs, .ts or .mts.`)
   }
 }
 
@@ -417,30 +496,43 @@ function formatDiagnostics(diagnostics) {
   }).join('\n')
 }
 
-/** Checks the plain records read from an authored scene module. */
+/** Checks whether an authored scene value is a non-array object. */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** Runs the CLI entry point and reports failures with a non-zero process status. */
 async function main() {
+  const controller = new AbortController()
+  const onInterrupt = () => controller.abort()
+  process.once('SIGINT', onInterrupt)
+  let interrupted = false
   try {
     const arguments_ = parseArguments(process.argv.slice(2))
     const workingDirectory = process.env.INIT_CWD ?? process.cwd()
     const result = await exportScenePackage({
       sceneFile: arguments_.scene,
+      engineConfigFile: arguments_.engineConfig,
       destination: arguments_.destination,
       workingDirectory,
+      signal: controller.signal,
     })
     process.stdout.write(`CodPlay scene exported to ${result.destination} (${result.resourceCount} resources).\n`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const debugDetails = process.env.CODPLAY_EXPORT_DEBUG === '1' && error instanceof Error
-      ? `\n${error.stack}`
-      : ''
-    process.stderr.write(`${message}${debugDetails}\n`)
-    process.exitCode = 1
+    if (controller.signal.aborted) {
+      interrupted = true
+    } else {
+      const message = error instanceof Error ? error.message : String(error)
+      const debugDetails = process.env.CODPLAY_EXPORT_DEBUG === '1' && error instanceof Error
+        ? `\n${error.stack}`
+        : ''
+      process.stderr.write(`${message}${debugDetails}\n`)
+      process.exitCode = 1
+    }
+  } finally {
+    process.removeListener('SIGINT', onInterrupt)
   }
+  if (interrupted) process.exit(130)
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

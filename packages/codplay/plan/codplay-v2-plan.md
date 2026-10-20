@@ -20,8 +20,8 @@ celui-ci ne remplace pas les spécifications ou plans actifs.
 
 | Domaine | Spécification(s) normative(s) | Suivi actif |
 |---|---|---|
-| Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Plan CompiledScene](./compiled-scene-plan.md) |
-| Export d'une scène CodPlay | [Paquet de diffusion](../specs/scene-package-export-v1-spec.md) | [Feuille de route par ressource](./2026-10-15-export-diffusion-plan.md) — médias/CSS et tranche core-only vérifiés, transport des fonctions en cours (D4/R8), autres familles et cycle d'exécution restant, Sighty/Elcé hors tranche |
+| Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Plan CompiledScene](./compiled-scene-plan.md), [suppression du catalogue et découverte des actions](./action-discovery-plan.md) |
+| Export d'une scène CodPlay | [Paquet de diffusion](../specs/scene-package-export-v1-spec.md) | [Feuille de route V1](./2026-10-15-export-diffusion-plan.md) — V1 finie ; R10 modes d'engine et R12 ressources Avatar vérifiés ; R13 distant reste une évolution ultérieure ; Sighty et Elcé hors tranche |
 | Reconstruction, engine et player | [Reconstruction logique](../specs/runtime-reconstruction-v2-spec.md), [Engine/Player](../specs/engine-player-v2-spec.md) | [Plan Player](./player-engine-plan.md) |
 | Façade et instances | [Façade](../specs/facade-v2-spec.md) | [Plan façade](./facade-engine-instance-plan.md) |
 | Diagnostics structurés | [Diagnostics](../specs/diagnostics-v2-spec.md) | — |
@@ -37,7 +37,7 @@ celui-ci ne remplace pas les spécifications ou plans actifs.
 | Projection des transformations | [Canaux de transformation](../specs/transform-properties-v2-spec.md) | [Plan transform](./transform-properties-plan.md) |
 | Move, retarget et présentation motion | [Move](../specs/move-v2-spec.md), [dépendance à la cible](../specs/move-target-dependency-v2-spec.md), [frontières motion](../specs/motion-frame-v2-spec.md) | [Dimensions de liste](./list-dimension-interpolation-plan.md), [retarget](./move-target-dependency-plan.md), [préparation motion](./motion-live-discovery-invalidation-plan.md), [intégration runner](./runner-flip-integration-study.md) |
 | Capacités list et glisser-déposer | [List](../specs/list-capability-v2-spec.md), [DnD/list](../specs/list-dnd-v2-spec.md) | [Validation DnD/capture S6](./drag-capture-list-s6-validation-plan.md) |
-| Capture continue | [Capture](../specs/capture-v2-spec.md) | — |
+| Capture continue | [Capture](../specs/capture-v2-spec.md) | [Découverte des actions sans catalogue global](./action-discovery-plan.md) |
 | Observation par scroll | [Scroll-container](../specs/scroll-container-spec.md) | [Enregistrement des observations](./scroll-observation-registration-plan.md), [reset de position](./scroll-container-reset-plan.md) |
 
 ## Mesure du poids des builds — 2026-10-07

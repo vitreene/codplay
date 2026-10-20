@@ -20,80 +20,94 @@ type CodPlayOwner = Readonly<{
   destroy: () => void
 }>
 
-/** Loads two occurrences of the exported V2 scene through one CodPlay owner. */
+type EngineConfigBundle = Readonly<{
+  engineCapabilities: Readonly<Record<string, unknown>>
+  preloadStrategies: Readonly<Record<string, (src: string, signal: AbortSignal) => Promise<void>>>
+}>
+
+type SceneDiagnostic = Readonly<{
+  severity: string
+  code: string
+  message: string
+}>
+
+/** Loads the simultaneous Rive and Three.js scene through the exported package. */
 async function mountSceneExportDemo(): Promise<void> {
-  const rootA = requireElement<HTMLElement>('#scene-root-a')
-  const rootB = requireElement<HTMLElement>('#scene-root-b')
+  const root = requireElement<HTMLElement>('#scene-export-root')
   const pageStatus = requireElement<HTMLElement>('#scene-export-status')
-  const statusA = requireElement<HTMLElement>('#scene-export-instance-a-status')
-  const statusB = requireElement<HTMLElement>('#scene-export-instance-b-status')
+  const instanceStatus = requireElement<HTMLElement>('#scene-export-instance-status')
   const playButton = requireElement<HTMLButtonElement>('#scene-export-play')
-  const pauseAButton = requireElement<HTMLButtonElement>('#scene-export-pause-a')
-  const seekAButton = requireElement<HTMLButtonElement>('#scene-export-seek-a')
-  const destroyAButton = requireElement<HTMLButtonElement>('#scene-export-destroy-a')
+  const seekButton = requireElement<HTMLButtonElement>('#scene-export-seek')
+  const pauseButton = requireElement<HTMLButtonElement>('#scene-export-pause')
+  const destroyButton = requireElement<HTMLButtonElement>('#scene-export-destroy')
   const packagePath = '/exports/scene-export/'
   const libraryUrl = new URL('/codplay-player/codplay.js', globalThis.location.href).href
-  const { CodPlay } = await import(/* @vite-ignore */ libraryUrl) as {
-    CodPlay: new () => CodPlayOwner
-  }
-  const player = new CodPlay()
-  let instanceA: SceneInstance | undefined
-  let instanceB: SceneInstance | undefined
-  let removeDiagnosticA: (() => void) | undefined
-  let removeDiagnosticB: (() => void) | undefined
+  const integrationUrl = new URL('/codplay-engine/engine.js', globalThis.location.href).href
+  const [{ CodPlay }, { engineCapabilities, preloadStrategies }] = await Promise.all([
+    import(/* @vite-ignore */ libraryUrl) as Promise<{
+      CodPlay: new (options: {
+        engine: Readonly<Record<string, unknown>>
+        preload: { strategies: EngineConfigBundle['preloadStrategies'] }
+      }) => CodPlayOwner
+    }>,
+    import(/* @vite-ignore */ integrationUrl) as Promise<EngineConfigBundle>,
+  ])
+  const player = new CodPlay({ engine: engineCapabilities, preload: { strategies: preloadStrategies } })
+  let instance: SceneInstance | undefined
+  let removeDiagnostic: (() => void) | undefined
   let progressTimer: number | undefined
+  const commandDiagnostics: SceneDiagnostic[] = []
 
   try {
-    const loadedInstances = await Promise.all([
-      player.load(packagePath, { root: rootA }),
-      player.load(packagePath, { root: rootB }),
-    ])
-    instanceA = loadedInstances[0]
-    instanceB = loadedInstances[1]
-    removeDiagnosticA = observeDiagnostics(instanceA, 'A')
-    removeDiagnosticB = observeDiagnostics(instanceB, 'B')
+    instance = await player.load(packagePath, { root })
+    removeDiagnostic = instance.diagnostic.onDiagnostic((diagnostic) => {
+      console.error('[scene-export] diagnostic CodPlay', diagnostic)
+      if (isErrorDiagnostic(diagnostic)) commandDiagnostics.push(diagnostic)
+    })
     pageStatus.dataset.state = 'ready'
-    pageStatus.textContent = 'Deux occurrences prêtes ; un seul owner CodPlay.'
+    pageStatus.textContent = 'Rive et Three.js sont préchargés dans la même scène exportée.'
     playButton.disabled = false
-    pauseAButton.disabled = false
-    seekAButton.disabled = false
-    destroyAButton.disabled = false
+    seekButton.disabled = false
+    pauseButton.disabled = false
+    destroyButton.disabled = false
+    refreshInstanceStatus(instance, instanceStatus)
     progressTimer = globalThis.setInterval(() => {
-      refreshInstanceStatus(instanceA, statusA)
-      refreshInstanceStatus(instanceB, statusB)
+      if (instance !== undefined) refreshInstanceStatus(instance, instanceStatus)
     }, 100)
 
     playButton.addEventListener('click', () => {
-      if (instanceA !== undefined && instanceB !== undefined) {
-        void playBoth(instanceA, instanceB, pageStatus)
-      }
+      if (instance === undefined) return
+      const activeInstance = instance
+      void runCommand(() => activeInstance.telco.play(), pageStatus, 'Scène lancée.', commandDiagnostics)
     })
-    pauseAButton.addEventListener('click', () => {
-      if (instanceA !== undefined) void runInstanceCommand(instanceA.telco.pause(), pageStatus, 'Pause A terminée.')
+    seekButton.addEventListener('click', () => {
+      if (instance === undefined) return
+      const activeInstance = instance
+      void runCommand(() => activeInstance.telco.seek(9_000), pageStatus, 'Seek à 9 000 ms terminé.', commandDiagnostics)
     })
-    seekAButton.addEventListener('click', () => {
-      if (instanceA !== undefined) {
-        void runInstanceCommand(instanceA.telco.seek(5_000), pageStatus, 'Seek A à 5 000 ms terminé.')
-      }
+    pauseButton.addEventListener('click', () => {
+      if (instance === undefined) return
+      const activeInstance = instance
+      void runCommand(() => activeInstance.telco.pause(), pageStatus, 'Scène en pause.', commandDiagnostics)
     })
-    destroyAButton.addEventListener('click', () => {
-      if (instanceA === undefined) return
-      player.instances.destroy(instanceA.instanceId)
-      removeDiagnosticA?.()
-      removeDiagnosticA = undefined
-      instanceA = undefined
+    destroyButton.addEventListener('click', () => {
+      if (instance === undefined) return
+      player.instances.destroy(instance.instanceId)
+      removeDiagnostic?.()
+      removeDiagnostic = undefined
+      instance = undefined
       playButton.disabled = true
-      pauseAButton.disabled = true
-      seekAButton.disabled = true
-      destroyAButton.disabled = true
-      refreshInstanceStatus(instanceA, statusA)
-      pageStatus.textContent = 'A détruite ; B reste chargée dans le même owner.'
+      seekButton.disabled = true
+      pauseButton.disabled = true
+      destroyButton.disabled = true
+      instanceStatus.dataset.state = 'destroyed'
+      instanceStatus.textContent = 'Instance détruite.'
+      pageStatus.textContent = 'Le player CodPlay reste disponible ; l’instance scène a été détruite.'
     })
 
     globalThis.addEventListener('beforeunload', () => {
       if (progressTimer !== undefined) globalThis.clearInterval(progressTimer)
-      removeDiagnosticA?.()
-      removeDiagnosticB?.()
+      removeDiagnostic?.()
       player.destroy()
     }, { once: true })
   } catch (error) {
@@ -103,53 +117,45 @@ async function mountSceneExportDemo(): Promise<void> {
   }
 }
 
-/** Adds a diagnostic listener for one loaded scene occurrence. */
-function observeDiagnostics(instance: SceneInstance, label: string): () => void {
-  return instance.diagnostic.onDiagnostic((diagnostic) => {
-    console.error(`[scene-export] diagnostic CodPlay ${label}`, diagnostic)
-  })
-}
-
-/** Updates one occurrence label with its own state and logical time. */
-function refreshInstanceStatus(instance: SceneInstance | undefined, status: HTMLElement): void {
-  if (instance === undefined) {
-    status.dataset.state = 'destroyed'
-    status.textContent = 'Détruite'
-    return
-  }
-
+/** Displays one instance state and its logical time while it is running. */
+function refreshInstanceStatus(instance: SceneInstance, status: HTMLElement): void {
   const state = instance.telco.getState()
   const progress = instance.telco.getProgress()
   status.dataset.state = state.status
   status.textContent = `${state.status} · ${progress.timelineMs} / ${progress.durationMs} ms`
 }
 
-/** Starts both loaded occurrences through their own telco controls. */
-async function playBoth(instanceA: SceneInstance, instanceB: SceneInstance, status: HTMLElement): Promise<void> {
+/** Runs one existing instance command and reports its result on the page. */
+async function runCommand(
+  command: () => Promise<unknown>,
+  status: HTMLElement,
+  success: string,
+  diagnostics: SceneDiagnostic[],
+): Promise<void> {
+  diagnostics.length = 0
   try {
-    await Promise.all([instanceA.telco.play(), instanceB.telco.play()])
-    status.dataset.state = 'playing'
-    status.textContent = 'A et B lancées par leur telco, sous le même engine.'
-  } catch (error) {
-    reportCommandFailure(error, status)
-  }
-}
-
-/** Runs one occurrence command and reports a rejected command in the page. */
-async function runInstanceCommand(command: Promise<unknown>, status: HTMLElement, success: string): Promise<void> {
-  try {
-    await command
+    await command()
+    const error = diagnostics.find((diagnostic) => diagnostic.severity === 'error')
+    if (error !== undefined) {
+      status.dataset.state = 'error'
+      status.textContent = `${error.code}: ${error.message}`
+      return
+    }
     status.dataset.state = 'ready'
     status.textContent = success
   } catch (error) {
-    reportCommandFailure(error, status)
+    status.dataset.state = 'error'
+    status.textContent = error instanceof Error ? error.message : String(error)
   }
 }
 
-/** Reports a failed CodPlay command without hiding the original error. */
-function reportCommandFailure(error: unknown, status: HTMLElement): void {
-  status.dataset.state = 'error'
-  status.textContent = error instanceof Error ? error.message : String(error)
+/** Narrows a diagnostic event before the demo displays command failures. */
+function isErrorDiagnostic(value: unknown): value is SceneDiagnostic {
+  if (typeof value !== 'object' || value === null) return false
+  const diagnostic = value as Partial<SceneDiagnostic>
+  return typeof diagnostic.severity === 'string'
+    && typeof diagnostic.code === 'string'
+    && typeof diagnostic.message === 'string'
 }
 
 /** Resolves one required page element and fails with its selector when absent. */

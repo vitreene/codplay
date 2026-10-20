@@ -104,6 +104,7 @@ export type { CompiledFunctionCollection } from './scene/compiled'
 export type {
   CompiledResourceManifest,
   SceneBuildFunctionReference,
+  SceneBuildPreloadResourceOccurrence,
   SceneBuildResourceReference,
   CompiledLengthValue,
   CompiledRel,

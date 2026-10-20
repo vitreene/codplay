@@ -13,16 +13,23 @@ import { loadScenePackage } from '../../src/facade/scene-package-loader'
 
 const temporaryDirectories = []
 const PACKAGE_ORIGIN = 'https://outside-project.example/'
+const COMPOSITE_PACKAGE_ORIGIN = 'https://composite-site.example/'
 
 describe('scene export acceptance', () => {
   let player
   let restoreNativeMedia
+  let restoreImageReadiness
+  let restoreFontSet
 
   afterEach(async () => {
     player?.destroy()
     player = undefined
     restoreNativeMedia?.()
     restoreNativeMedia = undefined
+    restoreImageReadiness?.()
+    restoreImageReadiness = undefined
+    restoreFontSet?.()
+    restoreFontSet = undefined
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     document.body.replaceChildren()
@@ -151,6 +158,174 @@ describe('scene export acceptance', () => {
     expect(calls).toContain('onSequenceEnd')
     expect(requestedFiles.sort()).toEqual(['export-manifest.json', manifest.scene])
     expect(moduleImporter).toHaveBeenCalledOnce()
+  })
+
+  it('loads one relocated core package with scene media, scoped CSS, a font and scene functions', async () => {
+    const directory = await createTemporaryDirectory()
+    const sourceDirectory = path.join(directory, 'authoring-project')
+    const buildDirectory = path.join(directory, 'build-output')
+    const externalProject = path.join(directory, 'independent-site', 'public', 'programs', 'composite')
+    const sceneFile = path.join(sourceDirectory, 'scene.ts')
+    const stylesheetFile = path.join(sourceDirectory, 'scene.css')
+    const traceFile = path.join(sourceDirectory, 'trace.ts')
+    await mkdir(sourceDirectory, { recursive: true })
+    await writeFile(sceneFile, [
+      "import './scene.css'",
+      "import { record } from './trace.ts'",
+      'export const scene = {',
+      "  id: 'composite-package-acceptance',",
+      "  init: () => record('init'),",
+      "  onStart: () => record('onStart'),",
+      "  onSequenceEnd: () => record('onSequenceEnd'),",
+      "  eventimes: [{ name: 'sequence:end', startAt: 100 }],",
+      '  stories: { main: { id: \'main\', persos: [',
+      "    { id: 'title', type: 'tag', initial: { tag: 'p', content: 'Packaged scene', attr: { class: 'cp-package-proof' }, move: '@root' }, actions: {} },",
+      "    { id: 'portrait', type: 'img', initial: { src: './portrait.svg', move: '@root' }, actions: {} },",
+      "    { id: 'clip', type: 'media', initial: { tag: 'video', src: './clip.mp4', move: '@root' }, actions: {} },",
+      '  ] } },',
+      '}',
+      '',
+    ].join('\n'))
+    await writeFile(traceFile, [
+      'export function record(name: string) {',
+      '  globalThis.__codplayCompositeExportCalls.push(name)',
+      '}',
+      '',
+    ].join('\n'))
+    await writeFile(stylesheetFile, [
+      '@font-face {',
+      '  font-family: "CodPlay Package Probe";',
+      '  src: url("./probe.woff2") format("woff2");',
+      '  font-weight: 400;',
+      '  font-style: normal;',
+      '}',
+      '.cp-package-proof {',
+      '  font-family: "CodPlay Package Probe";',
+      '  background-image: url("./texture.svg");',
+      '}',
+      '',
+    ].join('\n'))
+    await writeFile(path.join(sourceDirectory, 'portrait.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><title>portrait</title></svg>')
+    await writeFile(path.join(sourceDirectory, 'texture.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><title>texture</title></svg>')
+    await writeFile(path.join(sourceDirectory, 'clip.mp4'), await readFile(path.resolve('tests/fixtures/scene-export/short.mp4')))
+    await writeFile(path.join(sourceDirectory, 'probe.woff2'), await readFile(path.resolve('tests/fixtures/fonts/codplay-font-fixture.woff2')))
+
+    const buildPackage = path.join(buildDirectory, 'scene-package')
+    await runSceneExportCommand(sceneFile, buildPackage, directory)
+    await mkdir(path.dirname(externalProject), { recursive: true })
+    await rename(buildPackage, externalProject)
+    await rm(sourceDirectory, { recursive: true, force: true })
+
+    const manifest = JSON.parse(await readFile(path.join(externalProject, 'export-manifest.json'), 'utf8'))
+    expect(manifest.functions.file).toBe('scene/functions.mjs')
+    expect(manifest.resources.map(({ type }) => type).sort()).toEqual(['image', 'video'])
+    expect(manifest.styleSheet.classNames).toEqual(['cp-package-proof'])
+    expect(manifest.styleSheet.fontFaces.map(({ family }) => family)).toEqual(['CodPlay Package Probe'])
+    expect(manifest.styleSheet.resources.map(({ type }) => type).sort()).toEqual(['font', 'image'])
+    await expect(readFile(sceneFile, 'utf8')).rejects.toThrow()
+    await expect(readFile(path.join(externalProject, 'codplay.js'))).rejects.toThrow()
+    for (const file of [manifest.scene, manifest.functions.file, manifest.styleSheet.file,
+      ...manifest.resources.map(({ file }) => file),
+      ...manifest.styleSheet.resources.map(({ file }) => file)]) {
+      await expect(readFile(path.join(externalProject, file))).resolves.toBeDefined()
+    }
+
+    const packageBase = new URL('programs/composite/', COMPOSITE_PACKAGE_ORIGIN)
+    const requestedFiles = []
+    const requestedPreloads = []
+    vi.stubGlobal('__codplayCompositeExportCalls', [])
+    vi.stubGlobal('fetch', async (input) => {
+      const url = new URL(String(input))
+      if (url.origin !== packageBase.origin || !url.pathname.startsWith(packageBase.pathname)) {
+        throw new Error(`Composite package request escaped the external project: ${url.href}`)
+      }
+      const relativePath = decodeURIComponent(url.pathname.slice(packageBase.pathname.length))
+      requestedFiles.push(relativePath)
+      const body = await readFile(path.join(externalProject, relativePath), 'utf8')
+      return {
+        ok: true,
+        status: 200,
+        json: async () => JSON.parse(body),
+        text: async () => body,
+      }
+    })
+
+    restoreImageReadiness = stubRenderedImageReadiness()
+    const fontSet = new Set()
+    const previousFontSet = Object.getOwnPropertyDescriptor(document, 'fonts')
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fontSet })
+    restoreFontSet = () => {
+      if (previousFontSet === undefined) delete document.fonts
+      else Object.defineProperty(document, 'fonts', previousFontSet)
+    }
+    vi.stubGlobal('Image', class PackageImageProbe {
+      onload
+      onerror
+      currentSrc = ''
+      set src(value) {
+        this.currentSrc = value
+        requestedPreloads.push(value)
+        queueMicrotask(() => this.onload?.(new Event('load')))
+      }
+      get src() { return this.currentSrc }
+      decode() { return Promise.resolve() }
+    })
+    vi.stubGlobal('FontFace', vi.fn(function (family, source) {
+      const match = String(source).match(/url\(["']?(.*?)["']?\)/)
+      if (match?.[1] !== undefined) requestedPreloads.push(match[1])
+      return createTestFontFace(async () => undefined, {
+        family,
+        weight: 'normal',
+        style: 'normal',
+        stretch: 'normal',
+        variationSettings: 'normal',
+        unicodeRange: 'U+0-10FFFF',
+        display: 'auto',
+      })
+    }))
+    const mediaState = stubNativeMedia()
+    restoreNativeMedia = mediaState.restore
+    player = createPlayer()
+    const installCss = player.preload.css.set.bind(player.preload.css)
+    vi.spyOn(player.preload.css, 'set').mockImplementation((input) => {
+      installCss(input)
+      fontSet.add(createTestFontFace(async () => undefined, {
+        family: 'CodPlay Package Probe',
+        weight: '400',
+      }))
+    })
+
+    const root = document.createElement('main')
+    root.id = 'composite-package-root'
+    document.body.append(root)
+    const moduleImporter = vi.fn(async (moduleUrl) => {
+      expect(moduleUrl.href).toBe(new URL(manifest.functions.file, packageBase).href)
+      return importNativeEsm(path.join(externalProject, manifest.functions.file))
+    })
+    const instance = await loadScenePackage(player, packageBase.href, root, 'composite-package', moduleImporter)
+      .then(({ instance }) => instance)
+
+    expect(globalThis.__codplayCompositeExportCalls).toEqual(['init'])
+    expect(root.querySelector('p')?.textContent).toBe('Packaged scene')
+    expect(root.querySelector('img')?.src).toBe(new URL(manifest.resources.find(({ type }) => type === 'image').file, packageBase).href)
+    expect(root.querySelector('video')?.src).toBe(new URL(manifest.resources.find(({ type }) => type === 'video').file, packageBase).href)
+    expect(root.contains(root.querySelector('video'))).toBe(true)
+    const scopedStyle = document.head.querySelector('style[data-codplay-preload-css-slot="scene-package:composite-package"]')
+    expect(scopedStyle?.textContent).toContain('@scope ([data-codplay-scope=')
+    expect(scopedStyle?.textContent).toContain('.cp-package-proof')
+    const actualPreloads = [...requestedPreloads, ...mediaState.loads]
+    for (const resource of [...manifest.resources, ...manifest.styleSheet.resources]) {
+      expect(actualPreloads).toContain(new URL(resource.file, packageBase).href)
+    }
+
+    player.engine.advance(0)
+    await instance.telco.play()
+    player.engine.advance(150)
+    await flushSourceTasks()
+    expect(globalThis.__codplayCompositeExportCalls).toEqual(['init', 'onStart', 'onSequenceEnd'])
+    expect(requestedFiles.sort()).toEqual(['export-manifest.json', manifest.scene, manifest.styleSheet.file])
+    expect(moduleImporter).toHaveBeenCalledOnce()
+    expect(mediaState.loads).toEqual([new URL(manifest.resources.find(({ type }) => type === 'video').file, packageBase).href])
   })
 
   it('preloads initial and future media once and reuses them through seek, reset, replay and destroy', async () => {
@@ -404,6 +579,46 @@ function createPointerEvent(type, fields) {
   const event = new Event(type, { bubbles: true, cancelable: true })
   for (const [name, value] of Object.entries(fields)) Object.defineProperty(event, name, { value })
   return event
+}
+
+/** Marks materialized image nodes ready for the loader's browser-readiness check. */
+function stubRenderedImageReadiness() {
+  const prototype = HTMLImageElement.prototype
+  const previous = new Map(['complete', 'naturalWidth', 'decode'].map((key) => [
+    key,
+    Object.getOwnPropertyDescriptor(prototype, key),
+  ]))
+  Object.defineProperty(prototype, 'complete', { configurable: true, get: () => true })
+  Object.defineProperty(prototype, 'naturalWidth', { configurable: true, get: () => 1 })
+  Object.defineProperty(prototype, 'decode', { configurable: true, value: async () => undefined })
+  return () => {
+    for (const [key, descriptor] of previous) {
+      if (descriptor === undefined) delete prototype[key]
+      else Object.defineProperty(prototype, key, descriptor)
+    }
+  }
+}
+
+/** Creates a deterministic FontFace stand-in for package preload and CSS readiness. */
+function createTestFontFace(load = async () => undefined, descriptors = {}) {
+  let status = 'unloaded'
+  const fontFace = {
+    family: 'CodPlay Package Probe',
+    weight: '400',
+    style: 'normal',
+    stretch: 'normal',
+    variationSettings: 'normal',
+    unicodeRange: 'U+0-10FFFF',
+    display: 'auto',
+    ...descriptors,
+    get status() { return status },
+    async load() {
+      await load()
+      status = 'loaded'
+      return fontFace
+    },
+  }
+  return fontFace
 }
 
 /** Lets queued capture source adapter callbacks settle between native DOM events. */

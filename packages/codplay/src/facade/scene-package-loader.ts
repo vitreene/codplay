@@ -36,7 +36,7 @@ type ScenePackageResource = Readonly<{
   sceneUrl: string
   file: string
   suffix: string
-  type: 'image' | 'audio' | 'video'
+  type: string
   occurrences: readonly ScenePackageOccurrence[]
 }>
 
@@ -760,7 +760,8 @@ function parsePackageResource(value: unknown, index: number): ScenePackageResour
     || typeof value.sceneUrl !== 'string'
     || typeof value.file !== 'string'
     || typeof value.suffix !== 'string'
-    || (value.type !== 'image' && value.type !== 'audio' && value.type !== 'video')
+    || typeof value.type !== 'string'
+    || value.type.length === 0
     || !Array.isArray(value.occurrences)
     || value.occurrences.length === 0) {
     throw new Error(`Scene package resource ${index} is invalid.`)

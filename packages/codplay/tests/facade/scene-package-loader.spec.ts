@@ -82,6 +82,224 @@ describe('CodPlay scene package loading', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('passes a packaged custom preload resource to the existing type strategy', async () => {
+    const resourceUrl = 'assets/0123456789abcdefabcd.glb'
+    const packageResourceUrl = new URL(`scene/${resourceUrl}`, PACKAGE_BASE).href
+    const loadedUrls: string[] = []
+    player = new CodPlay({
+      pauseOnDocumentHidden: false,
+      frameScheduler: { request: () => 0, cancel: () => undefined },
+      preload: {
+        strategies: {
+          'three-glb': async (url) => { loadedUrls.push(url) },
+        },
+      },
+    })
+    const result = player.build({
+      scene: {
+        id: 'custom-preload-package-scene',
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{ id: 'avatar', type: 'tag', initial: { tag: 'div', src: '/models/actor.glb' } }],
+          },
+        },
+      },
+    }, {
+      export: true,
+      preloadManifest: { entries: [{
+        url: '/models/actor.glb',
+        type: 'three-glb',
+        policy: { cache: 'default' },
+      }] },
+      preloadResourceOccurrences: [{
+        entryIndex: 0,
+        storyId: 'main',
+        persoId: 'avatar',
+        path: ['initial', 'src'],
+      }],
+    })
+    if (!result.ok) throw new Error('Custom preload package fixture did not compile.')
+
+    const compiledScene = structuredClone(result.compiledScene) as MutablePackageScene
+    writePath(compiledScene, ['scene', 'stories', 'main', 'persos', 0, 'initial', 'src'], resourceUrl)
+    compiledScene.resources.entries = compiledScene.resources.entries.map((entry, index) =>
+      index === 0 ? { ...entry, url: resourceUrl } : entry,
+    )
+    compiledScene.requirements.resources = [resourceUrl]
+    const manifest = {
+      format: 'codplay.scene-package.v1',
+      scene: 'scene/scene.json',
+      functions: [],
+      resources: [{
+        sceneUrl: resourceUrl,
+        file: `scene/${resourceUrl}`,
+        suffix: '',
+        type: 'three-glb',
+        occurrences: [result.resourceReferences![0]!.path],
+      }],
+    }
+    const root = document.createElement('main')
+    document.body.append(root)
+    const fetchMock = createPackageFetch(manifest, JSON.stringify(compiledScene))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const instance = await player.load(PACKAGE_BASE, { root })
+
+    expect(loadedUrls).toEqual([packageResourceUrl])
+    expect(instance.telco.getState()).toMatchObject({ status: 'ready', initialized: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a malformed package URL before making requests or creating an instance', async () => {
+    player = createPlayer()
+    const root = document.createElement('main')
+    document.body.append(root)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(player.load('http://[invalid', { root })).rejects.toThrow()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(player.instances.get('codplay-load-1')).toBeUndefined()
+    expect(root.children).toHaveLength(0)
+  })
+
+  it('does not create a scene instance when a required engine library fails', async () => {
+    const libraryError = new Error('Remote engine library request failed.')
+    const loadLibrary = vi.fn(async () => { throw libraryError })
+    player = new CodPlay({
+      pauseOnDocumentHidden: false,
+      frameScheduler: { request: () => 0, cancel: () => undefined },
+      engine: { libraries: { register: [{ id: 'three', load: loadLibrary }] } },
+    })
+    const packageData = createPackageData(player)
+    const compiledScene = JSON.parse(packageData.sceneJson) as CompiledScene
+    const sceneJson = JSON.stringify({
+      ...compiledScene,
+      requirements: { ...compiledScene.requirements, libraries: ['three'] },
+    })
+    const root = document.createElement('main')
+    document.body.append(root)
+    const fetchMock = createPackageFetch(packageData.manifest, sceneJson)
+    vi.stubGlobal('fetch', fetchMock)
+    const createInstance = vi.spyOn(player.instances, 'create')
+
+    await expect(player.load(PACKAGE_BASE, { root })).rejects.toBe(libraryError)
+
+    expect(loadLibrary).toHaveBeenCalledTimes(1)
+    expect(createInstance).not.toHaveBeenCalled()
+    expect(player.instances.get('codplay-load-1')).toBeUndefined()
+    expect(root.children).toHaveLength(0)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('prepares a required library once per owner and keeps owners independent', async () => {
+    restoreImageReadiness = stubImageReadiness()
+    const firstRuntime = { owner: 'first' }
+    const secondRuntime = { owner: 'second' }
+    const firstLoad = vi.fn(async () => firstRuntime)
+    const secondLoad = vi.fn(async () => secondRuntime)
+    player = createPlayerWithLibrary(firstLoad)
+    const secondOwner = createPlayerWithLibrary(secondLoad)
+    try {
+      const packageData = createPackageData(player)
+      const compiledScene = JSON.parse(packageData.sceneJson) as CompiledScene
+      const sceneJson = JSON.stringify({
+        ...compiledScene,
+        requirements: { ...compiledScene.requirements, libraries: ['three'] },
+      })
+      const rootA = document.createElement('main')
+      const rootB = document.createElement('main')
+      const rootC = document.createElement('main')
+      rootA.id = 'first-owner-a'
+      rootB.id = 'first-owner-b'
+      rootC.id = 'second-owner'
+      document.body.append(rootA, rootB, rootC)
+      vi.stubGlobal('fetch', createPackageFetch(packageData.manifest, sceneJson))
+      const packageResourceUrl = new URL(PACKAGE_FILE, PACKAGE_BASE).href
+      vi.spyOn(player.preload, 'load').mockResolvedValue(createPreloadSuccess(packageResourceUrl))
+      vi.spyOn(secondOwner.preload, 'load').mockResolvedValue(createPreloadSuccess(packageResourceUrl))
+
+      const firstInstances = await Promise.all([
+        player.load(PACKAGE_BASE, { root: rootA }),
+        player.load(PACKAGE_BASE, { root: rootB }),
+      ])
+      const secondInstance = await secondOwner.load(PACKAGE_BASE, { root: rootC })
+
+      expect(firstLoad).toHaveBeenCalledTimes(1)
+      expect(secondLoad).toHaveBeenCalledTimes(1)
+      expect(new Set(firstInstances.map((instance) => instance.instanceId)).size).toBe(2)
+      expect(secondInstance.instanceId).toBe(firstInstances[0]?.instanceId)
+      expect(firstInstances.map((instance) => instance.telco.getState().status)).toEqual(['ready', 'ready'])
+      expect(secondInstance.telco.getState().status).toBe('ready')
+    } finally {
+      secondOwner.destroy()
+    }
+  })
+
+  it('loads the same package through a new owner after the previous owner is destroyed', async () => {
+    restoreImageReadiness = stubImageReadiness()
+    player = createPlayer()
+    const firstOwner = player
+    const packageData = createPackageData(firstOwner)
+    const firstRoot = document.createElement('main')
+    const secondRoot = document.createElement('main')
+    document.body.append(firstRoot, secondRoot)
+    vi.stubGlobal('fetch', createPackageFetch(packageData.manifest, packageData.sceneJson))
+    vi.spyOn(firstOwner.preload, 'load').mockResolvedValue(
+      createPreloadSuccess(new URL(PACKAGE_FILE, PACKAGE_BASE).href),
+    )
+
+    const firstInstance = await firstOwner.load(PACKAGE_BASE, { root: firstRoot })
+    expect(firstRoot.querySelector('img')).not.toBeNull()
+
+    firstOwner.destroy()
+    player = undefined
+    expect(firstRoot.children).toHaveLength(0)
+
+    player = createPlayer()
+    vi.stubGlobal('fetch', createPackageFetch(packageData.manifest, packageData.sceneJson))
+    vi.spyOn(player.preload, 'load').mockResolvedValue(
+      createPreloadSuccess(new URL(PACKAGE_FILE, PACKAGE_BASE).href),
+    )
+    const secondInstance = await player.load(PACKAGE_BASE, { root: secondRoot })
+
+    expect(secondInstance).not.toBe(firstInstance)
+    expect(player.instances.get(secondInstance.instanceId)).toBe(secondInstance)
+    expect(secondRoot.querySelector('img')?.src).toBe(new URL(PACKAGE_FILE, PACKAGE_BASE).href)
+    expect(secondInstance.telco.getState()).toMatchObject({ status: 'ready', initialized: true })
+  })
+
+  it('rejects an invalid compiled scene before preparation, preload or instance creation', async () => {
+    player = createPlayer()
+    const packageData = createPackageData(player)
+    const invalidScene = JSON.parse(packageData.sceneJson) as {
+      requirements: { resources: string[] }
+    }
+    invalidScene.requirements.resources = []
+    const invalidSceneJson = JSON.stringify(invalidScene)
+    const codec = new CompiledSceneCodec({ diagnosticOutput: () => undefined })
+    expect(codec.decode(invalidSceneJson).ok).toBe(false)
+
+    const root = document.createElement('main')
+    document.body.append(root)
+    const fetchMock = createPackageFetch(packageData.manifest, invalidSceneJson)
+    vi.stubGlobal('fetch', fetchMock)
+    const prepareScene = vi.spyOn(player.engine, 'prepareScene')
+    const preload = vi.spyOn(player.preload, 'load')
+    const createInstance = vi.spyOn(player.instances, 'create')
+
+    await expect(player.load(PACKAGE_BASE, { root })).rejects.toThrow('Compiled scene is invalid:')
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(prepareScene).not.toHaveBeenCalled()
+    expect(preload).not.toHaveBeenCalled()
+    expect(createInstance).not.toHaveBeenCalled()
+    expect(player.instances.get('codplay-load-1')).toBeUndefined()
+    expect(root.children).toHaveLength(0)
+  })
+
   it('serializes concurrent loads through one owner and creates distinct instances', async () => {
     restoreImageReadiness = stubImageReadiness()
     player = createPlayer()
@@ -303,6 +521,13 @@ describe('CodPlay scene package loading', () => {
     expect(authorInstance.telco.getState()).toMatchObject({ status: 'ready', initialized: true })
     expect(broadcastRoot.querySelector('img')?.src).toBe(new URL(PACKAGE_FILE, PACKAGE_BASE).href)
     expect(broadcastInstance.telco.getState()).toMatchObject({ status: 'ready', initialized: true })
+
+    player.instances.destroy(broadcastInstance.instanceId)
+
+    expect(broadcastRoot.children).toHaveLength(0)
+    expect(player.instances.get('author-instance')).toBe(authorInstance)
+    expect(authorRoot.innerHTML).toBe(authorMarkup)
+    expect(authorInstance.telco.getState()).toMatchObject({ status: 'ready', initialized: true })
   })
 
   it('installs the packaged stylesheet in the head, scopes it per root and clears it per instance', async () => {
@@ -500,6 +725,15 @@ function createPlayer(): CodPlay {
   return new CodPlay({
     pauseOnDocumentHidden: false,
     frameScheduler: { request: () => 0, cancel: () => undefined },
+  })
+}
+
+/** Creates a CodPlay owner with one independently supplied library loader. */
+function createPlayerWithLibrary(load: () => Promise<unknown>): CodPlay {
+  return new CodPlay({
+    pauseOnDocumentHidden: false,
+    frameScheduler: { request: () => 0, cancel: () => undefined },
+    engine: { libraries: { register: [{ id: 'three', load }] } },
   })
 }
 

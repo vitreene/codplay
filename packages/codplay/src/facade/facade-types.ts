@@ -6,8 +6,10 @@ import type {
 import type {
   CompiledFunctionCollection,
   CompiledRecord,
+  CompiledResourceManifest,
   CompiledScene,
   SceneBuildFunctionReference,
+  SceneBuildPreloadResourceOccurrence,
   SceneBuildResourceReference,
 } from '../scene/compiled'
 import type { SceneDoc } from '../scene/types'
@@ -107,6 +109,10 @@ export type CodPlayCompileOptions = Readonly<{
   schemaVersion?: string
   /** Enables strict export diagnostics and returns source-reference paths outside the scene JSON. */
   export?: boolean
+  /** Existing preload resources available to the export compiler. */
+  preloadManifest?: CompiledResourceManifest
+  /** Links non-native preload entries to exact authored fields during export compilation. */
+  preloadResourceOccurrences?: readonly SceneBuildPreloadResourceOccurrence[]
 }>
 
 /** Successful public compilation result reused by instance creation. */

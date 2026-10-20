@@ -36,6 +36,7 @@ import type {
   CompiledRecord,
   CompiledEventime,
   CompiledResource,
+  CompiledResourceManifest,
   CompiledScene,
   CompiledSceneData,
   CompiledStrapDeclarations,
@@ -54,16 +55,27 @@ export type SceneBuilderOptions = Readonly<{
   createdAt?: string
   schemaVersion?: string
   export?: boolean
+  preloadManifest?: CompiledResourceManifest
+  preloadResourceOccurrences?: readonly SceneBuildPreloadResourceOccurrence[]
   diagnosticOutput?: DiagnosticOutput
 }>
 
 /** One supported resource URL and the exact compiled payload path that references it. */
 export type SceneBuildResourceReference = Readonly<{
   url: string
-  type: 'image' | 'audio' | 'video'
+  type: string
   path: readonly (string | number)[]
   /** Exact CSS url(...) token to replace inside a compiled inline style value. */
   cssValue?: string
+}>
+
+/** One existing preload-manifest entry linked to its exact authored component field. */
+export type SceneBuildPreloadResourceOccurrence = Readonly<{
+  entryIndex: number
+  storyId: string
+  persoId: string
+  /** Path relative to the authored perso, such as ['initial', 'src']. */
+  path: readonly (string | number)[]
 }>
 
 /** One extracted function reference and its exact path in the authored SceneDoc. */
@@ -130,7 +142,13 @@ export class SceneBuilder {
         validateSourceFunctionReferences(scene, extraction.functions, functionReferences, diagnostics)
       }
       const exportResources = this.options.export
-        ? deriveExportResources(activeScene, diagnostics)
+        ? deriveExportResources(
+          activeScene,
+          compiledData,
+          this.options.preloadManifest,
+          this.options.preloadResourceOccurrences ?? [],
+          diagnostics,
+        )
         : undefined
       if (diagnostics.hasErrors()) {
         return { ok: false, diagnostics: diagnostics.report() }
@@ -495,6 +513,9 @@ function deriveRequirements(
 /** Derives export-only media closure and exact locations without changing the JSON schema. */
 function deriveExportResources(
   scene: CanonicalSceneDoc,
+  compiledData: CompiledSceneData,
+  preloadManifest: CompiledResourceManifest | undefined,
+  preloadResourceOccurrences: readonly SceneBuildPreloadResourceOccurrence[],
   diagnostics: DiagnosticCollector,
 ): Readonly<{ entries: readonly CompiledResource[]; references: readonly SceneBuildResourceReference[] }> {
   const entries = new Map<string, CompiledResource>()
@@ -522,6 +543,8 @@ function deriveExportResources(
           collectExportSource(scene.id, action.src, undefined, [...path, 'src'], perso, storyKey, diagnostics, entries, references)
           rejectMediaPartSource(scene.id, action.video, [...path, 'video'], perso, storyKey, diagnostics)
         })
+      } else if (perso.type === 'rive') {
+        collectExportSource(scene.id, perso.initial.src, 'rive', [...basePath, 'initial', 'src'], perso, storyKey, diagnostics, entries, references)
       } else if (perso.type === 'tag') {
         const tagName = typeof perso.initial.tag === 'string' ? perso.initial.tag.toLowerCase() : ''
         const expectedType = tagName === 'img' ? 'image'
@@ -535,7 +558,209 @@ function deriveExportResources(
     }
   }
 
+  collectPreloadResourceOccurrences(
+    scene,
+    compiledData,
+    preloadManifest,
+    preloadResourceOccurrences,
+    diagnostics,
+    entries,
+    references,
+  )
+
   return { entries: [...entries.values()], references }
+}
+
+/** Links existing preload entries to exact compiled fields and diagnoses unlinked custom entries. */
+function collectPreloadResourceOccurrences(
+  scene: CanonicalSceneDoc,
+  compiledData: CompiledSceneData,
+  manifestInput: unknown,
+  occurrencesInput: unknown,
+  diagnostics: DiagnosticCollector,
+  entries: Map<string, CompiledResource>,
+  references: SceneBuildResourceReference[],
+): void {
+  const seenPaths = new Set<string>()
+  const linkedEntryIndexes = new Set<number>()
+  const manifestEntries = readPreloadManifestEntries(scene.id, manifestInput, diagnostics)
+  const occurrences = readPreloadResourceOccurrences(scene.id, occurrencesInput, diagnostics)
+  for (const rawOccurrence of occurrences) {
+    if (!isPlainRecord(rawOccurrence)) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'Preload resource occurrence must be an object.')
+      continue
+    }
+    const entryIndex = Number.isInteger(rawOccurrence.entryIndex) && (rawOccurrence.entryIndex as number) >= 0
+      ? rawOccurrence.entryIndex as number
+      : undefined
+    const storyId = typeof rawOccurrence.storyId === 'string' ? rawOccurrence.storyId : undefined
+    const persoId = typeof rawOccurrence.persoId === 'string' ? rawOccurrence.persoId : undefined
+    const path = Array.isArray(rawOccurrence.path) ? rawOccurrence.path : undefined
+    const resource = entryIndex === undefined ? undefined : manifestEntries[entryIndex]
+    if (entryIndex !== undefined && resource !== undefined) linkedEntryIndexes.add(entryIndex)
+    if (entryIndex === undefined || storyId === undefined || persoId === undefined || path === undefined) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'Preload resource occurrence must identify a manifest entry, story, perso and path.', resource)
+      continue
+    }
+    const occurrence = {
+      entryIndex,
+      storyId,
+      persoId,
+      path: path as readonly (string | number)[],
+    }
+    const storyMatches = Object.entries(scene.stories).filter(([, story]) => story.id === storyId)
+    const story = storyMatches[0]?.[1]
+    const storyKey = storyMatches[0]?.[0]
+    const persoMatches = story?.persos.flatMap((perso, index) => perso.id === persoId ? [{ perso, index }] : []) ?? []
+    const target = persoMatches[0]
+    if (storyMatches.length !== 1 || story === undefined || storyKey === undefined || persoMatches.length !== 1 || target === undefined) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'Preload resource occurrence must identify exactly one active story and perso.', resource)
+      continue
+    }
+
+    if (!isPlainRecord(resource)
+      || typeof resource.url !== 'string'
+      || resource.url.length === 0
+      || typeof resource.type !== 'string'
+      || resource.type.length === 0
+      || !isPlainRecord(resource.policy)
+      || !Array.isArray(occurrence.path)
+      || occurrence.path.length === 0
+      || occurrence.path.some((segment) => typeof segment !== 'string'
+        && (typeof segment !== 'number' || !Number.isInteger(segment) || segment < 0))) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'Preload resource occurrence does not identify a valid preload-manifest entry.', resource)
+      continue
+    }
+    if (isNonLocalResourceUrl(resource.url)) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'Only local preload resource paths are supported by this export step.', resource)
+      continue
+    }
+
+    const authoredValue = readValueAtPath(target.perso, occurrence.path)
+    const compiledDataPath = ['stories', storyKey, 'persos', target.index, ...occurrence.path] as const
+    const compiledPath = ['scene', ...compiledDataPath] as const
+    const compiledValue = readValueAtPath(compiledData, compiledDataPath)
+    if (authoredValue !== resource.url || compiledValue !== resource.url) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'Preload resource occurrence does not resolve to the same authored and compiled URL.', resource)
+      continue
+    }
+
+    const pathKey = JSON.stringify(compiledPath)
+    if (seenPaths.has(pathKey)) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'A compiled resource occurrence is declared more than once.', resource)
+      continue
+    }
+    seenPaths.add(pathKey)
+
+    const existing = entries.get(resource.url)
+    if (existing !== undefined && existing.type !== resource.type) {
+      reportInvalidPreloadOccurrence(scene.id, diagnostics, rawOccurrence, 'One resource URL is declared with conflicting preload types.', resource)
+      continue
+    }
+    if (existing === undefined) entries.set(resource.url, resource as unknown as CompiledResource)
+    references.push({ url: resource.url, type: resource.type, path: compiledPath })
+  }
+
+  for (const [entryIndex, resource] of manifestEntries.entries()) {
+    if (!isPlainRecord(resource)
+      || typeof resource.url !== 'string'
+      || typeof resource.type !== 'string'
+      || resource.type.length === 0
+      || !isPlainRecord(resource.policy)) {
+      diagnostics.error(
+        'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+        'Preload manifest entry is malformed.',
+        { refs: { sceneId: scene.id }, context: { sceneId: scene.id, entryIndex } },
+        `export-preload-resource-malformed:${entryIndex}`,
+      )
+      continue
+    }
+    if (['image', 'audio', 'video', 'rive', 'font', 'css'].includes(resource.type)) continue
+    if (linkedEntryIndexes.has(entryIndex)) continue
+    diagnostics.error(
+      'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+      'Custom preload resource has no exact component occurrence declaration.',
+      {
+        refs: { sceneId: scene.id },
+        context: { sceneId: scene.id, entryIndex, url: resource.url, type: resource.type },
+      },
+      `export-preload-resource-unmapped:${entryIndex}`,
+    )
+  }
+}
+
+/** Validates a preload manifest during export compilation. */
+function readPreloadManifestEntries(
+  sceneId: string,
+  manifest: unknown,
+  diagnostics: DiagnosticCollector,
+): readonly unknown[] {
+  if (manifest === undefined) return []
+  if (!isPlainRecord(manifest) || !Array.isArray(manifest.entries)) {
+    diagnostics.error(
+      'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+      'Preload manifest must contain an entries array.',
+      { refs: { sceneId }, context: { sceneId } },
+      'export-preload-manifest-invalid',
+    )
+    return []
+  }
+  return manifest.entries
+}
+
+/** Validates the preload occurrence list during export compilation. */
+function readPreloadResourceOccurrences(
+  sceneId: string,
+  occurrences: unknown,
+  diagnostics: DiagnosticCollector,
+): readonly unknown[] {
+  if (occurrences === undefined) return []
+  if (!Array.isArray(occurrences)) {
+    diagnostics.error(
+      'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+      'Preload resource occurrences must be an array.',
+      { refs: { sceneId }, context: { sceneId } },
+      'export-preload-occurrences-invalid',
+    )
+    return []
+  }
+  return occurrences
+}
+
+/** Reports malformed or stale metadata attached to a preload resource occurrence. */
+function reportInvalidPreloadOccurrence(
+  sceneId: string,
+  diagnostics: DiagnosticCollector,
+  occurrence: unknown,
+  message: string,
+  resource?: unknown,
+): void {
+  const occurrenceRecord = isPlainRecord(occurrence) ? occurrence : undefined
+  const storyId = typeof occurrenceRecord?.storyId === 'string' ? occurrenceRecord.storyId : undefined
+  const persoId = typeof occurrenceRecord?.persoId === 'string' ? occurrenceRecord.persoId : undefined
+  const path = Array.isArray(occurrenceRecord?.path) ? occurrenceRecord.path : undefined
+  const entryIndexValue = occurrenceRecord?.entryIndex
+  const entryIndex = typeof entryIndexValue === 'number' && Number.isInteger(entryIndexValue)
+    ? entryIndexValue
+    : undefined
+  const resourceRecord = isPlainRecord(resource) ? resource : undefined
+  diagnostics.error(
+    'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+    message,
+    {
+      refs: { sceneId, ...(storyId === undefined ? {} : { storyId }), ...(persoId === undefined ? {} : { persoId }) },
+      context: {
+        sceneId,
+        ...(storyId === undefined ? {} : { storyId }),
+        ...(persoId === undefined ? {} : { persoId }),
+        ...(path === undefined ? {} : { path: [...path] }),
+        ...(entryIndex === undefined ? {} : { entryIndex }),
+        ...(typeof resourceRecord?.url === 'string' ? { url: resourceRecord.url } : {}),
+        ...(typeof resourceRecord?.type === 'string' ? { type: resourceRecord.type } : {}),
+      },
+    },
+    `export-preload-resource:${entryIndex ?? 'invalid'}:${storyId ?? 'unknown'}:${persoId ?? 'unknown'}:${path?.join('.') ?? 'unknown'}`,
+  )
 }
 
 /** Checks common initial/action fields for media or CSS resources outside the packaged source paths. */
@@ -876,7 +1101,7 @@ function rejectMediaPartSource(
 function collectExportSource(
   sceneId: string,
   value: unknown,
-  expectedType: 'image' | 'audio' | 'video' | undefined,
+  expectedType: 'image' | 'audio' | 'video' | 'rive' | undefined,
   path: readonly (string | number)[],
   perso: CanonicalSceneDoc['stories'][string]['persos'][number],
   storyId: string,
@@ -915,12 +1140,12 @@ function collectExportSource(
 }
 
 /** Recognizes only media formats packaged by the export step without changing author builds. */
-function inferExportMediaType(url: string): 'image' | 'audio' | 'video' | undefined {
+function inferExportMediaType(url: string): 'image' | 'audio' | 'video' | 'rive' | undefined {
   const path = url.split(/[?#]/, 1)[0] ?? url
   const extension = path.slice(path.lastIndexOf('.')).toLowerCase()
   if (extension === '.flac' || extension === '.m4a' || extension === '.oga') return 'audio'
   const type = SCENE_BUILD_CONFIG.resourceTypeByExtension[extension as keyof typeof SCENE_BUILD_CONFIG.resourceTypeByExtension]
-  return type === 'image' || type === 'audio' || type === 'video' ? type : undefined
+  return type === 'image' || type === 'audio' || type === 'video' || type === 'rive' ? type : undefined
 }
 
 /** Rejects schemes and protocol-relative URLs that this local-file export cannot materialize. */

@@ -47,6 +47,7 @@ export {
   SceneBuilder,
   type SceneBuildFailure,
   type SceneBuildFunctionReference,
+  type SceneBuildPreloadResourceOccurrence,
   type SceneBuildResourceReference,
   type SceneBuildResult,
   type SceneBuildSuccess,

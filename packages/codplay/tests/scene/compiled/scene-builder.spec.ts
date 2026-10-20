@@ -759,6 +759,187 @@ describe('SceneBuilder', () => {
     ])
   })
 
+  it('collects a Rive document through the existing rive preload resource type', () => {
+    const catalog = createCoreRuntimeCatalog()
+    catalog.registerComponent({
+      type: 'rive',
+      component: TagComponent,
+      modules: [],
+      validateInitial: () => undefined,
+      validateAction: () => undefined,
+    })
+    const builder = new SceneBuilder(catalog.validationSnapshot(), {
+      export: true,
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'export-rive-resource-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'avatar', type: 'rive', initial: { src: '/avatars/coach.riv' } }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries).toEqual([
+      expect.objectContaining({ url: '/avatars/coach.riv', type: 'rive' }),
+    ])
+    expect(result.resourceReferences).toEqual([{
+      url: '/avatars/coach.riv',
+      type: 'rive',
+      path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'src'],
+    }])
+  })
+
+  it('compiles custom preload resources only at their declared component paths', () => {
+    const catalog = createCoreRuntimeCatalog()
+    catalog.registerComponent({
+      type: 'avatar-fixture',
+      component: NoServiceComponent,
+      modules: [],
+      validateInitial: () => undefined,
+    })
+    const builder = new SceneBuilder(catalog.validationSnapshot(), {
+      export: true,
+      preloadManifest: { entries: [
+        {
+          url: '/models/actor.glb',
+          type: 'three-glb',
+          policy: { cache: 'default', priority: 'high' },
+        },
+        {
+          url: '/motions/walk.fbx',
+          type: 'three-fbx',
+          policy: { cache: 'default', priority: 'normal' },
+        },
+      ] },
+      preloadResourceOccurrences: [
+        {
+          entryIndex: 0,
+          storyId: 'main',
+          persoId: 'avatar',
+          path: ['initial', 'src'],
+        },
+        {
+          entryIndex: 1,
+          storyId: 'main',
+          persoId: 'avatar',
+          path: ['initial', 'animations', 'walk', 'src'],
+        },
+      ],
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'avatar-resource-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'avatar',
+            type: 'avatar-fixture',
+            initial: {
+              src: '/models/actor.glb',
+              animations: { walk: { src: '/motions/walk.fbx', format: 'fbx' } },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.resources.entries.map(({ url, type }) => ({ url, type }))).toEqual([
+      { url: '/models/actor.glb', type: 'three-glb' },
+      { url: '/motions/walk.fbx', type: 'three-fbx' },
+    ])
+    expect(result.compiledScene.requirements.resources).toEqual([
+      '/models/actor.glb', '/motions/walk.fbx',
+    ])
+    expect(result.resourceReferences).toEqual([
+      {
+        url: '/models/actor.glb',
+        type: 'three-glb',
+        path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'src'],
+      },
+      {
+        url: '/motions/walk.fbx',
+        type: 'three-fbx',
+        path: ['scene', 'stories', 'main', 'persos', 0, 'initial', 'animations', 'walk', 'src'],
+      },
+    ])
+  })
+
+  it('blocks a custom preload occurrence whose declared path does not match the scene', () => {
+    const catalog = createCoreRuntimeCatalog()
+    catalog.registerComponent({
+      type: 'avatar-fixture',
+      component: NoServiceComponent,
+      modules: [],
+      validateInitial: () => undefined,
+    })
+    const builder = new SceneBuilder(catalog.validationSnapshot(), {
+      export: true,
+      preloadManifest: { entries: [{
+        url: '/models/other.glb',
+        type: 'three-glb',
+        policy: { cache: 'default' },
+      }] },
+      preloadResourceOccurrences: [{
+        entryIndex: 0,
+        storyId: 'main',
+        persoId: 'avatar',
+        path: ['initial', 'src'],
+      }],
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'avatar-resource-mismatch-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'avatar', type: 'avatar-fixture', initial: { src: '/models/actor.glb' } }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors.map(({ code }) => code)).toContain(
+      'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+    )
+  })
+
+  it('reports an unmapped custom preload entry as a compiler diagnostic', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
+      export: true,
+      preloadManifest: { entries: [{
+        url: '/models/actor.glb',
+        type: 'three-glb',
+        policy: { cache: 'default' },
+      }] },
+      diagnosticOutput: vi.fn(),
+    })
+    const result = builder.build({
+      id: 'unmapped-preload-entry-scene',
+      stories: { main: { id: 'main', persos: [{ id: 'actor', type: 'tag', initial: { tag: 'div' } }] } },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors).toContainEqual(expect.objectContaining({
+      code: 'CODPLAY_EXPORT_PRELOAD_RESOURCE_REFERENCE_UNSUPPORTED',
+      message: 'Custom preload resource has no exact component occurrence declaration.',
+      details: expect.objectContaining({ context: expect.objectContaining({
+        entryIndex: 0,
+        url: '/models/actor.glb',
+        type: 'three-glb',
+      }) }),
+    }))
+  })
+
   it('blocks export when a known media source type conflicts with its consumer', () => {
     const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), {
       export: true,
