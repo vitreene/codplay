@@ -1,6 +1,6 @@
 import type { SceneDoc } from 'codplay/scene/types'
 import type { CompiledRecord } from 'codplay'
-import type { CoursePage } from '../course-data'
+import type { CoursePage, CourseQuestion } from '../course-data'
 import { COURSE_EVENTS } from '../messages'
 import {
   createQuizAnswerPersos,
@@ -9,6 +9,7 @@ import {
   readSelectedQuizAnswers,
   resolveQuizAnswer,
   selectQuizAnswer,
+  type QuizLocalState,
 } from '../../shared/quiz/answer-circuit'
 import {
   createPageBottomMarker,
@@ -17,6 +18,13 @@ import {
   pageBottomPartId,
   pageScrollPortId,
 } from './page-support'
+
+type QuizSceneState = QuizLocalState & Readonly<{ pageId: string }>
+
+type QuizStoryEventInput = Readonly<{
+  event: Readonly<{ data?: Record<string, unknown> }>
+  state: Readonly<Record<string, unknown>>
+}>
 
 /** Builds one independent quiz scene using CodPlay input, listen, and straps. */
 export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
@@ -48,24 +56,55 @@ export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
       main: {
         id: 'main',
         initial: { move: '@root' },
-        state: createQuizLocalState(page.question),
+        state: { ...createQuizLocalState(page.question), pageId: page.id },
         straps: {
-          'course-quiz-select-answer': ({ event, state }) =>
-            selectQuizAnswer(prefix, page.question!, state, event.data),
-          'course-quiz-validate-answer': ({ state }) =>
-            validateQuizAnswer(page, prefix, state),
-          'course-quiz-replay-reset': ({ event, state }) =>
-            applyQuizReplayReset(page, prefix, state, event.data),
+          'course-quiz-select-answer': selectCourseQuizAnswer,
+          'course-quiz-validate-answer': validateCourseQuizAnswer,
+          'course-quiz-replay-reset': resetCourseQuizScene,
         },
         listen: [
           { on: `${prefix}:answer:select`, straps: ['course-quiz-select-answer'] },
           { on: `${prefix}:validate`, straps: ['course-quiz-validate-answer'] },
-          { on: `${prefix}:reset`, straps: ['course-quiz-replay-reset'] },
+          { on: COURSE_EVENTS.quizReset, straps: ['course-quiz-replay-reset'] },
         ],
         persos,
       },
     },
   }
+}
+
+/** Selects an answer using the question and page id carried by scene state. */
+function selectCourseQuizAnswer({ event, state }: QuizStoryEventInput) {
+  const quiz = readQuizSceneState(state)
+  if (quiz === undefined) return undefined
+  return selectQuizAnswer(quizEventPrefix(quiz.pageId), quiz.question, state, event.data)
+}
+
+/** Validates a quiz answer using the question and page id carried by scene state. */
+function validateCourseQuizAnswer({ state }: QuizStoryEventInput) {
+  const quiz = readQuizSceneState(state)
+  if (quiz === undefined) return undefined
+  return validateQuizAnswer(quiz.pageId, quizEventPrefix(quiz.pageId), quiz.question, state)
+}
+
+/** Applies a generic Sighty reset to the quiz identified by scene-local state. */
+function resetCourseQuizScene({ event, state }: QuizStoryEventInput) {
+  const quiz = readQuizSceneState(state)
+  if (quiz === undefined) return undefined
+  return applyQuizReplayReset(quiz.question, quizEventPrefix(quiz.pageId), state, event.data)
+}
+
+/** Reads the immutable quiz definition and page id stored in one quiz story. */
+function readQuizSceneState(state: Readonly<Record<string, unknown>>): QuizSceneState | undefined {
+  if (typeof state.pageId !== 'string' || state.question === null || typeof state.question !== 'object') {
+    return undefined
+  }
+  return state as QuizSceneState
+}
+
+/** Returns the event prefix shared by one quiz page's authored controls. */
+function quizEventPrefix(pageId: string): string {
+  return `course-quiz:${pageId}`
 }
 
 /** Creates the question wrapper and its explicit answer, feedback, and end parts. */
@@ -179,15 +218,15 @@ function createQuestionFeedback(page: CoursePage, prefix: string): CoursePerso {
 
 /** Resolves the selected set, displays correction, and publishes the quiz result. */
 function validateQuizAnswer(
-  page: CoursePage,
+  pageId: string,
   prefix: string,
+  question: CourseQuestion,
   state: Readonly<Record<string, unknown>>,
 ) {
-  const question = page.question!
   const resolution = resolveQuizAnswer(question, state)
   if (resolution === undefined) return undefined
   const { selectedAnswerIds, isCorrect } = resolution
-  const feedbackMessage = page.id === 'chapter-1-quiz'
+  const feedbackMessage = pageId === 'chapter-1-quiz'
     ? isCorrect
       ? 'Bonne réponse ! Le chapitre 2 est maintenant accessible.'
       : 'Réponse incorrecte. Revenez au début du chapitre depuis le menu pour revoir les notions.'
@@ -207,7 +246,7 @@ function validateQuizAnswer(
     ...createQuizCorrectionEvents(question, prefix, selectedAnswerIds),
     {
       name: COURSE_EVENTS.quizAnswered,
-      data: { pageId: page.id, isCorrect },
+      data: { pageId, isCorrect },
       visibility: 'public',
     },
   ]
@@ -220,12 +259,11 @@ function validateQuizAnswer(
 
 /** Applies requested quiz reset and solution exposure effects in one scene event. */
 function applyQuizReplayReset(
-  page: CoursePage,
+  question: CourseQuestion,
   prefix: string,
   state: Readonly<Record<string, unknown>>,
   eventData: Record<string, unknown> | undefined,
 ) {
-  const question = page.question!
   const keys = Array.isArray(eventData?.keys)
     ? eventData.keys.filter((key): key is string => typeof key === 'string')
     : []

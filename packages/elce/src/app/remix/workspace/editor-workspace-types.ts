@@ -27,6 +27,10 @@ export interface EditorWorkspaceViewProps {
   readonly getDraggedEntry: () => DraggedScenarioEntry
   readonly onPreview: () => void
   readonly previewError: string | null
+  readonly onExport: () => void
+  readonly exportBusy: boolean
+  readonly exportError: string | null
+  readonly exportNotice: string | null
   readonly onMovePage: (pageId: PageId, placement: PagePlacement) => void
   readonly onMoveChapter: (chapterId: ChapterId, index: number) => void
 }

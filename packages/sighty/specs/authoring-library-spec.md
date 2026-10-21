@@ -85,6 +85,103 @@ calculé depuis `scenario.views` pour la navigation et reconstruit après une
 mutation ; il ne constitue pas une seconde définition du parcours. Le runtime
 résout les noms d’actions et de guards sur cette même surface `scenario`.
 
+### Paquet de diffusion
+
+La bibliothèque du player est un artefact séparé, construit par
+`npm run build --workspace=@codplay/sighty` dans `packages/sighty/dist/sighty.js`.
+Son import `codplay` reste externe afin que Sighty utilise le player CodPlay
+fourni par l’application hôte. L’export de scénario seul conserve ce format :
+il livre le scénario et les paquets de scène, sans player ni engine.
+
+`npm run export --workspace=@codplay/sighty -- --scenario <fichier> --export <dossier>`
+bundle le module scénario puis appelle `exportScenePackage()` de CodPlay pour
+chaque scène directe connue. Le dossier contient `scenario.mjs`, un manifeste
+Sighty qui associe chaque `SceneKey` à un sous-dossier, et un paquet scène
+CodPlay complet par entrée. Chaque sous-paquet garde son manifeste, ses
+fonctions, son CSS et ses ressources. Le scénario conserve ses callbacks ;
+aucun contexte de fonction n’est fusionné entre le scénario et les scènes.
+
+Le manifeste parent porte le format `sighty.scenario-package.v1` :
+
+```json
+{
+  "format": "sighty.scenario-package.v1",
+  "scenario": "scenario.mjs",
+  "scenes": { "layout": "scenes/scene-0/" }
+}
+```
+
+Pour livrer un dossier autonome avec le runtime configuré, le même exporteur
+accepte `--standalone --engine-config <fichier>`. Il compose les builders
+CodPlay, Sighty et engine existants, puis ajoute au paquet de scénario :
+
+```text
+loader.mjs
+distribution-manifest.json
+runtime/codplay.js
+runtime/sighty.js
+runtime/engine.js
+runtime/engine-manifest.json
+README.md
+```
+
+Chaque artefact runtime est présent une seule fois à la racine. Les imports de
+Sighty et de l’engine pointent vers ce même `runtime/codplay.js`. Les paquets
+CodPlay des scènes restent intacts dans `scenes/scene-N/` et ne recopient aucun
+runtime. Ce mode refuse les bibliothèques engine déclarées comme `remote` ou
+`platform`, car elles ne seraient pas incluses au dossier autonome.
+`distribution-manifest.json` porte le format `sighty.application-package.v1`
+et référence le loader, le manifeste scénario et les trois artefacts runtime.
+
+`loader.mjs` exporte `loadSightyPackage({ root, packagePath?, codplay?,
+runtime? })`. Il utilise l’engine empaqueté et appelle le `owner.load()` déjà
+existant ; il met ainsi le scénario et ses ressources à disposition sans
+initialiser le runtime. L’intégrateur garde cette étape explicite :
+
+```js
+import { loadSightyPackage } from './loader.mjs'
+
+const course = await loadSightyPackage({ root: '#player' })
+await course.runtime.initialize()
+```
+
+```ts
+const owner = new Sighty({ codplay: { engine: engineCapabilities } })
+const course = await owner.load('/exports/course/', { root })
+
+// Le chargement rend les ressources disponibles ; il ne crée pas d’occurrence.
+await course.runtime.initialize()
+await course.runtime.play('layout')
+owner.destroy()
+```
+
+`load(path, { root })` prépare le scénario et tous ses paquets CodPlay au moyen
+de `owner.prepare()`, puis retourne la même instance Sighty, avec ses surfaces
+`scenario` et `runtime` disponibles. `runtime.initialize()` garde la
+responsabilité de créer et monter la composition initiale. Les sources directes
+sont incluses même si elles ne sont pas dans la composition de départ. Les
+producteurs `sceneSources` lazy sont refusés sans être appelés ; leur export et
+leur résolution à la demande restent reportés.
+
+Les tests de production du paquet sont dans
+[`tools/scenario-export/tests/cli.spec.mjs`](../tools/scenario-export/tests/cli.spec.mjs).
+Le test de distribution autonome y vérifie le loader, l’unicité des artefacts
+runtime et les imports relatifs vers CodPlay.
+Les tests de préparation CodPlay sont dans
+[`scene-package-loader.spec.ts`](../../codplay/tests/facade/scene-package-loader.spec.ts).
+Le parcours Safari du 2026-10-20 a chargé un paquet déplacé sans ses sources,
+vérifié l’absence d’occurrence avant `initialize()`, puis le rendu du layout
+et d’une scène enfant après son initialisation.
+
+La démo navigateur du cours Demo 5 confirme le dossier autonome : l’unique
+player `codplay.js`, `sighty.js` et l’engine partagé dans `runtime/`, ainsi que
+les quinze paquets CodPlay directs. Après `loadSightyPackage()`, le cours
+affiche « aucune occurrence créée » ; `runtime.initialize()` monte ensuite sa
+première page. Le parcours Safari vérifie aussi le repère bas, la transition
+vers le quiz et une réponse correcte. Voir la
+[spécification de la démo exportée](../../demos/specs/sighty-export-demo-spec.md)
+pour l'acceptance visuelle et la vérification réseau.
+
 ## 3. API auteur publique
 
 Cette section concerne uniquement ce que l’auteur écrit ou qu’un outil

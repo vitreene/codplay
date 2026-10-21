@@ -1,4 +1,4 @@
-import { TagComponent, sanitizeTagInitial } from 'codplay/runtime/components'
+import { TagComponent, sanitizeTagInitial } from 'codplay'
 import type { RuntimeComponentDefinition } from 'codplay/runtime/catalog'
 import type { RuntimeCaptureSourceSession } from 'codplay/runtime/capture'
 import { isMeasurableHtmlElement } from 'codplay/runtime/runner-html'

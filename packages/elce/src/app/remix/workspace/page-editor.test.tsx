@@ -557,6 +557,10 @@ describe('Remix production page editor', () => {
         getDraggedEntry: () => null,
         onPreview: () => undefined,
         previewError: null,
+        onExport: () => undefined,
+        exportBusy: false,
+        exportError: null,
+        exportNotice: null,
         onMovePage: (pageId, placement) => actions.movePage(pageId, placement),
         onMoveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
       })}

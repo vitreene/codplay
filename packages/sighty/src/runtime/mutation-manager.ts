@@ -55,7 +55,7 @@ export class RuntimeMutationManager<SceneKey extends string, SlotName extends st
     this.scenes.destroyInstances()
     this.state.owner.preload.cancel()
     this.state.owner.preload.release(this.state.resourceUrls)
-    this.state.owner.preload.css.clear()
+    this.scenes.clearInstalledStyles()
     this.state.resourceUrls = []
     this.state.resourceUrlsByScene.clear()
     this.state.compiledBuilds.clear()

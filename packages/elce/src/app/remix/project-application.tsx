@@ -9,6 +9,7 @@ import type { ProjectSessionStatus } from '../projects/project-session-types'
 import { selectEditorViewModel } from '../selectors/editor-view-model'
 import { CATALOG_TAB } from '../../config/document-config'
 import { PopupPreviewHost } from '../player/popup-preview-host'
+import { downloadElceSightyPackage, requestElceSightyPackage } from '../../export/elce-sighty-export-client'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
 import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
@@ -31,6 +32,9 @@ export function ProjectApplication(handle: Handle) {
   let dropTarget: string | null = null
   let draggedEntry: DraggedScenarioEntry = null
   let previewError: string | null = null
+  let exportBusy = false
+  let exportError: string | null = null
+  let exportNotice: string | null = null
   let returnFocusId: string | null = null
   let popupPreviewHost: PopupPreviewHost | null = null
 
@@ -74,6 +78,29 @@ export function ProjectApplication(handle: Handle) {
     popupPreviewHost ??= new PopupPreviewHost(controller)
     if (!popupPreviewHost.open()) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
     void handle.update()
+  }
+  /** Packages the current actor snapshot and downloads it without saving or initializing it. */
+  const exportScenario = (): void => {
+    const context = controller.getSnapshot().context
+    if (exportBusy || context.activeProject === null || context.projectStatus !== 'active' || context.editAccess !== 'active') return
+    const documentSnapshot = context.document
+    const mediaSources = context.mediaSources
+    exportBusy = true
+    exportError = null
+    exportNotice = null
+    void handle.update()
+    void (async () => {
+      try {
+        const packageBlob = await requestElceSightyPackage(documentSnapshot, mediaSources)
+        const filename = downloadElceSightyPackage(packageBlob, documentSnapshot.data.name)
+        exportNotice = `Téléchargement de « ${filename} » démarré.`
+      } catch (error) {
+        exportError = error instanceof Error ? error.message : 'L’export du scénario Elcé a échoué.'
+      } finally {
+        exportBusy = false
+        void handle.update()
+      }
+    })()
   }
   /** Routes either button or shortcut through the same controller gesture. */
   const runHistoryAction = (kind: 'undo' | 'redo'): void => {
@@ -167,6 +194,10 @@ export function ProjectApplication(handle: Handle) {
     getDraggedEntry: () => draggedEntry,
     onPreview: openPreview,
     previewError,
+    onExport: exportScenario,
+    exportBusy,
+    exportError,
+    exportNotice,
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
     moveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
   }, runHistoryAction)
@@ -419,6 +450,10 @@ function renderApplication(
       getDraggedEntry: workspace.getDraggedEntry,
       onPreview: workspace.onPreview,
       previewError: workspace.previewError,
+      onExport: workspace.onExport,
+      exportBusy: workspace.exportBusy,
+      exportError: workspace.exportError,
+      exportNotice: workspace.exportNotice,
       onMovePage: workspace.movePage,
       onMoveChapter: workspace.moveChapter,
     })}

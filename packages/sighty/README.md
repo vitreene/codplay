@@ -62,6 +62,57 @@ rester distinctes des identifiants de scène. Une vue peut aussi recevoir une
 fonction d’action ou de guard inline, sans clé dans `scenario.actions` ou
 `scenario.guards`.
 
+## Exporter et charger un parcours
+
+Exportez le scénario pour produire son module et un paquet CodPlay autonome par
+scène directe, puis construisez la bibliothèque Sighty séparément :
+
+```sh
+npm run export --workspace=@codplay/sighty -- \
+  --scenario ./src/scenario.ts \
+  --export ./public/exports/course
+npm run build --workspace=@codplay/sighty
+```
+
+Pour remettre un paquet complet à une application sans player déjà installé,
+ajoutez la configuration de l’engine et `--standalone` :
+
+```sh
+npm run export --workspace=@codplay/sighty -- \
+  --scenario ./src/scenario.ts \
+  --engine-config ./src/engine.ts \
+  --standalone \
+  --export ./public/exports/course
+```
+
+Le dossier produit contient `loader.mjs`, une seule copie de CodPlay, Sighty et
+de l’engine, puis le scénario et ses paquets scène intacts. Déployez ce dossier
+sur un serveur HTTP et chargez-le ainsi :
+
+```js
+import { loadSightyPackage } from './exports/course/loader.mjs'
+
+const course = await loadSightyPackage({ root: '#course' })
+await course.runtime.initialize()
+```
+
+Le loader prépare le scénario et les ressources. L’appel à
+`runtime.initialize()` reste l’étape distincte qui crée les occurrences.
+
+Avec l’export de scénario seul, l’application importe `sighty.js` et configure
+l’owner CodPlay. Le chargement prépare les ressources du parcours ; appelez
+ensuite explicitement `runtime.initialize()` pour créer la composition :
+
+```ts
+import { Sighty } from '@codplay/sighty'
+
+const owner = new Sighty({ codplay: { engine: engineCapabilities } })
+const course = await owner.load('/exports/course/', { root: '#course' })
+await course.runtime.initialize()
+await course.runtime.play('layout')
+owner.destroy()
+```
+
 ## Rejouer un parcours
 
 Une action peut restaurer le contexte Sighty et demander aux scènes de remettre

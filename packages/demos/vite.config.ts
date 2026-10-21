@@ -34,6 +34,7 @@ export default defineConfig({
         'fame-v1': resolve(__dirname, 'fame-v1.html'),
         sighty: resolve(__dirname, 'sighty.html'),
         'scene-export': resolve(__dirname, 'scene-export/index.html'),
+        'sighty-export': resolve(__dirname, 'sighty-export/index.html'),
       },
     },
   },

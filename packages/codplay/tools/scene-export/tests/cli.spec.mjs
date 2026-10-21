@@ -88,6 +88,45 @@ describe('scene export command', () => {
     expect(await readFile(path.join(destination, packagedImage.file), 'utf8')).toBe(imageSource)
   })
 
+  it('keeps resource paths relative to the scene module behind an export entry', async () => {
+    const directory = await createTemporaryDirectory()
+    const sourceDirectory = path.join(directory, 'authoring', 'scenes')
+    const entryDirectory = path.join(directory, 'generated')
+    const sceneFile = path.join(sourceDirectory, 'scene.ts')
+    const entryFile = path.join(entryDirectory, 'entry.mjs')
+    const assetFile = path.join(sourceDirectory, 'pixel.svg')
+    const destination = path.join(directory, 'exported-scene')
+    await mkdir(sourceDirectory, { recursive: true })
+    await mkdir(entryDirectory, { recursive: true })
+    await writeFile(assetFile, '<svg xmlns="http://www.w3.org/2000/svg"/>')
+    await writeFile(sceneFile, [
+      'export const authoredScene = {',
+      "  id: 'scene-with-generated-entry',",
+      "  stories: { main: { id: 'main', persos: [{ id: 'image', type: 'img', initial: { src: './pixel.svg' }, actions: {} }] } },",
+      '}',
+      '',
+    ].join('\n'))
+    await writeFile(entryFile, [
+      `import { authoredScene } from ${JSON.stringify(pathToFileURL(sceneFile).href)}`,
+      'export const scene = authoredScene',
+      '',
+    ].join('\n'))
+
+    await exportScenePackage({
+      sceneFile: entryFile,
+      sourceFile: sceneFile,
+      destination,
+      workingDirectory: directory,
+    })
+
+    const manifest = JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8'))
+    const compiledScene = JSON.parse(await readFile(path.join(destination, manifest.scene), 'utf8'))
+    expect(manifest.resources).toHaveLength(1)
+    expect(compiledScene.scene.stories.main.persos[0].initial.src).toBe(manifest.resources[0].sceneUrl)
+    expect(await readFile(path.join(destination, manifest.resources[0].file), 'utf8'))
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"/>')
+  })
+
   it('packages custom binary resources declared by preload and rewrites their exact scene fields', async () => {
     const directory = await createTemporaryDirectory()
     const sceneFile = path.join(directory, 'scene.ts')

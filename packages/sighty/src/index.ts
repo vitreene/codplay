@@ -1,6 +1,9 @@
 export { Sighty } from './sighty'
 export type {
+  SightyAuthorOptions,
+  SightyLoadOptions,
   SightyOptions,
+  SightyOwnerOptions,
 } from './sighty'
 export type {
   SightyRuntimeApi,

@@ -989,9 +989,24 @@ body {
   font-size: 0.78rem;
 }
 
+.elce-sighty-export-button {
+  background: #263b3a;
+}
+
+.elce-sighty-export-button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 .elce-workspace-access-error {
   margin: 0.25rem 0.5rem 0.35rem;
   color: #9a3c2f;
+  font-size: 0.82rem;
+}
+
+.elce-workspace-access-status {
+  margin: 0.25rem 0.5rem 0.35rem;
+  color: #315b4f;
   font-size: 0.82rem;
 }
 

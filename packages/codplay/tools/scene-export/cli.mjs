@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -33,13 +31,23 @@ export function parseArguments(args) {
 }
 
 /** Builds and atomically publishes one scene package from a JavaScript or TypeScript scene module. */
-export async function exportScenePackage({ sceneFile, engineConfigFile, destination, workingDirectory = process.cwd(), signal }) {
+export async function exportScenePackage({
+  sceneFile,
+  sceneExportName = 'scene',
+  sourceFile = sceneFile,
+  engineConfigFile,
+  destination,
+  workingDirectory = process.cwd(),
+  signal,
+}) {
   const absoluteSceneFile = path.resolve(workingDirectory, sceneFile)
+  const absoluteSourceFile = path.resolve(workingDirectory, sourceFile)
   const absoluteEngineConfigFile = engineConfigFile === undefined
     ? undefined
     : path.resolve(workingDirectory, engineConfigFile)
   const absoluteDestination = path.resolve(workingDirectory, destination)
   await assertSceneFile(absoluteSceneFile, 'Scene')
+  await assertSceneFile(absoluteSourceFile, 'Scene source')
   if (absoluteEngineConfigFile !== undefined) await assertSceneFile(absoluteEngineConfigFile, 'Engine configuration')
   await assertDestinationMissing(absoluteDestination)
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -55,7 +63,7 @@ export async function exportScenePackage({ sceneFile, engineConfigFile, destinat
       const playerFile = await buildCodPlayLibrary(playerBuildDirectory)
       const codplayModule = await import(pathToFileURL(playerFile).href)
       const sourceBundleDirectory = path.join(stageDirectory, '.scene-source')
-      await buildSceneAndCodec(packageRoot, absoluteSceneFile, sourceBundleDirectory)
+      await buildSceneAndCodec(packageRoot, absoluteSceneFile, absoluteSourceFile, sourceBundleDirectory)
       globalThis[capturedStylesheetKey] = []
       let sceneModule
       try {
@@ -77,14 +85,14 @@ export async function exportScenePackage({ sceneFile, engineConfigFile, destinat
         engineCapabilities = engineModule.engineCapabilities
         await rm(engineBundleDirectory, { recursive: true, force: true })
       }
-      const scene = resolveSceneExport(sceneModule)
+      const scene = resolveSceneExport(sceneModule, sceneExportName)
       const stylesheetInputs = [...(importedStylesheets ?? [])]
       if (sceneModule.styleSheet !== undefined) {
-        stylesheetInputs.push({ sourceFile: absoluteSceneFile, cssText: sceneModule.styleSheet })
+        stylesheetInputs.push({ sourceFile: absoluteSourceFile, cssText: sceneModule.styleSheet })
       }
       const compiledStyleSheet = stylesheetInputs.length === 0
         ? undefined
-        : await compileStyleSheets(stylesheetInputs, absoluteSceneFile)
+        : await compileStyleSheets(stylesheetInputs, absoluteSourceFile)
 
       const playerOptions = {
         frameScheduler: { request: () => 0, cancel: () => undefined },
@@ -109,7 +117,7 @@ export async function exportScenePackage({ sceneFile, engineConfigFile, destinat
       }
 
       const packaged = await packageResources({
-        sourceFile: absoluteSceneFile,
+        sourceFile: absoluteSourceFile,
         compiledScene: buildResult.compiledScene,
         resourceReferences: buildResult.resourceReferences ?? [],
         stageDirectory,
@@ -202,7 +210,7 @@ function createAbortError() {
 }
 
 /** Bundles one external JavaScript or TypeScript scene module for execution by the Node CLI. */
-async function buildSceneAndCodec(packageRoot, sceneFile, outDirectory) {
+async function buildSceneAndCodec(packageRoot, sceneFile, sourceFile, outDirectory) {
   const codecEntry = path.join(path.dirname(outDirectory), '.scene-export-codec-entry.mjs')
   await writeFile(codecEntry,
     [
@@ -215,7 +223,7 @@ async function buildSceneAndCodec(packageRoot, sceneFile, outDirectory) {
       root: packageRoot,
       logLevel: 'error',
       ssr: { noExternal: true },
-      plugins: [stylesheetCapturePlugin(), sceneAssetUrlPlugin(sceneFile)],
+      plugins: [stylesheetCapturePlugin(), sceneAssetUrlPlugin(sourceFile)],
       build: {
         ssr: true,
         rollupOptions: {
@@ -233,7 +241,7 @@ async function buildSceneAndCodec(packageRoot, sceneFile, outDirectory) {
 }
 
 /** Rewrites local Vite `?url` imports to source-relative paths for resource compilation. */
-function sceneAssetUrlPlugin(sceneFile) {
+function sceneAssetUrlPlugin(sourceFile) {
   const sourceByVirtualId = new Map()
   let importedAssetIndex = 0
   return {
@@ -252,7 +260,7 @@ function sceneAssetUrlPlugin(sceneFile) {
     load(id) {
       const sourcePath = sourceByVirtualId.get(id)
       if (sourcePath === undefined) return null
-      const relativePath = path.relative(path.dirname(sceneFile), sourcePath)
+      const relativePath = path.relative(path.dirname(sourceFile), sourcePath)
         .split(path.sep)
         .map((segment) => encodeURIComponent(segment))
         .join('/')
@@ -457,10 +465,10 @@ function resolveStrapCollections(module, exported) {
 }
 
 /** Selects the exported SceneDoc while keeping the stylesheet as a separate named export. */
-function resolveSceneExport(module) {
-  const scene = module.scene ?? module.default
+function resolveSceneExport(module, exportName = 'scene') {
+  const scene = module[exportName] ?? (exportName === 'scene' ? module.default : undefined)
   if (!isRecord(scene) || typeof scene.id !== 'string' || !isRecord(scene.stories)) {
-    throw new Error('Scene module must export a SceneDoc as `scene` or as its default export.')
+    throw new Error(`Scene module must export a SceneDoc as \`${exportName}\`${exportName === 'scene' ? ' or as its default export' : ''}.`)
   }
   return scene
 }

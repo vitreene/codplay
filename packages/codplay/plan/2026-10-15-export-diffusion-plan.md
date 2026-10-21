@@ -95,9 +95,10 @@ publication et persistance d'une session de lecture. L'utilisateur indique que
 le compilateur Sighty suivra ensuite le même principe ; ne pas modifier son
 implémentation pendant cette tranche.
 
-L'étude de la composition Sighty est demandée ; sa proposition reste dans le
-[plan Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md#export-de-scénario--projection-à-relire).
-L'implémentation de cette tranche reste limitée à CodPlay.
+L’extension à l’export de scénario Sighty demandée le 2026-10-20 est suivie
+dans le [plan de diffusion Sighty](../../sighty/plan/2026-10-20-sighty-export-diffusion-plan.md),
+au statut `V1 implémentée` ; les scènes lazy restent reportées. La V1 décrite
+ici reste limitée à CodPlay.
 
 ### Ordre de réalisation demandé — 2026-10-16
 
@@ -772,6 +773,30 @@ Une scène sans fonction ne constitue pas une preuve R8.
 Le paquet ne contient pas de module de capacités. Un besoin absent du catalogue
 doit être corrigé dans la configuration d'engine du site ; l'export ne construit
 pas de classe de composant et ne renomme pas une identité.
+
+#### R9 — identité des composants HTML hérités (correctif accepté, 2026-10-20)
+
+La recette visuelle Sighty Demo 5 a révélé qu'un composant d'engine qui importe
+`TagComponent` depuis `codplay/runtime/components` embarque une seconde copie
+de cette classe dans le bundle d'engine. Ses instances héritent alors d'une
+seconde `BaseHTMLComponent` et échouent à la matérialisation du player, malgré
+l'externalisation de l'entrée `codplay`.
+
+Le correctif étend l'API racine `codplay` avec `TagComponent` et ses helpers
+`sanitizeTagInitial` / `validateTagInitial`, puis fait importer cette API
+racine au composant scroll partagé. Le sous-chemin reste utilisable ailleurs ;
+les intégrations qui fournissent des composants HTML au player importent leurs
+classes de base depuis `codplay`. Cela prolonge le contrat d'identité R9 déjà
+vérifié pour `BaseHTMLComponent` et conserve un seul player et un seul circuit
+de matérialisation.
+
+Vérifié le 2026-10-20 : `TagComponent` et ses deux helpers sont exportés depuis
+l'entrée publique racine ; le composant scroll partagé importe ses classes et
+helpers depuis cette entrée. Les typechecks CodPlay, component-v2 et démos
+passent ; les 50 tests component-v2 passent ; les builds séparés produisent le
+player et l'engine ; Safari initialise le paquet Demo 5, matérialise le
+scrollport, débloque la navigation au repère bas et parcourt le quiz avec une
+seule URL player.
 
 ### R10 — modes de livraison des bibliothèques tierces (Vérifiée)
 

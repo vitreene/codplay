@@ -1,11 +1,6 @@
 import { Sighty, type SightyScenarioDefinition } from '@codplay/sighty'
-import type { CodPlayEngineOptions } from 'codplay'
 import type { SightySceneSourceValue } from '@codplay/sighty'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  createScrollContainerSourceAdapter,
-} from '@codplay/component-v2/scroll-container'
+import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import { BDC_TYPE, CHAPTER_TYPE, ELCE_EVENTS, ELCE_SCENARIO, PAGE_TYPE } from '../config/document-config'
 import type { ChapterType } from '../config/document-config-types'
 import { buildFluxScene } from '../builders/flux/flux-scene-builder'
@@ -22,13 +17,9 @@ import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-
 import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
 import type { TestAnswerState } from '../domain/summary-profile/test-state-types'
+import { ELCE_ENGINE_CAPABILITIES } from './elce-player-engine'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
-
-const ELCE_ENGINE_CAPABILITIES: Pick<CodPlayEngineOptions, 'components' | 'modules'> = {
-  components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
-  modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
-}
 
 /** Owns the real Sighty/CodPlay player used to preview the current document. */
 export class ElcePlayerComposition {
@@ -42,12 +33,7 @@ export class ElcePlayerComposition {
   public constructor(options: ElcePlayerCompositionOptions) {
     this.options = options
     const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
-    const pageSceneCatalog = createPageSceneCatalog(options.document, options.mediaSources, options.sceneCache, testState.questionAnswers)
-    const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId, {
-      testState,
-      mediaSources: options.mediaSources,
-      onTestStateChange: options.onTestStateChange,
-    })
+    const scenario = createElcePlayerScenario({ ...options, testState })
     for (const warning of validateHtmlElementMethodActions(scenario.scenes ?? {})) {
       options.onLog?.(warning, 'warn')
     }
@@ -69,7 +55,6 @@ export class ElcePlayerComposition {
           htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
           pauseOnDocumentHidden: false,
         },
-        styles: [{ slot: 'elce-player-layout', cssText: [ELCE_PLAYER_STYLE_SHEET, ELCE_VIEWPORT_EXPANSION_STYLE_SHEET, ...pageSceneCatalog.styleSheets].join('\n') }],
       },
     })
   }
@@ -203,14 +188,49 @@ export class ElcePlayerComposition {
   }
 }
 
+export type ElcePlayerScenarioOptions = Omit<ElcePlayerCompositionOptions, 'stage' | 'onLog'>
+
+/** Builds the shared, DOM-free Sighty definition used by preview and export. */
+export function createElcePlayerScenario(
+  options: ElcePlayerScenarioOptions,
+): SightyScenarioDefinition<ElceSceneKey, ElceSlotName> {
+  const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
+  const pageSceneCatalog = createPageSceneCatalog(
+    options.document,
+    options.mediaSources,
+    options.sceneCache,
+    testState.questionAnswers,
+  )
+  const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId, {
+    testState,
+    mediaSources: options.mediaSources,
+    onTestStateChange: options.onTestStateChange,
+  })
+  const layoutSource = scenario.scenes?.[ELCE_SCENARIO.LAYOUT_SCENE]
+  if (layoutSource === undefined || typeof layoutSource === 'function') {
+    throw new Error('La scène layout Elcé est absente du scénario construit.')
+  }
+  const layoutSceneDoc = 'sceneDoc' in layoutSource ? layoutSource.sceneDoc : layoutSource
+  const layoutStyleSheet = [ELCE_PLAYER_STYLE_SHEET, ELCE_VIEWPORT_EXPANSION_STYLE_SHEET].join('\n')
+  return {
+    ...scenario,
+    scenes: {
+      ...scenario.scenes,
+      [ELCE_SCENARIO.LAYOUT_SCENE]: {
+        sceneDoc: layoutSceneDoc,
+        styleSheet: layoutStyleSheet,
+      },
+    },
+  }
+}
+
 /** Builds the scene catalogue for pages that belong to the player scenario. */
 export function createPageSceneCatalog(
   document: ElceDocument,
   mediaSources: ElcePlayerCompositionOptions['mediaSources'],
   cache?: ElcePageSceneCache,
   questionAnswers: Readonly<Record<string, TestAnswerState>> = {},
-): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>>; styleSheets: readonly string[] }> {
-  const pageStyleSheets: string[] = []
+): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>> }> {
   const pageIds = scenarioPageIds(document)
   const activePageIds = new Set(pageIds)
   for (const cachedPageId of cache?.keys() ?? []) {
@@ -256,7 +276,6 @@ export function createPageSceneCatalog(
     const signature = JSON.stringify([scenePage, sceneBdcs, pageMediaSources, pageMediaTypes, document.data.revelationDefaults])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
-      pageStyleSheets.push(...cached.styleSheets)
       return [`scene-${page.id}`, cached.source]
     }
     const scene = buildPageScene(page, document.bdcs, {
@@ -265,19 +284,22 @@ export function createPageSceneCatalog(
       questionAnswers,
       revelationDefaults: document.data.revelationDefaults,
     }, sceneChapterType)
-    pageStyleSheets.push(...scene.styleSheets)
     const questionReset = scene.questionReset
     const sceneDoc = withPageMediaStop(scene.sceneDoc)
-    const source: SightySceneSourceValue = questionReset === undefined ? sceneDoc : {
+    const styleSheet = scene.styleSheets.join('\n')
+    const source: SightySceneSourceValue = questionReset === undefined && styleSheet.length === 0 ? sceneDoc : {
       sceneDoc,
-      onReset: (keys: readonly string[]) => keys.includes('all') || keys.includes('quiz')
-        ? { name: questionReset.eventName, data: { keys: [...keys] } }
-        : undefined,
+      ...(styleSheet.length === 0 ? {} : { styleSheet }),
+      ...(questionReset === undefined ? {} : {
+        onReset: (keys: readonly string[]) => keys.includes('all') || keys.includes('quiz')
+          ? { name: questionReset.eventName, data: { keys: [...keys] } }
+          : undefined,
+      }),
     }
     cache?.set(pageId, { signature, source, styleSheets: scene.styleSheets })
     return [`scene-${page.id}`, source]
   }))
-  return { scenes, styleSheets: [...new Set(pageStyleSheets)] }
+  return { scenes }
 }
 
 /** Dispatches each page type to the scene builder that owns its presentation. */

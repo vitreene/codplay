@@ -1,4 +1,3 @@
-import { prepareTween, resolveTween } from 'ace'
 import type { SceneDoc } from 'codplay/scene/types'
 import type { CoursePage } from '../course-data'
 import {
@@ -21,6 +20,25 @@ const SECTION_IMAGE_ENTER_DURATION = 1000
 const SECTION_IMAGE_LEAVE_DURATION = 820
 const VIDEO_MAX_HEIGHT = '272px'
 const VIDEO_PLAY_ROOT_MARGIN = '-136px 0px -136px 0px'
+
+type SectionTitleActionInput = Readonly<{
+  data: Readonly<Record<string, unknown>>
+}>
+
+/** Returns the section title color from the live ratio and authored hue bounds. */
+function resolveSectionTitleColor({ data }: SectionTitleActionInput): Record<string, unknown> {
+  const fromHue = data.fromHue as number
+  const toHue = data.toHue as number
+  const ratio = data.ratio as number
+  const delta = toHue - fromHue
+  const shortestHueDelta = ((delta + 540) % 360) - 180
+  const hue = fromHue + shortestHueDelta * ratio
+  return {
+    style: {
+      '--demo5-section-title-color': `oklch(${SECTION_TITLE_LIGHTNESS}% ${SECTION_TITLE_CHROMA} ${hue}deg)`,
+    },
+  }
+}
 
 /** Builds one scrollable lesson page from its content catalogue entry. */
 export function createContentPageScene(page: CoursePage): SceneDoc<string> {
@@ -102,13 +120,7 @@ function createSectionPersos(
   const headingVisibilityAction = `${headingId}:visibility`
   const headingStartHue = (24 + index * 54) % 360
   const headingStartColor = `oklch(${SECTION_TITLE_LIGHTNESS}% ${SECTION_TITLE_CHROMA} ${headingStartHue}deg)`
-  const headingEndColor = `oklch(${SECTION_TITLE_LIGHTNESS}% ${SECTION_TITLE_CHROMA} ${(headingStartHue + SECTION_TITLE_HUE_SHIFT) % 360}deg)`
-  const headingTween = prepareTween({
-    from: headingStartColor,
-    to: headingEndColor,
-    duration: 1,
-    ease: 'linear',
-  })
+  const headingEndHue = (headingStartHue + SECTION_TITLE_HUE_SHIFT) % 360
   const persos: CoursePerso[] = [
     {
       id: headingObserverId,
@@ -134,9 +146,9 @@ function createSectionPersos(
       actions: {
         [headingVisibilityAction]: {
           duration: 1,
-          fn: (input: { data: Readonly<Record<string, unknown>> }): Record<string, unknown> => ({
-            style: { '--demo5-section-title-color': resolveTween(headingTween, input.data.ratio as number) },
-          }),
+          fromHue: headingStartHue,
+          toHue: headingEndHue,
+          fn: resolveSectionTitleColor,
         },
         [`${headingId}:enter`]: { style: { '--demo5-section-title-shadow': '0 0.6rem 1.3rem rgb(15 23 42 / 18%)' } },
         [`${headingId}:leave`]: { style: { '--demo5-section-title-shadow': 'none' } },

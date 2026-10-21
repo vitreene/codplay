@@ -88,7 +88,16 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
 
 /** Renders the icon-only controls on the outer edges of the center column. */
 function renderWorkspaceAccess(
-  props: Pick<EditorWorkspaceViewProps, 'responsivePanel' | 'onSetResponsivePanel' | 'onPreview' | 'previewError'>,
+  props: Pick<EditorWorkspaceViewProps,
+    | 'responsivePanel'
+    | 'onSetResponsivePanel'
+    | 'onPreview'
+    | 'previewError'
+    | 'onExport'
+    | 'exportBusy'
+    | 'exportError'
+    | 'exportNotice'
+  >,
 ): RemixNode {
   return <div
     id="elce-workspace-access-area"
@@ -101,6 +110,7 @@ function renderWorkspaceAccess(
     >
       {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
       {renderPreviewButton(props.onPreview)}
+      {renderExportButton(props.onExport, props.exportBusy)}
       {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
     </nav>
     {props.previewError === null ? null : <p
@@ -110,6 +120,14 @@ function renderWorkspaceAccess(
     >
       {props.previewError}
     </p>}
+    {props.exportBusy || props.exportError !== null || props.exportNotice !== null ? <p
+      id="elce-sighty-export-status"
+      className={props.exportError === null ? 'elce-workspace-access-status' : 'elce-workspace-access-error'}
+      role={props.exportError === null ? 'status' : 'alert'}
+      aria-live="polite"
+    >
+      {props.exportBusy ? 'Préparation du paquet Sighty…' : props.exportError ?? props.exportNotice}
+    </p> : null}
   </div>
 }
 
@@ -122,6 +140,20 @@ function renderPreviewButton(onPreview: () => void): RemixNode {
     mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
   >
     Prévisualiser
+  </button>
+}
+
+/** Renders the Sighty resource-package download beside the preview action. */
+function renderExportButton(onExport: () => void, busy: boolean): RemixNode {
+  return <button
+    id="elce-sighty-export"
+    className="elce-preview-open-button elce-sighty-export-button"
+    type="button"
+    disabled={busy}
+    aria-busy={busy}
+    mix={on<HTMLButtonElement, 'click'>('click', onExport)}
+  >
+    {busy ? 'Préparation…' : 'Exporter le scénario'}
   </button>
 }
 

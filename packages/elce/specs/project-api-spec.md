@@ -50,6 +50,7 @@ document, et `GET`, `HEAD` et `PUT` pour l’état test.
 
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
+| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v5 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
 | `POST /api/projects` | `ElceDocumentData` v5 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
@@ -108,6 +109,8 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 | `412` | `revision_mismatch` | La révision de `If-Match` est périmée ; aucune écriture n’est faite |
 | `428` | `if_match_required` | Un remplacement de document doit fournir sa révision |
 | `400` | `invalid_media_body` / `media_size_mismatch` | Le corps fichier manque ou sa taille ne correspond pas aux métadonnées SQLite |
+| `400` | `invalid_export_body` / `invalid_export_document` / `unknown_export_media` / `invalid_export_media` / `invalid_export_media_size` | Le formulaire d’export, son document ou ses fichiers sont invalides |
+| `422` | `sighty_export_failed` | Le document ou ses ressources ne peuvent pas produire un paquet Sighty complet |
 | `404` | `media_not_found` | La ressource ou son fichier serveur est absent |
 | `409` | `media_changed` / `media_already_has_file` | Les métadonnées ont changé pendant l’upload ou la ressource possède déjà un autre contenu |
 | `409` | `media_already_exists` | Les octets appartiennent déjà à une autre ressource du projet ; la réponse inclut son `mediaId` canonique |
@@ -195,6 +198,12 @@ Le contrat de disponibilité à la lecture reste celui de Sighty/CodPlay : si un
 builder fournit une URL serveur à la scène, le preload déjà en place assure la
 disponibilité du média avant le montage. Cette API ne crée aucun préchargeur
 ni circuit de lecture Elcé.
+
+L’export Sighty reçoit un instantané documentaire par formulaire multipart.
+Le navigateur envoie uniquement les médias référencés par les scènes directes
+du scénario ; le serveur transmet le ZIP sans enregistrer ce document ou ces
+octets. Le contrat d’assemblage et de téléchargement figure dans la
+[spécification d’export Sighty Elcé](./sighty-export-spec.md).
 
 ## Vérification
 

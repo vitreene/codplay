@@ -62,6 +62,28 @@ describe('CodPlay site engine build', () => {
     await expect(access(path.join(destination, 'old-output.txt'))).rejects.toThrow()
   })
 
+  it('can point the external CodPlay import at one package-local player file', async () => {
+    const directory = await createTemporaryDirectory()
+    const configFile = path.join(directory, 'engine.ts')
+    const destination = path.join(directory, 'output', 'site-engine')
+    await writeFile(configFile, [
+      "import { CodPlay } from 'codplay'",
+      'export const engineCapabilities = { ownerName: CodPlay.name }',
+      '',
+    ].join('\n'))
+
+    await buildEngineBundle({
+      engineConfigFile: configFile,
+      destination,
+      workingDirectory: directory,
+      codplayImport: './codplay.js',
+    })
+
+    const engine = await readFile(path.join(destination, 'engine.js'), 'utf8')
+    expect(engine).toMatch(/from\s*["']\.\/codplay\.js["']/)
+    expect(engine).not.toMatch(/from\s*["']codplay["']/)
+  })
+
   it('rejects incomplete remote metadata before publishing output', async () => {
     const directory = await createTemporaryDirectory()
     const configFile = path.join(directory, 'engine.ts')

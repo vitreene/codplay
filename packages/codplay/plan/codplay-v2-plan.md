@@ -22,6 +22,7 @@ celui-ci ne remplace pas les spécifications ou plans actifs.
 |---|---|---|
 | Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Plan CompiledScene](./compiled-scene-plan.md), [suppression du catalogue et découverte des actions](./action-discovery-plan.md) |
 | Export d'une scène CodPlay | [Paquet de diffusion](../specs/scene-package-export-v1-spec.md) | [Feuille de route V1](./2026-10-15-export-diffusion-plan.md) — V1 finie ; R10 modes d'engine et R12 ressources Avatar vérifiés ; R13 distant reste une évolution ultérieure ; Sighty et Elcé hors tranche |
+| Extension de diffusion à Sighty | [Paquet Sighty](../../sighty/specs/authoring-library-spec.md#paquet-de-diffusion), [paquet CodPlay](../specs/scene-package-export-v1-spec.md) et [façade CodPlay](../specs/facade-v2-spec.md) | [Plan de diffusion Sighty](../../sighty/plan/2026-10-20-sighty-export-diffusion-plan.md) — V1 des scènes directes vérifiée ; export et chargement lazy reportés |
 | Reconstruction, engine et player | [Reconstruction logique](../specs/runtime-reconstruction-v2-spec.md), [Engine/Player](../specs/engine-player-v2-spec.md) | [Plan Player](./player-engine-plan.md) |
 | Façade et instances | [Façade](../specs/facade-v2-spec.md) | [Plan façade](./facade-engine-instance-plan.md) |
 | Diagnostics structurés | [Diagnostics](../specs/diagnostics-v2-spec.md) | — |

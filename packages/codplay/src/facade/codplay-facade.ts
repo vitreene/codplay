@@ -8,6 +8,7 @@ import type {
   CodPlayEvents,
   CodPlayInstances,
   CodPlayLoadMethod,
+  CodPlayPrepareMethod,
   CodPlayModules,
   CodPlayLibraries,
   CodPlayOptions,
@@ -16,16 +17,18 @@ import type {
 } from './facade-types'
 import type { RuntimePreloadApi } from '../runtime/preload'
 import { EngineFacadeImpl } from './engine-facade'
-import { loadScenePackage, releaseScenePackageContexts } from './scene-package-loader'
+import { loadScenePackage, prepareScenePackage, releaseScenePackageContexts } from './scene-package-loader'
 
 /** Public CodPlay owner that hides engine and ticker construction details. */
 export class CodPlay implements CodPlayApi {
   #engineOwner: EngineFacadeImpl
   #loadQueue: Promise<void> = Promise.resolve()
   #loadCounter = 0
+  #prepareCounter = 0
   #scenePackageCssSlots = new Map<string, string>()
   readonly build: CodPlayBuildMethod
   readonly load: CodPlayLoadMethod
+  readonly prepare: CodPlayPrepareMethod
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules
@@ -76,6 +79,18 @@ export class CodPlay implements CodPlayApi {
       },
     }
     this.preload = createRuntimePreload(options.preload ?? {})
+    this.prepare = (scenePath, prepareOptions) => {
+      this.#engineOwner.lockCapabilityRegistries()
+      const cssSlot = prepareOptions.cssSlot ?? `scene-package:prepared-${++this.#prepareCounter}`
+      const result = this.#loadQueue.then(() => prepareScenePackage(
+        this,
+        scenePath,
+        prepareOptions.root,
+        cssSlot,
+      ))
+      this.#loadQueue = result.then(() => undefined, () => undefined)
+      return result
+    }
     this.load = (scenePath, loadOptions) => {
       this.#engineOwner.lockCapabilityRegistries()
       const instanceId = `codplay-load-${++this.#loadCounter}`

@@ -11,17 +11,21 @@ import { renderEditorWorkspace } from './editor-workspace'
 import type { DraggedScenarioEntry, ResponsivePanel } from './editor-workspace-types'
 
 describe('Remix editor workspace', () => {
-  it('places preview beside panel access commands and keeps it available in chapter settings', async () => {
+  it('places preview and export beside panel access commands and keeps them available in chapter settings', async () => {
     const onPreview = vi.fn()
+    const onExport = vi.fn()
     const previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
-    const { controller, mount, cleanup } = createWorkspace(onPreview, previewError)
+    const { controller, mount, cleanup } = createWorkspace(onPreview, previewError, onExport)
     let rendered = mount()
 
     expect(rendered.$('#elce-responsive-panel-access #elce-preview-open')).not.toBeNull()
+    expect(rendered.$('#elce-responsive-panel-access #elce-sighty-export')).not.toBeNull()
     expect(rendered.$('#elce-work-area-preview-row')).toBeNull()
     expect(rendered.$('#elce-workspace-access-area #elce-preview-open-error')?.textContent).toBe(previewError)
     await rendered.act(() => rendered.$('#elce-preview-open')?.dispatchEvent(new Event('click', { bubbles: true })))
     expect(onPreview).toHaveBeenCalledOnce()
+    await rendered.act(() => rendered.$('#elce-sighty-export')?.dispatchEvent(new Event('click', { bubbles: true })))
+    expect(onExport).toHaveBeenCalledOnce()
 
     const evaluationChapter = controller.getSnapshot().context.document.chapters.find((chapter) => chapter.type === CHAPTER_TYPE.EVALUATION)
     if (evaluationChapter === undefined) throw new Error('Evaluation fixture chapter is missing.')
@@ -33,7 +37,29 @@ describe('Remix editor workspace', () => {
 
     expect(rendered.$(`#elce-remix-evaluation-chapter-settings-${evaluationChapter.id}`)).not.toBeNull()
     expect(rendered.$('#elce-responsive-panel-access #elce-preview-open')).not.toBeNull()
+    expect(rendered.$('#elce-responsive-panel-access #elce-sighty-export')).not.toBeNull()
     expect(rendered.$('#elce-responsive-panel-access')?.querySelectorAll('#elce-preview-open')).toHaveLength(1)
+
+    rendered.cleanup()
+    cleanup()
+    controller.stop()
+  })
+
+  it('disables an active package export and announces its result accessibly', () => {
+    const { controller, mount, cleanup } = createWorkspace(
+      () => undefined,
+      null,
+      () => undefined,
+      true,
+      null,
+      null,
+    )
+    const rendered = mount()
+
+    expect((rendered.$('#elce-sighty-export') as HTMLButtonElement).disabled).toBe(true)
+    expect(rendered.$('#elce-sighty-export')?.getAttribute('aria-busy')).toBe('true')
+    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation du paquet Sighty…')
+    expect(rendered.$('#elce-sighty-export-status')?.getAttribute('role')).toBe('status')
 
     rendered.cleanup()
     cleanup()
@@ -206,7 +232,14 @@ describe('Remix editor workspace', () => {
 })
 
 /** Creates a local XState fixture and renders a fresh native workspace view. */
-function createWorkspace(onPreview: () => void = () => undefined, previewError: string | null = null) {
+function createWorkspace(
+  onPreview: () => void = () => undefined,
+  previewError: string | null = null,
+  onExport: () => void = () => undefined,
+  exportBusy = false,
+  exportError: string | null = null,
+  exportNotice: string | null = null,
+) {
   const controller = createActor(controllerMachine, { input: {} })
   controller.start()
   controller.send({ type: 'editor.access.activate' })
@@ -242,6 +275,10 @@ function createWorkspace(onPreview: () => void = () => undefined, previewError: 
       getDraggedEntry: () => draggedEntry,
       onPreview,
       previewError,
+      onExport,
+      exportBusy,
+      exportError,
+      exportNotice,
       onMovePage: (pageId, placement) => actions.movePage(pageId, placement),
       onMoveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
     })}

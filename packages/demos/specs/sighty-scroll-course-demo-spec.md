@@ -141,8 +141,9 @@ contient la vidéo de démonstration fournie dans les assets existants.
 Les paragraphes des pages de contenu font de 182 à 229 mots (moyenne : 206),
 pour produire plusieurs transitions d’observation au cours du scroll. Les
 titres de section sont des persos `tag` sticky ; leur `liveAction` lit
-`input.data.ratio` et interpole la couleur, avec des observations aux seuils
-`0`, `0.2`, `0.4`, `0.6`, `0.8` et `1`. Chaque image est un perso `img` placé
+`input.data.fromHue`, `input.data.toHue` et `input.data.ratio` et interpole la
+couleur sur le chemin de teinte le plus court d’ACE, avec des observations aux
+seuils `0`, `0.2`, `0.4`, `0.6`, `0.8` et `1`. Chaque image est un perso `img` placé
 dans un cadre `tag` observé depuis le scrollport. L’observation commence au bord
 du viewport (`rootMargin: '0px'`). Comme le premier callback de l’observateur
 synchronise la phase sans émettre `enter`, l’image materialisée démarre à
@@ -175,6 +176,16 @@ Le quiz est indépendant de la démo Quiz Series. Il emploie les composants
 `input` de CodPlay et le circuit `listen`/straps de la scène, puis transmet son
 résultat par événement public à l’action déclarée dans Sighty.
 
+Les straps de quiz sont des fonctions de module partagées entre les scènes. Ils
+lisent `question`, `pageId` et la sélection depuis l’état local de leur story,
+et les choix depuis les données de l’événement. Le préfixe d’événement est
+dérivé de `pageId`, sans configuration de page capturée. Le callback
+`onReset(keys)` du descripteur de scène reste conforme à l’API Sighty et produit
+un événement générique ; chaque strap de quiz détermine ensuite les effets à
+appliquer depuis son état local. Le logger hôte observe l’événement public
+`course:quiz:answered` par `runtime.events` et retrouve le titre depuis le
+catalogue du cours ; les actions auteur ne capturent donc plus `onLog`.
+
 ## Vérification
 
 Firefox 156.0.1 headless, viewport `1366 × 683`, sur `sighty.html?demo=demo5` :
@@ -204,6 +215,13 @@ Firefox 156.0.1 headless, viewport `1366 × 683`, sur `sighty.html?demo=demo5` :
 typechecks Sighty, component-v2, CodPlay et démos réussis ; build Vite et
 `git diff --check` réussis.
 
+Le 2026-10-21, le transform de couleur de Demo 5 a été vérifié sur le parcours
+Safari MCP réel `sighty.html?demo=demo5` : après un défilement de 900 px, la
+teinte calculée du premier titre évolue de 106° à environ 56°. Le callback de
+scène reçoit ses bornes dans `data`, calcule le même chemin d’ACE et n’utilise
+aucune valeur dynamique capturée. Le typecheck et le build Vite du package
+démos réussissent ; aucune erreur runtime n’apparaît dans la console.
+
 La visite Safari MCP du 2026-09-30 sur le build de prévisualisation charge le
 cours et son menu, refuse une cible verrouillée, puis parcourt les dix pages.
 Après un rechargement avec la première image déjà dans le scrollport, son
@@ -222,3 +240,15 @@ Les contrats généraux des conditions Sighty sont décrits dans
 [`authoring-library-spec.md`](../../sighty/specs/authoring-library-spec.md).
 Le contrat du repère scrollable et de son reset est décrit dans
 [`scroll-container-spec.md`](../../codplay/specs/scroll-container-spec.md).
+Le parcours visuel du même scénario depuis son paquet Sighty exporté est décrit
+dans la [spécification de diffusion Demo 5](./sighty-export-demo-spec.md).
+
+Le 2026-10-21, Safari MCP a vérifié le parcours auteur Demo 5 après le retrait
+des captures : les titres de section changent de teinte au scroll ; une réponse
+fausse puis juste au quiz produisent les feedbacks et lignes de journal
+attendus ; la bonne réponse déverrouille le chapitre suivant ; trois réponses
+finales justes ouvrent la conclusion ; « Recommencer le cours » restaure le
+signet et verrouille à nouveau les pages ; à la réouverture du quiz, sélection,
+correction et feedback sont effacés par le reset générique. Typecheck et build
+démos réussissent, sans erreur console ni requête HTTP en échec. Capture :
+[`codplay-demo5-callback-validation.png`](/private/tmp/codplay-demo5-callback-validation.png).

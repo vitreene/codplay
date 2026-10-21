@@ -21,6 +21,14 @@ dans sa Section. Pour ajouter une image, déposez un fichier dans la Section.
 Choisissez ensuite **Prévisualiser** pour ouvrir la lecture dans une fenêtre
 distincte et voir la composition Sighty/CodPlay du document.
 
+## Exporter les ressources du scénario
+
+Dans un projet éditable, choisissez **Exporter le scénario** à côté de
+**Prévisualiser**. Par exemple, un projet nommé « Projet 1 » produit le fichier
+`Projet-1.sighty.zip`, avec le scénario, ses scènes directes et les médias
+qu’elles utilisent. Vous pouvez charger ce paquet avec Sighty ; l’export ne
+lance pas l’initialisation ni la lecture.
+
 ## Utiliser un projet dans plusieurs fenêtres
 
 Chaque fenêtre choisit son projet séparément. Plusieurs fenêtres peuvent donc

@@ -50,6 +50,12 @@ npm run export --workspace=codplay -- \
   --export ./public/exports/ma-scene
 ```
 
+Le producteur `exportScenePackage()` accepte aussi une entrée-adaptateur, le
+nom de son export `scene` et le fichier source qui porte les chemins relatifs
+des ressources. L’export Sighty l’appelle une fois par scène directe dans un
+sous-répertoire dédié. Cette adaptation conserve le format et le contenu du
+paquet CodPlay V1 ; elle ne crée pas de second paquetage de scène.
+
 Le CLI construit dans un répertoire temporaire voisin de la destination, puis
 publie par renommage. Il refuse une destination déjà présente et retire son
 répertoire temporaire à l'échec. Le paquet contient :

@@ -65,9 +65,18 @@ exercent.
 
 ### Chargement d'un paquet de scène
 
+`await player.prepare(scenePath, { root, cssSlot? })` valide un paquet et rend
+son compilé, ses fonctions, ses ressources et son CSS disponibles sans créer
+d'occurrence. Il utilise le même owner, moteur, preload et registre de ressources
+que `load()`. Le résultat fournit les données nécessaires à
+`instances.create()` ; si l'intégration choisit un `cssSlot`, elle en garde la
+libération. Cette préparation permet à un runtime intégrateur de contrôler
+séparément le moment de création de ses occurrences.
+
 `await player.load(scenePath, { root })` charge une occurrence d'un paquet
 média, CSS, fontes locales et fonctions auteur, avec feuille et module de
-fonctions optionnels, puis retourne son `CodPlayInstance` après préparation.
+fonctions optionnels. `load()` réutilise `prepare()` puis crée et retourne son
+`CodPlayInstance` après préparation.
 `root` est un sélecteur CSS ou un
 `HTMLElement`. `load()` réutilise le moteur, le service de preload,
 l'enregistrement des ressources et le registre d'instances de ce même
@@ -97,7 +106,14 @@ l'owner. `HtmlComponentMaterializer` reconnaît cette frontière par
 copie de CodPlay, son host n'est pas matérialisable. Le bundle du site doit donc
 laisser `codplay` externe et résoudre son import vers le fichier du player déjà
 chargé. Les hosts spécialisés Rive et Three restent des classes distinctes,
-mais héritent de cette même classe de base. L'acceptance navigateur R9 du
+mais héritent de cette même classe de base. Une intégration qui étend
+`TagComponent` importe cette classe depuis l'entrée racine publique `codplay`,
+comme `BaseHTMLComponent`, afin que sa chaîne d'héritage utilise la classe que
+le player reconnaît. `TagComponent`, `sanitizeTagInitial` et
+`validateTagInitial` sont exportés par cette entrée ; un import de
+`codplay/runtime/components` peut sinon être embarqué dans le bundle d'engine
+comme une seconde copie. La recette Safari de diffusion Sighty Demo 5 confirme
+la matérialisation du scrollport dans ce montage séparé. L'acceptance navigateur R9 du
 [plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r9--composants-fournis-par-lengine)
 vérifie leur matérialisation et une seule URL player.
 

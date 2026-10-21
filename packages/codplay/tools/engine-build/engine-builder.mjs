@@ -6,7 +6,12 @@ import { build } from 'vite'
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 /** Builds the site's shared engine integration separately from the player and scene packages. */
-export async function buildEngineBundle({ engineConfigFile, destination, workingDirectory = process.cwd() }) {
+export async function buildEngineBundle({
+  engineConfigFile,
+  destination,
+  workingDirectory = process.cwd(),
+  codplayImport = 'codplay',
+}) {
   const absoluteConfigFile = path.resolve(workingDirectory, engineConfigFile)
   const absoluteDestination = path.resolve(workingDirectory, destination)
   await assertSourceFile(absoluteConfigFile)
@@ -24,7 +29,7 @@ export async function buildEngineBundle({ engineConfigFile, destination, working
     await rm(configDirectory, { recursive: true, force: true })
 
     const bundleDirectory = path.join(stageDirectory, 'bundle')
-    await bundleForBrowser(absoluteConfigFile, workingDirectory, bundleDirectory, deliveries)
+    await bundleForBrowser(absoluteConfigFile, workingDirectory, bundleDirectory, deliveries, codplayImport)
     await writeFile(path.join(bundleDirectory, 'engine-manifest.json'), JSON.stringify({
       format: 'codplay.site-engine.v1',
       entry: 'engine.js',
@@ -74,7 +79,7 @@ async function bundleEngineConfig(engineConfigFile, outputDirectory) {
 }
 
 /** Bundles the engine for browsers while keeping the player and selected dependencies external. */
-async function bundleForBrowser(engineConfigFile, workingDirectory, outputDirectory, deliveries) {
+async function bundleForBrowser(engineConfigFile, workingDirectory, outputDirectory, deliveries, codplayImport) {
   const deliveryByModule = new Map(deliveries.map((item) => [item.module, item.delivery]))
   const externalModules = new Set([...deliveryByModule]
     .filter(([, delivery]) => delivery.mode === 'remote' || delivery.mode === 'platform')
@@ -102,6 +107,7 @@ async function bundleForBrowser(engineConfigFile, workingDirectory, outputDirect
           entryFileNames: 'engine.js',
           chunkFileNames: '[name]-[hash].js',
           paths: (id) => {
+            if (id === 'codplay') return codplayImport
             const delivery = deliveryByModule.get(id)
             return delivery?.mode === 'remote' ? delivery.url : id
           },

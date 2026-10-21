@@ -85,6 +85,16 @@ export type LoadedScenePackage = Readonly<{
   cssSlot?: string
 }>
 
+/** One validated and resource-ready package scene without a created occurrence. */
+export type PreparedScenePackage = Readonly<{
+  compiledScene: CompiledScene
+  functions: CompiledFunctionCollection
+  strapCollections: StrapCollections
+  resourceUrls: readonly string[]
+  root: HTMLElement
+  cssSlot?: string
+}>
+
 /** Releases cached owner/package closures when their CodPlay owner is destroyed. */
 export function releaseScenePackageContexts(owner: object): void {
   packageFunctionContexts.delete(owner)
@@ -95,14 +105,14 @@ type MutableCompiledScene = Omit<CompiledScene, 'resources' | 'requirements'> & 
   requirements: CompiledScene['requirements']
 }
 
-/** Loads one compiled scene package through the owner's existing runtime services. */
-export async function loadScenePackage(
-  owner: Pick<CodPlayApi, 'engine' | 'instances' | 'preload' | 'resources'>,
+/** Validates and prepares one compiled scene package without creating an occurrence. */
+export async function prepareScenePackage(
+  owner: Pick<CodPlayApi, 'engine' | 'preload' | 'resources'>,
   scenePath: string,
   rootInput: HTMLElement | string,
-  instanceId: string,
+  cssSlot: string,
   moduleImporter: ScenePackageFunctionModuleImporter = importFunctionModuleFromUrl,
-): Promise<LoadedScenePackage> {
+): Promise<PreparedScenePackage> {
   const root = resolveRoot(rootInput)
   const baseUrl = resolvePackageBase(scenePath)
   const response = await fetch(new URL('export-manifest.json', baseUrl))
@@ -163,24 +173,54 @@ export async function loadScenePackage(
     metadata: preloaded.data.metadata,
     media: preloaded.data.media,
   })
-  const cssSlot = stylesheet === undefined ? undefined : `scene-package:${instanceId}`
+  const stylesheetSlot = stylesheet === undefined ? undefined : cssSlot
   try {
-    if (stylesheet !== undefined && cssSlot !== undefined) {
+    if (stylesheet !== undefined && stylesheetSlot !== undefined) {
       const existingFontFaces = stylesheet.fontFaces.length === 0 ? undefined : snapshotFontFaces()
-      owner.preload.css.set({ slot: cssSlot, cssText: stylesheet.cssText, container: root })
-      await waitForPackageFontFaces(cssSlot, stylesheet.fontFaces, existingFontFaces ?? new Set())
+      owner.preload.css.set({ slot: stylesheetSlot, cssText: stylesheet.cssText, container: root })
+      await waitForPackageFontFaces(stylesheetSlot, stylesheet.fontFaces, existingFontFaces ?? new Set())
     }
-    const instance = owner.instances.create({
-      instanceId,
+    return {
       compiledScene: validatedScene.value,
       functions: functionContext.functions,
       strapCollections: functionContext.strapCollections,
+      resourceUrls: validatedScene.value.resources.entries.map((entry) => entry.url),
       root,
-    })
-    await waitForRenderedResources(root, new Set(validatedScene.value.resources.entries.map((entry) => entry.url)))
-    return { instance, ...(cssSlot === undefined ? {} : { cssSlot }) }
+      ...(stylesheetSlot === undefined ? {} : { cssSlot: stylesheetSlot }),
+    }
   } catch (error) {
-    if (cssSlot !== undefined) owner.preload.css.clear(cssSlot)
+    if (stylesheetSlot !== undefined) owner.preload.css.clear(stylesheetSlot)
+    throw error
+  }
+}
+
+/** Loads one prepared package as an occurrence while retaining CodPlay's existing lifecycle. */
+export async function loadScenePackage(
+  owner: Pick<CodPlayApi, 'engine' | 'instances' | 'preload' | 'resources'>,
+  scenePath: string,
+  rootInput: HTMLElement | string,
+  instanceId: string,
+  moduleImporter: ScenePackageFunctionModuleImporter = importFunctionModuleFromUrl,
+): Promise<LoadedScenePackage> {
+  const prepared = await prepareScenePackage(
+    owner,
+    scenePath,
+    rootInput,
+    `scene-package:${instanceId}`,
+    moduleImporter,
+  )
+  try {
+    const instance = owner.instances.create({
+      instanceId,
+      compiledScene: prepared.compiledScene,
+      functions: prepared.functions,
+      strapCollections: prepared.strapCollections,
+      root: prepared.root,
+    })
+    await waitForRenderedResources(prepared.root, new Set(prepared.resourceUrls))
+    return { instance, ...(prepared.cssSlot === undefined ? {} : { cssSlot: prepared.cssSlot }) }
+  } catch (error) {
+    if (prepared.cssSlot !== undefined) owner.preload.css.clear(prepared.cssSlot)
     owner.instances.destroy(instanceId)
     throw error
   }

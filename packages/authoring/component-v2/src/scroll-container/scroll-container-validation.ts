@@ -1,5 +1,5 @@
 import type { ValidationContext, ValidationFunction } from 'codplay/services'
-import { validateTagInitial } from 'codplay/runtime/components'
+import { validateTagInitial } from 'codplay'
 import { isPlainRecord } from 'codplay/shared'
 
 /** Validates one scrollport tag and its optional progress profile. */

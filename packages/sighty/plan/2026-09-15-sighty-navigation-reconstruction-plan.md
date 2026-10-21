@@ -107,69 +107,13 @@ parcours navigateur complet reste à valider.
 
 ## Travail restant
 
-### Export de scénario — projection à relire
+### Export de scénario — V1 réalisée
 
-**Statut : A relire, non implémenté.** Étude demandée le 2026-10-15 à partir
-de l'[entrée de diffusion CodPlay](../../codplay/plan/2026-10-15-export-diffusion-plan.md#8-initialisation-côté-site-à-prouver).
-La scène CodPlay reste la première tranche à réaliser ; aucun changement de
-runtime Sighty n'est autorisé par cette seule projection.
-
-Forme d'usage proposée pour le paquet de scénario :
-
-```js
-const sy = new Sighty(root, scenarioPath)
-await sy.init()
-await sy.play()
-```
-
-Cette forme n'est pas disponible actuellement. La construction auteur
-`new Sighty({ scenario, runtime })` et ses surfaces existantes sont conservées.
-
-- [ ] Exporter la description initiale du parcours : vues, slots, routes,
-  couplages, règles d'admission, showMode et données initiales ; pas l'état
-  d'une session vivante, ses handles, instances, réponses ou générations.
-- [ ] Produire le code des actions/guards nommés et inline et des callbacks
-  `onReset`, avec leurs références exactes, imports et closures. Réutiliser
-  les mécanismes de transport de fonctions validés pour CodPlay ; conserver
-  la résolution et l'exécution Sighty dans leur circuit actuel.
-- [ ] Exporter chaque définition de scène par le circuit CodPlay, une seule
-  fois même si plusieurs vues/slots la référencent. Conserver la possibilité
-  de plusieurs occurrences indépendantes de cette même définition.
-- [ ] Embarquer CodPlay et Sighty une seule fois avec les capacités nécessaires ;
-  les scènes référencent les mêmes bibliothèques. Dédupliquer les ressources
-  par le circuit d'export accepté, sans second inventaire Sighty concurrent.
-- [ ] Étendre le propriétaire actuel `RuntimeSceneManager` pour consommer les
-  scènes déjà compilées ; son chemin actuel appelle encore `owner.build()`
-  pour les sources directes et lazy. Aucun re-build auteur à destination.
-- [ ] Garder un propriétaire CodPlay partagé pour Sighty : la lecture d'un
-  paquet de scène doit pouvoir être utilisée avec ce propriétaire. Ne pas
-  créer un `new CodPlay(root, scenePath)` autonome pour chaque scène.
-- [ ] `sy.init()` charge/valide scénario et fonctions, prépare le catalogue
-  de scènes exportées et initialise la composition de départ par le runtime
-  existant. Ne pas reconstruire navigation, montage, journal ou telco.
-- [ ] Définir et vérifier la frontière sans lecture de `sy.init()` ; `sy.play()`
-  utilise le `runtime.play` existant depuis la scène de départ, avec ses
-  sélections actives parent/enfant. Ne pas appeler play sur toutes les scènes.
-- [ ] Conserver navigation/événements sur `sy.runtime.dispatch` et la passerelle
-  actuelle. Les entrées/sorties de vues continuent de suivre leurs showMode,
-  guards, couplages et cycles CodPlay.
-- [ ] Pour un premier export autonome, résoudre à l'export l'ensemble fermé
-  des définitions lazy connues, tout en permettant leur chargement différé
-  depuis le paquet à la lecture. Définir les refus pour les scènes fabriquées
-  depuis une API ou des données externes non empaquetées ; ne pas exporter
-  seulement les scènes rencontrées dans le parcours courant.
-- [ ] Fixer le traitement des mutations : navigation entre scènes exportées
-  et création d'une nouvelle définition auteur à destination sont deux cas
-  distincts ; le second n'est pas implicitement inclus dans cette proposition.
-- [ ] Définir le format du paquet, sa convention d'entrée, son codec/version
-  et le cycle async/erreurs avant implémentation ; ne pas déduire le format
-  compilé/exportable d'un simple JSON.stringify de l'objet auteur actuel.
-
-Acceptation propre à cette tranche future : initialisation puis lancement,
-navigation entre deux scènes, même définition dans deux slots, lazy empaqueté,
-guard, action avec closure, reset/onReset, couplage, retour/relecture et
-destruction, depuis un dossier déplacé sur un site statique sans sources.
-Ces décisions ne sont transférées à la spec qu'après implémentation et preuves.
+La V1 transporte le module scénario et un paquet CodPlay autonome par scène
+directe. Le propriétaire Sighty charge le paquet ; son runtime initialise les
+occurrences séparément. L’implémentation, les preuves et la suite lazy sont
+suivies dans le [plan de diffusion Sighty](./2026-10-20-sighty-export-diffusion-plan.md)
+et décrites dans la [spécification Sighty](../specs/authoring-library-spec.md#paquet-de-diffusion).
 
 ### Autres décisions runtime
 

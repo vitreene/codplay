@@ -82,6 +82,28 @@ describe('CodPlay scene package loading', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('prepares package resources and compiled data without creating an occurrence', async () => {
+    player = createPlayer()
+    const packageData = createPackageData(player)
+    const root = document.createElement('main')
+    document.body.append(root)
+    const fetchMock = createPackageFetch(packageData.manifest, packageData.sceneJson)
+    vi.stubGlobal('fetch', fetchMock)
+    const resourceUrl = new URL(PACKAGE_FILE, PACKAGE_BASE).href
+    const preload = vi.spyOn(player.preload, 'load').mockResolvedValue(createPreloadSuccess(resourceUrl))
+
+    const prepared = await player.prepare(PACKAGE_BASE, { root })
+
+    expect(prepared.compiledScene.scene.id).toBe('package-load-scene')
+    expect(prepared.resourceUrls).toEqual([resourceUrl])
+    expect(prepared.root).toBe(root)
+    expect(prepared.cssSlot).toBeUndefined()
+    expect(player.instances.get('codplay-load-1')).toBeUndefined()
+    expect(root.children).toHaveLength(0)
+    expect(preload).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('passes a packaged custom preload resource to the existing type strategy', async () => {
     const resourceUrl = 'assets/0123456789abcdefabcd.glb'
     const packageResourceUrl = new URL(`scene/${resourceUrl}`, PACKAGE_BASE).href

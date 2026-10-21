@@ -1,12 +1,11 @@
 import {
-  type CodPlayCompileSuccess,
   type CodPlayInstance,
   type CodPlayResourceRegistration,
 } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 import type { ActiveSelection } from '../navigation/types'
 import { diagnosticDetails, occurrenceKeyForSelection } from './helpers'
-import type { SightyRuntimeBuilds } from './types'
+import type { SightyRuntimeBuild, SightyRuntimeBuilds } from './types'
 import { getLayoutSceneKey, type SightyRuntimeState } from './state'
 import type { SightySceneCatalog, SightySceneResetHandler } from '../types'
 
@@ -22,25 +21,39 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
 
   /** Compiles every synchronously supplied scene without invoking deferred sources. */
   compileDirectScenes(): SightyRuntimeBuilds<SceneKey> {
-    const builds = new Map<SceneKey, CodPlayCompileSuccess>()
-    for (const sceneKey of this.state.authoredSceneKeys) {
+    const builds = new Map<SceneKey, SightyRuntimeBuild>()
+    const sceneKeys = new Set<SceneKey>([
+      ...this.state.scenario.sceneKeys,
+      ...this.state.preparedBuilds.keys(),
+    ])
+    for (const sceneKey of sceneKeys) {
       const source = this.state.scenario.getScene(sceneKey)
-      if (source === undefined) continue
-      const { sceneDoc, styleSheet, onReset } = resolveSceneSource(source)
-      this.cacheResetHandler(sceneKey, onReset)
-      this.state.sceneDocuments.set(sceneKey, sceneDoc)
+      let sceneDoc: SceneDoc<string> | undefined
+      if (source !== undefined) {
+        const resolvedSource = resolveSceneSource(source)
+        sceneDoc = resolvedSource.sceneDoc
+        const { styleSheet, onReset } = resolvedSource
+        this.cacheResetHandler(sceneKey, onReset)
+        this.state.sceneDocuments.set(sceneKey, sceneDoc)
+        if (styleSheet.trim() !== '') this.state.sceneStyleSheets.set(sceneKey, styleSheet)
+      }
+      const preparedBuild = this.state.preparedBuilds.get(sceneKey)
+      if (preparedBuild !== undefined) {
+        builds.set(sceneKey, preparedBuild)
+        continue
+      }
+      if (sceneDoc === undefined) continue
       const result = this.state.owner.build({ scene: sceneDoc })
       if (!result.ok) {
         throw new Error(`La scène Sighty ${sceneKey} est invalide. ${diagnosticDetails(result.diagnostics.errors)}`)
       }
-      if (styleSheet.trim() !== '') this.state.sceneStyleSheets.set(sceneKey, styleSheet)
       builds.set(sceneKey, result)
     }
     return builds
   }
 
   /** Compiles and preloads one scene without creating an occurrence. */
-  async ensureScene(sceneKey: SceneKey): Promise<CodPlayCompileSuccess> {
+  async ensureScene(sceneKey: SceneKey): Promise<SightyRuntimeBuild> {
     const existingBuild = this.state.compiledBuilds.get(sceneKey)
     if (existingBuild !== undefined) return existingBuild
 
@@ -115,8 +128,18 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
       this.installedSceneStyleSheets.delete(sceneKey)
     }
     for (const [sceneKey, styleSheet] of this.state.sceneStyleSheets) {
+      if (this.state.packagedSceneKeys.has(sceneKey)) continue
       this.installSceneStyleSheet(sceneKey, styleSheet)
     }
+  }
+
+  /** Clears only Sighty-owned styles while preserving prepared package styles for retry. */
+  clearInstalledStyles(): void {
+    for (const style of this.state.styles) this.state.owner.preload.css.clear(style.slot)
+    for (const sceneKey of this.installedSceneStyleSheets) {
+      this.state.owner.preload.css.clear(sceneStyleSlot(sceneKey))
+    }
+    this.installedSceneStyleSheets.clear()
   }
 
   /** Installs one scene stylesheet in a stable preload slot scoped to the Sighty root. */
@@ -141,7 +164,7 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
   }
 
   /** Creates one scene occurrence once its compiled definition is available. */
-  createInstance(occurrenceKey: string, sceneKey: SceneKey, build: CodPlayCompileSuccess): void {
+  createInstance(occurrenceKey: string, sceneKey: SceneKey, build: SightyRuntimeBuild): void {
     if (this.state.instances.has(occurrenceKey)) return
     const baseInstanceId = this.state.instanceIds[sceneKey]
     if (typeof baseInstanceId !== 'string' || baseInstanceId.length === 0) {
@@ -155,6 +178,7 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
       instanceId,
       compiledScene: build.compiledScene,
       functions: build.functions,
+      ...(build.strapCollections === undefined ? {} : { strapCollections: build.strapCollections }),
       ...(occurrenceKey === this.layoutOccurrenceKey() ? { root: this.state.root } : {}),
     })
     this.state.instances.set(occurrenceKey, instance)

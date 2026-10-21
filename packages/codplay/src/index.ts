@@ -1,5 +1,12 @@
 export { CodPlay } from './facade'
-export { BaseComponent, BaseHTMLComponent } from './runtime/components'
+export {
+  BaseComponent,
+  BaseHTMLComponent,
+  TagComponent,
+  sanitizeTagInitial,
+  validateTagInitial,
+} from './runtime/components'
+export type { TagInitial } from './runtime/components'
 export type { ValidationContext, ValidationFunction } from './services'
 export type {
   ComponentActionOccurrence,
@@ -46,6 +53,9 @@ export type {
   CodPlayLibraries,
   CodPlayLoadMethod,
   CodPlayLoadOptions,
+  CodPlayPrepareMethod,
+  CodPlayPrepareOptions,
+  CodPlayPreparedScene,
   CodPlayOptions,
   CodPlayProjectionApi,
   CodPlayProjectionResult,

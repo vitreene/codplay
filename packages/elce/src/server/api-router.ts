@@ -2,10 +2,15 @@ import { createRouter } from 'remix/router'
 import { MediaApiController } from './media/media-api-controller'
 import { ProjectApiController } from './projects/project-api-controller'
 import { ProjectTestStateApiController } from './projects/project-test-state-api-controller'
+import { SightyExportApiController } from './export/sighty-export-api-controller'
 import type { ProjectPersistence } from './projects/project-persistence'
 
 /** Creates the server Fetch router and registers the project catalog API. */
-export function createElceApiRouter(persistence: ProjectPersistence, media?: MediaApiController) {
+export function createElceApiRouter(
+  persistence: ProjectPersistence,
+  media?: MediaApiController,
+  sightyExport = new SightyExportApiController(),
+) {
   const router = createRouter({
     defaultHandler() {
       return new Response(null, { status: 404 })
@@ -14,6 +19,7 @@ export function createElceApiRouter(persistence: ProjectPersistence, media?: Med
   const projects = new ProjectApiController(persistence)
   const testState = new ProjectTestStateApiController(persistence)
 
+  router.post('/api/exports/sighty', ({ request }) => sightyExport.export(request))
   router.get('/api/projects', () => projects.listProjects())
   router.post('/api/projects', ({ request }) => projects.createProject(request))
   router.get('/api/projects/:projectId', ({ params }) => projects.getProject(params.projectId!))

@@ -57,6 +57,16 @@ et peut réutiliser son cache HTTP. Tant qu’un transfert reste en attente, le
 lecteur crée une URL objet depuis le Blob conservé localement. Après
 confirmation du transfert d’une image, le Blob n’est pas requis par le lecteur.
 
+### Sources de style du scénario
+
+La preview et l’export consomment le même scénario produit par
+`createElcePlayerScenario`. Les styles partagés du lecteur et d’expansion du
+viewport sont attachés à la source de la scène layout. Les feuilles CSS
+produites par les builders restent attachées à la source de leur scène de page.
+Le paquetage Sighty peut ainsi conserver chaque feuille dans le paquet CodPlay
+de la scène qui l’utilise, sans déplacer les styles vers un registre runtime
+global.
+
 ### Preview réseau sur mobile
 
 Le lancement local opt-in `npm run dev:elce:network` publie une origine de

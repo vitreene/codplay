@@ -1,4 +1,4 @@
-import type { TagInitial } from 'codplay/runtime/components'
+import type { TagInitial } from 'codplay'
 import type { AuthorScrollObservationDeclaration } from 'codplay/scene/capture'
 
 /** Logical axis used by one scroll-progress provider. */

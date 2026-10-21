@@ -421,6 +421,22 @@ export type CodPlayLoadOptions = Readonly<{
   root: HTMLElement | string
 }>
 
+/** Root and optional stylesheet slot used to prepare a scene package without an occurrence. */
+export type CodPlayPrepareOptions = Readonly<{
+  root: HTMLElement | string
+  cssSlot?: string
+}>
+
+/** Validated scene package resources prepared for later instance creation. */
+export type CodPlayPreparedScene = Readonly<{
+  compiledScene: CompiledScene
+  functions: CompiledFunctionCollection
+  strapCollections: StrapCollections
+  resourceUrls: readonly string[]
+  root: HTMLElement
+  cssSlot?: string
+}>
+
 /** Public instance boundary; runtime classes and materializer internals stay hidden. */
 export type CodPlayInstance = Readonly<{
   readonly instanceId: string
@@ -478,6 +494,12 @@ export type CodPlayLoadMethod = (
   options: CodPlayLoadOptions,
 ) => Promise<CodPlayInstance>
 
+/** Prepares one scene package and its resources without creating an occurrence. */
+export type CodPlayPrepareMethod = (
+  scenePath: string,
+  options: CodPlayPrepareOptions,
+) => Promise<CodPlayPreparedScene>
+
 /** Public shared-resource registration surface. */
 export type CodPlayResources = Readonly<{
   register: (resources: CodPlayResourceRegistration) => void
@@ -509,6 +531,7 @@ export type CodPlayBuildMethod = (
 export type CodPlayApi = Readonly<{
   readonly build: CodPlayBuildMethod
   readonly load: CodPlayLoadMethod
+  readonly prepare: CodPlayPrepareMethod
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules
