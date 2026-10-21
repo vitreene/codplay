@@ -5,6 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./tools/engine-build/engine-builder.mjs": "./tools/engine-build/engine-builder.mjs",
+    "./tools/player-build/cli.mjs": "./tools/player-build/cli.mjs",
+    "./tools/scene-export/cli.mjs": "./tools/scene-export/cli.mjs",
     "./*": "./src/*"
   },
   "scripts": {

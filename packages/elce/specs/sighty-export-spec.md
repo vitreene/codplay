@@ -17,6 +17,11 @@ par ces scènes au serveur local Elcé.
 
 Le serveur adapte les sources temporaires au CLI Sighty existant en lui
 fournissant les capacités engine d’Elcé et demande sa distribution autonome.
+Il résout le CLI via l’entrée de package
+`@codplay/sighty/tools/scenario-export/cli.mjs` et lance le processus depuis le
+répertoire de travail du projet appelant. L’adaptateur n’a pas besoin de
+connaître la racine du monorepo ; le chemin de source temporaire normalisé suit
+ce même répertoire de travail.
 Le ZIP est prêt à être extrait et chargé par `loader.mjs`. Il contient une
 seule copie de CodPlay, de Sighty et de l’engine configuré dans `runtime/`, le
 manifeste de distribution, puis le manifeste Sighty, `scenario.mjs` et un
@@ -47,9 +52,11 @@ téléchargement partiel.
   vérifie le manifeste Sighty, toutes les scènes directes, un paquet CodPlay
   intact, la CSS du Carousel de page, la CSS du layout, les octets du média,
   l’absence de chemins temporaires, le loader, le manifeste de distribution,
-  l’unicité des trois fichiers runtime, les imports relatifs vers l’unique
-  `codplay.js` et l’absence de copies runtime dans les scènes. Il vérifie aussi
-  le refus d’octets manquants pour un média utilisé.
+  l’unicité des trois fichiers runtime, la résolution du CLI Sighty par son
+  entrée de package, les imports relatifs vers l’unique `codplay.js` et
+  l’absence de copies runtime dans les scènes. Il vérifie aussi le refus
+  d’octets manquants pour un média utilisé. L’export complet s’exécute avec un
+  répertoire de travail temporaire situé hors du dépôt.
 - [`elce-sighty-export-client.test.ts`](../src/export/elce-sighty-export-client.test.ts)
   vérifie l’envoi du document et des médias référencés ainsi que le traitement
   des erreurs.

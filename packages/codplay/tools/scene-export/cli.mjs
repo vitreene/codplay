@@ -36,6 +36,7 @@ export async function exportScenePackage({
   sceneExportName = 'scene',
   sourceFile = sceneFile,
   engineConfigFile,
+  codplayModule: sharedCodplayModule,
   destination,
   workingDirectory = process.cwd(),
   signal,
@@ -55,13 +56,18 @@ export async function exportScenePackage({
   await mkdir(parentDirectory, { recursive: true })
   const stageDirectory = await mkdtemp(path.join(parentDirectory, `.${path.basename(absoluteDestination)}.codplay-`))
   let playerBuildDirectory
-  let player
+  let codplayOwner
 
   try {
-    playerBuildDirectory = await mkdtemp(path.join(parentDirectory, '.codplay-player-build-'))
+    if (sharedCodplayModule === undefined) {
+      playerBuildDirectory = await mkdtemp(path.join(parentDirectory, '.codplay-player-build-'))
+    }
     const exportOperation = (async () => {
-      const playerFile = await buildCodPlayLibrary(playerBuildDirectory)
-      const codplayModule = await import(pathToFileURL(playerFile).href)
+      let codplayModule = sharedCodplayModule
+      if (codplayModule === undefined) {
+        const playerFile = await buildCodPlayLibrary(playerBuildDirectory)
+        codplayModule = await import(pathToFileURL(playerFile).href)
+      }
       const sourceBundleDirectory = path.join(stageDirectory, '.scene-source')
       await buildSceneAndCodec(packageRoot, absoluteSceneFile, absoluteSourceFile, sourceBundleDirectory)
       globalThis[capturedStylesheetKey] = []
@@ -94,12 +100,12 @@ export async function exportScenePackage({
         ? undefined
         : await compileStyleSheets(stylesheetInputs, absoluteSourceFile)
 
-      const playerOptions = {
+      const codplayOptions = {
         frameScheduler: { request: () => 0, cancel: () => undefined },
         ...(engineCapabilities === undefined ? {} : { engine: engineCapabilities }),
       }
-      player = new codplayModule.CodPlay(playerOptions)
-      const buildResult = player.build({ scene }, {
+      codplayOwner = new codplayModule.CodPlay(codplayOptions)
+      const buildResult = codplayOwner.build({ scene }, {
         export: true,
         preloadManifest: sceneModule.preloadManifest,
         preloadResourceOccurrences: sceneModule.preloadResourceOccurrences,
@@ -162,7 +168,7 @@ export async function exportScenePackage({
     if (playerBuildDirectory !== undefined) {
       await rm(playerBuildDirectory, { recursive: true, force: true })
     }
-    player?.destroy()
+    codplayOwner?.destroy()
   }
 }
 

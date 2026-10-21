@@ -1,5 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { BDC_TYPE, ELCE_SCENARIO } from '../config/document-config'
 import { applyDocumentCommand, createCarouselBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
@@ -39,9 +42,17 @@ describe('Elcé Sighty package export', () => {
     })
     document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-export-carousel', 'page-a', 2))
 
-    const zipBytes = await exportElceSightyPackage(document.toJSON(), new Map([
-      ['media-export-fixture', imageBytes],
-    ]))
+    const externalWorkingDirectory = await mkdtemp(join(tmpdir(), 'elce-external-export-'))
+    let zipBytes: Uint8Array
+    try {
+      vi.stubEnv('INIT_CWD', externalWorkingDirectory)
+      zipBytes = await exportElceSightyPackage(document.toJSON(), new Map([
+        ['media-export-fixture', imageBytes],
+      ]))
+    } finally {
+      vi.unstubAllEnvs()
+      await rm(externalWorkingDirectory, { recursive: true, force: true })
+    }
     const files = unzipSync(zipBytes)
     const readText = (path: string): string => {
       const value = files[path]

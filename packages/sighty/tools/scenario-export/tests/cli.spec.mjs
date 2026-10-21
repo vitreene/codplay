@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
@@ -6,9 +6,26 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { exportScenarioPackage, parseArguments } from '../cli.mjs'
 
+const { codplayBuildDirectories } = vi.hoisted(() => ({ codplayBuildDirectories: [] }))
+
+vi.mock('codplay/tools/player-build/cli.mjs', async (importOriginal) => {
+  const original = await importOriginal()
+  return {
+    ...original,
+    buildCodPlayLibrary: async (...args) => {
+      codplayBuildDirectories.push(args[0])
+      return await original.buildCodPlayLibrary(...args)
+    },
+  }
+})
+
 const cliFile = fileURLToPath(new URL('../cli.mjs', import.meta.url))
 
 const temporaryDirectories = []
+
+beforeEach(() => {
+  codplayBuildDirectories.length = 0
+})
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })))
@@ -51,7 +68,10 @@ describe('Sighty scenario export', () => {
       'export const scenario = {',
       "  id: 'standalone-course',",
       "  views: { start: 'main', views: { main: { view: { scene: 'intro' } } } },",
-      "  scenes: { intro: { id: 'intro', stories: { main: { id: 'main', persos: [] } } } },",
+      "  scenes: {",
+      "    intro: { id: 'intro', stories: { main: { id: 'main', persos: [] } } },",
+      "    followup: { id: 'followup', stories: { main: { id: 'main', persos: [] } } },",
+      '  },',
       '}',
       '',
     ].join('\n'))
@@ -69,7 +89,8 @@ describe('Sighty scenario export', () => {
       workingDirectory: directory,
     })
 
-    expect(result.sceneCount).toBe(1)
+    expect(result.sceneCount).toBe(2)
+    expect(codplayBuildDirectories).toHaveLength(1)
     const distribution = JSON.parse(await readFile(path.join(destination, 'distribution-manifest.json'), 'utf8'))
     expect(distribution).toEqual({
       format: 'sighty.application-package.v1',
@@ -90,9 +111,11 @@ describe('Sighty scenario export', () => {
     expect((await readFile(path.join(destination, 'loader.mjs'), 'utf8'))).toContain('owner.load(packagePath, { root })')
 
     const scenarioManifest = JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8'))
-    const childPackageRoot = path.join(destination, scenarioManifest.scenes.intro)
-    await expect(access(path.join(childPackageRoot, 'runtime', 'codplay.js'))).rejects.toThrow()
-    await expect(access(path.join(childPackageRoot, 'codplay.js'))).rejects.toThrow()
+    for (const scenePath of Object.values(scenarioManifest.scenes)) {
+      const childPackageRoot = path.join(destination, scenePath)
+      await expect(access(path.join(childPackageRoot, 'runtime', 'codplay.js'))).rejects.toThrow()
+      await expect(access(path.join(childPackageRoot, 'codplay.js'))).rejects.toThrow()
+    }
   }, 180_000)
 
   it('keeps each direct scene as an intact CodPlay package and bundles scenario callbacks', async () => {
@@ -133,10 +156,14 @@ describe('Sighty scenario export', () => {
       '',
     ].join('\n'))
 
-    const result = await runScenarioExport(scenarioFile, destination, directory)
-    expect(result.exitCode).toBe(0)
+    const result = await exportScenarioPackage({
+      scenarioFile,
+      destination,
+      workingDirectory: directory,
+    })
+    expect(result.sceneCount).toBe(2)
+    expect(codplayBuildDirectories).toHaveLength(1)
 
-    expect(result.stdout).toContain('(2 scenes)')
     const manifest = JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8'))
     expect(manifest).toEqual({
       format: 'sighty.scenario-package.v1',

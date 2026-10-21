@@ -3,9 +3,9 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import { build } from 'vite'
-import { exportScenePackage } from '../../../codplay/tools/scene-export/cli.mjs'
-import { buildEngineBundle } from '../../../codplay/tools/engine-build/engine-builder.mjs'
-import { buildCodPlayLibrary } from '../../../codplay/tools/player-build/cli.mjs'
+import { exportScenePackage } from 'codplay/tools/scene-export/cli.mjs'
+import { buildEngineBundle } from 'codplay/tools/engine-build/engine-builder.mjs'
+import { buildCodPlayLibrary } from 'codplay/tools/player-build/cli.mjs'
 import { buildSightyLibrary } from '../library-build/cli.mjs'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -76,6 +76,16 @@ export async function exportScenarioPackage({
     const scenarioModule = await import(/* @vite-ignore */ pathToFileURL(scenarioModulePath).href)
     const { scenario, exportName } = resolveScenarioExport(scenarioModule)
     const sceneSources = await collectSceneSourceBindings(absoluteScenarioFile)
+    const codplayBuildDirectory = path.join(stageDirectory, standalone ? 'runtime' : '.codplay-build')
+    if (standalone) await mkdir(codplayBuildDirectory, { recursive: true })
+    let codplayModule
+    /** Builds and imports the shared player once, when the first scene needs compilation. */
+    const getCodplayModule = async () => {
+      if (codplayModule === undefined) {
+        codplayModule = await buildCodPlayModule(codplayBuildDirectory)
+      }
+      return codplayModule
+    }
     const scenePackages = await exportDirectScenes({
       scenario,
       scenarioFile: absoluteScenarioFile,
@@ -83,10 +93,14 @@ export async function exportScenarioPackage({
       scenarioExportName: exportName,
       sceneSources,
       engineConfigFile: absoluteEngineConfigFile,
+      getCodplayModule,
       stageDirectory,
       workingDirectory,
       signal,
     })
+    if (!standalone && codplayModule !== undefined) {
+      await rm(codplayBuildDirectory, { recursive: true, force: true })
+    }
 
     await rename(scenarioModulePath, path.join(stageDirectory, 'scenario.mjs'))
     await rm(scenarioBuildDirectory, { recursive: true, force: true })
@@ -100,6 +114,7 @@ export async function exportScenarioPackage({
         stageDirectory,
         engineConfigFile: absoluteEngineConfigFile,
         workingDirectory,
+        codplayBuilt: codplayModule !== undefined,
       })
     }
     await assertDestinationMissing(absoluteDestination)
@@ -114,11 +129,17 @@ export async function exportScenarioPackage({
   }
 }
 
+/** Builds and imports the player module used to compile one or more scene packages. */
+async function buildCodPlayModule(outputDirectory) {
+  const playerFile = await buildCodPlayLibrary(outputDirectory)
+  return await import(pathToFileURL(playerFile).href)
+}
+
 /** Adds each shared runtime artifact once and writes the package loader entry point. */
-async function buildStandaloneDistribution({ stageDirectory, engineConfigFile, workingDirectory }) {
+async function buildStandaloneDistribution({ stageDirectory, engineConfigFile, workingDirectory, codplayBuilt }) {
   const runtimeDirectory = path.join(stageDirectory, 'runtime')
-  await mkdir(runtimeDirectory)
-  await buildCodPlayLibrary(runtimeDirectory)
+  await mkdir(runtimeDirectory, { recursive: true })
+  if (!codplayBuilt) await buildCodPlayLibrary(runtimeDirectory)
   await buildSightyLibrary(runtimeDirectory, { codplayImport: './codplay.js' })
 
   const engineBuildDirectory = path.join(stageDirectory, '.engine-build')
@@ -249,6 +270,7 @@ async function exportDirectScenes({
   scenarioExportName,
   sceneSources,
   engineConfigFile,
+  getCodplayModule,
   stageDirectory,
   workingDirectory,
   signal,
@@ -273,6 +295,7 @@ async function exportDirectScenes({
     const sourceBinding = sceneSources.get(sceneKey)
     const sourceFile = sourceBinding?.sourceFile ?? scenarioFile
     const sceneIndex = index++
+    const codplayModule = await getCodplayModule()
     const sceneEntryFile = path.join(stageDirectory, `.scene-entry-${sceneIndex}.mjs`)
     await writeFile(sceneEntryFile, createSceneEntryModule({
       sourceBinding,
@@ -287,6 +310,7 @@ async function exportDirectScenes({
       sceneFile: sceneEntryFile,
       sourceFile,
       engineConfigFile,
+      codplayModule,
       destination: path.join(stageDirectory, relativePackagePath),
       workingDirectory,
       signal,

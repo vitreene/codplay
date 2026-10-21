@@ -9,9 +9,8 @@ import type { ElceDocumentData, MediaId, MediaMetadata } from '../domain/documen
 import { scenarioExportMediaIds } from './scenario-export-media'
 
 const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const MONOREPO_ROOT = resolve(ELCE_PACKAGE_ROOT, '../..')
 const EXPORT_WORK_DIRECTORY = resolve(ELCE_PACKAGE_ROOT, '.elce-export')
-const SIGHTY_EXPORT_CLI = resolve(MONOREPO_ROOT, 'packages/sighty/tools/scenario-export/cli.mjs')
+const SIGHTY_EXPORT_CLI = fileURLToPath(import.meta.resolve('@codplay/sighty/tools/scenario-export/cli.mjs'))
 const PLAYER_SCENARIO_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-composition.ts')
 const DOCUMENT_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/domain/document/document-model.ts')
 const ENGINE_CONFIG_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-engine.ts')
@@ -21,6 +20,7 @@ export async function exportElceSightyPackage(
   documentData: ElceDocumentData,
   mediaBytesById: ReadonlyMap<MediaId, Uint8Array>,
 ): Promise<Uint8Array> {
+  const workingDirectory = process.env.INIT_CWD ?? process.cwd()
   const document = ElceDocument.fromJSON(documentData)
   const mediaPathsById = new Map<MediaId, Readonly<{ media: MediaMetadata; relativePath: string }>>()
   for (const [index, media] of document.medias.entries()) {
@@ -57,8 +57,8 @@ export async function exportElceSightyPackage(
     await writeFile(scenarioFile, createScenarioModule(temporaryDirectory, document.toJSON(), packagedMediaSources))
 
     const packageDirectory = join(temporaryDirectory, 'scenario-package')
-    await runSightyExporter(scenarioFile, packageDirectory)
-    await normalizeTemporaryScenarioPath(packageDirectory, scenarioFile)
+    await runSightyExporter(scenarioFile, packageDirectory, workingDirectory)
+    await normalizeTemporaryScenarioPath(packageDirectory, scenarioFile, workingDirectory)
     return await zipSightyPackage(packageDirectory)
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true })
@@ -66,9 +66,13 @@ export async function exportElceSightyPackage(
 }
 
 /** Removes the unique temporary source directory from the bundled scenario's source labels. */
-async function normalizeTemporaryScenarioPath(packageDirectory: string, scenarioFile: string): Promise<void> {
+async function normalizeTemporaryScenarioPath(
+  packageDirectory: string,
+  scenarioFile: string,
+  workingDirectory: string,
+): Promise<void> {
   const scenarioModule = join(packageDirectory, 'scenario.mjs')
-  const sourceLabel = relative(MONOREPO_ROOT, scenarioFile).split(sep).join('/')
+  const sourceLabel = relative(workingDirectory, scenarioFile).split(sep).join('/')
   const bundledScenario = await readFile(scenarioModule, 'utf8')
   await writeFile(scenarioModule, bundledScenario.split(sourceLabel).join('elce-export-source.ts'))
 }
@@ -95,8 +99,12 @@ function relativeModulePath(fromDirectory: string, moduleFile: string): string {
   return modulePath.startsWith('.') ? modulePath : `./${modulePath}`
 }
 
-/** Runs the already published Sighty export CLI with Elcé's engine capabilities. */
-function runSightyExporter(scenarioFile: string, packageDirectory: string): Promise<void> {
+/** Runs Sighty's exported CLI entry with Elcé's engine capabilities. */
+function runSightyExporter(
+  scenarioFile: string,
+  packageDirectory: string,
+  workingDirectory: string,
+): Promise<void> {
   return new Promise((resolveProcess, rejectProcess) => {
     const child = spawn(process.execPath, [
       SIGHTY_EXPORT_CLI,
@@ -104,7 +112,7 @@ function runSightyExporter(scenarioFile: string, packageDirectory: string): Prom
       '--engine-config', ENGINE_CONFIG_MODULE,
       '--standalone',
       '--export', packageDirectory,
-    ], { cwd: MONOREPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] })
+    ], { cwd: workingDirectory, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
     const collectOutput = (chunk: string | Buffer): void => {
       output = `${output}${chunk.toString()}`.slice(-16_000)

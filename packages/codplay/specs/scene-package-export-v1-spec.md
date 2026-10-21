@@ -78,6 +78,23 @@ puis la supprime avant de publier le paquet. Le manifeste scène ne référence
 pas le player. Si la scène contient des fonctions auteur, `CodPlay.load()`
 importe `scene/functions.mjs` depuis le paquet scène.
 
+Le producteur accepte aussi un module CodPlay déjà construit par son
+compositeur. L’export Sighty en construit un seul pour un scénario, puis le
+passe à `exportScenePackage()` pour chaque scène directe. Chaque appel crée et
+détruit toujours son propre owner CodPlay, puis compile sa scène avec
+`CodPlay.build({ scene }, { export: true })`. Le build Vite de la bibliothèque
+`codplay.js` fournit cette API ; ce n’est pas le build de la scène. Le paquet
+scène produit et son manifeste ne changent pas, et la bibliothèque reste hors
+des paquets scène.
+
+Le manifeste du package CodPlay expose les outils réutilisés par le
+compositeur Sighty sous leurs specifiers de package :
+`codplay/tools/scene-export/cli.mjs`,
+`codplay/tools/player-build/cli.mjs` et
+`codplay/tools/engine-build/engine-builder.mjs`. Ils pointent vers les
+producteurs existants ; cet accès ne crée pas un second circuit d’export.
+L’export Sighty et son test résolvent ces entrées par le package `codplay`.
+
 ### Build séparé de l'engine du site
 
 Le site construit son engine avec les définitions et stratégies existantes :

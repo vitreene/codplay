@@ -101,6 +101,22 @@ CodPlay complet par entrée. Chaque sous-paquet garde son manifeste, ses
 fonctions, son CSS et ses ressources. Le scénario conserve ses callbacks ;
 aucun contexte de fonction n’est fusionné entre le scénario et les scènes.
 
+Dans une même production Sighty, le premier paquet scène déclenche une seule
+construction de la bibliothèque CodPlay. Son module fournit `CodPlay.build()`
+à l’exporteur CodPlay pour compiler toutes les scènes directes ; chaque scène
+reçoit toujours un owner neuf et garde son paquet indépendant. En mode
+scénario seul, la bibliothèque temporaire est supprimée avant publication. En
+mode autonome, `runtime/codplay.js` sert à la compilation puis à la distribution.
+Le build distinct de la bibliothèque Sighty produit `runtime/sighty.js` pour le
+mode autonome. Un scénario sans scène directe ne construit pas de bibliothèque
+CodPlay en mode scénario seul.
+
+Le CLI Sighty importe les builders CodPlay via les sous-chemins du package
+`codplay` exposés pour le compositeur. L’adaptateur Elcé résout de la même façon
+le point d’entrée `@codplay/sighty/tools/scenario-export/cli.mjs`. Ces accès
+réutilisent les builders et le CLI décrits ici ; ils ne calculent pas le chemin
+vers les workspaces voisins du monorepo.
+
 Le manifeste parent porte le format `sighty.scenario-package.v1` :
 
 ```json
@@ -165,7 +181,8 @@ leur résolution à la demande restent reportés.
 
 Les tests de production du paquet sont dans
 [`tools/scenario-export/tests/cli.spec.mjs`](../tools/scenario-export/tests/cli.spec.mjs).
-Le test de distribution autonome y vérifie le loader, l’unicité des artefacts
+Les tests résolvent aussi les builders par leurs sous-chemins de package ; le
+test de distribution autonome vérifie le loader, l’unicité des artefacts
 runtime et les imports relatifs vers CodPlay.
 Les tests de préparation CodPlay sont dans
 [`scene-package-loader.spec.ts`](../../codplay/tests/facade/scene-package-loader.spec.ts).

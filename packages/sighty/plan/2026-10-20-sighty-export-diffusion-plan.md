@@ -9,9 +9,11 @@ La création des scènes lazy et les opérations ultérieures de remplacement ou
 rechargement runtime restent reportées.
 
 **Profil compact : enquête terminée ; nettoyage des callbacks de Demo 5
-terminé et vérifié le 2026-10-21.** La phase suivante portera sur
-l’optimisation des exporteurs selon le périmètre compact. Aucune modification
-des exporteurs n’est incluse dans la phase callbacks.
+terminé et vérifié le 2026-10-21.** La phase d’optimisation des exporteurs
+selon le périmètre compact est engagée. La construction
+répétée de la bibliothèque CodPlay par scène a été supprimée et vérifiée le
+2026-10-21 ;
+les autres optimisations de build et de taille restent à examiner.
 Le focus reste la diffusion autonome optimisée. L’exfiltration lisible du
 projet et SCORM restent hors de cette tranche.
 
@@ -124,7 +126,7 @@ await course.runtime.initialize()
 - [x] Refaire la démo visuelle Demo 5 par le loader livré, puis vérifier dans
   Safari le chargement des ressources et le parcours réel après
   `runtime.initialize()`.
-- [x] Mettre à jour cette spécification de plan, la spécification Sighty et la
+- [x] Mettre à jour ce document de suivi, la spécification Sighty et la
   spécification d’export Elcé avec les preuves vérifiées.
 
 ## Paquet produit
@@ -192,7 +194,8 @@ Aucun test comportemental n'est ajouté aux sources de démonstration.
 
 | Vérification | Résultat |
 |---|---|
-| Export CLI de deux scènes : manifeste parent, paquets CodPlay, ressource locale, CSS de descripteur, callbacks du scénario, puis suppression des sources | Tests `tools/scenario-export/tests/cli.spec.mjs` réussis ; 3 tests |
+| Export de deux scènes : manifeste parent, paquets CodPlay, ressource locale, CSS de descripteur, callbacks du scénario, puis suppression des sources | Tests `tools/scenario-export/tests/cli.spec.mjs` réussis ; 5 tests |
+| Construction de la bibliothèque CodPlay pour deux scènes, en scénario seul et en autonome | Un seul appel à `buildCodPlayLibrary()` dans chaque mode ; `CodPlay.build()` compile chaque scène ; paquets enfants sans bibliothèque ; test `tools/scenario-export/tests/cli.spec.mjs` |
 | Refus d’une source lazy sans exécuter son producteur ni publier le paquet | Test CLI réussi |
 | Préparation CodPlay sans occurrence et non-régression de `CodPlay.load()` | Tests ciblés CodPlay réussis ; 30 tests |
 | Runtime et API Sighty existants | 54 tests et typecheck Sighty réussis |
@@ -376,6 +379,40 @@ runtime partagé, 175 388 octets de `scenario.mjs` et 1 068 487 octets de
 `functions.mjs`. Les ressources image, vidéo et CSS ne sont pas des sources
 auteur et restent requises par les scènes du cours.
 
+### Circuits de construction et engine — vérification du 2026-10-21
+
+CodPlay conserve un seul circuit d’export de scène. `--engine-config` est
+optionnel : lorsqu’il est fourni, l’exporteur le charge temporairement pour
+valider les requirements de la scène ; il ne l’ajoute pas au paquet scène.
+L’engine partagé du site est construit séparément par `build:engine`. Une scène
+sans intégration tierce garde donc le même circuit d’export et n’a pas besoin
+d’un circuit « sans engine » distinct.
+
+Sighty appelle `exportScenePackage()` pour chacune de ses scènes directes,
+qu’une distribution autonome soit demandée ou non. `--standalone` ajoute à la
+racine le player CodPlay, Sighty, l’engine configuré et le loader ; il ne change
+pas la construction des paquets enfants. Le scénario seul conserve ses
+dépendances runtime externes pour l’hôte.
+
+Le CLI Sighty impose toutefois actuellement `--engine-config` avec
+`--standalone`, même si la configuration ne fournit aucune bibliothèque tierce.
+Ce contrôle est une exigence du mode actuel, pas la preuve qu’un second
+constructeur de scènes est nécessaire. **Décision à prendre avant toute
+évolution :** garder cette exigence explicite, ou permettre un paquet autonome
+core-only sans fichier de configuration auteur. Dans les deux cas, la
+recommandation de construction reste un seul circuit CodPlay et une couche
+engine optionnelle à la composition du paquet parent.
+
+Un coût de construction distinct de la taille diffusée était confirmé : chaque
+appel à `exportScenePackage()` reconstruisait la bibliothèque CodPlay. Le
+compositeur Sighty en construit maintenant une seule et passe son module à
+l’exporteur existant. Celui-ci appelle `CodPlay.build({ scene }, { export: true })`
+pour compiler chaque scène avec un owner neuf. En mode scénario seul, la
+bibliothèque temporaire est supprimée avant publication ; en mode autonome,
+le même fichier devient `runtime/codplay.js`. Le test de deux scènes vérifie
+une seule invocation de `buildCodPlayLibrary()` dans les deux modes et
+l’absence de bibliothèque dans les paquets enfants.
+
 ### Décision sur les entrées de fonctions — 2026-10-21
 
 L’utilisateur précise que toutes les valeurs variables nécessaires à une
@@ -543,3 +580,64 @@ un paquet scène à la demande. Aucun producteur lazy n’est invoqué par cet
 export. Le paquet enfant intact permet d’étudier ultérieurement le remplacement
 d’une scène sans modifier les paquets voisins ; aucune API de remplacement ou
 de rechargement runtime n’est fournie dans cette tranche.
+
+## Consommation depuis des projets tiers — décision du 2026-10-21
+
+**Exigence acceptée :** les projets consommateurs sont extérieurs à ce dépôt et
+appelleront CodPlay et Sighty comme des dépendances tierces, sous leurs noms
+actuels, via un registre npm. Aucun package n’est prêt à être installé ou
+publié sur npm maintenant ; cette décision fixe la cible future, pas une
+autorisation de publication ni une preuve de disponibilité. Aucun numéro de
+version de publication n’est choisi dans cette tranche.
+
+Le code d’export doit s’appuyer sur les points d’entrée de package prévus pour
+CodPlay et Sighty, jamais sur le voisinage du monorepo. CodPlay reste le
+compilateur des paquets scène ; Sighty continue de composer le scénario en
+réutilisant ce compilateur.
+
+**Écarts à corriger dans le code source :**
+
+- `packages/sighty/tools/scenario-export/cli.mjs` importe les trois outils
+  CodPlay depuis `../../../codplay/...` au lieu de sous-chemins du package
+  `codplay`.
+- `packages/elce/src/export/elce-scenario-exporter.ts` localise le CLI Sighty
+  par `MONOREPO_ROOT/packages/sighty/...` et l’exécute depuis la racine du
+  monorepo.
+- Les deux manifests devront exposer les sous-chemins d’outils utilisés par
+  leurs consommateurs. Les déclarations de publication, les versions
+  compatibles, les dépendances de production et l’éventuel changement de
+  `private` restent à la tranche de préparation npm.
+
+**Travail source autorisé dans la tranche actuelle :** exposer les seuls
+sous-chemins nécessaires, faire résoudre CodPlay et Sighty par leurs
+specifiers de package et supprimer les calculs de chemins vers le monorepo dans
+l’adaptateur Elcé. Vérifier les exports et tests depuis les workspaces déjà
+présents, sans installer, empaqueter pour installation ou publier de package.
+
+**Acceptance différée jusqu’à la préparation npm :** installer les archives
+publiées dans un projet temporaire hors du dépôt, puis appeler l’export Sighty
+avec des entrées propres à ce projet et charger le paquet obtenu. Cette preuve
+devra confirmer l’absence de dépendance au monorepo et l’utilisation de
+`exportScenePackage()` CodPlay pour chaque scène. Les spécifications ne
+déclareront le parcours externe vérifié qu’après cette acceptance.
+
+### État de la frontière source — 2026-10-21
+
+- [x] CodPlay expose dans son manifest les trois sous-chemins d’outils utilisés
+  par le compositeur Sighty.
+- [x] Le CLI Sighty importe ces sous-chemins par le package `codplay` ; le test
+  les résout par les exports de package via le lien workspace, sans alias Vite
+  vers les fichiers outils voisins.
+- [x] Le manifest Sighty expose son CLI et l’adaptateur Elcé le résout par ce
+  point d’entrée. Son processus et la normalisation des sources temporaires
+  suivent le répertoire de travail appelant, sans `MONOREPO_ROOT`.
+- [x] Vérifier les 56 tests Sighty, les 6 tests d’export Elcé ciblés, les
+  typechecks Sighty/Elcé et `git diff --check`.
+- [ ] Préparer les manifests à l’installation depuis un registre : dépendances
+  nécessaires en production, versions compatibles et choix de `private`.
+- [ ] Après préparation et autorisation de diffusion, installer les artefacts
+  de registre dans un projet externe et exercer le parcours complet.
+
+Aucune installation depuis le registre ni publication npm n’a été faite. Le
+package CodPlay reste `private` et ses versions ne sont pas sélectionnées pour
+publication ; le parcours d’installation externe reste non vérifié.
