@@ -29,6 +29,8 @@ import { ElceChapterEvaluation } from '../../domain/evaluation/chapter-evaluatio
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
 import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
 import { INITIAL_PROJECT_TEST_STATE } from '../../domain/summary-profile/test-state-types'
+import { ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../../scorm/scorm-types'
+import type { ElceScormProgressSink } from '../../scorm/scorm-types'
 import type {
   ProfileConstraint,
   ProfileProperty,
@@ -687,11 +689,16 @@ async function runMarkPageFinished(
   const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
   if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
   const finishedPages = readFinishedPages(context.context)
-  if (!finishedPages.includes(pageId)) {
-    const nextFinishedPages = [...finishedPages, pageId]
+  const nextFinishedPages = finishedPages.includes(pageId) ? finishedPages : [...finishedPages, pageId]
+  if (nextFinishedPages !== finishedPages) {
     await context.updateContext({ finishedPages: nextFinishedPages })
     onTestStateChange?.(testStateFromScenarioContext(context.context, { finishedPages: nextFinishedPages }))
   }
+  await saveScormReaderState(
+    context,
+    pageId,
+    testStateFromScenarioContext(context.context, { finishedPages: nextFinishedPages }),
+  )
   await refreshPresentation(context)
 }
 
@@ -714,7 +721,9 @@ async function runSaveProfileValues(
   if (data === undefined || !isRecord(data.profileValues)) return
   const profileValues = readProfileValues(data.profileValues)
   await context.updateContext({ profileValues })
-  await onTestStateChange?.(testStateFromScenarioContext(context.context, { profileValues }))
+  const state = testStateFromScenarioContext(context.context, { profileValues })
+  onTestStateChange?.(state)
+  await saveScormReaderState(context, undefined, state)
 }
 
 /** Commits a valid initial profile using the compact scenario definition. */
@@ -737,7 +746,9 @@ async function runSubmitProfile(
   if (!isValidProfileSubmission(runtime.profile.properties, runtime.profile.fieldPropertyIds, data)) return
   const profileValues = readProfileValues(isRecord(data) ? data.profileValues : undefined)
   await context.updateContext({ profileValues, profileSubmitted: true })
-  await onTestStateChange?.(testStateFromScenarioContext(context.context, { profileValues, profileSubmitted: true }))
+  const state = testStateFromScenarioContext(context.context, { profileValues, profileSubmitted: true })
+  onTestStateChange?.(state)
+  await saveScormReaderState(context, undefined, state)
 }
 
 /** Stores a validated answer in Sighty progress and its existing Evaluation state. */
@@ -796,11 +807,13 @@ async function runRecordQuestionResult(
       questionAnswers,
       evaluationStates: nextEvaluationStates,
     })
-    onTestStateChange?.(testStateFromScenarioContext(context.context, {
+    const nextTestState = testStateFromScenarioContext(context.context, {
       questionAnswers,
       questionResults: { ...questionResults, [pageId]: payload.isCorrect },
       evaluationStates: nextEvaluationStates,
-    }))
+    })
+    onTestStateChange?.(nextTestState)
+    await saveScormReaderState(context, pageId, nextTestState)
     await refreshPresentation(context)
 }
 
@@ -847,29 +860,71 @@ async function runRefreshEvaluationResult(
     const pageId = pageIdFromSceneKey(context.scenarioState.active?.sceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
     const page = runtime.pages[pageId]
-    if (page?.chapterId === null || page?.chapterId === undefined) return
+  if (page?.chapterId === null || page?.chapterId === undefined) {
+    await saveScormReaderState(context, pageId)
+    return
+  }
     const sourceChapter = runtime.chapters[page.chapterId]
     const chapter = sourceChapter?.type === CHAPTER_TYPE.EVALUATION ? sourceChapter : undefined
     const resultBdcId = page.bdcIds.find((bdcId) => runtime.bdcTypes[bdcId] === BDC_TYPE.EVALUATION_RESULT)
-    if (chapter === undefined || resultBdcId === undefined) return
+  if (chapter === undefined || resultBdcId === undefined) {
+    await saveScormReaderState(context, pageId)
+    return
+  }
 
     const questionIds = evaluationQuestionPageIds(runtime, chapter)
-    if (questionIds.length === 0) return
+  if (questionIds.length === 0) {
+    await saveScormReaderState(context, pageId)
+    return
+  }
     const evaluationStates = readEvaluationStates(context.context)
     let state = evaluationStates[chapter.id]
-    if (state === undefined || !questionIds.every((questionId) => state?.context.answers[questionId] !== undefined)) return
+  if (state === undefined || !questionIds.every((questionId) => state?.context.answers[questionId] !== undefined)) {
+    await saveScormReaderState(context, pageId)
+    return
+  }
     const machine = createEvaluationMachine(chapter, questionIds)
     if (state.value === 'attempting') state = machine.transition(state, { type: 'COMPLETE' })
     const passed = state.context.result?.passed
-    if (passed === null || passed === undefined) return
+  if (passed === null || passed === undefined) {
+    await saveScormReaderState(context, pageId)
+    return
+  }
+  let persistedEvaluationStates = evaluationStates
     if (state !== evaluationStates[chapter.id]) {
-      const nextEvaluationStates = { ...evaluationStates, [chapter.id]: state }
-      await context.updateContext({ evaluationStates: nextEvaluationStates })
-      onTestStateChange?.(testStateFromScenarioContext(context.context, { evaluationStates: nextEvaluationStates }))
+    persistedEvaluationStates = { ...evaluationStates, [chapter.id]: state }
+    await context.updateContext({ evaluationStates: persistedEvaluationStates })
+    onTestStateChange?.(testStateFromScenarioContext(context.context, { evaluationStates: persistedEvaluationStates }))
     }
+  await readScormProgressSink(context.context)?.recordEvaluationResult(
+    testStateFromScenarioContext(context.context, { evaluationStates: persistedEvaluationStates }),
+    pageId,
+    { chapterId: chapter.id, evaluationState: state },
+  )
     await context.send(`scene-${pageId}` as ElceSceneKey, {
       name: passed ? ELCE_EVENTS.EVALUATION_RESULT_SUCCESS : ELCE_EVENTS.EVALUATION_RESULT_FAILURE,
     }, { scope: 'scene' })
+}
+
+/** Saves the current Elcé test state when the host supplied the SCORM adapter. */
+async function saveScormReaderState(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+  currentPageId?: string,
+  state = testStateFromScenarioContext(context.context),
+): Promise<void> {
+  await readScormProgressSink(context.context)?.saveReaderState(state, currentPageId)
+}
+
+/** Reads the optional Elcé adapter from the application-owned Sighty runtime context. */
+function readScormProgressSink(
+  context: Readonly<Record<string, unknown>>,
+): ElceScormProgressSink | undefined {
+  const candidate = context[ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]
+  if (typeof candidate !== 'object' || candidate === null) return undefined
+  const sink = candidate as Partial<ElceScormProgressSink>
+  return typeof sink.saveReaderState === 'function' && typeof sink.recordEvaluationResult === 'function'
+    ? sink as ElceScormProgressSink
+    : undefined
 }
 
 /** Refreshes menu, title, and navigation from the active Sighty page. */

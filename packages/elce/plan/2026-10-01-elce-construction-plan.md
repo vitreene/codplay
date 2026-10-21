@@ -1382,6 +1382,21 @@ Qualifications dynamiques, variantes grammaticales, ACL et lot d’utilisateurs
 restent différés. Les formats internes intégrés sont disponibles pour relecture
 auteur ultérieure.
 
+## Export SCORM
+
+**Statut : En cours — réalisation du dossier SCORM autorisée ; intégration et
+validation du package à poursuivre selon le plan dédié.**
+
+- [Spécification session SCORM](../specs/scorm-session-spec.md) : reprise,
+  écritures CMI et raccords vérifiés dans le player.
+- [Plan d’export SCORM](2026-10-21-elce-scorm-export-plan.md) : versions,
+  reprise de consultation, classe métier, appels depuis les actions de page
+  Sighty, commande et dossier de package SCORM distincts, réutilisation de
+  l’export existant sans reconfiguration, codec, session et raccords au player
+  réalisés ; l’export autonome Sighty est disponible et spécifié ; assembleur,
+  commande SCORM, lanceur de lecture du paquet et validation LMS restent à
+  finaliser.
+
 ## Décisions ouvertes
 
 - **Réglages du Carousel quand la colonne centrale est étroite :** la

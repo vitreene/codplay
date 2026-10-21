@@ -14,6 +14,7 @@
     "packages/codplay-v1",
     "packages/codplay",
     "packages/sighty",
+    "packages/sighty-scorm",
     "packages/demos",
     "packages/editor",
     "packages/elce",

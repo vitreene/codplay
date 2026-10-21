@@ -1,6 +1,7 @@
 import type { ElceDocument } from '../domain/document/document-model'
 import type { MediaId, PageId } from '../domain/document/document-types'
 import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
+import type { ElceScormProgressSink } from '../scorm/scorm-types'
 import type { SightySceneSourceValue } from '@codplay/sighty'
 
 export type ElcePageSceneCache = Map<string, Readonly<{
@@ -16,6 +17,7 @@ export type ElcePlayerCompositionOptions = Readonly<{
   readonly mediaSources?: Readonly<Record<MediaId, string>>
   readonly sceneCache?: ElcePageSceneCache
   readonly testState?: ProjectTestState
+  readonly scormSession?: ElceScormProgressSink
   readonly onTestStateChange?: (state: ProjectTestState) => void
   readonly onLog?: (message: string, level?: 'info' | 'warn' | 'error') => void
 }>

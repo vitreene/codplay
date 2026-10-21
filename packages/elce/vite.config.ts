@@ -16,6 +16,7 @@ export default defineConfig({
       { find: '@codplay/scene-factory/capsule-distribution', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-distribution.ts') },
       { find: '@codplay/scene-factory/capsule-preset', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-preset.ts') },
       { find: '@codplay/sighty', replacement: resolve(__dirname, '../sighty/src/index.ts') },
+      { find: '@codplay/sighty-scorm', replacement: resolve(__dirname, '../sighty-scorm/src/index.ts') },
       { find: /^@codplay\/component-v2\/(.*)/, replacement: resolve(__dirname, '../authoring/component-v2/src/$1') },
       { find: '@codplay/component-v2', replacement: resolve(__dirname, '../authoring/component-v2/src/index.ts') },
     ],

@@ -14,6 +14,7 @@
       "@codplay/scene-factory/capsule-distribution": ["../authoring/scene-factory/src/capsule-distribution.ts"],
       "@codplay/scene-factory/capsule-preset": ["../authoring/scene-factory/src/capsule-preset.ts"],
       "@codplay/sighty": ["../sighty/src/index.ts"],
+      "@codplay/sighty-scorm": ["../sighty-scorm/src/index.ts"],
       "@codplay/component-v2": ["../authoring/component-v2/src/index.ts"],
       "@codplay/component-v2/*": ["../authoring/component-v2/src/*"]
     }

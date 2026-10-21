@@ -17,6 +17,7 @@ import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-
 import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
 import type { TestAnswerState } from '../domain/summary-profile/test-state-types'
+import { ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../scorm/scorm-types'
 import { ELCE_ENGINE_CAPABILITIES } from './elce-player-engine'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
@@ -42,7 +43,12 @@ export class ElcePlayerComposition {
       scenario,
       runtime: {
         root: options.stage,
-        context: scenarioContextFromTestState(testState),
+        context: {
+          ...scenarioContextFromTestState(testState),
+          ...(options.scormSession === undefined
+            ? {}
+            : { [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: options.scormSession }),
+        },
         instanceIds,
         codplay: {
           engine: {
