@@ -117,15 +117,42 @@ le point d’entrée `@codplay/sighty/tools/scenario-export/cli.mjs`. Ces accès
 réutilisent les builders et le CLI décrits ici ; ils ne calculent pas le chemin
 vers les workspaces voisins du monorepo.
 
-Le manifeste parent porte le format `sighty.scenario-package.v1` :
+Le format historique `sighty.scenario-package.v1` conserve des sources de scène
+directes dans `scenario.mjs`. Le loader le reste compatible. La diffusion
+compacte actuelle produit `sighty.scenario-package.v2` :
 
 ```json
 {
-  "format": "sighty.scenario-package.v1",
+  "format": "sighty.scenario-package.v2",
   "scenario": "scenario.mjs",
   "scenes": { "layout": "scenes/scene-0/" }
 }
 ```
+
+En V2, `scenario.mjs` conserve le graphe de vues, les données d’exécution et
+les actions et guards référencés. `scenes` ne contient que les clés directes
+et, lorsqu’elle existe, leur fonction `onReset`. Il ne contient ni `SceneDoc`
+ni producteur de scène lazy. Chaque répertoire référencé garde son paquet
+CodPlay V1 intact : `scene/scene.json` porte le `CompiledScene`, accompagné de
+ses fonctions référencées, de sa CSS et de ses ressources. Le paquet de chaque
+scène reste ainsi autonome et remplaçable.
+
+Pour une fonction Sighty conservée dans `scenario.mjs`, le module d’entrée
+désigne le groupe auteur avec `export * as scenarioFunctions from ...`. Pour
+les callbacks CodPlay, l’entrée ou le module auteur associé à la scène désigne
+`export * as sceneFunctions from ...`. L’exporteur relie les références
+compilées aux exports de ce groupe par identité puis ne bundle que les exports
+utilisés et leurs dépendances statiques. Toute fonction requise mais absente du
+groupe fait échouer l’export. Les constructeurs de scènes ne sont pas livrés.
+
+Le loader prépare chaque paquet CodPlay par `owner.prepare()` et transmet les
+builds compilés au runtime Sighty. Le manifeste des slots du layout et les IDs
+de stories utilisés pour le reset sont lus depuis les `CompiledScene`
+préparées ; les callbacks `onReset` restent dans une table séparée. Le scénario
+exposé après chargement ne conserve donc pas les documents auteur des scènes.
+Cette préparation ne crée aucune occurrence ; `runtime.initialize()` reste
+l’étape explicite qui crée et monte la composition initiale. Les sources lazy
+restent refusées en V2 et ne sont jamais appelées pendant l’export.
 
 Pour livrer un dossier autonome avec le runtime configuré, le même exporteur
 accepte `--standalone --engine-config <fichier>`. Il compose les builders
@@ -136,18 +163,23 @@ loader.mjs
 distribution-manifest.json
 runtime/codplay.js
 runtime/sighty.js
-runtime/engine.js
-runtime/engine-manifest.json
+runtime/<engine-name>.js
+runtime/<engine-name>-manifest.json
 README.md
 ```
 
 Chaque artefact runtime est présent une seule fois à la racine. Les imports de
-Sighty et de l’engine pointent vers ce même `runtime/codplay.js`. Les paquets
-CodPlay des scènes restent intacts dans `scenes/scene-N/` et ne recopient aucun
-runtime. Ce mode refuse les bibliothèques engine déclarées comme `remote` ou
-`platform`, car elles ne seraient pas incluses au dossier autonome.
+Sighty et de la configuration d’intégration pointent vers ce même
+`runtime/codplay.js`, qui contient le moteur d’exécution CodPlay. Le module
+`<engine-name>.js` contient la configuration et les capacités fournies par
+l’application ; son nom par défaut est `engine.js`. L’option facultative
+`--engine-name <kebab-case-name>` permet de préciser son rôle ; Elcé utilise
+`elce-engine.js` et `elce-engine-manifest.json`. Les paquets CodPlay des scènes
+restent intacts dans `scenes/scene-N/` et ne recopient aucun runtime. Ce mode
+refuse les bibliothèques engine déclarées comme `remote` ou `platform`, car
+elles ne seraient pas incluses au dossier autonome.
 `distribution-manifest.json` porte le format `sighty.application-package.v1`
-et référence le loader, le manifeste scénario et les trois artefacts runtime.
+et référence le loader, le manifeste scénario et les chemins runtime publiés.
 
 `loader.mjs` exporte `loadSightyPackage({ root, packagePath?, codplay?,
 runtime? })`. Il utilise l’engine empaqueté et appelle le `owner.load()` déjà
@@ -179,11 +211,15 @@ sont incluses même si elles ne sont pas dans la composition de départ. Les
 producteurs `sceneSources` lazy sont refusés sans être appelés ; leur export et
 leur résolution à la demande restent reportés.
 
-Les tests de production du paquet sont dans
+Les tests de production du paquet et de sélection des fonctions sont dans
 [`tools/scenario-export/tests/cli.spec.mjs`](../tools/scenario-export/tests/cli.spec.mjs).
-Les tests résolvent aussi les builders par leurs sous-chemins de package ; le
-test de distribution autonome vérifie le loader, l’unicité des artefacts
-runtime et les imports relatifs vers CodPlay.
+Ils vérifient le manifeste V2, l’absence des scènes source dans le scénario,
+les paquets CodPlay intacts et le tree-shaking des deux groupes. Les tests de
+[`loader-compat.spec.mjs`](../tools/scenario-export/tests/loader-compat.spec.mjs)
+gardent aussi le chargement V1 et vérifient la séparation des métadonnées de
+reset en V2. Les tests résolvent les builders par leurs sous-chemins de
+package ; le test de distribution autonome vérifie le loader, l’unicité des
+artefacts runtime et les imports relatifs vers CodPlay.
 Les tests de préparation CodPlay sont dans
 [`scene-package-loader.spec.ts`](../../codplay/tests/facade/scene-package-loader.spec.ts).
 Le parcours Safari du 2026-10-20 a chargé un paquet déplacé sans ses sources,

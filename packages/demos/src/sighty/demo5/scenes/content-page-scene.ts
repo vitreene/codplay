@@ -26,7 +26,7 @@ type SectionTitleActionInput = Readonly<{
 }>
 
 /** Returns the section title color from the live ratio and authored hue bounds. */
-function resolveSectionTitleColor({ data }: SectionTitleActionInput): Record<string, unknown> {
+export function resolveSectionTitleColor({ data }: SectionTitleActionInput): Record<string, unknown> {
   const fromHue = data.fromHue as number
   const toHue = data.toHue as number
   const ratio = data.ratio as number

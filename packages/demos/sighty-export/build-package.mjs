@@ -39,6 +39,8 @@ async function buildSightyDemo5Package() {
 function createScenarioAdapter(styleSheet) {
   return [
     "import { createCourseScenario } from '../src/sighty/demo5/scenario.ts'",
+    "export * as scenarioFunctions from '../src/sighty/demo5/scenario-functions.ts'",
+    "export * as sceneFunctions from '../src/sighty/demo5/scene-functions.ts'",
     `const styleSheet = ${JSON.stringify(styleSheet)}`,
     'const authoredScenario = createCourseScenario()',
     'const scenes = Object.fromEntries(Object.entries(authoredScenario.scenes ?? {}).map(([sceneKey, source]) => [',

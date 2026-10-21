@@ -1,6 +1,6 @@
 import { EVENT_ACTION } from '@codplay/capsule-automation'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
+import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { Bdc, BdcId, Page } from '../../domain/document/document-types'
 import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
 import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
@@ -225,7 +225,7 @@ function createBdcMount(
       if (question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
       const partId = `${page.id}:${bdc.id}:question`
       const card = buildQuestionCardPreset(`${page.id}-${bdc.id}`, partId, question)
-      const resetEvent = `${page.id}:${bdc.id}:reset`
+      const resetEvent = ELCE_EVENTS.QUESTION_RESET
       return {
         bdc,
         partId,

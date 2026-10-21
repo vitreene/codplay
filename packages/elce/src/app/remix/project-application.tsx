@@ -409,6 +409,7 @@ function renderApplication(
       >
         {editorVisible ? syncStatusLabel(view.syncStatus) : projectVisible ? 'Lecture seule' : projectStatusLabel(view.projectStatus)}
       </span>
+      {editorVisible ? renderExportButton(workspace.onExport, workspace.exportBusy) : null}
     </header>
     {view.activeProject === null ? renderProjectSelection(view, actions) : null}
     {projectVisible && !editorVisible && view.projectError !== null ? <p id="elce-project-reader-status" role="status">
@@ -450,7 +451,6 @@ function renderApplication(
       getDraggedEntry: workspace.getDraggedEntry,
       onPreview: workspace.onPreview,
       previewError: workspace.previewError,
-      onExport: workspace.onExport,
       exportBusy: workspace.exportBusy,
       exportError: workspace.exportError,
       exportNotice: workspace.exportNotice,
@@ -458,6 +458,20 @@ function renderApplication(
       onMoveChapter: workspace.moveChapter,
     })}
   </div>
+}
+
+/** Renders the Sighty export action at the right edge of the project title bar. */
+function renderExportButton(onExport: () => void, busy: boolean): RemixNode {
+  return <button
+    id="elce-sighty-export"
+    className="elce-project-export-button"
+    type="button"
+    disabled={busy}
+    aria-busy={busy}
+    mix={on<HTMLButtonElement, 'click'>('click', onExport)}
+  >
+    {busy ? 'Préparation…' : 'Exporter le scénario'}
+  </button>
 }
 
 /** Renders the selection surface when no project is actively being edited. */

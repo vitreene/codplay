@@ -1,5 +1,13 @@
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
+import type { CompiledRecord } from 'codplay/scene/compiled'
 import { DEFAULT_PRESET_ID, ELCE_EVENTS, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG } from '../../config/document-config'
+import {
+  ELCE_QUESTION_RUNTIME_KEY,
+  resetQuestionStrap,
+  selectQuestionAnswerStrap,
+  validateQuestionAnswerStrap,
+  type QuestionRuntimeConfiguration,
+} from '../scene-functions/question'
 import type { CardPresetBuild } from '../card/card-preset-builder-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { Bdc } from '../../domain/document/document-types'
@@ -11,6 +19,7 @@ const cardPresetBuilder = new ElceCardPresetBuilder()
 type QuestionStoryState = Readonly<{
   readonly selectedAnswerIds: readonly string[]
   readonly submitted: boolean
+  readonly [ELCE_QUESTION_RUNTIME_KEY]: QuestionRuntimeConfiguration
 }>
 
 /** Builds only the optional Question hosts whose authored content is present. */
@@ -36,7 +45,7 @@ export function buildQuestionBdcStory(
   bdc: Bdc,
   zones: Readonly<Record<string, string>>,
   completionEventName?: string,
-  completionEventData?: Readonly<Record<string, unknown>>,
+  completionEventData?: CompiledRecord,
   initialAnswer?: TestAnswerState,
 ): StoryDoc<string> {
   const question = bdc.question
@@ -54,7 +63,7 @@ export function buildQuestionBdcStory(
     answersZone,
     'elce-question-instructions',
   )
-  const resetEvent = `${prefix}:reset`
+  const resetEvent = ELCE_EVENTS.QUESTION_RESET
   const validationZone = requireQuestionZone(zones, 'validation', bdc.id)
   const answerPersos = question.answers.map((answer) => createQuestionAnswerPerso(
     pageId, bdc, prefix, answer, question, answersZone, initialAnswer,
@@ -64,19 +73,21 @@ export function buildQuestionBdcStory(
     state: {
       selectedAnswerIds: initialAnswer?.selectedAnswerIds ?? [],
       submitted: initialAnswer !== undefined,
+      [ELCE_QUESTION_RUNTIME_KEY]: {
+        pageId,
+        bdcId: bdc.id,
+        prefix,
+        answerIds: question.answers.map((answer) => answer.id),
+        correctAnswerIds: question.answers.filter((answer) => answer.correct).map((answer) => answer.id),
+        selection: QUESTION_TYPE_CONFIG[question.type].selection,
+        ...(completionEventName === undefined ? {} : { completionEventName }),
+        ...(completionEventData === undefined ? {} : { completionEventData }),
+      },
     } satisfies QuestionStoryState,
     straps: {
-      [`${prefix}:select-answer`]: ({ event, state }) => selectQuestionAnswer(prefix, question, state, event.data),
-      [`${prefix}:validate-answer`]: ({ state }) => validateQuestionAnswer(
-        pageId,
-        bdc,
-        prefix,
-        question,
-        state,
-        completionEventName,
-        completionEventData,
-      ),
-      [`${prefix}:reset-question`]: ({ state }) => resetQuestion(prefix, question, state),
+      [`${prefix}:select-answer`]: selectQuestionAnswerStrap,
+      [`${prefix}:validate-answer`]: validateQuestionAnswerStrap,
+      [`${prefix}:reset-question`]: resetQuestionStrap,
     },
     listen: [
       { on: `${prefix}:answer:select`, straps: [`${prefix}:select-answer`] },
@@ -229,113 +240,4 @@ function createQuestionFeedbackPerso(
     },
     actions: { [`${prefix}:feedback`]: {} },
   }
-}
-
-/** Applies a reader's answer selection and updates every CodPlay input perso. */
-function selectQuestionAnswer(
-  prefix: string,
-  question: QuestionContent,
-  state: Readonly<Record<string, unknown>>,
-  data: Record<string, unknown> | undefined,
-) {
-  if (state.submitted === true || typeof data?.answerId !== 'string') return undefined
-  if (!question.answers.some((answer) => answer.id === data.answerId)) return undefined
-  const previous = readQuestionSelection(state.selectedAnswerIds)
-  let selectedAnswerIds: readonly string[]
-  switch (QUESTION_TYPE_CONFIG[question.type].selection) {
-    case 'single':
-      selectedAnswerIds = [data.answerId]
-      break
-    case 'multiple':
-      selectedAnswerIds = previous.includes(data.answerId)
-        ? previous.filter((id) => id !== data.answerId)
-        : [...previous, data.answerId]
-      break
-  }
-  const selected = new Set(selectedAnswerIds)
-  return {
-    update: { selectedAnswerIds },
-    events: [
-      { name: selectedAnswerIds.length > 0 ? `${prefix}:selection:available` : `${prefix}:selection:empty` },
-      ...question.answers.map((answer) => ({ name: `${prefix}:answer:${answer.id}:${selected.has(answer.id) ? 'selected' : 'idle'}` })),
-    ],
-  }
-}
-
-/** Resolves a Question, reveals its correction, and reports completion and result. */
-function validateQuestionAnswer(
-  pageId: string,
-  bdc: Bdc,
-  prefix: string,
-  question: QuestionContent,
-  state: Readonly<Record<string, unknown>>,
-  completionEventName?: string,
-  completionEventData?: Readonly<Record<string, unknown>>,
-) {
-  const selectedAnswerIds = readQuestionSelection(state.selectedAnswerIds)
-  if (state.submitted === true || selectedAnswerIds.length === 0) return undefined
-  const correctAnswerIds = question.answers.filter((answer) => answer.correct).map((answer) => answer.id)
-  const isCorrect = sameQuestionAnswerSet(correctAnswerIds, selectedAnswerIds)
-  const selected = new Set(selectedAnswerIds)
-  const correct = new Set(correctAnswerIds)
-  return {
-    update: { selectedAnswerIds, submitted: true },
-    events: [
-      {
-        name: `${prefix}:feedback`,
-        data: {
-          content: isCorrect ? 'Bonne réponse.' : 'Réponse incorrecte.',
-          attr: { hidden: false },
-          style: { color: isCorrect ? '#166534' : '#b42318', fontWeight: 700 },
-        },
-      },
-      { name: `${prefix}:resolved` },
-      ...question.answers.map((answer) => ({
-        name: `${prefix}:answer:${answer.id}:${selected.has(answer.id)
-          ? correct.has(answer.id) ? 'revealed-correct' : 'revealed-incorrect'
-          : correct.has(answer.id) ? 'revealed-missed-correct' : 'locked'}`,
-      })),
-      {
-        name: ELCE_EVENTS.QUESTION_ANSWERED,
-        data: {
-          pageId,
-          bdcId: bdc.id,
-          isCorrect,
-          answerIds: question.answers.map((candidate) => candidate.id),
-          selectedAnswerIds,
-          expectedAnswerIds: correctAnswerIds,
-        },
-        visibility: 'public',
-      },
-      ...(completionEventName === undefined ? [] : [{
-        name: completionEventName,
-        ...(completionEventData === undefined ? {} : { data: completionEventData }),
-        visibility: 'public' as const,
-      }]),
-    ],
-  }
-}
-
-/** Resets local selection and validation state when Sighty replays a page. */
-function resetQuestion(prefix: string, question: QuestionContent, _state: Readonly<Record<string, unknown>>) {
-  return {
-    update: { selectedAnswerIds: [], submitted: false },
-    events: [
-      { name: `${prefix}:selection:empty` },
-      ...question.answers.map((answer) => ({ name: `${prefix}:answer:${answer.id}:reset` })),
-      { name: `${prefix}:feedback`, data: { content: '', attr: { hidden: true } } },
-    ],
-  }
-}
-
-/** Accepts only string identifiers from a CodPlay state value. */
-function readQuestionSelection(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
-}
-
-/** Compares answer sets without treating response order as correctness. */
-function sameQuestionAnswerSet(expected: readonly string[], actual: readonly string[]): boolean {
-  if (expected.length !== actual.length) return false
-  const expectedSet = new Set(expected)
-  return actual.every((id) => expectedSet.has(id))
 }

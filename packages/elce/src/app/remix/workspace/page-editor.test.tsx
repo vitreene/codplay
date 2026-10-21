@@ -557,7 +557,6 @@ describe('Remix production page editor', () => {
         getDraggedEntry: () => null,
         onPreview: () => undefined,
         previewError: null,
-        onExport: () => undefined,
         exportBusy: false,
         exportError: null,
         exportNotice: null,

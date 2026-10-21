@@ -397,6 +397,7 @@ export const ELCE_EVENTS = {
   PAGE_FINISHED: 'elce:page:finished',
   SCENE_END: 'scene:end',
   QUESTION_ANSWERED: 'elce:question:answered',
+  QUESTION_RESET: 'elce:question:reset',
   EVALUATION_RESULT_SUCCESS: 'elce:evaluation:result:success',
   EVALUATION_RESULT_FAILURE: 'elce:evaluation:result:failure',
   EVALUATION_RESULT_ACTION: 'elce:evaluation:result:action',

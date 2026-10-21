@@ -1,5 +1,6 @@
 import { CodPlay, type CodPlayOptions } from 'codplay'
 import { SightyScenarioImpl } from './scenario'
+import type { SightySceneResetHandler } from './types'
 import { loadSightyScenarioPackage } from './scenario-package-loader'
 import { createSightyRuntime } from './runtime'
 import type {
@@ -95,12 +96,13 @@ export class Sighty<
       const runtimeOptions: SightyRuntimeConfiguration<SceneKey> = {
         ...this.#ownerRuntimeOptions,
         root: loaded.root,
-        instanceIds: options.instanceIds ?? createInstanceIds(loaded.scenario),
+        instanceIds: options.instanceIds ?? createInstanceIds(loaded.scenario, loaded.packagedSceneKeys),
       }
       this.attachProject(loaded.scenario as SightyScenarioDefinition<SceneKey, SlotName>, runtimeOptions, {
         owner,
         preparedBuilds: loaded.preparedBuilds,
         packagedSceneKeys: loaded.packagedSceneKeys,
+        packagedSceneResetHandlers: loaded.sceneResetHandlers,
       })
       return this
     } finally {
@@ -130,9 +132,12 @@ export class Sighty<
       owner: CodPlay
       preparedBuilds: ReadonlyMap<SceneKey, SightyRuntimeBuild>
       packagedSceneKeys: ReadonlySet<SceneKey>
+      packagedSceneResetHandlers: ReadonlyMap<SceneKey, SightySceneResetHandler>
     }>,
   ): void {
-    const scenario = new SightyScenarioImpl(scenarioDefinition)
+    const scenario = new SightyScenarioImpl(scenarioDefinition, prepared === undefined
+      ? undefined
+      : { sceneKeys: prepared.packagedSceneKeys })
     const runtimeOptions: SightyRuntimeOptions<SceneKey, SlotName> = {
       ...runtimeConfiguration,
       scenario,
@@ -140,6 +145,7 @@ export class Sighty<
         owner: prepared.owner,
         preparedBuilds: prepared.preparedBuilds,
         packagedSceneKeys: prepared.packagedSceneKeys,
+        packagedSceneResetHandlers: prepared.packagedSceneResetHandlers,
       }),
     }
     this.#project = {
@@ -158,9 +164,11 @@ export class Sighty<
 /** Derives distinct owner-local CodPlay instance IDs for the direct scene catalog. */
 function createInstanceIds<SceneKey extends string>(
   scenario: SightyScenarioDefinition<SceneKey>,
+  packagedSceneKeys: ReadonlySet<SceneKey> = new Set(),
 ): Readonly<Record<SceneKey, string>> {
   const prefix = encodeURIComponent(scenario.id ?? 'sighty-scenario')
-  return Object.fromEntries(Object.keys(scenario.scenes ?? {}).map((sceneKey) => [
+  const sceneKeys = new Set<SceneKey>([...Object.keys(scenario.scenes ?? {}) as SceneKey[], ...packagedSceneKeys])
+  return Object.fromEntries([...sceneKeys].map((sceneKey) => [
     sceneKey,
     `sighty-${prefix}-${encodeURIComponent(sceneKey)}`,
   ])) as Readonly<Record<SceneKey, string>>

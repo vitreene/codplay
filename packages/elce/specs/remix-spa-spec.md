@@ -49,6 +49,10 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+  En développement, elle n’émet pas les `modulepreload` de l’entrée Remix :
+  les modules sont chargés à leur import et le navigateur n’affiche pas les
+  avertissements de préchargements inutilisés. En production, les indications
+  `modulepreload` restent présentes.
 - Le mode réseau opt-in `npm run dev:elce:network` sert les mêmes ports `5175`
   et `5181` sur l’IPv4 privée active. Le serveur Web n’affiche aux clients
   réseau que les assets nécessaires et la route `/` avec le paramètre
@@ -109,6 +113,9 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   remplacement de la zone centrale après sélection d’un chapitre.
 - [`remix-spa-router.test.ts`](../src/app/remix/remix-spa-router.test.ts)
   vérifie que l’URL de popup rend le lecteur sans monter l’application auteur.
+- [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts)
+  vérifie que la réponse de développement omet les `modulepreload`, tandis que
+  la réponse de production les conserve.
 - [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) exerce le
   protocole de messages et le chargement du média serveur sans Blob IndexedDB.
 - Brave DevTools, le 8 octobre 2026, a ouvert `npm run dev:elce` sur

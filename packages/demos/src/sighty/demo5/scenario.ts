@@ -1,5 +1,6 @@
 import type {
   SightyActionContext,
+  SightyConditionContext,
   SightyGraphView,
   SightySceneSourceValue,
   SightyScenarioDefinition,
@@ -142,20 +143,14 @@ export function createCourseScenario(): SightyScenarioDefinition<CourseSceneKey,
       'action:course:refresh-presentation': refreshCoursePresentation,
     },
     guards: {
-      'guard:course:page-access': ({ sceneKey, context }) => {
-        const page = getCoursePageBySceneKey(sceneKey)
-        return page !== undefined && canAccessCoursePage(page.id, readCourseSignet(context.signet))
-      },
-      'guard:course:page-exit': ({ sceneKey, event, context }) => {
-        const page = getCoursePageBySceneKey(sceneKey)
-        return page !== undefined && canExitCoursePage(page.id, event?.name, readCourseSignet(context.signet))
-      },
+      'guard:course:page-access': canAccessScenarioPage,
+      'guard:course:page-exit': canExitScenarioPage,
     },
   }
 }
 
 /** Returns one generic reset event for supported keys on every quiz scene. */
-function createCourseQuizResetEvent(keys: readonly string[]) {
+export function createCourseQuizResetEvent(keys: readonly string[]) {
   return keys.includes('all') || keys.includes('quiz') || keys.includes('solutions')
     ? { name: COURSE_EVENTS.quizReset, data: { keys: [...keys] } }
     : undefined
@@ -213,7 +208,7 @@ function getMenuPagesForCourse() {
 }
 
 /** Records the active scene's bottom-marker event in context.signet. */
-async function markCurrentPageFinished(context: SightyActionContext<CourseSceneKey>): Promise<void> {
+export async function markCurrentPageFinished(context: SightyActionContext<CourseSceneKey>): Promise<void> {
   const page = getCoursePageBySceneKey(context.event.sourceSceneKey)
   if (page === undefined) return
 
@@ -225,7 +220,7 @@ async function markCurrentPageFinished(context: SightyActionContext<CourseSceneK
 }
 
 /** Records one public question result in the appropriate signet field. */
-async function recordCurrentQuizAnswer(context: SightyActionContext<CourseSceneKey>): Promise<void> {
+export async function recordCurrentQuizAnswer(context: SightyActionContext<CourseSceneKey>): Promise<void> {
   const page = getCoursePageBySceneKey(context.event.sourceSceneKey)
   const isCorrect = context.event.data?.isCorrect
   if (page === undefined || page.kind !== 'quiz' || typeof isCorrect !== 'boolean') return
@@ -245,10 +240,26 @@ async function updateCourseProgress(
 }
 
 /** Refreshes persistent course controls through one declared Sighty action. */
-async function refreshCoursePresentation(context: SightyActionContext<CourseSceneKey>): Promise<void> {
+export async function refreshCoursePresentation(context: SightyActionContext<CourseSceneKey>): Promise<void> {
   const page = getCoursePageBySceneKey(context.scenarioState.active?.sceneKey)
   if (page === undefined) return
   await sendCoursePresentation(context)
+}
+
+/** Checks whether the current course context permits entry to one scene. */
+export function canAccessScenarioPage(
+  { sceneKey, context }: SightyConditionContext<CourseSceneKey>,
+): boolean {
+  const page = getCoursePageBySceneKey(sceneKey)
+  return page !== undefined && canAccessCoursePage(page.id, readCourseSignet(context.signet))
+}
+
+/** Checks whether the current course context permits leaving one scene. */
+export function canExitScenarioPage(
+  { sceneKey, event, context }: SightyConditionContext<CourseSceneKey>,
+): boolean {
+  const page = getCoursePageBySceneKey(sceneKey)
+  return page !== undefined && canExitCoursePage(page.id, event?.name, readCourseSignet(context.signet))
 }
 
 /** Sends authored presentation events to their persistent scene instances. */

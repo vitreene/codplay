@@ -2,13 +2,21 @@ import type {
   CodPlay,
   CodPlayPreparedScene,
 } from 'codplay'
-import type { SightyScenarioDefinition } from './types'
+import type {
+  SightyScenarioDefinition,
+  SightySceneResetHandler,
+  SightySceneSourceValue,
+} from './types'
 import type { SightyRuntimeBuild } from './runtime/types'
 
 type SightyScenarioPackageManifest = Readonly<{
-  format: 'sighty.scenario-package.v1'
+  format: 'sighty.scenario-package.v1' | 'sighty.scenario-package.v2'
   scenario: string
   scenes: Readonly<Record<string, string>>
+}>
+
+type SightyPackagedSceneMetadata = Readonly<{
+  onReset?: SightySceneResetHandler
 }>
 
 /** Returns one loaded scenario and the CodPlay builds prepared from its child packages. */
@@ -17,6 +25,7 @@ export type LoadedSightyScenario<SceneKey extends string> = Readonly<{
   preparedBuilds: ReadonlyMap<SceneKey, SightyRuntimeBuild>
   root: HTMLElement
   packagedSceneKeys: ReadonlySet<SceneKey>
+  sceneResetHandlers: ReadonlyMap<SceneKey, SightySceneResetHandler>
 }>
 
 let packageLoadCounter = 0
@@ -36,15 +45,16 @@ export async function loadSightyScenarioPackage<SceneKey extends string>(
   const loadId = ++packageLoadCounter
   const scenarioUrl = resolvePackageFile(baseUrl, manifest.scenario)
   const scenarioModule = await import(/* @vite-ignore */ withLoadIdentity(scenarioUrl, loadId).href) as Record<string, unknown>
-  const scenario = normalizeDirectScenes(resolveScenarioDefinition<SceneKey>(scenarioModule))
-  const sceneEntries = Object.entries(scenario.scenes ?? {})
+  const packageScenario = resolveScenarioDefinition<SceneKey>(scenarioModule)
+  const { scenario, sceneEntries, sceneResetHandlers } = manifest.format === 'sighty.scenario-package.v1'
+    ? normalizeLegacyPackage(packageScenario)
+    : normalizeCompiledPackage(packageScenario)
   if (sceneEntries.length === 0) throw new Error('Sighty scenario package must contain at least one direct scene.')
   const manifestSceneKeys = Object.keys(manifest.scenes)
   const sceneKeys = sceneEntries.map(([sceneKey]) => sceneKey)
   if (manifestSceneKeys.length !== sceneKeys.length || sceneKeys.some((sceneKey) => !Object.hasOwn(manifest.scenes, sceneKey))) {
     throw new Error('Sighty scenario package scene references do not match its scenario definition.')
   }
-
   const preparedBuilds = new Map<SceneKey, SightyRuntimeBuild>()
   const preparedScenes: CodPlayPreparedScene[] = []
   try {
@@ -76,13 +86,14 @@ export async function loadSightyScenarioPackage<SceneKey extends string>(
     preparedBuilds,
     root: firstPreparedScene.root,
     packagedSceneKeys: new Set(sceneKeys as SceneKey[]),
+    sceneResetHandlers,
   }
 }
 
 /** Resolves and validates the versioned outer package manifest. */
 function parsePackageManifest(value: unknown): SightyScenarioPackageManifest {
   if (!isRecord(value)
-    || value.format !== 'sighty.scenario-package.v1'
+    || (value.format !== 'sighty.scenario-package.v1' && value.format !== 'sighty.scenario-package.v2')
     || typeof value.scenario !== 'string'
     || !isRecord(value.scenes)
     || Object.values(value.scenes).some((scenePath) => typeof scenePath !== 'string')) {
@@ -104,10 +115,14 @@ function resolveScenarioDefinition<SceneKey extends string>(
     : 'Scenario module exports more than one Sighty scenario definition.')
 }
 
-/** Promotes direct scene-source values to the stable scene catalog and rejects lazy producers. */
-function normalizeDirectScenes<SceneKey extends string>(
+/** Preserves the original v1 scene-source contract while preparing its child packages. */
+function normalizeLegacyPackage<SceneKey extends string>(
   scenario: SightyScenarioDefinition<SceneKey>,
-): SightyScenarioDefinition<SceneKey> {
+): Readonly<{
+  scenario: SightyScenarioDefinition<SceneKey>
+  sceneEntries: readonly (readonly [string, SightySceneSourceValue])[]
+  sceneResetHandlers: ReadonlyMap<SceneKey, SightySceneResetHandler>
+}> {
   const scenes = { ...(scenario.scenes ?? {}) } as NonNullable<SightyScenarioDefinition<SceneKey>['scenes']>
   for (const [sceneKey, source] of Object.entries(scenario.sceneSources ?? {})) {
     if (typeof source === 'function') {
@@ -117,7 +132,57 @@ function normalizeDirectScenes<SceneKey extends string>(
       scenes[sceneKey as SceneKey] = source as (typeof scenes)[SceneKey]
     }
   }
-  return { ...scenario, scenes, sceneSources: undefined }
+  const sceneEntries = Object.entries(scenes) as [string, SightySceneSourceValue][]
+  const sceneResetHandlers = new Map<SceneKey, SightySceneResetHandler>()
+  for (const [sceneKey, source] of sceneEntries) {
+    const onReset = readSceneResetHandler(source)
+    if (onReset !== undefined) sceneResetHandlers.set(sceneKey as SceneKey, onReset)
+  }
+  return {
+    scenario: { ...scenario, scenes, sceneSources: undefined },
+    sceneEntries,
+    sceneResetHandlers,
+  }
+}
+
+/** Accepts the compact v2 scene metadata without retaining original scene documents. */
+function normalizeCompiledPackage<SceneKey extends string>(
+  scenario: SightyScenarioDefinition<SceneKey>,
+): Readonly<{
+  scenario: SightyScenarioDefinition<SceneKey>
+  sceneEntries: readonly (readonly [string, SightyPackagedSceneMetadata])[]
+  sceneResetHandlers: ReadonlyMap<SceneKey, SightySceneResetHandler>
+}> {
+  if (scenario.sceneSources !== undefined && Object.keys(scenario.sceneSources).length > 0) {
+    throw new Error('Sighty compiled scenario packages cannot contain lazy scene sources.')
+  }
+  const scenes = scenario.scenes as unknown
+  if (!isRecord(scenes)) throw new Error('Sighty compiled scenario package must declare scene metadata.')
+  const sceneEntries: [string, SightyPackagedSceneMetadata][] = []
+  const sceneResetHandlers = new Map<SceneKey, SightySceneResetHandler>()
+  for (const [sceneKey, entry] of Object.entries(scenes)) {
+    if (!isRecord(entry)
+      || Object.keys(entry).some((key) => key !== 'onReset')
+      || (entry.onReset !== undefined && typeof entry.onReset !== 'function')) {
+      throw new Error(`Sighty package scene metadata is invalid: ${sceneKey}.`)
+    }
+    const metadata = entry as SightyPackagedSceneMetadata
+    sceneEntries.push([sceneKey, metadata])
+    if (metadata.onReset !== undefined) sceneResetHandlers.set(sceneKey as SceneKey, metadata.onReset)
+  }
+  return {
+    scenario: { ...scenario, scenes: undefined, sceneSources: undefined },
+    sceneEntries,
+    sceneResetHandlers,
+  }
+}
+
+/** Reads a v1 source wrapper's reset callback without changing its scene source. */
+function readSceneResetHandler(source: SightySceneSourceValue): SightySceneResetHandler | undefined {
+  if (isRecord(source) && 'sceneDoc' in source && typeof source.onReset === 'function') {
+    return source.onReset as SightySceneResetHandler
+  }
+  return undefined
 }
 
 /** Converts a prepared package into the build record consumed by Sighty's existing runtime. */

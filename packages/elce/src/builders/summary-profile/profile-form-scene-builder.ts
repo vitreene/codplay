@@ -1,10 +1,18 @@
 import type { PersoDoc, SceneDoc, StoryDoc } from 'codplay/scene/types'
-import type { StrapEvent, StrapFunction, StrapRuntimeOutput } from 'codplay/runtime/player'
 import { ELCE_EVENTS } from '../../config/document-config'
 import type { ProfileChoice, ProfileProperty, ProfileValue } from '../../domain/summary-profile/summary-profile-types'
-import { resolveProfileValues, validateProfileValues } from '../../domain/summary-profile/profile-rules'
+import { resolveProfileValues } from '../../domain/summary-profile/profile-rules'
+import {
+  changeProfileValueStrap,
+  ELCE_PROFILE_FORM_RUNTIME_KEY,
+  submitProfileStrap,
+  type ProfileFormRuntimeConfiguration,
+} from '../scene-functions/profile-form'
 
-type ProfileFormState = Readonly<{ values: Readonly<Record<string, ProfileValue>> }>
+type ProfileFormState = Readonly<{
+  values: Readonly<Record<string, ProfileValue>>
+  [ELCE_PROFILE_FORM_RUNTIME_KEY]: ProfileFormRuntimeConfiguration
+}>
 
 /** Builds the child scene that collects and validates all configured profile fields. */
 export function buildProfileFormScene(
@@ -21,15 +29,17 @@ export function buildProfileFormScene(
   const fieldMarkup = fields.map((property) => createFieldMarkup(prefix, property)).join('')
   const resolvedValues = resolveProfileValues(properties, initialValues)
   const persos = fields.flatMap((property) => createFieldPersos(prefix, property, resolvedValues[property.id]))
-  const straps: Readonly<Record<string, StrapFunction>> = {
-    [`${prefix}:change`]: ({ state, event }) => changeProfileValue(prefix, fields, state, event.data),
-    [`${prefix}:submit`]: ({ state }) => submitProfile(fields, fieldPropertyIds, state),
-  }
   const story: StoryDoc<string> = {
     id: 'main',
     initial: { move: '@root' },
-    state: { values: resolvedValues } satisfies ProfileFormState,
-    straps,
+    state: {
+      values: resolvedValues,
+      [ELCE_PROFILE_FORM_RUNTIME_KEY]: { prefix, properties: fields, fieldPropertyIds },
+    } satisfies ProfileFormState,
+    straps: {
+      [`${prefix}:change`]: changeProfileValueStrap,
+      [`${prefix}:submit`]: submitProfileStrap,
+    },
     listen: [
       { on: ELCE_EVENTS.PROFILE_ERROR },
       { on: `${prefix}:field:change`, straps: [`${prefix}:change`] },
@@ -144,101 +154,11 @@ function createChoiceInput(prefix: string, property: ProfileProperty, choice: Pr
   }
 }
 
-/** Updates the serializable field values and reflects choice selection in inputs. */
-function changeProfileValue(
-  prefix: string,
-  properties: readonly ProfileProperty[],
-  state: Readonly<Record<string, unknown>>,
-  data: Readonly<Record<string, unknown>> | undefined,
-): StrapRuntimeOutput | undefined {
-  if (typeof data?.propertyId !== 'string') return undefined
-  const property = properties.find((candidate) => candidate.id === data.propertyId)
-  if (property === undefined) return undefined
-  const values = readValues(state.values)
-  const nextValues: Record<string, ProfileValue> = { ...values }
-  switch (property.type) {
-    case 'text':
-      if (typeof data.value === 'string') nextValues[property.id] = data.value
-      break
-    case 'number': {
-      const text = typeof data.value === 'string' ? data.value.trim() : ''
-      if (text.length === 0) delete nextValues[property.id]
-      else {
-        const number = Number(text)
-        nextValues[property.id] = Number.isFinite(number) ? number : text
-      }
-      break
-    }
-    case 'choice-one':
-      if (typeof data.choiceId === 'string' && property.choices.some((choice) => choice.id === data.choiceId)) {
-        nextValues[property.id] = data.choiceId
-      }
-      break
-    case 'choice-many': {
-      if (typeof data.choiceId !== 'string' || !property.choices.some((choice) => choice.id === data.choiceId)) break
-      const current = Array.isArray(values[property.id]) ? [...values[property.id] as readonly string[]] : []
-      nextValues[property.id] = current.includes(data.choiceId)
-        ? current.filter((id) => id !== data.choiceId)
-        : [...current, data.choiceId]
-      break
-    }
-  }
-  const events: StrapEvent[] = [{ name: ELCE_EVENTS.PROFILE_CHANGED, data: { profileValues: nextValues }, visibility: 'public' }]
-  if (property.type === 'choice-one' || property.type === 'choice-many') {
-    const selected = new Set(typeof nextValues[property.id] === 'string'
-      ? [nextValues[property.id] as string]
-      : Array.isArray(nextValues[property.id]) ? nextValues[property.id] as readonly string[] : [])
-    events.push(...property.choices.map((choice) => ({
-      name: `${prefix}:choice:${property.id}:${choice.id}:${selected.has(choice.id) ? 'selected' : 'idle'}`,
-    })))
-  }
-  return { update: { values: nextValues }, events }
-}
-
-/** Validates the form and publishes only a complete profile submission. */
-function submitProfile(
-  properties: readonly ProfileProperty[],
-  fieldPropertyIds: readonly string[],
-  state: Readonly<Record<string, unknown>>,
-): StrapRuntimeOutput | undefined {
-  const values = readValues(state.values)
-  const errors = validateProfileValues(properties, fieldPropertyIds, values)
-  if (errors.length > 0) {
-    return {
-      events: [{
-        name: ELCE_EVENTS.PROFILE_ERROR,
-        data: { content: errors.join(' ') },
-        visibility: 'story' as const,
-      }],
-    }
-  }
-  return {
-    events: [
-      { name: ELCE_EVENTS.PROFILE_ERROR, data: { content: '', attr: { hidden: true } }, visibility: 'story' as const },
-      {
-        name: ELCE_EVENTS.PROFILE_SUBMIT,
-        data: { profileValues: resolveProfileValues(properties, values) },
-        visibility: 'public' as const,
-      },
-    ],
-  }
-}
-
 /** Resolves the fixed part ID of one simple input or choice input. */
 function inputPartId(prefix: string, property: ProfileProperty, choice?: ProfileChoice): string {
   return choice === undefined
     ? `${prefix}:field:${property.id}`
     : `${prefix}:field:${property.id}:choice:${choice.id}`
-}
-
-/** Accepts only a serializable object containing supported profile values. */
-function readValues(value: unknown): Readonly<Record<string, ProfileValue>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
-  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, ProfileValue] => {
-    const candidate = entry[1]
-    return typeof candidate === 'string' || typeof candidate === 'number' && Number.isFinite(candidate)
-      || Array.isArray(candidate) && candidate.every((item) => typeof item === 'string')
-  }))
 }
 
 /** Escapes property text before writing it into authored scene markup. */

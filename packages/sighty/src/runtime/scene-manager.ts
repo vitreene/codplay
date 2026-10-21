@@ -279,7 +279,7 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
       this.state.compiledBuilds.delete(sceneKey)
       this.state.sceneDocuments.delete(sceneKey)
       this.state.sceneStyleSheets.delete(sceneKey)
-      this.state.sceneResetHandlers.delete(sceneKey)
+      if (!this.state.packagedSceneKeys.has(sceneKey)) this.state.sceneResetHandlers.delete(sceneKey)
       this.state.owner.preload.css.clear(sceneStyleSlot(sceneKey))
       this.installedSceneStyleSheets.delete(sceneKey)
       this.state.resourceUrlsByScene.delete(sceneKey)

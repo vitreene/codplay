@@ -6,7 +6,7 @@ import type { ChapterType } from '../config/document-config-types'
 import { buildFluxScene } from '../builders/flux/flux-scene-builder'
 import type { FluxSceneBuildOptions } from '../builders/flux/flux-scene-builder-types'
 import { buildDiapoScene } from '../builders/diapo/diapo-scene-builder'
-import { buildScenario, scenarioContextFromTestState } from '../builders/scenario/scenario-builder'
+import { buildScenario, resetQuestionScene, scenarioContextFromTestState } from '../builders/scenario/scenario-builder'
 import { validateHtmlElementMethodActions } from '../builders/markup-validation/html-element-method-validation'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
@@ -290,11 +290,7 @@ export function createPageSceneCatalog(
     const source: SightySceneSourceValue = questionReset === undefined && styleSheet.length === 0 ? sceneDoc : {
       sceneDoc,
       ...(styleSheet.length === 0 ? {} : { styleSheet }),
-      ...(questionReset === undefined ? {} : {
-        onReset: (keys: readonly string[]) => keys.includes('all') || keys.includes('quiz')
-          ? { name: questionReset.eventName, data: { keys: [...keys] } }
-          : undefined,
-      }),
+      ...(questionReset === undefined ? {} : { onReset: resetQuestionScene }),
     }
     cache?.set(pageId, { signature, source, styleSheets: scene.styleSheets })
     return [`scene-${page.id}`, source]

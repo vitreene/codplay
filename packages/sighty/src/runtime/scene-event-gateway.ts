@@ -55,7 +55,9 @@ export class RuntimeSceneEventGateway<SceneKey extends string, SlotName extends 
 
   /** Sends one reset event to every retained occurrence of a scene key. */
   async sendToExistingSceneOccurrences(sceneKey: SceneKey, eventime: CodPlayEventime): Promise<void> {
-    const storyIds = Object.keys(this.state.sceneDocuments.get(sceneKey)?.stories ?? {})
+    const stories = this.state.compiledBuilds.get(sceneKey)?.compiledScene.scene.stories
+      ?? this.state.sceneDocuments.get(sceneKey)?.stories
+    const storyIds = Object.keys(stories ?? {})
     const occurrenceKeys = [...this.state.instanceSceneKeys]
       .filter(([, currentSceneKey]) => currentSceneKey === sceneKey)
       .map(([occurrenceKey]) => occurrenceKey)

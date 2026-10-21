@@ -13,6 +13,16 @@ import type { ProjectSessionPort } from '../projects/project-session-types'
 import { EditorContextProvider } from './editor-context'
 import { ProjectApplication } from './project-application'
 
+const exportClientMocks = vi.hoisted(() => ({
+  request: vi.fn(),
+  download: vi.fn(),
+}))
+
+vi.mock('../../export/elce-sighty-export-client', () => ({
+  requestElceSightyPackage: exportClientMocks.request,
+  downloadElceSightyPackage: exportClientMocks.download,
+}))
+
 describe('Remix project application', () => {
   it('keeps ordinary read-only status quiet until access recovery is needed', async () => {
     const project = { id: 'reader-project', name: 'Projet en lecture', revision: 0 }
@@ -51,6 +61,58 @@ describe('Remix project application', () => {
     expect(rendered.$('#elce-project-reader-status')).toBeNull()
     expect(rendered.$('#elce-project-access-retry')).toBeNull()
     expect(rendered.$('#elce-project-access-force')).toBeNull()
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
+  it('places export at the right of the title bar and keeps its pending state', async () => {
+    exportClientMocks.request.mockReset()
+    exportClientMocks.download.mockReset()
+    let finishExport: (blob: Blob) => void = () => {}
+    exportClientMocks.request.mockImplementation(() => new Promise<Blob>((resolve) => {
+      finishExport = resolve
+    }))
+    exportClientMocks.download.mockReturnValue('Projet export.sighty.zip')
+
+    const project = { id: 'export-project', name: 'Projet export', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
+    controller.send({ type: 'editor.access.activate' })
+
+    const rendered = render(<EditorContextProvider
+      controller={controller}
+      actions={new EditorActionsFacade(controller)}
+    >
+      <ProjectApplication />
+    </EditorContextProvider>)
+    const exportButton = rendered.$('#elce-sighty-export') as HTMLButtonElement | null
+    if (exportButton === null) throw new Error('Le bouton d’export doit être présent dans la barre de titre.')
+
+    expect(exportButton.closest('#elce-project-header')).not.toBeNull()
+    expect(rendered.$('#elce-project-header')?.lastElementChild).toBe(exportButton)
+    expect(rendered.$('#elce-responsive-panel-access #elce-sighty-export')).toBeNull()
+
+    await rendered.act(() => exportButton.click())
+    expect(exportClientMocks.request).toHaveBeenCalledOnce()
+    expect(exportButton.disabled).toBe(true)
+    expect(exportButton.getAttribute('aria-busy')).toBe('true')
+    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation du paquet Sighty…')
+
+    await rendered.act(() => finishExport(new Blob(['package'], { type: 'application/zip' })))
+    await vi.waitFor(() => expect(exportClientMocks.download).toHaveBeenCalledOnce())
+    expect(exportButton.disabled).toBe(false)
+    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Téléchargement de « Projet export.sighty.zip » démarré.')
 
     rendered.cleanup()
     controller.stop()

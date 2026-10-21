@@ -94,7 +94,7 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     compiledBuilds: new Map(options.preparedBuilds ?? []),
     sceneDocuments: new Map(),
     sceneStyleSheets: new Map(),
-    sceneResetHandlers: new Map(),
+    sceneResetHandlers: new Map(options.packagedSceneResetHandlers ?? []),
     resourceUrlsByScene: new Map(),
     viewIndex,
     authoredSceneKeys: collectSceneKeys(viewIndex),

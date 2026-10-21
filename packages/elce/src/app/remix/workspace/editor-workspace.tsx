@@ -93,7 +93,6 @@ function renderWorkspaceAccess(
     | 'onSetResponsivePanel'
     | 'onPreview'
     | 'previewError'
-    | 'onExport'
     | 'exportBusy'
     | 'exportError'
     | 'exportNotice'
@@ -110,7 +109,6 @@ function renderWorkspaceAccess(
     >
       {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
       {renderPreviewButton(props.onPreview)}
-      {renderExportButton(props.onExport, props.exportBusy)}
       {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
     </nav>
     {props.previewError === null ? null : <p
@@ -140,20 +138,6 @@ function renderPreviewButton(onPreview: () => void): RemixNode {
     mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
   >
     Prévisualiser
-  </button>
-}
-
-/** Renders the Sighty resource-package download beside the preview action. */
-function renderExportButton(onExport: () => void, busy: boolean): RemixNode {
-  return <button
-    id="elce-sighty-export"
-    className="elce-preview-open-button elce-sighty-export-button"
-    type="button"
-    disabled={busy}
-    aria-busy={busy}
-    mix={on<HTMLButtonElement, 'click'>('click', onExport)}
-  >
-    {busy ? 'Préparation…' : 'Exporter le scénario'}
   </button>
 }
 

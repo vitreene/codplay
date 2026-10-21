@@ -41,8 +41,29 @@ describe('Sighty scenario export', () => {
       scenario: './src/scenario.ts',
       destination: './public/scenario',
       engineConfig: './src/engine.ts',
+      engineName: 'engine',
       standalone: false,
     })
+  })
+
+  it('accepts a path-safe application engine name only for standalone distributions', () => {
+    expect(parseArguments([
+      '--scenario', './src/scenario.ts',
+      '--engine-config', './src/engine.ts',
+      '--standalone',
+      '--engine-name', 'elce-engine',
+      '--export', './public/package',
+    ]).engineName).toBe('elce-engine')
+    expect(() => parseArguments([
+      '--scenario', './src/scenario.ts',
+      '--engine-name', '../engine',
+      '--export', './public/scenario',
+    ])).toThrow('Engine artifact name must be a lowercase kebab-case name')
+    expect(() => parseArguments([
+      '--scenario', './src/scenario.ts',
+      '--engine-name', 'elce-engine',
+      '--export', './public/scenario',
+    ])).toThrow('--engine-name requires --standalone')
   })
 
   it('requires an engine configuration for a standalone distribution', () => {
@@ -118,7 +139,7 @@ describe('Sighty scenario export', () => {
     }
   }, 180_000)
 
-  it('keeps each direct scene as an intact CodPlay package and bundles scenario callbacks', async () => {
+  it('keeps compiled scenes in intact CodPlay packages and publishes only the compact scenario graph', async () => {
     const directory = await createTemporaryDirectory()
     const sourceDirectory = path.join(directory, 'source')
     const sceneDirectory = path.join(sourceDirectory, 'scenes')
@@ -127,9 +148,11 @@ describe('Sighty scenario export', () => {
     await mkdir(path.join(sceneDirectory, 'assets'), { recursive: true })
     await writeFile(path.join(sceneDirectory, 'assets', 'first.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><title>first</title></svg>')
     await writeFile(path.join(sceneDirectory, 'first.ts'), [
+      "const sceneConstructionSentinel = 'scene-source-not-shipped'",
       'export const firstScene = {',
       "  id: 'first-scene',",
       "  stories: { main: { id: 'main', persos: [{ id: 'image', type: 'img', initial: { src: './assets/first.svg' }, actions: {} }] } },",
+      '  unused: sceneConstructionSentinel,',
       '}',
       '',
     ].join('\n'))
@@ -140,18 +163,31 @@ describe('Sighty scenario export', () => {
       '}',
       '',
     ].join('\n'))
-    await writeFile(path.join(sourceDirectory, 'helper.ts'), "export const mark = () => 'from-bundled-helper'\n")
+    await writeFile(path.join(sourceDirectory, 'helper.ts'), [
+      "export const mark = () => 'from-bundled-helper'",
+      "export const unused = () => 'unused-scenario-callback-sentinel'",
+      '',
+    ].join('\n'))
+    await writeFile(path.join(sourceDirectory, 'scenario-functions.ts'), [
+      "import { mark as markHelper } from './helper'",
+      'export async function mark({ context }) { return { ...context, loaded: markHelper() } }',
+      "export function reset(keys) { return keys.includes('quiz') ? { name: 'scenario:reset', data: { keys: [...keys] } } : undefined }",
+      'export function unused() { return markHelper() }',
+      '',
+    ].join('\n'))
     const scenarioFile = path.join(sourceDirectory, 'scenario.ts')
     await writeFile(scenarioFile, [
       "import { firstScene as layoutScene } from './scenes/first'",
       "import { secondScene } from './scenes/second'",
+      "import { mark, reset } from './scenario-functions'",
+      "export * as scenarioFunctions from './scenario-functions'",
       'export const scenario = {',
       "  format: 'sighty',",
       "  version: 1,",
       "  id: 'standalone-course',",
-      "  views: { start: 'main', views: { main: { view: { scene: 'layout' } } } },",
-      "  scenes: { layout: { sceneDoc: layoutScene, styleSheet: '.package-layout { color: red; }' }, secondScene },",
-      "  actions: { 'action:course:mark': async ({ context }) => ({ ...context, loaded: (await import('./helper')).mark() }) },",
+      "  views: { start: 'main', views: { main: { actions: { 'scenario:mark': { action: 'action:course:mark' } }, view: { scene: 'layout' } } } },",
+      "  scenes: { layout: { sceneDoc: layoutScene, styleSheet: '.package-layout { color: red; }', onReset: reset }, secondScene },",
+      "  actions: { 'action:course:mark': mark },",
       '}',
       '',
     ].join('\n'))
@@ -166,7 +202,7 @@ describe('Sighty scenario export', () => {
 
     const manifest = JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8'))
     expect(manifest).toEqual({
-      format: 'sighty.scenario-package.v1',
+      format: 'sighty.scenario-package.v2',
       scenario: 'scenario.mjs',
       scenes: { layout: 'scenes/scene-0/', secondScene: 'scenes/scene-1/' },
     })
@@ -185,6 +221,15 @@ describe('Sighty scenario export', () => {
     expect(await readFile(path.join(destination, manifest.scenes.layout, firstManifest.resources[0].file), 'utf8'))
       .toContain('<title>first</title>')
 
+    const compactScenarioSource = await readFile(path.join(destination, manifest.scenario), 'utf8')
+    expect(compactScenarioSource.length).toBeGreaterThan(100)
+    expect(compactScenarioSource).not.toContain('scene-source-not-shipped')
+    expect(compactScenarioSource).not.toContain('first-scene')
+    expect(compactScenarioSource).not.toContain('second-scene')
+    expect(compactScenarioSource).not.toContain('package-layout')
+    expect(compactScenarioSource).not.toContain('unused-scenario-callback-sentinel')
+    expect(compactScenarioSource).toContain('from-bundled-helper')
+
     await rm(sourceDirectory, { recursive: true, force: true })
     const scenarioFileFromPackage = path.join(destination, manifest.scenario)
     const verifyFile = path.join(directory, 'verify-package.mjs')
@@ -193,6 +238,8 @@ describe('Sighty scenario export', () => {
       'process.stdout.write(JSON.stringify({',
       '  id: module.scenario.id,',
       "  action: await module.scenario.actions['action:course:mark']({ context: {} }),",
+      "  reset: module.scenario.scenes.layout.onReset(['quiz']),",
+      '  sceneKeys: Object.keys(module.scenario.scenes),',
       '}))',
       '',
     ].join('\n'))
@@ -201,7 +248,31 @@ describe('Sighty scenario export', () => {
     expect(JSON.parse(verification.stdout)).toEqual({
       id: 'standalone-course',
       action: { loaded: 'from-bundled-helper' },
+      reset: { name: 'scenario:reset', data: { keys: ['quiz'] } },
+      sceneKeys: ['layout', 'secondScene'],
     })
+  })
+
+  it('rejects compact scenario callbacks that are not exported from scenarioFunctions', async () => {
+    const directory = await createTemporaryDirectory()
+    const scenarioFile = path.join(directory, 'scenario.mjs')
+    const destination = path.join(directory, 'published-course')
+    await writeFile(scenarioFile, [
+      'const handler = () => undefined',
+      'export const scenario = {',
+      "  views: { start: 'main', views: { main: { actions: { run: { action: 'action:course:run' } }, view: { scene: 'layout' } } } },",
+      "  scenes: { layout: { id: 'layout', stories: { main: { id: 'main', persos: [] } } } },",
+      "  actions: { 'action:course:run': handler },",
+      '}',
+      '',
+    ].join('\n'))
+
+    await expect(exportScenarioPackage({
+      scenarioFile,
+      destination,
+      workingDirectory: directory,
+    })).rejects.toThrow('SIGHTY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED')
+    await expect(access(destination)).rejects.toThrow()
   })
 
   it('rejects a lazy source without invoking its producer or publishing a package', async () => {

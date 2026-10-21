@@ -8,23 +8,34 @@ l’engine configuré et le paquet Sighty composé de ses scènes CodPlay intact
 La création des scènes lazy et les opérations ultérieures de remplacement ou
 rechargement runtime restent reportées.
 
-**Profil compact : enquête terminée ; nettoyage des callbacks de Demo 5
-terminé et vérifié le 2026-10-21.** La phase d’optimisation des exporteurs
-selon le périmètre compact est engagée. La construction
-répétée de la bibliothèque CodPlay par scène a été supprimée et vérifiée le
-2026-10-21 ;
-les autres optimisations de build et de taille restent à examiner.
-Le focus reste la diffusion autonome optimisée. L’exfiltration lisible du
-projet et SCORM restent hors de cette tranche.
+**Profil compact : callbacks et paquets compilés implémentés et vérifiés le
+2026-10-21.** CodPlay ne conserve dans `functions.mjs` que les fonctions
+référencées et leurs dépendances auteur. Le scénario Sighty V2 ne livre plus
+les `SceneDoc` ; chaque paquet enfant reste un paquet CodPlay autonome et
+contient sa scène compilée dans `scene/scene.json`. Elcé groupe ses callbacks
+runtime par scène et son scénario ne livre plus le document ni ses
+constructeurs. La construction répétée de la bibliothèque CodPlay par scène a
+également été supprimée.
+
+Sur l’export `Projet-1.sighty-2` fourni, les quatre `functions.mjs` passent de
+864 232 à 42 748 octets bruts (−95,05 %) et de 244 438 à 13 588 octets gzip
+calculés fichier par fichier (−94,44 %). `scenario.mjs` passe de 421 067 à
+71 121 octets (−83,11 %). Le ZIP autonome compact Elcé obtenu pèse 323 199
+octets. Les tests et spécifications de cette tranche sont à jour.
+
+Le suivi reste ouvert pour les décisions et évolutions de ressources locales,
+distantes et partagées par l’engine, ainsi que pour l’acceptance depuis un
+projet installé hors du monorepo. L’exfiltration lisible et SCORM restent hors
+de cette tranche.
 
 ## Décisions retenues
 
 - Sighty réutilise `exportScenePackage()` de CodPlay pour chaque scène. Son
   CLI ne fait que construire le paquet parent et référencer les paquets
   enfants.
-- Chaque scène garde son paquet CodPlay complet dans son propre répertoire.
-  Le scénario et les paquets scène ne partagent ni ne fusionnent leurs
-  fonctions.
+- Chaque scène garde son paquet CodPlay complet dans son propre répertoire ;
+  son `scene/scene.json` contient le `CompiledScene`. Le scénario et les
+  paquets scène ne partagent ni ne fusionnent leurs fonctions.
 - Le module de fonctions d’une scène ne contient que ses handlers et straps
   auteur atteignables, ainsi que leurs constantes ou modules auteur utiles.
   CodPlay et les bibliothèques tierces runtime restent hors du paquet scène ;
@@ -52,29 +63,46 @@ projet et SCORM restent hors de cette tranche.
   des médias continue de passer par `createElcePlayerScenario` et le CLI
   Sighty existants.
 
-### Ressources par couche — à appliquer après la phase callbacks
+### Décision acceptée — nom du module d’intégration Elcé
 
-- Un paquet CodPlay de scène unique conserve ses ressources propres et leur
-  déclaration d’adressage. Celle-ci doit distinguer les fichiers inclus dans
-  le paquet des adresses distantes autorisées par le contrat retenu.
-- Un paquet Sighty garde chaque paquet CodPlay de scène intact. Les ressources
-  communes fournies par la configuration ou l’engine restent distinctes des
-  ressources propres aux scènes ; un répertoire partagé à la racine peut les
-  rendre accessibles sans les recopier dans chaque scène.
-- Le manifeste doit exprimer cette séparation et les emplacements utilisés.
-  Les noms de fichiers et la forme exacte du manifeste restent à fixer dans la
-  tranche d’export correspondante.
-- **Écart au contrat vérifié :** CodPlay V1 n’accepte actuellement que les
-  ressources locales de scène et refuse les références distantes ; le mode
-  Sighty autonome refuse aussi les bibliothèques engine `remote` ou `platform`.
-  Une prise en charge distante exige une décision et une évolution explicites
-  du contrat avant toute modification du code ou de la spécification.
+Le fichier qui fournit les capacités et options d’intégration Elcé ne doit pas
+s’appeler simplement `engine.js`, nom qui le confond avec le moteur CodPlay
+contenu dans `codplay.js`. Le ZIP Elcé le nomme `runtime/elce-engine.js` et
+`runtime/elce-engine-manifest.json`. Le CLI Sighty reste générique : il accepte
+un nom de module facultatif, dont la valeur par défaut conserve
+`runtime/engine.js` pour les autres consommateurs.
+
+- [x] Ajouter `--engine-name` au CLI Sighty, l’utiliser pour le module, son
+  manifeste et l’import du loader ; conserver le nom générique par défaut.
+- [x] Faire passer `elce-engine` par l’adaptateur Elcé et vérifier les chemins
+  du ZIP, du manifeste de distribution, du manifeste CodPlay et du loader.
+- [x] Mettre à jour les spécifications Sighty et Elcé après validation des
+  tests concernés.
+
+### Décisions ouvertes — ressources par couche
+
+**Orientation retenue par l’utilisateur, à implémenter dans une tranche
+ultérieure :** le manifeste d’un paquet scène doit indiquer si ses ressources
+sont incluses localement ou référencées à distance. Dans une distribution
+Sighty, chaque paquet CodPlay garde ses ressources propres ; celles que fournit
+l’engine restent communes et doivent être adressées depuis la couche partagée,
+éventuellement par un dossier de ressources à la racine. Une scène unique
+diffusée sur une page peut avoir toutes ses ressources dans son propre paquet.
+
+Restent à définir dans la tranche ressource : les champs et chemins exacts du
+manifeste, la résolution des URL distantes, et la façon dont l’engine référence
+les ressources communes. **Contrat actuellement vérifié :** CodPlay V1 accepte
+les ressources locales de scène et refuse les références distantes ; le mode
+Sighty autonome refuse aussi les bibliothèques engine `remote` ou `platform`.
+Ne pas faire passer l’orientation acceptée pour un comportement déjà livré.
 
 ## Tranche distribution autonome — terminée le 2026-10-21
 
 ### Invariants
 
-- Garder `sighty.scenario-package.v1` et `codplay.scene-package.v1` inchangés.
+- Garder `codplay.scene-package.v1` inchangé et le loader compatible avec les
+  anciens manifests `sighty.scenario-package.v1`. L’export compact produit un
+  manifeste Sighty V2 distinct.
 - Garder chaque paquet scène dans son dossier, intégral et remplaçable ; ne
   recopier aucun player ni engine dans les paquets enfants.
 - Ne pas appeler `runtime.initialize()` ni démarrer la lecture depuis le loader.
@@ -298,41 +326,25 @@ nécessaires. Le paquet ne porte pas le player. En distribution Sighty autonome,
 le player CodPlay partagé est livré une seule fois à la racine sous
 `runtime/codplay.js` ; il n’est donc pas absent du ZIP.
 
-Le point d’optimisation du CLI CodPlay est `buildFunctionModule()` dans
-`packages/codplay/tools/scene-export/cli.mjs` : son entrée bundler réexporte la
-scène entière, puis le module final retrouve les callbacks par parcours
-dynamique de `functionReferences`. Ce chemin masque les propriétés utiles au
-tree-shaker. Dans Demo 5, les dix `functions.mjs` font ensemble 1 068 487
-octets, sont déjà minifiés, et contiennent malgré tout du code
-`AutoCapsule`/`capsule-automation` et les tables de couleurs.
-
-La correction CodPlay doit rendre les références de fonctions statiques au
-moment du build et n’embarquer que ces fonctions, `strapCollections` lorsqu’il
-est explicitement exporté, et leurs dépendances réellement exécutées. Elle doit
-garder les paquets scène autonomes : Demo 5 répète trois JPEG dans trois scènes
-chacune, soit 1 341 298 octets de copies avant ZIP. Ce poids est le coût de
-l’autonomie demandée ; supprimer ou déplacer ces octets hors des enfants
-changerait le contrat de remplacement/rechargement. Le player minifié pèse
-550 615 octets dans l’artefact observé ; sa réduction est un chantier séparé,
-qui nécessite une analyse fiable des exigences des compilés et ne doit pas
-retirer une capacité runtime par simple inspection d’un exemple.
+Avant compact, `buildFunctionModule()` réexportait la scène entière au bundler,
+puis retrouvait les callbacks par parcours dynamique de `functionReferences`.
+Ce chemin empêchait le tree-shaker d’éliminer le code auteur inutilisé ; les
+sorties contenaient notamment `AutoCapsule`, `capsule-automation` et les tables
+de couleurs. Le CLI utilise maintenant le namespace ESM explicite
+`sceneFunctions`, relie les callbacks requis par identité et génère des imports
+statiques. Le format conserve chaque paquet CodPlay autonome. Les médias
+répétés entre paquets restent donc le coût assumé de cette autonomie ; ils ne
+sont pas dédupliqués entre scènes.
 
 #### Export Sighty — scénario et composition des paquets
 
-Le CLI Sighty construit `scenario.mjs` depuis toute l’entrée auteur sans
-minification. Il importe ensuite ce scénario à la construction, mais publie le
-module bundlé d’origine. Dans Demo 5, `scenario.mjs` pèse 175 388 octets et
-contient des sections source des catalogues de couleurs et de
-`capsule-automation`, ainsi que le code qui construit les scènes.
-
-Pour chaque scène dont aucune liaison source statique n’est trouvée,
-`createSceneEntryModule()` réimporte le scénario et lit la scène par `SceneKey`.
-Le CLI CodPlay rebundle alors ce graphe dans le `functions.mjs` de l’enfant.
-Dans l’artefact Demo 5, les dix enfants font ainsi 1 068 487 octets de fonctions
-liées aux scènes. Cette amplification est un problème de composition Sighty ×
-CodPlay : Sighty doit fournir une entrée isolée pour chaque scène connue sans
-réintroduire tout le module scénario dans chaque paquet ; CodPlay doit ensuite
-tree-shaker les fonctions de cette entrée isolée.
+Avant le format compact V2, le CLI Sighty publiait le graphe auteur complet,
+avec les catalogues, les constructeurs et les `SceneDoc`. Il produit désormais
+le graphe runtime et les callbacks référencés dans `scenario.mjs` ; les scènes
+compilées et leurs ressources restent dans les paquets CodPlay enfants. Le
+format compact fournit au CLI CodPlay le module de fonctions groupé de la
+scène, et non le scénario auteur entier. `functionReferences` sélectionne les
+callbacks nécessaires en maintenant chaque enfant autonome.
 
 Sighty doit conserver dans son payload compact le graphe `views`, les données
 consommées par ce graphe, l’identité/version/`showMode`, les actions et guards
@@ -341,11 +353,11 @@ scène effectivement utilisés par le runtime. Le compilé et les ressources de
 chaque scène restent dans son paquet CodPlay. Les pages/scènes lazy restent
 reportées.
 
-Le runtime Sighty consulte actuellement les `SceneDoc` pour résoudre les slots
-du layout et connaître les stories à cibler lors d’un reset, et lit
-`onReset`/CSS sur la source scène. Toute suppression de `SceneDoc` redondant
-doit donc être précédée d’une extraction et validation de ces métadonnées depuis
-le paquet préparé, sans déplacer la création d’occurrences dans `load()`.
+Le runtime compact lit les slots du layout et les IDs de stories depuis les
+`CompiledScene` préparées par `owner.prepare()`. Les callbacks `onReset` restent
+dans les métadonnées du scénario et la CSS est préparée par le paquet CodPlay.
+Cette préparation ne crée aucune occurrence : `runtime.initialize()` reste
+l’étape qui compose les scènes.
 
 #### Adaptateur Elcé — entrée de projet et ressources
 
@@ -356,20 +368,16 @@ résultat. Le filtrage des médias est déjà porté par
 `scenarioExportMediaIds()` ; le catalogue inutilisé n’est pas nécessaire au
 lecteur.
 
-La génération actuelle de l’entrée temporaire importe `ElceDocument` et
-`createElcePlayerScenario`. Le CLI Sighty bundle donc le modèle et le graphe de
-constructeurs auteur avec le scénario. Dans le profil compact, ces constructeurs
-doivent s’exécuter pour produire les ressources, mais leurs implémentations,
-`ElceDocument`, les éditeurs et le document de projet ne doivent pas se retrouver
-dans le ZIP. La prévisualisation et l’export doivent continuer à partager le
-même `createElcePlayerScenario` afin de ne pas créer une seconde définition du
-parcours.
+L’entrée temporaire d’Elcé réutilise toujours le producteur partagé avec la
+preview pour construire le scénario et les scènes. Le CLI n’expédie que le
+graphe d’exécution et les références nécessaires ; `ElceDocument`, les
+constructeurs auteur et l’éditeur restent hors du ZIP. Les callbacks de scène
+Elcé sont regroupés par module, et leurs paramètres spécifiques sont stockés
+dans l’état compilé.
 
-Le ZIP Elcé d’audit n’a pas pu être régénéré dans l’environnement courant :
-Vitest échoue avant le test, car le paquet `ace` importé par
-`packages/codplay/src/runtime/components/polygon/polygon-component.ts` est
-absent de `node_modules`. Les mesures de tailles portent donc sur l’artefact
-Demo 5 existant et non sur le poids exact d’un ZIP Elcé.
+Le ZIP Elcé compact a été généré depuis le même document et les mêmes octets
+média que l’export fourni par l’utilisateur ; le poids de sortie autonome est
+323 199 octets. Les tailles comparatives détaillées sont consignées plus bas.
 
 #### Mesures de référence — artefact Demo 5 disponible
 
@@ -378,6 +386,24 @@ ZIP et 3 065 586 octets après ZIP niveau 6. Il comprend 744 914 octets de
 runtime partagé, 175 388 octets de `scenario.mjs` et 1 068 487 octets de
 `functions.mjs`. Les ressources image, vidéo et CSS ne sont pas des sources
 auteur et restent requises par les scènes du cours.
+
+#### Référence fournie par l’utilisateur — export Elcé non optimisé
+
+L’export `Projet-1.sighty-2` contient 12 scènes. Quatre paquets ont un
+`functions.mjs` : `scene-3` (215 142 octets, 2 références), `scene-8`
+(215 576 octets, 5 références), `scene-9` (217 464 octets, 8 références) et
+`scene-10` (216 050 octets, 3 références). Le total initial est de **864 232
+octets pour 18 références**. Une compression gzip niveau 9, appliquée à chaque
+fichier séparément pour fournir un repère comparable, donne 244 438 octets ;
+ce chiffre n’est pas la taille d’un ZIP.
+
+Chaque fichier n’expose que `functionReferences` et
+`createScenePackageContext` comme exports ESM, mais contient environ 405
+déclarations `function` détectées par scan lexical. Les quatre modules ont
+environ 203 Ko de contenu de lignes identique entre eux. C’est un indicateur
+fort de code de construction partagé et réembarqué, pas une mesure directe des
+octets supprimables. La comparaison après export compact est consignée dans la
+section « Résultat compact Elcé » ci-dessous.
 
 ### Circuits de construction et engine — vérification du 2026-10-21
 
@@ -394,14 +420,14 @@ racine le player CodPlay, Sighty, l’engine configuré et le loader ; il ne cha
 pas la construction des paquets enfants. Le scénario seul conserve ses
 dépendances runtime externes pour l’hôte.
 
-Le CLI Sighty impose toutefois actuellement `--engine-config` avec
-`--standalone`, même si la configuration ne fournit aucune bibliothèque tierce.
-Ce contrôle est une exigence du mode actuel, pas la preuve qu’un second
-constructeur de scènes est nécessaire. **Décision à prendre avant toute
-évolution :** garder cette exigence explicite, ou permettre un paquet autonome
-core-only sans fichier de configuration auteur. Dans les deux cas, la
-recommandation de construction reste un seul circuit CodPlay et une couche
-engine optionnelle à la composition du paquet parent.
+Le CLI Sighty impose actuellement `--engine-config` avec `--standalone`, même
+si la configuration ne fournit aucune bibliothèque tierce. Ce contrôle est une
+exigence du mode actuel, pas la preuve qu’un second constructeur de scènes est
+nécessaire. **Décision à prendre avant toute évolution :** garder cette
+exigence explicite, ou permettre un paquet autonome core-only sans fichier de
+configuration auteur. Dans les deux cas, la recommandation de construction
+reste un seul circuit CodPlay et une couche engine optionnelle à la composition
+du paquet parent.
 
 Un coût de construction distinct de la taille diffusée était confirmé : chaque
 appel à `exportScenePackage()` reconstruisait la bibliothèque CodPlay. Le
@@ -448,58 +474,100 @@ les handlers livrés.
 
 Les callbacks Sighty et les fonctions de scène peuvent être des fermetures
 arbitraires : `Function.prototype.toString()` ne transporte pas leurs variables
-capturées. Le compilateur actuel conserve leurs modules source pour préserver
-ces fermetures. Le profil compact vise les seuls handlers référencés et leurs
-dépendances, en donnant les valeurs propres au document et à la scène via les
-arguments déjà disponibles. Les constantes stables restent des imports de
-projet. La politique pour une fonction auteur qui capture une valeur dynamique
-reste à décider : échec compact avec un diagnostic précis, ou conservation
-d’un chemin historique distinct. Quelle que soit l’option retenue, pas de
-transformation avec `toString()` ou `eval`.
+capturées. La règle auteur retenue par l’utilisateur est que les valeurs
+dynamiques arrivent par les paramètres d’appel ; les constantes stables sont
+définies au niveau projet et peuvent être importées. Le profil compact utilise
+des exports ESM auteur groupés et garde leurs imports transitifs. Il ne
+reconstruit jamais une fonction par `toString()` ou `eval`. Cette règle est
+vérifiée par audit des callbacks concernés et leurs tests ; le bundler ne
+prétend pas détecter automatiquement une capture dynamique arbitraire.
 
-L’implémentation doit étendre les outils CodPlay et Sighty en réutilisant leurs
-circuits existants. Toute évolution éventuelle du runtime Sighty doit avoir un
-item accepté avant le code. Aucun second exporteur Elcé ni changement
-opportuniste du runtime CodPlay n’est prévu. Le test statique réalisé est
-ciblé sur les factories effectivement utilisées ; l’acceptance du profil
-compact devra aussi contrôler la sortie construite et le parcours réel.
+**Précision du circuit CodPlay, vérifiée le 2026-10-21 :** `CodPlay.build(...,
+{ export: true })` produit `functionReferences` sous la forme `{ ref, path }` et
+vérifie que chaque chemin désigne encore la même fonction auteur. C’est la
+source d’autorité pour savoir quelles fonctions sont présentes et requises.
+L’exporteur réimporte toutefois le module scène entier, puis résout ces chemins
+à l’intérieur de `createScenePackageContext()` ; ces chemins ne sont pas des
+exports ESM que le tree-shaker peut sélectionner. Un essai Vite local montre
+qu’un accès littéral à une propriété imbriquée conserve les propriétés voisines
+de l’objet, tandis qu’un import ESM nommé élimine les exports inutilisés. Le
+chemin compact établit maintenant un lien statique entre les références
+compilées et les exports du module de fonctions auteur.
 
-### Audit de pureté et de captures — 2026-10-21
+**Décision utilisateur du 2026-10-21 :** toutes les fonctions d’une scène sont
+regroupées dans un unique module auteur, qui produit l’unique
+`scene/functions.mjs` de son paquet. Le compact ne doit pas imposer un fichier
+par callback ni disséminer les fonctions entre paquets. `functionReferences`
+reste la vérification que chaque fonction requise par la scène est bien
+présente. **Décision utilisateur du 2026-10-21 :** le module de scène désigne
+explicitement le groupe avec `export * as sceneFunctions from
+'./scene-functions.js'`. L’exporteur associe les fonctions compilées aux
+exports de ce namespace par identité, puis génère des imports ESM nommés pour
+les seules fonctions requises et les straps externes réellement déclarés. Vite
+ferme leurs imports auteur transitifs et élimine les exports inutilisés. Un
+namespace déclaré mais incomplet bloque l’export avec un diagnostic ; sans
+namespace, le chemin historique continue de préserver les fermetures. Aucun
+code de construction de scène ne doit entrer dans le chemin compact.
 
-« Fonction pure » et « fonction sans capture lexicale » sont deux propriétés
-différentes. Une fonction peut être sans effet de bord tout en dépendant d’une
-configuration capturée ; une action peut être sans capture et rester
-intentionnellement effectful parce qu’elle met à jour le contexte Sighty ou
-envoie des événements.
+**Travail accepté et exécuté :** étendre les CLI CodPlay et Sighty ainsi que
+l’adaptateur Elcé en réutilisant leurs circuits d’export, sans modifier
+`packages/codplay/src`. Les tests vérifient l’identité des références, le
+tree-shaking, les imports transitifs, les contextes indépendants, le parcours
+historique à fermetures, les paquets compilés et les callbacks du scénario.
+Les spécifications ont été mises à jour avec les comportements vérifiés ; les
+questions de ressources non implémentées restent dans la section ouverte.
 
-Un contrôle statique par AST TypeScript sur les factories effectivement
-utilisées a relevé ces captures :
+**CodPlay compact — implémenté et vérifié le 2026-10-21 :** le namespace
+`sceneFunctions` active le chemin compact de l’exporteur, sans changement du
+runtime CodPlay. Le test CLI prouve la sélection par identité, l’inclusion d’une
+constante importée, le retrait d’un callback et de sa dépendance inutilisés,
+l’exclusion du constructeur de scène et le renouvellement des fonctions par
+contexte. Le test historique vérifie toujours ses fermetures, imports différés,
+assets et straps. Les 15 tests CLI et 5 tests d’acceptance paquet sont passés ;
+le typecheck CodPlay est passé.
 
-| Callback | Valeurs capturées | Effets observés |
-|---|---|---|
-| Garde d’accès Elcé `createPageAccessGuard` | `document`, `pageIds`, `questionBdcByPage`, `previewStartPageId`, `evaluationResultPageIds` | Aucun effet direct relevé ; prédicat de lecture, paramétré par le document capturé |
-| Garde de sortie Elcé `createPageExitGuard` | `document`, `pageIds`, `questionBdcByPage` | Aucun effet direct relevé |
-| Actions inline `REFRESH_PRESENTATION`/`OPEN_MENU_DRAWER` et factories `createMarkPageFinished`, `createRecordQuestionResult`, `createRefreshEvaluationResult`, `createSaveProfileValues` et `createSubmitProfile` | `document` et/ou `onTestStateChange` | Appels à `context.updateContext()` et au callback de persistance optionnel |
-| Strap carousel Elcé `createSelectionStrap` | `prefix`, `content`, `storyId`, `expandableViews` | Produit des mises à jour et événements déclaratifs sans les appliquer directement |
-| Strap expansion Elcé `createViewportExpansionStrap` | L’objet `input`, qui contient l’identifiant de story, des collections de vues et des noms d’événements | Produit des mises à jour et événements déclaratifs |
-| Reset Elcé de page | `questionReset` | Retourne une description d’événement sans effet direct |
-| Straps de quiz Demo 5 (sélection, validation, reset) | `page`, `prefix` — résolus ; `question`, `pageId` viennent de l’état de story et les choix de l’événement | Produisent des mises à jour et événements à partir des entrées de strap |
-| Actions du scénario Demo 5 | `onLog` — résolu ; les actions lisent leur contexte d’appel, le logger hôte observe l’événement public | Mettent à jour le contexte et publient les projections Sighty |
-| Transform de titre Demo 5 | `headingTween` — résolu ; `fromHue`, `toHue` et `ratio` arrivent dans `data` | Calcul déterministe d’un patch de style, avec les constantes de couleur du projet |
+**Décisions utilisateur du 2026-10-21 :** l’export de diffusion est compact,
+non rééditable et utilisable depuis un point d’entrée unique (`loader.mjs`).
+L’export reçoit une table de build `SceneKey → module auteur groupé` pour les
+scènes issues de factories, exécute ces factories pendant la construction et
+publie chaque scène concrète dans son paquet CodPlay autonome. Le paquet
+CodPlay enfant contient la seule représentation de scène livrée : sa
+`CompiledScene` et les ressources runtime décrites par son manifeste. Le
+`SceneDoc`, le code des factories et les CSS/médias déjà copiés dans l’enfant
+ne sont pas recopiés dans `scenario.mjs`.
 
-Ce relevé statique ciblait les factories utilisées ; la première table Elcé
-reste un audit des captures existantes pour une tranche ultérieure. Les
-callbacks auteur de Demo 5 listés ci-dessus ne capturent plus de valeur propre
-à une scène ou à une instance. Les actions Sighty effectful restent conformes
-au contrat d’exécution existant via `context.updateContext()` et
-`context.send()`.
+Le scénario compact conserve son graphe `views`, ses données et ses actions,
+guards et callbacks `onReset` nécessaires à l’exécution. Sighty lit les slots
+du layout et les identifiants de stories depuis les `CompiledScene` déjà
+préparées ; `owner.prepare()` fournit les ressources et CSS des paquets enfants.
+La forme auteur utilisée en mémoire reste inchangée et
+`runtime.initialize()` demeure le seul appel qui crée les occurrences.
 
-L’absence de capture dynamique ne suffit pas, à elle seule, à faire éliminer
-les constructeurs par le tree-shaker : le problème mesuré vient aussi des
-graphes d’imports dynamiques et de la construction runtime des scènes. L’export
-CodPlay a déjà un contrat vérifié qui préserve les closures dans un contexte
-isolé par owner/paquet, sans `Function.toString()` ni `eval` ; le profil
-compact doit donc s’y ajouter sans remplacer implicitement le format courant.
+**Travail accepté et exécuté :** adapter le packaging Sighty et le chargement
+des paquets pour consommer les seules scènes compilées, sans modifier le
+runtime CodPlay ni créer un circuit d’export Elcé parallèle. Les tests
+contrôlent le contenu livré, l’absence de `SceneDoc` et de factory dans
+`scenario.mjs`, les références `onReset`, les slots et stories lus depuis le
+compilé, l’absence d’occurrence avant `runtime.initialize()` et le parcours
+après initialisation.
+
+### Résultat de l’audit des captures — 2026-10-21
+
+Le compact sépare les valeurs dynamiques de leurs callbacks : la configuration
+du scénario issue du document va dans `scenario.data`, les paramètres propres
+à une scène vont dans son état compilé, et les constantes stables restent des
+imports de projet. Les handlers et fonctions de scène sont top-level dans les
+groupes auteur désignés par `scenarioFunctions` et `sceneFunctions`.
+
+`onTestStateChange` sert uniquement à la persistance de la preview : l’export
+construit le scénario sans cette option, donc ses closures ne sont pas livrées.
+Les actions exportées conservent les effets prévus par Sighty, tels que la mise
+à jour du contexte et l’envoi d’événements. Les actions Demo 5 observent leur
+contexte d’appel ; l’hôte consomme les événements par `runtime.events`.
+
+Les tests des actions et fonctions de scène vérifient les paramètres d’appel
+et leur comportement. Le chemin compact ne reconstruit aucune fonction par
+`Function.toString()` ou `eval`.
 
 ### Phase 1 — callbacks auteur de Demo 5
 
@@ -520,29 +588,59 @@ callbacks de scène de Demo 5. Les exporteurs restent hors de cette phase.
 - [x] Vérifier typecheck, build, feedback et journal des quiz, progression,
   reset complet et effacement de l’état local après réouverture dans le
   parcours réel Safari Demo 5 ; consigner l’observation dans la spécification.
-- [ ] Poursuivre l’optimisation des exporteurs selon la tranche compacte et
-  son acceptance, dans une étape ultérieure.
+- [x] Terminer l’optimisation des exporteurs selon la tranche compacte ; le
+  résultat Sighty/Elcé et les validations Demo 5 sont consignés ci-dessous.
 
-Acceptance requise avant de stabiliser le profil :
+Acceptance du profil compact :
 
-- décider si le profil compact est explicite et comment il traite les
-  callbacks qui capturent des valeurs dynamiques ;
-- ne produire que les callbacks atteignables depuis le compilé et le scénario,
-  avec leurs imports réellement exécutés ;
-- vérifier qu’un callback compact ne capture aucune donnée propre au document,
-  à la scène ou à l’instance, et que les valeurs requises arrivent par ses
-  arguments d’appel ;
-- vérifier que le module scénario livré n’importe ni le document Elcé ni les
-  constructeurs et catalogues auteur ;
-- vérifier que chaque `functions.mjs` ne contient que les handlers référencés
-  par son compilé et la fermeture de dépendances nécessaire ;
-- charger un paquet déplacé, initialiser séparément, puis valider Play, Seek,
-  reset, callbacks, CSS, assets et remplacement/remontage isolé d’un paquet
-  scène ;
-- comparer le ZIP avant/après sur Demo 5 et sur l’aperçu Elcé, en distinguant
-  la taille source du ZIP ;
-- conserver la suite de tests CodPlay/Sighty/Elcé et les vérifications
-  navigateur pertinentes.
+- [x] Le namespace auteur `sceneFunctions` est l’opt-in compact ; les valeurs
+  dynamiques viennent des paramètres d’appel et les constantes de projet sont
+  des imports. Le bundler ne prétend pas détecter arbitrairement les captures.
+- [x] Produire uniquement les callbacks atteignables depuis le compilé et le
+  scénario, avec leurs imports auteur nécessaires.
+- [x] Garder les données de scène dans l’état d’exécution et les valeurs
+  variables dans les paramètres d’appel ; conserver les constantes projet
+  comme imports.
+- [x] Vérifier que le scénario compact ne livre ni document Elcé, ni `SceneDoc`,
+  ni constructeurs auteur ; vérifier que chaque paquet contient son
+  `CompiledScene` dans `scene/scene.json`.
+- [x] Vérifier par identité les callbacks requis et le retrait des exports
+  inutilisés, du constructeur et des dépendances auteur inutilisées.
+- [x] Vérifier sur Demo 5 le loader distribué, la préparation sans occurrence,
+  l’initialisation explicite, la navigation et le quiz dans Safari.
+- [x] Comparer l’export `Projet-1.sighty-2` fourni avec l’export compact sur le
+  même document et les mêmes médias ; distinguer octets bruts, gzip et ZIP.
+- [x] Exécuter les tests export CodPlay, la suite Sighty et les validations
+  Elcé ciblées et complètes, avec typechecks et build.
+
+Hors de cette acceptance : une API runtime de remplacement/rechargement de
+scène. Les paquets restent indépendants pour faciliter cette évolution, mais
+cette API n’est pas introduite ici. La séparation des ressources distantes et
+communes à l’engine reste une décision ouverte consignée plus haut.
+
+### Résultat compact Elcé — export de référence fourni
+
+La comparaison réutilise le document du ZIP non optimisé
+`/Users/Rve/Downloads/Projet-1.sighty-2` et reconstruit les octets médias depuis
+ses paquets scène. Le paquet compact contient toujours une scène CodPlay V1
+autonome par scène directe, avec son `CompiledScene` dans
+`scene/scene.json`.
+
+| Contenu comparé | Ancien export | Export compact | Réduction |
+|---|---:|---:|---:|
+| Quatre `functions.mjs`, brut | 864 232 octets | 42 748 octets | 95,05 % |
+| Quatre `functions.mjs`, gzip niveau 9 par fichier | 244 438 octets | 13 588 octets | 94,44 % |
+| `scenario.mjs`, brut | 421 067 octets | 71 121 octets | 83,11 % |
+| ZIP Elcé autonome compact | — | 323 199 octets | — |
+
+Le ZIP compact n’a pas de mesure ZIP ancienne comparable dans cette exécution.
+
+Les validations réalisées sont : 59 tests Sighty et typecheck ; 15 tests du
+CLI export CodPlay et typecheck ; 81 tests Elcé ciblés, typecheck et build ;
+385 tests Elcé au total réussis sur l’exécution complète et le rerun autorisé
+du fichier qui ouvre un serveur local. Ce fichier a été relancé séparément
+après que l’environnement sandbox a refusé son `listen` local pendant le run
+complet.
 
 ### Re-test Safari du 20 octobre 2026
 
@@ -595,24 +693,23 @@ CodPlay et Sighty, jamais sur le voisinage du monorepo. CodPlay reste le
 compilateur des paquets scène ; Sighty continue de composer le scénario en
 réutilisant ce compilateur.
 
-**Écarts à corriger dans le code source :**
+**Corrections vérifiées dans les workspaces :**
 
-- `packages/sighty/tools/scenario-export/cli.mjs` importe les trois outils
-  CodPlay depuis `../../../codplay/...` au lieu de sous-chemins du package
-  `codplay`.
-- `packages/elce/src/export/elce-scenario-exporter.ts` localise le CLI Sighty
-  par `MONOREPO_ROOT/packages/sighty/...` et l’exécute depuis la racine du
+- Le CLI Sighty importe les outils CodPlay par les sous-chemins déclarés du
+  package `codplay`.
+- L’adaptateur Elcé résout le CLI Sighty par son entrée de package et exécute
+  depuis le répertoire de travail appelant, sans calcul de chemin vers le
   monorepo.
-- Les deux manifests devront exposer les sous-chemins d’outils utilisés par
-  leurs consommateurs. Les déclarations de publication, les versions
-  compatibles, les dépendances de production et l’éventuel changement de
-  `private` restent à la tranche de préparation npm.
+- Les manifests exportent les sous-chemins utilisés par ces deux outils.
+  Dépendances, versions compatibles, déclarations de publication et choix de
+  `private` restent à la préparation npm.
 
-**Travail source autorisé dans la tranche actuelle :** exposer les seuls
-sous-chemins nécessaires, faire résoudre CodPlay et Sighty par leurs
-specifiers de package et supprimer les calculs de chemins vers le monorepo dans
-l’adaptateur Elcé. Vérifier les exports et tests depuis les workspaces déjà
-présents, sans installer, empaqueter pour installation ou publier de package.
+**Travail source exécuté dans la tranche actuelle :** exposer les seuls
+sous-chemins nécessaires, résoudre CodPlay et Sighty par leurs specifiers de
+package et supprimer les calculs de chemins vers le monorepo dans l’adaptateur
+Elcé. Les exports et tests ont été vérifiés dans les workspaces présents.
+Conformément à la décision utilisateur, aucun package n’a été installé depuis
+un registre, préparé pour publication ou publié.
 
 **Acceptance différée jusqu’à la préparation npm :** installer les archives
 publiées dans un projet temporaire hors du dépôt, puis appeler l’export Sighty
@@ -631,8 +728,8 @@ déclareront le parcours externe vérifié qu’après cette acceptance.
 - [x] Le manifest Sighty expose son CLI et l’adaptateur Elcé le résout par ce
   point d’entrée. Son processus et la normalisation des sources temporaires
   suivent le répertoire de travail appelant, sans `MONOREPO_ROOT`.
-- [x] Vérifier les 56 tests Sighty, les 6 tests d’export Elcé ciblés, les
-  typechecks Sighty/Elcé et `git diff --check`.
+- [x] Revalider les 59 tests Sighty, les tests d’export Elcé ciblés, les
+  typechecks Sighty/Elcé et `git diff --check` pendant la tranche compacte.
 - [ ] Préparer les manifests à l’installation depuis un registre : dépendances
   nécessaires en production, versions compatibles et choix de `private`.
 - [ ] Après préparation et autorisation de diffusion, installer les artefacts

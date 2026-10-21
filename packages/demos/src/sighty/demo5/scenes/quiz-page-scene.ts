@@ -74,21 +74,21 @@ export function createQuizPageScene(page: CoursePage): SceneDoc<string> {
 }
 
 /** Selects an answer using the question and page id carried by scene state. */
-function selectCourseQuizAnswer({ event, state }: QuizStoryEventInput) {
+export function selectCourseQuizAnswer({ event, state }: QuizStoryEventInput) {
   const quiz = readQuizSceneState(state)
   if (quiz === undefined) return undefined
   return selectQuizAnswer(quizEventPrefix(quiz.pageId), quiz.question, state, event.data)
 }
 
 /** Validates a quiz answer using the question and page id carried by scene state. */
-function validateCourseQuizAnswer({ state }: QuizStoryEventInput) {
+export function validateCourseQuizAnswer({ state }: QuizStoryEventInput) {
   const quiz = readQuizSceneState(state)
   if (quiz === undefined) return undefined
   return validateQuizAnswer(quiz.pageId, quizEventPrefix(quiz.pageId), quiz.question, state)
 }
 
 /** Applies a generic Sighty reset to the quiz identified by scene-local state. */
-function resetCourseQuizScene({ event, state }: QuizStoryEventInput) {
+export function resetCourseQuizScene({ event, state }: QuizStoryEventInput) {
   const quiz = readQuizSceneState(state)
   if (quiz === undefined) return undefined
   return applyQuizReplayReset(quiz.question, quizEventPrefix(quiz.pageId), state, event.data)

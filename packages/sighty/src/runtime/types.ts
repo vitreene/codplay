@@ -84,6 +84,7 @@ export type SightyRuntimeOptions<
   owner?: CodPlay
   preparedBuilds?: ReadonlyMap<SceneKey, SightyRuntimeBuild>
   packagedSceneKeys?: ReadonlySet<SceneKey>
+  packagedSceneResetHandlers?: ReadonlyMap<SceneKey, import('../types').SightySceneResetHandler>
 }>
 
 /** Groups compiled scenes by their stable author scene key. */

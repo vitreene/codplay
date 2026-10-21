@@ -103,12 +103,15 @@ describe('Elcé scenario builder', () => {
         }],
       },
     })
-    const pageAccessGuard = buildScenario(document, {}).guards?.[ELCE_SCENARIO_HANDLERS.PAGE_ACCESS] as unknown as (input: {
+    const scenario = buildScenario(document, {})
+    const pageAccessGuard = scenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_ACCESS] as unknown as (input: {
       readonly sceneKey: `scene-${string}`
+      readonly data: Readonly<Record<string, unknown>>
       readonly event?: { readonly name: string }
       readonly context: Readonly<Record<string, unknown>>
     }) => boolean
     const accessInput = {
+      data: scenario.data ?? {},
       sceneKey: 'scene-page-b' as const,
       event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-b` },
       context: { profileEnabled: true, finishedPages: ['page-a'] },
@@ -163,21 +166,25 @@ describe('Elcé scenario builder', () => {
     const scenario = buildScenario(document, {})
     const pageAccessGuard = scenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_ACCESS] as unknown as (input: {
       readonly sceneKey: `scene-${string}`
+      readonly data: Readonly<Record<string, unknown>>
       readonly event?: { readonly name: string }
       readonly context: Readonly<Record<string, unknown>>
     }) => boolean
     const pageExitGuard = scenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as unknown as (input: {
       readonly sceneKey: `scene-${string}`
+      readonly data: Readonly<Record<string, unknown>>
       readonly event?: { readonly name: string }
       readonly context: Readonly<Record<string, unknown>>
     }) => boolean
     const accessPage = (pageId: string, context: Readonly<Record<string, unknown>>) => pageAccessGuard({
+      data: scenario.data ?? {},
       sceneKey: `scene-${pageId}`,
       event: { name: `${ELCE_EVENTS.MENU_PREFIX}${pageId}` },
       context,
     })
 
     expect(pageExitGuard({
+      data: scenario.data ?? {},
       sceneKey: 'scene-page-a',
       event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
       context: { profileEnabled: true },
@@ -216,18 +223,22 @@ describe('Elcé scenario builder', () => {
         }],
       },
     })
-    const pageAccessGuard = buildScenario(document, {}).guards?.[ELCE_SCENARIO_HANDLERS.PAGE_ACCESS] as unknown as (input: {
+    const scenario = buildScenario(document, {})
+    const pageAccessGuard = scenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_ACCESS] as unknown as (input: {
       readonly sceneKey: `scene-${string}`
+      readonly data: Readonly<Record<string, unknown>>
       readonly event?: { readonly name: string }
       readonly context: Readonly<Record<string, unknown>>
     }) => boolean
 
     expect(pageAccessGuard({
+      data: scenario.data ?? {},
       sceneKey: 'scene-page-a',
       event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-a` },
       context: { profileEnabled: true, profileValues: { 'profile-region': 'student' } },
     })).toBe(false)
     expect(pageAccessGuard({
+      data: scenario.data ?? {},
       sceneKey: 'scene-page-a',
       event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-a` },
       context: { profileEnabled: true, profileValues: { 'profile-region': 'teacher' } },
@@ -308,10 +319,12 @@ describe('Elcé scenario builder', () => {
     const scenario = buildScenario(document, {})
     const pageExitGuard = scenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as unknown as (input: {
       readonly sceneKey: `scene-${string}`
+      readonly data: Readonly<Record<string, unknown>>
       readonly event?: { readonly name: string }
       readonly context: Readonly<Record<string, unknown>>
     }) => boolean
     const summaryInput = {
+      data: scenario.data ?? {},
       sceneKey: 'scene-page-evaluation-summary' as const,
       event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
       context: { finishedPages: document.scenarioPageIds },
@@ -347,14 +360,17 @@ describe('Elcé scenario builder', () => {
       type: 'summary.settings.update',
       summary: { ...document.data.summary, pageContinuationMode: 'free' },
     })
-    const freePageExitGuard = buildScenario(freeDocument, {}).guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as unknown as typeof pageExitGuard
+    const freeScenario = buildScenario(freeDocument, {})
+    const freePageExitGuard = freeScenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as unknown as typeof pageExitGuard
     expect(freePageExitGuard({
       ...summaryInput,
+      data: freeScenario.data ?? {},
       sceneKey: 'scene-page-a',
       context: {},
     })).toBe(true)
     expect(freePageExitGuard({
       ...summaryInput,
+      data: freeScenario.data ?? {},
       context: { finishedPages: document.scenarioPageIds, questionResults: failingResults },
     })).toBe(false)
   })
@@ -375,11 +391,13 @@ describe('Elcé scenario builder', () => {
     const scenario = buildScenario(document, {})
     const pageExitGuard = scenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as unknown as (input: {
       readonly sceneKey: `scene-${string}`
+      readonly data: Readonly<Record<string, unknown>>
       readonly event?: { readonly name: string }
       readonly context: Readonly<Record<string, unknown>>
     }) => boolean
 
     expect(pageExitGuard({
+      data: scenario.data ?? {},
       sceneKey: 'scene-page-a',
       event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
       context: { finishedPages: ['page-a'] },

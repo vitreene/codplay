@@ -1,13 +1,14 @@
 import type { PersoDoc, SceneDoc } from 'codplay/scene/types'
 import type {
   SightyActionContext,
+  SightyConditionContext,
   SightyGraphView,
   SightyScenarioDefinition,
   SightyScenarioStateApi,
   SightyViewAction,
   SightyViewGraph,
 } from '@codplay/sighty'
-import type { SightySceneSourceValue } from '@codplay/sighty'
+import type { SightySceneResetHandler, SightySceneSourceValue } from '@codplay/sighty'
 import {
   ELCE_EVENTS,
   ELCE_SCENARIO,
@@ -28,10 +29,23 @@ import { ElceChapterEvaluation } from '../../domain/evaluation/chapter-evaluatio
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
 import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
 import { INITIAL_PROJECT_TEST_STATE } from '../../domain/summary-profile/test-state-types'
-import type { ProfileValue } from '../../domain/summary-profile/summary-profile-types'
-import { chapterVisibilityAllowsAccess, pageVisibilityAllowsAccess, validateProfileValues } from '../../domain/summary-profile/profile-rules'
+import type {
+  ProfileConstraint,
+  ProfileProperty,
+  ProfileValue,
+  ReadingConstraint,
+  SummarySettings,
+} from '../../domain/summary-profile/summary-profile-types'
+import {
+  pageVisibilityAllowsAccess,
+  profileVisibilityForChapter,
+  profileVisibilityForPage,
+  profileVisibilityMatches,
+  validateProfileValues,
+} from '../../domain/summary-profile/profile-rules'
 import { buildProfileFormScene } from '../summary-profile/profile-form-scene-builder'
 import { buildSummaryEntries, buildSummaryScene } from '../summary-profile/summary-scene-builder'
+import type { SummaryEntry } from '../summary-profile/summary-scene-builder'
 import type { ElceSceneKey, ElceSlotName } from './scenario-builder-types'
 
 type ElcePresentation = Readonly<{
@@ -47,6 +61,34 @@ type ElceProgressContext = Readonly<{
   readonly finishedPages?: readonly string[]
   readonly questionResults?: Readonly<Record<string, boolean>>
   readonly evaluationStates?: Readonly<Record<string, EvaluationMachineState>>
+}>
+
+type ElceRuntimeChapter = Pick<Chapter,
+  'id' | 'type' | 'pageIds' | 'evaluationThreshold' | 'evaluationAttemptLimit' | 'evaluationRetryScope'
+>
+
+type ElceRuntimeData = Readonly<{
+  pageIds: readonly string[]
+  pageNames: Readonly<Record<string, string>>
+  pagePaths: Readonly<Record<string, string>>
+  questionBdcByPage: Readonly<Record<string, string>>
+  previewStartPageId: string
+  evaluationResultPageIds: readonly string[]
+  chapterIds: readonly string[]
+  pages: Readonly<Record<string, Readonly<{ chapterId: string | null; bdcIds: readonly string[] }>>>
+  chapters: Readonly<Record<string, ElceRuntimeChapter>>
+  bdcTypes: Readonly<Record<string, string>>
+  summary: Pick<SummarySettings,
+    'title' | 'showAtRoot' | 'endChapterDestination' | 'pageContinuationMode' | 'permanentAccess'
+  >
+  profile: Readonly<{
+    fieldPropertyIds: readonly string[]
+    properties: readonly ProfileProperty[]
+    pageVisibility: Readonly<Record<string, ProfileConstraint>>
+    chapterVisibility: Readonly<Record<string, ProfileConstraint>>
+    readingConstraints: readonly ReadingConstraint[]
+  }>
+  summaryEntries: readonly SummaryEntry[]
 }>
 
 const chapterEvaluation = new ElceChapterEvaluation()
@@ -84,6 +126,14 @@ export function buildScenario(
     const hasEvaluationResult = page.bdcIds.some((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === BDC_TYPE.EVALUATION_RESULT)
     return hasEvaluationResult ? [page.id] : []
   }))
+  const runtimeData = createScenarioRuntimeData({
+    document,
+    pageIds,
+    pagePaths,
+    questionBdcByPage,
+    previewStartPageId: firstPageId,
+    evaluationResultPageIds: [...evaluationResultPageIds],
+  })
   const sceneCatalog: Record<string, SightySceneSourceValue> = {
     [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document.id),
     [ELCE_SCENARIO.SUMMARY_SCENE]: buildSummaryScene(document, 'root', options.mediaSources),
@@ -105,12 +155,7 @@ export function buildScenario(
     format: 'sighty',
     version: 1,
     id: `${document.id}-scenario`,
-    data: {
-      pageIds,
-      pageNames: Object.fromEntries(document.pages.map((page) => [page.id, page.name])),
-      pagePaths,
-      questionBdcByPage,
-    },
+    data: runtimeData,
     views: {
       start: ELCE_SCENARIO.ROOT_VIEW,
       views: {
@@ -137,27 +182,28 @@ export function buildScenario(
     },
     scenes: sceneCatalog,
     actions: {
-      [ELCE_SCENARIO_HANDLERS.REFRESH_PRESENTATION]: (context) => refreshPresentation(context, document),
-      [ELCE_SCENARIO_HANDLERS.OPEN_MENU_DRAWER]: async (context) => {
-        await openMenuDrawer(context)
-        await refreshPresentation(context, document)
-      },
+      [ELCE_SCENARIO_HANDLERS.REFRESH_PRESENTATION]: refreshPresentationAction,
+      [ELCE_SCENARIO_HANDLERS.OPEN_MENU_DRAWER]: openMenuDrawerAction,
       [ELCE_SCENARIO_HANDLERS.CLOSE_MENU_DRAWER]: closeMenuDrawer,
-      [ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED]: createMarkPageFinished(document, options.onTestStateChange),
-      [ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT]: createRecordQuestionResult(document, options.onTestStateChange),
-      [ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT]: createRefreshEvaluationResult(document, options.onTestStateChange),
-      [ELCE_SCENARIO_HANDLERS.SAVE_PROFILE_VALUES]: createSaveProfileValues(options.onTestStateChange),
-      [ELCE_SCENARIO_HANDLERS.SUBMIT_PROFILE]: createSubmitProfile(document, options.onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.MARK_PAGE_FINISHED]: options.onTestStateChange === undefined
+        ? markPageFinishedAction
+        : createMarkPageFinished(options.onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.RECORD_QUESTION_RESULT]: options.onTestStateChange === undefined
+        ? recordQuestionResultAction
+        : createRecordQuestionResult(options.onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT]: options.onTestStateChange === undefined
+        ? refreshEvaluationResultAction
+        : createRefreshEvaluationResult(options.onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.SAVE_PROFILE_VALUES]: options.onTestStateChange === undefined
+        ? saveProfileValuesAction
+        : createSaveProfileValues(options.onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.SUBMIT_PROFILE]: options.onTestStateChange === undefined
+        ? submitProfileAction
+        : createSubmitProfile(options.onTestStateChange),
     },
     guards: {
-      [ELCE_SCENARIO_HANDLERS.PAGE_ACCESS]: createPageAccessGuard(
-        document,
-        pageIds,
-        questionBdcByPage,
-        firstPageId,
-        evaluationResultPageIds,
-      ),
-      [ELCE_SCENARIO_HANDLERS.PAGE_EXIT]: createPageExitGuard(document, pageIds, questionBdcByPage),
+      [ELCE_SCENARIO_HANDLERS.PAGE_ACCESS]: pageAccessGuard,
+      [ELCE_SCENARIO_HANDLERS.PAGE_EXIT]: pageExitGuard,
     },
   }
 }
@@ -172,6 +218,63 @@ export function scenarioContextFromTestState(state: ProjectTestState): Readonly<
     profileEnabled: state.profileEnabled,
     profileSubmitted: state.profileSubmitted,
     profileValues: state.profileValues,
+  }
+}
+
+/** Builds the serializable reader configuration consumed by exported callbacks. */
+function createScenarioRuntimeData(input: Readonly<{
+  document: ElceDocument
+  pageIds: readonly string[]
+  pagePaths: Readonly<Record<string, string>>
+  questionBdcByPage: Readonly<Record<string, string>>
+  previewStartPageId: string
+  evaluationResultPageIds: readonly string[]
+}>): ElceRuntimeData {
+  const { document } = input
+  return {
+    pageIds: input.pageIds,
+    pageNames: Object.fromEntries(document.pages.map((page) => [page.id, page.name])),
+    pagePaths: input.pagePaths,
+    questionBdcByPage: input.questionBdcByPage,
+    previewStartPageId: input.previewStartPageId,
+    evaluationResultPageIds: input.evaluationResultPageIds,
+    chapterIds: document.chapters.map((chapter) => chapter.id),
+    pages: Object.fromEntries(document.pages.map((page) => [page.id, {
+      chapterId: page.chapterId,
+      bdcIds: page.bdcIds,
+    }])),
+    chapters: Object.fromEntries(document.chapters.map((chapter) => [chapter.id, {
+      id: chapter.id,
+      type: chapter.type,
+      pageIds: chapter.pageIds,
+      ...(chapter.evaluationThreshold === undefined ? {} : { evaluationThreshold: chapter.evaluationThreshold }),
+      ...(chapter.evaluationAttemptLimit === undefined ? {} : { evaluationAttemptLimit: chapter.evaluationAttemptLimit }),
+      ...(chapter.evaluationRetryScope === undefined ? {} : { evaluationRetryScope: chapter.evaluationRetryScope }),
+    }])),
+    bdcTypes: Object.fromEntries(document.bdcs
+      .filter((bdc) => bdc.type === BDC_TYPE.QUESTION || bdc.type === BDC_TYPE.EVALUATION_RESULT)
+      .map((bdc) => [bdc.id, bdc.type])),
+    summary: {
+      title: document.data.summary.title,
+      showAtRoot: document.data.summary.showAtRoot,
+      endChapterDestination: document.data.summary.endChapterDestination,
+      pageContinuationMode: document.data.summary.pageContinuationMode,
+      permanentAccess: document.data.summary.permanentAccess,
+    },
+    profile: {
+      fieldPropertyIds: document.data.profile.fieldPropertyIds,
+      properties: document.data.profile.properties,
+      pageVisibility: Object.fromEntries(document.pages.flatMap((page) => {
+        const constraint = profileVisibilityForPage(document, page.id)
+        return constraint === undefined ? [] : [[page.id, constraint]]
+      })),
+      chapterVisibility: Object.fromEntries(document.chapters.flatMap((chapter) => {
+        const constraint = profileVisibilityForChapter(document, chapter.id)
+        return constraint === undefined ? [] : [[chapter.id, constraint]]
+      })),
+      readingConstraints: document.data.profile.readingConstraints,
+    },
+    summaryEntries: buildSummaryEntries(document),
   }
 }
 
@@ -192,7 +295,7 @@ function createScenarioViews(
   const views: Record<string, SightyGraphView<ElceSceneKey, ElceSlotName>> = Object.fromEntries(
     document.data.scenarioEntries.flatMap((entry) => scenarioEntryView(document, entry, firstPageId, pageIds)),
   )
-  const collectProfile = shouldCollectProfile(document, options.testState ?? INITIAL_PROJECT_TEST_STATE)
+  const collectProfile = shouldCollectProfile(document.data.profile.fieldPropertyIds, options.testState ?? INITIAL_PROJECT_TEST_STATE)
   const firstPagePath = pagePathFromTable(pagePaths, firstPageId)
   if (pageIds.length === 0) {
     views[ELCE_SCENARIO.EMPTY_ENTRY_VIEW] = {
@@ -388,8 +491,8 @@ function navigationBlockActions(): Readonly<Record<string, SightyViewAction<Elce
 }
 
 /** Requires profile submission only when the author configured form fields. */
-function shouldCollectProfile(document: ElceDocument, state: ProjectTestState): boolean {
-  return state.profileEnabled && document.data.profile.fieldPropertyIds.length > 0 && !state.profileSubmitted
+function shouldCollectProfile(fieldPropertyIds: readonly string[], state: ProjectTestState): boolean {
+  return state.profileEnabled && fieldPropertyIds.length > 0 && !state.profileSubmitted
 }
 
 /** Sends the drawer-open event to the existing persistent menu scene. */
@@ -399,8 +502,26 @@ async function openMenuDrawer(context: SightyActionContext<ElceSceneKey, ElceSlo
   }, { scope: 'story', storyId: 'main' })
 }
 
+/** Refreshes the page chrome through the scenario data and the existing Sighty operations. */
+export async function refreshPresentationAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await refreshPresentation(context)
+}
+
+/** Opens the persistent menu drawer and refreshes its accessible page states. */
+export async function openMenuDrawerAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await openMenuDrawer(context)
+  await refreshPresentation(context)
+}
+
+/** Sends the scene-level Question reset event for supported reset keys. */
+export function resetQuestionScene(keys: readonly string[]): ReturnType<SightySceneResetHandler> {
+  return keys.includes('all') || keys.includes('quiz')
+    ? { name: ELCE_EVENTS.QUESTION_RESET, data: { keys: [...keys] } }
+    : undefined
+}
+
 /** Sends a responsive close request through the persistent menu scene. */
-async function closeMenuDrawer(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+export async function closeMenuDrawer(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
   await context.send(ELCE_SCENARIO.SUMMARY_MENU_SCENE, {
     name: ELCE_EVENTS.MENU_DRAWER_CLOSE,
   }, { scope: 'story', storyId: 'main' })
@@ -444,44 +565,40 @@ function createScenarioActions(
   return actions
 }
 
-/** Creates the page access condition used by the menu and the content slot. */
-function createPageAccessGuard(
-  document: ElceDocument,
-  pageIds: readonly string[],
-  questionBdcByPage: Readonly<Record<string, string>>,
-  previewStartPageId: string,
-  evaluationResultPageIds: ReadonlySet<string>,
-) {
-  return ({ sceneKey, event, context }: { sceneKey: ElceSceneKey; event?: { name: string; data?: unknown }; context: Readonly<Record<string, unknown>> }): boolean => {
-    if (sceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE) {
-      return shouldCollectProfile(document, testStateFromScenarioContext(context))
-    }
-    if (sceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE) {
-      return event?.name === ELCE_EVENTS.PROFILE_SUBMIT && isValidProfileSubmission(document, event.data)
-        || context.profileSubmitted === true
-    }
-    if (sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) {
-      return document.data.summary.showAtRoot
-        && (!shouldCollectProfile(document, testStateFromScenarioContext(context)) || context.profileSubmitted === true)
-    }
-    const pageId = pageIdFromSceneKey(sceneKey)
-    if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
-    if (!pageIds.includes(pageId)) return false
-    if (!pageProfileConstraintsAllowAccess(document, pageId, context, questionBdcByPage)) return false
-    if (event?.name === ELCE_EVENTS.RUNTIME_INITIALIZE) return true
-    const submitsProfile = event?.name === ELCE_EVENTS.PROFILE_SUBMIT && isValidProfileSubmission(document, event.data)
-    if (shouldCollectProfile(document, testStateFromScenarioContext(context)) && !submitsProfile) return false
-    const pageIndex = pageIds.indexOf(pageId)
-    if (pageIndex <= 0) return pageIndex === 0
-    if (pageId === previewStartPageId) return true
-    if (document.data.summary.pageContinuationMode === 'free' && !evaluationResultPageIds.has(pageId)) return true
-    const previewStartIndex = pageIds.indexOf(previewStartPageId)
-    const prefixStartIndex = pageIndex > previewStartIndex && !evaluationResultPageIds.has(pageId)
-      ? previewStartIndex
-      : 0
-    return pageIds.slice(prefixStartIndex, pageIndex)
-      .every((candidate) => isPageComplete(candidate, context, questionBdcByPage))
+/** Evaluates the page access condition from compact scenario data and call parameters. */
+export function pageAccessGuard(input: SightyConditionContext<ElceSceneKey>): boolean {
+  const { sceneKey, event, context } = input
+  const runtime = readScenarioRuntimeData(input.data)
+  if (sceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE) {
+    return shouldCollectProfile(runtime.profile.fieldPropertyIds, testStateFromScenarioContext(context))
   }
+  if (sceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE) {
+    return event?.name === ELCE_EVENTS.PROFILE_SUBMIT
+        && isValidProfileSubmission(runtime.profile.properties, runtime.profile.fieldPropertyIds, event.data)
+      || context.profileSubmitted === true
+  }
+  if (sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) {
+    return runtime.summary.showAtRoot
+      && (!shouldCollectProfile(runtime.profile.fieldPropertyIds, testStateFromScenarioContext(context)) || context.profileSubmitted === true)
+  }
+  const pageId = pageIdFromSceneKey(sceneKey)
+  if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
+  if (!runtime.pageIds.includes(pageId)) return false
+  if (!runtimePageProfileConstraintsAllowAccess(runtime, pageId, context)) return false
+  if (event?.name === ELCE_EVENTS.RUNTIME_INITIALIZE) return true
+  const submitsProfile = event?.name === ELCE_EVENTS.PROFILE_SUBMIT
+    && isValidProfileSubmission(runtime.profile.properties, runtime.profile.fieldPropertyIds, event.data)
+  if (shouldCollectProfile(runtime.profile.fieldPropertyIds, testStateFromScenarioContext(context)) && !submitsProfile) return false
+  const pageIndex = runtime.pageIds.indexOf(pageId)
+  if (pageIndex <= 0) return pageIndex === 0
+  if (pageId === runtime.previewStartPageId) return true
+  if (runtime.summary.pageContinuationMode === 'free' && !runtime.evaluationResultPageIds.includes(pageId)) return true
+  const previewStartIndex = runtime.pageIds.indexOf(runtime.previewStartPageId)
+  const prefixStartIndex = pageIndex > previewStartIndex && !runtime.evaluationResultPageIds.includes(pageId)
+    ? previewStartIndex
+    : 0
+  return runtime.pageIds.slice(prefixStartIndex, pageIndex)
+    .every((candidate) => isPageComplete(candidate, context, runtime.questionBdcByPage))
 }
 
 /** Keeps page visibility and chapter prerequisites active in either continuation mode. */
@@ -497,14 +614,14 @@ function pageProfileConstraintsAllowAccess(
 }
 
 /** Validates a form event before Sighty admits its completion destination. */
-function isValidProfileSubmission(document: ElceDocument, data: unknown): boolean {
+function isValidProfileSubmission(
+  properties: readonly ProfileProperty[],
+  fieldPropertyIds: readonly string[],
+  data: unknown,
+): boolean {
   if (!isRecord(data) || !isRecord(data.profileValues)) return false
   const values = readProfileValues(data.profileValues)
-  return validateProfileValues(
-    document.data.profile.properties,
-    document.data.profile.fieldPropertyIds,
-    values,
-  ).length === 0
+  return validateProfileValues(properties, fieldPropertyIds, values).length === 0
 }
 
 /** Applies the configured chapter prerequisite against retained reader progress. */
@@ -532,28 +649,41 @@ function chapterReadingRequirementMet(
 }
 
 /** Creates the page exit condition that follows Demo 5's scroll-end navigation. */
-function createPageExitGuard(document: ElceDocument, pageIds: readonly string[], questionBdcByPage: Readonly<Record<string, string>>) {
-  return ({ sceneKey, event, context }: { sceneKey: ElceSceneKey; event?: { name: string }; context: Readonly<Record<string, unknown>> }): boolean => {
-    if (sceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE) return event?.name === ELCE_EVENTS.PROFILE_SUBMIT
-    if (sceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE || sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) return true
-    const pageId = pageIdFromSceneKey(sceneKey)
-    if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
-    switch (event?.name) {
-      case ELCE_EVENTS.NAVIGATION_PREVIOUS:
-        return pageIds.indexOf(pageId) > 0
-      case ELCE_EVENTS.NAVIGATION_NEXT:
-        return canLeavePage(document, pageId, questionBdcByPage, context)
-      case ELCE_EVENTS.MENU_SUMMARY:
-        return document.data.summary.permanentAccess || isPageComplete(pageId, context, questionBdcByPage)
-      default:
-        return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
-    }
+/** Evaluates the page exit condition from compact scenario data and call parameters. */
+export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): boolean {
+  const { sceneKey, event, context } = input
+  const runtime = readScenarioRuntimeData(input.data)
+  if (sceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE) return event?.name === ELCE_EVENTS.PROFILE_SUBMIT
+  if (sceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE || sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) return true
+  const pageId = pageIdFromSceneKey(sceneKey)
+  if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
+  switch (event?.name) {
+    case ELCE_EVENTS.NAVIGATION_PREVIOUS:
+      return runtime.pageIds.indexOf(pageId) > 0
+    case ELCE_EVENTS.NAVIGATION_NEXT:
+      return canLeavePage(runtime, pageId, context)
+    case ELCE_EVENTS.MENU_SUMMARY:
+      return runtime.summary.permanentAccess || isPageComplete(pageId, context, runtime.questionBdcByPage)
+    default:
+      return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
   }
 }
 
 /** Records a functional page end and refreshes the fixed controls. */
-function createMarkPageFinished(document: ElceDocument, onTestStateChange?: ScenarioBuildOptions['onTestStateChange']) {
-  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
+export async function markPageFinishedAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await runMarkPageFinished(context)
+}
+
+/** Keeps the authoring preview's host persistence callback outside the exported runtime function. */
+function createMarkPageFinished(onTestStateChange: NonNullable<ScenarioBuildOptions['onTestStateChange']>) {
+  return (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => runMarkPageFinished(context, onTestStateChange)
+}
+
+/** Updates reader progress, optionally reports it to the preview host, and refreshes presentation. */
+async function runMarkPageFinished(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+  onTestStateChange?: ScenarioBuildOptions['onTestStateChange'],
+): Promise<void> {
   const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
   if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
   const finishedPages = readFinishedPages(context.context)
@@ -562,35 +692,70 @@ function createMarkPageFinished(document: ElceDocument, onTestStateChange?: Scen
     await context.updateContext({ finishedPages: nextFinishedPages })
     onTestStateChange?.(testStateFromScenarioContext(context.context, { finishedPages: nextFinishedPages }))
   }
-  await refreshPresentation(context, document)
-  }
+  await refreshPresentation(context)
 }
 
-/** Persists form edits in the shared Sighty context without changing the document. */
-function createSaveProfileValues(onTestStateChange?: ScenarioBuildOptions['onTestStateChange']) {
-  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
-    const data = context.event.data
-    if (data === undefined || !isRecord(data.profileValues)) return
-    const profileValues = readProfileValues(data.profileValues)
-    await context.updateContext({ profileValues })
-    await onTestStateChange?.(testStateFromScenarioContext(context.context, { profileValues }))
-  }
+/** Updates profile values in the shared Sighty context. */
+export async function saveProfileValuesAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await runSaveProfileValues(context)
 }
 
-/** Commits a valid initial profile and waits for the reader host to rebuild its projection. */
-function createSubmitProfile(document: ElceDocument, onTestStateChange?: ScenarioBuildOptions['onTestStateChange']) {
-  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
-    const data = context.event.data
-    if (!isValidProfileSubmission(document, data)) return
-    const profileValues = readProfileValues(data?.profileValues)
-    await context.updateContext({ profileValues, profileSubmitted: true })
-    await onTestStateChange?.(testStateFromScenarioContext(context.context, { profileValues, profileSubmitted: true }))
-  }
+/** Keeps authoring-preview persistence outside the exported profile handler. */
+function createSaveProfileValues(onTestStateChange: NonNullable<ScenarioBuildOptions['onTestStateChange']>) {
+  return (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => runSaveProfileValues(context, onTestStateChange)
 }
 
-/** Stores a validated answer in the existing Sighty progress and Evaluation state. */
-function createRecordQuestionResult(document: ElceDocument, onTestStateChange?: ScenarioBuildOptions['onTestStateChange']) {
-  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
+/** Applies a profile edit and optionally reports it to the authoring host. */
+async function runSaveProfileValues(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+  onTestStateChange?: ScenarioBuildOptions['onTestStateChange'],
+): Promise<void> {
+  const data = context.event.data
+  if (data === undefined || !isRecord(data.profileValues)) return
+  const profileValues = readProfileValues(data.profileValues)
+  await context.updateContext({ profileValues })
+  await onTestStateChange?.(testStateFromScenarioContext(context.context, { profileValues }))
+}
+
+/** Commits a valid initial profile using the compact scenario definition. */
+export async function submitProfileAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await runSubmitProfile(context)
+}
+
+/** Keeps authoring-preview persistence outside the exported profile handler. */
+function createSubmitProfile(onTestStateChange: NonNullable<ScenarioBuildOptions['onTestStateChange']>) {
+  return (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => runSubmitProfile(context, onTestStateChange)
+}
+
+/** Validates profile values, updates Sighty state, and optionally reports the change to the host. */
+async function runSubmitProfile(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+  onTestStateChange?: ScenarioBuildOptions['onTestStateChange'],
+): Promise<void> {
+  const runtime = readScenarioRuntimeData(context.data)
+  const data = context.event.data
+  if (!isValidProfileSubmission(runtime.profile.properties, runtime.profile.fieldPropertyIds, data)) return
+  const profileValues = readProfileValues(isRecord(data) ? data.profileValues : undefined)
+  await context.updateContext({ profileValues, profileSubmitted: true })
+  await onTestStateChange?.(testStateFromScenarioContext(context.context, { profileValues, profileSubmitted: true }))
+}
+
+/** Stores a validated answer in Sighty progress and its existing Evaluation state. */
+export async function recordQuestionResultAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await runRecordQuestionResult(context)
+}
+
+/** Keeps authoring-preview persistence outside the exported question handler. */
+function createRecordQuestionResult(onTestStateChange: NonNullable<ScenarioBuildOptions['onTestStateChange']>) {
+  return (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => runRecordQuestionResult(context, onTestStateChange)
+}
+
+/** Validates a Question result, updates Sighty state, and refreshes presentation. */
+async function runRecordQuestionResult(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+  onTestStateChange?: ScenarioBuildOptions['onTestStateChange'],
+): Promise<void> {
+    const runtime = readScenarioRuntimeData(context.data)
     const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
     const payload = context.event.data as {
@@ -601,18 +766,19 @@ function createRecordQuestionResult(document: ElceDocument, onTestStateChange?: 
       selectedAnswerIds?: unknown
       expectedAnswerIds?: unknown
     } | undefined
-    const expectedBdcId = readQuestionBdcIds(context).find((candidate) => candidate.pageId === pageId)?.bdcId
+    const expectedBdcId = runtime.questionBdcByPage[pageId]
     if (payload?.pageId !== pageId || payload.bdcId !== expectedBdcId || typeof payload.isCorrect !== 'boolean') return
 
     const questionResults = readQuestionResults(context.context)
-    const page = document.pages.find((candidate) => candidate.id === pageId)
+    const page = runtime.pages[pageId]
     const chapter = page?.chapterId === null || page?.chapterId === undefined
       ? undefined
-      : document.chapters.find((candidate) => candidate.id === page.chapterId && candidate.type === CHAPTER_TYPE.EVALUATION)
+      : runtime.chapters[page.chapterId]
+    const evaluationChapter = chapter?.type === CHAPTER_TYPE.EVALUATION ? chapter : undefined
     const evaluationStates = readEvaluationStates(context.context)
-    const state = chapter === undefined
+    const state = evaluationChapter === undefined
       ? undefined
-      : recordEvaluationAnswer(document, chapter, pageId, payload, evaluationStates[chapter.id])
+      : recordEvaluationAnswer(runtime, evaluationChapter, pageId, payload, evaluationStates[evaluationChapter.id])
     const answerIds = readStringIds(payload.answerIds)
     const selectedAnswerIds = readStringIds(payload.selectedAnswerIds)
     const expectedAnswerIds = readStringIds(payload.expectedAnswerIds)
@@ -622,9 +788,9 @@ function createRecordQuestionResult(document: ElceDocument, onTestStateChange?: 
         ...readQuestionAnswers(context.context),
         [pageId]: { answerIds, selectedAnswerIds, expectedAnswerIds, isCorrect: payload.isCorrect },
       }
-    const nextEvaluationStates = chapter === undefined || state === undefined
+    const nextEvaluationStates = evaluationChapter === undefined || state === undefined
       ? evaluationStates
-      : { ...evaluationStates, [chapter.id]: state }
+      : { ...evaluationStates, [evaluationChapter.id]: state }
     await context.updateContext({
       questionResults: { ...questionResults, [pageId]: payload.isCorrect },
       questionAnswers,
@@ -635,14 +801,13 @@ function createRecordQuestionResult(document: ElceDocument, onTestStateChange?: 
       questionResults: { ...questionResults, [pageId]: payload.isCorrect },
       evaluationStates: nextEvaluationStates,
     }))
-    await refreshPresentation(context, document)
-  }
+    await refreshPresentation(context)
 }
 
 /** Records the validated answer in its chapter's existing portable machine. */
 function recordEvaluationAnswer(
-  document: ElceDocument,
-  chapter: Chapter,
+  runtime: ElceRuntimeData,
+  chapter: ElceRuntimeChapter,
   pageId: string,
   payload: Readonly<{ answerIds?: unknown; selectedAnswerIds?: unknown; expectedAnswerIds?: unknown }>,
   previousState: EvaluationMachineState | undefined,
@@ -651,7 +816,7 @@ function recordEvaluationAnswer(
   const selectedAnswerIds = readStringIds(payload.selectedAnswerIds)
   const expectedAnswerIds = readStringIds(payload.expectedAnswerIds)
   if (answerIds === undefined || selectedAnswerIds === undefined || expectedAnswerIds === undefined) return previousState
-  const questionIds = evaluationQuestionPageIds(document, chapter)
+  const questionIds = evaluationQuestionPageIds(runtime, chapter)
   if (questionIds.length === 0) return previousState
   const machine = createEvaluationMachine(chapter, questionIds)
   let state = previousState ?? machine.initialState()
@@ -663,18 +828,32 @@ function recordEvaluationAnswer(
 }
 
 /** Reads Sighty's result state on page entry and sends it to the Result story. */
-function createRefreshEvaluationResult(document: ElceDocument, onTestStateChange?: ScenarioBuildOptions['onTestStateChange']) {
-  return async (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => {
-    await refreshPresentation(context, document)
+export async function refreshEvaluationResultAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  await runRefreshEvaluationResult(context)
+}
+
+/** Keeps authoring-preview persistence outside the exported result handler. */
+function createRefreshEvaluationResult(onTestStateChange: NonNullable<ScenarioBuildOptions['onTestStateChange']>) {
+  return (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> => runRefreshEvaluationResult(context, onTestStateChange)
+}
+
+/** Refreshes the page chrome and sends a completed Evaluation result to its compiled scene. */
+async function runRefreshEvaluationResult(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+  onTestStateChange?: ScenarioBuildOptions['onTestStateChange'],
+): Promise<void> {
+    const runtime = readScenarioRuntimeData(context.data)
+    await refreshPresentation(context)
     const pageId = pageIdFromSceneKey(context.scenarioState.active?.sceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
-    const page = document.pages.find((candidate) => candidate.id === pageId)
+    const page = runtime.pages[pageId]
     if (page?.chapterId === null || page?.chapterId === undefined) return
-    const chapter = document.chapters.find((candidate) => candidate.id === page.chapterId && candidate.type === CHAPTER_TYPE.EVALUATION)
-    const resultBdcId = page.bdcIds.find((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === BDC_TYPE.EVALUATION_RESULT)
+    const sourceChapter = runtime.chapters[page.chapterId]
+    const chapter = sourceChapter?.type === CHAPTER_TYPE.EVALUATION ? sourceChapter : undefined
+    const resultBdcId = page.bdcIds.find((bdcId) => runtime.bdcTypes[bdcId] === BDC_TYPE.EVALUATION_RESULT)
     if (chapter === undefined || resultBdcId === undefined) return
 
-    const questionIds = evaluationQuestionPageIds(document, chapter)
+    const questionIds = evaluationQuestionPageIds(runtime, chapter)
     if (questionIds.length === 0) return
     const evaluationStates = readEvaluationStates(context.context)
     let state = evaluationStates[chapter.id]
@@ -691,15 +870,12 @@ function createRefreshEvaluationResult(document: ElceDocument, onTestStateChange
     await context.send(`scene-${pageId}` as ElceSceneKey, {
       name: passed ? ELCE_EVENTS.EVALUATION_RESULT_SUCCESS : ELCE_EVENTS.EVALUATION_RESULT_FAILURE,
     }, { scope: 'scene' })
-  }
 }
 
 /** Refreshes menu, title, and navigation from the active Sighty page. */
-async function refreshPresentation(context: SightyActionContext<ElceSceneKey, ElceSlotName>, document: ElceDocument): Promise<void> {
-  const pageIds = readPageIds(context)
-  const pageNames = readPageNames(context)
-  const pagePaths = readPagePaths(context)
-  const presentation = await createPresentation(context.scenarioState, pageIds, pageNames, pagePaths, document, context.context)
+async function refreshPresentation(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  const runtime = readScenarioRuntimeData(context.data)
+  const presentation = await createPresentation(context.scenarioState, runtime, context.context)
   await context.send(ELCE_SCENARIO.TITLE_SCENE, {
     name: ELCE_EVENTS.PRESENTATION_TITLE,
     data: { content: presentation.title },
@@ -751,37 +927,34 @@ async function refreshPresentation(context: SightyActionContext<ElceSceneKey, El
 /** Projects the current page and its guard answers into the fixed controls. */
 async function createPresentation(
   scenarioState: SightyScenarioStateApi<ElceSceneKey, ElceSlotName>,
-  pageIds: readonly string[],
-  pageNames: Readonly<Record<string, string>>,
-  pagePaths: Readonly<Record<string, string>>,
-  document: ElceDocument,
+  runtime: ElceRuntimeData,
   readerContext: Readonly<Record<string, unknown>>,
 ): Promise<ElcePresentation> {
   const activeContentSelection = scenarioState.current.find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)
   const activeSceneKey = activeContentSelection?.sceneKey ?? scenarioState.active?.sceneKey
   const activePageId = pageIdFromSceneKey(activeSceneKey)
-  const pageIndex = activePageId === undefined ? -1 : pageIds.indexOf(activePageId)
-  const page = activePageId === undefined ? undefined : pageIds[pageIndex]
-  const nextPageId = pageIndex < 0 ? undefined : pageIds[pageIndex + 1]
-  const activePage = activePageId === undefined ? undefined : document.pages.find((candidate) => candidate.id === activePageId)
+  const pageIndex = activePageId === undefined ? -1 : runtime.pageIds.indexOf(activePageId)
+  const page = activePageId === undefined ? undefined : runtime.pageIds[pageIndex]
+  const nextPageId = pageIndex < 0 ? undefined : runtime.pageIds[pageIndex + 1]
+  const activePage = activePageId === undefined ? undefined : runtime.pages[activePageId]
   const activeChapter = activePage?.chapterId === null || activePage?.chapterId === undefined
     ? undefined
-    : document.chapters.find((candidate) => candidate.id === activePage.chapterId)
+    : runtime.chapters[activePage.chapterId]
   const nextDestination = activeChapter?.pageIds.at(-1) === activePageId
-    && document.data.summary.endChapterDestination === 'summary'
-    && document.data.summary.showAtRoot
+    && runtime.summary.endChapterDestination === 'summary'
+    && runtime.summary.showAtRoot
     ? { path: `${ELCE_SCENARIO.ROOT_VIEW}/${ELCE_SCENARIO.SUMMARY_ENTRY_VIEW}` }
-    : nextPageId === undefined ? undefined : { path: pagePathFromTable(pagePaths, nextPageId) }
+    : nextPageId === undefined ? undefined : { path: pagePathFromTable(runtime.pagePaths, nextPageId) }
   const previousAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
-        { path: pagePathFromTable(pagePaths, page) },
+        { path: pagePathFromTable(runtime.pagePaths, page) },
       { name: ELCE_EVENTS.NAVIGATION_PREVIOUS, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
   const nextExitAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
-        { path: pagePathFromTable(pagePaths, page) },
+        { path: pagePathFromTable(runtime.pagePaths, page) },
       { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
   const nextPageAllowed = nextDestination === undefined
@@ -793,33 +966,31 @@ async function createPresentation(
 
   const menu = await createMenuClassPatch(
     activePageId,
-    pagePaths,
-    document,
+    runtime,
     readerContext.profileEnabled !== false,
     readProfileValues(readerContext.profileValues),
     scenarioState,
   )
   return {
     title: activeSceneKey === ELCE_SCENARIO.SUMMARY_SCENE
-      ? document.data.summary.title
+      ? runtime.summary.title
       : activeSceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE || activeSceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE
         ? 'Profil'
-        : page === undefined || page === ELCE_SCENARIO.EMPTY_PAGE ? 'Aucune page' : pageNames[page] ?? page,
+        : page === undefined || page === ELCE_SCENARIO.EMPTY_PAGE ? 'Aucune page' : runtime.pageNames[page] ?? page,
     menuClassPatch: menu.patch,
     menuPageStates: menu.states,
     previousAttributes: { type: 'button', disabled: pageIndex <= 0 || !previousAllowed },
     nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextPageAllowed },
     navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
       ? ''
-      : `Page ${pageIndex + 1} sur ${pageIds.length}`,
+      : `Page ${pageIndex + 1} sur ${runtime.pageIds.length}`,
   }
 }
 
 /** Computes menu classes using the same access guard as the content slot. */
 async function createMenuClassPatch(
   activePageId: string | undefined,
-  pagePaths: Readonly<Record<string, string>>,
-  document: ElceDocument,
+  runtime: ElceRuntimeData,
   profileEnabled: boolean,
   profileValues: Readonly<Record<string, ProfileValue>>,
   scenarioState: SightyScenarioStateApi<ElceSceneKey, ElceSlotName>,
@@ -827,15 +998,15 @@ async function createMenuClassPatch(
   readonly patch: Readonly<{ add: string; remove: string }>
   readonly states: readonly Readonly<{ id: string; title: string; active: boolean; allowed: boolean }>[]
 }>> {
-  const access = await Promise.all(buildSummaryEntries(document).map(async (entry) => {
+  const access = await Promise.all(runtime.summaryEntries.map(async (entry) => {
     const pageAllowed = entry.pageId === activePageId
       ? true
       : await scenarioState.canAccess(
-          { path: pagePathFromTable(pagePaths, entry.pageId) },
+          { path: pagePathFromTable(runtime.pagePaths, entry.pageId) },
           { name: menuEvent(entry.pageId), sourceSceneKey: ELCE_SCENARIO.SUMMARY_MENU_SCENE },
         )
     const chapterAllowed = !profileEnabled || entry.kind !== 'chapter'
-      || chapterVisibilityAllowsAccess(document, entry.id, profileValues)
+      || runtimeChapterVisibilityAllowsAccess(runtime, entry.id, profileValues)
     return { id: entry.pageId, title: entry.title, allowed: pageAllowed && chapterAllowed }
   }))
   const classes = ['elce-player-menu-state']
@@ -843,26 +1014,6 @@ async function createMenuClassPatch(
     patch: { add: classes.join(' '), remove: classes.join(' ') },
     states: access.map((page) => ({ ...page, active: page.id === activePageId })),
   }
-}
-
-/** Reads the ordered page catalogue from static scenario data. */
-function readPageIds(context: SightyActionContext<ElceSceneKey, ElceSlotName>): readonly string[] {
-  const pageIds = context.data.pageIds
-  return Array.isArray(pageIds) ? pageIds.filter((pageId): pageId is string => typeof pageId === 'string') : []
-}
-
-/** Reads the static page names stored beside the ordered scenario catalogue. */
-function readPageNames(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Readonly<Record<string, string>> {
-  const pageNames = context.data.pageNames
-  if (typeof pageNames !== 'object' || pageNames === null) return {}
-  return Object.fromEntries(Object.entries(pageNames).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
-}
-
-/** Reads the stable page routes stored beside the scenario page catalogue. */
-function readPagePaths(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Readonly<Record<string, string>> {
-  const pagePaths = context.data.pagePaths
-  if (typeof pagePaths !== 'object' || pagePaths === null) return {}
-  return Object.fromEntries(Object.entries(pagePaths).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
 }
 
 /** Reads the progress list stored in Sighty context. */
@@ -910,9 +1061,63 @@ function testStateFromScenarioContext(
   }
 }
 
+/** Reads the runtime configuration embedded in the compact scenario data. */
+function readScenarioRuntimeData(value: Readonly<Record<string, unknown>>): ElceRuntimeData {
+  if (!Array.isArray(value.pageIds)
+    || !isRecord(value.pageNames)
+    || !isRecord(value.pagePaths)
+    || !isRecord(value.pages)
+    || !isRecord(value.chapters)
+    || !isRecord(value.profile)) {
+    throw new Error('Les données runtime du scénario Elcé sont absentes ou invalides.')
+  }
+  return value as unknown as ElceRuntimeData
+}
+
 /** Checks whether a scenario context field is a non-array object. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Applies compact page visibility and chapter-prerequisite data to one access check. */
+function runtimePageProfileConstraintsAllowAccess(
+  runtime: ElceRuntimeData,
+  pageId: string,
+  context: Readonly<Record<string, unknown>>,
+): boolean {
+  if (context.profileEnabled === false) return true
+  const visibility = runtime.profile.pageVisibility[pageId]
+  if (visibility?.unmetBehavior === 'lock'
+    && !profileVisibilityMatches(visibility.conditions, new Map(runtime.profile.properties.map((property) => [property.id, property])), readProfileValues(context.profileValues))) {
+    return false
+  }
+  const page = runtime.pages[pageId]
+  if (page?.chapterId === null || page?.chapterId === undefined) return true
+  const constraint = runtime.profile.readingConstraints.find((candidate) => candidate.target.id === page.chapterId)
+  if (constraint === undefined) return true
+  const chapterIndex = runtime.chapterIds.indexOf(page.chapterId)
+  const requiredChapterIds = constraint.requirement.kind === 'chapters'
+    ? constraint.requirement.chapterIds
+    : runtime.chapterIds[chapterIndex - 1] === undefined
+      ? []
+      : [runtime.chapterIds[chapterIndex - 1]!]
+  return requiredChapterIds.every((requiredChapterId) => {
+    const requiredChapter = runtime.chapters[requiredChapterId]
+    return requiredChapter !== undefined
+      && requiredChapter.pageIds.every((requiredPageId) => isPageComplete(requiredPageId, context, runtime.questionBdcByPage))
+  })
+}
+
+/** Checks one chapter's compact visibility rule using the shared profile evaluator. */
+function runtimeChapterVisibilityAllowsAccess(
+  runtime: ElceRuntimeData,
+  chapterId: string,
+  profileValues: Readonly<Record<string, ProfileValue>>,
+): boolean {
+  const visibility = runtime.profile.chapterVisibility[chapterId]
+  return visibility === undefined
+    || visibility.unmetBehavior !== 'lock'
+    || profileVisibilityMatches(visibility.conditions, new Map(runtime.profile.properties.map((property) => [property.id, property])), profileValues)
 }
 
 /** Accepts only the serializable profile values supported by the test-state API. */
@@ -931,17 +1136,14 @@ function readStringIds(value: unknown): readonly string[] | undefined {
   return value
 }
 
-/** Resolves the chapter's ordered Question pages for its Evaluation machine. */
-function evaluationQuestionPageIds(document: ElceDocument, chapter: Chapter): readonly string[] {
-  return chapter.pageIds.filter((pageId) => {
-    const page = document.pages.find((candidate) => candidate.id === pageId)
-    return page?.bdcIds.some((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === BDC_TYPE.QUESTION) === true
-  })
+/** Resolves the chapter's ordered Question pages from the compact scene index. */
+function evaluationQuestionPageIds(runtime: ElceRuntimeData, chapter: ElceRuntimeChapter): readonly string[] {
+  return chapter.pageIds.filter((pageId) => runtime.questionBdcByPage[pageId] !== undefined)
 }
 
 /** Creates the chapter machine with its authored settings and shared score threshold. */
 function createEvaluationMachine(
-  chapter: Chapter,
+  chapter: ElceRuntimeChapter,
   questionIds: readonly string[],
 ): EvaluationMachine {
   return new EvaluationMachine({
@@ -954,15 +1156,6 @@ function createEvaluationMachine(
   })
 }
 
-/** Reads the static Question-to-page index stored in the scenario definition. */
-function readQuestionBdcIds(context: SightyActionContext<ElceSceneKey, ElceSlotName>): readonly Readonly<{ pageId: string; bdcId: string }>[] {
-  const questionBdcByPage = context.data.questionBdcByPage
-  if (typeof questionBdcByPage !== 'object' || questionBdcByPage === null) return []
-  return Object.entries(questionBdcByPage)
-    .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-    .map(([pageId, bdcId]) => ({ pageId, bdcId }))
-}
-
 /** Requires scroll-end and a submitted Question answer when the page owns one. */
 function isPageComplete(pageId: string, context: Readonly<Record<string, unknown>>, questionBdcByPage: Readonly<Record<string, string>>): boolean {
   if (!readFinishedPages(context).includes(pageId)) return false
@@ -971,19 +1164,18 @@ function isPageComplete(pageId: string, context: Readonly<Record<string, unknown
 
 /** Applies page completion and any final Evaluation chapter threshold before navigation. */
 function canLeavePage(
-  document: ElceDocument,
+  runtime: ElceRuntimeData,
   pageId: string,
-  questionBdcByPage: Readonly<Record<string, string>>,
   context: Readonly<Record<string, unknown>>,
 ): boolean {
-  if (document.data.summary.pageContinuationMode !== 'free' && !isPageComplete(pageId, context, questionBdcByPage)) return false
-  const page = findPage(document, pageId)
-  if (page.chapterId === null) return true
-  const chapter = document.chapters.find((candidate) => candidate.id === page.chapterId)
+  if (runtime.summary.pageContinuationMode !== 'free' && !isPageComplete(pageId, context, runtime.questionBdcByPage)) return false
+  const page = runtime.pages[pageId]
+  if (page === undefined || page.chapterId === null) return true
+  const chapter = runtime.chapters[page.chapterId]
   switch (chapter?.type) {
     case CHAPTER_TYPE.EVALUATION: {
       if (chapter.pageIds.at(-1) !== pageId) return true
-      const questionPageIds = chapter.pageIds.filter((candidate) => questionBdcByPage[candidate] !== undefined)
+      const questionPageIds = evaluationQuestionPageIds(runtime, chapter)
       const evaluation = chapterEvaluation.evaluate(
         questionPageIds,
         readQuestionResults(context),

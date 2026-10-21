@@ -1,16 +1,32 @@
 import type { AuthorRecord, PersoDoc, SceneDoc, StoryDoc } from 'codplay/scene/types'
-import type { StrapFunction, StrapRuntimeOutput } from 'codplay/runtime/player'
 import { TRACK_EVENT_ACTIVATE, TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
 import { ELCE_VIEWPORT_EXPANSION_DURATION_MS } from './viewport-expansion-style.ts'
+import {
+  carouselViewCollapsedEvent,
+  carouselViewExpandedEvent,
+  carouselViewportCurrentEvent,
+  contentCloseEvent,
+  contentOpenEvent,
+  ELCE_VIEWPORT_EXPANSION_RUNTIME_KEY,
+  initializeViewportGestureCapture,
+  trackViewportGesture,
+  viewportFocusEvent,
+  viewportExpansionStrap,
+  VIEWPORT_EXPANSION_CONTENT_ATTR,
+  VIEWPORT_EXPANSION_SCROLL_LOCK_EVENT,
+  VIEWPORT_EXPANSION_SCROLL_LOCK_REQUEST_EVENT,
+  VIEWPORT_EXPANSION_SCROLL_UNLOCK_EVENT,
+  VIEWPORT_EXPANSION_SCROLL_UNLOCK_REQUEST_EVENT,
+} from '../scene-functions/viewport-expansion'
 
-const SWIPE_THRESHOLD_PX = 48
-const TAP_TOLERANCE_PX = 8
-
-export const VIEWPORT_EXPANSION_SCROLL_LOCK_EVENT = 'elce:viewport-expansion:scroll-lock'
-export const VIEWPORT_EXPANSION_SCROLL_UNLOCK_EVENT = 'elce:viewport-expansion:scroll-unlock'
-export const VIEWPORT_EXPANSION_CONTENT_ATTR = 'data-elce-viewport-content'
-const VIEWPORT_EXPANSION_SCROLL_LOCK_REQUEST_EVENT = 'elce:viewport-expansion:request-scroll-lock'
-const VIEWPORT_EXPANSION_SCROLL_UNLOCK_REQUEST_EVENT = 'elce:viewport-expansion:request-scroll-unlock'
+export {
+  carouselViewCollapsedEvent,
+  carouselViewExpandedEvent,
+  carouselViewportCurrentEvent,
+  VIEWPORT_EXPANSION_CONTENT_ATTR,
+  VIEWPORT_EXPANSION_SCROLL_LOCK_EVENT,
+  VIEWPORT_EXPANSION_SCROLL_UNLOCK_EVENT,
+} from '../scene-functions/viewport-expansion'
 
 export type ViewportExpansionCarouselView = Readonly<{
   readonly bdcId: string
@@ -110,7 +126,6 @@ export function addViewportExpansionToStory(
   const navigationPersos = carousel === undefined
     ? []
     : createCarouselNavigationPersos(story.id, hostId, carousel, gestureEndEvent, escapeEvent)
-  const controlDirections = new Map(navigationPersos.map((perso) => [perso.id, perso.id.endsWith('-previous') ? 'previous' : 'next'] as const))
   const host: PersoDoc<string> = {
     id: `${hostId}-host`,
     type: 'layout',
@@ -159,36 +174,45 @@ export function addViewportExpansionToStory(
     },
   }
 
-  const expansionStrap = createViewportExpansionStrap({
-    storyId: story.id,
-    hostId: `${hostId}-host`,
-    contentIds,
-    viewByContentId,
-    controlDirections,
-    carousel,
-    gestureEndEvent,
-    keyboardToggleEvent,
-    escapeEvent,
-    openHostEvent,
-    closeHostEvent,
-    finishCloseHostEvent,
-    focusReadyEvent,
-    hostPartId,
-  })
-
   return {
     ...story,
     state: {
       ...story.state,
       expandedContentId: null,
       closingContentId: null,
+      [ELCE_VIEWPORT_EXPANSION_RUNTIME_KEY]: {
+        storyId: story.id,
+        hostId: `${hostId}-host`,
+        ...(carousel === undefined ? {} : {
+          previousControlId: `${hostId}-previous`,
+          nextControlId: `${hostId}-next`,
+        }),
+        contentIds: [...contentIds],
+        views: [...viewByContentId].map(([persoId, view]) => ({ persoId, bdcId: view.bdcId })),
+        ...(carousel === undefined ? {} : {
+          carousel: {
+            selectionEvent: carousel.selectionEvent,
+            automatic: carousel.automatic,
+            trackId: carousel.trackId,
+            trackActivateEvent: TRACK_EVENT_ACTIVATE,
+            trackDeactivateEvent: TRACK_EVENT_DEACTIVATE,
+          },
+        }),
+        gestureEndEvent,
+        keyboardToggleEvent,
+        escapeEvent,
+        openHostEvent,
+        closeHostEvent,
+        finishCloseHostEvent,
+        focusReadyEvent,
+      },
     },
     persos: [
       ...story.persos.map((perso) => expandedContents.find((content) => content.id === perso.id) ?? perso),
       host,
       ...navigationPersos,
     ],
-    straps: { ...story.straps, [strapName]: expansionStrap },
+    straps: { ...story.straps, [strapName]: viewportExpansionStrap },
     listen: [
       ...story.listen ?? [],
       { on: gestureEndEvent, straps: [strapName] },
@@ -310,21 +334,6 @@ function asEventRules(value: unknown): readonly unknown[] {
   return Array.isArray(value) ? value : [value]
 }
 
-/** Names one Carousel view move triggered only while its viewport is expanded. */
-export function carouselViewExpandedEvent(storyId: string, bdcId: string): string {
-  return `${storyId}:viewport:carousel:${bdcId}:expanded`
-}
-
-/** Names one Carousel view return triggered only while its viewport is expanded. */
-export function carouselViewCollapsedEvent(storyId: string, bdcId: string): string {
-  return `${storyId}:viewport:carousel:${bdcId}:collapsed`
-}
-
-/** Names the Carousel view used to update the expanded navigation edge controls. */
-export function carouselViewportCurrentEvent(storyId: string, bdcId: string): string {
-  return `${storyId}:viewport:carousel:${bdcId}:current`
-}
-
 /** Builds a pointer capture that measures the movement from one pointer gesture. */
 function createPointerGestureRule(sourceId: string, endEventName: string) {
   return {
@@ -333,16 +342,8 @@ function createPointerGestureRule(sourceId: string, endEventName: string) {
       stateScope: 'story' as const,
       trackOn: ['pointermove'],
       endOn: ['pointerup'],
-      initCaptureState: () => ({ deltaX: 0, deltaY: 0 }),
-      trackCommand: ({ sample, captureState }: {
-        readonly sample: Readonly<Record<string, unknown>>
-        readonly captureState: Readonly<Record<string, unknown>>
-      }) => ({
-        captureState: {
-          deltaX: readNumber(captureState.deltaX) + readNumber(sample.movementX),
-          deltaY: readNumber(captureState.deltaY) + readNumber(sample.movementY),
-        },
-      }),
+      initCaptureState: initializeViewportGestureCapture,
+      trackCommand: trackViewportGesture,
       endEmit: { name: endEventName, data: { sourceId }, visibility: 'story' as const },
     },
   }
@@ -398,156 +399,6 @@ function createCarouselNavigationPersos(
   })
 }
 
-/** Resolves tap, swipe, keyboard toggle, and Escape through the owning story's strap. */
-function createViewportExpansionStrap(input: Readonly<{
-  storyId: string
-  hostId: string
-  contentIds: ReadonlySet<string>
-  viewByContentId: ReadonlyMap<string, ViewportExpansionCarouselView>
-  controlDirections: ReadonlyMap<string, 'previous' | 'next'>
-  carousel?: ViewportExpansionCarousel
-  gestureEndEvent: string
-  keyboardToggleEvent: string
-  escapeEvent: string
-  openHostEvent: string
-  closeHostEvent: string
-  finishCloseHostEvent: string
-  focusReadyEvent: string
-  hostPartId: string
-}>): StrapFunction {
-  return ({ event, state }) => {
-    const expandedContentId = typeof state.expandedContentId === 'string' ? state.expandedContentId : undefined
-    const closingContentId = typeof state.closingContentId === 'string' ? state.closingContentId : undefined
-    const sourceId = typeof event.data?.sourceId === 'string' ? event.data.sourceId : undefined
-    const keyboardContentId = typeof event.data?.contentPersoId === 'string' ? event.data.contentPersoId : undefined
-
-    if (event.name === input.focusReadyEvent) {
-      if (expandedContentId !== undefined || closingContentId === undefined) return undefined
-      const contentId = closingContentId
-      return {
-        update: { closingContentId: null },
-        events: [
-          { name: input.finishCloseHostEvent, visibility: 'story' },
-          { name: VIEWPORT_EXPANSION_SCROLL_UNLOCK_REQUEST_EVENT, visibility: 'scene' },
-          { name: viewportFocusEvent(input.storyId, contentId), visibility: 'story' },
-          ...(input.carousel?.automatic !== true || input.carousel === undefined || state.manualCarouselSelection === true
-            ? []
-            : [{ name: TRACK_EVENT_ACTIVATE, data: { trackIds: [input.carousel.trackId] }, visibility: 'scene' as const }]),
-        ],
-      }
-    }
-
-    if (event.name === input.escapeEvent) {
-      return expandedContentId === undefined
-        ? undefined
-        : closeExpansion(expandedContentId, expandedCardId(expandedContentId), input)
-    }
-
-    if (event.name === input.keyboardToggleEvent) {
-      if (keyboardContentId === undefined || !input.contentIds.has(keyboardContentId)) return undefined
-      if (expandedContentId === keyboardContentId) {
-        return closeExpansion(keyboardContentId, expandedCardId(keyboardContentId), input)
-      }
-      if (expandedContentId !== undefined || (closingContentId !== undefined && closingContentId !== keyboardContentId)) return undefined
-      return openExpansion(keyboardContentId, input)
-    }
-
-    if (event.name !== input.gestureEndEvent || sourceId === undefined) return undefined
-    const captureState = asRecord(event.data?.captureState)
-    const deltaX = readNumber(captureState.deltaX)
-    const deltaY = readNumber(captureState.deltaY)
-    const horizontalSwipe = Math.abs(deltaX) >= SWIPE_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY)
-    if (horizontalSwipe) {
-      if (expandedContentId === undefined || input.carousel === undefined) return undefined
-      const direction = deltaX < 0 ? 'next' : 'previous'
-      return { events: [{ name: input.carousel.selectionEvent, data: { direction }, visibility: 'story' }] }
-    }
-
-    if (Math.abs(deltaX) >= TAP_TOLERANCE_PX || Math.abs(deltaY) >= TAP_TOLERANCE_PX) return undefined
-    const controlDirection = input.controlDirections.get(sourceId)
-    if (controlDirection !== undefined) {
-      if (expandedContentId === undefined) {
-        return closingContentId === undefined ? undefined : openExpansion(closingContentId, input)
-      }
-      return input.carousel === undefined
-        ? undefined
-        : { events: [{ name: input.carousel.selectionEvent, data: { direction: controlDirection }, visibility: 'story' }] }
-    }
-
-    if (expandedContentId !== undefined) {
-      return sourceId === input.hostId || sourceId === expandedContentId
-        ? closeExpansion(expandedContentId, expandedCardId(expandedContentId), input)
-        : undefined
-    }
-    if (closingContentId !== undefined) {
-      return sourceId === input.hostId || sourceId === closingContentId
-        ? openExpansion(closingContentId, input)
-        : undefined
-    }
-    return input.contentIds.has(sourceId) ? openExpansion(sourceId, input) : undefined
-  }
-
-  function expandedCardId(contentId: string): string | undefined {
-    return input.viewByContentId.get(contentId)?.bdcId
-  }
-}
-
-/** Opens one content perso and records the selected Carousel view when applicable. */
-function openExpansion(
-  contentId: string,
-  input: Parameters<typeof createViewportExpansionStrap>[0],
-): StrapRuntimeOutput {
-  const view = input.viewByContentId.get(contentId)
-  const events = [
-    { name: contentOpenEvent(input.storyId, contentId), visibility: 'story' as const },
-    { name: input.openHostEvent, visibility: 'story' as const },
-    { name: VIEWPORT_EXPANSION_SCROLL_LOCK_REQUEST_EVENT, visibility: 'scene' as const },
-    ...(view === undefined ? [] : [{ name: carouselViewportCurrentEvent(input.storyId, view.bdcId), visibility: 'story' as const }]),
-    ...(input.carousel?.automatic !== true || input.carousel === undefined
-      ? []
-      : [{ name: TRACK_EVENT_DEACTIVATE, data: { trackIds: [input.carousel.trackId] }, visibility: 'scene' as const }]),
-  ]
-  return {
-    update: {
-      expandedContentId: contentId,
-      closingContentId: null,
-      ...(view === undefined ? {} : { activeCardBdcId: view.bdcId }),
-    },
-    events,
-  }
-}
-
-/** Closes one content perso, restores focus, and resumes automatic Carousel playback when allowed. */
-function closeExpansion(
-  contentId: string,
-  cardBdcId: string | undefined,
-  input: Parameters<typeof createViewportExpansionStrap>[0],
-): StrapRuntimeOutput {
-  return {
-    update: { expandedContentId: null, closingContentId: contentId },
-    events: [
-      { name: contentCloseEvent(input.storyId, contentId), visibility: 'story' as const },
-      { name: input.closeHostEvent, visibility: 'story' as const },
-      ...(cardBdcId === undefined ? [] : [{ name: `${input.storyId}:viewport:carousel:close`, visibility: 'story' as const }]),
-    ],
-  }
-}
-
-/** Returns one viewport content source event identity. */
-function contentOpenEvent(storyId: string, contentId: string): string {
-  return `${storyId}:viewport:content:${contentId}:open`
-}
-
-/** Returns one viewport content return event identity. */
-function contentCloseEvent(storyId: string, contentId: string): string {
-  return `${storyId}:viewport:content:${contentId}:close`
-}
-
-/** Names the focus restoration emitted after the content return motion settles. */
-function viewportFocusEvent(storyId: string, contentId: string): string {
-  return `${storyId}:viewport:content:${contentId}:focus`
-}
-
 /** Reads one move target without changing the authored source placement. */
 function readMoveTarget(move: unknown, contentId: string): string {
   if (typeof move === 'string') return move
@@ -564,6 +415,3 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 /** Reads one finite numeric movement sample. */
-function readNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}

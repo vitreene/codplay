@@ -243,6 +243,23 @@ body {
   font-size: 0.8rem;
 }
 
+.elce-project-export-button {
+  flex: 0 0 auto;
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  color: #fffdf8;
+  background: #46726b;
+  border: 1px solid #b9c9c1;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.elce-project-export-button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 .elce-project-selection {
   display: grid;
   min-height: calc(100vh - 4rem);
@@ -987,15 +1004,6 @@ body {
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
-}
-
-.elce-sighty-export-button {
-  background: #263b3a;
-}
-
-.elce-sighty-export-button:disabled {
-  cursor: progress;
-  opacity: 0.7;
 }
 
 .elce-workspace-access-error {
@@ -2258,6 +2266,11 @@ body {
   .elce-project-menu {
     flex: 1 1 9rem;
     min-width: 0;
+  }
+
+  .elce-project-export-button {
+    order: 2;
+    margin-left: auto;
   }
 
   .elce-history-actions {

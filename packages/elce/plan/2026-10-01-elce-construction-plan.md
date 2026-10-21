@@ -353,6 +353,44 @@ intégration dépendante ; les travaux indépendants continuent.
   fermé restait donc dans la grille et repoussait la zone centrale. Le sélecteur
   de masquage est maintenant limité au panneau latéral fermé dans l’espace auteur.
 
+### Placement du bouton d’export Sighty — décision acceptée
+
+Le bouton « Exporter le scénario » rejoint le côté droit de la barre de titre
+du projet. « Prévisualiser » reste dans la barre de commandes au-dessus de la
+zone centrale. Le même gestionnaire d’export, l’état occupé et les annonces
+d’erreur ou de téléchargement sont conservés.
+
+- [x] Déplacer le bouton dans la barre de titre, à droite, et le retirer de la
+  barre responsive du workspace.
+- [x] Vérifier l’emplacement, l’action et l’état occupé, puis mettre à jour les
+  spécifications, les tests, le typecheck et le build. Les tests
+  `project-application.test.tsx` et `editor-workspace.test.tsx` couvrent le
+  nouvel emplacement et l’action ; typecheck, build et `git diff --check`
+  passent.
+
+### Minification de `elce-engine.js` — décision acceptée
+
+Le bundle d’intégration Elcé n’a besoin que du prédicat `isPlainRecord` pour
+valider la capacité `scroll-container`. Le validateur local de
+`component-v2` copie ce petit prédicat au lieu d’importer la barre
+`codplay/shared`. Il importe également le garde DOM depuis son fichier précis,
+pas depuis la barre complète `codplay/runtime/runner-html`. Ces deux barres
+peuvent tirer des services sans rapport avec la capacité, dont la table de
+couleurs ACE. La configuration engine Elcé importe ses définitions de
+composant et de module depuis leurs modules précis ; elle ne charge pas la
+barre qui réexporte également l’adaptateur HTML utilisé par le player Elcé.
+Le moteur et son builder CodPlay restent inchangés.
+
+- [x] Copier le prédicat dans le validateur `scroll-container` de
+  `component-v2`, retirer l’import de la barre partagée et cibler le fichier du
+  garde DOM directement ; cibler aussi les deux définitions requises depuis
+  les modules précis dans la configuration engine Elcé.
+- [x] Vérifier les tests de la capacité, puis reconstruire l’engine Elcé et
+  confirmer que la table de couleurs ACE n’est plus embarquée ; mettre à jour
+  la spécification d’export et le présent suivi. Le bundle passe de 23 073 à
+  8 672 octets (−62,4 %) ; les tests `component-v2` et d’export, le typecheck
+  Elcé et `git diff --check` passent.
+
 ### Défilement indépendant des colonnes — décision acceptée, implémentation en cours
 
 Quand l’éditeur est ouvert, son bandeau supérieur reste fixe dans la fenêtre et
@@ -1091,6 +1129,19 @@ modification CSS temporaire suit le même circuit. Après les deux rechargements
 Projet 1 reste ouvert et l’état revient à « Synchronisé ». Les modifications
 temporaires sont retirées. L’interface reste sur 5175, l’API sur 5181 et aucun
 serveur n’est ouvert sur 5173.
+
+### Indications de préchargement en développement — décision acceptée
+
+Le navigateur avertit que des dizaines de modules annoncés par
+`entry.preloads` ne sont pas utilisés dans les secondes après le chargement.
+La réponse HTML de développement n’émettra pas ces `modulepreload` : le client
+chargera les modules à leur import. Le build de production conservera les
+préchargements. Le log de connexion HMR reste disponible ; aucune interception
+globale de la console n’est ajoutée.
+
+- [x] Omettre `entry.preloads` du HTML en développement et les conserver en
+  production.
+- [x] Vérifier les deux rendus par test, puis typecheck et build Elcé.
 
 ## Évaluation initiale — BDC insérables dans le flux d’une Section
 

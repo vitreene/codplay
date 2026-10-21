@@ -1,6 +1,5 @@
 import type { ValidationContext, ValidationFunction } from 'codplay/services'
 import { validateTagInitial } from 'codplay'
-import { isPlainRecord } from 'codplay/shared'
 
 /** Validates one scrollport tag and its optional progress profile. */
 export const validateScrollContainerInitial: ValidationFunction = (value, context) => {
@@ -44,6 +43,16 @@ export const validateScrollContainerInitial: ValidationFunction = (value, contex
       'values.progress.range',
     )
   }
+}
+
+/** Narrows scroll-container inputs to plain records without importing shared style utilities. */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }
 
 /** Reports a component validation error at its authored profile path. */

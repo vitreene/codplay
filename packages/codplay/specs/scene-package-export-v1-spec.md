@@ -134,6 +134,30 @@ ces mêmes références ainsi que `createScenePackageContext()`, qui renvoie
 et différés et les assets importés, sans `toString`, `eval` ni compilation de
 scène au chargement.
 
+Une scène peut regrouper ses fonctions auteur dans un seul module et le
+désigner explicitement depuis son entrée :
+
+```ts
+export * as sceneFunctions from './scene-functions.js'
+```
+
+Avec cette déclaration, l’exporteur associe chaque `{ ref, path }` retourné par
+`CodPlay.build(..., { export: true })` à la fonction de même identité dans
+`sceneFunctions`. Une fonction absente bloque l’export avec
+`CODPLAY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED`. Le paquet `functions.mjs`
+importe statiquement par nom les seules fonctions référencées et les seules
+fonctions des `strapCollections` utilisées par une déclaration de straps
+réutilisables. Vite conserve leurs dépendances auteur transitives et élimine
+les autres exports du groupe ; le module de construction du `SceneDoc` reste
+hors de ce paquet. Chaque appel à `createScenePackageContext()` crée un groupe
+de fonctions neuf, comme dans le chemin historique. Les imports de constantes
+de projet utilisées par ces fonctions restent inclus.
+
+Sans namespace `sceneFunctions`, l’export conserve le chemin historique qui
+bundle le module de scène complet pour préserver les fermetures existantes.
+L’entrée namespace est donc l’opt-in au paquet compact ; elle ne change ni le
+format du manifeste, ni le player, ni le contrat de chargement.
+
 Le code de `scene/functions.mjs` est une ressource du paquet scène. Le player
 séparé charge sa fabrique depuis le dossier donné à `load()` et transmet les
 fonctions restaurées au runtime existant comme callbacks. Le build du player

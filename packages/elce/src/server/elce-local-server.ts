@@ -118,7 +118,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
           return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
         }
         const apiOrigin = apiOriginForRequest(request, apiPort, networkPreviewOrigin)
-        const documentHtml = renderDocumentHtml(entry, styles, apiOrigin, networkPreviewOrigin ?? null)
+        const documentHtml = renderDocumentHtml(entry, styles, apiOrigin, networkPreviewOrigin ?? null, isDevelopment)
         return new Response(request.method === 'HEAD' ? null : documentHtml, {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
@@ -303,11 +303,12 @@ async function serveAsset(assets: ReturnType<typeof createAssetServer>, request:
 }
 
 /** Creates the Remix SPA document with its runtime import map and native stylesheets. */
-function renderDocumentHtml(
+export function renderDocumentHtml(
   entry: Awaited<ReturnType<ReturnType<typeof createAssetServer>['getScriptEntry']>>,
   styles: readonly string[],
   apiOrigin: string,
   previewOrigin: string | null,
+  isDevelopment: boolean,
 ): string {
   const styleLinks = styles.map((href, index) =>
     `<link id="elce-style-${index + 1}" rel="stylesheet" href="${escapeHtmlAttribute(href)}">`,
@@ -315,9 +316,11 @@ function renderDocumentHtml(
   const importMap = escapeInlineScript(JSON.stringify(entry.importMap))
   const browserApiOrigin = escapeInlineScript(JSON.stringify(apiOrigin))
   const browserPreviewOrigin = escapeInlineScript(JSON.stringify(previewOrigin))
-  const preloads = entry.preloads.map((href, index) =>
-    `<link id="elce-module-preload-${index + 1}" rel="modulepreload" href="${escapeHtmlAttribute(href)}">`,
-  ).join('\n    ')
+  const preloads = isDevelopment
+    ? ''
+    : entry.preloads.map((href, index) =>
+      `<link id="elce-module-preload-${index + 1}" rel="modulepreload" href="${escapeHtmlAttribute(href)}">`,
+    ).join('\n    ')
 
   return `<!doctype html>
 <html id="elce-document" lang="fr">

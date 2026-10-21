@@ -169,10 +169,10 @@ describe('Elcé Diapo scene builder', () => {
     expect(story?.persos.filter((perso) => perso.type === 'input')).toHaveLength(2)
     expect(story?.persos.find((perso) => perso.id.endsWith(':prompt'))?.initial).toMatchObject({ tag: 'legend' })
     expect(story?.listen).toContainEqual({
-      on: `${page.id}:bdc-diapo-question:reset`,
+      on: ELCE_EVENTS.QUESTION_RESET,
       straps: [`${page.id}:bdc-diapo-question:reset-question`],
     })
-    expect(build.questionReset).toEqual({ eventName: `${page.id}:bdc-diapo-question:reset` })
+    expect(build.questionReset).toEqual({ eventName: ELCE_EVENTS.QUESTION_RESET })
   })
 
   it.each([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO])('projects the flexible Diapo Question %s illustration', (mediaType) => {

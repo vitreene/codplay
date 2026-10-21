@@ -107,7 +107,7 @@ export function buildDiapoScene(
           options.questionAnswers?.[page.id],
         )
         childStories = { [questionStory.id]: questionStory }
-        const resetEventName = `${page.id}:${bdc.id}:reset`
+        const resetEventName = ELCE_EVENTS.QUESTION_RESET
         questionReset = { eventName: resetEventName }
         const mediaPerso = createQuestionMediaPerso(bdc, questionBuild.zonePartIds.illustration ?? '', options)
         childStories = { [questionStory.id]: { ...questionStory, persos: [...(questionStory.persos ?? []), ...mediaPerso] } }

@@ -409,6 +409,82 @@ describe('scene export command', () => {
     await expect(firstContext.functions[deferredRef]()).resolves.toBe('deferred-import-ready')
   })
 
+  it('tree-shakes a grouped sceneFunctions namespace and keeps only referenced callbacks and straps', async () => {
+    const directory = await createTemporaryDirectory()
+    const sceneFile = path.join(directory, 'scene.ts')
+    const functionsFile = path.join(directory, 'scene-functions.ts')
+    const destination = path.join(directory, 'exported-scene')
+    await writeFile(path.join(directory, 'project-constants.ts'), "export const PROJECT_PREFIX = 'project-constant-kept'\n")
+    await writeFile(path.join(directory, 'unused-constants.ts'), "export const UNUSED_CONSTANT = 'unused-dependency-removed'\n")
+    await writeFile(functionsFile, [
+      "import { PROJECT_PREFIX } from './project-constants.ts'",
+      "import { UNUSED_CONSTANT } from './unused-constants.ts'",
+      'export function onStart({ value }) { return `${PROJECT_PREFIX}:${value}` }',
+      "export function sharedStrap({ event }) { return [{ event: { name: 'shared-result', data: event.data } }] }",
+      "export function storyStrap({ event }) { return [{ event: { name: 'story-result', data: event.data } }] }",
+      'export function unusedCallback() { return UNUSED_CONSTANT }',
+      'export function unusedStrap() { return UNUSED_CONSTANT }',
+      '',
+    ].join('\n'))
+    await writeFile(sceneFile, [
+      "import { onStart, sharedStrap, storyStrap, unusedStrap } from './scene-functions.ts'",
+      "export * as sceneFunctions from './scene-functions.ts'",
+      "const sceneConstructionSentinel = 'scene-constructor-excluded'",
+      'export const scene = {',
+      "  id: 'compact-grouped-functions',",
+      '  onStart,',
+      "  straps: ['shared'],",
+      "  stories: { main: { id: 'main', persos: [], straps: ['story'] } },",
+      '}',
+      'export const strapCollections = { scene: { shared: sharedStrap, unused: unusedStrap }, stories: { main: { story: storyStrap, unused: unusedStrap } } }',
+      'void sceneConstructionSentinel',
+      '',
+    ].join('\n'))
+
+    await exportScenePackage({ sceneFile, destination, workingDirectory: directory })
+
+    const manifest = JSON.parse(await readFile(path.join(destination, 'export-manifest.json'), 'utf8'))
+    const functionSource = await readFile(path.join(destination, manifest.functions.file), 'utf8')
+    expect(manifest.functions.references.map(({ path: sourcePath }) => sourcePath)).toEqual([['onStart']])
+    expect(functionSource).toContain('project-constant-kept')
+    expect(functionSource).toContain('shared-result')
+    expect(functionSource).toContain('story-result')
+    expect(functionSource).not.toContain('unused-dependency-removed')
+    expect(functionSource).not.toContain('scene-constructor-excluded')
+
+    const functionsModule = await import(pathToFileURL(path.join(destination, manifest.functions.file)).href)
+    const firstContext = functionsModule.createScenePackageContext()
+    const secondContext = functionsModule.createScenePackageContext()
+    const startReference = manifest.functions.references[0].ref
+    expect(firstContext.functions[startReference]({ value: 'call-value' })).toBe('project-constant-kept:call-value')
+    expect(firstContext.strapCollections.scene.shared({ event: { data: { answer: 42 } } })).toEqual([
+      { event: { name: 'shared-result', data: { answer: 42 } } },
+    ])
+    expect(firstContext.strapCollections.scene).toHaveProperty('shared')
+    expect(firstContext.strapCollections.scene).not.toHaveProperty('unused')
+    expect(firstContext.strapCollections.stories.main).toHaveProperty('story')
+    expect(firstContext.strapCollections.stories.main).not.toHaveProperty('unused')
+    expect(firstContext.functions[startReference]).not.toBe(secondContext.functions[startReference])
+  })
+
+  it('rejects a grouped sceneFunctions namespace when a compiled callback is missing from it', async () => {
+    const directory = await createTemporaryDirectory()
+    const sceneFile = path.join(directory, 'scene.ts')
+    await writeFile(path.join(directory, 'scene-functions.ts'), 'export const unrelated = () => undefined\n')
+    await writeFile(sceneFile, [
+      'const onStart = () => undefined',
+      "export * as sceneFunctions from './scene-functions.ts'",
+      "export const scene = { id: 'compact-missing-function', onStart, stories: { main: { id: 'main', persos: [] } } }",
+      '',
+    ].join('\n'))
+
+    await expect(exportScenePackage({
+      sceneFile,
+      destination: path.join(directory, 'exported-scene'),
+      workingDirectory: directory,
+    })).rejects.toThrow('CODPLAY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED')
+  })
+
   it('rejects an external strap declared in a scope that does not provide it', async () => {
     const directory = await createTemporaryDirectory()
     const sceneFile = path.join(directory, 'scene.ts')

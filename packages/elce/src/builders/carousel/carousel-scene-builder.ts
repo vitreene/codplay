@@ -2,7 +2,7 @@ import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automa
 import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { TRACK_EVENT_DEACTIVATE, type StrapFunction } from 'codplay/runtime/player'
+import { TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
 import { BDC_TYPE, CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
 import type { CarouselContent, CarouselBdcEntry } from '../../domain/carousel/carousel-types'
 import type { Bdc } from '../../domain/document/document-types'
@@ -14,12 +14,10 @@ import { createResolvedRevelationAction } from '../revelation/revelation-action'
 import type { CarouselSceneBuild, CarouselSceneBuildInput } from './carousel-scene-builder-types'
 import {
   addViewportExpansionToStory,
-  carouselViewCollapsedEvent,
-  carouselViewExpandedEvent,
-  carouselViewportCurrentEvent,
   isViewportExpansionPerso,
   type ViewportExpansionCarouselView,
 } from '../viewport-expansion/viewport-expansion-builder.ts'
+import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../scene-functions/carousel'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
@@ -132,7 +130,20 @@ export class ElceCarouselSceneBuilder {
       )
     const story: StoryDoc<string> = {
       id: storyId,
-      state: { activeCardBdcId: firstCardBdcId, manualCarouselSelection: false },
+      state: {
+        activeCardBdcId: firstCardBdcId,
+        manualCarouselSelection: false,
+        [ELCE_CAROUSEL_RUNTIME_KEY]: {
+          prefix,
+          storyId,
+          cardIds: content.cards.map((entry) => entry.bdcId),
+          selectionEvent,
+          automatic: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+          trackId: storyId,
+          trackDeactivateEvent: TRACK_EVENT_DEACTIVATE,
+          views: expandableViews,
+        },
+      },
       persos: [
         ...(diapoRootId === undefined ? [] : [createDiapoCarouselRoot(
           diapoRootId,
@@ -149,7 +160,7 @@ export class ElceCarouselSceneBuilder {
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
         ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
         : [],
-      straps: { [selectionEvent]: createSelectionStrap(prefix, content, storyId, expandableViews) },
+      straps: { [selectionEvent]: selectCarouselCardStrap },
       listen: [{ on: selectionEvent, straps: [selectionEvent] }],
     }
     const expandedStory = addViewportExpansionToStory(story, {
@@ -461,65 +472,5 @@ function createCarouselNavigationPerso(
     },
     emit: { click: { event: { name: selectionEvent, data: { cardBdcId: bdc.id }, visibility: 'story' } } },
     actions,
-  }
-}
-
-/** Builds the strap that selects a Card and interrupts scheduled playback after a manual choice. */
-function createSelectionStrap(
-  prefix: string,
-  content: CarouselContent,
-  storyId: string,
-  expandableViews: readonly ViewportExpansionCarouselView[],
-): StrapFunction {
-  return ({ event, state }) => {
-    let selectedBdcId = typeof event.data?.cardBdcId === 'string' ? event.data.cardBdcId : undefined
-    const direction = event.data?.direction
-    if (selectedBdcId === undefined && (direction === 'previous' || direction === 'next')) {
-      const activeBdcId = typeof state.activeCardBdcId === 'string' ? state.activeCardBdcId : undefined
-      const currentViewIndex = expandableViews.findIndex((view) => view.bdcId === activeBdcId)
-      const nextViewIndex = currentViewIndex + (direction === 'next' ? 1 : -1)
-      if (currentViewIndex < 0 || nextViewIndex < 0 || nextViewIndex >= expandableViews.length) return undefined
-      selectedBdcId = expandableViews[nextViewIndex]?.bdcId
-    }
-    if (selectedBdcId === undefined) return undefined
-    const selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId)
-    if (selectedEntry === undefined) return undefined
-    const selectedView = expandableViews.find((view) => view.bdcId === selectedEntry.bdcId)
-    const expandedContentId = typeof state.expandedContentId === 'string' ? state.expandedContentId : undefined
-    if (expandedContentId !== undefined && selectedView === undefined) return undefined
-    const previousView = expandedContentId === undefined
-      ? undefined
-      : expandableViews.find((view) => view.persoId === expandedContentId)
-    const expandedEvents = expandedContentId === undefined || selectedView === undefined
-      ? []
-      : [
-          ...(previousView === undefined || previousView.bdcId === selectedView.bdcId
-            ? []
-            : [{ name: carouselViewCollapsedEvent(storyId, previousView.bdcId) }]),
-          ...(previousView?.bdcId === selectedView.bdcId
-            ? []
-            : [{ name: carouselViewExpandedEvent(storyId, selectedView.bdcId) }]),
-          { name: carouselViewportCurrentEvent(storyId, selectedView.bdcId) },
-        ]
-    return {
-      update: {
-        activeCardBdcId: selectedEntry.bdcId,
-        manualCarouselSelection: true,
-        ...(expandedContentId === undefined || selectedView === undefined ? {} : { expandedContentId: selectedView.persoId }),
-      },
-      events: [
-        ...content.cards.map((entry) => ({
-          name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? 'selected' : 'unselected'}`,
-        })),
-        ...expandedEvents,
-        ...(content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
-          ? [{
-            name: TRACK_EVENT_DEACTIVATE,
-            data: { trackIds: [storyId] },
-            visibility: 'scene' as const,
-          }]
-          : []),
-      ],
-    }
   }
 }

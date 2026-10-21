@@ -253,7 +253,7 @@ describe('Elcé Flux scene builder', () => {
     ]))
     expect(questionStory?.listen).toEqual(expect.arrayContaining([
       expect.objectContaining({ on: 'page-a:bdc-question-1:validate' }),
-      expect.objectContaining({ on: 'page-a:bdc-question-1:reset' }),
+      expect.objectContaining({ on: ELCE_EVENTS.QUESTION_RESET }),
     ]))
     const result = codplay.build({ scene: build.sceneDoc })
     expect(result.ok).toBe(true)

@@ -1,6 +1,7 @@
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import ts from 'typescript'
 import { build } from 'vite'
 import { buildCodPlayLibrary } from '../player-build/cli.mjs'
 import { packageResources } from './resource-packager.mjs'
@@ -130,14 +131,39 @@ export async function exportScenePackage({
       })
       const packagedStyleSheet = await packageStyleSheet({ compiledStyleSheet, stageDirectory })
       const functionReferences = buildResult.functionReferences ?? []
-      const packagedFunctions = functionReferences.length > 0 || strapCollectionsExported
-        ? await buildFunctionModule({
+      const sceneFunctionsModule = await resolveSceneFunctionsModule(absoluteSceneFile)
+      const compactFunctions = sceneFunctionsModule === undefined
+        ? undefined
+        : resolveCompactFunctions({
+          sceneFunctions: sceneModule.sceneFunctions,
+          sceneFunctionsModule,
+          functionReferences,
+          functions: buildResult.functions,
+          compiledScene: buildResult.compiledScene,
+          strapCollections,
+        })
+      const hasCompactFunctions = compactFunctions !== undefined
+        && (compactFunctions.functions.length > 0
+          || compactFunctions.strapCollections.scene.length > 0
+          || Object.values(compactFunctions.strapCollections.stories).some((straps) => straps.length > 0))
+      let packagedFunctions
+      if (compactFunctions !== undefined) {
+        if (hasCompactFunctions) {
+          packagedFunctions = await buildFunctionModule({
+            packageRoot,
+            functionReferences,
+            stageDirectory,
+            compactFunctions,
+          })
+        }
+      } else if (functionReferences.length > 0 || strapCollectionsExported) {
+        packagedFunctions = await buildFunctionModule({
           packageRoot,
           sceneFile: absoluteSceneFile,
           functionReferences,
           stageDirectory,
         })
-        : undefined
+      }
       const codec = new codecModule.CompiledSceneCodec({ diagnosticOutput: () => undefined })
       const sceneJson = codec.encode(packaged.compiledScene)
       await writeFile(path.join(stageDirectory, 'scene/scene.json'), sceneJson)
@@ -282,19 +308,117 @@ function hasUrlImportQuery(source) {
   return query !== undefined && new URLSearchParams(query).has('url')
 }
 
+/** Resolves the grouped author-function module explicitly re-exported by a scene entry. */
+async function resolveSceneFunctionsModule(sceneFile) {
+  const sourceText = await readFile(sceneFile, 'utf8')
+  const source = ts.createSourceFile(sceneFile, sourceText, ts.ScriptTarget.Latest, true)
+  let moduleSpecifier
+  let hasSceneFunctionsExport = false
+  for (const statement of source.statements) {
+    if (!ts.isExportDeclaration(statement) || statement.exportClause === undefined) continue
+    if (ts.isNamespaceExport(statement.exportClause) && statement.exportClause.name.text === 'sceneFunctions') {
+      moduleSpecifier = statement.moduleSpecifier
+      break
+    }
+    if (ts.isNamedExports(statement.exportClause)) {
+      hasSceneFunctionsExport ||= statement.exportClause.elements.some((element) =>
+        (element.propertyName?.text ?? element.name.text) === 'sceneFunctions',
+      )
+    }
+  }
+  if (moduleSpecifier === undefined) {
+    if (hasSceneFunctionsExport) {
+      throw new Error('Compact scene export requires `export * as sceneFunctions from "./scene-functions.js"` to expose the grouped author-function module.')
+    }
+    return undefined
+  }
+  if (!ts.isStringLiteral(moduleSpecifier)) {
+    throw new Error('The sceneFunctions namespace must re-export one local author-function module.')
+  }
+  const resolvedModule = ts.resolveModuleName(moduleSpecifier.text, sceneFile, {
+    allowJs: true,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+  }, ts.sys).resolvedModule
+  if (resolvedModule === undefined) {
+    throw new Error(`Unable to resolve the sceneFunctions module "${moduleSpecifier.text}" from ${sceneFile}.`)
+  }
+  return path.resolve(resolvedModule.resolvedFileName)
+}
+
+/** Matches compiled function references and selected external straps to grouped exports by identity. */
+function resolveCompactFunctions({ sceneFunctions, sceneFunctionsModule, functionReferences, functions, compiledScene, strapCollections }) {
+  if (!isRecord(sceneFunctions)) {
+    throw new Error('The sceneFunctions namespace must resolve to an exported module namespace.')
+  }
+  const exportNameByFunction = new Map()
+  for (const [exportName, value] of Object.entries(sceneFunctions)) {
+    if (typeof value === 'function' && !exportNameByFunction.has(value)) {
+      exportNameByFunction.set(value, exportName)
+    }
+  }
+  const selectedExports = new Set()
+  const registerFunction = (value, referenceLabel) => {
+    const exportName = exportNameByFunction.get(value)
+    if (exportName === undefined) {
+      throw new Error(`CODPLAY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED: ${referenceLabel} is not exported by sceneFunctions.`)
+    }
+    selectedExports.add(exportName)
+    return exportName
+  }
+  const selectedReferences = functionReferences.map(({ ref, path: sourcePath }) => {
+    const fn = functions[ref]
+    if (typeof fn !== 'function') {
+      throw new Error(`CODPLAY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED: ${ref} has no function value.`)
+    }
+    const exportName = registerFunction(fn, `${ref} at ${JSON.stringify(sourcePath)}`)
+    return { ref, path: sourcePath, exportName }
+  })
+  const selectedStraps = { scene: [], stories: Object.create(null) }
+  for (const strapName of reusableStrapNames(compiledScene.scene.straps)) {
+    selectedStraps.scene.push({
+      name: strapName,
+      exportName: registerFunction(strapCollections.scene[strapName], `scene strap "${strapName}"`),
+    })
+  }
+  for (const [storyId, story] of Object.entries(compiledScene.scene.stories)) {
+    const straps = reusableStrapNames(story.straps).map((strapName) => ({
+      name: strapName,
+      exportName: registerFunction(
+        strapCollections.stories[storyId]?.[strapName],
+        `story strap "${storyId}.${strapName}"`,
+      ),
+    }))
+    if (straps.length > 0) selectedStraps.stories[storyId] = straps
+  }
+  return {
+    moduleFile: sceneFunctionsModule,
+    functions: selectedReferences,
+    selectedExports: [...selectedExports],
+    strapCollections: selectedStraps,
+  }
+}
+
+/** Returns reusable external strap names selected by one compiled scope. */
+function reusableStrapNames(declarations) {
+  return Array.isArray(declarations) ? declarations : []
+}
+
 /** Bundles author code into a factory so each owner/package gets fresh closures. */
-async function buildFunctionModule({ packageRoot, sceneFile, functionReferences, stageDirectory }) {
+async function buildFunctionModule({ packageRoot, sceneFile, functionReferences, stageDirectory, compactFunctions }) {
   const bundleDirectory = path.join(stageDirectory, '.scene-functions')
   const sourceDirectory = path.join(stageDirectory, '.scene-function-source')
   const entryFile = path.join(sourceDirectory, 'functions-entry.mjs')
   const contextName = '__codplayScenePackageSource'
   await mkdir(sourceDirectory, { recursive: true })
-  await writeFile(entryFile, [
-    'import * as sourceModule from ' + JSON.stringify(pathToFileURL(sceneFile).href) + ';',
-    'export const scene = sourceModule.scene;',
-    'export const strapCollections = sourceModule.strapCollections;',
-    '',
-  ].join('\n'))
+  await writeFile(entryFile, compactFunctions === undefined
+    ? [
+      'import * as sourceModule from ' + JSON.stringify(pathToFileURL(sceneFile).href) + ';',
+      'export const scene = sourceModule.scene;',
+      'export const strapCollections = sourceModule.strapCollections;',
+      '',
+    ].join('\n')
+    : createCompactFunctionEntry(entryFile, compactFunctions))
   try {
     await build({
       configFile: path.join(packageRoot, 'vite.config.ts'),
@@ -325,7 +449,7 @@ async function buildFunctionModule({ packageRoot, sceneFile, functionReferences,
   if (bundleFile === undefined) throw new Error('Function code bundler did not emit its JavaScript module.')
   const bundle = await readFile(path.join(bundleDirectory, bundleFile), 'utf8')
   const referencesJson = JSON.stringify(functionReferences)
-  const moduleSource = [
+  const moduleSource = compactFunctions === undefined ? [
     `export const functionReferences = Object.freeze(${referencesJson}.map((entry) => Object.freeze({ ref: entry.ref, path: Object.freeze([...entry.path]) })));`,
     'export function createScenePackageContext() {',
     bundle,
@@ -351,6 +475,14 @@ async function buildFunctionModule({ packageRoot, sceneFile, functionReferences,
     '  return Object.freeze({ functions: Object.freeze(functions), strapCollections });',
     '}',
     '',
+  ].join('\n') : [
+    `export const functionReferences = Object.freeze(${referencesJson}.map((entry) => Object.freeze({ ref: entry.ref, path: Object.freeze([...entry.path]) })));`,
+    'export function createScenePackageContext() {',
+    bundle,
+    `  const sourceModule = ${contextName};`,
+    '  return Object.freeze({ functions: Object.freeze(sourceModule.functions), strapCollections: sourceModule.strapCollections });',
+    '}',
+    '',
   ].join('\n')
   if (emittedFiles.some((file) => file !== bundleFile)) {
     throw new Error(`Function module emitted external files that cannot be inlined: ${emittedFiles.filter((file) => file !== bundleFile).join(', ')}`)
@@ -361,6 +493,42 @@ async function buildFunctionModule({ packageRoot, sceneFile, functionReferences,
   await writeFile(path.join(sceneDirectory, 'functions.mjs'), moduleSource)
   await rm(bundleDirectory, { recursive: true, force: true })
   return { file: 'scene/functions.mjs', references: functionReferences }
+}
+
+/** Writes an entry that imports only selected named functions from one grouped author module. */
+function createCompactFunctionEntry(entryFile, compactFunctions) {
+  const selectedNames = new Set(compactFunctions.selectedExports)
+  const localNameByExport = new Map()
+  let importIndex = 0
+  for (const exportName of selectedNames) {
+    localNameByExport.set(exportName, `__sceneFunction${importIndex++}`)
+  }
+  const relativeModulePath = path.relative(path.dirname(entryFile), compactFunctions.moduleFile)
+    .split(path.sep)
+    .join('/')
+  const moduleSpecifier = relativeModulePath.startsWith('.') ? relativeModulePath : `./${relativeModulePath}`
+  const imports = [...selectedNames].map((exportName) => {
+    const importedName = /^[A-Za-z_$][\w$]*$/.test(exportName) ? exportName : JSON.stringify(exportName)
+    return `import { ${importedName} as ${localNameByExport.get(exportName)} } from ${JSON.stringify(moduleSpecifier)};`
+  })
+  const functions = compactFunctions.functions.map(({ ref, exportName }) =>
+    `${JSON.stringify(ref)}: ${localNameByExport.get(exportName)}`,
+  )
+  const sceneStraps = compactFunctions.strapCollections.scene.map(({ name, exportName }) =>
+    `${JSON.stringify(name)}: ${localNameByExport.get(exportName)}`,
+  )
+  const storyStraps = Object.entries(compactFunctions.strapCollections.stories).map(([storyId, straps]) => {
+    const entries = straps.map(({ name, exportName }) =>
+      `${JSON.stringify(name)}: ${localNameByExport.get(exportName)}`,
+    )
+    return `${JSON.stringify(storyId)}: { ${entries.join(', ')} }`
+  })
+  return [
+    ...imports,
+    `export const functions = { ${functions.join(', ')} };`,
+    `export const strapCollections = { scene: { ${sceneStraps.join(', ')} }, stories: { ${storyStraps.join(', ')} } };`,
+    '',
+  ].join('\n')
 }
 
 /** Captures CSS module imports for the scene export compiler instead of dropping them in SSR. */

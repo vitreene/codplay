@@ -13,6 +13,8 @@ const EXPORT_WORK_DIRECTORY = resolve(ELCE_PACKAGE_ROOT, '.elce-export')
 const SIGHTY_EXPORT_CLI = fileURLToPath(import.meta.resolve('@codplay/sighty/tools/scenario-export/cli.mjs'))
 const PLAYER_SCENARIO_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-composition.ts')
 const DOCUMENT_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/domain/document/document-model.ts')
+const SCENARIO_FUNCTIONS_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/builders/scenario/scenario-functions.ts')
+const SCENE_FUNCTIONS_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/builders/scene-functions/scene-functions.ts')
 const ENGINE_CONFIG_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-engine.ts')
 
 /** Converts one current Elcé document and its media bytes into a Sighty package ZIP. */
@@ -86,6 +88,8 @@ function createScenarioModule(
   return [
     `import { ElceDocument } from ${JSON.stringify(relativeModulePath(temporaryDirectory, DOCUMENT_MODULE))};`,
     `import { createElcePlayerScenario } from ${JSON.stringify(relativeModulePath(temporaryDirectory, PLAYER_SCENARIO_MODULE))};`,
+    `export * as scenarioFunctions from ${JSON.stringify(relativeModulePath(temporaryDirectory, SCENARIO_FUNCTIONS_MODULE))};`,
+    `export * as sceneFunctions from ${JSON.stringify(relativeModulePath(temporaryDirectory, SCENE_FUNCTIONS_MODULE))};`,
     `const documentData = JSON.parse(${JSON.stringify(JSON.stringify(documentData))});`,
     `const mediaSources = JSON.parse(${JSON.stringify(JSON.stringify(mediaSources))});`,
     'export const scenario = createElcePlayerScenario({ document: ElceDocument.fromJSON(documentData), mediaSources });',
@@ -111,6 +115,7 @@ function runSightyExporter(
       '--scenario', scenarioFile,
       '--engine-config', ENGINE_CONFIG_MODULE,
       '--standalone',
+      '--engine-name', 'elce-engine',
       '--export', packageDirectory,
     ], { cwd: workingDirectory, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
