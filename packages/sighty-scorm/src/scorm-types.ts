@@ -21,18 +21,30 @@ export interface ScormSessionRestore {
   readonly location: string
   readonly suspendData: string
   readonly mode: string
+  /** LMS passing threshold expressed as a percentage, when one is configured. */
+  readonly masteryScore?: number
 }
 
-/** Describes optional SCORM 2004 progress values computed by an adapter. */
+/** Describes one chapter's SCORM objective progress in a 2004 mono-SCO. */
+export interface ScormObjectiveProgress {
+  readonly id: string
+  readonly measure: number
+  readonly completionStatus?: 'completed'
+}
+
+/** Describes course completion for both editions and progress for SCORM 2004. */
 export interface ScormProgressUpdate {
   readonly measure: number
-  readonly completionStatus: 'completed' | 'incomplete'
+  readonly completionStatus?: 'completed' | 'incomplete'
+  readonly successStatus?: 'passed' | 'failed'
+  readonly objectives?: readonly ScormObjectiveProgress[]
 }
 
 /** Carries an opaque bookmark and suspend-data value into the shared session. */
 export interface ScormReaderUpdate {
   readonly location: string | null
   readonly suspendData: string
+  readonly sessionTimeMs?: number
   readonly progress?: ScormProgressUpdate
 }
 
@@ -44,13 +56,34 @@ export interface ScormScore {
   readonly scaled: number
 }
 
-/** Carries one standard SCORM choice interaction without project-domain types. */
-export interface ScormChoiceInteraction {
+/** Lists standard CMI interaction types accepted by the shared session. */
+export type ScormInteractionType =
+  | 'true-false'
+  | 'choice'
+  | 'fill-in'
+  | 'long-fill-in'
+  | 'matching'
+  | 'performance'
+  | 'sequencing'
+  | 'likert'
+  | 'numeric'
+  | 'other'
+
+/** Carries one generic SCORM interaction without project-domain types. */
+export interface ScormInteraction {
   readonly id: string
+  readonly type?: ScormInteractionType
+  readonly description?: string
   readonly correctResponse: string
   readonly learnerResponse: string
+  readonly timestampMs?: number
+  readonly latencyMs?: number
+  readonly weighting?: number
   readonly result: 'correct' | 'incorrect'
 }
+
+/** Preserves the public type name used by existing choice-interaction callers. */
+export type ScormChoiceInteraction = ScormInteraction
 
 /** Describes one SCORM objective result computed by a project adapter. */
 export interface ScormObjectiveResult {
@@ -65,7 +98,7 @@ export interface ScormEvaluationUpdate {
   readonly status: 'passed' | 'failed'
   readonly score: ScormScore
   readonly objective?: ScormObjectiveResult
-  readonly interactions: readonly ScormChoiceInteraction[]
+  readonly interactions: readonly ScormInteraction[]
 }
 
 /** Configures the shared CMI session for one SCO. */

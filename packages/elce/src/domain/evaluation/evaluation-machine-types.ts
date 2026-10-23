@@ -1,4 +1,5 @@
 import type { EvaluationRetryScope } from '../../config/document-config-types'
+import type { QuestionType } from '../question/question-types'
 
 export { EVALUATION_RETRY_SCOPE } from '../../config/document-config'
 export type { EvaluationRetryScope } from '../../config/document-config-types'
@@ -17,6 +18,11 @@ export interface EvaluationAnswer {
   readonly answerIds: readonly string[]
   readonly selectedAnswerIds: readonly string[]
   readonly expectedAnswerIds: readonly string[]
+  readonly questionType?: QuestionType
+  readonly answerLabels?: readonly string[]
+  readonly description?: string
+  readonly latencyMs?: number
+  readonly timestampMs?: number
 }
 
 export interface EvaluationResult {

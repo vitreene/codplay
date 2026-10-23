@@ -2,9 +2,10 @@
 
 ## Statut
 
-**Fini le 21 octobre 2026.** Le bouton, l’adaptateur de ressources, la route
-ZIP et la structure autonome de son contenu sont vérifiés. Le loader et le
-runtime partagés sont exercés visuellement par la démo Sighty Demo 5.
+**Fini le 22 octobre 2026.** L’action « Exporter le scénario », son
+adaptateur de ressources, sa route ZIP et la structure autonome de son contenu
+sont vérifiés. Le loader et le runtime partagés sont exercés visuellement par
+la démo Sighty Demo 5.
 
 ## Contrat
 
@@ -15,10 +16,19 @@ même producteur DOM-free que la preview. Les pages du catalogue restent
 exclues. Le client transmet le document et les seuls fichiers média référencés
 par ces scènes au serveur local Elcé.
 
-Dans l’espace éditable, l’action « Exporter le scénario » se trouve à droite
-dans la barre de titre du projet. « Prévisualiser » reste dans la barre de
-commandes du workspace. Le déplacement conserve le même traitement, son état
-occupé et les annonces accessibles du résultat ou de l’erreur.
+Le lancement de l’export ne suspend ni l’accès d’édition ni la synchronisation
+ordinaire du projet. Il conserve le document et les sources média présents au
+démarrage de l’action : une commande auteur acceptée pendant la génération
+modifie le document actif et suit son circuit de synchronisation habituel,
+sans changer le snapshot déjà transmis à l’export. Les routes d’export ne
+modifient pas la persistance du projet ; aucune suspension spécifique de la
+synchro avec la base n’est nécessaire.
+
+Dans l’espace éditable, le bouton « Exporter » se trouve à droite dans la barre
+de titre du projet et ouvre une modale de diffusion. Son action « Exporter le
+scénario » conserve le traitement, le ZIP et le téléchargement décrits ici ;
+« Prévisualiser » reste dans la barre de commandes du workspace. L’action
+SCORM y est séparée et suit le [plan d’export SCORM](../plan/2026-10-21-elce-scorm-export-plan.md).
 
 Le serveur adapte les sources temporaires au CLI Sighty existant en lui
 fournissant les capacités engine d’Elcé et demande sa distribution autonome.
@@ -50,7 +60,10 @@ définitions requises plutôt que la barre qui réexporte aussi cet adaptateur.
 La diffusion Elcé utilise le format compact Sighty V2. `scenario.mjs` contient
 le graphe et les données nécessaires à l’exécution ainsi que les seuls
 callbacks Sighty référencés ; il ne contient ni `ElceDocument`, ni `SceneDoc`,
-ni les constructeurs auteur de scène. Chaque enfant contient le paquet CodPlay
+ni les constructeurs auteur de scène. Les métadonnées runtime des chapitres
+conservent leur identifiant, leur nom auteur, leur type et leurs pages, afin que
+le paquet SCORM puisse afficher les noms de chapitres sans utiliser les IDs
+techniques comme libellés. Chaque enfant contient le paquet CodPlay
 V1 de sa scène compilée (`scene/scene.json`), avec ses seules fonctions
 référencées, sa CSS et ses médias. L’entrée temporaire fournie au CLI réutilise
 le builder de scénario de la preview, puis désigne explicitement ses groupes
@@ -100,7 +113,9 @@ téléchargement partiel.
   vérifie la réponse ZIP et l’absence d’écriture de persistance.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie le bouton à droite de la barre de titre, son action, son état occupé
-  et l’annonce du téléchargement ;
+  et l’annonce du téléchargement. Pendant que la génération Sighty reste en
+  attente, le test crée une page par l’interface : l’accès reste actif et le
+  snapshot d’export demeure celui pris au démarrage ;
   [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
   vérifie qu’il n’est plus rendu dans la barre de commandes responsive.
 - Safari, le 20 octobre 2026, sur `http://localhost:5175`, exporte le Projet 1

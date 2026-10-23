@@ -793,6 +793,9 @@ function isExpectedAccessTransition(error: unknown): boolean {
 
 /** Replaces internal access codes with a recovery message after repeated requests. */
 function accessRecoveryMessage(error: unknown): string {
+  if (error instanceof Error && error.message === 'edit_access_wait_timeout') {
+    return 'L’accès attend toujours la libération du verrou d’un autre onglet.'
+  }
   if (isExpectedAccessTransition(error)) {
     return 'L’accès n’a pas pu être repris après plusieurs tentatives.'
   }

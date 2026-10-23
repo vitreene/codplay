@@ -1,12 +1,12 @@
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
 import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
-import { EVALUATION_RETRY_SCOPE } from '../config/document-config'
+import { EVALUATION_RETRY_SCOPE, QUESTION_TYPE } from '../config/document-config'
 import type { EvaluationMachineState } from '../domain/evaluation/evaluation-machine-types'
-import { suspendDataLimit } from '@codplay/sighty-scorm'
+import { suspendDataLimit } from '@codplay/sighty-scorm/limits'
 import type { ScormVersion } from '@codplay/sighty-scorm'
 import type { ScormReaderState } from './scorm-types'
 
-export { suspendDataLimit } from '@codplay/sighty-scorm'
+export { suspendDataLimit } from '@codplay/sighty-scorm/limits'
 
 /** Encodes the Elcé reader state as bounded JSON for cmi.suspend_data. */
 export function encodeScormReaderState(state: ScormReaderState, version: ScormVersion): string {
@@ -98,6 +98,15 @@ function isEvaluationAnswer(questionId: string, value: unknown): boolean {
     && isStringArray(value.answerIds)
     && isStringArray(value.selectedAnswerIds)
     && isStringArray(value.expectedAnswerIds)
+    && (value.questionType === undefined
+      || value.questionType === QUESTION_TYPE.TRUE_FALSE
+      || value.questionType === QUESTION_TYPE.CHOICE
+      || value.questionType === QUESTION_TYPE.MULTIPLE_CHOICE)
+    && (value.answerLabels === undefined
+      || isStringArray(value.answerLabels) && value.answerLabels.length === value.answerIds.length)
+    && (value.description === undefined || typeof value.description === 'string')
+    && (value.latencyMs === undefined || typeof value.latencyMs === 'number' && Number.isFinite(value.latencyMs) && value.latencyMs >= 0)
+    && (value.timestampMs === undefined || typeof value.timestampMs === 'number' && Number.isFinite(value.timestampMs) && value.timestampMs >= 0)
 }
 
 /** Checks the stored numeric result fields and nullable outcome. */

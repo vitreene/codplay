@@ -39,7 +39,8 @@ Pour les requêtes navigateur, le serveur autorise les origines HTTP de boucle
 locale (`localhost`, `127.0.0.1` et `[::1]`), quelle que soit leur origine de
 port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
 `DELETE` et les en-têtes `Content-Type`, `If-Match`, `X-Elce-Page-Id` et
-`X-Elce-Edit-Grant`. Il expose `ETag` à l’éditeur. En mode réseau, l’origine
+`X-Elce-Edit-Grant`. Il expose `ETag` à l’éditeur ainsi que `Content-Disposition`
+et `X-Elce-Scorm-Filename` pour l’export SCORM. En mode réseau, l’origine
 exacte de la preview peut lire le document et son état test, lire ses médias,
 et écrire uniquement l’état test. Les mutations du document et des médias,
 l’index des projets et les droits d’édition restent refusés depuis cette
@@ -51,6 +52,7 @@ document, et `GET`, `HEAD` et `PUT` pour l’état test.
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
 | `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v5 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
+| `POST /api/exports/scorm` | `multipart/form-data` : `sightyPackage` ZIP, `documentName`, `version` (`1.2`, `2004v3` ou `2004v4`) et `monoSco` (`true` ou `false`) | `200 application/zip`, nom stable dans `Content-Disposition` et `X-Elce-Scorm-Filename`, nombre de packages dans `X-Elce-Scorm-Package-Count`, `Cache-Control: no-store` ; aucune persistance |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
 | `POST /api/projects` | `ElceDocumentData` v5 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
@@ -111,6 +113,8 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 | `400` | `invalid_media_body` / `media_size_mismatch` | Le corps fichier manque ou sa taille ne correspond pas aux métadonnées SQLite |
 | `400` | `invalid_export_body` / `invalid_export_document` / `unknown_export_media` / `invalid_export_media` / `invalid_export_media_size` | Le formulaire d’export, son document ou ses fichiers sont invalides |
 | `422` | `sighty_export_failed` | Le document ou ses ressources ne peuvent pas produire un paquet Sighty complet |
+| `400` | `invalid_scorm_export_body` / `invalid_scorm_export_package` / `invalid_scorm_export_version` / `invalid_scorm_export_mono_sco` / `invalid_scorm_export_document_name` | Le formulaire, le ZIP Sighty, l’édition, l’option monoSCO ou le nom du projet est invalide |
+| `422` | `scorm_export_failed` | L’assemblage SCORM du paquet Sighty a échoué |
 | `404` | `media_not_found` | La ressource ou son fichier serveur est absent |
 | `409` | `media_changed` / `media_already_has_file` | Les métadonnées ont changé pendant l’upload ou la ressource possède déjà un autre contenu |
 | `409` | `media_already_exists` | Les octets appartiennent déjà à une autre ressource du projet ; la réponse inclut son `mediaId` canonique |

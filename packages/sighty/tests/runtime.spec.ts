@@ -884,7 +884,7 @@ describe('Sighty runtime slot selection', () => {
     const stage = document.createElement('div')
     const scheduler = createManualFrameScheduler()
     const now = vi.spyOn(Date, 'now').mockReturnValue(0)
-    const events: Array<{ name: string; sourceSceneKey?: NavigationSceneKey; data?: unknown }> = []
+    const events: Array<{ name: string; sourceSceneKey?: NavigationSceneKey; timeMs?: number; data?: unknown }> = []
     document.body.append(stage)
     navigationProject = new Sighty({
       scenario: {
@@ -914,6 +914,7 @@ describe('Sighty runtime slot selection', () => {
     const unsubscribe = navigationProject.runtime.events.onEvent((event) => events.push({
       name: event.name,
       sourceSceneKey: event.sourceSceneKey,
+      timeMs: event.timeMs,
       data: event.data,
     }))
 
@@ -921,18 +922,21 @@ describe('Sighty runtime slot selection', () => {
     const menu = navigationProject.runtime.getInstance('scene-menu')
     if (menu === undefined) throw new Error('La scène menu de test est absente.')
     await navigationProject.runtime.play('scene-menu')
+    now.mockReturnValue(40)
+    scheduler.flush()
     await menu.events.emit(
       { name: 'navigation:open-a', visibility: 'public', data: { choice: 'a' } },
       { scope: 'story', storyId: 'main' },
     )
 
     expect(events).toEqual([])
-    now.mockReturnValue(20)
+    now.mockReturnValue(60)
     scheduler.flush()
 
     expect(events).toEqual([{
       name: 'navigation:open-a',
       sourceSceneKey: 'scene-menu',
+      timeMs: 40,
       data: { choice: 'a' },
     }])
     await vi.waitFor(() => {

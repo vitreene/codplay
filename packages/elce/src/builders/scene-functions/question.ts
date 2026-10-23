@@ -1,6 +1,7 @@
 import type { StrapExecutionInput, StrapRuntimeOutput } from 'codplay/runtime/player'
 import type { CompiledRecord } from 'codplay/scene/compiled'
-import { ELCE_EVENTS } from '../../config/document-config'
+import { ELCE_EVENTS, QUESTION_TYPE } from '../../config/document-config'
+import type { QuestionType } from '../../domain/question/question-types'
 
 export const ELCE_QUESTION_RUNTIME_KEY = 'elceQuestionRuntime'
 
@@ -8,7 +9,11 @@ export type QuestionRuntimeConfiguration = Readonly<{
   pageId: string
   bdcId: string
   prefix: string
+  questionType: QuestionType
+  title: string
+  prompt: string
   answerIds: readonly string[]
+  answerLabels: readonly string[]
   correctAnswerIds: readonly string[]
   selection: 'single' | 'multiple'
   completionEventName?: string
@@ -72,10 +77,15 @@ export function validateQuestionAnswerStrap(input: StrapExecutionInput): StrapRu
         data: {
           pageId: configuration.pageId,
           bdcId: configuration.bdcId,
+          questionType: configuration.questionType,
           isCorrect,
           answerIds: configuration.answerIds,
+          answerLabels: configuration.answerLabels,
           selectedAnswerIds,
           expectedAnswerIds: correctAnswerIds,
+          description: [configuration.title, configuration.prompt]
+            .filter((text) => text.trim().length > 0)
+            .join(' '),
         },
         visibility: 'public',
       },
@@ -109,7 +119,14 @@ function readQuestionConfiguration(state: Readonly<Record<string, unknown>>): Qu
     || typeof value.pageId !== 'string'
     || typeof value.bdcId !== 'string'
     || typeof value.prefix !== 'string'
+    || (value.questionType !== QUESTION_TYPE.TRUE_FALSE
+      && value.questionType !== QUESTION_TYPE.CHOICE
+      && value.questionType !== QUESTION_TYPE.MULTIPLE_CHOICE)
+    || typeof value.title !== 'string'
+    || typeof value.prompt !== 'string'
     || !isStringArray(value.answerIds)
+    || !isStringArray(value.answerLabels)
+    || value.answerLabels.length !== value.answerIds.length
     || !isStringArray(value.correctAnswerIds)
     || (value.selection !== 'single' && value.selection !== 'multiple')
     || (value.completionEventName !== undefined && typeof value.completionEventName !== 'string')

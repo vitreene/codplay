@@ -4,7 +4,7 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
 import { anchorNameFor } from '../../app/anchor/anchor-position'
 import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createCarouselBdcCommand, createDefaultPageCommand, createEvaluationResultBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
@@ -143,6 +143,10 @@ describe('Elcé Flux scene builder', () => {
     const build = buildFluxScene(anchored.pages[0]!, anchored.bdcs, {
       mediaSources: { 'media-image-1': 'blob:image-1' },
       mediaTypes: { 'media-image-1': MEDIA_TYPE.IMAGE },
+      revelationDefaults: {
+        intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+        outro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      },
     })
     const pageStory = build.sceneDoc.stories['page-a-page']
     const articleInitial = pageStory?.persos[1]?.initial
@@ -163,6 +167,7 @@ describe('Elcé Flux scene builder', () => {
         className: expect.stringContaining('elce-flux-card-root'),
         style: expect.objectContaining({
           opacity: 1,
+          x: 0,
           position: 'absolute',
           'position-anchor': anchorNameFor('page-a:bdc-image-1:anchor'),
           width: '100%',
@@ -170,6 +175,22 @@ describe('Elcé Flux scene builder', () => {
           height: 'auto',
         }),
         move: { target: 'page-a:bdc-image-1:anchor' },
+      },
+      emit: { observe: {
+        root: 'page-a-scrollport',
+        zone: { threshold: 0 },
+        enter: [{ name: 'page-a-bdc-image-1-card:enter' }],
+        leave: [{ name: 'page-a-bdc-image-1-card:leave' }],
+      } },
+      actions: {
+        'page-a-bdc-image-1-card:enter': { style: {
+          opacity: { from: 0, to: 1, duration: 300 },
+          x: { from: -250, to: 0, duration: 300 },
+        } },
+        'page-a-bdc-image-1-card:leave': { style: {
+          opacity: { to: 0, duration: 300 },
+          x: { to: -250, duration: 300 },
+        } },
       },
     })
     expect(pageStory?.persos[4]).toMatchObject({

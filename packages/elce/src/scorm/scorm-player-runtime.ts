@@ -34,6 +34,7 @@ export async function startScormPlayerRuntime(
     evaluationChapterIds: options.document.chapters
       .filter((chapter) => chapter.type === CHAPTER_TYPE.EVALUATION)
       .map((chapter) => chapter.id),
+    chapterIds: options.document.chapters.map((chapter) => chapter.id),
     chapterPageIds: options.document.chapters.map((chapter) => chapter.pageIds),
     api: options.api,
     onDiagnostic: (message) => options.onLog?.(message, 'warn'),

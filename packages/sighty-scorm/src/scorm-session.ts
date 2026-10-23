@@ -1,7 +1,8 @@
 import type {
   PipwerksScormApi,
-  ScormChoiceInteraction,
   ScormEvaluationUpdate,
+  ScormInteraction,
+  ScormObjectiveProgress,
   ScormObjectiveResult,
   ScormReaderUpdate,
   ScormSessionOptions,
@@ -53,10 +54,12 @@ export class ScormSession {
 
     const mode = this.api.get(this.modeElement())
     this.browseMode = mode === 'browse' || mode === 'review'
+    const masteryScore = this.readMasteryScore()
     this.restore = {
       location: this.api.get(this.locationElement()),
       suspendData: this.api.get('cmi.suspend_data'),
       mode,
+      ...(masteryScore === undefined ? {} : { masteryScore }),
     }
     return this.restore
   }
@@ -69,6 +72,15 @@ export class ScormSession {
     this.assertSuccess(this.api!.save(), 'commit')
   }
 
+  /** Saves reader state and one immediate interaction in a single LMS commit. */
+  public async recordInteraction(update: ScormReaderUpdate, interaction: ScormInteraction): Promise<void> {
+    if (!this.canWrite()) return
+    this.writeReaderState(update)
+    this.latestReaderUpdate = update
+    if (this.version !== '1.2') this.writeInteraction(interaction, this.interactionCount())
+    this.assertSuccess(this.api!.save(), 'commit')
+  }
+
   /** Saves reader data, an evaluation result, an objective, and interactions. */
   public async recordEvaluationResult(update: ScormEvaluationUpdate): Promise<void> {
     if (!this.canWrite()) return
@@ -76,6 +88,30 @@ export class ScormSession {
     this.latestReaderUpdate = update.reader
     this.writeEvaluation(update)
     this.assertSuccess(this.api!.save(), 'commit')
+  }
+
+  /** Requests an LMS navigation choice and ends this SCO session like the reference reader. */
+  public async navigateToSco(identifier: string): Promise<boolean> {
+    if (!this.connected || this.closed || this.api === undefined) return false
+    this.api.get(`adl.nav.request_valid.choice.{target=${identifier}}`)
+    if (!this.api.set('adl.nav.request', `{target=${identifier}}choice`)) return false
+
+    this.closed = true
+    let failure: unknown
+    try {
+      this.assertSuccess(this.api.save(), 'commit de navigation vers un autre SCO')
+    } catch (error: unknown) {
+      failure = error
+    }
+    try {
+      this.assertSuccess(this.api.quit(), 'terminaison avant navigation vers un autre SCO')
+    } catch (error: unknown) {
+      failure ??= error
+    } finally {
+      this.connected = false
+    }
+    if (failure !== undefined) throw failure
+    return true
   }
 
   /** Saves the latest reader data and terminates the LMS session once. */
@@ -88,7 +124,6 @@ export class ScormSession {
       try {
         const update = finalUpdate ?? this.latestReaderUpdate
         if (update !== undefined) this.writeReaderState(update)
-        this.assertSuccess(this.api.set(this.exitElement(), 'suspend'), 'suspension de la session')
         this.assertSuccess(this.api.save(), 'commit final')
       } catch (error: unknown) {
         failure = error
@@ -123,9 +158,26 @@ export class ScormSession {
       throw new RangeError(`L’état suspendu dépasse la limite SCORM ${this.version} (${maximumSuspendDataLength} caractères).`)
     }
     this.assertSuccess(this.api.set('cmi.suspend_data', suspendData), 'écriture de l’état suspendu')
-    if (update.progress !== undefined && this.version !== '1.2') {
-      this.assertSuccess(this.api.set('cmi.progress_measure', String(update.progress.measure)), 'écriture de la progression globale')
-      this.assertSuccess(this.api.set('cmi.completion_status', update.progress.completionStatus), 'écriture de l’état de complétion global')
+    if (update.sessionTimeMs !== undefined) {
+      const sessionTime = formatSessionTime(update.sessionTimeMs, this.version)
+      const element = this.version === '1.2' ? 'cmi.core.session_time' : 'cmi.session_time'
+      this.assertSuccess(this.api.set(element, sessionTime), 'écriture de la durée de session')
+    }
+    if (update.progress !== undefined) {
+      if (this.version === '1.2') {
+        const lessonStatus = update.progress.successStatus ?? update.progress.completionStatus
+        if (lessonStatus !== undefined) {
+          this.assertSuccess(this.api.set('cmi.core.lesson_status', lessonStatus), 'écriture de l’état du chapitre')
+        }
+      } else {
+        this.assertSuccess(this.api.set('cmi.progress_measure', String(update.progress.measure)), 'écriture de la progression globale')
+        if (update.progress.completionStatus !== undefined) {
+          this.assertSuccess(this.api.set('cmi.completion_status', update.progress.completionStatus), 'écriture de l’état de complétion global')
+        }
+        for (const objective of update.progress.objectives ?? []) {
+          this.writeObjectiveProgress(objective)
+        }
+      }
     }
   }
 
@@ -136,14 +188,14 @@ export class ScormSession {
       this.assertSuccess(this.api.set('cmi.core.lesson_status', update.status), 'écriture du résultat')
       this.assertSuccess(this.api.set('cmi.core.score.raw', String(Math.round(update.score.raw))), 'écriture du score')
     } else {
-      if (update.reader.progress === undefined) {
+      if (update.reader.progress?.completionStatus === undefined) {
         this.assertSuccess(this.api.set('cmi.completion_status', 'completed'), 'écriture de la progression')
       }
       this.assertSuccess(this.api.set('cmi.success_status', update.status), 'écriture du résultat')
       this.writeScore('cmi.score', update.score, 'du score global')
     }
     if (update.objective !== undefined && this.version !== '1.2') this.writeObjective(update.objective)
-    this.writeInteractions(update.interactions)
+    if (this.version !== '1.2') this.writeInteractions(update.interactions)
   }
 
   /** Writes one objective when the package manifest declares its identifier. */
@@ -162,6 +214,23 @@ export class ScormSession {
     this.onDiagnostic?.(`L’objectif SCORM ${objective.id} est absent du manifeste.`)
   }
 
+  /** Writes chapter progress fields when the manifest declares the objective. */
+  private writeObjectiveProgress(objective: ScormObjectiveProgress): void {
+    if (this.api === undefined) return
+    const count = Number.parseInt(this.api.get('cmi.objectives._count'), 10)
+    if (!Number.isFinite(count) || count <= 0) return
+    for (let index = 0; index < count; index += 1) {
+      if (this.api.get(`cmi.objectives.${index}.id`) !== objective.id) continue
+      const prefix = `cmi.objectives.${index}`
+      this.assertSuccess(this.api.set(`${prefix}.progress_measure`, String(objective.measure)), 'écriture de la progression du chapitre')
+      if (objective.completionStatus !== undefined) {
+        this.assertSuccess(this.api.set(`${prefix}.completion_status`, objective.completionStatus), 'écriture de la complétion du chapitre')
+      }
+      return
+    }
+    this.onDiagnostic?.(`L’objectif SCORM ${objective.id} est absent du manifeste.`)
+  }
+
   /** Writes raw, minimum, maximum, and normalized score values. */
   private writeScore(prefix: string, score: ScormEvaluationUpdate['score'], label: string): void {
     if (this.api === undefined) return
@@ -172,24 +241,45 @@ export class ScormSession {
   }
 
   /** Writes choice interactions while reusing existing LMS records by ID. */
-  private writeInteractions(interactions: readonly ScormChoiceInteraction[]): void {
+  private writeInteractions(interactions: readonly ScormInteraction[]): void {
     if (this.api === undefined) return
-    const count = Number.parseInt(this.api.get('cmi.interactions._count'), 10)
-    let interactionCount = Number.isFinite(count) && count > 0 ? count : 0
+    let interactionCount = this.interactionCount()
     for (const interaction of interactions) {
-      const idLimit = this.version === '1.2' ? SCORM_INTERACTION_ID_LIMIT_12 : SCORM_INTERACTION_ID_LIMIT_2004
-      if (interaction.id.length > idLimit) {
-        throw new RangeError(`L’identifiant d’interaction dépasse la limite SCORM ${this.version} (${idLimit} caractères).`)
-      }
-      const index = this.interactionIndex(interaction.id, interactionCount)
-      if (index === interactionCount) interactionCount += 1
-      const prefix = `cmi.interactions.${index}`
-      this.assertSuccess(this.api.set(`${prefix}.id`, interaction.id), 'écriture de l’identifiant d’interaction')
-      this.assertSuccess(this.api.set(`${prefix}.type`, 'choice'), 'écriture du type d’interaction')
-      this.assertSuccess(this.api.set(`${prefix}.correct_responses.0.pattern`, interaction.correctResponse), 'écriture de la réponse attendue')
-      this.assertSuccess(this.api.set(`${prefix}.learner_response`, interaction.learnerResponse), 'écriture de la réponse apprenant')
-      this.assertSuccess(this.api.set(`${prefix}.result`, interaction.result), 'écriture du résultat d’interaction')
+      interactionCount = this.writeInteraction(interaction, interactionCount)
     }
+  }
+
+  /** Writes one interaction, reusing its current LMS index when the ID exists. */
+  private writeInteraction(interaction: ScormInteraction, currentCount: number): number {
+    if (this.api === undefined) return currentCount
+    const idLimit = this.version === '1.2' ? SCORM_INTERACTION_ID_LIMIT_12 : SCORM_INTERACTION_ID_LIMIT_2004
+    if (interaction.id.length > idLimit) {
+      throw new RangeError(`L’identifiant d’interaction dépasse la limite SCORM ${this.version} (${idLimit} caractères).`)
+    }
+    const index = this.interactionIndex(interaction.id, currentCount)
+    const nextCount = index === currentCount ? currentCount + 1 : currentCount
+    const prefix = `cmi.interactions.${index}`
+    this.assertSuccess(this.api.set(`${prefix}.id`, interaction.id), 'écriture de l’identifiant d’interaction')
+    this.assertSuccess(this.api.set(`${prefix}.type`, interaction.type ?? 'choice'), 'écriture du type d’interaction')
+    this.assertSuccess(this.api.set(`${prefix}.description`, interaction.description ?? ''), 'écriture de la description d’interaction')
+    this.assertSuccess(this.api.set(`${prefix}.correct_responses.0.pattern`, interaction.correctResponse), 'écriture de la réponse attendue')
+    this.assertSuccess(this.api.set(`${prefix}.learner_response`, interaction.learnerResponse), 'écriture de la réponse apprenant')
+    if (interaction.timestampMs !== undefined) {
+      this.assertSuccess(this.api.set(`${prefix}.timestamp`, formatInteractionTimestamp(interaction.timestampMs)), 'écriture de l’horodatage d’interaction')
+    }
+    if (interaction.latencyMs !== undefined) {
+      this.assertSuccess(this.api.set(`${prefix}.latency`, formatInteractionLatency(interaction.latencyMs)), 'écriture de la latence d’interaction')
+    }
+    this.assertSuccess(this.api.set(`${prefix}.weighting`, String(interaction.weighting || 0)), 'écriture de la pondération d’interaction')
+    this.assertSuccess(this.api.set(`${prefix}.result`, interaction.result), 'écriture du résultat d’interaction')
+    return nextCount
+  }
+
+  /** Reads the existing CMI interaction count once for one write operation. */
+  private interactionCount(): number {
+    if (this.api === undefined) return 0
+    const count = Number.parseInt(this.api.get('cmi.interactions._count'), 10)
+    return Number.isFinite(count) && count > 0 ? count : 0
   }
 
   /** Finds an existing interaction or returns the next LMS interaction index. */
@@ -206,14 +296,20 @@ export class ScormSession {
     return this.version === '1.2' ? 'cmi.core.lesson_mode' : 'cmi.mode'
   }
 
+  /** Reads the LMS mastery score using the edition-specific element used by the reference reader. */
+  private readMasteryScore(): number | undefined {
+    if (this.api === undefined) return undefined
+    const element = this.version === '1.2'
+      ? 'cmi.student_data.mastery_score'
+      : 'cmi.scaled_passing_score'
+    const rawScore = Number.parseFloat(this.api.get(element))
+    const score = this.version === '1.2' ? rawScore : rawScore * 100
+    return Number.isFinite(score) && score !== 0 ? score : undefined
+  }
+
   /** Returns the CMI bookmark element for the configured SCORM edition. */
   private locationElement(): string {
     return this.version === '1.2' ? 'cmi.core.lesson_location' : 'cmi.location'
-  }
-
-  /** Returns the CMI exit element used to retain the suspended attempt. */
-  private exitElement(): string {
-    return this.version === '1.2' ? 'cmi.core.exit' : 'cmi.exit'
   }
 
   /** Raises a diagnostic when one pipwerks operation returns false. */
@@ -223,6 +319,54 @@ export class ScormSession {
     const diagnostic = this.api?.debug?.getDiagnosticInfo?.(errorCode)
     throw new Error(`Échec SCORM pendant ${operation}${diagnostic ? ` : ${diagnostic}` : ''}.`)
   }
+}
+
+/** Formats elapsed SCO time with the reference reader's edition-specific representation. */
+function formatSessionTime(timeMs: number, version: ScormVersion): string {
+  if (!Number.isFinite(timeMs) || timeMs < 0) {
+    throw new RangeError('La durée de session SCORM doit être un temps positif.')
+  }
+  const totalSeconds = Math.floor(timeMs / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor(totalSeconds / 60) % 60
+  const seconds = totalSeconds % 60
+  if (version === '1.2') {
+    const centiseconds = Math.round((timeMs % 1000) / 10)
+    return `${padFourDigits(hours)}:${padTwoDigits(minutes)}:${padTwoDigits(seconds)}.${String(centiseconds).padStart(2, '0').slice(-2)}`
+  }
+  return `PT${padFourDigits(hours)}H${padTwoDigits(minutes)}M${padTwoDigits(seconds)}S`
+}
+
+/** Formats one epoch timestamp using the date representation of the reference project. */
+function formatInteractionTimestamp(timestampMs: number): string {
+  if (!Number.isFinite(timestampMs) || timestampMs < 0) {
+    throw new RangeError('L’horodatage d’interaction doit être un temps Unix positif.')
+  }
+  const date = new Date(timestampMs)
+  return `${date.getFullYear()}-${padTwoDigits(date.getMonth() + 1)}-${padTwoDigits(date.getDate())}`
+    + `T${padTwoDigits(date.getHours())}:${padTwoDigits(date.getMinutes())}:${padTwoDigits(date.getSeconds())}`
+    + `.${String(Math.floor(date.getMilliseconds() / 10)).padStart(2, '0')}Z`
+}
+
+/** Formats one elapsed time with the reference project's minute/second representation. */
+function formatInteractionLatency(latencyMs: number): string {
+  if (!Number.isFinite(latencyMs) || latencyMs < 0) {
+    throw new RangeError('La latence d’interaction doit être un temps positif.')
+  }
+  const totalSeconds = Math.floor(latencyMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds - minutes * 60
+  return `PT${minutes}M${seconds}S`
+}
+
+/** Pads one date field to two digits. */
+function padTwoDigits(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/** Pads the hour field to the width emitted by the reference reader. */
+function padFourDigits(value: number): string {
+  return String(value).padStart(4, '0').slice(-4)
 }
 
 /** Resolves the wrapper global only in a browser SCO runtime. */

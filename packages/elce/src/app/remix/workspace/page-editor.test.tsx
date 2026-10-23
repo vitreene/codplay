@@ -74,6 +74,9 @@ describe('Remix production page editor', () => {
     }
 
     await actOnRemix(rendered, () => Promise.resolve())
+    const titleRow = rendered.$('#elce-work-area-title-row')
+    expect(titleRow?.children[0]?.id).toBe('elce-work-area-actions')
+    expect(titleRow?.children[1]?.id).toBe('elce-work-area-titles')
     expect(pageBdcOrder(rendered)).toEqual(initialBdcOrder)
     await actOnRemix(rendered, () => rendered.$('#elce-card-create')?.click())
     documentModel = controller.getSnapshot().context.document

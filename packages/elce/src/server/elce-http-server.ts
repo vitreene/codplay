@@ -90,7 +90,7 @@ function answerLocalCors(
       ? 'GET, HEAD, PUT, OPTIONS'
       : 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match, X-Elce-Page-Id, X-Elce-Edit-Grant')
-    response.setHeader('Access-Control-Expose-Headers', 'ETag')
+    response.setHeader('Access-Control-Expose-Headers', 'ETag, Content-Disposition, X-Elce-Scorm-Filename')
     response.setHeader('Access-Control-Max-Age', '600')
     response.setHeader('Vary', 'Origin')
   }

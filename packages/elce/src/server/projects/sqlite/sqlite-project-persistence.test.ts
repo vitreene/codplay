@@ -463,6 +463,7 @@ describe('SQLite project persistence through the Remix API', () => {
       expect(preflight.status).toBe(204)
       expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5175')
       expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Content-Type')
+      expect(preflight.headers.get('Access-Control-Expose-Headers')).toContain('X-Elce-Scorm-Filename')
       const rejectedOrigin = await fetch(`${origin}/api/projects`, {
         method: 'OPTIONS',
         headers: { Origin: 'https://example.com', 'Access-Control-Request-Method': 'POST' },

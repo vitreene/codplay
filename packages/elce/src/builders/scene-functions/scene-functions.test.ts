@@ -34,7 +34,11 @@ describe('Elcé grouped scene callbacks', () => {
         pageId: 'page-fixture',
         bdcId: 'question-fixture',
         prefix: 'page-fixture:question-fixture',
+        questionType: 'multiple-choice',
+        title: 'Question fixture',
+        prompt: 'Choisissez une réponse.',
         answerIds: ['answer-correct', 'answer-other'],
+        answerLabels: ['Correcte', 'Autre'],
         correctAnswerIds: ['answer-correct'],
         selection: 'multiple',
         completionEventName: ELCE_EVENTS.PAGE_FINISHED,
@@ -53,7 +57,11 @@ describe('Elcé grouped scene callbacks', () => {
     const validated = validateQuestionAnswerStrap(makeInput('validate', 'validate', undefined, questionState))
     expect(validated?.update).toEqual({ selectedAnswerIds: ['answer-correct'], submitted: true })
     expect(validated?.events).toEqual(expect.arrayContaining([
-      { name: ELCE_EVENTS.QUESTION_ANSWERED, data: expect.any(Object), visibility: 'public' },
+      {
+        name: ELCE_EVENTS.QUESTION_ANSWERED,
+        data: expect.objectContaining({ description: 'Question fixture Choisissez une réponse.' }),
+        visibility: 'public',
+      },
       { name: ELCE_EVENTS.PAGE_FINISHED, data: { pageId: 'page-fixture' }, visibility: 'public' },
     ]))
     expect(resetQuestionStrap(makeInput('reset', ELCE_EVENTS.QUESTION_RESET, undefined, questionState))).toMatchObject({

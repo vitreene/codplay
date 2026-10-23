@@ -2,10 +2,10 @@
 
 ## Portée
 
-Ce chantier est différé après la transition en cours. Il ne fait pas partie du
-POC ni des travaux de migration actuellement planifiés. Cette note fixe
-l’orientation à reprendre au moment de préparer ce chantier ; elle ne constitue
-pas une spécification d’implémentation ni un modèle de stockage.
+Cette note conserve l’orientation explorée le 7 octobre 2026. La préparation
+du chantier reprend le 22 octobre dans l’[analyse de l’onglet Style](./2026-10-22-style-tab-analysis.md)
+et son [plan dédié](../plan/2026-10-22-elce-style-tab-plan.md), **A relire**.
+Elle ne constitue pas une spécification d’implémentation ni un modèle de stockage.
 
 Le rendu du document reste principalement défini par CSS. L’effet de titre de
 Section qui reste en haut pendant la lecture, puis cède la place au titre de la
@@ -27,11 +27,11 @@ Le titre sticky d’une Section appartient à ces invariants de layout. Un thèm
 pourra en modifier l’apparence, mais pas le comportement de maintien et de
 relais entre Sections.
 
-## À préciser lors de la reprise
+## Raccord au chantier Style
 
-- La portée des réglages individuels : document, projet ou profil utilisateur.
-- La priorité entre réglages individuels et valeurs du thème lorsqu’ils
-  concernent la même propriété.
-- Le jalon précis désigné par « après la transition » et le périmètre de la
-  première version de personnalisation.
+Les décisions sur la portée, les priorités, le premier périmètre et son ordre
+de réalisation sont désormais suivies exclusivement dans le
+[plan de l’onglet Style](../plan/2026-10-22-elce-style-tab-plan.md).
+L’orientation antérieure qui associait les transitions au thème reste une
+piste d’élaboration ; elle n’ajoute pas les transitions au périmètre de ce plan.
 

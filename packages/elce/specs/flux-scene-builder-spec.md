@@ -53,6 +53,19 @@ Un Graphe ancré utilise ce même slot et cette réservation Flux. Le
 mode Tableau garde sa hauteur naturelle et réserve `100%` de la largeur du
 slot ; les rendus SVG réservent `56.25%`. Aucun hôte parallèle n’est ajouté.
 
+Les racines de Carte observent le scrollport dans la zone déclarée
+`rootMargin: '0px 0px -40% 0px', threshold: 0`, comme la révélation d’image de
+la démo scroll-container. La première mesure synchronise la phase sans lancer
+d’animation ; une Carte déjà visible au chargement reste donc dans son état
+stable. Pour une Carte avec média, la racine observée garde une géométrie fixe ;
+le perso image ou vidéo enfant porte le style de repos et les actions Capsule
+d’entrée/sortie. L’observer ne mesure donc pas un élément que sa propre
+translation déplacerait. Chaque passage ultérieur vers l’intérieur ou
+l’extérieur rejoue l’action correspondante, y compris après un aller-retour ;
+aucun événement `once` n’est déclaré. Une Carte sans média conserve ses actions
+sur sa racine. Les racines de Graphe ancré gardent
+`initial: 'enter'` pour signaler un graphe déjà visible.
+
 - un perso `scroll-container` racine, placé sur `@root` ;
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
   des `id` explicites et des commentaires d’insertion pour chaque Section et le
@@ -161,7 +174,11 @@ builders ne déclarent que leur comportement d’exécution.
   leurs médias selon le layout et les plages automatiques finies.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   vérifie les placements Graphe direct Flux et ancré en Section par les
-  builders réels.
+  builders réels, ainsi que l’état initial `enter` du Graphe ancré.
+- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+  vérifie la zone de révélation de la Carte et ses événements d’entrée/sortie ;
+  il vérifie aussi que l’image/vidéo porte les actions et que la racine observée
+  reste stable.
 - [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
   vérifie les presets, les identifiants des éléments parents, les commentaires
   d’insertion, l’identité des zones et l’omission des textes facultatifs vides.

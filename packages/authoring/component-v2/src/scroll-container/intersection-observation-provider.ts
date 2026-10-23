@@ -69,6 +69,7 @@ export class IntersectionObservationProvider extends AbstractLiveSourceProvider 
           persoId: rule.persoId,
           storyId: rule.storyId,
           phase: update.phase,
+          initial: previousPhase === undefined,
           event,
         })
       }

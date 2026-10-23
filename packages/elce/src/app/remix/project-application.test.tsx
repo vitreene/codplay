@@ -3,7 +3,7 @@ import { createActor } from 'xstate'
 import { describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/ui/test'
-import { CHAPTER_TYPE } from '../../config/document-config'
+import { CHAPTER_TYPE, DEFAULT_PRESET_ID } from '../../config/document-config'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
 import type { ProfileProperty } from '../../domain/summary-profile/summary-profile-types'
@@ -16,6 +16,8 @@ import { ProjectApplication } from './project-application'
 const exportClientMocks = vi.hoisted(() => ({
   request: vi.fn(),
   download: vi.fn(),
+  requestScorm: vi.fn(),
+  downloadScorm: vi.fn(),
 }))
 
 vi.mock('../../export/elce-sighty-export-client', () => ({
@@ -23,7 +25,58 @@ vi.mock('../../export/elce-sighty-export-client', () => ({
   downloadElceSightyPackage: exportClientMocks.download,
 }))
 
+vi.mock('../../export/elce-scorm-export-client', () => ({
+  requestElceScormPackage: exportClientMocks.requestScorm,
+  downloadElceScormPackage: exportClientMocks.downloadScorm,
+}))
+
 describe('Remix project application', () => {
+  it('ignores controller snapshots that do not change the rendered project view', async () => {
+    const project = { id: 'stable-view-project', name: 'Vue stable', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
+
+    const subscriptionTask: { current: (() => void) | null } = { current: null }
+    const abortController = new AbortController()
+    const update = vi.fn(async () => {})
+    const handle = {
+      context: { get: () => ({ controller, actions: new EditorActionsFacade(controller) }) },
+      queueTask: (callback: () => void) => { subscriptionTask.current = callback },
+      signal: abortController.signal,
+      update,
+    } as unknown as Parameters<typeof ProjectApplication>[0]
+    ProjectApplication(handle)
+    if (subscriptionTask.current === null) throw new Error('L’abonnement de l’application doit être installé.')
+    subscriptionTask.current()
+    update.mockClear()
+
+    controller.send({ type: 'project.summary.refresh', project: { ...project } })
+    expect(update).not.toHaveBeenCalled()
+
+    controller.send({
+      type: 'project.local-copy.availability', projectId: 'another-project', available: true,
+    })
+    expect(update).not.toHaveBeenCalled()
+
+    controller.send({
+      type: 'project.access.recovery', message: 'L’accès doit pouvoir être repris.',
+    })
+    expect(update).toHaveBeenCalledOnce()
+
+    abortController.abort()
+    controller.stop()
+  })
+
   it('keeps ordinary read-only status quiet until access recovery is needed', async () => {
     const project = { id: 'reader-project', name: 'Projet en lecture', revision: 0 }
     const projectSession: ProjectSessionPort = {
@@ -66,9 +119,11 @@ describe('Remix project application', () => {
     controller.stop()
   })
 
-  it('places export at the right of the title bar and keeps its pending state', async () => {
+  it('keeps the scenario editable while its export uses the captured document', async () => {
     exportClientMocks.request.mockReset()
     exportClientMocks.download.mockReset()
+    exportClientMocks.requestScorm.mockReset()
+    exportClientMocks.downloadScorm.mockReset()
     let finishExport: (blob: Blob) => void = () => {}
     exportClientMocks.request.mockImplementation(() => new Promise<Blob>((resolve) => {
       finishExport = resolve
@@ -89,6 +144,8 @@ describe('Remix project application', () => {
     controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
     await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
     controller.send({ type: 'editor.access.activate' })
+    const exportedDocument = controller.getSnapshot().context.document
+    const initialPageCount = exportedDocument.pages.length
 
     const rendered = render(<EditorContextProvider
       controller={controller}
@@ -96,23 +153,117 @@ describe('Remix project application', () => {
     >
       <ProjectApplication />
     </EditorContextProvider>)
-    const exportButton = rendered.$('#elce-sighty-export') as HTMLButtonElement | null
+    const exportButton = rendered.$('#elce-export-open') as HTMLButtonElement | null
     if (exportButton === null) throw new Error('Le bouton d’export doit être présent dans la barre de titre.')
 
     expect(exportButton.closest('#elce-project-header')).not.toBeNull()
     expect(rendered.$('#elce-project-header')?.lastElementChild).toBe(exportButton)
-    expect(rendered.$('#elce-responsive-panel-access #elce-sighty-export')).toBeNull()
+    expect(rendered.$('#elce-responsive-panel-access #elce-export-open')).toBeNull()
+    expect(rendered.$('#elce-export-dialog')?.getAttribute('aria-modal')).toBeNull()
+    expect(rendered.$('#elce-export-dialog-title')?.textContent).toBe('Exporter')
+    expect(rendered.$('#elce-export-dialog-close')?.getAttribute('aria-label')).toBe('Fermer la fenêtre d’export')
+    expect(rendered.$('#elce-export-dialog-close')?.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+    expect(rendered.$('#elce-sighty-export-action')?.textContent).toContain('Exporter le scénario')
+    expect(rendered.$('#elce-sighty-export-action')?.textContent).not.toContain('Sighty')
+    expect(rendered.$('#elce-scorm-export-action')?.textContent).toContain('Exporter en SCORM')
+    expect((rendered.$('#elce-scorm-version-2004') as HTMLInputElement).checked).toBe(true)
+    expect((rendered.$('#elce-scorm-mono-sco') as HTMLInputElement).checked).toBe(false)
+    expect(rendered.$('#elce-scorm-export-action')?.classList.contains('elce-export-dialog__action--primary')).toBe(false)
+
+    const dialog = rendered.$('#elce-export-dialog') as HTMLDialogElement
+    const dialogMethods = stubDialogMethods(dialog)
 
     await rendered.act(() => exportButton.click())
+    expect(dialogMethods.showModal).toHaveBeenCalledOnce()
+    expect(dialog.open).toBe(true)
+    await rendered.act(() => rendered.$('#elce-sighty-export-action')?.dispatchEvent(new Event('click', { bubbles: true })))
     expect(exportClientMocks.request).toHaveBeenCalledOnce()
     expect(exportButton.disabled).toBe(true)
     expect(exportButton.getAttribute('aria-busy')).toBe('true')
-    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation du paquet Sighty…')
+    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation de l’export du scénario…')
+    expect(dialogMethods.close).toHaveBeenCalledOnce()
+    expect(exportClientMocks.request.mock.calls[0]?.[0]).toBe(exportedDocument)
+
+    const editor = rendered.$('#elce-main') as HTMLElement | null
+    const addPage = rendered.$('#elce-create-scenario-diapo') as HTMLButtonElement | null
+    expect(editor?.hasAttribute('inert')).toBe(false)
+    if (addPage === null) throw new Error('Le bouton de création de page doit rester disponible pendant l’export.')
+    expect(addPage.disabled).toBe(false)
+    await rendered.act(() => addPage.dispatchEvent(new Event('click', { bubbles: true })))
+    expect(controller.getSnapshot().context.document.pages).toHaveLength(initialPageCount + 1)
+    expect(exportedDocument.pages).toHaveLength(initialPageCount)
 
     await rendered.act(() => finishExport(new Blob(['package'], { type: 'application/zip' })))
     await vi.waitFor(() => expect(exportClientMocks.download).toHaveBeenCalledOnce())
     expect(exportButton.disabled).toBe(false)
     expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Téléchargement de « Projet export.sighty.zip » démarré.')
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
+  it('keeps the editor writable while creating a SCORM package from a stable snapshot', async () => {
+    exportClientMocks.request.mockReset().mockResolvedValue(new Blob(['Sighty'], { type: 'application/zip' }))
+    exportClientMocks.download.mockReset()
+    let finishScormExport: (download: { archive: Blob; filename: string }) => void = () => {}
+    exportClientMocks.requestScorm.mockReset().mockImplementation(() => new Promise<{ archive: Blob; filename: string }>((resolve) => {
+      finishScormExport = resolve
+    }))
+    exportClientMocks.downloadScorm.mockReset().mockReturnValue('Projet-SCORM-scorm-monosco-2026-10-22(1.2).zip')
+
+    const project = { id: 'scorm-export-project', name: 'Projet SCORM', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
+    controller.send({ type: 'editor.access.activate' })
+    const exportedDocument = controller.getSnapshot().context.document
+    const initialPageCount = exportedDocument.pages.length
+    const rendered = render(<EditorContextProvider controller={controller} actions={new EditorActionsFacade(controller)}>
+      <ProjectApplication />
+    </EditorContextProvider>)
+    const dialog = rendered.$('#elce-export-dialog') as HTMLDialogElement
+    stubDialogMethods(dialog)
+
+    await rendered.act(() => rendered.$('#elce-export-open')?.dispatchEvent(new Event('click', { bubbles: true })))
+    await rendered.act(() => (rendered.$('#elce-scorm-version-12') as HTMLInputElement).click())
+    await rendered.act(() => (rendered.$('#elce-scorm-mono-sco') as HTMLInputElement).click())
+    await rendered.act(() => rendered.$('#elce-scorm-export-action')?.dispatchEvent(new Event('click', { bubbles: true })))
+
+    expect(exportClientMocks.request).toHaveBeenCalledOnce()
+    expect(exportClientMocks.request.mock.calls[0]?.[0]).toBe(exportedDocument)
+    await vi.waitFor(() => expect(exportClientMocks.requestScorm).toHaveBeenCalledOnce())
+    expect(exportClientMocks.requestScorm).toHaveBeenCalledWith(expect.any(Blob), 'Document Elcé', '1.2', true)
+    expect(exportClientMocks.downloadScorm).not.toHaveBeenCalled()
+    expect(exportClientMocks.download).not.toHaveBeenCalled()
+
+    const editor = rendered.$('#elce-main') as HTMLElement | null
+    const addPage = rendered.$('#elce-create-scenario-diapo') as HTMLButtonElement | null
+    expect(editor?.hasAttribute('inert')).toBe(false)
+    if (addPage === null) throw new Error('Le bouton de création de page doit rester disponible pendant l’export.')
+    expect(addPage.disabled).toBe(false)
+    await rendered.act(() => addPage.dispatchEvent(new Event('click', { bubbles: true })))
+
+    const updatedDocument = controller.getSnapshot().context.document
+    expect(controller.getSnapshot().context.editAccess).toBe('active')
+    expect(updatedDocument).not.toBe(exportedDocument)
+    expect(updatedDocument.pages).toHaveLength(initialPageCount + 1)
+    expect(exportedDocument.pages).toHaveLength(initialPageCount)
+
+    const scormArchive = new Blob(['SCORM'], { type: 'application/zip' })
+    const scormFilename = 'Document-Elce-scorm-monosco-2026-10-22(1.2).zip'
+    await rendered.act(() => finishScormExport({ archive: scormArchive, filename: scormFilename }))
+    await vi.waitFor(() => expect(exportClientMocks.downloadScorm).toHaveBeenCalledOnce())
+    expect(exportClientMocks.downloadScorm).toHaveBeenCalledWith(scormArchive, scormFilename)
+    await vi.waitFor(() => expect(rendered.$('#elce-sighty-export-status')?.textContent).toContain('Extrayez cette archive'))
 
     rendered.cleanup()
     controller.stop()
@@ -269,6 +420,76 @@ describe('Remix project application', () => {
     controller.stop()
   })
 
+  it('settles after a loaded anchored image stores its measured ratio', async () => {
+    const project = { id: 'loaded-anchor-project', name: 'Image déjà chargée', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'active',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const media = { id: 'loaded-image', name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' }
+    controller.send({
+      type: 'document.apply',
+      command: {
+        type: 'bdc.anchor.create',
+        sectionBdcId: 'bdc-section-1',
+        pageId: 'page-a',
+        bdcId: 'card-image',
+        presetId: DEFAULT_PRESET_ID.PHOTO,
+        media,
+        partId: 'page-a:card-image:anchor',
+        markup: '<p id="section-text-1">Avant <span id="page-a:card-image:anchor" data-elce-anchor="true"></span> après</p>',
+        content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [
+            { type: 'text', text: 'Avant ' },
+            { type: 'elceAnchor', attrs: {
+              bdcId: 'card-image', partId: 'page-a:card-image:anchor', paddingBottom: '75%',
+            } },
+            { type: 'text', text: ' après' },
+          ] }],
+        },
+      },
+    })
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
+    controller.send({ type: 'media.source.register', mediaId: media.id, source: 'data:image/png;base64,fixture' })
+
+    const complete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
+    const naturalWidth = vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(400)
+    const naturalHeight = vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(200)
+    const snapshotCount = { value: 0 }
+    const subscription = controller.subscribe(() => { snapshotCount.value += 1 })
+    const rendered = render(<EditorContextProvider controller={controller} actions={new EditorActionsFacade(controller)}>
+      <ProjectApplication />
+    </EditorContextProvider>)
+
+    try {
+      await vi.waitFor(() => {
+        const content = controller.getSnapshot().context.document.bdcs
+          .find((bdc) => bdc.id === 'bdc-section-1')?.section?.content
+        const anchor = content?.content[0]?.content?.find((node) => node.type === 'elceAnchor')
+        expect(anchor?.attrs?.paddingBottom).toBe('50%')
+      })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(snapshotCount.value).toBeLessThan(20)
+      expect(rendered.$('#elce-project-sync-status')?.textContent).not.toBe('Lecture seule')
+    } finally {
+      rendered.cleanup()
+      subscription.unsubscribe()
+      complete.mockRestore()
+      naturalWidth.mockRestore()
+      naturalHeight.mockRestore()
+      controller.stop()
+    }
+  })
+
   it('updates the central work area when a chapter is selected through the scenario', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
@@ -297,3 +518,12 @@ describe('Remix project application', () => {
     controller.stop()
   })
 })
+
+/** Supplies native dialog open and close methods when the DOM test environment omits them. */
+function stubDialogMethods(dialog: HTMLDialogElement): Readonly<{ showModal: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> {
+  const showModal = vi.fn(() => dialog.setAttribute('open', ''))
+  const close = vi.fn(() => dialog.removeAttribute('open'))
+  Object.defineProperty(dialog, 'showModal', { configurable: true, value: showModal })
+  Object.defineProperty(dialog, 'close', { configurable: true, value: close })
+  return { showModal, close }
+}

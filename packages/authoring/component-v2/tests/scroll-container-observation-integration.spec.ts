@@ -47,7 +47,7 @@ afterEach(() => {
 })
 
 /** Creates a small scene with one ratio-driven title and one animated image. */
-function createObservationScene(): SceneDoc<string> {
+function createObservationScene(initialImageEnter = false): SceneDoc<string> {
   return {
     id: 'scroll-observation-reset',
     stories: {
@@ -101,6 +101,7 @@ function createObservationScene(): SceneDoc<string> {
             },
             emit: {
               observe: {
+                ...(initialImageEnter ? { initial: 'enter' as const } : {}),
                 zone: { threshold: 0 },
                 enter: [{ name: 'image:enter' }],
                 leave: [{ name: 'image:leave' }],
@@ -132,11 +133,15 @@ function createObservationScene(): SceneDoc<string> {
 }
 
 /** Creates a real HtmlPlayerRunner with the optional scroll observation adapter. */
-function createObservationRunner(root: HTMLElement): HtmlPlayerRunner {
+function createObservationRunner(
+  root: HTMLElement,
+  initialImageEnter = false,
+  captureAdapter?: (adapter: ReturnType<typeof createScrollContainerSourceAdapter>) => void,
+): HtmlPlayerRunner {
   const catalog = createCoreRuntimeCatalog()
   catalog.registerComponent(SCROLL_CONTAINER_COMPONENT_DEFINITION)
   catalog.registerModule(SCROLL_CONTAINER_MODULE_DEFINITION)
-  const build = new SceneBuilder(catalog.validationSnapshot()).build(createObservationScene())
+  const build = new SceneBuilder(catalog.validationSnapshot()).build(createObservationScene(initialImageEnter))
   if (!build.ok) throw new Error(build.diagnostics.errors.map((issue) => issue.message).join('\n'))
   return new HtmlPlayerRunner({
     id: 'scroll-observation-reset',
@@ -145,7 +150,11 @@ function createObservationRunner(root: HTMLElement): HtmlPlayerRunner {
     root,
     catalog,
     resources: ['/image.png'],
-    sourceAdapterFactories: [createScrollContainerSourceAdapter],
+    sourceAdapterFactories: [(context) => {
+      const adapter = createScrollContainerSourceAdapter(context)
+      captureAdapter?.(adapter)
+      return adapter
+    }],
   })
 }
 
@@ -171,6 +180,125 @@ async function deliverAndSettle(
   observer.deliver({ target, isIntersecting, intersectionRatio: ratio })
   await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
 }
+
+it('delivers a matching initial observation after playback starts if its callback arrived in ready', async () => {
+  vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+  const root = document.createElement('div')
+  document.body.append(root)
+  const runner = createObservationRunner(root, true)
+
+  expect(runner.init().ok).toBe(true)
+  const imageFrame = runner.getPersoNode('story:image-frame') as HTMLElement
+  const observer = observerFor(imageFrame)
+  await deliverAndSettle(observer, imageFrame, true, 1)
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
+
+  runner.play(stoppedTicker())
+  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).toEqual(['image:enter'])
+
+  await deliverAndSettle(observer, imageFrame, true, 1)
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).toEqual(['image:enter'])
+
+  runner.destroy()
+  root.remove()
+})
+
+it('cancels a queued initial observation when seek replaces the ready presentation', async () => {
+  vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+  const root = document.createElement('div')
+  document.body.append(root)
+  const runner = createObservationRunner(root, true)
+
+  expect(runner.init().ok).toBe(true)
+  const imageFrame = runner.getPersoNode('story:image-frame') as HTMLElement
+  await deliverAndSettle(observerFor(imageFrame), imageFrame, true, 1)
+  expect(runner.seek(0).ok).toBe(true)
+
+  runner.play(stoppedTicker())
+  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
+
+  runner.destroy()
+  root.remove()
+})
+
+it('cancels a queued initial observation when reset replaces the ready presentation', async () => {
+  vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+  const root = document.createElement('div')
+  document.body.append(root)
+  const runner = createObservationRunner(root, true)
+
+  expect(runner.init().ok).toBe(true)
+  const imageFrame = runner.getPersoNode('story:image-frame') as HTMLElement
+  await deliverAndSettle(observerFor(imageFrame), imageFrame, true, 1)
+  runner.reset()
+
+  runner.play(stoppedTicker())
+  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
+
+  runner.destroy()
+  root.remove()
+})
+
+it('drops a queued initial event if its observation phase changes before playback starts', async () => {
+  vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+  const root = document.createElement('div')
+  document.body.append(root)
+  const runner = createObservationRunner(root, true)
+
+  expect(runner.init().ok).toBe(true)
+  const imageFrame = runner.getPersoNode('story:image-frame') as HTMLElement
+  const observer = observerFor(imageFrame)
+  await deliverAndSettle(observer, imageFrame, true, 1)
+  await deliverAndSettle(observer, imageFrame, false, 0)
+  runner.play(stoppedTicker())
+  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
+
+  runner.destroy()
+  root.remove()
+})
+
+it('clears a queued initial event at sequence end and ignores a later playback notification', async () => {
+  vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+  const root = document.createElement('div')
+  document.body.append(root)
+  let adapter: ReturnType<typeof createScrollContainerSourceAdapter> | undefined
+  const runner = createObservationRunner(root, true, (created) => { adapter = created })
+
+  expect(runner.init().ok).toBe(true)
+  const imageFrame = runner.getPersoNode('story:image-frame') as HTMLElement
+  await deliverAndSettle(observerFor(imageFrame), imageFrame, true, 1)
+  adapter?.onSequenceEnd?.({} as Parameters<NonNullable<typeof adapter.onSequenceEnd>>[0])
+  adapter?.onPlaybackStateChange?.('playing')
+
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
+
+  runner.destroy()
+  root.remove()
+})
+
+it('clears queued initial events when the source adapter is destroyed', async () => {
+  vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+  const root = document.createElement('div')
+  document.body.append(root)
+  let adapter: ReturnType<typeof createScrollContainerSourceAdapter> | undefined
+  const runner = createObservationRunner(root, true, (created) => { adapter = created })
+
+  expect(runner.init().ok).toBe(true)
+  const imageFrame = runner.getPersoNode('story:image-frame') as HTMLElement
+  await deliverAndSettle(observerFor(imageFrame), imageFrame, true, 1)
+  adapter?.destroy()
+  adapter?.onPlaybackStateChange?.('playing')
+
+  expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
+
+  runner.destroy()
+  root.remove()
+})
 
 it('resynchronizes observations after reset while retaining title live actions and later image transitions', async () => {
   vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)

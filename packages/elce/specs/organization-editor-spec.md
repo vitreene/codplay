@@ -65,11 +65,13 @@ même taille de 14 px. Ces dimensions restent adaptées à chaque action ; les
 icônes gardent 2 px de padding interne et 4 px d’écart avec leur élément voisin.
 L’écart vertical entre les lignes de l’arborescence est de 0,1 rem.
 
-Dans la zone centrale, le titre de la page sélectionnée est éditable. Si cette
-page appartient à un chapitre, le titre de ce chapitre apparaît au-dessus et
-est éditable lui aussi. L’icône de type de chapitre et son nom éditable partagent
-la même ligne. Une page à la racine du scénario ou dans le catalogue n’affiche
-pas de titre de chapitre.
+Dans la zone centrale, la rangée d’actions de création se trouve au-dessus des
+titres et reste alignée à droite. Le titre de la page sélectionnée est éditable,
+avec une taille et une graisse visuellement plus fortes que le titre de
+chapitre. Si la page appartient à un chapitre, son titre éditable apparaît
+au-dessus du titre de page, avec un espacement net entre les deux. L’icône de
+type de chapitre et son nom éditable partagent la même ligne. Une page à la
+racine du scénario ou dans le catalogue n’affiche pas de titre de chapitre.
 
 Cliquer le nom ou l’icône d’un chapitre sélectionne ce chapitre dans l’état
 XState et remplace le contenu central par sa vue de réglages. Pour un chapitre
@@ -194,7 +196,8 @@ séparées.
   parcours intégré du catalogue et de l’éditeur de page vérifie aussi le
   déplacement d’une Carte disponible vers une page puis son retour au catalogue
   en la faisant glisser depuis sa poignée de placement vers l’onglet « Blocs
-  disponibles ».
+  disponibles ». Le test vérifie aussi que la rangée d’actions précède le groupe
+  des titres dans l’éditeur de page.
 - Le 9 octobre 2026, Brave confirme dans l’éditeur que la colonne ne contient
   plus le groupe « Blocs dans la page » : le retour au catalogue se fait depuis
   la poignée de placement du BDC.
@@ -222,6 +225,10 @@ séparées.
   corbeilles compactes à droite des lignes, ainsi que les champs centraux des
   titres de page et de chapitre. Le 4 octobre 2026, Safari vérifie que l’icône
   et le champ de titre du chapitre occupent la même ligne centrale.
+- Brave DevTools, le 22 octobre 2026, vérifie dans l’éditeur de Demo5 la rangée
+  d’actions au-dessus des titres, le titre de page en 1,5 rem / graisse 750 et
+  son espacement distinct du titre de chapitre en 0,82 rem / graisse 500. Le
+  document reste « Synchronisé » pendant cette vérification visuelle.
 - Le 4 octobre, Safari MCP confirme qu’une page racine créée apparaît comme
   sœur du chapitre, qu’elle peut être déplacée avant et après celui-ci par les
   gestionnaires de glisser-déposer de l’application, puis que sa suppression

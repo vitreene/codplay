@@ -8,6 +8,7 @@ interface PendingLockRequest {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -236,6 +237,31 @@ describe('Elcé project editor focus lock', () => {
     await vi.waitFor(() => expect(onAccessRecoveryRequired).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'edit_access_occupied' }),
     ))
+    await editorLock.stop()
+  })
+
+  it('offers access recovery when a native lock request remains queued', async () => {
+    const { lock } = installBrowserLock(true)
+    vi.useFakeTimers()
+    const onAccessRecoveryRequired = vi.fn()
+    const editorLock = new ProjectEditorLock('project-native-lock-timeout', {
+      onAccessWaiting: vi.fn(),
+      onAccessGranted: vi.fn(async () => {}),
+      onAccessSuspending: vi.fn(async () => {}),
+      onAccessRecoveryRequired,
+      onAccessError: vi.fn(),
+    })
+
+    editorLock.start()
+    expect(lock.request).toHaveBeenCalledOnce()
+    expect(onAccessRecoveryRequired).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(onAccessRecoveryRequired).toHaveBeenCalledOnce()
+    expect(onAccessRecoveryRequired).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'edit_access_wait_timeout',
+    }))
     await editorLock.stop()
   })
 

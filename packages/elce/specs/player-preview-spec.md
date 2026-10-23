@@ -172,9 +172,14 @@ détruit les ressources du lecteur.
   vérifie la réutilisation des sources de scènes inchangées après une
   réorganisation et la reconstruction de la scène d’une page éditée. Il
   vérifie aussi le départ direct à la Question D, son achèvement par réponse et
-  scroll-end, l’accès à F, et le maintien du verrou de G tant que ses
-  prérequis globaux restent incomplets. Les contrôles de composition passent
-  tous les 28.
+  scroll-end, l’accès à F, le maintien du verrou de G tant que ses prérequis
+  globaux restent incomplets. Le test de révélation monte la composition réelle,
+  garde stable la racine observée, vérifie une première mesure sans animation,
+  puis fait passer la Carte de `inside` à `outside` et de nouveau à `inside` ;
+  il contrôle l’opacité et la translation horizontale du média sur les deux
+  trajets. Il utilise un `IntersectionObserver` contrôlé et ne remplace pas la
+  validation visuelle de l’observer natif dans le navigateur. Les contrôles de
+  composition passent tous les 45.
 - Brave DevTools, le 5 octobre 2026, a vérifié l’ouverture dans une fenêtre
   distincte, la navigation indépendante, la synchronisation manuelle, le
   retour à la page éditée et la synchronisation unique d’une nouvelle page.

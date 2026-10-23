@@ -4,6 +4,7 @@ import type { CodPlayPublicEvent } from 'codplay'
 export type SightyPublicEvent<SceneKey extends string = string> = Readonly<{
   name: string
   sourceSceneKey?: SceneKey
+  timeMs?: number
   data?: CodPlayPublicEvent['data']
 }>
 

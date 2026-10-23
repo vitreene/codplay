@@ -5,9 +5,32 @@ import type {
   EvaluationMachineState,
   EvaluationSettings,
 } from './evaluation-machine-types'
-import { EvaluationMachine } from './evaluation-machine'
+import { applyEvaluationThreshold, EvaluationMachine } from './evaluation-machine'
 
 describe('EvaluationMachine', () => {
+  it('recomputes a persisted result when the LMS supplies a different mastery threshold', () => {
+    const machine = new EvaluationMachine({
+      questionIds: ['q1', 'q2', 'q3', 'q4', 'q5'],
+      settings: settings({ threshold: 0.8 }),
+    })
+    let state = machine.transition(machine.initialState(), { type: 'START' })
+    state = answer(machine, state, 'q1', ['a'], ['a'])
+    state = answer(machine, state, 'q2', ['b'], ['b'])
+    state = answer(machine, state, 'q3', ['c'], ['c'])
+    state = answer(machine, state, 'q4', ['x'], ['d'])
+    state = answer(machine, state, 'q5', ['y'], ['e'])
+    state = machine.transition(state, { type: 'COMPLETE' })
+
+    const restored = applyEvaluationThreshold(state, 0.6)
+
+    expect(state.context.result?.passed).toBe(false)
+    expect(restored.value).toBe('success')
+    expect(restored.context.settings.threshold).toBe(0.6)
+    expect(restored.context.result).toEqual({ questionCount: 5, correctCount: 3, score: 0.6, passed: true })
+    expect(restored.context.answers).toEqual(state.context.answers)
+    expect(restored.context.attempt).toBe(state.context.attempt)
+  })
+
   it('retries only incorrect Questions after failure without revealing answers', () => {
     const machine = new EvaluationMachine({
       questionIds: ['q1', 'q2', 'q3'],

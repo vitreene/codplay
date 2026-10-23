@@ -122,6 +122,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
       style: { aspectRatio: '16 / 9' },
       markup: expect.stringContaining(`data-part="${partId}:visual"`),
     })
+    expect(graphRoot?.emit?.observe).toMatchObject({ root: 'page-a-scrollport', initial: 'enter' })
     expect(graphVisual?.initial).toMatchObject({ move: { target: `${partId}:visual` } })
     expect(graphVisualMarkup).toContain('<svg')
     const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial

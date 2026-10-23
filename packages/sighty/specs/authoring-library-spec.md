@@ -488,6 +488,7 @@ L’événement actuellement exposé est :
 type SightyPublicEvent<SceneKey extends string = string> = {
   name: string
   sourceSceneKey?: SceneKey
+  timeMs?: number
   data?: Readonly<Record<string, unknown>>
 }
 ```
@@ -497,6 +498,12 @@ génération ou révision interne. Elle peut transporter les événements public
 de télécommande, les intentions de navigation et les informations produites
 par une interaction de scène, y compris un formulaire, lorsque la scène les
 déclare comme événements publics CodPlay.
+
+Pour un événement public CodPlay issu d’une scène, `timeMs` est le temps
+logique de cette scène au moment de l’événement. Sighty le transmet sans le
+recalculer à l’abonné hôte et à l’action qui reçoit le même événement après
+admission. Il est facultatif pour les événements fournis directement à
+`runtime.dispatch`.
 
 Sighty écoute les événements publics des instances CodPlay. Pour une scène
 active, il les adapte, les rend disponibles à l’hôte et les place dans le

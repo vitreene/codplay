@@ -7,6 +7,8 @@ export type { ScormCliArguments } from './cli/scorm-cli-arguments'
 export type {
   PipwerksScormApi,
   ScormChoiceInteraction,
+  ScormInteraction,
+  ScormInteractionType,
   ScormEvaluationUpdate,
   ScormObjectiveResult,
   ScormProgressUpdate,

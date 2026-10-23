@@ -39,7 +39,8 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   `RemixCarouselEditor`. Les champs et imports média empruntent les façades
   Carte et Carousel existantes. Dans la barre des vues, l’ajout d’une Carte
   montre l’icône Carte et l’ajout d’un Graphe son icône Graphe ; le libellé
-  court reste sous l’icône.
+  court reste sous l’icône. Le retrait d’un média de Carte utilise l’icône
+  corbeille `Trash2` ; la croix du panneau d’édition ferme ce panneau.
 - Les icônes Elcé sont créées à partir de `lucide-static` comme éléments SVG
   natifs ; aucun adaptateur d’icônes React n’est chargé.
 - Les vues Remix sont écrites en JSX dans des fichiers `.tsx`. TypeScript est
@@ -107,7 +108,9 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie dans le même `RemixPageEditor` le contenu, le titre, les commandes
   Tiptap, le dépôt et la persistance d’une image, l’aperçu et le déplacement
-  d’ancre, ainsi que la conservation de l’instance Editor et de son DOM.
+  d’ancre, ainsi que la conservation de l’instance Editor et de son DOM. Il
+  vérifie aussi que le bouton de retrait du média rend `lucide-trash-2`, tandis
+  que le bouton de fermeture du panneau rend `lucide-x`.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie le montage de l’éditeur natif dans `ProjectApplication` et le
   remplacement de la zone centrale après sélection d’un chapitre.

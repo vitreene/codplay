@@ -10,6 +10,7 @@
     "dev": "node scripts/dev-elce.mjs",
     "dev:network": "ELCE_NETWORK_PREVIEW=1 node scripts/dev-elce.mjs",
     "dev:api": "node scripts/dev-api.mjs",
+    "package-scorm": "node scripts/package-scorm.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

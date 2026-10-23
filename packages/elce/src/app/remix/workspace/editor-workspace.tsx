@@ -94,6 +94,7 @@ function renderWorkspaceAccess(
     | 'onPreview'
     | 'previewError'
     | 'exportBusy'
+    | 'exportKind'
     | 'exportError'
     | 'exportNotice'
   >,
@@ -124,7 +125,9 @@ function renderWorkspaceAccess(
       role={props.exportError === null ? 'status' : 'alert'}
       aria-live="polite"
     >
-      {props.exportBusy ? 'Préparation du paquet Sighty…' : props.exportError ?? props.exportNotice}
+      {props.exportBusy
+        ? props.exportKind === 'scorm' ? 'Préparation du package SCORM…' : 'Préparation de l’export du scénario…'
+        : props.exportError ?? props.exportNotice}
     </p> : null}
   </div>
 }

@@ -4,6 +4,7 @@ import type { ScormVersion } from '../scorm-types'
 export interface ScormManifestSco {
   readonly id: string
   readonly identifier?: string
+  readonly resourceIdentifier?: string
   readonly title: string
   readonly href: string | null
   readonly isVisible: boolean
@@ -18,6 +19,8 @@ export interface ScormManifestDefinition {
   readonly withSummary: boolean
   readonly monoSco: boolean
   readonly allSco: readonly ScormManifestSco[]
+  readonly manifestIdentifier?: string
+  readonly organizationIdentifier?: string
   readonly createIdentifier?: () => string
 }
 
@@ -32,19 +35,15 @@ interface XmlElement {
 export function buildScormManifest(definition: ScormManifestDefinition): string {
   const createIdentifier = definition.createIdentifier ?? (() => crypto.randomUUID())
   const identifier = (prefix: string): string => `${prefix}-${createIdentifier()}`
-  const manifestIdentifier = identifier('MANIFEST')
-  const organizationIdentifier = identifier('ORG')
-  const allItems = definition.allSco.map((sco) => ({
-    sco,
-    identifier: sco.identifier ?? identifier('ITEM'),
-    resourceIdentifier: identifier('RES'),
-  }))
+  const manifestIdentifier = definition.manifestIdentifier ?? identifier('MANIFEST')
+  const organizationIdentifier = definition.organizationIdentifier ?? identifier('ORG')
   const items = definition.allSco
-    .filter((sco) => sco.href !== null)
-    .map((sco, index) => {
-      const identifiers = allItems[index]!
-      return { sco, identifier: identifiers.identifier, resourceIdentifier: identifiers.resourceIdentifier }
-    })
+    .map((sco) => ({
+      sco,
+      identifier: sco.identifier ?? identifier('ITEM'),
+      resourceIdentifier: sco.resourceIdentifier ?? identifier('RES'),
+    }))
+    .filter(({ sco }) => sco.href !== null)
   const isScorm12 = definition.version === '1.2'
   const schemaVersion = definition.version === '2004v3'
     ? '2004 3rd Edition'

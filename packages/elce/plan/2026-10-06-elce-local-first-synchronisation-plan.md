@@ -136,7 +136,7 @@ BDC et une Carte ancrée est enfant de sa Section. Le schéma relationnel garde
 `media_type` ni référence média générique dans `content_blocks`. Les tests de
 commande vérifient les versions v1, v2 et v3 refusées sans conversion.
 
-**Décision de révélation acceptée le 7 octobre 2026, non implémentée :**
+**Décision de révélation acceptée le 7 octobre 2026 — réalisation en cours :**
 ajouter une image ou une vidéo crée une BDC Carte au layout « Photo ou vidéo
 plein cadre ». Une icône dans un coin de l’image ouvre l’édition du layout et
 de ses paramètres. La durée ne concerne pas une Carte placée seule ; dans un
@@ -173,6 +173,77 @@ commune du Carousel à tous les enfants. La démo 5 observe l’entrée et la so
 de visibilité du média dans le scroll. L’implémentation devra résoudre les
 références depuis le registre Capsule Automation et déclarer leurs actions sur
 le perso média, sans ajouter de minuteur ou d’animation parallèle.
+
+**Révélation des images de preview — 22 octobre 2026 :** l’enquête a trouvé
+deux écarts dans la déclaration Elcé. La Carte déclenchait ses actions Capsule
+dès le premier contact avec le bord du scrollport (`threshold: 0`, sans marge),
+alors que la démo scroll-container réduit sa zone avec
+`rootMargin: '0px 0px -40% 0px'`. Elle demandait aussi `initial: 'enter'`, ce
+qui lançait une entrée pour un média déjà visible, contrairement à la décision
+acceptée. La déclaration Carte reprend maintenant la zone de la démo et
+synchronise sa phase initiale sans animation ; les passages de phase ultérieurs
+restent sur l’observer et les actions Capsule existants. Tests ciblés et
+vérification de preview réelle à exécuter avant de fermer ce signal. Le pont
+Brave DevTools MCP n’a pas répondu le 22 octobre ; la page de l’auteur est
+signalée active mais son DOM n’a pas encore été inspecté dans cette session.
+Les tests builder + composition passent (59/59), ceux du provider et de
+l’adaptateur CodPlay passent (11/11), et le typecheck et le build Elcé
+réussissent. La validation navigateur reste la seule preuve manquante pour ce
+signal.
+
+**Reprise de l’animation d’image — décision acceptée le 22 octobre 2026 :**
+la preview signale une première entrée interrompue, puis seulement l’opacité,
+sans rejouer la translation en remontant. L’adaptation actuelle anime le même
+perso Carte qu’elle observe. **Décision confirmée par l’auteur le 22 octobre :
+la Carte, et non sa Section ni son perso média seul, possède la responsabilité
+de sa révélation.** La Section porte l’ancre et la réservation de place ; la
+racine Carte porte l’état initial, l’observation et les actions Capsule
+existantes. Aucun changement de contrat ou réglage CodPlay n’est demandé.
+
+La comparaison du code de travail avec la version Elcé antérieure identifie la
+régression introduite dans le builder Flux : l’action a été déplacée de la
+racine Carte vers l’image enfant et la zone a été modifiée de `threshold: 0`
+vers `rootMargin: '0px 0px -40% 0px'`. La marge négative retarde l’entrée
+jusqu’à ce que la Carte soit déjà visible, puis l’action explicite repart de
+`from: 0`, ce qui produit le flash. La correction rétablit l’action sur la
+Carte et le seuil antérieur `0`, qui déclenche la transition au premier contact
+avec la zone visible. La première mesure déjà visible reste silencieuse ; les
+passages ultérieurs rejouent l’entrée et la sortie sans règle `once`.
+
+L’enregistrement courant de Demo5 porte `fade`/`fade` comme références de
+projet ; ses six Sections héritent de ces valeurs et demandent donc un fondu.
+Les valeurs `swipe-right`/`swipe-left` du test de composition servent seulement
+à vérifier que le trajet horizontal réversible est bien rendu par le runtime ;
+elles ne demandent pas de remplacer les références enregistrées dans Demo5.
+La décision acceptée est de préserver toute transition existante sur une entrée
+Carte Carousel ; elle prime sur le réglage du Carousel, puis sur le défaut du
+projet. Pour une Carte ancrée dans une Section, le réglage de la Section prime
+sur le défaut du projet. Toute valeur `null` continue d’hériter du niveau
+parent. Il faut retrouver la transition d’origine de Demo5 avant de changer ses
+données persistées.
+
+Le 22 octobre, l’enregistrement du projet était à la révision 14 et le verrou
+normal était occupé. Aucune écriture ni reprise forcée n’a été faite. Brave
+DevTools est configuré et exposé, mais `list_pages` n’a pas répondu dans cette
+session ; la page reste déclarée active par l’auteur.
+
+**Acceptation restante :**
+
+- [ ] Rétablir le propriétaire d’animation Carte et son seuil d’observation
+  antérieur, puis vérifier dans les tests le premier franchissement et le
+  rejeu bidirectionnel.
+- [ ] Vérifier la première mesure `inside` stable et le premier passage
+  `outside` → `inside` sur la composition preview réelle.
+- [ ] Retrouver dans la source Demo5 la transition d’origine et vérifier qu’Elcé
+  conserve la transition de chaque Carte au lieu de lui substituer un défaut.
+- [ ] Vérifier visuellement l’animation native dans la preview active avec
+  Brave DevTools, quand le pont répond.
+- [x] Mettre à jour les spécifications Flux et preview après les preuves des
+  tests ciblés ; garder le signal `En cours` tant que la preuve navigateur manque.
+
+Les deux fichiers de tests ciblés passent (59 tests) ; `npm run typecheck` et
+`npm run build` passent. La construction signale seulement un bundle client
+supérieur à 500 kB.
 
 Le modèle documentaire v4 distingue les types de BDC métier sans créer de BDC
 `image` ou `video`. La whitelist de types et de layouts selon le contexte

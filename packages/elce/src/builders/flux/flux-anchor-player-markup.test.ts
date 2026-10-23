@@ -23,7 +23,7 @@ describe('Flux player anchor markup', () => {
   it('keeps the logical bdc target available before player projection', () => {
     const markup = '<p id="text"><span data-elce-anchor="true" data-bdc-id="bdc-image" data-part="part:anchor"></span></p>'
 
-    expect(readFluxAnchorTargets(markup)).toEqual([{ bdcId: 'bdc-image', partId: 'part:anchor', paddingBottom: '12rem' }])
+    expect(readFluxAnchorTargets(markup)).toEqual([{ bdcId: 'bdc-image', partId: 'part:anchor', paddingBottom: '75%' }])
   })
 
   it('keeps the raw reservation when projecting markup that already has layout CSS', () => {

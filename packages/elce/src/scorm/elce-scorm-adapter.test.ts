@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_EVALUATION_SETTINGS } from '../config/document-config'
+import { DEFAULT_EVALUATION_SETTINGS, QUESTION_TYPE } from '../config/document-config'
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
 import type { PipwerksScormApi } from '@codplay/sighty-scorm'
 import { ElceScormAdapter } from './elce-scorm-adapter'
@@ -75,6 +75,11 @@ function createFailedEvaluationState() {
           answerIds: ['answer-a', 'answer-b'],
           selectedAnswerIds: ['answer-b'],
           expectedAnswerIds: ['answer-a'],
+          questionType: 'choice' as const,
+          answerLabels: ['Réponse 1', 'Réponse 2'],
+          description: 'Quel choix ?',
+          latencyMs: 12_999,
+          timestampMs: new Date(2026, 9, 21, 12, 34, 56, 789).getTime(),
         },
       },
       result: { questionCount: 1, correctCount: 0, score: 0, passed: false },
@@ -96,6 +101,50 @@ function createPassedEvaluationState() {
 }
 
 describe('ElceScormAdapter', () => {
+  it.each([
+    ['1.2', 'cmi.student_data.mastery_score', '75', 0.75],
+    ['2004v3', 'cmi.scaled_passing_score', '0.65', 0.65],
+    ['2004v4', 'cmi.scaled_passing_score', '0.8', 0.8],
+  ] as const)('exposes the LMS mastery score as an Evaluation threshold for %s', async (version, element, value, expected) => {
+    const api = new FakePipwerksApi()
+    api.values.set(element, value)
+    const session = new ElceScormAdapter({ version, api })
+
+    await session.initialize()
+
+    expect(session.getEvaluationThresholdOverride()).toBe(expected)
+  })
+
+  it('re-evaluates a restored Evaluation result with the current LMS threshold', async () => {
+    const api = new FakePipwerksApi()
+    api.values.set('cmi.scaled_passing_score', '0.6')
+    api.values.set('cmi.suspend_data', JSON.stringify({
+      schemaVersion: 1,
+      currentPageId: 'page-result',
+      projectTestState: {
+        ...INITIAL_PROJECT_TEST_STATE,
+        evaluationStates: {
+          'chapter-evaluation': {
+            ...createFailedEvaluationState(),
+            context: {
+              ...createFailedEvaluationState().context,
+              settings: { ...DEFAULT_EVALUATION_SETTINGS, threshold: 0.8 },
+              result: { questionCount: 5, correctCount: 3, score: 0.6, passed: false },
+            },
+          },
+        },
+      },
+    }))
+    const session = new ElceScormAdapter({ version: '2004v4', api })
+
+    const restored = await session.initialize()
+    const evaluation = restored.projectTestState.evaluationStates['chapter-evaluation']
+
+    expect(evaluation?.context.settings.threshold).toBe(0.6)
+    expect(evaluation?.context.result?.passed).toBe(true)
+    expect(evaluation?.value).toBe('success')
+  })
+
   it.each([
     ['1.2', 'cmi.core.lesson_location'],
     ['2004v3', 'cmi.location'],
@@ -202,32 +251,178 @@ describe('ElceScormAdapter', () => {
 
     expect(api.values.get('cmi.core.lesson_status')).toBe('failed')
     expect(api.values.get('cmi.core.score.raw')).toBe('40')
+    expect(api.writes.some(({ parameter }) => parameter.startsWith('cmi.interactions.'))).toBe(false)
+    const savedAnswer = JSON.parse(api.values.get('cmi.suspend_data') ?? '{}')
+      .projectTestState.evaluationStates['chapter-evaluation'].context.answers['page-question']
+    expect(savedAnswer).toMatchObject({
+      selectedAnswerIds: ['answer-b'],
+      expectedAnswerIds: ['answer-a'],
+    })
+    expect(JSON.parse(api.values.get('cmi.suspend_data') ?? '{}')
+      .projectTestState.evaluationStates['chapter-evaluation'].context.attempt).toBe(2)
+    expect(savedAnswer).not.toHaveProperty('questionType')
+    expect(savedAnswer).not.toHaveProperty('answerLabels')
+    expect(savedAnswer).not.toHaveProperty('description')
+    expect(savedAnswer).not.toHaveProperty('latencyMs')
+    expect(savedAnswer).not.toHaveProperty('timestampMs')
   })
 
-  it('reports chapter-based completion and progress for a 2004 mono-SCO package', async () => {
+  it('writes a non-evaluation true-false response immediately with its reader state', async () => {
     const api = new FakePipwerksApi()
+    const session = new ElceScormAdapter({ version: '2004v4', api })
+    await session.initialize()
+
+    await session.recordQuestionInteraction(INITIAL_PROJECT_TEST_STATE, 'page-a', {
+      questionType: QUESTION_TYPE.TRUE_FALSE,
+      answerIds: ['answer-yes', 'answer-no'],
+      answerLabels: ['Oui', 'Non'],
+      selectedAnswerIds: ['answer-no'],
+      expectedAnswerIds: ['answer-yes'],
+      description: 'La réponse est-elle correcte ?',
+      isCorrect: false,
+      latencyMs: 4_999,
+      timestampMs: new Date(2026, 9, 21, 12, 34, 56, 789).getTime(),
+    })
+
+    expect(api.values.get('cmi.location')).toBe('page-a')
+    expect(JSON.parse(api.values.get('cmi.suspend_data') ?? '{}').currentPageId).toBe('page-a')
+    expect(api.values.get('cmi.interactions.0.id')).toBe('page-a_0')
+    expect(api.values.get('cmi.interactions.0.type')).toBe('true-false')
+    expect(api.values.get('cmi.interactions.0.description'))
+      .toBe('La réponse est-elle correcte ?\n1. Oui\n2. Non')
+    expect(api.values.get('cmi.interactions.0.correct_responses.0.pattern')).toBe('Oui')
+    expect(api.values.get('cmi.interactions.0.learner_response')).toBe('Non')
+    expect(api.values.get('cmi.interactions.0.latency')).toBe('PT0M4S')
+    expect(api.values.get('cmi.interactions.0.result')).toBe('incorrect')
+    expect(api.saveCount).toBe(1)
+  })
+
+  it('reports current-page progress and per-chapter objectives for a 2004 mono-SCO package', async () => {
+    const api = new FakePipwerksApi()
+    api.values.set('cmi.objectives._count', '2')
+    api.values.set('cmi.objectives.0.id', 'obj_chapter-a')
+    api.values.set('cmi.objectives.1.id', 'obj_chapter-b')
     const session = new ElceScormAdapter({
       version: '2004v4',
       monoSco: true,
+      chapterIds: ['chapter-a', 'chapter-b'],
       chapterPageIds: [['page-a'], ['page-b']],
       api,
     })
     await session.initialize()
 
+    await session.saveReaderState(INITIAL_PROJECT_TEST_STATE, 'page-a')
+    expect(api.values.get('cmi.progress_measure')).toBe('0')
+    expect(api.values.has('cmi.completion_status')).toBe(false)
+    expect(api.values.get('cmi.objectives.0.progress_measure')).toBe('1')
+    expect(api.values.has('cmi.objectives.0.completion_status')).toBe(false)
+
     await session.saveReaderState({ ...INITIAL_PROJECT_TEST_STATE, finishedPageIds: ['page-a'] }, 'page-a')
     expect(api.values.get('cmi.progress_measure')).toBe('0.5')
     expect(api.values.get('cmi.completion_status')).toBe('incomplete')
+    expect(api.values.get('cmi.objectives.0.completion_status')).toBe('completed')
 
     await session.saveReaderState({ ...INITIAL_PROJECT_TEST_STATE, finishedPageIds: ['page-a', 'page-b'] }, 'page-b')
     expect(api.values.get('cmi.progress_measure')).toBe('1')
     expect(api.values.get('cmi.completion_status')).toBe('completed')
+    expect(api.values.get('cmi.objectives.1.progress_measure')).toBe('1')
+    expect(api.values.get('cmi.objectives.1.completion_status')).toBe('completed')
+  })
+
+  it('writes only the mono-SCO completion status for a 1.2 package', async () => {
+    const api = new FakePipwerksApi()
+    const session = new ElceScormAdapter({
+      version: '1.2',
+      monoSco: true,
+      chapterIds: ['chapter-a', 'chapter-b'],
+      chapterPageIds: [['page-a'], ['page-b']],
+      api,
+    })
+    await session.initialize()
+
+    await session.saveReaderState(INITIAL_PROJECT_TEST_STATE, 'page-a')
+    expect(api.values.has('cmi.core.lesson_status')).toBe(false)
+    expect(api.values.has('cmi.progress_measure')).toBe(false)
+
+    await session.saveReaderState({ ...INITIAL_PROJECT_TEST_STATE, finishedPageIds: ['page-a'] }, 'page-a')
+    expect(api.values.get('cmi.core.lesson_status')).toBe('incomplete')
+
+    await session.saveReaderState({ ...INITIAL_PROJECT_TEST_STATE, finishedPageIds: ['page-a', 'page-b'] }, 'page-b')
+    expect(api.values.get('cmi.core.lesson_status')).toBe('completed')
+    expect(api.values.has('cmi.progress_measure')).toBe(false)
+  })
+
+  it.each([
+    ['2004v4', 'cmi.completion_status'],
+    ['1.2', 'cmi.core.lesson_status'],
+  ] as const)('writes completion for only the current multi-SCO chapter in %s', async (version, statusElement) => {
+    const api = new FakePipwerksApi()
+    const session = new ElceScormAdapter({
+      version,
+      monoSco: false,
+      chapterPageIds: [['chapter-a-page-1', 'chapter-a-page-2'], ['chapter-b-page-1']],
+      questionPageIds: ['chapter-a-page-2'],
+      scoPageIds: ['chapter-a-page-1', 'chapter-a-page-2'],
+      api,
+    })
+    await session.initialize()
+
+    await session.saveReaderState({
+      ...INITIAL_PROJECT_TEST_STATE,
+      finishedPageIds: ['chapter-a-page-1'],
+    }, 'chapter-a-page-1')
+    expect(api.values.has(statusElement)).toBe(false)
+    if (version !== '1.2') expect(api.values.get('cmi.progress_measure')).toBe('0.5')
+
+    await session.saveReaderState({
+      ...INITIAL_PROJECT_TEST_STATE,
+      finishedPageIds: ['chapter-a-page-1', 'chapter-a-page-2', 'chapter-b-page-1'],
+    }, 'chapter-a-page-2')
+    expect(api.values.has(statusElement)).toBe(false)
+    if (version !== '1.2') expect(api.values.get('cmi.progress_measure')).toBe('1')
+
+    await session.saveReaderState({
+      ...INITIAL_PROJECT_TEST_STATE,
+      finishedPageIds: ['chapter-a-page-1', 'chapter-a-page-2', 'chapter-b-page-1'],
+      questionAnswers: {
+        'chapter-a-page-2': {
+          answerIds: ['yes', 'no'],
+          selectedAnswerIds: ['yes'],
+          expectedAnswerIds: ['yes'],
+          isCorrect: true,
+        },
+      },
+    }, 'chapter-a-page-2')
+    expect(api.values.get(statusElement)).toBe('completed')
+    if (version !== '1.2') expect(api.values.get('cmi.progress_measure')).toBe('1')
+  })
+
+  it('preserves an evaluation result in SCORM 1.2 after its SCO completes', async () => {
+    const api = new FakePipwerksApi()
+    const evaluation = createFailedEvaluationState()
+    const session = new ElceScormAdapter({
+      version: '1.2',
+      monoSco: false,
+      scoPageIds: ['evaluation-page'],
+      scoEvaluationChapterId: 'chapter-evaluation',
+      api,
+    })
+    await session.initialize()
+
+    await session.saveReaderState({
+      ...INITIAL_PROJECT_TEST_STATE,
+      finishedPageIds: ['evaluation-page'],
+      evaluationStates: { 'chapter-evaluation': evaluation },
+    }, 'evaluation-page')
+
+    expect(api.values.get('cmi.core.lesson_status')).toBe('failed')
   })
 
   it.each([
     ['1.2', 'cmi.core.lesson_status', 'cmi.core.score.raw'],
     ['2004v3', 'cmi.success_status', 'cmi.score.scaled'],
     ['2004v4', 'cmi.success_status', 'cmi.score.scaled'],
-  ] as const)('writes a failed evaluation and its interaction for SCORM %s', async (version, statusElement, scoreElement) => {
+  ] as const)('writes a failed evaluation and reference-compatible interactions for SCORM %s', async (version, statusElement, scoreElement) => {
     const api = new FakePipwerksApi()
     const session = new ElceScormAdapter({ version, api: api as FakePipwerksApi })
     await session.initialize()
@@ -239,11 +434,28 @@ describe('ElceScormAdapter', () => {
 
     expect(api.values.get(statusElement)).toBe('failed')
     expect(api.values.get(scoreElement)).toBe('0')
-    expect(api.values.get('cmi.interactions.0.id')).toBe('chapter-evaluation:page-question')
-    expect(api.values.get('cmi.interactions.0.type')).toBe('choice')
-    expect(api.values.get('cmi.interactions.0.correct_responses.0.pattern')).toBe('answer-a')
-    expect(api.values.get('cmi.interactions.0.learner_response')).toBe('answer-b')
-    expect(api.values.get('cmi.interactions.0.result')).toBe('incorrect')
+    if (version === '1.2') {
+      expect(api.writes.some(({ parameter }) => parameter.startsWith('cmi.interactions.'))).toBe(false)
+    } else {
+      const savedAnswer = JSON.parse(api.values.get('cmi.suspend_data') ?? '{}')
+        .projectTestState.evaluationStates['chapter-evaluation'].context.answers['page-question']
+      expect(savedAnswer).toMatchObject({
+        questionType: 'choice',
+        answerLabels: ['Réponse 1', 'Réponse 2'],
+        latencyMs: 12_999,
+        description: 'Quel choix ?',
+      })
+      expect(api.values.get('cmi.interactions.0.id')).toBe('page-question_0')
+      expect(api.values.get('cmi.interactions.0.type')).toBe('choice')
+      expect(api.values.get('cmi.interactions.0.description'))
+        .toBe('Quel choix ?\n1. Réponse 1\n2. Réponse 2')
+      expect(api.values.get('cmi.interactions.0.correct_responses.0.pattern')).toBe('1')
+      expect(api.values.get('cmi.interactions.0.learner_response')).toBe('2')
+      expect(api.values.get('cmi.interactions.0.timestamp')).toBe('2026-10-21T12:34:56.78Z')
+      expect(api.values.get('cmi.interactions.0.latency')).toBe('PT0M12S')
+      expect(api.values.get('cmi.interactions.0.weighting')).toBe('0')
+      expect(api.values.get('cmi.interactions.0.result')).toBe('incorrect')
+    }
     expect(api.saveCount).toBe(1)
   })
 
@@ -259,7 +471,7 @@ describe('ElceScormAdapter', () => {
     expect(api.quitCount).toBe(1)
   })
 
-  it('commits and terminates a connected session once', async () => {
+  it('commits and terminates a connected session once without adding an exit value', async () => {
     const api = new FakePipwerksApi()
     const session = new ElceScormAdapter({ version: '2004v4', api })
     await session.initialize()
@@ -268,24 +480,23 @@ describe('ElceScormAdapter', () => {
 
     expect(api.saveCount).toBe(2)
     expect(api.handleExitMode).toBe(false)
-    expect(api.values.get('cmi.exit')).toBe('suspend')
+    expect(api.values.has('cmi.exit')).toBe(false)
     expect(api.quitCount).toBe(1)
-    expect(api.operations.slice(-5)).toEqual([
+    expect(api.operations.slice(-4)).toEqual([
       'set:cmi.location',
       'set:cmi.suspend_data',
-      'set:cmi.exit',
       'commit',
       'terminate',
     ])
   })
 
-  it('uses the 1.2 exit element when suspending the session', async () => {
+  it('does not write a 1.2 exit value when terminating the session', async () => {
     const api = new FakePipwerksApi()
     const session = new ElceScormAdapter({ version: '1.2', api })
     await session.initialize()
     await session.close()
 
-    expect(api.values.get('cmi.core.exit')).toBe('suspend')
+    expect(api.values.has('cmi.core.exit')).toBe(false)
   })
 
   it('surfaces a failed LMS write to the Sighty action that awaited it', async () => {

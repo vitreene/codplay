@@ -1,4 +1,5 @@
 import type { PagePlacement } from '../../domain/commands/document-command-types'
+import type { ScormVersion } from '../../scorm/scorm-types'
 import type { EditorViewModel } from '../selectors/editor-view-model'
 import type { ElceAppContext } from '../controller/controller-types'
 import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
@@ -24,7 +25,11 @@ export interface ProjectApplicationWorkspaceState {
   readonly onPreview: () => void
   readonly previewError: string | null
   readonly onExport: () => void
+  readonly onCloseExportDialog: () => void
+  readonly onExportSighty: () => void
+  readonly onExportScorm: (version: ScormVersion, monoSco: boolean) => void
   readonly exportBusy: boolean
+  readonly exportKind: 'sighty' | 'scorm' | null
   readonly exportError: string | null
   readonly exportNotice: string | null
   readonly movePage: (pageId: string, placement: PagePlacement) => void

@@ -28,6 +28,7 @@ export interface EditorWorkspaceViewProps {
   readonly onPreview: () => void
   readonly previewError: string | null
   readonly exportBusy: boolean
+  readonly exportKind?: 'sighty' | 'scorm' | null
   readonly exportError: string | null
   readonly exportNotice: string | null
   readonly onMovePage: (pageId: PageId, placement: PagePlacement) => void

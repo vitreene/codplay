@@ -4,14 +4,15 @@
 `IntersectionObserver` de `emit.observe` et leur cycle de vie. Le comportement
 reste enregistré par le composant, le module et la capacité scroll-container.
 
-## Travail
+## Travail déjà vérifié
 
-- Déplacer la résolution des cibles, la création et le cycle de vie des
-  observers dans `ScrollContainerComponent`.
-- Retirer `CodPlayOptions.htmlHost`, `sourceAdapterFactories` et leurs usages.
-- Émettre les events et actions live par les circuits player communs existants.
-- Couvrir Play, Seek, reset, fin de séquence et destruction.
-- Mettre à jour la spécification après implémentation et validations.
+- `ScrollContainerComponent` possède la progression et la capture ; l’adaptateur
+  HTML optionnel possède la résolution et le cycle de vie des observers.
+- Le hook source HTML reste à la frontière `runner-html` et les events/actions
+  live empruntent les ports player existants.
+- Les suites de `component-v2` et les typechecks couvrent le composant, Play,
+  Seek, reset, fin de séquence, destruction et le parcours `HtmlPlayerRunner`.
+  La spécification décrit ces contrats vérifiés.
 
 ## Décision acceptée — observation initiale déclarative
 
@@ -33,12 +34,42 @@ typechecks correspondants. Le parcours Safari Elcé confirme le routage du
 repère après un défilement long ; le cas initial est exercé par le test de
 composition avec le vrai adapter CodPlay et son ticker contrôlé.
 
-## Point technique à résoudre avant le code
+## Invariant de composition
 
-Le composant reçoit son node matérialisé, les actions compilées et le port de
-capture. Il ne reçoit pas aujourd’hui les ports d’émission d’events ordinaires
-et d’actions live. Raccorder le composant aux circuits player existants avant
-tout changement de contrat ; aucun chemin parallèle.
+Le composant scroll garde la géométrie et la capture. La résolution des cibles
+`emit.observe`, ses `IntersectionObserver` et leur cycle de vie appartiennent à
+l’adaptateur HTML facultatif, qui utilise les ports player existants pour les
+actions live et les events. Cette séparation est vérifiée dans la
+[spécification scroll](../specs/scroll-container-spec.md) ; aucun second circuit
+ni accès aux ports d’émission depuis le composant ne doit être ajouté.
+
+## Régression des observations initiales avant `PLAYING` — 2026-10-22
+
+**Décision acceptée :** si le premier callback observe la phase déclarée par
+`initial` avant que le player passe à `playing`, l’adaptateur conserve
+l’émission correspondante et la transmet par `commands.emit` lors de la
+notification `onPlaybackStateChange(playing)` déjà fournie par
+`HtmlPlayerRunner`. Il conserve la phase du provider et n’ajoute aucun circuit
+de dispatch. Les émissions en attente sont annulées au seek, au reset, à la fin
+de séquence et à la destruction.
+
+La session LMS réelle confirme que le marqueur peut être vu `outside` puis
+`inside` par l’API native alors que `Suivant` reste désactivé et que le CMI ne
+reçoit pas `finishedPageIds`. Le runtime embarqué abandonne actuellement une
+émission si le player n’est pas `playing` après que le provider a mémorisé la
+phase. Le probe ciblé du vrai `HtmlPlayerRunner` reproduit la perte d’un
+`initial: 'enter'` reçu en état `ready`.
+
+**Acceptation restante :**
+
+- [x] Retenir seulement les émissions sélectionnées par la première phase
+  initiale, puis les envoyer une seule fois au passage à `playing`.
+- [x] Vérifier via `HtmlPlayerRunner` l’émission initiale différée, l’absence
+  de doublon et l’annulation lors du seek/reset/fin/destruction ou d’un
+  changement de phase avant `playing`.
+- [ ] Rejouer le package SCORM reconstruit dans la LMS réelle ; confirmer
+  l’animation d’apparition et le déverrouillage CMI de la page.
+- [x] Mettre à jour cette spécification après les validations source et joueur.
 
 ## Régression de reset — 2026-09-30
 

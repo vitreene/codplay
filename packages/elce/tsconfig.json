@@ -15,6 +15,8 @@
       "@codplay/scene-factory/capsule-preset": ["../authoring/scene-factory/src/capsule-preset.ts"],
       "@codplay/sighty": ["../sighty/src/index.ts"],
       "@codplay/sighty-scorm": ["../sighty-scorm/src/index.ts"],
+      "@codplay/sighty-scorm/session": ["../sighty-scorm/src/scorm-session.ts"],
+      "@codplay/sighty-scorm/limits": ["../sighty-scorm/src/scorm-data-limits.ts"],
       "@codplay/component-v2": ["../authoring/component-v2/src/index.ts"],
       "@codplay/component-v2/*": ["../authoring/component-v2/src/*"]
     }

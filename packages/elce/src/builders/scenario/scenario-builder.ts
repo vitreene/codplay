@@ -13,6 +13,7 @@ import {
   ELCE_EVENTS,
   ELCE_SCENARIO,
   ELCE_SCENARIO_HANDLERS,
+  QUESTION_TYPE,
   SCENARIO_ENTRY_KIND,
 } from '../../config/document-config'
 import type { ElceDocument } from '../../domain/document/document-model'
@@ -23,14 +24,19 @@ import {
   DEFAULT_EVALUATION_SETTINGS,
   DEFAULT_EVALUATION_THRESHOLD,
 } from '../../config/document-config'
-import { EvaluationMachine } from '../../domain/evaluation/evaluation-machine'
+import { applyEvaluationThreshold, EvaluationMachine } from '../../domain/evaluation/evaluation-machine'
 import type { EvaluationMachineState } from '../../domain/evaluation/evaluation-machine-types'
 import { ElceChapterEvaluation } from '../../domain/evaluation/chapter-evaluation'
 import type { ScenarioEntry } from '../../domain/scenario/scenario-entry-types'
 import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
 import { INITIAL_PROJECT_TEST_STATE } from '../../domain/summary-profile/test-state-types'
-import { ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../../scorm/scorm-types'
-import type { ElceScormProgressSink } from '../../scorm/scorm-types'
+import {
+  ELCE_SCORM_CHAPTER_CONTEXT_KEY,
+  ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY,
+  ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY,
+} from '../../scorm/scorm-types'
+import type { ElceScormProgressSink, ScormQuestionInteraction } from '../../scorm/scorm-types'
+import type { QuestionType } from '../../domain/question/question-types'
 import type {
   ProfileConstraint,
   ProfileProperty,
@@ -49,6 +55,9 @@ import { buildProfileFormScene } from '../summary-profile/profile-form-scene-bui
 import { buildSummaryEntries, buildSummaryScene } from '../summary-profile/summary-scene-builder'
 import type { SummaryEntry } from '../summary-profile/summary-scene-builder'
 import type { ElceSceneKey, ElceSlotName } from './scenario-builder-types'
+import { scenarioContextFromTestState } from './scenario-context'
+
+export { scenarioContextFromTestState } from './scenario-context'
 
 type ElcePresentation = Readonly<{
   readonly title: string
@@ -66,7 +75,7 @@ type ElceProgressContext = Readonly<{
 }>
 
 type ElceRuntimeChapter = Pick<Chapter,
-  'id' | 'type' | 'pageIds' | 'evaluationThreshold' | 'evaluationAttemptLimit' | 'evaluationRetryScope'
+  'id' | 'name' | 'type' | 'pageIds' | 'evaluationThreshold' | 'evaluationAttemptLimit' | 'evaluationRetryScope'
 >
 
 type ElceRuntimeData = Readonly<{
@@ -196,6 +205,7 @@ export function buildScenario(
       [ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT]: options.onTestStateChange === undefined
         ? refreshEvaluationResultAction
         : createRefreshEvaluationResult(options.onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.NAVIGATE_SCORM_CHAPTER]: navigateScormChapterAction,
       [ELCE_SCENARIO_HANDLERS.SAVE_PROFILE_VALUES]: options.onTestStateChange === undefined
         ? saveProfileValuesAction
         : createSaveProfileValues(options.onTestStateChange),
@@ -207,19 +217,6 @@ export function buildScenario(
       [ELCE_SCENARIO_HANDLERS.PAGE_ACCESS]: pageAccessGuard,
       [ELCE_SCENARIO_HANDLERS.PAGE_EXIT]: pageExitGuard,
     },
-  }
-}
-
-/** Maps the persisted test state onto the context owned by Sighty. */
-export function scenarioContextFromTestState(state: ProjectTestState): Readonly<Record<string, unknown>> {
-  return {
-    finishedPages: state.finishedPageIds,
-    questionAnswers: state.questionAnswers,
-    questionResults: Object.fromEntries(Object.entries(state.questionAnswers).map(([pageId, answer]) => [pageId, answer.isCorrect])),
-    evaluationStates: state.evaluationStates,
-    profileEnabled: state.profileEnabled,
-    profileSubmitted: state.profileSubmitted,
-    profileValues: state.profileValues,
   }
 }
 
@@ -247,6 +244,7 @@ function createScenarioRuntimeData(input: Readonly<{
     }])),
     chapters: Object.fromEntries(document.chapters.map((chapter) => [chapter.id, {
       id: chapter.id,
+      name: chapter.name,
       type: chapter.type,
       pageIds: chapter.pageIds,
       ...(chapter.evaluationThreshold === undefined ? {} : { evaluationThreshold: chapter.evaluationThreshold }),
@@ -571,6 +569,7 @@ function createScenarioActions(
 export function pageAccessGuard(input: SightyConditionContext<ElceSceneKey>): boolean {
   const { sceneKey, event, context } = input
   const runtime = readScenarioRuntimeData(input.data)
+  const scormChapter = scopedScormChapter(runtime, context)
   if (sceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE) {
     return shouldCollectProfile(runtime.profile.fieldPropertyIds, testStateFromScenarioContext(context))
   }
@@ -580,26 +579,31 @@ export function pageAccessGuard(input: SightyConditionContext<ElceSceneKey>): bo
       || context.profileSubmitted === true
   }
   if (sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) {
-    return runtime.summary.showAtRoot
+    return scormChapter === undefined && runtime.summary.showAtRoot
       && (!shouldCollectProfile(runtime.profile.fieldPropertyIds, testStateFromScenarioContext(context)) || context.profileSubmitted === true)
   }
   const pageId = pageIdFromSceneKey(sceneKey)
   if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
   if (!runtime.pageIds.includes(pageId)) return false
-  if (!runtimePageProfileConstraintsAllowAccess(runtime, pageId, context)) return false
+  // Sighty initializes the complete exported scenario before the SCO can
+  // route to its chapter. The launch page stays hidden during that transition.
   if (event?.name === ELCE_EVENTS.RUNTIME_INITIALIZE) return true
+  if (scormChapter !== undefined && !scormChapter.pageIds.includes(pageId)) return false
+  if (!runtimePageProfileConstraintsAllowAccess(runtime, pageId, context)) return false
   const submitsProfile = event?.name === ELCE_EVENTS.PROFILE_SUBMIT
     && isValidProfileSubmission(runtime.profile.properties, runtime.profile.fieldPropertyIds, event.data)
   if (shouldCollectProfile(runtime.profile.fieldPropertyIds, testStateFromScenarioContext(context)) && !submitsProfile) return false
-  const pageIndex = runtime.pageIds.indexOf(pageId)
+  const accessPageIds = scormChapter?.pageIds ?? runtime.pageIds
+  const pageIndex = accessPageIds.indexOf(pageId)
   if (pageIndex <= 0) return pageIndex === 0
-  if (pageId === runtime.previewStartPageId) return true
+  const previewStartPageId = scormChapter?.pageIds[0] ?? runtime.previewStartPageId
+  if (pageId === previewStartPageId) return true
   if (runtime.summary.pageContinuationMode === 'free' && !runtime.evaluationResultPageIds.includes(pageId)) return true
-  const previewStartIndex = runtime.pageIds.indexOf(runtime.previewStartPageId)
+  const previewStartIndex = accessPageIds.indexOf(previewStartPageId)
   const prefixStartIndex = pageIndex > previewStartIndex && !runtime.evaluationResultPageIds.includes(pageId)
     ? previewStartIndex
     : 0
-  return runtime.pageIds.slice(prefixStartIndex, pageIndex)
+  return accessPageIds.slice(prefixStartIndex, pageIndex)
     .every((candidate) => isPageComplete(candidate, context, runtime.questionBdcByPage))
 }
 
@@ -655,10 +659,34 @@ function chapterReadingRequirementMet(
 export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): boolean {
   const { sceneKey, event, context } = input
   const runtime = readScenarioRuntimeData(input.data)
+  const scormChapter = scopedScormChapter(runtime, context)
   if (sceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE) return event?.name === ELCE_EVENTS.PROFILE_SUBMIT
-  if (sceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE || sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) return true
+  if (sceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE) return true
+  if (sceneKey === ELCE_SCENARIO.SUMMARY_SCENE) return scormChapter === undefined
   const pageId = pageIdFromSceneKey(sceneKey)
   if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
+  if (scormChapter !== undefined) {
+    const chapterIndex = scormChapter.pageIds.indexOf(pageId)
+    if (chapterIndex < 0) {
+      return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
+        && scormChapter.pageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
+    }
+    switch (event?.name) {
+      case ELCE_EVENTS.NAVIGATION_PREVIOUS:
+        return chapterIndex > 0 || hasAdjacentScormChapter(runtime, context, scormChapter.id, -1)
+      case ELCE_EVENTS.NAVIGATION_NEXT:
+        return (chapterIndex < scormChapter.pageIds.length - 1
+          || hasAdjacentScormChapter(runtime, context, scormChapter.id, 1))
+          && canLeavePage(runtime, pageId, context)
+      case ELCE_EVENTS.MENU_SUMMARY:
+        return false
+      default:
+        if (event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true) {
+          return scormChapter.pageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
+        }
+        return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
+    }
+  }
   switch (event?.name) {
     case ELCE_EVENTS.NAVIGATION_PREVIOUS:
       return runtime.pageIds.indexOf(pageId) > 0
@@ -688,6 +716,8 @@ async function runMarkPageFinished(
 ): Promise<void> {
   const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
   if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
+  const runtime = readScenarioRuntimeData(context.data)
+  if (!isPageInScormChapter(runtime, context.context, pageId)) return
   const finishedPages = readFinishedPages(context.context)
   const nextFinishedPages = finishedPages.includes(pageId) ? finishedPages : [...finishedPages, pageId]
   if (nextFinishedPages !== finishedPages) {
@@ -769,13 +799,17 @@ async function runRecordQuestionResult(
     const runtime = readScenarioRuntimeData(context.data)
     const pageId = pageIdFromSceneKey(context.event.sourceSceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
+    if (!isPageInScormChapter(runtime, context.context, pageId)) return
     const payload = context.event.data as {
       pageId?: unknown
       bdcId?: unknown
       isCorrect?: unknown
       answerIds?: unknown
+      answerLabels?: unknown
       selectedAnswerIds?: unknown
       expectedAnswerIds?: unknown
+      questionType?: unknown
+      description?: unknown
     } | undefined
     const expectedBdcId = runtime.questionBdcByPage[pageId]
     if (payload?.pageId !== pageId || payload.bdcId !== expectedBdcId || typeof payload.isCorrect !== 'boolean') return
@@ -787,9 +821,19 @@ async function runRecordQuestionResult(
       : runtime.chapters[page.chapterId]
     const evaluationChapter = chapter?.type === CHAPTER_TYPE.EVALUATION ? chapter : undefined
     const evaluationStates = readEvaluationStates(context.context)
+    const questionInteraction = toScormQuestionInteraction(payload, context.event.timeMs, Date.now())
+    const evaluationThresholdOverride = readScormProgressSink(context.context)?.getEvaluationThresholdOverride?.()
     const state = evaluationChapter === undefined
       ? undefined
-      : recordEvaluationAnswer(runtime, evaluationChapter, pageId, payload, evaluationStates[evaluationChapter.id])
+      : recordEvaluationAnswer(
+        runtime,
+        evaluationChapter,
+        pageId,
+        payload,
+        evaluationStates[evaluationChapter.id],
+        questionInteraction,
+        evaluationThresholdOverride,
+      )
     const answerIds = readStringIds(payload.answerIds)
     const selectedAnswerIds = readStringIds(payload.selectedAnswerIds)
     const expectedAnswerIds = readStringIds(payload.expectedAnswerIds)
@@ -813,7 +857,14 @@ async function runRecordQuestionResult(
       evaluationStates: nextEvaluationStates,
     })
     onTestStateChange?.(nextTestState)
-    await saveScormReaderState(context, pageId, nextTestState)
+    const scormSink = readScormProgressSink(context.context)
+    if (evaluationChapter === undefined
+      && questionInteraction !== undefined
+      && scormSink?.recordQuestionInteraction !== undefined) {
+      await scormSink.recordQuestionInteraction(nextTestState, pageId, questionInteraction)
+    } else {
+      await saveScormReaderState(context, pageId, nextTestState)
+    }
     await refreshPresentation(context)
 }
 
@@ -822,8 +873,10 @@ function recordEvaluationAnswer(
   runtime: ElceRuntimeData,
   chapter: ElceRuntimeChapter,
   pageId: string,
-  payload: Readonly<{ answerIds?: unknown; selectedAnswerIds?: unknown; expectedAnswerIds?: unknown }>,
+  payload: Readonly<{ answerIds?: unknown; selectedAnswerIds?: unknown; expectedAnswerIds?: unknown; description?: unknown }>,
   previousState: EvaluationMachineState | undefined,
+  interaction: ScormQuestionInteraction | undefined,
+  evaluationThresholdOverride?: number,
 ): EvaluationMachineState | undefined {
   const answerIds = readStringIds(payload.answerIds)
   const selectedAnswerIds = readStringIds(payload.selectedAnswerIds)
@@ -831,18 +884,96 @@ function recordEvaluationAnswer(
   if (answerIds === undefined || selectedAnswerIds === undefined || expectedAnswerIds === undefined) return previousState
   const questionIds = evaluationQuestionPageIds(runtime, chapter)
   if (questionIds.length === 0) return previousState
-  const machine = createEvaluationMachine(chapter, questionIds)
-  let state = previousState ?? machine.initialState()
+  const machine = createEvaluationMachine(chapter, questionIds, evaluationThresholdOverride)
+  let state = previousState === undefined
+    ? machine.initialState()
+    : applyEvaluationThreshold(previousState, evaluationThresholdOverride)
   if (state.value === 'ready') state = machine.transition(state, { type: 'START' })
   return machine.transition(state, {
     type: 'QUESTION.ANSWERED',
-    answer: { questionId: pageId, answerIds, selectedAnswerIds, expectedAnswerIds },
+    answer: {
+      questionId: pageId,
+      answerIds,
+      selectedAnswerIds,
+      expectedAnswerIds,
+      ...(interaction === undefined ? {} : {
+        questionType: interaction.questionType,
+        answerLabels: interaction.answerLabels,
+        description: interaction.description,
+        ...(interaction.latencyMs === undefined ? {} : { latencyMs: interaction.latencyMs }),
+        ...(interaction.timestampMs === undefined ? {} : { timestampMs: interaction.timestampMs }),
+      }),
+    },
   })
+}
+
+/** Reads the validated Question fields needed for an immediate or deferred CMI interaction. */
+function toScormQuestionInteraction(
+  payload: Readonly<Record<string, unknown>> | undefined,
+  timeMs: number | undefined,
+  timestampMs: number,
+): ScormQuestionInteraction | undefined {
+  if (payload === undefined || typeof payload.isCorrect !== 'boolean') return undefined
+  const questionType = readQuestionType(payload.questionType)
+  const answerIds = readStringIds(payload.answerIds)
+  const answerLabels = readStringIds(payload.answerLabels)
+  const selectedAnswerIds = readStringIds(payload.selectedAnswerIds)
+  const expectedAnswerIds = readStringIds(payload.expectedAnswerIds)
+  if (questionType === undefined || answerIds === undefined || answerLabels === undefined
+    || answerLabels.length !== answerIds.length
+    || selectedAnswerIds === undefined || expectedAnswerIds === undefined) return undefined
+  return {
+    questionType,
+    answerIds,
+    answerLabels,
+    selectedAnswerIds,
+    expectedAnswerIds,
+    description: typeof payload.description === 'string' ? payload.description : '',
+    isCorrect: payload.isCorrect,
+    ...(typeof timeMs === 'number' && Number.isFinite(timeMs) && timeMs >= 0 ? { latencyMs: timeMs } : {}),
+    ...(Number.isFinite(timestampMs) && timestampMs >= 0 ? { timestampMs } : {}),
+  }
+}
+
+/** Restricts serialized Question kinds to the editor's supported types. */
+function readQuestionType(value: unknown): QuestionType | undefined {
+  return value === QUESTION_TYPE.TRUE_FALSE || value === QUESTION_TYPE.CHOICE || value === QUESTION_TYPE.MULTIPLE_CHOICE
+    ? value
+    : undefined
 }
 
 /** Reads Sighty's result state on page entry and sends it to the Result story. */
 export async function refreshEvaluationResultAction(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
   await runRefreshEvaluationResult(context)
+}
+
+/** Persists the current page and requests the adjacent LMS chapter from its leaf navigation action. */
+export async function navigateScormChapterAction(
+  context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+): Promise<void> {
+  const runtime = readScenarioRuntimeData(context.data)
+  const chapterId = context.context[ELCE_SCORM_CHAPTER_CONTEXT_KEY]
+  if (typeof chapterId !== 'string') return
+  const direction = context.event.name === ELCE_EVENTS.NAVIGATION_NEXT
+    ? 1
+    : context.event.name === ELCE_EVENTS.NAVIGATION_PREVIOUS
+      ? -1
+      : 0
+  if (direction === 0 || !hasAdjacentScormChapter(runtime, context.context, chapterId, direction)) return
+  const chapter = runtime.chapters[chapterId]
+  const pageSelection = context.scenarioState.current.find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)
+  const pageId = pageIdFromSceneKey(pageSelection?.sceneKey)
+  if (chapter === undefined || pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
+  const isAtBoundary = direction > 0
+    ? chapter.pageIds.at(-1) === pageId
+    : chapter.pageIds[0] === pageId
+  if (!isAtBoundary || (direction > 0 && !canLeavePage(runtime, pageId, context.context))) return
+  const targetChapterId = adjacentChapterId(runtime, chapterId, direction)
+  const sink = readScormProgressSink(context.context)
+  if (targetChapterId === undefined || sink?.navigateToChapter === undefined) return
+
+  await runRefreshEvaluationResult(context)
+  await sink.navigateToChapter(targetChapterId)
 }
 
 /** Keeps authoring-preview persistence outside the exported result handler. */
@@ -859,6 +990,7 @@ async function runRefreshEvaluationResult(
     await refreshPresentation(context)
     const pageId = pageIdFromSceneKey(context.scenarioState.active?.sceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
+    if (!isPageInScormChapter(runtime, context.context, pageId)) return
     const page = runtime.pages[pageId]
   if (page?.chapterId === null || page?.chapterId === undefined) {
     await saveScormReaderState(context, pageId)
@@ -883,7 +1015,9 @@ async function runRefreshEvaluationResult(
     await saveScormReaderState(context, pageId)
     return
   }
-    const machine = createEvaluationMachine(chapter, questionIds)
+    const evaluationThresholdOverride = readScormProgressSink(context.context)?.getEvaluationThresholdOverride?.()
+    const machine = createEvaluationMachine(chapter, questionIds, evaluationThresholdOverride)
+    state = applyEvaluationThreshold(state, evaluationThresholdOverride)
     if (state.value === 'attempting') state = machine.transition(state, { type: 'COMPLETE' })
     const passed = state.context.result?.passed
   if (passed === null || passed === undefined) {
@@ -985,21 +1119,33 @@ async function createPresentation(
   runtime: ElceRuntimeData,
   readerContext: Readonly<Record<string, unknown>>,
 ): Promise<ElcePresentation> {
+  const scormChapter = scopedScormChapter(runtime, readerContext)
+  const presentationPageIds = scormChapter?.pageIds ?? runtime.pageIds
   const activeContentSelection = scenarioState.current.find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)
   const activeSceneKey = activeContentSelection?.sceneKey ?? scenarioState.active?.sceneKey
   const activePageId = pageIdFromSceneKey(activeSceneKey)
-  const pageIndex = activePageId === undefined ? -1 : runtime.pageIds.indexOf(activePageId)
-  const page = activePageId === undefined ? undefined : runtime.pageIds[pageIndex]
-  const nextPageId = pageIndex < 0 ? undefined : runtime.pageIds[pageIndex + 1]
+  const pageIndex = activePageId === undefined ? -1 : presentationPageIds.indexOf(activePageId)
+  const page = activePageId === undefined ? undefined : presentationPageIds[pageIndex]
+  const nextPageId = pageIndex < 0 ? undefined : presentationPageIds[pageIndex + 1]
   const activePage = activePageId === undefined ? undefined : runtime.pages[activePageId]
   const activeChapter = activePage?.chapterId === null || activePage?.chapterId === undefined
     ? undefined
     : runtime.chapters[activePage.chapterId]
-  const nextDestination = activeChapter?.pageIds.at(-1) === activePageId
+  const nextDestination = scormChapter === undefined && activeChapter?.pageIds.at(-1) === activePageId
     && runtime.summary.endChapterDestination === 'summary'
     && runtime.summary.showAtRoot
     ? { path: `${ELCE_SCENARIO.ROOT_VIEW}/${ELCE_SCENARIO.SUMMARY_ENTRY_VIEW}` }
     : nextPageId === undefined ? undefined : { path: pagePathFromTable(runtime.pagePaths, nextPageId) }
+  const previousScormChapter = scormChapter !== undefined && pageIndex === 0
+    ? adjacentChapterId(runtime, scormChapter.id, -1)
+    : undefined
+  const nextScormChapter = scormChapter !== undefined && pageIndex === presentationPageIds.length - 1
+    ? adjacentChapterId(runtime, scormChapter.id, 1)
+    : undefined
+  const previousScormChapterAllowed = previousScormChapter !== undefined
+    && hasScormChapterSco(readerContext, previousScormChapter)
+  const nextScormChapterAllowed = nextScormChapter !== undefined
+    && hasScormChapterSco(readerContext, nextScormChapter)
   const previousAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
@@ -1013,11 +1159,11 @@ async function createPresentation(
       { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
   const nextPageAllowed = nextDestination === undefined
-    ? false
-    : await scenarioState.canAccess(
-        nextDestination,
-        { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
-      )
+    ? nextScormChapterAllowed
+    : await scenarioState.canAccess(nextDestination, {
+      name: ELCE_EVENTS.NAVIGATION_NEXT,
+      sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE,
+    })
 
   const menu = await createMenuClassPatch(
     activePageId,
@@ -1025,6 +1171,7 @@ async function createPresentation(
     readerContext.profileEnabled !== false,
     readProfileValues(readerContext.profileValues),
     scenarioState,
+    scormChapter?.id,
   )
   return {
     title: activeSceneKey === ELCE_SCENARIO.SUMMARY_SCENE
@@ -1034,11 +1181,14 @@ async function createPresentation(
         : page === undefined || page === ELCE_SCENARIO.EMPTY_PAGE ? 'Aucune page' : runtime.pageNames[page] ?? page,
     menuClassPatch: menu.patch,
     menuPageStates: menu.states,
-    previousAttributes: { type: 'button', disabled: pageIndex <= 0 || !previousAllowed },
+    previousAttributes: {
+      type: 'button',
+      disabled: (pageIndex <= 0 && !previousScormChapterAllowed) || !previousAllowed,
+    },
     nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextPageAllowed },
     navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
       ? ''
-      : `Page ${pageIndex + 1} sur ${runtime.pageIds.length}`,
+      : `Page ${pageIndex + 1} sur ${presentationPageIds.length}`,
   }
 }
 
@@ -1049,11 +1199,16 @@ async function createMenuClassPatch(
   profileEnabled: boolean,
   profileValues: Readonly<Record<string, ProfileValue>>,
   scenarioState: SightyScenarioStateApi<ElceSceneKey, ElceSlotName>,
+  scormChapterId?: string,
 ): Promise<Readonly<{
   readonly patch: Readonly<{ add: string; remove: string }>
   readonly states: readonly Readonly<{ id: string; title: string; active: boolean; allowed: boolean }>[]
 }>> {
-  const access = await Promise.all(runtime.summaryEntries.map(async (entry) => {
+  const scormChapter = scormChapterId === undefined ? undefined : runtime.chapters[scormChapterId]
+  const entries = scormChapter === undefined
+    ? runtime.summaryEntries
+    : runtime.summaryEntries.filter((entry) => scormChapter.pageIds.includes(entry.pageId))
+  const access = await Promise.all(entries.map(async (entry) => {
     const pageAllowed = entry.pageId === activePageId
       ? true
       : await scenarioState.canAccess(
@@ -1069,6 +1224,54 @@ async function createMenuClassPatch(
     patch: { add: classes.join(' '), remove: classes.join(' ') },
     states: access.map((page) => ({ ...page, active: page.id === activePageId })),
   }
+}
+
+/** Reads the optional chapter scope used by one chapter-level SCO launcher. */
+function scopedScormChapter(
+  runtime: ElceRuntimeData,
+  context: Readonly<Record<string, unknown>>,
+): ElceRuntimeChapter | undefined {
+  const chapterId = context[ELCE_SCORM_CHAPTER_CONTEXT_KEY]
+  return typeof chapterId === 'string' ? runtime.chapters[chapterId] : undefined
+}
+
+/** Resolves the chapter immediately before or after one chapter in author order. */
+function adjacentChapterId(
+  runtime: ElceRuntimeData,
+  chapterId: string,
+  direction: -1 | 1,
+): string | undefined {
+  const index = runtime.chapterIds.indexOf(chapterId)
+  return index < 0 ? undefined : runtime.chapterIds[index + direction]
+}
+
+/** Checks whether the package manifest and adapter can navigate to an adjacent SCO. */
+function hasAdjacentScormChapter(
+  runtime: ElceRuntimeData,
+  context: Readonly<Record<string, unknown>>,
+  chapterId: string,
+  direction: -1 | 1,
+): boolean {
+  const targetChapterId = adjacentChapterId(runtime, chapterId, direction)
+  return targetChapterId !== undefined && hasScormChapterSco(context, targetChapterId)
+}
+
+/** Checks the runtime's stable chapter item identifier and navigation operation. */
+function hasScormChapterSco(context: Readonly<Record<string, unknown>>, chapterId: string): boolean {
+  const identifiers = context[ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]
+  if (!isRecord(identifiers) || typeof identifiers[chapterId] !== 'string') return false
+  return typeof readScormProgressSink(context)?.navigateToChapter === 'function'
+}
+
+/** Keeps SCORM progress writes inside the chapter of the current SCO. */
+function isPageInScormChapter(
+  runtime: ElceRuntimeData,
+  context: Readonly<Record<string, unknown>>,
+  pageId: string,
+): boolean {
+  const chapterId = context[ELCE_SCORM_CHAPTER_CONTEXT_KEY]
+  if (typeof chapterId !== 'string') return true
+  return runtime.chapters[chapterId]?.pageIds.includes(pageId) === true
 }
 
 /** Reads the progress list stored in Sighty context. */
@@ -1200,11 +1403,12 @@ function evaluationQuestionPageIds(runtime: ElceRuntimeData, chapter: ElceRuntim
 function createEvaluationMachine(
   chapter: ElceRuntimeChapter,
   questionIds: readonly string[],
+  evaluationThresholdOverride?: number,
 ): EvaluationMachine {
   return new EvaluationMachine({
     questionIds,
     settings: {
-      threshold: chapter.evaluationThreshold ?? DEFAULT_EVALUATION_THRESHOLD,
+      threshold: evaluationThresholdOverride ?? chapter.evaluationThreshold ?? DEFAULT_EVALUATION_THRESHOLD,
       attemptLimit: chapter.evaluationAttemptLimit ?? DEFAULT_EVALUATION_SETTINGS.attemptLimit,
       retryScope: chapter.evaluationRetryScope ?? DEFAULT_EVALUATION_SETTINGS.retryScope,
     },
@@ -1234,7 +1438,9 @@ function canLeavePage(
       const evaluation = chapterEvaluation.evaluate(
         questionPageIds,
         readQuestionResults(context),
-        chapter.evaluationThreshold ?? DEFAULT_EVALUATION_THRESHOLD,
+        readScormProgressSink(context)?.getEvaluationThresholdOverride?.()
+          ?? chapter.evaluationThreshold
+          ?? DEFAULT_EVALUATION_THRESHOLD,
       )
       return evaluation.passed !== false
     }

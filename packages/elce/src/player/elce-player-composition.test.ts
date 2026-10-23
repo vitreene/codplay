@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
 import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { ElceQuestionService } from '../domain/question/question-service'
@@ -1189,7 +1189,7 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-player-navigation__button--next')?.hasAttribute('disabled')).toBe(false)
   })
 
-  it('records scroll-end when an anchored Card outro shares its observer batch with the bottom marker', async () => {
+  it('records scroll-end when the anchored Card outro and bottom marker use separate observer groups', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -1328,8 +1328,14 @@ describe('Elcé player composition', () => {
     if (precedingQuestionPageId === undefined) throw new Error('The fixture has no preceding Evaluation question.')
 
     const stage = document.createElement('div')
+    const testStates: ProjectTestState[] = []
     document.body.append(stage)
-    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: precedingQuestionPageId })
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: precedingQuestionPageId,
+      onTestStateChange: (state) => testStates.push(state),
+    })
 
     await composition.initialize()
     await flushCompositionFrames(pendingFrames)
@@ -1356,6 +1362,18 @@ describe('Elcé player composition', () => {
     await flushCompositionFrames(pendingFrames)
     validateButton?.click()
     await flushCompositionFrames(pendingFrames)
+    const answeredPage = documentModel.pages.find((page) => page.id === precedingQuestionPageId)
+    const answeredQuestion = documentModel.bdcs.find((bdc) => answeredPage?.bdcIds.includes(bdc.id) && bdc.question !== null)?.question
+    const evaluationChapterId = answeredPage?.chapterId
+    const answeredState = evaluationChapterId === null || evaluationChapterId === undefined
+      ? undefined
+      : testStates.at(-1)?.evaluationStates[evaluationChapterId]?.context.answers[precedingQuestionPageId]
+    expect(answeredState).toMatchObject({
+      description: [answeredQuestion?.title, answeredQuestion?.prompt].filter((text) => text?.trim()).join(' '),
+    })
+    expect(answeredState?.latencyMs).toEqual(expect.any(Number))
+    expect(answeredState?.latencyMs).toBeGreaterThan(0)
+    expect(answeredState?.timestampMs).toEqual(expect.any(Number))
     pageDObserver?.deliver({ target: pageDMarker as Element, intersectionRatio: 1, isIntersecting: true })
     await flushCompositionFrames(pendingFrames)
 
@@ -1813,6 +1831,173 @@ describe('Elcé player composition', () => {
     await composition.initialize()
 
     expect(stage.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
+  })
+
+  it('keeps an initially visible Card stable and replays its reveal in both scroll directions', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    let frameTime = performance.now()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const { documentModel: initialDocument } = createAnchoredImagePreviewDocument('bdc-preview-scroll-reveal', 'media-preview-scroll-reveal')
+    const documentModel = applyDocumentCommand(initialDocument, {
+      type: 'document.revelation.update',
+      revelationDefaults: {
+        intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+        outro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: 'page-a',
+      mediaSources: { 'media-preview-scroll-reveal': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+    if (preview === null) throw new Error('La composition de preview est absente.')
+    composition = preview
+    const runtime = (preview as unknown as {
+      readonly sighty: { readonly runtime: { getInstance(sceneKey: string): {
+        readonly snapshot: { get(): { readonly states: readonly { target: { persoId: string }; state: { style?: Readonly<Record<string, unknown>> } }[] } | null }
+      } | undefined } }
+    }).sighty.runtime
+
+    await preview.initialize()
+    const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
+    expect(cardRoot).not.toBeNull()
+    expect(observer).toBeDefined()
+    const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
+      .find((state) => state.target.persoId.includes('bdc-preview-scroll-reveal-card'))
+      ?.state.style
+    const cardX = () => {
+      const x = cardState()?.x
+      if (typeof x === 'number') return x
+      return typeof x === 'object' && x !== null && 'value' in x && typeof x.value === 'number' ? x.value : NaN
+    }
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.opacity).toBe('1')
+
+    // A first measurement inside leaves an already-visible Card stable.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+
+    // Leaving and re-entering replays the configured Card actions.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
+    await waitForPlayerActions()
+
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardX()).toBeLessThan(0)
+    })
+
+    for (let frame = 1; frame <= 8; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(cardState()).toMatchObject({ opacity: 0 })
+    expect(cardX()).toBe(-250)
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(cardState()?.opacity).toBeGreaterThan(0)
+      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardX()).toBeGreaterThan(-250)
+      expect(cardX()).toBeLessThan(0)
+    })
+
+    for (let frame = 1; frame <= 8; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.opacity).toBe('1')
+  })
+
+  it('reveals a Card on its first entry after the initial outside measurement', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    let frameTime = performance.now()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const mediaId = 'media-first-card-entry'
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: mediaId, name: 'first-entry.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const withCard = createCardWithMedia(withMedia, 'bdc-first-card-entry', mediaId)
+    const documentModel = applyDocumentCommand(withCard, {
+      type: 'document.revelation.update',
+      revelationDefaults: {
+        intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+        outro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { [mediaId]: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+
+    await composition.initialize()
+    const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
+    const runtime = (composition as unknown as {
+      readonly sighty: { readonly runtime: { getInstance(sceneKey: string): {
+        readonly snapshot: { get(): { readonly states: readonly { target: { persoId: string }; state: { style?: Readonly<Record<string, unknown>> } }[] } | null }
+      } | undefined } }
+    }).sighty.runtime
+    const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
+      .find((state) => state.target.persoId.includes('bdc-first-card-entry-card'))
+      ?.state.style
+    const cardX = () => {
+      const x = cardState()?.x
+      if (typeof x === 'number') return x
+      return typeof x === 'object' && x !== null && 'value' in x && typeof x.value === 'number' ? x.value : NaN
+    }
+
+    expect(cardRoot).not.toBeNull()
+    expect(observer).toBeDefined()
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+
+    // The first outside measurement only seeds the phase; crossing inside then plays the Card action.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
+    await waitForPlayerActions()
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(cardState()?.opacity).toBeGreaterThan(0)
+      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardX()).toBeGreaterThan(-250)
+      expect(cardX()).toBeLessThan(0)
+    })
   })
 
   it('opens a direct image in the viewport and closes it with Escape through the real player', async () => {
@@ -2524,6 +2709,32 @@ function createCardWithMedia(document: ReturnType<typeof createInitialDocument>,
     placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
   })
   return applyDocumentCommand(created, { type: 'bdc.card.media.set', bdcId, mediaId })
+}
+
+/** Creates a Photo Card anchored inside the default Flux Section for preview tests. */
+function createAnchoredImagePreviewDocument(bdcId: string, mediaId: string) {
+  const media = { id: mediaId, name: `${mediaId}.png`, mimeType: 'image/png', size: 10, caption: '' }
+  const withMedia = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })
+  return {
+    documentModel: applyDocumentCommand(withMedia, {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId,
+      presetId: DEFAULT_PRESET_ID.PHOTO,
+      media,
+      partId: `page-a:${bdcId}:anchor`,
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId, partId: `page-a:${bdcId}:anchor` } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+      markup: `<p id="${bdcId}-text">Avant <span id="page-a:${bdcId}:anchor" data-elce-anchor="true" data-bdc-id="${bdcId}" data-part="page-a:${bdcId}:anchor" style="display:inline-block;position:relative;padding-bottom:75%;"></span> après</p>`,
+    }),
+  }
 }
 
 /** Creates an Evaluation chapter with Page F and G, optionally preceded by another Question. */

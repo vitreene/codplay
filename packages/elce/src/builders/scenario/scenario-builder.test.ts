@@ -1,14 +1,220 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SceneDoc } from 'codplay/scene/types'
 import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION, QUESTION_TYPE } from '../../config/document-config'
 import { applyDocumentCommand, createPageCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceQuestionService } from '../../domain/question/question-service'
-import { buildScenario } from './scenario-builder'
+import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
+import {
+  ELCE_SCORM_CHAPTER_CONTEXT_KEY,
+  ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY,
+  ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY,
+} from '../../scorm/scorm-types'
+import {
+  buildScenario,
+  navigateScormChapterAction,
+  pageAccessGuard,
+  pageExitGuard,
+  recordQuestionResultAction,
+} from './scenario-builder'
 
 const emptyScene: SceneDoc<string> = { id: 'empty-scene', stories: {} }
 
 describe('Elcé scenario builder', () => {
+  it('stores the scene time and response metadata in the Evaluation answer', async () => {
+    const questionService = new ElceQuestionService()
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create',
+      chapterId: 'chapter-evaluation',
+      name: 'Évaluation',
+      chapterType: CHAPTER_TYPE.EVALUATION,
+    })
+    document = applyDocumentCommand(document, {
+      type: 'page.move',
+      pageId: 'page-a',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-evaluation' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const question = document.bdcs.find((bdc) => bdc.id === 'bdc-question')!.question!
+    const multipleChoiceQuestion = questionService.changeType(question, QUESTION_TYPE.MULTIPLE_CHOICE)
+    document = applyDocumentCommand(document, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-question',
+      question: {
+        ...multipleChoiceQuestion,
+        title: 'Titre de question',
+        prompt: 'Choisissez la bonne réponse.',
+      },
+    })
+    const authoredQuestion = document.bdcs.find((bdc) => bdc.id === 'bdc-question')!.question!
+    const answerIds = authoredQuestion.answers.map((answer) => answer.id)
+    const expectedAnswerIds = authoredQuestion.answers.filter((answer) => answer.correct).map((answer) => answer.id)
+    const selectedAnswerIds = authoredQuestion.answers.filter((answer) => !answer.correct).slice(0, 1).map((answer) => answer.id)
+    const scenario = buildScenario(document, {})
+    const selection = {
+      slotName: ELCE_SCENARIO.CONTENT_SLOT,
+      view: { path: `${ELCE_SCENARIO.ROOT_VIEW}/main/page-a` },
+      sceneKey: 'scene-page-a',
+    }
+    const savedPatch: Record<string, unknown> = {}
+    const persistedStates: ProjectTestState[] = []
+    const scormSink = {
+      saveReaderState: async (state: ProjectTestState) => { persistedStates.push(state) },
+      getEvaluationThresholdOverride: () => 0.6,
+      recordEvaluationResult: async () => undefined,
+    }
+    const actionContext = {
+      event: {
+        name: ELCE_EVENTS.QUESTION_ANSWERED,
+        sourceSceneKey: 'scene-page-a',
+        timeMs: 12_345,
+        data: {
+          pageId: 'page-a',
+          bdcId: 'bdc-question',
+          questionType: QUESTION_TYPE.MULTIPLE_CHOICE,
+          isCorrect: false,
+          answerIds,
+          answerLabels: authoredQuestion.answers.map((answer) => answer.label),
+          selectedAnswerIds,
+          expectedAnswerIds,
+          description: 'Titre de question Choisissez la bonne réponse.',
+        },
+      },
+      data: scenario.data ?? {},
+      context: { [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: scormSink },
+      state: {},
+      scenarioState: {
+        active: selection,
+        current: [selection],
+        context: {},
+        canAccess: async () => true,
+        canExit: async () => true,
+      },
+      updateContext: async (patch: Readonly<Record<string, unknown>>) => Object.assign(savedPatch, patch),
+      send: async () => undefined,
+    } as unknown as Parameters<typeof recordQuestionResultAction>[0]
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_760_000_000_000)
+    try {
+      await recordQuestionResultAction(actionContext)
+    } finally {
+      now.mockRestore()
+    }
+
+    const evaluationStates = savedPatch.evaluationStates as Record<string, {
+      context: {
+        settings: { threshold: number }
+        answers: Record<string, { description?: string; latencyMs?: number; timestampMs?: number }>
+      }
+    }>
+    expect(evaluationStates['chapter-evaluation']?.context.settings.threshold).toBe(0.6)
+    expect(evaluationStates['chapter-evaluation']?.context.answers['page-a']).toMatchObject({
+      questionType: QUESTION_TYPE.MULTIPLE_CHOICE,
+      answerLabels: authoredQuestion.answers.map((answer) => answer.label),
+      description: 'Titre de question Choisissez la bonne réponse.',
+      latencyMs: 12_345,
+      timestampMs: 1_760_000_000_000,
+    })
+    expect(persistedStates.at(-1)?.evaluationStates['chapter-evaluation']?.context.answers['page-a'])
+      .toMatchObject({
+        questionType: QUESTION_TYPE.MULTIPLE_CHOICE,
+        answerLabels: authoredQuestion.answers.map((answer) => answer.label),
+        latencyMs: 12_345,
+        timestampMs: 1_760_000_000_000,
+      })
+  })
+
+  it('sends a non-evaluation Question interaction immediately through the SCORM adapter', async () => {
+    const questionService = new ElceQuestionService()
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const question = document.bdcs.find((bdc) => bdc.id === 'bdc-question')!.question!
+    const authoredQuestion = {
+      ...questionService.changeType(question, QUESTION_TYPE.TRUE_FALSE),
+      title: 'Question immédiate',
+      prompt: 'La réponse est-elle correcte ?',
+    }
+    document = applyDocumentCommand(document, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-question',
+      question: authoredQuestion,
+    })
+    const answerIds = authoredQuestion.answers.map((answer) => answer.id)
+    const answerLabels = authoredQuestion.answers.map((answer) => answer.label)
+    const selectedAnswerIds = authoredQuestion.answers.filter((answer) => answer.correct).map((answer) => answer.id)
+    const expectedAnswerIds = selectedAnswerIds
+    const scenario = buildScenario(document, {})
+    const selection = {
+      slotName: ELCE_SCENARIO.CONTENT_SLOT,
+      view: { path: `${ELCE_SCENARIO.ROOT_VIEW}/main/page-a` },
+      sceneKey: 'scene-page-a',
+    }
+    const recordedInteractions: unknown[][] = []
+    const scormSink = {
+      saveReaderState: async () => undefined,
+      recordQuestionInteraction: async (...args: unknown[]) => { recordedInteractions.push(args) },
+      recordEvaluationResult: async () => undefined,
+    }
+    const actionContext = {
+      event: {
+        name: ELCE_EVENTS.QUESTION_ANSWERED,
+        sourceSceneKey: 'scene-page-a',
+        timeMs: 8_700,
+        data: {
+          pageId: 'page-a',
+          bdcId: 'bdc-question',
+          questionType: QUESTION_TYPE.TRUE_FALSE,
+          isCorrect: true,
+          answerIds,
+          answerLabels,
+          selectedAnswerIds,
+          expectedAnswerIds,
+          description: 'Question immédiate La réponse est-elle correcte ?',
+        },
+      },
+      data: scenario.data ?? {},
+      context: { [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: scormSink },
+      state: {},
+      scenarioState: {
+        active: selection,
+        current: [selection],
+        context: {},
+        canAccess: async () => true,
+        canExit: async () => true,
+      },
+      updateContext: async () => undefined,
+      send: async () => undefined,
+    } as unknown as Parameters<typeof recordQuestionResultAction>[0]
+
+    await recordQuestionResultAction(actionContext)
+
+    expect(recordedInteractions).toHaveLength(1)
+    expect(recordedInteractions[0]?.[1]).toBe('page-a')
+    expect(recordedInteractions[0]?.[2]).toMatchObject({
+      questionType: QUESTION_TYPE.TRUE_FALSE,
+      answerIds,
+      answerLabels,
+      selectedAnswerIds,
+      expectedAnswerIds,
+      description: 'Question immédiate La réponse est-elle correcte ?',
+      latencyMs: 8_700,
+      isCorrect: true,
+    })
+    expect(recordedInteractions[0]?.[2]).toMatchObject({ timestampMs: expect.any(Number) })
+  })
+
   it('routes the shared page-completion event to the Sighty action', () => {
     const scenario = buildScenario(createInitialDocument(), {})
     const mainView = scenario.views !== undefined && 'views' in scenario.views
@@ -355,6 +561,18 @@ describe('Elcé scenario builder', () => {
       ...summaryInput,
       context: { finishedPages: document.scenarioPageIds, questionResults: failingResults },
     })).toBe(false)
+    expect(pageExitGuard({
+      ...summaryInput,
+      context: {
+        finishedPages: document.scenarioPageIds,
+        questionResults: failingResults,
+        [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: {
+          saveReaderState: async () => undefined,
+          recordEvaluationResult: async () => undefined,
+          getEvaluationThresholdOverride: () => 0.6,
+        },
+      },
+    })).toBe(true)
 
     const freeDocument = applyDocumentCommand(document, {
       type: 'summary.settings.update',
@@ -446,6 +664,10 @@ describe('Elcé scenario builder', () => {
       'page-a': 'main/chapter-chapter-1/slot-content/page-a',
       'page-b': 'main/chapter-chapter-2/slot-content/page-b',
     })
+    expect(scenario.data?.chapters).toMatchObject({
+      'chapter-1': { name: 'Chapitre 1' },
+      'chapter-2': { name: 'Chapitre 2' },
+    })
     const mainView = scenario.views !== undefined && 'views' in scenario.views
       ? scenario.views.views.main
       : undefined
@@ -478,5 +700,162 @@ describe('Elcé scenario builder', () => {
     expect(summaryMenuScene !== undefined && 'stories' in summaryMenuScene
       ? summaryMenuScene.stories.main?.persos.some((perso) => perso.id === `${document.id}:summary:menu-button-page-catalog`)
       : false).toBe(false)
+  })
+
+  it('keeps multi-SCO navigation and page access within the launched chapter', () => {
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create', chapterId: 'chapter-sco-a', name: 'Chapitre SCO A',
+    })
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create', chapterId: 'chapter-sco-b', name: 'Chapitre SCO B',
+    })
+    document = applyDocumentCommand(document, {
+      type: 'page.move', pageId: 'page-a', placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-sco-a' },
+    })
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-b', bdcId: 'bdc-section-b', name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-sco-b' },
+    }))
+    const scenario = buildScenario(document, {})
+    const chapterContext = {
+      [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: 'chapter-sco-b',
+      finishedPages: document.scenarioPageIds,
+    }
+
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-a',
+      event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-a` },
+      context: chapterContext,
+      state: {},
+    })).toBe(false)
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-b` },
+      context: chapterContext,
+      state: {},
+    })).toBe(true)
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-a',
+      event: { name: ELCE_EVENTS.RUNTIME_INITIALIZE },
+      context: chapterContext,
+      state: {},
+    })).toBe(true)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-a',
+      event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-b` },
+      context: chapterContext,
+      state: {},
+    })).toBe(true)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: ELCE_EVENTS.NAVIGATION_PREVIOUS },
+      context: chapterContext,
+      state: {},
+    })).toBe(false)
+    const scormChapterContext = {
+      ...chapterContext,
+      [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: {
+        'chapter-sco-a': 'ITEM-a',
+        'chapter-sco-b': 'ITEM-b',
+      },
+      [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: {
+        saveReaderState: async () => undefined,
+        recordEvaluationResult: async () => undefined,
+        navigateToChapter: async () => true,
+      },
+    }
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: ELCE_EVENTS.NAVIGATION_PREVIOUS },
+      context: scormChapterContext,
+      state: {},
+    })).toBe(true)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
+      context: scormChapterContext,
+      state: {},
+    })).toBe(false)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
+      context: chapterContext,
+      state: {},
+    })).toBe(false)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-a` },
+      context: chapterContext,
+      state: {},
+    })).toBe(false)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-b` },
+      context: chapterContext,
+      state: {},
+    })).toBe(true)
+  })
+
+  it('persists the chapter end before requesting the next manifest SCO', async () => {
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create', chapterId: 'chapter-sco-b', name: 'Chapitre SCO B',
+    })
+    document = applyDocumentCommand(document, {
+      type: 'page.move', pageId: 'page-a', placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    })
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-b', bdcId: 'bdc-section-b', name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-sco-b' },
+    }))
+    const scenario = buildScenario(document, {})
+    const selection = {
+      slotName: ELCE_SCENARIO.CONTENT_SLOT,
+      view: { path: `${ELCE_SCENARIO.ROOT_VIEW}/chapter-1/page-a` },
+      sceneKey: 'scene-page-a',
+    }
+    const saved: unknown[] = []
+    const navigate = vi.fn(async () => true)
+    const scormSink = {
+      saveReaderState: async (...args: unknown[]) => { saved.push(args) },
+      recordEvaluationResult: async () => undefined,
+      navigateToChapter: navigate,
+    }
+    const context = {
+      event: { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
+      data: scenario.data ?? {},
+      context: {
+        [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: 'chapter-1',
+        [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: { 'chapter-sco-b': 'ITEM-b' },
+        [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: scormSink,
+        finishedPages: ['page-a'],
+      },
+      state: {},
+      scenarioState: {
+        active: selection,
+        current: [selection],
+        context: {},
+        canAccess: async () => true,
+        canExit: async () => true,
+      },
+      updateContext: async () => undefined,
+      send: async () => undefined,
+    } as unknown as Parameters<typeof navigateScormChapterAction>[0]
+
+    await navigateScormChapterAction(context)
+
+    expect(saved.at(-1)).toMatchObject([expect.any(Object), 'page-a'])
+    expect(navigate).toHaveBeenCalledWith('chapter-sco-b')
   })
 })

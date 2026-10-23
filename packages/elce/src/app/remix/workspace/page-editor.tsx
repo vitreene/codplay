@@ -5,7 +5,7 @@ import { BDC_ORDER, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, CHAPTER_TYPE_CONF
 import type { Bdc, Chapter, Page } from '../../../domain/document/document-types'
 import { canMoveBdcToPage } from '../../../domain/commands/document-commands'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
-import { selectEditorViewModel } from '../../selectors/editor-view-model'
+import { editorViewModelEqual, selectEditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import { EditorContextProvider } from '../editor-context'
 import { renderLucideIcon } from '../lucide-static-icon'
@@ -45,13 +45,19 @@ export function RemixPageEditor(handle: Handle) {
   }
   const setEditingAnchorBdc = (bdcId: string | null): void => {
     editingAnchorBdcId = bdcId
-    if (!handle.signal.aborted) void handle.update()
+    if (handle.signal.aborted) return
+    void handle.update().then(() => {
+      if (bdcId === null || handle.signal.aborted) return
+      document.getElementById(`elce-anchor-card-editor-${bdcId}`)?.scrollIntoView({ block: 'nearest' })
+    })
   }
 
   handle.queueTask(() => {
     const subscription = controller.subscribe((snapshot) => {
+      const nextView = selectEditorViewModel(snapshot)
+      if (editorViewModelEqual(current.view, nextView)) return
       const previousRestore = current.view.historyRestore
-      current.view = selectEditorViewModel(snapshot)
+      current.view = nextView
       const page = current.view.selectedPage
       if (page !== undefined) {
         for (const bdc of current.view.selectedPageBdcs) {
@@ -151,13 +157,6 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
         className="elce-work-area-title-row"
       >
         <div
-          id="elce-work-area-titles"
-          className="elce-work-area-titles"
-        >
-          {view.pageChapter === undefined ? null : renderPageChapterTitle(view.pageChapter, actions)}
-          {renderPageTitle(page, actions)}
-        </div>
-        <div
           id="elce-work-area-actions"
           className="elce-work-area-actions"
         >
@@ -169,6 +168,13 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
           {canCreateEvaluationResult
             ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)
             : null}
+        </div>
+        <div
+          id="elce-work-area-titles"
+          className="elce-work-area-titles"
+        >
+          {view.pageChapter === undefined ? null : renderPageChapterTitle(view.pageChapter, actions)}
+          {renderPageTitle(page, actions)}
         </div>
       </div>
     </div>

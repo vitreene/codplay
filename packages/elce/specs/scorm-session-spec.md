@@ -30,6 +30,15 @@ Le runtime du SCO crée l’adaptateur et restaure les données avant
 l’initialisation de Sighty. Il le ferme dans le cycle de vie du player. La
 preview auteur ne crée pas d’adaptateur et n’ouvre pas de session LMS.
 
+Si l’API LMS retourne un seuil de réussite non nul, `ElceScormAdapter` expose
+sa valeur normalisée à travers le même service de progression déjà fourni au
+contexte Sighty. La machine d’Évaluation utilise alors ce seuil pour le résultat
+et le garde de navigation ; il prévaut sur le seuil auteur pendant cette session
+SCORM. Les résultats d’Évaluation déjà suspendus sont recalculés sans perdre
+réponses, tentatives ni réglages de reprise. Sans valeur LMS utilisable, le
+seuil auteur ou son défaut s’applique. La preview, qui n’a pas d’adaptateur,
+reste régie par le seuil auteur.
+
 ## État de reprise Elcé
 
 `cmi.suspend_data` contient un objet JSON versionné :
@@ -58,34 +67,163 @@ tronquer l’état. En 1.2, le signet est écrit dans
 
 ## Actions Sighty et résultats
 
-Les handlers `MARK_PAGE_FINISHED`, `RECORD_QUESTION_RESULT`,
-`SAVE_PROFILE_VALUES` et `SUBMIT_PROFILE` transmettent l’état courant à
-`ElceScormAdapter.saveReaderState()`. `REFRESH_EVALUATION_RESULT` enregistre
-également le signet de la page admise. Quand la machine d’Évaluation possède
-un résultat complet, l’action transmet son résultat, le chapitre et les
-réponses validées à `recordEvaluationResult()`.
+Les handlers `MARK_PAGE_FINISHED`, `SAVE_PROFILE_VALUES` et `SUBMIT_PROFILE`
+transmettent l’état courant à `ElceScormAdapter.saveReaderState()`.
+`RECORD_QUESTION_RESULT` enregistre aussi cet état ; pour une Question hors
+Évaluation, il demande à l’adaptateur d’écrire son interaction immédiatement
+avec ce même état. Pour une Question d’Évaluation, il garde la réponse et ses
+métadonnées dans l’état repris. `REFRESH_EVALUATION_RESULT` enregistre le
+signet de la page admise et, quand la machine possède un résultat complet,
+transmet son résultat, le chapitre et les réponses validées à
+`recordEvaluationResult()`.
 
 En `monoSco`, l’adaptateur calcule la moyenne des scores de chapitres pour le
 résultat global et considère le SCO échoué dès qu’un chapitre a échoué. Pour
-SCORM 2004, il demande aussi la mise à jour de l’objectif `obj_<chapterId>` et
-calcule la progression depuis les pages terminées des chapitres. Pour SCORM
-1.2, il fournit le résultat et le score agrégés sans objectif ni mesure de
-progression 2004. Hors `monoSco`, le résultat est celui du chapitre courant.
-Le noyau partagé écrit les valeurs calculées dans les éléments CMI.
+SCORM 2004, il met à jour l’objectif `obj_<chapterId>` du chapitre courant avec
+sa position de page 1-based, puis calcule la progression globale à partir des
+chapitres terminés, comme le lecteur de référence. La complétion globale est
+écrite à la fin d’un chapitre et ne devient `completed` qu’une fois tous les
+chapitres terminés. Pour SCORM 1.2, il fournit le résultat et le score agrégés
+sans objectif ni mesure de progression 2004 ; il transmet le statut global à
+la fin d’un chapitre. Hors `monoSco`, la progression correspond à la position
+de page courante dans le SCO, arrondie au centième. Le statut reste inchangé
+pendant la consultation ordinaire et devient `completed` au repère de fin de la
+dernière page. Le noyau partagé écrit les valeurs calculées dans les éléments
+CMI.
+
+Pour un SCO par chapitre, le runtime transmet à l’adaptateur les identifiants de
+pages du chapitre lancé et les pages qui contiennent une Question. La mesure
+2004 reprend la position de la page courante, comme dans le lecteur de
+référence ; elle ne dépend pas du nombre de pages déjà terminées. Le statut
+reste inchangé avant la fin du chapitre. Au repère bas de sa dernière page, une
+page Question doit également avoir une réponse pour que le chapitre soit
+considéré terminé. Les pages d’autres chapitres ne contribuent jamais à la
+mesure. En 1.2, seul le statut de chapitre est écrit, au moment où la fin est
+atteinte ; pour un chapitre d’Évaluation dont le résultat est connu, `passed`
+ou `failed` reste le statut final du SCO.
 
 Les réponses et tentatives complètes restent conservées dans l’état suspendu
-pour les trois éditions ; les interactions LMS `choice` complètent ce stockage
-à la fin du chapitre d’évaluation.
+pour les trois éditions. L’action Sighty `RECORD_QUESTION_RESULT` reçoit
+`timeMs` sur l’événement public après admission ; le temps logique de la scène
+Question sert de latence, sans timer ajouté. Elle conserve aussi la description,
+le type de Question, ses réponses possibles dans leur ordre auteur et
+l’horodatage de validation. Dans un chapitre ordinaire, l’adaptateur écrit
+l’interaction immédiatement avec l’état de lecture. Dans un chapitre
+d’Évaluation, l’action conserve ces métadonnées dans la machine d’Évaluation,
+puis l’adaptateur écrit toutes les interactions à l’envoi du résultat du
+chapitre. Le noyau écrit les interactions uniquement en SCORM 2004 ; en 1.2,
+Elcé conserve réponses et tentatives dans l’état suspendu, en omet les
+métadonnées propres aux interactions, et écrit le résultat et le score sans
+interaction CMI.
+
+L’identifiant reprend la forme `<pageId>_0`. En CMI, une Question « Vrai / Faux »
+utilise le type `true-false` et les libellés de réponse ; les Questions à choix
+utilisent le type `choice` et les positions de réponse commençant à `1`, jointes
+par `[,]` dans l’ordre auteur. La description CMI contient le texte du titre et
+de l’énoncé suivi des réponses numérotées dans leur ordre auteur. Le résultat,
+l’horodatage, la latence et la pondération `0` suivent le format de la référence. Les états
+suspendus antérieurs sans métadonnées restent acceptés ; leur type est alors
+traité comme `choice`, leur description comme vide, et ils ne fournissent pas
+d’horodatage ni de latence CMI.
+
+## Runtime d’un package Sighty SCORM
+
+Le lanceur généré importe `scenario.mjs`, `loader.mjs` et le runtime SCORM Elcé
+du package existant. `startElceScormPackageRuntime()` ouvre la session SCORM
+avant d’initialiser Sighty, valide les métadonnées compactes du scénario,
+réconcilie le signet, les pages terminées, les réponses, les tentatives et le
+profil avec les identifiants présents dans le package, puis injecte l’état et
+`ElceScormAdapter` dans le contexte du loader. Le player reste masqué pendant
+cette restauration. Après `runtime.initialize()`, le runtime Sighty reçoit
+l’événement de sélection de la page restaurée ; le player ne devient visible
+qu’après cette transition et une sauvegarde de l’état restauré.
+
+Pour un package multi-SCO, le lanceur reçoit la table des identifiants `ITEM-*`
+du manifeste. Les actions Sighty « Suivant » et « Précédent » au dernier et au
+premier écran appellent l’adaptateur Elcé, qui enregistre le signet et les
+données suspendues, renseigne `adl.nav.request`, committe et termine le SCO.
+Le bouton inter-chapitre est disponible seulement si le manifeste fournit
+l’identifiant stable du chapitre voisin.
+
+Le lanceur initialise le conteneur avec `visibility: hidden`. Après le succès
+de la restauration, de l’initialisation Sighty, de la sélection de page et de
+la sauvegarde, le runtime force sa visibilité à `visible` au lieu de rétablir
+la valeur initiale masquée. Si une étape échoue, il restaure cette valeur
+initiale et laisse le conteneur caché pendant que le lanceur signale l’erreur.
+Le test du runtime démarre avec un conteneur masqué, vérifie qu’il le reste
+pendant l’initialisation, puis vérifie l’affichage après succès et le maintien
+du masquage après échec.
+
+La fermeture du runtime détruit le player et ferme la session SCORM une seule
+fois. `pagehide` et `beforeunload` déclenchent cette fermeture. Le lanceur
+n’ajoute aucun circuit d’événement dans les scènes ; les écritures pendant le
+parcours restent aux handlers Sighty décrits plus haut. La preview auteur
+n’utilise pas ce runtime.
+
+Cette preuve utilise le loader Sighty et le runtime Elcé dans un environnement
+de test avec faux LMS. Elle valide le raccord et la restauration du parcours ;
+l’interopérabilité des écritures et de la reprise avec un LMS qui conserve les
+données reste à vérifier.
+
+Une vérification du package Demo5 2004v4 dans la route locale 2J Learning a
+confirmé que le contenu devient visible avec le runtime généré. Cette route
+fonctionne en mode `browse` et son API de test n’enregistre pas les écritures ;
+elle vérifie le lancement et l’affichage, pas la persistance ni la reprise LMS.
+
+### Lancement d’un SCO par chapitre
+
+En `monoSco=false` sans sommaire, le manifeste contient une ressource et un
+lanceur HTML par chapitre. Chaque lanceur transmet le `chapterId` à
+`startElceScormPackageRuntime()` ; l’assembleur embarque une seule copie du
+paquet Sighty complet et ne modifie pas son export. Le runtime garde le
+contenu masqué pendant l’initialisation Sighty, dont la page globale par défaut
+peut être hors du chapitre, puis sélectionne la page du chapitre lancé avant
+d’afficher le player.
+
+Le contexte Sighty porte l’identifiant du chapitre courant. Les gardes
+d’accès/sortie et les actions de page n’admettent ensuite que ses pages ; le
+sommaire du SCO ne liste que ces pages. `reconcilePackagedReaderState()` filtre
+le signet, les pages terminées, les réponses et les états d’Évaluation selon
+la portée du chapitre. Le LMS conserve ces valeurs séparément pour chaque SCO.
+`monoSco=true` continue d’utiliser le scénario complet.
+
+Les tests de runtime et de scénario vérifient le routage depuis la page globale
+initiale, le refus d’accès aux autres chapitres, la navigation locale et la
+restauration filtrée. Des ZIP Demo5 en 1.2, 2004v3 et 2004v4 contiennent chacun
+quatre lanceurs et quatre ressources `sco` ; leurs archives et manifestes
+passent respectivement `unzip -t` et les schémas XSD fournis. Cette preuve ne
+valide pas encore l’isolation des données, la reprise ou les résultats dans un
+LMS réel qui persiste les valeurs CMI.
 
 ## Preuves
 
 - [`scorm-state-codec.test.ts`](../src/scorm/scorm-state-codec.test.ts) vérifie
   l’encodage, la validation et les limites.
 - [`elce-scorm-adapter.test.ts`](../src/scorm/elce-scorm-adapter.test.ts)
-  vérifie le mapping Elcé des sessions, résultats, objectifs, progression,
-  interactions, modes lecture et erreurs.
+  vérifie la lecture du seuil LMS, son application aux résultats suspendus et
+  le mapping Elcé des sessions, résultats, objectifs, progression,
+  interactions immédiates et différées, les formats de réponses par type,
+  la complétion du chapitre courant après consultation et réponse à ses
+  Questions en multi-SCO 1.2/2004, l’absence
+  d’interactions 1.2, les modes lecture et les erreurs.
+- [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
+  vérifie la conservation de `timeMs`, de la description et de l’horodatage
+  dans la réponse de la machine d’Évaluation. Il vérifie aussi l’admission de la
+  page de démarrage Sighty masquée, l’entrée dans le chapitre lancé, le refus
+  des pages des autres chapitres et les sorties précédent/suivant locales.
+- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  vérifie qu’une Question d’Évaluation jouée par le player Sighty/CodPlay
+  produit une latence par réponse sans ajouter de timer.
 - [`scorm-player-runtime.test.ts`](../src/scorm/scorm-player-runtime.test.ts)
   vérifie la restauration avant Sighty, la sauvegarde après navigation admise
   et l’absence de session SCORM dans la preview. Le test d’export Sighty vérifie
   aussi que les handlers de page restent exportables avec cette intégration
   optionnelle.
+- [`scorm-package-runtime.test.ts`](../src/scorm/scorm-package-runtime.test.ts)
+  vérifie l’injection du contexte dans le loader du package, la réconciliation
+  des identifiants, la page restaurée, la sauvegarde et la fermeture.
+  Il couvre également le conteneur masqué au lancement, visible après succès et
+  toujours masqué après échec, ainsi que la sélection du chapitre du SCO et le
+  filtrage des données restaurées à cette portée. Il vérifie aussi que la
+  complétion est calculée dans ce seul chapitre et écrite par le runtime
+  multi-SCO vers le faux LMS.

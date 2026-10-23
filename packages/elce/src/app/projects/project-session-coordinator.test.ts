@@ -9,6 +9,7 @@ import { controllerMachine } from '../controller/controller-machine'
 import { ProjectSessionCoordinator } from './project-session-coordinator'
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -435,6 +436,33 @@ describe('Elcé project session lifecycle', () => {
     await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
     browser.grantAccess(0)
     await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('surfaces the existing recovery controls when another window keeps the native lock pending', async () => {
+    const initial = documentForProject('pending-native-lock', 'Projet en lecture')
+    const remote = new Map([[initial.id, initial]])
+    const store = new MemoryProjectStore()
+    const { coordinator } = createCoordinator(remote, store)
+    const browser = installFakeBrowserEvents(true)
+    vi.useFakeTimers()
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: initial.id } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).toBe(initial.id))
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledOnce())
+    expect(actor.getSnapshot().context.accessRecoveryAvailable).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+    expect(actor.getSnapshot().context.accessRecoveryAvailable).toBe(true)
+    expect(actor.getSnapshot().context.projectError)
+      .toBe('L’accès attend toujours la libération du verrou d’un autre onglet.')
 
     await coordinator.dispose()
     actor.stop()

@@ -34,9 +34,46 @@ describe('SCORM reader state codec', () => {
                   answerIds: ['choice-a', 'choice-b'],
                   selectedAnswerIds: ['choice-a'],
                   expectedAnswerIds: ['choice-a'],
+                  questionType: 'multiple-choice' as const,
+                  answerLabels: ['Choix A', 'Choix B'],
+                  description: 'Question de test',
+                  latencyMs: 7_250,
+                  timestampMs: 1_760_000_000_000,
                 },
               },
               result: { questionCount: 1, correctCount: 0, score: 0, passed: false },
+            },
+          },
+        },
+      },
+    }
+
+    expect(decodeScormReaderState(encodeScormReaderState(state, '2004v4'))).toEqual(state)
+  })
+
+  it('accepts earlier answer states without interaction metadata', () => {
+    const state = {
+      schemaVersion: 1 as const,
+      currentPageId: 'page-a',
+      projectTestState: {
+        ...INITIAL_PROJECT_TEST_STATE,
+        evaluationStates: {
+          chapter: {
+            value: 'attempting' as const,
+            context: {
+              questionIds: ['page-a'],
+              activeQuestionIds: ['page-a'],
+              settings: { threshold: 0.8, attemptLimit: 3, retryScope: 'all-questions' as const },
+              attempt: 1,
+              answers: {
+                'page-a': {
+                  questionId: 'page-a',
+                  answerIds: ['answer-a'],
+                  selectedAnswerIds: ['answer-a'],
+                  expectedAnswerIds: ['answer-a'],
+                },
+              },
+              result: null,
             },
           },
         },

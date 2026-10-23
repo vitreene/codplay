@@ -18,7 +18,7 @@ describe('Remix editor workspace', () => {
     let rendered = mount()
 
     expect(rendered.$('#elce-responsive-panel-access #elce-preview-open')).not.toBeNull()
-    expect(rendered.$('#elce-responsive-panel-access #elce-sighty-export')).toBeNull()
+    expect(rendered.$('#elce-responsive-panel-access #elce-export-open')).toBeNull()
     expect(rendered.$('#elce-work-area-preview-row')).toBeNull()
     expect(rendered.$('#elce-workspace-access-area #elce-preview-open-error')?.textContent).toBe(previewError)
     await rendered.act(() => rendered.$('#elce-preview-open')?.dispatchEvent(new Event('click', { bubbles: true })))
@@ -34,7 +34,7 @@ describe('Remix editor workspace', () => {
 
     expect(rendered.$(`#elce-remix-evaluation-chapter-settings-${evaluationChapter.id}`)).not.toBeNull()
     expect(rendered.$('#elce-responsive-panel-access #elce-preview-open')).not.toBeNull()
-    expect(rendered.$('#elce-responsive-panel-access #elce-sighty-export')).toBeNull()
+    expect(rendered.$('#elce-responsive-panel-access #elce-export-open')).toBeNull()
     expect(rendered.$('#elce-responsive-panel-access')?.querySelectorAll('#elce-preview-open')).toHaveLength(1)
 
     rendered.cleanup()
@@ -52,7 +52,7 @@ describe('Remix editor workspace', () => {
     )
     const rendered = mount()
 
-    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation du paquet Sighty…')
+    expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation de l’export du scénario…')
     expect(rendered.$('#elce-sighty-export-status')?.getAttribute('role')).toBe('status')
 
     rendered.cleanup()
@@ -269,6 +269,7 @@ function createWorkspace(
       onPreview,
       previewError,
       exportBusy,
+      exportKind: null,
       exportError,
       exportNotice,
       onMovePage: (pageId, placement) => actions.movePage(pageId, placement),

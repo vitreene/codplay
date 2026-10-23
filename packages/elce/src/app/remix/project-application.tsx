@@ -1,4 +1,5 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
+import { X } from 'lucide-static'
 
 import type { SnapshotFrom } from 'xstate'
 import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
@@ -6,10 +7,13 @@ import { isImportChange, type controllerMachine } from '../controller/controller
 import { EditorContextProvider } from './editor-context'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { ProjectSessionStatus } from '../projects/project-session-types'
-import { selectEditorViewModel } from '../selectors/editor-view-model'
+import { editorViewModelEqual, selectEditorViewModel } from '../selectors/editor-view-model'
 import { CATALOG_TAB } from '../../config/document-config'
 import { PopupPreviewHost } from '../player/popup-preview-host'
+import { renderLucideIcon } from './lucide-static-icon'
 import { downloadElceSightyPackage, requestElceSightyPackage } from '../../export/elce-sighty-export-client'
+import { downloadElceScormPackage, requestElceScormPackage } from '../../export/elce-scorm-export-client.ts'
+import type { ScormVersion } from '../../scorm/scorm-types'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
 import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
@@ -33,6 +37,7 @@ export function ProjectApplication(handle: Handle) {
   let draggedEntry: DraggedScenarioEntry = null
   let previewError: string | null = null
   let exportBusy = false
+  let exportKind: 'sighty' | 'scorm' | null = null
   let exportError: string | null = null
   let exportNotice: string | null = null
   let returnFocusId: string | null = null
@@ -79,13 +84,25 @@ export function ProjectApplication(handle: Handle) {
     if (!popupPreviewHost.open()) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
     void handle.update()
   }
+  /** Opens the export choices from the project title bar. */
+  const openExportDialog = (): void => {
+    const dialog = document.getElementById('elce-export-dialog') as HTMLDialogElement | null
+    if (dialog !== null && !dialog.open) dialog.showModal()
+  }
+  /** Closes the shared export choices dialog. */
+  const closeExportDialog = (): void => {
+    const dialog = document.getElementById('elce-export-dialog') as HTMLDialogElement | null
+    if (dialog?.open === true) dialog.close()
+  }
   /** Packages the current actor snapshot and downloads it without saving or initializing it. */
   const exportScenario = (): void => {
+    closeExportDialog()
     const context = controller.getSnapshot().context
     if (exportBusy || context.activeProject === null || context.projectStatus !== 'active' || context.editAccess !== 'active') return
     const documentSnapshot = context.document
     const mediaSources = context.mediaSources
     exportBusy = true
+    exportKind = 'sighty'
     exportError = null
     exportNotice = null
     void handle.update()
@@ -98,6 +115,36 @@ export function ProjectApplication(handle: Handle) {
         exportError = error instanceof Error ? error.message : 'L’export du scénario Elcé a échoué.'
       } finally {
         exportBusy = false
+        exportKind = null
+        void handle.update()
+      }
+    })()
+  }
+  /** Builds the existing Sighty archive, then lets the dedicated SCORM CLI package it. */
+  const exportScorm = (version: ScormVersion, monoSco: boolean): void => {
+    closeExportDialog()
+    const context = controller.getSnapshot().context
+    if (exportBusy || context.activeProject === null || context.projectStatus !== 'active' || context.editAccess !== 'active') return
+    const documentSnapshot = context.document
+    const mediaSources = context.mediaSources
+    exportBusy = true
+    exportKind = 'scorm'
+    exportError = null
+    exportNotice = null
+    void handle.update()
+    void (async () => {
+      try {
+        const sightyPackage = await requestElceSightyPackage(documentSnapshot, mediaSources)
+        const scormPackage = await requestElceScormPackage(sightyPackage, documentSnapshot.data.name, version, monoSco)
+        const filename = downloadElceScormPackage(scormPackage.archive, scormPackage.filename)
+        exportNotice = monoSco
+          ? `Téléchargement de « ${filename} » démarré. Extrayez cette archive pour importer séparément les packages SCORM qu’elle contient.`
+          : `Téléchargement de « ${filename} » démarré.`
+      } catch (error) {
+        exportError = error instanceof Error ? error.message : 'L’export SCORM du scénario Elcé a échoué.'
+      } finally {
+        exportBusy = false
+        exportKind = null
         void handle.update()
       }
     })()
@@ -111,7 +158,9 @@ export function ProjectApplication(handle: Handle) {
   }
   handle.queueTask(() => {
     const subscription = controller.subscribe((snapshot) => {
-      view = selectProjectView(snapshot)
+      const nextView = selectProjectView(snapshot)
+      if (projectApplicationViewEqual(view, nextView)) return
+      view = nextView
       void handle.update()
     })
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -194,8 +243,12 @@ export function ProjectApplication(handle: Handle) {
     getDraggedEntry: () => draggedEntry,
     onPreview: openPreview,
     previewError,
-    onExport: exportScenario,
+    onExport: openExportDialog,
+    onCloseExportDialog: closeExportDialog,
+    onExportSighty: exportScenario,
+    onExportScorm: exportScorm,
     exportBusy,
+    exportKind,
     exportError,
     exportNotice,
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
@@ -245,6 +298,40 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
     syncStatus: snapshot.context.syncStatus,
     editor: selectEditorViewModel(snapshot),
   }
+}
+
+/** Skips parent renders when an actor snapshot leaves every projected value unchanged. */
+function projectApplicationViewEqual(left: ProjectApplicationView, right: ProjectApplicationView): boolean {
+  return sameProjectSummaries(left.projects, right.projects)
+    && sameProjectSummary(left.activeProject, right.activeProject)
+    && left.projectStatus === right.projectStatus
+    && left.projectError === right.projectError
+    && left.accessRecoveryAvailable === right.accessRecoveryAvailable
+    && left.recoverableLocalCopy === right.recoverableLocalCopy
+    && left.editAccess === right.editAccess
+    && left.document === right.document
+    && left.history === right.history
+    && left.importPending === right.importPending
+    && left.syncStatus === right.syncStatus
+    && editorViewModelEqual(left.editor, right.editor)
+}
+
+/** Compares the visible project catalogue by its stable row fields. */
+function sameProjectSummaries(
+  left: ProjectApplicationView['projects'],
+  right: ProjectApplicationView['projects'],
+): boolean {
+  return left.length === right.length
+    && left.every((project, index) => sameProjectSummary(project, right[index] ?? null))
+}
+
+/** Compares a displayed project row by its identifier, name, and revision. */
+function sameProjectSummary(
+  left: ProjectApplicationView['activeProject'],
+  right: ProjectApplicationView['activeProject'],
+): boolean {
+  if (left === null || right === null) return left === right
+  return left.id === right.id && left.name === right.name && left.revision === right.revision
 }
 
 /** Renders the project switcher, project list, and Remix work area. */
@@ -411,6 +498,7 @@ function renderApplication(
       </span>
       {editorVisible ? renderExportButton(workspace.onExport, workspace.exportBusy) : null}
     </header>
+    {editorVisible ? renderExportDialog(workspace) : null}
     {view.activeProject === null ? renderProjectSelection(view, actions) : null}
     {projectVisible && !editorVisible && view.projectError !== null ? <p id="elce-project-reader-status" role="status">
       {view.projectError}
@@ -452,6 +540,7 @@ function renderApplication(
       onPreview: workspace.onPreview,
       previewError: workspace.previewError,
       exportBusy: workspace.exportBusy,
+      exportKind: workspace.exportKind,
       exportError: workspace.exportError,
       exportNotice: workspace.exportNotice,
       onMovePage: workspace.movePage,
@@ -460,18 +549,106 @@ function renderApplication(
   </div>
 }
 
-/** Renders the Sighty export action at the right edge of the project title bar. */
+/** Renders the export action at the right edge of the project title bar. */
 function renderExportButton(onExport: () => void, busy: boolean): RemixNode {
   return <button
-    id="elce-sighty-export"
+    id="elce-export-open"
     className="elce-project-export-button"
     type="button"
+    aria-haspopup="dialog"
+    aria-controls="elce-export-dialog"
     disabled={busy}
     aria-busy={busy}
     mix={on<HTMLButtonElement, 'click'>('click', onExport)}
   >
-    {busy ? 'Préparation…' : 'Exporter le scénario'}
+    {busy ? 'Préparation…' : 'Exporter'}
   </button>
+}
+
+/** Presents the existing scenario download and the separate SCORM packaging options. */
+function renderExportDialog(workspace: ProjectApplicationWorkspaceState): RemixNode {
+  return <dialog
+    id="elce-export-dialog"
+    className="elce-export-dialog"
+    aria-labelledby="elce-export-dialog-title"
+    aria-describedby="elce-export-dialog-description"
+  >
+    <div id="elce-export-dialog-content" className="elce-export-dialog__content">
+      <header id="elce-export-dialog-header" className="elce-export-dialog__header">
+        <h2 id="elce-export-dialog-title">Exporter</h2>
+        <button
+          id="elce-export-dialog-close"
+          className="elce-export-dialog__close"
+          type="button"
+          aria-label="Fermer la fenêtre d’export"
+          title="Fermer la fenêtre d’export"
+          mix={on<HTMLButtonElement, 'click'>('click', workspace.onCloseExportDialog)}
+        >
+          {renderLucideIcon(X, 'elce-export-dialog-close-icon', 14)}
+        </button>
+      </header>
+      <p id="elce-export-dialog-description">
+        Choisissez le format de diffusion. L’export SCORM reprend le même scénario et les mêmes médias.
+      </p>
+      <button
+        id="elce-sighty-export-action"
+        className="elce-export-dialog__action"
+        type="button"
+        disabled={workspace.exportBusy}
+        mix={on<HTMLButtonElement, 'click'>('click', workspace.onExportSighty)}
+      >
+        Exporter le scénario
+      </button>
+      <section id="elce-scorm-export-section" className="elce-export-dialog__scorm">
+        <h3 id="elce-scorm-export-title">Exporter en SCORM</h3>
+        <p id="elce-scorm-export-description">
+          Cochez monoSCO pour obtenir un package SCORM distinct par chapitre.
+        </p>
+        <form id="elce-scorm-export-form">
+          <fieldset id="elce-scorm-version-options" className="elce-export-dialog__fieldset">
+            <legend id="elce-scorm-version-legend">Version SCORM</legend>
+            <label id="elce-scorm-version-label-12" className="elce-export-dialog__choice">
+              <input id="elce-scorm-version-12" name="version" type="radio" value="1.2" />
+              SCORM 1.2
+            </label>
+            <label id="elce-scorm-version-label-2004" className="elce-export-dialog__choice">
+              <input id="elce-scorm-version-2004" name="version" type="radio" value="2004v4" checked />
+              SCORM 2004 (4e édition)
+            </label>
+          </fieldset>
+          <label id="elce-scorm-mono-sco-label" className="elce-export-dialog__choice">
+            <input id="elce-scorm-mono-sco" name="monoSco" type="checkbox" value="true" />
+            monoSCO
+          </label>
+        </form>
+        <button
+          id="elce-scorm-export-action"
+          className="elce-export-dialog__action"
+          type="button"
+          disabled={workspace.exportBusy}
+          mix={on<HTMLButtonElement, 'click'>('click', () => submitScormExport(workspace.onExportScorm))}
+        >
+          Exporter en SCORM
+        </button>
+      </section>
+    </div>
+  </dialog>
+}
+
+/** Reads the selected edition and mono-SCO checkbox from the export form. */
+function submitScormExport(onExportScorm: (version: ScormVersion, monoSco: boolean) => void): void {
+  const form = document.getElementById('elce-scorm-export-form') as HTMLFormElement | null
+  if (form === null) return
+  const formData = new FormData(form)
+  const version = formData.get('version')
+  const monoSco = formData.get('monoSco') === 'true'
+  if (!isScormVersion(version)) return
+  onExportScorm(version, monoSco)
+}
+
+/** Accepts only the SCORM editions available in the package CLI. */
+function isScormVersion(value: FormDataEntryValue | null): value is ScormVersion {
+  return value === '1.2' || value === '2004v3' || value === '2004v4'
 }
 
 /** Renders the selection surface when no project is actively being edited. */

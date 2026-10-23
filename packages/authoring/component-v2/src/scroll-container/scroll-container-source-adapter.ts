@@ -6,6 +6,7 @@ import type {
 import type { Diagnostic } from 'codplay/diagnostics'
 import {
   PLAYER_LIFECYCLE_PLAYING,
+  PLAYER_LIFECYCLE_READY,
   resolveAncestorChain,
 } from 'codplay/runtime/player'
 import type { SolvedScene } from 'codplay/runtime/player'
@@ -15,7 +16,11 @@ import type {
   HtmlSourceAdapterFactory,
 } from 'codplay/runtime/runner-html'
 import { IntersectionObservationProvider } from './intersection-observation-provider'
-import type { ScrollObservationRule, ScrollObservationUpdate } from './scroll-source-types'
+import type {
+  ScrollObservationEmission,
+  ScrollObservationRule,
+  ScrollObservationUpdate,
+} from './scroll-source-types'
 
 type ExtendedIntersectionObserverInit = IntersectionObserverInit & Readonly<{
   scrollMargin?: string
@@ -53,6 +58,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   private readonly observerGroups = new Map<Element, Map<string, ObserverGroup>>()
   private readonly reportedDiagnostics = new Set<string>()
   private readonly emittedOnce = new Set<CompiledScrollObservationEvent>()
+  private pendingInitialEmissions: ScrollObservationEmission[] = []
   private pendingDispatch: Promise<void> = Promise.resolve()
   private attached = false
   private seeking = false
@@ -81,6 +87,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     if (this.destroyed) return
     this.seeking = true
     this.observationGeneration += 1
+    this.pendingInitialEmissions = []
   }
 
   /** Resumes observation delivery after seek presentation. */
@@ -89,11 +96,19 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     this.seeking = false
   }
 
+  /** Delivers matching initial observations once the player starts playback. */
+  onPlaybackStateChange(state: ReturnType<HtmlSourceAdapterContext['getLifecycleState']>): void {
+    if (state !== PLAYER_LIFECYCLE_PLAYING || this.destroyed || this.seeking) return
+    const emissions = this.pendingInitialEmissions.splice(0)
+    this.dispatchEmissions(emissions)
+  }
+
   /** Disconnects observers before the player finalizes sequence:end. */
   onSequenceEnd(): void {
     this.observationGeneration += 1
     this.attached = false
     this.seeking = true
+    this.pendingInitialEmissions = []
     this.disconnectObservationBindings()
   }
 
@@ -101,6 +116,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   onReset(): void {
     if (this.destroyed) return
     this.observationGeneration += 1
+    this.pendingInitialEmissions = []
     this.disconnectObservationBindings()
     this.observationProvider.detach()
     this.attached = false
@@ -119,6 +135,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     this.attached = false
     this.seeking = true
     this.observationGeneration += 1
+    this.pendingInitialEmissions = []
     this.disconnectObservationBindings()
     this.observationProvider.destroy()
     this.pendingDispatch = Promise.resolve()
@@ -280,6 +297,24 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
         })
       }
     }
+    const lifecycleState = this.context.getLifecycleState()
+    if (lifecycleState === PLAYER_LIFECYCLE_READY) {
+      const latestPhaseByRule = new Map(updates.map((update) => [update.ruleId, update.phase]))
+      this.pendingInitialEmissions = this.pendingInitialEmissions.filter((emission) => (
+        latestPhaseByRule.get(emission.ruleId) === undefined
+        || latestPhaseByRule.get(emission.ruleId) === emission.phase
+      ))
+      this.pendingInitialEmissions.push(...emissions.filter((emission) => emission.initial))
+      return
+    }
+    if (lifecycleState !== PLAYER_LIFECYCLE_PLAYING) {
+      return
+    }
+    this.dispatchEmissions(emissions)
+  }
+
+  /** Serializes event emissions through the existing player command port. */
+  private dispatchEmissions(emissions: readonly ScrollObservationEmission[]): void {
     if (this.context.getLifecycleState() !== PLAYER_LIFECYCLE_PLAYING || emissions.length === 0) return
     const applyAtMs = this.context.getCurrentTimeMs()
     const generation = this.observationGeneration

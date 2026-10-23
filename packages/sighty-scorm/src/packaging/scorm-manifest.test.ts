@@ -66,6 +66,30 @@ describe('SCORM manifest renderer', () => {
     expect(manifest).not.toContain('adlseq:objectives')
     expect(manifest.match(/<item\b/g)).toHaveLength(1)
   })
+
+  it('preserves explicit identities when a non-launchable item precedes a chapter SCO', () => {
+    const manifest = buildScormManifest({
+      ...definition('2004v4', [
+        {
+          id: 'summary', identifier: 'ITEM-summary', resourceIdentifier: 'RES-summary',
+          title: 'Accueil', href: null, isVisible: true,
+        },
+        {
+          id: 'chapter-a', identifier: 'ITEM-chapter-a', resourceIdentifier: 'RES-chapter-a',
+          title: 'Chapitre A', href: 'chapter-a.html', isVisible: false,
+        },
+      ]),
+      manifestIdentifier: 'MANIFEST-stable',
+      organizationIdentifier: 'ORG-stable',
+    })
+
+    expect(manifest).toContain('identifier="MANIFEST-stable"')
+    expect(manifest).toContain('identifier="ORG-stable"')
+    expect(manifest).toContain('identifier="ITEM-chapter-a" identifierref="RES-chapter-a"')
+    expect(manifest).toContain('identifier="RES-chapter-a" type="webcontent" href="chapter-a.html"')
+    expect(manifest).not.toContain('ITEM-summary')
+    expect(manifest).not.toContain('RES-summary')
+  })
 })
 
 /** Creates deterministic fixture data that belongs only to these manifest tests. */

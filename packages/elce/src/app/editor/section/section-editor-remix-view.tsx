@@ -1,9 +1,9 @@
 import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
 import { on, ref, type RemixNode } from 'remix/ui'
 
-import { BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
+import { ANCHOR, BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
-import type { Bdc, Page } from '../../../domain/document/document-types'
+import type { Bdc, Page, RichTextNode } from '../../../domain/document/document-types'
 import type { ElceAnchorCardPreview } from '../../../domain/anchor/anchor-types'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
@@ -15,6 +15,7 @@ import { SectionTiptapAdapter } from './section-editor-tiptap-adapter'
 import { EMPTY_SECTION_TOOLBAR_STATE } from './section-editor-tiptap'
 import type { SectionToolbarState } from './section-editor-tiptap'
 import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
+import { anchorNameFor } from '../../anchor/anchor-position'
 
 export interface RemixSectionEditorBindings {
   readonly adapters: Map<string, SectionTiptapAdapter>
@@ -39,6 +40,9 @@ export function renderRemixSectionEditor(
   const anchorIllustrations = view.documentModel.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id
     && (candidate.type === BDC_TYPE.CARD || candidate.type === BDC_TYPE.STATISTICAL_GRAPH))
   const editingAnchorBdc = anchorIllustrations.find((illustration) => illustration.id === state.selectedAnchorBdcId)
+  const editingAnchorPartId = editingAnchorBdc === undefined
+    ? null
+    : findAnchorPartId(section.content.content, editingAnchorBdc.id)
   const cardActions = actions.createCardEditorActions(view.documentModel.bdcs)
   const toolbarState = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
   const handle = state.handle
@@ -116,7 +120,7 @@ export function renderRemixSectionEditor(
     />
     {editingAnchorBdc === undefined
       ? null
-      : renderAnchorCardEditor(editingAnchorBdc, view, cardActions, state.onCloseAnchorBdc, actions)}
+      : renderAnchorCardEditor(editingAnchorBdc, view, cardActions, state.onCloseAnchorBdc, actions, editingAnchorPartId)}
   </section>
 }
 
@@ -182,11 +186,22 @@ function renderAnchorCardEditor(
   actions: ReturnType<EditorActionsFacade['createCardEditorActions']>,
   close: () => void,
   editorActions: EditorActionsFacade,
+  anchorPartId: string | null,
 ): RemixNode {
+  const positionStyle = anchorPartId === null ? undefined : {
+    position: 'absolute' as const,
+    positionAnchor: anchorNameFor(`${anchorPartId}-editor-frame`),
+    insetInlineStart: 'anchor(left)',
+    insetBlockStart: 'anchor(top)',
+    marginBlockStart: 0,
+    zIndex: 4,
+  }
   if (card.type === BDC_TYPE.STATISTICAL_GRAPH && card.statisticalGraph != null) {
     return <section
       id={`elce-anchor-card-editor-${card.id}`}
       className="elce-anchor-card-editor"
+      data-anchor-part-id={anchorPartId ?? undefined}
+      style={positionStyle}
       aria-label="Modifier le graphe ancré"
     >
       <header
@@ -218,6 +233,8 @@ function renderAnchorCardEditor(
   return <section
     id={`elce-anchor-card-editor-${card.id}`}
     className="elce-anchor-card-editor"
+    data-anchor-part-id={anchorPartId ?? undefined}
+    style={positionStyle}
     aria-label="Modifier la carte ancrée"
   >
     <header
@@ -248,6 +265,18 @@ function renderAnchorCardEditor(
       imageAspectRatio={null}
     />
   </section>
+}
+
+/** Finds the selected BDC's saved insertion point in the Section rich-text tree. */
+function findAnchorPartId(nodes: readonly RichTextNode[], bdcId: string): string | null {
+  for (const node of nodes) {
+    if (node.type === ANCHOR.NODE_NAME && node.attrs?.bdcId === bdcId && typeof node.attrs.partId === 'string') {
+      return node.attrs.partId
+    }
+    const nestedPartId = node.content === undefined ? null : findAnchorPartId(node.content, bdcId)
+    if (nestedPartId !== null) return nestedPartId
+  }
+  return null
 }
 
 /** Resolves the Card layout, text and available media from the current actor snapshot. */

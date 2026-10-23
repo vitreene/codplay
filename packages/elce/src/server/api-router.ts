@@ -3,6 +3,7 @@ import { MediaApiController } from './media/media-api-controller'
 import { ProjectApiController } from './projects/project-api-controller'
 import { ProjectTestStateApiController } from './projects/project-test-state-api-controller'
 import { SightyExportApiController } from './export/sighty-export-api-controller'
+import { ScormExportApiController } from './export/scorm-export-api-controller'
 import type { ProjectPersistence } from './projects/project-persistence'
 
 /** Creates the server Fetch router and registers the project catalog API. */
@@ -10,6 +11,7 @@ export function createElceApiRouter(
   persistence: ProjectPersistence,
   media?: MediaApiController,
   sightyExport = new SightyExportApiController(),
+  scormExport = new ScormExportApiController(),
 ) {
   const router = createRouter({
     defaultHandler() {
@@ -20,6 +22,7 @@ export function createElceApiRouter(
   const testState = new ProjectTestStateApiController(persistence)
 
   router.post('/api/exports/sighty', ({ request }) => sightyExport.export(request))
+  router.post('/api/exports/scorm', ({ request }) => scormExport.export(request))
   router.get('/api/projects', () => projects.listProjects())
   router.post('/api/projects', ({ request }) => projects.createProject(request))
   router.get('/api/projects/:projectId', ({ params }) => projects.getProject(params.projectId!))

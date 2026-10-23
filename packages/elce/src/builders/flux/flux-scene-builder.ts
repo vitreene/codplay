@@ -426,7 +426,7 @@ function createFluxCardPersos(
   return [root, ...cardBuild.contentPersos, ...cardBuild.mediaPersos]
 }
 
-/** Projects an anchored Statistical Graph into the existing Section anchor target. */
+/** Projects an anchored Statistical Graph into its existing Section anchor target. */
 function createFluxGraphPersos(
   page: Page,
   bdc: Bdc,
@@ -472,6 +472,7 @@ function createFluxGraphPersos(
     emit: {
       observe: {
         root: scrollPortId,
+        initial: 'enter',
         zone: { threshold: 0 },
         enter: [{ name: enterEvent }],
         leave: [{ name: leaveEvent }],

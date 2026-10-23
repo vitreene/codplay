@@ -5,6 +5,7 @@ type ProjectEditorLockMessage =
   | Readonly<{ type: 'force'; projectId: string; senderId: string }>
 
 const ACCESS_RECOVERY_FAILURE_LIMIT = 3
+const ACCESS_WAIT_RECOVERY_MS = 5000
 const FILE_PICKER_FOCUS_FALLBACK_MS = 50
 
 export interface ProjectEditorLockLifecycle {
@@ -33,6 +34,7 @@ export class ProjectEditorLock {
   private started = false
   private releaseTask: Promise<void> | null = null
   private releaseFailed = false
+  private accessWaitTimer: ReturnType<typeof setTimeout> | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private heartbeatTask: Promise<void> | null = null
   private forceInProgress = false
@@ -73,6 +75,7 @@ export class ProjectEditorLock {
   /** Bypasses a held browser lock and asks the server to replace its current grant. */
   public forceAccess(): void {
     if (!this.pageCanEdit() || this.ownsAccess || this.forceInProgress) return
+    this.clearAccessWaitTimer()
     this.forceInProgress = true
     this.wantsAccess = true
     this.lifecycle.onAccessWaiting()
@@ -87,6 +90,7 @@ export class ProjectEditorLock {
   public async stop(): Promise<void> {
     if (!this.started) return
     this.wantsAccess = false
+    this.clearAccessWaitTimer()
     await this.releaseAccess()
     this.started = false
     this.channel.removeEventListener('message', this.onMessage)
@@ -109,6 +113,7 @@ export class ProjectEditorLock {
     if (document.visibilityState === 'hidden') {
       if (this.filePickerOpen) return
       this.wantsAccess = false
+      this.clearAccessWaitTimer()
       void this.releaseAccess().catch(() => undefined)
       return
     }
@@ -126,6 +131,7 @@ export class ProjectEditorLock {
   private readonly onBlur = (): void => {
     if (this.filePickerOpen) return
     this.wantsAccess = false
+    this.clearAccessWaitTimer()
     void this.releaseAccess().catch(() => undefined)
   }
 
@@ -194,6 +200,7 @@ export class ProjectEditorLock {
   /** Releases ownership on page navigation or closure. */
   private readonly onPageHide = (): void => {
     this.wantsAccess = false
+    this.clearAccessWaitTimer()
     void this.releaseAccess().catch(() => undefined)
   }
 
@@ -203,6 +210,7 @@ export class ProjectEditorLock {
     if (message === null || message.projectId !== this.projectId || message.senderId === this.instanceId) return
     if (message.type === 'force') {
       this.wantsAccess = false
+      this.clearAccessWaitTimer()
       void this.loseAccess(new Error('edit_access_lost'))
       return
     }
@@ -220,15 +228,21 @@ export class ProjectEditorLock {
   private requestAccess(): void {
     if (!this.pageCanEdit() || this.forceInProgress) return
     this.wantsAccess = true
-    if (this.accessRequest !== null) return
+    if (this.accessRequest !== null) {
+      this.startAccessWaitTimer()
+      return
+    }
     this.lifecycle.onAccessWaiting()
+    this.startAccessWaitTimer()
     this.channel.postMessage({ type: 'request', projectId: this.projectId, senderId: this.instanceId } satisfies ProjectEditorLockMessage)
 
     this.accessRequest = navigator.locks.request(this.lockName, { mode: 'exclusive' }, async (lock) => {
       if (lock === null || this.ownsAccess || this.forceInProgress || !this.wantsAccess || !this.pageCanEdit()) return
+      this.clearAccessWaitTimer()
       await this.holdAccess(true, false)
     }).catch((error: unknown) => {
       this.wantsAccess = false
+      this.clearAccessWaitTimer()
       this.lifecycle.onAccessError(error)
     }).finally(() => {
       this.accessRequest = null
@@ -239,6 +253,7 @@ export class ProjectEditorLock {
   /** Keeps the editor session until it is safely suspended, with or without a native lock. */
   private async holdAccess(nativeLockOwned: boolean, force: boolean): Promise<void> {
     if (this.ownsAccess) return
+    this.clearAccessWaitTimer()
     let release!: () => void
     const released = new Promise<void>((resolve) => { release = resolve })
     this.releaseLock = release
@@ -299,6 +314,23 @@ export class ProjectEditorLock {
   private stopHeartbeat(): void {
     if (this.heartbeatTimer !== null) clearInterval(this.heartbeatTimer)
     this.heartbeatTimer = null
+  }
+
+  /** Exposes the existing recovery controls when a native lock never resolves. */
+  private startAccessWaitTimer(): void {
+    if (this.accessWaitTimer !== null || this.lifecycle.onAccessRecoveryRequired === undefined) return
+    this.accessWaitTimer = setTimeout(() => {
+      this.accessWaitTimer = null
+      if (this.accessRequest === null || !this.wantsAccess || !this.pageCanEdit() || this.ownsAccess) return
+      this.lifecycle.onAccessRecoveryRequired?.(new Error('edit_access_wait_timeout'))
+    }, ACCESS_WAIT_RECOVERY_MS)
+  }
+
+  /** Clears the timer that makes a long native-lock wait recoverable. */
+  private clearAccessWaitTimer(): void {
+    if (this.accessWaitTimer === null) return
+    clearTimeout(this.accessWaitTimer)
+    this.accessWaitTimer = null
   }
 
   /** Suspends local editing without publishing through an unavailable or revoked grant. */

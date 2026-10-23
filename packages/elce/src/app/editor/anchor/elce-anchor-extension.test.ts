@@ -37,8 +37,8 @@ describe('Elcé anchor extension', () => {
     expect(html).toContain('data-elce-anchor="true"')
     expect(html).toContain('data-bdc-id="bdc-image-1"')
     expect(html).toContain('data-part="page-a:bdc-image-1:anchor"')
-    expect(html).toContain('--elce-anchor-padding: 12rem')
-    expect(html).toContain('padding-bottom: calc(1lh + 1rem + 1rem + 12rem)')
+    expect(html).toContain('--elce-anchor-padding: 75%')
+    expect(html).toContain('padding-bottom: calc(75% + (1lh + 1rem + 1rem))')
     expect(html).toContain('vertical-align: top')
     expect(html).not.toContain('margin-inline-end')
     expect(html).not.toContain('data-media-id')
@@ -80,8 +80,8 @@ describe('Elcé anchor extension', () => {
     expect(anchor?.classList.contains('elce-anchor-placeholder')).toBe(true)
     expect(anchor?.getAttribute('style')).toContain('width: 0px')
     expect(anchor?.querySelector('.elce-anchor-bdc')).not.toBeNull()
-    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 12rem')
-    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(1lh + 1rem + 1rem + 12rem)')
+    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 75%')
+    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(75% + (1lh + 1rem + 1rem))')
     expect(anchor?.getAttribute('style')).toContain('vertical-align: top')
     expect(anchor?.getAttribute('style')).not.toContain('margin-inline-end')
     expect(anchor?.getAttribute('style')).toContain('anchor-name: --anchor-page-a-bdc-image-1-anchor')
@@ -114,6 +114,40 @@ describe('Elcé anchor extension', () => {
 
     const placeholder = host.querySelector('.elce-anchor-placeholder')
     expect(placeholder?.querySelector('.elce-anchor-bdc img.elce-anchor-media-preview')?.getAttribute('src')).toBe('blob:image-1')
+  })
+
+  it('replaces a legacy video reservation with the configured 16:9 block ratio', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: { mediaId: 'media-video-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        layoutId: DEFAULT_PRESET_ID.PHOTO,
+        media: { source: 'blob:video-1', type: 'video' },
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'elceAnchor',
+            attrs: { bdcId: 'bdc-video-1', partId: 'page-a:bdc-video-1:anchor', paddingBottom: '12rem' },
+          }],
+        }],
+      },
+    })
+    editor.mount(host)
+
+    await vi.waitFor(() => expect(editor?.getJSON()).toMatchObject({
+      content: [{ content: [{ attrs: { paddingBottom: '56.25%' } }] }],
+    }))
+
+    const anchor = host.querySelector('.elce-anchor')
+    const preview = host.querySelector('.elce-anchor-bdc')
+    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 56.25%')
+    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(56.25% + (1lh + 1rem + 1rem))')
+    expect(preview?.getAttribute('style')).toContain('aspect-ratio: 16 / 9')
+    expect(preview?.querySelector('video.elce-anchor-media-preview')?.getAttribute('src')).toBe('blob:video-1')
   })
 
   it('gives an anchored Graph table natural height and reserves its text width', () => {

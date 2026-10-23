@@ -471,6 +471,15 @@ consécutives déclenchées par interaction qui échouent. Une reprise réussie
 réinitialise cet état ; les erreurs réelles de réseau et de synchronisation
 gardent leurs messages propres.
 
+**Décision d'interface acceptée le 21 octobre — attente du verrou natif :** si
+une demande de Web Lock reste en attente cinq secondes, afficher le message de
+récupération et les commandes existantes « Réessayer l’accès » et « Forcer
+l’accès ». Cette attente bloquée est distincte des trois échecs de reprise sur
+interaction ci-dessus. Le forçage reste une action explicite de l’utilisateur.
+Le délai et son raccordement au message sont couverts par les tests du verrou
+et du coordinateur ; le parcours navigateur avec un verrou réellement retenu
+reste à valider.
+
 **Acceptation à couvrir :** une interaction pointeur ou clavier dans une page
 lectrice synchronisée lui donne le droit sans attendre l'expiration du bail ;
 elle montre la dernière révision confirmée avant d'activer l'édition. Une

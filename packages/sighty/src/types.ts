@@ -17,6 +17,7 @@ export type SightySlotName = string
 export type SightyConditionEvent<SceneKey extends string = string> = Readonly<{
   name: string
   sourceSceneKey?: SceneKey
+  timeMs?: number
   data?: unknown
 }>
 
@@ -38,6 +39,7 @@ export type SightyConditionFunction<SceneKey extends string = string> = (
 export type SightyRuntimeEvent<SceneKey extends string = string> = Readonly<{
   name: string
   sourceSceneKey?: SceneKey
+  timeMs?: number
   data?: CodPlayPublicEvent['data']
 }>
 

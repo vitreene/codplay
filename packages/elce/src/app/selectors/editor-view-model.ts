@@ -100,5 +100,16 @@ export function editorViewModelEqual(left: EditorViewModel, right: EditorViewMod
     && left.selectedCarouselCardBdcId === right.selectedCarouselCardBdcId
     && left.historyRestore === right.historyRestore
     && left.catalogTab === right.catalogTab
-    && left.mediaSources === right.mediaSources
+    && sameMediaSources(left.mediaSources, right.mediaSources)
+}
+
+/** Compares source URLs by value so duplicate registration does not refresh the editor. */
+function sameMediaSources(
+  left: ElceAppContext['mediaSources'],
+  right: ElceAppContext['mediaSources'],
+): boolean {
+  const leftMediaIds = Object.keys(left)
+  const rightMediaIds = Object.keys(right)
+  return leftMediaIds.length === rightMediaIds.length
+    && leftMediaIds.every((mediaId) => left[mediaId] === right[mediaId])
 }

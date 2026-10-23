@@ -117,9 +117,13 @@ describe('Elcé Sighty package export', () => {
     expect(scenarioModuleText).not.toContain('createElcePlayerScenario')
     expect(scenarioModuleText).not.toContain('documentData')
     const packagedScenario = await import(`data:text/javascript;base64,${Buffer.from(scenarioModuleText).toString('base64')}`) as {
-      scenario?: { scenes?: Record<string, unknown> }
+      scenario?: {
+        scenes?: Record<string, unknown>
+        data?: { chapters?: Record<string, Readonly<{ name?: string }>> }
+      }
     }
     expect(Object.keys(packagedScenario.scenario?.scenes ?? {})).toEqual(Object.keys(scenarioManifest.scenes))
+    expect(packagedScenario.scenario?.data?.chapters?.['chapter-1']?.name).toBe('Chapitre 1')
 
     const pagePackageRoot = scenarioManifest.scenes['scene-page-a']
     expect(pagePackageRoot).toBeDefined()

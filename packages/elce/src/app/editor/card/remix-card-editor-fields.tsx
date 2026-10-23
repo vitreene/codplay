@@ -1,4 +1,4 @@
-import { ImagePlus, X } from 'lucide-static'
+import { ImagePlus, Trash2 } from 'lucide-static'
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import {
@@ -460,7 +460,7 @@ function renderCardMediaEditor(
           title="Retirer le média"
           mix={on<HTMLButtonElement, 'click'>('click', () => actions.clearMedia(bdcId))}
         >
-          {renderLucideIcon(X, `${idPrefix}-media-clear-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Trash2, `${idPrefix}-media-clear-icon-${bdcId}`, 14)}
         </button>}
     </div>
   </div>
