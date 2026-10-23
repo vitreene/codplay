@@ -9,6 +9,7 @@ import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state
 import type { ProfileDefinition } from '../domain/summary-profile/summary-profile-types'
 import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
+import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
 import { createPlayerPreviewComposition } from '../app/player/player-preview'
 import type { ElcePageSceneCache } from './player-composition-types'
 
@@ -1833,7 +1834,7 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
   })
 
-  it('keeps an initially visible Card stable and replays its reveal in both scroll directions', async () => {
+  it('keeps image opacity stable while replaying Card spatial transitions in both scroll directions', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     let frameTime = performance.now()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -1868,8 +1869,10 @@ describe('Elcé player composition', () => {
 
     await preview.initialize()
     const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const media = stage.querySelector<HTMLElement>('.elce-carousel-media')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
     expect(cardRoot).not.toBeNull()
+    expect(media).not.toBeNull()
     expect(observer).toBeDefined()
     const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
       .find((state) => state.target.persoId.includes('bdc-preview-scroll-reveal-card'))
@@ -1879,14 +1882,15 @@ describe('Elcé player composition', () => {
       if (typeof x === 'number') return x
       return typeof x === 'object' && x !== null && 'value' in x && typeof x.value === 'number' ? x.value : NaN
     }
-    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardState()).not.toHaveProperty('opacity')
     expect(cardX()).toBe(0)
-    expect(cardRoot?.style.opacity).toBe('1')
+    expect(cardRoot?.style.opacity).toBe('')
+    expect(media?.style.opacity).toBe('0.92')
 
     // A first measurement inside leaves an already-visible Card stable.
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
     await waitForPlayerActions()
-    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardState()).not.toHaveProperty('opacity')
     expect(cardX()).toBe(0)
 
     // Leaving and re-entering replays the configured Card actions.
@@ -1896,7 +1900,7 @@ describe('Elcé player composition', () => {
     await vi.waitFor(() => {
       frameTime += 50
       flushPendingFrames(pendingFrames, frameTime)
-      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardState()).not.toHaveProperty('opacity')
       expect(cardX()).toBeLessThan(0)
     })
 
@@ -1905,7 +1909,7 @@ describe('Elcé player composition', () => {
       flushPendingFrames(pendingFrames, frameTime)
       await new Promise<void>((resolve) => setTimeout(resolve, 50))
     }
-    expect(cardState()).toMatchObject({ opacity: 0 })
+    expect(cardState()).not.toHaveProperty('opacity')
     expect(cardX()).toBe(-250)
 
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
@@ -1913,8 +1917,7 @@ describe('Elcé player composition', () => {
     await vi.waitFor(() => {
       frameTime += 50
       flushPendingFrames(pendingFrames, frameTime)
-      expect(cardState()?.opacity).toBeGreaterThan(0)
-      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardState()).not.toHaveProperty('opacity')
       expect(cardX()).toBeGreaterThan(-250)
       expect(cardX()).toBeLessThan(0)
     })
@@ -1924,9 +1927,125 @@ describe('Elcé player composition', () => {
       flushPendingFrames(pendingFrames, frameTime)
       await new Promise<void>((resolve) => setTimeout(resolve, 50))
     }
-    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardState()).not.toHaveProperty('opacity')
     expect(cardX()).toBe(0)
-    expect(cardRoot?.style.opacity).toBe('1')
+    expect(cardRoot?.style.opacity).toBe('')
+  })
+
+  it('drives the Card image motion from its root observation and replays both directions', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    let frameTime = performance.now()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const { documentModel } = createAnchoredImagePreviewDocument('bdc-card-media-motion', 'media-card-media-motion')
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { 'media-card-media-motion': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+
+    await composition.initialize()
+
+    const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const media = stage.querySelector<HTMLElement>('.elce-carousel-media')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
+    expect(cardRoot).not.toBeNull()
+    expect(media).not.toBeNull()
+    expect(observer).toBeDefined()
+    expect(ControlledIntersectionObserver.instances.some((candidate) => candidate.targets.has(media as Element))).toBe(false)
+    expect(media?.style.opacity).toBe('0.92')
+
+    // A first measurement inside does not animate an image that is already visible.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    expect(media?.style.transform).toBe('')
+
+    // The Card's existing events animate its media out and back in, without another observer.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
+    await waitForPlayerActions()
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(media?.style.transform).not.toBe('')
+    })
+    for (let frame = 1; frame <= 20; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(media?.style.transform).toBe('translateX(-112%)')
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(media?.style.transform).not.toBe('translateX(-112%)')
+    })
+    for (let frame = 1; frame <= 20; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(media?.style.transform).toBe('translateX(0%)')
+  })
+
+  it('starts the Card image offscreen on its first entry after an outside measurement', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    let frameTime = performance.now()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const mediaId = 'media-first-card-media-entry'
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: mediaId, name: 'first-card-entry.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const documentModel = createCardWithMedia(withMedia, 'bdc-first-card-media-entry', mediaId)
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { [mediaId]: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+
+    await composition.initialize()
+
+    const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const media = stage.querySelector<HTMLElement>('.elce-carousel-media')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
+    expect(cardRoot).not.toBeNull()
+    expect(media).not.toBeNull()
+    expect(observer).toBeDefined()
+    expect(media?.style.opacity).toBe('0.92')
+    expect(media?.style.transform).toBe('')
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
+    await waitForPlayerActions()
+    expect(media?.style.transform).toBe('')
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    expect(media?.style.transform).toMatch(/^translateX\(-\d/)
+
+    for (let frame = 1; frame <= 20; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(media?.style.transform).toBe('translateX(0%)')
   })
 
   it('reveals a Card on its first entry after the initial outside measurement', async () => {
@@ -1979,13 +2098,13 @@ describe('Elcé player composition', () => {
 
     expect(cardRoot).not.toBeNull()
     expect(observer).toBeDefined()
-    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardState()).not.toHaveProperty('opacity')
     expect(cardX()).toBe(0)
 
     // The first outside measurement only seeds the phase; crossing inside then plays the Card action.
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
     await waitForPlayerActions()
-    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardState()).not.toHaveProperty('opacity')
     expect(cardX()).toBe(0)
 
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
@@ -1993,8 +2112,7 @@ describe('Elcé player composition', () => {
     await vi.waitFor(() => {
       frameTime += 50
       flushPendingFrames(pendingFrames, frameTime)
-      expect(cardState()?.opacity).toBeGreaterThan(0)
-      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardState()).not.toHaveProperty('opacity')
       expect(cardX()).toBeGreaterThan(-250)
       expect(cardX()).toBeLessThan(0)
     })
@@ -2036,6 +2154,7 @@ describe('Elcé player composition', () => {
     await waitForPlayerActions()
 
     expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(viewportHost?.style.opacity).toBe('1')
     expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
     expect(viewportHost?.getAttribute('aria-hidden')).toBe('false')
 
@@ -2048,6 +2167,7 @@ describe('Elcé player composition', () => {
     dispatchPointerEvent(window, 'pointerup')
     await waitForPlayerActions()
     expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(viewportHost?.style.opacity).toBe('1')
     expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
     viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
     await waitForPlayerActions()
@@ -2618,7 +2738,10 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    expect(stage.querySelector('.elce-carousel-photo__media video')).not.toBeNull()
+    const video = stage.querySelector<HTMLVideoElement>('.elce-carousel-photo__media video')
+    expect(video).not.toBeNull()
+    expect(video?.parentElement?.classList.contains('elce-carousel-media')).toBe(true)
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-carousel-media > img,\s*\.elce-carousel-media > video\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover;/)
   })
 
   it('stops an independent video on page exit and reuses it at zero on return', async () => {

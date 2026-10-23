@@ -160,6 +160,13 @@ n’ajoute aucun circuit d’événement dans les scènes ; les écritures penda
 parcours restent aux handlers Sighty décrits plus haut. La preview auteur
 n’utilise pas ce runtime.
 
+Elcé fournit la durée de session depuis l’instance persistante `scene-layout`
+avec la surface publique de la telco CodPlay :
+`telco.getProgress().timelineMs`. Cette valeur suit l’horloge logique déjà
+employée par le parcours ; aucun timer SCORM parallèle n’est ajouté. Le noyau
+partagé l’écrit dans le champ de durée propre à l’édition lors des sauvegardes
+de lecture.
+
 Cette preuve utilise le loader Sighty et le runtime Elcé dans un environnement
 de test avec faux LMS. Elle valide le raccord et la restauration du parcours ;
 l’interopérabilité des écritures et de la reprise avec un LMS qui conserve les

@@ -11,7 +11,7 @@ import { validateHtmlElementMethodActions } from '../builders/markup-validation/
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
-import { ELCE_VIEWPORT_EXPANSION_STYLE_SHEET } from '../builders/viewport-expansion/viewport-expansion-style.ts'
+import { createViewportExpansionStyleSheet } from '../builders/viewport-expansion/viewport-expansion-style.ts'
 import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
 import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
@@ -19,8 +19,10 @@ import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state
 import type { TestAnswerState } from '../domain/summary-profile/test-state-types'
 import { ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../scorm/scorm-types'
 import { ELCE_ENGINE_CAPABILITIES } from './elce-player-engine'
+import { ElceEditorSettingsResolver } from '../domain/editor-settings/editor-settings-resolver'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
+const editorSettingsResolver = new ElceEditorSettingsResolver()
 
 /** Owns the real Sighty/CodPlay player used to preview the current document. */
 export class ElcePlayerComposition {
@@ -217,7 +219,11 @@ export function createElcePlayerScenario(
     throw new Error('La scène layout Elcé est absente du scénario construit.')
   }
   const layoutSceneDoc = 'sceneDoc' in layoutSource ? layoutSource.sceneDoc : layoutSource
-  const layoutStyleSheet = [ELCE_PLAYER_STYLE_SHEET, ELCE_VIEWPORT_EXPANSION_STYLE_SHEET].join('\n')
+  const playerSettings = editorSettingsResolver.resolvePlayer()
+  const layoutStyleSheet = [
+    ELCE_PLAYER_STYLE_SHEET,
+    createViewportExpansionStyleSheet(playerSettings.interactions.viewportExpansion),
+  ].join('\n')
   return {
     ...scenario,
     scenes: {
@@ -273,13 +279,14 @@ export function createPageSceneCatalog(
       const type = mediaTypeFromMimeType(media.mimeType)
       return type === null ? [] : [[mediaId, type]]
     }))
+    const editorSettings = editorSettingsResolver.resolvePage(page, document.bdcs, document.data.revelationDefaults)
     const scenePage = {
       id: page.id,
       type: page.type,
       bdcIds: page.bdcIds,
       chapterType: sceneChapterType,
     }
-    const signature = JSON.stringify([scenePage, sceneBdcs, pageMediaSources, pageMediaTypes, document.data.revelationDefaults])
+    const signature = JSON.stringify([scenePage, sceneBdcs, pageMediaSources, pageMediaTypes, editorSettings])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
       return [`scene-${page.id}`, cached.source]
@@ -288,7 +295,7 @@ export function createPageSceneCatalog(
       mediaSources: pageMediaSources,
       mediaTypes: pageMediaTypes,
       questionAnswers,
-      revelationDefaults: document.data.revelationDefaults,
+      editorSettings,
     }, sceneChapterType)
     const questionReset = scene.questionReset
     const sceneDoc = withPageMediaStop(scene.sceneDoc)

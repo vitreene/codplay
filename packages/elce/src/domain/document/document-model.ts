@@ -2,11 +2,11 @@ import {
   BDC_TYPE,
   CHAPTER_TYPE,
   DEFAULT_PRESET_ID,
-  DEFAULT_PROJECT_REVELATION,
   PAGE_TYPE,
   SCENARIO_ENTRY_KIND,
   CHAPTER_TYPE_CONFIG,
 } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import type { Bdc, Chapter, ElceDocumentData, MediaMetadata, Page, PageId, RichTextDocument } from './document-types'
 import { INITIAL_PROFILE_DEFINITION, INITIAL_SUMMARY_SETTINGS } from '../summary-profile/summary-profile-types'
 
@@ -163,7 +163,7 @@ export function createInitialDocument(): ElceDocument {
     id: 'elce-document',
     version: ELCE_DOCUMENT_VERSION,
     name: 'Document Elcé',
-    revelationDefaults: DEFAULT_PROJECT_REVELATION,
+    revelationDefaults: ELCE_EDITOR_SETTINGS.revelation.projectDefaults,
     summary: INITIAL_SUMMARY_SETTINGS,
     profile: INITIAL_PROFILE_DEFINITION,
     chapters: [chapter],

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CARD_LAYOUT_IDS, DEFAULT_PRESET_ID } from '../../config/document-config'
 import { CARD_PRESETS } from '../../config/presets'
-import { applyDocumentCommand, createCarouselBdcCommand } from '../../domain/commands/document-commands'
+import { applyDocumentCommand, createCarouselBdcCommand, createStandaloneCardBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceCardPresetBuilder } from './card-preset-builder'
 import { ElceCardBdcSceneBuilder } from './card-bdc-scene-builder'
@@ -101,6 +101,37 @@ describe('ElceCardPresetBuilder', () => {
       })
       expect(build.contentPersos, presetId).toHaveLength(0)
     }
+  })
+
+  it('places a full-frame video in the responsive media part of its Card', () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'card-video', name: 'card-video.mp4', mimeType: 'video/mp4', size: 10, caption: '' },
+    })
+    const withCard = applyDocumentCommand(
+      withMedia,
+      createStandaloneCardBdcCommand('video-card', 'page-a', DEFAULT_PRESET_ID.PHOTO),
+    )
+    const withVideo = applyDocumentCommand(withCard, {
+      type: 'bdc.card.media.set', bdcId: 'video-card', mediaId: 'card-video',
+    })
+    const card = withVideo.bdcs.find((bdc) => bdc.id === 'video-card')!
+    const build = new ElceCardBdcSceneBuilder().build({
+      pageId: 'page-a',
+      containerBdcId: 'video-card',
+      bdc: card,
+      mediaSources: { 'card-video': 'blob:card-video' },
+      mediaTypes: { 'card-video': 'video' },
+    })
+
+    expect(build.mediaPersos[0]).toMatchObject({
+      type: 'media',
+      initial: {
+        className: 'elce-carousel-media',
+        move: { target: 'page-a:video-card:card:video-card:media' },
+      },
+    })
+    expect(build.mediaPersos[0]?.initial).not.toHaveProperty('media')
   })
 
   it('leaves the Question prompt as a comment target instead of an empty legend', () => {

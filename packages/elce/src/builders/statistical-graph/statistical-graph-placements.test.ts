@@ -5,17 +5,33 @@ import {
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
 import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { applyDocumentCommand, createDefaultPageCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import type { RichTextDocument } from '../../domain/document/document-types'
-import { buildDiapoScene } from '../diapo/diapo-scene-builder'
-import { buildFluxScene } from '../flux/flux-scene-builder'
+import { ElceEditorSettingsResolver } from '../../domain/editor-settings/editor-settings-resolver'
+import { buildDiapoScene as projectDiapoScene } from '../diapo/diapo-scene-builder'
+import { buildFluxScene as projectFluxScene } from '../flux/flux-scene-builder'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
+
+/** Resolves test-owned settings before projecting a Diapo fixture. */
+function buildDiapoSceneForTest(page: Parameters<typeof projectDiapoScene>[0], bdcs: Parameters<typeof projectDiapoScene>[1]) {
+  const editorSettings = editorSettingsResolver.resolvePage(page, bdcs, ELCE_EDITOR_SETTINGS.revelation.projectDefaults)
+  return projectDiapoScene(page, bdcs, { editorSettings })
+}
+
+/** Resolves test-owned settings before projecting a Flux fixture. */
+function buildFluxSceneForTest(page: Parameters<typeof projectFluxScene>[0], bdcs: Parameters<typeof projectFluxScene>[1]) {
+  const editorSettings = editorSettingsResolver.resolvePage(page, bdcs, ELCE_EDITOR_SETTINGS.revelation.projectDefaults)
+  return projectFluxScene(page, bdcs, { editorSettings })
+}
 
 describe('Statistical Graph placement through Elcé scene builders', () => {
   it('builds direct Flux and Diapo graphs through the real CodPlay scene boundary', () => {
     const initial = createInitialDocument()
     const flux = applyDocumentCommand(initial, createStatisticalGraphBdcCommand('graph-flux', 'page-a', 1))
-    const fluxBuild = buildFluxScene(flux.pages.find((page) => page.id === 'page-a')!, flux.bdcs)
+    const fluxBuild = buildFluxSceneForTest(flux.pages.find((page) => page.id === 'page-a')!, flux.bdcs)
     const fluxStory = fluxBuild.sceneDoc.stories['page-a-page']
     const article = fluxStory?.persos.find((perso) => perso.id === 'page-a-article')
     const fluxVisual = fluxStory?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
@@ -32,7 +48,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     let diapo = applyDocumentCommand(initial, diapoPage)
     diapo = applyDocumentCommand(diapo, { type: 'bdc.carousel.delete', bdcId: diapoPage.bdcId })
     diapo = applyDocumentCommand(diapo, createStatisticalGraphBdcCommand('graph-diapo', diapoPage.pageId, 0))
-    const diapoBuild = buildDiapoScene(diapo.pages.find((page) => page.id === diapoPage.pageId)!, diapo.bdcs)
+    const diapoBuild = buildDiapoSceneForTest(diapo.pages.find((page) => page.id === diapoPage.pageId)!, diapo.bdcs)
     const diapoStory = diapoBuild.sceneDoc.stories[`${diapoPage.pageId}-diapo-page`]
     const diapoHost = diapoStory?.persos.find((perso) => perso.id === `${diapoPage.pageId}-diapo-content`)
     const diapoVisual = diapoStory?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
@@ -54,7 +70,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     if (firstCardId === undefined) throw new Error('La Diapo de test doit commencer par une vue Carte.')
     document = applyDocumentCommand(document, createStatisticalGraphCarouselBdcCommand('graph-slide', pageCommand.bdcId, 1))
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs)
     const story = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const graphView = story?.persos.find((perso) => perso.id === `${page.id}:${pageCommand.bdcId}-card-graph-slide`)
     const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
@@ -104,7 +120,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
       markup,
       content,
     })
-    const build = buildFluxScene(document.pages[0]!, document.bdcs)
+    const build = buildFluxSceneForTest(document.pages[0]!, document.bdcs)
     const story = build.sceneDoc.stories['page-a-page']
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const articleMarkup = article?.initial !== undefined && 'markup' in article.initial ? String(article.initial.markup) : ''
@@ -119,7 +135,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     })
     expect(graphRoot?.initial).toMatchObject({
       move: { target: partId },
-      style: { aspectRatio: '16 / 9' },
+      style: { aspectRatio: '16 / 9', zIndex: 1 },
       markup: expect.stringContaining(`data-part="${partId}:visual"`),
     })
     expect(graphRoot?.emit?.observe).toMatchObject({ root: 'page-a-scrollport', initial: 'enter' })
@@ -160,7 +176,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
       content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'graph-table-anchor', partId } }] }] },
     })
 
-    const build = buildFluxScene(document.pages[0]!, document.bdcs)
+    const build = buildFluxSceneForTest(document.pages[0]!, document.bdcs)
     const story = build.sceneDoc.stories['page-a-page']
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const graphRoot = story?.persos.find((perso) => perso.id === 'page-a-graph-table-anchor-graph')
@@ -171,7 +187,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(article?.initial).toMatchObject({
       flowReservations: [{ partId, blockSize: 'calc(100% + 1rem + 1rem)' }],
     })
-    expect(graphStyle).toMatchObject({ height: 'auto' })
+    expect(graphStyle).toMatchObject({ height: 'auto', zIndex: 1 })
     expect(graphStyle).not.toHaveProperty('aspectRatio')
     expect(graphRoot?.initial).toMatchObject({
       className: expect.stringContaining('elce-statistical-graph--table'),

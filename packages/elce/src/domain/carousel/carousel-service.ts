@@ -1,8 +1,12 @@
-import { CAROUSEL_CONFIG, CAROUSEL_TRANSITION_OPTIONS, REVELATION_TRANSITION_PAIRS } from '../../config/document-config'
+import { CAROUSEL_CONFIG, CAROUSEL_TRANSITION_OPTIONS } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import type { CarouselPlaybackMode, CarouselTransition } from '../../config/document-config-types'
 import type { BdcId } from '../document/document-types'
 import type { CarouselAspectRatio, CarouselContent } from './carousel-types'
 import type { RevelationTransitionDefaults } from '../document/document-types'
+import { ElceEditorSettingsResolver } from '../editor-settings/editor-settings-resolver'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
 
 /** Owns Carousel playback settings and its ordered illustration BDC relationships. */
 export class ElceCarouselService {
@@ -70,7 +74,7 @@ export class ElceCarouselService {
 
   /** Changes the transition used by the Carousel sequence. */
   public setTransition(content: CarouselContent, transition: CarouselTransition): CarouselContent {
-    return { ...content, revelation: REVELATION_TRANSITION_PAIRS[transition] }
+    return { ...content, revelation: ELCE_EDITOR_SETTINGS.revelation.transitionPairs[transition] }
   }
 
   /** Resolves the one author-facing pair that matches the effective enter and exit refs. */
@@ -78,10 +82,9 @@ export class ElceCarouselService {
     content: CarouselContent,
     projectDefaults: RevelationTransitionDefaults,
   ): CarouselTransition | null {
-    const intro = content.revelation.intro ?? projectDefaults.intro
-    const outro = content.revelation.outro ?? projectDefaults.outro
-    const entry = Object.entries(REVELATION_TRANSITION_PAIRS)
-      .find(([, pair]) => pair.intro === intro && pair.outro === outro)
+    const resolved = editorSettingsResolver.resolveOverrides(projectDefaults, content.revelation)
+    const entry = Object.entries(ELCE_EDITOR_SETTINGS.revelation.transitionPairs)
+      .find(([, pair]) => pair.intro === resolved.intro && pair.outro === resolved.outro)
     return entry?.[0] as CarouselTransition | undefined ?? null
   }
 

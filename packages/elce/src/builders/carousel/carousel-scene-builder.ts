@@ -3,7 +3,7 @@ import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
-import { BDC_TYPE, CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
+import { BDC_TYPE, CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID } from '../../config/document-config'
 import type { CarouselContent, CarouselBdcEntry } from '../../domain/carousel/carousel-types'
 import type { Bdc } from '../../domain/document/document-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
@@ -49,9 +49,8 @@ export class ElceCarouselSceneBuilder {
     const navigationPartId = `${prefix}:carousel:navigation`
     const diapoRootId = displayMode === 'scene' ? input.completionEventRootId ?? rootId : undefined
     const schedule = resolveCardSchedule(input)
-    const projectRevelation = input.revelationDefaults ?? DEFAULT_PROJECT_REVELATION
-    const parentIntroRef = content.revelation.intro ?? projectRevelation.intro
-    const parentOutroRef = content.revelation.outro ?? projectRevelation.outro
+    const parentIntroRef = input.revelationSettings.defaults.intro
+    const parentOutroRef = input.revelationSettings.defaults.outro
     const capsule = new AutoCapsule({
       capsule: {
         id: `${rootId}-capsule`,
@@ -64,27 +63,31 @@ export class ElceCarouselSceneBuilder {
         defaults: {
           introTransitionRef: parentIntroRef,
           outroTransitionRef: parentOutroRef,
-          generateDefaultOutro: true,
+          generateDefaultOutro: input.revelationSettings.generateDefaultOutro,
         },
       },
-      children: schedule.map((entry, index) => ({
-        id: entry.bdc.id,
-        order: index,
-        timeRange: { startMs: entry.startMs, endMs: entry.endMs },
-        className: 'elce-carousel-view',
-        events: {
-          intro: {
-            name: `${prefix}:card:${entry.bdc.id}:intro`,
-            action: EVENT_ACTION.intro,
-            ref: entry.entry.introTransitionRef ?? parentIntroRef,
+      children: schedule.map((entry, index) => {
+        const revelation = input.revelationSettings.entries[entry.bdc.id]
+        if (revelation === undefined) throw new Error(`Les réglages résolus de révélation de ${entry.bdc.id} sont absents.`)
+        return {
+          id: entry.bdc.id,
+          order: index,
+          timeRange: { startMs: entry.startMs, endMs: entry.endMs },
+          className: 'elce-carousel-view',
+          events: {
+            intro: {
+              name: `${prefix}:card:${entry.bdc.id}:intro`,
+              action: EVENT_ACTION.intro,
+              ref: revelation.intro,
+            },
+            outro: {
+              name: `${prefix}:card:${entry.bdc.id}:outro`,
+              action: EVENT_ACTION.outro,
+              ref: revelation.outro,
+            },
           },
-          outro: {
-            name: `${prefix}:card:${entry.bdc.id}:outro`,
-            action: EVENT_ACTION.outro,
-            ref: entry.entry.outroTransitionRef ?? parentOutroRef,
-          },
-        },
-      })),
+        }
+      }),
     })
     const capsuleResult = capsule.resolve()
     const firstCardBdcId = content.cards[0]?.bdcId ?? null
@@ -105,7 +108,13 @@ export class ElceCarouselSceneBuilder {
       return [
         ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, viewBuild, firstCardBdcId, displayMode === 'scene'),
         ...(diapoRootId !== undefined && child.id === lastCardBdcId
-          ? [createCarouselCompletionMarker(input.pageId, input.bdcId, child.id, diapoRootId)]
+          ? [createCarouselCompletionMarker(
+            input.pageId,
+            input.bdcId,
+            child.id,
+            diapoRootId,
+            input.playerSettings.progression.pageCompletionObservation,
+          )]
           : []),
       ]
     })
@@ -163,7 +172,7 @@ export class ElceCarouselSceneBuilder {
       straps: { [selectionEvent]: selectCarouselCardStrap },
       listen: [{ on: selectionEvent, straps: [selectionEvent] }],
     }
-    const expandedStory = addViewportExpansionToStory(story, {
+    const expandedStory = addViewportExpansionToStory(story, input.playerSettings.interactions.viewportExpansion, {
       selectionEvent,
       views: expandableViews,
       automatic: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
@@ -237,12 +246,14 @@ function createCarouselCompletionMarker(
   carouselBdcId: string,
   cardBdcId: string,
   rootId: string,
+  settings: CarouselSceneBuildInput['playerSettings']['progression']['pageCompletionObservation'],
 ): PersoDoc<string> {
   return createPageBottomMarkerPerso({
     pageId,
     markerId: `${pageId}:${carouselBdcId}-completion-marker`,
     rootId,
     targetPartId: `${pageId}:${carouselBdcId}:card:${cardBdcId}:root`,
+    settings,
     className: 'elce-page-bottom-marker elce-carousel-completion-marker',
     style: { position: 'absolute', insetInlineEnd: 0, insetBlockEnd: 0, width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' },
   })

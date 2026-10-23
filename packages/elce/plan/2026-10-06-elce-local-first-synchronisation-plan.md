@@ -167,83 +167,113 @@ le trajet complet : le preset qui fait entrer depuis la gauche fait sortir vers
 la droite. Cette correspondance est extensible sans changer le modèle de
 données.
 
-Le contrat `AutoCapsuleChildInput.events` accepte déjà des événements
-`intro`/`outro` propres à un enfant ; le builder Elcé actuel passe la transition
-commune du Carousel à tous les enfants. La démo 5 observe l’entrée et la sortie
-de visibilité du média dans le scroll. L’implémentation devra résoudre les
-références depuis le registre Capsule Automation et déclarer leurs actions sur
-le perso média, sans ajouter de minuteur ou d’animation parallèle.
+Dans un Carousel, `AutoCapsuleChildInput.events` reçoit les transitions
+`intro`/`outro` résolues pour chaque entrée. Dans un Flux, la racine Carte est
+l’unique propriétaire de l’observation et des événements de visibilité ;
+l’image reçoit son mouvement par ces événements, sans observer le scroll elle-
+même. La Section reste responsable du placement et de la réserve d’ancre.
 
-**Révélation des images de preview — 22 octobre 2026 :** l’enquête a trouvé
-deux écarts dans la déclaration Elcé. La Carte déclenchait ses actions Capsule
-dès le premier contact avec le bord du scrollport (`threshold: 0`, sans marge),
-alors que la démo scroll-container réduit sa zone avec
-`rootMargin: '0px 0px -40% 0px'`. Elle demandait aussi `initial: 'enter'`, ce
-qui lançait une entrée pour un média déjà visible, contrairement à la décision
-acceptée. La déclaration Carte reprend maintenant la zone de la démo et
-synchronise sa phase initiale sans animation ; les passages de phase ultérieurs
-restent sur l’observer et les actions Capsule existants. Tests ciblés et
-vérification de preview réelle à exécuter avant de fermer ce signal. Le pont
-Brave DevTools MCP n’a pas répondu le 22 octobre ; la page de l’auteur est
-signalée active mais son DOM n’a pas encore été inspecté dans cette session.
-Les tests builder + composition passent (59/59), ceux du provider et de
-l’adaptateur CodPlay passent (11/11), et le typecheck et le build Elcé
-réussissent. La validation navigateur reste la seule preuve manquante pour ce
-signal.
-
-**Reprise de l’animation d’image — décision acceptée le 22 octobre 2026 :**
-la preview signale une première entrée interrompue, puis seulement l’opacité,
-sans rejouer la translation en remontant. L’adaptation actuelle anime le même
-perso Carte qu’elle observe. **Décision confirmée par l’auteur le 22 octobre :
-la Carte, et non sa Section ni son perso média seul, possède la responsabilité
-de sa révélation.** La Section porte l’ancre et la réservation de place ; la
-racine Carte porte l’état initial, l’observation et les actions Capsule
-existantes. Aucun changement de contrat ou réglage CodPlay n’est demandé.
-
-La comparaison du code de travail avec la version Elcé antérieure identifie la
-régression introduite dans le builder Flux : l’action a été déplacée de la
-racine Carte vers l’image enfant et la zone a été modifiée de `threshold: 0`
-vers `rootMargin: '0px 0px -40% 0px'`. La marge négative retarde l’entrée
-jusqu’à ce que la Carte soit déjà visible, puis l’action explicite repart de
-`from: 0`, ce qui produit le flash. La correction rétablit l’action sur la
-Carte et le seuil antérieur `0`, qui déclenche la transition au premier contact
-avec la zone visible. La première mesure déjà visible reste silencieuse ; les
-passages ultérieurs rejouent l’entrée et la sortie sans règle `once`.
+**Révélation des images Carte — trajectoire et opacité vérifiées :**
+la racine Carte observe avec la zone Elcé `threshold: 0` et porte les actions
+Capsule résolues. Une Carte déjà visible à la mesure initiale reste stable ;
+après une mesure `outside`, l’image démarre cachée, puis joue les transitions
+entrée et sortie lors des passages suivants, dans les deux sens. Aucune règle
+`once` ne bloque le rejeu. Les valeurs vérifiées dans Demo5 et reprises dans
+Elcé sont : entrée `-112%` → `0%` en 1000 ms `outCubic`, sortie `0%` → `-112%`
+en 820 ms `inCubic`. Une transition Capsule horizontale configurée pour la
+Carte prime sur le mouvement média du même axe. Les tests de builder et de
+composition couvrent ce circuit. Pour une Carte qui contient une image, la
+racine ne reçoit plus d’état ou d’action `opacity` ; le média reste à `0.92`.
+Brave DevTools vérifie le 23 octobre que l’opacité calculée de la racine reste
+à `1` pendant les translations dans les deux sens.
 
 L’enregistrement courant de Demo5 porte `fade`/`fade` comme références de
 projet ; ses six Sections héritent de ces valeurs et demandent donc un fondu.
 Les valeurs `swipe-right`/`swipe-left` du test de composition servent seulement
 à vérifier que le trajet horizontal réversible est bien rendu par le runtime ;
 elles ne demandent pas de remplacer les références enregistrées dans Demo5.
-La décision acceptée est de préserver toute transition existante sur une entrée
+La décision acceptée est de préserver toute transition explicite sur une entrée
 Carte Carousel ; elle prime sur le réglage du Carousel, puis sur le défaut du
 projet. Pour une Carte ancrée dans une Section, le réglage de la Section prime
 sur le défaut du projet. Toute valeur `null` continue d’hériter du niveau
-parent. Il faut retrouver la transition d’origine de Demo5 avant de changer ses
-données persistées.
+parent. Ces références Capsule restent distinctes des tweens d’image repris de
+Demo5 ; les données persistées ne sont pas modifiées par cette correction.
 
-Le 22 octobre, l’enregistrement du projet était à la révision 14 et le verrou
-normal était occupé. Aucune écriture ni reprise forcée n’a été faite. Brave
-DevTools est configuré et exposé, mais `list_pages` n’a pas répondu dans cette
-session ; la page reste déclarée active par l’auteur.
+**Centralisation des réglages de révélation — décision acceptée le 23 octobre
+2026 :** les réglages et leur héritage sont résolus dans une couche Elcé
+centrale, réutilisée par la lecture et l’export. Une configuration regroupée
+contient les valeurs système non exposées et les valeurs initiales du projet ;
+les valeurs enregistrées dans le document (projet, Section, Carousel et entrée
+Carousel) restent leur source persistée. Un résolveur de réglages d’éditeur
+calcule une fois les valeurs effectives selon l’héritage accepté, puis les
+transmet aux builders. Les builders projettent ces valeurs dans la scène Sighty
+et ne choisissent ni défaut, ni priorité, ni zone d’observation. Les réglages
+peuvent rester cachés dans l’interface ; toute future commande visible doit
+modifier la même source de configuration/document. Cette tranche conserve les
+valeurs et le comportement existants ; elle ne choisit pas une nouvelle zone
+d’observation.
+
+**Portée de la résolution des réglages — décision acceptée le 23 octobre 2026 :**
+les réglages de comportement et de présentation utilisés pour construire le
+player Elcé sont regroupés dans `ELCE_EDITOR_SETTINGS`, puis remis aux builders
+par le résolveur. Cela inclut aussi les observations de lecture vidéo et de fin
+de page, ainsi que les durées/easings du tiroir de sommaire ; ces valeurs ne
+doivent pas être réintroduites dans les fonctions de construction. La durée et
+les easings CSS/CodPlay de l’agrandissement média suivent ce même passage de
+configuration vers les builders et la feuille de style player. Les constantes
+de modèle, identifiants et contraintes de domaine restent dans leurs registres
+métier dédiés.
+
+Le code de référence se trouve dans
+[`content-page-scene.ts`](../../../demos/src/sighty/demo5/scenes/content-page-scene.ts) :
+le cadre image observe `threshold: 0` et les deux tweens emploient les valeurs
+ci-dessus. Les références de transition `fade`/`fade` actuellement enregistrées
+dans le document Demo5 restent inchangées. Les tests de transition horizontale
+utilisent un document de test distinct.
 
 **Acceptation restante :**
 
-- [ ] Rétablir le propriétaire d’animation Carte et son seuil d’observation
-  antérieur, puis vérifier dans les tests le premier franchissement et le
-  rejeu bidirectionnel.
-- [ ] Vérifier la première mesure `inside` stable et le premier passage
-  `outside` → `inside` sur la composition preview réelle.
-- [ ] Retrouver dans la source Demo5 la transition d’origine et vérifier qu’Elcé
-  conserve la transition de chaque Carte au lieu de lui substituer un défaut.
-- [ ] Vérifier visuellement l’animation native dans la preview active avec
-  Brave DevTools, quand le pont répond.
+- [x] Regrouper les valeurs système de révélation et les valeurs initiales du
+  projet dans la configuration Elcé ; centraliser la résolution project →
+  parent → placement et faire consommer les valeurs résolues par les builders.
+- [x] Vérifier par tests que l’héritage est identique en preview, en export, en
+  Flux et en Diapo, sans défaut ni priorité calculés dans les builders.
+  Preuves : `editor-settings-resolver.test.ts`, les tests Flux/Diapo et
+  `elce-scenario-exporter.test.ts` passent ; la preview et l’export appellent le
+  même `createElcePlayerScenario`.
+- [x] Achever le transfert des réglages de player (lecture vidéo, fin de page,
+  tiroir du sommaire et agrandissement média) vers la configuration centrale et
+  le résolveur Elcé. Les builders et la feuille de style consomment les valeurs
+  résolues ; les tests couvrent chaque circuit.
+- [x] Faire répondre l’image Carte aux événements d’entrée/sortie de sa racine,
+  sans second observateur ; vérifier l’état initial, les deux directions de
+  scroll et la priorité des transitions Capsule horizontales. Preuves : les
+  tests de builder et de composition du player réel couvrent l’entrée, la sortie,
+  le rejeu et l’absence d’observateur sur le média.
+- [x] Vérifier l’état initial stable et le premier passage `outside` → `inside`
+  sur la composition du player Elcé ; l’auteur confirme également le bon
+  fonctionnement visuel des images dans la preview le 23 octobre 2026.
+- [x] Comparer les tweens de l’image Demo5 avec la configuration Elcé : entrée
+  1000 ms `outCubic`, sortie 820 ms `inCubic`, translation de `-112%` et seuil
+  `0`. Le défaut Elcé reprend ces valeurs sans modifier les références de
+  transition persistées dans le document.
 - [x] Mettre à jour les spécifications Flux et preview après les preuves des
-  tests ciblés ; garder le signal `En cours` tant que la preuve navigateur manque.
+  tests ciblés et la confirmation visuelle de l’auteur.
+- [x] Appliquer la correction d’opacité acceptée : image stable à `0.92`, sans
+  tween d’opacité sur la racine Carte image ; préserver les autres propriétés
+  des transitions Carte.
+- [x] Prouver le comportement par tests du builder et de la composition réelle,
+  puis dans la preview sur entrée/sortie de scroll ; la racine ne doit plus
+  changer d’opacité et l’image doit toujours parcourir les translations
+  `-112%` ↔ `0%`. Les quatre fichiers de tests ciblés passent (70 tests) ;
+  Brave DevTools observe les valeurs `1`/`0.92` constantes et les deux
+  translations dans la preview générée depuis l’éditeur.
 
-Les deux fichiers de tests ciblés passent (59 tests) ; `npm run typecheck` et
-`npm run build` passent. La construction signale seulement un bundle client
-supérieur à 500 kB.
+Les 97 tests ciblés passent. Après l’ajustement vidéo du 23 octobre, la suite
+complète passe avec 462 tests sur 70 fichiers, avec le loopback autorisé pour
+le test de serveur temporaire ; le typecheck et le build Elcé réussissent. Le
+build signale seulement un bundle client supérieur à 500 kB. L’auteur confirme
+le rendu visuel des images dans la preview.
 
 Le modèle documentaire v4 distingue les types de BDC métier sans créer de BDC
 `image` ou `video`. La whitelist de types et de layouts selon le contexte

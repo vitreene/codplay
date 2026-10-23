@@ -106,8 +106,12 @@ Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
 Les valeurs affichées suivent le document courant. Une création utilise les
 défauts configurés ; après édition, le mode et la transition enregistrés restent
 sélectionnés après un changement de page et un rechargement. La transition
-effective combine les remplacements du Carousel avec les défauts de révélation
-du projet.
+effective est résolue par `ElceEditorSettingsResolver` avant l’appel au builder :
+les valeurs du Carousel remplacent champ par champ celles du parent/projet, puis
+chaque entrée peut remplacer ses propres champs. Une valeur `null` hérite. Le
+builder Carousel ne recalcule pas ces priorités ; il reçoit les références
+effectives avec les réglages de projection centralisés dans
+[`editor-settings.ts`](../src/config/editor-settings.ts).
 
 ## Projection et lecture
 
@@ -148,9 +152,14 @@ Photo garde les ancres commentaire CodPlay de racine et de média. Elle est
 conservée comme emplacement futur pour un rendu `<picture>` et une légende ;
 le conteneur vidéo reste disponible pour de futurs éléments `<track>`.
 
-Les zones de média et l’image native sont dimensionnées à 100 % de leur
-conteneur ; `object-fit` règle le cadrage `cover` ou `contain` sur l’image.
-L’image ne conserve donc pas ses dimensions intrinsèques au-delà du cadre.
+Les zones média et les éléments natifs image/vidéo sont dimensionnés à 100 % de
+leur conteneur ; `object-fit` règle le cadrage `cover` ou `contain` de l’image.
+L’image ne conserve donc pas ses dimensions intrinsèques au-delà du cadre. La
+vidéo plein cadre utilise la même part média responsive et remplit son logement
+avec le cadrage `cover`. Le perso `media` porte la classe de dimensionnement sur
+son conteneur CodPlay, tandis que la feuille de style player règle l’élément
+`video` natif. Cette règle s’applique aux Cartes Photo directes et aux Cartes
+enfant de Carousel en Flux comme en Diapo.
 Pour une Diapo, le marqueur de fin cible un commentaire dans la carte finale ;
 la racine Carousel plein cadre utilise elle aussi son commentaire d’insertion.
 Ces marqueurs n’ajoutent pas de boîtes DOM. Dans le chemin vérifié Safari d’une
@@ -184,6 +193,9 @@ n’est ajouté dans React ou dans Elcé.
 - [`carousel-service.test.ts`](../src/domain/carousel/carousel-service.test.ts) vérifie
   l’ajout, le retrait, le réordonnancement des IDs et la conservation de la
   durée de chaque entrée lors du réordonnancement.
+- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
+  vérifie l’héritage project → parent → Carousel → entrée avec des valeurs
+  distinctes d’entrée et de sortie.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   compile une vue Graphe enfant via le builder Carousel réel et vérifie sa place
   dans la séquence et son rôle de vue finale.
@@ -198,6 +210,12 @@ n’est ajouté dans React ou dans Elcé.
   vérifie la projection des BDC Carte, des champs visibles, des médias selon
   le layout, les commentaires d’insertion et les plages Capsule, ainsi que dix
   passages automatiques supplémentaires finis ; CodPlay compile la scène.
+- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+  vérifie que la vidéo Carte cible la part responsive `elce-carousel-media` ;
+  [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  vérifie son montage dans le vrai composant CodPlay et la règle CSS qui adapte
+  l’élément vidéo au logement. Le test d’export vérifie aussi la présence de
+  cette règle dans la feuille de style du package.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   exécute le player réel en DOM de test : sélection manuelle, passage en lecture
   manuelle après un clic pendant l’automatique, absence de double Carte/point

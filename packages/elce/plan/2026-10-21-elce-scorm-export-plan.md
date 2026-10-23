@@ -577,10 +577,19 @@ actif distingue les raccords désormais corrigés des écarts encore ouverts.
   bouton. Aucun fichier installé dans la LMS n’a été modifié dans cette
   correction.
 - **Durée SCORM — raccordée aux horloges existantes.** L’adaptateur lit
-  `getCurrentTimeMs()` sur l’instance persistante de `scene-layout` et transmet
-  la valeur à `cmi.session_time` ou `cmi.core.session_time`. Aucun timer n’est
-  ajouté. Cette durée de session reste indépendante de la latence `timeMs` de
-  chaque Question.
+  `telco.getProgress().timelineMs` sur l’instance persistante de `scene-layout`
+  et transmet la valeur à `cmi.session_time` ou `cmi.core.session_time`. La
+  telco publique n’expose pas `getCurrentTimeMs()` ; les tests précédents
+  simulaient à tort cette méthode absente et ne reproduisaient donc pas le
+  runtime exporté. Le test de fermeture utilise désormais la surface publique
+  réelle et vérifie l’écriture de `session_time`. Aucun timer n’est ajouté.
+  Cette durée de session reste indépendante de la latence `timeMs` de chaque
+  Question.
+- **Piste pour la suite — timer général CodPlay.** L’utilisateur signale qu’une
+  fonction peut être accrochée à ce timer et que ce raccord pourrait aussi
+  fournir le temps. Examiner cette possibilité pour une évolution de la mesure
+  SCORM ; elle n’est pas implémentée et ne modifie pas le raccord courant tant
+  que son contrat et son adéquation à la durée du SCO ne sont pas vérifiés.
 - **Progression et complétion — alignées en tests.** Le 2004 multi-SCO rapporte
   la position 1-based de la page courante, pas le nombre de pages déjà finies ;
   il n’écrit le statut de complétion qu’au repère bas de la dernière page. En

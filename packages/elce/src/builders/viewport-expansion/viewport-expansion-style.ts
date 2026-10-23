@@ -1,30 +1,30 @@
-export const ELCE_VIEWPORT_EXPANSION_DURATION_MS = 320
+import type { ElceResolvedPlayerSettings } from '../../domain/editor-settings/editor-settings-types'
 
 /** Styles the fixed viewport projection and contained image frame used by Elcé. */
-export const ELCE_VIEWPORT_EXPANSION_STYLE_SHEET = `
+export function createViewportExpansionStyleSheet(
+  settings: ElceResolvedPlayerSettings['interactions']['viewportExpansion'],
+): string {
+  return `
 .elce-viewport-expansion-host {
   display: grid;
   place-items: stretch;
-  background: #000;
+  background: rgb(0 0 0 / ${settings.backdropOpacity * 100}%);
   color: #fff;
-  opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transition: opacity ${ELCE_VIEWPORT_EXPANSION_DURATION_MS}ms ease, visibility 0s linear ${ELCE_VIEWPORT_EXPANSION_DURATION_MS}ms;
+  transition: visibility 0s linear ${settings.durationMs}ms;
 }
 
 .elce-viewport-expansion-host--open {
-  opacity: 1;
   pointer-events: auto;
   visibility: visible;
-  transition: opacity ${ELCE_VIEWPORT_EXPANSION_DURATION_MS}ms ease, visibility 0s;
+  transition: visibility 0s;
 }
 
 .elce-viewport-expansion-host--closing {
-  opacity: 0;
   pointer-events: auto;
-  visibility: visible;
-  transition: opacity ${ELCE_VIEWPORT_EXPANSION_DURATION_MS}ms ease, visibility 0s;
+  visibility: hidden;
+  transition: visibility 0s linear ${settings.durationMs}ms;
 }
 
 .elce-viewport-expansion-host__frame {
@@ -143,3 +143,4 @@ export const ELCE_VIEWPORT_EXPANSION_STYLE_SHEET = `
   }
 }
 `
+}

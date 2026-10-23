@@ -91,7 +91,7 @@ comportement vérifié dans les spécifications actuelles.
 | D5 | Priorité par propriété | Chaîne acceptée : bloc → parent BDC éventuel → page → défauts du projet → défauts de l’app. Les réglages généraux du projet constituent ses défauts et héritent de l’app pour les propriétés absentes. Base provisoire de l’app : couleurs actuelles et Crimson Serif/DM Sans. Au sein d’un niveau, la priorité proposée reste ajustement explicite puis valeur du preset local. Aucun niveau chapitre dans la première tranche. Définir aussi le rendu des objets conservés au catalogue. |
 | D6 | Fond | Distinguer fond hérité, fond transparent et fond uni explicite. Formaliser, pour chaque racine existante, la surface qui peint le fond et celle réellement placée derrière le texte ; éviter de repeindre arbitrairement toutes les zones internes. |
 | D7 | Padding | Densité héritée adaptée à chaque niveau Fixe. Proposer Aucun, Compact, Normal et Aéré, avec Hériter aux niveaux locaux. Arrêter les libellés, valeurs et correspondances Flux, Diapo, Section, Carte et conteneurs imbriqués. |
-| D8 | Texte et contraste | Périmètre Fixe : couleur du texte par rapport à la couleur CSS de son background, exclusivement via les fonctions CSS disponibles. Préciser les propriétés CSS utilisées et leur transmission au contexte du texte. Les libellés Hériter, Automatique et Couleur restent à arrêter. Aucun traitement des pixels ou des médias, aucun calcul ou remplacement JavaScript. |
+| D8 | Texte et contraste | Périmètre Fixe : couleur du texte par rapport à la couleur CSS de son background, exclusivement via CSS. Fonction identifiée : `contrast-color()`, noir ou blanc à partir de la couleur fournie. La proposition ci-dessous réapplique la déclaration dans chaque périmètre et préserve une couleur manuelle. Valider son raccord aux racines Elcé et les libellés Hériter, Automatique et Couleur. Aucun traitement des pixels ou des médias, aucun calcul ou remplacement JavaScript. |
 | D9 | Couleurs liées ou libres | Une teinte de palette conserve une référence sémantique ; une couleur personnalisée conserve sa valeur. La première suit les changements de palette applicables, la seconde reste fixe. Démarrer avec des couleurs unies opaques ; le fond transparent reste un choix distinct. |
 | D10 | Ressources typographiques initiales | Huit duos proposés ci-dessous, issus de Figma et composés de familles Google Fonts, avec Bubblegum Sans/Open Sans comme exception ludique explicitement retenue. Définir les variantes nécessaires aux titres et aux enrichissements existants. Décision acceptée : l’export ne conserve que les typographies utilisées et inclut par défaut leurs fichiers comme ressources du package. Les tailles restent gérées par l’application. L’extension administrable reste hors de cette étape. |
 | D11 | Références et version documentaire | Arrêter la forme minimale des réglages et les références aux presets initiaux. Le contrat v5 rejette les anciennes versions sans conversion : aucun mécanisme de migration ou de remplacement silencieux ne peut être présumé. La gestion d’un catalogue administrable reste différée. |
@@ -213,10 +213,83 @@ les exports. P0 identifie les fonctions CSS disponibles ; P2 exprime les
 propriétés nécessaires dans les feuilles et racines existantes ; P4 vérifie
 leur application. Aucune analyse de média ni solution JavaScript n’est prévue.
 
+## D8 Exploration du contraste CSS
+
+**23 octobre 2026 — mécanisme natif éprouvé dans une page isolée ; raccord
+Elcé non implémenté.** La proposition reste **A relire** pour son intégration.
+
+La fonction [`contrast-color()`](https://drafts.csswg.org/css-color-5/#contrast-color)
+prend une couleur CSS et renvoie noir ou blanc. Elle ne lit pas une propriété
+`background-color` par son nom : il faut lui transmettre la valeur. Une même
+variable fournit donc le fond et l’entrée de la fonction. L’implémentation
+native est documentée par [WebKit](https://webkit.org/blog/16929/contrast-color/)
+et livrée dans [Chrome 147](https://developer.chrome.com/blog/new-in-chrome-147).
+
+Proposition minimale, avec des noms illustratifs de propriétés non enregistrées :
+
+```css
+.style-scope {
+  background-color: var(--background);
+  color: var(--text-color, contrast-color(var(--background)));
+}
+```
+
+Le fond applicable est porté par `--background`, défini ou hérité selon la
+chaîne app/projet/page/bloc. Une couleur manuelle définit `--text-color`.
+Le mode automatique local pose `--text-color: initial`, ce qui réactive la
+fonction même sous un parent à couleur manuelle. Reprendre du parent retire
+la déclaration locale. Ces trois gestes utilisent les réglages documentaires
+et les racines existants, sans moteur de contraste supplémentaire.
+
+La déclaration `color` est appliquée à chaque périmètre Style. Définir une
+variable de couleur automatique une seule fois sur l’ancêtre peut figer son
+argument : dans l’essai, `--cached-text: contrast-color(var(--background))`
+défini sur un fond blanc a donné du texte noir dans un enfant devenu noir.
+La règle proposée évite ce problème en évaluant la fonction localement.
+
+### Preuve native isolée
+
+La configuration locale indique Brave actif et Firefox désactivé. L’inventaire
+vivant expose les outils Brave ; aucun outil Safari n’est exposé. L’essai a
+utilisé une page `about:blank` dans un contexte isolé, fermée après lecture des
+styles calculés. Le navigateur a annoncé `Chrome/156.0.0.0` dans son user-agent.
+
+| Cas essayé | Résultat observé |
+| --- | --- |
+| `CSS.supports('color', 'contrast-color(white)')` | `true` |
+| `contrast-color(background-color)` | Syntaxe refusée ; une valeur est nécessaire. |
+| Ancienne écriture `color-contrast(white vs black, white)` | Syntaxe refusée. |
+| App blanche → page noire → bloc blanc | Texte noir → blanc → noir. |
+| Enfant sans fond local sous une page noire | Fond noir hérité, texte blanc. |
+| Page passée de noir à blanc | Texte de la page et de ses enfants automatiques passé de blanc à noir. |
+| Bloc passé de blanc à noir | Texte passé de noir à blanc. |
+| Texte manuel `#cc0000`, puis changement du fond parent | Texte manuel conservé, également sur l’enfant qui l’hérite. |
+| Automatique sous un parent manuel avec `--text-color: initial` | Texte blanc sur noir, puis noir sur blanc. |
+| Retrait de la couleur manuelle locale | Retour au texte automatique noir sur le fond blanc. |
+
+### Acceptation dans Elcé encore à réaliser
+
+P0 peut retenir `contrast-color()` comme fonction native identifiée. P2 doit
+raccorder la règle aux surfaces existantes sans laisser des couleurs fixes de
+titres ou de textes la supplanter. Le fond à transmettre reste une couleur CSS ;
+le traitement des pixels et des médias reste hors périmètre.
+
+P4 doit rejouer depuis le panneau réel : modifier la couleur du fond au picker,
+passer en texte automatique, choisir une couleur manuelle, reprendre du parent,
+puis Annuler/Rétablir. Vérifier une page, un bloc direct, une Carte ancrée et
+une Carte de Carousel. Le cas où parenté métier et DOM diffèrent reste à
+valider dans les builders ; l’essai isolé ne le certifie pas.
+
+L’export doit conserver la fonction et les variables dont elle dépend parmi
+les définitions réellement utilisées, pour garder le même comportement dans
+le package. Aucun calcul JavaScript ni polyfill n’est prévu. La fonction doit
+être native dans le navigateur de lecture ; la validation Safari et celle des
+packages restent en attente, sans lancement d’un autre navigateur local.
+
 Avant chaque validation navigateur ou autre tâche MCP, relire la configuration
 locale complète des serveurs et l’inventaire vivant complet des outils exposés,
 puis comparer les capacités. Une capacité configurée sans outil appelable reste
-en attente. Aucune validation navigateur n’a été exécutée pour cette étude.
+en attente. L’essai natif ci-dessus ne vaut pas acceptation du parcours Elcé.
 
 Les catégories de validation ci-dessus ne peuvent être omises qu’avec une
 justification causale explicite de leur absence d’impact. Un build ou un test

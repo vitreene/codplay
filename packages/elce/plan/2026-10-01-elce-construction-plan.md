@@ -806,6 +806,19 @@ ouvert dans la section [Décisions ouvertes](#décisions-ouvertes). Typecheck et
   changement du core CodPlay n’est requis.
   Vérifier visuellement le confinement des contenus dans les trois autres
   layouts avant de clore cette acceptation.
+- **Responsive vidéo plein cadre — accepté le 23 octobre 2026, En cours :**
+  une vidéo Carte doit remplir son logement responsive comme le média image du
+  même preset. Le builder Carte applique la classe de dimensionnement au
+  conteneur CodPlay ; la feuille centrale du player contraint la vidéo native à
+  100 % du cadre avec `object-fit: cover`, le cadrage déjà prévu.
+  La règle s’applique par le builder Carte partagé aux Cartes directes, ancrées,
+  Carousel Flux et Carousel Diapo.
+  - [x] Vérifier le perso, son montage dans le player CodPlay, les règles de la
+    feuille centrale et leur présence dans le package exporté ; la suite Elcé
+    passe avec 462 tests, le typecheck et le build.
+  - [ ] Vérifier dans la preview le logement vidéo à grande et petite largeur.
+    L’appel Brave DevTools `list_pages` n’a pas répondu le 23 octobre 2026 ; ce
+    contrôle visuel reste en attente.
 - Étendre le modèle documentaire et ses invariants de placement unique aux
   relations parent/enfant, puis aligner les commandes, la sélection d’édition,
   l’éditeur Carousel, le traitement des médias et la composition de scène sur

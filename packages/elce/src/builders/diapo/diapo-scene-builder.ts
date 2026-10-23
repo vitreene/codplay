@@ -18,7 +18,7 @@ const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 export function buildDiapoScene(
   page: Page,
   bdcs: readonly Bdc[],
-  options: DiapoSceneBuildOptions = {},
+  options: DiapoSceneBuildOptions,
 ): DiapoSceneBuild {
   if (page.type !== PAGE_TYPE.DIAPO) throw new Error(`Le builder Diapo ne traite pas la page ${page.id}.`)
   const pageBdcs = page.bdcIds.map((bdcId) => bdcs.find((bdc) => bdc.id === bdcId))
@@ -36,7 +36,7 @@ export function buildDiapoScene(
         ...addViewportExpansionToScene({
           id: `elce-diapo-${page.id}`,
           stories: { [storyId]: pageStory },
-        }),
+        }, options.editorSettings.player.interactions.viewportExpansion),
       },
       styleSheets: [carouselBuild.styleSheet],
     }
@@ -69,6 +69,7 @@ export function buildDiapoScene(
           markerId: `${page.id}-diapo-bottom-marker`,
           rootId: scrollPortId,
           targetPartId: `${page.id}:bottom`,
+          settings: options.editorSettings.player.progression.pageCompletionObservation,
         })
         pagePersos = [...cardBuild.contentPersos, ...cardBuild.mediaPersos]
         break
@@ -87,6 +88,7 @@ export function buildDiapoScene(
           markerId: `${page.id}-diapo-bottom-marker`,
           rootId: scrollPortId,
           targetPartId: `${page.id}:bottom`,
+          settings: options.editorSettings.player.progression.pageCompletionObservation,
         })
         break
       }
@@ -130,6 +132,7 @@ export function buildDiapoScene(
           markerId: `${page.id}-diapo-bottom-marker`,
           rootId: scrollPortId,
           targetPartId: `${page.id}:bottom`,
+          settings: options.editorSettings.player.progression.pageCompletionObservation,
         })
         break
       }
@@ -145,6 +148,7 @@ export function buildDiapoScene(
       markerId: `${page.id}-diapo-bottom-marker`,
       rootId: scrollPortId,
       targetPartId: `${page.id}:bottom`,
+      settings: options.editorSettings.player.progression.pageCompletionObservation,
     })
   }
 
@@ -179,7 +183,7 @@ export function buildDiapoScene(
   const sceneDoc = addViewportExpansionToScene({
     id: `elce-diapo-${page.id}`,
     stories: { [pageStory.id]: pageStory, ...childStories },
-  })
+  }, options.editorSettings.player.interactions.viewportExpansion)
   return {
     sceneDoc,
     styleSheets,
@@ -195,6 +199,8 @@ function buildCarousel(
   options: DiapoSceneBuildOptions,
 ) {
   if (carousel.carousel == null) throw new Error(`Le BDC Carousel ${carousel.id} de la Diapo est incomplet.`)
+  const revelationSettings = options.editorSettings.revelation.carouselsByBdcId[carousel.id]
+  if (revelationSettings === undefined) throw new Error(`Les réglages de révélation du Carousel ${carousel.id} sont absents.`)
   const views = carousel.carousel.cards.map((entry) => {
     const child = bdcs.find((candidate) => candidate.id === entry.bdcId)
     if (child === undefined) throw new Error(`La vue ${entry.bdcId} du Carousel ${carousel.id} est introuvable.`)
@@ -207,6 +213,8 @@ function buildCarousel(
     cards: views,
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
+    revelationSettings,
+    playerSettings: options.editorSettings.player,
     displayMode: 'scene',
     storyId: `${page.id}-diapo-page`,
     completionEventRootId: `${page.id}-${carousel.id}-diapo-end-scrollport`,

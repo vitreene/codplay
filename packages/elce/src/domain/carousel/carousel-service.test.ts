@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CAROUSEL_CONFIG, CAROUSEL_PLAYBACK_MODE, REVELATION_TRANSITION_PAIRS } from '../../config/document-config'
+import { CAROUSEL_CONFIG, CAROUSEL_PLAYBACK_MODE } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { ElceCarouselService } from './carousel-service'
 
 describe('ElceCarouselService', () => {
@@ -52,7 +53,7 @@ describe('ElceCarouselService', () => {
       playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
       repeatCount: 0,
       aspectRatio: { width: 1, height: 1 },
-      revelation: REVELATION_TRANSITION_PAIRS.cut,
+      revelation: ELCE_EDITOR_SETTINGS.revelation.transitionPairs.cut,
       cards: carousel.cards,
     })
   })

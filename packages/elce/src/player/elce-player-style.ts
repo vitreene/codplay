@@ -565,7 +565,8 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   min-height: 0;
 }
 
-.elce-carousel-media > img {
+.elce-carousel-media > img,
+.elce-carousel-media > video {
   display: block;
   width: 100%;
   height: 100%;

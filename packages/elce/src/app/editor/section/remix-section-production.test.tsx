@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/ui/test'
 import { BDC_TYPE, MEDIA_TYPE } from '../../../config/document-config'
+import { ElceEditorSettingsResolver } from '../../../domain/editor-settings/editor-settings-resolver'
 import { EditorContextProvider } from '../../remix/editor-context'
 import { controllerMachine } from '../../controller/controller-machine'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
@@ -14,6 +15,8 @@ import { renderProfileTokenInsertion } from '../profile/profile-token-insertion'
 import { RemixPageEditor } from '../../remix/workspace/page-editor'
 import { buildFluxScene } from '../../../builders/flux/flux-scene-builder'
 import { anchorNameFor } from '../../anchor/anchor-position'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
 
 class PendingMediaStore implements ElceDocumentStore {
   public readonly pending: Array<{ media: MediaBlob; resolve: () => void }> = []
@@ -178,6 +181,11 @@ describe('Remix production Section editor', () => {
     const scene = buildFluxScene(document.pages[0]!, document.bdcs, {
       mediaSources: { [pendingMedia.media.id]: 'blob:image-1' },
       mediaTypes: { [pendingMedia.media.id]: MEDIA_TYPE.IMAGE },
+      editorSettings: editorSettingsResolver.resolvePage(
+        document.pages[0]!,
+        document.bdcs,
+        document.data.revelationDefaults,
+      ),
     })
     expect(scene.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-article')?.initial).toMatchObject({
       flowReservations: [{ partId: `page-a:${anchorCard.id}:anchor`, blockSize: 'calc(65.88888889% + 1rem + 1rem)' }],

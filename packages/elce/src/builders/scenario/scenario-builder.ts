@@ -56,6 +56,7 @@ import { buildSummaryEntries, buildSummaryScene } from '../summary-profile/summa
 import type { SummaryEntry } from '../summary-profile/summary-scene-builder'
 import type { ElceSceneKey, ElceSlotName } from './scenario-builder-types'
 import { scenarioContextFromTestState } from './scenario-context'
+import { ElceEditorSettingsResolver } from '../../domain/editor-settings/editor-settings-resolver'
 
 export { scenarioContextFromTestState } from './scenario-context'
 
@@ -103,6 +104,7 @@ type ElceRuntimeData = Readonly<{
 }>
 
 const chapterEvaluation = new ElceChapterEvaluation()
+const editorSettingsResolver = new ElceEditorSettingsResolver()
 
 export type ScenarioBuildOptions = Readonly<{
   readonly testState?: ProjectTestState
@@ -145,10 +147,21 @@ export function buildScenario(
     previewStartPageId: firstPageId,
     evaluationResultPageIds: [...evaluationResultPageIds],
   })
+  const playerSettings = editorSettingsResolver.resolvePlayer()
   const sceneCatalog: Record<string, SightySceneSourceValue> = {
     [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document.id),
-    [ELCE_SCENARIO.SUMMARY_SCENE]: buildSummaryScene(document, 'root', options.mediaSources),
-    [ELCE_SCENARIO.SUMMARY_MENU_SCENE]: buildSummaryScene(document, 'menu', options.mediaSources),
+    [ELCE_SCENARIO.SUMMARY_SCENE]: buildSummaryScene(
+      document,
+      'root',
+      playerSettings.navigation.summaryDrawerMotion,
+      options.mediaSources,
+    ),
+    [ELCE_SCENARIO.SUMMARY_MENU_SCENE]: buildSummaryScene(
+      document,
+      'menu',
+      playerSettings.navigation.summaryDrawerMotion,
+      options.mediaSources,
+    ),
     [ELCE_SCENARIO.PROFILE_FORM_SCENE]: buildProfileFormScene(
       document.id,
       document.data.profile.properties,

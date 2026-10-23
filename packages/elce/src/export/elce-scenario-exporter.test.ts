@@ -166,6 +166,8 @@ describe('Elcé Sighty package export', () => {
     expect(JSON.parse(readText(`${layoutPackageRoot}${layoutPackageManifest.scene}`))).toHaveProperty('scene.stories')
     expect(layoutPackageManifest.styleSheet).toBeDefined()
     expect(files[`${layoutPackageRoot}${layoutPackageManifest.styleSheet!.file}`]).toBeDefined()
+    expect(strFromU8(files[`${layoutPackageRoot}${layoutPackageManifest.styleSheet!.file}`]!))
+      .toMatch(/\.elce-carousel-media > img,\s*\.elce-carousel-media > video\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover;/)
 
     const mediaResource = pagePackageManifest.resources.find((resource) => resource.file.endsWith('.svg'))
     expect(mediaResource).toBeDefined()

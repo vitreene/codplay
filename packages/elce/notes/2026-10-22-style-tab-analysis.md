@@ -152,9 +152,18 @@ sans ajouter des conteneurs uniquement pour transmettre une couleur.
 
 Le thème utilise les propriétés personnalisées CSS, la cascade et l’héritage.
 L’option Contraste concerne uniquement la couleur du texte par rapport à la
-couleur CSS de son background, au moyen des fonctions CSS disponibles.
-La couleur de background applicable est transmise dans le contexte du texte.
-Une couleur de texte manuelle reste un choix explicite.
+couleur CSS de son background. La fonction identifiée est
+[`contrast-color()`](https://drafts.csswg.org/css-color-5/#contrast-color) :
+elle reçoit une couleur et choisit noir ou blanc. La même variable CSS peut
+alimenter `background-color` et l’argument de la fonction, comme dans
+l’[exemple WebKit](https://webkit.org/blog/16929/contrast-color/).
+
+La déclaration `color` doit réappliquer la fonction dans chaque périmètre
+Style. Hériter d’une couleur déjà calculée sur l’ancêtre ne suffit pas lorsqu’un
+bloc change de background. Un essai isolé dans Brave a confirmé ce point et
+le maintien d’une couleur manuelle prioritaire. La proposition CSS, les
+résultats et l’acceptation encore nécessaire dans Elcé figurent dans le
+[plan](../plan/2026-10-22-elce-style-tab-plan.md#d8-exploration-du-contraste-css).
 
 Ce réglage ne comporte ni analyse des pixels, des images ou des vidéos,
 ni calcul ou mécanisme de remplacement JavaScript.

@@ -1,5 +1,6 @@
 import type { PersoDoc, SceneDoc, StoryDoc } from 'codplay/scene/types'
 import { ELCE_EVENTS } from '../../config/document-config'
+import type { ElceResolvedPlayerSettings } from '../../domain/editor-settings/editor-settings-types'
 import type { ElceDocument } from '../../domain/document/document-model'
 
 export type SummaryPresentation = 'menu' | 'root'
@@ -8,6 +9,7 @@ export type SummaryPresentation = 'menu' | 'root'
 export function buildSummaryScene(
   document: ElceDocument,
   presentation: SummaryPresentation,
+  drawerMotion: ElceResolvedPlayerSettings['navigation']['summaryDrawerMotion'],
   mediaSources: Readonly<Record<string, string>> = {},
 ): SceneDoc<string> {
   const summary = document.data.summary
@@ -15,7 +17,15 @@ export function buildSummaryScene(
   const entries = buildSummaryEntries(document)
   const entryMarkup = createEntryListMarkup(document, prefix, entries, presentation)
   const menuPersos = presentation === 'menu'
-    ? createMenuDrawerPersos(document.id, summary.title, summary.description, summary.showAtRoot, entries.map((entry) => entry.pageId), summary.showInMenu ? entryMarkup : '')
+    ? createMenuDrawerPersos(
+      document.id,
+      summary.title,
+      summary.description,
+      summary.showAtRoot,
+      entries.map((entry) => entry.pageId),
+      summary.showInMenu ? entryMarkup : '',
+      drawerMotion,
+    )
     : []
   const story: StoryDoc<string> = {
     id: 'main',
@@ -123,6 +133,7 @@ function createMenuDrawerPersos(
   showSummaryLink: boolean,
   pageIds: readonly string[],
   entries: string,
+  drawerMotion: ElceResolvedPlayerSettings['navigation']['summaryDrawerMotion'],
 ): readonly PersoDoc<string>[] {
   const prefix = `${documentId}:summary:menu`
   const drawerTarget = `${prefix}:drawer:host`
@@ -135,11 +146,11 @@ function createMenuDrawerPersos(
     : `<p id="${documentId}-menu-description" class="elce-player-menu__description">${escapeHtmlText(description)}</p>`
   const openDrawer = {
     attr: { 'data-open': 'true', 'aria-hidden': 'false', inert: false },
-    style: { opacity: { from: 0, to: 1, duration: 260, ease: 'outCubic' } },
+    style: { opacity: drawerMotion.open.opacity },
   }
   const closeDrawer = {
     attr: { 'data-open': 'false', 'aria-hidden': 'true', inert: true },
-    style: { opacity: { from: 1, to: 0, duration: 260, ease: 'inCubic' } },
+    style: { opacity: drawerMotion.close.opacity },
   }
   const closeEvents = Object.fromEntries([
     ELCE_EVENTS.MENU_DRAWER_CLOSE,
@@ -197,8 +208,11 @@ function createMenuDrawerPersos(
         </aside>`,
       },
       actions: {
-        [ELCE_EVENTS.MENU_DRAWER_OPEN]: { style: { translateX: { from: '-100%', to: '0%', duration: 260, ease: 'outCubic' } } },
-        ...Object.fromEntries(Object.keys(closeEvents).map((eventName) => [eventName, { style: { translateX: { from: '0%', to: '-100%', duration: 260, ease: 'inCubic' } } }])),
+        [ELCE_EVENTS.MENU_DRAWER_OPEN]: { style: { translateX: drawerMotion.open.translateX } },
+        ...Object.fromEntries(Object.keys(closeEvents).map((eventName) => [
+          eventName,
+          { style: { translateX: drawerMotion.close.translateX } },
+        ])),
       },
     },
     createMenuClosePerso(documentId, closeTarget),

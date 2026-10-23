@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SceneDoc } from 'codplay/scene/types'
 import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION, QUESTION_TYPE } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { applyDocumentCommand, createPageCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceQuestionService } from '../../domain/question/question-service'
@@ -470,6 +471,18 @@ describe('Elcé scenario builder', () => {
     expect(getMarkup(menuScene)).toContain('Choisissez une page.')
     expect(getMarkup(rootScene)).toContain('Parcours auteur')
     expect(getMarkup(rootScene)).toContain('Choisissez une page.')
+
+    const menuPersos = menuScene !== undefined && 'stories' in menuScene
+      ? menuScene.stories.main?.persos ?? []
+      : []
+    const drawer = menuPersos.find((perso) => perso.id === `${document.id}-menu-drawer`)
+    const panel = menuPersos.find((perso) => perso.id === `${document.id}-menu-panel`)
+    const motion = ELCE_EDITOR_SETTINGS.player.navigation.summaryDrawerMotion
+
+    expect(drawer?.actions?.[ELCE_EVENTS.MENU_DRAWER_OPEN]).toMatchObject({ style: { opacity: motion.open.opacity } })
+    expect(panel?.actions?.[ELCE_EVENTS.MENU_DRAWER_OPEN]).toMatchObject({ style: { translateX: motion.open.translateX } })
+    expect(drawer?.actions?.[ELCE_EVENTS.MENU_DRAWER_CLOSE]).toMatchObject({ style: { opacity: motion.close.opacity } })
+    expect(panel?.actions?.[ELCE_EVENTS.MENU_DRAWER_CLOSE]).toMatchObject({ style: { translateX: motion.close.translateX } })
   })
 
   it('gates an Evaluation chapter on answered Questions and the configured 80 percent threshold', () => {

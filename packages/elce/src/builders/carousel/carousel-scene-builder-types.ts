@@ -1,7 +1,8 @@
 import type { StoryDoc } from 'codplay/scene/types'
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
-import type { MediaId, PageId, BdcId, Bdc, RevelationTransitionDefaults } from '../../domain/document/document-types'
+import type { MediaId, PageId, BdcId, Bdc } from '../../domain/document/document-types'
 import type { MediaType } from '../../config/document-config-types'
+import type { ElceResolvedPlayerSettings, ResolvedCarouselRevelationSettings } from '../../domain/editor-settings/editor-settings-types'
 
 export interface CarouselSceneBuildInput {
   readonly pageId: PageId
@@ -13,7 +14,8 @@ export interface CarouselSceneBuildInput {
   readonly cards: readonly Bdc[]
   readonly mediaSources: Readonly<Record<MediaId, string>>
   readonly mediaTypes: Readonly<Record<MediaId, MediaType>>
-  readonly revelationDefaults?: RevelationTransitionDefaults
+  readonly revelationSettings: ResolvedCarouselRevelationSettings
+  readonly playerSettings: ElceResolvedPlayerSettings
   readonly displayMode?: 'content' | 'scene'
   readonly completionEventRootId?: string
 }

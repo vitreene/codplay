@@ -1,6 +1,7 @@
 import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../config/document-config'
 import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
-import type { SightyScenarioMutation, SightyViewAction } from '@codplay/sighty'
+import type { SightyRuntimeApi, SightyScenarioMutation, SightyViewAction } from '@codplay/sighty'
+import type { CodPlayTelco } from 'codplay'
 import { scenarioContextFromTestState } from '../builders/scenario/scenario-context'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
@@ -34,6 +35,15 @@ export interface ElceScormPackageScenario {
 }
 
 /** Describes the Sighty loader and runtime operations used by an exported SCO. */
+type ElceScormPackageRuntime = Pick<
+  SightyRuntimeApi<ElceSceneKey, ElceSlotName>,
+  'initialize' | 'play' | 'dispatch' | 'mutate'
+> & Readonly<{
+  getInstance(sceneKey: ElceSceneKey): Readonly<{
+    telco: Pick<CodPlayTelco, 'getProgress'>
+  }> | undefined
+}>
+
 export interface ElceScormPackageLoader {
   (options: Readonly<{
     root: HTMLElement
@@ -44,16 +54,7 @@ export interface ElceScormPackageLoader {
     }>
     runtime: Readonly<{ context: Readonly<Record<string, unknown>> }>
   }>): Promise<Readonly<{
-    runtime: Readonly<{
-      initialize(): Promise<void>
-      play(sceneKey: string): Promise<void>
-      dispatch(event: Readonly<{ name: string }>): Promise<boolean>
-      mutate(
-        mutation: SightyScenarioMutation<ElceSceneKey, ElceSlotName>,
-        policy?: 'preserve' | 'rewind' | 'reset' | 'reload',
-      ): Promise<boolean>
-      getInstance(sceneKey: ElceSceneKey): Readonly<{ telco: Readonly<{ getCurrentTimeMs(): number }> }> | undefined
-    }>
+    runtime: ElceScormPackageRuntime
     destroy(): void
   }>>
 }
@@ -101,7 +102,7 @@ export async function startElceScormPackageRuntime(
     chapterPageIds: packageData.chapterIds.map((chapterId) => packageData.chapters[chapterId].pageIds),
     questionPageIds: Object.keys(packageData.questionBdcByPage),
     chapterScoIdentifiers: options.chapterScoIdentifiers,
-    getSessionTimeMs: () => course?.runtime.getInstance(ELCE_SCENARIO.LAYOUT_SCENE)?.telco.getCurrentTimeMs(),
+    getSessionTimeMs: () => course?.runtime.getInstance(ELCE_SCENARIO.LAYOUT_SCENE)?.telco.getProgress().timelineMs,
     ...(scopedChapter === undefined ? {} : {
       scoPageIds: scopedChapter.pageIds,
       ...(scopedChapter.type === 'evaluation' ? { scoEvaluationChapterId: scopedChapter.id } : {}),

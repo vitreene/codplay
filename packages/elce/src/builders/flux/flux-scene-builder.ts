@@ -1,13 +1,14 @@
 import { EVENT_ACTION } from '@codplay/capsule-automation'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
-import type { Bdc, BdcId, Page } from '../../domain/document/document-types'
+import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
+import type { Bdc, BdcId, Page, RevelationTransitionDefaults } from '../../domain/document/document-types'
 import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
 import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../domain/anchor/anchor-ratio-service'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { FluxAnchorTarget } from './flux-anchor-player-markup-types'
 import type { FluxSceneBuild, FluxSceneBuildOptions } from './flux-scene-builder-types'
+import type { ElceResolvedPageSettings, ResolvedCardMediaMotion } from '../../domain/editor-settings/editor-settings-types'
 import { ElceCarouselSceneBuilder } from '../carousel/carousel-scene-builder'
 import type { CarouselSceneBuild } from '../carousel/carousel-scene-builder-types'
 import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/question-bdc-scene-builder'
@@ -43,7 +44,7 @@ const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 export function buildFluxScene(
   page: Page,
   bdcs: readonly Bdc[],
-  options: FluxSceneBuildOptions = {},
+  options: FluxSceneBuildOptions,
 ): FluxSceneBuild {
   switch (page.type) {
     case PAGE_TYPE.FLUX:
@@ -79,11 +80,20 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
     if (illustration === undefined || section?.type !== BDC_TYPE.SECTION || section.section === null) {
       throw new Error(`Le BDC illustratif ancré ${target.bdcId} ou sa Section est introuvable.`)
     }
-    const anchor = { paddingBottom: target.paddingBottom, layoutId: target.layoutId, revelation: section.section.revelation }
+    const anchor = { paddingBottom: target.paddingBottom, layoutId: target.layoutId }
     switch (illustration.type) {
       case BDC_TYPE.CARD: {
         const cardBuild = buildFluxCard(page, section.id, illustration, options)
-        return createFluxCardPersos(page, illustration, cardBuild, target.partId, scrollPortId, options, anchor)
+        return createFluxCardPersos(
+          page,
+          illustration,
+          cardBuild,
+          target.partId,
+          scrollPortId,
+          options,
+          getBdcRevelationSettings(options.editorSettings, illustration.id),
+          anchor,
+        )
       }
       case BDC_TYPE.STATISTICAL_GRAPH: {
         const graphBuild = statisticalGraphSceneBuilder.build(
@@ -99,8 +109,8 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
           graphBuild.rootClassName,
           target.partId,
           scrollPortId,
-          anchor,
-          options.revelationDefaults ?? DEFAULT_PROJECT_REVELATION,
+          options.editorSettings.revelation.byBdcId[illustration.id],
+          options.editorSettings.revelation.graphObservation,
         )
       }
       default:
@@ -141,6 +151,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
         markerId: bottomMarkerId,
         rootId: scrollPortId,
         targetPartId: `${page.id}:bottom`,
+        settings: options.editorSettings.player.progression.pageCompletionObservation,
       }),
       ...pageMediaPersos,
       ...anchoredIllustrationPersos,
@@ -164,7 +175,10 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
       ? []
       : [[mount.carouselBuild.story.id, mount.carouselBuild.story] as const])),
   }
-  const sceneDoc = addViewportExpansionToScene({ id: `elce-flux-${page.id}`, stories })
+  const sceneDoc = addViewportExpansionToScene(
+    { id: `elce-flux-${page.id}`, stories },
+    options.editorSettings.player.interactions.viewportExpansion,
+  )
   const questionMount = mounts.find((mount) => mount.bdc.type === BDC_TYPE.QUESTION)
   return {
     sceneDoc,
@@ -253,14 +267,15 @@ function createBdcMount(
         case undefined:
           throw new Error(`Le BDC Carousel ${bdc.id} n’a pas de contenu.`)
         default: {
-      const carouselBuild = carouselSceneBuilder.build({
+          const carouselBuild = carouselSceneBuilder.build({
             pageId: page.id,
             bdcId: bdc.id,
             content,
             cards: allBdcs,
             mediaSources: options.mediaSources ?? {},
-        mediaTypes: options.mediaTypes ?? {},
-        revelationDefaults: options.revelationDefaults,
+            mediaTypes: options.mediaTypes ?? {},
+            revelationSettings: getCarouselRevelationSettings(options.editorSettings, bdc.id),
+            playerSettings: options.editorSettings.player,
           })
           return {
             bdc,
@@ -337,7 +352,15 @@ function createMediaPersos(
     case BDC_TYPE.CARD:
       return mount.cardBuild === undefined
         ? []
-        : createFluxCardPersos(page, mount.bdc, mount.cardBuild, mount.partId, scrollPortId, options)
+        : createFluxCardPersos(
+          page,
+          mount.bdc,
+          mount.cardBuild,
+          mount.partId,
+          scrollPortId,
+          options,
+          getBdcRevelationSettings(options.editorSettings, mount.bdc.id),
+        )
     case BDC_TYPE.QUESTION:
       return createQuestionMediaPerso(page, mount.bdc, mount.zonePartIds.illustration ?? '', scrollPortId, options)
     case BDC_TYPE.EVALUATION_RESULT:
@@ -370,13 +393,16 @@ function createFluxCardPersos(
   targetPartId: string,
   scrollPortId: string,
   options: FluxSceneBuildOptions,
-  anchor?: Readonly<{ paddingBottom: string; layoutId: string; revelation: NonNullable<Bdc['section']>['revelation'] }>,
+  revelation: RevelationTransitionDefaults,
+  anchor?: Readonly<{ paddingBottom: string; layoutId: string }>,
 ): readonly PersoDoc<string>[] {
   const mediaId = bdc.card?.mediaId
   const mediaType = mediaId === null || mediaId === undefined ? undefined : options.mediaTypes?.[mediaId]
-  const projectRevelation = options.revelationDefaults ?? DEFAULT_PROJECT_REVELATION
-  const introRef = anchor?.revelation.intro ?? projectRevelation.intro
-  const outroRef = anchor?.revelation.outro ?? projectRevelation.outro
+  const introRef = revelation.intro
+  const outroRef = revelation.outro
+  const cardMediaMotion = options.editorSettings.revelation.cardMediaMotionByBdcId[bdc.id]
+  const hasImageMedia = cardBuild.mediaPersos.some((perso) => perso.type === 'img')
+  const omitOpacity = hasImageMedia && cardMediaMotion?.suppressCardOpacityTransitionForImages === true
   const cardId = `${page.id}-${bdc.id}-card`
   const enterEvent = `${cardId}:enter`
   const leaveEvent = `${cardId}:leave`
@@ -387,6 +413,7 @@ function createFluxCardPersos(
       : anchorRatioService.imageAspectRatio(anchor.paddingBottom)
   const anchoredStyle = anchor === undefined ? {} : {
     position: 'absolute',
+    zIndex: 1,
     'position-anchor': anchorNameFor(targetPartId),
     'inset-inline-start': 0,
     'inset-inline-end': 0,
@@ -405,7 +432,7 @@ function createFluxCardPersos(
       move: { target: targetPartId },
       className: `${cardBuild.rootClassName} elce-flux-card-root`,
       style: {
-        ...createRevelationInitialStyle(introRef),
+        ...createRevelationInitialStyle(introRef, { omitOpacity }),
         ...(anchor === undefined ? { width: '100%' } : anchoredStyle),
       },
       markup: cardBuild.markup,
@@ -413,17 +440,21 @@ function createFluxCardPersos(
     emit: {
       observe: {
         root: scrollPortId,
-        zone: { threshold: 0 },
+        zone: options.editorSettings.revelation.cardObservationZone,
         enter: [{ name: enterEvent }],
         leave: [{ name: leaveEvent }],
       },
     },
     actions: {
-      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
-      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
+      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro, { omitOpacity }),
+      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro, { omitOpacity }),
     },
   }
-  return [root, ...cardBuild.contentPersos, ...cardBuild.mediaPersos]
+  return [
+    root,
+    ...cardBuild.contentPersos,
+    ...applyCardMediaMotion(cardBuild.mediaPersos, enterEvent, leaveEvent, cardMediaMotion),
+  ]
 }
 
 /** Projects an anchored Statistical Graph into its existing Section anchor target. */
@@ -435,14 +466,15 @@ function createFluxGraphPersos(
   rootClassName: string,
   targetPartId: string,
   scrollPortId: string,
-  anchor: Readonly<{ paddingBottom: string; layoutId: string; revelation: NonNullable<Bdc['section']>['revelation'] }>,
-  projectRevelation: NonNullable<FluxSceneBuildOptions['revelationDefaults']>,
+  revelation: RevelationTransitionDefaults | undefined,
+  observation: ElceResolvedPageSettings['revelation']['graphObservation'],
 ): readonly PersoDoc<string>[] {
   if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
     throw new Error(`Le bdc ${bdc.id} n’est pas un Graphe complet.`)
   }
-  const introRef = anchor.revelation.intro ?? projectRevelation.intro
-  const outroRef = anchor.revelation.outro ?? projectRevelation.outro
+  if (revelation === undefined) throw new Error(`Les réglages de révélation du Graphe ${bdc.id} sont absents.`)
+  const introRef = revelation.intro
+  const outroRef = revelation.outro
   const graphId = `${page.id}-${bdc.id}-graph`
   const layoutClass = bdc.presetId === DEFAULT_PRESET_ID.STATISTICAL_GRAPH_SIDE_BY_SIDE
     ? 'elce-statistical-graph--side-by-side'
@@ -458,6 +490,7 @@ function createFluxGraphPersos(
       className: `${rootClassName} ${layoutClass} ${renderingClass} elce-flux-graph-root`,
       style: {
         position: 'absolute',
+        zIndex: 1,
         'position-anchor': anchorNameFor(targetPartId),
         'inset-inline-start': 0,
         'inset-inline-end': 0,
@@ -472,8 +505,8 @@ function createFluxGraphPersos(
     emit: {
       observe: {
         root: scrollPortId,
-        initial: 'enter',
-        zone: { threshold: 0 },
+        initial: observation.initial,
+        zone: observation.zone,
         enter: [{ name: enterEvent }],
         leave: [{ name: leaveEvent }],
       },
@@ -499,9 +532,26 @@ function createQuestionMediaPerso(
   const mediaType = options.mediaTypes?.[mediaId]
   switch (mediaType) {
     case MEDIA_TYPE.IMAGE:
-      return [createImagePerso(page, bdc, target, scrollPortId, resolveMediaSource(bdc.id, mediaId, options), false, ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO)]
+      return [createImagePerso(
+        page,
+        bdc,
+        target,
+        scrollPortId,
+        resolveMediaSource(bdc.id, mediaId, options),
+        false,
+        ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO,
+        options.editorSettings.revelation.imageEntrance,
+      )]
     case MEDIA_TYPE.VIDEO:
-      return [createVideoPerso(page, bdc, target, scrollPortId, resolveMediaSource(bdc.id, mediaId, options), false)]
+      return [createVideoPerso(
+        page,
+        bdc,
+        target,
+        scrollPortId,
+        resolveMediaSource(bdc.id, mediaId, options),
+        false,
+        options.editorSettings.player.media.fluxVideoVisibilityZone,
+      )]
     default:
       throw new Error(`Le type du média d’illustration ${mediaId} est absent ou non pris en charge.`)
   }
@@ -533,6 +583,7 @@ function createImagePerso(
   source: string,
   anchored: boolean,
   paddingBottom: string,
+  entrance: ElceResolvedPageSettings['revelation']['imageEntrance'],
 ): PersoDoc<string> {
   const imageId = `${page.id}-${bdc.id}-image`
   const enterEvent = `${imageId}:enter`
@@ -555,9 +606,9 @@ function createImagePerso(
             width: '100%',
             height: 'auto',
             aspectRatio,
-            translateX: '0%',
+            translateX: entrance.restingTranslateX,
           }
-        : { translateX: '0%' },
+        : { translateX: entrance.restingTranslateX },
       img: {
         style: { display: 'block', width: '100%', aspectRatio, objectFit: 'contain' },
       },
@@ -566,13 +617,22 @@ function createImagePerso(
     emit: {
       observe: {
         root: scrollPortId,
-        initial: 'enter',
-        zone: { threshold: 0 },
-        enter: [{ name: enterEvent, once: true }],
+        initial: entrance.initial,
+        zone: entrance.zone,
+        enter: [{ name: enterEvent, once: entrance.once }],
       },
     },
     actions: {
-      [enterEvent]: { style: { translateX: { from: '-112%', to: '0%', duration: 1000, ease: 'outCubic' } } },
+      [enterEvent]: {
+        style: {
+          translateX: {
+            from: entrance.fromTranslateX,
+            to: entrance.toTranslateX,
+            duration: entrance.duration,
+            ease: entrance.ease,
+          },
+        },
+      },
     },
   }
 }
@@ -584,6 +644,7 @@ function createVideoPerso(
   scrollPortId: string,
   source: string,
   anchored: boolean,
+  visibilityZone: ElceResolvedPageSettings['player']['media']['fluxVideoVisibilityZone'],
 ): PersoDoc<string> {
   const videoId = `${page.id}-${bdc.id}-video`
   const playEvent = `${videoId}:fully-visible`
@@ -617,7 +678,7 @@ function createVideoPerso(
     emit: {
       observe: {
         root: scrollPortId,
-        zone: { threshold: 0.75 },
+        zone: visibilityZone,
         enter: [{ name: playEvent }],
         leave: [{ name: pauseEvent }],
       },
@@ -627,6 +688,68 @@ function createVideoPerso(
       [pauseEvent]: { broadcast: { type: 'PAUSE' } },
     },
   }
+}
+
+/** Returns pre-resolved revelation settings for a BDC without applying inheritance. */
+function getBdcRevelationSettings(
+  editorSettings: ElceResolvedPageSettings,
+  bdcId: BdcId,
+): RevelationTransitionDefaults {
+  const settings = editorSettings.revelation.byBdcId[bdcId]
+  if (settings === undefined) throw new Error(`Les réglages de révélation du BDC ${bdcId} sont absents.`)
+  return settings
+}
+
+/** Returns pre-resolved Carousel revelation settings without applying fallbacks. */
+function getCarouselRevelationSettings(
+  editorSettings: ElceResolvedPageSettings,
+  bdcId: BdcId,
+): NonNullable<ElceResolvedPageSettings['revelation']['carouselsByBdcId'][BdcId]> {
+  const settings = editorSettings.revelation.carouselsByBdcId[bdcId]
+  if (settings === undefined) throw new Error(`Les réglages de révélation du Carousel ${bdcId} sont absents.`)
+  return settings
+}
+
+/** Applies Card-owned scroll events to image media without adding an observer. */
+function applyCardMediaMotion(
+  mediaPersos: readonly PersoDoc<string>[],
+  enterEvent: string,
+  leaveEvent: string,
+  motion: ResolvedCardMediaMotion | undefined,
+): readonly PersoDoc<string>[] {
+  if (motion === undefined) return mediaPersos
+  return mediaPersos.map((perso) => {
+    if (perso.type !== 'img') return perso
+    if (perso.initial === undefined) return perso
+    const actions: Record<string, unknown> = { ...perso.actions }
+    if (motion.intro !== null) {
+      actions[enterEvent] = { style: { translateX: {
+        from: motion.intro.fromTranslateX,
+        to: motion.intro.toTranslateX,
+        duration: motion.intro.duration,
+        ease: motion.intro.ease,
+      } } }
+    }
+    if (motion.outro !== null) {
+      actions[leaveEvent] = { style: { translateX: {
+        from: motion.outro.fromTranslateX,
+        to: motion.outro.toTranslateX,
+        duration: motion.outro.duration,
+        ease: motion.outro.ease,
+      } } }
+    }
+    return {
+      ...perso,
+      initial: {
+        ...perso.initial,
+        style: {
+          ...(typeof perso.initial.style === 'object' && perso.initial.style !== null ? perso.initial.style : {}),
+          opacity: motion.imageOpacity,
+        },
+      },
+      actions,
+    }
+  })
 }
 
 function resolveMediaSource(bdcId: BdcId, mediaId: string, options: FluxSceneBuildOptions): string {

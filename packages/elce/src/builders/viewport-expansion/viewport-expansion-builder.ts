@@ -1,6 +1,6 @@
 import type { AuthorRecord, PersoDoc, SceneDoc, StoryDoc } from 'codplay/scene/types'
 import { TRACK_EVENT_ACTIVATE, TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
-import { ELCE_VIEWPORT_EXPANSION_DURATION_MS } from './viewport-expansion-style.ts'
+import type { ElceResolvedPlayerSettings } from '../../domain/editor-settings/editor-settings-types'
 import {
   carouselViewCollapsedEvent,
   carouselViewExpandedEvent,
@@ -50,9 +50,13 @@ type ViewportExpansionPersoDoc = Readonly<{
 
 type ViewportExpansionContentKind = 'image' | 'graph'
 
+/** Keeps the backdrop below CodPlay's temporary z-index:20 reparent presentation. */
+const VIEWPORT_EXPANSION_HOST_Z_INDEX = 19
+
 /** Adds the viewport target and its interactions to a story containing expandable Elcé content. */
 export function addViewportExpansionToStory(
   story: StoryDoc<string>,
+  settings: ElceResolvedPlayerSettings['interactions']['viewportExpansion'],
   carousel?: ViewportExpansionCarousel,
 ): StoryDoc<string> {
   const contents = story.persos.filter(isViewportExpansionPerso)
@@ -88,14 +92,14 @@ export function addViewportExpansionToStory(
     const view = viewByContentId.get(content.id)
     const actions: Record<string, unknown> = {
       ...content.actions,
-      [openEvent]: createContentMoveAction(hostPartId, kind, true),
-      [closeEvent]: createContentMoveAction(sourceTarget, kind, false),
+      [openEvent]: createContentMoveAction(hostPartId, kind, true, settings),
+      [closeEvent]: createContentMoveAction(sourceTarget, kind, false, settings),
       [focusEvent]: { htmlElementMethod: ['focus', 'preventscroll'] },
     }
 
     if (view !== undefined) {
-      actions[carouselViewExpandedEvent(story.id, view.bdcId)] = createContentMoveAction(hostPartId, kind, true)
-      actions[carouselViewCollapsedEvent(story.id, view.bdcId)] = createContentMoveAction(sourceTarget, kind, false)
+      actions[carouselViewExpandedEvent(story.id, view.bdcId)] = createContentMoveAction(hostPartId, kind, true, settings)
+      actions[carouselViewCollapsedEvent(story.id, view.bdcId)] = createContentMoveAction(sourceTarget, kind, false, settings)
     }
 
     return {
@@ -144,7 +148,8 @@ export function addViewportExpansionToStory(
         inset: 0,
         width: '100vw',
         height: '100vh',
-        zIndex: 2147483647,
+        zIndex: VIEWPORT_EXPANSION_HOST_Z_INDEX,
+        opacity: 1,
         boxSizing: 'border-box',
         overflow: 'hidden',
       },
@@ -156,11 +161,20 @@ export function addViewportExpansionToStory(
           add: 'elce-viewport-expansion-host--open',
           remove: 'elce-viewport-expansion-host--closed elce-viewport-expansion-host--closing',
         },
+        style: { opacity: 1 },
         attr: { 'aria-hidden': 'false', inert: false },
         htmlElementMethod: ['focus', 'preventscroll'],
       },
       [closeHostEvent]: {
         className: { add: 'elce-viewport-expansion-host--closing', remove: 'elce-viewport-expansion-host--open' },
+        style: {
+          opacity: {
+            from: 1,
+            to: 0,
+            duration: settings.backdropClose.durationMs,
+            ease: settings.backdropClose.ease,
+          },
+        },
       },
       [finishCloseHostEvent]: {
         className: { add: 'elce-viewport-expansion-host--closed', remove: 'elce-viewport-expansion-host--closing elce-viewport-expansion-host--open' },
@@ -224,10 +238,13 @@ export function addViewportExpansionToStory(
 }
 
 /** Adds viewport expansion behavior to stories and locks their scene scrollports. */
-export function addViewportExpansionToScene(scene: SceneDoc<string>): SceneDoc<string> {
+export function addViewportExpansionToScene(
+  scene: SceneDoc<string>,
+  settings: ElceResolvedPlayerSettings['interactions']['viewportExpansion'],
+): SceneDoc<string> {
   const stories = Object.fromEntries(Object.entries(scene.stories).map(([storyId, story]) => [
     storyId,
-    addViewportExpansionToStory(story),
+    addViewportExpansionToStory(story, settings),
   ]))
   const hasExpansion = Object.values(stories).some((story) => story.persos.some((perso) => perso.id.endsWith('-viewport-expansion-host')))
   if (!hasExpansion) return { ...scene, stories }
@@ -278,6 +295,7 @@ function createContentMoveAction(
   target: string,
   kind: ViewportExpansionContentKind,
   expanded: boolean,
+  settings: ElceResolvedPlayerSettings['interactions']['viewportExpansion'],
 ): Readonly<Record<string, unknown>> {
   const className = expanded
     ? { add: 'elce-viewport-content--expanded' }
@@ -299,7 +317,7 @@ function createContentMoveAction(
     move: {
       target,
       reparent: true,
-      transition: { duration: ELCE_VIEWPORT_EXPANSION_DURATION_MS, ease: 'outCubic' },
+      transition: { duration: settings.durationMs, ease: settings.moveEase },
     },
     className,
     attr,

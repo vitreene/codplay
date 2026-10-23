@@ -165,6 +165,7 @@ describe('SCORM package state restoration', () => {
     let runtimeContext: Readonly<Record<string, unknown>> | undefined
     let sourceAdapterFactories: readonly unknown[] | undefined
     const mutations: SightyScenarioMutation<ElceSceneKey, ElceSlotName>[] = []
+    let layoutTimelineMs = 12_345
     let destroyed = 0
     const loadSightyPackage = vi.fn(async (options: Readonly<{
       root: HTMLElement
@@ -190,7 +191,9 @@ describe('SCORM package state restoration', () => {
             mutations.push(mutation)
             return true
           },
-          getInstance: () => ({ telco: { getCurrentTimeMs: () => 12_345 } }),
+          getInstance: () => ({
+            telco: { getProgress: () => ({ timelineMs: layoutTimelineMs, durationMs: 60_000 }) },
+          }),
         },
         destroy: () => { destroyed += 1 },
       }
@@ -265,9 +268,11 @@ describe('SCORM package state restoration', () => {
     expect(api.values.get('cmi.progress_measure')).toBe('1')
     expect(api.values.get('cmi.completion_status')).toBe('completed')
 
+    layoutTimelineMs = 23_456
     await runtime.close()
     await runtime.close()
 
+    expect(api.values.get('cmi.session_time')).toBe('PT0000H00M23S')
     expect(destroyed).toBe(1)
     expect(api.quitCount).toBe(1)
   })
@@ -288,7 +293,7 @@ describe('SCORM package state restoration', () => {
           mutations.push(mutation)
           return true
         },
-        getInstance: () => ({ telco: { getCurrentTimeMs: () => 0 } }),
+        getInstance: () => ({ telco: { getProgress: () => ({ timelineMs: 0, durationMs: 0 }) } }),
       },
       destroy: () => {},
     }))
