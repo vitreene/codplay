@@ -9,6 +9,7 @@ import { updateSectionContent, deleteSection, updateSectionRevelation } from './
 import { setCardMedia, attachCardMedia, setQuestionMedia, attachQuestionMedia, attachSummaryBackgroundMedia, mergeMedia } from './media-commands'
 import { updateDocumentRevelation } from './revelation-commands'
 import { assertDocumentInvariants } from './document-invariants'
+import { resetAppearanceProperty, setAppearanceProperty } from './appearance-commands'
 
 /** Applies one document command and returns a new immutable model value. */
 function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
@@ -109,6 +110,10 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return new ElceDocument({ ...document.data, summary: command.summary })
     case 'profile.definition.update':
       return new ElceDocument({ ...document.data, profile: command.profile })
+    case 'appearance.property.set':
+      return setAppearanceProperty(document, command.target, command.property, command.value)
+    case 'appearance.property.reset':
+      return resetAppearanceProperty(document, command.target, command.property)
     case 'document.rename':
       return new ElceDocument({ ...document.data, name: command.name })
   }

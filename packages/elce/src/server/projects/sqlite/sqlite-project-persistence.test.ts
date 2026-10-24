@@ -43,7 +43,7 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('migrates a fresh database and round-trips the v5 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v6 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new SqliteProjectPersistence(database)
     const router = createElceApiRouter(persistence)
@@ -226,7 +226,7 @@ describe('SQLite project persistence through the Remix API', () => {
     expect((await database.exec(rawSql('SELECT * FROM question_answers WHERE project_id = ?', [projectId]))).rows)
       .toEqual(answerRowsBefore.rows)
 
-    await database.migrate(migrations, { direction: 'down', step: 3 })
+    await database.migrate(migrations, { direction: 'down', to: '20261013110000_add-statistical-graph-transposition' })
     const relationalValues = await database.exec(rawSql(
       'SELECT category_id, series_id, value FROM graph_values WHERE project_id = ? ORDER BY category_id',
       [projectId],
@@ -235,6 +235,82 @@ describe('SQLite project persistence through the Remix API', () => {
       { category_id: 'category-1', series_id: 'series-1', value: 1250.5 },
       { category_id: 'category-2', series_id: 'series-2', value: 0 },
     ])
+  })
+
+  it('flattens only Demo5 local appearance presets and restores canonical presets on rollback', async () => {
+    database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
+    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    await database.migrate(migrations, { to: '20261024120000_add_appearance_settings' })
+
+    const projectRows = [
+      ['demo5-elce-comparison', 'Demo5', 6, 0, '2026-10-24', '2026-10-24', 'fade', 'fade', JSON.stringify({ presetId: 'plum' })],
+      ['another-project', 'Autre projet', 6, 0, '2026-10-24', '2026-10-24', 'fade', 'fade', null],
+    ]
+    await database.exec(rawSql(
+      `INSERT INTO projects (
+        project_id, name, format_version, revision, created_at, updated_at,
+        default_intro_transition_ref, default_outro_transition_ref, appearance_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [...projectRows[0]!, ...projectRows[1]!],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO pages (project_id, page_id, name, page_type, appearance_json)
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [
+        'demo5-elce-comparison', 'demo5-page', 'Page Demo5', PAGE_TYPE.FLUX, JSON.stringify({ presetId: 'forest' }),
+        'another-project', 'other-page', 'Page autre', PAGE_TYPE.FLUX, JSON.stringify({ presetId: 'classic' }),
+      ],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO content_blocks (
+        project_id, content_block_id, content_block_type, preset_id, appearance_json
+      ) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [
+        'demo5-elce-comparison', 'demo5-card', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_SHORT, JSON.stringify({ presetId: 'slate' }),
+        'another-project', 'other-card', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_SHORT, JSON.stringify({ presetId: 'classic' }),
+      ],
+    ))
+
+    await database.migrate(migrations)
+
+    const convertedPages = await database.exec(rawSql(
+      'SELECT project_id, appearance_json FROM pages ORDER BY project_id',
+    ))
+    expect((convertedPages.rows ?? []).map((row) => ({ ...row, appearance_json: row.appearance_json === null ? null : JSON.parse(String(row.appearance_json)) })))
+      .toEqual([
+        { project_id: 'another-project', appearance_json: { presetId: 'classic' } },
+        { project_id: 'demo5-elce-comparison', appearance_json: { paletteId: 'forest', typographyPairId: 'nunito-pt-sans', density: 'large' } },
+      ])
+    const convertedBlocks = await database.exec(rawSql(
+      'SELECT project_id, appearance_json FROM content_blocks ORDER BY project_id',
+    ))
+    expect((convertedBlocks.rows ?? []).map((row) => ({ ...row, appearance_json: row.appearance_json === null ? null : JSON.parse(String(row.appearance_json)) })))
+      .toEqual([
+        { project_id: 'another-project', appearance_json: { presetId: 'classic' } },
+        { project_id: 'demo5-elce-comparison', appearance_json: { paletteId: 'slate', typographyPairId: 'instrument-sans-geist', density: 'compact' } },
+      ])
+    const demo5Project = await database.exec(rawSql(
+      'SELECT appearance_json FROM projects WHERE project_id = ?', ['demo5-elce-comparison'],
+    ))
+    expect(JSON.parse(String(demo5Project.rows?.[0]?.appearance_json))).toEqual({ presetId: 'plum' })
+
+    await database.migrate(migrations, { direction: 'down', to: '20261024190000_flatten_demo5_local_appearance_presets' })
+    const restoredPages = await database.exec(rawSql(
+      'SELECT project_id, appearance_json FROM pages ORDER BY project_id',
+    ))
+    expect((restoredPages.rows ?? []).map((row) => ({ ...row, appearance_json: row.appearance_json === null ? null : JSON.parse(String(row.appearance_json)) })))
+      .toEqual([
+        { project_id: 'another-project', appearance_json: { presetId: 'classic' } },
+        { project_id: 'demo5-elce-comparison', appearance_json: { presetId: 'forest' } },
+      ])
+    const restoredBlocks = await database.exec(rawSql(
+      'SELECT project_id, appearance_json FROM content_blocks ORDER BY project_id',
+    ))
+    expect((restoredBlocks.rows ?? []).map((row) => ({ ...row, appearance_json: row.appearance_json === null ? null : JSON.parse(String(row.appearance_json)) })))
+      .toEqual([
+        { project_id: 'another-project', appearance_json: { presetId: 'classic' } },
+        { project_id: 'demo5-elce-comparison', appearance_json: { presetId: 'slate' } },
+      ])
   })
 
   it('preserves server media metadata and rejects stale document revisions atomically', async () => {
@@ -679,7 +755,7 @@ async function reserve(router: ReturnType<typeof createElceApiRouter>, projectId
   return { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': body.grantId }
 }
 
-/** Builds a v5 fixture that exercises independent ordering and nested placements. */
+/** Builds a v6 fixture that exercises independent ordering and nested placements. */
 function createRelationalFixture(): ElceDocumentClass {
   let document = createInitialDocument()
   document = applyDocumentCommand(document, {

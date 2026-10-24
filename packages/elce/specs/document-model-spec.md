@@ -2,7 +2,7 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v5 ; les structures générales, les commandes et
+**Fixe — modèle documentaire v6 ; les structures générales, les commandes et
 invariants de placement sont vérifiés. Sommaire et profils sont décrits dans
 la [spécification dédiée](./summary-profile-spec.md).**
 
@@ -13,14 +13,15 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 5 contient des tableaux de chapitres, pages, BDC et
+Un `ElceDocument` version 6 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
 Chaque chapitre conserve son propre ordre de pages. La séquence racine et les
 ordres internes des chapitres déterminent ensemble l’ordre de lecture. Les
 pages du catalogue restent hors scénario. Une page possède un type (`flux` ou
-`diapo`), un nom, une affectation de chapitre éventuelle et un ordre de BDC.
+`diapo`), un nom, une affectation de chapitre éventuelle, un ordre de BDC et
+des réglages d’apparence facultatifs.
 
 Chaque BDC a un emplacement unique : dans une page, dans le catalogue, ou
 comme enfant d’un BDC conteneur. Une page Flux peut contenir plusieurs BDC ; une
@@ -44,11 +45,16 @@ catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de l
 masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
 propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument` v5 ajoute `data.summary` et `data.profile` ; leur structure et
-leurs invariants sont décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
+`ElceDocument` v6 ajoute `data.summary`, `data.profile` et des réglages
+d’apparence facultatifs sur le document, chaque page et chaque BDC. Le preset
+général d’apparence est réservé au document ; les détails et la résolution
+par propriété figurent dans la [spécification d’apparence](./appearance-spec.md).
+`data.summary` et `data.profile` gardent leur structure et leurs invariants
+décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
 `ElceDocument.fromJSON()` accepte uniquement la version courante et rejette
-les versions précédentes sans conversion. Le projet ne conserve pas de
-compatibilité documentaire legacy.
+les documents v5 sans conversion automatique. La migration SQLite dédiée
+convertit uniquement Demo5, seul document conservé ; aucune compatibilité
+documentaire générale n’est ajoutée.
 
 Les valeurs de placement et les constantes de configuration sont déclarées
 dans [`document-config.ts`](../src/config/document-config.ts), leurs types
@@ -79,7 +85,7 @@ il est créé atomiquement avec un BDC Carte enfant au layout initial
 métier.
 
 `ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
-5. Les octets des médias sont conservés à part par la frontière IndexedDB.
+6. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 ## Commandes
 
@@ -245,6 +251,10 @@ serveur.
 - Le même fichier vérifie que les versions 1, 2 et 3 sont rejetées, le mélange et
   le déplacement d’entrées page/chapitre à la racine, le déplacement d’une
   page de chapitre vers la racine et les invariants de placement correspondants.
+- [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+  vérifie l’ajout des colonnes d’apparence facultatives et la migration ciblée
+  des anciens presets locaux de Demo5, avec restauration des presets canoniques
+  au rollback. Les autres projets ne sont pas convertis.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
   layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
   la Carte autonome dans la séquence Flux et comme unique BDC direct d’une

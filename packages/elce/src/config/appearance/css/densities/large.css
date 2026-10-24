@@ -1,0 +1,7 @@
+.elce-appearance-density-large.elce-appearance-role-section { box-sizing: border-box; padding: clamp(1.5rem, 4vw, 3rem); }
+.elce-appearance-density-large.elce-appearance-role-page-flux { --elce-appearance-page-padding: 2.5rem; }
+.elce-appearance-density-large.elce-appearance-role-page-diapo { --elce-appearance-page-padding: 0; }
+.elce-appearance-density-large.elce-appearance-role-card-text-short { --elce-appearance-card-padding: clamp(1.25rem, 5cqw, 3.75rem); }
+.elce-appearance-density-large.elce-appearance-role-card-text-image { --elce-appearance-card-padding: clamp(1rem, 3.75cqw, 2.5rem); }
+.elce-appearance-density-large.elce-appearance-role-card-image-caption { --elce-appearance-card-padding: 0.65rem 1rem; }
+.elce-appearance-density-large:is(.elce-appearance-role-question, .elce-appearance-role-evaluation-result) { --elce-appearance-card-padding: clamp(1.5rem, 3.5vw, 2.25rem); }

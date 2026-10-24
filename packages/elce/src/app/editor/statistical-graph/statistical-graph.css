@@ -8,7 +8,7 @@
   min-width: 0;
   min-height: 0;
   margin: 0;
-  color: #263b3a;
+  color: var(--elce-appearance-text-color, #263b3a);
 }
 
 .elce-statistical-graph__overline,
@@ -17,7 +17,7 @@
 }
 
 .elce-statistical-graph__overline {
-  color: #58716c;
+  color: var(--elce-appearance-muted-color, #58716c);
   font-size: 0.85rem;
   font-weight: 650;
 }
@@ -82,13 +82,13 @@
 
 .elce-statistical-graph__tick-label,
 .elce-statistical-graph__empty {
-  fill: #394a47;
-  font-size: clamp(14px, calc(140px / 1cqw * 1px), 40px);
+  fill: var(--elce-appearance-text-color, #394a47);
+  font-size: clamp(0.875rem, calc(8.75rem / 1cqw * 0.0625rem), 2.5rem);
 }
 
 .elce-statistical-graph__axis-label {
-  fill: #394a47;
-  font-size: clamp(17px, calc(170px / 1cqw * 1px), 48px);
+  fill: var(--elce-appearance-text-color, #394a47);
+  font-size: clamp(1.0625rem, calc(10.625rem / 1cqw * 0.0625rem), 3rem);
 }
 
 .elce-statistical-graph__line {
@@ -256,10 +256,10 @@
 .elce-statistical-graph__table--visually-hidden,
 .elce-statistical-graph__table-caption.elce-statistical-graph__visually-hidden {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
+  width: 0.0625rem !important;
+  height: 0.0625rem !important;
   padding: 0 !important;
-  margin: -1px !important;
+  margin: -0.0625rem !important;
   overflow: hidden !important;
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
@@ -268,10 +268,10 @@
 
 .elce-statistical-graph__visually-hidden {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
+  width: 0.0625rem !important;
+  height: 0.0625rem !important;
   padding: 0 !important;
-  margin: -1px !important;
+  margin: -0.0625rem !important;
   overflow: hidden !important;
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;

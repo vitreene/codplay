@@ -152,7 +152,7 @@ describe('Elcé Flux scene builder', () => {
     const articleInitial = pageStory?.persos[1]?.initial
     const articleMarkup = articleInitial !== undefined && 'markup' in articleInitial ? String(articleInitial.markup) : ''
 
-    expect(articleMarkup).toContain('class="elce-flow-slot"')
+    expect(articleMarkup).toContain('class="elce-flow-slot elce-flow-slot-')
     expect(articleMarkup).not.toContain('data-elce-anchor="true"')
     expect(articleMarkup).not.toContain('page-a-bdc-image-1-media-host')
     expect(articleInitial).toMatchObject({
@@ -168,11 +168,6 @@ describe('Elcé Flux scene builder', () => {
         style: expect.objectContaining({
           opacity: 1,
           x: 0,
-          position: 'absolute',
-          'position-anchor': anchorNameFor('page-a:bdc-image-1:anchor'),
-          width: '100%',
-          aspectRatio: '4 / 3',
-          height: 'auto',
         }),
         move: { target: 'page-a:bdc-image-1:anchor' },
       },
@@ -193,6 +188,7 @@ describe('Elcé Flux scene builder', () => {
         } },
       },
     })
+    expect(build.styleSheets.join('\n')).toContain(`position-anchor: ${anchorNameFor('page-a:bdc-image-1:anchor')}`)
     expect(pageStory?.persos[4]).toMatchObject({
       type: 'img',
       initial: {
@@ -310,7 +306,7 @@ describe('Elcé Flux scene builder', () => {
       initial: {
         src: 'blob:question-image',
         ...(mediaType === MEDIA_TYPE.IMAGE
-          ? { img: { style: { width: '100%', aspectRatio: '4 / 3', objectFit: 'contain' } } }
+          ? { img: { className: 'elce-flux-image__native' } }
           : { sync: 'independent', controls: true }),
       },
       emit: mediaType === MEDIA_TYPE.IMAGE ? { observe: {

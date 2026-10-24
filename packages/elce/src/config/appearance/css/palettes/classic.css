@@ -1,0 +1,15 @@
+.elce-appearance-palette-classic {
+  --elce-palette-background: #fffdf8;
+  --elce-palette-surface: #ffffff;
+  --elce-palette-text: #1d2d35;
+  --elce-palette-muted: #52666b;
+  --elce-palette-accent: #263b3a;
+  --elce-palette-border: #d9d4c9;
+}
+
+.elce-appearance-contrast-background-classic-background { --elce-appearance-contrast-background: #fffdf8; }
+.elce-appearance-contrast-background-classic-surface { --elce-appearance-contrast-background: #ffffff; }
+.elce-appearance-contrast-background-classic-text { --elce-appearance-contrast-background: #1d2d35; }
+.elce-appearance-contrast-background-classic-muted { --elce-appearance-contrast-background: #52666b; }
+.elce-appearance-contrast-background-classic-accent { --elce-appearance-contrast-background: #263b3a; }
+.elce-appearance-contrast-background-classic-border { --elce-appearance-contrast-background: #d9d4c9; }

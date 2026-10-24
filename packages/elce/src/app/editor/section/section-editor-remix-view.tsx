@@ -5,6 +5,7 @@ import { ANCHOR, BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config
 import type { CardLayoutId } from '../../../config/document-config-types'
 import type { Bdc, Page, RichTextNode } from '../../../domain/document/document-types'
 import type { ElceAnchorCardPreview } from '../../../domain/anchor/anchor-types'
+import type { AppearanceTarget } from '../../../domain/commands/document-command-types'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
@@ -16,6 +17,7 @@ import { EMPTY_SECTION_TOOLBAR_STATE } from './section-editor-tiptap'
 import type { SectionToolbarState } from './section-editor-tiptap'
 import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
 import { anchorNameFor } from '../../anchor/anchor-position'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 
 export interface RemixSectionEditorBindings {
   readonly adapters: Map<string, SectionTiptapAdapter>
@@ -23,6 +25,7 @@ export interface RemixSectionEditorBindings {
   readonly selectedAnchorBdcId: string | null
   readonly onEditAnchorBdc: (bdcId: string) => void
   readonly onCloseAnchorBdc: () => void
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly handle: RemixRenderHandle
   readonly current: { view: EditorViewModel }
 }
@@ -66,16 +69,28 @@ export function renderRemixSectionEditor(
         data-elce-profile-token-target="true"
         mix={on<HTMLInputElement, 'input'>('input', (event) => state.adapters.get(bdc.id)?.updateTitle(event.currentTarget.value))}
       />
-      <button
-        id={`elce-section-delete-${bdc.id}`}
-        className="elce-bdc-icon-button elce-bdc-icon-button--danger"
-        type="button"
-        aria-label="Supprimer le bloc texte"
-        title="Supprimer le bloc texte"
-        mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
+      <div
+        id={`elce-section-header-actions-${bdc.id}`}
+        className="elce-bdc-header-actions"
       >
-        {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`, 14)}
-      </button>
+        {renderAppearanceTrigger({
+          id: `elce-section-style-${bdc.id}`,
+          target: { kind: 'bdc', bdcId: bdc.id },
+          label: `Ouvrir le style de la section ${section.title.trim() || ''}`,
+          onOpen: state.onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-bdc-style-trigger',
+        })}
+        <button
+          id={`elce-section-delete-${bdc.id}`}
+          className="elce-bdc-icon-button elce-bdc-icon-button--danger"
+          type="button"
+          aria-label="Supprimer le bloc texte"
+          title="Supprimer le bloc texte"
+          mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
+        >
+          {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`, 14)}
+        </button>
+      </div>
     </div>
     {renderToolbar(bdc.id, toolbarState, state.adapters, handle)}
     <div
@@ -120,7 +135,15 @@ export function renderRemixSectionEditor(
     />
     {editingAnchorBdc === undefined
       ? null
-      : renderAnchorCardEditor(editingAnchorBdc, view, cardActions, state.onCloseAnchorBdc, actions, editingAnchorPartId)}
+      : renderAnchorCardEditor(
+        editingAnchorBdc,
+        view,
+        cardActions,
+        state.onCloseAnchorBdc,
+        actions,
+        editingAnchorPartId,
+        state.onOpenAppearanceTarget,
+      )}
   </section>
 }
 
@@ -187,6 +210,7 @@ function renderAnchorCardEditor(
   close: () => void,
   editorActions: EditorActionsFacade,
   anchorPartId: string | null,
+  onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void,
 ): RemixNode {
   const positionStyle = anchorPartId === null ? undefined : {
     position: 'absolute' as const,
@@ -213,6 +237,13 @@ function renderAnchorCardEditor(
         >
           Graphe
         </h3>
+        {renderAppearanceTrigger({
+          id: `elce-anchor-graph-style-${card.id}`,
+          target: { kind: 'bdc', bdcId: card.id },
+          label: 'Ouvrir le style du graphe',
+          onOpen: onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
+        })}
         <button
           id={`elce-anchor-card-editor-close-${card.id}`}
           className="elce-bdc-icon-button"
@@ -246,6 +277,13 @@ function renderAnchorCardEditor(
       >
         Carte
       </h3>
+      {renderAppearanceTrigger({
+        id: `elce-anchor-card-style-${card.id}`,
+        target: { kind: 'bdc', bdcId: card.id },
+        label: `Ouvrir le style de la carte ${card.card?.title.trim() || ''}`,
+        onOpen: onOpenAppearanceTarget,
+        className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
+      })}
       <button
         id={`elce-anchor-card-editor-close-${card.id}`}
         className="elce-bdc-icon-button"

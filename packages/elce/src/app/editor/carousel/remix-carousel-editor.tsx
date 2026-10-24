@@ -13,6 +13,7 @@ import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import type { ElceCarouselEditorProps } from '../../facades/carousel/carousel-facade-types'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 import { RemixCardEditorFields } from '../card/remix-card-editor-fields'
 import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
 
@@ -57,16 +58,28 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
       >
         Carousel
       </h3>
-      <button
-        id={`elce-carousel-delete-${bdcId}`}
-        className="elce-carousel-editor__delete-bdc"
-        type="button"
-        aria-label="Supprimer le bloc Carousel"
-        title="Supprimer le bloc Carousel"
-        mix={on<HTMLButtonElement, 'click'>('click', actions.deleteCarousel)}
+      <div
+        id={`elce-carousel-header-actions-${bdcId}`}
+        className="elce-bdc-header-actions"
       >
-        {renderLucideIcon(Trash2, `elce-carousel-delete-icon-${bdcId}`, 14)}
-      </button>
+        {renderAppearanceTrigger({
+          id: `elce-carousel-style-${bdcId}`,
+          target: { kind: 'bdc', bdcId },
+          label: 'Ouvrir le style du Carousel',
+          onOpen: props.onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-bdc-style-trigger',
+        })}
+        <button
+          id={`elce-carousel-delete-${bdcId}`}
+          className="elce-carousel-editor__delete-bdc"
+          type="button"
+          aria-label="Supprimer le bloc Carousel"
+          title="Supprimer le bloc Carousel"
+          mix={on<HTMLButtonElement, 'click'>('click', actions.deleteCarousel)}
+        >
+          {renderLucideIcon(Trash2, `elce-carousel-delete-icon-${bdcId}`, 14)}
+        </button>
+      </div>
     </header>
     {renderCarouselSettings(props)}
     <div
@@ -389,17 +402,29 @@ function renderSelectedCard(
         allowMultipleMediaFiles={true}
         importMediaFiles={actions.importMediaFiles}
         toolbarContent={durationControl}
-        toolbarEnd={<button
-          id={`elce-carousel-card-delete-${selected.bdc.id}`}
-          className="elce-carousel-editor__delete"
-          type="button"
-          aria-label="Supprimer cette carte"
-          title="Supprimer cette carte"
-          disabled={content.cards.length <= 1}
-          mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeCard(selected.bdc.id, selectedCardBdcId))}
+        toolbarEnd={<div
+          id={`elce-carousel-card-header-actions-${selected.bdc.id}`}
+          className="elce-bdc-header-actions elce-carousel-card-header-actions"
         >
-          {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`, 14)}
-        </button>}
+          {renderAppearanceTrigger({
+            id: `elce-carousel-card-style-${selected.bdc.id}`,
+            target: { kind: 'bdc', bdcId: selected.bdc.id },
+            label: `Ouvrir le style de la carte ${selected.bdc.card?.title.trim() || ''}`,
+            onOpen: props.onOpenAppearanceTarget,
+            className: 'elce-appearance-trigger elce-bdc-style-trigger',
+          })}
+          <button
+            id={`elce-carousel-card-delete-${selected.bdc.id}`}
+            className="elce-carousel-editor__delete"
+            type="button"
+            aria-label="Supprimer cette carte"
+            title="Supprimer cette carte"
+            disabled={content.cards.length <= 1}
+            mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeCard(selected.bdc.id, selectedCardBdcId))}
+          >
+            {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`, 14)}
+          </button>
+        </div>}
       />
       : selected.bdc.type === 'statistical-graph' && selected.bdc.statisticalGraph != null
         ? renderRemixStatisticalGraphEditor(
@@ -407,6 +432,13 @@ function renderSelectedCard(
           props.createStatisticalGraphActions(selected.bdc.id, selected.bdc.statisticalGraph),
           () => actions.removeStatisticalGraph(selected.bdc.id, selectedCardBdcId),
           durationControl,
+          renderAppearanceTrigger({
+            id: `elce-carousel-graph-style-${selected.bdc.id}`,
+            target: { kind: 'bdc', bdcId: selected.bdc.id },
+            label: 'Ouvrir le style du graphe',
+            onOpen: props.onOpenAppearanceTarget,
+            className: 'elce-appearance-trigger elce-bdc-style-trigger',
+          }),
         )
         : null}
   </div>

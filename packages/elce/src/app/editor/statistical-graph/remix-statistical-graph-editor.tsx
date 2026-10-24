@@ -33,6 +33,7 @@ export function renderRemixStatisticalGraphEditor(
   actions: StatisticalGraphEditorActions,
   onDelete?: () => void,
   toolbarContent?: RemixNode,
+  appearanceTrigger?: RemixNode,
 ): RemixNode {
   if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) return null
   const content = bdc.statisticalGraph
@@ -96,6 +97,7 @@ export function renderRemixStatisticalGraphEditor(
           {renderLucideIcon(Eye, `elce-statistical-graph-preview-icon-${bdc.id}`, 14)}
           Aperçu
         </button>
+        {appearanceTrigger}
         {deleteButton}
       </div>
     </header>

@@ -2,6 +2,7 @@ import type { SceneDoc } from 'codplay/scene/types'
 import type { MediaId, RevelationTransitionDefaults } from '../../domain/document/document-types'
 import type { ChapterType, MediaType } from '../../config/document-config-types'
 import type { TestAnswerState } from '../../domain/summary-profile/test-state-types'
+import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
 
 export interface DiapoQuestionReset {
   readonly eventName: string
@@ -13,6 +14,7 @@ export type DiapoSceneBuildOptions = Readonly<{
   readonly chapterType?: ChapterType
   readonly revelationDefaults?: RevelationTransitionDefaults
   readonly questionAnswers?: Readonly<Record<string, TestAnswerState>>
+  readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }>
 
 export interface DiapoSceneBuild {

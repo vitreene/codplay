@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { renderDocumentHtml } from './elce-local-server'
+import { appearanceFontAssetPath, renderDocumentHtml } from './elce-local-server'
+
+describe('Elcé local appearance font assets', () => {
+  it('maps local font URLs to the existing Remix source mount', () => {
+    expect(appearanceFontAssetPath('/fonts/crimson-text/normal-400.ttf'))
+      .toBe('/assets/elce/assets/fonts/crimson-text/normal-400.ttf')
+    expect(appearanceFontAssetPath('/fonts/dm-sans/italic-700.ttf'))
+      .toBe('/assets/elce/assets/fonts/dm-sans/italic-700.ttf')
+  })
+
+  it('rejects paths outside the configured local font shape', () => {
+    expect(appearanceFontAssetPath('/fonts/../server/elce-local-server.ts')).toBeNull()
+    expect(appearanceFontAssetPath('/fonts/crimson-text/OFL.txt')).toBeNull()
+    expect(appearanceFontAssetPath('/assets/elce/assets/fonts/crimson-text/normal-400.ttf')).toBeNull()
+  })
+})
 
 describe('Elcé local server document preloads', () => {
   const entry = {

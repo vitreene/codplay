@@ -7,6 +7,8 @@ import { GripVertical, Trash2 } from 'lucide-static'
 import { renderLucideIcon } from '../lucide-static-icon'
 import { renderProfileTokenInsertion } from '../../editor/profile/profile-token-insertion'
 import type { ContentCatalogPanelProps } from './catalog-panel-types'
+import { renderAppearancePanel } from '../../appearance/appearance-panel'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 
 /** Renders the available BDC and reusable media tabs in the existing right panel. */
 export function renderContentCatalogPanel(props: ContentCatalogPanelProps): RemixNode {
@@ -44,11 +46,43 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
     id="elce-properties"
     className="elce-panel elce-properties"
     data-panel-open={responsivePanel === 'properties'}
-    aria-labelledby="elce-content-catalog-title"
+    aria-labelledby={props.sidePanelTab === 'contents' ? 'elce-content-catalog-title' : 'elce-appearance-title'}
   >
+    <div
+      id="elce-side-panel-tabs"
+      className="elce-side-panel-tabs"
+      role="tablist"
+      aria-label="Panneau latéral"
+    >
+      <button
+        id="elce-side-panel-tab-contents"
+        className={props.sidePanelTab === 'contents' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
+        type="button"
+        role="tab"
+        aria-selected={props.sidePanelTab === 'contents'}
+        aria-controls="elce-content-catalog"
+        mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('contents'))}
+      >
+        Contenus
+      </button>
+      <button
+        id="elce-side-panel-tab-style"
+        className={props.sidePanelTab === 'style' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
+        type="button"
+        role="tab"
+        aria-selected={props.sidePanelTab === 'style'}
+        aria-controls="elce-appearance-tabpanel"
+        mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('style'))}
+      >
+        Style
+      </button>
+    </div>
     <section
       id="elce-content-catalog"
       className="elce-outline-group"
+      role="tabpanel"
+      aria-labelledby="elce-side-panel-tab-contents"
+      hidden={props.sidePanelTab !== 'contents'}
     >
       <header
         id="elce-properties-heading"
@@ -140,6 +174,13 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
                 className="elce-content-catalog-row"
               >
                 {renderCatalogReference(entry.reference, entry.name, catalogBdcLabel(entry.bdcType), 'bdc', entry.key)}
+                {renderAppearanceTrigger({
+                  id: `elce-catalog-bdc-style-${entry.reference.bdcId}`,
+                  target: { kind: 'bdc', bdcId: entry.reference.bdcId },
+                  label: `Ouvrir le style du bloc ${catalogBdcLabel(entry.bdcType)} « ${entry.name} »`,
+                  onOpen: props.onOpenAppearanceTarget,
+                  className: 'elce-appearance-trigger elce-content-catalog-style-trigger',
+                })}
                 {renderDeleteButton(`elce-catalog-bdc-delete-${entry.reference.bdcId}`, `Supprimer définitivement le bloc ${entry.name}`, () => actions.deleteCatalogBdc(entry.reference.bdcId))}
               </div>
             </li>)}
@@ -187,6 +228,18 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
           profileTokenTargetId,
         )}
       </section>
+    </section>
+    <section
+      id="elce-appearance-tabpanel"
+      role="tabpanel"
+      aria-labelledby="elce-side-panel-tab-style"
+      hidden={props.sidePanelTab !== 'style'}
+    >
+      {renderAppearancePanel({
+        view,
+        actions,
+        target: props.appearanceTarget,
+      })}
     </section>
   </aside>
 }

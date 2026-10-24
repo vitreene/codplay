@@ -3,7 +3,7 @@
 ## Rôle
 
 Le routeur Fetch Remix expose les opérations du catalogue local des projets.
-Un projet correspond à un `ElceDocument` v5 : son identifiant et son nom sont
+Un projet correspond à un `ElceDocument` v6 : son identifiant et son nom sont
 ceux du document. Le navigateur crée le document initial ; le serveur reçoit
 ensuite sa valeur structurée et la persiste. Le routeur ne crée pas un second
 document initial.
@@ -51,10 +51,10 @@ document, et `GET`, `HEAD` et `PUT` pour l’état test.
 
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
-| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v5 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
+| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v6 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
 | `POST /api/exports/scorm` | `multipart/form-data` : `sightyPackage` ZIP, `documentName`, `version` (`1.2`, `2004v3` ou `2004v4`) et `monoSco` (`true` ou `false`) | `200 application/zip`, nom stable dans `Content-Disposition` et `X-Elce-Scorm-Filename`, nombre de packages dans `X-Elce-Scorm-Package-Count`, `Cache-Control: no-store` ; aucune persistance |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
-| `POST /api/projects` | `ElceDocumentData` v5 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
+| `POST /api/projects` | `ElceDocumentData` v6 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
 | `POST /api/projects/:projectId/edit-access` | `{ "pageId": string, "force"?: true }` | `200 { "grantId": string, "recovered": boolean }` ; une répétition normale par la page détentrice retrouve son droit ; `force: true` le remplace |
 | `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
@@ -62,13 +62,13 @@ document, et `GET`, `HEAD` et `PUT` pour l’état test.
 | `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
 | `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
 | `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
-| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v5, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v6, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
 | `GET /api/projects/:projectId/test-state` | — | `200 { "state" }` et un ETag de révision indépendant |
 | `PUT /api/projects/:projectId/test-state` | `{ "state": ProjectTestState }`, `If-Match: "<revision>"` | `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
-Le corps JSON transporté est le document v5 structuré produit par
+Le corps JSON transporté est le document v6 structuré produit par
 `ElceDocument.toJSON()`. L’adaptateur de persistance le projette vers les
 tables ; le JSON riche de Tiptap et le contenu complet du BDC Graphe sont les
 deux champs JSON en base. Les autres BDC, dont Question/Réponses, conservent
@@ -103,7 +103,7 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 
 | Statut | Code | Sens |
 | --- | --- | --- |
-| `400` | `invalid_request` | JSON, document v5, identifiant ou nom de type invalide |
+| `400` | `invalid_request` | JSON, document v6, identifiant ou nom de type invalide |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
 | `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
@@ -125,7 +125,7 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 `SqliteProjectPersistence` implémente `ProjectPersistence` avec
 `remix/data-table/sqlite`. À l’ouverture, `openProjectDatabase()` applique les
 migrations SQL chargées avec `loadMigrations()` de Remix. Les migrations créent
-les tables relationnelles du modèle v5 ; aucune table ne contient le document
+les tables relationnelles du modèle v6 ; aucune table ne contient le document
 Elcé entier en JSON. `sections.content_json` garde le JSON Tiptap et
 `sections.markup_html` son export HTML. `statistical_graphs` garde le contenu
 complet du Graphe dans `content_json` ; les tables `graph_categories`,
@@ -133,6 +133,11 @@ complet du Graphe dans `content_json` ; les tables `graph_categories`,
 les tables `questions` et `question_answers`. Les colonnes `summary_json` et
 `profile_json` enregistrent les réglages du Sommaire et du profil. La table
 `project_test_states` conserve séparément le JSON de test auteur et sa révision.
+Les colonnes `appearance_json` de `projects`, `pages` et `content_blocks`
+enregistrent les réglages d’apparence facultatifs correspondants. La migration
+`20261024190000_flatten_demo5_local_appearance_presets` convertit les presets
+locaux uniquement pour Demo5 ; le contrat complet figure dans la
+[spécification d’apparence](./appearance-spec.md).
 La migration `20261015100000_add_summary_page_continuation_mode` complète les
 réglages existants avec `pageContinuationMode: "endpage"` seulement quand cette
 clé manque ; elle préserve une valeur déjà enregistrée.
@@ -215,7 +220,7 @@ octets. Le contrat d’assemblage et de téléchargement figure dans la
 `ProjectPersistence`; `ProjectTestStateApiController` traite l’état test séparé.
 Les tests couvrent les opérations API avec le dépôt isolé, puis avec SQLite
 Remix en mémoire. Une base fichier est fermée puis rouverte ; les projets
-restent lisibles et le document v5 conserve ses relations et ordres. La
+restent lisibles et le document v6 conserve ses relations et ordres. La
 révision périmée est refusée sans perdre les métadonnées de stockage média.
 
 `createElceHttpServer()` assemble le listener Node, le routeur Fetch Remix,

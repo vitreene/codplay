@@ -1218,14 +1218,20 @@ body {
 .elce-page-bdc {
   position: relative;
   min-width: 0;
-  padding-left: 1.95rem;
+  padding-left: 2.45rem;
 }
 
-.elce-page-bdc__drag {
+.elce-page-bdc-actions {
   position: absolute;
   z-index: 2;
   top: 1rem;
   left: 0.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.elce-page-bdc__drag {
   cursor: grab;
 }
 
@@ -2483,4 +2489,75 @@ body {
   #elce-profile-rule-controls {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.elce-appearance-trigger {
+  display: inline-flex;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.25rem;
+  color: #263b3a;
+  background: #fffdf8;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+
+.elce-appearance-trigger:hover {
+  background: #e8e4db;
+}
+
+.elce-appearance-trigger:focus-visible {
+  outline: 3px solid #80b4a8;
+  outline-offset: 2px;
+}
+
+.elce-work-area-page-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.elce-work-area-page-heading > .elce-work-area-page-title {
+  flex: 1;
+}
+
+.elce-content-catalog-row .elce-content-catalog-style-trigger {
+  flex: 0 0 auto;
+}
+
+.elce-anchor-card-editor__header .elce-anchor-appearance-trigger {
+  margin-left: auto;
+}
+
+.elce-bdc-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.elce-bdc-header-actions > .elce-appearance-trigger,
+.elce-bdc-header-actions > .elce-bdc-icon-button,
+.elce-bdc-header-actions > .elce-card-editor__delete,
+.elce-bdc-header-actions > .elce-carousel-editor__delete-bdc,
+.elce-bdc-header-actions > .elce-danger-action,
+.elce-statistical-graph-editor__header-actions > .elce-bdc-style-trigger,
+.elce-statistical-graph-editor__header-actions > .elce-bdc-icon-button {
+  width: 1.7rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  min-height: 1.7rem;
+  flex: 0 0 1.7rem;
+}
+
+.elce-bdc-style-trigger {
+  flex: 0 0 auto;
 }

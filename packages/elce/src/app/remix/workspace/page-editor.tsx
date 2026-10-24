@@ -5,6 +5,7 @@ import { BDC_ORDER, BDC_TYPE, CATALOG_REFERENCE, CHAPTER_TYPE, CHAPTER_TYPE_CONF
 import type { Bdc, Chapter, Page } from '../../../domain/document/document-types'
 import { canMoveBdcToPage } from '../../../domain/commands/document-commands'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
+import type { AppearanceTarget } from '../../../domain/commands/document-command-types'
 import { editorViewModelEqual, selectEditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import { EditorContextProvider } from '../editor-context'
@@ -20,6 +21,11 @@ import { renderRemixCardEditor } from '../../editor/card/remix-card-editor'
 import { RemixCarouselEditor } from '../../editor/carousel/remix-carousel-editor'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import { renderRemixStatisticalGraphEditor } from '../../editor/statistical-graph/remix-statistical-graph-editor'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+
+interface RemixPageEditorProps {
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
+}
 
 const chapterTypeIcons = {
   folder: Folder,
@@ -27,7 +33,7 @@ const chapterTypeIcons = {
 } as const
 
 /** Renders the selected page and all of its BDC editors in Remix. */
-export function RemixPageEditor(handle: Handle) {
+export function RemixPageEditor(handle: Handle<RemixPageEditorProps>) {
   const { controller, actions } = handle.context.get(EditorContextProvider)
   if (controller === null || actions === null) return () => null
 
@@ -87,6 +93,7 @@ export function RemixPageEditor(handle: Handle) {
     updateDropTarget,
     editingAnchorBdcId,
     setEditingAnchorBdc,
+    onOpenAppearanceTarget: handle.props.onOpenAppearanceTarget,
   })
 }
 
@@ -102,6 +109,7 @@ interface PageEditorRenderState {
   readonly updateDropTarget: (targetId: string | null) => void
   readonly editingAnchorBdcId: string | null
   readonly setEditingAnchorBdc: (bdcId: string | null) => void
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
 }
 
 /** Renders the page title, author commands, and ordered BDC sequence. */
@@ -174,7 +182,7 @@ function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, s
           className="elce-work-area-titles"
         >
           {view.pageChapter === undefined ? null : renderPageChapterTitle(view.pageChapter, actions)}
-          {renderPageTitle(page, actions)}
+          {renderPageTitle(page, actions, state.onOpenAppearanceTarget)}
         </div>
       </div>
     </div>
@@ -259,41 +267,56 @@ function renderChapterTypeMark(chapter: Chapter): RemixNode {
   </span>
 }
 
-/** Renders the selected page's inline editable title. */
-function renderPageTitle(page: Page | undefined, actions: EditorActionsFacade): RemixNode {
+/** Renders the selected page title and its keyboard-accessible style entry point. */
+function renderPageTitle(
+  page: Page | undefined,
+  actions: EditorActionsFacade,
+  onOpenAppearanceTarget: PageEditorRenderState['onOpenAppearanceTarget'],
+): RemixNode {
   if (page === undefined) return <h1
     id="elce-work-area-title"
   >
     Éditeur
   </h1>
-  return <h1
-    id="elce-work-area-title"
-    className="elce-work-area-page-title"
+  return <div
+    id={`elce-work-area-page-heading-${page.id}`}
+    className="elce-work-area-page-heading"
   >
-    <span
-      id={`elce-page-type-mark-${page.id}`}
-      className="elce-page-type-mark"
-      aria-hidden={true}
+    <h1
+      id="elce-work-area-title"
+      className="elce-work-area-page-title"
     >
-      {renderLucideIcon(getPageTypeIcon(page.type), `elce-page-type-icon-${page.id}`, 14)}
-    </span>
-    <input
-      id={`elce-page-title-${page.id}`}
-      className="elce-inline-title-input"
-      type="text"
-      aria-label="Titre de la page"
-      title="Modifier le titre de la page"
-      defaultValue={page.name}
-      data-elce-profile-token-target="true"
-      key={`${page.id}:${page.name}`}
-      mix={[
-        on<HTMLInputElement, 'blur'>('blur', (event) => commitInlineName(event.currentTarget, page.name, (name) => actions.renamePage(page.id, name))),
-        on<HTMLInputElement, 'keydown'>('keydown', (event) => {
-          if (event.key === 'Enter') event.currentTarget.blur()
-        }),
-      ]}
-    />
-  </h1>
+      <span
+        id={`elce-page-type-mark-${page.id}`}
+        className="elce-page-type-mark"
+        aria-hidden={true}
+      >
+        {renderLucideIcon(getPageTypeIcon(page.type), `elce-page-type-icon-${page.id}`, 14)}
+      </span>
+      <input
+        id={`elce-page-title-${page.id}`}
+        className="elce-inline-title-input"
+        type="text"
+        aria-label="Titre de la page"
+        title="Modifier le titre de la page"
+        defaultValue={page.name}
+        data-elce-profile-token-target="true"
+        key={`${page.id}:${page.name}`}
+        mix={[
+          on<HTMLInputElement, 'blur'>('blur', (event) => commitInlineName(event.currentTarget, page.name, (name) => actions.renamePage(page.id, name))),
+          on<HTMLInputElement, 'keydown'>('keydown', (event) => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+          }),
+        ]}
+      />
+    </h1>
+    {renderAppearanceTrigger({
+      id: `elce-page-style-${page.id}`,
+      target: { kind: 'page', pageId: page.id },
+      label: `Ouvrir le style de la page ${page.name}`,
+      onOpen: onOpenAppearanceTarget,
+    })}
+  </div>
 }
 
 /** Keeps inline title validation consistent with the existing page editor. */
@@ -330,20 +353,25 @@ function renderPageBdcList(page: Page, view: EditorViewModel, actions: EditorAct
             id={`elce-page-bdc-${bdc.id}`}
             className="elce-page-bdc"
           >
-            <button
-              id={`elce-page-bdc-drag-${bdc.id}`}
-              className="elce-bdc-icon-button elce-page-bdc__drag"
-              type="button"
-              draggable={true}
-              aria-label="Déplacer le bloc"
-              title="Glisser pour déplacer ou rendre disponible"
-              mix={[
-                on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => beginBdcDrag(event, bdc.id, state)),
-                on<HTMLButtonElement, 'dragend'>('dragend', () => endBdcDrag(state)),
-              ]}
+            <div
+              id={`elce-page-bdc-actions-${bdc.id}`}
+              className="elce-page-bdc-actions"
             >
-              {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdc.id}`, 14)}
-            </button>
+              <button
+                id={`elce-page-bdc-drag-${bdc.id}`}
+                className="elce-bdc-icon-button elce-page-bdc__drag"
+                type="button"
+                draggable={true}
+                aria-label="Déplacer le bloc"
+                title="Glisser pour déplacer ou rendre disponible"
+                mix={[
+                  on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => beginBdcDrag(event, bdc.id, state)),
+                  on<HTMLButtonElement, 'dragend'>('dragend', () => endBdcDrag(state)),
+                ]}
+              >
+                {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdc.id}`, 14)}
+              </button>
+            </div>
             {renderBdcEditor(bdc, page, view, actions, state)}
           </div>,
         ]
@@ -388,6 +416,7 @@ function renderBdcEditor(
         selectedAnchorBdcId: state.editingAnchorBdcId,
         onEditAnchorBdc: state.setEditingAnchorBdc,
         onCloseAnchorBdc: () => state.setEditingAnchorBdc(null),
+        onOpenAppearanceTarget: state.onOpenAppearanceTarget,
         handle: state.handle,
         current: state.current,
       })
@@ -406,6 +435,7 @@ function renderBdcEditor(
         actions: actions.createQuestionEditorActions(bdc.id, bdc.question),
         profileProperties: view.documentModel.data.profile.properties,
         onCatalogReference: (reference) => actions.attachQuestionMediaReference(bdc.id, reference),
+        onOpenAppearanceTarget: state.onOpenAppearanceTarget,
       })
     }
     case BDC_TYPE.EVALUATION_RESULT:
@@ -415,6 +445,7 @@ function renderBdcEditor(
         bdc.evaluationResult,
         (evaluationResult) => actions.updateEvaluationResult(bdc.id, evaluationResult),
         () => actions.deleteEvaluationResult(bdc.id),
+        state.onOpenAppearanceTarget,
       )
     case BDC_TYPE.CAROUSEL: {
       if (bdc.carousel === null || bdc.carousel === undefined) return null
@@ -428,6 +459,7 @@ function renderBdcEditor(
         bdcs={views}
         selectedCardBdcId={view.selectedCarouselCardBdcId}
         mediaById={view.mediaById}
+        onOpenAppearanceTarget={state.onOpenAppearanceTarget}
         createStatisticalGraphActions={(childBdcId, graph) => actions.createStatisticalGraphEditorActions(childBdcId, graph)}
         actions={actions.createCarouselEditorActions(
           bdc.id,
@@ -443,6 +475,7 @@ function renderBdcEditor(
         view,
         actions.createCardEditorActions(view.documentModel.bdcs),
         () => actions.deleteCard(bdc.id),
+        state.onOpenAppearanceTarget,
       )
     case BDC_TYPE.STATISTICAL_GRAPH:
       if (bdc.statisticalGraph == null) return null
@@ -450,6 +483,14 @@ function renderBdcEditor(
         bdc,
         actions.createStatisticalGraphEditorActions(bdc.id, bdc.statisticalGraph),
         () => actions.deleteStatisticalGraph(bdc.id),
+        undefined,
+        renderAppearanceTrigger({
+          id: `elce-statistical-graph-style-${bdc.id}`,
+          target: { kind: 'bdc', bdcId: bdc.id },
+          label: 'Ouvrir le style du graphe',
+          onOpen: state.onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-bdc-style-trigger',
+        }),
       )
     default:
       return null

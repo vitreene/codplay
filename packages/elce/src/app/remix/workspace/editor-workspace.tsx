@@ -78,6 +78,10 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
         view: props.view,
         actions: props.actions,
         responsivePanel: props.responsivePanel,
+        sidePanelTab: props.sidePanelTab,
+        appearanceTarget: props.appearanceTarget,
+        onSetSidePanelTab: props.onSetSidePanelTab,
+        onOpenAppearanceTarget: props.onOpenAppearanceTarget,
         profileTokenTargetId: props.profileTokenTargetId,
         dropTarget: props.dropTarget,
         onSetDropTarget: props.onSetDropTarget,
@@ -151,7 +155,7 @@ function renderPanelToggle(
   setResponsivePanel: EditorWorkspaceViewProps['onSetResponsivePanel'],
 ): RemixNode {
   const isOpen = responsivePanel === panel
-  const panelLabel = panel === 'outline' ? 'le scénario' : 'les contenus'
+  const panelLabel = panel === 'outline' ? 'le scénario' : 'le panneau latéral'
   const label = `${isOpen ? 'Fermer' : 'Ouvrir'} ${panelLabel}`
   const id = panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
   const targetId = panel === 'outline' ? 'elce-outline' : 'elce-properties'

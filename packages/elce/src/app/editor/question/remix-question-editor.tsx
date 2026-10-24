@@ -6,6 +6,7 @@ import { on, type RemixNode } from 'remix/ui'
 import type { QuestionEditorProps } from './question-editor-types'
 import { renderRemixMediaPicker } from '../media/remix-media-picker'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 
 const ANSWER_DRAG_MIME_TYPE = 'application/x-elce-question-answer+json'
 
@@ -36,16 +37,28 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           {option.label}
         </option>)}
       </select>
-      <button
-        id={`elce-question-delete-${bdcId}`}
-        className="elce-bdc-icon-button elce-bdc-icon-button--danger"
-        type="button"
-        aria-label="Supprimer la question"
-        title="Supprimer la question"
-        mix={on<HTMLButtonElement, 'click'>('click', actions.deleteQuestion)}
+      <div
+        id={`elce-question-header-actions-${bdcId}`}
+        className="elce-bdc-header-actions"
       >
-        {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`, 14)}
-      </button>
+        {renderAppearanceTrigger({
+          id: `elce-question-style-${bdcId}`,
+          target: { kind: 'bdc', bdcId },
+          label: 'Ouvrir le style de la question',
+          onOpen: props.onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-bdc-style-trigger',
+        })}
+        <button
+          id={`elce-question-delete-${bdcId}`}
+          className="elce-bdc-icon-button elce-bdc-icon-button--danger"
+          type="button"
+          aria-label="Supprimer la question"
+          title="Supprimer la question"
+          mix={on<HTMLButtonElement, 'click'>('click', actions.deleteQuestion)}
+        >
+          {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`, 14)}
+        </button>
+      </div>
     </div>
     <div
       id={`elce-question-workspace-${bdcId}`}

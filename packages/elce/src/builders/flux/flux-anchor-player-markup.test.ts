@@ -10,12 +10,9 @@ describe('Flux player anchor markup', () => {
     expect(projected).toContain('Avant ')
     expect(projected).toContain(' après')
     expect(projected).toContain('id="part:anchor-flow-slot"')
-    expect(projected).toContain('class="elce-flow-slot"')
+    expect(projected).toMatch(/class="elce-flow-slot elce-flow-slot-/)
     expect(projected).toContain('data-part="part:anchor"')
-    expect(projected).toContain('display:inline-block;width:0;height:0;position:static;')
-    expect(projected).toContain('--elce-anchor-padding:75%')
-    expect(projected).toContain('padding-bottom:calc(75% + 1rem)')
-    expect(projected).toContain('margin-inline-end:100%')
+    expect(projected).not.toContain('style=')
     expect(projected).not.toContain('data-elce-anchor')
     expect(projected).not.toContain('data-bdc-id')
   })
@@ -26,23 +23,23 @@ describe('Flux player anchor markup', () => {
     expect(readFluxAnchorTargets(markup)).toEqual([{ bdcId: 'bdc-image', partId: 'part:anchor', paddingBottom: '75%' }])
   })
 
-  it('keeps the raw reservation when projecting markup that already has layout CSS', () => {
+  it('projects an existing anchor as a class without copying its inline layout values', () => {
     const markup = '<p id="text"><span data-elce-anchor="true" data-bdc-id="bdc-image" data-part="part:anchor" style="--elce-anchor-padding:75%;padding-bottom:calc(75% + 1rem);"></span></p>'
 
     const projected = projectFluxPlayerMarkup(markup)
 
-    expect(projected).toContain('--elce-anchor-padding:75%')
-    expect(projected).toContain('padding-bottom:calc(75% + 1rem)')
-    expect(projected).not.toContain('calc(calc(')
+    expect(projected).toMatch(/class="elce-flow-slot elce-flow-slot-/)
+    expect(projected).not.toContain('style=')
+    expect(readFluxAnchorTargets(markup)[0]?.paddingBottom).toBe('75%')
   })
 
-  it('projects an authored graph size for the same existing flow slot', () => {
+  it('projects a graph anchor through the same flow slot class', () => {
     const markup = '<p id="text"><span data-elce-anchor="true" data-bdc-id="graph-1" data-part="part:graph"></span></p>'
 
-    const projected = projectFluxPlayerMarkup(markup, { 'graph-1': '100%' })
+    const projected = projectFluxPlayerMarkup(markup)
 
-    expect(projected).toContain('--elce-anchor-padding:100%')
-    expect(projected).toContain('padding-bottom:calc(100% + 1rem)')
+    expect(projected).toMatch(/class="elce-flow-slot elce-flow-slot-/)
     expect(projected).toContain('data-part="part:graph"')
+    expect(projected).not.toContain('style=')
   })
 })

@@ -9,7 +9,10 @@ describe('Statistical Graph scene builder', () => {
   it('renders the selected Table as visible HTML and chooses one font size for all cells', () => {
     const build = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, { transposeEnabled: false }), 'statistical-graph-above-text', 'table-graph')
 
-    expect(build.markup).toContain('<table id="table-graph-table" class="elce-statistical-graph__table" style="--statistical-graph-series-count:1;--statistical-graph-category-count:1;--statistical-graph-max-value-length:1;--statistical-graph-max-row-heading-length:6;--statistical-graph-max-series-heading-length:10">')
+    expect(build.markup).toMatch(/<table id="table-graph-table" class="elce-statistical-graph__table elce-graph-table-fit-[^"]+">/)
+    expect(build.markup).not.toContain('style=')
+    expect(build.styleSheet).toContain('--statistical-graph-series-count: 1;')
+    expect(build.styleSheet).toContain('--statistical-graph-max-series-heading-length: 10;')
     expect(build.markup).toContain('<th id="table-graph-series-0" scope="col" title="Population">Population</th>')
     expect(build.markup).toContain('<th id="table-graph-category-0" class="elce-statistical-graph__row-heading" scope="row" title="Nord">Nord</th>')
     expect(build.markup).toContain('<td id="table-graph-cell-0-0" title="0">0</td>')
@@ -44,16 +47,18 @@ describe('Statistical Graph scene builder', () => {
 
   it('marks wide visible tables for responsive dense layout while preserving every series label', () => {
     const series = Array.from({ length: 40 }, (_unused, index) => ({ id: `s${index}`, label: `Série ${index + 1}` }))
-    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
+    const build = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
       series,
       values: [
         { categoryId: 'c1', seriesId: 's1', value: 0 },
         { categoryId: 'c1', seriesId: 's39', value: 1 },
       ],
       transposeEnabled: false,
-    }), 'statistical-graph-above-text', 'dense-table').markup
+    }), 'statistical-graph-above-text', 'dense-table')
+    const markup = build.markup
 
-    expect(markup).toContain('class="elce-statistical-graph__table elce-statistical-graph__table--dense" style="--statistical-graph-series-count:40;--statistical-graph-category-count:1;--statistical-graph-max-value-length:1;--statistical-graph-max-row-heading-length:6;--statistical-graph-max-series-heading-length:8"')
+    expect(markup).toMatch(/class="elce-statistical-graph__table elce-statistical-graph__table--dense elce-graph-table-fit-[^"]+"/)
+    expect(build.styleSheet).toContain('--statistical-graph-series-count: 40;')
     expect(markup).toContain('id="dense-table-category-0" class="elce-statistical-graph__row-heading" scope="row" title="Nord">Nord</th>')
     expect(markup).toContain('id="dense-table-cell-0-1" title="0">0</td>')
     expect(markup).toContain('title="Série 40">Série 40</th>')
@@ -67,14 +72,17 @@ describe('Statistical Graph scene builder', () => {
       seriesId: 's1',
       value: index === categories.length - 1 ? 1600 : index,
     }))
-    const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
+    const build = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.TABLE, {
       categories,
       series,
       values,
       transposeEnabled: false,
-    }), 'statistical-graph-above-text', 'tall-table').markup
+    }), 'statistical-graph-above-text', 'tall-table')
+    const markup = build.markup
 
-    expect(markup).toContain('class="elce-statistical-graph__table elce-statistical-graph__table--dense" style="--statistical-graph-series-count:1;--statistical-graph-category-count:40;--statistical-graph-max-value-length:5;--statistical-graph-max-row-heading-length:12;--statistical-graph-max-series-heading-length:8"')
+    expect(markup).toMatch(/class="elce-statistical-graph__table elce-statistical-graph__table--dense elce-graph-table-fit-[^"]+"/)
+    expect(build.styleSheet).toContain('--statistical-graph-category-count: 40;')
+    expect(build.styleSheet).toContain('--statistical-graph-max-value-length: 5;')
     expect(markup).toContain('id="tall-table-cell-39-0" title="1 600">1 600</td>')
   })
 
@@ -165,7 +173,7 @@ describe('Statistical Graph scene builder', () => {
     expect(markup).toContain('id="transposed-pie-legend" class="elce-statistical-graph__legend" aria-label="Séries"')
     expect(markup).toContain('id="transposed-pie-legend-label-s2" class="elce-statistical-graph__legend-label">Surface</span>')
     expect(markup).not.toContain('id="transposed-pie-legend-label-s1"')
-    expect(markup.match(/class="elce-statistical-graph__sector"/g)).toHaveLength(1)
+    expect(markup.match(/class="elce-statistical-graph__sector(?: [^"]*)?"/g)).toHaveLength(1)
   })
 
   it('omits chart legends when no applicable label is named', () => {
@@ -205,7 +213,7 @@ describe('Statistical Graph scene builder', () => {
     const markup = builder.buildContent(content, 'statistical-graph-above-text', 'gapped-line').markup
 
     expect(markup).not.toContain('id="gapped-line-line-0"')
-    expect(markup.match(/class="elce-statistical-graph__point"/g)).toHaveLength(2)
+    expect(markup.match(/class="elce-statistical-graph__point(?: [^"]*)?"/g)).toHaveLength(2)
   })
 
   it('keeps every 40 by 40 value in the semantic table and reduces chart labels', () => {

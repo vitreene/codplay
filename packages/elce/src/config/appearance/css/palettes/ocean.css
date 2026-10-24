@@ -1,0 +1,15 @@
+.elce-appearance-palette-ocean {
+  --elce-palette-background: #f3f8fc;
+  --elce-palette-surface: #ffffff;
+  --elce-palette-text: #18354a;
+  --elce-palette-muted: #506c80;
+  --elce-palette-accent: #176b9b;
+  --elce-palette-border: #c8dce9;
+}
+
+.elce-appearance-contrast-background-ocean-background { --elce-appearance-contrast-background: #f3f8fc; }
+.elce-appearance-contrast-background-ocean-surface { --elce-appearance-contrast-background: #ffffff; }
+.elce-appearance-contrast-background-ocean-text { --elce-appearance-contrast-background: #18354a; }
+.elce-appearance-contrast-background-ocean-muted { --elce-appearance-contrast-background: #506c80; }
+.elce-appearance-contrast-background-ocean-accent { --elce-appearance-contrast-background: #176b9b; }
+.elce-appearance-contrast-background-ocean-border { --elce-appearance-contrast-background: #c8dce9; }

@@ -11,6 +11,14 @@ import { validateHtmlElementMethodActions } from '../builders/markup-validation/
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
+import {
+  appearanceThemeCssAssetPathsForDocument,
+  createDocumentAppearanceStyleSheet,
+  createPageAppearanceStyleSheet,
+} from './appearance-scene-style-sheet'
+import { loadAppearanceThemeCssLinks } from './appearance/appearance-theme-css-links.ts'
+import type { AppearanceThemeCssLinks } from './appearance/appearance-theme-css-links.ts'
+import { pageAppearanceClassNames } from '../builders/scene-style/appearance-class-names.ts'
 import { ELCE_VIEWPORT_EXPANSION_STYLE_SHEET } from '../builders/viewport-expansion/viewport-expansion-style.ts'
 import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
@@ -29,10 +37,18 @@ export class ElcePlayerComposition {
   private destroyed = false
   private removeMenuDrawerListeners: (() => void) | undefined
   private removePageMediaPlayback: (() => void) | undefined
+  private readonly appearanceThemeCssLinks: AppearanceThemeCssLinks
 
   /** Builds one player composition from the current métier document. */
   public constructor(options: ElcePlayerCompositionOptions) {
     this.options = options
+    this.appearanceThemeCssLinks = loadAppearanceThemeCssLinks(
+      options.stage.ownerDocument,
+      appearanceThemeCssAssetPathsForDocument(options.document),
+    )
+    void this.appearanceThemeCssLinks.loaded.catch((error: unknown) => {
+      options.onLog?.(`Feuilles CSS d’apparence indisponibles : ${String(error)}`, 'error')
+    })
     const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
     const scenario = createElcePlayerScenario({ ...options, testState })
     for (const warning of validateHtmlElementMethodActions(scenario.scenes ?? {})) {
@@ -87,6 +103,7 @@ export class ElcePlayerComposition {
     this.removePageMediaPlayback?.()
     this.removePageMediaPlayback = undefined
     this.sighty.runtime.destroy()
+    this.appearanceThemeCssLinks.remove()
   }
 
   /** Connects accessible focus behavior to the CodPlay-driven menu drawer. */
@@ -199,6 +216,7 @@ export type ElcePlayerScenarioOptions = Omit<ElcePlayerCompositionOptions, 'stag
 /** Builds the shared, DOM-free Sighty definition used by preview and export. */
 export function createElcePlayerScenario(
   options: ElcePlayerScenarioOptions,
+  fontSourcePrefix: '/' | './' = '/',
 ): SightyScenarioDefinition<ElceSceneKey, ElceSlotName> {
   const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
   const pageSceneCatalog = createPageSceneCatalog(
@@ -217,7 +235,11 @@ export function createElcePlayerScenario(
     throw new Error('La scène layout Elcé est absente du scénario construit.')
   }
   const layoutSceneDoc = 'sceneDoc' in layoutSource ? layoutSource.sceneDoc : layoutSource
-  const layoutStyleSheet = [ELCE_PLAYER_STYLE_SHEET, ELCE_VIEWPORT_EXPANSION_STYLE_SHEET].join('\n')
+  const layoutStyleSheet = [
+    createDocumentAppearanceStyleSheet(options.document, fontSourcePrefix),
+    ELCE_PLAYER_STYLE_SHEET,
+    ELCE_VIEWPORT_EXPANSION_STYLE_SHEET,
+  ].join('\n')
   return {
     ...scenario,
     scenes: {
@@ -277,9 +299,17 @@ export function createPageSceneCatalog(
       id: page.id,
       type: page.type,
       bdcIds: page.bdcIds,
+      appearance: page.appearance,
       chapterType: sceneChapterType,
     }
-    const signature = JSON.stringify([scenePage, sceneBdcs, pageMediaSources, pageMediaTypes, document.data.revelationDefaults])
+    const signature = JSON.stringify([
+      scenePage,
+      sceneBdcs,
+      document.data.appearance,
+      pageMediaSources,
+      pageMediaTypes,
+      document.data.revelationDefaults,
+    ])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
       return [`scene-${page.id}`, cached.source]
@@ -289,16 +319,19 @@ export function createPageSceneCatalog(
       mediaTypes: pageMediaTypes,
       questionAnswers,
       revelationDefaults: document.data.revelationDefaults,
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, sceneBdcs),
     }, sceneChapterType)
     const questionReset = scene.questionReset
     const sceneDoc = withPageMediaStop(scene.sceneDoc)
-    const styleSheet = scene.styleSheets.join('\n')
+    const appearanceStyleSheet = createPageAppearanceStyleSheet(document, page, sceneBdcs)
+    const styleSheets = [...scene.styleSheets, appearanceStyleSheet]
+    const styleSheet = styleSheets.join('\n')
     const source: SightySceneSourceValue = questionReset === undefined && styleSheet.length === 0 ? sceneDoc : {
       sceneDoc,
       ...(styleSheet.length === 0 ? {} : { styleSheet }),
       ...(questionReset === undefined ? {} : { onReset: resetQuestionScene }),
     }
-    cache?.set(pageId, { signature, source, styleSheets: scene.styleSheets })
+    cache?.set(pageId, { signature, source, styleSheets })
     return [`scene-${page.id}`, source]
   }))
   return { scenes }

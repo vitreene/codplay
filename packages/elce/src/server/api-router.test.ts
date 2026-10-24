@@ -187,7 +187,7 @@ describe('Elcé project API Fetch router', () => {
   })
 })
 
-/** Creates an isolated v5 document fixture for API tests. */
+/** Creates an isolated v6 document fixture for API tests. */
 function documentWithId(id: string): ElceDocument {
   return new ElceDocument({ ...createInitialDocument().toJSON(), id })
 }

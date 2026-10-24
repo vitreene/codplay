@@ -10,6 +10,7 @@ import { renderLucideIcon } from '../lucide-static-icon'
 import { SUMMARY_PROFILE_ACCESS_ICON } from '../summary-profile-access-icon'
 import { getPageTypeIcon } from './page-type-icon.ts'
 import type { ScenarioPanelProps } from './scenario-panel-types'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 
 /** Renders the ordered scenario and its native Remix page/chapter controls. */
 export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
@@ -52,6 +53,13 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
           {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-summary-profile-open-icon', 14)}
           <span id="elce-summary-profile-open-label" className="elce-add-content-action__label">Sommaire</span>
         </button>
+        {renderAppearanceTrigger({
+          id: 'elce-scenario-project-style-trigger',
+          target: { kind: 'document' },
+          label: 'Ouvrir les réglages de style du projet',
+          onOpen: workspace.onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-icon-action',
+        })}
       </div>
     </div>
     <div

@@ -18,6 +18,8 @@ import {
   type ViewportExpansionCarouselView,
 } from '../viewport-expansion/viewport-expansion-builder.ts'
 import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../scene-functions/carousel'
+import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
+import { appearanceClassNameForTarget } from '../scene-style/appearance-class-names.ts'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
@@ -28,6 +30,7 @@ type CarouselViewBuild = Readonly<{
   readonly rootClassName: string
   readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
+  readonly styleSheet: string
 }>
 
 type ScheduledView = Readonly<{
@@ -58,9 +61,6 @@ export class ElceCarouselSceneBuilder {
         type: CAPSULE_TYPE.carousel,
         className: displayMode === 'scene' ? 'elce-carousel-capsule elce-carousel-capsule--scene' : 'elce-carousel-capsule',
         grid: { className: 'elce-carousel-capsule__grid' },
-        style: displayMode === 'scene'
-          ? { height: '100%' }
-          : { aspectRatio: `${content.aspectRatio.width} / ${content.aspectRatio.height}` },
         defaults: {
           introTransitionRef: parentIntroRef,
           outroTransitionRef: parentOutroRef,
@@ -87,6 +87,8 @@ export class ElceCarouselSceneBuilder {
       })),
     })
     const capsuleResult = capsule.resolve()
+    const capsulePresentationClass = sceneStyleClassName('carousel-capsule', rootId)
+    const capsuleClassName = `${capsuleResult.capsule.className} ${capsulePresentationClass}`
     const firstCardBdcId = content.cards[0]?.bdcId ?? null
     const viewBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildView(input, entry.bdc, displayMode === 'scene')]))
     const lastCardBdcId = capsuleResult.children.at(-1)?.id
@@ -124,9 +126,16 @@ export class ElceCarouselSceneBuilder {
         rootId,
         `${pageId}:${bdcId}:carousel`,
         {
-          frame: createCapsuleMarkup(rootId, capsulePartId, capsuleResult, parentIntroRef, parentOutroRef),
+          frame: createCapsuleMarkup(rootId, capsulePartId, capsuleClassName, parentIntroRef, parentOutroRef),
           navigation: '',
         },
+      )
+    const markup = card === undefined
+      ? ''
+      : appendClassToMarkupElement(
+        card.markup,
+        rootId,
+        appearanceClassNameForTarget(bdcId, input.appearanceClassNamesByTarget),
       )
     const story: StoryDoc<string> = {
       id: storyId,
@@ -147,10 +156,10 @@ export class ElceCarouselSceneBuilder {
       persos: [
         ...(diapoRootId === undefined ? [] : [createDiapoCarouselRoot(
           diapoRootId,
-          capsuleResult.capsule.className,
-          capsuleResult.capsule.inlineStyle,
+          capsuleClassName,
           parentIntroRef,
           parentOutroRef,
+          appearanceClassNameForTarget(bdcId, input.appearanceClassNamesByTarget),
         )]),
         ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
@@ -170,9 +179,17 @@ export class ElceCarouselSceneBuilder {
       trackId: storyId,
     })
     return {
-      markup: card?.markup ?? '',
+      markup,
       story: expandedStory,
-      styleSheet: capsuleResult.styleSheet,
+      styleSheet: [
+        capsuleResult.styleSheet,
+        sceneClassRule(capsulePresentationClass, displayMode === 'scene'
+          ? { height: '100%' }
+          : { aspectRatio: `${content.aspectRatio.width} / ${content.aspectRatio.height}` }),
+        ...Array.from(viewBuilds.values(), (view) => view.styleSheet),
+      ]
+        .filter((styleSheet) => styleSheet.length > 0)
+        .join('\n'),
     }
   }
 }
@@ -219,12 +236,14 @@ function buildView(input: CarouselSceneBuildInput, bdc: Bdc, photoMediaRoot: boo
         mediaSources: input.mediaSources,
         mediaTypes: input.mediaTypes,
         photoMediaRoot,
+        appearanceClassNamesByTarget: input.appearanceClassNamesByTarget,
       })
     case BDC_TYPE.STATISTICAL_GRAPH:
       return statisticalGraphSceneBuilder.build(
         bdc,
         `${input.pageId}-${input.bdcId}-graph-${bdc.id}`,
         `${input.pageId}:${input.bdcId}:card:${bdc.id}`,
+        appearanceClassNameForTarget(bdc.id, input.appearanceClassNamesByTarget),
       )
     default:
       throw new Error(`Le BDC ${bdc.id} n’est pas une illustration prise en charge par Carousel.`)
@@ -244,7 +263,6 @@ function createCarouselCompletionMarker(
     rootId,
     targetPartId: `${pageId}:${carouselBdcId}:card:${cardBdcId}:root`,
     className: 'elce-page-bottom-marker elce-carousel-completion-marker',
-    style: { position: 'absolute', insetInlineEnd: 0, insetBlockEnd: 0, width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' },
   })
 }
 
@@ -252,9 +270,9 @@ function createCarouselCompletionMarker(
 function createDiapoCarouselRoot(
   rootId: string,
   capsuleClassName: string,
-  capsuleStyle: Readonly<Record<string, string | number>>,
   introTransitionRef: string,
   outroTransitionRef: string,
+  appearanceClassName: string,
 ): PersoDoc<string> {
   return {
     id: rootId,
@@ -271,20 +289,9 @@ function createDiapoCarouselRoot(
         'elce-card--carousel',
         'elce-diapo-content',
         'elce-diapo-carousel-root',
+        appearanceClassName,
         ...capsuleClassName.split(/\s+/),
       ].join(' '),
-      style: {
-        ...capsuleStyle,
-        gridTemplateColumns: 'minmax(0, 1fr)',
-        gridTemplateRows: 'minmax(0, 1fr) auto',
-        width: '100%',
-        height: '100%',
-        minWidth: 0,
-        minHeight: 0,
-        position: 'relative',
-        overflow: 'hidden',
-        containerType: 'inline-size',
-      },
       move: '@root',
     },
   }
@@ -298,7 +305,6 @@ function createDiapoNavigationHost(containerRootId: string, navigationId: string
     initial: {
       move: { target: containerRootId },
       className: 'elce-carousel__navigation',
-      style: { gridRow: '2', gridColumn: '1' },
       markup: `<nav id="${navigationId}-navigation" aria-label="Vues du carousel"><!-- data-part="${navigationPartId}" --></nav>`,
     },
   }
@@ -324,30 +330,15 @@ function createAutomaticEventimes(
   ).flat()
 }
 
-/** Creates the fixed AutoCapsule host and its resolved inline layout. */
+/** Creates the fixed AutoCapsule host with its generated layout classes. */
 function createCapsuleMarkup(
   rootId: string,
   capsulePartId: string,
-  result: ReturnType<AutoCapsule['resolve']>,
+  capsuleClassName: string,
   introTransitionRef: string,
   outroTransitionRef: string,
 ): string {
-  const style = serializeStyle(result.capsule.inlineStyle)
-  return `<div id="${rootId}-capsule" class="${result.capsule.className}" data-intro-transition="${introTransitionRef}" data-outro-transition="${outroTransitionRef}"${style}><!-- data-part="${capsulePartId}" --></div>`
-}
-
-/** Serializes builder-owned inline style values for static scene markup. */
-function serializeStyle(value: unknown): string {
-  if (value === null || typeof value !== 'object') return ''
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, propertyValue]) => typeof propertyValue === 'string' || typeof propertyValue === 'number')
-    .map(([property, propertyValue]) => `${toKebabCase(property)}:${String(propertyValue)}`)
-  return entries.length === 0 ? '' : ` style="${entries.join(';')}"`
-}
-
-/** Converts one authored JavaScript style property to its CSS property spelling. */
-function toKebabCase(property: string): string {
-  return property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+  return `<div id="${rootId}-capsule" class="${capsuleClassName}" data-intro-transition="${introTransitionRef}" data-outro-transition="${outroTransitionRef}"><!-- data-part="${capsulePartId}" --></div>`
 }
 
 /** Creates a Card layout root with its Capsule transition actions. */
@@ -416,7 +407,6 @@ function createCarouselCardPersos(
       className,
       attr: { 'aria-hidden': firstCardBdcId !== bdc.id, inert: firstCardBdcId !== bdc.id },
       style: {
-        ...child.inlineStyle,
         opacity: firstCardBdcId === bdc.id ? 1 : 0,
         x: 0,
         y: 0,

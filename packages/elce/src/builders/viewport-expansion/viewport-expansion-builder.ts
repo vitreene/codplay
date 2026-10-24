@@ -139,15 +139,6 @@ export function addViewportExpansionToStory(
         inert: true,
         tabindex: '-1',
       },
-      style: {
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 2147483647,
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-      },
       markup: `<div id="${hostId}-frame" class="elce-viewport-expansion-host__frame"><!-- data-part="${hostPartId}" --><!-- data-part="${hostId}:previous" --><!-- data-part="${hostId}:next" --></div>`,
     },
     actions: {

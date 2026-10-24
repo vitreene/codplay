@@ -12,9 +12,11 @@ import { createElceHttpServer } from './elce-http-server'
 const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const MONOREPO_ROOT = resolve(ELCE_PACKAGE_ROOT, '../..')
 const ASSET_BASE_PATH = '/assets'
+const FONT_BASE_PATH = '/fonts'
 const BROWSER_ENTRY = 'packages/elce/src/app/remix/browser-entry.tsx'
 const STYLE_FILES = [
   'packages/elce/src/app/layout/app-layout.css',
+  'packages/elce/src/app/appearance/appearance-panel.css',
   'packages/elce/src/app/editor/card/card-editor.css',
   'packages/elce/src/app/editor/carousel/carousel-editor.css',
   'packages/elce/src/app/editor/statistical-graph/statistical-graph.css',
@@ -87,6 +89,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       'packages/authoring/exclusive-sync/src/**',
     ],
     denyFiles: ['packages/elce/src/**/*.test.*', 'packages/elce/src/server/**'],
+    files: { extensions: ['.ttf'] },
     allowPackages: BROWSER_PACKAGES,
     hmr: enableHmr
       ? {
@@ -113,6 +116,9 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
         const path = new URL(request.url).pathname
         if (path === ASSET_BASE_PATH || path.startsWith(`${ASSET_BASE_PATH}/`)) {
           return serveAsset(assets, request)
+        }
+        if (path === FONT_BASE_PATH || path.startsWith(`${FONT_BASE_PATH}/`)) {
+          return serveAppearanceFontAsset(assets, request)
         }
         if (request.method !== 'GET' && request.method !== 'HEAD') {
           return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
@@ -300,6 +306,30 @@ function isAddressInUse(cause: unknown): boolean {
 /** Serves one browser asset through the configured Remix asset boundary. */
 async function serveAsset(assets: ReturnType<typeof createAssetServer>, request: Request): Promise<Response> {
   return await assets.fetch(request) ?? new Response(null, { status: 404 })
+}
+
+/** Routes one local appearance font through Remix's existing file asset boundary. */
+async function serveAppearanceFontAsset(
+  assets: ReturnType<typeof createAssetServer>,
+  request: Request,
+): Promise<Response> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
+  }
+  const assetPath = appearanceFontAssetPath(new URL(request.url).pathname)
+  if (assetPath === null) return new Response(null, { status: 404 })
+  const assetRequest = new Request(new URL(assetPath, request.url), {
+    method: request.method,
+    headers: request.headers,
+  })
+  return await assets.fetch(assetRequest) ?? new Response(null, { status: 404 })
+}
+
+/** Maps a published font URL to its configured Elcé source mount. */
+export function appearanceFontAssetPath(pathname: string): string | null {
+  const match = /^\/fonts\/([a-z0-9-]+)\/(normal|italic)-(400|700)\.ttf$/.exec(pathname)
+  if (match === null) return null
+  return `${ASSET_BASE_PATH}/elce/assets/fonts/${match[1]}/${match[2]}-${match[3]}.ttf`
 }
 
 /** Creates the Remix SPA document with its runtime import map and native stylesheets. */

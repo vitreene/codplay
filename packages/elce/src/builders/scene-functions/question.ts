@@ -63,7 +63,7 @@ export function validateQuestionAnswerStrap(input: StrapExecutionInput): StrapRu
         data: {
           content: isCorrect ? 'Bonne réponse.' : 'Réponse incorrecte.',
           attr: { hidden: false },
-          style: { color: isCorrect ? '#166534' : '#b42318', fontWeight: 700 },
+          className: `elce-question-feedback elce-question-feedback--${isCorrect ? 'correct' : 'incorrect'}`,
         },
       },
       { name: `${configuration.prefix}:resolved` },

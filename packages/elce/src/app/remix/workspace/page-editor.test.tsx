@@ -66,7 +66,7 @@ describe('Remix production page editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
@@ -307,7 +307,7 @@ describe('Remix production page editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
@@ -421,7 +421,7 @@ describe('Remix production page editor', () => {
     if (questionId === undefined) throw new Error('The file-picker fixture has no Question.')
 
     const rendered = render(<EditorContextProvider controller={controller} actions={actions}>
-      <RemixPageEditor />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = async () => {
       rendered.cleanup()
@@ -475,7 +475,7 @@ describe('Remix production page editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
@@ -545,14 +545,18 @@ describe('Remix production page editor', () => {
       {renderEditorWorkspace({
         view: selectEditorViewModel(controller.getSnapshot()),
         actions,
-        pageEditorHost: <RemixPageEditor />,
+        pageEditorHost: <RemixPageEditor onOpenAppearanceTarget={() => undefined} />,
         responsivePanel: null,
+        sidePanelTab: 'contents',
+        appearanceTarget: { kind: 'document' },
         summarySettingsOpen: false,
         profileTokenTargetId: null,
         authoringError: null,
         dropTarget: null,
         visible: true,
         onSetResponsivePanel: () => undefined,
+        onSetSidePanelTab: () => undefined,
+        onOpenAppearanceTarget: () => undefined,
         onSetSummarySettingsOpen: () => undefined,
         onSetAuthoringError: () => undefined,
         onSetDropTarget: () => undefined,

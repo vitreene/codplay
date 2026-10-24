@@ -111,23 +111,25 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const graphRoot = story?.persos.find((perso) => perso.id === 'page-a-graph-anchor-graph')
     const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
+    const graphStyle = graphRoot?.initial !== undefined && 'style' in graphRoot.initial ? graphRoot.initial.style : undefined
+    const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial ? String(graphRoot.initial.className) : ''
+    const graphRules = build.styleSheets.join('\n')
 
     expect(document.bdcs.find((bdc) => bdc.id === 'graph-anchor')?.parentBdcId).toBe('bdc-section-1')
-    expect(articleMarkup).toContain('class="elce-flow-slot"')
+    expect(articleMarkup).toContain('class="elce-flow-slot elce-flow-slot-')
     expect(article?.initial).toMatchObject({
       flowReservations: [{ partId, blockSize: 'calc(56.25% + 1rem + 1rem)' }],
     })
     expect(graphRoot?.initial).toMatchObject({
       move: { target: partId },
-      style: { aspectRatio: '16 / 9' },
       markup: expect.stringContaining(`data-part="${partId}:visual"`),
     })
+    expect(graphStyle).not.toHaveProperty('aspectRatio')
+    expect(graphClassName).toContain('elce-flux-anchor-illustration-')
+    expect(graphRules).toContain('aspect-ratio: 16 / 9;')
     expect(graphRoot?.emit?.observe).toMatchObject({ root: 'page-a-scrollport', initial: 'enter' })
     expect(graphVisual?.initial).toMatchObject({ move: { target: `${partId}:visual` } })
     expect(graphVisualMarkup).toContain('<svg')
-    const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial
-      ? String(graphRoot.initial.className)
-      : ''
     expect(graphClassName).toContain('elce-statistical-graph--bar')
     expect(graphClassName).toContain('elce-flux-graph-root')
     expect(compileScene(build.sceneDoc).ok).toBe(true)
@@ -167,15 +169,18 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
     const graphStyle = graphRoot?.initial !== undefined && 'style' in graphRoot.initial ? graphRoot.initial.style : undefined
+    const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial ? String(graphRoot.initial.className) : ''
+    const graphRules = build.styleSheets.join('\n')
 
     expect(article?.initial).toMatchObject({
       flowReservations: [{ partId, blockSize: 'calc(100% + 1rem + 1rem)' }],
     })
-    expect(graphStyle).toMatchObject({ height: 'auto' })
+    expect(graphStyle).not.toHaveProperty('height')
     expect(graphStyle).not.toHaveProperty('aspectRatio')
-    expect(graphRoot?.initial).toMatchObject({
-      className: expect.stringContaining('elce-statistical-graph--table'),
-    })
+    expect(graphClassName).toContain('elce-statistical-graph--table')
+    expect(graphClassName).toContain('elce-flux-anchor-illustration-')
+    expect(graphRules).toContain('height: auto;')
+    expect(graphRules).toContain('position-anchor: --')
     expect(graphRoot?.initial).toMatchObject({ markup: expect.stringContaining(`data-part="${partId}:visual"`) })
     expect(graphVisualMarkup).toContain('<table')
     expect(compileScene(build.sceneDoc).ok).toBe(true)

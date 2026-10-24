@@ -22,7 +22,7 @@
   display: inline-grid;
   width: 2rem;
   height: 2rem;
-  margin-left: auto;
+  margin-left: 0;
   place-items: center;
   padding: var(--elce-icon-padding);
   border: 1px solid #d6d3ca;

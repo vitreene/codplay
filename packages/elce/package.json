@@ -8,13 +8,21 @@
   },
   "scripts": {
     "dev": "node scripts/dev-elce.mjs",
+    "predev": "npm run generate:appearance",
     "dev:network": "ELCE_NETWORK_PREVIEW=1 node scripts/dev-elce.mjs",
+    "predev:network": "npm run generate:appearance",
     "dev:api": "node scripts/dev-api.mjs",
     "package-scorm": "node scripts/package-scorm.mjs",
+    "prepackage-scorm": "npm run generate:appearance",
     "build": "vite build",
+    "prebuild": "npm run generate:appearance",
     "preview": "vite preview",
+    "prepreview": "npm run generate:appearance",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "pretypecheck": "npm run generate:appearance",
+    "test": "vitest run",
+    "pretest": "npm run generate:appearance",
+    "generate:appearance": "node scripts/generate-appearance-palette-metadata.mjs"
   },
   "dependencies": {
     "@codplay/exclusive-sync": "*",

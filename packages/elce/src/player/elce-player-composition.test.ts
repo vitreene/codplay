@@ -533,7 +533,7 @@ describe('Elcé player composition', () => {
     expect(traceEvents).toContain(ELCE_EVENTS.PAGE_FINISHED)
     expect(instanceEvents).toContain(ELCE_EVENTS.PAGE_FINISHED)
     expect(stage.querySelector('.elce-card--text-short')).not.toBeNull()
-    expect((stage.querySelector('.elce-diapo-host') as HTMLElement | null)?.style.overflowY).toBe('hidden')
+    expect((stage.querySelector('.elce-diapo-host') as HTMLElement | null)?.getAttribute('style')).toBeNull()
     expect(stage.querySelector('.elce-flux-scrollport')).toBeNull()
     expect(publicEvents).toContainEqual(expect.objectContaining({
       name: ELCE_EVENTS.PAGE_FINISHED,
@@ -775,6 +775,7 @@ describe('Elcé player composition', () => {
     const photoView = image?.closest('.elce-carousel-view')
     const carouselRoot = stage.querySelector('.elce-diapo-carousel-root')
     const contentSlot = stage.querySelector('.elce-player-layout__content-slot')
+    const pageRoot = stage.querySelector('.elce-diapo-content')
     const imagePath: Element[] = []
     for (let element: Element | null = image ?? null; element !== null; element = element.parentElement) {
       imagePath.push(element)
@@ -784,10 +785,11 @@ describe('Elcé player composition', () => {
     expect(contentSlot?.tagName).toBe('SECTION')
     expect(contentSlot?.classList.contains('elce-player-layout__content')).toBe(true)
     expect(stage.querySelector('.elce-diapo-host')).toBeNull()
+    expect(pageRoot?.parentElement).toBe(contentSlot)
     expect(photoView?.parentElement).toBe(carouselRoot)
-    expect(carouselRoot?.parentElement).toBe(contentSlot)
+    expect(carouselRoot?.parentElement).toBe(pageRoot)
     expect(imagePath.at(-1)).toBe(contentSlot)
-    expect(imagePath.length).toBeLessThanOrEqual(6)
+    expect(imagePath.length).toBeLessThanOrEqual(7)
 
     const imageRoot = photoView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
     const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
@@ -2026,10 +2028,8 @@ describe('Elcé player composition', () => {
     const focusImage = vi.spyOn(imageRoot!, 'focus')
     expect(viewportHost).not.toBeNull()
     expect(viewportHost?.id).toMatch(/-frame$/)
-    expect(viewportHost?.style.position).toBe('fixed')
-    expect(viewportHost?.style.inset).toBe('0px')
-    expect(viewportHost?.style.width).toBe('100vw')
-    expect(viewportHost?.style.height).toBe('100vh')
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host')).toBe(true)
+    expect(viewportHost?.getAttribute('style')).toBeNull()
     expect(scrollport).not.toBeNull()
     dispatchPointerEvent(imageRoot!, 'pointerdown')
     dispatchPointerEvent(window, 'pointerup')
@@ -2481,8 +2481,9 @@ describe('Elcé player composition', () => {
     expect(flowSlot?.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
     const anchoredCard = flowSlot?.querySelector<HTMLElement>('.elce-flux-card-root')
     expect(anchoredCard?.parentElement).toBe(flowSlot)
-    expect(anchoredCard?.style.height).toBe('auto')
-    expect(anchoredCard?.style.aspectRatio).toBe('4 / 3')
+    expect(anchoredCard?.style.length).toBe(1)
+    expect(anchoredCard?.style.getPropertyValue('opacity')).toBe('1')
+    expect(Array.from(anchoredCard?.classList ?? []).some((className) => className.startsWith('elce-flux-anchor-illustration-'))).toBe(true)
 
     const imageRoot = flowSlot?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
     const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')

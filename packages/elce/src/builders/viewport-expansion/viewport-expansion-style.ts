@@ -3,7 +3,14 @@ export const ELCE_VIEWPORT_EXPANSION_DURATION_MS = 320
 /** Styles the fixed viewport projection and contained image frame used by Elcé. */
 export const ELCE_VIEWPORT_EXPANSION_STYLE_SHEET = `
 .elce-viewport-expansion-host {
+  position: fixed;
+  inset: 0;
   display: grid;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483647;
+  box-sizing: border-box;
+  overflow: hidden;
   place-items: stretch;
   background: #000;
   color: #fff;

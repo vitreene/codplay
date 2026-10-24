@@ -1,0 +1,15 @@
+.elce-appearance-palette-plum {
+  --elce-palette-background: #241e2b;
+  --elce-palette-surface: #352b40;
+  --elce-palette-text: #f8f1fc;
+  --elce-palette-muted: #c4b5ce;
+  --elce-palette-accent: #d6a5ed;
+  --elce-palette-border: #5f4c6e;
+}
+
+.elce-appearance-contrast-background-plum-background { --elce-appearance-contrast-background: #241e2b; }
+.elce-appearance-contrast-background-plum-surface { --elce-appearance-contrast-background: #352b40; }
+.elce-appearance-contrast-background-plum-text { --elce-appearance-contrast-background: #f8f1fc; }
+.elce-appearance-contrast-background-plum-muted { --elce-appearance-contrast-background: #c4b5ce; }
+.elce-appearance-contrast-background-plum-accent { --elce-appearance-contrast-background: #d6a5ed; }
+.elce-appearance-contrast-background-plum-border { --elce-appearance-contrast-background: #5f4c6e; }

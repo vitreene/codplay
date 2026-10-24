@@ -272,7 +272,7 @@ describe('Elcé scenario builder', () => {
     expect(contentSlot?.initial).toMatchObject({
       tag: 'section',
       attr: { id: `${document.id}-content-region`, 'aria-label': 'Contenu de la page' },
-      className: 'elce-player-layout__content elce-player-layout__content-slot',
+      className: expect.stringContaining('elce-player-layout__content elce-player-layout__content-slot'),
     })
     expect(layoutMarkup).not.toContain('menu-toggle-host')
     expect(layoutMarkup).not.toContain('title-host')

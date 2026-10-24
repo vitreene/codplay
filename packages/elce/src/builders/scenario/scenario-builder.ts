@@ -37,6 +37,7 @@ import {
 } from '../../scorm/scorm-types'
 import type { ElceScormProgressSink, ScormQuestionInteraction } from '../../scorm/scorm-types'
 import type { QuestionType } from '../../domain/question/question-types'
+import { documentAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
 import type {
   ProfileConstraint,
   ProfileProperty,
@@ -146,7 +147,7 @@ export function buildScenario(
     evaluationResultPageIds: [...evaluationResultPageIds],
   })
   const sceneCatalog: Record<string, SightySceneSourceValue> = {
-    [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document.id),
+    [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document),
     [ELCE_SCENARIO.SUMMARY_SCENE]: buildSummaryScene(document, 'root', options.mediaSources),
     [ELCE_SCENARIO.SUMMARY_MENU_SCENE]: buildSummaryScene(document, 'menu', options.mediaSources),
     [ELCE_SCENARIO.PROFILE_FORM_SCENE]: buildProfileFormScene(
@@ -1465,12 +1466,19 @@ function findChapter(document: ElceDocument, chapterId: string): Chapter {
 }
 
 /** Creates the fixed layout with the five explicit regions of the complete preview. */
-function createLayoutScene(documentId: string): SceneDoc<string> {
+function createLayoutScene(document: ElceDocument): SceneDoc<string> {
+  const documentId = document.id
   const menuPartId = `${documentId}:layout:menu`
   const menuTogglePartId = `${documentId}:layout:menu-toggle`
   const titlePartId = `${documentId}:layout:title`
   const contentPartId = `${documentId}:layout:content`
   const navigationPartId = `${documentId}:layout:navigation`
+  const appearanceClassNames = documentAppearanceClassNames(document)
+  const layoutAppearanceClass = appearanceClassNames[`${documentId}-layout-root`]
+  const contentAppearanceClass = appearanceClassNames[`${documentId}-content-region`]
+  if (layoutAppearanceClass === undefined || contentAppearanceClass === undefined) {
+    throw new Error(`Les classes d’apparence du projet ${documentId} sont incomplètes.`)
+  }
   return {
     id: `${documentId}-layout-scene`,
     stories: {
@@ -1483,8 +1491,8 @@ function createLayoutScene(documentId: string): SceneDoc<string> {
             type: 'layout',
             initial: {
               move: '@root',
-              className: 'elce-player-layout',
-              markup: `<main id="${documentId}-layout-root" class="elce-player-layout">
+              className: `elce-player-layout ${layoutAppearanceClass}`,
+              markup: `<main id="${documentId}-layout-root" class="elce-player-layout ${layoutAppearanceClass}">
                 <aside id="${documentId}-menu-region" class="elce-player-layout__menu" aria-label="Menu du document"><!-- data-part="${menuPartId}" --></aside>
                 <header id="${documentId}-title-region" class="elce-player-layout__title" aria-label="Page courante">
                   <!-- data-part="${menuTogglePartId}" -->
@@ -1501,7 +1509,7 @@ function createLayoutScene(documentId: string): SceneDoc<string> {
           createMenuTogglePerso(documentId, menuTogglePartId),
           createLayoutSlot(ELCE_SCENARIO.MENU_SLOT, menuPartId, 'elce-player-layout__menu-slot'),
           createLayoutSlot(ELCE_SCENARIO.TITLE_SLOT, titlePartId, 'elce-player-layout__title-slot'),
-          createLayoutSlot(ELCE_SCENARIO.CONTENT_SLOT, contentPartId, 'elce-player-layout__content elce-player-layout__content-slot', {
+          createLayoutSlot(ELCE_SCENARIO.CONTENT_SLOT, contentPartId, `elce-player-layout__content elce-player-layout__content-slot ${contentAppearanceClass}`, {
             tag: 'section',
             attr: { id: `${documentId}-content-region`, 'aria-label': 'Contenu de la page' },
           }),

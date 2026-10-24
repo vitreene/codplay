@@ -2,6 +2,7 @@ import type { StoryDoc } from 'codplay/scene/types'
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { MediaId, PageId, BdcId, Bdc, RevelationTransitionDefaults } from '../../domain/document/document-types'
 import type { MediaType } from '../../config/document-config-types'
+import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
 
 export interface CarouselSceneBuildInput {
   readonly pageId: PageId
@@ -16,6 +17,7 @@ export interface CarouselSceneBuildInput {
   readonly revelationDefaults?: RevelationTransitionDefaults
   readonly displayMode?: 'content' | 'scene'
   readonly completionEventRootId?: string
+  readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }
 
 export interface CarouselSceneBuild {

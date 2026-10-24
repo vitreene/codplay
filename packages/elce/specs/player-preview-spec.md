@@ -63,9 +63,44 @@ La preview et l’export consomment le même scénario produit par
 `createElcePlayerScenario`. Les styles partagés du lecteur et d’expansion du
 viewport sont attachés à la source de la scène layout. Les feuilles CSS
 produites par les builders restent attachées à la source de leur scène de page.
+La feuille layout porte les définitions `@font-face` uniques pour les familles,
+styles et poids utilisés par le document ; les feuilles des pages n’en
+redéclarent aucune. Dans la preview, `/fonts/<famille>/<style>-<poids>.ttf` est
+servi par le routeur Elcé via le service d’assets Remix, qui le résout depuis
+`/assets/elce/assets/fonts/`. Dans le package Sighty, l’exporteur copie les
+fichiers utilisés et leurs licences ; la feuille emploie `./fonts/` pour rester
+autonome après extraction.
+Les classes générées par Elcé gardent leur rôle lisible et utilisent un suffixe
+de hachage compact et déterministe de l’identifiant cible. Elles ne recopient
+pas cet identifiant dans le nom de classe ; les identifiants DOM et les cibles
+`data-part` ne changent pas.
 Le paquetage Sighty peut ainsi conserver chaque feuille dans le paquet CodPlay
 de la scène qui l’utilise, sans déplacer les styles vers un registre runtime
 global.
+
+Les réglages d’apparence du document s’appliquent par classes et feuilles CSS
+de scène. Le fond projet cible la racine layout, tandis que sa typographie et
+sa densité visent la zone de contenu ; les réglages de page et de chaque BDC
+conservent leurs surfaces propres. Les déclarations statiques restent dans les
+classes CSS ; les attributs CodPlay `style` restent réservés aux propriétés
+animées et à leur état de repos. Le détail du résolveur, du panneau et des rôles
+de surface figure dans la [spécification d’apparence](./appearance-spec.md).
+
+Le lecteur charge les CSS d’apparence comme des assets dans son propre
+document : `appearance-surface.css`, puis uniquement les feuilles de palette,
+duo typographique et densité utilisées par les surfaces résolues. Les feuilles
+de l’application d’édition ne sont pas ajoutées à ce document. Dans le package
+Sighty, les mêmes feuilles utilisées sont importées localement par la scène
+layout et le paquetage les développe selon son circuit CSS existant.
+
+[`appearance-font-assets.test.ts`](../src/player/appearance-font-assets.test.ts)
+vérifie la déduplication des règles et les chemins preview/package ;
+[`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts) vérifie
+le routage local des fichiers `.ttf`. Safari MCP, le 24 octobre 2026 sur le
+serveur `5175`, confirme que les feuilles CSS sélectionnées chargent comme
+assets dans le document lecteur et que les polices des surfaces visibles
+calculent Crimson Text et DM Sans. Les requêtes de fontes et de CSS répondent
+sans échec. Les surfaces d’apparence inspectées n’ont pas d’attribut `style`.
 
 ### Preview réseau sur mobile
 

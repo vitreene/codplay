@@ -1,0 +1,15 @@
+.elce-appearance-palette-forest {
+  --elce-palette-background: #f5f7ef;
+  --elce-palette-surface: #ffffff;
+  --elce-palette-text: #263c2c;
+  --elce-palette-muted: #5b6e58;
+  --elce-palette-accent: #3b704b;
+  --elce-palette-border: #d0dbc8;
+}
+
+.elce-appearance-contrast-background-forest-background { --elce-appearance-contrast-background: #f5f7ef; }
+.elce-appearance-contrast-background-forest-surface { --elce-appearance-contrast-background: #ffffff; }
+.elce-appearance-contrast-background-forest-text { --elce-appearance-contrast-background: #263c2c; }
+.elce-appearance-contrast-background-forest-muted { --elce-appearance-contrast-background: #5b6e58; }
+.elce-appearance-contrast-background-forest-accent { --elce-appearance-contrast-background: #3b704b; }
+.elce-appearance-contrast-background-forest-border { --elce-appearance-contrast-background: #d0dbc8; }
