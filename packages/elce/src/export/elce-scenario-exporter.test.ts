@@ -3,8 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE, ELCE_SCENARIO } from '../config/document-config'
-import { applyDocumentCommand, createCarouselBdcCommand, createQuestionBdcCommand } from '../domain/commands/document-commands'
+import { BDC_TYPE, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION } from '../config/document-config'
+import {
+  applyDocumentCommand,
+  createCarouselBdcCommand,
+  createPageCommand,
+  createQuestionBdcCommand,
+} from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { createElcePlayerScenario } from '../player/elce-player-composition'
 import { exportElceSightyPackage } from './elce-scenario-exporter'
@@ -42,6 +47,17 @@ describe('Elcé Sighty package export', () => {
     })
     document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-export-carousel', 'page-a', 2))
     document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-export-question', 'page-a', 3))
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create',
+      chapterId: 'chapter-export-next',
+      name: 'Chapitre suivant',
+    })
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-export-next',
+      bdcId: 'bdc-export-next',
+      name: 'Page suivante',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-export-next' },
+    }))
     document = applyDocumentCommand(document, {
       type: 'profile.definition.update',
       profile: {
@@ -120,10 +136,15 @@ describe('Elcé Sighty package export', () => {
       scenario?: {
         scenes?: Record<string, unknown>
         data?: { chapters?: Record<string, Readonly<{ name?: string }>> }
+        actions?: Record<string, unknown>
+        views?: unknown
       }
     }
     expect(Object.keys(packagedScenario.scenario?.scenes ?? {})).toEqual(Object.keys(scenarioManifest.scenes))
     expect(packagedScenario.scenario?.data?.chapters?.['chapter-1']?.name).toBe('Chapitre 1')
+    expect(packagedScenario.scenario?.actions?.[ELCE_SCENARIO_HANDLERS.NAVIGATE_SCORM_CHAPTER]).toBeTypeOf('function')
+    expect(JSON.stringify(packagedScenario.scenario?.views) ?? '')
+      .not.toContain(ELCE_SCENARIO_HANDLERS.NAVIGATE_SCORM_CHAPTER)
 
     const pagePackageRoot = scenarioManifest.scenes['scene-page-a']
     expect(pagePackageRoot).toBeDefined()

@@ -39,5 +39,6 @@ describe('Elcé SCORM package runner', () => {
     expect(manifest).toContain('href="chapter-a.html"')
     expect(manifest).not.toContain('<title>chapter-a</title>')
     expect(launcher).toContain('<title id="scorm-title">chapter-label-fixture - 1. Lire une scène</title>')
+    expect(launcher).toContain('chapterScoIdentifiers: config.chapterScoIdentifiers')
   }, 60_000)
 })

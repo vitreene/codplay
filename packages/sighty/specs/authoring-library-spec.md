@@ -129,13 +129,22 @@ compacte actuelle produit `sighty.scenario-package.v2` :
 }
 ```
 
-En V2, `scenario.mjs` conserve le graphe de vues, les données d’exécution et
-les actions et guards référencés. `scenes` ne contient que les clés directes
-et, lorsqu’elle existe, leur fonction `onReset`. Il ne contient ni `SceneDoc`
-ni producteur de scène lazy. Chaque répertoire référencé garde son paquet
-CodPlay V1 intact : `scene/scene.json` porte le `CompiledScene`, accompagné de
-ses fonctions référencées, de sa CSS et de ses ressources. Le paquet de chaque
-scène reste ainsi autonome et remplaçable.
+En V2, `scenario.mjs` conserve le graphe de vues, les données d’exécution,
+toutes les entrées de `scenario.actions` et les guards référencés dans le
+graphe. Les actions ne sont pas filtrées selon les références du graphe
+initial : le runtime peut utiliser une action après une mutation. `scenes` ne
+contient que les clés directes et, lorsqu’elle existe, leur fonction `onReset`.
+Il ne contient ni `SceneDoc` ni producteur de scène lazy. Chaque répertoire
+référencé garde son paquet CodPlay V1 intact : `scene/scene.json` porte le
+`CompiledScene`, accompagné de ses fonctions référencées, de sa CSS et de ses
+ressources. Le paquet de chaque scène reste ainsi autonome et remplaçable.
+
+Le CLI garde toutes les entrées de `scenario.actions`, y compris celles qu’une
+mutation runtime peut référencer sans qu’elles figurent dans le graphe initial.
+Les guards restent limités aux références du graphe. Le test
+[`cli.spec.mjs`](../tools/scenario-export/tests/cli.spec.mjs) vérifie qu’une
+action absente du graphe est conservée et appelable depuis le scénario exporté,
+tandis qu’un export de fonction inutilisé reste exclu.
 
 Pour une fonction Sighty conservée dans `scenario.mjs`, le module d’entrée
 désigne le groupe auteur avec `export * as scenarioFunctions from ...`. Pour

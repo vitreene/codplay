@@ -171,6 +171,7 @@ describe('Sighty scenario export', () => {
     await writeFile(path.join(sourceDirectory, 'scenario-functions.ts'), [
       "import { mark as markHelper } from './helper'",
       'export async function mark({ context }) { return { ...context, loaded: markHelper() } }',
+      "export function dynamicAction() { return 'late-action-preserved' }",
       "export function reset(keys) { return keys.includes('quiz') ? { name: 'scenario:reset', data: { keys: [...keys] } } : undefined }",
       'export function unused() { return markHelper() }',
       '',
@@ -179,7 +180,7 @@ describe('Sighty scenario export', () => {
     await writeFile(scenarioFile, [
       "import { firstScene as layoutScene } from './scenes/first'",
       "import { secondScene } from './scenes/second'",
-      "import { mark, reset } from './scenario-functions'",
+      "import { dynamicAction, mark, reset } from './scenario-functions'",
       "export * as scenarioFunctions from './scenario-functions'",
       'export const scenario = {',
       "  format: 'sighty',",
@@ -187,7 +188,7 @@ describe('Sighty scenario export', () => {
       "  id: 'standalone-course',",
       "  views: { start: 'main', views: { main: { actions: { 'scenario:mark': { action: 'action:course:mark' } }, view: { scene: 'layout' } } } },",
       "  scenes: { layout: { sceneDoc: layoutScene, styleSheet: '.package-layout { color: red; }', onReset: reset }, secondScene },",
-      "  actions: { 'action:course:mark': mark },",
+      "  actions: { 'action:course:mark': mark, 'action:course:dynamic': dynamicAction },",
       '}',
       '',
     ].join('\n'))
@@ -229,6 +230,7 @@ describe('Sighty scenario export', () => {
     expect(compactScenarioSource).not.toContain('package-layout')
     expect(compactScenarioSource).not.toContain('unused-scenario-callback-sentinel')
     expect(compactScenarioSource).toContain('from-bundled-helper')
+    expect(compactScenarioSource).toContain('late-action-preserved')
 
     await rm(sourceDirectory, { recursive: true, force: true })
     const scenarioFileFromPackage = path.join(destination, manifest.scenario)
@@ -238,6 +240,7 @@ describe('Sighty scenario export', () => {
       'process.stdout.write(JSON.stringify({',
       '  id: module.scenario.id,',
       "  action: await module.scenario.actions['action:course:mark']({ context: {} }),",
+      "  dynamicAction: module.scenario.actions['action:course:dynamic'](),",
       "  reset: module.scenario.scenes.layout.onReset(['quiz']),",
       '  sceneKeys: Object.keys(module.scenario.scenes),',
       '}))',
@@ -248,6 +251,7 @@ describe('Sighty scenario export', () => {
     expect(JSON.parse(verification.stdout)).toEqual({
       id: 'standalone-course',
       action: { loaded: 'from-bundled-helper' },
+      dynamicAction: 'late-action-preserved',
       reset: { name: 'scenario:reset', data: { keys: ['quiz'] } },
       sceneKeys: ['layout', 'secondScene'],
     })

@@ -84,7 +84,7 @@ export class ElceScormAdapter implements ElceScormProgressSink {
     )
     this.restoredState = {
       ...(savedState ?? initialScormReaderState()),
-      currentPageId: restore.location.length > 0 ? restore.location : savedState?.currentPageId ?? null,
+      currentPageId: restore.location.length > 0 ? restore.location : null,
       projectTestState,
     }
     return this.restoredState

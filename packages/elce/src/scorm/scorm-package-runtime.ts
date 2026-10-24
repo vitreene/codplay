@@ -37,7 +37,7 @@ export interface ElceScormPackageScenario {
 /** Describes the Sighty loader and runtime operations used by an exported SCO. */
 type ElceScormPackageRuntime = Pick<
   SightyRuntimeApi<ElceSceneKey, ElceSlotName>,
-  'initialize' | 'play' | 'dispatch' | 'mutate'
+  'initialize' | 'play' | 'dispatch' | 'mutate' | 'updateContext'
 > & Readonly<{
   getInstance(sceneKey: ElceSceneKey): Readonly<{
     telco: Pick<CodPlayTelco, 'getProgress'>
@@ -142,20 +142,20 @@ export async function startElceScormPackageRuntime(
       await session.saveReaderState(restored.projectTestState, currentPageId)
     }
 
+    const runtimeContext = {
+      ...scenarioContextFromTestState(restored.projectTestState),
+      ...(options.chapterScoIdentifiers === undefined ? {} : {
+        [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: options.chapterScoIdentifiers,
+      }),
+      [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: session,
+    }
     course = await options.loadSightyPackage({
       root: options.root,
       codplay: {
         htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
       },
       runtime: {
-        context: {
-          ...scenarioContextFromTestState(restored.projectTestState),
-          ...(options.chapterId === undefined ? {} : { [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: options.chapterId }),
-          ...(options.chapterScoIdentifiers === undefined ? {} : {
-            [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: options.chapterScoIdentifiers,
-          }),
-          [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: session,
-        },
+        context: runtimeContext,
       },
     })
     await course.runtime.initialize()
@@ -166,6 +166,7 @@ export async function startElceScormPackageRuntime(
         scopedChapter,
         options.chapterScoIdentifiers ?? {},
       )
+      await course.runtime.updateContext({ [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: scopedChapter.id })
     }
     await course.runtime.play(ELCE_SCENARIO.LAYOUT_SCENE)
     const refreshed = await course.runtime.dispatch({ name: ELCE_EVENTS.PRESENTATION_REFRESH })
@@ -232,7 +233,8 @@ async function configureScormChapterBoundaryNavigation(
         },
       },
     }
-    const updated = await runtime.mutate(mutation, 'preserve')
+    // `preserve` kept the selected page's pre-mutation action table.
+    const updated = await runtime.mutate(mutation, 'reset')
     if (!updated) throw new Error(`Les commandes de navigation SCORM du chapitre ${chapter.id} n’ont pas pu être installées.`)
   }
 }

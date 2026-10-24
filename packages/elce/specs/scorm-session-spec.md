@@ -59,11 +59,16 @@ valide reste utilisable indépendamment du contenu suspendu. À l’ouverture,
 `reconcileProjectTestState()`, puis fournit l’état et la page courante à
 `ElcePlayerComposition` avant l’initialisation Sighty.
 
-La reprise conserve la page, les pages terminées, le profil, les réponses et
-les machines d’Évaluation, donc les tentatives. Le codec utilise la limite de
-`suspend_data` exportée par le noyau partagé et refuse tout dépassement sans
-tronquer l’état. En 1.2, le signet est écrit dans
-`cmi.core.lesson_location` ; en 2004, dans `cmi.location`.
+La page courante vient du signet LMS : `cmi.core.lesson_location` en 1.2 et
+`cmi.location` en 2004. Si ce champ est vide ou absent, le lecteur démarre à
+la première page du SCO, comme Shell ; il ne reprend pas
+`suspend_data.currentPageId` comme solution de repli. Le reste de l’état
+suspendu reste restauré : pages terminées, profil, réponses et machines
+d’Évaluation, donc les tentatives. Ainsi, une nouvelle lecture dont le LMS a
+effacé le signet recommence au début tout en gardant les réponses déjà
+enregistrées, qui peuvent satisfaire les gardes de lecture et de Question.
+Le codec utilise la limite de `suspend_data` exportée par le noyau partagé et
+refuse tout dépassement sans tronquer l’état.
 
 ## Actions Sighty et résultats
 
@@ -138,12 +143,17 @@ cette restauration. Après `runtime.initialize()`, le runtime Sighty reçoit
 l’événement de sélection de la page restaurée ; le player ne devient visible
 qu’après cette transition et une sauvegarde de l’état restauré.
 
-Pour un package multi-SCO, le lanceur reçoit la table des identifiants `ITEM-*`
-du manifeste. Les actions Sighty « Suivant » et « Précédent » au dernier et au
+Pour un package multi-SCO, le lanceur transmet à
+`startElceScormPackageRuntime()` la table des identifiants `ITEM-*` du
+manifeste. Les actions Sighty « Suivant » et « Précédent » au dernier et au
 premier écran appellent l’adaptateur Elcé, qui enregistre le signet et les
 données suspendues, renseigne `adl.nav.request`, committe et termine le SCO.
 Le bouton inter-chapitre est disponible seulement si le manifeste fournit
 l’identifiant stable du chapitre voisin.
+Le test d’export Sighty vérifie que le scénario compact d’un parcours à
+plusieurs chapitres contient `action:elce:navigate-scorm-chapter` dans
+`scenario.actions` même si le graphe statique ne la référence pas ; le test du
+runtime vérifie sa mutation de frontière et la demande d’item `ITEM-*`.
 
 Le lanceur initialise le conteneur avec `visibility: hidden`. Après le succès
 de la restauration, de l’initialisation Sighty, de la sélection de page et de
@@ -194,13 +204,24 @@ le signet, les pages terminées, les réponses et les états d’Évaluation sel
 la portée du chapitre. Le LMS conserve ces valeurs séparément pour chaque SCO.
 `monoSco=true` continue d’utiliser le scénario complet.
 
+À l’ouverture d’un SCO de chapitre, le conteneur reste masqué pendant que le
+runtime installe les actions de frontière avec les mutations `reset` Sighty.
+Ces resets repartent de l’entrée globale du scénario ; le runtime applique
+donc l’identifiant de chapitre au contexte après ces mutations, puis joue le
+layout et restaure la page du SCO avant de rendre le conteneur visible. Une
+reprise dans un SCO déjà complété garde son signet et ses données suspendues ;
+le reset de configuration ne déclenche pas de boucle d’accès sur l’entrée d’un
+autre chapitre.
+
 Les tests de runtime et de scénario vérifient le routage depuis la page globale
 initiale, le refus d’accès aux autres chapitres, la navigation locale et la
-restauration filtrée. Des ZIP Demo5 en 1.2, 2004v3 et 2004v4 contiennent chacun
-quatre lanceurs et quatre ressources `sco` ; leurs archives et manifestes
-passent respectivement `unzip -t` et les schémas XSD fournis. Cette preuve ne
-valide pas encore l’isolation des données, la reprise ou les résultats dans un
-LMS réel qui persiste les valeurs CMI.
+restauration filtrée. Le test intégré avec le runtime Sighty réel relance aussi
+un SCO déjà complété, retrouve sa page suspendue et vérifie l’absence de
+`SIGHTY_ACCESS_REDIRECT_LOOP`. Des ZIP Demo5 en 1.2, 2004v3 et 2004v4
+contiennent chacun quatre lanceurs et quatre ressources `sco` ; leurs archives
+et manifestes passent respectivement `unzip -t` et les schémas XSD fournis.
+Cette preuve ne valide pas encore l’isolation des données, la reprise ou les
+résultats dans un LMS réel qui persiste les valeurs CMI.
 
 ## Preuves
 
@@ -211,7 +232,8 @@ LMS réel qui persiste les valeurs CMI.
   le mapping Elcé des sessions, résultats, objectifs, progression,
   interactions immédiates et différées, les formats de réponses par type,
   la complétion du chapitre courant après consultation et réponse à ses
-  Questions en multi-SCO 1.2/2004, l’absence
+  Questions en multi-SCO 1.2/2004, le retour à la page initiale quand le
+  signet LMS manque tout en conservant l’état suspendu, l’absence
   d’interactions 1.2, les modes lecture et les erreurs.
 - [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
   vérifie la conservation de `timeMs`, de la description et de l’horodatage
@@ -228,9 +250,20 @@ LMS réel qui persiste les valeurs CMI.
   optionnelle.
 - [`scorm-package-runtime.test.ts`](../src/scorm/scorm-package-runtime.test.ts)
   vérifie l’injection du contexte dans le loader du package, la réconciliation
-  des identifiants, la page restaurée, la sauvegarde et la fermeture.
+  des identifiants, la reprise à la première page quand le signet LMS est vide,
+  la conservation des réponses et pages terminées, la page restaurée, la
+  sauvegarde et la fermeture.
   Il couvre également le conteneur masqué au lancement, visible après succès et
   toujours masqué après échec, ainsi que la sélection du chapitre du SCO et le
   filtrage des données restaurées à cette portée. Il vérifie aussi que la
   complétion est calculée dans ce seul chapitre et écrite par le runtime
-  multi-SCO vers le faux LMS.
+  multi-SCO vers le faux LMS. Dans le player Sighty réel, il clique « Suivant »
+  après la fin d’une page pour atteindre la page suivante, puis après la
+  validation de la Question finale pour vérifier l’écriture de la destination
+  `ITEM-*` dans `adl.nav.request`. Il relance enfin un SCO déjà complété,
+  vérifie le retour à sa page suspendue et s’assure que le warning
+  `SIGHTY_ACCESS_REDIRECT_LOOP` ne réapparaît pas.
+- [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts)
+  exporte un scénario à plusieurs chapitres par le CLI Sighty et vérifie que
+  `scenario.mjs` contient le handler de navigation inter-SCO dans
+  `scenario.actions`.

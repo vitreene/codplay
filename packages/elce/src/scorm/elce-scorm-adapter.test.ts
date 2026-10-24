@@ -171,6 +171,38 @@ describe('ElceScormAdapter', () => {
     expect(api.saveCount).toBe(1)
   })
 
+  it.each(['1.2', '2004v3', '2004v4'] as const)(
+    'uses the initial-page fallback when %s has no location but suspend data has a previous page',
+    async (version) => {
+      const api = new FakePipwerksApi()
+      api.values.set('cmi.suspend_data', JSON.stringify({
+        schemaVersion: 1,
+        currentPageId: 'last-page',
+        projectTestState: {
+          ...INITIAL_PROJECT_TEST_STATE,
+          finishedPageIds: ['first-page', 'last-page'],
+          questionAnswers: {
+            'last-page': {
+              answerIds: ['correct', 'wrong'],
+              selectedAnswerIds: ['correct'],
+              expectedAnswerIds: ['correct'],
+              isCorrect: true,
+            },
+          },
+          evaluationStates: { 'chapter-1': createPassedEvaluationState() },
+        },
+      }))
+      const session = new ElceScormAdapter({ version, api })
+
+      const restored = await session.initialize()
+
+      expect(restored.currentPageId).toBeNull()
+      expect(restored.projectTestState.finishedPageIds).toEqual(['first-page', 'last-page'])
+      expect(restored.projectTestState.questionAnswers['last-page']?.isCorrect).toBe(true)
+      expect(restored.projectTestState.evaluationStates['chapter-1']?.context.attempt).toBe(2)
+    },
+  )
+
   it('persists reader state when an evaluation outcome has no score yet', async () => {
     const api = new FakePipwerksApi()
     const session = new ElceScormAdapter({ version: '2004v4', api })

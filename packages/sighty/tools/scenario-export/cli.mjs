@@ -387,7 +387,7 @@ async function buildCompactScenarioModule({ scenario, scenarioFunctions, scenari
 
 /** Keeps the scenario graph and execution data while replacing documents with reset metadata. */
 function createCompactScenarioDefinition(scenario) {
-  const { actionKeys, guardKeys } = collectScenarioReferences(scenario.views)
+  const guardKeys = collectScenarioGuardReferences(scenario.views)
   const directScenes = new Map(Object.entries(isRecord(scenario.scenes) ? scenario.scenes : {}))
   for (const [sceneKey, sceneSource] of Object.entries(isRecord(scenario.sceneSources) ? scenario.sceneSources : {})) {
     if (!directScenes.has(sceneKey) && typeof sceneSource !== 'function') directScenes.set(sceneKey, sceneSource)
@@ -403,11 +403,7 @@ function createCompactScenarioDefinition(scenario) {
     scenes[sceneKey] = onReset === undefined ? {} : { onReset }
   }
 
-  const actions = Object.create(null)
-  for (const actionKey of actionKeys) {
-    const handler = scenario.actions?.[actionKey]
-    if (handler !== undefined) actions[actionKey] = handler
-  }
+  const actions = isRecord(scenario.actions) ? scenario.actions : Object.create(null)
   const guards = Object.create(null)
   for (const guardKey of guardKeys) {
     const handler = scenario.guards?.[guardKey]
@@ -427,9 +423,8 @@ function createCompactScenarioDefinition(scenario) {
   }
 }
 
-/** Collects the registered action and guard keys referenced by one view graph. */
-function collectScenarioReferences(viewGraph) {
-  const actionKeys = new Set()
+/** Collects the registered guard keys referenced by one view graph. */
+function collectScenarioGuardReferences(viewGraph) {
   const guardKeys = new Set()
   const visit = (value) => {
     if (Array.isArray(value)) {
@@ -438,13 +433,12 @@ function collectScenarioReferences(viewGraph) {
     }
     if (!isRecord(value)) return
     for (const [key, child] of Object.entries(value)) {
-      if (key === 'action' && typeof child === 'string' && child.startsWith('action:')) actionKeys.add(child)
       if ((key === 'accessBy' || key === 'exitBy') && typeof child === 'string' && child.startsWith('guard:')) guardKeys.add(child)
       visit(child)
     }
   }
   visit(viewGraph)
-  return { actionKeys, guardKeys }
+  return guardKeys
 }
 
 /** Collects every callback retained in the compact scenario payload. */

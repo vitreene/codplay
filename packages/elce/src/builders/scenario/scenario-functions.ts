@@ -1,6 +1,7 @@
 export {
   closeMenuDrawer,
   markPageFinishedAction,
+  navigateScormChapterAction,
   openMenuDrawerAction,
   pageAccessGuard,
   pageExitGuard,

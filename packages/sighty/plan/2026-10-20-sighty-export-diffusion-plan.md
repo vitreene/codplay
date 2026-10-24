@@ -28,6 +28,21 @@ distantes et partagées par l’engine, ainsi que pour l’acceptance depuis un
 projet installé hors du monorepo. L’exfiltration lisible et SCORM restent hors
 de cette tranche.
 
+**Correction du 2026-10-24 — conservation des actions de scénario :
+implémentée et vérifiée.** Le compilateur Sighty conserve toutes les entrées de
+`scenario.actions`, même si une entrée n’est référencée dans le graphe initial
+qu’après une mutation runtime. Les guards gardent le filtrage actuel par
+référence statique. Le tree-shaking continue à exclure les exports de
+`scenarioFunctions` qui ne servent à aucune action déclarée.
+
+- [x] Ajouter une action déclarée mais absente du graphe initial au fixture du
+  CLI ; vérifier sa présence et son appel dans le `scenario.mjs` exporté.
+- [x] Conserver le test qui vérifie le retrait d’un export de module non utilisé.
+- [x] Mettre à jour la spécification Sighty après réussite des tests CLI,
+  typecheck et build concernés.
+  Le CLI dédié passe ses 7 tests et la suite Sighty ses 60 tests ; le typecheck
+  et le build du package passent.
+
 ## Décisions retenues
 
 - Sighty réutilise `exportScenePackage()` de CodPlay pour chaque scène. Son
@@ -298,8 +313,9 @@ ne doit pas être recopiée dans le paquet d’une scène. Une dépendance de bu
 qui n’est plus utilisée à l’exécution doit disparaître du bundle compact.
 
 Pour le scénario : garder ses identifiants et métadonnées d’exécution, le graphe
-`views`, les données auteur consommées, `showMode`, les actions et guards
-référencés ainsi que les callbacks de reset réellement utilisés. Le catalogue
+`views`, les données auteur consommées, `showMode`, toutes les entrées de
+`scenario.actions`, les guards référencés et les callbacks de reset réellement
+utilisés. Le catalogue
 de scènes doit garder une entrée légère par `SceneKey` pour que le chargeur
 puisse contrôler l’accord avec le manifeste enfant. La définition brute des
 scènes ne doit pas être recopiée dans `scenario.mjs` lorsque les paquets CodPlay
@@ -347,11 +363,11 @@ scène, et non le scénario auteur entier. `functionReferences` sélectionne les
 callbacks nécessaires en maintenant chaque enfant autonome.
 
 Sighty doit conserver dans son payload compact le graphe `views`, les données
-consommées par ce graphe, l’identité/version/`showMode`, les actions et guards
-référencés, les clés de toutes les scènes directes ainsi que les callbacks de
-scène effectivement utilisés par le runtime. Le compilé et les ressources de
-chaque scène restent dans son paquet CodPlay. Les pages/scènes lazy restent
-reportées.
+consommées par ce graphe, l’identité/version/`showMode`, toutes les entrées de
+`scenario.actions`, les guards référencés, les clés de toutes les scènes
+directes ainsi que les callbacks de scène effectivement utilisés par le
+runtime. Le compilé et les ressources de chaque scène restent dans son paquet
+CodPlay. Les pages/scènes lazy restent reportées.
 
 Le runtime compact lit les slots du layout et les IDs de stories depuis les
 `CompiledScene` préparées par `owner.prepare()`. Les callbacks `onReset` restent
@@ -536,8 +552,10 @@ CodPlay enfant contient la seule représentation de scène livrée : sa
 `SceneDoc`, le code des factories et les CSS/médias déjà copiés dans l’enfant
 ne sont pas recopiés dans `scenario.mjs`.
 
-Le scénario compact conserve son graphe `views`, ses données et ses actions,
-guards et callbacks `onReset` nécessaires à l’exécution. Sighty lit les slots
+Le scénario compact conserve son graphe `views`, ses données et toutes les
+entrées de `scenario.actions`, y compris les actions qui ne sont référencées
+qu’après une mutation runtime. Il conserve les guards et callbacks `onReset`
+nécessaires à l’exécution. Sighty lit les slots
 du layout et les identifiants de stories depuis les `CompiledScene` déjà
 préparées ; `owner.prepare()` fournit les ressources et CSS des paquets enfants.
 La forme auteur utilisée en mémoire reste inchangée et

@@ -231,6 +231,7 @@ function createLauncherHtml(input) {
         version: config.version,
         monoSco: config.monoSco,
         chapterId: config.chapterId,
+        chapterScoIdentifiers: config.chapterScoIdentifiers,
         initialPageId: config.initialPageId,
       })
       status.textContent = ''

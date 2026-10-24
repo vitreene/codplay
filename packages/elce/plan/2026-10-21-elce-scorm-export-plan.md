@@ -560,22 +560,81 @@ reçoivent uniquement l’interface de l’adaptateur.
    transmettre au runtime la table `chapterId`/`ITEM-*` issue des identifiants
    conservés du manifeste pour activer les passages inter-chapitres.
 
-### Écarts de lecture avec le projet de référence — 22 octobre 2026
+### Écarts de lecture avec le projet de référence — 24 octobre 2026
 
 L’exigence utilisateur est de reprendre à 100 % les fonctions communes du
 projet de référence. L’inspection de `ScormManager`, `Lesson` et du package LMS
 actif distingue les raccords désormais corrigés des écarts encore ouverts.
 
-- **Passage entre SCO — raccordé, package LMS à mettre à jour.** « Suivant » en
-  fin de chapitre et « Précédent » au début appellent maintenant l’action de
-  page Sighty. L’adaptateur transmet l’`ITEM-*` stable du manifeste au noyau,
-  qui demande le choix CMI, committe et termine le SCO. Les tests de scénario et
-  de runtime contrôlent le routage et la conservation des identifiants. La page
-  LMS inspectée le 22 octobre reste toutefois dans l’ancienne archive : son
-  lanceur ne contient pas `chapterScoIdentifiers`. L’API LMS accepte la
-  destination, mais cette version n’a pas la table nécessaire pour activer le
-  bouton. Aucun fichier installé dans la LMS n’a été modifié dans cette
-  correction.
+- **Nouvelle lecture après une interruption — corrigée et vérifiée en tests ;
+  validation LMS restante.** Dans la session LMS inspectée, le lancement
+  indiquait `cmi.entry=ab_initio`, `cmi.location` était vide et
+  `suspend_data.currentPageId` désignait encore la dernière page du chapitre.
+  L’adaptateur Elcé choisissait cette page JSON comme repli. Comme Shell,
+  l’adaptateur prend maintenant le signet CMI comme seule source de page ; s’il
+  est vide, le runtime part de la première page du SCO. Les réponses, pages
+  terminées, valeurs de profil et tentatives de `suspend_data` restent
+  conservées. Les tests adaptateur/runtime vérifient ces deux aspects
+  (35 tests passés dans les deux fichiers ciblés). Le re-test LMS reste à faire
+  après réexport : le navigateur courant est en mode consultation et le LMS
+  refuse l’accès à une tentative active avec son verrou.
+- **Défaut signalé : « Suivant » actif en fin de chapitre mais sans navigation —
+  non corrigé, diagnostic LMS incomplet.** Le lecteur a signalé ce défaut en
+  lecture LMS, après réponse à la Question finale ; il reste à traiter et ne
+  doit pas être écarté au motif d’une observation faite en mode consultation.
+  Dans ce mode `review`, le clic DOM est reçu mais aucun événement métier Sighty
+  ni appel CMI n’a été observé. Le navigateur affiche maintenant le verrou LMS
+  « cours déjà ouvert » et ne donne pas accès à une tentative active. L’archive
+  `Elce 3` actuellement servie contient bien `action:elce:navigate-scorm-chapter`
+  dans `scenario.mjs`, ce qui écarte uniquement l’absence de déclaration du
+  handler ; cela ne prouve pas que le clic du paquet LMS l’exécute. Le test
+  d’intégration Sighty local couvre la fin de page, la validation de la Question
+  et l’émission de `adl.nav.request`, mais ne remplace pas le test navigateur
+  LMS. Après libération du verrou, reprendre une tentative active et tracer le
+  clic jusqu’à l’événement `elce:navigation:next`, l’action de frontière et
+  l’écriture `adl.nav.request`. Ne pas modifier CodPlay ni ajouter un circuit
+  d’événement parallèle sans preuve localisant le défaut à cette frontière.
+- **Navigation multi-SCO — raccord Elcé corrigé ; validation LMS restante.** Le
+  lanceur généré contenait la table `chapterScoIdentifiers` dans son JSON,
+  mais ne la transmettait pas à `startElceScormPackageRuntime()` ; le passage
+  est maintenant explicite et le test du package généré le vérifie. La mutation
+  des actions de frontière utilisait `preserve` : le graphe Sighty était mis à
+  jour, mais la sélection active conservait l’ancienne action. Le runtime
+  applique maintenant cette mutation avec `reset` afin que la sélection active
+  utilise le graphe mis à jour avant le démarrage de lecture. Un test avec le
+  player Sighty réel clique « Suivant » après la fin d’une page, puis après
+  validation d’une Question finale, et vérifie respectivement la page suivante
+  puis `adl.nav.request={target=ITEM-two}choice`. Le LMS a ensuite révélé que
+  `action:elce:navigate-scorm-chapter` manquait de `scenario.actions` dans le
+  scénario compact. Le compilateur Sighty conserve maintenant toutes les
+  entrées de `scenario.actions`, même si elles sont appelées après une mutation
+  runtime ; `scenario-functions` exporte le handler Elcé pour qu’il soit
+  sérialisable. Le graphe auteur conserve ainsi les actions ordinaires et le
+  runtime SCORM ajoute l’action de navigation au moment de la mutation.
+  Le test d’export complet vérifie que le handler existe dans `scenario.mjs`
+  sans être référencé dans le graphe initial ; les tests runtime vérifient la
+  mutation et la demande `ITEM-*`. Aucun fichier CodPlay core n’a été modifié.
+  Le package déjà installé dans la LMS doit être réexporté et réimporté avant
+  validation réelle. Vérification actuelle : 60 tests
+  Sighty, 7 tests CLI ciblés, 2 tests d’export Elcé, typechecks Sighty/Elcé et
+  build Sighty passent. La suite complète Elcé précédemment exécutée passait
+  464 tests sur 465 ; son unique échec est le test de streaming SQLite, bloqué
+  avant exécution par `listen EPERM` sur `127.0.0.1` dans le sandbox.
+- **Reprise d’un SCO de chapitre déjà consulté — correction implémentée et
+  vérifiée le 24 octobre.** Le test LMS a confirmé
+  `adl.nav.request_valid.choice=true` et la reprise de
+  `cmi.location`/`cmi.suspend_data` dans le SCO cible, puis le runtime échouait
+  pendant l’installation des actions de frontière. Ces mutations utilisent
+  `reset` ; avec le contexte du chapitre déjà actif, le reset repartait sur la
+  première page globale, la garde de chapitre la refusait et sa route de repli
+  bouclait sur cette même page (`SIGHTY_ACCESS_REDIRECT_LOOP`). Le runtime
+  installe maintenant les actions pendant que le conteneur reste masqué, puis
+  active la portée du chapitre avant la restauration et l’affichage. Un test
+  avec le vrai runtime Sighty relance un SCO déjà complété, retrouve sa page et
+  vérifie le maintien de son statut ainsi que l’absence du diagnostic. Les 21
+  tests runtime SCORM, builder de scénario et export passent ; typecheck Elcé,
+  build Elcé et bundle Vite du runtime SCORM passent. Le ZIP installé dans la
+  LMS doit être réexporté puis réimporté pour la validation réelle.
 - **Durée SCORM — raccordée aux horloges existantes.** L’adaptateur lit
   `telco.getProgress().timelineMs` sur l’instance persistante de `scene-layout`
   et transmet la valeur à `cmi.session_time` ou `cmi.core.session_time`. La
@@ -791,16 +850,11 @@ sa confirmation dans un LMS réel reste requise.
   existants à préserver. Le générateur Elcé les réutilise maintenant dans la
   branche SCORM et donne des identifiants déterministes aux nouveaux projets et
   chapitres.
-- Session LMS consultée le 22 octobre après reprise : `chapter-2`, page 3/3,
-  `cmi.mode=normal`, `cmi.completion_status=completed`,
-  `cmi.progress_measure=1` et `cmi.location=chapter-2-synthesis`. Le repère bas
-  est dans le scrollport, mais `Suivant` reste désactivé. Une lecture du
-  lanceur inline montre qu’il ne passe pas `chapterScoIdentifiers`; en même
-  temps, `adl.nav.request_valid.choice` vers l’`ITEM-*` suivant vaut `true`.
-  Le blocage est donc dans l’ancienne archive installée, qui ne fournit pas la
-  table de destinations au runtime, et non dans le statut LMS ni le repère de
-  fin. Le runtime actuel et les tests de scénario construisent cette table à
-  partir des identifiants stables du manifeste.
+- Validation LMS restante : la session active du 23 octobre utilise un package
+  antérieur aux deux corrections Elcé ci-dessus. Après réexport/réimport,
+  repartir d’une entrée fraîche du chapitre 1 pour contrôler la navigation
+  vers la page suivante, le déblocage après la Question et la requête LMS vers
+  le chapitre suivant.
 - Le runtime SCORM servi dans cette session inclut déjà la conservation des
   observations initiales jusqu’à `PLAYING`. Les Cartes et Graphes déclarent
   `initial: 'enter'`, et un test ciblé du vrai `HtmlPlayerRunner` valide la

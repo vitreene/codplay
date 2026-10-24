@@ -1,19 +1,33 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it, vi } from 'vitest'
+import { Sighty } from '@codplay/sighty'
 import type { SightyScenarioMutation } from '@codplay/sighty'
+import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
-import { ELCE_EVENTS, ELCE_SCENARIO } from '../config/document-config'
-import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
+import {
+  BDC_LOCATION,
+  BDC_TYPE,
+  DEFAULT_PRESET_ID,
+  ELCE_EVENTS,
+  ELCE_SCENARIO,
+  ELCE_SCENARIO_HANDLERS,
+  PAGE_LOCATION,
+} from '../config/document-config'
 import type { PipwerksScormApi } from '@codplay/sighty-scorm'
 import type { ScormReaderState } from './scorm-types'
+import { applyDocumentCommand, createPageCommand } from '../domain/commands/document-commands'
+import { createInitialDocument } from '../domain/document/document-model'
+import { createElcePlayerScenario } from '../player/elce-player-composition'
+import { ELCE_ENGINE_CAPABILITIES } from '../player/elce-player-engine'
 import {
   ELCE_SCORM_CHAPTER_CONTEXT_KEY,
   ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY,
   ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY,
 } from './scorm-types'
 import { reconcilePackagedReaderState, startElceScormPackageRuntime } from './scorm-package-runtime'
+import type { ElceScormPackageLoader, ElceScormPackageScenario } from './scorm-package-runtime'
 
 /** Supplies a deterministic LMS store to the exported Sighty package runtime. */
 class FakePipwerksApi implements PipwerksScormApi {
@@ -106,6 +120,42 @@ describe('SCORM package state restoration', () => {
     expect(restored.projectTestState.profileValues).toEqual({ participant: 'Ada' })
   })
 
+  it('starts at the chapter initial page when the LMS bookmark is empty and preserves suspend data', () => {
+    const readerState: ScormReaderState = {
+      schemaVersion: 1,
+      currentPageId: null,
+      projectTestState: {
+        ...INITIAL_PROJECT_TEST_STATE,
+        finishedPageIds: ['page-a', 'question-page'],
+        questionAnswers: {
+          'question-page': {
+            answerIds: ['answer-a', 'answer-b'],
+            selectedAnswerIds: ['answer-a'],
+            expectedAnswerIds: ['answer-a'],
+            isCorrect: true,
+          },
+        },
+      },
+    }
+    const data = {
+      pageIds: ['page-a', 'question-page'],
+      pagePaths: { 'page-a': '/chapter-a/page-a', 'question-page': '/chapter-a/question-page' },
+      chapterIds: ['chapter-a'],
+      previewStartPageId: 'page-a',
+      questionBdcByPage: { 'question-page': 'question-bdc' },
+      chapters: {
+        'chapter-a': { id: 'chapter-a', name: 'Chapitre A', type: 'standard', pageIds: ['page-a', 'question-page'] },
+      },
+      profile: { fieldPropertyIds: [] },
+    } as const
+
+    const restored = reconcilePackagedReaderState(readerState, data, 'page-a', 'chapter-a')
+
+    expect(restored.currentPageId).toBe('page-a')
+    expect(restored.projectTestState.finishedPageIds).toEqual(['page-a', 'question-page'])
+    expect(restored.projectTestState.questionAnswers['question-page']?.isCorrect).toBe(true)
+  })
+
   it('reconciles a chapter SCO resume to that chapter and its own questions', () => {
     const readerState: ScormReaderState = {
       schemaVersion: 1,
@@ -163,6 +213,7 @@ describe('SCORM package state restoration', () => {
     document.body.append(root)
     const events: string[] = []
     let runtimeContext: Readonly<Record<string, unknown>> | undefined
+    const contextUpdates: Readonly<Record<string, unknown>>[] = []
     let sourceAdapterFactories: readonly unknown[] | undefined
     const mutations: SightyScenarioMutation<ElceSceneKey, ElceSlotName>[] = []
     let layoutTimelineMs = 12_345
@@ -175,7 +226,7 @@ describe('SCORM package state restoration', () => {
       runtime: Readonly<{ context: Readonly<Record<string, unknown>> }>
     }>) => {
       runtimeContext = options.runtime.context
-      sourceAdapterFactories = options.codplay.htmlHost.sourceAdapterFactories
+      sourceAdapterFactories = options.codplay.htmlHost?.sourceAdapterFactories
       return {
         runtime: {
           initialize: async () => {
@@ -190,6 +241,10 @@ describe('SCORM package state restoration', () => {
           mutate: async (mutation: SightyScenarioMutation<ElceSceneKey, ElceSlotName>) => {
             mutations.push(mutation)
             return true
+          },
+          updateContext: async (patch: Readonly<Record<string, unknown>>) => {
+            contextUpdates.push(patch)
+            events.push('updateContext')
           },
           getInstance: () => ({
             telco: { getProgress: () => ({ timelineMs: layoutTimelineMs, durationMs: 60_000 }) },
@@ -227,7 +282,7 @@ describe('SCORM package state restoration', () => {
     expect(typeof (progressSink as { saveReaderState?: unknown } | undefined)?.saveReaderState).toBe('function')
     expect((progressSink as { getEvaluationThresholdOverride?: () => number | undefined } | undefined)
       ?.getEvaluationThresholdOverride?.()).toBe(0.65)
-    expect(runtimeContext?.[ELCE_SCORM_CHAPTER_CONTEXT_KEY]).toBe('evaluation-a')
+    expect(runtimeContext?.[ELCE_SCORM_CHAPTER_CONTEXT_KEY]).toBeUndefined()
     expect(runtimeContext?.[ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]).toEqual({
       'chapter-a': 'ITEM-a',
       'evaluation-a': 'ITEM-evaluation',
@@ -235,10 +290,12 @@ describe('SCORM package state restoration', () => {
     expect(sourceAdapterFactories).toEqual([createScrollContainerSourceAdapter])
     expect(events).toEqual([
       'initialize',
+      'updateContext',
       `play:${ELCE_SCENARIO.LAYOUT_SCENE}`,
       ELCE_EVENTS.PRESENTATION_REFRESH,
       `${ELCE_EVENTS.MENU_PREFIX}page-b`,
     ])
+    expect(contextUpdates).toEqual([{ [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: 'evaluation-a' }])
     expect(api.values.get('cmi.location')).toBe('page-b')
     expect(JSON.parse(api.values.get('cmi.suspend_data') ?? '{}').currentPageId).toBe('page-b')
     expect(api.values.get('cmi.session_time')).toBe('PT0000H00M12S')
@@ -293,6 +350,7 @@ describe('SCORM package state restoration', () => {
           mutations.push(mutation)
           return true
         },
+        updateContext: async () => {},
         getInstance: () => ({ telco: { getProgress: () => ({ timelineMs: 0, durationMs: 0 }) } }),
       },
       destroy: () => {},
@@ -387,6 +445,163 @@ describe('SCORM package state restoration', () => {
     await runtime.close()
   })
 
+  it('routes next-page and next-chapter clicks after their completion gates', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const api = new FakePipwerksApi()
+    window.pipwerks = { SCORM: api }
+    const root = document.createElement('main')
+    root.style.visibility = 'hidden'
+    document.body.append(root)
+
+    let documentModel = createInitialDocument()
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'page.move',
+      pageId: 'page-a',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    })
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-a2',
+      bdcId: 'bdc-section-a2',
+      name: 'Page A2',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'chapter.create', chapterId: 'chapter-2', name: 'Chapitre 2',
+    })
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-b',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-2' },
+    }))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-a',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a2', index: 0 },
+    })
+    const scenario = createElcePlayerScenario({ document: documentModel })
+    const chapterScoIdentifiers = { 'chapter-1': 'ITEM-one', 'chapter-2': 'ITEM-two' }
+    let sighty: Sighty<ElceSceneKey, ElceSlotName> | undefined
+    const loadSightyPackage: ElceScormPackageLoader = vi.fn(async (options) => {
+      const sceneKeys = Object.keys(scenario.scenes ?? {}) as ElceSceneKey[]
+      sighty = new Sighty({
+        scenario,
+        runtime: {
+          root: options.root,
+          context: options.runtime.context,
+          instanceIds: Object.fromEntries(sceneKeys.map((sceneKey) => [sceneKey, `test-${sceneKey}`])) as Record<ElceSceneKey, string>,
+          codplay: {
+            engine: ELCE_ENGINE_CAPABILITIES,
+            htmlHost: options.codplay.htmlHost,
+          },
+        },
+      })
+      return { runtime: sighty.runtime, destroy: () => sighty?.destroy() }
+    })
+
+    const runtime = await startElceScormPackageRuntime({
+      root,
+      scenario: scenario as unknown as ElceScormPackageScenario,
+      loadSightyPackage,
+      version: '2004v4',
+      monoSco: false,
+      chapterId: 'chapter-1',
+      initialPageId: 'page-a',
+      chapterScoIdentifiers,
+    })
+    const navigationSelection = sighty!.runtime.scenarioState.current.find(
+      ({ sceneKey }) => sceneKey === ELCE_SCENARIO.NAVIGATION_SCENE,
+    )
+    expect(navigationSelection).toBeDefined()
+    expect(sighty!.runtime.getInstance(ELCE_SCENARIO.NAVIGATION_SCENE)?.telco.getState().status).toBe('playing')
+    const nextButton = root.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    expect(sighty!.scenario.getView('scene-page-a2')?.actions?.[ELCE_EVENTS.NAVIGATION_NEXT])
+      .toEqual({ action: ELCE_SCENARIO_HANDLERS.NAVIGATE_SCORM_CHAPTER })
+    const observedRuntimeEvents: string[] = []
+    const stopObservingEvents = sighty!.runtime.events.onEvent((event) => observedRuntimeEvents.push(event.name))
+    expect(nextButton?.disabled).toBe(true)
+
+    const firstPageFinished = await sighty!.runtime.dispatch({
+      name: ELCE_EVENTS.PAGE_FINISHED,
+      sourceSceneKey: 'scene-page-a',
+      data: { pageId: 'page-a' },
+    })
+    expect(firstPageFinished).toBe(true)
+    await flushScormPlayerFrames(pendingFrames)
+    expect(nextButton?.disabled).toBe(false)
+    nextButton?.click()
+    await flushScormPlayerFrames(pendingFrames)
+    expect(sighty!.runtime.scenarioState.current.some(({ sceneKey }) => sceneKey === 'scene-page-a2')).toBe(true)
+    expect(api.values.get('cmi.location')).toBe('page-a2')
+
+    const finalPageFinished = await sighty!.runtime.dispatch({
+      name: ELCE_EVENTS.PAGE_FINISHED,
+      sourceSceneKey: 'scene-page-a2',
+      data: { pageId: 'page-a2' },
+    })
+    expect(finalPageFinished).toBe(true)
+    await flushScormPlayerFrames(pendingFrames)
+    expect(nextButton?.disabled).toBe(true)
+
+    const answerInputs = root.querySelectorAll<HTMLInputElement>('.elce-card--question input[type="radio"]')
+    const validateButton = root.querySelector<HTMLButtonElement>('.elce-question-validate')
+    expect(answerInputs.length).toBeGreaterThan(0)
+    answerInputs[0]?.click()
+    await flushScormPlayerFrames(pendingFrames)
+    validateButton?.click()
+    await flushScormPlayerFrames(pendingFrames)
+    expect(root.querySelector('.elce-question-feedback')?.textContent).toMatch(/Bonne réponse|Réponse incorrecte/)
+    expect(nextButton?.disabled).toBe(false)
+    expect(api.values.get('cmi.completion_status')).toBe('completed')
+    nextButton?.click()
+    await flushScormPlayerFrames(pendingFrames)
+    stopObservingEvents()
+    expect(observedRuntimeEvents).toContain(ELCE_EVENTS.NAVIGATION_NEXT)
+    expect(api.values.get('adl.nav.request')).toBe('{target=ITEM-two}choice')
+    await runtime.close()
+
+    const resumeState: ScormReaderState = {
+      schemaVersion: 1,
+      currentPageId: 'page-b',
+      projectTestState: {
+        ...INITIAL_PROJECT_TEST_STATE,
+        finishedPageIds: ['page-b'],
+      },
+    }
+    api.values.set('cmi.completion_status', 'completed')
+    api.values.set('cmi.location', 'page-b')
+    api.values.set('cmi.suspend_data', JSON.stringify(resumeState))
+    const warningSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const resumedRuntime = await startElceScormPackageRuntime({
+        root,
+        scenario: scenario as unknown as ElceScormPackageScenario,
+        loadSightyPackage,
+        version: '2004v4',
+        monoSco: false,
+        chapterId: 'chapter-2',
+        initialPageId: 'page-b',
+        chapterScoIdentifiers,
+      })
+
+      expect(sighty!.runtime.scenarioState.current.some(({ sceneKey }) => sceneKey === 'scene-page-b')).toBe(true)
+      expect(api.values.get('cmi.location')).toBe('page-b')
+      expect(api.values.get('cmi.completion_status')).toBe('completed')
+      expect(root.style.visibility).toBe('visible')
+      expect(warningSpy.mock.calls.flat().join(' ')).not.toContain('SIGHTY_ACCESS_REDIRECT_LOOP')
+      await resumedRuntime.close()
+    } finally {
+      warningSpy.mockRestore()
+    }
+  })
+
   it('keeps the launch container hidden when Sighty initialization fails', async () => {
     const api = new FakePipwerksApi()
     window.pipwerks = { SCORM: api }
@@ -400,6 +615,7 @@ describe('SCORM package state restoration', () => {
         play: async () => {},
         dispatch: async () => true,
         mutate: async () => true,
+        updateContext: async () => {},
         getInstance: () => undefined,
       },
       destroy: () => { destroyed += 1 },
@@ -428,3 +644,18 @@ describe('SCORM package state restoration', () => {
     expect(api.quitCount).toBe(1)
   })
 })
+
+/** Runs one queued CodPlay frame so native player interactions reach Sighty. */
+function flushPendingScormPlayerFrames(pendingFrames: FrameRequestCallback[]): void {
+  const callbacks = pendingFrames.splice(0)
+  for (const callback of callbacks) callback(performance.now())
+}
+
+/** Gives the real player event queue and Sighty presentation several frames to settle. */
+async function flushScormPlayerFrames(pendingFrames: FrameRequestCallback[]): Promise<void> {
+  for (let pass = 0; pass < 3; pass += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    flushPendingScormPlayerFrames(pendingFrames)
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, 25))
+}
