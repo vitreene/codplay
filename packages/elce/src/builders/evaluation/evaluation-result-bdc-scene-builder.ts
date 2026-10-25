@@ -3,7 +3,6 @@ import { ELCE_EVENTS, EVALUATION_RESULT_BRANCH, EVALUATION_RESULT_CONFIG } from 
 import type { EvaluationResultAction, EvaluationResultBranch } from '../../config/document-config-types'
 import type { Bdc, Page } from '../../domain/document/document-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
-import { sceneStyleClassName } from '../scene-style/scene-style-classes'
 
 export type EvaluationResultBdcSceneBuild = Readonly<{
   readonly mountPartId: string
@@ -61,7 +60,7 @@ function createEvaluationResultBranchStory(
         type: 'layout',
         initial: {
           move: '@off',
-          className: `elce-card--evaluation-result ${appearanceClassName ?? sceneStyleClassName('appearance-surface', bdc.id)}`,
+          className: `elce-card--evaluation-result ${appearanceClassName ?? 'evaluation-result bdc'}`,
           markup: card.markup,
         },
         actions: {

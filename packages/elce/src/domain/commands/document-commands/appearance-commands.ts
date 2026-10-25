@@ -2,6 +2,7 @@ import type { AppearanceSettings } from '../../../config/appearance/appearance-t
 import { ElceDocument } from '../../../domain/document/document-model'
 import type { AppearanceProperty, AppearanceTarget } from '../document-command-types'
 import { fail, findBdc } from './command-helpers'
+import { resolveAppearance } from '../../appearance/appearance-resolver'
 
 /** Sets one local appearance value without replacing other explicit settings. */
 export function setAppearanceProperty(
@@ -12,6 +13,32 @@ export function setAppearanceProperty(
 ): ElceDocument {
   const current = appearanceForTarget(document, target)
   return replaceAppearanceForTarget(document, target, { ...current, [property]: value })
+}
+
+/** Sets a surface color and restores the Normal density when leaving Transparent. */
+export function setAppearanceBackground(
+  document: ElceDocument,
+  target: AppearanceTarget,
+  background: NonNullable<AppearanceSettings['background']>,
+): ElceDocument {
+  const current = appearanceForTarget(document, target)
+  const density = resolveAppearance(document, target).density.value
+  return replaceAppearanceForTarget(document, target, {
+    ...current,
+    background,
+    ...(density === 'none' ? { density: 'normal' } : {}),
+  })
+}
+
+/** Replaces title and body font choices as one undoable author action. */
+export function setAppearanceTypography(
+  document: ElceDocument,
+  target: AppearanceTarget,
+  headingFontId: string,
+  bodyFontId: string,
+): ElceDocument {
+  const current = appearanceForTarget(document, target)
+  return replaceAppearanceForTarget(document, target, { ...current, headingFontId, bodyFontId })
 }
 
 /** Removes only the named local appearance value so the next context applies. */

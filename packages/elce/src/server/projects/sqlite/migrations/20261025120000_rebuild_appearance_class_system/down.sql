@@ -1,0 +1,1 @@
+-- Appearance v7 stores independent heading and body fonts; Demo5 downgrade is intentionally unavailable.

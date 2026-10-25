@@ -19,7 +19,7 @@ import { createRevelationAction, createRevelationInitialStyle } from '../revelat
 import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistical-graph-scene-builder'
 import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
-import { appearanceClassNameForTarget } from '../scene-style/appearance-class-names.ts'
+import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../scene-style/appearance-class-names.ts'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -73,7 +73,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
 
   const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
-  const pageAppearanceClass = appearanceClassNameForTarget(articleId, options.appearanceClassNamesByTarget)
+  const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
   const bottomMarkerId = `${page.id}-bottom-marker`
   const articleMarkup = `<article id="${articleId}" class="elce-flux-article ${pageAppearanceClass}">${mounts.map((mount) => mount.markup).join('')}<!-- data-part="${page.id}:bottom" --></article>`
   const pageMediaPersos = mounts.flatMap((mount) => createMediaPersos(page, mount, scrollPortId, options))
@@ -92,11 +92,12 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
         return createFluxCardPersos(page, illustration, cardBuild, target.partId, scrollPortId, options, anchor)
       }
       case BDC_TYPE.STATISTICAL_GRAPH: {
+        const appearanceClassName = appearanceClassNameForBdc(illustration.id, options.appearanceClassNamesByTarget)
         const graphBuild = statisticalGraphSceneBuilder.build(
           illustration,
           `${page.id}-${section.id}-${illustration.id}-anchor`,
           target.partId,
-          appearanceClassNameForTarget(illustration.id, options.appearanceClassNamesByTarget),
+          appearanceClassName,
         )
         anchoredGraphStyleSheets.push(graphBuild.styleSheet)
         return createFluxGraphPersos(
@@ -268,7 +269,7 @@ function createBdcMount(
       const markup = appendClassToMarkupElement(
         card.markup,
         sectionId,
-        appearanceClassNameForTarget(sectionId, options.appearanceClassNamesByTarget),
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
       )
       return {
         bdc,
@@ -298,8 +299,7 @@ function createBdcMount(
         `${page.id}-${bdc.id}`,
         partId,
         question,
-        bdc.id,
-        appearanceClassNameForTarget(bdc.id, options.appearanceClassNamesByTarget),
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
       )
       const resetEvent = ELCE_EVENTS.QUESTION_RESET
       return {
@@ -315,7 +315,7 @@ function createBdcMount(
       const resultBuild = buildEvaluationResultBdcScene(
         page,
         bdc,
-        appearanceClassNameForTarget(bdc.id, options.appearanceClassNamesByTarget),
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
       )
       return {
         bdc,
@@ -360,7 +360,7 @@ function createBdcMount(
         bdc,
         `${page.id}-${bdc.id}-graph`,
         graphPartId,
-        appearanceClassNameForTarget(bdc.id, options.appearanceClassNamesByTarget),
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
       )
       return {
         bdc,
@@ -462,13 +462,14 @@ function createFluxCardPersos(
   const cardId = `${page.id}-${bdc.id}-card`
   const enterEvent = `${cardId}:enter`
   const leaveEvent = `${cardId}:leave`
+  const hasMedia = cardBuild.mediaPersos.length > 0
   const root: PersoDoc<string> = {
     id: cardId,
     type: 'layout',
     initial: {
       move: { target: targetPartId },
       className: `${cardBuild.rootClassName} elce-flux-card-root${anchor === undefined ? '' : ` ${sceneStyleClassName('flux-anchor-illustration', cardId)}`}`,
-      style: createRevelationInitialStyle(introRef),
+      ...(hasMedia ? {} : { style: createRevelationInitialStyle(introRef) }),
       markup: cardBuild.markup,
     },
     emit: {
@@ -479,12 +480,35 @@ function createFluxCardPersos(
         leave: [{ name: leaveEvent }],
       },
     },
+    ...(hasMedia ? {} : { actions: {
+      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
+      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
+    } }),
+  }
+  const mediaPersos = hasMedia
+    ? cardBuild.mediaPersos.map((perso) => revealFluxCardMedia(perso, enterEvent, leaveEvent, introRef, outroRef))
+    : cardBuild.mediaPersos
+  return [root, ...cardBuild.contentPersos, ...mediaPersos]
+}
+
+/** Applies a Flux Card's visibility transitions to its media, keeping the observed root still. */
+function revealFluxCardMedia(
+  perso: PersoDoc<string>,
+  enterEvent: string,
+  leaveEvent: string,
+  introRef: NonNullable<FluxSceneBuildOptions['revelationDefaults']>['intro'],
+  outroRef: NonNullable<FluxSceneBuildOptions['revelationDefaults']>['outro'],
+): PersoDoc<string> {
+  if (perso.initial === undefined) throw new Error(`Le média ${perso.id} de la Carte Flux ne possède pas d’état initial.`)
+  return {
+    ...perso,
+    initial: { ...perso.initial, style: createRevelationInitialStyle(introRef) },
     actions: {
+      ...perso.actions,
       [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
       [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
     },
   }
-  return [root, ...cardBuild.contentPersos, ...cardBuild.mediaPersos]
 }
 
 /** Projects an anchored Statistical Graph into its existing Section anchor target. */

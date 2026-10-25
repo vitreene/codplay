@@ -160,9 +160,9 @@ function renderEvaluationSettings(chapter: Chapter, actions: EditorActionsFacade
 function renderChapterTypeIcon(chapter: Chapter): RemixNode {
   switch (chapter.type) {
     case CHAPTER_TYPE.STANDARD:
-      return renderLucideIcon(Folder, `elce-remix-chapter-icon-${chapter.id}`, 14)
+      return renderLucideIcon(Folder, `elce-remix-chapter-icon-${chapter.id}`)
     case CHAPTER_TYPE.EVALUATION:
-      return renderLucideIcon(ClipboardCheck, `elce-remix-chapter-icon-${chapter.id}`, 14)
+      return renderLucideIcon(ClipboardCheck, `elce-remix-chapter-icon-${chapter.id}`)
     default:
       return assertNever(chapter.type)
   }

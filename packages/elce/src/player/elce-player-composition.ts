@@ -14,7 +14,6 @@ import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
 import {
   appearanceThemeCssAssetPathsForDocument,
   createDocumentAppearanceStyleSheet,
-  createPageAppearanceStyleSheet,
 } from './appearance-scene-style-sheet'
 import { loadAppearanceThemeCssLinks } from './appearance/appearance-theme-css-links.ts'
 import type { AppearanceThemeCssLinks } from './appearance/appearance-theme-css-links.ts'
@@ -323,8 +322,7 @@ export function createPageSceneCatalog(
     }, sceneChapterType)
     const questionReset = scene.questionReset
     const sceneDoc = withPageMediaStop(scene.sceneDoc)
-    const appearanceStyleSheet = createPageAppearanceStyleSheet(document, page, sceneBdcs)
-    const styleSheets = [...scene.styleSheets, appearanceStyleSheet]
+    const styleSheets = [...scene.styleSheets]
     const styleSheet = styleSheets.join('\n')
     const source: SightySceneSourceValue = questionReset === undefined && styleSheet.length === 0 ? sceneDoc : {
       sceneDoc,

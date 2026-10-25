@@ -54,11 +54,14 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     if (firstCardId === undefined) throw new Error('La Diapo de test doit commencer par une vue Carte.')
     document = applyDocumentCommand(document, createStatisticalGraphCarouselBdcCommand('graph-slide', pageCommand.bdcId, 1))
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoScene(page, document.bdcs, {
+      appearanceClassNamesByTarget: { 'bdc:graph-slide': 'graph bdc appearance-test density-normal' },
+    })
     const story = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const graphView = story?.persos.find((perso) => perso.id === `${page.id}:${pageCommand.bdcId}-card-graph-slide`)
     const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const graphMarkup = graphView?.initial !== undefined && 'markup' in graphView.initial ? String(graphView.initial.markup) : ''
+    const graphViewClassName = graphView?.initial !== undefined && 'className' in graphView.initial ? String(graphView.initial.className) : ''
     const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
     const completion = story?.persos.find((perso) => perso.id.endsWith('-completion-marker'))
 
@@ -68,6 +71,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     ])
     expect(graphMarkup).toContain(`data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:visual"`)
     expect(graphMarkup).not.toContain('<svg')
+    expect(graphViewClassName).toContain('appearance-test')
     expect(graphVisualMarkup).toContain('<svg')
     expect(graphMarkup).toContain(`<!-- data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:root" -->`)
     expect(completion?.emit?.observe).toMatchObject({ root: `${page.id}-${pageCommand.bdcId}-diapo-end-scrollport` })
@@ -104,7 +108,9 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
       markup,
       content,
     })
-    const build = buildFluxScene(document.pages[0]!, document.bdcs)
+    const build = buildFluxScene(document.pages[0]!, document.bdcs, {
+      appearanceClassNamesByTarget: { 'bdc:graph-anchor': 'graph bdc appearance-test density-normal' },
+    })
     const story = build.sceneDoc.stories['page-a-page']
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const articleMarkup = article?.initial !== undefined && 'markup' in article.initial ? String(article.initial.markup) : ''
@@ -132,6 +138,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(graphVisualMarkup).toContain('<svg')
     expect(graphClassName).toContain('elce-statistical-graph--bar')
     expect(graphClassName).toContain('elce-flux-graph-root')
+    expect(graphClassName).toContain('appearance-test')
     expect(compileScene(build.sceneDoc).ok).toBe(true)
   })
 

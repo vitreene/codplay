@@ -9,7 +9,7 @@ import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/ques
 import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-bdc-scene-builder'
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
-import { appearanceClassNameForTarget } from '../scene-style/appearance-class-names.ts'
+import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../scene-style/appearance-class-names.ts'
 
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
 const carouselSceneBuilder = new ElceCarouselSceneBuilder()
@@ -45,7 +45,7 @@ export function buildDiapoScene(
 
   const scrollPortId = `${page.id}-diapo-scrollport`
   const rootId = `${page.id}-diapo-content`
-  const pageAppearanceClass = appearanceClassNameForTarget(rootId, options.appearanceClassNamesByTarget)
+  const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
   let markup = ''
   let bottomPartMarkup = ''
   let pageBottomMarker: PersoDoc<string> | undefined
@@ -81,7 +81,7 @@ export function buildDiapoScene(
           bdc,
           `${page.id}-${bdc.id}-graph`,
           `${page.id}:${bdc.id}:statistical-graph`,
-          appearanceClassNameForTarget(bdc.id, options.appearanceClassNamesByTarget),
+          appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
         )
         markup = graphBuild.markup
         pagePersos = graphBuild.mediaPersos
@@ -101,8 +101,7 @@ export function buildDiapoScene(
           `${page.id}-${bdc.id}`,
           `${page.id}:${bdc.id}:question`,
           bdc.question,
-          bdc.id,
-          appearanceClassNameForTarget(bdc.id, options.appearanceClassNamesByTarget),
+          appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
         )
         markup = questionBuild.markup
         const questionStory = buildQuestionBdcStory(
@@ -131,7 +130,7 @@ export function buildDiapoScene(
         const resultBuild = buildEvaluationResultBdcScene(
           page,
           bdc,
-          appearanceClassNameForTarget(bdc.id, options.appearanceClassNamesByTarget),
+          appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
         )
         markup = resultBuild.mountMarkup
         childStories = Object.fromEntries(resultBuild.stories.map((story) => [story.id, story]))
@@ -216,7 +215,7 @@ function createDiapoCarouselPageStory(
     }
   })
   if (!foundCarouselRoot) throw new Error(`La racine de Diapo Carousel ${carousel.id} est absente.`)
-  const pageAppearanceClass = appearanceClassNameForTarget(pageRootId, options.appearanceClassNamesByTarget)
+  const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
   const pageRoot: PersoDoc<string> = {
     id: pageRootId,
     type: 'layout',

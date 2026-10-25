@@ -56,7 +56,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           title="Supprimer la question"
           mix={on<HTMLButtonElement, 'click'>('click', actions.deleteQuestion)}
         >
-          {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`)}
         </button>
       </div>
     </div>
@@ -121,7 +121,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
             title="Ajouter une réponse"
             mix={on<HTMLButtonElement, 'click'>('click', actions.addAnswer)}
           >
-            {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`, 14)}
+            {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`)}
             <span
               id={`elce-question-add-answer-label-${bdcId}`}
               className="elce-add-content-action__label"
@@ -196,7 +196,7 @@ function renderQuestionAnswer(
         transfer.setData(ANSWER_DRAG_MIME_TYPE, answer.id)
       })}
     >
-      {renderLucideIcon(GripVertical, `elce-question-answer-drag-icon-${answer.id}`, 14)}
+      {renderLucideIcon(GripVertical, `elce-question-answer-drag-icon-${answer.id}`)}
     </button>
     <input
       id={`elce-question-answer-label-${answer.id}`}
@@ -215,7 +215,7 @@ function renderQuestionAnswer(
       title={answer.correct ? 'Réponse juste' : 'Marquer juste'}
       mix={on<HTMLButtonElement, 'click'>('click', () => actions.setAnswerCorrect(answer.id, !answer.correct))}
     >
-      {renderLucideIcon(Check, `elce-question-answer-correct-icon-${answer.id}`, 14)}
+      {renderLucideIcon(Check, `elce-question-answer-correct-icon-${answer.id}`)}
     </button>
     <button
       id={`elce-question-answer-delete-${answer.id}`}
@@ -226,7 +226,7 @@ function renderQuestionAnswer(
       disabled={!actions.canRemoveAnswer(answer.id)}
       mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeAnswer(answer.id))}
     >
-      {renderLucideIcon(Trash2, `elce-question-answer-delete-icon-${answer.id}`, 14)}
+      {renderLucideIcon(Trash2, `elce-question-answer-delete-icon-${answer.id}`)}
     </button>
   </li>
 }

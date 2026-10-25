@@ -94,7 +94,7 @@ export interface MediaMetadata {
 
 export interface ElceDocumentData {
   readonly id: string
-  readonly version: 6
+  readonly version: 7
   readonly name: string
   readonly appearance?: AppearanceSettings
   readonly revelationDefaults: RevelationTransitionDefaults

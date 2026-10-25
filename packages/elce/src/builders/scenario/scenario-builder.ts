@@ -674,11 +674,9 @@ export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): bool
     }
     switch (event?.name) {
       case ELCE_EVENTS.NAVIGATION_PREVIOUS:
-        return chapterIndex > 0 || hasAdjacentScormChapter(runtime, context, scormChapter.id, -1)
+        return true
       case ELCE_EVENTS.NAVIGATION_NEXT:
-        return (chapterIndex < scormChapter.pageIds.length - 1
-          || hasAdjacentScormChapter(runtime, context, scormChapter.id, 1))
-          && canLeavePage(runtime, pageId, context)
+        return canLeavePage(runtime, pageId, context)
       case ELCE_EVENTS.MENU_SUMMARY:
         return false
       default:
@@ -690,7 +688,7 @@ export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): bool
   }
   switch (event?.name) {
     case ELCE_EVENTS.NAVIGATION_PREVIOUS:
-      return runtime.pageIds.indexOf(pageId) > 0
+      return true
     case ELCE_EVENTS.NAVIGATION_NEXT:
       return canLeavePage(runtime, pageId, context)
     case ELCE_EVENTS.MENU_SUMMARY:
@@ -1147,19 +1145,14 @@ async function createPresentation(
     && hasScormChapterSco(readerContext, previousScormChapter)
   const nextScormChapterAllowed = nextScormChapter !== undefined
     && hasScormChapterSco(readerContext, nextScormChapter)
-  const previousAllowed = page === undefined
-    ? false
-    : await scenarioState.canExit(
-        { path: pagePathFromTable(runtime.pagePaths, page) },
-      { name: ELCE_EVENTS.NAVIGATION_PREVIOUS, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
-      )
+  const previousPageAllowed = pageIndex > 0
   const nextExitAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
         { path: pagePathFromTable(runtime.pagePaths, page) },
       { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
-  const nextPageAllowed = nextDestination === undefined
+  const nextDestinationAllowed = nextDestination === undefined
     ? nextScormChapterAllowed
     : await scenarioState.canAccess(nextDestination, {
       name: ELCE_EVENTS.NAVIGATION_NEXT,
@@ -1184,9 +1177,9 @@ async function createPresentation(
     menuPageStates: menu.states,
     previousAttributes: {
       type: 'button',
-      disabled: (pageIndex <= 0 && !previousScormChapterAllowed) || !previousAllowed,
+      disabled: !previousPageAllowed && !previousScormChapterAllowed,
     },
-    nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextPageAllowed },
+    nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextDestinationAllowed },
     navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
       ? ''
       : `Page ${pageIndex + 1} sur ${presentationPageIds.length}`,
@@ -1474,8 +1467,8 @@ function createLayoutScene(document: ElceDocument): SceneDoc<string> {
   const contentPartId = `${documentId}:layout:content`
   const navigationPartId = `${documentId}:layout:navigation`
   const appearanceClassNames = documentAppearanceClassNames(document)
-  const layoutAppearanceClass = appearanceClassNames[`${documentId}-layout-root`]
-  const contentAppearanceClass = appearanceClassNames[`${documentId}-content-region`]
+  const layoutAppearanceClass = appearanceClassNames['document:layout']
+  const contentAppearanceClass = appearanceClassNames['document:content']
   if (layoutAppearanceClass === undefined || contentAppearanceClass === undefined) {
     throw new Error(`Les classes d’apparence du projet ${documentId} sont incomplètes.`)
   }

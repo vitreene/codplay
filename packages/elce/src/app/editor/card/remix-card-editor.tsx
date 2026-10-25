@@ -52,7 +52,7 @@ export function renderRemixCardEditor(
           title="Supprimer la carte de cette page"
           mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
         >
-          {renderLucideIcon(Trash2, `elce-card-editor-delete-icon-${bdc.id}`, 14)}
+          {renderLucideIcon(Trash2, `elce-card-editor-delete-icon-${bdc.id}`)}
         </button>
       </div>
     </header>

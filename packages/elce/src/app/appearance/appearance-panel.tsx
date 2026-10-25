@@ -8,7 +8,7 @@ import {
   APPEARANCE_TYPOGRAPHY_PAIRS,
   getAppearancePalette,
 } from '../../config/appearance/appearance-config'
-import type { AppearanceColorRole } from '../../config/appearance/appearance-types'
+import type { AppearanceColor, AppearanceColorRole, AppearanceSettings } from '../../config/appearance/appearance-types'
 import type {
   AppearanceProperty,
   AppearanceTarget,
@@ -16,7 +16,10 @@ import type {
 } from '../../domain/commands/document-command-types'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { EditorViewModel } from '../selectors/editor-view-model'
-import { resolveAppearance } from '../../domain/appearance/appearance-resolver'
+import {
+  appearanceBackgroundAppliesToSurface,
+  resolveAppearance,
+} from '../../domain/appearance/appearance-resolver'
 
 interface AppearancePanelProps {
   readonly view: EditorViewModel
@@ -42,7 +45,7 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
   const localSettings = appearanceSettingsAt(document, target)
   const resolved = resolveAppearance(document, target)
   const palette = getAppearancePalette(resolved.paletteId.value)
-  const textCard = isTextBearingCard(view, target)
+  const hasTextSurface = isTextBearingCard(view, target)
 
   return <section
     id="elce-appearance-panel"
@@ -103,22 +106,24 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
         {renderColorField({
           id: 'elce-appearance-background',
           label: 'Fond',
-          color: resolved.background.value.color === 'transparent' ? palette.colors.background : resolved.background.value.color,
-          choice: resolved.background.value.choice,
+          color: resolved.background.value.color,
+          backgroundChoice: resolved.background.value.choice,
           paletteColors: palette.colors,
           allowTransparent: true,
+          transparent: resolved.density.value === 'none'
+            || !appearanceBackgroundAppliesToSurface(resolved, target),
           localSettings,
           property: 'background',
           actions,
           target,
         })}
-        {textCard ? renderColorField({
+        {hasTextSurface ? renderColorField({
           id: 'elce-appearance-text-color',
           label: 'Couleur du texte',
           color: resolved.textColor.value.color,
-          choice: resolved.textColor.value.choice,
           paletteColors: palette.colors,
           allowTransparent: false,
+          transparent: false,
           localSettings,
           property: 'textColor',
           actions,
@@ -126,29 +131,30 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
         }) : null}
       </div>
     </fieldset>
-    {textCard ? renderSelectField(
-      'elce-appearance-typography',
-      'Duo typographique',
-      resolved.typographyPairId.value,
-      APPEARANCE_TYPOGRAPHY_PAIRS.map((entry) => ({ value: entry.id, label: entry.label })),
-      (value) => actions.setAppearanceProperty(target, 'typographyPairId', value),
+    {hasTextSurface ? renderTypographyPairField(
+      matchingTypographyPairId(resolved.headingFontId.value, resolved.bodyFontId.value),
+      (pairId) => {
+        const pair = APPEARANCE_TYPOGRAPHY_PAIRS.find((entry) => entry.id === pairId)
+        if (pair !== undefined) actions.setAppearanceTypography(target, pair.headingFontId, pair.bodyFontId)
+      },
       localSettings,
-      'typographyPairId',
       actions,
       target,
     ) : null}
-    {textCard ? renderSelectField(
+    {hasTextSurface ? renderSelectField(
       'elce-appearance-density',
       'Espacement',
-      resolved.density.value,
-      APPEARANCE_DENSITIES.map((entry) => ({ value: entry.value, label: entry.label })),
-      (value) => actions.setAppearanceProperty(target, 'density', value as 'none' | 'compact' | 'normal' | 'large'),
+      resolved.density.value === 'none' ? 'normal' : resolved.density.value,
+      APPEARANCE_DENSITIES
+        .filter((entry) => entry.value !== 'none')
+        .map((entry) => ({ value: entry.value, label: entry.label })),
+      (value) => actions.setAppearanceProperty(target, 'density', value),
       localSettings,
       'density',
       actions,
       target,
     ) : null}
-    {textCard ? <div
+    {hasTextSurface ? <div
       id="elce-appearance-auto-contrast-field"
       className="elce-appearance-field"
     >
@@ -178,10 +184,11 @@ interface ColorFieldProps {
   readonly id: string
   readonly label: string
   readonly color: string
-  readonly choice: import('../../config/appearance/appearance-types').AppearanceBackground | import('../../config/appearance/appearance-types').AppearanceColor
+  readonly backgroundChoice?: AppearanceColor
   readonly paletteColors: Readonly<Record<AppearanceColorRole, string>>
   readonly allowTransparent: boolean
-  readonly localSettings: import('../../config/appearance/appearance-types').AppearanceSettings | undefined
+  readonly transparent: boolean
+  readonly localSettings: AppearanceSettings | undefined
   readonly property: 'background' | 'textColor'
   readonly actions: EditorActionsFacade
   readonly target: AppearanceTarget
@@ -189,7 +196,19 @@ interface ColorFieldProps {
 
 /** Renders a native color picker with semantic palette swatches and a per-property reset. */
 function renderColorField(props: ColorFieldProps): RemixNode {
-  const { id, label, color, choice, paletteColors, allowTransparent, localSettings, property, actions, target } = props
+  const {
+    id,
+    label,
+    color,
+    backgroundChoice,
+    paletteColors,
+    allowTransparent,
+    transparent,
+    localSettings,
+    property,
+    actions,
+    target,
+  } = props
   return <fieldset
     id={`${id}-field`}
     className="elce-appearance-field"
@@ -207,12 +226,14 @@ function renderColorField(props: ColorFieldProps): RemixNode {
       <input
         id={`${id}-transparent`}
         type="checkbox"
-        checked={choice.kind === 'transparent'}
+        checked={transparent}
         mix={on<HTMLInputElement, 'change'>('change', (event) => {
           if (event.currentTarget.checked) {
-            actions.setAppearanceProperty(target, 'background', { kind: 'transparent' })
+            actions.setAppearanceProperty(target, 'density', 'none')
+          } else if (property === 'background' && backgroundChoice !== undefined) {
+            actions.setAppearanceProperty(target, 'background', backgroundChoice)
           } else {
-            actions.setAppearanceProperty(target, 'background', { kind: 'palette', role: 'background' })
+            actions.setAppearanceProperty(target, 'density', 'normal')
           }
         })}
       />
@@ -244,6 +265,60 @@ function renderColorField(props: ColorFieldProps): RemixNode {
     </div>
     {renderResetButton(`${id}-reset`, `Réinitialiser ${label.toLowerCase()}`, localSettings, property, actions, target)}
   </fieldset>
+}
+
+/** Renders a picker suggestion that writes both stored font references together. */
+function renderTypographyPairField(
+  value: string,
+  onValueChange: (value: string) => void,
+  localSettings: AppearanceSettings | undefined,
+  actions: EditorActionsFacade,
+  target: AppearanceTarget,
+): RemixNode {
+  const hasLocalOverride = localSettings?.headingFontId !== undefined || localSettings?.bodyFontId !== undefined
+  const options = [
+    { value: '', label: 'Duo personnalisé' },
+    ...APPEARANCE_TYPOGRAPHY_PAIRS.map((entry) => ({ value: entry.id, label: entry.label })),
+  ]
+  return <div id="elce-appearance-typography-pair-field" className="elce-appearance-field">
+    <label id="elce-appearance-typography-pair-label" htmlFor="elce-appearance-typography-pair-select">
+      Duo typographique
+    </label>
+    <select
+      id="elce-appearance-typography-pair-select"
+      value={value}
+      mix={on<HTMLSelectElement, 'change'>('change', (event) => onValueChange(event.currentTarget.value))}
+    >
+      {options.map((option) => <option
+        key={option.value}
+        id={`elce-appearance-typography-pair-option-${option.value || 'custom'}`}
+        value={option.value}
+        selected={option.value === value}
+        disabled={option.value === ''}
+      >
+        {option.label}
+      </option>)}
+    </select>
+    {hasLocalOverride ? <button
+      id="elce-appearance-typography-pair-reset"
+      className="elce-appearance-reset"
+      type="button"
+      aria-label="Réinitialiser le duo typographique"
+      title="Réinitialiser le duo typographique"
+      mix={on<HTMLButtonElement, 'click'>('click', () => {
+        if (localSettings?.headingFontId !== undefined) actions.resetAppearanceProperty(target, 'headingFontId')
+        if (localSettings?.bodyFontId !== undefined) actions.resetAppearanceProperty(target, 'bodyFontId')
+      })}
+    >
+      Réinitialiser
+    </button> : null}
+  </div>
+}
+
+/** Returns a UI pairing only when both selected font families match it. */
+function matchingTypographyPairId(headingFontId: string, bodyFontId: string): string {
+  return APPEARANCE_TYPOGRAPHY_PAIRS.find((pair) =>
+    pair.headingFontId === headingFontId && pair.bodyFontId === bodyFontId)?.id ?? ''
 }
 
 /** Renders one accessible semantic swatch that tracks the active palette. */

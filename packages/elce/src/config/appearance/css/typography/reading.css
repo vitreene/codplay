@@ -1,0 +1,20 @@
+@scope (.elce-player-layout) {
+  .elce-flux-article,
+  .elce-diapo-content,
+  .section > div,
+  .card-text-image > .elce-carousel-text-image__content {
+    container-type: inline-size;
+  }
+
+  .bdc {
+    box-sizing: border-box;
+    max-inline-size: min(100%, 70ch);
+    margin-inline: auto;
+  }
+
+  @scope (.section.bdc) to (.section.bdc .bdc) {
+    :scope > div :is(p, li, blockquote) {
+      font-size: clamp(0.9rem, 0.6cqi + 0.7rem, 1rem);
+    }
+  }
+}

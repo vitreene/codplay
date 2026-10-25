@@ -1,4 +1,4 @@
-import { getAppearanceTypographyPair } from '../config/appearance/appearance-config'
+import { getAppearanceFont } from '../config/appearance/appearance-config'
 
 export interface AppearanceFontAsset {
   readonly family: string
@@ -18,43 +18,21 @@ const STANDARD_VARIANTS = [
   { style: 'italic', weight: 700 },
 ] as const satisfies readonly Readonly<{ style: 'normal' | 'italic'; weight: 400 | 700 }>[]
 
-const FONT_FAMILY_DIRECTORIES: Readonly<Record<string, string>> = {
-  'Bubblegum Sans': 'bubblegum-sans',
-  'Crimson Text': 'crimson-text',
-  'DM Sans': 'dm-sans',
-  Geist: 'geist',
-  'Instrument Sans': 'instrument-sans',
-  Inter: 'inter',
-  Karla: 'karla',
-  Krub: 'krub',
-  Merriweather: 'merriweather',
-  Montserrat: 'montserrat',
-  Mulish: 'mulish',
-  Nunito: 'nunito',
-  'Open Sans': 'open-sans',
-  Philosopher: 'philosopher',
-  'PT Sans': 'pt-sans',
-  Raleway: 'raleway',
-}
+/** Returns locally stored font files for the independently selected families. */
+export function appearanceFontAssetsForIds(fontIds: Iterable<string>): readonly AppearanceFontAsset[] {
+  const fonts = new Map([...fontIds].map((id) => {
+    const font = getAppearanceFont(id)
+    return [font.id, font] as const
+  }))
 
-/** Returns locally stored font files for the selected typography pairs. */
-export function appearanceFontAssetsForPairs(pairIds: Iterable<string>): readonly AppearanceFontAsset[] {
-  const familyNames = new Set<string>()
-  for (const pairId of pairIds) {
-    const pair = getAppearanceTypographyPair(pairId)
-    familyNames.add(pair.headingFamily)
-    familyNames.add(pair.bodyFamily)
-  }
-
-  return [...familyNames].sort().flatMap((family) => {
-    const directory = FONT_FAMILY_DIRECTORIES[family]
-    if (directory === undefined) throw new Error(`Répertoire de fonte d’apparence absent : ${family}`)
-    const variants = family === 'Bubblegum Sans' ? [STANDARD_VARIANTS[0]] : STANDARD_VARIANTS
+  return [...fonts.values()].sort((left, right) => left.id.localeCompare(right.id)).flatMap((font) => {
+    const directory = font.fontDirectory
+    const variants = font.id === 'bubblegum-sans' ? [STANDARD_VARIANTS[0]] : STANDARD_VARIANTS
     return variants.map(({ style, weight }) => {
       const fileName = `${style}-${weight}.ttf`
       const relativeFontPath = `${directory}/${fileName}`
       return {
-        family,
+        family: font.family,
         style,
         weight,
         fileName,

@@ -53,7 +53,7 @@ export function renderRemixEvaluationResultEditor(
             title="Supprimer le bloc résultat"
             mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
           >
-            {renderLucideIcon(Trash2, `elce-evaluation-result-delete-icon-${bdcId}`, 14)}
+            {renderLucideIcon(Trash2, `elce-evaluation-result-delete-icon-${bdcId}`)}
           </button>
         </div>
       </div>,

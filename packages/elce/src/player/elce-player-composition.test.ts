@@ -1870,11 +1870,13 @@ describe('Elcé player composition', () => {
 
     await preview.initialize()
     const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const cardMedia = cardRoot?.querySelector<HTMLElement>('.elce-carousel-media')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
     expect(cardRoot).not.toBeNull()
+    expect(cardMedia).not.toBeNull()
     expect(observer).toBeDefined()
     const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
-      .find((state) => state.target.persoId.includes('bdc-preview-scroll-reveal-card'))
+      .find((state) => state.target.persoId.includes('card-bdc-preview-scroll-reveal-media'))
       ?.state.style
     const cardX = () => {
       const x = cardState()?.x
@@ -1883,13 +1885,15 @@ describe('Elcé player composition', () => {
     }
     expect(cardState()).toMatchObject({ opacity: 1 })
     expect(cardX()).toBe(0)
-    expect(cardRoot?.style.opacity).toBe('1')
+    expect(cardRoot?.style.length).toBe(0)
+    expect(cardMedia?.style.opacity).toBe('1')
 
     // A first measurement inside leaves an already-visible Card stable.
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
     await waitForPlayerActions()
     expect(cardState()).toMatchObject({ opacity: 1 })
     expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
 
     // Leaving and re-entering replays the configured Card actions.
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
@@ -1928,7 +1932,8 @@ describe('Elcé player composition', () => {
     }
     expect(cardState()).toMatchObject({ opacity: 1 })
     expect(cardX()).toBe(0)
-    expect(cardRoot?.style.opacity).toBe('1')
+    expect(cardRoot?.style.length).toBe(0)
+    expect(cardMedia?.style.opacity).toBe('1')
   })
 
   it('reveals a Card on its first entry after the initial outside measurement', async () => {
@@ -1964,6 +1969,7 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
     const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const cardMedia = cardRoot?.querySelector<HTMLElement>('.elce-carousel-media')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
     const runtime = (composition as unknown as {
       readonly sighty: { readonly runtime: { getInstance(sceneKey: string): {
@@ -1971,7 +1977,7 @@ describe('Elcé player composition', () => {
       } | undefined } }
     }).sighty.runtime
     const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
-      .find((state) => state.target.persoId.includes('bdc-first-card-entry-card'))
+      .find((state) => state.target.persoId.includes('card-bdc-first-card-entry-media'))
       ?.state.style
     const cardX = () => {
       const x = cardState()?.x
@@ -1980,15 +1986,18 @@ describe('Elcé player composition', () => {
     }
 
     expect(cardRoot).not.toBeNull()
+    expect(cardMedia).not.toBeNull()
     expect(observer).toBeDefined()
     expect(cardState()).toMatchObject({ opacity: 1 })
     expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
 
     // The first outside measurement only seeds the phase; crossing inside then plays the Card action.
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
     await waitForPlayerActions()
     expect(cardState()).toMatchObject({ opacity: 1 })
     expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
 
     observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
     await waitForPlayerActions()
@@ -2480,9 +2489,10 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('[data-bdc-id="bdc-image-1"]')).toBeNull()
     expect(flowSlot?.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
     const anchoredCard = flowSlot?.querySelector<HTMLElement>('.elce-flux-card-root')
+    const anchoredMedia = anchoredCard?.querySelector<HTMLElement>('.elce-carousel-media')
     expect(anchoredCard?.parentElement).toBe(flowSlot)
-    expect(anchoredCard?.style.length).toBe(1)
-    expect(anchoredCard?.style.getPropertyValue('opacity')).toBe('1')
+    expect(anchoredCard?.style.length).toBe(0)
+    expect(anchoredMedia?.style.getPropertyValue('opacity')).toBe('1')
     expect(Array.from(anchoredCard?.classList ?? []).some((className) => className.startsWith('elce-flux-anchor-illustration-'))).toBe(true)
 
     const imageRoot = flowSlot?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')

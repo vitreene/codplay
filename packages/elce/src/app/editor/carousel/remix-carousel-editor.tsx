@@ -77,7 +77,7 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
           title="Supprimer le bloc Carousel"
           mix={on<HTMLButtonElement, 'click'>('click', actions.deleteCarousel)}
         >
-          {renderLucideIcon(Trash2, `elce-carousel-delete-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Trash2, `elce-carousel-delete-icon-${bdcId}`)}
         </button>
       </div>
     </header>
@@ -98,7 +98,7 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
           title="Ajouter une carte"
           mix={on<HTMLButtonElement, 'click'>('click', actions.addCard)}
         >
-          {renderLucideIcon(RectangleHorizontal, `elce-carousel-card-add-icon-${bdcId}`, 14)}
+          {renderLucideIcon(RectangleHorizontal, `elce-carousel-card-add-icon-${bdcId}`)}
           <span
             id={`elce-carousel-card-add-label-${bdcId}`}
             className="elce-add-content-action__label"
@@ -114,7 +114,7 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
           title="Ajouter un graphe"
           mix={on<HTMLButtonElement, 'click'>('click', actions.addStatisticalGraph)}
         >
-          {renderLucideIcon(Activity, `elce-carousel-graph-add-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Activity, `elce-carousel-graph-add-icon-${bdcId}`)}
           <span
             id={`elce-carousel-graph-add-label-${bdcId}`}
             className="elce-add-content-action__label"
@@ -331,7 +331,7 @@ function renderCardTab(
     ]}
     data-carousel-id={carouselBdcId}
   >
-    {renderLucideIcon(GripVertical, `elce-carousel-card-tab-drag-icon-${bdc.id}`, 14)}
+    {renderLucideIcon(GripVertical, `elce-carousel-card-tab-drag-icon-${bdc.id}`)}
     <span
       id={`elce-carousel-card-tab-number-${bdc.id}`}
     >
@@ -422,7 +422,7 @@ function renderSelectedCard(
             disabled={content.cards.length <= 1}
             mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeCard(selected.bdc.id, selectedCardBdcId))}
           >
-            {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`, 14)}
+            {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`)}
           </button>
         </div>}
       />

@@ -21,13 +21,13 @@ export type AppearanceTargetForProperty<Property extends AppearanceProperty> = P
   : AppearanceTarget
 
 type AppearancePropertySetCommand = {
-  [Property in AppearanceProperty]: Readonly<{
+  [Property in Exclude<AppearanceProperty, 'background'>]: Readonly<{
     type: 'appearance.property.set'
     target: AppearanceTargetForProperty<Property>
     property: Property
     value: NonNullable<AppearanceSettings[Property]>
   }>
-}[AppearanceProperty]
+}[Exclude<AppearanceProperty, 'background'>]
 
 type AppearancePropertyResetCommand = {
   [Property in AppearanceProperty]: Readonly<{
@@ -161,6 +161,17 @@ export type DocumentCommand =
   | Readonly<{ type: 'document.revelation.update'; revelationDefaults: RevelationTransitionDefaults }>
   | Readonly<{ type: 'summary.settings.update'; summary: SummarySettings }>
   | Readonly<{ type: 'profile.definition.update'; profile: ProfileDefinition }>
+  | Readonly<{
+      type: 'appearance.background.set'
+      target: AppearanceTarget
+      value: NonNullable<AppearanceSettings['background']>
+    }>
+  | Readonly<{
+      type: 'appearance.typography.set'
+      target: AppearanceTarget
+      headingFontId: string
+      bodyFontId: string
+    }>
   | AppearancePropertySetCommand
   | AppearancePropertyResetCommand
   | Readonly<{ type: 'document.rename'; name: string }>

@@ -43,7 +43,7 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('migrates a fresh database and round-trips the v6 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v7 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new SqliteProjectPersistence(database)
     const router = createElceApiRouter(persistence)
@@ -271,7 +271,7 @@ describe('SQLite project persistence through the Remix API', () => {
       ],
     ))
 
-    await database.migrate(migrations)
+    await database.migrate(migrations, { to: '20261024190000_flatten_demo5_local_appearance_presets' })
 
     const convertedPages = await database.exec(rawSql(
       'SELECT project_id, appearance_json FROM pages ORDER BY project_id',
@@ -311,6 +311,77 @@ describe('SQLite project persistence through the Remix API', () => {
         { project_id: 'another-project', appearance_json: { presetId: 'classic' } },
         { project_id: 'demo5-elce-comparison', appearance_json: { presetId: 'slate' } },
       ])
+  })
+
+  it('converts only Demo5 to v7 appearance references and represents Transparent as density none', async () => {
+    database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
+    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    await database.migrate(migrations, { to: '20261024190000_flatten_demo5_local_appearance_presets' })
+    await database.exec(rawSql(
+      `INSERT INTO projects (
+        project_id, name, format_version, revision, created_at, updated_at,
+        default_intro_transition_ref, default_outro_transition_ref, appearance_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'demo5-elce-comparison', 'Demo5', 6, 0, '2026-10-25', '2026-10-25', 'fade', 'fade',
+        JSON.stringify({ presetId: 'plum', typographyPairId: 'raleway-merriweather', background: { kind: 'transparent' } }),
+        'another-project', 'Autre projet', 6, 0, '2026-10-25', '2026-10-25', 'fade', 'fade', null,
+      ],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO pages (project_id, page_id, name, page_type, appearance_json)
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [
+        'demo5-elce-comparison', 'demo5-page', 'Page Demo5', PAGE_TYPE.FLUX,
+        JSON.stringify({ paletteId: 'forest', typographyPairId: 'nunito-pt-sans', density: 'large' }),
+        'another-project', 'other-page', 'Page autre', PAGE_TYPE.FLUX, JSON.stringify({ typographyPairId: 'inter-krub' }),
+      ],
+    ))
+    await database.exec(rawSql(
+      `INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id, appearance_json)
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      [
+        'demo5-elce-comparison', 'demo5-card', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_SHORT,
+        JSON.stringify({ paletteId: 'slate', typographyPairId: 'instrument-sans-geist', density: 'compact', background: { kind: 'transparent' } }),
+        'another-project', 'other-card', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_SHORT, JSON.stringify({ typographyPairId: 'inter-krub' }),
+      ],
+    ))
+
+    await database.migrate(migrations)
+
+    const projects = await database.exec(rawSql(
+      'SELECT project_id, format_version, appearance_json FROM projects ORDER BY project_id',
+    ))
+    expect(projects.rows).toEqual([
+      { project_id: 'another-project', format_version: 6, appearance_json: null },
+      {
+        project_id: 'demo5-elce-comparison',
+        format_version: 7,
+        appearance_json: JSON.stringify({ presetId: 'plum', headingFontId: 'raleway', bodyFontId: 'merriweather', density: 'none' }),
+      },
+    ])
+
+    const pages = await database.exec(rawSql(
+      'SELECT project_id, appearance_json FROM pages ORDER BY project_id',
+    ))
+    expect(pages.rows).toEqual([
+      { project_id: 'another-project', appearance_json: JSON.stringify({ typographyPairId: 'inter-krub' }) },
+      {
+        project_id: 'demo5-elce-comparison',
+        appearance_json: JSON.stringify({ paletteId: 'forest', density: 'large', headingFontId: 'nunito', bodyFontId: 'pt-sans' }),
+      },
+    ])
+
+    const blocks = await database.exec(rawSql(
+      'SELECT project_id, appearance_json FROM content_blocks ORDER BY project_id',
+    ))
+    expect(blocks.rows).toEqual([
+      { project_id: 'another-project', appearance_json: JSON.stringify({ typographyPairId: 'inter-krub' }) },
+      {
+        project_id: 'demo5-elce-comparison',
+        appearance_json: JSON.stringify({ paletteId: 'slate', density: 'none', headingFontId: 'instrument-sans', bodyFontId: 'geist' }),
+      },
+    ])
   })
 
   it('preserves server media metadata and rejects stale document revisions atomically', async () => {

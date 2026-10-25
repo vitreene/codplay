@@ -1,5 +1,4 @@
 :root {
-  --elce-icon-size: 14px;
   --elce-icon-gap: 4px;
   --elce-icon-padding: 2px;
   color: #20242b;
@@ -15,9 +14,9 @@
 
 .elce-ui-icon {
   display: block;
-  width: var(--elce-icon-size);
-  height: var(--elce-icon-size);
-  flex: 0 0 var(--elce-icon-size);
+  block-size: 1.4cap;
+  inline-size: auto;
+  flex: 0 0 auto;
 }
 
 html,

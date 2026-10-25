@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { appearanceFontAssetsForPairs, appearanceFontFaceStyleSheet } from './appearance-font-assets'
+import { appearanceFontAssetsForIds, appearanceFontFaceStyleSheet } from './appearance-font-assets'
 
 describe('appearance font assets', () => {
   it('emits one local font-face rule for each unique family, style, and weight', () => {
-    const fonts = appearanceFontAssetsForPairs([
-      'crimson-dm-sans',
-      'instrument-sans-geist',
-      'crimson-dm-sans',
+    const fonts = appearanceFontAssetsForIds([
+      'crimson-text',
+      'dm-sans',
+      'instrument-sans',
+      'geist',
+      'crimson-text',
     ])
     const styleSheet = appearanceFontFaceStyleSheet([...fonts, ...fonts])
     const packagedStyleSheet = appearanceFontFaceStyleSheet(fonts, './')

@@ -173,7 +173,7 @@ function renderPanelToggle(
     aria-controls={targetId}
     mix={on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(isOpen ? null : panel, id))}
   >
-    {renderLucideIcon(icon, `${id}-icon`, 14)}
+    {renderLucideIcon(icon, `${id}-icon`)}
   </button>
 }
 

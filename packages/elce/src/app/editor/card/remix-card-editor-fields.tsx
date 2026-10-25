@@ -460,7 +460,7 @@ function renderCardMediaEditor(
           title="Retirer le média"
           mix={on<HTMLButtonElement, 'click'>('click', () => actions.clearMedia(bdcId))}
         >
-          {renderLucideIcon(Trash2, `${idPrefix}-media-clear-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Trash2, `${idPrefix}-media-clear-icon-${bdcId}`)}
         </button>}
     </div>
   </div>
@@ -509,7 +509,7 @@ function renderMediaAddPrompt(bdcId: BdcId, idPrefix: string, hint: string): Rem
     id={`${idPrefix}-media-add-prompt-${bdcId}`}
     className="elce-media-add-prompt"
   >
-    {renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`, 14)}
+    {renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`)}
     <span
       id={`${idPrefix}-media-add-label-${bdcId}`}
       className="elce-media-add-prompt__label"

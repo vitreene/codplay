@@ -88,7 +88,7 @@ export function renderRemixSectionEditor(
           title="Supprimer le bloc texte"
           mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
         >
-          {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`, 14)}
+          {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`)}
         </button>
       </div>
     </div>
@@ -197,7 +197,7 @@ function renderToolbar(
         if (!handle.signal.aborted) void handle.update()
       })}
     >
-      {renderLucideIcon(icon, `elce-section-${suffix}-icon-${bdcId}`, 14)}
+      {renderLucideIcon(icon, `elce-section-${suffix}-icon-${bdcId}`)}
     </button>)}
   </div>
 }
@@ -252,7 +252,7 @@ function renderAnchorCardEditor(
           title="Fermer"
           mix={on<HTMLButtonElement, 'click'>('click', close)}
         >
-          {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`, 14)}
+          {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`)}
         </button>
       </header>
       {renderRemixStatisticalGraphEditor(
@@ -292,7 +292,7 @@ function renderAnchorCardEditor(
         title="Fermer"
         mix={on<HTMLButtonElement, 'click'>('click', close)}
       >
-        {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`, 14)}
+        {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`)}
       </button>
     </header>
     <RemixCardEditorFields

@@ -1,7 +1,29 @@
-.elce-appearance-density-compact.elce-appearance-role-section { box-sizing: border-box; padding: clamp(0.5rem, 1.5vw, 1rem); }
-.elce-appearance-density-compact.elce-appearance-role-page-flux { --elce-appearance-page-padding: 1.5rem; }
-.elce-appearance-density-compact.elce-appearance-role-page-diapo { --elce-appearance-page-padding: 0; }
-.elce-appearance-density-compact.elce-appearance-role-card-text-short { --elce-appearance-card-padding: clamp(0.75rem, 3cqw, 2.25rem); }
-.elce-appearance-density-compact.elce-appearance-role-card-text-image { --elce-appearance-card-padding: clamp(0.5rem, 2cqw, 1.5rem); }
-.elce-appearance-density-compact.elce-appearance-role-card-image-caption { --elce-appearance-card-padding: 0.35rem 0.55rem; }
-.elce-appearance-density-compact:is(.elce-appearance-role-question, .elce-appearance-role-evaluation-result) { --elce-appearance-card-padding: clamp(0.65rem, 2vw, 1rem); }
+@scope (.elce-player-layout) {
+  .bdc.density-compact { max-inline-size: min(100%, 60ch); }
+
+  @scope (.section.bdc) to (.section.bdc .bdc) {
+    :scope.density-compact > div :is(p, li, blockquote) {
+      font-size: clamp(0.9rem, 0.5cqi + 0.68rem, 0.95rem);
+    }
+  }
+
+  .density-compact.page-flux { padding: 1.5rem; }
+  .density-compact.page-diapo { padding: 0; }
+  .density-compact.section.has-background { box-sizing: border-box; padding: clamp(0.5rem, 1.5vw, 1rem); }
+  .density-compact.card-text-short.has-background { padding: clamp(0.75rem, 3cqw, 2.25rem); }
+  .density-compact.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(0.5rem, 2cqw, 1.5rem); }
+  .density-compact.card-image-caption.has-background > .elce-card-image-caption__caption { padding: 0.35rem 0.55rem; }
+  .density-compact:is(.question, .evaluation-result).has-background { padding: clamp(0.65rem, 2vw, 1rem); }
+  .density-compact:is(
+    .card-text-short,
+    .card-text-image,
+    .card-image-caption,
+    .question,
+    .evaluation-result
+  ) :is(p, li, blockquote) {
+    margin-block: 0 0.5em;
+  }
+  @scope (.density-compact.section) to (.density-compact.section .bdc) {
+    :scope p { margin-block: 0 0.5em; }
+  }
+}

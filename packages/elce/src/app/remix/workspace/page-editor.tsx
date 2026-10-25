@@ -214,7 +214,7 @@ function renderCreateButton(
     disabled={disabled}
     mix={on<HTMLButtonElement, 'click'>('click', run)}
   >
-    {renderLucideIcon(icon, `${id}-icon`, 14)}
+    {renderLucideIcon(icon, `${id}-icon`)}
     <span
       id={`${id}-label`}
       className="elce-add-content-action__label"
@@ -258,7 +258,7 @@ function renderChapterTypeMark(chapter: Chapter): RemixNode {
     id={`elce-chapter-type-mark-${chapter.id}`}
     className="elce-chapter-type-mark"
   >
-    {renderLucideIcon(icon, `elce-chapter-type-icon-${chapter.id}`, 14)}
+    {renderLucideIcon(icon, `elce-chapter-type-icon-${chapter.id}`)}
     {presentation.label === null ? null : <span
       id={`elce-chapter-type-label-${chapter.id}`}
     >
@@ -291,7 +291,7 @@ function renderPageTitle(
         className="elce-page-type-mark"
         aria-hidden={true}
       >
-        {renderLucideIcon(getPageTypeIcon(page.type), `elce-page-type-icon-${page.id}`, 14)}
+        {renderLucideIcon(getPageTypeIcon(page.type), `elce-page-type-icon-${page.id}`)}
       </span>
       <input
         id={`elce-page-title-${page.id}`}
@@ -369,7 +369,7 @@ function renderPageBdcList(page: Page, view: EditorViewModel, actions: EditorAct
                   on<HTMLButtonElement, 'dragend'>('dragend', () => endBdcDrag(state)),
                 ]}
               >
-                {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdc.id}`, 14)}
+                {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdc.id}`)}
               </button>
             </div>
             {renderBdcEditor(bdc, page, view, actions, state)}

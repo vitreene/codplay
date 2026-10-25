@@ -63,7 +63,9 @@ d’entrée/sortie. L’observer ne mesure donc pas un élément que sa propre
 translation déplacerait. Chaque passage ultérieur vers l’intérieur ou
 l’extérieur rejoue l’action correspondante, y compris après un aller-retour ;
 aucun événement `once` n’est déclaré. Une Carte sans média conserve ses actions
-sur sa racine. Les racines de Graphe ancré gardent
+sur sa racine. Le défaut du projet est la paire Capsule `swipe-right` ; les
+remplacements enregistrés sur le parent ou le placement restent prioritaires.
+Les racines de Graphe ancré gardent
 `initial: 'enter'` pour signaler un graphe déjà visible.
 
 - un perso `scroll-container` racine, placé sur `@root` ;
@@ -203,7 +205,9 @@ builders ne déclarent que leur comportement d’exécution.
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de
   test, ainsi que
   le montage de Cartes avec les composants `img` et `media`, d’une Carte dans
-  une ancre de texte et d’un média selon le layout de Carte.
+  une ancre de texte et d’un média selon le layout de Carte. Les tests de
+  révélation pilotent l’observateur réel et vérifient que la racine reste fixe
+  tandis que le média enfant reçoit l’opacité et la translation Capsule.
 - Le 15 octobre 2026, le style Flux a été dépouillé des déclarations de snap.
   Les 41 tests de composition, le typecheck et le build passent. La vérification
   navigateur d’un BDC plus haut que le viewport reste ouverte dans le

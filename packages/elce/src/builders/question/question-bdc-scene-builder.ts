@@ -13,7 +13,7 @@ import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { Bdc } from '../../domain/document/document-types'
 import type { QuestionAnswer, QuestionContent } from '../../domain/question/question-types'
 import type { TestAnswerState } from '../../domain/summary-profile/test-state-types'
-import { appendClassToMarkupElement, sceneStyleClassName } from '../scene-style/scene-style-classes'
+import { appendClassToMarkupElement } from '../scene-style/scene-style-classes'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 
@@ -28,7 +28,6 @@ export function buildQuestionCardPreset(
   rootId: string,
   partPrefix: string,
   question: Pick<QuestionContent, 'title' | 'mediaId'>,
-  appearanceTargetId?: string,
   appearanceClassName?: string,
 ): CardPresetBuild {
   const contentByZone = {
@@ -40,16 +39,10 @@ export function buildQuestionCardPreset(
       : `<div id="${rootId}-illustration" class="elce-question-illustration"><!-- data-part="${partPrefix}:illustration" --></div>`,
   }
   const card = cardPresetBuilder.build(DEFAULT_PRESET_ID.QUESTION, rootId, partPrefix, contentByZone)
-  return appearanceTargetId === undefined
-    ? card
-    : {
-        ...card,
-        markup: appendClassToMarkupElement(
-          card.markup,
-          rootId,
-          appearanceClassName ?? sceneStyleClassName('appearance-surface', appearanceTargetId),
-        ),
-      }
+  return {
+    ...card,
+    markup: appendClassToMarkupElement(card.markup, rootId, appearanceClassName ?? 'question bdc'),
+  }
 }
 
 /** Builds the shared interactive CodPlay story for one Question BDC. */

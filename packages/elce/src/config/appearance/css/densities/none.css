@@ -1,7 +1,13 @@
-.elce-appearance-density-none.elce-appearance-role-section { box-sizing: border-box; padding: 0; }
-.elce-appearance-density-none.elce-appearance-role-page-flux { --elce-appearance-page-padding: 0; }
-.elce-appearance-density-none.elce-appearance-role-page-diapo { --elce-appearance-page-padding: 0; }
-.elce-appearance-density-none.elce-appearance-role-card-text-short { --elce-appearance-card-padding: 0; }
-.elce-appearance-density-none.elce-appearance-role-card-text-image { --elce-appearance-card-padding: 0; }
-.elce-appearance-density-none.elce-appearance-role-card-image-caption { --elce-appearance-card-padding: 0; }
-.elce-appearance-density-none:is(.elce-appearance-role-question, .elce-appearance-role-evaluation-result) { --elce-appearance-card-padding: 0; }
+@scope (.elce-player-layout) {
+  .density-none:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph) { background-color: transparent; }
+  .density-none.card-text-image > .elce-carousel-text-image__content,
+  .density-none.card-image-caption > .elce-card-image-caption__caption { background-color: transparent; }
+  .density-none.page-flux,
+  .density-none.page-diapo,
+  .density-none.section,
+  .density-none.card-text-short,
+  .density-none.question,
+  .density-none.evaluation-result { padding: 0; }
+  .density-none.card-text-image > .elce-carousel-text-image__content,
+  .density-none.card-image-caption > .elce-card-image-caption__caption { padding: 0; }
+}

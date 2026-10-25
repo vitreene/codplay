@@ -11,7 +11,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   grid-template-areas: 'menu title' 'menu content' 'menu navigation';
   overflow: hidden;
   color: #1d2d35;
-  background: #fffdf8;
 }
 
 .elce-player-menu-drawer {
@@ -79,7 +78,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   grid-area: content;
   min-height: 0;
   overflow: hidden;
-  background: #fffdf8;
 }
 
 .elce-player-layout__navigation {
@@ -293,7 +291,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding: var(--elce-appearance-page-padding, clamp(1rem, 3vw, 2rem));
   box-sizing: border-box;
 }
 
@@ -316,7 +313,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 .elce-diapo-content {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  padding: var(--elce-appearance-page-padding, 0);
 }
 
 .elce-diapo-content > .elce-card--carousel,
@@ -404,7 +400,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   overflow: hidden;
   border: 1px solid #d5ddd8;
   border-radius: 0.65rem;
-  background: #f8faf8;
 }
 
 .elce-page-bottom-marker {
@@ -469,9 +464,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   flex-direction: column;
   justify-content: center;
   gap: clamp(0.25rem, 1.2cqw, 0.8rem);
-  padding: var(--elce-appearance-card-padding, clamp(1rem, 4cqw, 3rem));
   overflow: hidden;
-  color: var(--elce-appearance-text-color, #263b3a);
   text-align: center;
 }
 
@@ -483,7 +476,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-card--text-short .elce-card-text-short__overline,
 .elce-card--text-short .elce-card-text-short__note {
-  color: var(--elce-appearance-muted-color, #647670);
   font-size: clamp(0.7rem, 1.5cqw, 0.95rem);
 }
 
@@ -493,7 +485,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 }
 
 .elce-card--text-short .elce-card-text-short__description {
-  color: var(--elce-appearance-muted-color, #52645f);
   font-size: clamp(0.85rem, 1.8cqw, 1.15rem);
 }
 
@@ -511,7 +502,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   grid-template-areas: 'image content';
   overflow: hidden;
-  color: var(--elce-appearance-text-color, #263b3a);
 }
 
 .elce-carousel-view--image-right.elce-card--text-image {
@@ -534,7 +524,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   justify-content: center;
   grid-area: content;
   gap: clamp(0.25rem, 1.2cqw, 0.8rem);
-  padding: var(--elce-appearance-card-padding, clamp(0.75rem, 3cqw, 2rem));
   overflow: hidden;
 }
 
@@ -546,7 +535,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-card--text-image .elce-card-text-image__overline,
 .elce-card--text-image .elce-card-text-image__note {
-  color: var(--elce-appearance-muted-color, #647670);
   font-size: clamp(0.7rem, 1.5cqw, 0.95rem);
 }
 
@@ -556,7 +544,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 }
 
 .elce-card--text-image .elce-card-text-image__description {
-  color: var(--elce-appearance-muted-color, #52645f);
   font-size: clamp(0.8rem, 1.6cqw, 1.05rem);
 }
 
@@ -617,8 +604,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-card--image-caption > .elce-card-image-caption__caption {
   margin: 0;
-  padding: var(--elce-appearance-card-padding, 0.45rem 0.75rem);
-  color: var(--elce-appearance-muted-color, #52645f);
   font-size: 0.82rem;
 }
 
@@ -725,10 +710,8 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-card--question {
   width: 100%;
-  padding: var(--elce-appearance-card-padding, clamp(1rem, 3vw, 1.6rem));
   border: 1px solid #d5ddd8;
   border-radius: 0.65rem;
-  background: #f8faf8;
 }
 
 .elce-card--question header {
@@ -737,7 +720,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-card--question header h2 {
   margin: 0;
-  color: var(--elce-appearance-text-color, #263b3a);
   font-size: clamp(1.1rem, 2.3vw, 1.5rem);
 }
 
@@ -757,7 +739,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 .elce-card--question legend {
   width: 100%;
   margin: 0 0 0.8rem;
-  color: var(--elce-appearance-text-color, #263b3a);
   font-size: clamp(1.05rem, 2.2vw, 1.4rem);
   font-weight: 700;
   line-height: 1.4;
@@ -765,7 +746,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-question-instructions {
   margin: 0 0 0.5rem;
-  color: var(--elce-appearance-muted-color, #65736d);
   font-size: 0.85rem;
 }
 

@@ -145,6 +145,15 @@ données suspendues, renseigne `adl.nav.request`, committe et termine le SCO.
 Le bouton inter-chapitre est disponible seulement si le manifeste fournit
 l’identifiant stable du chapitre voisin.
 
+« Précédent » dépend uniquement de la présence d’une page précédente dans le
+SCO ou d’un identifiant stable pour le chapitre précédent ; il n’exige pas la
+complétion de la page. « Suivant » combine la garde de sortie de la page et la
+disponibilité de la page ou du SCO cible. La garde de sortie n’inclut pas la
+présence du chapitre voisin. Comme l’action inter-SCO n’a pas de route `go`,
+son handler vérifie de nouveau que la page est à la limite du chapitre, que la
+page est terminée pour « Suivant » et que le SCO voisin possède son identifiant
+stable avant d’appeler l’adaptateur.
+
 Le lanceur initialise le conteneur avec `visibility: hidden`. Après le succès
 de la restauration, de l’initialisation Sighty, de la sélection de page et de
 la sauvegarde, le runtime force sa visibilité à `visible` au lieu de rétablir
@@ -210,7 +219,9 @@ LMS réel qui persiste les valeurs CMI.
   vérifie la conservation de `timeMs`, de la description et de l’horodatage
   dans la réponse de la machine d’Évaluation. Il vérifie aussi l’admission de la
   page de démarrage Sighty masquée, l’entrée dans le chapitre lancé, le refus
-  des pages des autres chapitres et les sorties précédent/suivant locales.
+  des pages des autres chapitres, les gardes de complétion, les boutons de
+  navigation aux limites de SCO et le refus de l’action inter-SCO sans page
+  terminée ou identifiant cible stable.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie qu’une Question d’Évaluation jouée par le player Sighty/CodPlay
   produit une latence par réponse sans ajouter de timer.

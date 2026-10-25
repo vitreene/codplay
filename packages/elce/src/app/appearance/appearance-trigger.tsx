@@ -24,7 +24,7 @@ export function renderAppearanceTrigger(options: AppearanceTriggerOptions): Remi
     title={options.label}
     mix={on<HTMLButtonElement, 'click'>('click', (event) => options.onOpen(options.target, event.currentTarget.id))}
   >
-    {renderLucideIcon(Palette, `${options.id}-icon`, 14)}
+    {renderLucideIcon(Palette, `${options.id}-icon`)}
     {options.visibleLabel === undefined ? null : <span
       id={`${options.id}-label`}
     >

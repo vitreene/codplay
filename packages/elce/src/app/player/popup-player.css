@@ -79,8 +79,8 @@
 
 .elce-popup-reader .elce-player-menu-toggle svg,
 .elce-popup-reader .elce-player-menu-close svg {
-  width: var(--elce-icon-size);
-  height: var(--elce-icon-size);
+  block-size: 1cap;
+  inline-size: auto;
 }
 
 .elce-popup-reader__main {

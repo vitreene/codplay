@@ -8,6 +8,7 @@ import { BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE
 import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { buildDiapoScene } from './diapo-scene-builder'
+import { pageAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
 
 describe('Elcé Diapo scene builder', () => {
   it('builds a no-scroll stage and signals the visible single Carousel card', () => {
@@ -15,7 +16,9 @@ describe('Elcé Diapo scene builder', () => {
     const command = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
     const document = applyDocumentCommand(initial, command)
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoScene(page, document.bdcs, {
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, document.bdcs),
+    })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const carousel = document.bdcs.find((bdc) => bdc.id === command.bdcId)!
     const carouselStory = pageStory
@@ -106,7 +109,9 @@ describe('Elcé Diapo scene builder', () => {
       layoutId: DEFAULT_PRESET_ID.PHOTO,
     })
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoScene(page, document.bdcs, {
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, document.bdcs),
+    })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const cardView = pageStory?.persos.find((perso) => perso.id === `${page.id}:${carousel.id}-card-${cardBdcId}`)
     const markup = cardView?.initial !== undefined && 'markup' in cardView.initial ? String(cardView.initial.markup) : ''
@@ -115,7 +120,7 @@ describe('Elcé Diapo scene builder', () => {
       className: expect.stringContaining('elce-carousel-photo__media'),
       move: { target: `${page.id}-${carousel.id}-diapo-end-scrollport` },
     })
-    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media elce-appearance-surface-`)
+    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media card-photo bdc bg-classic-background ink-classic-text headings-crimson-text body-dm-sans density-normal`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:root" -->`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:media" -->`)
     expect(markup).not.toContain('<article')

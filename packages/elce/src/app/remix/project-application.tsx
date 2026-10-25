@@ -611,7 +611,7 @@ function renderExportDialog(workspace: ProjectApplicationWorkspaceState): RemixN
           title="Fermer la fenêtre d’export"
           mix={on<HTMLButtonElement, 'click'>('click', workspace.onCloseExportDialog)}
         >
-          {renderLucideIcon(X, 'elce-export-dialog-close-icon', 14)}
+          {renderLucideIcon(X, 'elce-export-dialog-close-icon')}
         </button>
       </header>
       <p id="elce-export-dialog-description">

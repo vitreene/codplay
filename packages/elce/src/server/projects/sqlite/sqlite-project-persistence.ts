@@ -204,7 +204,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     })
   }
 
-  /** Creates a project from its browser-owned v6 document unless its id already exists. */
+  /** Creates a project from its browser-owned v7 document unless its id already exists. */
   public async createProject(document: ElceDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
@@ -369,7 +369,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   }
 }
 
-/** Reconstructs the project summary and the v6 document from normalized rows. */
+/** Reconstructs the project summary and the v7 document from normalized rows. */
 async function readStoredProject(database: ProjectDatabase, projectId: string): Promise<StoredProject | null> {
   const projectRows = await queryRows(database, `
     SELECT project_id, name, format_version, revision,
@@ -380,7 +380,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   if (projectRows.length === 0) return null
 
   const projectRow = projectRows[0]!
-  if (numberValue(projectRow, 'format_version') !== 6) {
+  if (numberValue(projectRow, 'format_version') !== 7) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -390,7 +390,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   }
 }
 
-/** Reads the relational records and assembles their ElceDocument v6 value. */
+/** Reads the relational records and assembles their ElceDocument v7 value. */
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<ElceDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
@@ -435,7 +435,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
   ))
   const data: ElceDocumentData = {
     id: projectId,
-    version: 6,
+    version: 7,
     name: stringValue(projectRow, 'name'),
     ...optionalAppearance(projectRow),
     revelationDefaults: {

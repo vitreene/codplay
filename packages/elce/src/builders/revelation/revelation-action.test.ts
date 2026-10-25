@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { CAROUSEL_TRANSITION, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
 import { createRevelationAction, createRevelationInitialStyle } from './revelation-action'
 
 describe('Revelation actions', () => {
+  it('uses the rightward translation pair as the project default', () => {
+    expect(DEFAULT_PROJECT_REVELATION).toEqual({
+      intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+      outro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+    })
+  })
+
   it('enters from the left and exits to the right for the rightward pair', () => {
     const intro = createRevelationAction('swipe-right', 'intro')
     const outro = createRevelationAction('swipe-right', 'outro')

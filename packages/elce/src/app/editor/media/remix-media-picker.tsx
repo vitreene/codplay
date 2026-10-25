@@ -63,7 +63,7 @@ export function renderRemixMediaPicker(props: RemixMediaPickerProps): RemixNode 
         id={id('illustration-prompt')}
         className="elce-media-add-prompt"
       >
-        {renderLucideIcon(ImagePlus, id('illustration-icon'), 14)}
+        {renderLucideIcon(ImagePlus, id('illustration-icon'))}
         <span
           id={id('illustration-label')}
           className="elce-media-add-prompt__label"
@@ -90,7 +90,7 @@ export function renderRemixMediaPicker(props: RemixMediaPickerProps): RemixNode 
           props.onClear()
         })}
       >
-        {renderLucideIcon(X, id('media-clear-icon'), 14)}
+        {renderLucideIcon(X, id('media-clear-icon'))}
       </button>}
   </label>
 }

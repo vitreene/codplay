@@ -1,0 +1,10 @@
+@scope (.elce-player-layout) {
+  @scope (.headings-mulish) {
+    :scope :is(h1, h2, h3, h4, h5, h6) { font-family: 'Mulish', sans-serif; }
+  }
+
+  .body-mulish {
+    font-family: 'Mulish', sans-serif;
+    line-height: 1.5;
+  }
+}

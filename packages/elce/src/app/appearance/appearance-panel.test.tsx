@@ -66,11 +66,13 @@ describe('appearance panel targets', () => {
       expect(rendered.$('#elce-appearance-palette-select')).not.toBeNull()
       expect(rendered.$('#elce-appearance-color-group-label')?.textContent).toBe('Couleurs')
       expect(rendered.$('#elce-appearance-background-picker')).not.toBeNull()
-      expect(rendered.$('#elce-appearance-typography-select')).not.toBeNull()
+      expect(rendered.$('#elce-appearance-typography-pair-select')).not.toBeNull()
+      expect(rendered.$('#elce-appearance-heading-font-select')).toBeNull()
+      expect(rendered.$('#elce-appearance-body-font-select')).toBeNull()
       expect(rendered.$('#elce-appearance-density-select')).not.toBeNull()
       expect(rendered.$('#elce-appearance-auto-contrast')).not.toBeNull()
       expect((rendered.$('#elce-appearance-palette-select') as HTMLSelectElement | null)?.value).toBe('classic')
-      expect((rendered.$('#elce-appearance-typography-select') as HTMLSelectElement | null)?.value)
+      expect((rendered.$('#elce-appearance-typography-pair-select') as HTMLSelectElement | null)?.value)
         .toBe('crimson-dm-sans')
       expect((rendered.$('#elce-appearance-density-select') as HTMLSelectElement | null)?.value).toBe('normal')
       expect(rendered.$('#elce-appearance-preset-select') !== null).toBe(target.kind === 'document')
@@ -102,12 +104,45 @@ describe('appearance panel targets', () => {
       densitySelect.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
+    const pairSelect = densityPanel.$('#elce-appearance-typography-pair-select') as HTMLSelectElement | null
+    if (pairSelect === null) throw new Error('The text Card panel has no font-pair suggestion select.')
+    await densityPanel.act(() => {
+      pairSelect.value = 'inter-krub'
+      pairSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
     const updatedDocument = controller.getSnapshot().context.document
     const updatedCard = updatedDocument.bdcs.find((bdc) => bdc.id === textCard.id)
     if (updatedCard === undefined) throw new Error('The changed text Card is absent from its document.')
     expect(updatedCard.appearance?.density).toBe('large')
+    expect(updatedCard.appearance).toMatchObject({ headingFontId: 'inter', bodyFontId: 'krub' })
     expect(appearanceThemeCssAssetPathsForDocument(updatedDocument)).toContain('densities/large.css')
     densityPanel.cleanup()
+
+    const transparentPanel = render(<div id="appearance-transparent-test-root">
+      {renderAppearancePanel({
+        view: selectEditorViewModel(controller.getSnapshot()),
+        actions,
+        target: { kind: 'bdc', bdcId: textCard.id },
+      })}
+    </div>)
+    const transparentToggle = transparentPanel.$('#elce-appearance-background-transparent') as HTMLInputElement | null
+    if (transparentToggle === null) throw new Error('The text Card panel has no Transparent checkbox.')
+    await transparentPanel.act(() => {
+      transparentToggle.checked = true
+      transparentToggle.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === textCard.id)?.appearance?.density).toBe('none')
+    const backgroundPicker = transparentPanel.$('#elce-appearance-background-picker') as HTMLInputElement | null
+    if (backgroundPicker === null) throw new Error('The text Card panel has no background color picker.')
+    await transparentPanel.act(() => {
+      backgroundPicker.value = '#324b5a'
+      backgroundPicker.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const reactivatedCard = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === textCard.id)
+    expect(reactivatedCard?.appearance?.density).toBe('normal')
+    expect(reactivatedCard?.appearance?.background).toEqual({ kind: 'custom', value: '#324b5a' })
+    transparentPanel.cleanup()
 
     controller.stop()
   })

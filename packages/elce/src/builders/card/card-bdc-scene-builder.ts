@@ -3,7 +3,7 @@ import { CARD_IMAGE_FIT, DEFAULT_PRESET_ID, MEDIA_TYPE } from '../../config/docu
 import type { CardImageFit, MediaType } from '../../config/document-config-types'
 import type { MediaId, PageId, Bdc, BdcId } from '../../domain/document/document-types'
 import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
-import { appearanceClassNameForTarget } from '../scene-style/appearance-class-names.ts'
+import { appearanceClassNameForBdc } from '../scene-style/appearance-class-names.ts'
 import { appendClassToMarkupElement } from '../scene-style/scene-style-classes'
 import { ElceCardPresetBuilder } from './card-preset-builder'
 
@@ -39,13 +39,14 @@ export class ElceCardBdcSceneBuilder {
     const layout = cardPresetBuilder.build(bdc.presetId, rootId, partId)
     const photoMediaRoot = input.photoMediaRoot === true && bdc.presetId === DEFAULT_PRESET_ID.PHOTO
     const markup = photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : layout.markup
+    const appearanceClassName = appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget)
     return {
       markup: appendClassToMarkupElement(
         markup,
         rootId,
-        appearanceClassNameForTarget(rootId, input.appearanceClassNamesByTarget),
+        appearanceClassName,
       ),
-      rootClassName: layout.rootClassName,
+      rootClassName: `${layout.rootClassName} ${appearanceClassName}`,
       zonePartIds: layout.zonePartIds,
       contentPersos: createCardContentPersos(bdc, layout.zonePartIds, layout.zoneClassNames, `${pageId}:${bdc.id}`),
       mediaPersos: createCardMediaPersos(input, partId, bdc.card.imageFit),

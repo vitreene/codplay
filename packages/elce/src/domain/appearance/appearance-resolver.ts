@@ -22,7 +22,8 @@ export interface ResolvedAppearanceValue<Value> {
 export interface ResolvedAppearance {
   readonly presetId: ResolvedAppearanceValue<string>
   readonly paletteId: ResolvedAppearanceValue<string>
-  readonly typographyPairId: ResolvedAppearanceValue<string>
+  readonly headingFontId: ResolvedAppearanceValue<string>
+  readonly bodyFontId: ResolvedAppearanceValue<string>
   readonly density: ResolvedAppearanceValue<NonNullable<AppearanceSettings['density']>>
   readonly background: ResolvedAppearanceValue<Readonly<{ choice: AppearanceBackground; color: string }>>
   readonly textColor: ResolvedAppearanceValue<Readonly<{ choice: AppearanceColor; color: string }>>
@@ -32,7 +33,7 @@ export interface ResolvedAppearance {
 export interface AppearanceContrastContext {
   readonly color: string
   readonly paletteId: string
-  readonly choice: AppearanceBackground
+  readonly choice: AppearanceColor
 }
 
 interface AppearanceLayer {
@@ -48,7 +49,8 @@ export function resolveAppearance(document: ElceDocument, target: AppearanceTarg
   }]
   const presetId = resolveValue(layers, 'presetId')
   const paletteId = resolveValue(layers, 'paletteId')
-  const typographyPairId = resolveValue(layers, 'typographyPairId')
+  const headingFontId = resolveValue(layers, 'headingFontId')
+  const bodyFontId = resolveValue(layers, 'bodyFontId')
   const density = resolveValue(layers, 'density')
   const backgroundChoice = resolveValue(layers, 'background')
   const textColorChoice = resolveValue(layers, 'textColor')
@@ -58,15 +60,14 @@ export function resolveAppearance(document: ElceDocument, target: AppearanceTarg
   return {
     presetId,
     paletteId,
-    typographyPairId,
+    headingFontId,
+    bodyFontId,
     density,
     background: {
       ...backgroundChoice,
       value: {
         choice: backgroundChoice.value,
-        color: backgroundChoice.value.kind === 'transparent'
-          ? 'transparent'
-          : appearanceColor(backgroundChoice.value, palette.colors),
+        color: appearanceColor(backgroundChoice.value, palette.colors),
       },
     },
     textColor: {
@@ -78,6 +79,19 @@ export function resolveAppearance(document: ElceDocument, target: AppearanceTarg
     },
     autoContrast,
   }
+}
+
+/** Identifies whether the resolved color is painted by the target surface itself. */
+export function appearanceBackgroundAppliesToSurface(
+  resolved: ResolvedAppearance,
+  target: AppearanceTarget,
+): boolean {
+  if (target.kind === 'document') return true
+
+  const source = resolved.background.source
+  if (source.kind !== target.kind) return false
+  if (target.kind === 'page') return source.kind === 'page' && source.pageId === target.pageId
+  return source.kind === 'bdc' && source.bdcId === target.bdcId
 }
 
 /** Finds the nearest opaque CSS background behind the target's text surface. */
@@ -94,13 +108,13 @@ export function resolveAppearanceContrastContext(
   while (current !== null) {
     const resolved = resolveAppearance(document, current)
     const background = resolved.background.value
-    if (background.choice.kind !== 'transparent') {
+    if (resolved.density.value !== 'none' && appearanceBackgroundAppliesToSurface(resolved, current)) {
       return { color: background.color, paletteId: resolved.paletteId.value, choice: background.choice }
     }
     current = appearanceParentTarget(document, current)
   }
   const paletteId = 'classic'
-  const choice: AppearanceBackground = { kind: 'palette', role: 'background' }
+  const choice: AppearanceColor = { kind: 'palette', role: 'background' }
   return { color: getAppearancePalette(paletteId).colors.background, paletteId, choice }
 }
 
@@ -195,7 +209,8 @@ function presetValueFor<Property extends AppearanceProperty>(
     const preset = getAppearancePreset(settings.presetId)
     switch (property) {
       case 'paletteId': return preset.paletteId as AppearanceSettings[Property]
-      case 'typographyPairId': return preset.typographyPairId as AppearanceSettings[Property]
+      case 'headingFontId': return preset.headingFontId as AppearanceSettings[Property]
+      case 'bodyFontId': return preset.bodyFontId as AppearanceSettings[Property]
       case 'density': return preset.density as AppearanceSettings[Property]
       case 'background': return { kind: 'palette', role: 'background' } as AppearanceSettings[Property]
       case 'textColor': return { kind: 'palette', role: 'text' } as AppearanceSettings[Property]

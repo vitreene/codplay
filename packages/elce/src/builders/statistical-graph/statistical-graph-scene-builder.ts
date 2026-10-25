@@ -27,7 +27,7 @@ export class ElceStatisticalGraphSceneBuilder {
     if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
       throw new Error(`Le BDC ${bdc.id} n’est pas un Graphe complet.`)
     }
-    return this.buildContent(bdc.statisticalGraph, bdc.presetId, rootId, partId, bdc.id, appearanceClassName)
+    return this.buildContent(bdc.statisticalGraph, bdc.presetId, rootId, partId, appearanceClassName)
   }
 
   /** Builds preview markup from graph content without requiring a document BDC wrapper. */
@@ -36,7 +36,6 @@ export class ElceStatisticalGraphSceneBuilder {
     layoutId: string,
     rootId: string,
     partId?: string,
-    appearanceTargetId?: string,
     appearanceClassName?: string,
   ): StatisticalGraphSceneBuild {
     const titleId = `${rootId}-svg-title`
@@ -64,18 +63,14 @@ export class ElceStatisticalGraphSceneBuilder {
       ? chart
       : `<!-- data-part="${escapeHtml(visualPartId)}" -->`
     const visualClassName = `elce-statistical-graph__visual${content.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? ' elce-statistical-graph__visual--table' : ''}`
-    const appearanceClass = appearanceClassName !== undefined
-      ? ` ${appearanceClassName}`
-      : appearanceTargetId === undefined
-        ? ''
-        : ` ${sceneStyleClassName('appearance-surface', appearanceTargetId)}`
+    const appearanceClass = ` ${appearanceClassName ?? 'graph bdc'}`
     const markup = `<figure id="${rootId}" class="elce-statistical-graph ${layoutClass} elce-statistical-graph--${content.rendering}${appearanceClass}">${rootPart}${overline}${visibleTitle}<div id="${rootId}-body" class="elce-statistical-graph__body"><div id="${rootId}-visual" class="${visualClassName}">${visualMarkup}</div>${textPanel}</div></figure>`
     const mediaPersos = visualPartId === undefined
       ? []
       : [createViewportGraphPerso(rootId, visualPartId, chart, content.rendering)]
     return {
       markup,
-      rootClassName: 'elce-statistical-graph',
+      rootClassName: `elce-statistical-graph${appearanceClass}`,
       contentPersos: [],
       mediaPersos,
       styleSheet: [

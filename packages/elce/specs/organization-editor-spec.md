@@ -58,11 +58,12 @@ qui s’aligne à gauche et occupe l’espace disponible ; les actions restent �
 droite. Un chapitre standard utilise l’icône dossier seule. Un chapitre
 d’évaluation utilise l’icône presse-papiers, sans libellé répété ; son nom
 automatique est « Évaluation » au lieu de « Chapitre N ». Le nom reste
-modifiable. L’action d’ajout de page utilise l’icône Lucide FilePlus de 14 px
-dans un bouton carré de 1,35 rem, à peine plus grand que le bouton de
-suppression de 1,25 rem. L’icône Lucide Trash2 du bouton de suppression a la
-même taille de 14 px. Ces dimensions restent adaptées à chaque action ; les
-icônes gardent 2 px de padding interne et 4 px d’écart avec leur élément voisin.
+modifiable. L’action d’ajout de page utilise l’icône Lucide FilePlus dans un
+bouton carré de 1,35 rem, à peine plus grand que le bouton de suppression de
+1,25 rem. FilePlus, Trash2 et les autres icônes d’interface suivent la hauteur
+de capitale avec `block-size: 1cap` et une largeur automatique. Ces tailles
+restent adaptées à chaque action ; les icônes gardent 2 px de padding interne
+et 4 px d’écart avec leur élément voisin.
 L’écart vertical entre les lignes de l’arborescence est de 0,1 rem.
 
 Dans la zone centrale, la rangée d’actions de création se trouve au-dessus des
@@ -245,10 +246,11 @@ séparées.
   utilisé pour le test. Le type, le seuil et les réglages persistés sont
   vérifiés dans [`chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
   contre le document détenu par XState.
-- Le 9 octobre, Brave sur 5175 confirme dans l’arborescence le rendu uniforme
-  des icônes FilePlus et Trash2 en 14 × 14 px, avec leurs gabarits distincts
-  conservés. Les icônes de type de chapitre et de page dans la zone centrale
-  mesurent également 14 × 14 px.
+- Safari MCP, le 25 octobre, vérifie que les SVG Lucide de l’éditeur n’ont plus
+  d’attributs de taille fixes, que leur classe applique `block-size: 1cap` et
+  que Safari prend en charge cette unité. Les 78 icônes présentes suivent
+  ainsi la police de leur commande ; les dimensions de bouton restent propres
+  à chaque action.
 - Le 4 octobre, Safari MCP crée une page temporaire dans un chapitre standard,
   supprime son BDC Texte initial, confirme que la page reste éditable et ajoute
   une Question avec l’icône ListChecks. La page temporaire est ensuite supprimée.

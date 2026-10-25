@@ -277,7 +277,7 @@ function renderCatalogReference(
       }
     })}
   >
-    {renderLucideIcon(GripVertical, `elce-catalog-${referenceKind}-handle-${key}`, 14)}
+    {renderLucideIcon(GripVertical, `elce-catalog-${referenceKind}-handle-${key}`)}
     <span
       id={`elce-catalog-${referenceKind}-name-${key}`}
     >
@@ -301,7 +301,7 @@ function renderDeleteButton(id: string, label: string, onClick: () => void): Rem
     title={label}
     mix={on<HTMLButtonElement, 'click'>('click', onClick)}
   >
-    {renderLucideIcon(Trash2, `${id}-icon`, 14)}
+    {renderLucideIcon(Trash2, `${id}-icon`)}
   </button>
 }
 

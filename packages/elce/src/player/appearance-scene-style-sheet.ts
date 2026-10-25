@@ -1,25 +1,38 @@
 import type { AppearanceTarget } from '../domain/commands/document-command-types'
 import type { Bdc, Page } from '../domain/document/document-types'
 import type { ElceDocument } from '../domain/document/document-model'
-import { resolveAppearance, resolveAppearanceContrastContext } from '../domain/appearance/appearance-resolver'
-import { customColorClassName } from '../builders/scene-style/appearance-class-names.ts'
+import {
+  appearanceSurfaceRoleForTarget,
+  customColorClassName,
+} from '../builders/scene-style/appearance-class-names.ts'
+import type { AppearanceSurfaceRole } from '../builders/scene-style/appearance-class-names.ts'
+import {
+  appearanceBackgroundAppliesToSurface,
+  resolveAppearance,
+  resolveAppearanceContrastContext,
+} from '../domain/appearance/appearance-resolver'
+import { appearanceFontAssetsForIds, appearanceFontFaceStyleSheet } from './appearance-font-assets'
 import {
   appearanceThemeCssAssetPaths,
   appearanceThemeCssImport,
 } from './appearance/appearance-theme-styles.ts'
-import { appearanceFontAssetsForPairs, appearanceFontFaceStyleSheet } from './appearance-font-assets'
 
-/** Builds used theme CSS, custom color classes and fonts for the document layout. */
+type CssDeclarationMap = Map<string, Set<string>>
+
+/** Builds the one project stylesheet for used theme assets and custom colors. */
 export function createDocumentAppearanceStyleSheet(document: ElceDocument, fontSourcePrefix: '/' | './' = '/'): string {
   const targets = appearanceTargetsForDocument(document)
   const resolved = targets.map((target) => resolveAppearance(document, target))
-  const pairIds = resolved.map((appearance) => appearance.typographyPairId.value)
+  const fontIds = resolved.flatMap((appearance) => [
+    appearance.headingFontId.value,
+    appearance.bodyFontId.value,
+  ])
   const themeCssPaths = appearanceThemeCssAssetPaths(
     resolved.map((appearance) => appearance.paletteId.value),
-    pairIds,
+    fontIds,
     resolved.map((appearance) => appearance.density.value),
   )
-  const fonts = appearanceFontAssetsForPairs(pairIds)
+  const fonts = appearanceFontAssetsForIds(fontIds)
   return [
     ...(fontSourcePrefix === './' ? themeCssPaths.map(appearanceThemeCssImport) : []),
     appearanceFontFaceStyleSheet(fonts, fontSourcePrefix),
@@ -27,30 +40,27 @@ export function createDocumentAppearanceStyleSheet(document: ElceDocument, fontS
   ].filter((styleSheet) => styleSheet.length > 0).join('\n')
 }
 
-/** Returns the distinct authored theme CSS assets used by any rendered document surface. */
+/** Returns each used project, page and BDC theme stylesheet once. */
 export function appearanceThemeCssAssetPathsForDocument(document: ElceDocument): readonly string[] {
   const resolved = appearanceTargetsForDocument(document).map((target) => resolveAppearance(document, target))
+  const fontIds = resolved.flatMap((appearance) => [
+    appearance.headingFontId.value,
+    appearance.bodyFontId.value,
+  ])
   return appearanceThemeCssAssetPaths(
     resolved.map((appearance) => appearance.paletteId.value),
-    resolved.map((appearance) => appearance.typographyPairId.value),
+    fontIds,
     resolved.map((appearance) => appearance.density.value),
   )
 }
 
-/** Builds custom color classes for the appearance targets in one real page scene. */
-export function createPageAppearanceStyleSheet(
-  document: ElceDocument,
-  page: Page,
-  bdcs: readonly Bdc[],
-): string {
-  return customAppearanceStyleSheet(document, pageAppearanceTargets(page, bdcs))
-}
-
-/** Returns fonts referenced by the generated layout and scenario page styles. */
+/** Returns the font files referenced by the common project stylesheet. */
 export function appearanceFontAssetsForDocument(document: ElceDocument) {
-  const pairIds = appearanceTargetsForDocument(document)
-    .map((target) => resolveAppearance(document, target).typographyPairId.value)
-  return appearanceFontAssetsForPairs(pairIds)
+  const fontIds = appearanceTargetsForDocument(document).flatMap((target) => {
+    const resolved = resolveAppearance(document, target)
+    return [resolved.headingFontId.value, resolved.bodyFontId.value]
+  })
+  return appearanceFontAssetsForIds(fontIds)
 }
 
 /** Collects all project, scenario page and scene BDC appearance targets. */
@@ -67,7 +77,7 @@ function appearanceTargetsForDocument(document: ElceDocument): readonly Appearan
   return targets
 }
 
-/** Returns the page and styled BDC targets using the page scene's real source set. */
+/** Returns a page and its direct scene BDC targets. */
 function pageAppearanceTargets(page: Page, bdcs: readonly Bdc[]): readonly AppearanceTarget[] {
   return [
     { kind: 'page', pageId: page.id },
@@ -77,53 +87,98 @@ function pageAppearanceTargets(page: Page, bdcs: readonly Bdc[]): readonly Appea
   ]
 }
 
-/** Emits only class rules required by author-supplied colors in these targets. */
+/** Emits reusable direct color rules once for author-supplied colors in the project. */
 function customAppearanceStyleSheet(
   document: ElceDocument,
   targets: readonly AppearanceTarget[],
 ): string {
-  const declarations = new Map<string, Map<string, string>>()
+  const ordinary: CssDeclarationMap = new Map()
+  const contrast: CssDeclarationMap = new Map()
+
   for (const target of targets) {
     const resolved = resolveAppearance(document, target)
-    if (resolved.background.value.choice.kind === 'custom') {
-      addCustomDeclaration(
-        declarations,
-        customColorClassName('background', resolved.background.value.color),
-        '--elce-appearance-background-color',
-        resolved.background.value.color,
+    const role = appearanceSurfaceRoleForTarget(document, target)
+    const background = resolved.background.value
+    if (
+      background.choice.kind === 'custom'
+      && resolved.density.value !== 'none'
+      && appearanceBackgroundAppliesToSurface(resolved, target)
+    ) {
+      addDeclaration(
+        ordinary,
+        'background-color',
+        background.color,
+        customBackgroundSelector(customColorClassName('background', background.color), role),
       )
     }
     if (resolved.textColor.value.choice.kind === 'custom') {
-      const className = customColorClassName('text', resolved.textColor.value.color)
-      addCustomDeclaration(declarations, className, '--elce-appearance-text-color', resolved.textColor.value.color)
-      addCustomDeclaration(declarations, className, '--elce-appearance-muted-color', resolved.textColor.value.color)
-    }
-    const contrastBackground = resolveAppearanceContrastContext(document, target)
-    if (contrastBackground.choice.kind === 'custom') {
-      addCustomDeclaration(
-        declarations,
-        customColorClassName('contrast-background', contrastBackground.color),
-        '--elce-appearance-contrast-background',
-        contrastBackground.color,
+      addDeclaration(
+        ordinary,
+        'color',
+        resolved.textColor.value.color,
+        `.${customColorClassName('text', resolved.textColor.value.color)}`,
       )
     }
+    if (resolved.autoContrast.value) {
+      const context = resolveAppearanceContrastContext(document, target)
+      if (context.choice.kind === 'custom') {
+        addDeclaration(
+          contrast,
+          'color',
+          `contrast-color(${context.color})`,
+          `.${customColorClassName('contrast-background', context.color)}:is(.${role})`,
+        )
+      }
+    }
   }
-  return [...declarations.entries()].map(([className, properties]) => [
-    `.${className} {`,
-    ...[...properties.entries()].map(([property, value]) => `  ${property}: ${value};`),
+
+  const contrastRules = renderRules(contrast)
+  const ordinaryRules = renderRules(ordinary)
+  if (ordinaryRules.length === 0 && contrastRules.length === 0) return ''
+  return [
+    '@scope (.elce-player-layout) {',
+    ...ordinaryRules.map((rule) => `  ${rule}`),
+    ...(contrastRules.length === 0 ? [] : [
+      '  @supports (color: contrast-color(#ffffff)) {',
+      ...contrastRules.map((rule) => `    ${rule}`),
+      '  }',
+    ]),
     '}',
-  ].join('\n')).join('\n')
+  ].join('\n')
 }
 
-/** Adds one custom color declaration and deduplicates its reusable class. */
-function addCustomDeclaration(
-  declarations: Map<string, Map<string, string>>,
-  className: string,
+/** Adds a selector to a shared direct declaration and avoids repeating its rule. */
+function addDeclaration(
+  declarations: CssDeclarationMap,
   property: string,
   value: string,
+  selector: string,
 ): void {
-  const properties = declarations.get(className) ?? new Map<string, string>()
-  properties.set(property, value)
-  declarations.set(className, properties)
+  const key = `${property}\u0000${value}`
+  const selectors = declarations.get(key) ?? new Set<string>()
+  selectors.add(selector)
+  declarations.set(key, selectors)
 }
 
+/** Renders selector groups that share one direct CSS declaration. */
+function renderRules(declarations: CssDeclarationMap): string[] {
+  return [...declarations.entries()].flatMap(([key, selectorSet]) => {
+    const separator = key.indexOf('\u0000')
+    const property = key.slice(0, separator)
+    const value = key.slice(separator + 1)
+    const selectors = [...selectorSet].sort()
+    return [`${selectors.join(',\n')} { ${property}: ${value}; }`]
+  })
+}
+
+/** Targets the visible background surface for each content role. */
+function customBackgroundSelector(className: string, role: AppearanceSurfaceRole): string {
+  switch (role) {
+    case 'card-text-image':
+      return `.${className}.card-text-image > .elce-carousel-text-image__content`
+    case 'card-image-caption':
+      return `.${className}.card-image-caption > .elce-card-image-caption__caption`
+    default:
+      return `.${className}:is(.${role})`
+  }
+}

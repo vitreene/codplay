@@ -10,9 +10,9 @@ import { assertSummaryProfileInvariants } from '../../summary-profile/profile-ru
 import {
   APPEARANCE_COLOR_ROLES,
   APPEARANCE_DENSITIES,
+  getAppearanceFont,
   getAppearancePalette,
   getAppearancePreset,
-  getAppearanceTypographyPair,
 } from '../../../config/appearance/appearance-config'
 import type { AppearanceColorRole } from '../../../config/appearance/appearance-types'
 
@@ -306,7 +306,7 @@ function assertAppearanceSettings(value: unknown, allowGeneralPreset: boolean): 
   if (!isAppearanceRecord(value)) fail('Réglages d’apparence invalides.')
 
   const allowedProperties = new Set([
-    'presetId', 'paletteId', 'typographyPairId', 'density', 'background', 'textColor', 'autoContrast',
+    'presetId', 'paletteId', 'headingFontId', 'bodyFontId', 'density', 'background', 'textColor', 'autoContrast',
   ])
   if (Object.keys(value).some((property) => !allowedProperties.has(property))) {
     fail('Réglages d’apparence : propriété inconnue.')
@@ -317,15 +317,14 @@ function assertAppearanceSettings(value: unknown, allowGeneralPreset: boolean): 
   }
   if ('presetId' in value) assertAppearanceReference(value.presetId, getAppearancePreset, 'preset')
   if ('paletteId' in value) assertAppearanceReference(value.paletteId, getAppearancePalette, 'palette')
-  if ('typographyPairId' in value) {
-    assertAppearanceReference(value.typographyPairId, getAppearanceTypographyPair, 'duo typographique')
-  }
+  if ('headingFontId' in value) assertAppearanceReference(value.headingFontId, getAppearanceFont, 'police de titre')
+  if ('bodyFontId' in value) assertAppearanceReference(value.bodyFontId, getAppearanceFont, 'police de corps')
   if ('density' in value && !APPEARANCE_DENSITIES.some((entry) => entry.value === value.density)) {
     fail('Densité d’apparence inconnue.')
   }
   if ('background' in value) {
     if (!isAppearanceRecord(value.background)) fail('Fond d’apparence invalide.')
-    if (value.background.kind !== 'transparent') assertAppearanceColor(value.background)
+    assertAppearanceColor(value.background)
   }
   if ('textColor' in value) assertAppearanceColor(value.textColor)
   if ('autoContrast' in value && typeof value.autoContrast !== 'boolean') {

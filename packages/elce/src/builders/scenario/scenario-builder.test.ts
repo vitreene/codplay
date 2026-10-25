@@ -16,6 +16,7 @@ import {
   pageAccessGuard,
   pageExitGuard,
   recordQuestionResultAction,
+  refreshPresentationAction,
 } from './scenario-builder'
 
 const emptyScene: SceneDoc<string> = { id: 'empty-scene', stories: {} }
@@ -757,7 +758,7 @@ describe('Elcé scenario builder', () => {
       event: { name: ELCE_EVENTS.NAVIGATION_PREVIOUS },
       context: chapterContext,
       state: {},
-    })).toBe(false)
+    })).toBe(true)
     const scormChapterContext = {
       ...chapterContext,
       [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: {
@@ -783,12 +784,19 @@ describe('Elcé scenario builder', () => {
       event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
       context: scormChapterContext,
       state: {},
-    })).toBe(false)
+    })).toBe(true)
     expect(pageExitGuard({
       data: scenario.data ?? {},
       sceneKey: 'scene-page-b',
       event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
       context: chapterContext,
+      state: {},
+    })).toBe(true)
+    expect(pageExitGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-b',
+      event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
+      context: { [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: 'chapter-sco-b' },
       state: {},
     })).toBe(false)
     expect(pageExitGuard({
@@ -805,6 +813,90 @@ describe('Elcé scenario builder', () => {
       context: chapterContext,
       state: {},
     })).toBe(true)
+  })
+
+  it('computes SCORM boundary buttons from their destinations and guards only Next exit', async () => {
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create', chapterId: 'chapter-sco-b', name: 'Chapitre SCO B',
+    })
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create', chapterId: 'chapter-sco-c', name: 'Chapitre SCO C',
+    })
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-b', bdcId: 'bdc-section-b', name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-sco-b' },
+    }))
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-c', bdcId: 'bdc-section-c', name: 'Page C',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-sco-c' },
+    }))
+    const scenario = buildScenario(document, {})
+    const scenarioPagePaths = scenario.data?.pagePaths as Readonly<Record<string, string>> | undefined
+    const selection = {
+      slotName: ELCE_SCENARIO.CONTENT_SLOT,
+      view: { path: scenarioPagePaths?.['page-b'] ?? '' },
+      sceneKey: 'scene-page-b',
+    }
+    const sent: Readonly<{ sceneKey: string; event: Readonly<{ name: string; data?: unknown }> }>[] = []
+    const canExit = vi.fn(async () => false)
+    const canAccess = vi.fn(async () => true)
+    const readerContext: Record<string, unknown> = {
+      [ELCE_SCORM_CHAPTER_CONTEXT_KEY]: 'chapter-sco-b',
+      [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: {
+        'chapter-1': 'ITEM-a',
+        'chapter-sco-c': 'ITEM-c',
+      },
+      [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: {
+        saveReaderState: async () => undefined,
+        recordEvaluationResult: async () => undefined,
+        navigateToChapter: async () => true,
+      },
+    }
+    const context = {
+      event: { name: ELCE_EVENTS.PRESENTATION_REFRESH },
+      data: scenario.data ?? {},
+      context: readerContext,
+      state: {},
+      scenarioState: { active: selection, current: [selection], canAccess, canExit },
+      send: async (sceneKey: string, event: Readonly<{ name: string; data?: unknown }>) => {
+        sent.push({ sceneKey, event })
+      },
+    } as unknown as Parameters<typeof refreshPresentationAction>[0]
+
+    await refreshPresentationAction(context)
+
+    /** Reads one button's disabled state from the emitted presentation update. */
+    const attributes = (name: string): Readonly<{ disabled: boolean }> => {
+      const event = sent.find((entry) => entry.event.name === name)?.event
+      return (event?.data as { attr: Readonly<{ disabled: boolean }> }).attr
+    }
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).disabled).toBe(false)
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT).disabled).toBe(true)
+    expect(canExit).toHaveBeenCalledOnce()
+    expect(canExit).toHaveBeenCalledWith(
+      { path: scenarioPagePaths?.['page-b'] },
+      { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
+    )
+    expect(canAccess).not.toHaveBeenCalled()
+
+    canExit.mockResolvedValue(true)
+    readerContext[ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY] = { 'chapter-1': 'ITEM-a' }
+    sent.splice(0)
+    await refreshPresentationAction(context)
+
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).disabled).toBe(false)
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT).disabled).toBe(true)
+
+    readerContext[ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY] = {
+      'chapter-1': 'ITEM-a',
+      'chapter-sco-c': 'ITEM-c',
+    }
+    sent.splice(0)
+    await refreshPresentationAction(context)
+
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).disabled).toBe(false)
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT).disabled).toBe(false)
   })
 
   it('persists the chapter end before requesting the next manifest SCO', async () => {
@@ -857,5 +949,18 @@ describe('Elcé scenario builder', () => {
 
     expect(saved.at(-1)).toMatchObject([expect.any(Object), 'page-a'])
     expect(navigate).toHaveBeenCalledWith('chapter-sco-b')
+
+    const savedCount = saved.length
+    await navigateScormChapterAction({
+      ...context,
+      context: { ...context.context, finishedPages: [] },
+    } as unknown as Parameters<typeof navigateScormChapterAction>[0])
+    await navigateScormChapterAction({
+      ...context,
+      context: { ...context.context, [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: {} },
+    } as unknown as Parameters<typeof navigateScormChapterAction>[0])
+
+    expect(saved).toHaveLength(savedCount)
+    expect(navigate).toHaveBeenCalledTimes(1)
   })
 })

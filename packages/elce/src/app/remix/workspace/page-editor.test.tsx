@@ -269,7 +269,7 @@ describe('Remix production page editor', () => {
     expect((rendered.$(`#elce-card-image-fit-${directCardId}`) as HTMLSelectElement).value).toBe(CARD_IMAGE_FIT.COVER)
     expect((rendered.$(`#elce-card-image-position-${directCardId}`) as HTMLSelectElement).value).toBe(CAROUSEL_IMAGE_POSITION.RIGHT)
     expect((rendered.$(`#elce-carousel-playback-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
-    expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_TRANSITION.FADE)
+    expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_TRANSITION.SWIPE_RIGHT)
     const subscription = subscribeSpy.mock.results[0]?.value
     if (subscription === undefined) throw new Error('The Remix page editor did not subscribe to the actor.')
     const unsubscribeSpy = vi.spyOn(subscription, 'unsubscribe')
@@ -486,7 +486,7 @@ describe('Remix production page editor', () => {
     const playback = rendered.$(`#elce-carousel-playback-${carouselId}`) as HTMLSelectElement
     const transition = rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement
     expect(playback.value).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
-    expect(transition.value).toBe(CAROUSEL_TRANSITION.FADE)
+    expect(transition.value).toBe(CAROUSEL_TRANSITION.SWIPE_RIGHT)
 
     await actOnRemix(rendered, () => {
       playback.value = CAROUSEL_PLAYBACK_MODE.AUTOMATIC

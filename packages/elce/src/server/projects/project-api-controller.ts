@@ -69,7 +69,7 @@ export class ProjectApiController {
     return Response.json({ projects })
   }
 
-  /** Creates a project from the v6 document authored by the browser. */
+  /** Creates a project from the v7 document authored by the browser. */
   public async createProject(request: Request): Promise<Response> {
     const body = await readJsonBody(request)
     if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
@@ -181,7 +181,7 @@ async function readJsonBody(request: Request): Promise<JsonBody> {
   }
 }
 
-/** Rehydrates and validates a v6 document using the existing domain invariants. */
+/** Rehydrates and validates a v7 document using the existing domain invariants. */
 function parseDocument(value: unknown): ParsedDocument {
   if (!isDocumentData(value)) return { kind: 'invalid' }
 

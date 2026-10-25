@@ -15,6 +15,7 @@ import {
 } from '../../domain/commands/document-commands'
 import type {
   AppearanceProperty,
+  AppearanceTarget,
   AppearanceTargetForProperty,
   DocumentCommand,
   PagePlacement,
@@ -302,7 +303,16 @@ export class EditorActionsFacade {
     property: Property,
     value: NonNullable<AppearanceSettings[Property]>,
   ): void {
+    if (property === 'background') {
+      this.apply({ type: 'appearance.background.set', target, value: value as NonNullable<AppearanceSettings['background']> })
+      return
+    }
     this.apply({ type: 'appearance.property.set', target, property, value } as DocumentCommand)
+  }
+
+  /** Applies a suggested heading/body font combination as one document command. */
+  public setAppearanceTypography(target: AppearanceTarget, headingFontId: string, bodyFontId: string): void {
+    this.apply({ type: 'appearance.typography.set', target, headingFontId, bodyFontId })
   }
 
   /** Removes one explicit appearance value so it inherits from its context. */

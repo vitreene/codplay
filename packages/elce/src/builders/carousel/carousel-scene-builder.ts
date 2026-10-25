@@ -19,7 +19,7 @@ import {
 } from '../viewport-expansion/viewport-expansion-builder.ts'
 import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../scene-functions/carousel'
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
-import { appearanceClassNameForTarget } from '../scene-style/appearance-class-names.ts'
+import { appearanceClassNameForBdc } from '../scene-style/appearance-class-names.ts'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
@@ -135,7 +135,7 @@ export class ElceCarouselSceneBuilder {
       : appendClassToMarkupElement(
         card.markup,
         rootId,
-        appearanceClassNameForTarget(bdcId, input.appearanceClassNamesByTarget),
+        appearanceClassNameForBdc(bdcId, input.appearanceClassNamesByTarget),
       )
     const story: StoryDoc<string> = {
       id: storyId,
@@ -159,7 +159,7 @@ export class ElceCarouselSceneBuilder {
           capsuleClassName,
           parentIntroRef,
           parentOutroRef,
-          appearanceClassNameForTarget(bdcId, input.appearanceClassNamesByTarget),
+          appearanceClassNameForBdc(bdcId, input.appearanceClassNamesByTarget),
         )]),
         ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
@@ -243,7 +243,7 @@ function buildView(input: CarouselSceneBuildInput, bdc: Bdc, photoMediaRoot: boo
         bdc,
         `${input.pageId}-${input.bdcId}-graph-${bdc.id}`,
         `${input.pageId}:${input.bdcId}:card:${bdc.id}`,
-        appearanceClassNameForTarget(bdc.id, input.appearanceClassNamesByTarget),
+        appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget),
       )
     default:
       throw new Error(`Le BDC ${bdc.id} n’est pas une illustration prise en charge par Carousel.`)
