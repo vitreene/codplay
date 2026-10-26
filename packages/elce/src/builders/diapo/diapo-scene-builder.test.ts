@@ -12,7 +12,7 @@ import { createInitialDocument } from '../../domain/document/document-model'
 import type { RevelationTransitionDefaults } from '../../domain/document/document-types'
 import type { DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 import { buildDiapoScene as projectDiapoScene } from './diapo-scene-builder'
-import { pageAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
+import { appearanceScopeClassName, pageAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -142,7 +142,8 @@ describe('Elcé Diapo scene builder', () => {
       className: expect.stringContaining('elce-carousel-photo__media'),
       move: { target: `${page.id}-${carousel.id}-diapo-end-scrollport` },
     })
-    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media card-photo bdc ink-classic-text headings-crimson-text body-dm-sans density-normal`)
+    const cardAppearanceClass = appearanceScopeClassName(document, { kind: 'bdc', bdcId: cardBdcId })
+    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media card-photo ${cardAppearanceClass} bdc headings-crimson-text body-dm-sans density-normal`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:root" -->`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:media" -->`)
     expect(markup).not.toContain('<article')

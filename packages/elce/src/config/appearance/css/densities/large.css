@@ -1,18 +1,18 @@
 @scope (.elce-player-layout) {
-  .bdc.density-large { max-inline-size: min(100%, 81ch); }
-
-  @scope (.section.bdc) to (.section.bdc .bdc) {
-    :scope.density-large > div :is(p, li, blockquote) {
-      font-size: clamp(0.95rem, 0.6cqi + 0.85rem, 1.125rem);
-    }
+  .density-large.bdc :is(p, li, blockquote, dd, dt, figcaption, label, legend) {
+    font-size: max(0.95rem, 2.76cqi);
+  }
+  .density-large.bdc .elce-card__copy {
+    font-size: max(0.95rem, 2.76cqi);
   }
 
-  .density-large.page-flux { padding: 2.5rem; }
+  .density-large.page-flux.has-background { padding: 2.5rem; }
+  .density-large.page-flux:not(.has-background) { padding: 0; }
   .density-large.page-diapo { padding: 0; }
   .density-large.section.has-background { box-sizing: border-box; padding: clamp(1.5rem, 4vw, 3rem); }
   .density-large.card-text-short.has-background { padding: clamp(1.25rem, 5cqw, 3.75rem); }
   .density-large.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(1rem, 3.75cqw, 2.5rem); }
-  .density-large.card-image-caption.has-background > .elce-card-image-caption__caption { padding: 0.65rem 1rem; }
+  .density-large.card-image-caption.has-background > .elce-card__caption { padding: 0.65rem 1rem; }
   .density-large:is(.question, .evaluation-result).has-background { padding: clamp(1.5rem, 3.5vw, 2.25rem); }
   .density-large:is(
     .card-text-short,

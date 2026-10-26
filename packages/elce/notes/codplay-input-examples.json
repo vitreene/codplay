@@ -630,7 +630,7 @@
             "initial": {
               "tag": "p",
               "content": "Carte directe",
-              "className": "elce-card-text-image__overline",
+              "className": "elce-card__meta elce-card__overline",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline"
               }
@@ -642,7 +642,7 @@
             "initial": {
               "tag": "h2",
               "content": "Une Carte dans le flux",
-              "className": "elce-card-text-image__title",
+              "className": "elce-card__title",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title"
               }
@@ -654,7 +654,7 @@
             "initial": {
               "tag": "p",
               "content": "Le texte visible vient des persos projetés dans les zones du preset.",
-              "className": "elce-card-text-image__description",
+              "className": "elce-card__copy elce-card__description",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description"
               }
@@ -666,7 +666,7 @@
             "initial": {
               "tag": "p",
               "content": "Le média reste une ressource référencée.",
-              "className": "elce-card-text-image__message",
+              "className": "elce-card__copy elce-card__message",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message"
               }
@@ -678,7 +678,7 @@
             "initial": {
               "tag": "footer",
               "content": "Exemple de projection.",
-              "className": "elce-card-text-image__note",
+              "className": "elce-card__meta",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note"
               }
@@ -902,7 +902,7 @@
             "initial": {
               "tag": "p",
               "content": "Deuxième vue",
-              "className": "elce-card-text-short__overline",
+              "className": "elce-card__meta elce-card__overline",
               "move": {
                 "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline"
               }
@@ -914,7 +914,7 @@
             "initial": {
               "tag": "h2",
               "content": "Une Carte enfant",
-              "className": "elce-card-text-short__title",
+              "className": "elce-card__title",
               "move": {
                 "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title"
               }
@@ -926,7 +926,7 @@
             "initial": {
               "tag": "p",
               "content": "La Carte reste un BDC identifié, ordonné par le Carousel.",
-              "className": "elce-card-text-short__description",
+              "className": "elce-card__copy elce-card__description",
               "move": {
                 "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description"
               }
@@ -1260,7 +1260,7 @@
             "initial": {
               "tag": "p",
               "content": "Carte directe",
-              "className": "elce-card-text-image__overline",
+              "className": "elce-card__meta elce-card__overline",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline"
               }
@@ -1272,7 +1272,7 @@
             "initial": {
               "tag": "h2",
               "content": "Une Carte dans le flux",
-              "className": "elce-card-text-image__title",
+              "className": "elce-card__title",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title"
               }
@@ -1284,7 +1284,7 @@
             "initial": {
               "tag": "p",
               "content": "Le texte visible vient des persos projetés dans les zones du preset.",
-              "className": "elce-card-text-image__description",
+              "className": "elce-card__copy elce-card__description",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description"
               }
@@ -1296,7 +1296,7 @@
             "initial": {
               "tag": "p",
               "content": "Le média reste une ressource référencée.",
-              "className": "elce-card-text-image__message",
+              "className": "elce-card__copy elce-card__message",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message"
               }
@@ -1308,7 +1308,7 @@
             "initial": {
               "tag": "footer",
               "content": "Exemple de projection.",
-              "className": "elce-card-text-image__note",
+              "className": "elce-card__meta",
               "move": {
                 "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note"
               }
@@ -1532,7 +1532,7 @@
             "initial": {
               "tag": "p",
               "content": "Deuxième vue",
-              "className": "elce-card-text-short__overline",
+              "className": "elce-card__meta elce-card__overline",
               "move": {
                 "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline"
               }
@@ -1544,7 +1544,7 @@
             "initial": {
               "tag": "h2",
               "content": "Une Carte enfant",
-              "className": "elce-card-text-short__title",
+              "className": "elce-card__title",
               "move": {
                 "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title"
               }
@@ -1556,7 +1556,7 @@
             "initial": {
               "tag": "p",
               "content": "La Carte reste un BDC identifié, ordonné par le Carousel.",
-              "className": "elce-card-text-short__description",
+              "className": "elce-card__copy elce-card__description",
               "move": {
                 "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description"
               }
@@ -1894,7 +1894,7 @@
               "initial": {
                 "tag": "p",
                 "content": "Carte directe",
-                "className": "elce-card-text-image__overline",
+                "className": "elce-card__meta elce-card__overline",
                 "move": {
                   "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:overline"
                 }
@@ -1906,7 +1906,7 @@
               "initial": {
                 "tag": "h2",
                 "content": "Une Carte dans le flux",
-                "className": "elce-card-text-image__title",
+                "className": "elce-card__title",
                 "move": {
                   "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:title"
                 }
@@ -1918,7 +1918,7 @@
               "initial": {
                 "tag": "p",
                 "content": "Le texte visible vient des persos projetés dans les zones du preset.",
-                "className": "elce-card-text-image__description",
+                "className": "elce-card__copy elce-card__description",
                 "move": {
                   "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:description"
                 }
@@ -1930,7 +1930,7 @@
               "initial": {
                 "tag": "p",
                 "content": "Le média reste une ressource référencée.",
-                "className": "elce-card-text-image__message",
+                "className": "elce-card__copy elce-card__message",
                 "move": {
                   "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:message"
                 }
@@ -1942,7 +1942,7 @@
               "initial": {
                 "tag": "footer",
                 "content": "Exemple de projection.",
-                "className": "elce-card-text-image__note",
+                "className": "elce-card__meta",
                 "move": {
                   "target": "page-flux-example:bdc-card-direct-example:card:bdc-card-direct-example:note"
                 }
@@ -2648,7 +2648,7 @@
               "initial": {
                 "tag": "p",
                 "content": "Deuxième vue",
-                "className": "elce-card-text-short__overline",
+                "className": "elce-card__meta elce-card__overline",
                 "move": {
                   "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:overline"
                 }
@@ -2660,7 +2660,7 @@
               "initial": {
                 "tag": "h2",
                 "content": "Une Carte enfant",
-                "className": "elce-card-text-short__title",
+                "className": "elce-card__title",
                 "move": {
                   "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:title"
                 }
@@ -2672,7 +2672,7 @@
               "initial": {
                 "tag": "p",
                 "content": "La Carte reste un BDC identifié, ordonné par le Carousel.",
-                "className": "elce-card-text-short__description",
+                "className": "elce-card__copy elce-card__description",
                 "move": {
                   "target": "page-flux-example:bdc-carousel-example:card:bdc-carousel-text-example:description"
                 }
@@ -3102,7 +3102,7 @@
               "initial": {
                 "tag": "p",
                 "content": "Deuxième vue",
-                "className": "elce-card-text-short__overline",
+                "className": "elce-card__meta elce-card__overline",
                 "move": {
                   "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:overline"
                 }
@@ -3114,7 +3114,7 @@
               "initial": {
                 "tag": "h2",
                 "content": "Diapo Carousel",
-                "className": "elce-card-text-short__title",
+                "className": "elce-card__title",
                 "move": {
                   "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:title"
                 }
@@ -3126,7 +3126,7 @@
               "initial": {
                 "tag": "p",
                 "content": "Navigation et cartes sont projetées par la même story.",
-                "className": "elce-card-text-short__description",
+                "className": "elce-card__copy elce-card__description",
                 "move": {
                   "target": "page-diapo-example:bdc-diapo-carousel-example:card:bdc-diapo-text-example:description"
                 }

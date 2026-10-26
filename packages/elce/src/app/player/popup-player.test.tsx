@@ -6,6 +6,7 @@ import { render } from 'remix/ui/test'
 import { applyDocumentCommand, createDefaultPageCommand } from '../../domain/commands/document-commands'
 import { PAGE_LOCATION } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document/document-model'
+import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
 import { ElceProjectApiClient } from '../../infrastructure/project-api/project-api-client'
 import { PopupPlayer } from './popup-player'
 
@@ -59,6 +60,7 @@ describe('Remix popup reader synchronization controls', () => {
   afterEach(() => {
     cleanup?.()
     cleanup = undefined
+    vi.useRealTimers()
     if (openerDescriptor === undefined) delete (window as Window & { opener?: Window }).opener
     else Object.defineProperty(window, 'opener', openerDescriptor)
     openerDescriptor = undefined
@@ -75,6 +77,10 @@ describe('Remix popup reader synchronization controls', () => {
     />)
     cleanup = rendered.cleanup
     expect(rendered.$('#elce-popup-reader-test-controls-icon')?.classList.contains('lucide-list')).toBe(true)
+    expect(rendered.$('#elce-popup-reader-test-controls')?.getAttribute('aria-label'))
+      .toBe('Accéder au profil et aux réglages du test auteur')
+    expect(rendered.$('#elce-popup-reader-test-controls .elce-popup-reader__action-label')?.textContent)
+      .toBe('Test auteur')
 
     const originalDocument = createInitialDocument()
     await rendered.act(() => dispatchResponse(opener, {
@@ -136,10 +142,48 @@ describe('Remix popup reader synchronization controls', () => {
       )
     })
   })
+
+  it('explains that an orphaned preview must be reopened without loading a stale local document', async () => {
+    const loadDocument = vi.spyOn(IndexedDbDocumentStore.prototype, 'loadDocument')
+      .mockRejectedValueOnce(new Error('Version de document Elcé non supportée : 4'))
+    setOpener(null)
+    const rendered = render(<PopupPlayer
+      sessionId="orphaned-reader-session"
+      startPageId="page-a"
+    />)
+    cleanup = rendered.cleanup
+
+    await vi.waitFor(() => {
+      expect(rendered.$('#elce-popup-reader-error')?.textContent)
+        .toBe('La fenêtre de l’éditeur est fermée. Rouvre la lecture depuis l’éditeur.')
+    })
+    expect(loadDocument).not.toHaveBeenCalled()
+    expect(rendered.$('#elce-popup-reader')?.textContent).not.toContain('Chargement de la lecture…')
+  })
+
+  it('ends the loading state when the editor does not answer the initial snapshot request', async () => {
+    vi.useFakeTimers()
+    const loadDocument = vi.spyOn(IndexedDbDocumentStore.prototype, 'loadDocument')
+      .mockRejectedValueOnce(new Error('Version de document Elcé non supportée : 4'))
+    const opener = { closed: false, postMessage: vi.fn() } as unknown as Window
+    setOpener(opener)
+    const rendered = render(<PopupPlayer
+      sessionId="unanswered-reader-session"
+      startPageId="page-a"
+    />)
+    cleanup = rendered.cleanup
+
+    await rendered.act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+
+    expect(rendered.$('#elce-popup-reader-error')?.textContent)
+      .toBe('L’éditeur n’a pas transmis le document. Rouvre la prévisualisation depuis l’éditeur.')
+    expect(loadDocument).not.toHaveBeenCalled()
+    expect(rendered.$('#elce-popup-reader')?.textContent).not.toContain('Chargement de la lecture…')
+  })
 })
 
 /** Replaces the popup opener so message responses can be sent through the browser event path. */
-function setOpener(opener: Window): void {
+function setOpener(opener: Window | null): void {
   openerDescriptor = Object.getOwnPropertyDescriptor(window, 'opener')
   Object.defineProperty(window, 'opener', { configurable: true, value: opener })
 }

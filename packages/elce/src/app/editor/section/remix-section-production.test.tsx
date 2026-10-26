@@ -188,7 +188,7 @@ describe('Remix production Section editor', () => {
       ),
     })
     expect(scene.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-article')?.initial).toMatchObject({
-      flowReservations: [{ partId: `page-a:${anchorCard.id}:anchor`, blockSize: 'calc(65.88888889% + 1rem + 1rem)' }],
+      flowReservations: [{ partId: `page-a:${anchorCard.id}:anchor`, blockSize: 'calc(65.88888889% + 2rem + 2rem)' }],
     })
     expect(editor.view.dom.querySelector('.elce-anchor-media-preview')?.getAttribute('src')).toMatch(/^blob:/)
     expect(getEditor(rendered.$('.ProseMirror'))).toBe(editor)

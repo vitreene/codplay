@@ -27,6 +27,9 @@ Carousel, selon les contextes autorisés. Une Carte porte sa référence média 
 son rendu image ou vidéo vient du MIME de cette ressource. Les Cartes peuvent
 être des BDC directs de la page ou des enfants d’une Section ou d’un Carousel.
 Une Carte ancrée appartient à sa Section et n’est pas un BDC direct de page.
+Dans le Flux, les BDC de premier niveau sont séparés par un `gap` de `2.5rem`.
+Ce rythme extérieur ne change pas les espacements typographiques à l’intérieur
+des BDC.
 Une source média optionnelle peut être fournie séparément par `mediaSources` ;
 le builder projette la Carte par son preset et monte son perso média dans la
 cible correspondante. Dans le markup de layout, les points d’insertion CodPlay
@@ -109,7 +112,9 @@ Les racines de Graphe ancré gardent
 - le scrollport n’impose pas de snap CSS. Le défilement des BDC reste natif et
   libre, notamment lorsqu’un BDC dépasse la hauteur du viewport. Aucun
   `scroll-snap-type`, `scroll-snap-align` ou gestionnaire de snap JavaScript
-  n’est ajouté au Flux ;
+  n’est ajouté au Flux. Le scrollport contient aussi le chaînage vertical aux
+  limites avec `overscroll-behavior-y: contain` : atteindre le début ou le bas
+  du contenu ne fait pas défiler le document qui héberge le player ;
 - un perso marqueur observant le scrollport et émettant l’événement public
   `elce:page:finished` avec l’identifiant de page ; la déclaration demande aussi
   `initial: 'enter'` pour qu’un repère déjà visible signale immédiatement la
@@ -253,9 +258,14 @@ Elcé.
   tandis que le média enfant reçoit l’opacité et la translation Capsule.
 - Le 15 octobre 2026, le style Flux a été dépouillé des déclarations de snap.
   Les 41 tests de composition, le typecheck et le build passent. La vérification
-  navigateur d’un BDC plus haut que le viewport reste ouverte dans le
-  [plan de construction](../plan/2026-10-01-elce-construction-plan.md) ; elle
-  doit confirmer l’absence de recul signalé par l’auteur.
+  navigateur d’un BDC plus haut que le viewport restait ouverte dans le
+  [plan de construction](../plan/2026-10-01-elce-construction-plan.md).
+- Brave DevTools, le 26 octobre 2026, a reproduit puis corrigé le chaînage de
+  fin de page dans la preview : PageDown fait défiler un long scrollport Flux ;
+  une fois en bas, un autre PageDown ne déplace ni le scrollport ni le document
+  parent, et le cadre de lecture reste en place. Le repère de fin active
+  « Suivant ». `elce-player-composition.test.ts` vérifie la règle du scrollport ;
+  ses 47 tests, le typecheck et le build passent.
 
 Le 26 octobre 2026, après résolution de fusion, les 481 tests Elcé dans
 73 fichiers passent, ainsi que le typecheck et le build. Les tests Flux et

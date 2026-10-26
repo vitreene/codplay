@@ -198,6 +198,22 @@ describe('Statistical Graph scene builder', () => {
     }
   })
 
+  it('keeps the fixed graph palette in bars, lines, sectors and their legend', () => {
+    const colors = ['#326c64', '#c27b3a', '#5376a2', '#a64f4f', '#7a6599', '#7f8f45', '#4c8491', '#bd6688']
+
+    for (const rendering of [STATISTICAL_GRAPH_RENDERING.BAR, STATISTICAL_GRAPH_RENDERING.LINE, STATISTICAL_GRAPH_RENDERING.PIE]) {
+      const build = builder.buildContent(createGraph(rendering), 'statistical-graph-above-text', `palette-${rendering}`)
+
+      for (const [index, color] of colors.entries()) {
+        expect(build.styleSheet).toContain(`fill: ${color};`)
+        expect(build.styleSheet).toContain(`stroke: ${color};`)
+        expect(build.styleSheet).toContain(`background-color: ${color};`)
+        expect(build.styleSheet).toContain(`elce-statistical-graph__color--${index}`)
+        expect(build.styleSheet).toContain(`elce-statistical-graph__legend-mark--${index}`)
+      }
+    }
+  })
+
   it('does not connect a line across a missing data cell', () => {
     const content = createGraph(STATISTICAL_GRAPH_RENDERING.LINE, {
       categories: [

@@ -26,11 +26,6 @@ export interface AppearancePalette {
   readonly brightness: 'light' | 'dark'
   readonly colors: Readonly<Record<AppearanceColorRole, string>>
   readonly cssFile: string
-  readonly classes: Readonly<{
-    background: Readonly<Record<AppearanceColorRole, string>>
-    text: Readonly<Record<AppearanceColorRole, string>>
-    contrast: Readonly<Record<AppearanceColorRole, string>>
-  }>
 }
 
 /** Identifies one Google Font family and its source classes. */

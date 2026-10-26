@@ -20,6 +20,13 @@ describe('ElceCardPresetBuilder', () => {
     ].sort())
   })
 
+  it('reuses the same text role classes across both text Card layouts', () => {
+    const shortText = CARD_PRESETS[DEFAULT_PRESET_ID.TEXT_SHORT].zones
+    const imageText = CARD_PRESETS[DEFAULT_PRESET_ID.TEXT_IMAGE].zones
+
+    expect(shortText).toEqual(imageText.filter(({ content }) => content === 'text'))
+  })
+
   it('resolves every fixed preset to unique markup with identified elements and comment insertion anchors', () => {
     for (const preset of Object.values(CARD_PRESETS)) {
       /** Supplies concrete branch markup for the dynamic Result preset slot. */

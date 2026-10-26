@@ -8,13 +8,31 @@
 
   .bdc {
     box-sizing: border-box;
-    max-inline-size: min(100%, 70ch);
+    max-inline-size: min(100%, 55rem);
     margin-inline: auto;
+    container-type: inline-size;
   }
 
-  @scope (.section.bdc) to (.section.bdc .bdc) {
-    :scope > div :is(p, li, blockquote) {
-      font-size: clamp(0.9rem, 0.6cqi + 0.7rem, 1rem);
-    }
+  /* Keep the reading measure stable as the BDC grows, down to the readable floor. */
+  .bdc :is(p, li, blockquote, dd, dt, figcaption, label, legend) {
+    font-size: max(0.9rem, 2.76cqi);
+  }
+
+  /* Each minimum is multiplied exactly by 1.41; headings keep scaling with the BDC. */
+  .bdc h1 { font-size: max(1.58625rem, 5.1606cqi); }
+  .bdc h2 { font-size: max(1.41rem, 4.3005cqi); }
+  .bdc h3 { font-size: max(1.23375rem, 3.8775cqi); }
+  .bdc h4 { font-size: max(1.145625rem, 3.525cqi); }
+  .bdc h5 { font-size: max(1.0575rem, 3.102cqi); }
+  .bdc h6 { font-size: max(0.969375rem, 2.82cqi); }
+
+  .bdc :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: 1.25em 0.5em;
+    line-height: 1.2;
+  }
+
+  /* A heading that starts its content block does not need an upper gap. */
+  .bdc :is(h1, h2, h3, h4, h5, h6):first-child {
+    margin-block-start: 0;
   }
 }

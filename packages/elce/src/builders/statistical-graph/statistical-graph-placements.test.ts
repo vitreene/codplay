@@ -42,6 +42,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(fluxMarkup).toContain('data-part="page-a:graph-flux:statistical-graph:visual"')
     expect(fluxMarkup).not.toContain('<svg')
     expect(fluxVisualMarkup).toContain('<svg')
+    expect(fluxBuild.styleSheets.join('\n')).toContain('elce-statistical-graph__legend-mark--0 { background-color: #326c64; }')
     expect(compileScene(fluxBuild.sceneDoc).ok).toBe(true)
 
     const diapoPage = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, 'Graphe', PAGE_TYPE.DIAPO)
@@ -59,6 +60,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(diapoMarkup).toContain(`data-part="${diapoPage.pageId}:graph-diapo:statistical-graph:visual"`)
     expect(diapoMarkup).not.toContain('<svg')
     expect(diapoVisualMarkup).toContain('<svg')
+    expect(diapoBuild.styleSheets.join('\n')).toContain('elce-statistical-graph__legend-mark--0 { background-color: #326c64; }')
     expect(compileScene(diapoBuild.sceneDoc).ok).toBe(true)
   })
 
@@ -89,6 +91,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(graphMarkup).not.toContain('<svg')
     expect(graphViewClassName).toContain('appearance-test')
     expect(graphVisualMarkup).toContain('<svg')
+    expect(build.styleSheets.join('\n')).toContain('elce-statistical-graph__legend-mark--0 { background-color: #326c64; }')
     expect(graphMarkup).toContain(`<!-- data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:root" -->`)
     expect(completion?.emit?.observe).toMatchObject({ root: `${page.id}-${pageCommand.bdcId}-diapo-end-scrollport` })
     expect(compileScene(build.sceneDoc).ok).toBe(true)
@@ -140,7 +143,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     expect(document.bdcs.find((bdc) => bdc.id === 'graph-anchor')?.parentBdcId).toBe('bdc-section-1')
     expect(articleMarkup).toContain('class="elce-flow-slot elce-flow-slot-')
     expect(article?.initial).toMatchObject({
-      flowReservations: [{ partId, blockSize: 'calc(56.25% + 1rem + 1rem)' }],
+      flowReservations: [{ partId, blockSize: 'calc(56.25% + 2rem + 2rem)' }],
     })
     expect(graphRoot?.initial).toMatchObject({
       move: { target: partId },
@@ -196,7 +199,7 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     const graphRules = build.styleSheets.join('\n')
 
     expect(article?.initial).toMatchObject({
-      flowReservations: [{ partId, blockSize: 'calc(100% + 1rem + 1rem)' }],
+      flowReservations: [{ partId, blockSize: 'calc(100% + 2rem + 2rem)' }],
     })
     expect(graphStyle).not.toHaveProperty('height')
     expect(build.styleSheets.join('\n')).toContain('z-index: 1;')

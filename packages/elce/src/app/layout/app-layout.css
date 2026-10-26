@@ -1545,9 +1545,6 @@ body {
   flex: 1;
   min-height: 28rem;
   overflow: hidden;
-  background: #e8e4db;
-  border: 1px solid #d9d4c9;
-  border-radius: 0.35rem;
 }
 
 .elce-player-layout {
@@ -1931,28 +1928,23 @@ body {
   overflow: hidden;
 }
 
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__title,
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__title {
+.elce-editor-content .elce-anchor-card-preview .elce-card__title {
   font-size: 1rem;
   line-height: 1.15;
 }
 
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__overline,
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__note,
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__overline,
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__note {
+.elce-editor-content .elce-anchor-card-preview .elce-card__meta {
   color: #647670;
   font-size: 0.7rem;
 }
 
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__description,
-.elce-editor-content .elce-anchor-card-preview .elce-card-image-caption__caption {
+.elce-editor-content .elce-anchor-card-preview .elce-card__description,
+.elce-editor-content .elce-anchor-card-preview .elce-card__caption {
   color: #52645f;
   font-size: 0.75rem;
 }
 
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-short__message,
-.elce-editor-content .elce-anchor-card-preview .elce-card-text-image__message {
+.elce-editor-content .elce-anchor-card-preview .elce-card__message {
   font-size: 0.8rem;
   line-height: 1.25;
 }

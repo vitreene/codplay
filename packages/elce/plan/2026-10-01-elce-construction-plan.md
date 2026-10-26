@@ -61,7 +61,7 @@ dans les notes Style.
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Disposition actuelle :** « Prévisualiser » se trouve dans la barre de commandes au-dessus de la zone centrale, reste visible à toutes les largeurs et ouvre la popup active du POC ; le test du workspace vérifie son emplacement et son action. L’accès à la modale intégrée reste désactivé (tranche 9 ; comportement de la popup dans la [spécification de preview](../specs/player-preview-spec.md)). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le bandeau des réglages a reçu une correction CSS le 9 octobre : libellés au-dessus des champs, valeurs non compressées, chevrons reculés et défilement horizontal si nécessaire ; la durée par vue porte le libellé « Durée (sec.) ». Le contrôle visuel Brave reste en attente. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
-| 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
+| 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, typecheck, tests et build vérifiés avec Brave. Correction de la preview orpheline vérifiée le 26 octobre : elle ne charge plus le document local par défaut, termine l’état de chargement et demande de rouvrir depuis l’éditeur ; une nouvelle preview rend le document v7. Le même jour, Brave a vérifié la récupération après une session restée sans instantané malgré un éditeur ouvert : recliquer sur « Prévisualiser » réutilise la popup et charge la page active avec une nouvelle session. Le 26 octobre, le libellé « Test auteur » a aussi été réintégré à l’adaptation responsive : masqué sur mobile, visible sur ordinateur, sans débordement. La suite Elcé passe 483 tests sur 484 ; le test SQLite restant est bloqué par `listen EPERM`. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
 **Éditeur central de page — appliqué et vérifié le 22 octobre 2026.** La
 rangée d’actions de création précède maintenant les titres ; le titre de page
@@ -360,13 +360,12 @@ laissé intact. La validation visuelle native reste donc à faire.
 
 ### Snap des BDC Flux — retrait demandé le 15 octobre 2026
 
-**Statut : CSS retiré et vérifié automatiquement le 15 octobre 2026 ;
-confirmation navigateur par l’auteur en attente.** Lors de ses vérifications,
-l’auteur a reproduit un recul du scroll quand un BDC dépasse la hauteur du
-viewport, ce qui empêche de lire le document. Cette observation invalide la
-précédente acceptation visuelle. La règle `scroll-snap-type: y proximity`
-laisse le navigateur décider quand déclencher l’alignement ; CSS n’expose pas
-de seuil réglable par l’auteur
+**Statut : appliqué et vérifié dans Brave le 26 octobre 2026.** Lors de ses
+vérifications, l’auteur a reproduit un recul du scroll quand un BDC dépasse la
+hauteur du viewport, ce qui empêche de lire le document. Cette observation
+invalide la précédente acceptation visuelle. La règle
+`scroll-snap-type: y proximity` laisse le navigateur décider quand déclencher
+l’alignement ; CSS n’expose pas de seuil réglable par l’auteur
 ([CSS Scroll Snap, §4.1.2](https://www.w3.org/TR/css-scroll-snap-1/#scroll-snap-type)).
 
 - Décision appliquée : retirer le snap du scrollport Flux et les alignements
@@ -374,9 +373,17 @@ de seuil réglable par l’auteur
   nouveau paramètre n’est ajouté.
 - Le style Flux ne déclare plus `scroll-snap-type` ni `scroll-snap-align`. Les
   41 tests de composition, le typecheck et le build passent.
-- Confirmation navigateur restante : parcourir un BDC plus haut que le viewport
-  et vérifier l’absence de recul, puis vérifier que la navigation et le repère
-  de fin de page fonctionnent toujours.
+- La régression distincte reproduite dans Brave le 26 octobre venait du
+  chaînage natif : une commande PageDown au bas du `.elce-flux-scrollport`
+  défilait le document de la fenêtre. La décision utilisateur complète le
+  contrat : atteindre la limite du scrollport ne déclenche pas le défilement de
+  la preview parente. `overscroll-behavior-y: contain` est appliqué au
+  scrollport Flux existant ; son défilement natif intérieur est préservé, sans
+  snap ni gestionnaire JavaScript.
+- Brave a vérifié PageDown dans un contenu long, l’arrêt du document parent à la
+  limite, le maintien du cadre de preview et l’activation de « Suivant » par le
+  repère de fin. Le test de composition ciblé (47 tests), le typecheck et le
+  build passent.
 
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
 contrat. Un échec de preuve garde la tranche « En cours » et bloque son
@@ -541,6 +548,29 @@ Les SVG Lucide de l’interface utilisent `.elce-ui-icon` avec `block-size: 1.4c
 Safari MCP, le 25 octobre 2026, avait vérifié la prise en charge de `1cap` et l’absence de taille fixe sur les 78 icônes d’éditeur présentes. La règle `1.4cap` reste à vérifier visuellement ; les feuilles du popup utilisent la même règle.
 ### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
 
+- **Régression confirmée le 26 octobre 2026 — En cours ; décision utilisateur
+  appliquée dans la scène, acceptation navigateur restante.** Brave MCP, popup
+  locale de « Démo 5 — comparaison Elcé », à
+  1034 × 892 : le sommaire est visible, mais son unique
+  `.elce-player-menu-drawer` conserve `aria-hidden="true"`, `inert` et
+  `data-open="false"`. Les boutons « Distinguer les plans » et « Suivre le
+  regard » ne sont pas désactivés ; `elementFromPoint()` à leur centre cible
+  leur ancêtre, pas le bouton. La console ne signale aucune erreur. Le défaut
+  constaté concerne donc l'interaction sur ordinateur, au-delà de
+  l'incohérence ARIA 800/801 déjà suivie.
+  `elce-player-style.ts` force l'affichage au-dessus de 800 px ;
+  `summary-scene-builder.ts` déclarait aussi `inert` dans son HTML et ses actions
+  d'ouverture/fermeture. Sur instruction utilisateur, ces déclarations ont été
+  retirées ; le gestionnaire responsive conserve `inert` seulement pour le
+  tiroir mobile fermé. Le moment exact où il a été réappliqué dans la popup
+  observée reste à établir.
+  Les tests de composition consultés appellent directement `.click()` et ne
+  couvrent pas l'atteignabilité réelle des boutons dans le navigateur.
+  Acceptation restante :
+  clic réel sur une page autorisée dès le démarrage sur ordinateur, après
+  navigation et synchronisation ; parcours mobile ouvert/fermé, transitions
+  800/801 dans les deux sens, clavier et focus ; puis tests ciblés, typecheck,
+  suite Elcé, build et mise à jour de la spécification après vérification.
 - Décision validée le 5 octobre 2026 : à 800 px et en dessous, une icône ouvre
   un tiroir latéral gauche superposé au contenu ; au-dessus, le sommaire reste
   dans la colonne latérale. Le tiroir se ferme par son icône de fermeture, un
@@ -594,12 +624,13 @@ Safari MCP, le 25 octobre 2026, avait vérifié la prise en charge de `1cap` et 
   HTML comme canvas. L’incohérence ARIA constatée au passage de 800 à 801 px
   reste consignée comme travail différé et ne bloque pas la tranche actuelle.
   Ne pas ajouter de capacité de breakpoint au travail de focus.
-- Point à résoudre avant l’intégration : `bindMenuDrawer()` retire actuellement
-  `aria-hidden` et `inert` au menu visible sur ordinateur. Sans lui, les valeurs
-  initiales du perso `layout` laissent ce menu visible mais inerte. La scène ne
-  peut pas distinguer les breakpoints avec les capacités courantes. Définir
-  l’état accessible de cette navigation dans la version présente, ou différer
-  son intégration ; ne pas réintroduire un adaptateur DOM.
+- Précision utilisateur du 26 octobre 2026, appliquée : la scène ne déclare plus
+  `inert` dans son HTML ni dans ses actions d’ouverture et de fermeture. Le
+  gestionnaire existant l’ajoute seulement au tiroir mobile fermé et le retire
+  sur ordinateur. La popup observée gardait malgré tout `inert` sur ordinateur ;
+  le parcours navigateur doit confirmer qu’elle reste désormais interactive
+  au démarrage, après navigation et après synchronisation. La coordination
+  générale du focus responsive reste à accepter avant de la modifier.
 - Après correction, rejouer le typecheck, la suite Elcé, le build et le
   parcours Brave sur les tailles concernées par le transfert de focus.
   Confirmer l’animation, Échap, le clic extérieur, la sélection d’une page et

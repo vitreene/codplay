@@ -1,21 +1,18 @@
 import {
   APPEARANCE_READING_CSS_FILE,
   APPEARANCE_FONT_DEFINITIONS,
-  APPEARANCE_PALETTE_DEFINITIONS,
 } from '../../config/appearance/appearance-definitions.ts'
 import { getAppearanceDensity } from '../../config/appearance/appearance-config'
 import type { AppearanceDensity } from '../../config/appearance/appearance-types'
 
 const APPEARANCE_CSS_DIRECTORY = 'config/appearance/css'
 
-/** Returns each CSS source referenced by the resolved content settings once. */
+/** Returns the font, reading and density CSS sources used by resolved settings. */
 export function appearanceThemeCssAssetPaths(
-  paletteIds: Iterable<string>,
   fontIds: Iterable<string>,
   densities: Iterable<AppearanceDensity>,
 ): readonly string[] {
   return unique([
-    ...unique(paletteIds).map((id) => requireCssFile(APPEARANCE_PALETTE_DEFINITIONS, id, 'Palette')),
     ...unique(fontIds).map((id) => requireCssFile(APPEARANCE_FONT_DEFINITIONS, id, 'Police')),
     APPEARANCE_READING_CSS_FILE,
     ...unique(densities).map((density) => {

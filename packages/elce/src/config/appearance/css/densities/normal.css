@@ -1,10 +1,11 @@
 @scope (.elce-player-layout) {
-  .density-normal.page-flux { padding: 2rem; }
+  .density-normal.page-flux.has-background { padding: 2rem; }
+  .density-normal.page-flux:not(.has-background) { padding: 0; }
   .density-normal.page-diapo { padding: 0; }
   .density-normal.section.has-background { box-sizing: border-box; padding: clamp(1rem, 3vw, 2rem); }
   .density-normal.card-text-short.has-background { padding: clamp(1rem, 4cqw, 3rem); }
   .density-normal.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(0.75rem, 3cqw, 2rem); }
-  .density-normal.card-image-caption.has-background > .elce-card-image-caption__caption { padding: 0.45rem 0.75rem; }
+  .density-normal.card-image-caption.has-background > .elce-card__caption { padding: 0.45rem 0.75rem; }
   .density-normal:is(.question, .evaluation-result).has-background { padding: clamp(1rem, 3vw, 1.6rem); }
   .density-normal:is(
     .card-text-short,

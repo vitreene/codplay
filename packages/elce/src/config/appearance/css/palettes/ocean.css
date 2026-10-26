@@ -1,43 +1,7 @@
-@scope (.elce-player-layout) {
-  .bg-ocean-background:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-ocean-background.card-text-image > .elce-carousel-text-image__content,
-  .bg-ocean-background.card-image-caption > .elce-card-image-caption__caption { background-color: #f3f8fc; }
-  .bg-ocean-surface:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-ocean-surface.card-text-image > .elce-carousel-text-image__content,
-  .bg-ocean-surface.card-image-caption > .elce-card-image-caption__caption { background-color: #ffffff; }
-  .bg-ocean-text:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-ocean-text.card-text-image > .elce-carousel-text-image__content,
-  .bg-ocean-text.card-image-caption > .elce-card-image-caption__caption { background-color: #18354a; }
-  .bg-ocean-muted:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-ocean-muted.card-text-image > .elce-carousel-text-image__content,
-  .bg-ocean-muted.card-image-caption > .elce-card-image-caption__caption { background-color: #506c80; }
-  .bg-ocean-accent:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-ocean-accent.card-text-image > .elce-carousel-text-image__content,
-  .bg-ocean-accent.card-image-caption > .elce-card-image-caption__caption { background-color: #176b9b; }
-  .bg-ocean-border:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-ocean-border.card-text-image > .elce-carousel-text-image__content,
-  .bg-ocean-border.card-image-caption > .elce-card-image-caption__caption { background-color: #c8dce9; }
-  .ink-ocean-background { color: #f3f8fc; }
-  .ink-ocean-surface { color: #ffffff; }
-  .ink-ocean-text { color: #18354a; }
-  .ink-ocean-muted { color: #506c80; }
-  .ink-ocean-accent { color: #176b9b; }
-  .ink-ocean-border { color: #c8dce9; }
-
-  @scope (.ink-ocean-background, .ink-ocean-surface, .ink-ocean-text, .ink-ocean-muted, .ink-ocean-accent, .ink-ocean-border) {
-    :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: #506c80; }
-  }
-
-  @supports (color: contrast-color(#ffffff)) {
-    .contrast-ocean-background:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#f3f8fc); }
-    .contrast-ocean-surface:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#ffffff); }
-    .contrast-ocean-text:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#18354a); }
-    .contrast-ocean-muted:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#506c80); }
-    .contrast-ocean-accent:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#176b9b); }
-    .contrast-ocean-border:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#c8dce9); }
-
-    @scope (.contrast-ocean-background, .contrast-ocean-surface, .contrast-ocean-text, .contrast-ocean-muted, .contrast-ocean-accent, .contrast-ocean-border) {
-      :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: inherit; }
-    }
-  }
-}
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-ocean-background { background-color: #f3f8fc; }
+.bg-ocean-surface { background-color: #ffffff; }
+.bg-ocean-text { background-color: #18354a; }
+.bg-ocean-muted { background-color: #506c80; }
+.bg-ocean-accent { background-color: #176b9b; }
+.bg-ocean-border { background-color: #c8dce9; }

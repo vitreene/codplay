@@ -1,43 +1,7 @@
-@scope (.elce-player-layout) {
-  .bg-plum-background:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-plum-background.card-text-image > .elce-carousel-text-image__content,
-  .bg-plum-background.card-image-caption > .elce-card-image-caption__caption { background-color: #241e2b; }
-  .bg-plum-surface:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-plum-surface.card-text-image > .elce-carousel-text-image__content,
-  .bg-plum-surface.card-image-caption > .elce-card-image-caption__caption { background-color: #352b40; }
-  .bg-plum-text:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-plum-text.card-text-image > .elce-carousel-text-image__content,
-  .bg-plum-text.card-image-caption > .elce-card-image-caption__caption { background-color: #f8f1fc; }
-  .bg-plum-muted:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-plum-muted.card-text-image > .elce-carousel-text-image__content,
-  .bg-plum-muted.card-image-caption > .elce-card-image-caption__caption { background-color: #c4b5ce; }
-  .bg-plum-accent:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-plum-accent.card-text-image > .elce-carousel-text-image__content,
-  .bg-plum-accent.card-image-caption > .elce-card-image-caption__caption { background-color: #d6a5ed; }
-  .bg-plum-border:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
-  .bg-plum-border.card-text-image > .elce-carousel-text-image__content,
-  .bg-plum-border.card-image-caption > .elce-card-image-caption__caption { background-color: #5f4c6e; }
-  .ink-plum-background { color: #241e2b; }
-  .ink-plum-surface { color: #352b40; }
-  .ink-plum-text { color: #f8f1fc; }
-  .ink-plum-muted { color: #c4b5ce; }
-  .ink-plum-accent { color: #d6a5ed; }
-  .ink-plum-border { color: #5f4c6e; }
-
-  @scope (.ink-plum-background, .ink-plum-surface, .ink-plum-text, .ink-plum-muted, .ink-plum-accent, .ink-plum-border) {
-    :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: #c4b5ce; }
-  }
-
-  @supports (color: contrast-color(#ffffff)) {
-    .contrast-plum-background:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#241e2b); }
-    .contrast-plum-surface:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#352b40); }
-    .contrast-plum-text:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#f8f1fc); }
-    .contrast-plum-muted:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#c4b5ce); }
-    .contrast-plum-accent:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#d6a5ed); }
-    .contrast-plum-border:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#5f4c6e); }
-
-    @scope (.contrast-plum-background, .contrast-plum-surface, .contrast-plum-text, .contrast-plum-muted, .contrast-plum-accent, .contrast-plum-border) {
-      :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: inherit; }
-    }
-  }
-}
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-plum-background { background-color: #241e2b; }
+.bg-plum-surface { background-color: #352b40; }
+.bg-plum-text { background-color: #f8f1fc; }
+.bg-plum-muted { background-color: #c4b5ce; }
+.bg-plum-accent { background-color: #d6a5ed; }
+.bg-plum-border { background-color: #5f4c6e; }

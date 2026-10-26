@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../config/document-config'
 import {
-  customColorClassName,
+  appearanceScopeClassName,
   pageAppearanceClassNames,
 } from '../builders/scene-style/appearance-class-names.ts'
 import { applyDocumentCommand } from '../domain/commands/document-commands'
@@ -13,6 +13,7 @@ import {
   appearanceThemeCssAssetPathsForDocument,
   createDocumentAppearanceStyleSheet,
 } from './appearance-scene-style-sheet'
+import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
 
 describe('appearance CSS assets for the document', () => {
   it('selects only the authored files used by resolved appearance values', () => {
@@ -20,7 +21,6 @@ describe('appearance CSS assets for the document', () => {
     const assetPaths = appearanceThemeCssAssetPathsForDocument(document)
 
     expect(assetPaths).toEqual([
-      'palettes/classic.css',
       'typography/crimson-text.css',
       'typography/dm-sans.css',
       'typography/reading.css',
@@ -34,9 +34,9 @@ describe('appearance CSS assets for the document', () => {
     const packageStyleSheet = createDocumentAppearanceStyleSheet(document, './')
 
     expect(previewStyleSheet).not.toContain('@import')
-    expect(previewStyleSheet).not.toContain('--elce-appearance-')
-    expect(packageStyleSheet.startsWith('@import "./appearance/css/palettes/classic.css";')).toBe(true)
-    expect(packageStyleSheet).toContain('@import "./appearance/css/palettes/classic.css";')
+    expect(previewStyleSheet).toContain('--elce-appearance-background: #fffdf8;')
+    expect(packageStyleSheet.startsWith('@import "./appearance/css/typography/crimson-text.css";')).toBe(true)
+    expect(packageStyleSheet).not.toContain('/palettes/')
     expect(packageStyleSheet).toContain('@import "./appearance/css/typography/crimson-text.css";')
     expect(packageStyleSheet).toContain('@import "./appearance/css/typography/dm-sans.css";')
     expect(packageStyleSheet).toContain('@import "./appearance/css/typography/reading.css";')
@@ -57,6 +57,33 @@ describe('appearance CSS assets for the document', () => {
     expect(largeDensity).toContain('padding: clamp(1rem, 3.75cqw, 2.5rem)')
   })
 
+  it('keeps normal padding inside Flux BDC borders without a background', async () => {
+    const noneDensity = await readFile(new URL('../config/appearance/css/densities/none.css', import.meta.url), 'utf8')
+
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.page-flux \.question:not\(\.has-background\),\s*\.page-flux \.carousel\s*\{[^}]*padding: clamp\(1rem, 3vw, 1\.6rem\);/s)
+    expect(noneDensity).not.toMatch(/\.density-none\.question\s*\{[^}]*padding:\s*0/)
+    expect(noneDensity).toContain('.density-none.evaluation-result { padding: 0; }')
+  })
+
+  it('keeps heading rhythm distinct from paragraph spacing', async () => {
+    const readingCss = await readFile(new URL('../config/appearance/css/typography/reading.css', import.meta.url), 'utf8')
+    const familyCss = await readFile(new URL('../config/appearance/css/typography/dm-sans.css', import.meta.url), 'utf8')
+
+    expect(readingCss).toContain('margin-block: 1.25em 0.5em')
+    expect(readingCss).toContain('line-height: 1.2')
+    expect(readingCss).toContain(':is(h1, h2, h3, h4, h5, h6):first-child')
+    expect(readingCss).toContain('margin-block-start: 0')
+    expect(familyCss).toContain('line-height: 1.45')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('.elce-card--text-short > .elce-card__overline:has(+ .elce-card__title)')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('.elce-card--text-image > .elce-carousel-text-image__content > .elce-card__overline:has(+ .elce-card__title)')
+    expect(ELCE_PLAYER_STYLE_SHEET).not.toMatch(/\.elce-card--text-short\s*\{[^}]*\bgap:/s)
+    expect(ELCE_PLAYER_STYLE_SHEET).not.toMatch(/\.elce-card--text-image > \.elce-carousel-text-image__content\s*\{[^}]*\bgap:/s)
+  })
+
+  it('doubles the space between direct BDCs in a Flux page', () => {
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-flux-article\s*\{[^}]*\bgap:\s*2\.5rem;/s)
+  })
+
   it('applies one reading measure to every BDC root', async () => {
     const readingCss = await readFile(new URL('../config/appearance/css/typography/reading.css', import.meta.url), 'utf8')
     const compactDensity = await readFile(new URL('../config/appearance/css/densities/compact.css', import.meta.url), 'utf8')
@@ -67,17 +94,17 @@ describe('appearance CSS assets for the document', () => {
     if (page === undefined) throw new Error('The appearance fixture has no page.')
 
     expect(readingCss).toContain('  .bdc {')
-    expect(readingCss).toContain('max-inline-size: min(100%, 70ch)')
+    expect(readingCss).toContain('max-inline-size: min(100%, 55rem)')
     expect(readingCss).toContain('container-type: inline-size')
-    expect(readingCss).toContain('@scope (.section.bdc) to (.section.bdc .bdc)')
-    expect(readingCss).toContain('font-size: clamp(0.9rem, 0.6cqi + 0.7rem, 1rem)')
+    expect(readingCss).toContain('font-size: max(0.9rem, 2.76cqi)')
+    expect(readingCss).toContain('font-size: max(1.58625rem, 5.1606cqi)')
     expect(readingCss).toContain('margin-inline: auto')
     expect(readingCss).not.toContain('.text-reading')
     expect(readingCss).not.toContain('.elce-flow-slot')
-    expect(compactDensity).toContain('.bdc.density-compact { max-inline-size: min(100%, 60ch); }')
-    expect(compactDensity).toContain('font-size: clamp(0.9rem, 0.5cqi + 0.68rem, 0.95rem)')
-    expect(largeDensity).toContain('.bdc.density-large { max-inline-size: min(100%, 81ch); }')
-    expect(largeDensity).toContain('font-size: clamp(0.95rem, 0.6cqi + 0.85rem, 1.125rem)')
+    expect(compactDensity).not.toContain('max-inline-size:')
+    expect(largeDensity).not.toContain('max-inline-size:')
+    expect(largeDensity).toContain('font-size: max(0.95rem, 2.76cqi)')
+    expect(largeDensity).toContain('.elce-card__copy')
     expect(familyCss).not.toContain('font-size:')
     expect(familyCss).not.toContain('max-inline-size:')
     expect(pageAppearanceClassNames(document, page, document.bdcs)['bdc:bdc-section-1']).toContain('bdc')
@@ -116,7 +143,7 @@ describe('appearance CSS assets for the document', () => {
     }
   })
 
-  it('keeps author-entered colors in compact target-independent classes', () => {
+  it('keeps author-entered colors as exact generated palette anchors', () => {
     const document = applyDocumentCommand(createInitialDocument(), {
       type: 'appearance.background.set',
       target: { kind: 'document' },
@@ -124,13 +151,13 @@ describe('appearance CSS assets for the document', () => {
     })
 
     const styleSheet = createDocumentAppearanceStyleSheet(document)
-    const customClass = customColorClassName('background', '#324b5a')
-    expect(styleSheet).toContain(`.${customClass}:is(.project-layout)`)
-    expect(styleSheet).toContain('background-color: #324b5a;')
-    expect(styleSheet).not.toContain('--elce-appearance-')
+    const projectClass = appearanceScopeClassName(document, { kind: 'document' })
+    expect(styleSheet).toContain(`.${projectClass} {`)
+    expect(styleSheet).toContain('--elce-appearance-background: #324b5a;')
+    expect(styleSheet).toContain(`.${projectClass}.project-layout.has-background { background-color: var(--elce-appearance-background); }`)
   })
 
-  it('shares one direct custom-color definition across the project stylesheet', () => {
+  it('projects one custom color to separate project and page scopes', () => {
     let document = applyDocumentCommand(createInitialDocument(), {
       type: 'appearance.background.set',
       target: { kind: 'document' },
@@ -145,9 +172,11 @@ describe('appearance CSS assets for the document', () => {
     })
 
     const styleSheet = createDocumentAppearanceStyleSheet(document)
-    expect(styleSheet.match(/background-color: #324b5a;/g)).toHaveLength(1)
-    expect(styleSheet).toContain('.custom-bg-324b5a:is(.project-layout)')
-    expect(styleSheet).toContain('.custom-bg-324b5a:is(.page-flux)')
+    const projectClass = appearanceScopeClassName(document, { kind: 'document' })
+    const pageClass = appearanceScopeClassName(document, { kind: 'page', pageId: page.id })
+    expect(styleSheet).toContain(`.${projectClass} {`)
+    expect(styleSheet).toContain(`.${pageClass} {`)
+    expect(styleSheet).toContain(`.${pageClass}.page-flux.has-background { background-color: var(--elce-appearance-background); }`)
   })
 })
 

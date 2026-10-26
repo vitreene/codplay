@@ -91,7 +91,7 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     `,
     zones: [
       { id: 'image', label: 'Image', required: true, content: 'media' },
-      { id: 'caption', label: 'Légende', required: false, content: 'text', className: 'elce-card-image-caption__caption' },
+      { id: 'caption', label: 'Légende', required: false, content: 'text', className: 'elce-card__caption' },
     ],
   },
   [DEFAULT_PRESET_ID.PHOTO]: {
@@ -123,11 +123,11 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
       </article>
     `,
     zones: [
-      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card-text-short__overline' },
-      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card-text-short__title' },
-      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card-text-short__description' },
-      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card-text-short__message' },
-      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card-text-short__note' },
+      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card__meta elce-card__overline' },
+      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card__title' },
+      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card__copy elce-card__description' },
+      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card__copy elce-card__message' },
+      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card__meta' },
     ],
   },
   [DEFAULT_PRESET_ID.TEXT_IMAGE]: {
@@ -150,11 +150,11 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
     `,
     zones: [
       { id: 'image', label: 'Image', required: true, content: 'media' },
-      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card-text-image__overline' },
-      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card-text-image__title' },
-      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card-text-image__description' },
-      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card-text-image__message' },
-      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card-text-image__note' },
+      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card__meta elce-card__overline' },
+      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card__title' },
+      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card__copy elce-card__description' },
+      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card__copy elce-card__message' },
+      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card__meta' },
     ],
   },
 } as const

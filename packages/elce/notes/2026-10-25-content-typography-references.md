@@ -16,7 +16,7 @@ adaptés à chaque police et à chaque rôle de contenu.
 | --- | --- | --- |
 | [Butterick — longueur de ligne](https://practicaltypography.com/line-length.html) | Moyenne de 45 à 90 caractères, espaces compris. | Guide typographique général, couvrant notamment la composition imprimée. Une plage à comparer, sans fixer le seuil d’Elcé. |
 | [Baymard — longueur de ligne](https://baymard.com/research-articles/line-length-readability) | Environ 50 à 75 caractères pour le corps de texte ; ajustement de la largeur selon la police. | Recherche sur la lecture à l’écran en e-commerce, dont les descriptions de produits. Ce contexte diffère du contenu pédagogique composé dans Elcé. |
-| [Butterick — taille](https://practicaltypography.com/point-size.html) | Environ 15 à 25 pixels pour le corps sur le Web. | Ordre de grandeur de confort, dépendant de la police. Un plancher de sécurité ne définit pas à lui seul une taille de lecture. |
+| [Butterick — taille](https://practicaltypography.com/point-size.html) | Ajuster le corps à la police et à la composition. | Repère de confort sans taille universelle. Un plancher de sécurité ne définit pas à lui seul une taille de lecture. |
 | [Butterick — interligne](https://practicaltypography.com/line-spacing.html) | Interligne de 1,20 à 1,45 fois le corps pour de nombreux textes. | Repère de composition à comparer aux lignes, aux familles et aux supports réellement employés. |
 | [Butterick — espace entre paragraphes](https://practicaltypography.com/space-between-paragraphs.html) | Espace de l’ordre de 0,5 à 1 fois le corps ; espacement porté de préférence après le paragraphe. | Les paragraphes doivent rester distincts et former un ensemble continu. Ce repère s’exprime naturellement en `em`. |
 | [Butterick — espace avant et après](https://practicaltypography.com/space-above-and-below.html) | L’espace participe à la mise en valeur ; un titre doit rester visuellement proche du texte qu’il introduit. | Comparer les marges autour des titres avec le rythme des paragraphes dans chaque densité. |
@@ -30,9 +30,11 @@ adaptés à chaque police et à chaque rôle de contenu.
 | [W3C — présentation visuelle, 1.4.8](https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html) | Le critère AAA traite notamment d’un mécanisme permettant une largeur d’au plus 80 caractères et l’agrandissement du texte. | Repère d’accessibilité distinct du choix typographique courant. Il ne fixe pas automatiquement la largeur par défaut du projet. |
 
 Les références décrivent des usages différents et ne convergent pas vers un
-seuil universel. L’utilisateur retient une plage de 70 à 95 caractères par
-ligne, espaces compris, pour les essais Elcé. La police, le contenu et la
-composition effectivement testés détermineront le réglage final.
+seuil universel. Pour Elcé, l’utilisateur demande une moyenne de 60 à 85
+caractères par ligne, espaces compris, quand la largeur du conteneur le permet.
+Sur petit écran, la taille conserve un plancher confortable et les lignes
+peuvent être plus courtes. La calibration finale se fait avec les fontes,
+contenus et compositions réellement affichés.
 
 ## Composition de référence désignée par l’utilisateur
 
@@ -48,12 +50,12 @@ dans un navigateur :
 | Equity | `0.98rem` | `1.4` |
 | Concourse | `1rem` | `1.35` |
 
-Les paragraphes ont une marge après de `1em`. Pour la disposition desktop à
-partir de 1000 pixels, la feuille fixe une racine de 24 pixels, une page
-plafonnée à 1000 pixels et des marges de contenu de 12 et 2,5 rem. On en déduit
-une colonne de 652 pixels. Avec Valkyrie, le corps nominal vaut alors 21,84
-pixels. Ces calculs décrivent la source, sans certifier le rendu actuel de
-l’utilisateur. Le [script publié](https://practicaltypography.com/functions.js)
+Les paragraphes ont une marge après de `1em`. Pour sa composition desktop,
+une conversion en unités relatives donne une page plafonnée à `41.67rem`, des
+marges de contenu de `0.5rem` et `2.5rem`, et une colonne d’environ `27.17rem`.
+Avec Valkyrie, le corps nominal est `0.91rem`. Ces calculs décrivent la source,
+sans certifier le rendu actuel de l’utilisateur. Le
+[script publié](https://practicaltypography.com/functions.js)
 sélectionne Valkyrie par défaut et conserve le choix de famille.
 
 L’exemple montre un réglage conjoint famille/taille/interligne dans une classe

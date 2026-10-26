@@ -145,11 +145,11 @@ function createMenuDrawerPersos(
     ? ''
     : `<p id="${documentId}-menu-description" class="elce-player-menu__description">${escapeHtmlText(description)}</p>`
   const openDrawer = {
-    attr: { 'data-open': 'true', 'aria-hidden': 'false', inert: false },
+    attr: { 'data-open': 'true', 'aria-hidden': 'false' },
     style: { opacity: drawerMotion.open.opacity },
   }
   const closeDrawer = {
-    attr: { 'data-open': 'false', 'aria-hidden': 'true', inert: true },
+    attr: { 'data-open': 'false', 'aria-hidden': 'true' },
     style: { opacity: drawerMotion.close.opacity },
   }
   const closeEvents = Object.fromEntries([
@@ -164,8 +164,8 @@ function createMenuDrawerPersos(
       initial: {
         move: { target: drawerTarget },
         className: 'elce-player-menu-drawer',
-        attr: { 'data-open': 'false', 'aria-hidden': 'true', inert: true },
-        markup: `<div id="${documentId}-menu-drawer-root" class="elce-player-menu-drawer" role="dialog" aria-label="Sommaire du document" aria-modal="true" aria-hidden="true" inert tabindex="-1">
+        attr: { 'data-open': 'false', 'aria-hidden': 'true' },
+        markup: `<div id="${documentId}-menu-drawer-root" class="elce-player-menu-drawer" role="dialog" aria-label="Sommaire du document" aria-modal="true" aria-hidden="true" tabindex="-1">
           <!-- data-part="${backdropTarget}" -->
           <!-- data-part="${panelTarget}" -->
         </div>`,

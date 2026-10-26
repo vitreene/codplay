@@ -87,7 +87,7 @@
   display: flex;
   flex: 1;
   min-height: 0;
-  padding: 0.75rem;
+  padding: 0;
 }
 
 .elce-popup-reader__main--network-preview {

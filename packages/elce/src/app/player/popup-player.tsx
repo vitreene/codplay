@@ -1,7 +1,7 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import { FileText, RefreshCw } from 'lucide-static'
-import { ElceDocument, createInitialDocument } from '../../domain/document/document-model'
+import { ElceDocument } from '../../domain/document/document-model'
 import type { PageId } from '../../domain/document/document-types'
 import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
 import { ElceProjectApiClient } from '../../infrastructure/project-api/project-api-client'
@@ -233,7 +233,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     const api = new ElceProjectApiClient()
     let disposed = false
     let receivedEditorSnapshot = false
-    let fallbackTimer: number | null = null
+    let responseTimer: number | null = null
 
     /** Loads an editor snapshot or synchronized project into the real player. */
     const presentDocument = async (
@@ -342,31 +342,28 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       })
     } else if (sessionId !== null) {
       window.addEventListener('message', receiveMessage)
-      window.opener?.postMessage({ type: 'ready', sessionId, requestId: 0 }, window.location.origin)
-      fallbackTimer = window.setTimeout(() => {
-        if (receivedEditorSnapshot || readerSnapshot !== null) return
-        void store.loadDocument(createInitialDocument().id).then((stored) => {
-          if (disposed || receivedEditorSnapshot) return
-          if (stored === null) {
-            pendingRequest = null
-            error = 'Aucun document Elcé n’est disponible pour la lecture.'
-            update()
-            return
-          }
-          void presentDocument(stored, startPageId, false)
-        }).catch((cause: unknown) => {
-          if (!disposed) {
-            pendingRequest = null
-            error = cause instanceof Error ? cause.message : 'La lecture du document a échoué.'
-            update()
-          }
-        })
-      }, 3000)
+      if (window.opener === null || window.opener.closed) {
+        pendingRequest = null
+        pending = false
+        error = 'La fenêtre de l’éditeur est fermée. Rouvre la lecture depuis l’éditeur.'
+        update()
+      } else {
+        window.opener.postMessage({ type: 'ready', sessionId, requestId: 0 }, window.location.origin)
+        responseTimer = window.setTimeout(() => {
+          if (receivedEditorSnapshot || readerSnapshot !== null) return
+          pendingRequest = null
+          pending = false
+          error = window.opener === null || window.opener.closed
+            ? 'La fenêtre de l’éditeur est fermée. Rouvre la lecture depuis l’éditeur.'
+            : 'L’éditeur n’a pas transmis le document. Rouvre la prévisualisation depuis l’éditeur.'
+          update()
+        }, 3000)
+      }
     }
 
     const dispose = (): void => {
       disposed = true
-      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer)
+      if (responseTimer !== null) window.clearTimeout(responseTimer)
       window.removeEventListener('message', receiveMessage)
       composition?.destroy()
       composition = null
@@ -432,13 +429,14 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           id="elce-popup-reader-test-controls"
           type="button"
           title="Accéder au profil et aux réglages du test auteur"
+          aria-label="Accéder au profil et aux réglages du test auteur"
           aria-expanded={state.testControlsOpen}
           aria-controls="elce-popup-reader-test-panel"
           disabled={snapshot === null || pending}
           mix={on<HTMLButtonElement, 'click'>('click', state.onToggleTestControls)}
         >
           {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-popup-reader-test-controls-icon')}
-          Test auteur
+          <span className="elce-popup-reader__action-label">Test auteur</span>
         </button>
         <button
           id="elce-popup-reader-edited-page"
@@ -507,7 +505,7 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
       >
         {error}
       </p>}
-      {snapshot === null && !isNetworkPreview
+      {snapshot === null && !isNetworkPreview && error === null
         ? <p
           id="elce-popup-reader-loading"
         >

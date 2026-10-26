@@ -47,7 +47,8 @@ vidéo Elcé. Les autres layouts utilisent la réservation par défaut configur�
 Le `padding-bottom` réservé comprend la ligne d’insertion et les
 marges ; le player ajoute la marge supérieure
 `ANCHOR.DEFAULT_BDC_MARGIN_TOP`, également définie dans la configuration et non
-éditable dans le POC.
+éditable dans le POC. Les marges haute et basse des BDC ancrés valent chacune
+`2rem` ; la réservation du player inclut les deux marges.
 
 Le nœud ne crée aucun élément CodPlay et ne contient pas de HTML saisi par
 l’auteur. Une Carte ou un Graphe ancré est un BDC enfant de la
@@ -210,12 +211,21 @@ la zone visible avec `scrollIntoView({ block: 'nearest' })`.
   `16 / 9` → `56.25%`. L’éditeur a enregistré ces valeurs par ses transactions
   normales et le projet indique « Synchronisé » à la révision 12 ; aucune
   écriture SQL directe n’a été faite.
-- Une preview fraîche ouverte depuis l’éditeur affiche les deux images de la
+- **Mesure antérieure au doublement des marges du 26 octobre 2026 :** une
+  preview fraîche ouverte depuis l’éditeur affiche les deux images de la
   première page, décodées en `900 × 593` et `640 × 416`. À `918 px` de largeur,
   leurs cadres mesurent respectivement `918 × 604.86 px` et `918 × 596.70 px` ;
   les deux slots gardent leurs `16 px` de marge supérieure et inférieure. La
   preview de la page vidéo réserve `56.25%`. Les consoles de l’éditeur et de
   cette preview sont sans erreur.
+- **Contrôle Brave après doublement, le 26 octobre 2026 :** sur la preview Demo5,
+  les deux BDC ancrés commencent à `2rem` du haut de leur slot et laissent
+  `2rem` en bas. Ces espacements suivent la largeur mobile et ordinateur sans
+  débordement horizontal. [`anchor-position.test.ts`](../src/app/anchor/anchor-position.test.ts),
+  [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts),
+  [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+  et [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  couvrent les réservations et les deux marges ; typecheck et build passent.
 - Le 8 octobre 2026, Brave DevTools reproduit le défaut dans la preview réelle
   de Page A du Projet 1, sans modifier le document : le slot réservait
   `918 × 1462,75 px`, tandis que la racine Photo et son image ne faisaient que

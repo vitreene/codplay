@@ -11,7 +11,7 @@ const OUTPUT_FILE = resolve(PACKAGE_DIRECTORY, 'src/config/appearance/appearance
 async function readPaletteColors(definition) {
   const css = await readFile(resolve(PALETTE_DIRECTORY, definition.cssFile.replace(/^palettes\//, '')), 'utf8')
   const colors = Object.fromEntries(APPEARANCE_COLOR_ROLES.map((role) => {
-    const className = definition.classes.background[role]
+    const className = `bg-${definition.id}-${role}`
     const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const blocks = css.matchAll(new RegExp(`\\.${escapedClassName}[^{}]*\\{([^{}]*)\\}`, 'g'))
     const declaration = [...blocks]

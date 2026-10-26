@@ -79,8 +79,12 @@ leur cadrage et leur mise en page.
 Dans le player, l’image de la Question utilise `object-fit: contain`, en Flux
 comme en Diapo. Le cadre Flux garde son rapport `4:3` ; en Diapo, le layout
 réserve une zone flexible que l’image remplit en largeur et en hauteur. Le
-style du sélecteur d’illustration de Remix est limité au composant
-`.elce-question-editor` et n’impose aucune hauteur maximale à la photo. Son
+bloc Question en Flux conserve le padding Normal quand son fond est transparent,
+car sa bordure reste visible. En Diapo, la bordure est retirée et cette règle
+de retrait ne s’applique pas ; le padding existant d’une surface opaque suit
+toujours sa densité. Le style du sélecteur d’illustration de Remix est limité
+au composant `.elce-question-editor` et n’impose aucune hauteur maximale à
+la photo. Son
 effet d’apparition utilise l’observation du scrollport existante :
 `initial: 'enter'` couvre une image déjà visible au premier relevé, et l’event
 `enter` est déclaré `once: true`. L’action fait entrer l’image depuis la gauche

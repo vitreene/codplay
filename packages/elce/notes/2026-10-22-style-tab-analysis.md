@@ -5,31 +5,33 @@ exemples. Le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md) réunit les
 arbitrages, les actions et leur état. Les comportements vérifiés sont décrits
 par la [spécification d’apparence](../specs/appearance-spec.md).
 
-La méthode des collections reste une proposition à relire. Les décisions de
-périmètre déjà acceptées ne valent pas preuve de leur réalisation.
+Le circuit initial des palettes et classes est implémenté. L’extension à toute
+la preview et la palette dérivée en OKLCH restent à concevoir et à valider dans
+le plan Style ; les lignes ci-dessous qui décrivent cette extension ne sont pas
+des contrats vérifiés.
 
 ## Décisions détaillées
 
 
 | Repère | Sujet | Proposition et point à arrêter |
 | --- | --- | --- |
-| D1 | Périmètre des réglages et du rendu | Fixe : réglages auteur sur le contenu ; adaptation de navigation différée après le premier état, sans réglages auteur dédiés. Anticiper le besoin futur d’un rendu dépendant des choix auteur, par exemple un chargement CSS selon clair/sombre ; aucun mécanisme n’est encore décidé. Pour le premier état, identifier les racines de contenu et les surfaces auteur qui les reflètent. Les éléments de navigation, la portée et les correspondances seront arrêtés lors de l’extension. Préserver les comportements et les états accessibles existants. |
+| D1 | Périmètre des réglages et du rendu | Décision utilisateur du 26 octobre : toute la preview documentaire (cadre, sommaire, titre, contenu et navigation, desktop et mobile) relève de l’apparence auteur ; seule la barre technique est exclue. Les contrôles existants restent inchangés ; aucune commande par région n’est ajoutée. Cette portée remplace l’ancienne limite au contenu. Les correspondances de couleurs restent ouvertes dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md). |
 | D2 | Preset général du projet | Fixe : cinq gammes de couleurs harmonisées initiales, à enrichir plus tard ; seul le projet choisit le preset général, qui applique ensemble palette, polices de titre et de corps, et espacement. Les propriétés du projet restent ajustables séparément selon D4. Composer leurs teintes, noms et associations. Ambiance et clair/sombre servent à choisir les palettes ; le contraste du texte suit D8. |
 | D3 | Personnalisation locale | Fixe : les pages et tous les BDC ne choisissent pas de preset général ; ils personnalisent uniquement leurs propriétés individuelles. Toute propriété sans exception locale hérite de son contexte. Réutiliser les définitions d’apparence et les mêmes commandes à tous les niveaux. Distinguer explicitement le preset d’apparence du layout `presetId`. |
 | D4 | Exceptions et changement de preset | Fixe : remplacer le preset général du projet conserve les ajustements explicites du projet et les exceptions des descendants ; une commande par réglage supprime son exception locale, sans choix « Hériter » affiché. Aux pages, Sections et Cartes, les réglages sont des exceptions directes aux valeurs héritées. Les libellés de réinitialisation restent à préciser. |
 | D5 | Priorité par propriété | Chaîne acceptée : bloc → parent BDC éventuel → page → réglages du projet → défauts de l’app. Le preset général et les ajustements explicites du projet constituent ses valeurs ; pour toute propriété absente, l’héritage s’applique depuis le niveau supérieur. Les pages, Sections et Cartes n’ont pas de preset local et ne portent que des ajustements directs. Base provisoire de l’app : couleurs actuelles et Crimson Text/DM Sans. Aucun niveau chapitre dans la première tranche. Fixe : un bloc au catalogue conserve ses exceptions et hérite des défauts du projet puis de l’app ; sa réaffectation lui donne son nouveau contexte d’héritage. |
-| D6 | Fond | Héritage implicite et réinitialisation conservés. Révision du 25 octobre : le choix Transparent sélectionne `density: none`, sans valeur de fond transparente enregistrée. Le fond du projet reste celui du layout ; les fonds page/BDC gardent leurs surfaces distinctes. |
+| D6 | Fond | Héritage implicite et réinitialisation conservés. Le choix Transparent sélectionne `density: none`, sans valeur de fond transparente enregistrée. Décision utilisateur du 26 octobre : Fond fournit la teinte maîtresse de la gamme dérivée ; Texte reste la couleur de premier plan de référence. La courte gamme OKLCH visée sert les rôles documentaires arrière-plan, texte courant, titre, intertitre et deux accents coordonnés. Le sommaire/menu et la navigation en sont des déclinaisons tonales, sans gamme autonome ; les exceptions page/BDC gardent leur priorité. Les paramètres et correspondances restent ouverts dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md). |
 | D7 | Densité et padding | Décision acceptée et appliquée le 25 octobre : Transparent est un préréglage d’interface qui enregistre `density: none`. Le profil CSS du rôle définit ensemble fond transparent et padding nul. Choisir ensuite une couleur opaque rétablit Normal par défaut ; les autres densités explicites restent prioritaires. Les paddings structurels restent au layout. |
-| D8 | Texte et contraste | Fixe et appliqué — confirmé le 25 octobre : simple case « Contraste auto », héritage implicite et réinitialisation par réglage. Employer `contrast-color(<couleur>)` dans les règles de classe ; une couleur littérale suffit, sans variable CSS d’apparence ni calcul JS du contraste. JS résout le fond opaque de référence, notamment pour une surface transparente. Le rendu réel de Demo5 reste à valider dans le lecteur. |
+| D8 | Texte et contraste | Le réglage « Contraste auto », son héritage et sa réinitialisation restent inchangés. L’implémentation actuelle emploie `contrast-color(<couleur>)` dans des règles de classe et résout le fond opaque de référence. La garantie de contraste des variantes calculées en OKLCH, y compris après gamut mapping, reste à définir dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md) ; l’ancienne règle ne suffit pas à la décrire. |
 | D9 | Couleurs liées ou libres | Fixe : une teinte de palette conserve une référence sémantique et suit les changements de palette applicables ; une couleur personnalisée conserve sa valeur fixe. Les couleurs personnalisées démarrent unies et opaques ; Transparent sélectionne le profil de densité `none`. |
 | D10 | Ressources typographiques initiales | Huit suggestions d’association de familles Google Fonts pour l’interface, avec choix titre/corps enregistrés séparément, avec Bubblegum Sans/Open Sans comme exception ludique explicitement retenue ; Figma peut inspirer la sélection sans imposer ses noms ni ses associations. Utiliser les noms Google Fonts dans l’interface et le CSS. Définir les variantes nécessaires aux titres et aux enrichissements existants. Décision acceptée : l’export ne conserve que les typographies utilisées et inclut par défaut leurs fichiers comme ressources du package. Les tailles restent gérées par l’application. L’extension administrable reste hors de cette étape. |
 | D11 | Références et version documentaire | Décision acceptée et appliquée le 25 octobre : document v7, choix séparés `headingFontId` et `bodyFontId`, conversion SQLite ciblée sur Demo5 sans compatibilité générale. `appearance` reste facultatif au projet, aux pages et aux BDC ; seul le projet porte le preset général. Chaque propriété absente hérite indépendamment. Le fond conserve les références de couleur ; les anciens fonds transparents sont convertis en `density: none`. |
 | D12 | Picker natif | Choix Fixe : priorité au champ natif `input` de type `color`. Raccorder la couleur validée aux commandes et à l’historique existants. Présenter simplement les teintes prédéfinies si nécessaire ; aucun cycle spécifique d’aperçu ou d’annulation à construire. |
 | D13 | Types de BDC | Fixe — décision confirmée : Carousel, Question, Résultat et Graphe font partie du périmètre immédiat, avec Section et Carte. Tous utilisent le même langage d’apparence et les mêmes commandes ; chaque règle cible la surface de son BDC. L’inset actuel est réservé aux surfaces textuelles définies en D7 ; il ne s’applique pas aux racines Carousel/Graphe ni aux médias Photo. Les couleurs de correction, d’état, de données et de navigation gardent leur sens ; elles ne deviennent pas automatiquement la couleur du texte courant. |
 | D14 | Unités CSS du document | Fixe — 24 octobre : dans les CSS du contenu document (preview, lecteur, exports), les propriétés qui règlent le rythme du texte (taille, interlignage, marges, espacements et padding de sa surface) utilisent des unités relatives, avec `rem` comme base ; `vw` et `cqw` servent à l’adaptation au layout. Aucune de ces propriétés textuelles n’est déclarée en pixels ; les pixels observés dans les styles calculés du navigateur restent des mesures résolues. Cette décision ne s’applique pas au chrome de l’interface d’édition, qui conserve ses propres règles. |
-| D15 | Construction et application des classes | Méthode acceptée et appliquée le 25 octobre : déclarations uniques des palettes, familles, densités et presets dans `appearance-definitions.ts` ; valeurs fixes dans les feuilles CSS ; métadonnées du picker lues depuis les CSS ; résolution commune par cible métier ; application par les builders aux surfaces et champs existants. Les couleurs libres seules ajoutent des règles directes dédupliquées au niveau projet. Les classes d’ambiance réutilisables sont partagées entre les scènes ; les règles CSS et fontes communes sont installées une fois dans la scène layout du projet et réutilisées par l’export. |
-| D16 | Transport des fichiers CSS | Fixe — 24 octobre : servir les feuilles d’apparence comme assets CSS via le routeur Remix. En preview, le player ajoute au document lecteur les seuls liens CSS utilisés ; ils restent séparés des feuilles de l’interface d’édition. Pour l’export, le scénario Sighty importe les seules feuilles CSS utilisées et le paquetage CodPlay les développe dans la feuille scoped de la scène layout, via le circuit d’import CSS local existant. Aucun import `?inline` CSS ni générateur de règles thématiques propriété par propriété. Les teintes nécessaires au picker sont des métadonnées générées depuis les fichiers palette CSS. |
-| D17 | Lecture du BDC texte | Cadre du 25 octobre : préserver le layout fonctionnel et régler la largeur maximale du texte, la taille bornée, l’interligne et les paragraphes. Cibler 70 à 95 caractères par ligne, espaces compris, pour les tests ; le réglage final sera retenu après ces essais. Respecter un plancher de 9 pixels CSS et conserver les unités relatives dans les déclarations. Les réglages précis et leur acceptation sont suivis au §7 de cette note. |
+| D15 | Construction et application des classes | Le résolveur par cible reste l’entrée des valeurs auteur. Décision utilisateur du 26 octobre : un générateur de couleurs remplacera l’ancienne projection dans le lecteur et deviendra sa source unique, sans classes ou styles hérités en repli. Sa première version couvre la gamme documentaire, les déclinaisons du menu/navigation et le padding lié à la présence du fond ; sa sortie CSS et ses règles sont à stabiliser dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md). |
+| D16 | Transport des fichiers CSS | Le transport existant reste celui des feuilles fixes : assets CSS en preview et imports CSS locaux développés à l’export, sans import `?inline`. Le picker continue de lire ses couleurs de référence depuis les CSS. La façon d’émettre les couleurs dérivées de chaque document est une extension ouverte ; voir le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md). |
+| D17 | Lecture du BDC texte | Le 26 octobre, l’utilisateur précise la cible : la taille suit la largeur du conteneur pour viser en moyenne 60 à 85 caractères par ligne ; un plancher confortable prévaut sur petit écran. Conserver les retours naturels, les unités relatives et le layout. Les règles appliquées et la validation restant à faire sont suivies dans le plan Style. |
 
 Les propriétés communes concernent tous les types de BDC. La révision de leur
 projection et les décisions techniques encore ouvertes sont suivies dans la
@@ -141,11 +143,11 @@ de preview reste indépendante, avec synchronisation manuelle.
   doit privilégier la sélection de classes en JS et des déclarations CSS
   directes, sans chaîne de variables servant seulement de relais entre classes.
   Les animations et transitions suivent le circuit de composition existant.
-- Pour le BDC texte, borner la largeur de lecture sur grand écran et régler
-  ensemble largeur, taille, interligne et espace entre paragraphes. Cibler
-  70 à 95 caractères par ligne pour les tests ; le réglage final sera retenu
-  après ces essais. Une taille de police ne doit pas descendre sous 9 pixels CSS ;
-  ce plancher ne définit pas la taille normale du corps de texte.
+- Pour le texte documentaire, borner la largeur de lecture sur grand écran et
+  régler ensemble largeur, taille, interligne et espace entre paragraphes.
+  Viser en moyenne 60 à 85 caractères par ligne lorsque le contenant le permet.
+  Une taille confortable reste prioritaire sur petit écran ; le garde-fou
+  `0.5625rem` ne définit pas la taille normale du corps de texte.
 
 Ces orientations sont traduites par la méthode des sections suivantes. Les réglages typographiques de lecture restent à calibrer avec Demo5 ; le suivi est dans le plan Style.
 
@@ -427,7 +429,7 @@ le markup ou dans `initial.className` du perso texte.
 
 | Cible métier | Surface peinte / espacement | Cibles typographiques |
 | --- | --- | --- |
-| Projet | Fond sur la racine layout. | Défauts de contenu sur sa région existante ; commandes de navigation gardées dans leur circuit. |
+| Projet | Fond de référence sur toute la preview documentaire. | Rôles documentaires pour texte courant, titre et intertitre ; menu/sommaire et navigation en déclinaisons tonales de cette gamme, sans réglages indépendants. |
 | Page Flux ou Diapo | Racine de contenu de la page, selon le rôle existant. | Contenu propre à la page ; chaque BDC reçoit ensuite ses valeurs résolues. |
 | Section | Racine Section : fond et inset ; corps riche : rythme et largeur de lecture. | Titre sur son perso `h2`, corps sur son conteneur existant. |
 | Carte Texte court | Racine Carte. | Champs existants selon leur rôle : surtitre, titre, description, message, note. |
@@ -689,8 +691,10 @@ fait partie de la méthode de projection encore à relire et à vérifier.
 Les [références typographiques](../notes/2026-10-25-content-typography-references.md)
 apportent des repères issus de contextes différents. Le seuil de longueur de
 ligne et les réglages associés seront retenus à partir de nos tests dans Elcé.
-La plage retenue pour les essais est de 70 à 95 caractères par ligne,
-espaces compris. Le réglage final résultera de la lecture observée.
+La cible demandée pour l’adaptation est une moyenne de 60 à 85 caractères par
+ligne, espaces compris, lorsque la largeur le permet. Un plancher confortable
+prévaut sur petit écran ; le réglage final reste à calibrer avec les fontes et
+textes Elcé.
 
 L’ensemble du guide [Practical Typography](https://practicaltypography.com/)
 est retenu comme référence pour construire les variantes de densité :
@@ -723,7 +727,7 @@ rechercher cet équilibre avec les fontes du projet.
 - Écrire l’interligne comme un rapport sans unité et les marges de paragraphe
   en `em` ou `rem`. Définir un espacement effectif entre paragraphes, en tenant
   compte de la fusion ou de l’addition des marges selon leur contenant.
-- Vérifier le plancher de 9 pixels CSS dans le rendu, y compris les petits
+- Vérifier le plancher relatif `0.5625rem` dans le rendu, y compris les petits
   textes concernés. Les déclarations de taille restent relatives ; la taille
   racine du navigateur est prise en compte. Le corps de lecture utilise une
   taille confortable distincte de ce plancher.
@@ -737,24 +741,22 @@ ligne ou de génération des règles fixes n’est introduit par cette méthode.
 
 | Paramètre | Comparaison à effectuer |
 | --- | --- |
-| Longueur des lignes | Cibler 70 à 95 caractères par ligne, espaces compris, avec les textes et polices Elcé. Le réglage final résulte de la lecture observée. |
-| Taille du corps | Calibrer les bornes par famille en comparant le rendu à la composition de référence ; vérifier la variation avec la largeur. Le plancher de 9 pixels CSS reste un garde-fou. |
+| Longueur des lignes | Viser en moyenne 60 à 85 caractères par ligne, espaces compris, lorsque le contenant le permet ; le plancher confortable prévaut sur petit écran. Calibrer avec les textes et polices Elcé. |
+| Taille du corps | Calibrer les bornes par famille en comparant le rendu à la composition de référence ; vérifier la variation avec la largeur. Le plancher `0.5625rem` reste un garde-fou. |
 | Interligne | Comparer notamment des rapports de `1.4`, `1.45`, `1.5` et `1.6`, en les associant à la largeur et à la police. |
 | Espacement entre paragraphes | Prendre `1em` comme point de comparaison de la page de référence et essayer aussi `0.5em` et `0.75em`, indépendamment du padding du fond. |
 | Densité | Construire des ensembles cohérents d’interligne, d’espaces entre paragraphes, de marges autour des titres et de marges de lecture, avec Practical Typography comme référence. Les valeurs sont adaptées au rôle et à la police puis vérifiées par nos essais. Le profil `none` règle fond transparent et padding nul ; son rythme de lecture reste à calibrer. |
 
 ### Première mise en place CSS — 25 octobre
 
-Le corps riche des BDC Section utilise maintenant le profil normal de
-`appearance/css/typography/reading.css` : `0.9–1rem` par une expression
-`clamp()` liée au contenant avec `cqi`, et le corps de Section borné par
-`min(100%, 82ch)`. Compact applique `0.9–0.95rem` /
-`min(100%, 70ch)`, Large `0.95–1.125rem` / `min(100%, 95ch)` dans leurs
-feuilles de densité ; Transparent garde la base normale. Le corps de Section
-est le contenant de requête ; l’article Flux et la racine visuelle de Section
-gardent leur largeur de layout. Ces
-limites `ch` sont des points de départ, pas une conversion exacte de 70–95
-caractères. Le test visuel de Demo5 reste à faire avant de retenir les valeurs.
+La première règle, limitée aux paragraphes de Section, a été remplacée le
+26 octobre par l’adaptation du texte documentaire de tous les BDC et du titre
+de page, décrite dans la [spécification d’apparence](../specs/appearance-spec.md).
+La cible moyenne demandée est de 60–85 caractères, sans forcer ce nombre quand
+le contenant étroit exige de conserver le plancher lisible. Les limites `ch`
+restent des bornes de largeur, pas une conversion exacte en caractères. Le
+calibrage visuel de Demo5 reste à faire avant de retenir la règle comme
+complètement validée.
 
 Les essais couvrent les textes longs et courts, titres, enrichissements et
 fontes du catalogue ; écran étroit, Carte étroite sur écran large et grande
@@ -856,7 +858,7 @@ deviennent pas des dépendances des tests.
 | Picker natif | Le champ natif valide une couleur par le circuit documentaire existant ; Annuler/Rétablir fonctionne sans gestion spécifique au picker. |
 | Preview | Style reçu à l’ouverture puis au clic Synchroniser ; aucun rafraîchissement automatique ajouté. Preview réseau conforme à la révision serveur confirmée. |
 | Lecture et cycle de vie | Play, seek et replay sur les scènes concernées ; navigation A → B → A, resize, remontage et destruction sans perte de style ni contamination d’un autre projet. |
-| Réglages de contenu et navigation existante | Contenu personnalisé dans l’éditeur et le lecteur ; réinitialisation et Undo/Redo fonctionnels, absence d’effet des exceptions locales hors de leur portée, comportements et états accessibles de navigation conservés. L’adaptation visuelle de navigation n’est pas un critère du premier état. |
+| Réglages documentaires et navigation existante | Contenu personnalisé dans l’éditeur et le lecteur ; réinitialisation et Undo/Redo fonctionnels, absence d’effet des exceptions locales hors de leur portée, comportements et états accessibles de navigation conservés. Le menu et la navigation reçoivent des déclinaisons tonales de la palette documentaire, identiques dans leur rôle sur mobile et desktop. |
 | Export des seuls usages | Les définitions et valeurs utilisées par les contenus et états des scènes exportées sont présentes, y compris les défauts hérités nécessaires. Les palettes, couleurs et familles inutilisées sont absentes ; la sélection ne se limite pas à l’affichage initial. |
 | Export autonome avec fontes | Rendu conforme à la preview dans les paquets Sighty et SCORM ; les fichiers des fontes utilisées sont inclus par défaut comme ressources du package et chargent depuis celui-ci. |
 | Contraste et accessibilité du panneau | Simple case « Contraste auto », sans sélecteur de modes ; cas limites de D8, états focus/sélection/erreur distinguables, libellés accessibles, case, picker et réinitialisation utilisables au clavier. |

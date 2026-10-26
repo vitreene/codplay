@@ -80,6 +80,11 @@ describe('Elcé player composition', () => {
     vi.unstubAllGlobals()
   })
 
+  it('contains vertical scroll chaining at the Flux scrollport boundary', () => {
+    expect(ELCE_PLAYER_STYLE_SHEET)
+      .toMatch(/\.elce-flux-scrollport\s*\{[^}]*overscroll-behavior-y:\s*contain;/s)
+  })
+
   it('reuses unchanged page scenes across organization changes and rebuilds only an edited page scene', () => {
     const initial = createInitialDocument()
     const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO })
@@ -456,7 +461,7 @@ describe('Elcé player composition', () => {
     expect(viewElements).toHaveLength(2)
     expect(viewElements[0]?.classList.contains('elce-carousel-view--visible')).toBe(true)
     expect(viewElements[1]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
-    expect(viewElements[0]?.querySelector(':scope > h2.elce-card-text-short__title')).toBeNull()
+    expect(viewElements[0]?.querySelector(':scope > h2.elce-card__title')).toBeNull()
     expect(viewElements[0]?.querySelector('h2 h2, p p, footer footer')).toBeNull()
 
     navigationDots[1]?.click()

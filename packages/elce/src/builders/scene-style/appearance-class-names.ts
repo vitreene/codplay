@@ -1,13 +1,11 @@
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../config/document-config'
-import { getAppearanceDensity, getAppearanceFont, getAppearancePalette } from '../../config/appearance/appearance-config'
-import type { AppearanceColor } from '../../config/appearance/appearance-types'
+import { getAppearanceDensity, getAppearanceFont } from '../../config/appearance/appearance-config'
 import type { AppearanceTarget } from '../../domain/commands/document-command-types'
 import type { Bdc, Page } from '../../domain/document/document-types'
 import type { ElceDocument } from '../../domain/document/document-model'
 import {
   appearanceBackgroundAppliesToSurface,
   resolveAppearance,
-  resolveAppearanceContrastContext,
 } from '../../domain/appearance/appearance-resolver'
 
 export type AppearanceSurfaceRole =
@@ -26,6 +24,15 @@ export type AppearanceSurfaceRole =
   | 'graph'
 
 export type AppearanceClassNamesByTarget = Readonly<Record<string, string>>
+
+/** Returns a stable CSS scope class for one document, page or BDC appearance. */
+export function appearanceScopeClassName(document: ElceDocument, target: AppearanceTarget): string {
+  const identity = target.kind === 'document'
+    ? `project-${document.id}`
+    : `${target.kind}-${document.id}-${target.kind === 'page' ? target.pageId : target.bdcId}`
+  const token = Array.from(identity, (character) => character.codePointAt(0)?.toString(16) ?? '0').join('-')
+  return `appearance-${token}`
+}
 
 /** Returns the classes for one page using its business identifier as the lookup key. */
 export function appearanceClassNameForPage(
@@ -105,8 +112,7 @@ function appearanceClassNames(
   role: AppearanceSurfaceRole,
 ): string {
   const resolved = resolveAppearance(document, target)
-  const palette = getAppearancePalette(resolved.paletteId.value)
-  const classes: string[] = [role]
+  const classes: string[] = [role, appearanceScopeClassName(document, target)]
   if (target.kind === 'bdc') classes.push('bdc')
 
   if (
@@ -115,17 +121,12 @@ function appearanceClassNames(
     && appearanceBackgroundAppliesToSurface(resolved, target)
   ) {
     classes.push('has-background')
-    classes.push(backgroundClassName(resolved.background.value.choice, palette))
   }
 
   if (role !== 'project-layout') {
-    classes.push(textClassName(resolved.textColor.value.choice, palette))
     classes.push(getAppearanceFont(resolved.headingFontId.value).headingClassName)
     classes.push(getAppearanceFont(resolved.bodyFontId.value).bodyClassName)
     classes.push(getAppearanceDensity(resolved.density.value).className)
-    if (resolved.autoContrast.value) {
-      classes.push(contrastClassName(document, target))
-    }
   } else if (resolved.density.value === 'none') {
     classes.push(getAppearanceDensity(resolved.density.value).className)
   }
@@ -155,37 +156,4 @@ function bdcAppearanceRole(bdc: Bdc): AppearanceSurfaceRole {
     case BDC_TYPE.STATISTICAL_GRAPH:
       return 'graph'
   }
-}
-
-/** Returns the selected palette class or a shared class named by its literal color. */
-function backgroundClassName(
-  background: AppearanceColor,
-  palette: ReturnType<typeof getAppearancePalette>,
-): string {
-  if (background.kind === 'palette') return palette.classes.background[background.role]
-  return customColorClassName('background', background.value)
-}
-
-/** Returns the selected text class or a shared class named by its literal color. */
-function textClassName(
-  color: AppearanceColor,
-  palette: ReturnType<typeof getAppearancePalette>,
-): string {
-  if (color.kind === 'palette') return palette.classes.text[color.role]
-  return customColorClassName('text', color.value)
-}
-
-/** Returns the class for the nearest opaque background used by automatic contrast. */
-function contrastClassName(document: ElceDocument, target: AppearanceTarget): string {
-  const context = resolveAppearanceContrastContext(document, target)
-  if (context.choice.kind === 'palette') {
-    return getAppearancePalette(context.paletteId).classes.contrast[context.choice.role]
-  }
-  return customColorClassName('contrast-background', context.color)
-}
-
-/** Names generated color classes by their normalized literal, not by a target ID. */
-export function customColorClassName(role: 'background' | 'text' | 'contrast-background', color: string): string {
-  const prefix = role === 'background' ? 'custom-bg' : role === 'text' ? 'custom-ink' : 'custom-contrast'
-  return `${prefix}-${color.toLowerCase().replace(/^#/, '')}`
 }

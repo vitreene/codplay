@@ -70,6 +70,22 @@ affichée. Les cellules vides avant cette limite restent visibles. Zéro compte
 comme une valeur. L’alternative sémantique des rendus SVG conserve les
 dimensions complètes de la matrice.
 
+Les couleurs des rendus SVG forment une palette fixe, indépendante de l’apparence
+du projet. Barres et courbes associent ses teintes à l’ordre des séries ; les
+secteurs les associent à l’ordre des catégories. Les repères de légende
+réutilisent le même index, avec répétition après la huitième teinte.
+
+| Index | Couleur |
+| ---: | --- |
+| 0 | `#326c64` |
+| 1 | `#c27b3a` |
+| 2 | `#5376a2` |
+| 3 | `#a64f4f` |
+| 4 | `#7a6599` |
+| 5 | `#7f8f45` |
+| 6 | `#4c8491` |
+| 7 | `#bd6688` |
+
 La légende conserve uniquement les entrées nommées et disparaît quand aucune
 entrée applicable n’a de nom. Dans les secteurs transposés, elle identifie les
 séries de la catégorie choisie ; sans transposition, elle identifie les
@@ -119,10 +135,12 @@ modifié.
   couvre la grille, les nombres et le remplacement de matrice.
 - [`statistical-graph-scene-builder.test.ts`](../src/builders/statistical-graph/statistical-graph-scene-builder.test.ts)
   couvre les quatre rendus, l’alternative accessible et le choix d’une taille
-  commune selon le contenu le plus contraignant.
+  commune selon le contenu le plus contraignant ; ses assertions vérifient les
+  huit couleurs fixes pour chaque rendu SVG et sa légende.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   compile les placements Flux, Diapo, Carousel et Section par les builders et
-  le runtime CodPlay réels.
+  le runtime CodPlay réels ; les placements Flux, Diapo et Carousel conservent
+  aussi la feuille de couleurs du graphe.
 - [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
   vérifie l’aller-retour JSON, la migration depuis les anciennes lignes
   relationnelles et son retour, la suppression des tables de détail et la

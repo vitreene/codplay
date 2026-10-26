@@ -1,18 +1,11 @@
 @scope (.elce-player-layout) {
-  .bdc.density-compact { max-inline-size: min(100%, 60ch); }
-
-  @scope (.section.bdc) to (.section.bdc .bdc) {
-    :scope.density-compact > div :is(p, li, blockquote) {
-      font-size: clamp(0.9rem, 0.5cqi + 0.68rem, 0.95rem);
-    }
-  }
-
-  .density-compact.page-flux { padding: 1.5rem; }
+  .density-compact.page-flux.has-background { padding: 1.5rem; }
+  .density-compact.page-flux:not(.has-background) { padding: 0; }
   .density-compact.page-diapo { padding: 0; }
   .density-compact.section.has-background { box-sizing: border-box; padding: clamp(0.5rem, 1.5vw, 1rem); }
   .density-compact.card-text-short.has-background { padding: clamp(0.75rem, 3cqw, 2.25rem); }
   .density-compact.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(0.5rem, 2cqw, 1.5rem); }
-  .density-compact.card-image-caption.has-background > .elce-card-image-caption__caption { padding: 0.35rem 0.55rem; }
+  .density-compact.card-image-caption.has-background > .elce-card__caption { padding: 0.35rem 0.55rem; }
   .density-compact:is(.question, .evaluation-result).has-background { padding: clamp(0.65rem, 2vw, 1rem); }
   .density-compact:is(
     .card-text-short,

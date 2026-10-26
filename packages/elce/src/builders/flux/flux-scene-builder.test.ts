@@ -203,7 +203,7 @@ describe('Elcé Flux scene builder', () => {
     expect(articleInitial).toMatchObject({
       flowReservations: [{
         partId: 'page-a:bdc-image-1:anchor',
-        blockSize: 'calc(12rem + 1rem + 1rem)',
+        blockSize: 'calc(12rem + 2rem + 2rem)',
       }],
     })
     expect(pageStory?.persos[3]).toMatchObject({

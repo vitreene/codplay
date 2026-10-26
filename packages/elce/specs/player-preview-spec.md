@@ -13,6 +13,16 @@ tardif à la fermeture ; ces points restent suivis dans le plan de construction.
 Le bouton « Prévisualiser » ouvre le lecteur dans une fenêtre distincte. Cette
 fenêtre reçoit le document de l’éditeur et la page sélectionnée au moment de
 son ouverture.
+Si une ancienne session n’a plus de liaison avec l’éditeur, cliquer de nouveau
+sur « Prévisualiser » relance une session fraîche dans la même fenêtre nommée
+`elce-player-preview`. Elle reçoit alors le document courant et la page active.
+
+Une preview de session ne charge que l’instantané transmis par son éditeur.
+Si la fenêtre émettrice est absente, le lecteur demande de rouvrir la preview
+depuis l’éditeur. Si aucun instantané n’arrive, il termine l’attente et indique
+que l’éditeur n’a pas transmis le document. Il ne remplace pas cet instantané
+par un document local par défaut, qui pourrait appartenir à une autre session
+ou à une version antérieure.
 
 Le lecteur monte la composition Sighty/CodPlay réelle dans son propre contexte
 de navigateur. Sa navigation est indépendante de celle de l’éditeur. Les
@@ -31,6 +41,8 @@ Chaque commande associe une icône à son libellé. À 800 px et en dessous, le
 libellé visible est masqué et l’icône reste seule. Le texte reste disponible
 dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icône
 et le libellé sont visibles ensemble.
+Le bouton « Test auteur » suit la même adaptation : son libellé est masqué sur
+petit écran, tandis que son nom accessible descriptif reste disponible.
 Les icônes d’interface du lecteur, y compris l’ouverture et la fermeture du
 sommaire Sighty/CodPlay, suivent la hauteur de capitale de la police courante
 avec `block-size: 1cap` et une largeur automatique, sans taille fixe dans les
@@ -206,7 +218,9 @@ détruit les ressources du lecteur.
 - [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) vérifie la
   synchronisation unique lorsqu’une page éditée vient d’être créée et la
   résolution d’un média confirmé dont le Blob n’est plus présent en local. Il
-  vérifie aussi l’icône partagée du bouton « Test auteur ».
+  vérifie aussi l’icône partagée du bouton « Test auteur », ainsi que les
+  messages de reprise sans éditeur et sans réponse initiale, sans chargement
+  d’un ancien document local.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   vérifie la réutilisation des sources de scènes inchangées après une
   réorganisation et la reconstruction de la scène d’une page éditée. Il
@@ -224,6 +238,12 @@ détruit les ressources du lecteur.
   distincte, la navigation indépendante, la synchronisation manuelle, le
   retour à la page éditée et la synchronisation unique d’une nouvelle page.
   Il a aussi vérifié les libellés accessibles à 390 px, 800 px et 801 px.
+- Brave DevTools, le 26 octobre 2026, a vérifié la preview en largeur mobile et
+  ordinateur : le contenu passe en une colonne sur mobile sans débordement
+  horizontal ; le libellé « Test auteur » est masqué et son nom accessible
+  conservé. Sur ordinateur, le libellé réapparaît et la composition reprend
+  ses colonnes. Le test `popup-player.test.tsx` vérifie le libellé et son
+  enveloppe responsive dans le DOM.
 - Brave DevTools, le 8 octobre 2026, a vérifié le chargement d’une image
   confirmée depuis l’URL serveur dans l’éditeur et dans le popup, sans Blob
   conservé dans IndexedDB ; l’image y était décodée à `1 × 1 px` et la console
@@ -247,6 +267,17 @@ détruit les ressources du lecteur.
   L’API refuse la liste des projets (`403`) et un prévol d’écriture (`403`).
   Brave émule ici un téléphone ; l’accès depuis un téléphone réel reste à
   vérifier sur le même réseau local.
+- Brave DevTools, le 26 octobre 2026, a rechargé une ancienne URL de session
+  sans fenêtre émettrice. Avant correction, le secours chargeait le document
+  local par défaut v4 et affichait son erreur de version avec l’indication de
+  chargement encore visible. Désormais, le lecteur affiche seulement la
+  consigne de réouverture. Une nouvelle preview ouverte depuis l’éditeur rend
+  le document v7, sans message d’erreur ni erreur console.
+- Brave DevTools, le 26 octobre 2026, a aussi vérifié le rétablissement après
+  « L’éditeur n’a pas transmis le document » alors que la fenêtre de l’éditeur
+  restait ouverte. Un nouveau clic sur « Prévisualiser » réutilise la popup,
+  crée une nouvelle session et charge la page active (« Repérer les grandes
+  formes — itération 3 ») sans fermer la fenêtre.
 - Pour cette correction, le typecheck et le build passent ; le build signale un
   chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
   passe 28/28. La suite complète compte 218 succès et un échec d’environnement :

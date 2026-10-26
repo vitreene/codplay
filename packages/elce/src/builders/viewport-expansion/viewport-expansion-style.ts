@@ -15,8 +15,8 @@ export function createViewportExpansionStyleSheet(
   box-sizing: border-box;
   overflow: hidden;
   place-items: stretch;
-  background: rgb(0 0 0 / ${settings.backdropOpacity * 100}%);
-  color: #fff;
+  background: color-mix(in srgb, var(--elce-appearance-menu-background) ${settings.backdropOpacity * 100}%, transparent);
+  color: var(--elce-appearance-menu-foreground);
   pointer-events: none;
   visibility: hidden;
   transition: visibility 0s linear ${settings.durationMs}ms;
@@ -110,10 +110,10 @@ export function createViewportExpansionStyleSheet(
   height: 4rem;
   place-items: center;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 36%);
+  border: 1px solid color-mix(in srgb, var(--elce-appearance-border) 36%, transparent);
   border-radius: 0.5rem;
-  color: #fff;
-  background: rgb(12 18 24 / 68%);
+  color: var(--elce-appearance-menu-foreground);
+  background: color-mix(in srgb, var(--elce-appearance-menu-background) 68%, transparent);
   font: inherit;
   font-size: 2.5rem;
   line-height: 1;
