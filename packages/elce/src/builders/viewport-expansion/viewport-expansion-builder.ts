@@ -50,9 +50,6 @@ type ViewportExpansionPersoDoc = Readonly<{
 
 type ViewportExpansionContentKind = 'image' | 'graph'
 
-/** Keeps the backdrop below CodPlay's temporary z-index:20 reparent presentation. */
-const VIEWPORT_EXPANSION_HOST_Z_INDEX = 19
-
 /** Adds the viewport target and its interactions to a story containing expandable Elcé content. */
 export function addViewportExpansionToStory(
   story: StoryDoc<string>,
@@ -143,16 +140,7 @@ export function addViewportExpansionToStory(
         inert: true,
         tabindex: '-1',
       },
-      style: {
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: VIEWPORT_EXPANSION_HOST_Z_INDEX,
-        opacity: 1,
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-      },
+      style: { opacity: 1 },
       markup: `<div id="${hostId}-frame" class="elce-viewport-expansion-host__frame"><!-- data-part="${hostPartId}" --><!-- data-part="${hostId}:previous" --><!-- data-part="${hostId}:next" --></div>`,
     },
     actions: {

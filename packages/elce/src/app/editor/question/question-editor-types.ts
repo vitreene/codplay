@@ -1,4 +1,5 @@
 import type { ElceQuestionEditorActions } from '../../facades/question/question-facade-types'
+import type { AppearanceTarget } from '../../../domain/commands/document-command-types'
 import type { MediaMetadata } from '../../../domain/document/document-types'
 import type { QuestionContent } from '../../../domain/question/question-types'
 import type { SupportedMediaType } from '../../../domain/media/media-resource-service'
@@ -13,4 +14,5 @@ export interface QuestionEditorProps {
   readonly actions: ElceQuestionEditorActions
   readonly profileProperties: readonly ProfileProperty[]
   readonly onCatalogReference: (value: string) => void
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
 }

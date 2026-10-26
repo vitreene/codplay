@@ -33,6 +33,7 @@ export function renderRemixStatisticalGraphEditor(
   actions: StatisticalGraphEditorActions,
   onDelete?: () => void,
   toolbarContent?: RemixNode,
+  appearanceTrigger?: RemixNode,
 ): RemixNode {
   if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) return null
   const content = bdc.statisticalGraph
@@ -44,7 +45,7 @@ export function renderRemixStatisticalGraphEditor(
     title="Supprimer le graphe de cette page"
     mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
   >
-    {renderLucideIcon(Trash2, `elce-statistical-graph-delete-icon-${bdc.id}`, 14)}
+    {renderLucideIcon(Trash2, `elce-statistical-graph-delete-icon-${bdc.id}`)}
   </button>
 
   /** Opens a preview of this graph BDC using its existing scene builder. */
@@ -93,9 +94,10 @@ export function renderRemixStatisticalGraphEditor(
           aria-controls={`elce-statistical-graph-preview-dialog-${bdc.id}`}
           mix={on<HTMLButtonElement, 'click'>('click', openGraphPreview)}
         >
-          {renderLucideIcon(Eye, `elce-statistical-graph-preview-icon-${bdc.id}`, 14)}
+          {renderLucideIcon(Eye, `elce-statistical-graph-preview-icon-${bdc.id}`)}
           Aperçu
         </button>
+        {appearanceTrigger}
         {deleteButton}
       </div>
     </header>
@@ -220,7 +222,7 @@ export function renderRemixStatisticalGraphEditor(
           title="Fermer l’aperçu du graphe"
           mix={on<HTMLButtonElement, 'click'>('click', closeGraphPreview)}
         >
-          {renderLucideIcon(X, `elce-statistical-graph-preview-close-icon-${bdc.id}`, 14)}
+          {renderLucideIcon(X, `elce-statistical-graph-preview-close-icon-${bdc.id}`)}
         </button>
       </header>
       <div
@@ -450,7 +452,7 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
           id={`elce-statistical-graph-selected-cell-label-${bdcId}`}
           className="elce-statistical-graph-editor__selected-cell-field"
         >
-          {renderLucideIcon(Pencil, `elce-statistical-graph-selected-cell-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Pencil, `elce-statistical-graph-selected-cell-icon-${bdcId}`)}
           <input
             id={`elce-statistical-graph-selected-cell-${bdcId}`}
             type="text"
@@ -481,7 +483,7 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
             title={hasColumnLabels ? 'Masquer les intitulés de colonne' : 'Afficher les intitulés de colonne'}
             mix={on<HTMLButtonElement, 'click'>('click', () => updateHeading('columnLabelsEnabled', !hasColumnLabels))}
           >
-            {renderLucideIcon(Columns3, `elce-statistical-graph-column-labels-icon-${bdcId}`, 14)}
+            {renderLucideIcon(Columns3, `elce-statistical-graph-column-labels-icon-${bdcId}`)}
           </button>
           <button
             id={`elce-statistical-graph-row-labels-toggle-${bdcId}`}
@@ -492,7 +494,7 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
             title={hasRowLabels ? 'Masquer les intitulés de ligne' : 'Afficher les intitulés de ligne'}
             mix={on<HTMLButtonElement, 'click'>('click', () => updateHeading('rowLabelsEnabled', !hasRowLabels))}
           >
-            {renderLucideIcon(Rows3, `elce-statistical-graph-row-labels-icon-${bdcId}`, 14)}
+            {renderLucideIcon(Rows3, `elce-statistical-graph-row-labels-icon-${bdcId}`)}
           </button>
         </div>
       </div>

@@ -3,12 +3,12 @@ import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, MEDIA_TYPE, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { Bdc, BdcId, Page, RevelationTransitionDefaults } from '../../domain/document/document-types'
 import { projectFluxPlayerMarkup, readFluxAnchorTargets } from './flux-anchor-player-markup'
-import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
+import { anchorIllustrationBlockSizeFor, anchorFlowBlockSizeFor, anchorNameFor, anchorReservationFor, statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../domain/anchor/anchor-ratio-service'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { FluxAnchorTarget } from './flux-anchor-player-markup-types'
 import type { FluxSceneBuild, FluxSceneBuildOptions } from './flux-scene-builder-types'
-import type { ElceResolvedPageSettings, ResolvedCardMediaMotion } from '../../domain/editor-settings/editor-settings-types'
+import type { ElceResolvedPageSettings } from '../../domain/editor-settings/editor-settings-types'
 import { ElceCarouselSceneBuilder } from '../carousel/carousel-scene-builder'
 import type { CarouselSceneBuild } from '../carousel/carousel-scene-builder-types'
 import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/question-bdc-scene-builder'
@@ -19,6 +19,8 @@ import type { CardBdcSceneBuild } from '../card/card-bdc-scene-builder'
 import { createRevelationAction, createRevelationInitialStyle } from '../revelation/revelation-action'
 import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistical-graph-scene-builder'
 import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
+import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
+import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../scene-style/appearance-class-names.ts'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -28,6 +30,7 @@ type FluxBdcMount = Readonly<{
   readonly zonePartIds: Readonly<Record<string, string>>
   readonly paddingBottom?: string
   readonly questionResetEvent?: string
+  readonly styleSheet?: string
   readonly carouselBuild?: CarouselSceneBuild
   readonly evaluationResultStories?: readonly StoryDoc<string>[]
   readonly cardBuild?: CardBdcSceneBuild
@@ -67,13 +70,16 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
   }
   const pageContents = pageBdcs.filter((bdc): bdc is Bdc => bdc !== undefined)
   const anchorTargets = readAnchorTargets(pageContents, bdcs)
-  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options, anchorTargets))
+  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options))
 
   const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
+  const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
   const bottomMarkerId = `${page.id}-bottom-marker`
-  const articleMarkup = `<article id="${articleId}" class="elce-flux-article">${mounts.map((mount) => mount.markup).join('')}<!-- data-part="${page.id}:bottom" --></article>`
+  const articleMarkup = `<article id="${articleId}" class="elce-flux-article ${pageAppearanceClass}">${mounts.map((mount) => mount.markup).join('')}<!-- data-part="${page.id}:bottom" --></article>`
   const pageMediaPersos = mounts.flatMap((mount) => createMediaPersos(page, mount, scrollPortId, options))
+  const anchorStyleSheet = createFluxAnchorStyleSheet(page, bdcs, anchorTargets, options)
+  const anchoredGraphStyleSheets: string[] = []
   const anchoredIllustrationPersos = anchorTargets.flatMap((target) => {
     const illustration = bdcs.find((candidate) => candidate.id === target.bdcId)
     const section = pageContents.find((candidate) => candidate.id === target.sectionBdcId)
@@ -96,11 +102,14 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
         )
       }
       case BDC_TYPE.STATISTICAL_GRAPH: {
+        const appearanceClassName = appearanceClassNameForBdc(illustration.id, options.appearanceClassNamesByTarget)
         const graphBuild = statisticalGraphSceneBuilder.build(
           illustration,
           `${page.id}-${section.id}-${illustration.id}-anchor`,
           target.partId,
+          appearanceClassName,
         )
+        anchoredGraphStyleSheets.push(graphBuild.styleSheet)
         return createFluxGraphPersos(
           page,
           illustration,
@@ -128,7 +137,6 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
           tag: 'section',
           attr: { id: scrollPortId, 'aria-label': 'Contenu de la page' },
           className: 'elce-flux-scrollport',
-          style: { width: '100%', height: '100%', minHeight: 0, overflowY: 'auto' },
           move: '@root',
         },
       },
@@ -137,8 +145,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
         type: 'layout',
         initial: {
           move: { target: scrollPortId },
-          className: 'elce-flux-article',
-          style: { display: 'flex', minHeight: '100%', flexDirection: 'column', gap: '1.25rem', padding: '2rem', boxSizing: 'border-box' },
+          className: `elce-flux-article ${pageAppearanceClass}`,
           markup: articleMarkup,
           flowReservations: anchorTargets.map((target) => ({
             partId: target.partId,
@@ -185,9 +192,76 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
     scrollPortId,
     bottomMarkerId,
     storyIds: Object.keys(stories),
-    styleSheets: mounts.flatMap((mount) => mount.carouselBuild === undefined ? [] : [mount.carouselBuild.styleSheet]),
+    styleSheets: [
+      ...mounts.flatMap((mount) => [
+        ...(mount.styleSheet === undefined ? [] : [mount.styleSheet]),
+        ...(mount.carouselBuild === undefined ? [] : [mount.carouselBuild.styleSheet]),
+      ]),
+      ...anchoredGraphStyleSheets,
+      ...(anchorStyleSheet.length === 0 ? [] : [anchorStyleSheet]),
+    ],
     ...(questionMount?.questionResetEvent === undefined ? {} : { questionReset: { eventName: questionMount.questionResetEvent } }),
   }
+}
+
+/** Generates class rules for per-anchor geometry in the page's existing stylesheet channel. */
+function createFluxAnchorStyleSheet(
+  page: Page,
+  bdcs: readonly Bdc[],
+  targets: readonly FluxAnchorTarget[],
+  options: FluxSceneBuildOptions,
+): string {
+  const rules = targets.flatMap((target) => {
+    const slotClassName = sceneStyleClassName('flow-slot', target.partId)
+    const slotRule = sceneClassRule(slotClassName, {
+      [ANCHOR.PADDING_VARIABLE]: target.paddingBottom,
+      paddingBottom: anchorReservationFor(target.paddingBottom),
+      anchorName: anchorNameFor(target.partId),
+    })
+    const bdc = bdcs.find((candidate) => candidate.id === target.bdcId)
+    if (bdc === undefined) throw new Error(`Le BDC ancré ${target.bdcId} est introuvable.`)
+
+    if (bdc.type === BDC_TYPE.CARD) {
+      const mediaId = bdc.card?.mediaId
+      const mediaType = mediaId == null ? undefined : options.mediaTypes?.[mediaId]
+      const aspectRatio = mediaType === MEDIA_TYPE.VIDEO
+        ? '16 / 9'
+        : anchorRatioService.imageAspectRatio(target.paddingBottom)
+      const declarations = {
+        position: 'absolute',
+        zIndex: '1',
+        positionAnchor: anchorNameFor(target.partId),
+        insetInlineStart: '0',
+        insetInlineEnd: '0',
+        insetBlockStart: `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
+        width: '100%',
+        ...(target.layoutId === DEFAULT_PRESET_ID.PHOTO
+          ? { aspectRatio, height: 'auto' }
+          : { height: anchorIllustrationBlockSizeFor(target.layoutId, target.paddingBottom) }),
+      }
+      const cardId = `${page.id}-${bdc.id}-card`
+      return [slotRule, sceneClassRule(sceneStyleClassName('flux-anchor-illustration', cardId), declarations)]
+    }
+
+    if (bdc.type === BDC_TYPE.STATISTICAL_GRAPH && bdc.statisticalGraph != null) {
+      const graphId = `${page.id}-${bdc.id}-graph`
+      const declarations = {
+        position: 'absolute',
+        zIndex: '1',
+        positionAnchor: anchorNameFor(target.partId),
+        insetInlineStart: '0',
+        insetInlineEnd: '0',
+        insetBlockStart: `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
+        width: '100%',
+        height: 'auto',
+        ...(bdc.statisticalGraph.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? {} : { aspectRatio: '16 / 9' }),
+      }
+      return [slotRule, sceneClassRule(sceneStyleClassName('flux-anchor-illustration', graphId), declarations)]
+    }
+
+    throw new Error(`Le BDC ${bdc.id} ne peut pas être ancré en Flux.`)
+  })
+  return rules.join('\n')
 }
 
 function createBdcMount(
@@ -195,7 +269,6 @@ function createBdcMount(
   bdc: Bdc,
   allBdcs: readonly Bdc[],
   options: FluxSceneBuildOptions,
-  anchorTargets: readonly FluxAnchorTarget[],
 ): FluxBdcMount {
   switch (bdc.type) {
     case BDC_TYPE.SECTION: {
@@ -206,19 +279,19 @@ function createBdcMount(
         sectionId,
         partId,
         {
-          body: projectFluxPlayerMarkup(
-            bdc.section?.markup ?? '',
-            Object.fromEntries(anchorTargets
-              .filter((target) => target.sectionBdcId === bdc.id)
-              .map((target) => [target.bdcId, target.paddingBottom])),
-          ),
+          body: projectFluxPlayerMarkup(bdc.section?.markup ?? ''),
         },
+      )
+      const markup = appendClassToMarkupElement(
+        card.markup,
+        sectionId,
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
       )
       return {
         bdc,
         partId,
         anchored: false,
-        markup: card.markup,
+        markup,
         zonePartIds: card.zonePartIds,
       }
     }
@@ -238,7 +311,12 @@ function createBdcMount(
       const question = bdc.question
       if (question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
       const partId = `${page.id}:${bdc.id}:question`
-      const card = buildQuestionCardPreset(`${page.id}-${bdc.id}`, partId, question)
+      const card = buildQuestionCardPreset(
+        `${page.id}-${bdc.id}`,
+        partId,
+        question,
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
+      )
       const resetEvent = ELCE_EVENTS.QUESTION_RESET
       return {
         bdc,
@@ -250,7 +328,11 @@ function createBdcMount(
       }
     }
     case BDC_TYPE.EVALUATION_RESULT: {
-      const resultBuild = buildEvaluationResultBdcScene(page, bdc)
+      const resultBuild = buildEvaluationResultBdcScene(
+        page,
+        bdc,
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
+      )
       return {
         bdc,
         partId: resultBuild.mountPartId,
@@ -276,6 +358,7 @@ function createBdcMount(
             mediaTypes: options.mediaTypes ?? {},
             revelationSettings: getCarouselRevelationSettings(options.editorSettings, bdc.id),
             playerSettings: options.editorSettings.player,
+            appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
           })
           return {
             bdc,
@@ -294,6 +377,7 @@ function createBdcMount(
         bdc,
         `${page.id}-${bdc.id}-graph`,
         graphPartId,
+        appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
       )
       return {
         bdc,
@@ -302,6 +386,7 @@ function createBdcMount(
         markup: graphBuild.markup,
         zonePartIds: {},
         graphVisualPersos: graphBuild.mediaPersos,
+        styleSheet: graphBuild.styleSheet,
       }
     }
     case BDC_TYPE.CARD:
@@ -382,6 +467,7 @@ function buildFluxCard(page: Page, containerBdcId: BdcId, bdc: Bdc, options: Flu
     bdc,
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
+    appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
   })
 }
 
@@ -396,45 +482,19 @@ function createFluxCardPersos(
   revelation: RevelationTransitionDefaults,
   anchor?: Readonly<{ paddingBottom: string; layoutId: string }>,
 ): readonly PersoDoc<string>[] {
-  const mediaId = bdc.card?.mediaId
-  const mediaType = mediaId === null || mediaId === undefined ? undefined : options.mediaTypes?.[mediaId]
   const introRef = revelation.intro
   const outroRef = revelation.outro
-  const cardMediaMotion = options.editorSettings.revelation.cardMediaMotionByBdcId[bdc.id]
-  const hasImageMedia = cardBuild.mediaPersos.some((perso) => perso.type === 'img')
-  const omitOpacity = hasImageMedia && cardMediaMotion?.suppressCardOpacityTransitionForImages === true
   const cardId = `${page.id}-${bdc.id}-card`
   const enterEvent = `${cardId}:enter`
   const leaveEvent = `${cardId}:leave`
-  const aspectRatio = mediaType === MEDIA_TYPE.VIDEO
-    ? '16 / 9'
-    : anchor === undefined
-      ? ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO
-      : anchorRatioService.imageAspectRatio(anchor.paddingBottom)
-  const anchoredStyle = anchor === undefined ? {} : {
-    position: 'absolute',
-    zIndex: 1,
-    'position-anchor': anchorNameFor(targetPartId),
-    'inset-inline-start': 0,
-    'inset-inline-end': 0,
-    'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
-    width: '100%',
-    ...(anchor.layoutId === DEFAULT_PRESET_ID.PHOTO
-      // Anchored Photos resolve the Carousel's height:100% on the text line.
-      // Override it so aspectRatio determines the frame height.
-      ? { aspectRatio, height: 'auto' }
-      : { height: anchorIllustrationBlockSizeFor(anchor.layoutId, anchor.paddingBottom) }),
-  }
+  const hasMedia = cardBuild.mediaPersos.length > 0
   const root: PersoDoc<string> = {
     id: cardId,
     type: 'layout',
     initial: {
       move: { target: targetPartId },
-      className: `${cardBuild.rootClassName} elce-flux-card-root`,
-      style: {
-        ...createRevelationInitialStyle(introRef, { omitOpacity }),
-        ...(anchor === undefined ? { width: '100%' } : anchoredStyle),
-      },
+      className: `${cardBuild.rootClassName} elce-flux-card-root${anchor === undefined ? '' : ` ${sceneStyleClassName('flux-anchor-illustration', cardId)}`}`,
+      ...(hasMedia ? {} : { style: createRevelationInitialStyle(introRef) }),
       markup: cardBuild.markup,
     },
     emit: {
@@ -445,16 +505,35 @@ function createFluxCardPersos(
         leave: [{ name: leaveEvent }],
       },
     },
+    ...(hasMedia ? {} : { actions: {
+      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
+      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
+    } }),
+  }
+  const mediaPersos = hasMedia
+    ? cardBuild.mediaPersos.map((perso) => revealFluxCardMedia(perso, enterEvent, leaveEvent, introRef, outroRef))
+    : cardBuild.mediaPersos
+  return [root, ...cardBuild.contentPersos, ...mediaPersos]
+}
+
+/** Applies a Flux Card's visibility transitions to its media, keeping the observed root still. */
+function revealFluxCardMedia(
+  perso: PersoDoc<string>,
+  enterEvent: string,
+  leaveEvent: string,
+  introRef: RevelationTransitionDefaults['intro'],
+  outroRef: RevelationTransitionDefaults['outro'],
+): PersoDoc<string> {
+  if (perso.initial === undefined) throw new Error(`Le média ${perso.id} de la Carte Flux ne possède pas d’état initial.`)
+  return {
+    ...perso,
+    initial: { ...perso.initial, style: createRevelationInitialStyle(introRef) },
     actions: {
-      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro, { omitOpacity }),
-      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro, { omitOpacity }),
+      ...perso.actions,
+      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
+      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
     },
   }
-  return [
-    root,
-    ...cardBuild.contentPersos,
-    ...applyCardMediaMotion(cardBuild.mediaPersos, enterEvent, leaveEvent, cardMediaMotion),
-  ]
 }
 
 /** Projects an anchored Statistical Graph into its existing Section anchor target. */
@@ -487,19 +566,8 @@ function createFluxGraphPersos(
     type: 'layout',
     initial: {
       move: { target: targetPartId },
-      className: `${rootClassName} ${layoutClass} ${renderingClass} elce-flux-graph-root`,
-      style: {
-        position: 'absolute',
-        zIndex: 1,
-        'position-anchor': anchorNameFor(targetPartId),
-        'inset-inline-start': 0,
-        'inset-inline-end': 0,
-        'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
-        width: '100%',
-        height: 'auto',
-        ...(bdc.statisticalGraph.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? {} : { aspectRatio: '16 / 9' }),
-        ...createRevelationInitialStyle(introRef),
-      },
+      className: `${rootClassName} ${layoutClass} ${renderingClass} elce-flux-graph-root ${sceneStyleClassName('flux-anchor-illustration', graphId)}`,
+      style: createRevelationInitialStyle(introRef),
       markup,
     },
     emit: {
@@ -538,8 +606,6 @@ function createQuestionMediaPerso(
         target,
         scrollPortId,
         resolveMediaSource(bdc.id, mediaId, options),
-        false,
-        ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO,
         options.editorSettings.revelation.imageEntrance,
       )]
     case MEDIA_TYPE.VIDEO:
@@ -549,7 +615,6 @@ function createQuestionMediaPerso(
         target,
         scrollPortId,
         resolveMediaSource(bdc.id, mediaId, options),
-        false,
         options.editorSettings.player.media.fluxVideoVisibilityZone,
       )]
     default:
@@ -581,37 +646,18 @@ function createImagePerso(
   articlePartId: string,
   scrollPortId: string,
   source: string,
-  anchored: boolean,
-  paddingBottom: string,
   entrance: ElceResolvedPageSettings['revelation']['imageEntrance'],
 ): PersoDoc<string> {
   const imageId = `${page.id}-${bdc.id}-image`
   const enterEvent = `${imageId}:enter`
-  const aspectRatio = anchored
-    ? anchorRatioService.imageAspectRatio(paddingBottom)
-    : ANCHOR.DEFAULT_IMAGE_ASPECT_RATIO
   return {
     id: imageId,
     type: 'img',
     initial: {
       src: source,
       className: 'elce-flux-image',
-      style: anchored
-        ? {
-            position: 'absolute',
-            'position-anchor': anchorNameFor(articlePartId),
-            'inset-inline-start': 0,
-            'inset-inline-end': 0,
-            'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
-            width: '100%',
-            height: 'auto',
-            aspectRatio,
-            translateX: entrance.restingTranslateX,
-          }
-        : { translateX: entrance.restingTranslateX },
-      img: {
-        style: { display: 'block', width: '100%', aspectRatio, objectFit: 'contain' },
-      },
+      style: { translateX: entrance.restingTranslateX },
+      img: { className: 'elce-flux-image__native' },
       move: { target: articlePartId },
     },
     emit: {
@@ -643,7 +689,6 @@ function createVideoPerso(
   articlePartId: string,
   scrollPortId: string,
   source: string,
-  anchored: boolean,
   visibilityZone: ElceResolvedPageSettings['player']['media']['fluxVideoVisibilityZone'],
 ): PersoDoc<string> {
   const videoId = `${page.id}-${bdc.id}-video`
@@ -658,21 +703,6 @@ function createVideoPerso(
       controls: true,
       sync: 'independent',
       className: 'elce-flux-video',
-      style: anchored
-        ? {
-            position: 'absolute',
-            'position-anchor': anchorNameFor(articlePartId),
-            'inset-inline-start': 0,
-            'inset-inline-end': 0,
-            'inset-block-start': `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
-            width: '100%',
-            height: 'auto',
-            aspectRatio: '16 / 9',
-          }
-        : { position: 'relative', width: '100%', marginInline: 'auto', maxWidth: '48rem' },
-      video: {
-        style: { display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover' },
-      },
       move: { target: articlePartId },
     },
     emit: {
@@ -708,48 +738,6 @@ function getCarouselRevelationSettings(
   const settings = editorSettings.revelation.carouselsByBdcId[bdcId]
   if (settings === undefined) throw new Error(`Les réglages de révélation du Carousel ${bdcId} sont absents.`)
   return settings
-}
-
-/** Applies Card-owned scroll events to image media without adding an observer. */
-function applyCardMediaMotion(
-  mediaPersos: readonly PersoDoc<string>[],
-  enterEvent: string,
-  leaveEvent: string,
-  motion: ResolvedCardMediaMotion | undefined,
-): readonly PersoDoc<string>[] {
-  if (motion === undefined) return mediaPersos
-  return mediaPersos.map((perso) => {
-    if (perso.type !== 'img') return perso
-    if (perso.initial === undefined) return perso
-    const actions: Record<string, unknown> = { ...perso.actions }
-    if (motion.intro !== null) {
-      actions[enterEvent] = { style: { translateX: {
-        from: motion.intro.fromTranslateX,
-        to: motion.intro.toTranslateX,
-        duration: motion.intro.duration,
-        ease: motion.intro.ease,
-      } } }
-    }
-    if (motion.outro !== null) {
-      actions[leaveEvent] = { style: { translateX: {
-        from: motion.outro.fromTranslateX,
-        to: motion.outro.toTranslateX,
-        duration: motion.outro.duration,
-        ease: motion.outro.ease,
-      } } }
-    }
-    return {
-      ...perso,
-      initial: {
-        ...perso.initial,
-        style: {
-          ...(typeof perso.initial.style === 'object' && perso.initial.style !== null ? perso.initial.style : {}),
-          opacity: motion.imageOpacity,
-        },
-      },
-      actions,
-    }
-  })
 }
 
 function resolveMediaSource(bdcId: BdcId, mediaId: string, options: FluxSceneBuildOptions): string {

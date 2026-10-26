@@ -437,7 +437,7 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           disabled={snapshot === null || pending}
           mix={on<HTMLButtonElement, 'click'>('click', state.onToggleTestControls)}
         >
-          {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-popup-reader-test-controls-icon', 14)}
+          {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-popup-reader-test-controls-icon')}
           Test auteur
         </button>
         <button
@@ -448,7 +448,7 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           disabled={snapshot === null || pending}
           mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('show-edited-page'))}
         >
-          {renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon', 14)}
+          {renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon')}
           <span
             id="elce-popup-reader-edited-page-label"
             className="elce-popup-reader__action-label"
@@ -464,7 +464,7 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
           disabled={snapshot === null || pending}
           mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('synchronize'))}
         >
-          {renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon', 14)}
+          {renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon')}
           <span
             id="elce-popup-reader-sync-label"
             className="elce-popup-reader__action-label"

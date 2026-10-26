@@ -6,7 +6,14 @@ export function createViewportExpansionStyleSheet(
 ): string {
   return `
 .elce-viewport-expansion-host {
+  position: fixed;
+  inset: 0;
   display: grid;
+  width: 100vw;
+  height: 100vh;
+  z-index: 19;
+  box-sizing: border-box;
+  overflow: hidden;
   place-items: stretch;
   background: rgb(0 0 0 / ${settings.backdropOpacity * 100}%);
   color: #fff;

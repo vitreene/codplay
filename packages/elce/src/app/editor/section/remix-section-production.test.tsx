@@ -94,7 +94,7 @@ describe('Remix production Section editor', () => {
         controller={controller}
         actions={actions}
       >
-        <RemixPageEditor />
+        <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
       </EditorContextProvider>
     </div>)
 

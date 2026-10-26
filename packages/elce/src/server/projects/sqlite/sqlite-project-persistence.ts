@@ -21,6 +21,7 @@ import type {
 } from '../../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../../../domain/summary-profile/test-state-types'
+import type { AppearanceSettings } from '../../../config/appearance/appearance-types'
 import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/commands/document-commands'
 import { ElceDocument } from '../../../domain/document/document-model'
 import type { AcquireProjectEditResult, DeleteProjectResult, EditProjectResult, ProjectEditGrant, ProjectPersistence, ProjectSummary, StoredProject } from '../project-persistence'
@@ -203,7 +204,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     })
   }
 
-  /** Creates a project from its browser-owned v5 document unless its id already exists. */
+  /** Creates a project from its browser-owned v7 document unless its id already exists. */
   public async createProject(document: ElceDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
@@ -211,8 +212,8 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         INSERT INTO projects (
           project_id, name, format_version, revision, created_at, updated_at,
           default_intro_transition_ref, default_outro_transition_ref,
-          summary_json, profile_json
-        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+          summary_json, profile_json, appearance_json
+        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(project_id) DO NOTHING
         RETURNING project_id
       `, [
@@ -225,6 +226,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         document.data.revelationDefaults.outro,
         JSON.stringify(document.data.summary),
         JSON.stringify(document.data.profile),
+        serializeOptionalJson(document.data.appearance),
       ])
 
       switch (inserted.length) {
@@ -291,7 +293,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         UPDATE projects
         SET name = ?, format_version = ?, revision = revision + 1, updated_at = ?,
             default_intro_transition_ref = ?, default_outro_transition_ref = ?,
-            summary_json = ?, profile_json = ?
+            summary_json = ?, profile_json = ?, appearance_json = ?
         WHERE project_id = ? AND revision = ?
         RETURNING project_id, name, revision
       `, [
@@ -302,6 +304,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         document.data.revelationDefaults.outro,
         JSON.stringify(document.data.summary),
         JSON.stringify(document.data.profile),
+        serializeOptionalJson(document.data.appearance),
         projectId,
         expectedRevision,
       ])
@@ -366,17 +369,18 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   }
 }
 
-/** Reconstructs the project summary and the v5 document from normalized rows. */
+/** Reconstructs the project summary and the v7 document from normalized rows. */
 async function readStoredProject(database: ProjectDatabase, projectId: string): Promise<StoredProject | null> {
   const projectRows = await queryRows(database, `
     SELECT project_id, name, format_version, revision,
-           default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json
+           default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json,
+           appearance_json
     FROM projects WHERE project_id = ?
   `, [projectId])
   if (projectRows.length === 0) return null
 
   const projectRow = projectRows[0]!
-  if (numberValue(projectRow, 'format_version') !== 5) {
+  if (numberValue(projectRow, 'format_version') !== 7) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -386,7 +390,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   }
 }
 
-/** Reads the relational records and assembles their ElceDocument v5 value. */
+/** Reads the relational records and assembles their ElceDocument v7 value. */
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<ElceDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
@@ -431,8 +435,9 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
   ))
   const data: ElceDocumentData = {
     id: projectId,
-    version: 5,
+    version: 7,
     name: stringValue(projectRow, 'name'),
+    ...optionalAppearance(projectRow),
     revelationDefaults: {
       intro: stringValue(projectRow, 'default_intro_transition_ref') as ElceDocumentData['revelationDefaults']['intro'],
       outro: stringValue(projectRow, 'default_outro_transition_ref') as ElceDocumentData['revelationDefaults']['outro'],
@@ -501,6 +506,7 @@ function pageFromRow(row: SqlRow, scenarioRows: readonly SqlRow[], placementRows
       .filter((placement) => placement.page_id === pageId)
       .sort(byPosition)
       .map((placement) => stringValue(placement, 'content_block_id')),
+    ...optionalAppearance(row),
   }
 }
 
@@ -533,6 +539,7 @@ function bdcFromRows(
     presetId: stringValue(row, 'preset_id'),
     pageId: nullableText(placement, 'page_id'),
     parentBdcId: nullableText(placement, 'parent_content_block_id'),
+    ...optionalAppearance(row),
     section: section === undefined ? null : {
       title: nullableText(section, 'title') ?? '',
       markup: stringValue(section, 'markup_html'),
@@ -641,8 +648,8 @@ async function writeDocumentRows(database: ProjectDatabase, document: ElceDocume
   await insertCatalogPages(database, document)
   for (const bdc of document.bdcs) {
     await queryRows(database,
-      'INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id) VALUES (?, ?, ?, ?)',
-      [document.id, bdc.id, bdc.type, bdc.presetId])
+      'INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id, appearance_json) VALUES (?, ?, ?, ?, ?)',
+      [document.id, bdc.id, bdc.type, bdc.presetId, serializeOptionalJson(bdc.appearance)])
   }
   for (const bdc of document.bdcs) await insertBdcPlacement(database, document, bdc)
   for (const bdc of document.bdcs) await insertBdcDetail(database, document.id, bdc)
@@ -670,8 +677,8 @@ async function insertChapter(database: ProjectDatabase, projectId: string, chapt
 /** Inserts a page identity; its scenario and BDC order are stored separately. */
 async function insertPage(database: ProjectDatabase, projectId: string, page: Page): Promise<void> {
   await queryRows(database,
-    'INSERT INTO pages (project_id, page_id, name, page_type) VALUES (?, ?, ?, ?)',
-    [projectId, page.id, page.name, page.type])
+    'INSERT INTO pages (project_id, page_id, name, page_type, appearance_json) VALUES (?, ?, ?, ?, ?)',
+    [projectId, page.id, page.name, page.type, serializeOptionalJson(page.appearance)])
 }
 
 /** Persists root scenario order and each chapter’s page order in one relation. */
@@ -1005,6 +1012,25 @@ function nullableText(row: SqlRow, key: string): string | null {
   if (value === null || value === undefined) return null
   if (typeof value !== 'string') throw new Error(`Valeur texte invalide en base : ${key}`)
   return value
+}
+
+/** Serializes optional appearance settings as SQL NULL when a scope inherits all values. */
+function serializeOptionalJson(value: AppearanceSettings | undefined): string | null {
+  if (value === undefined) return null
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) throw new Error('Réglages d’apparence non sérialisables.')
+  return serialized
+}
+
+/** Restores sparse appearance settings from one nullable relational column. */
+function optionalAppearance(row: SqlRow): Readonly<{ appearance?: AppearanceSettings }> {
+  const value = nullableText(row, 'appearance_json')
+  if (value === null) return {}
+  try {
+    return { appearance: JSON.parse(value) as AppearanceSettings }
+  } catch {
+    throw new Error('Réglages d’apparence JSON invalides en base.')
+  }
 }
 
 /** Converts an empty model string to SQL NULL for optional text columns. */

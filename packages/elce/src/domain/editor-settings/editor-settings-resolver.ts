@@ -1,5 +1,5 @@
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
-import { BDC_TYPE, PAGE_TYPE } from '../../config/document-config'
+import { BDC_TYPE } from '../../config/document-config'
 import type {
   Bdc,
   BdcId,
@@ -10,7 +10,6 @@ import type {
 import type {
   ElceResolvedPageSettings,
   ElceResolvedPlayerSettings,
-  ResolvedCardMediaMotion,
 } from './editor-settings-types'
 
 /** Resolves persisted and hidden editor settings before scene projection. */
@@ -42,7 +41,6 @@ export class ElceEditorSettingsResolver {
     const resolvedByBdcId = new Map<BdcId, RevelationTransitionDefaults>()
     const resolvingBdcIds = new Set<BdcId>()
     const byBdcId: Record<BdcId, RevelationTransitionDefaults> = {}
-    const cardMediaMotionByBdcId: Record<BdcId, ResolvedCardMediaMotion> = {}
     const carouselsByBdcId: Record<
       BdcId,
       ElceResolvedPageSettings['revelation']['carouselsByBdcId'][BdcId]
@@ -58,16 +56,6 @@ export class ElceEditorSettingsResolver {
         resolvedByBdcId,
         resolvingBdcIds,
       )
-      if (this.isFluxCardPlacement(page.type, bdc, bdcsById)) {
-        const effective = byBdcId[bdcId]
-        const cardMotion = ELCE_EDITOR_SETTINGS.revelation.flux.cardMediaMotion
-        cardMediaMotionByBdcId[bdcId] = {
-          intro: this.conflictsWithCardTransition(effective.intro) ? null : cardMotion.intro,
-          outro: this.conflictsWithCardTransition(effective.outro) ? null : cardMotion.outro,
-          imageOpacity: cardMotion.imageOpacity,
-          suppressCardOpacityTransitionForImages: cardMotion.suppressCardOpacityTransitionForImages,
-        }
-      }
       if (bdc.type !== BDC_TYPE.CAROUSEL || bdc.carousel == null) continue
       const defaults = byBdcId[bdcId]
       const entries: Record<BdcId, RevelationTransitionDefaults> = {}
@@ -89,7 +77,6 @@ export class ElceEditorSettingsResolver {
       revelation: {
         byBdcId,
         carouselsByBdcId,
-        cardMediaMotionByBdcId,
         cardObservationZone: ELCE_EDITOR_SETTINGS.revelation.flux.cardObservationZone,
         graphObservation: ELCE_EDITOR_SETTINGS.revelation.flux.graphObservation,
         imageEntrance: ELCE_EDITOR_SETTINGS.revelation.flux.imageEntrance,
@@ -150,15 +137,4 @@ export class ElceEditorSettingsResolver {
     }
   }
 
-  /** Gives a configured horizontal Capsule transition priority over media motion. */
-  private conflictsWithCardTransition(reference: RevelationTransitionDefaults['intro']): boolean {
-    return ELCE_EDITOR_SETTINGS.revelation.flux.cardMediaMotion.conflictsWith.some((candidate) => candidate === reference)
-  }
-
-  /** Limits scroll-driven media movement to direct and Section-anchored Flux Cards. */
-  private isFluxCardPlacement(pageType: Page['type'], bdc: Bdc, bdcsById: ReadonlyMap<BdcId, Bdc>): boolean {
-    if (pageType !== PAGE_TYPE.FLUX || bdc.type !== BDC_TYPE.CARD) return false
-    if (bdc.parentBdcId === null) return true
-    return bdcsById.get(bdc.parentBdcId)?.type === BDC_TYPE.SECTION
-  }
 }

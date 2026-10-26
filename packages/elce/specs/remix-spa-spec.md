@@ -25,11 +25,12 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - `RemixPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
   déplacement, les titres éditables, les commandes de création et le nettoyage
   au changement de page. Il rend dans Remix Section, Question, Résultat, Carte
-  directe et Carousel à chaque ligne BDC. Les marqueurs de type du chapitre
-  courant et de la page sélectionnée mesurent tous deux 14 × 14 px. L’échelle
-  commune des icônes Lucide de l’interface est 14 × 14 px ; les commandes
-  conservent leurs dimensions propres à leur rôle, avec 2 px de padding autour
-  des icônes seules et 4 px d’écart entre l’icône et son libellé ou voisin.
+  directe et Carousel à chaque ligne BDC. Les marqueurs de type du chapitre,
+  de la page et toutes les icônes Lucide d’interface utilisent `block-size: 1.4cap`
+  et une largeur automatique, sans attributs SVG `width`/`height` fixes. Leur
+  hauteur suit la capitale de la police courante ; les commandes conservent
+  leurs dimensions propres à leur rôle, avec 2 px de padding autour des icônes
+  seules et 4 px d’écart entre l’icône et son libellé ou voisin.
 - La Section utilise `renderRemixSectionEditor` et `SectionTiptapAdapter`.
   Remix rend le titre, les commandes et les ancres ; `@tiptap/core` garde le
   DOM ProseMirror. Les transactions, dépôts média, déplacements d’ancres et

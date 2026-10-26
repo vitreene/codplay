@@ -37,6 +37,7 @@ import {
 } from '../../scorm/scorm-types'
 import type { ElceScormProgressSink, ScormQuestionInteraction } from '../../scorm/scorm-types'
 import type { QuestionType } from '../../domain/question/question-types'
+import { documentAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
 import type {
   ProfileConstraint,
   ProfileProperty,
@@ -149,7 +150,7 @@ export function buildScenario(
   })
   const playerSettings = editorSettingsResolver.resolvePlayer()
   const sceneCatalog: Record<string, SightySceneSourceValue> = {
-    [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document.id),
+    [ELCE_SCENARIO.LAYOUT_SCENE]: createLayoutScene(document),
     [ELCE_SCENARIO.SUMMARY_SCENE]: buildSummaryScene(
       document,
       'root',
@@ -686,11 +687,9 @@ export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): bool
     }
     switch (event?.name) {
       case ELCE_EVENTS.NAVIGATION_PREVIOUS:
-        return chapterIndex > 0 || hasAdjacentScormChapter(runtime, context, scormChapter.id, -1)
+        return true
       case ELCE_EVENTS.NAVIGATION_NEXT:
-        return (chapterIndex < scormChapter.pageIds.length - 1
-          || hasAdjacentScormChapter(runtime, context, scormChapter.id, 1))
-          && canLeavePage(runtime, pageId, context)
+        return canLeavePage(runtime, pageId, context)
       case ELCE_EVENTS.MENU_SUMMARY:
         return false
       default:
@@ -702,7 +701,7 @@ export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): bool
   }
   switch (event?.name) {
     case ELCE_EVENTS.NAVIGATION_PREVIOUS:
-      return runtime.pageIds.indexOf(pageId) > 0
+      return true
     case ELCE_EVENTS.NAVIGATION_NEXT:
       return canLeavePage(runtime, pageId, context)
     case ELCE_EVENTS.MENU_SUMMARY:
@@ -1159,19 +1158,14 @@ async function createPresentation(
     && hasScormChapterSco(readerContext, previousScormChapter)
   const nextScormChapterAllowed = nextScormChapter !== undefined
     && hasScormChapterSco(readerContext, nextScormChapter)
-  const previousAllowed = page === undefined
-    ? false
-    : await scenarioState.canExit(
-        { path: pagePathFromTable(runtime.pagePaths, page) },
-      { name: ELCE_EVENTS.NAVIGATION_PREVIOUS, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
-      )
+  const previousPageAllowed = pageIndex > 0
   const nextExitAllowed = page === undefined
     ? false
     : await scenarioState.canExit(
         { path: pagePathFromTable(runtime.pagePaths, page) },
       { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
-  const nextPageAllowed = nextDestination === undefined
+  const nextDestinationAllowed = nextDestination === undefined
     ? nextScormChapterAllowed
     : await scenarioState.canAccess(nextDestination, {
       name: ELCE_EVENTS.NAVIGATION_NEXT,
@@ -1196,9 +1190,9 @@ async function createPresentation(
     menuPageStates: menu.states,
     previousAttributes: {
       type: 'button',
-      disabled: (pageIndex <= 0 && !previousScormChapterAllowed) || !previousAllowed,
+      disabled: !previousPageAllowed && !previousScormChapterAllowed,
     },
-    nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextPageAllowed },
+    nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextDestinationAllowed },
     navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
       ? ''
       : `Page ${pageIndex + 1} sur ${presentationPageIds.length}`,
@@ -1478,12 +1472,19 @@ function findChapter(document: ElceDocument, chapterId: string): Chapter {
 }
 
 /** Creates the fixed layout with the five explicit regions of the complete preview. */
-function createLayoutScene(documentId: string): SceneDoc<string> {
+function createLayoutScene(document: ElceDocument): SceneDoc<string> {
+  const documentId = document.id
   const menuPartId = `${documentId}:layout:menu`
   const menuTogglePartId = `${documentId}:layout:menu-toggle`
   const titlePartId = `${documentId}:layout:title`
   const contentPartId = `${documentId}:layout:content`
   const navigationPartId = `${documentId}:layout:navigation`
+  const appearanceClassNames = documentAppearanceClassNames(document)
+  const layoutAppearanceClass = appearanceClassNames['document:layout']
+  const contentAppearanceClass = appearanceClassNames['document:content']
+  if (layoutAppearanceClass === undefined || contentAppearanceClass === undefined) {
+    throw new Error(`Les classes d’apparence du projet ${documentId} sont incomplètes.`)
+  }
   return {
     id: `${documentId}-layout-scene`,
     stories: {
@@ -1496,8 +1497,8 @@ function createLayoutScene(documentId: string): SceneDoc<string> {
             type: 'layout',
             initial: {
               move: '@root',
-              className: 'elce-player-layout',
-              markup: `<main id="${documentId}-layout-root" class="elce-player-layout">
+              className: `elce-player-layout ${layoutAppearanceClass}`,
+              markup: `<main id="${documentId}-layout-root" class="elce-player-layout ${layoutAppearanceClass}">
                 <aside id="${documentId}-menu-region" class="elce-player-layout__menu" aria-label="Menu du document"><!-- data-part="${menuPartId}" --></aside>
                 <header id="${documentId}-title-region" class="elce-player-layout__title" aria-label="Page courante">
                   <!-- data-part="${menuTogglePartId}" -->
@@ -1514,7 +1515,7 @@ function createLayoutScene(documentId: string): SceneDoc<string> {
           createMenuTogglePerso(documentId, menuTogglePartId),
           createLayoutSlot(ELCE_SCENARIO.MENU_SLOT, menuPartId, 'elce-player-layout__menu-slot'),
           createLayoutSlot(ELCE_SCENARIO.TITLE_SLOT, titlePartId, 'elce-player-layout__title-slot'),
-          createLayoutSlot(ELCE_SCENARIO.CONTENT_SLOT, contentPartId, 'elce-player-layout__content elce-player-layout__content-slot', {
+          createLayoutSlot(ELCE_SCENARIO.CONTENT_SLOT, contentPartId, `elce-player-layout__content elce-player-layout__content-slot ${contentAppearanceClass}`, {
             tag: 'section',
             attr: { id: `${documentId}-content-region`, 'aria-label': 'Contenu de la page' },
           }),

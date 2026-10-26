@@ -66,7 +66,7 @@ export interface ProjectPersistence {
   /** Lists project identifiers, names, and current revisions. */
   listProjects(): Promise<readonly ProjectSummary[]>
 
-  /** Loads a project and its reconstructed v5 document. */
+  /** Loads a project and its reconstructed v7 document. */
   findProject(projectId: string): Promise<StoredProject | null>
 
   /** Creates revision zero unless the document identifier is already stored. */

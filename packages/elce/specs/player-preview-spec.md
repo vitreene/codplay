@@ -32,9 +32,10 @@ libellé visible est masqué et l’icône reste seule. Le texte reste disponibl
 dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icône
 et le libellé sont visibles ensemble.
 Les icônes d’interface du lecteur, y compris l’ouverture et la fermeture du
-sommaire Sighty/CodPlay, sont rendues en 14 × 14 px dans l’application Elcé.
-Les boutons gardent leur gabarit propre : la barre conserve ses cibles de 40 px
-sur mobile et le menu garde ses cibles tactiles de 44 px.
+sommaire Sighty/CodPlay, suivent la hauteur de capitale de la police courante
+avec `block-size: 1cap` et une largeur automatique, sans taille fixe dans les
+attributs SVG. Les boutons gardent leur gabarit propre : la barre conserve ses
+cibles de 40 px sur mobile et le menu garde ses cibles tactiles de 44 px.
 
 La popup auteur propose « Test auteur » pour ouvrir les réglages du profil et
 de la progression. Son icône Lucide List est la même que celle du bouton
@@ -60,12 +61,43 @@ confirmation du transfert d’une image, le Blob n’est pas requis par le lecte
 ### Sources de style du scénario
 
 La preview et l’export consomment le même scénario produit par
-`createElcePlayerScenario`. Les styles partagés du lecteur et d’expansion du
-viewport sont attachés à la source de la scène layout. Les feuilles CSS
-produites par les builders restent attachées à la source de leur scène de page.
-Le paquetage Sighty peut ainsi conserver chaque feuille dans le paquet CodPlay
-de la scène qui l’utilise, sans déplacer les styles vers un registre runtime
-global.
+`createElcePlayerScenario`. Les styles partagés du lecteur, d’expansion du
+viewport et d’apparence documentaire sont attachés à la source de la scène
+layout persistante. Les styles de géométrie des builders restent attachés aux
+scènes de page. La feuille layout porte les définitions `@font-face` uniques
+pour les familles, styles et poids utilisés par le document ; les scènes de
+page n’en redéclarent aucune. Dans la preview, `/fonts/<famille>/<style>-<poids>.ttf` est
+servi par le routeur Elcé via le service d’assets Remix, qui le résout depuis
+`/assets/elce/assets/fonts/`. Dans le package Sighty, l’exporteur copie les
+fichiers utilisés et leurs licences ; la feuille emploie `./fonts/` pour rester
+autonome après extraction.
+Les classes d’apparence sont lisibles, réutilisables et indépendantes des
+identifiants de cibles. Elles restent distinctes des classes de layout et de
+transition des builders. Les identifiants DOM et les cibles `data-part` ne
+changent pas.
+
+Les réglages d’apparence du document s’appliquent par classes et feuilles CSS
+de scène. Le fond projet cible la racine layout, tandis que sa typographie et
+sa densité visent la zone de contenu ; les réglages de page et de chaque BDC
+conservent leurs surfaces propres. Les déclarations statiques restent dans les
+classes CSS ; les attributs CodPlay `style` restent réservés aux propriétés
+animées et à leur état de repos. Le détail du résolveur, du panneau et des rôles
+de surface figure dans la [spécification d’apparence](./appearance-spec.md).
+
+Le lecteur charge comme assets les feuilles de palette, de famille, de densité
+et la règle de lecture commune effectivement utilisées. La feuille de la scène
+layout porte les règles de couleurs personnalisées et les `@font-face` propres
+au document. Les feuilles de l’application d’édition ne sont pas ajoutées au
+document lecteur. Dans le package Sighty, les mêmes feuilles utilisées sont
+importées localement par la scène layout et le paquetage les développe selon
+son circuit CSS existant.
+
+[`appearance-font-assets.test.ts`](../src/player/appearance-font-assets.test.ts)
+vérifie la déduplication des règles et les chemins preview/package ;
+[`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts) vérifie
+le routage local des fichiers `.ttf`. La validation Safari du rendu Demo5 après
+chargement de la migration v7 reste ouverte dans le
+[plan Style](../plan/2026-10-22-elce-style-tab-plan.md).
 
 ### Preview réseau sur mobile
 
@@ -98,6 +130,13 @@ les prérequis de chapitre et les règles d’Évaluation. Un BDC Résultat cons
 son garde global et reste inaccessible tant que le parcours requis pour son
 évaluation n’est pas terminé. Les pages antérieures à l’origine de preview ne
 reçoivent aucune progression ni réponse.
+
+« Précédent » dépend de l’existence d’une page précédente, sans condition de
+complétion. « Suivant » demande que la page courante puisse être quittée et que
+sa destination soit accessible. En multi-SCO, la destination de bordure est
+disponible seulement avec l’identifiant stable du SCO voisin. La garde de sortie
+ne vérifie pas l’existence de cette destination ; l’action inter-SCO la
+revalide avec la complétion de la page avant d’appeler le LMS.
 
 ## Lecture des vidéos et sortie de page
 
@@ -195,10 +234,10 @@ détruit les ressources du lecteur.
   chargées depuis leurs URL API. « Réafficher la page éditée » a réaffiché la
   même page. Les consoles étaient vides et aucun asset React, ReactDOM,
   `@react-refresh` ou `react/jsx-runtime` n’a été demandé.
-- Brave DevTools, le 9 octobre 2026, confirme sur 5175 que les commandes de la
-  barre et les icônes d’ouverture/fermeture du sommaire mesurent 14 × 14 px. À
-  390 px, la barre garde des boutons de 40 px et le menu des boutons de 44 px ;
-  à 1280 px, les commandes conservent leurs libellés et noms accessibles.
+- Safari MCP, le 25 octobre 2026, confirme dans l’éditeur la prise en charge de
+  `1cap` et l’absence d’attributs SVG de taille fixe sur les icônes. La feuille
+  du popup applique la même règle ; ses cibles tactiles restent configurées à
+  40 px et 44 px.
 - Brave DevTools, le 13 octobre 2026, a ouvert depuis l’éditeur synchronisé
   `elce-document`, page « Titre », l’URL réseau
   `http://192.168.1.47:5175/?elce-preview-project=elce-document&elce-preview-page=page-a`.

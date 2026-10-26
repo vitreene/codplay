@@ -9,6 +9,7 @@ import { buildQuestionBdcStory, buildQuestionCardPreset } from '../question/ques
 import { buildEvaluationResultBdcScene } from '../evaluation/evaluation-result-bdc-scene-builder'
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
+import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../scene-style/appearance-class-names.ts'
 
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
 const carouselSceneBuilder = new ElceCarouselSceneBuilder()
@@ -30,7 +31,7 @@ export function buildDiapoScene(
 
   if (bdc?.type === BDC_TYPE.CAROUSEL) {
     const carouselBuild = buildCarousel(page, bdc, bdcs, options)
-    const pageStory: StoryDoc<string> = { ...carouselBuild.story, id: storyId }
+    const pageStory = createDiapoCarouselPageStory(page, bdc, { ...carouselBuild.story, id: storyId }, options)
     return {
       sceneDoc: {
         ...addViewportExpansionToScene({
@@ -44,6 +45,7 @@ export function buildDiapoScene(
 
   const scrollPortId = `${page.id}-diapo-scrollport`
   const rootId = `${page.id}-diapo-content`
+  const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
   let markup = ''
   let bottomPartMarkup = ''
   let pageBottomMarker: PersoDoc<string> | undefined
@@ -61,6 +63,7 @@ export function buildDiapoScene(
           bdc,
           mediaSources: options.mediaSources ?? {},
           mediaTypes: options.mediaTypes ?? {},
+          appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
         })
         markup = cardBuild.markup
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
@@ -79,9 +82,11 @@ export function buildDiapoScene(
           bdc,
           `${page.id}-${bdc.id}-graph`,
           `${page.id}:${bdc.id}:statistical-graph`,
+          appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
         )
         markup = graphBuild.markup
         pagePersos = graphBuild.mediaPersos
+        styleSheets = [graphBuild.styleSheet]
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
         pageBottomMarker = createPageBottomMarkerPerso({
           pageId: page.id,
@@ -98,6 +103,7 @@ export function buildDiapoScene(
           `${page.id}-${bdc.id}`,
           `${page.id}:${bdc.id}:question`,
           bdc.question,
+          appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
         )
         markup = questionBuild.markup
         const questionStory = buildQuestionBdcStory(
@@ -123,7 +129,11 @@ export function buildDiapoScene(
           case undefined:
             throw new Error(`Le BDC Résultat ${bdc.id} ne peut être projeté que dans une Diapo d’Évaluation.`)
         }
-        const resultBuild = buildEvaluationResultBdcScene(page, bdc)
+        const resultBuild = buildEvaluationResultBdcScene(
+          page,
+          bdc,
+          appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
+        )
         markup = resultBuild.mountMarkup
         childStories = Object.fromEntries(resultBuild.stories.map((story) => [story.id, story]))
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
@@ -162,7 +172,6 @@ export function buildDiapoScene(
           tag: 'section',
           attr: { id: scrollPortId, 'aria-label': 'Contenu de la Diapo' },
           className: 'elce-diapo-host',
-          style: { width: '100%', height: '100%', minWidth: 0, minHeight: 0, overflowY: 'hidden' },
           move: '@root',
         },
       },
@@ -171,9 +180,8 @@ export function buildDiapoScene(
         type: 'layout',
         initial: {
           move: { target: scrollPortId },
-          className: 'elce-diapo-content',
-          style: { width: '100%', height: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden' },
-          markup: `<article id="${rootId}" class="elce-diapo-content">${markup}${bottomPartMarkup}</article>`,
+          className: `elce-diapo-content ${pageAppearanceClass}`,
+          markup: `<article id="${rootId}" class="elce-diapo-content ${pageAppearanceClass}">${markup}${bottomPartMarkup}</article>`,
         },
       },
       ...(pageBottomMarker === undefined ? [] : [pageBottomMarker]),
@@ -189,6 +197,39 @@ export function buildDiapoScene(
     styleSheets,
     ...(questionReset === undefined ? {} : { questionReset }),
   }
+}
+
+/** Places the Carousel BDC inside its distinct Diapo page appearance root. */
+function createDiapoCarouselPageStory(
+  page: Page,
+  carousel: Bdc,
+  story: StoryDoc<string>,
+  options: DiapoSceneBuildOptions,
+): StoryDoc<string> {
+  const pageRootId = `${page.id}-diapo-content`
+  const pagePartId = `${page.id}:diapo:carousel`
+  const carouselRootId = `${page.id}-${carousel.id}-diapo-end-scrollport`
+  let foundCarouselRoot = false
+  const carouselPersos = (story.persos ?? []).map((perso) => {
+    if (perso.id !== carouselRootId) return perso
+    foundCarouselRoot = true
+    return {
+      ...perso,
+      initial: { ...perso.initial, move: { target: pagePartId } },
+    }
+  })
+  if (!foundCarouselRoot) throw new Error(`La racine de Diapo Carousel ${carousel.id} est absente.`)
+  const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
+  const pageRoot: PersoDoc<string> = {
+    id: pageRootId,
+    type: 'layout',
+    initial: {
+      move: '@root',
+      className: `elce-diapo-content ${pageAppearanceClass}`,
+      markup: `<article id="${pageRootId}" class="elce-diapo-content ${pageAppearanceClass}"><!-- data-part="${pagePartId}" --></article>`,
+    },
+  }
+  return { ...story, persos: [pageRoot, ...carouselPersos] }
 }
 
 /** Projects the Diapo's one supported Carousel BDC with its illustration children. */
@@ -218,6 +259,7 @@ function buildCarousel(
     displayMode: 'scene',
     storyId: `${page.id}-diapo-page`,
     completionEventRootId: `${page.id}-${carousel.id}-diapo-end-scrollport`,
+    appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
   })
 }
 
@@ -242,7 +284,7 @@ function createQuestionMediaPerso(
         initial: {
           src: source,
           className: 'elce-diapo-question-media',
-          img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' } },
+          img: { className: 'elce-diapo-question-media__native' },
           move: { target },
         },
       }]
@@ -256,7 +298,6 @@ function createQuestionMediaPerso(
           controls: true,
           sync: 'independent',
           className: 'elce-diapo-question-media',
-          video: { style: { display: 'block', width: '100%', maxHeight: '28vh', objectFit: 'contain' } },
           move: { target },
         },
       }]

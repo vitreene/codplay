@@ -3,6 +3,7 @@ import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { MediaId, PageId, BdcId, Bdc } from '../../domain/document/document-types'
 import type { MediaType } from '../../config/document-config-types'
 import type { ElceResolvedPlayerSettings, ResolvedCarouselRevelationSettings } from '../../domain/editor-settings/editor-settings-types'
+import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
 
 export interface CarouselSceneBuildInput {
   readonly pageId: PageId
@@ -18,6 +19,7 @@ export interface CarouselSceneBuildInput {
   readonly playerSettings: ElceResolvedPlayerSettings
   readonly displayMode?: 'content' | 'scene'
   readonly completionEventRootId?: string
+  readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }
 
 export interface CarouselSceneBuild {

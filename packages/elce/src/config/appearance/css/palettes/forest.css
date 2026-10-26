@@ -1,0 +1,43 @@
+@scope (.elce-player-layout) {
+  .bg-forest-background:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-forest-background.card-text-image > .elce-carousel-text-image__content,
+  .bg-forest-background.card-image-caption > .elce-card-image-caption__caption { background-color: #f5f7ef; }
+  .bg-forest-surface:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-forest-surface.card-text-image > .elce-carousel-text-image__content,
+  .bg-forest-surface.card-image-caption > .elce-card-image-caption__caption { background-color: #ffffff; }
+  .bg-forest-text:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-forest-text.card-text-image > .elce-carousel-text-image__content,
+  .bg-forest-text.card-image-caption > .elce-card-image-caption__caption { background-color: #263c2c; }
+  .bg-forest-muted:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-forest-muted.card-text-image > .elce-carousel-text-image__content,
+  .bg-forest-muted.card-image-caption > .elce-card-image-caption__caption { background-color: #5b6e58; }
+  .bg-forest-accent:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-forest-accent.card-text-image > .elce-carousel-text-image__content,
+  .bg-forest-accent.card-image-caption > .elce-card-image-caption__caption { background-color: #3b704b; }
+  .bg-forest-border:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-forest-border.card-text-image > .elce-carousel-text-image__content,
+  .bg-forest-border.card-image-caption > .elce-card-image-caption__caption { background-color: #d0dbc8; }
+  .ink-forest-background { color: #f5f7ef; }
+  .ink-forest-surface { color: #ffffff; }
+  .ink-forest-text { color: #263c2c; }
+  .ink-forest-muted { color: #5b6e58; }
+  .ink-forest-accent { color: #3b704b; }
+  .ink-forest-border { color: #d0dbc8; }
+
+  @scope (.ink-forest-background, .ink-forest-surface, .ink-forest-text, .ink-forest-muted, .ink-forest-accent, .ink-forest-border) {
+    :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: #5b6e58; }
+  }
+
+  @supports (color: contrast-color(#ffffff)) {
+    .contrast-forest-background:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#f5f7ef); }
+    .contrast-forest-surface:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#ffffff); }
+    .contrast-forest-text:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#263c2c); }
+    .contrast-forest-muted:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#5b6e58); }
+    .contrast-forest-accent:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#3b704b); }
+    .contrast-forest-border:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#d0dbc8); }
+
+    @scope (.contrast-forest-background, .contrast-forest-surface, .contrast-forest-text, .contrast-forest-muted, .contrast-forest-accent, .contrast-forest-border) {
+      :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: inherit; }
+    }
+  }
+}

@@ -2,6 +2,9 @@ import type { PersoDoc } from 'codplay/scene/types'
 import { CARD_IMAGE_FIT, DEFAULT_PRESET_ID, MEDIA_TYPE } from '../../config/document-config'
 import type { CardImageFit, MediaType } from '../../config/document-config-types'
 import type { MediaId, PageId, Bdc, BdcId } from '../../domain/document/document-types'
+import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
+import { appearanceClassNameForBdc } from '../scene-style/appearance-class-names.ts'
+import { appendClassToMarkupElement } from '../scene-style/scene-style-classes'
 import { ElceCardPresetBuilder } from './card-preset-builder'
 
 export interface CardBdcSceneBuildInput {
@@ -11,6 +14,7 @@ export interface CardBdcSceneBuildInput {
   readonly mediaSources: Readonly<Record<MediaId, string>>
   readonly mediaTypes: Readonly<Record<MediaId, MediaType>>
   readonly photoMediaRoot?: boolean
+  readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }
 
 export interface CardBdcSceneBuild {
@@ -19,6 +23,7 @@ export interface CardBdcSceneBuild {
   readonly zonePartIds: Readonly<Record<string, string>>
   readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
+  readonly styleSheet: string
 }
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
@@ -33,12 +38,19 @@ export class ElceCardBdcSceneBuilder {
     const partId = `${pageId}:${containerBdcId}:card:${bdc.id}`
     const layout = cardPresetBuilder.build(bdc.presetId, rootId, partId)
     const photoMediaRoot = input.photoMediaRoot === true && bdc.presetId === DEFAULT_PRESET_ID.PHOTO
+    const markup = photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : layout.markup
+    const appearanceClassName = appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget)
     return {
-      markup: photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : layout.markup,
-      rootClassName: layout.rootClassName,
+      markup: appendClassToMarkupElement(
+        markup,
+        rootId,
+        appearanceClassName,
+      ),
+      rootClassName: `${layout.rootClassName} ${appearanceClassName}`,
       zonePartIds: layout.zonePartIds,
       contentPersos: createCardContentPersos(bdc, layout.zonePartIds, layout.zoneClassNames, `${pageId}:${bdc.id}`),
       mediaPersos: createCardMediaPersos(input, partId, bdc.card.imageFit),
+      styleSheet: '',
     }
   }
 }

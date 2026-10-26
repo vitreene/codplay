@@ -1,0 +1,10 @@
+@scope (.elce-player-layout) {
+  @scope (.headings-montserrat) {
+    :scope :is(h1, h2, h3, h4, h5, h6) { font-family: 'Montserrat', sans-serif; }
+  }
+
+  .body-montserrat {
+    font-family: 'Montserrat', sans-serif;
+    line-height: 1.45;
+  }
+}

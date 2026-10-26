@@ -414,8 +414,9 @@ function createAnchorEditIcon(id: string): SVGSVGElement {
   if (root.localName !== 'svg') throw new Error('Lucide asset is not an SVG element.')
   const icon = document.importNode(root, true) as unknown as SVGSVGElement
   icon.id = id
-  icon.setAttribute('width', '18')
-  icon.setAttribute('height', '18')
+  icon.removeAttribute('width')
+  icon.removeAttribute('height')
+  icon.classList.add('elce-ui-icon')
   icon.setAttribute('aria-hidden', 'true')
   return icon
 }

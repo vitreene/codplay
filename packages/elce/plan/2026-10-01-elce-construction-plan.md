@@ -40,18 +40,20 @@ présent plan restent propriétaires du mod actuel, désormais nommé Learning.
 ## Étude distincte de l’onglet Style
 
 L’[analyse de l’onglet Style](../notes/2026-10-22-style-tab-analysis.md) et son
-[plan dédié](./2026-10-22-elce-style-tab-plan.md) étudient les presets, les
-réglages par projet/page/bloc et leur héritage. Le plan est **A relire** ; les
-choix d’apparence ne sont pas implémentés par cette étude et ne changent pas les
-contrats vérifiés du POC. Les décisions et acceptations à venir restent dans
-ce plan dédié.
+[plan dédié](./2026-10-22-elce-style-tab-plan.md) suivent les presets, les
+réglages par projet/page/bloc et leur héritage. Le premier état est **En cours** ;
+les comportements vérifiés sont décrits dans la
+[spécification d’apparence](../specs/appearance-spec.md). Le plan dédié
+regroupe les décisions et acceptations restantes ; la méthode de construction
+et d’application des classes est **A relire**. Ses détails sont conservés
+dans les notes Style.
 
 ## Ordre et critères de sortie
 
 | Ordre | Tranche | État | Critère de sortie |
 | --- | --- | --- | --- |
 | 0 | Application et workspace | En cours | Lancement à froid, preview, typecheck, tests et build fonctionnent depuis le workspace Elcé ; le navigateur restaure le document et ses médias. |
-| 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 font 14 px. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le panneau « Contenus » occupe la colonne droite et expose les variables de profil dans le contexte d’édition pertinent. Une page déplacée ne reconstruit pas les scènes. |
+| 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 suivent la hauteur de capitale via `1.4cap`. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le panneau « Contenus » occupe la colonne droite et expose les variables de profil dans le contexte d’édition pertinent. Une page déplacée ne reconstruit pas les scènes. |
 | 2 | Première lecture Flux dans Sighty/CodPlay | En cours | Une scène Flux réelle se lit via le scénario Sighty et son slot racine. Le scroll s’aligne par proximité sur le début de chaque BDC direct. Menu, lecture à la page courante, repère de fin, pages courtes et longues suivent les contrats de la démo 5. Un aller-retour A → B → A conserve chaque scène. |
 | 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. Une image chargée réserve son ratio intrinsèque, une vidéo conserve le cadre configuré `16 / 9`, et le panneau d’édition s’affiche sur le cadre du média sélectionné. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
 | 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. En mode éditeur, l’illustration et la zone question-réponses sont côte à côte au rapport 25/75. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
@@ -326,6 +328,36 @@ inaccessible. Dans le parcours accessible, valider la Question de F après les
 pages précédentes, vérifier l’accès à G, puis cliquer « Suivant » et constater
 Page G.
 
+**Correction acceptée, 25 octobre — révélation :** défaut projet `swipe-right`
+à l’entrée et à la sortie ; conserver les remplacements existants. Pour une
+Carte média Flux, garder l’observation sur la racine fixe et porter l’animation
+par le média enfant.
+
+**Décision acceptée — simplifier « Suivant/Précédent », 25 octobre :** la garde
+de sortie répond uniquement aux conditions pour quitter la page ; le calcul des
+boutons décide séparément si leur destination existe et est accessible. Pour
+« Précédent », seule la destination compte. Pour « Suivant », `canExit` vérifie
+la page courante et `canAccess` vérifie la page cible, ou l’identifiant stable
+du SCO cible à une frontière. Retirer de `pageExitGuard` ses vérifications de
+présence d’un chapitre adjacent. À la frontière, l’action SCORM sans `go`
+revalide la complétion et l’identifiant avant l’appel LMS, car Sighty ne peut
+pas appliquer les gardes d’une route qu’elle n’effectue pas. Ne pas changer
+Sighty/CodPlay. Vérifier les boutons, les gardes de page, le clic inter-SCO et
+le refus d’une action directe si la page n’est pas terminée.
+
+**État, 25 octobre :** le défaut est appliqué au code et au projet Demo5 par la
+commande `document.revelation.update` (révision 32) ; aucun remplacement local
+de BDC n’a été modifié ; le défaut des transitions entre cartes reste « Fondu ».
+Le bouton « Précédent » ne vérifie plus de garde de sortie, et « Suivant » sépare
+la sortie courante de l’accès à sa destination ; à la frontière SCO, le handler
+revalide la page et l’identifiant cible. Le test de scénario couvre les deux
+boutons et refuse une action inter-SCO directe si la page est incomplète ou si
+l’identifiant manque. Les 468 tests passants, le typecheck, le build et
+`git diff --check` sont confirmés. Le seul échec de la suite complète reste
+l’écouteur SQLite refusé par l’environnement (`listen EPERM`). La preview
+n’avait pas d’onglet dédié ; l’unique onglet Safari étant l’éditeur, il a été
+laissé intact. La validation visuelle native reste donc à faire.
+
 ### Snap des BDC Flux — retrait demandé le 15 octobre 2026
 
 **Statut : CSS retiré et vérifié automatiquement le 15 octobre 2026 ;
@@ -491,9 +523,7 @@ façon autorisée.
 
 Le titre central de chaque page affiche l’icône de son type avant le nom, sans
 retirer l’édition inline. Réutiliser les icônes déjà associées aux types dans
-les commandes du Scénario : FilePlus pour Flux et Presentation pour Diapo. Le
-marqueur de la page sélectionnée garde la même taille de 14 × 14 px que le
-marqueur du chapitre courant.
+les commandes du Scénario : FilePlus pour Flux et Presentation pour Diapo. Le marqueur de la page sélectionnée suit la hauteur de capitale (`1.4cap`) comme le marqueur du chapitre courant.
 Implémenté le 9 octobre 2026 dans le titre de page Remix et dans la commande
 d’icône partagée avec le Scénario. Le 9 octobre, l’ajout de ce helper avait
 laissé deux imports sans extension ; le serveur a répondu 404 sur
@@ -502,32 +532,13 @@ de l’interface. Les imports pointent maintenant explicitement vers le module
 `.ts`. Après rechargement dans Brave sur 5175, Projet 1 s’affiche avec le
 statut « Synchronisé », l’icône Presentation précède le titre Page B et la
 console ne signale plus d’erreur. Le typecheck et `git diff --check` passent.
-Brave confirme maintenant que le SVG du marqueur de chapitre et celui de la
-page mesurent chacun 14 × 14 px ; la console reste sans erreur. L’affichage du
-titre Flux reste à contrôler dans Brave.
+Safari MCP, le 25 octobre 2026, avait confirmé que les SVG du marqueur de chapitre et de page n’ont pas d’attribut de taille fixe et utilisaient `block-size: 1cap`. La règle est passée à `1.4cap` et doit être revalidée visuellement ; l’affichage du titre Flux reste à contrôler dans Brave.
 
-### Régularité des icônes et de leurs commandes — décision acceptée, vérifiée
+### Taille des icônes d’interface — règle appliquée
 
-L’interface Elcé utilise la taille Lucide la plus fréquente déjà présente :
-14 × 14 px. Les commandes conservent les dimensions définies par leur rôle ; aucune
-taille de bouton commune ne remplace ces gabarits. Le padding autour des icônes
-est harmonisé à 2 px, et l’écart entre icône et libellé ou voisin à 4 px.
-Les SVG qui portent le contenu d’un graphe ou d’une illustration ne sont pas
-des icônes d’interface et gardent leur contrat de rendu.
+Les SVG Lucide de l’interface utilisent `.elce-ui-icon` avec `block-size: 1.4cap` et une largeur automatique. Le renderer retire les attributs SVG `width`/`height` ; l’icône d’ancre réutilise la même classe. La flèche de sélection CSS suit aussi `1cap`. Les dimensions des boutons restent propres à leur rôle, avec le padding de 2 px et l’écart de 4 px déjà définis. Les SVG de graphe et d’illustration gardent leur contrat de rendu.
 
-**Vérification le 9 octobre 2026 :** Brave sur 5175 affiche à 1024 px le
-Scénario, le catalogue, les commandes de page, et sur Page A les éditeurs
-Section/Quiz/Graphe ; Page B couvre le Carousel. À 390 px, l’éditeur montre le
-Carousel et le lecteur popup a été contrôlé. Toutes les icônes d’interface
-mesurées font 14 × 14 px ; le padding interne est de 2 px et les écarts entre
-éléments avec icône de 4 px. Les dimensions de boutons restent propres à chaque
-action. Dans le lecteur popup, les icônes du menu gardent aussi 14 × 14 px et
-les cibles tactiles restent de 40 px et 44 px. Les libellés et noms accessibles
-restent présents. Cette preuve porte sur la taille des icônes, pas sur
-l’adaptation responsive de l’éditeur Carousel ; le débordement observé reste
-ouvert dans la section [Décisions ouvertes](#décisions-ouvertes). Typecheck et
-`git diff --check` passent.
-
+Safari MCP, le 25 octobre 2026, avait vérifié la prise en charge de `1cap` et l’absence de taille fixe sur les 78 icônes d’éditeur présentes. La règle `1.4cap` reste à vérifier visuellement ; les feuilles du popup utilisent la même règle.
 ### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
 
 - Décision validée le 5 octobre 2026 : à 800 px et en dessous, une icône ouvre

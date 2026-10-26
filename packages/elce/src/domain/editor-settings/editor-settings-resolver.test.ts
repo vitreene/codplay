@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CAROUSEL_TRANSITION } from '../../config/document-config'
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
-import { applyDocumentCommand, createCarouselBdcCommand, createStandaloneCardBdcCommand } from '../commands/document-commands'
+import { applyDocumentCommand, createCarouselBdcCommand } from '../commands/document-commands'
 import { createInitialDocument } from '../document/document-model'
 import { ElceEditorSettingsResolver } from './editor-settings-resolver'
 
@@ -82,21 +82,4 @@ describe('ElceEditorSettingsResolver', () => {
     )).toEqual({ intro: CAROUSEL_TRANSITION.SWIPE_LEFT, outro: CAROUSEL_TRANSITION.ZOOM })
   })
 
-  it('keeps a horizontal Card transition from being covered by image movement', () => {
-    const initial = createInitialDocument()
-    const page = initial.pages[0]!
-    const withCard = applyDocumentCommand(initial, createStandaloneCardBdcCommand('card-motion', page.id))
-    const cardPage = withCard.pages[0]!
-    const settings = resolver.resolvePage(cardPage, withCard.bdcs, {
-      intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
-      outro: CAROUSEL_TRANSITION.FADE,
-    })
-
-    expect(settings.revelation.cardMediaMotionByBdcId['card-motion']).toEqual({
-      intro: null,
-      outro: { fromTranslateX: '0%', toTranslateX: '-112%', duration: 820, ease: 'inCubic' },
-      imageOpacity: 0.92,
-      suppressCardOpacityTransitionForImages: true,
-    })
-  })
 })

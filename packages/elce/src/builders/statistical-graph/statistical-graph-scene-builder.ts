@@ -3,12 +3,14 @@ import type { Bdc } from '../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
 import type { PersoDoc } from 'codplay/scene/types'
 import { VIEWPORT_EXPANSION_CONTENT_ATTR } from '../viewport-expansion/viewport-expansion-builder.ts'
+import { sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
 
 export interface StatisticalGraphSceneBuild {
   readonly markup: string
   readonly rootClassName: string
   readonly contentPersos: readonly []
   readonly mediaPersos: readonly PersoDoc<string>[]
+  readonly styleSheet: string
 }
 
 const graphColors = ['#326c64', '#c27b3a', '#5376a2', '#a64f4f', '#7a6599', '#7f8f45', '#4c8491', '#bd6688']
@@ -16,11 +18,16 @@ const graphColors = ['#326c64', '#c27b3a', '#5376a2', '#a64f4f', '#7a6599', '#7f
 /** Projects one Statistical Graph BDC into accessible markup for the existing page and Carousel builders. */
 export class ElceStatisticalGraphSceneBuilder {
   /** Builds the selected SVG chart or visible HTML table and its semantic data table. */
-  public build(bdc: Bdc, rootId = `elce-${bdc.id}-graph`, partId?: string): StatisticalGraphSceneBuild {
+  public build(
+    bdc: Bdc,
+    rootId = `elce-${bdc.id}-graph`,
+    partId?: string,
+    appearanceClassName?: string,
+  ): StatisticalGraphSceneBuild {
     if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
       throw new Error(`Le BDC ${bdc.id} n’est pas un Graphe complet.`)
     }
-    return this.buildContent(bdc.statisticalGraph, bdc.presetId, rootId, partId)
+    return this.buildContent(bdc.statisticalGraph, bdc.presetId, rootId, partId, appearanceClassName)
   }
 
   /** Builds preview markup from graph content without requiring a document BDC wrapper. */
@@ -29,8 +36,10 @@ export class ElceStatisticalGraphSceneBuilder {
     layoutId: string,
     rootId: string,
     partId?: string,
+    appearanceClassName?: string,
   ): StatisticalGraphSceneBuild {
     const titleId = `${rootId}-svg-title`
+    const tableFitRules: string[] = []
     const renderingContent = transposeStatisticalGraphContent(content)
     const title = content.title.trim() || 'Graphe'
     const visibleTitle = content.title.trim().length > 0
@@ -40,8 +49,8 @@ export class ElceStatisticalGraphSceneBuilder {
       ? ''
       : `<p id="${rootId}-overline" class="elce-statistical-graph__overline">${escapeHtml(content.overline)}</p>`
     const chart = renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE
-      ? renderVisibleTable(renderingContent, rootId)
-      : `${renderSvgChart(renderingContent, rootId, titleId)}${renderAccessibleTable(renderingContent, rootId)}`
+      ? renderVisibleTable(renderingContent, rootId, tableFitRules)
+      : `${renderSvgChart(renderingContent, rootId, titleId)}${renderAccessibleTable(renderingContent, rootId, tableFitRules)}`
     const layoutClass = layoutId === 'statistical-graph-side-by-side'
       ? 'elce-statistical-graph--side-by-side'
       : 'elce-statistical-graph--above-text'
@@ -54,11 +63,21 @@ export class ElceStatisticalGraphSceneBuilder {
       ? chart
       : `<!-- data-part="${escapeHtml(visualPartId)}" -->`
     const visualClassName = `elce-statistical-graph__visual${content.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? ' elce-statistical-graph__visual--table' : ''}`
-    const markup = `<figure id="${rootId}" class="elce-statistical-graph ${layoutClass} elce-statistical-graph--${content.rendering}">${rootPart}${overline}${visibleTitle}<div id="${rootId}-body" class="elce-statistical-graph__body"><div id="${rootId}-visual" class="${visualClassName}">${visualMarkup}</div>${textPanel}</div></figure>`
+    const appearanceClass = ` ${appearanceClassName ?? 'graph bdc'}`
+    const markup = `<figure id="${rootId}" class="elce-statistical-graph ${layoutClass} elce-statistical-graph--${content.rendering}${appearanceClass}">${rootPart}${overline}${visibleTitle}<div id="${rootId}-body" class="elce-statistical-graph__body"><div id="${rootId}-visual" class="${visualClassName}">${visualMarkup}</div>${textPanel}</div></figure>`
     const mediaPersos = visualPartId === undefined
       ? []
       : [createViewportGraphPerso(rootId, visualPartId, chart, content.rendering)]
-    return { markup, rootClassName: 'elce-statistical-graph', contentPersos: [], mediaPersos }
+    return {
+      markup,
+      rootClassName: `elce-statistical-graph${appearanceClass}`,
+      contentPersos: [],
+      mediaPersos,
+      styleSheet: [
+        ...(renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? [] : [graphColorStyleSheet()]),
+        ...tableFitRules,
+      ].join('\n'),
+    }
   }
 }
 
@@ -81,7 +100,6 @@ function createViewportGraphPerso(
         role: 'group',
         tabindex: '0',
       },
-      style: { width: '100%', minWidth: 0, minHeight: 0 },
       markup: `<div id="${rootId}-visual-content" class="${className}" ${VIEWPORT_EXPANSION_CONTENT_ATTR}="graph" role="group" tabindex="0">${chart}</div>`,
     },
   }
@@ -180,7 +198,7 @@ function renderBars(
     const x = left + categoryWidth * categoryIndex + (categoryWidth - barWidth * content.series.length) / 2 + barWidth * seriesIndex
     const y = Math.min(baseline, valueY)
     const barHeight = Math.max(1, Math.abs(valueY - baseline))
-    return [`<rect id="${rootId}-bar-${categoryIndex}-${seriesIndex}" class="elce-statistical-graph__bar" x="${round(x)}" y="${round(y)}" width="${round(barWidth * 0.88)}" height="${round(barHeight)}" fill="${graphColor(seriesIndex)}" />`]
+    return [`<rect id="${rootId}-bar-${categoryIndex}-${seriesIndex}" class="elce-statistical-graph__bar ${graphColorClassName(seriesIndex)}" x="${round(x)}" y="${round(y)}" width="${round(barWidth * 0.88)}" height="${round(barHeight)}" />`]
   }).join('')
 }
 
@@ -221,9 +239,9 @@ function renderLines(
       .join(' ')
     const line = path.length === 0
       ? ''
-      : `<path id="${rootId}-line-${seriesIndex}" class="elce-statistical-graph__line" d="${path}" stroke="${graphColor(seriesIndex)}" />`
+      : `<path id="${rootId}-line-${seriesIndex}" class="elce-statistical-graph__line ${graphColorClassName(seriesIndex)}" d="${path}" />`
     const markers = points.flatMap((point) => point === null ? [] : [
-      `<circle id="${rootId}-point-${seriesIndex}-${point.categoryIndex}" class="elce-statistical-graph__point" cx="${point.x}" cy="${point.y}" r="3" fill="${graphColor(seriesIndex)}" />`,
+      `<circle id="${rootId}-point-${seriesIndex}-${point.categoryIndex}" class="elce-statistical-graph__point ${graphColorClassName(seriesIndex)}" cx="${point.x}" cy="${point.y}" r="3" />`,
     ]).join('')
     return `${line}${markers}`
   }).join('')
@@ -242,7 +260,7 @@ function renderPie(content: StatisticalGraphContent, rootId: string): string {
   return values.map((entry, index) => {
     const nextAngle = angle + ((entry.value / largest) / total) * Math.PI * 2
     const path = pieSectorPath(500, 245, 185, angle, nextAngle)
-    const sector = `<path id="${rootId}-sector-${index}" class="elce-statistical-graph__sector" d="${path}" fill="${graphColor(content.categories.findIndex((category) => category.id === entry.category.id))}" />`
+    const sector = `<path id="${rootId}-sector-${index}" class="elce-statistical-graph__sector ${graphColorClassName(content.categories.findIndex((category) => category.id === entry.category.id))}" d="${path}" />`
     angle = nextAngle
     return sector
   }).join('')
@@ -273,11 +291,11 @@ function renderLegend(content: StatisticalGraphContent, rootId: string): string 
   if (namedEntries.length === 0) return ''
   const density = labelDensity(namedEntries.length)
   const selectedEntries = namedEntries.filter((_entry, index) => index % density === 0 || index === namedEntries.length - 1)
-  return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${legendLabel}">${selectedEntries.map((entry) => `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark" style="background-color:${graphColor(entry.colorIndex)}"></span><span id="${rootId}-legend-label-${entry.id}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span></li>`).join('')}</ul>`
+  return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${legendLabel}">${selectedEntries.map((entry) => `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark ${graphLegendColorClassName(entry.colorIndex)}"></span><span id="${rootId}-legend-label-${entry.id}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span></li>`).join('')}</ul>`
 }
 
 /** Bounds the visible Table to populated rows and the last populated column. */
-function renderVisibleTable(content: StatisticalGraphContent, rootId: string): string {
+function renderVisibleTable(content: StatisticalGraphContent, rootId: string, tableFitRules: string[]): string {
   const populatedCategoryIds = new Set(content.values.map((entry) => entry.categoryId))
   const seriesIndexById = new Map(content.series.map((series, index) => [series.id, index]))
   const lastPopulatedSeriesIndex = content.values.reduce(
@@ -289,16 +307,16 @@ function renderVisibleTable(content: StatisticalGraphContent, rootId: string): s
     categories: content.categories.filter((category) => populatedCategoryIds.has(category.id)),
     series: content.series.slice(0, lastPopulatedSeriesIndex + 1),
   }
-  return `${renderAxisCaptions(content, rootId)}${renderTable(visibleContent, rootId, 'elce-statistical-graph__table')}`
+  return `${renderAxisCaptions(content, rootId)}${renderTable(visibleContent, rootId, 'elce-statistical-graph__table', tableFitRules)}`
 }
 
 /** Renders the required semantic alternative after an SVG chart. */
-function renderAccessibleTable(content: StatisticalGraphContent, rootId: string): string {
-  return renderTable(content, `${rootId}-accessible`, 'elce-statistical-graph__table elce-statistical-graph__table--visually-hidden')
+function renderAccessibleTable(content: StatisticalGraphContent, rootId: string, tableFitRules: string[]): string {
+  return renderTable(content, `${rootId}-accessible`, 'elce-statistical-graph__table elce-statistical-graph__table--visually-hidden', tableFitRules)
 }
 
 /** Creates a correctly scoped data table from the normalized graph matrix. */
-function renderTable(content: StatisticalGraphContent, rootId: string, className: string): string {
+function renderTable(content: StatisticalGraphContent, rootId: string, className: string, tableFitRules: string[]): string {
   const title = content.title.trim() || 'Graphe'
   const isVisible = !className.includes('--visually-hidden')
   const denseClass = !isVisible || Math.max(content.series.length, content.categories.length) < 12
@@ -314,17 +332,31 @@ function renderTable(content: StatisticalGraphContent, rootId: string, className
     }).join('')
     return `<tr id="${rootId}-category-row-${categoryIndex}">${rowHeading}${cells}</tr>`
   }).join('')
-  return `<table id="${rootId}-table" class="${className}${denseClass}"${renderTableFitStyle(content, isVisible)}><caption id="${rootId}-caption" class="elce-statistical-graph__table-caption">${escapeHtml(title)}</caption><thead id="${rootId}-thead">${header}</thead><tbody id="${rootId}-tbody">${body}</tbody></table>`
+  const fitClassName = renderTableFitClassName(content, rootId, isVisible, tableFitRules)
+  return `<table id="${rootId}-table" class="${className}${denseClass}${fitClassName === '' ? '' : ` ${fitClassName}`}"><caption id="${rootId}-caption" class="elce-statistical-graph__table-caption">${escapeHtml(title)}</caption><thead id="${rootId}-thead">${header}</thead><tbody id="${rootId}-tbody">${body}</tbody></table>`
 }
 
-/** Sets one shared font size using the most constrained visible table cells. */
-function renderTableFitStyle(content: StatisticalGraphContent, isVisible: boolean): string {
+/** Creates a class rule with the text dimensions used to fit the visible table. */
+function renderTableFitClassName(
+  content: StatisticalGraphContent,
+  rootId: string,
+  isVisible: boolean,
+  tableFitRules: string[],
+): string {
   if (!isVisible) return ''
 
   const maxValueLength = Math.max(1, ...content.values.map((value) => formatValue(value.value).length))
   const maxRowHeadingLength = Math.max(1, content.categoryAxisLabel.length, ...content.categories.map((category) => category.label.length))
   const maxSeriesHeadingLength = Math.max(1, ...content.series.map((series) => series.label.length))
-  return ` style="--statistical-graph-series-count:${content.series.length};--statistical-graph-category-count:${content.categories.length};--statistical-graph-max-value-length:${maxValueLength};--statistical-graph-max-row-heading-length:${maxRowHeadingLength};--statistical-graph-max-series-heading-length:${maxSeriesHeadingLength}"`
+  const className = sceneStyleClassName('graph-table-fit', rootId)
+  tableFitRules.push(sceneClassRule(className, {
+    '--statistical-graph-series-count': String(content.series.length),
+    '--statistical-graph-category-count': String(content.categories.length),
+    '--statistical-graph-max-value-length': String(maxValueLength),
+    '--statistical-graph-max-row-heading-length': String(maxRowHeadingLength),
+    '--statistical-graph-max-series-heading-length': String(maxSeriesHeadingLength),
+  }))
+  return className
 }
 
 /** Keeps separate axis labels visible when the HTML table is selected. */
@@ -364,9 +396,26 @@ function renderingDescription(rendering: StatisticalGraphContent['rendering']): 
   }
 }
 
-/** Returns a stable palette color for an indexed graph series or category. */
-function graphColor(index: number): string {
-  return graphColors[index % graphColors.length]!
+/** Returns the CSS class for one repeating graph palette color. */
+function graphColorClassName(index: number): string {
+  return `elce-statistical-graph__color--${index % graphColors.length}`
+}
+
+/** Returns the legend-specific CSS class for one repeating graph color. */
+function graphLegendColorClassName(index: number): string {
+  return `elce-statistical-graph__legend-mark--${index % graphColors.length}`
+}
+
+/** Emits the graph palette as CSS class rules shared by this scene's markup. */
+function graphColorStyleSheet(): string {
+  return graphColors.map((color, index) => {
+    const colorClass = graphColorClassName(index)
+    return [
+      `.elce-statistical-graph__bar.${colorClass}, .elce-statistical-graph__point.${colorClass}, .elce-statistical-graph__sector.${colorClass} { fill: ${color}; }`,
+      `.elce-statistical-graph__line.${colorClass} { fill: none; stroke: ${color}; }`,
+      `.elce-statistical-graph__legend-mark.${graphLegendColorClassName(index)} { background-color: ${color}; }`,
+    ].join('\n')
+  }).join('\n')
 }
 
 /** Formats numeric cells with the browser's French locale convention. */

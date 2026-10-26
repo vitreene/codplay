@@ -13,7 +13,13 @@ import {
   createStatisticalGraphBdcCommand,
   createStatisticalGraphCarouselBdcCommand,
 } from '../../domain/commands/document-commands'
-import type { DocumentCommand, PagePlacement } from '../../domain/commands/document-command-types'
+import type {
+  AppearanceProperty,
+  AppearanceTarget,
+  AppearanceTargetForProperty,
+  DocumentCommand,
+  PagePlacement,
+} from '../../domain/commands/document-command-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import { createStableId, type ElceDocument } from '../../domain/document/document-model'
 import type { Bdc, BdcId, ChapterId, PageId, RevelationTransitionDefaults } from '../../domain/document/document-types'
@@ -22,6 +28,7 @@ import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/c
 import type { QuestionContent } from '../../domain/question/question-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
 import type { ProfileDefinition, SummarySettings } from '../../domain/summary-profile/summary-profile-types'
+import type { AppearanceSettings } from '../../config/appearance/appearance-types'
 import type { ElceMediaImport } from '../../domain/media/media-resource-types'
 import { ElceMediaResourceService, mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ProjectSessionOperation } from '../projects/project-session-types'
@@ -288,6 +295,32 @@ export class EditorActionsFacade {
   /** Saves profile fields and constraints through document history. */
   public updateProfileDefinition(profile: ProfileDefinition): void {
     this.apply({ type: 'profile.definition.update', profile })
+  }
+
+  /** Sets one explicit appearance value through the document history. */
+  public setAppearanceProperty<Property extends AppearanceProperty>(
+    target: AppearanceTargetForProperty<Property>,
+    property: Property,
+    value: NonNullable<AppearanceSettings[Property]>,
+  ): void {
+    if (property === 'background') {
+      this.apply({ type: 'appearance.background.set', target, value: value as NonNullable<AppearanceSettings['background']> })
+      return
+    }
+    this.apply({ type: 'appearance.property.set', target, property, value } as DocumentCommand)
+  }
+
+  /** Applies a suggested heading/body font combination as one document command. */
+  public setAppearanceTypography(target: AppearanceTarget, headingFontId: string, bodyFontId: string): void {
+    this.apply({ type: 'appearance.typography.set', target, headingFontId, bodyFontId })
+  }
+
+  /** Removes one explicit appearance value so it inherits from its context. */
+  public resetAppearanceProperty<Property extends AppearanceProperty>(
+    target: AppearanceTargetForProperty<Property>,
+    property: Property,
+  ): void {
+    this.apply({ type: 'appearance.property.reset', target, property } as DocumentCommand)
   }
 
   /** Saves both outcomes of a Result BDC. */

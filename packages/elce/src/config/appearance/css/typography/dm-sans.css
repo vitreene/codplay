@@ -1,0 +1,10 @@
+@scope (.elce-player-layout) {
+  @scope (.headings-dm-sans) {
+    :scope :is(h1, h2, h3, h4, h5, h6) { font-family: 'DM Sans', sans-serif; }
+  }
+
+  .body-dm-sans {
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.5;
+  }
+}

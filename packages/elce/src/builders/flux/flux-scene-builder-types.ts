@@ -3,6 +3,7 @@ import type { MediaId } from '../../domain/document/document-types'
 import type { ElceResolvedPageSettings } from '../../domain/editor-settings/editor-settings-types'
 import type { MediaType } from '../../config/document-config-types'
 import type { TestAnswerState } from '../../domain/summary-profile/test-state-types'
+import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
 
 export type FluxMediaSources = Readonly<Record<MediaId, string>>
 
@@ -11,6 +12,7 @@ export type FluxSceneBuildOptions = Readonly<{
   readonly mediaTypes?: Readonly<Record<MediaId, MediaType>>
   readonly editorSettings: ElceResolvedPageSettings
   readonly questionAnswers?: Readonly<Record<string, TestAnswerState>>
+  readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }>
 
 export interface FluxQuestionReset {

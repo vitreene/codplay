@@ -12,6 +12,7 @@ import { createInitialDocument } from '../../domain/document/document-model'
 import type { RevelationTransitionDefaults } from '../../domain/document/document-types'
 import type { DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 import { buildDiapoScene as projectDiapoScene } from './diapo-scene-builder'
+import { pageAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -36,7 +37,9 @@ describe('Elcé Diapo scene builder', () => {
     const command = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
     const document = applyDocumentCommand(initial, command)
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoSceneForTest(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, document.bdcs),
+    })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const carousel = document.bdcs.find((bdc) => bdc.id === command.bdcId)!
     const carouselStory = pageStory
@@ -56,8 +59,7 @@ describe('Elcé Diapo scene builder', () => {
       initial: {
         tag: 'section',
         className: expect.stringContaining('elce-diapo-carousel-root'),
-        move: '@root',
-        style: { width: '100%', height: '100%', gridTemplateRows: 'minmax(0, 1fr) auto' },
+        move: { target: `${page.id}:diapo:carousel` },
       },
     })
     expect(carouselRoot?.initial).toMatchObject({
@@ -66,12 +68,14 @@ describe('Elcé Diapo scene builder', () => {
     })
     expect(navigationHost?.initial).toMatchObject({
       className: 'elce-carousel__navigation',
-      style: { gridRow: '2', gridColumn: '1' },
       markup: expect.stringContaining(`<nav id="${page.id}-${carousel.id}-navigation"`),
     })
     expect(firstCardMarkup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${firstCardId}:root" -->`)
     expect(carouselRoot?.initial).not.toHaveProperty('style.aspectRatio')
-    expect(carouselStory?.persos.some((perso) => perso.id === `${page.id}-diapo-content`)).toBe(false)
+    expect(carouselStory?.persos.find((perso) => perso.id === `${page.id}-diapo-content`)).toMatchObject({
+      type: 'layout',
+      initial: { move: '@root', markup: expect.stringContaining(`id="${page.id}-diapo-content"`) },
+    })
     expect(carouselStory?.persos.some((perso) => perso.id === `${page.id}-diapo-scrollport`)).toBe(false)
     expect(build.sceneDoc.stories).toHaveProperty(`${page.id}-diapo-page`)
     expect(Object.keys(build.sceneDoc.stories)).toHaveLength(1)
@@ -127,7 +131,9 @@ describe('Elcé Diapo scene builder', () => {
       layoutId: DEFAULT_PRESET_ID.PHOTO,
     })
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoSceneForTest(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, document.bdcs),
+    })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const cardView = pageStory?.persos.find((perso) => perso.id === `${page.id}:${carousel.id}-card-${cardBdcId}`)
     const markup = cardView?.initial !== undefined && 'markup' in cardView.initial ? String(cardView.initial.markup) : ''
@@ -136,7 +142,7 @@ describe('Elcé Diapo scene builder', () => {
       className: expect.stringContaining('elce-carousel-photo__media'),
       move: { target: `${page.id}-${carousel.id}-diapo-end-scrollport` },
     })
-    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media">`)
+    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media card-photo bdc ink-classic-text headings-crimson-text body-dm-sans density-normal`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:root" -->`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:media" -->`)
     expect(markup).not.toContain('<article')
@@ -227,8 +233,8 @@ describe('Elcé Diapo scene builder', () => {
       initial: {
         src: 'https://example.test/question.png',
         ...(mediaType === MEDIA_TYPE.IMAGE
-          ? { img: { style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' } } }
-          : { sync: 'independent', controls: true, video: { style: { objectFit: 'contain' } } }),
+          ? { img: { className: 'elce-diapo-question-media__native' } }
+          : { sync: 'independent', controls: true, className: 'elce-diapo-question-media' }),
       },
     })
     expect(image?.initial).not.toHaveProperty('img.style.maxHeight')

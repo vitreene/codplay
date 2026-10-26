@@ -4,8 +4,8 @@ import { CAROUSEL_TRANSITION } from './document-config'
 export const ELCE_EDITOR_SETTINGS = {
   revelation: {
     projectDefaults: {
-      intro: CAROUSEL_TRANSITION.FADE,
-      outro: CAROUSEL_TRANSITION.FADE,
+      intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+      outro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
     },
     transitionPairs: {
       [CAROUSEL_TRANSITION.CUT]: { intro: CAROUSEL_TRANSITION.CUT, outro: CAROUSEL_TRANSITION.CUT },
@@ -31,23 +31,6 @@ export const ELCE_EDITOR_SETTINGS = {
         toTranslateX: '0%',
         duration: 1000,
         ease: 'outCubic',
-      },
-      cardMediaMotion: {
-        imageOpacity: 0.92,
-        suppressCardOpacityTransitionForImages: true,
-        intro: {
-          fromTranslateX: '-112%',
-          toTranslateX: '0%',
-          duration: 1000,
-          ease: 'outCubic',
-        },
-        outro: {
-          fromTranslateX: '0%',
-          toTranslateX: '-112%',
-          duration: 820,
-          ease: 'inCubic',
-        },
-        conflictsWith: [CAROUSEL_TRANSITION.SWIPE_LEFT, CAROUSEL_TRANSITION.SWIPE_RIGHT],
       },
     },
     carousel: {

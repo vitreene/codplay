@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { contentOpenEvent } from '../scene-functions/viewport-expansion'
 import { addViewportExpansionToStory } from './viewport-expansion-builder'
+import { createViewportExpansionStyleSheet } from './viewport-expansion-style'
 
 describe('Viewport expansion builder', () => {
   it('keeps the configured media move to the viewport host', () => {
@@ -26,7 +27,8 @@ describe('Viewport expansion builder', () => {
     const closeHostAction = host?.actions?.[`${story.id}:viewport-expansion:close-host`]
     const settings = ELCE_EDITOR_SETTINGS.player.interactions.viewportExpansion
 
-    expect(host?.initial).toMatchObject({ style: { zIndex: 19, opacity: 1 } })
+    expect(host?.initial).toMatchObject({ style: { opacity: 1 } })
+    expect(createViewportExpansionStyleSheet(settings)).toContain('z-index: 19;')
     expect(openAction).toMatchObject({
       move: {
         target: `${story.id}:viewport-expansion:media`,

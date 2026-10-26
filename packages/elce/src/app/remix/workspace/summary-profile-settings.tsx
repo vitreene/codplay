@@ -512,7 +512,7 @@ function renderProfileConstraintEditor(props: SummaryProfileSettingsProps): Remi
           aria-label="Ajouter une condition"
           title="Ajouter une condition"
         >
-          {renderLucideIcon(Plus, 'elce-profile-visibility-add-icon', 14)}
+          {renderLucideIcon(Plus, 'elce-profile-visibility-add-icon')}
         </button>
       </div>
       <p id="elce-profile-rule-current-state" role="status" />
@@ -610,7 +610,7 @@ function renderVisibilityConditionRowTemplate(properties: readonly ProfileProper
       aria-label="Supprimer la condition"
       title="Supprimer la condition"
     >
-      {renderLucideIcon(Trash2, 'elce-profile-visibility-remove-icon-__row__', 14)}
+      {renderLucideIcon(Trash2, 'elce-profile-visibility-remove-icon-__row__')}
     </button>
   </div>
 }

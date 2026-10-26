@@ -3,9 +3,10 @@ import type { ScenarioEntry } from '../../../domain/scenario/scenario-entry-type
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import type { ChapterId, PageId } from '../../../domain/document/document-types'
-import type { PagePlacement } from '../../../domain/commands/document-command-types'
+import type { AppearanceTarget, PagePlacement } from '../../../domain/commands/document-command-types'
 
 export type ResponsivePanel = 'outline' | 'properties' | null
+export type SidePanelTab = 'contents' | 'style'
 export type DraggedScenarioEntry = ScenarioEntry | null
 
 export interface EditorWorkspaceViewProps {
@@ -13,6 +14,8 @@ export interface EditorWorkspaceViewProps {
   readonly actions: EditorActionsFacade
   readonly pageEditorHost: RemixNode
   readonly responsivePanel: ResponsivePanel
+  readonly sidePanelTab: SidePanelTab
+  readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
   readonly profileTokenTargetId: string | null
   readonly authoringError: string | null
@@ -20,6 +23,8 @@ export interface EditorWorkspaceViewProps {
   readonly visible: boolean
   readonly editable?: boolean
   readonly onSetResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void
+  readonly onSetSidePanelTab: (tab: SidePanelTab) => void
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly onSetSummarySettingsOpen: (open: boolean) => void
   readonly onSetAuthoringError: (error: string | null) => void
   readonly onSetDropTarget: (targetId: string | null) => void

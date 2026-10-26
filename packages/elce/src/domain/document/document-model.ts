@@ -10,7 +10,7 @@ import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import type { Bdc, Chapter, ElceDocumentData, MediaMetadata, Page, PageId, RichTextDocument } from './document-types'
 import { INITIAL_PROFILE_DEFINITION, INITIAL_SUMMARY_SETTINGS } from '../summary-profile/summary-profile-types'
 
-export const ELCE_DOCUMENT_VERSION = 5 as const
+export const ELCE_DOCUMENT_VERSION = 7 as const
 
 /** Creates the empty rich-text document used by a new Section. */
 export function createEmptyRichTextDocument(): RichTextDocument {

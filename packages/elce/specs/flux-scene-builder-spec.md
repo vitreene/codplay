@@ -79,23 +79,20 @@ Les builders reçoivent `ElceResolvedPageSettings` et ne choisissent pas de
 défaut ni de priorité. Les autres réglages cachés du player suivent le même
 contrat décrit dans la [spécification de résolution](./editor-settings-spec.md).
 
-Dans Flux, la racine Carte observe le scrollport avec la zone résolue et porte
-les actions Capsule correspondant aux transitions effectives. Le perso image
-applique sa translation à partir des mêmes événements d’entrée et de sortie ;
-il n’observe pas le scrollport lui-même. Une transition Capsule horizontale
-garde la priorité sur le mouvement média du même axe. Ces décisions et leurs
-valeurs sont regroupées dans la configuration Elcé. L’entrée reprend le trajet
-`-112%` → `0%` en 1000 ms `outCubic` ; la sortie reprend `0%` → `-112%` en
-820 ms `inCubic`, comme dans Demo5. Pour une Carte qui contient une image, sa
-racine conserve les autres propriétés de transition mais ne reçoit ni état
-initial ni action animée `opacity`. Le perso image porte une opacité fixe
-`0.92` ; les Cartes sans image et les vidéos gardent leur trajectoire existante.
-La preview du 23 octobre 2026 confirme que l’opacité calculée de la racine reste
-à `1` et celle du média à `0.92` pendant les translations vers `-112%` et `0%`.
-Cette vérification et les tests ciblés sont consignés dans le
-[plan actif](../plan/2026-10-06-elce-local-first-synchronisation-plan.md).
-Les racines de Graphe ancré et les vidéos d’illustration utilisent également
-leurs réglages résolus de transition et d’observation.
+Les racines de Carte observent le scrollport dans la zone résolue
+`threshold: 0`, comme la révélation d’image de
+la démo scroll-container. La première mesure synchronise la phase sans lancer
+d’animation ; une Carte déjà visible au chargement reste donc dans son état
+stable. Pour une Carte avec média, la racine observée garde une géométrie fixe ;
+le perso image ou vidéo enfant porte le style de repos et les actions Capsule
+d’entrée/sortie. L’observer ne mesure donc pas un élément que sa propre
+translation déplacerait. Chaque passage ultérieur vers l’intérieur ou
+l’extérieur rejoue l’action correspondante, y compris après un aller-retour ;
+aucun événement `once` n’est déclaré. Une Carte sans média conserve ses actions
+sur sa racine. Le défaut des nouveaux projets est la paire Capsule `swipe-right` ; les
+remplacements enregistrés sur le parent ou le placement restent prioritaires.
+Les racines de Graphe ancré gardent
+`initial: 'enter'` pour signaler un graphe déjà visible.
 
 - un perso `scroll-container` racine, placé sur `@root` ;
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
@@ -251,9 +248,18 @@ Elcé.
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de
   test, ainsi que
   le montage de Cartes avec les composants `img` et `media`, d’une Carte dans
-  une ancre de texte et d’un média selon le layout de Carte.
+  une ancre de texte et d’un média selon le layout de Carte. Les tests de
+  révélation pilotent l’observateur réel et vérifient que la racine reste fixe
+  tandis que le média enfant reçoit l’opacité et la translation Capsule.
 - Le 15 octobre 2026, le style Flux a été dépouillé des déclarations de snap.
   Les 41 tests de composition, le typecheck et le build passent. La vérification
   navigateur d’un BDC plus haut que le viewport reste ouverte dans le
   [plan de construction](../plan/2026-10-01-elce-construction-plan.md) ; elle
   doit confirmer l’absence de recul signalé par l’auteur.
+
+Le 26 octobre 2026, après résolution de fusion, les 481 tests Elcé dans
+73 fichiers passent, ainsi que le typecheck et le build. Les tests Flux et
+Graphe vérifient aussi la priorité `z-index: 1` dans les classes de géométrie ;
+les tests player exercent les transitions Capsule sur le média avec une
+racine observée fixe. La validation navigateur après fusion reste dans le
+[plan Style](../plan/2026-10-22-elce-style-tab-plan.md).

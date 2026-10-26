@@ -7,9 +7,21 @@ import { assertQuestionMediaAllowed, assertCardMediaAllowed } from './media-comm
 import { anchorReferenceService, questionService, evaluationResultService, carouselService, cardService } from './services'
 import { assertStatisticalGraphContent } from '../../statistical-graph/statistical-graph-service'
 import { assertSummaryProfileInvariants } from '../../summary-profile/profile-rules'
+import {
+  APPEARANCE_COLOR_ROLES,
+  APPEARANCE_DENSITIES,
+  getAppearanceFont,
+  getAppearancePalette,
+  getAppearancePreset,
+} from '../../../config/appearance/appearance-config'
+import type { AppearanceColorRole } from '../../../config/appearance/appearance-types'
 
 /** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: ElceDocument): void {
+  assertAppearanceSettings(document.data.appearance, true)
+  for (const page of document.pages) assertAppearanceSettings(page.appearance, false)
+  for (const bdc of document.bdcs) assertAppearanceSettings(bdc.appearance, false)
+
   const pageIds = new Set<PageId>()
   const bdcIds = new Set<BdcId>()
   const bdcById = new Map(document.bdcs.map((bdc) => [bdc.id, bdc]))
@@ -286,4 +298,75 @@ export function assertDocumentInvariants(document: ElceDocument): void {
     }
   }
   assertSummaryProfileInvariants(document)
+}
+
+/** Rejects unknown appearance references and malformed sparse settings at any document scope. */
+function assertAppearanceSettings(value: unknown, allowGeneralPreset: boolean): void {
+  if (value === undefined) return
+  if (!isAppearanceRecord(value)) fail('Réglages d’apparence invalides.')
+
+  const allowedProperties = new Set([
+    'presetId', 'paletteId', 'headingFontId', 'bodyFontId', 'density', 'background', 'textColor', 'autoContrast',
+  ])
+  if (Object.keys(value).some((property) => !allowedProperties.has(property))) {
+    fail('Réglages d’apparence : propriété inconnue.')
+  }
+
+  if ('presetId' in value && !allowGeneralPreset) {
+    fail('Le preset général d’apparence est réservé au projet.')
+  }
+  if ('presetId' in value) assertAppearanceReference(value.presetId, getAppearancePreset, 'preset')
+  if ('paletteId' in value) assertAppearanceReference(value.paletteId, getAppearancePalette, 'palette')
+  if ('headingFontId' in value) assertAppearanceReference(value.headingFontId, getAppearanceFont, 'police de titre')
+  if ('bodyFontId' in value) assertAppearanceReference(value.bodyFontId, getAppearanceFont, 'police de corps')
+  if ('density' in value && !APPEARANCE_DENSITIES.some((entry) => entry.value === value.density)) {
+    fail('Densité d’apparence inconnue.')
+  }
+  if ('background' in value) {
+    if (!isAppearanceRecord(value.background)) fail('Fond d’apparence invalide.')
+    assertAppearanceColor(value.background)
+  }
+  if ('textColor' in value) assertAppearanceColor(value.textColor)
+  if ('autoContrast' in value && typeof value.autoContrast !== 'boolean') {
+    fail('Le contraste automatique doit être un booléen.')
+  }
+}
+
+/** Verifies that a local palette or custom color choice is a valid value. */
+function assertAppearanceColor(value: unknown): void {
+  if (!isAppearanceRecord(value)) fail('Couleur d’apparence invalide.')
+  switch (value.kind) {
+    case 'palette':
+      if (typeof value.role !== 'string'
+        || !APPEARANCE_COLOR_ROLES.includes(value.role as AppearanceColorRole)) {
+        fail('Rôle de couleur de palette inconnu.')
+      }
+      return
+    case 'custom':
+      if (typeof value.value !== 'string' || !/^#[\da-f]{6}$/i.test(value.value)) {
+        fail('Une couleur personnalisée doit être un hexadécimal #RRGGBB.')
+      }
+      return
+    default:
+      fail('Source de couleur d’apparence inconnue.')
+  }
+}
+
+/** Resolves one stable catalog reference and translates missing entries into a document invariant. */
+function assertAppearanceReference<T>(
+  value: unknown,
+  lookup: (id: string) => T,
+  label: string,
+): void {
+  if (typeof value !== 'string') fail(`Référence de ${label} invalide.`)
+  try {
+    lookup(value)
+  } catch {
+    fail(`Référence de ${label} inconnue : ${value}`)
+  }
+}
+
+/** Narrows JSON values to an object record for appearance validation. */
+function isAppearanceRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

@@ -89,6 +89,12 @@ et son zoom permettent d’agrandir la lecture. À partir de 12 lignes ou colonn
 les en-têtes de série sont orientés verticalement et la taille s’adapte à la
 zone disponible. Les tableaux ne défilent pas à l’intérieur de leur zone.
 
+Le rythme CSS du texte des axes, valeurs, légendes et tableaux — taille,
+interlignage, marges et padding — utilise des unités relatives, avec `rem`
+comme base et `cqw` pour l’adaptation au graphe. Aucune de ces propriétés
+textuelles n’est déclarée en pixels. Le navigateur peut présenter les valeurs
+résolues en pixels dans ses styles calculés.
+
 ## Layout et placements
 
 Le layout présente le graphe au-dessus du commentaire éditorial ou à côté de
@@ -125,11 +131,15 @@ modifié.
   vérifie la saisie contrôlée et l’extension de grille par collage.
 - Brave, sur le projet de test temporaire, affiche une matrice 40 × 40 ancrée
   dans une Section. À 390 × 844, la table fait `300 × 135.42 px`, la réserve
-  `300 × 332 px` et le texte suivant reprend au bas du slot ; la taille commune
-  est `1.575 px`. À 1280 × 900, la table fait `918 × 292.52 px` et la taille
-  commune est `4.82 px`. Les 1 681 cellules sont présentes, aucune plage de
-  texte ne déborde de sa cellule, la page ne déborde pas et la console Brave
-  est vide.
+  `300 × 332 px` et le texte suivant reprend au bas du slot. À 1280 × 900, la
+  table fait `918 × 292.52 px`. Les 1 681 cellules sont présentes, aucune
+  plage de texte ne déborde de sa cellule, la page ne déborde pas et la console
+  Brave est vide. Les valeurs en pixels de cette preuve mesurent la géométrie
+  rendue ; les règles des tailles de texte sont relatives.
+- Safari Technology Preview, dans la preview Demo5 du 24 octobre 2026, accepte
+  (`CSS.supports`) la formule `rem`/`cqw` des libellés SVG et expose les règles
+  sources sans unité `px` pour `font-size`. Ce contrôle confirme leur analyse
+  CSS ; il ne remplace pas l’acceptation visuelle du Graphe prévue par P5.
 - Le 9 octobre 2026, Brave sur `5175` montre le formulaire en sections et sa
   grille éditable avec les libellés de lignes et colonnes. Ajouter puis
   supprimer une ligne et une colonne met à jour la grille ; la dernière entrée

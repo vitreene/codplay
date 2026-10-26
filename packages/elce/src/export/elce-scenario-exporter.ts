@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zipSync } from 'fflate'
@@ -7,6 +7,11 @@ import type { Zippable } from 'fflate'
 import { ElceDocument } from '../domain/document/document-model'
 import type { ElceDocumentData, MediaId, MediaMetadata } from '../domain/document/document-types'
 import { scenarioExportMediaIds } from './scenario-export-media'
+import {
+  appearanceFontAssetsForDocument,
+  appearanceThemeCssAssetPathsForDocument,
+} from '../player/appearance-scene-style-sheet'
+import type { AppearanceFontAsset } from '../player/appearance-font-assets'
 
 const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const EXPORT_WORK_DIRECTORY = resolve(ELCE_PACKAGE_ROOT, '.elce-export')
@@ -24,6 +29,8 @@ export async function exportElceSightyPackage(
 ): Promise<Uint8Array> {
   const workingDirectory = process.env.INIT_CWD ?? process.cwd()
   const document = ElceDocument.fromJSON(documentData)
+  const appearanceFontAssets = appearanceFontAssetsForDocument(document)
+  const appearanceThemeCssPaths = appearanceThemeCssAssetPathsForDocument(document)
   const mediaPathsById = new Map<MediaId, Readonly<{ media: MediaMetadata; relativePath: string }>>()
   for (const [index, media] of document.medias.entries()) {
     mediaPathsById.set(media.id, { media, relativePath: `./media/${mediaFileName(index, media)}` })
@@ -53,6 +60,8 @@ export async function exportElceSightyPackage(
     for (const { bytes, relativePath } of mediaSources.values()) {
       await writeFile(join(temporaryDirectory, relativePath.slice('./'.length)), bytes)
     }
+    await copyAppearanceFontAssets(temporaryDirectory, appearanceFontAssets)
+    await copyAppearanceThemeCssAssets(temporaryDirectory, appearanceThemeCssPaths)
 
     const scenarioFile = join(temporaryDirectory, 'scenario.ts')
     const packagedMediaSources = Object.fromEntries([...mediaSources].map(([mediaId, source]) => [mediaId, source.relativePath]))
@@ -60,10 +69,50 @@ export async function exportElceSightyPackage(
 
     const packageDirectory = join(temporaryDirectory, 'scenario-package')
     await runSightyExporter(scenarioFile, packageDirectory, workingDirectory)
+    await copyAppearanceFontLicenses(packageDirectory, appearanceFontAssets)
     await normalizeTemporaryScenarioPath(packageDirectory, scenarioFile, workingDirectory)
     return await zipSightyPackage(packageDirectory)
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true })
+  }
+}
+
+/** Copies only the local font files used by the current document into the scenario source tree. */
+async function copyAppearanceFontAssets(
+  temporaryDirectory: string,
+  fontAssets: readonly AppearanceFontAsset[],
+): Promise<void> {
+  for (const asset of fontAssets) {
+    const sourcePath = join(ELCE_PACKAGE_ROOT, 'src', asset.sourcePath)
+    const targetPath = join(temporaryDirectory, asset.packagePath)
+    await mkdir(dirname(targetPath), { recursive: true })
+    await copyFile(sourcePath, targetPath)
+  }
+}
+
+/** Copies only authored theme CSS files used by the document into the temporary scenario source tree. */
+async function copyAppearanceThemeCssAssets(
+  temporaryDirectory: string,
+  assetPaths: readonly string[],
+): Promise<void> {
+  for (const assetPath of assetPaths) {
+    const sourcePath = join(ELCE_PACKAGE_ROOT, 'src/config/appearance/css', assetPath)
+    const targetPath = join(temporaryDirectory, 'appearance/css', assetPath)
+    await mkdir(dirname(targetPath), { recursive: true })
+    await copyFile(sourcePath, targetPath)
+  }
+}
+
+/** Includes the licenses for font families referenced by the exported scene styles. */
+async function copyAppearanceFontLicenses(
+  packageDirectory: string,
+  fontAssets: readonly AppearanceFontAsset[],
+): Promise<void> {
+  const licenses = new Map(fontAssets.map((asset) => [asset.licensePackagePath, asset.licenseSourcePath]))
+  for (const [packagePath, sourcePath] of licenses) {
+    const targetPath = join(packageDirectory, packagePath)
+    await mkdir(dirname(targetPath), { recursive: true })
+    await copyFile(join(ELCE_PACKAGE_ROOT, 'src', sourcePath), targetPath)
   }
 }
 
@@ -92,7 +141,7 @@ function createScenarioModule(
     `export * as sceneFunctions from ${JSON.stringify(relativeModulePath(temporaryDirectory, SCENE_FUNCTIONS_MODULE))};`,
     `const documentData = JSON.parse(${JSON.stringify(JSON.stringify(documentData))});`,
     `const mediaSources = JSON.parse(${JSON.stringify(JSON.stringify(mediaSources))});`,
-    'export const scenario = createElcePlayerScenario({ document: ElceDocument.fromJSON(documentData), mediaSources });',
+    'export const scenario = createElcePlayerScenario({ document: ElceDocument.fromJSON(documentData), mediaSources }, "./");',
     '',
   ].join('\n')
 }

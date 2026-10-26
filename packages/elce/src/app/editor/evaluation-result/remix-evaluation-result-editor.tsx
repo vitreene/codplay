@@ -3,9 +3,11 @@ import { EVALUATION_RESULT_BRANCH, EVALUATION_RESULT_CONFIG } from '../../../con
 import type { EvaluationResultAction, EvaluationResultBranch } from '../../../config/document-config-types'
 import { ElceEvaluationResultService } from '../../../domain/evaluation/evaluation-result-service'
 import type { EvaluationResultContent } from '../../../domain/evaluation/evaluation-result-types'
+import type { AppearanceTarget } from '../../../domain/commands/document-command-types'
 import { on, type RemixNode } from 'remix/ui'
 
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 
 const resultService = new ElceEvaluationResultService()
 
@@ -15,6 +17,7 @@ export function renderRemixEvaluationResultEditor(
   content: EvaluationResultContent,
   onChange: (content: EvaluationResultContent) => void,
   onDelete: () => void,
+  onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void,
 ): RemixNode {
   return <section
     id={`elce-evaluation-result-editor-${bdcId}`}
@@ -31,16 +34,28 @@ export function renderRemixEvaluationResultEditor(
         >
           Résultat
         </span>
-        <button
-          id={`elce-evaluation-result-delete-${bdcId}`}
-          className="elce-danger-action"
-          type="button"
-          aria-label="Supprimer le bloc résultat"
-          title="Supprimer le bloc résultat"
-          mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
+        <div
+          id={`elce-evaluation-result-header-actions-${bdcId}`}
+          className="elce-bdc-header-actions"
         >
-          {renderLucideIcon(Trash2, `elce-evaluation-result-delete-icon-${bdcId}`, 14)}
-        </button>
+          {renderAppearanceTrigger({
+            id: `elce-evaluation-result-style-${bdcId}`,
+            target: { kind: 'bdc', bdcId },
+            label: 'Ouvrir le style du résultat',
+            onOpen: onOpenAppearanceTarget,
+            className: 'elce-appearance-trigger elce-bdc-style-trigger',
+          })}
+          <button
+            id={`elce-evaluation-result-delete-${bdcId}`}
+            className="elce-danger-action"
+            type="button"
+            aria-label="Supprimer le bloc résultat"
+            title="Supprimer le bloc résultat"
+            mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
+          >
+            {renderLucideIcon(Trash2, `elce-evaluation-result-delete-icon-${bdcId}`)}
+          </button>
+        </div>
       </div>,
       ...Object.values(EVALUATION_RESULT_BRANCH).map((branch) => renderResultBranch(bdcId, branch, content, onChange)),
     ]}

@@ -1,4 +1,4 @@
-import type { DocumentCommand } from '../../../domain/commands/document-command-types'
+import type { AppearanceTarget, DocumentCommand } from '../../../domain/commands/document-command-types'
 import type { CarouselPlaybackMode, CarouselTransition, MediaType } from '../../../config/document-config-types'
 import type { CarouselAspectRatio, CarouselContent } from '../../../domain/carousel/carousel-types'
 import type { Bdc } from '../../../domain/document/document-types'
@@ -36,6 +36,7 @@ export interface ElceCarouselEditorProps {
   readonly content: CarouselContent
   readonly bdcs: readonly Bdc[]
   readonly selectedCardBdcId: string | null
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly mediaById: Readonly<Record<string, Readonly<{ name: string; type: MediaType; source: string | null }>>>
   readonly createStatisticalGraphActions: (bdcId: string, content: StatisticalGraphContent) => StatisticalGraphEditorActions
   readonly actions: ElceCarouselEditorActions

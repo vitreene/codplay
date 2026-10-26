@@ -1,0 +1,44 @@
+@scope (.elce-player-layout) {
+  .bg-classic-background:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-classic-background.card-text-image > .elce-carousel-text-image__content,
+  .bg-classic-background.card-image-caption > .elce-card-image-caption__caption { background-color: #fffdf8; }
+  .bg-classic-surface:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-classic-surface.card-text-image > .elce-carousel-text-image__content,
+  .bg-classic-surface.card-image-caption > .elce-card-image-caption__caption { background-color: #ffffff; }
+  .bg-classic-text:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-classic-text.card-text-image > .elce-carousel-text-image__content,
+  .bg-classic-text.card-image-caption > .elce-card-image-caption__caption { background-color: #1d2d35; }
+  .bg-classic-muted:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-classic-muted.card-text-image > .elce-carousel-text-image__content,
+  .bg-classic-muted.card-image-caption > .elce-card-image-caption__caption { background-color: #52666b; }
+  .bg-classic-accent:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-classic-accent.card-text-image > .elce-carousel-text-image__content,
+  .bg-classic-accent.card-image-caption > .elce-card-image-caption__caption { background-color: #263b3a; }
+  .bg-classic-border:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph),
+  .bg-classic-border.card-text-image > .elce-carousel-text-image__content,
+  .bg-classic-border.card-image-caption > .elce-card-image-caption__caption { background-color: #d9d4c9; }
+
+  .ink-classic-background { color: #fffdf8; }
+  .ink-classic-surface { color: #ffffff; }
+  .ink-classic-text { color: #1d2d35; }
+  .ink-classic-muted { color: #52666b; }
+  .ink-classic-accent { color: #263b3a; }
+  .ink-classic-border { color: #d9d4c9; }
+
+  @scope (.ink-classic-background, .ink-classic-surface, .ink-classic-text, .ink-classic-muted, .ink-classic-accent, .ink-classic-border) {
+    :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: #52666b; }
+  }
+
+  @supports (color: contrast-color(#ffffff)) {
+    .contrast-classic-background:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#fffdf8); }
+    .contrast-classic-surface:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#ffffff); }
+    .contrast-classic-text:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#1d2d35); }
+    .contrast-classic-muted:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#52666b); }
+    .contrast-classic-accent:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#263b3a); }
+    .contrast-classic-border:is(.project-layout, .project-content, .page-flux, .page-diapo, .section, .card-text-short, .card-text-image, .card-image-caption, .card-photo, .carousel, .question, .evaluation-result, .graph) { color: contrast-color(#d9d4c9); }
+
+    @scope (.contrast-classic-background, .contrast-classic-surface, .contrast-classic-text, .contrast-classic-muted, .contrast-classic-accent, .contrast-classic-border) {
+      :scope :is(.elce-card-text-short__overline, .elce-card-text-short__note, .elce-card-text-short__description, .elce-card-text-image__overline, .elce-card-text-image__note, .elce-card-text-image__description, .elce-card-image-caption__caption, .elce-question-instructions, .elce-statistical-graph__overline) { color: inherit; }
+    }
+  }
+}

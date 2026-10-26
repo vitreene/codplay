@@ -16,8 +16,9 @@ import { downloadElceScormPackage, requestElceScormPackage } from '../../export/
 import type { ScormVersion } from '../../scorm/scorm-types'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
-import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
+import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab } from './workspace/editor-workspace-types'
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './project-application-types'
+import type { AppearanceTarget } from '../../domain/commands/document-command-types'
 
 /** Renders project management and the native Remix authoring workspace. */
 export function ProjectApplication(handle: Handle) {
@@ -30,6 +31,9 @@ export function ProjectApplication(handle: Handle) {
 
   let view = selectProjectView(controller.getSnapshot())
   let responsivePanel: ResponsivePanel = null
+  let sidePanelTab: SidePanelTab = 'contents'
+  let appearanceTarget: AppearanceTarget = { kind: 'document' }
+  let appearanceProjectId = view.activeProject?.id ?? null
   let summarySettingsOpen = false
   let profileTokenTargetId: string | null = null
   let authoringError: string | null = null
@@ -51,6 +55,16 @@ export function ProjectApplication(handle: Handle) {
     void handle.update().then(() => {
       if (panel === null && focusId !== null) document.getElementById(focusId)?.focus()
     })
+  }
+  const setSidePanelTab = (tab: SidePanelTab): void => {
+    if (sidePanelTab === tab) return
+    sidePanelTab = tab
+    void handle.update()
+  }
+  const openAppearanceTarget = (target: AppearanceTarget, triggerId: string): void => {
+    appearanceTarget = target
+    sidePanelTab = 'style'
+    setResponsivePanel('properties', triggerId)
   }
   const setDropTarget = (targetId: string | null): void => {
     if (dropTarget === targetId) return
@@ -160,6 +174,11 @@ export function ProjectApplication(handle: Handle) {
     const subscription = controller.subscribe((snapshot) => {
       const nextView = selectProjectView(snapshot)
       if (projectApplicationViewEqual(view, nextView)) return
+      const nextProjectId = nextView.activeProject?.id ?? null
+      if (appearanceProjectId !== nextProjectId) {
+        appearanceProjectId = nextProjectId
+        appearanceTarget = { kind: 'document' }
+      }
       view = nextView
       void handle.update()
     })
@@ -230,12 +249,16 @@ export function ProjectApplication(handle: Handle) {
 
   return () => renderApplication(view, actions, {
     responsivePanel,
+    sidePanelTab,
+    appearanceTarget,
     summarySettingsOpen,
     profileTokenTargetId,
     authoringError,
     dropTarget,
     visible: view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active',
     setResponsivePanel,
+    setSidePanelTab,
+    openAppearanceTarget,
     setSummarySettingsOpen,
     setAuthoringError,
     setDropTarget,
@@ -522,9 +545,11 @@ function renderApplication(
       view: view.editor,
       actions,
       pageEditorHost: projectVisible && view.editor.selectedChapter === undefined
-        ? <RemixPageEditor />
+        ? <RemixPageEditor onOpenAppearanceTarget={workspace.openAppearanceTarget} />
         : null,
       responsivePanel: workspace.responsivePanel,
+      sidePanelTab: workspace.sidePanelTab,
+      appearanceTarget: workspace.appearanceTarget,
       summarySettingsOpen: workspace.summarySettingsOpen,
       profileTokenTargetId: workspace.profileTokenTargetId,
       authoringError: workspace.authoringError,
@@ -532,6 +557,8 @@ function renderApplication(
       visible: projectVisible,
       editable: editorVisible,
       onSetResponsivePanel: workspace.setResponsivePanel,
+      onSetSidePanelTab: workspace.setSidePanelTab,
+      onOpenAppearanceTarget: workspace.openAppearanceTarget,
       onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
       onSetAuthoringError: workspace.setAuthoringError,
       onSetDropTarget: workspace.setDropTarget,
@@ -584,7 +611,7 @@ function renderExportDialog(workspace: ProjectApplicationWorkspaceState): RemixN
           title="Fermer la fenêtre d’export"
           mix={on<HTMLButtonElement, 'click'>('click', workspace.onCloseExportDialog)}
         >
-          {renderLucideIcon(X, 'elce-export-dialog-close-icon', 14)}
+          {renderLucideIcon(X, 'elce-export-dialog-close-icon')}
         </button>
       </header>
       <p id="elce-export-dialog-description">

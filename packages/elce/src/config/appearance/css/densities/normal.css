@@ -1,0 +1,21 @@
+@scope (.elce-player-layout) {
+  .density-normal.page-flux { padding: 2rem; }
+  .density-normal.page-diapo { padding: 0; }
+  .density-normal.section.has-background { box-sizing: border-box; padding: clamp(1rem, 3vw, 2rem); }
+  .density-normal.card-text-short.has-background { padding: clamp(1rem, 4cqw, 3rem); }
+  .density-normal.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(0.75rem, 3cqw, 2rem); }
+  .density-normal.card-image-caption.has-background > .elce-card-image-caption__caption { padding: 0.45rem 0.75rem; }
+  .density-normal:is(.question, .evaluation-result).has-background { padding: clamp(1rem, 3vw, 1.6rem); }
+  .density-normal:is(
+    .card-text-short,
+    .card-text-image,
+    .card-image-caption,
+    .question,
+    .evaluation-result
+  ) :is(p, li, blockquote) {
+    margin-block: 0 0.75em;
+  }
+  @scope (.density-normal.section) to (.density-normal.section .bdc) {
+    :scope p { margin-block: 0 0.75em; }
+  }
+}

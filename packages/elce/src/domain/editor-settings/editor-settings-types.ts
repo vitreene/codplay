@@ -2,24 +2,11 @@ import type { BdcId, RevelationTransitionDefaults } from '../document/document-t
 import type { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 
 export type ElceScrollObservationZone = Readonly<{ threshold: number }>
-export type ElceCardMediaMotion = Readonly<{
-  readonly fromTranslateX: string
-  readonly toTranslateX: string
-  readonly duration: number
-  readonly ease: 'outCubic' | 'inCubic'
-}>
 
 export interface ResolvedCarouselRevelationSettings {
   readonly defaults: RevelationTransitionDefaults
   readonly entries: Readonly<Record<BdcId, RevelationTransitionDefaults>>
   readonly generateDefaultOutro: boolean
-}
-
-export interface ResolvedCardMediaMotion {
-  readonly intro: ElceCardMediaMotion | null
-  readonly outro: ElceCardMediaMotion | null
-  readonly imageOpacity: number
-  readonly suppressCardOpacityTransitionForImages: boolean
 }
 
 export type ElceResolvedPlayerSettings = typeof ELCE_EDITOR_SETTINGS.player
@@ -30,7 +17,6 @@ export interface ElceResolvedPageSettings {
   readonly revelation: Readonly<{
     readonly byBdcId: Readonly<Record<BdcId, RevelationTransitionDefaults>>
     readonly carouselsByBdcId: Readonly<Record<BdcId, ResolvedCarouselRevelationSettings>>
-    readonly cardMediaMotionByBdcId: Readonly<Record<BdcId, ResolvedCardMediaMotion>>
     readonly cardObservationZone: ElceScrollObservationZone
     readonly graphObservation: Readonly<{
       readonly initial: 'enter'

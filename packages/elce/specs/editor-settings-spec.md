@@ -2,10 +2,9 @@
 
 ## Statut
 
-**Fixe — source centralisée et transmission aux scènes vérifiées.** La correction
-du fondu parasite des images Flux est vérifiée dans les tests et dans la preview
-le 23 octobre 2026 ; son acceptation est consignée dans le
-[plan actif](../plan/2026-10-06-elce-local-first-synchronisation-plan.md).
+**Fixe — source centralisée et transmission aux scènes vérifiées.** Les
+transitions Flux utilisent la racine observée fixe et les actions Capsule du
+média, selon la [spécification Flux](./flux-scene-builder-spec.md).
 
 ## Rôle
 
@@ -44,20 +43,15 @@ puis reprendre le même résolveur.
 
 Les observations de révélation et leurs actions conservent leurs propriétaires
 existants : la racine Carte Flux observe et émet les événements d’entrée/sortie ;
-l’image applique ses actions à partir de ces événements, sans créer un second
-observateur ; la Section continue de gérer le placement de l’ancre. Le résolveur
-supprime aussi les mouvements média qui entreraient en conflit avec une
-transition Capsule horizontale. La translation d’entrée est `-112%` → `0%` en
-1000 ms `outCubic` ; la sortie est `0%` → `-112%` en 820 ms `inCubic`, selon le
-comportement vérifié dans le composant d’image de
-[`Demo5`](../../../demos/src/sighty/demo5/scenes/content-page-scene.ts).
-Pour une Carte Flux contenant une image, la racine ne reçoit ni état initial ni
-action `opacity` de sa transition Capsule : elle reste à son opacité CSS normale
-pendant que le média suit la trajectoire. Le perso image reçoit une opacité
-statique de `0.92` (environ 8 % de transparence). Les vidéos et les Cartes sans
-image gardent leurs transitions existantes. Ces deux valeurs sont dans
-`ELCE_EDITOR_SETTINGS.revelation.flux.cardMediaMotion` et sont transmises par
-`ElceEditorSettingsResolver`.
+si la Carte possède un média, celui-ci porte l’état de repos et les actions
+Capsule résolues, sans second observateur. Une Carte sans média porte ses
+propres actions. La première mesure synchronise la phase sans animer une Carte
+déjà visible ; les passages suivants rejouent l’entrée et la sortie. La
+Section continue de gérer le placement de l’ancre. Le défaut des nouveaux
+projets est `swipe-right` pour les deux directions ; les références persistées
+et leurs remplacements restent prioritaires. Les anciens tweens image
+supplémentaires et l’opacité fixe `0.92` ne sont plus appliqués aux Cartes.
+L’illustration image d’une Question conserve sa propre entrée configurée.
 
 La preview et l’export du scénario utilisent `createElcePlayerScenario` et la
 même résolution de page. Les valeurs initiales cachées restent centralisées ;
@@ -69,15 +63,12 @@ elles ne sont pas recopiées comme réglages locaux dans les builders.
   couvre l’héritage projet → parent → Carousel → entrée et vérifie la remise des
   réglages player groupés.
 - [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
-  vérifie les zones vidéo et fin de page, ainsi que les événements d’observation
-  portés par la Carte, l’absence de fondu sur la racine d’une Carte image et
-  l’opacité statique du média. La composition du player exerce le mouvement réel
-  dans les deux directions sans état d’opacité animé sur la racine.
-- Le 23 octobre 2026, Brave DevTools vérifie dans la preview générée depuis
-  l’éditeur que la racine reste à l’opacité calculée `1`, tandis que l’image
-  reste à `0.92`. Le scroll vers le bas puis vers le haut fait parcourir à
-  l’image `0%` → `-112%` puis `-112%` → `0%` ; aucune variation d’opacité n’est
-  observée pendant ces trajets.
+  vérifie les zones vidéo et fin de page, les événements de visibilité portés
+  par la Carte et les actions Capsule portées par son média ou par sa racine
+  lorsqu’elle n’a pas de média.
+- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  vérifie la première mesure stable, l’entrée après une mesure extérieure et le
+  rejeu des transitions dans les deux sens dans la composition réelle.
 - [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
   vérifie la zone centralisée des marqueurs de fin de page.
 - [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
@@ -89,3 +80,7 @@ elles ne sont pas recopiées comme réglages locaux dans les builders.
   `0` sur une durée plus courte que le `move`, sans changer l’aller-retour du
   média. Le 23 octobre 2026, Brave mesure `0.198` à 50 ms puis `0` à 130 ms ;
   le test de composition vérifie aussi que la réouverture rétablit `1`.
+
+La fusion du 26 octobre 2026 passe la suite Elcé complète (481 tests dans
+73 fichiers), le typecheck et le build. La vérification visuelle après fusion
+reste suivie dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md).
