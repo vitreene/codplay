@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION } from '../config/document-config'
+import { BDC_TYPE, DEFAULT_PRESET_ID, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION } from '../config/document-config'
 import {
   applyDocumentCommand,
   createCarouselBdcCommand,
@@ -37,13 +37,25 @@ describe('Elcé Sighty package export', () => {
       type: 'bdc.create',
       bdcId: 'bdc-export-card',
       bdcType: BDC_TYPE.CARD,
-      presetId: 'photo-basic',
+      presetId: DEFAULT_PRESET_ID.IMAGE_TITLE,
       placement: { kind: 'page', pageId: 'page-a' },
+    })
+    const exportCard = document.bdcs.find((bdc) => bdc.id === 'bdc-export-card')?.card
+    if (exportCard === undefined || exportCard === null) throw new Error('The image-title export Card has no content.')
+    document = applyDocumentCommand(document, {
+      type: 'bdc.card.update',
+      bdcId: 'bdc-export-card',
+      card: { ...exportCard, title: 'Titre exporté' },
     })
     document = applyDocumentCommand(document, {
       type: 'bdc.card.media.set',
       bdcId: 'bdc-export-card',
       mediaId: 'media-export-fixture',
+    })
+    document = applyDocumentCommand(document, {
+      type: 'appearance.background.set',
+      target: { kind: 'bdc', bdcId: 'bdc-export-card' },
+      value: { kind: 'gradient', id: 'background-surface' },
     })
     document = applyDocumentCommand(document, createCarouselBdcCommand('bdc-export-carousel', 'page-a', 2))
     document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-export-question', 'page-a', 3))
@@ -161,8 +173,11 @@ describe('Elcé Sighty package export', () => {
       scene?: { stories?: Record<string, unknown> }
     }
     expect(compiledPageScene.scene?.stories).toBeDefined()
+    expect(JSON.stringify(compiledPageScene)).toContain('elce-card--image-title')
+    expect(JSON.stringify(compiledPageScene)).toContain('Titre exporté')
     expect(pagePackageManifest.styleSheet).toBeDefined()
-    expect(strFromU8(files[`${pagePackageRoot}${pagePackageManifest.styleSheet!.file}`]!)).toContain('ac-grid-carousel')
+    const pageStyleSheet = strFromU8(files[`${pagePackageRoot}${pagePackageManifest.styleSheet!.file}`]!)
+    expect(pageStyleSheet).toContain('ac-grid-carousel')
     expect(pagePackageManifest.resources.some((resource) => resource.file.endsWith('.svg'))).toBe(true)
     expect(Object.keys(files).some((path) => path.includes('.elce-export'))).toBe(false)
     expect(Object.keys(files).some((path) => path.endsWith('visuel-export.svg'))).toBe(false)
@@ -194,6 +209,16 @@ describe('Elcé Sighty package export', () => {
     expect(layoutStyleSheet).toContain('.headings-crimson-text')
     expect(layoutStyleSheet).toContain('.body-dm-sans')
     expect(layoutStyleSheet).toContain('.density-normal')
+    expect(layoutStyleSheet).toContain('.elce-card--image-title > .elce-card__title')
+    expect(layoutStyleSheet).toContain('font-weight: 700;')
+    expect(layoutStyleSheet).toContain('max-inline-size: calc(100% - 2em);')
+    expect(layoutStyleSheet).toContain('padding: 0.5em;')
+    expect(layoutStyleSheet).toContain('color: var(--elce-appearance-surface-foreground);')
+    expect(layoutStyleSheet).toContain('backdrop-filter: blur(0.5rem);')
+    expect(layoutStyleSheet).toContain('text-wrap: balance;')
+    expect(layoutStyleSheet).not.toContain('mix-blend-mode: difference;')
+    expect(layoutStyleSheet).toContain('.card-image-title.has-background')
+    expect(layoutStyleSheet).toContain('linear-gradient(135deg, var(--elce-appearance-background), var(--elce-appearance-surface))')
     expect(layoutStyleSheet).not.toContain('.bg-ocean-background')
     expect(layoutStyleSheet).not.toContain('.headings-inter')
     expect(layoutStyleSheet).toContain('var(--elce-appearance-background)')

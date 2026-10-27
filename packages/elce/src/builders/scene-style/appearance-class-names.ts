@@ -17,6 +17,7 @@ export type AppearanceSurfaceRole =
   | 'card-text-short'
   | 'card-text-image'
   | 'card-image-caption'
+  | 'card-image-title'
   | 'card-photo'
   | 'carousel'
   | 'question'
@@ -84,6 +85,11 @@ export function pageAppearanceClassNames(
   return classes
 }
 
+/** Returns the same reusable appearance classes for one target outside a page projection. */
+export function appearanceClassNameForTarget(document: ElceDocument, target: AppearanceTarget): string {
+  return appearanceClassNames(document, target, appearanceSurfaceRoleForTarget(document, target))
+}
+
 /** Returns the CSS role assigned to a document, page or BDC surface. */
 export function appearanceSurfaceRoleForTarget(
   document: ElceDocument,
@@ -122,6 +128,7 @@ function appearanceClassNames(
   ) {
     classes.push('has-background')
   }
+  if (resolved.frame.value && role !== 'project-content') classes.push('has-frame')
 
   if (role !== 'project-layout') {
     classes.push(getAppearanceFont(resolved.headingFontId.value).headingClassName)
@@ -144,6 +151,7 @@ function bdcAppearanceRole(bdc: Bdc): AppearanceSurfaceRole {
         case DEFAULT_PRESET_ID.TEXT_SHORT: return 'card-text-short'
         case DEFAULT_PRESET_ID.TEXT_IMAGE: return 'card-text-image'
         case DEFAULT_PRESET_ID.IMAGE_CAPTION: return 'card-image-caption'
+        case DEFAULT_PRESET_ID.IMAGE_TITLE: return 'card-image-title'
         case DEFAULT_PRESET_ID.PHOTO: return 'card-photo'
         default: throw new Error(`Layout de Carte inconnu : ${bdc.presetId}`)
       }

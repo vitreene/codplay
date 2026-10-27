@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import { render } from 'remix/ui/test'
-import { BDC_TYPE, CHAPTER_TYPE, PAGE_LOCATION } from '../../config/document-config'
+import { BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import type { AppearanceTarget } from '../../domain/commands/document-command-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
@@ -71,6 +71,7 @@ describe('appearance panel targets', () => {
       expect(rendered.$('#elce-appearance-body-font-select')).toBeNull()
       expect(rendered.$('#elce-appearance-density-select')).not.toBeNull()
       expect(rendered.$('#elce-appearance-auto-contrast')).not.toBeNull()
+      expect(rendered.$('#elce-appearance-frame')).not.toBeNull()
       expect((rendered.$('#elce-appearance-palette-select') as HTMLSelectElement | null)?.value).toBe('classic')
       expect((rendered.$('#elce-appearance-typography-pair-select') as HTMLSelectElement | null)?.value)
         .toBe('crimson-dm-sans')
@@ -84,17 +85,70 @@ describe('appearance panel targets', () => {
       rendered.cleanup()
     }
 
+    const projectPanel = render(<div id="appearance-frame-test-root">
+      {renderAppearancePanel({
+        view: selectEditorViewModel(controller.getSnapshot()),
+        actions,
+        target: { kind: 'document' },
+      })}
+    </div>)
+    const frameToggle = projectPanel.$('#elce-appearance-frame') as HTMLInputElement | null
+    if (frameToggle === null) throw new Error('The project panel has no Cadre checkbox.')
+    await projectPanel.act(() => {
+      frameToggle.checked = true
+      frameToggle.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.document.data.appearance?.frame).toBe(true)
+    projectPanel.cleanup()
+    const projectResetPanel = render(<div id="appearance-frame-reset-test-root">
+      {renderAppearancePanel({
+        view: selectEditorViewModel(controller.getSnapshot()),
+        actions,
+        target: { kind: 'document' },
+      })}
+    </div>)
+    const frameReset = projectResetPanel.$('#elce-appearance-frame-reset') as HTMLButtonElement | null
+    if (frameReset === null) throw new Error('The project panel has no Cadre reset button.')
+    await projectResetPanel.act(() => frameReset.click())
+    expect(controller.getSnapshot().context.document.data.appearance?.frame).toBeUndefined()
+    projectResetPanel.cleanup()
+
     const textCard = documentModel.bdcs.find((bdc) => bdc.type === BDC_TYPE.CARD)
     const textCardParent = textCard?.parentBdcId === null || textCard?.parentBdcId === undefined
       ? undefined
       : documentModel.bdcs.find((bdc) => bdc.id === textCard.parentBdcId)
     const textCardPageId = textCard?.pageId ?? textCardParent?.pageId
     if (textCard === undefined || textCardPageId == null) throw new Error('The appearance panel fixture has no text Card on a page.')
+    const cardTarget = { kind: 'bdc', bdcId: textCard.id } as const
+    actions.createCardEditorActions(controller.getSnapshot().context.document.bdcs)
+      .setCardLayout(textCard.id, DEFAULT_PRESET_ID.IMAGE_TITLE)
+    const imageTitlePanel = render(<div id="appearance-image-title-test-root">
+      {renderAppearancePanel({
+        view: selectEditorViewModel(controller.getSnapshot()),
+        actions,
+        target: cardTarget,
+      })}
+    </div>)
+    expect(imageTitlePanel.$('#elce-appearance-background-gradient-background-surface')).not.toBeNull()
+    expect(imageTitlePanel.$('#elce-appearance-background-gradient-background-accent')).not.toBeNull()
+    expect(imageTitlePanel.$('#elce-appearance-background-gradient-background-accent-secondary')).not.toBeNull()
+    expect(imageTitlePanel.$('#elce-appearance-text-color-picker')).toBeNull()
+    expect(imageTitlePanel.$('#elce-appearance-auto-contrast')).toBeNull()
+    const gradientChoice = imageTitlePanel.$('#elce-appearance-background-gradient-background-surface') as HTMLButtonElement | null
+    if (gradientChoice === null) throw new Error('The image-title Card panel has no gradient choices.')
+    await imageTitlePanel.act(() => gradientChoice.click())
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === textCard.id)?.appearance?.background)
+      .toEqual({ kind: 'gradient', id: 'background-surface' })
+    imageTitlePanel.cleanup()
+    actions.resetAppearanceProperty(cardTarget, 'background')
+    actions.createCardEditorActions(controller.getSnapshot().context.document.bdcs)
+      .setCardLayout(textCard.id, DEFAULT_PRESET_ID.TEXT_SHORT)
+
     const densityPanel = render(<div id="appearance-density-test-root">
       {renderAppearancePanel({
         view: selectEditorViewModel(controller.getSnapshot()),
         actions,
-        target: { kind: 'bdc', bdcId: textCard.id },
+        target: cardTarget,
       })}
     </div>)
     const densitySelect = densityPanel.$('#elce-appearance-density-select') as HTMLSelectElement | null
@@ -123,7 +177,7 @@ describe('appearance panel targets', () => {
       {renderAppearancePanel({
         view: selectEditorViewModel(controller.getSnapshot()),
         actions,
-        target: { kind: 'bdc', bdcId: textCard.id },
+        target: cardTarget,
       })}
     </div>)
     const transparentToggle = transparentPanel.$('#elce-appearance-background-transparent') as HTMLInputElement | null

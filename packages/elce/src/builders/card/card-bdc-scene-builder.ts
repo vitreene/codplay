@@ -40,13 +40,13 @@ export class ElceCardBdcSceneBuilder {
     const photoMediaRoot = input.photoMediaRoot === true && bdc.presetId === DEFAULT_PRESET_ID.PHOTO
     const markup = photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : layout.markup
     const appearanceClassName = appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget)
+    const imagePositionClassName = bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
+      ? `elce-card--image-position-${bdc.card.imagePosition}`
+      : ''
+    const generatedClassNames = [appearanceClassName, imagePositionClassName].filter(Boolean).join(' ')
     return {
-      markup: appendClassToMarkupElement(
-        markup,
-        rootId,
-        appearanceClassName,
-      ),
-      rootClassName: `${layout.rootClassName} ${appearanceClassName}`,
+      markup: appendClassToMarkupElement(markup, rootId, generatedClassNames),
+      rootClassName: [layout.rootClassName, generatedClassNames].filter(Boolean).join(' '),
       zonePartIds: layout.zonePartIds,
       contentPersos: createCardContentPersos(bdc, layout.zonePartIds, layout.zoneClassNames, `${pageId}:${bdc.id}`),
       mediaPersos: createCardMediaPersos(input, partId, bdc.card.imageFit),
@@ -79,6 +79,8 @@ function createCardContentPersos(
         ...createCardTextPersos(prefix, bdc.id, 'message', 'p', card.message, zonePartIds.message, zoneClassNames.message),
         ...createCardTextPersos(prefix, bdc.id, 'note', 'footer', card.note, zonePartIds.note, zoneClassNames.note),
       ]
+    case DEFAULT_PRESET_ID.IMAGE_TITLE:
+      return createCardTextPersos(prefix, bdc.id, 'title', 'h2', card.title, zonePartIds.title, zoneClassNames.title)
     case DEFAULT_PRESET_ID.PHOTO:
       return []
     case DEFAULT_PRESET_ID.IMAGE_CAPTION:
@@ -141,6 +143,7 @@ function cardMediaPartId(layoutId: string, partId: string): string | null {
       return `${partId}:media`
     case DEFAULT_PRESET_ID.IMAGE_CAPTION:
     case DEFAULT_PRESET_ID.TEXT_IMAGE:
+    case DEFAULT_PRESET_ID.IMAGE_TITLE:
       return `${partId}:image`
     case DEFAULT_PRESET_ID.TEXT_SHORT:
       return null

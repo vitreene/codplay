@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyDocumentCommand } from '../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../domain/document/document-model'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../domain/summary-profile/test-state-types'
@@ -12,6 +12,8 @@ import type {
   StoredProject,
 } from './projects/project-persistence'
 import { createElceApiRouter } from './api-router'
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('Elcé project API Fetch router', () => {
   it('returns 404 for an unregistered endpoint', async () => {
@@ -129,20 +131,88 @@ describe('Elcé project API Fetch router', () => {
     expect(missingRevision.status).toBe(428)
     expect(malformedRevision.status).toBe(400)
     expect(mismatchedId.status).toBe(400)
+    const malformedRevisionBody = await malformedRevision.json() as Record<string, unknown>
+    const mismatchedIdBody = await mismatchedId.json() as Record<string, unknown>
+    expect(malformedRevisionBody).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'invalid_if_match',
+    })
+    expect(mismatchedIdBody).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'document_id_mismatch',
+    })
+    expect(malformedRevisionBody.diagnosticId).not.toBe(mismatchedIdBody.diagnosticId)
   })
 
-  it('rejects unreadable JSON and unsupported document versions', async () => {
+  it('classifies unreadable JSON and invalid document shapes', async () => {
     const router = createElceApiRouter(new MemoryProjectPersistence())
     const invalidJson = await router.fetch(new Request('http://elce.test/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{',
     }))
-    const oldDocument = documentWithId('project-old-version').toJSON()
-    const unsupportedVersion = await router.fetch(jsonRequest('POST', '/api/projects', { ...oldDocument, version: 3 }))
+    const grant = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': 'test-grant' }
+    const invalidDocumentJson = await router.fetch(new Request('http://elce.test/api/projects/project-invalid/document', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-Match': '"0"', ...grant },
+      body: '{',
+    }))
+    const document = documentWithId('project-invalid-shape').toJSON()
+    const invalidShape = await router.fetch(jsonRequest('PUT', '/api/projects/project-invalid-shape/document', {
+      ...document,
+      version: 3,
+    }, { 'If-Match': '"0"', ...grant }))
 
     expect(invalidJson.status).toBe(400)
-    expect(unsupportedVersion.status).toBe(400)
+    expect(invalidDocumentJson.status).toBe(400)
+    expect(await invalidDocumentJson.json()).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'invalid_json',
+    })
+    expect(await invalidShape.json()).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'invalid_document_shape',
+    })
+  })
+
+  it('correlates invariant rejection without logging document content', async () => {
+    const router = createElceApiRouter(new MemoryProjectPersistence())
+    const document = documentWithId('project-invalid-invariant').toJSON()
+    const privateSentinel = 'DOCUMENT_TEXT_MUST_NOT_BE_LOGGED'
+    const invalidDocument = {
+      ...document,
+      appearance: { privateNote: privateSentinel },
+    }
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const response = await router.fetch(jsonRequest(
+      'PUT',
+      '/api/projects/project-invalid-invariant/document',
+      invalidDocument,
+      {
+        'If-Match': '"0"',
+        'X-Elce-Page-Id': 'test-page',
+        'X-Elce-Edit-Grant': 'test-grant',
+      },
+    ))
+    const diagnostic = await response.json() as Record<string, unknown>
+
+    expect(response.status).toBe(400)
+    expect(diagnostic).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'document_invariants_rejected',
+    })
+    expect(report).toHaveBeenCalledWith('Elcé API rejected project document.', expect.objectContaining({
+      diagnosticId: diagnostic.diagnosticId,
+      projectId: 'project-invalid-invariant',
+      diagnosticReason: 'document_invariants_rejected',
+      validationFrames: expect.any(Array),
+    }))
+    expect(JSON.stringify(report.mock.calls)).not.toContain(privateSentinel)
   })
 
   it('reads and saves test state on its independent revision and rejects stale writes', async () => {

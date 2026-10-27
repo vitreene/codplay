@@ -7,13 +7,17 @@ partiellement les surfaces projet, page et BDC sur écran large et étroit. La
 cible vient d’être ramenée à 60–85 caractères ; son recalibrage reste à faire.
 Le test typographique ciblé passe et la preview confirme ses espacements sur
 grand et petit écran. Le padding Normal des surfaces bordées sans fond est
-appliqué et vérifié sur Question ; cinq suites ciblées couvrant Question,
-graphe et placements passent (44 tests), dont les couleurs fixes des trois
-rendus SVG. La dernière suite Elcé complète connue passe 483 tests sur 484 ;
-un test de persistance SQLite est bloqué par l’interdiction du socket local. Le sommaire
+appliqué et vérifié sur Question ; Cadre est implémenté, hérité du projet aux
+pages et BDC, et contrôlé dans Brave à deux largeurs. Cinq suites ciblées
+couvrant Question, graphe et placements passent (44 tests), dont les couleurs fixes des trois
+rendus SVG. La dernière suite Elcé complète passe 491 tests sur 492 ; le test
+de streaming SQLite échoue sur `listen EPERM 127.0.0.1` dans cet environnement.
+Le sommaire
 ouvert, les autres BDC et le facteur `1.41` des titres restent à vérifier. Le
 build global échoue dans `codplay-v1` sur des erreurs TypeScript de tests et
-démos hors du paquet Elcé.
+démos hors du paquet Elcé. La correction de l’aperçu du graphe passe aussi dans
+les trois suites ciblées Éditeur, builder et placements (21 tests), avec le
+typecheck et le build Elcé.
 La mesure s’applique à la racine `.bdc` de tous les types. Décision utilisateur
 du 26 octobre : autoriser le bloc à s’étendre jusqu’à `55rem`, quelle
 que soit la densité, et continuer à augmenter la taille du texte au-delà de son
@@ -23,7 +27,35 @@ et ses paramètres sont isolés dans la
 [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
 Le recalibrage réel des fontes et la vérification des autres BDC restent ouverts.
 
+## Cadre — appliqué et vérifié (27 octobre 2026)
+
+- `appearance.frame?: boolean` et une case « Cadre » dans le panneau Style,
+  sur le projet, les pages et les BDC. La valeur par défaut est désactivée ; le
+  reset retire seulement l’exception locale.
+- Cadre est résolu avec la cascade existante BDC → parent BDC → page → projet →
+  application. Une valeur active héritée s’applique à chaque cible descendante.
+- Le cadre pose `thin solid var(--elce-appearance-frame)`, gris neutre sombre
+  avec correction de luminosité si le contraste de 3:1 l’exige. Une surface
+  cadrée reçoit le padding Normal de son rôle, quelle que soit sa densité ou
+  son fond. La feuille Normal est chargée en dernier lorsque Cadre est actif
+  pour que cette règle prime sur les espacements de densité.
+- Le typecheck et le build Elcé passent ; les tests ciblés d’apparence passent
+  (12 tests). La suite complète passe 491/492 ; l’unique échec est le test de
+  streaming SQLite bloqué par `listen EPERM 127.0.0.1`.
+- Brave vérifie le projet, une page et les BDC hérités à 1280×900 et 390×844,
+  y compris le padding Normal sans débordement. Le réglage Cadre de Demo5 a été
+  réinitialisé après la vérification.
+
 ## Sources propriétaires
+
+Le layout Carte « Titre sur image » est défini dans la
+[spécification Carte](../specs/carousel-bdc-spec.md). Son titre utilise un
+cadre local dérivé des rôles Surface et Premier plan de Surface ; la décision
+de contraste est appliquée et vérifiée.
+
+La position « Centrée » du preset Texte avec image est suivie dans son
+[plan dédié](./2026-10-27-centered-text-image-card-plan.md), **A relire** :
+textes centrés horizontalement et image entre description et message.
 
 - `src/config/appearance/appearance-definitions.ts` référence les choix ; les
   CSS de palette fournissent les échantillons du picker via
@@ -90,9 +122,11 @@ le lecteur. L’interface ne propose qu’un duo typographique ; `headingFontId`
    couleurs fixes du builder, indépendantes du Fond du projet. Le builder les
    émet déjà ; des assertions les couvrent désormais pour barres, courbes,
    secteurs et légendes, ainsi que dans les placements Flux, Diapo et
-   Carousel.
-   Une fixture Brave confirme leur rendu CSS. Demo5 ne montre qu’un Graphe en
-   Tableau ; inspecter un rendu SVG monté par le runtime reste à faire.
+   Carousel. L’aperçu auteur ignorait cette feuille et affichait les barres en
+   noir ; il monte maintenant le balisage et les styles du builder ensemble.
+   Le test éditeur dédié passe. Brave confirme les couleurs dans la modale
+   auteur puis dans le SVG Barres monté dans la page Lecture ouverte depuis
+   l’éditeur. Courbes et Secteurs restent à vérifier en navigateur.
 2. **Compléter les mesures BDC.** Vérifier en rendu réel chaque type présent
    dans Demo5 à largeur large et mobile. La passe de mesure confirme Section,
    Photos ancrées et Question sans débordement aux deux formats. La preview

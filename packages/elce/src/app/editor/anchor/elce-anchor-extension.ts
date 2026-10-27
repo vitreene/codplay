@@ -84,8 +84,22 @@ function renderAnchorCardPreview(
   const root = container.firstElementChild
   if (!(root instanceof HTMLElement)) return
   root.classList.add('elce-anchor-card-preview')
-  if (preview.content.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT) root.classList.add('elce-carousel-view--image-right')
+  if (preview.appearanceClassName !== undefined) {
+    root.classList.add(...preview.appearanceClassName.split(' ').filter(Boolean))
+  }
+  if (preview.layoutId === DEFAULT_PRESET_ID.TEXT_IMAGE) {
+    root.classList.add(`elce-card--image-position-${preview.content.imagePosition}`)
+    if (preview.content.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT) {
+      root.classList.add('elce-carousel-view--image-right')
+    }
+  }
   root.dataset.elceCardPreview = 'true'
+  if (preview.appearanceStyleSheet !== undefined) {
+    const style = document.createElement('style')
+    style.id = `${rootId}-appearance-style`
+    style.textContent = preview.appearanceStyleSheet
+    root.append(style)
+  }
   if (preview.layoutId === DEFAULT_PRESET_ID.PHOTO) {
     const image = root.querySelector('.elce-anchor-media-preview')
     if (image instanceof HTMLImageElement) onPhotoImage(image)

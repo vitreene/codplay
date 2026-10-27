@@ -99,11 +99,13 @@ avant d’activer ses commandes.
 
 ## Erreurs
 
-Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
+Les réponses d’erreur ont la forme `{ "error": "<code>" }`, sauf les
+diagnostics documentaires et le doublon de média qui ajoutent leurs champs
+spécifiques :
 
 | Statut | Code | Sens |
 | --- | --- | --- |
-| `400` | `invalid_request` | JSON, document v7, identifiant ou nom de type invalide |
+| `400` | `invalid_request` | JSON, document v7, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
 | `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
@@ -119,6 +121,20 @@ Les réponses d’erreur ont la forme `{ "error": "<code>" }` :
 | `409` | `media_changed` / `media_already_has_file` | Les métadonnées ont changé pendant l’upload ou la ressource possède déjà un autre contenu |
 | `409` | `media_already_exists` | Les octets appartiennent déjà à une autre ressource du projet ; la réponse inclut son `mediaId` canonique |
 | `415` | `unsupported_media_type` | Le type MIME du média ne fait pas partie des types pris en charge par le modèle |
+
+Un rejet de validation par `PUT /api/projects/:projectId/document` retourne
+`{ "error": "invalid_request", "diagnosticId": "<uuid>",
+"diagnosticReason": "<reason>" }`. Les raisons distinguent
+`invalid_if_match`, `invalid_json`, `invalid_document_shape`,
+`document_rehydration_rejected`, `document_invariants_rejected` et
+`document_id_mismatch`. L’API journalise le même identifiant, le projet, la
+route et la raison ; lorsque la reconstitution ou les invariants échouent, le
+log conserve au plus huit frames d’appel, sans le message dynamique de
+l’erreur. Ni le corps, ni le nom, ni le contenu éditorial du document ne sont
+journalisés. Le client garde l’identifiant et la raison dans
+`ElceProjectApiError`, affichés avec l’erreur de synchronisation, et ne
+réessaie pas un `invalid_request` déterministe. La copie locale reste en
+attente afin de pouvoir l’inspecter ou la récupérer.
 
 ## Persistance SQLite vérifiée
 
@@ -239,11 +255,15 @@ et la suppression du projet. Il vérifie aussi le prévol depuis l’origine
 `ElceProjectApiClient` adapte les opérations de catalogue et de document
 utilisées par l’application : lister, créer, lire, renommer, supprimer,
 enregistrer le document et transférer un média. Ses tests vérifient les chemins
-HTTP, les méthodes, les corps, les ETags et la remontée de l’identifiant média
-canonique en cas de doublon.
+HTTP, les méthodes, les corps, les ETags, la remontée de l’identifiant média
+canonique en cas de doublon et la propagation du diagnostic documentaire.
 Ils vérifient aussi le renouvellement du bail et l’envoi du forçage. Les tests
-SQLite couvrent le renouvellement, l’expiration, la reprise forcée et le refus
-d’une écriture de l’ancienne paire.
+API vérifient les catégories de rejet `PUT /document`, la corrélation entre la
+réponse et le log, ainsi que l’absence de contenu documentaire dans ce log ;
+le coordinateur vérifie que l’identifiant et la catégorie remontent dans
+l’erreur de projet, qu’un rejet n’est pas réessayé et que la copie locale reste
+en attente. Les tests SQLite couvrent le renouvellement, l’expiration, la
+reprise forcée et le refus d’une écriture de l’ancienne paire.
 
 Le 8 octobre, `npm run dev:elce` a démarré ensemble l’entrée Vite et le listener
 API. Le port `5175` étant occupé, Vite a servi l’entrée sur `5176` ; les requêtes

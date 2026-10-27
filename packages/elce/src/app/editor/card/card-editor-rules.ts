@@ -42,6 +42,7 @@ export function cardLayoutAcceptsMedia(layoutId: CardLayoutId, mediaType: MediaT
           return false
       }
     case DEFAULT_PRESET_ID.IMAGE_CAPTION:
+    case DEFAULT_PRESET_ID.IMAGE_TITLE:
     case DEFAULT_PRESET_ID.TEXT_IMAGE:
       return mediaType === MEDIA_TYPE.IMAGE
     case DEFAULT_PRESET_ID.TEXT_SHORT:

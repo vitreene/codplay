@@ -505,3 +505,64 @@ ni `blur` ni `focus` dans les pages contrôlées, et les deux signalaient encore
 `document.hasFocus() === true`. La fenêtre privée existante, dont le champ de
 titre avait une valeur locale différente de son `defaultValue`, a été laissée
 intacte. Garder l’acceptation du focus natif en cours ; ne pas lancer Firefox.
+
+### 27 octobre — `400 invalid_request` après une action d’édition
+
+**Statut : traçage implémenté et testé ; l’API active sur `5181` est ancienne. La validation qui rejette l’édition reste à identifier après redémarrage.**
+Le signalement vise la page
+« Découvrir Nutrition & Santé » du projet
+`nutrition-sante-accueil-interimaires`. L’API locale sert le document v7 à la
+révision 134 ; il passe `assertDocumentInvariants`. Un profil Brave isolé a
+ouvert ce projet en état « Synchronisé », sans erreur console et sans requête
+`PUT /document`. L’utilisateur précise que le `400` survient après une action
+dans l’éditeur ; l’ouverture seule est donc saine dans le profil isolé. Le
+Web Lock, son canal de transfert et le droit SQLite sont tous indexés par
+`projectId`. L’essai Brave a acquis puis libéré le droit du projet Nutrition &
+Santé ; il a pu rendre une autre page de ce même projet éditable, sans toucher
+aux autres projets. La réponse générique de l’API ne permet pas encore
+d’identifier la validation rejetée lors de l’action.
+
+**Constat runtime du 27 octobre :** la page Brave contrôlée sert le client qui
+reconnaît les champs de diagnostic ; le `GET` du projet Nutrition & Santé
+retourne le document v7 à la révision 134. Un `PUT` de son endpoint avec un
+`If-Match` volontairement invalide — rejeté avant lecture du document et avant
+toute écriture — retourne encore seulement `{ "error": "invalid_request" }`.
+L’API active ne contient donc pas le traçage déployé dans le workspace. Le
+lanceur `startOrReuseApi()` reconnaît un serveur existant uniquement à la
+forme de `GET /api/projects` et peut réutiliser silencieusement une ancienne
+instance. Le corps du `400` original n’étant pas disponible, sa validation
+fautive reste inconnue.
+
+**Décision acceptée le 27 octobre — traçage des rejets `PUT /document` :**
+chaque `400 invalid_request` reçoit un `diagnosticId` et une catégorie sûre
+(`invalid_if_match`, `invalid_json`, `invalid_document_shape`,
+`document_rehydration_rejected`, `document_invariants_rejected`,
+`document_id_mismatch`). L’API journalise le même identifiant, l’étape du rejet
+et les métadonnées minimales du projet ; pour une erreur de reconstitution ou
+un invariant, elle conserve les frames d’appel sans le message dynamique. Ni
+le corps du document ni ses champs éditoriaux ne sont journalisés. Le client
+affiche l’identifiant et la catégorie dans l’erreur de synchronisation et ne
+réessaie pas un `invalid_request` déterministe.
+
+**Vérification du traçage le 27 octobre :** les tests API distinguent les
+causes `If-Match`, JSON, forme documentaire, invariants et identifiant de
+route ; ils relient l’identifiant de réponse au log et vérifient qu’un texte
+sentinelle du document n’y apparaît pas. Le test client retrouve l’identifiant
+et la catégorie dans `ElceProjectApiError`. Le test du coordinateur provoque
+un `400`, constate un seul `PUT`, et confirme que le brouillon local reste
+`pending` tandis que la révision serveur est inchangée ; l’erreur de projet
+contient aussi l’identifiant et la catégorie. Les tests ciblés API, client et
+session passent (44 tests). La cause racine du signalement initial reste
+inconnue faute de requête fautive capturée ; les prochains identifiants de
+diagnostic permettront de la déterminer.
+
+**À la prochaine occurrence :** relever le `diagnosticId` dans la console du
+navigateur, puis retrouver la même entrée dans le terminal de l’API. Utiliser
+la catégorie et les frames consignées pour identifier la cause racine sans
+écraser une copie locale `pending` ou `conflict`.
+
+**Prérequis runtime :** arrêter l’ancienne API qui tient le port `5181`, puis
+relancer l’éditeur avec son API courante. Au démarrage, vérifier que le message
+indique `API Elcé disponible`, pas `API Elcé réutilisée`. Ne pas reproduire
+l’édition avant ce redémarrage, car aucun diagnostic n’est encore émis par le
+serveur actuellement actif.

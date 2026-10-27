@@ -415,6 +415,51 @@ describe('Elcé project session lifecycle', () => {
     actor.stop()
   })
 
+  it('does not retry an invalid document rejection and keeps the local pending copy', async () => {
+    const initial = documentForProject('invalid-document-save', 'Version confirmée')
+    const remote = new Map([[initial.id, initial]])
+    const store = new MemoryProjectStore()
+    const network = { online: true, invalidDocumentSave: true }
+    const { coordinator, request } = createCoordinator(remote, store, new Map(), network)
+    const browser = installFakeBrowserEvents()
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    const reportError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    actor.start()
+    await coordinator.attach(actor)
+
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: initial.id } })
+    await vi.waitFor(() => expect(browser.locks.request).toHaveBeenCalledTimes(1))
+    browser.grantAccess(0)
+    await vi.waitFor(() => expect(actor.getSnapshot().context.editAccess).toBe('active'))
+
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Brouillon à conserver' } })
+    await vi.waitFor(() => expect(store.documents.get(initial.id)?.data.name).toBe('Brouillon à conserver'))
+    browser.setFocused(false)
+    browser.window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(reportError).toHaveBeenCalledWith(
+      'La synchronisation locale Elcé a échoué.',
+      expect.objectContaining({
+        code: 'invalid_request',
+        diagnosticId: 'diagnostic-test-save',
+        diagnosticReason: 'document_invariants_rejected',
+      }),
+    ))
+    await vi.waitFor(() => expect(actor.getSnapshot().context.projectError)
+      .toContain('[diagnostic diagnostic-test-save: document_invariants_rejected]'))
+    await new Promise<void>((resolve) => setTimeout(resolve, 600))
+
+    const documentSaveCalls = request.mock.calls.filter(([input, init]) =>
+      init?.method === 'PUT' && new URL(input.toString()).pathname.endsWith('/document'))
+    expect(documentSaveCalls).toHaveLength(1)
+    expect(store.documents.get(initial.id)?.data.name).toBe('Brouillon à conserver')
+    expect(store.checkpoints.get(initial.id)).toMatchObject({ remoteRevision: 0, status: 'pending' })
+    expect(remote.get(initial.id)?.data.name).toBe('Version confirmée')
+
+    network.invalidDocumentSave = false
+    await coordinator.dispose()
+    actor.stop()
+  })
+
   it('waits for window focus before requesting project edit access', async () => {
     const initial = documentForProject('elce-document', 'Fenêtre en arrière-plan')
     const remote = new Map([[initial.id, initial]])
@@ -675,7 +720,12 @@ function createCoordinator(
   remote: Map<string, ElceDocumentModel>,
   store: MemoryProjectStore,
   revisions: Map<string, number> = new Map(),
-  network: { online: boolean; failedProjectReadId?: string; occupiedProjectId?: string } = { online: true },
+  network: {
+    online: boolean
+    failedProjectReadId?: string
+    occupiedProjectId?: string
+    invalidDocumentSave?: boolean
+  } = { online: true },
   session: Storage | null = null,
 ): Readonly<{
   coordinator: ProjectSessionCoordinator
@@ -733,6 +783,13 @@ function createCoordinator(
         const currentRevision = revisions.get(projectId) ?? 0
         if (init?.headers === undefined || new Headers(init.headers).get('If-Match') !== `"${currentRevision}"`) {
           return Response.json({ error: 'revision_mismatch' }, { status: 412 })
+        }
+        if (network.invalidDocumentSave === true) {
+          return Response.json({
+            error: 'invalid_request',
+            diagnosticId: 'diagnostic-test-save',
+            diagnosticReason: 'document_invariants_rejected',
+          }, { status: 400 })
         }
         const data = JSON.parse(String(init.body)) as Parameters<typeof ElceDocument.fromJSON>[0]
         const document = ElceDocument.fromJSON(data)

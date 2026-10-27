@@ -52,12 +52,15 @@ export function renderRemixStatisticalGraphEditor(
   const openGraphPreview = (): void => {
     const dialog = document.getElementById(`elce-statistical-graph-preview-dialog-${bdc.id}`) as HTMLDialogElement | null
     const preview = document.getElementById(`elce-statistical-graph-preview-content-${bdc.id}`)
-    if (dialog === null || preview === null) return
-    preview.innerHTML = statisticalGraphSceneBuilder.buildContent(
+    const style = document.getElementById(`elce-graph-preview-style-${bdc.id}`)
+    if (dialog === null || preview === null || style === null) return
+    const graphBuild = statisticalGraphSceneBuilder.buildContent(
       content,
       bdc.presetId,
       `elce-statistical-graph-preview-${bdc.id}`,
-    ).markup
+    )
+    style.textContent = graphBuild.styleSheet
+    preview.innerHTML = graphBuild.markup
     if (!dialog.open) dialog.showModal()
   }
 
@@ -225,6 +228,7 @@ export function renderRemixStatisticalGraphEditor(
           {renderLucideIcon(X, `elce-statistical-graph-preview-close-icon-${bdc.id}`)}
         </button>
       </header>
+      <style id={`elce-graph-preview-style-${bdc.id}`} />
       <div
         id={`elce-statistical-graph-preview-content-${bdc.id}`}
         className="elce-statistical-graph-preview-dialog__content"

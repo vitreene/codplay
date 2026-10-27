@@ -22,6 +22,8 @@ export type ElceAnchorCardPreview = Readonly<{
   readonly content: CardContent
   readonly layoutId: CardLayoutId
   readonly media: Readonly<{ source: string; type: ElceCatalogMediaType }> | null
+  readonly appearanceClassName?: string
+  readonly appearanceStyleSheet?: string
 }> | Readonly<{
   readonly kind: 'statistical-graph'
   readonly content: StatisticalGraphContent

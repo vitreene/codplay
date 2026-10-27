@@ -9,6 +9,41 @@ import { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import { renderRemixStatisticalGraphEditor } from './remix-statistical-graph-editor'
 
 describe('Remix Statistical Graph editor', () => {
+  it('includes the graph builder stylesheet in its visual preview', async () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const actions = new EditorActionsFacade(controller)
+    const initialDocument = controller.getSnapshot().context.document
+    const page = initialDocument.pages[0]
+    if (page === undefined) throw new Error('The graph editor fixture has no page.')
+
+    actions.createStatisticalGraph(page.id, page.bdcIds.length)
+    const graphBdc = controller.getSnapshot().context.document.bdcs.find((entry) => entry.type === BDC_TYPE.STATISTICAL_GRAPH)
+    if (graphBdc === undefined || graphBdc.statisticalGraph == null) throw new Error('The graph editor fixture has no statistical graph BDC.')
+    const rendered = render(renderRemixStatisticalGraphEditor(
+      graphBdc,
+      actions.createStatisticalGraphEditorActions(graphBdc.id, graphBdc.statisticalGraph),
+    ))
+    const dialog = rendered.$(`#elce-statistical-graph-preview-dialog-${graphBdc.id}`) as HTMLDialogElement | null
+    if (dialog === null) throw new Error('The graph editor fixture has no graph preview dialog.')
+    dialog.showModal = () => { dialog.open = true }
+
+    await rendered.act(() => {
+      const button = rendered.$(`#elce-statistical-graph-preview-open-${graphBdc.id}`)
+      if (button === null) throw new Error('The graph editor fixture has no preview button.')
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const style = rendered.$(`#elce-graph-preview-style-${graphBdc.id}`)
+    expect(style?.textContent).toContain('fill: #326c64;')
+    expect(style?.textContent).toContain('stroke: #c27b3a;')
+    expect(style?.textContent).toContain('background-color: #bd6688;')
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
   it('commits numeric cell input and accepts a paste beyond 40 data rows', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()

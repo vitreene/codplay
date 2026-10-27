@@ -720,7 +720,7 @@ async function retryPublish(publish: () => Promise<void>): Promise<void> {
       return
     } catch (error) {
       if (error instanceof ElceProjectApiError
-        && ['revision_mismatch', 'edit_access_lost', 'source_media_unavailable'].includes(error.code)) throw error
+        && ['revision_mismatch', 'edit_access_lost', 'source_media_unavailable', 'invalid_request'].includes(error.code)) throw error
       if (error instanceof Error && /conflit/.test(error.message)) throw error
       lastError = error
       if (attempt < 2) await new Promise<void>((resolve) => setTimeout(resolve, 150 * (attempt + 1)))

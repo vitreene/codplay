@@ -398,16 +398,13 @@ function createCarouselCardPersos(
         throw new Error(`Action de transition Carousel non prise en charge : ${event.action}`)
     }
   }
-  const imagePosition = bdc.card?.imagePosition
   const className = [
     child.className,
     cardBuild.rootClassName,
     photoMediaRoot && bdc.presetId === DEFAULT_PRESET_ID.PHOTO ? 'elce-carousel-photo__media' : null,
     firstCardBdcId === bdc.id ? 'elce-carousel-view--visible' : 'elce-carousel-view--hidden',
-    bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
-      ? imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT
-        ? 'elce-carousel-view--image-right'
-        : 'elce-carousel-view--image-left'
+    bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE && bdc.card?.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT
+      ? 'elce-carousel-view--image-right'
       : null,
   ].filter(Boolean).join(' ')
   const cardRoot: PersoDoc<string> = {

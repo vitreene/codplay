@@ -88,7 +88,8 @@ pas le DOM. Les références croisées des presets sont contrôlées par TypeScr
 
 `appearance` est facultatif sur le document, chaque page et chaque BDC. Sa
 forme sparse accepte `presetId`, `paletteId`, `headingFontId`, `bodyFontId`, `density`,
-`background`, `textColor` et `autoContrast`. Les invariants n’autorisent
+`background`, `textColor`, `autoContrast` et `frame`. `frame` est un booléen
+facultatif, désactivé par défaut. Les invariants n’autorisent
 `presetId` qu’au niveau du document ; une page ou un BDC ne choisit pas de
 preset général.
 
@@ -107,6 +108,9 @@ ajustements explicites du même niveau restent prioritaires. Une valeur absente
 hérite implicitement : l’interface n’affiche aucun choix « Hériter » ni aucun
 libellé d’origine. Chaque contrôle montre sa valeur effective ; son action
 « Réinitialiser » supprime uniquement l’exception locale correspondante.
+`frame` suit cette même cascade : une valeur active sur le projet s’applique
+aux pages et BDC descendants, sauf exception locale, et le reset rétablit la
+valeur de l’ancêtre.
 
 Une couleur peut référencer un rôle sémantique d’une palette ou conserver une
 valeur personnalisée fixe. Le fond n’enregistre pas `transparent` : le choix
@@ -116,6 +120,14 @@ qui conservent le retrait Normal. Choisir ensuite une couleur restaure Normal.
 Une référence sémantique suit les changements de palette qui lui sont
 applicables ; une couleur personnalisée ne change pas. Le contraste automatique
 est un booléen indépendant et agit uniquement sur la couleur du texte.
+
+Pour une Carte, `background` accepte aussi un identifiant de dégradé. Les trois
+choix disponibles sont Fond → Surface, Fond → Accent et Fond → Accent
+secondaire, tous à 135°. Ils sont calculés depuis les rôles de palette résolus ;
+le document ne conserve ni couleurs d’étape ni angle. Le dégradé est une
+exception locale de Carte et ne change pas l’ancre de fond solide dont dépend la
+palette dérivée. Les invariants refusent ce choix au projet, à une page et aux
+autres types de BDC.
 
 Les commandes d’apparence passent par `document.apply`. Elles préservent les
 autres champs documentaires. La migration documentaire v6 → v7 ne cible que
@@ -129,7 +141,12 @@ général n’est affiché qu’au projet. Palette, Fond et Couleur du texte son
 présentés dans le même groupe « Couleurs » ; le contraste est une seule case
 « Contraste auto ». Les libellés d’héritage et de provenance ne sont pas
 affichés. La typographie se choisit par duo ; l’interface n’expose pas de
-sélecteurs de police de titre et de corps séparés.
+sélecteurs de police de titre et de corps séparés. La case « Cadre » et son
+reset sont disponibles pour le projet, les pages et tous les BDC. Elle n’expose
+aucun paramètre de couleur, d’épaisseur ou de retrait.
+Le champ Fond propose les trois dégradés sur les Cartes. Pour le layout Titre
+sur image, Couleur du texte et Contraste auto sont masqués : le traitement fixe
+du titre les remplace.
 
 Une icône Palette ouvre le style du projet depuis l’en-tête Scénario. Chaque
 page et BDC possède son bouton de style accessible ; dans l’en-tête d’un BDC,
@@ -154,10 +171,12 @@ Le circuit est le suivant :
    trouve la première surface opaque qui porte réellement un fond.
 3. [`generateAppearanceColors`](../src/domain/appearance/appearance-color-generator.ts)
    reçoit les couleurs Fond et Texte résolues, l’option Contraste auto et ce
-   fond de contraste ; il calcule les rôles de palette.
+   fond de contraste ; il calcule les rôles de palette, dont le gris neutre du
+   cadre.
 4. [`createDocumentAppearanceStyleSheet`](../src/player/appearance-scene-style-sheet.ts)
    associe ces rôles aux variables CSS de chaque portée et peint le fond
-   uniquement sur sa surface visible.
+   uniquement sur sa surface visible ; il ajoute la bordure des cibles dont la
+   valeur `frame` résolue est active.
 5. [`ELCE_PLAYER_STYLE_SHEET`](../src/player/elce-player-style.ts) consomme les
    mêmes variables dans le contenu, le sommaire, le titre et la navigation.
 
@@ -179,11 +198,18 @@ Carousel, gardent `.bdc` et les classes résolues sur la racine animée.
   lorsqu’ils y sont effectivement définis. Une valeur héritée ne peint pas une
   nouvelle surface : elle reste transparente et laisse voir le fond de son
   ancêtre. Chaque cible locale recalcule ses rôles depuis ses valeurs résolues.
+- Cadre suit la cascade standard sans règle spéciale de surface : `has-frame`
+  est posé sur chaque cible où `frame` résout à `true`, y compris les pages et
+  BDC qui héritent du projet. Le projet encadre sa racine de layout ; le slot de
+  contenu n’ajoute pas de seconde bordure.
 - Une Section et les surfaces de Carousel, Question, Résultat et Graphe
   possèdent chacune leur classe ; sans réglage local, leur fond est transparent.
 - Le fond d’une Carte vise sa surface de texte : la racine des layouts
-  textuels, la zone de texte de Texte avec image, ou la légende d’Image avec
-  légende.
+  textuels et de Titre sur image, la zone de texte de Texte avec image, ou la
+  légende d’Image avec légende.
+- Pour Titre sur image, le titre utilise aussi `surface-foreground` sur un
+  cadre local en Surface, translucide et floutant ; sa règle exacte est
+  détaillée dans la [spécification Carte](./carousel-bdc-spec.md).
 
 L’inset sur fond opaque s’applique aux surfaces textuelles Section, Question,
 Résultat et aux layouts Carte Texte court, Texte avec image et Image avec
@@ -198,6 +224,14 @@ conserve son inset sur sa propre zone, et la légende le conserve sur sa surface
 Photo n’ajoute aucun inset autour du média. Le Graphe conserve son fond, sa
 typographie et ses couleurs, sans padding d’apparence. Les paddings de page et
 de contenu préexistants gardent leurs rôles distincts.
+
+Cadre impose le padding Normal de son rôle sur toute cible cadrée, même avec un
+fond transparent et quelle que soit la densité choisie. Texte avec image et
+Image avec légende gardent leur bordure autour de la Carte ; leur padding
+Normal reste dans la zone de texte ou la légende. La feuille `normal.css` est
+chargée après les autres densités lorsqu’un cadre est actif, afin que ces
+mesures priment sur Compact et Large. Sans Cadre, les règles existantes restent
+inchangées.
 
 La preview ne rajoute ni marge ni bord autour de `.elce-player-stage`, règle
 portée par [`app-layout.css`](../src/app/layout/app-layout.css) et
@@ -218,8 +252,9 @@ réglages.
 ## Génération et édition de la palette
 
 Le modèle de document conserve seulement les ancres Fond et Texte, la palette
-référencée, l’option Contraste auto et la densité. Il n’enregistre pas chaque
-couleur calculée. La fonction pure
+référencée, l’option Contraste auto, la densité, le booléen Cadre et, sur une
+Carte, l’identifiant du dégradé choisi. Il n’enregistre pas chaque couleur
+calculée. La fonction pure
 [`generateAppearanceColors`](../src/domain/appearance/appearance-color-generator.ts)
 produit les rôles suivants :
 
@@ -232,15 +267,16 @@ produit les rôles suivants :
 | `accent-foreground`, `accent-secondary-foreground` | Premier plan de chaque accent, corrigé pour garder 4,5:1 de contraste. |
 | `surface`, `surface-foreground` | Surface légèrement décalée depuis Fond et couleur de texte vérifiée sur cette surface. |
 | `border` | Mélange des ancres Fond et Texte, avec contraste graphique minimal. |
+| `frame` | Gris neutre sombre `#505050`, corrigé en luminosité si nécessaire pour garder 3:1 avec la surface. |
 | `menu-*`, `navigation-*` | Deux tons d’interface dérivés de la teinte projet, plus leur premier plan lisible. |
 
 Les constantes réglables sont regroupées au début du générateur dans
 `COLOR_RULES` : teinte neutre de repli (165°), écart entre accents, plage de
 chroma, seuil de neutralité, cibles de contraste (4,5:1 pour le texte et 3:1
-pour les éléments graphiques), écart des surfaces et luminosités du menu et de
-la navigation. Si Fond est neutre, Texte fournit la teinte ; si les deux sont
-neutres, Elcé utilise la teinte de référence 165°. Les couleurs personnalisées
-suivent les mêmes règles que les rôles de palette.
+pour les éléments graphiques), base neutre du cadre, écart des surfaces et
+luminosités du menu et de la navigation. Si Fond est neutre, Texte fournit la
+teinte ; si les deux sont neutres, Elcé utilise la teinte de référence 165°.
+Les couleurs personnalisées suivent les mêmes règles que les rôles de palette.
 
 Le calcul suit les fonctions nommées du même fichier : `hexToOklch` convertit
 les ancres sRGB ; `themeHueFor` choisit la teinte ; `generateAppearanceColors`
@@ -284,12 +320,20 @@ nécessaires et leurs licences dans le package ; la feuille exportée utilise
 - [`appearance-panel.test.tsx`](../src/app/appearance/appearance-panel.test.tsx)
   vérifie les commandes communes du projet, d’une page et des six types de
   BDC, le preset projet seulement, le choix typographique par duo et l’absence
-  de libellés d’héritage.
+  de libellés d’héritage ; la case Cadre écrit sa valeur et son reset retire
+  l’exception locale. Il vérifie aussi les trois choix de dégradé sur une Carte
+  et l’absence de Couleur du texte/Contraste auto sur Titre sur image.
 - [`appearance-scene-style-sheet.test.ts`](../src/player/appearance-scene-style-sheet.test.ts)
   vérifie les marges et l’interligne des titres, l’absence de marge avant pour
   un premier titre, l’espace des paragraphes et l’absence de `gap` concurrent
   dans les cartes flex ; il vérifie aussi le `gap` de Flux, distinct de ce
-  rythme interne, ainsi que le padding Normal des surfaces bordées sans fond.
+  rythme interne, ainsi que l’héritage Cadre projet → page → BDC, les resets,
+  la bordure sémantique, le padding Normal de chaque rôle, le calcul du dégradé
+  depuis la couleur de projet et le refus de ses usages hors Carte.
+- Brave DevTools confirme Cadre sur le projet, une page Flux et ses BDC
+  descendants à 1280×900 et 390×844. Le cadre reste sans débordement
+  horizontal ; son gris reste neutre sur fond sombre et devient `#505050` sur
+  fond clair. Le padding Normal suit la même règle aux deux largeurs.
 - La preview Brave d’un document v7 confirme en rendu réel, sur écran large et
   étroit, l’interligne du corps, le rythme des paragraphes et des titres, ainsi
   que la marge avant nulle du premier titre. Aucun débordement horizontal n’a
@@ -302,10 +346,12 @@ nécessaires et leurs licences dans le package ; la feuille exportée utilise
   bordé en Flux ; les racines Diapo restent hors de ces sélecteurs.
 - Les tests du builder Graphe vérifient la palette fixe pour chaque rendu SVG ;
   les tests de placements vérifient sa présence dans les feuilles Flux, Diapo
-  et Carousel. Une fixture Brave montre que les mêmes classes peignent barres,
-  courbes, secteurs et légendes. Demo5 n’expose actuellement qu’un Graphe en
-  Tableau ; l’inspection d’un graphe SVG monté par une session d’auteur reste
-  suivie dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md).
+  et Carousel. Le test de l’éditeur vérifie le transfert de cette feuille dans
+  l’aperçu auteur. Le 27 octobre 2026, Brave confirme les couleurs dans cet
+  aperçu et dans le SVG barres de la page Lecture ouverte depuis l’éditeur ;
+  les remplissages calculés correspondent aux trois premières couleurs de la
+  palette fixe. Les rendus montés Courbes et Secteurs restent à vérifier en
+  navigateur, comme suivi dans le [plan Style](../plan/2026-10-22-elce-style-tab-plan.md).
 - Brave DevTools, le 26 octobre 2026, confirme la nouvelle mesure : à la borne
   `55rem`, un long paragraphe de Demo5 donne une moyenne mesurée de 76,9
   caractères par ligne. Sur mobile, la racine reste sous la borne, le plancher
@@ -326,7 +372,9 @@ nécessaires et leurs licences dans le package ; la feuille exportée utilise
   l’exporteur vérifie l’inclusion des fontes et licences utilisées.
 - [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts)
   vérifie que les feuilles CSS de thème utilisées sont présentes dans le CSS
-  scoped du layout exporté et que les feuilles inutilisées en sont absentes.
+  scoped du layout exporté et que les feuilles inutilisées en sont absentes. Le
+  scénario Carte exporté vérifie aussi le titre, l’image, le dégradé généré et
+  les styles du layout Titre sur image.
 - La migration v7 appliquée à Demo5 est vérifiée par l’API locale et l’ouverture
   du contenu dans Safari. MCP confirme sur grands et petits viewports la racine
   Section, ses deux racines Photo ancrées et la racine Question, sans

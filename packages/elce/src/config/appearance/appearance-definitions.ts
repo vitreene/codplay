@@ -1,3 +1,5 @@
+import type { AppearanceBackgroundGradientDefinition } from './appearance-types'
+
 export const APPEARANCE_COLOR_ROLES = [
   'background',
   'surface',
@@ -6,6 +8,12 @@ export const APPEARANCE_COLOR_ROLES = [
   'accent',
   'border',
 ] as const
+
+export const APPEARANCE_BACKGROUND_GRADIENT_DEFINITIONS = [
+  { id: 'background-surface', label: 'Fond → Surface', from: 'background', to: 'surface', angle: '135deg' },
+  { id: 'background-accent', label: 'Fond → Accent', from: 'background', to: 'accent', angle: '135deg' },
+  { id: 'background-accent-secondary', label: 'Fond → Accent secondaire', from: 'background', to: 'accent-secondary', angle: '135deg' },
+] as const satisfies readonly AppearanceBackgroundGradientDefinition[]
 
 export const APPEARANCE_DENSITIES = [
   {
@@ -313,4 +321,5 @@ export const APPEARANCE_PRESETS = [
 export const APP_APPEARANCE_DEFAULTS = {
   presetId: 'classic',
   autoContrast: false,
+  frame: false,
 } as const

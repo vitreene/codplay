@@ -1,15 +1,19 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../config/document-config'
+import type { AppearanceBackgroundGradientId } from '../config/appearance/appearance-types'
 import {
   appearanceScopeClassName,
+  documentAppearanceClassNames,
   pageAppearanceClassNames,
 } from '../builders/scene-style/appearance-class-names.ts'
 import { applyDocumentCommand } from '../domain/commands/document-commands'
-import { createStatisticalGraphBdcCommand } from '../domain/commands/document-commands/command-factories'
+import { createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand } from '../domain/commands/document-commands/command-factories'
 import { ElceDocument, createInitialDocument } from '../domain/document/document-model'
+import { resolveAppearance } from '../domain/appearance/appearance-resolver'
 import type { Bdc } from '../domain/document/document-types'
 import {
+  createAppearanceTargetStyleSheet,
   appearanceThemeCssAssetPathsForDocument,
   createDocumentAppearanceStyleSheet,
 } from './appearance-scene-style-sheet'
@@ -80,6 +84,31 @@ describe('appearance CSS assets for the document', () => {
     expect(ELCE_PLAYER_STYLE_SHEET).not.toMatch(/\.elce-card--text-image > \.elce-carousel-text-image__content\s*\{[^}]*\bgap:/s)
   })
 
+  it('frames the balanced image title with translucent project colors and a light blur', async () => {
+    const anchorStyleSheet = await readFile(new URL('../app/layout/app-layout.css', import.meta.url), 'utf8')
+
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('.elce-card--image-title > .elce-card__title')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('font-weight: 700;')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('width: fit-content;')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('max-inline-size: calc(100% - 2em);')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('padding: 0.5em;')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('color: var(--elce-appearance-surface-foreground);')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('background-color: color-mix(in oklch, var(--elce-appearance-surface) 82%, transparent);')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('backdrop-filter: blur(0.5rem);')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('text-wrap: balance;')
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('place-items: center;')
+    expect(ELCE_PLAYER_STYLE_SHEET).not.toContain('mix-blend-mode: difference;')
+
+    expect(anchorStyleSheet).toContain('.elce-anchor-card-preview.elce-card--image-title > .elce-card__title')
+    expect(anchorStyleSheet).toContain('max-inline-size: calc(100% - 2em);')
+    expect(anchorStyleSheet).toContain('padding: 0.5em;')
+    expect(anchorStyleSheet).toContain('color: var(--elce-appearance-surface-foreground);')
+    expect(anchorStyleSheet).toContain('background-color: color-mix(in oklch, var(--elce-appearance-surface) 82%, transparent);')
+    expect(anchorStyleSheet).toContain('backdrop-filter: blur(0.5rem);')
+    expect(anchorStyleSheet).toContain('text-wrap: balance;')
+    expect(anchorStyleSheet).not.toContain('mix-blend-mode: difference;')
+  })
+
   it('doubles the space between direct BDCs in a Flux page', () => {
     expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-flux-article\s*\{[^}]*\bgap:\s*2\.5rem;/s)
   })
@@ -116,21 +145,29 @@ describe('appearance CSS assets for the document', () => {
       appearanceBdcFixture('card-short', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_SHORT, graphPage.id, null),
       appearanceBdcFixture('card-image', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_IMAGE, graphPage.id, null),
       appearanceBdcFixture('card-caption', BDC_TYPE.CARD, DEFAULT_PRESET_ID.IMAGE_CAPTION, graphPage.id, null),
+      appearanceBdcFixture('card-title-image', BDC_TYPE.CARD, DEFAULT_PRESET_ID.IMAGE_TITLE, graphPage.id, null),
       appearanceBdcFixture('card-photo', BDC_TYPE.CARD, DEFAULT_PRESET_ID.PHOTO, graphPage.id, null),
       appearanceBdcFixture('carousel', BDC_TYPE.CAROUSEL, DEFAULT_PRESET_ID.CAROUSEL, graphPage.id, null),
       appearanceBdcFixture('carousel-card', BDC_TYPE.CARD, DEFAULT_PRESET_ID.TEXT_SHORT, null, 'carousel'),
       appearanceBdcFixture('question', BDC_TYPE.QUESTION, DEFAULT_PRESET_ID.QUESTION, graphPage.id, null),
       appearanceBdcFixture('result', BDC_TYPE.EVALUATION_RESULT, DEFAULT_PRESET_ID.EVALUATION_RESULT, graphPage.id, null),
     ]
+    const framedGraphDocument = applyDocumentCommand(graphDocument, {
+      type: 'appearance.property.set',
+      target: { kind: 'document' },
+      property: 'frame',
+      value: true,
+    })
     const roleDocument = new ElceDocument({
-      ...graphDocument.toJSON(),
-      bdcs: [...graphDocument.bdcs, ...roleFixtures],
+      ...framedGraphDocument.toJSON(),
+      bdcs: [...framedGraphDocument.bdcs, ...roleFixtures],
     })
     const roleClasses = pageAppearanceClassNames(roleDocument, graphPage, roleDocument.bdcs)
     for (const bdcId of [
       'card-short',
       'card-image',
       'card-caption',
+      'card-title-image',
       'card-photo',
       'carousel',
       'carousel-card',
@@ -139,6 +176,7 @@ describe('appearance CSS assets for the document', () => {
       'bdc-graph',
     ]) {
       expect(roleClasses[`bdc:${bdcId}`]).toMatch(/\bbdc\b/)
+      expect(roleClasses[`bdc:${bdcId}`]).toContain('has-frame')
       expect(roleClasses[`bdc:${bdcId}`]).not.toContain('text-reading')
     }
   })
@@ -155,6 +193,54 @@ describe('appearance CSS assets for the document', () => {
     expect(styleSheet).toContain(`.${projectClass} {`)
     expect(styleSheet).toContain('--elce-appearance-background: #324b5a;')
     expect(styleSheet).toContain(`.${projectClass}.project-layout.has-background { background-color: var(--elce-appearance-background); }`)
+  })
+
+  it('derives Card gradients from the inherited project color and rejects them elsewhere', () => {
+    const initial = createInitialDocument()
+    const projectColor = applyDocumentCommand(initial, {
+      type: 'appearance.background.set',
+      target: { kind: 'document' },
+      value: { kind: 'custom', value: '#324b5a' },
+    })
+    const withCard = applyDocumentCommand(projectColor, createStandaloneCardBdcCommand(
+      'card-title-image',
+      'page-a',
+      DEFAULT_PRESET_ID.IMAGE_TITLE,
+    ))
+    const cardTarget = { kind: 'bdc', bdcId: 'card-title-image' } as const
+    const gradientDocument = applyDocumentCommand(withCard, {
+      type: 'appearance.background.set',
+      target: cardTarget,
+      value: { kind: 'gradient', id: 'background-surface' },
+    })
+    const resolved = resolveAppearance(gradientDocument, cardTarget)
+    const styleSheet = createDocumentAppearanceStyleSheet(gradientDocument)
+    const targetStyleSheet = createAppearanceTargetStyleSheet(gradientDocument, cardTarget)
+    const scope = appearanceScopeClassName(gradientDocument, cardTarget)
+
+    expect(resolved.background.value).toMatchObject({
+      choice: { kind: 'gradient', id: 'background-surface' },
+      color: '#324b5a',
+    })
+    expect(pageAppearanceClassNames(
+      gradientDocument,
+      gradientDocument.pages[0]!,
+      gradientDocument.bdcs,
+    )['bdc:card-title-image']).toContain('card-image-title')
+    expect(styleSheet).toContain(`.${scope}.card-image-title.has-background { background-image: linear-gradient(135deg, var(--elce-appearance-background), var(--elce-appearance-surface)); }`)
+    expect(targetStyleSheet).toContain('--elce-appearance-background: #324b5a;')
+    expect(targetStyleSheet).not.toContain(':scope')
+
+    expect(() => applyDocumentCommand(gradientDocument, {
+      type: 'appearance.background.set',
+      target: { kind: 'document' },
+      value: { kind: 'gradient', id: 'background-surface' },
+    })).toThrow(/réservés aux Cartes/)
+    expect(() => applyDocumentCommand(gradientDocument, {
+      type: 'appearance.background.set',
+      target: cardTarget,
+      value: { kind: 'gradient', id: 'unknown-gradient' as AppearanceBackgroundGradientId },
+    })).toThrow(/dégradé/i)
   })
 
   it('projects one custom color to separate project and page scopes', () => {
@@ -177,6 +263,65 @@ describe('appearance CSS assets for the document', () => {
     expect(styleSheet).toContain(`.${projectClass} {`)
     expect(styleSheet).toContain(`.${pageClass} {`)
     expect(styleSheet).toContain(`.${pageClass}.page-flux.has-background { background-color: var(--elce-appearance-background); }`)
+  })
+
+  it('inherits Cadre through project, page and BDC targets and resets local exceptions', () => {
+    const initial = createInitialDocument()
+    const page = initial.pages[0]
+    if (page === undefined) throw new Error('The appearance fixture has no page.')
+    const framed = applyDocumentCommand(initial, {
+      type: 'appearance.property.set',
+      target: { kind: 'document' },
+      property: 'frame',
+      value: true,
+    })
+    const pageClasses = pageAppearanceClassNames(framed, page, framed.bdcs)
+    const projectClasses = documentAppearanceClassNames(framed)
+    const projectClass = appearanceScopeClassName(framed, { kind: 'document' })
+    const styleSheet = createDocumentAppearanceStyleSheet(framed)
+    const themePaths = appearanceThemeCssAssetPathsForDocument(framed)
+
+    expect(projectClasses['document:layout']).toContain('has-frame')
+    expect(projectClasses['document:content']).not.toContain('has-frame')
+    expect(pageClasses[`page:${page.id}`]).toContain('has-frame')
+    expect(Object.entries(pageClasses).some(([key, classes]) => key.startsWith('bdc:') && classes.includes('has-frame'))).toBe(true)
+    expect(styleSheet).toContain(`.${projectClass}.project-layout.has-frame { box-sizing: border-box; border: thin solid var(--elce-appearance-frame); }`)
+    expect(styleSheet).toContain('--elce-appearance-frame: #505050;')
+    expect(themePaths[themePaths.length - 1]).toBe('densities/normal.css')
+    expect(resolveAppearance(framed, { kind: 'page', pageId: page.id }).frame).toMatchObject({
+      value: true,
+      source: { kind: 'document' },
+      origin: 'inherited',
+    })
+
+    const pageOverride = applyDocumentCommand(framed, {
+      type: 'appearance.property.set',
+      target: { kind: 'page', pageId: page.id },
+      property: 'frame',
+      value: false,
+    })
+    expect(resolveAppearance(pageOverride, { kind: 'page', pageId: page.id }).frame.value).toBe(false)
+    const resetPage = applyDocumentCommand(pageOverride, {
+      type: 'appearance.property.reset',
+      target: { kind: 'page', pageId: page.id },
+      property: 'frame',
+    })
+    expect(resolveAppearance(resetPage, { kind: 'page', pageId: page.id }).frame.value).toBe(true)
+  })
+
+  it('uses the Normal padding rules for framed transparent and colored surfaces', async () => {
+    const normalDensity = await readFile(new URL('../config/appearance/css/densities/normal.css', import.meta.url), 'utf8')
+
+    expect(normalDensity).toContain(':scope.project-layout.has-frame { padding: clamp(1rem, 3vw, 2rem); }')
+    expect(normalDensity).toContain('.page-flux.has-frame { padding: 2rem; }')
+    expect(normalDensity).toContain('.page-diapo.has-frame { padding: clamp(1rem, 3vw, 2rem); }')
+    expect(normalDensity).toContain('.bdc.section.has-frame { box-sizing: border-box; padding: clamp(1rem, 3vw, 2rem); }')
+    expect(normalDensity).toContain('.bdc.card-text-short.has-frame { padding: clamp(1rem, 4cqw, 3rem); }')
+    expect(normalDensity).toContain('.bdc.card-text-image.has-frame > .elce-carousel-text-image__content { padding: clamp(0.75rem, 3cqw, 2rem); }')
+    expect(normalDensity).toContain('.bdc.card-image-caption.has-frame > .elce-card__caption { padding: 0.45rem 0.75rem; }')
+    expect(normalDensity).toContain('.bdc.card-image-title.has-frame { box-sizing: border-box; padding: clamp(1rem, 3cqw, 2rem); }')
+    expect(normalDensity).toContain('.bdc:is(.card-photo, .carousel, .question, .evaluation-result, .graph).has-frame')
+    expect(normalDensity).not.toMatch(/has-frame[^}]*padding:\s*[^;}]*px/)
   })
 })
 

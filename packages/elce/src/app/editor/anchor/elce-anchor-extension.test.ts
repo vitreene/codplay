@@ -277,6 +277,42 @@ describe('Elcé anchor extension', () => {
     expect(preview?.querySelector('.elce-card-image-caption__image img')?.getAttribute('src')).toBe('blob:image-2')
   })
 
+  it('renders the image-title card with its inherited appearance scope', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: {
+          mediaId: 'media-cover',
+          overline: '',
+          title: 'Titre centré',
+          description: '',
+          message: '',
+          note: '',
+          caption: '',
+          imagePosition: CAROUSEL_IMAGE_POSITION.CENTER,
+          imageFit: CARD_IMAGE_FIT.COVER,
+        },
+        layoutId: DEFAULT_PRESET_ID.IMAGE_TITLE,
+        media: { source: 'blob:cover-image', type: 'image' },
+        appearanceClassName: 'bdc card-image-title appearance-cover has-background density-normal',
+        appearanceStyleSheet: '.appearance-cover.card-image-title.has-background { background-image: linear-gradient(135deg, #234, #567); }',
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'bdc-image-title', partId: 'page-a:bdc-image-title:anchor' } }] }],
+      },
+    })
+    editor.mount(host)
+
+    const preview = host.querySelector('.elce-anchor-bdc article.elce-card--image-title')
+    expect(preview?.classList.contains('appearance-cover')).toBe(true)
+    expect(preview?.querySelector('.elce-card__title')?.textContent).toBe('Titre centré')
+    expect(preview?.querySelector('.elce-card__image img')?.getAttribute('src')).toBe('blob:cover-image')
+    expect(preview?.querySelector('#bdc-image-title-anchor-preview-appearance-style')?.textContent)
+      .toContain('linear-gradient(135deg, #234, #567)')
+  })
+
   it('creates an image anchor from one external file drop', () => {
     const droppedFile = new File(['image'], 'photo.png', { type: 'image/png' })
     const onDropTarget = vi.fn(() => ({

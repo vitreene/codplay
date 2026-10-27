@@ -48,6 +48,14 @@ regroupe les décisions et acceptations restantes ; la méthode de construction
 et d’application des classes est **A relire**. Ses détails sont conservés
 dans les notes Style.
 
+## Export standard réimportable — plan à relire
+
+Le [plan export/import coordonnés](./2026-10-26-elce-standard-export-import-plan.md)
+prépare le prochain paquet standard à partir de l’export Sighty existant et sa
+reprise en projet éditable. Le socle est le document actuel ; les propositions
+de format, de périmètre et de publication restent **A relire**. Aucun changement
+de code ou de contrat SCORM n’est réalisé par cette préparation.
+
 ## Ordre et critères de sortie
 
 | Ordre | Tranche | État | Critère de sortie |

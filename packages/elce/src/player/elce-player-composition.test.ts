@@ -473,6 +473,110 @@ describe('Elcé player composition', () => {
     expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
   })
 
+  it('plays a bold image-title Card with its derived gradient through Carousel navigation', async () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'image-title-media', name: 'cover.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    let documentModel = applyDocumentCommand(withMedia, createCarouselBdcCommand('image-title-carousel', 'page-a', 1))
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === 'image-title-carousel')
+    const firstCardId = carousel?.carousel?.cards[0]?.bdcId
+    if (firstCardId === undefined) throw new Error('The image-title Carousel has no first Card.')
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'image-title-next-card',
+      'image-title-carousel',
+      1,
+      DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.layout.set',
+      bdcId: firstCardId,
+      layoutId: DEFAULT_PRESET_ID.IMAGE_TITLE,
+    })
+    const firstCard = documentModel.bdcs.find((bdc) => bdc.id === firstCardId)?.card
+    if (firstCard === undefined || firstCard === null) throw new Error('The first Carousel Card has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.update',
+      bdcId: firstCardId,
+      card: { ...firstCard, title: 'Titre centré et gras' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set',
+      bdcId: firstCardId,
+      mediaId: 'image-title-media',
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'appearance.background.set',
+      target: { kind: 'bdc', bdcId: firstCardId },
+      value: { kind: 'gradient', id: 'background-accent-secondary' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const image = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22%3E%3C/svg%3E'
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { 'image-title-media': image },
+    })
+
+    await composition.initialize()
+
+    const imageTitleCard = stage.querySelector<HTMLElement>('.elce-card--image-title')
+    const firstView = imageTitleCard?.closest<HTMLElement>('.elce-carousel-view')
+    const title = imageTitleCard?.querySelector<HTMLElement>('.elce-card__title')
+    const imageElement = imageTitleCard?.querySelector<HTMLImageElement>('.elce-card__image img')
+    expect(title?.textContent).toBe('Titre centré et gras')
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(imageElement?.getAttribute('src')).toBe(image)
+    expect(getComputedStyle(title!).fontWeight).toMatch(/^(700|bold)$/)
+
+    const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+    dots[1]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+    expect(stage.querySelector('.elce-carousel-view--visible .elce-card--image-title')).toBeNull()
+  })
+
+  it('renders an image-title Card as a direct Diapo block', async () => {
+    const initialDocument = createInitialDocument()
+    const diapoCommand = createDefaultPageCommand(
+      initialDocument,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Titre sur image',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(initialDocument, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createStandaloneCardBdcCommand(
+      'bdc-diapo-image-title',
+      diapoCommand.pageId,
+      DEFAULT_PRESET_ID.IMAGE_TITLE,
+    ))
+    const card = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-diapo-image-title')?.card
+    if (card === undefined || card === null) throw new Error('The image-title Diapo Card has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.update',
+      bdcId: 'bdc-diapo-image-title',
+      card: { ...card, title: 'Titre Diapo centré' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'appearance.background.set',
+      target: { kind: 'bdc', bdcId: 'bdc-diapo-image-title' },
+      value: { kind: 'gradient', id: 'background-surface' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: diapoCommand.pageId })
+
+    await composition.initialize()
+
+    const imageTitleCard = stage.querySelector<HTMLElement>('.elce-card--image-title')
+    const title = imageTitleCard?.querySelector<HTMLElement>('.elce-card__title')
+    expect(imageTitleCard).not.toBeNull()
+    expect(title?.textContent).toBe('Titre Diapo centré')
+    expect(getComputedStyle(title!).fontWeight).toMatch(/^(700|bold)$/)
+    expect(stage.querySelector('.elce-diapo-host')).not.toBeNull()
+  })
+
   it('emits a standalone Diapo Card completion and unlocks the next page from the selected preview start', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {

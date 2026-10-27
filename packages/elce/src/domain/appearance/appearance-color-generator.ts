@@ -14,6 +14,7 @@ export interface GeneratedAppearanceColors {
   readonly surfaceForeground: string
   readonly muted: string
   readonly border: string
+  readonly frame: string
   readonly menuBackground: string
   readonly menuForeground: string
   readonly navigationBackground: string
@@ -43,6 +44,7 @@ const COLOR_RULES = {
   neutralChromaThreshold: 0.025,
   textContrast: 4.5,
   graphicContrast: 3,
+  frameBase: '#505050',
   mutedLightnessMix: 0.12,
   mutedChromaScale: 0.65,
   surfaceLightnessShift: 0.035,
@@ -128,6 +130,7 @@ export function generateAppearanceColors(
       contrastBackground,
       COLOR_RULES.graphicContrast,
     ),
+    frame: ensureContrast(COLOR_RULES.frameBase, contrastBackground, COLOR_RULES.graphicContrast),
     menuBackground,
     menuForeground: ensureContrast(chosenText, menuBackground, COLOR_RULES.textContrast),
     navigationBackground,

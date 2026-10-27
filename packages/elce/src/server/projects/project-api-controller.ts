@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { assertDocumentInvariants } from '../../domain/commands/document-commands'
 import { ELCE_DOCUMENT_VERSION, ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentData } from '../../domain/document/document-types'
@@ -13,7 +14,10 @@ const API_ERROR = {
 } as const
 
 type JsonBody = Readonly<{ kind: 'valid'; value: unknown }> | Readonly<{ kind: 'invalid' }>
-type ParsedDocument = Readonly<{ kind: 'valid'; document: ElceDocument }> | Readonly<{ kind: 'invalid' }>
+type ParsedDocument = Readonly<{ kind: 'valid'; document: ElceDocument }>
+  | Readonly<{ kind: 'invalid'; reason: 'invalid_document_shape' }>
+  | Readonly<{ kind: 'invalid'; reason: 'document_rehydration_rejected'; frames: readonly string[] }>
+  | Readonly<{ kind: 'invalid'; reason: 'document_invariants_rejected'; frames: readonly string[] }>
 type ParsedRevision = Readonly<{ kind: 'valid'; revision: number }> | Readonly<{ kind: 'missing' }> | Readonly<{ kind: 'invalid' }>
 
 /** Handles the HTTP operations for the local project catalog. */
@@ -145,18 +149,19 @@ export class ProjectApiController {
       case 'missing':
         return apiError(API_ERROR.IF_MATCH_REQUIRED, 428)
       case 'invalid':
-        return apiError(API_ERROR.INVALID_REQUEST, 400)
+        return this.invalidDocumentRequest(projectId, 'invalid_if_match')
       case 'valid':
         break
     }
 
     const body = await readJsonBody(request)
-    if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
+    if (body.kind === 'invalid') return this.invalidDocumentRequest(projectId, 'invalid_json')
 
     const parsed = parseDocument(body.value)
-    if (parsed.kind === 'invalid' || parsed.document.id !== projectId) {
-      return apiError(API_ERROR.INVALID_REQUEST, 400)
+    if (parsed.kind === 'invalid') {
+      return this.invalidDocumentRequest(projectId, parsed.reason, 'frames' in parsed ? parsed.frames : undefined)
     }
+    if (parsed.document.id !== projectId) return this.invalidDocumentRequest(projectId, 'document_id_mismatch')
 
     const result = await this.persistence.saveDocument(projectId, revision.revision, parsed.document, grant)
     switch (result.kind) {
@@ -170,7 +175,33 @@ export class ProjectApiController {
         return projectResponse(result.project)
     }
   }
+
+  /** Logs a safe rejection trace and returns its correlation details to the editor. */
+  private invalidDocumentRequest(
+    projectId: string,
+    diagnosticReason: SaveDocumentDiagnosticReason,
+    validationFrames?: readonly string[],
+  ): Response {
+    const diagnosticId = randomUUID()
+    console.error('Elcé API rejected project document.', {
+      diagnosticId,
+      projectId,
+      method: 'PUT',
+      route: '/api/projects/:projectId/document',
+      diagnosticReason,
+      ...(validationFrames === undefined ? {} : { validationFrames }),
+    })
+    return Response.json({ error: API_ERROR.INVALID_REQUEST, diagnosticId, diagnosticReason }, { status: 400 })
+  }
 }
+
+type SaveDocumentDiagnosticReason =
+  | 'invalid_if_match'
+  | 'invalid_json'
+  | 'invalid_document_shape'
+  | 'document_rehydration_rejected'
+  | 'document_invariants_rejected'
+  | 'document_id_mismatch'
 
 /** Reads a JSON request body without leaking parse errors through the router. */
 async function readJsonBody(request: Request): Promise<JsonBody> {
@@ -183,15 +214,27 @@ async function readJsonBody(request: Request): Promise<JsonBody> {
 
 /** Rehydrates and validates a v7 document using the existing domain invariants. */
 function parseDocument(value: unknown): ParsedDocument {
-  if (!isDocumentData(value)) return { kind: 'invalid' }
+  if (!isDocumentData(value)) return { kind: 'invalid', reason: 'invalid_document_shape' }
+
+  let document: ElceDocument
+  try {
+    document = ElceDocument.fromJSON(value)
+  } catch (error) {
+    return { kind: 'invalid', reason: 'document_rehydration_rejected', frames: errorFrames(error) }
+  }
 
   try {
-    const document = ElceDocument.fromJSON(value)
     assertDocumentInvariants(document)
     return { kind: 'valid', document }
-  } catch {
-    return { kind: 'invalid' }
+  } catch (error) {
+    return { kind: 'invalid', reason: 'document_invariants_rejected', frames: errorFrames(error) }
   }
+}
+
+/** Keeps stack locations while omitting the dynamic error message from logs. */
+function errorFrames(error: unknown): readonly string[] {
+  if (!(error instanceof Error) || error.stack === undefined) return []
+  return error.stack.split('\n').slice(1).filter((line) => /^\s+at\s/.test(line)).slice(0, 8)
 }
 
 /** Narrows untrusted JSON to the required top-level document fields. */

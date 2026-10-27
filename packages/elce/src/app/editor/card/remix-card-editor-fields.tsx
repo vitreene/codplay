@@ -144,6 +144,7 @@ function renderCardPresentationSettings(
       switch (presetId) {
         case DEFAULT_PRESET_ID.PHOTO:
         case DEFAULT_PRESET_ID.IMAGE_CAPTION:
+        case DEFAULT_PRESET_ID.IMAGE_TITLE:
           return [renderImageFitSetting(bdcId, card, actions, idPrefix)]
         case DEFAULT_PRESET_ID.TEXT_IMAGE:
           return [
@@ -242,6 +243,21 @@ function renderCardContent(
           value={card.caption}
           data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCaption(bdcId, event.currentTarget.value))}
+        />
+      </div>
+    case DEFAULT_PRESET_ID.IMAGE_TITLE:
+      return <div
+        id={`${idPrefix}-image-title-fields-${bdcId}`}
+        className="elce-carousel-text-fields"
+      >
+        {renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)}
+        <input
+          id={`${idPrefix}-title-${bdcId}`}
+          placeholder="Titre"
+          aria-label="Titre"
+          value={card.title}
+          data-elce-profile-token-target="true"
+          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCardText(bdcId, 'title', event.currentTarget.value))}
         />
       </div>
     case DEFAULT_PRESET_ID.TEXT_IMAGE:

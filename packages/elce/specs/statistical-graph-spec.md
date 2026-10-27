@@ -93,6 +93,8 @@ catégories de la série choisie.
 
 L’éditeur propose un bouton d’aperçu du graphe seul dans une modale accessible.
 Échap ferme la modale et le focus retourne au bouton qui l’a ouverte.
+L’aperçu monte le balisage et la feuille de style retournés ensemble par le
+builder ; la palette SVG et les règles propres au tableau y sont donc actives.
 
 Dans les graphiques, les libellés denses sont espacés automatiquement : tous
 jusqu’à 10 entrées, un sur cinq jusqu’à 20, puis un sur dix, avec le dernier
@@ -146,7 +148,13 @@ modifié.
   relationnelles et son retour, la suppression des tables de détail et la
   conservation de Question/Réponses.
 - [`remix-statistical-graph-editor.test.tsx`](../src/app/editor/statistical-graph/remix-statistical-graph-editor.test.tsx)
-  vérifie la saisie contrôlée et l’extension de grille par collage.
+  vérifie la saisie contrôlée, l’extension de grille par collage et le transfert
+  de la feuille de style du builder dans l’aperçu auteur.
+- Le 27 octobre 2026, Brave montre les barres colorées dans l’aperçu du graphe
+  auteur et dans la page Lecture ouverte depuis l’éditeur. Le SVG réel de cette
+  page calcule les remplissages `#326c64`, `#c27b3a` et `#5376a2` depuis sa
+  palette ; les consoles des deux pages ne contiennent que le message de
+  connexion HMR.
 - Brave, sur le projet de test temporaire, affiche une matrice 40 × 40 ancrée
   dans une Section. À 390 × 844, la table fait `300 × 135.42 px`, la réserve
   `300 × 332 px` et le texte suivant reprend au bas du slot. À 1280 × 900, la

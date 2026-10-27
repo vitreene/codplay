@@ -142,6 +142,24 @@ describe('Elcé project API client', () => {
     })
   })
 
+  it('preserves the API diagnostic id and rejection category for a failed save', async () => {
+    const document = createInitialDocument()
+    const diagnosticId = 'bfe3a03d-b7d5-42be-9b72-76f30e0a4be4'
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      error: 'invalid_request',
+      diagnosticId,
+      diagnosticReason: 'document_invariants_rejected',
+    }, { status: 400 }))
+    const api = await grantedApi(request, document.id)
+
+    await expect(api.saveDocument(document, 4)).rejects.toMatchObject({
+      code: 'invalid_request',
+      diagnosticId,
+      diagnosticReason: 'document_invariants_rejected',
+      message: `API Elcé : invalid_request (400) [diagnostic ${diagnosticId}: document_invariants_rejected]`,
+    })
+  })
+
   it('uploads a media Blob and resolves the stable server URL', async () => {
     const media: MediaMetadata = { id: 'media-image', name: 'photo.webp', mimeType: 'image/webp', size: 3, caption: '' }
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json(

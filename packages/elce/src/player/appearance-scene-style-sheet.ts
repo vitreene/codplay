@@ -1,4 +1,5 @@
 import type { AppearanceTarget } from '../domain/commands/document-command-types'
+import type { AppearanceDensity } from '../config/appearance/appearance-types'
 import type { Bdc, Page } from '../domain/document/document-types'
 import type { ElceDocument } from '../domain/document/document-model'
 import {
@@ -12,6 +13,7 @@ import {
 } from '../domain/appearance/appearance-resolver'
 import { generateAppearanceColors } from '../domain/appearance/appearance-color-generator'
 import { appearanceFontAssetsForIds, appearanceFontFaceStyleSheet } from './appearance-font-assets'
+import { appearanceBackgroundGradientCss } from '../config/appearance/appearance-config'
 import {
   appearanceThemeCssAssetPaths,
   appearanceThemeCssImport,
@@ -27,7 +29,7 @@ export function createDocumentAppearanceStyleSheet(document: ElceDocument, fontS
   ])
   const themeCssPaths = appearanceThemeCssAssetPaths(
     fontIds,
-    resolved.map((appearance) => appearance.density.value),
+    appearanceDensities(resolved),
   )
   const fonts = appearanceFontAssetsForIds(fontIds)
   return [
@@ -35,6 +37,11 @@ export function createDocumentAppearanceStyleSheet(document: ElceDocument, fontS
     appearanceFontFaceStyleSheet(fonts, fontSourcePrefix),
     generatedAppearanceStyleSheet(document, targets),
   ].filter((styleSheet) => styleSheet.length > 0).join('\n')
+}
+
+/** Builds only one target's generated color rules for a scoped author preview. */
+export function createAppearanceTargetStyleSheet(document: ElceDocument, target: AppearanceTarget): string {
+  return generatedAppearanceStyleSheet(document, [target], false)
 }
 
 /** Returns each used project, page and BDC theme stylesheet once. */
@@ -46,7 +53,7 @@ export function appearanceThemeCssAssetPathsForDocument(document: ElceDocument):
   ])
   return appearanceThemeCssAssetPaths(
     fontIds,
-    resolved.map((appearance) => appearance.density.value),
+    appearanceDensities(resolved),
   )
 }
 
@@ -87,6 +94,7 @@ function pageAppearanceTargets(page: Page, bdcs: readonly Bdc[]): readonly Appea
 function generatedAppearanceStyleSheet(
   document: ElceDocument,
   targets: readonly AppearanceTarget[],
+  includeStage = true,
 ): string {
   const rules = targets.flatMap((target) => {
     const resolved = resolveAppearance(document, target)
@@ -107,6 +115,7 @@ function generatedAppearanceStyleSheet(
       'surface-foreground': colors.surfaceForeground,
       muted: colors.muted,
       border: colors.border,
+      frame: colors.frame,
       'menu-background': colors.menuBackground,
       'menu-foreground': colors.menuForeground,
       'navigation-background': colors.navigationBackground,
@@ -117,12 +126,30 @@ function generatedAppearanceStyleSheet(
       && appearanceBackgroundAppliesToSurface(resolved, target)
       ? [`${selectors.join(',\n')} { background-color: var(--elce-appearance-background); }`]
       : []
+    const backgroundChoice = resolved.background.value.choice
+    const gradientRule = backgroundChoice.kind === 'gradient'
+      && resolved.density.value !== 'none'
+      && appearanceBackgroundAppliesToSurface(resolved, target)
+      ? [`${selectors.join(',\n')} { background-image: ${appearanceBackgroundGradientCss(backgroundChoice.id, {
+        background: 'var(--elce-appearance-background)',
+        surface: 'var(--elce-appearance-surface)',
+        accent: 'var(--elce-appearance-accent)',
+        'accent-secondary': 'var(--elce-appearance-accent-secondary)',
+      })}; }`]
+      : []
+    const frameRule = resolved.frame.value
+      ? [`${frameSurfaceSelector(className, role)} { box-sizing: border-box; border: thin solid var(--elce-appearance-frame); }`]
+      : []
     return [
       `.${className} {\n${variables.join('\n')}\n}`,
       `.${className} { color: var(--elce-appearance-text); }`,
       ...paintRule,
+      ...gradientRule,
+      ...frameRule,
     ]
   })
+  if (!includeStage) return rules.join('\n')
+
   const project = resolveAppearance(document, { kind: 'document' })
   const projectColors = generateAppearanceColors(
     project,
@@ -147,4 +174,16 @@ function paintedSurfaceSelectors(className: string, role: string): string[] {
     default:
       return [`.${className}.${role}.has-background`]
   }
+}
+
+/** Loads Normal last when a frame needs its role-specific padding. */
+function appearanceDensities(appearances: readonly ReturnType<typeof resolveAppearance>[]): readonly AppearanceDensity[] {
+  const densities = appearances.map((appearance) => appearance.density.value)
+  if (!appearances.some((appearance) => appearance.frame.value)) return densities
+  return [...densities.filter((density) => density !== 'normal'), 'normal']
+}
+
+/** Selects the authored target root that receives a frame. */
+function frameSurfaceSelector(className: string, role: string): string {
+  return `.${className}.${role}.has-frame`
 }

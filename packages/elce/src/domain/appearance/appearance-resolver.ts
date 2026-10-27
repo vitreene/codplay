@@ -28,12 +28,13 @@ export interface ResolvedAppearance {
   readonly background: ResolvedAppearanceValue<Readonly<{ choice: AppearanceBackground; color: string }>>
   readonly textColor: ResolvedAppearanceValue<Readonly<{ choice: AppearanceColor; color: string }>>
   readonly autoContrast: ResolvedAppearanceValue<boolean>
+  readonly frame: ResolvedAppearanceValue<boolean>
 }
 
 export interface AppearanceContrastContext {
   readonly color: string
   readonly paletteId: string
-  readonly choice: AppearanceColor
+  readonly choice: AppearanceBackground
 }
 
 interface AppearanceLayer {
@@ -53,8 +54,12 @@ export function resolveAppearance(document: ElceDocument, target: AppearanceTarg
   const bodyFontId = resolveValue(layers, 'bodyFontId')
   const density = resolveValue(layers, 'density')
   const backgroundChoice = resolveValue(layers, 'background')
+  const backgroundColorChoice = backgroundChoice.value.kind === 'gradient'
+    ? resolveSolidBackground(layers.slice(1)).value
+    : backgroundChoice.value
   const textColorChoice = resolveValue(layers, 'textColor')
   const autoContrast = resolveValue(layers, 'autoContrast')
+  const frame = resolveValue(layers, 'frame')
   const palette = getAppearancePalette(paletteId.value)
 
   return {
@@ -67,7 +72,7 @@ export function resolveAppearance(document: ElceDocument, target: AppearanceTarg
       ...backgroundChoice,
       value: {
         choice: backgroundChoice.value,
-        color: appearanceColor(backgroundChoice.value, palette.colors),
+        color: appearanceColor(backgroundColorChoice, palette.colors),
       },
     },
     textColor: {
@@ -78,6 +83,7 @@ export function resolveAppearance(document: ElceDocument, target: AppearanceTarg
       },
     },
     autoContrast,
+    frame,
   }
 }
 
@@ -114,7 +120,7 @@ export function resolveAppearanceContrastContext(
     current = appearanceParentTarget(document, current)
   }
   const paletteId = 'classic'
-  const choice: AppearanceColor = { kind: 'palette', role: 'background' }
+  const choice: AppearanceBackground = { kind: 'palette', role: 'background' }
   return { color: getAppearancePalette(paletteId).colors.background, paletteId, choice }
 }
 
@@ -198,6 +204,30 @@ function resolveValue<Property extends AppearanceProperty>(
     }
   }
   throw new Error(`Valeur d’apparence sans défaut : ${String(property)}`)
+}
+
+/** Keeps a Card gradient anchored to the nearest inherited solid project background. */
+function resolveSolidBackground(layers: readonly AppearanceLayer[]): ResolvedAppearanceValue<AppearanceColor> {
+  for (const [index, layer] of layers.entries()) {
+    const explicit = layer.settings?.background
+    if (explicit !== undefined && explicit.kind !== 'gradient') {
+      return {
+        value: explicit,
+        source: layer.source,
+        origin: originForLayer(index, layer, 'local'),
+      }
+    }
+
+    const presetValue = presetValueFor(layer.settings, 'background')
+    if (presetValue !== undefined && presetValue.kind !== 'gradient') {
+      return {
+        value: presetValue,
+        source: layer.source,
+        origin: originForLayer(index, layer, 'preset'),
+      }
+    }
+  }
+  throw new Error('Couleur de fond solide sans défaut.')
 }
 
 /** Returns project-preset values or palette-linked colors for one scope. */

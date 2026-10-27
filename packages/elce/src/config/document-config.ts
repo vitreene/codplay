@@ -203,6 +203,7 @@ export const DEFAULT_PRESET_ID = {
   QUESTION: 'question-basic',
   EVALUATION_RESULT: 'evaluation-result-basic',
   IMAGE_CAPTION: 'image-caption',
+  IMAGE_TITLE: 'image-title-basic',
   STATISTICAL_GRAPH_ABOVE_TEXT: 'statistical-graph-above-text',
   STATISTICAL_GRAPH_SIDE_BY_SIDE: 'statistical-graph-side-by-side',
 } as const
@@ -225,6 +226,7 @@ export const CAROUSEL_ASPECT_RATIO = {
 
 export const CAROUSEL_IMAGE_POSITION = {
   LEFT: 'left',
+  CENTER: 'center',
   RIGHT: 'right',
 } as const
 
@@ -236,6 +238,7 @@ export const CARD_IMAGE_FIT = {
 export const CARD_LAYOUT_IDS = [
   DEFAULT_PRESET_ID.PHOTO,
   DEFAULT_PRESET_ID.IMAGE_CAPTION,
+  DEFAULT_PRESET_ID.IMAGE_TITLE,
   DEFAULT_PRESET_ID.TEXT_IMAGE,
   DEFAULT_PRESET_ID.TEXT_SHORT,
 ] as const
@@ -274,6 +277,7 @@ export const CAROUSEL_ASPECT_RATIO_OPTIONS = [
 
 export const CAROUSEL_IMAGE_POSITION_OPTIONS = [
   { value: CAROUSEL_IMAGE_POSITION.LEFT, label: 'Image à gauche' },
+  { value: CAROUSEL_IMAGE_POSITION.CENTER, label: 'Image centrée' },
   { value: CAROUSEL_IMAGE_POSITION.RIGHT, label: 'Image à droite' },
 ] as const
 
@@ -285,6 +289,7 @@ export const CARD_IMAGE_FIT_OPTIONS = [
 export const CARD_LAYOUT_OPTIONS = [
   { value: DEFAULT_PRESET_ID.TEXT_SHORT, label: 'Texte court' },
   { value: DEFAULT_PRESET_ID.TEXT_IMAGE, label: 'Texte avec image' },
+  { value: DEFAULT_PRESET_ID.IMAGE_TITLE, label: 'Titre sur image' },
   { value: DEFAULT_PRESET_ID.PHOTO, label: 'Photo ou vidéo plein cadre' },
   { value: DEFAULT_PRESET_ID.IMAGE_CAPTION, label: 'Image avec légende' },
 ] as const

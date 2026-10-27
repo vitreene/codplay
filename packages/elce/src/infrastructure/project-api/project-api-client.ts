@@ -23,6 +23,8 @@ interface MediaResponse {
 interface ApiErrorResponse {
   readonly error: string
   readonly mediaId?: MediaId
+  readonly diagnosticId?: string
+  readonly diagnosticReason?: string
 }
 
 interface EditAccessResponse {
@@ -43,13 +45,26 @@ export class ElceProjectApiError extends Error {
   public readonly status: number
   public readonly code: string
   public readonly mediaId: MediaId | null
+  public readonly diagnosticId: string | null
+  public readonly diagnosticReason: string | null
 
-  public constructor(status: number, code: string, mediaId: MediaId | null = null) {
-    super(`API Elcé : ${code} (${status})`)
+  public constructor(
+    status: number,
+    code: string,
+    mediaId: MediaId | null = null,
+    diagnosticId: string | null = null,
+    diagnosticReason: string | null = null,
+  ) {
+    const diagnostic = diagnosticId === null
+      ? ''
+      : ` [diagnostic ${diagnosticId}${diagnosticReason === null ? '' : `: ${diagnosticReason}`}]`
+    super(`API Elcé : ${code} (${status})${diagnostic}`)
     this.name = 'ElceProjectApiError'
     this.status = status
     this.code = code
     this.mediaId = mediaId
+    this.diagnosticId = diagnosticId
+    this.diagnosticReason = diagnosticReason
   }
 }
 
@@ -264,6 +279,8 @@ async function readResponseJson<T>(response: Response): Promise<T> {
       response.status,
       typeof error.error === 'string' ? error.error : 'request_failed',
       typeof error.mediaId === 'string' ? error.mediaId : null,
+      typeof error.diagnosticId === 'string' ? error.diagnosticId : null,
+      typeof error.diagnosticReason === 'string' ? error.diagnosticReason : null,
     )
   }
   return body as T

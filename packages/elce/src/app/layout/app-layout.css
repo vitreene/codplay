@@ -1863,6 +1863,48 @@ body {
   color: #263b3a;
 }
 
+.elce-editor-content .elce-anchor-card-preview.elce-card--image-title {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--image-title > .elce-card__image {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--image-title > .elce-card__image > .elce-anchor-card-media-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--image-title > .elce-card__title {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: fit-content;
+  max-inline-size: calc(100% - 2em);
+  padding: 0.5em;
+  color: var(--elce-appearance-surface-foreground);
+  background-color: var(--elce-appearance-surface);
+  background-color: color-mix(in oklch, var(--elce-appearance-surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(0.5rem);
+  backdrop-filter: blur(0.5rem);
+  font-size: max(1.25rem, 6cqi);
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .elce-editor-content .elce-anchor-card-preview.elce-card--text-short {
   display: flex;
   flex-direction: column;
@@ -1873,21 +1915,68 @@ body {
 }
 
 .elce-editor-content .elce-anchor-card-preview.elce-card--text-image {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-  grid-template-areas: 'image content';
+  position: relative;
+  display: block;
 }
 
-.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-carousel-view--image-right {
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  grid-template-areas: 'content image';
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image > .elce-carousel-text-image__content {
+  box-sizing: border-box;
+  display: flex;
+  width: 60%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.5rem;
+  margin-inline-start: 40%;
+  overflow: hidden;
 }
 
-.elce-editor-content .elce-anchor-card-preview.elce-card--text-image .elce-carousel-text-image__image {
-  grid-area: image;
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image > .elce-carousel-text-image__content > .elce-carousel-text-image__image {
+  position: absolute;
+  z-index: 1;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 40%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-card--image-position-right > .elce-carousel-text-image__content {
+  margin-inline: 0 40%;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-card--image-position-right > .elce-carousel-text-image__content > .elce-carousel-text-image__image {
+  inset-inline: auto 0;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-card--image-position-center {
+  display: flex;
+  flex-direction: column;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0.5rem;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-carousel-text-image__image {
+  position: static;
+  z-index: auto;
+  display: flex;
+  width: 100%;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.elce-editor-content .elce-anchor-card-preview.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > :not(.elce-carousel-text-image__image) {
+  text-align: center;
 }
 
 .elce-editor-content .elce-anchor-card-preview.elce-card--text-image .elce-carousel-text-image__content {
@@ -1897,8 +1986,6 @@ body {
   flex-direction: column;
   justify-content: center;
   gap: 0.15rem;
-  grid-area: content;
-  padding: 0.5rem;
   overflow: hidden;
 }
 

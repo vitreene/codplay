@@ -2,13 +2,21 @@ import { on, type RemixNode } from 'remix/ui'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../../config/document-config'
 import {
   APPEARANCE_COLOR_ROLES,
+  APPEARANCE_BACKGROUND_GRADIENTS,
   APPEARANCE_DENSITIES,
   APPEARANCE_PALETTES,
   APPEARANCE_PRESETS,
   APPEARANCE_TYPOGRAPHY_PAIRS,
   getAppearancePalette,
+  appearanceBackgroundGradientCss,
 } from '../../config/appearance/appearance-config'
-import type { AppearanceColor, AppearanceColorRole, AppearanceSettings } from '../../config/appearance/appearance-types'
+import type {
+  AppearanceBackground,
+  AppearanceColorRole,
+  AppearanceBackgroundGradientId,
+  AppearanceGradientColors,
+  AppearanceSettings,
+} from '../../config/appearance/appearance-types'
 import type {
   AppearanceProperty,
   AppearanceTarget,
@@ -20,6 +28,7 @@ import {
   appearanceBackgroundAppliesToSurface,
   resolveAppearance,
 } from '../../domain/appearance/appearance-resolver'
+import { generateAppearanceColors } from '../../domain/appearance/appearance-color-generator'
 
 interface AppearancePanelProps {
   readonly view: EditorViewModel
@@ -46,6 +55,11 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
   const resolved = resolveAppearance(document, target)
   const palette = getAppearancePalette(resolved.paletteId.value)
   const hasTextSurface = isTextBearingCard(view, target)
+  const card = target.kind === 'bdc'
+    ? document.bdcs.find((bdc) => bdc.id === target.bdcId && bdc.type === BDC_TYPE.CARD)
+    : undefined
+  const imageTitleCard = card?.presetId === DEFAULT_PRESET_ID.IMAGE_TITLE
+  const gradientColors = gradientColorsFor(resolved)
 
   return <section
     id="elce-appearance-panel"
@@ -108,6 +122,8 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
           label: 'Fond',
           color: resolved.background.value.color,
           backgroundChoice: resolved.background.value.choice,
+          gradients: card === undefined ? [] : APPEARANCE_BACKGROUND_GRADIENTS,
+          gradientColors,
           paletteColors: palette.colors,
           allowTransparent: true,
           transparent: resolved.density.value === 'none'
@@ -117,10 +133,12 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
           actions,
           target,
         })}
-        {hasTextSurface ? renderColorField({
+        {hasTextSurface && !imageTitleCard ? renderColorField({
           id: 'elce-appearance-text-color',
           label: 'Couleur du texte',
           color: resolved.textColor.value.color,
+          gradients: [],
+          gradientColors,
           paletteColors: palette.colors,
           allowTransparent: false,
           transparent: false,
@@ -131,6 +149,29 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
         }) : null}
       </div>
     </fieldset>
+    <div
+      id="elce-appearance-frame-field"
+      className="elce-appearance-field"
+    >
+      <label
+        id="elce-appearance-frame-label"
+        className="elce-appearance-inline-choice"
+        htmlFor="elce-appearance-frame"
+      >
+        <input
+          id="elce-appearance-frame"
+          type="checkbox"
+          checked={resolved.frame.value}
+          mix={on<HTMLInputElement, 'change'>('change', (event) => actions.setAppearanceProperty(
+            target,
+            'frame',
+            event.currentTarget.checked,
+          ))}
+        />
+        Cadre
+      </label>
+      {renderResetButton('elce-appearance-frame-reset', 'Réinitialiser le cadre', localSettings, 'frame', actions, target)}
+    </div>
     {hasTextSurface ? renderTypographyPairField(
       matchingTypographyPairId(resolved.headingFontId.value, resolved.bodyFontId.value),
       (pairId) => {
@@ -154,7 +195,7 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
       actions,
       target,
     ) : null}
-    {hasTextSurface ? <div
+    {hasTextSurface && !imageTitleCard ? <div
       id="elce-appearance-auto-contrast-field"
       className="elce-appearance-field"
     >
@@ -184,8 +225,10 @@ interface ColorFieldProps {
   readonly id: string
   readonly label: string
   readonly color: string
-  readonly backgroundChoice?: AppearanceColor
+  readonly backgroundChoice?: AppearanceBackground
   readonly paletteColors: Readonly<Record<AppearanceColorRole, string>>
+  readonly gradients: typeof APPEARANCE_BACKGROUND_GRADIENTS | readonly []
+  readonly gradientColors: AppearanceGradientColors
   readonly allowTransparent: boolean
   readonly transparent: boolean
   readonly localSettings: AppearanceSettings | undefined
@@ -202,6 +245,8 @@ function renderColorField(props: ColorFieldProps): RemixNode {
     color,
     backgroundChoice,
     paletteColors,
+    gradients,
+    gradientColors,
     allowTransparent,
     transparent,
     localSettings,
@@ -262,9 +307,54 @@ function renderColorField(props: ColorFieldProps): RemixNode {
       aria-label={`Teintes prédéfinies pour ${label.toLowerCase()}`}
     >
       {APPEARANCE_COLOR_ROLES.map((role) => renderPaletteSwatch(id, label, role, paletteColors[role], property, actions, target))}
+      {property === 'background' ? gradients.map((gradient) => renderGradientSwatch(
+        id,
+        gradient.id,
+        gradient.label,
+        appearanceBackgroundGradientCss(gradient.id, gradientColors),
+        backgroundChoice,
+        actions,
+        target,
+      )) : null}
     </div>
     {renderResetButton(`${id}-reset`, `Réinitialiser ${label.toLowerCase()}`, localSettings, property, actions, target)}
   </fieldset>
+}
+
+/** Projects the shared generated palette roles into the gradient stops. */
+function gradientColorsFor(resolved: ReturnType<typeof resolveAppearance>): AppearanceGradientColors {
+  const colors = generateAppearanceColors(resolved)
+  return {
+    background: colors.background,
+    surface: colors.surface,
+    accent: colors.accent,
+    'accent-secondary': colors.accentSecondary,
+  }
+}
+
+/** Renders a Card-only gradient choice using the shared generated stops. */
+function renderGradientSwatch(
+  id: string,
+  gradientId: AppearanceBackgroundGradientId,
+  label: string,
+  gradient: string,
+  backgroundChoice: AppearanceBackground | undefined,
+  actions: EditorActionsFacade,
+  target: AppearanceTarget,
+): RemixNode {
+  return <button
+    id={`${id}-gradient-${gradientId}`}
+    className="elce-appearance-swatch"
+    type="button"
+    style={{ backgroundImage: gradient }}
+    aria-label={`Utiliser le dégradé ${label.toLowerCase()}`}
+    aria-pressed={backgroundChoice?.kind === 'gradient' && backgroundChoice.id === gradientId}
+    title={label}
+    mix={on<HTMLButtonElement, 'click'>('click', () => actions.setAppearanceProperty(target, 'background', {
+      kind: 'gradient',
+      id: gradientId,
+    }))}
+  />
 }
 
 /** Renders a picker suggestion that writes both stored font references together. */

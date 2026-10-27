@@ -1,11 +1,23 @@
 export type AppearanceColorRole = 'background' | 'surface' | 'text' | 'muted' | 'accent' | 'border'
 export type AppearanceDensity = 'none' | 'compact' | 'normal' | 'large'
+export type AppearanceGradientColorRole = 'background' | 'surface' | 'accent' | 'accent-secondary'
+export type AppearanceBackgroundGradientId = 'background-surface' | 'background-accent' | 'background-accent-secondary'
+export type AppearanceGradientColors = Readonly<Record<AppearanceGradientColorRole, string>>
 
 export type AppearanceColor =
   | Readonly<{ kind: 'palette'; role: AppearanceColorRole }>
   | Readonly<{ kind: 'custom'; value: string }>
 
 export type AppearanceBackground = AppearanceColor
+  | Readonly<{ kind: 'gradient'; id: AppearanceBackgroundGradientId }>
+
+export interface AppearanceBackgroundGradientDefinition {
+  readonly id: AppearanceBackgroundGradientId
+  readonly label: string
+  readonly from: AppearanceGradientColorRole
+  readonly to: AppearanceGradientColorRole
+  readonly angle: '135deg'
+}
 
 /** Stores the project preset when project-scoped, plus sparse property overrides. */
 export interface AppearanceSettings {
@@ -18,6 +30,7 @@ export interface AppearanceSettings {
   readonly background?: AppearanceBackground
   readonly textColor?: AppearanceColor
   readonly autoContrast?: boolean
+  readonly frame?: boolean
 }
 
 export interface AppearancePalette {

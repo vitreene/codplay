@@ -1,7 +1,7 @@
 import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
 import { on, ref, type RemixNode } from 'remix/ui'
 
-import { ANCHOR, BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
+import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
 import type { Bdc, Page, RichTextNode } from '../../../domain/document/document-types'
 import type { ElceAnchorCardPreview } from '../../../domain/anchor/anchor-types'
@@ -18,6 +18,8 @@ import type { SectionToolbarState } from './section-editor-tiptap'
 import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
 import { anchorNameFor } from '../../anchor/anchor-position'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+import { appearanceClassNameForTarget } from '../../../builders/scene-style/appearance-class-names.ts'
+import { createAppearanceTargetStyleSheet } from '../../../player/appearance-scene-style-sheet.ts'
 
 export interface RemixSectionEditorBindings {
   readonly adapters: Map<string, SectionTiptapAdapter>
@@ -333,12 +335,18 @@ function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorCard
     : view.documentModel.medias.find((candidate) => candidate.id === card.card?.mediaId)
   const source = card.card.mediaId === null ? undefined : view.mediaSources[card.card.mediaId]
   const mediaType = mediaMetadata === undefined ? null : mediaTypeFromMimeType(mediaMetadata.mimeType)
+  const appearanceTarget = { kind: 'bdc', bdcId: card.id } as const
+  const usesImageTitle = card.presetId === DEFAULT_PRESET_ID.IMAGE_TITLE
   return {
     content: card.card,
     layoutId: card.presetId as CardLayoutId,
     media: mediaMetadata === undefined || source === undefined || mediaType === null
       ? null
       : { source, type: mediaType },
+    ...(usesImageTitle ? {
+      appearanceClassName: appearanceClassNameForTarget(view.documentModel, appearanceTarget),
+      appearanceStyleSheet: createAppearanceTargetStyleSheet(view.documentModel, appearanceTarget),
+    } : {}),
   }
 }
 

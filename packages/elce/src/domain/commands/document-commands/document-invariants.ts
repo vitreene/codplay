@@ -9,6 +9,7 @@ import { assertStatisticalGraphContent } from '../../statistical-graph/statistic
 import { assertSummaryProfileInvariants } from '../../summary-profile/profile-rules'
 import {
   APPEARANCE_COLOR_ROLES,
+  getAppearanceBackgroundGradient,
   APPEARANCE_DENSITIES,
   getAppearanceFont,
   getAppearancePalette,
@@ -18,9 +19,11 @@ import type { AppearanceColorRole } from '../../../config/appearance/appearance-
 
 /** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: ElceDocument): void {
-  assertAppearanceSettings(document.data.appearance, true)
-  for (const page of document.pages) assertAppearanceSettings(page.appearance, false)
-  for (const bdc of document.bdcs) assertAppearanceSettings(bdc.appearance, false)
+  assertAppearanceSettings(document.data.appearance, true, false)
+  for (const page of document.pages) assertAppearanceSettings(page.appearance, false, false)
+  for (const bdc of document.bdcs) {
+    assertAppearanceSettings(bdc.appearance, false, bdc.type === BDC_TYPE.CARD)
+  }
 
   const pageIds = new Set<PageId>()
   const bdcIds = new Set<BdcId>()
@@ -301,12 +304,16 @@ export function assertDocumentInvariants(document: ElceDocument): void {
 }
 
 /** Rejects unknown appearance references and malformed sparse settings at any document scope. */
-function assertAppearanceSettings(value: unknown, allowGeneralPreset: boolean): void {
+function assertAppearanceSettings(
+  value: unknown,
+  allowGeneralPreset: boolean,
+  allowGradientBackground: boolean,
+): void {
   if (value === undefined) return
   if (!isAppearanceRecord(value)) fail('Réglages d’apparence invalides.')
 
   const allowedProperties = new Set([
-    'presetId', 'paletteId', 'headingFontId', 'bodyFontId', 'density', 'background', 'textColor', 'autoContrast',
+    'presetId', 'paletteId', 'headingFontId', 'bodyFontId', 'density', 'background', 'textColor', 'autoContrast', 'frame',
   ])
   if (Object.keys(value).some((property) => !allowedProperties.has(property))) {
     fail('Réglages d’apparence : propriété inconnue.')
@@ -324,11 +331,20 @@ function assertAppearanceSettings(value: unknown, allowGeneralPreset: boolean): 
   }
   if ('background' in value) {
     if (!isAppearanceRecord(value.background)) fail('Fond d’apparence invalide.')
-    assertAppearanceColor(value.background)
+    if (value.background.kind === 'gradient') {
+      if (!allowGradientBackground) fail('Les fonds dégradés sont réservés aux Cartes.')
+      if (typeof value.background.id !== 'string') fail('Dégradé de fond invalide.')
+      assertAppearanceReference(value.background.id, getAppearanceBackgroundGradient, 'dégradé')
+    } else {
+      assertAppearanceColor(value.background)
+    }
   }
   if ('textColor' in value) assertAppearanceColor(value.textColor)
   if ('autoContrast' in value && typeof value.autoContrast !== 'boolean') {
     fail('Le contraste automatique doit être un booléen.')
+  }
+  if ('frame' in value && typeof value.frame !== 'boolean') {
+    fail('Le cadre doit être un booléen.')
   }
 }
 
