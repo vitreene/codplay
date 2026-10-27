@@ -122,7 +122,28 @@ le repère bas et la validation de la réponse ; la réponse peut être fausse.
 L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapitre
 Évaluation sur sa dernière page. Elle n’est pas portée par chaque Question.
 
+Les sources de scènes Question mises en cache ne contiennent pas de réponse de
+consultation. Lorsqu’une composition démarre avec une réponse enregistrée,
+le scénario Sighty la transmet à la story Question lors du rafraîchissement
+de la page active. La story rétablit la sélection, les contrôles et le retour
+sans republier `elce:question:answered`. Les mêmes sources peuvent être
+réutilisées pour une autre réponse ou une remise à zéro. Les réponses saisies
+pendant la composition conservent le comportement de reset à la réadmission.
+Dans le lecteur preview, une réponse validée reste dans l’état de la session ;
+elle n’est pas envoyée au serveur et une nouvelle preview repart de son état
+test initial.
+
 ## Preuves
+
+- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  vérifie en Flux et Diapo la réutilisation d’une source, la restitution de deux
+  réponses, leur suppression, l’absence de nouvelle validation et le seek.
+  Safari a aussi affiché une réponse enregistrée dans une preview réseau sur
+  une base temporaire ; ce contrôle ne couvre pas la réutilisation du cache.
+- [`popup-player-cache-integration.test.tsx`](../src/app/player/popup-player-cache-integration.test.tsx)
+  vérifie la validation Question et l’absence d’écriture serveur depuis la
+  preview. Safari MCP, le 27 octobre 2026, a confirmé l’affichage de la réponse,
+  son absence après réouverture et un état test serveur inchangé.
 
 - [`question-service.test.ts`](../src/domain/question/question-service.test.ts) vérifie
   les réponses par défaut, l’unicité de la réponse juste en Choix, au moins une

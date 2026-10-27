@@ -69,6 +69,12 @@ précise les capacités, leurs circuits actuels et les couplages à séparer.
 Cette analyse remplace l’attribution exclusive à Learning des fonctionnalités
 dans la cartographie du 20 octobre ; elle ne certifie pas leur indépendance.
 
+L’[audit du 27 octobre](../notes/2026-10-27-learning-independence-audit.md)
+actualise ce constat sur 196 sources : les règles de profil, le formulaire,
+les identités et l’historique conservent notamment des chemins vers l’agrégat.
+Il distingue les couplages de types des dépendances de valeurs. Aucun lot
+d’extraction n’est appliqué ; D10–D13 restent **A relire**.
+
 ## Décisions de refactorisation
 
 - Extraire Learning à fonctionnalités constantes : comportements, limitations connues et contrats vérifiés sont conservés.
@@ -81,7 +87,7 @@ dans la cartographie du 20 octobre ; elle ne certifie pas leur indépendance.
 
 ## Actions proposées — A relire
 
-1. Reprendre la cartographie de l’[étude d’extraction](../notes/2026-10-20-learning-extraction-study.md) avec l’[examen des ressources candidates](../notes/2026-10-27-learning-reusable-resources-study.md) : pour chaque fonctionnalité actuelle, identifier les classes métier réutilisables, les adaptations de l’agrégat et les circuits communs conservés. Examiner aussi parcours, navigation, progression, profil et Évaluation ; Learning en sélectionne la composition actuelle.
+1. Reprendre la cartographie de l’[étude d’extraction](../notes/2026-10-20-learning-extraction-study.md) avec l’[examen des ressources candidates](../notes/2026-10-27-learning-reusable-resources-study.md) et l’[audit des dépendances](../notes/2026-10-27-learning-independence-audit.md) : pour chaque fonctionnalité actuelle, identifier les classes métier réutilisables, les adaptations de l’agrégat et les circuits communs conservés. Examiner aussi parcours, navigation, progression, profil et Évaluation ; Learning en sélectionne la composition actuelle.
 2. Préciser les entrées et dépendances de `src/core/`, `src/resources/` et `src/mods/learning/`, les raccords auteur/lecture/serveur et la résolution du mod. Les signatures et l’identification persistée restent à valider en D1, D2, D3, D10 et D13.
 3. Découper et appliquer la migration en lots acceptés : déplacer et adapter les circuits existants, puis raccorder les entrées applicatives aux compositions Learning. Chaque lot nomme ses fichiers et sa comparaison avant/après ; les presets seuls ne clôturent pas le chantier.
 4. Vérifier l’application actuelle dans cette structure : édition, historique, médias, persistance/synchronisation, preview et exports existants. Mettre à jour les spécifications avec les seuls comportements implémentés et vérifiés.
@@ -124,7 +130,15 @@ Ces points restent **A relire** pour leurs choix techniques non arrêtés.
 | D12 | Objectif fixé : structure mods avec l’application actuelle sous Learning ; ordre et contenu technique des lots, composition des fonctionnalités effectivement utilisées à préciser. |
 | D13 | Échanges internes nécessaires : intentions, résultats, erreurs, propriétaires d’état et cycle de vie. |
 
-Le point de cache des réponses Question relevé dans l’étude reste à qualifier.
+Cache preview : état de consultation, navigation comprise, séparé du contenu
+édité et du cache des ressources. **Appliqué et vérifié sur `develop`, puis
+intégré à `elce-mods`.** La preview garde cet état dans sa session, ne l’écrit
+pas sur le serveur et restitue la page active lors d’une reconstruction ;
+« Synchroniser » utilise la page sélectionnée dans l’éditeur. Le contrat et
+les preuves sont dans la [spécification Preview](../../specs/player-preview-spec.md).
+D8 reste **A relire** pour la proposition plus large de pilotage Sighty,
+chargement/restauration et persistance selon les contextes.
+
 Le comportement actuel de Sighty n’établit pas encore toutes les possibilités
 de reprise, d’interruption et de concurrence envisagées pour DGS.
 

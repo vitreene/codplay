@@ -5,6 +5,7 @@ export function scenarioContextFromTestState(state: ProjectTestState): Readonly<
   return {
     finishedPages: state.finishedPageIds,
     questionAnswers: state.questionAnswers,
+    restorableQuestionPageIds: Object.keys(state.questionAnswers),
     questionResults: Object.fromEntries(Object.entries(state.questionAnswers).map(([pageId, answer]) => [pageId, answer.isCorrect])),
     evaluationStates: state.evaluationStates,
     profileEnabled: state.profileEnabled,

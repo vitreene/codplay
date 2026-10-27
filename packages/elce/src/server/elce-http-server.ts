@@ -87,7 +87,7 @@ function answerLocalCors(
   if (isAllowedOrigin && origin !== undefined) {
     response.setHeader('Access-Control-Allow-Origin', origin)
     response.setHeader('Access-Control-Allow-Methods', isNetworkPreview
-      ? 'GET, HEAD, PUT, OPTIONS'
+      ? 'GET, HEAD, OPTIONS'
       : 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match, X-Elce-Page-Id, X-Elce-Edit-Grant')
     response.setHeader('Access-Control-Expose-Headers', 'ETag, Content-Disposition, X-Elce-Scorm-Filename')
@@ -96,10 +96,8 @@ function answerLocalCors(
   }
   if (request.method !== 'OPTIONS') return false
   const requestedMethod = request.headers['access-control-request-method']
-  const testStatePath = /^\/api\/projects\/[^/]+\/test-state$/.test(new URL(request.url ?? '/', 'http://localhost').pathname)
   const allowedNetworkPreflight = isNetworkPreview
-    && (requestedMethod === 'GET' || requestedMethod === 'HEAD'
-      || requestedMethod === 'PUT' && testStatePath)
+    && (requestedMethod === 'GET' || requestedMethod === 'HEAD')
   response.writeHead(isLoopback || allowedNetworkPreflight ? 204 : 403)
   response.end()
   return true

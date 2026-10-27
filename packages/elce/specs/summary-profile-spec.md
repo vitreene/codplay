@@ -189,12 +189,13 @@ incrémente atomiquement la révision puis renvoie l’état et son nouvel ETag.
 révision périmée reçoit `412 revision_mismatch` sans écraser la valeur serveur.
 Cette révision est indépendante de celle du document.
 
-La preview réseau de l’origine exacte du lecteur peut lire et écrire cette
-route. Elle peut aussi lire le document et ses médias, mais ses mutations du
-document et des médias restent refusées. L’éditeur et sa popup utilisent la
-même ligne de test ; le lecteur réseau téléphone la lit et enregistre les
-réponses et la progression. La popup locale peut démarrer une session non
-persistée si le serveur est hors ligne.
+La preview réseau de l’origine exacte du lecteur peut lire cette route, mais
+son prévol `PUT` est refusé. Elle peut aussi lire le document et ses médias,
+mais leurs mutations restent refusées. Le lecteur charge éventuellement l’état
+test existant au démarrage ; les modifications de profil, les réponses, la
+progression, les évaluations et la navigation restent dans la session de
+preview et ne sont pas écrites sur le serveur. Une réouverture de preview
+repart donc de l’état test initial disponible côté serveur.
 
 Les deux remises à zéro sont distinctes : la remise à zéro du profil vide ses
 valeurs et rouvre le formulaire sans effacer les réponses ou la progression ;
@@ -206,8 +207,9 @@ types et choix actuels. Une réponse Question reste valide lorsque seuls les
 libellés changent ; elle est écartée si l’identité des choix ou la correction
 change. L’état d’Évaluation conserve les réponses encore compatibles, réouvre
 les questions manquantes et recalcule l’issue quand toutes les réponses
-restantes sont valides. Une modification concurrente du test recharge la
-dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
+restantes sont valides. La réconciliation faite par la preview reste locale.
+L’API conserve son compare-and-swap : une modification concurrente refuse un
+`PUT` périmé sans écraser la valeur serveur.
 
 ## Preuves de validation
 
@@ -263,15 +265,18 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
   couvre la conservation ou l’invalidation ciblée des réponses.
 - [`project-test-state-session.test.ts`](../src/app/player/project-test-state-session.test.ts)
   et [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx)
-  couvrent le chargement, les écritures, le mode local hors ligne et la
-  restitution dans le lecteur ; le second vérifie aussi l’icône partagée du
-  bouton « Test auteur ».
+  couvrent la session API, le mode local hors ligne et la restitution dans le
+  lecteur ; le second vérifie aussi l’icône partagée du bouton « Test auteur ».
 - [`api-router.test.ts`](../src/server/api-router.test.ts),
   [`network-preview-api-policy.test.ts`](../src/server/network-preview-api-policy.test.ts),
   [`project-api-client.test.ts`](../src/infrastructure/project-api/project-api-client.test.ts)
   et [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
   couvrent les routes, la politique de preview, les ETags, le compare-and-swap
-  et la persistance SQLite.
+  et la persistance SQLite. Le test d’intégration
+  [`popup-player-cache-integration.test.tsx`](../src/app/player/popup-player-cache-integration.test.tsx)
+  vérifie que le lecteur garde les interactions en session sans appeler
+  l’écriture d’état test. Safari MCP, le 27 octobre 2026, a aussi confirmé le
+  refus `403` du prévol `PUT` depuis l’origine réseau de preview.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   exerce dans la composition réelle Sighty/CodPlay le changement de champ, le
   refus d’un formulaire incomplet, la soumission valide, la réouverture sur le

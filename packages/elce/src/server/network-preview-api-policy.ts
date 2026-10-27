@@ -5,7 +5,7 @@ export interface NetworkPreviewApiRequest {
   readonly requestedMethod: string | undefined
 }
 
-/** Allows LAN preview reads and writes to its test-state route only. */
+/** Allows LAN preview reads while keeping project state and resources read-only. */
 export function isNetworkPreviewApiRequestAllowed(
   request: NetworkPreviewApiRequest,
   previewOrigin: string,
@@ -17,9 +17,9 @@ export function isNetworkPreviewApiRequestAllowed(
   const isRead = request.method === 'GET' || request.method === 'HEAD'
   if (isRead && projectPath && originMatches) return true
   if (isRead && mediaPath && (originMatches || request.origin === undefined)) return true
-  if (testStatePath && originMatches && (isRead || request.method === 'PUT')) return true
+  if (testStatePath && originMatches && isRead) return true
   if (request.method !== 'OPTIONS' || !originMatches) return false
   return projectPath && (request.requestedMethod === 'GET' || request.requestedMethod === 'HEAD')
     || testStatePath && (request.requestedMethod === 'GET'
-      || request.requestedMethod === 'HEAD' || request.requestedMethod === 'PUT')
+      || request.requestedMethod === 'HEAD')
 }

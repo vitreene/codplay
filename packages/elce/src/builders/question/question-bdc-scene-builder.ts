@@ -4,6 +4,7 @@ import { DEFAULT_PRESET_ID, ELCE_EVENTS, QUESTION_DEFAULTS, QUESTION_TYPE_CONFIG
 import {
   ELCE_QUESTION_RUNTIME_KEY,
   resetQuestionStrap,
+  restoreQuestionStrap,
   selectQuestionAnswerStrap,
   validateQuestionAnswerStrap,
   type QuestionRuntimeConfiguration,
@@ -12,7 +13,6 @@ import type { CardPresetBuild } from '../card/card-preset-builder-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
 import type { Bdc } from '../../domain/document/document-types'
 import type { QuestionAnswer, QuestionContent } from '../../domain/question/question-types'
-import type { TestAnswerState } from '../../domain/summary-profile/test-state-types'
 import { appendClassToMarkupElement } from '../scene-style/scene-style-classes'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
@@ -52,7 +52,6 @@ export function buildQuestionBdcStory(
   zones: Readonly<Record<string, string>>,
   completionEventName?: string,
   completionEventData?: CompiledRecord,
-  initialAnswer?: TestAnswerState,
 ): StoryDoc<string> {
   const question = bdc.question
   if (question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
@@ -72,13 +71,13 @@ export function buildQuestionBdcStory(
   const resetEvent = ELCE_EVENTS.QUESTION_RESET
   const validationZone = requireQuestionZone(zones, 'validation', bdc.id)
   const answerPersos = question.answers.map((answer) => createQuestionAnswerPerso(
-    pageId, bdc, prefix, answer, question, answersZone, initialAnswer,
+    pageId, bdc, prefix, answer, question, answersZone,
   ))
   return {
     id: `${pageId}-${bdc.id}`,
     state: {
-      selectedAnswerIds: initialAnswer?.selectedAnswerIds ?? [],
-      submitted: initialAnswer !== undefined,
+      selectedAnswerIds: [],
+      submitted: false,
       [ELCE_QUESTION_RUNTIME_KEY]: {
         pageId,
         bdcId: bdc.id,
@@ -98,11 +97,13 @@ export function buildQuestionBdcStory(
       [`${prefix}:select-answer`]: selectQuestionAnswerStrap,
       [`${prefix}:validate-answer`]: validateQuestionAnswerStrap,
       [`${prefix}:reset-question`]: resetQuestionStrap,
+      [`${prefix}:restore-question`]: restoreQuestionStrap,
     },
     listen: [
       { on: `${prefix}:answer:select`, straps: [`${prefix}:select-answer`] },
       { on: `${prefix}:validate`, straps: [`${prefix}:validate-answer`] },
       { on: resetEvent, straps: [`${prefix}:reset-question`] },
+      { on: ELCE_EVENTS.QUESTION_RESTORE, straps: [`${prefix}:restore-question`] },
     ],
     persos: [
       ...title,
@@ -115,7 +116,7 @@ export function buildQuestionBdcStory(
         validationZone,
         question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
       ),
-      createQuestionFeedbackPerso(bdc.id, prefix, validationZone, initialAnswer),
+      createQuestionFeedbackPerso(bdc.id, prefix, validationZone),
     ],
   }
 }
@@ -149,16 +150,8 @@ function createQuestionAnswerPerso(
   answer: QuestionAnswer,
   question: QuestionContent,
   answersZone: string,
-  initialAnswer?: TestAnswerState,
 ): PersoDoc<string> {
   const correctAnswerIds = question.answers.filter((candidate) => candidate.correct).map((candidate) => candidate.id)
-  const selectedAnswerIds = new Set(initialAnswer?.selectedAnswerIds ?? [])
-  const expectedAnswerIds = new Set(initialAnswer?.expectedAnswerIds ?? [])
-  const selected = selectedAnswerIds.has(answer.id)
-  const submitted = initialAnswer !== undefined
-  const visualState = !submitted ? selected ? 'selected' : 'idle'
-    : selected ? expectedAnswerIds.has(answer.id) ? 'revealed-correct' : 'revealed-incorrect'
-      : expectedAnswerIds.has(answer.id) ? 'revealed-missed-correct' : 'disabled'
   return {
     id: `${pageId}-${bdc.id}-answer-${answer.id}`,
     type: 'input',
@@ -168,10 +161,9 @@ function createQuestionAnswerPerso(
       value: answer.id,
       label: answer.label,
       hint: '',
-      checked: selected,
-      disabled: submitted,
-      ...(submitted ? { selectedAnswerIds: [...selectedAnswerIds], correctAnswerIds, disableAnswers: true, showCorrection: true } : {}),
-      visualState,
+      checked: false,
+      disabled: false,
+      visualState: 'idle',
       selectionIcon: { className: 'elce-question-answer__selection' },
       correctionIcon: {
         className: 'elce-question-answer__correction',
@@ -235,16 +227,14 @@ function createQuestionFeedbackPerso(
   bdcId: string,
   prefix: string,
   target: string,
-  answer?: TestAnswerState,
 ): PersoDoc<string> {
-  const message = answer === undefined ? '' : answer.isCorrect ? 'Bonne réponse.' : 'Réponse incorrecte.'
   return {
     id: `${bdcId}-feedback`,
     type: 'tag',
     initial: {
       tag: 'p',
-      content: message,
-      attr: { hidden: answer === undefined, 'aria-live': 'polite' },
+      content: '',
+      attr: { hidden: true, 'aria-live': 'polite' },
       className: 'elce-question-feedback',
       move: { target },
     },

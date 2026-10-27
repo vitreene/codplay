@@ -24,6 +24,9 @@
 
 ## Implementation process
 
+- When the user has discussed the intended work and then asks to implement it,
+  treat the discussed plan as accepted. Update its status and proceed; do not
+  ask for a second confirmation merely because it was previously `A relire`.
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
 - For every browser validation or other MCP-backed task, inspect both the local MCP server configuration and the complete live tool inventory offered by the current session before starting. Compare configured servers with the tools actually exposed here and review their names and descriptions; do not decide availability from a name-only search for `browser` or `Safari`. Use only the exposed tools, and never infer availability from installed applications, previous sessions, or another machine. If a configured server has no callable tools in this session, report that work as pending instead of launching a different local application or treating it as equivalent.
@@ -62,17 +65,21 @@
 
 ## Documentation and implementation tracking
 
-- Plans must be short, operational, and useful for decision-making. Keep only
-  concise decisions to make, their status, ordered actions, and acceptance
-  criteria. Name the files or owners to change, what is replaced, and the
-  expected result. Keep small concrete examples needed to evaluate the proposal;
-  brevity must not turn the plan into an abstract summary. General intentions
-  are not decisions. Keep extended discussions, decisions, rationale, research,
-  and examples in notes, linked from the plan. Do not write plans as
-  conversations or duplicate commentary across documents.
+- **A note is not a plan.** A discussion, audit finding, explanation, or decision
+  record belongs in `notes/`, even when marked `Fixe` or accompanied by possible
+  next steps. Do not call it a plan in filenames, headings, links, or replies.
+  Adding a status or a list of intentions does not turn a note into a plan.
+- Plans must be short execution documents: ordered actions, the files or owners
+  to change, what is replaced, the expected result, gates, status, and concrete
+  acceptance criteria. Keep only the concise decisions or prerequisites needed
+  to perform those actions; link to the note for the decision record, rationale,
+  research, or discussion. Keep small concrete examples when needed to evaluate
+  an action. When a note leads to implementation, derive an operational plan
+  from it instead of relabeling or copying the note into `plan/`. Do not append
+  narrative commentary to a plan or duplicate it across documents.
 - Documentation roles are exclusive and must not be mixed:
-  - `notes/` records project elaboration, exploration, and rationale; open decisions for an active feature stay in its plan;
-  - `plan/` records actions to perform, their order, gates, status, acceptance path, and decisions that are open or agreed but unapplied;
+  - `notes/` records project elaboration, exploration, rationale, and detailed decision records; concise open decisions needed for active work stay in its plan;
+  - `plan/` records actions to perform, their order, gates, status, acceptance path, and concise decisions that are open or agreed but unapplied;
   - specifications record only behavior that has been implemented and verified;
   - `README.md` records only simple user-facing usage, with an illustrated concrete example; it must not contain internal contracts, architecture, implementation status, plans, or validation tracking.
 - A `*-reprise-report.md` is a handoff report, not a living documentation surface. Do not append project elaboration, implementation specification, or user instructions to it. Put each new content in the one appropriate category above; if an action must be retained, record it in the applicable plan, not in the report.

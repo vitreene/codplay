@@ -6,6 +6,7 @@ export {
   selectQuestionAnswerStrap,
   validateQuestionAnswerStrap,
   resetQuestionStrap,
+  restoreQuestionStrap,
 } from './question'
 export { selectCarouselCardStrap } from './carousel'
 export {

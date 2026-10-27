@@ -23,7 +23,6 @@ import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
 import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
-import type { TestAnswerState } from '../domain/summary-profile/test-state-types'
 import { ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../scorm/scorm-types'
 import { ELCE_ENGINE_CAPABILITIES } from './elce-player-engine'
 import { ElceEditorSettingsResolver } from '../domain/editor-settings/editor-settings-resolver'
@@ -93,6 +92,12 @@ export class ElcePlayerComposition {
     const refreshed = await this.sighty.runtime.dispatch({ name: ELCE_EVENTS.PRESENTATION_REFRESH })
     if (!refreshed) this.options.onLog?.('La présentation Elcé n’a pas pu être actualisée.', 'warn')
     this.options.onLog?.('Prévisualisation Elcé initialisée.', 'info')
+  }
+
+  /** Reads the current page from Sighty before a preview composition is rebuilt. */
+  public getCurrentPageId(): string | undefined {
+    const sceneKey = this.sighty.runtime.scenarioState.active?.sceneKey
+    return this.options.document.pages.find((page) => `scene-${page.id}` === sceneKey)?.id
   }
 
   /** Destroys all player resources owned by this composition. */
@@ -224,7 +229,6 @@ export function createElcePlayerScenario(
     options.document,
     options.mediaSources,
     options.sceneCache,
-    testState.questionAnswers,
   )
   const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId, {
     testState,
@@ -259,7 +263,6 @@ export function createPageSceneCatalog(
   document: ElceDocument,
   mediaSources: ElcePlayerCompositionOptions['mediaSources'],
   cache?: ElcePageSceneCache,
-  questionAnswers: Readonly<Record<string, TestAnswerState>> = {},
 ): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>> }> {
   const pageIds = scenarioPageIds(document)
   const activePageIds = new Set(pageIds)
@@ -313,7 +316,6 @@ export function createPageSceneCatalog(
     const scene = buildPageScene(page, document.bdcs, {
       mediaSources: pageMediaSources,
       mediaTypes: pageMediaTypes,
-      questionAnswers,
       editorSettings,
       appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, sceneBdcs),
     }, sceneChapterType)

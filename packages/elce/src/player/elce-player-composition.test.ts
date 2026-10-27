@@ -12,6 +12,7 @@ import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-com
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
 import { createPlayerPreviewComposition } from '../app/player/player-preview'
 import type { ElcePageSceneCache } from './player-composition-types'
+import type { SightyRuntimeApi } from '@codplay/sighty'
 
 type IntersectionEntry = Pick<IntersectionObserverEntry, 'target' | 'intersectionRatio' | 'isIntersecting'>
 type PointerMovement = Readonly<{ movementX?: number; movementY?: number }>
@@ -83,6 +84,79 @@ describe('Elcé player composition', () => {
   it('contains vertical scroll chaining at the Flux scrollport boundary', () => {
     expect(ELCE_PLAYER_STYLE_SHEET)
       .toMatch(/\.elce-flux-scrollport\s*\{[^}]*overscroll-behavior-y:\s*contain;/s)
+  })
+
+  it.each(['flux', 'diapo'] as const)('restores current Question answers while reusing the %s page resource', async (pageType) => {
+    const initial = createInitialDocument()
+    const pageCommand = pageType === 'diapo'
+      ? createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, 'Question', PAGE_TYPE.DIAPO)
+      : undefined
+    const pageId = pageCommand?.pageId ?? 'page-a'
+    const questionId = `question-cache-${pageType}`
+    let model = pageCommand === undefined ? initial : applyDocumentCommand(initial, pageCommand)
+    if (pageCommand !== undefined) {
+      model = applyDocumentCommand(model, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
+    }
+    model = applyDocumentCommand(model, createQuestionBdcCommand(questionId, pageId, pageType === 'flux' ? 1 : 0))
+    const question = model.bdcs.find((bdc) => bdc.id === questionId)?.question
+    if (question === null || question === undefined) throw new Error('Question fixture missing')
+    const correct = question.answers.find((answer) => answer.correct)
+    const incorrect = question.answers.find((answer) => !answer.correct)
+    if (correct === undefined || incorrect === undefined) throw new Error('Question answers missing')
+    const emptyState = { ...INITIAL_PROJECT_TEST_STATE, profileEnabled: false }
+    const cache: ElcePageSceneCache = new Map()
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const emitted: string[] = []
+
+    /** Rebuilds the real preview using a shared resource cache and a new reader state. */
+    async function showAnswer(selectedId?: string) {
+      composition?.destroy()
+      const testState: ProjectTestState = selectedId === undefined ? emptyState : {
+        ...emptyState,
+        questionAnswers: { [pageId]: {
+          answerIds: question!.answers.map((answer) => answer.id),
+          selectedAnswerIds: [selectedId],
+          expectedAnswerIds: [correct!.id],
+          isCorrect: selectedId === correct!.id,
+        } },
+      }
+      composition = createPlayerPreviewComposition(stage, {
+        documentModel: model, selectedPageId: pageId, mediaSources: {}, testState, sceneCache: cache,
+      }) ?? undefined
+      if (composition === undefined) throw new Error('Preview fixture missing')
+      const runtime = (composition as unknown as { sighty: { runtime: {
+        events: { onEvent(listener: (event: { name: string }) => void): () => void }
+      } } }).sighty.runtime
+      runtime.events.onEvent((event) => emitted.push(event.name))
+      await composition.initialize()
+      await waitForPlayerActions()
+      return Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
+    }
+
+    const empty = await showAnswer()
+    expect(empty.map((input) => input.checked)).toEqual([false, false])
+    const source = cache.get(pageId)?.source
+    const correctInputs = await showAnswer(correct.id)
+    expect(cache.get(pageId)?.source).toBe(source)
+    expect(correctInputs.map((input) => input.checked)).toEqual(question.answers.map((answer) => answer.id === correct.id))
+    expect(correctInputs.every((input) => input.disabled)).toBe(true)
+    const runtime = (composition as unknown as { sighty: { runtime: SightyRuntimeApi } }).sighty.runtime
+    const instance = runtime.getInstance(`scene-${pageId}`)
+    if (instance === undefined) throw new Error('Question instance missing')
+    await instance.telco.pause()
+    await instance.telco.seek(0)
+    await instance.telco.play()
+    await waitForPlayerActions()
+    expect(correctInputs.map((input) => input.checked)).toEqual(question.answers.map((answer) => answer.id === correct.id))
+    const incorrectInputs = await showAnswer(incorrect.id)
+    expect(cache.get(pageId)?.source).toBe(source)
+    expect(incorrectInputs.map((input) => input.checked)).toEqual(question.answers.map((answer) => answer.id === incorrect.id))
+    const resetInputs = await showAnswer()
+    expect(cache.get(pageId)?.source).toBe(source)
+    expect(resetInputs.map((input) => input.checked)).toEqual([false, false])
+    expect(resetInputs.every((input) => !input.disabled)).toBe(true)
+    expect(emitted).not.toContain(ELCE_EVENTS.QUESTION_ANSWERED)
   })
 
   it('reuses unchanged page scenes across organization changes and rebuilds only an edited page scene', () => {

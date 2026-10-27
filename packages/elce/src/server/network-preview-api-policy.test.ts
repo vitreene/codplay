@@ -11,9 +11,10 @@ describe('Elcé network preview API policy', () => {
     expect(allowed('GET', '/api/projects/project-a/media/media-a', null)).toBe(true)
   })
 
-  it('allows test-state reads and compare-and-swap writes only from the exact preview origin', () => {
+  it('allows test-state reads and denies writes from the preview origin', () => {
     expect(allowed('GET', '/api/projects/project-a/test-state')).toBe(true)
-    expect(allowed('PUT', '/api/projects/project-a/test-state')).toBe(true)
+    expect(allowed('HEAD', '/api/projects/project-a/test-state')).toBe(true)
+    expect(allowed('PUT', '/api/projects/project-a/test-state')).toBe(false)
     expect(allowed('PUT', '/api/projects/project-a/test-state', 'http://192.168.1.21:4173')).toBe(false)
     expect(allowed('PUT', '/api/projects/project-a/test-state', null)).toBe(false)
   })
@@ -25,8 +26,9 @@ describe('Elcé network preview API policy', () => {
     expect(allowed('PUT', '/api/projects/project-a/media/media-a')).toBe(false)
   })
 
-  it('admits the test-state preflight but not document-write preflight', () => {
-    expect(allowed('OPTIONS', '/api/projects/project-a/test-state', origin, 'PUT')).toBe(true)
+  it('admits test-state reads but not preview writes or document-write preflights', () => {
+    expect(allowed('OPTIONS', '/api/projects/project-a/test-state', origin, 'GET')).toBe(true)
+    expect(allowed('OPTIONS', '/api/projects/project-a/test-state', origin, 'PUT')).toBe(false)
     expect(allowed('OPTIONS', '/api/projects/project-a/document', origin, 'PUT')).toBe(false)
   })
 })

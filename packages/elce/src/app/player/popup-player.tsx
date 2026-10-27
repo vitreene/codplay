@@ -84,8 +84,6 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   let pending = false
   let testStateNotice: string | null = null
   let testControlsOpen = false
-  let testStateSession: ProjectTestStateSession | null = null
-  let conflictPresented = false
   const sourceUrls = new Map<string, string>()
   const sceneCache: ElcePageSceneCache = new Map()
   let composition: ElcePlayerComposition | null = null
@@ -97,42 +95,22 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     if (!handle.signal.aborted) void handle.update()
   }
 
-  /** Saves a committed reader change using the independent server test-state revision. */
-  const saveTestState = async (
+  /** Updates consultation state in this preview session without saving it to the server. */
+  const updateTestState = async (
     state: ProjectTestState,
     options: Readonly<{ rebuild?: boolean; resetSelection?: boolean }> = {},
   ): Promise<void> => {
     const current = readerSnapshot
     const submittedNow = current !== null && !current.testState.profileSubmitted && state.profileSubmitted
-    if (current !== null) readerSnapshot = { ...current, testState: state }
     const rebuild = options.rebuild === true || submittedNow
-    const selectedPageId = options.resetSelection === true || submittedNow ? null : current?.selectedPageId ?? null
+    const selectedPageId = options.resetSelection === true || submittedNow
+      ? null
+      : composition?.getCurrentPageId?.() ?? current?.selectedPageId ?? null
+    if (current !== null) readerSnapshot = { ...current, selectedPageId, testState: state }
     update()
-    if (testStateSession === null) {
-      if (rebuild && readerSnapshot !== null) await presentSnapshot({ ...readerSnapshot, selectedPageId, testState: state })
-      return
-    }
-    try {
-      const result = await testStateSession.save(state)
-      if (result.kind === 'conflict') {
-        testStateNotice = 'Le test a changé dans une autre fenêtre. La version serveur a été rechargée.'
-        const latest = readerSnapshot
-        if (latest !== null && !conflictPresented) {
-          conflictPresented = true
-          await presentSnapshot({ ...latest, testState: result.state })
-        }
-        return
-      }
-      if (!testStateSession.isPersisted) {
-        testStateNotice = 'Le projet doit être synchronisé au serveur pour enregistrer le test.'
-      }
-    } catch (cause: unknown) {
-      testStateNotice = cause instanceof Error ? cause.message : 'L’état de test n’a pas pu être enregistré.'
-    }
     if (rebuild && readerSnapshot !== null) {
-      await presentSnapshot({ ...readerSnapshot, selectedPageId, testState: state })
+      await presentSnapshot({ ...readerSnapshot, testState: state }, selectedPageId)
     }
-    update()
   }
 
   /** Clears only profile answers, leaving page and question progress intact. */
@@ -140,7 +118,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     if (readerSnapshot === null) return
     const state = { ...readerSnapshot.testState, profileSubmitted: false, profileValues: {} }
     testControlsOpen = false
-    void saveTestState(state, { rebuild: true, resetSelection: true })
+    void updateTestState(state, { rebuild: true, resetSelection: true })
   }
 
   /** Clears only page completion, Question answers and Evaluation attempts. */
@@ -153,7 +131,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       evaluationStates: {},
     }
     testControlsOpen = false
-    void saveTestState(state, { rebuild: true })
+    void updateTestState(state, { rebuild: true })
   }
 
   /** Toggles profile filtering while preserving independently stored progress. */
@@ -161,7 +139,7 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     if (readerSnapshot === null) return
     const state = { ...readerSnapshot.testState, profileEnabled: enabled }
     testControlsOpen = false
-    void saveTestState(state, { rebuild: true })
+    void updateTestState(state, { rebuild: true })
   }
 
   /** Requests a fresh editor snapshot or its selected page through the opener. */
@@ -182,16 +160,19 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   }
 
   /** Renders a received snapshot and remounts the same player composition circuit. */
-  const presentSnapshot = async (nextSnapshot: ReaderSnapshot): Promise<void> => {
+  const presentSnapshot = async (
+    nextSnapshot: ReaderSnapshot,
+    selectedPageId: string | null = nextSnapshot.selectedPageId,
+  ): Promise<void> => {
     if (handle.signal.aborted) return
-    readerSnapshot = nextSnapshot
-    if (nextSnapshot.selectedPageId !== null && nextSnapshot.testState.profileEnabled && nextSnapshot.testState.profileSubmitted) {
+    readerSnapshot = { ...nextSnapshot, selectedPageId }
+    if (selectedPageId !== null && nextSnapshot.testState.profileEnabled && nextSnapshot.testState.profileSubmitted) {
       const readerDocument = projectReaderDocument(
         nextSnapshot.documentModel,
         nextSnapshot.testState.profileValues,
         nextSnapshot.testState.profileEnabled,
       )
-      if (!readerDocument.pages.some((page) => page.id === nextSnapshot.selectedPageId)) {
+      if (!readerDocument.pages.some((page) => page.id === selectedPageId)) {
         testStateNotice = 'La page sélectionnée est exclue par le profil du test auteur.'
       }
     }
@@ -210,10 +191,10 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
 
     composition = createPlayerPreviewComposition(stage, {
       documentModel: nextSnapshot.documentModel,
-      selectedPageId: nextSnapshot.selectedPageId,
+      selectedPageId,
       mediaSources: nextSnapshot.mediaSources,
       testState: nextSnapshot.testState,
-      onTestStateChange: (state) => { void saveTestState(state) },
+      onTestStateChange: (state) => { void updateTestState(state) },
       sceneCache,
     })
     if (composition !== null) {
@@ -246,24 +227,8 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
           ? loadServerMediaSources(documentModel, api)
           : await loadMediaSources(documentModel, store, api, sourceUrls)
         if (disposed || handle.signal.aborted) return
-        testStateSession = await ProjectTestStateSession.open(api, documentModel.id, { allowOffline: !isNetworkPreview })
-        conflictPresented = false
-        const storedTestState = testStateSession.state
-        let testState = reconcileProjectTestState(documentModel, storedTestState)
-        if (testState !== storedTestState) {
-          try {
-            const result = await testStateSession.save(testState)
-            if (result.kind === 'conflict') {
-              testStateNotice = 'Le test a changé dans une autre fenêtre. La version serveur a été rechargée.'
-              conflictPresented = true
-              testState = reconcileProjectTestState(documentModel, result.state)
-            } else {
-              testState = result.state
-            }
-          } catch (cause: unknown) {
-            testStateNotice = cause instanceof Error ? cause.message : 'L’état de test n’a pas pu être enregistré.'
-          }
-        }
+        const testStateSession = await ProjectTestStateSession.open(api, documentModel.id, { allowOffline: !isNetworkPreview })
+        const testState = reconcileProjectTestState(documentModel, testStateSession.state)
         const nextSnapshot = {
           documentModel,
           selectedPageId: selectedPageId !== null && documentModel.pages.some((page) => page.id === selectedPageId)

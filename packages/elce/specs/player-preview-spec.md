@@ -54,12 +54,29 @@ de la progression. Son icône Lucide List est la même que celle du bouton
 « Sommaire » dans l’éditeur.
 
 Chaque instantané reçu monte une nouvelle composition du lecteur. La
-navigation et l’historique restent propres à cette session. L’état du test —
-profil, progression et réponses — est chargé et enregistré séparément du
-document ; la popup auteur et la preview réseau utilisent le même état serveur.
-La popup locale peut fonctionner sans persistance lorsque le serveur est
-indisponible. Le contrat détaillé figure dans la
-[spécification Sommaire et profils](./summary-profile-spec.md).
+navigation et l’historique restent propres à cette session. Avant une
+reconstruction, le lecteur conserve la sélection active de Sighty comme page de
+départ ; les autres slots et les directions de navigation sont dérivés du
+graphe. Le profil, la progression, les réponses, les évaluations et cette
+sélection restent dans la session lecteur, séparément des sources de scènes
+réutilisées. Ces sources ne capturent pas l’état de consultation et le cache
+des ressources est libéré à la fermeture de la fenêtre.
+
+Le lecteur peut charger l’état test initial depuis l’API du projet. Les
+changements de consultation restent propres à la preview et ne sont pas
+enregistrés sur le serveur. L’origine réseau de preview peut lire l’état test ;
+son prévol `PUT` est refusé. Le contrat du stockage serveur et de sa révision
+figure dans la [spécification Sommaire et profils](./summary-profile-spec.md).
+
+Dans la popup, une reconstruction provoquée par la remise à zéro de la
+progression reprend la page courante du lecteur depuis Sighty. Une demande
+explicite « Synchroniser » utilise la page sélectionnée dans l’éditeur. Le
+[test d’intégration popup](../src/app/player/popup-player-cache-integration.test.tsx)
+exerce ces deux actions avec la composition Sighty/CodPlay réelle et vérifie
+qu’une réponse de preview ne déclenche aucune écriture API. Les tests de
+[composition du player](../src/player/elce-player-composition.test.ts) vérifient
+la réutilisation des scènes Flux/Diapo, la restauration ou la suppression des
+réponses, et l’absence d’une nouvelle validation.
 
 Le document de l’éditeur reste la source unique. La communication entre les
 fenêtres transporte des demandes et des instantanés ; elle ne crée ni document,
@@ -278,6 +295,11 @@ détruit les ressources du lecteur.
   restait ouverte. Un nouveau clic sur « Prévisualiser » réutilise la popup,
   crée une nouvelle session et charge la page active (« Repérer les grandes
   formes — itération 3 ») sans fermer la fenêtre.
+- Safari MCP, le 27 octobre 2026, a validé une réponse dans la preview réseau
+  d’un projet temporaire. À la réouverture, la Question était vierge ; une
+  lecture API a confirmé l’état serveur à la révision 0 avec
+  `questionAnswers: {}`. Un prévol `PUT` présenté avec l’origine preview a
+  répondu `403` et n’a autorisé que `GET`, `HEAD` et `OPTIONS`.
 - Pour cette correction, le typecheck et le build passent ; le build signale un
   chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
   passe 28/28. La suite complète compte 218 succès et un échec d’environnement :

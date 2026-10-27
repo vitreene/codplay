@@ -112,7 +112,6 @@ export function buildDiapoScene(
           questionBuild.zonePartIds,
           ELCE_EVENTS.PAGE_FINISHED,
           { pageId: page.id },
-          options.questionAnswers?.[page.id],
         )
         childStories = { [questionStory.id]: questionStory }
         const resetEventName = ELCE_EVENTS.QUESTION_RESET

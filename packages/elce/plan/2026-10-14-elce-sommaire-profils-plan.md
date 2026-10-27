@@ -318,8 +318,10 @@ construction.
    - Accepter renommage, texte littéral, caractères spéciaux, formatage Tiptap,
      ancres, réadmission, seek et reconstruction ciblée du cache.
 
-7. **Utilisateur de test auteur et restitution — intégrés ; tests API, SQLite,
-   session et player passés.** La vérification sur téléphone reste à faire.
+7. **État de test auteur et restitution — En cours.** L’isolation du cache de
+   consultation et l’absence d’écriture serveur depuis la preview sont
+   appliquées et vérifiées dans l’écart du 27 octobre ci-dessous. La
+   vérification du parcours sur téléphone reste à faire.
    - Persister séparément profil, progression, réponses et réglages de test sur
      le serveur, dans un état distinct du document.
    - Ajouter la modale auteur : reconfiguration, activation/désactivation du
@@ -332,8 +334,7 @@ construction.
      téléphone ; vérifier deux écritures concurrentes, les deux RAZ,
      reconfiguration sans RAZ et page éditée exclue sans l’afficher.
 
-8. **Acceptation et clôture — tests automatisés terminés ; parcours navigateur
-   et réseau restant.**
+8. **Acceptation et clôture — En cours ; vérification sur téléphone restante.**
    - Exercer la composition réelle Sighty/CodPlay et les frontières
      document, commandes, stockage serveur, scène, Questions, Évaluation et
      popup.
@@ -342,22 +343,45 @@ construction.
    - **Vérifié :** défaut `endpage`, accès libre aux pages ordinaires et maintien
      des contraintes de Visibilité, des prérequis et du BDC Résultat.
    - Exécuter les suites Elcé pertinentes, typecheck, build et navigateur ; les
-     tests possèdent leurs propres documents et valeurs. Les 51 fichiers
-     donnent 374 tests réussis dans l’exécution complète, avec le test SQLite
-     exécuté grâce à l’accès autorisé à la boucle locale. Typecheck et build
-     passent. Safari MCP sur Projet 1 vérifie que le clic sur « Chapitre 1 »
+     tests possèdent leurs propres documents et valeurs. La suite actuelle
+     passe 504 tests sur 505 ; le test SQLite bloqué par `listen EPERM` passe
+     seul avec accès à la boucle locale (16/16). Typecheck et build passent.
+     Safari MCP sur Projet 1 vérifie que le clic sur « Chapitre 1 »
      coche ses deux pages, active les contraintes et que tout décocher les
      désactive. Les contrôles restent dans le rendu SPA. Safari confirme aussi
      le titre « Contenus » et le bouton « Sommaire » avec son icône. Le document
      est visible, mais l’application affiche « Lecture seule » et `#elce-main`
      est inerte ; la saisie et l’enregistrement ne sont donc pas vérifiés en
      direct.
-     Depuis le téléphone,
-     vérifier la lecture et l’écriture de l’état test, puis confirmer le refus
-     des écritures document et média.
+     Depuis le téléphone, confirmer que la preview peut lire l’état test sans
+     écrire les réponses ou la progression sur le serveur, puis confirmer le
+     refus des écritures document et média.
    - Après vérification, transférer les contrats et preuves dans les
      spécifications concernées, actualiser le statut du plan de construction,
      puis retirer ce plan et les notes préparatoires devenues inutiles.
+
+## Cache preview et état de consultation — appliqué et vérifié le 27 octobre 2026
+
+Les sources de scènes Question restent neutres et réutilisables ; le circuit
+Sighty restitue la réponse issue du contexte courant sans nouvelle validation.
+La composition conserve la page active de Sighty lors d’une reconstruction ;
+« Synchroniser » utilise la sélection de page de l’éditeur. La session de
+preview garde réponses, profil, progression, évaluations et navigation sans
+écrire l’état test sur le serveur. L’API de preview réseau lit l’état initial
+et refuse le prévol `PUT`.
+
+Preuves : [`player-preview-spec.md`](../specs/player-preview-spec.md),
+[`question-bdc-spec.md`](../specs/question-bdc-spec.md) et
+[`summary-profile-spec.md`](../specs/summary-profile-spec.md) décrivent le
+contrat vérifié. Les tests couvrent réponses restaurées, modifiées et
+supprimées en Flux/Diapo, seek, reset, synchronisation explicite et absence
+d’écriture API. La validation typecheck/build passe ; Safari sur une base
+temporaire a affiché la réponse en session, puis une preview rouverte sans
+réponse, tandis que l’état serveur est resté vide à la révision 0. Le prévol
+réseau `PUT` a reçu `403`.
+
+La synchronisation permanente débrayable reste une étape ultérieure du
+[plan de construction](2026-10-01-elce-construction-plan.md#lecture-dans-une-fenêtre-distincte--tranche-9-en-cours).
 
 ## Gate de réalisation
 

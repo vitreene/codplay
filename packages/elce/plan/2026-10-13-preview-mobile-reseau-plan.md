@@ -35,6 +35,8 @@ Sighty/CodPlay déjà utilisé par la preview.
    l’éditeur reste inaccessible sur l’origine LAN.
 4. [x] Brave vérifie la route LAN en émulation mobile à 390 × 844, le chargement
    des médias et du document à la révision 10, ainsi que les refus API `403`.
+   Safari MCP confirme aussi que la preview lit l’état test et que son prévol
+   `PUT` est refusé (`403`).
    [ ] Confirmer depuis un téléphone réel connecté au même réseau ; garder deux
    pages Brave au plus et ne pas lancer Firefox.
 5. [x] Les spécifications `player-preview`, `project-api` et `remix-spa`

@@ -112,6 +112,35 @@ export function resetQuestionStrap(input: StrapExecutionInput): StrapRuntimeOutp
   }
 }
 
+/** Restores an already recorded answer without publishing another submission. */
+export function restoreQuestionStrap(input: StrapExecutionInput): StrapRuntimeOutput | undefined {
+  const configuration = readQuestionConfiguration(input.state)
+  const selectedAnswerIds = readQuestionSelection(input.event.data?.selectedAnswerIds)
+  if (configuration === undefined || input.state.submitted === true || selectedAnswerIds.length === 0) return undefined
+  const selected = new Set(selectedAnswerIds)
+  const correct = new Set(configuration.correctAnswerIds)
+  const isCorrect = sameQuestionAnswerSet(configuration.correctAnswerIds, selectedAnswerIds)
+  return {
+    update: { selectedAnswerIds, submitted: true },
+    events: [
+      {
+        name: `${configuration.prefix}:feedback`,
+        data: {
+          content: isCorrect ? 'Bonne réponse.' : 'Réponse incorrecte.',
+          attr: { hidden: false },
+          className: `elce-question-feedback elce-question-feedback--${isCorrect ? 'correct' : 'incorrect'}`,
+        },
+      },
+      { name: `${configuration.prefix}:resolved` },
+      ...configuration.answerIds.map((id) => ({
+        name: `${configuration.prefix}:answer:${id}:${selected.has(id)
+          ? correct.has(id) ? 'revealed-correct' : 'revealed-incorrect'
+          : correct.has(id) ? 'revealed-missed-correct' : 'locked'}`,
+      })),
+    ],
+  }
+}
+
 /** Validates the compact Question parameters supplied by the builder in story state. */
 function readQuestionConfiguration(state: Readonly<Record<string, unknown>>): QuestionRuntimeConfiguration | undefined {
   const value = state[ELCE_QUESTION_RUNTIME_KEY]

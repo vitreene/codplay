@@ -173,7 +173,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
     ])),
     ...Object.fromEntries(mounts.filter((mount) => mount.bdc.type === BDC_TYPE.QUESTION).map((mount) => [
       `${page.id}-${mount.bdc.id}`,
-      buildQuestionBdcStory(page.id, mount.bdc, mount.zonePartIds, undefined, undefined, options.questionAnswers?.[page.id]),
+      buildQuestionBdcStory(page.id, mount.bdc, mount.zonePartIds),
     ])),
     ...Object.fromEntries(mounts.flatMap((mount) => mount.evaluationResultStories === undefined
       ? []

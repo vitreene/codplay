@@ -1076,6 +1076,18 @@ function readScormProgressSink(
 /** Refreshes menu, title, and navigation from the active Sighty page. */
 async function refreshPresentation(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
   const runtime = readScenarioRuntimeData(context.data)
+  const activeScene = context.scenarioState.active?.sceneKey
+  const activePageId = pageIdFromSceneKey(activeScene)
+  const questionId = activePageId === undefined ? undefined : runtime.questionBdcByPage[activePageId]
+  const answer = activePageId === undefined ? undefined : readQuestionAnswers(context.context)[activePageId]
+  const restorablePageIds = context.context.restorableQuestionPageIds
+  if (activeScene !== undefined && activePageId !== undefined && questionId !== undefined && answer !== undefined
+    && Array.isArray(restorablePageIds) && restorablePageIds.includes(activePageId)) {
+    await context.send(activeScene, {
+      name: ELCE_EVENTS.QUESTION_RESTORE,
+      data: { selectedAnswerIds: [...answer.selectedAnswerIds] },
+    }, { scope: 'story', storyId: `${activePageId}-${questionId}` })
+  }
   const presentation = await createPresentation(context.scenarioState, runtime, context.context)
   await context.send(ELCE_SCENARIO.TITLE_SCENE, {
     name: ELCE_EVENTS.PRESENTATION_TITLE,
