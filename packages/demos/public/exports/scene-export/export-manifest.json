@@ -1,0 +1,89 @@
+{
+  "format": "codplay.scene-package.v1",
+  "scene": "scene/scene.json",
+  "functions": {
+    "file": "scene/functions.mjs",
+    "references": [
+      {
+        "ref": "fn:0:scene.stories.main.persos[6].actions.camera:move.fn",
+        "path": [
+          "stories",
+          "main",
+          "persos",
+          6,
+          "actions",
+          "camera:move",
+          "fn"
+        ]
+      },
+      {
+        "ref": "fn:1:scene.stories.main.persos[7].actions.ambient:color.fn",
+        "path": [
+          "stories",
+          "main",
+          "persos",
+          7,
+          "actions",
+          "ambient:color",
+          "fn"
+        ]
+      },
+      {
+        "ref": "fn:2:scene.stories.main.persos[8].actions.point:move-and-color.fn",
+        "path": [
+          "stories",
+          "main",
+          "persos",
+          8,
+          "actions",
+          "point:move-and-color",
+          "fn"
+        ]
+      }
+    ]
+  },
+  "resources": [
+    {
+      "sceneUrl": "assets/17d50ba044fdaf8d0b3a.mp3",
+      "file": "scene/assets/17d50ba044fdaf8d0b3a.mp3",
+      "suffix": "",
+      "type": "audio",
+      "occurrences": [
+        [
+          "scene",
+          "stories",
+          "main",
+          "persos",
+          1,
+          "initial",
+          "src"
+        ]
+      ]
+    },
+    {
+      "sceneUrl": "assets/f7c97e26be60a9f8a8f8.riv",
+      "file": "scene/assets/f7c97e26be60a9f8a8f8.riv",
+      "suffix": "",
+      "type": "rive",
+      "occurrences": [
+        [
+          "scene",
+          "stories",
+          "main",
+          "persos",
+          2,
+          "initial",
+          "src"
+        ]
+      ]
+    }
+  ],
+  "styleSheet": {
+    "file": "scene/style.css",
+    "classNames": [
+      "v2-demo-scene-slot"
+    ],
+    "resources": [],
+    "fontFaces": []
+  }
+}
