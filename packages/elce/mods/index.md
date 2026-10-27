@@ -6,6 +6,7 @@ les conclusions, les décisions retenues et celles qui restent à prendre.
 
 ## Architecture
 
+- [Ressources réutilisables de Learning](notes/2026-10-27-learning-reusable-resources-study.md) : réexamen des fonctionnalités actuelles, de leurs classes métier et des adaptations à la composition du mod.
 - [Faisabilité et reconfiguration](notes/2026-10-20-elce-reconfiguration-study.md) : articulation du noyau, des ressources et des dispositifs des mods.
 - [Étude technique de l’extraction Learning](notes/2026-10-20-learning-extraction-study.md) : analyse du code, arborescence, cartographie et raccords envisagés.
 - [Construction progressive et API internes](notes/2026-10-20-mod-composition-internal-api-study.md) : composition, façades, machines et évolution des fonctionnalités.

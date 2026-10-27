@@ -5,14 +5,39 @@ Ce document conserve les conclusions et les décisions courantes. Les choix
 techniques à valider sont distingués des orientations retenues ; leur présence
 ici ne signifie pas qu’ils sont implémentés.
 
+## Périmètre convenu
+
+**Fixe pour l’objectif et les principes ; découpage technique A relire.**
+
+Créer la structure des mods et y faire fonctionner l’application actuelle sous
+Learning, à fonctionnalités constantes. La création d’autres mods, dont DGS,
+interviendra plus tard. L’extraction limitée des presets constitue un lot
+possible de ce chantier, pas son résultat final.
+
+Une ressource porte l’essentiel de son métier dans une ou plusieurs classes
+TypeScript indépendantes des mods. Un mod sélectionne et configure les
+ressources et fournit les adaptations nécessaires à son document, son parcours
+et ses contextes d’usage. Être le premier utilisateur d’une ressource n’en donne
+pas la propriété métier au mod.
+
+Le Sommaire suit ce principe dès l’extraction actuelle : distinguer son métier
+réutilisable des adaptations Learning. Le scheduler devra suivre le même
+principe lors de sa conception future, même si son premier usage est DGS.
+Ses règles fonctionnelles et ses interfaces restent à définir.
+
+Learning constitue la composition de base : toutes ses capacités actuelles
+sont à examiner comme réutilisables. Le parcours, la progression, le profil
+et l’Évaluation ne sont pas réservés à Learning. Chaque mod choisit ses
+ressources et leurs réglages ; leur emploi reste facultatif selon sa composition.
+
 ## Orientations retenues
 
 - Elcé reste une application auteur unique avec des interfaces cohérentes entre mods.
-- Le principe des mods est retenu. Learning est le nom du mod actuel ; Learning et DGS sont prioritaires. Les autres exemples restent secondaires, sans engagement de réalisation.
+- Le principe des mods est retenu. Learning est le nom du mod actuel et constitue la première mise en service de cette structure. DGS reste un usage futur prioritaire ; les autres exemples restent secondaires, sans engagement de réalisation.
 - Le noyau résout le mod du projet et les ressources nécessaires. Le choix du mod à la création reste une idée d’interface ; le mod reste attaché au projet.
 - Le réemploi auteur consiste à copier les contenus et BDC, puis à adapter leur présentation. Le partage éventuel des fichiers image reste à décider.
 - Chaque mod possède sa définition et ses assemblages dans son dossier. Les entrées applicatives utilisent ses fonctions publiques.
-- Le métier appartient aux classes TypeScript ; machines et façades coordonnent leurs appels ; les interfaces présentent les valeurs et émettent les intentions. Le scheduler et l’affichage emploieront les mêmes classes métier concernées.
+- Le métier des ressources appartient à des classes TypeScript indépendantes des mods ; machines et façades coordonnent leurs appels ; les interfaces présentent les valeurs et émettent les intentions. Les adaptateurs portent les raccords propres à un mod. Le scheduler et l’affichage emploieront les mêmes classes métier concernées.
 - Tous les mods suivent la même chaîne : document auteur persisté, puis génération Elcé du scénario Sighty, des scènes CodPlay, actions et guards. Le schéma BDD et les productions de lecture sont distincts ; preview et player exporté partagent cette génération.
 - La composition directe en TypeScript constitue l’approche actuelle. Un mod réduit à une composition de modules reste un cap ; les interactions entièrement déclaratives sont exclues de cette étude.
 
@@ -25,8 +50,8 @@ L’[analyse du code actuel](../notes/2026-10-20-learning-extraction-study.md#an
 | Propriétaire | Responsabilités |
 | --- | --- |
 | Noyau | Structures communes, références, admission et file de changements, commit, historique, sessions, synchronisation, transport, gestion technique des médias et cycle Sighty/CodPlay d’une composition fournie. |
-| Ressources | Données, règles de contenu, éditeurs, presets et rendu des BDC ; formats Flux/Diapo et mécanismes réutilisables identifiés. |
-| Learning | Document complet et codec actuels, création initiale, `scenarioEntries`, `PagePlacement`, Sommaire, profil, Évaluation, scénario, progression, navigation et adaptateur SQLite actuel. |
+| Ressources | Classes métier indépendantes des mods et contributions réutilisables : contenus et formats, organisation du parcours, Sommaire, profil/formulaire, conditions/prérequis, progression/navigation, Évaluation/Résultat, personnalisation des textes, état de lecture et apparence. Les frontières précises restent à relire. |
+| Learning | Définition, sélection, configuration et assemblage des ressources actuelles ; création initiale et raccords à l’agrégat v7, son codec, ses invariants et son adaptateur SQLite. `scenarioEntries` et `PagePlacement` décrivent aujourd’hui l’organisation choisie ; leur métier est candidat au réemploi. |
 | Assemblages du mod | Contributions des ressources, services, façades et machines sous `src/mods/learning/`. Aucun fichier Learning dans un dossier global de composition. |
 | Lecture Learning | Même préparation par profil, mêmes builders et mêmes règles pour preview et player exporté. Entrées et raccords de contexte distincts ; le lecteur partagé est indépendant des services auteur. |
 | Interface auteur | Cadre et gestes communs ; organisation du parcours, réglages et choix des contributions possédés par le mod. |
@@ -35,6 +60,14 @@ Le stockage commun peut transporter le document complet : son codec et les
 services qui interprètent les données Learning restent fournis par ce mod.
 L’historique reçoit la transformation de fusion média du service de commandes.
 La préparation de lecture par profil appartient au lecteur partagé preview/export.
+La cartographie des études doit être réévaluée selon cette séparation : une
+fonctionnalité actuellement rangée dans Learning peut fournir une ressource
+autonome et un adaptateur Learning, sans dupliquer son métier.
+
+L’[examen des candidats](../notes/2026-10-27-learning-reusable-resources-study.md)
+précise les capacités, leurs circuits actuels et les couplages à séparer.
+Cette analyse remplace l’attribution exclusive à Learning des fonctionnalités
+dans la cartographie du 20 octobre ; elle ne certifie pas leur indépendance.
 
 ## Décisions de refactorisation
 
@@ -46,9 +79,26 @@ La préparation de lecture par profil appartient au lecteur partagé preview/exp
 - Conserver le format dans un lot de refactorisation pour permettre sa comparaison ; toute évolution de format constitue une décision distincte.
 - L’isolation du moteur de presets par injection du registre est le premier découpage limité envisagé ; les variantes plus larges de l’étude ne valent pas engagement global.
 
+## Actions proposées — A relire
+
+1. Reprendre la cartographie de l’[étude d’extraction](../notes/2026-10-20-learning-extraction-study.md) avec l’[examen des ressources candidates](../notes/2026-10-27-learning-reusable-resources-study.md) : pour chaque fonctionnalité actuelle, identifier les classes métier réutilisables, les adaptations de l’agrégat et les circuits communs conservés. Examiner aussi parcours, navigation, progression, profil et Évaluation ; Learning en sélectionne la composition actuelle.
+2. Préciser les entrées et dépendances de `src/core/`, `src/resources/` et `src/mods/learning/`, les raccords auteur/lecture/serveur et la résolution du mod. Les signatures et l’identification persistée restent à valider en D1, D2, D3, D10 et D13.
+3. Découper et appliquer la migration en lots acceptés : déplacer et adapter les circuits existants, puis raccorder les entrées applicatives aux compositions Learning. Chaque lot nomme ses fichiers et sa comparaison avant/après ; les presets seuls ne clôturent pas le chantier.
+4. Vérifier l’application actuelle dans cette structure : édition, historique, médias, persistance/synchronisation, preview et exports existants. Mettre à jour les spécifications avec les seuls comportements implémentés et vérifiés.
+
+Acceptation : Learning fonctionne par ses compositions dans la structure mods,
+avec les comportements et limitations actuels. Les ressources extraites
+n’importent pas Learning et leurs classes métier sont éprouvées avec des données
+propres aux tests, sans champs Learning factices. Les raccords réels concernés
+sont validés en complément des tests métier, du typecheck et du build. Aucun
+autre mod ni scheduler n’est à construire pour obtenir cette acceptation.
+
 ## Format documentaire
 
-Le v5 est le format de départ, encore provisoire. Avant fixation explicite du
+Le v7 est le format actuel de départ, selon la
+[spécification documentaire](../../specs/document-model-spec.md). La
+refactorisation conserve ce format ; l’identification persistée du mod reste
+une décision distincte en D1/D3. Avant fixation explicite du
 format de référence après les derniers tests du périmètre retenu, les données
 d’essai peuvent être effacées et recréées lors d’un changement accepté.
 Après fixation, chaque évolution demandera une réécriture/migration de base
@@ -68,10 +118,10 @@ Ces points restent **A relire** pour leurs choix techniques non arrêtés.
 | D6 | Acquisition et rétention des médias copiés, Undo/Redo et éventuel partage des fichiers image. |
 | D7 | Contributions d’interface propres aux mods, configuration des outils communs et interface de détermination du mod. |
 | D8 | Raccord du pilotage de l’état de lecture demandé au niveau du scénario Sighty : chargement, restauration, resets et confirmations d’enregistrement. |
-| D9 | Premier périmètre fonctionnel DGS et capacités runtime nécessaires. |
-| D10 | Raccords physiques et signatures exactes du découpage étudié, selon le périmètre concerné. |
-| D11 | Configurations réellement proposées et couverture des interactions de leurs ressources. |
-| D12 | Périmètre de la première extraction et composition des fonctionnalités effectivement utilisées. |
+| D9 | Pour plus tard : premier périmètre fonctionnel DGS et capacités runtime nécessaires. |
+| D10 | Frontières des ressources candidates, classes métier, dépendances, adaptations documentaires et signatures ; réviser la cartographie et l’arborescence du 20 octobre avant les lots concernés. |
+| D11 | Configurations réellement proposées, dépendances facultatives entre ressources et couverture de leurs interactions, sans imposer la composition complète Learning. |
+| D12 | Objectif fixé : structure mods avec l’application actuelle sous Learning ; ordre et contenu technique des lots, composition des fonctionnalités effectivement utilisées à préciser. |
 | D13 | Échanges internes nécessaires : intentions, résultats, erreurs, propriétaires d’état et cycle de vie. |
 
 Le point de cache des réponses Question relevé dans l’étude reste à qualifier.
@@ -82,7 +132,10 @@ de reprise, d’interruption et de concurrence envisagées pour DGS.
 
 Le point de départ de l’[étude dédiée](../notes/2026-10-20-sequence-scheduler-study.md)
 distingue les enchaînements locaux de `sequence` et leur programmation temporelle
-par `scheduler`. L’autonomie de `sequence` hors DGS reste ouverte.
+par `scheduler`. Le métier de ces ressources doit pouvoir être employé par
+plusieurs mods ; leurs adaptations DGS appartiendront à ce mod. La possibilité
+d’utiliser `sequence` sans scheduler reste ouverte. Leur réalisation est hors
+du chantier actuel.
 
 Les séquences et calendriers sont des données auteur à persister. Les builders
 et contributions du mod les transforment en scénario, scènes, actions et guards.
@@ -110,7 +163,7 @@ sont des pistes étudiées ; aucun parcours n’est encore retenu.
 
 | Réf. | Décision ouverte |
 | --- | --- |
-| SQ1 | Usage de `sequence` sans calendrier et propriétaire du module. |
+| SQ1 | Usage de `sequence` sans calendrier et découpage physique du métier réutilisable et des adaptations propres aux mods. |
 | SQ2 | Format documentaire et projection BDD des séquences ; génération distincte des passages successifs et compositions par zones en vues et scènes Sighty/CodPlay, avec correspondance des identités. |
 | SQ3 | Durées, contrat des signaux de fin et raccord de la fin collective, cas des chapitres, transitions, chargement et dépassement. |
 | SQ4 | Projection temporelle des passages successifs et scènes parallèles : durée finie, inconnue ou boucle. |

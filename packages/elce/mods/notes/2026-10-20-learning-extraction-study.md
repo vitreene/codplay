@@ -7,6 +7,12 @@ les pistes de découpage et les exemples de raccords. Les signatures sont des
 propositions techniques ; les conclusions et décisions courantes sont dans
 le [plan unique du sujet](../plan/2026-10-20-elce-mods-reconfiguration-plan.md).
 
+Le [réexamen du 27 octobre](2026-10-27-learning-reusable-resources-study.md)
+étend les candidats au réemploi aux fonctionnalités précédemment attribuées
+en bloc à Learning, notamment parcours, profil, progression et Évaluation.
+Les attributions exclusives et destinations correspondantes ci-dessous sont
+à réviser selon les décisions du plan avant toute extraction concernée.
+
 Le relevé porte sur `a2a8fb09c3a89810bec0e2b7734a12e36ef035fe`.
 Les contrats utilisés pour interpréter le code sont :
 
