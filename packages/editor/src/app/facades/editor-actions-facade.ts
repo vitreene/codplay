@@ -1,7 +1,7 @@
 import type { Actor } from 'xstate'
 import { DocumentHistory, type DocumentHistoryState } from '../history/document-history'
 import { applyDefaultTextFontSize } from '../commands/default-decor-presets'
-import type { EditorScene } from '../commands/types'
+import type { EditorScene, RootPlacementMode } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
 
@@ -29,6 +29,16 @@ export class EditorActionsFacade {
   /** Sends one typed document command through the central facade. */
   runCommand(command: Command): void {
     this.controller.send({ type: 'RUN_COMMAND', command })
+  }
+
+  /** Enters the existing creation gesture with one of the root placement modes. */
+  beginBlockCreation(placementMode: RootPlacementMode): void {
+    this.controller.send({ type: 'CREATE_MODE_ENTER', itemType: 'bloc', placementMode })
+  }
+
+  /** Leaves the current creation gesture without changing the document. */
+  cancelCreation(): void {
+    this.controller.send({ type: 'CREATE_CANCEL' })
   }
 
   /** Sends a grouped command batch as one document gesture. */

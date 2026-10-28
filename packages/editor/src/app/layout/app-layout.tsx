@@ -52,7 +52,12 @@ export function AppLayout(handle: Handle<AppLayoutProps>) {
     const isEditable = target instanceof HTMLElement
       && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
     if (event.key === 'Escape') {
-      if (isEditable || snapshot.context.selection.itemIds.length === 0) return
+      if (isEditable) return
+      if (snapshot.value === 'creating') {
+        actions.cancelCreation()
+        return
+      }
+      if (snapshot.context.selection.itemIds.length === 0) return
       actions.clearSelection()
       return
     }
@@ -70,7 +75,9 @@ export function AppLayout(handle: Handle<AppLayoutProps>) {
     const target = event.target
     if (!(target instanceof Element)) return
     if (target.closest('[data-selection-frame]') !== null) return
+    if (target.closest('[data-selection-frame-creation]') !== null) return
     if (target.closest('[data-editor-overlay]') !== null) return
+    if (snapshot.value === 'creating') return
 
     const scene = snapshot.context.scene
     const itemId = scene === null ? null : resolveClickedItemId(target, scene)

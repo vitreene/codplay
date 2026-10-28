@@ -1,6 +1,6 @@
 # ed2 — Définition du contrôleur central + façade de commandes
 
-Définition du **contrôleur central** (machine XState racine) et de la **façade de commandes** (son unique voie d'écriture), à valider avant tout code — convention « cœur » (`app/2026-07-10-app-construction-plan.md`, étape 2). Document normatif : ce qui suit est la référence pour l'implémentation, pas une exploration.
+Définition du **contrôleur central** (machine XState racine) et de la **façade de commandes** (son unique voie d'écriture). Les comportements appliqués sont décrits dans leurs spécifications propriétaires ; les décisions encore ouvertes ci-dessous ne sont pas des contrats pour du code futur.
 
 **Rôle du contrôleur.** Le contrôleur possède le document (`EditorScene`), la sélection, et l'état d'édition partagé de l'app. Aucun module (sequence-editor, dedit, cadre de sélection) n'en détient de copie : chacun lit une projection du document et émet des intentions ; le contrôleur applique et rediffuse. Toute mutation du document passe par la **façade de commandes** — la voie d'écriture unique.
 
@@ -27,7 +27,7 @@ La frontière document/éphémère est celle déjà actée dans les axes d'archi
 ## 3. États de la machine
 
 ```
-idle ──CREATE_MODE_ENTER──► creating(type)
+idle ──CREATE_MODE_ENTER(type, placementMode)──► creating
   ▲                              │
   │                         CREATE_COMMIT /
   │                         CREATE_CANCEL
@@ -36,16 +36,14 @@ idle ──CREATE_MODE_ENTER──► creating(type)
 idle ◄──selection change (interne, pas un état à part)──► idle
 ```
 
-La sélection, le panneau ouvert, et le document courant sont des **valeurs de contexte**, pas des états — ils changent sans changer l'état machine. Le seul découpage en états concerne le **mode de geste actif**, parce que lui seul change ce que les événements font (un clic en mode `idle` sélectionne ; le même clic en mode `creating:text` ouvre un tracé).
+La sélection, le panneau ouvert, et le document courant sont des **valeurs de contexte**, pas des états — ils changent sans changer l'état machine. Le seul découpage en états concerne le **mode de geste actif**, parce que lui seul change ce que les événements font (un clic en mode `idle` sélectionne ; un clic en mode `creating(bloc, transform)` ouvre un tracé).
 
 - **`idle`** — état par défaut. Sélection active ou non ; édition de décor/capsule/contenu possible sur la sélection courante.
-- **`creating(type)`** — mode tracé actif (déclenché par un bouton de création, `app/2026-07-11-ed2-document-model.md`, discussion §« Établissement du contenu »). L'utilisateur trace un rectangle ; à la validation, `createItem` produit un `bloc` positionné, puis la seconde commande (`assignType` ou `assignContent`, §4) le typifie. `CREATE_CANCEL` (Échap) revient à `idle` sans mutation.
+- **`creating(type, placementMode)`** — mode tracé actif ; le contrôleur conserve le type demandé et le mode racine choisi. Pour le flux accepté des blocs, `type` vaut `bloc`. `CREATE_CANCEL` (Échap) revient à `idle` sans mutation.
 
 Pas d'autres états macro à ce stade — `zone-edit`/`position-edit` (mentionnés en discussion comme modes) sont des **sous-modes de `idle`** portés par une valeur de contexte (`editGesture: 'zone' | 'position' | null`), pas des états machine séparés : ils ne changent pas la nature des commandes disponibles, seulement quel module vanilla capte le geste actuellement.
 
-**Cible du geste en mode `creating` — tracé libre ou désignation de zone (point à éprouver par l'usage, pas tranché).** Le mode `creating(type)` ne préjuge pas de la source de la géométrie : tracer un rectangle main-levée et désigner une zone existante sont **deux sources possibles pour le même argument `geometry`** de `createItem` (§4.1) — pas deux modes distincts. Désigner une zone revient à composer `createItem(type, zone.rect, parentId)` + `placeInZone(itemId, zoneId)` en une `transaction` (§4.1, un seul commit). Aucune commande dédiée n'est nécessaire pour ce cas (cf. axe 3 — composer plutôt qu'ajouter).
-
-- **Affichage des zones pendant le geste** — un booléen de contexte, `zonesVisible: boolean` (bascule d'interface, pas une mutation de document — §2, éphémère), disponible pendant `creating` pour que le module de rendu de zones sache s'afficher ou non. Événement : `TOGGLE_ZONES_VISIBLE()`. La question « le tracé libre et la désignation de zone doivent-ils être deux gestes distincts dans l'UI, ou le même geste qui accroche sur une zone survolée » est un test d'usage à mener (dedit/selection-frame), pas une décision de ce document — la façade (composition `createItem`+`placeInZone`) est neutre vis-à-vis du résultat de ce test.
+**Tracé des blocs — comportement vérifié**, décrit dans la [spécification de création](../2026-10-28-editor-block-creation-spec.md). En mode racine `transform` (grille `1 × 1`), le rectangle tracé fournit l'offset libre. En mode `fine-grid` (90 rangées × 160 colonnes), le rectangle accroché crée une zone racine et le bloc qui y est attaché dans la même transaction. La commande qui choisit le mode racine précède le geste ; le mode est conservé dans le contexte XState pendant le tracé. Ces deux modes ne sélectionnent pas une zone existante.
 
 ---
 
@@ -59,7 +57,9 @@ Chaque commande est une **mutation pure** `(EditorScene, args) → EditorScene`,
 
 | Commande | Effet | Cible |
 |---|---|---|
-| `createItem(type, geometry, parentId?)` | Crée un item **`bloc`** (sans contenu), positionné (décor initial dérivé de `geometry`), attaché sous `parentId` (racine si absent) | `items`, `decors` |
+| `setRootPlacementMode(mode)` | Enregistre `1 × 1` (`transform`) ou `90 × 160` (`fine-grid`) dans `EditorScene.rootCapsule.grid` ; refuse de revenir à `1 × 1` tant que des zones racine existent | `rootCapsule` |
+| `createRootZone(zoneId, area)` | Crée une zone de la capsule racine sur la grille `90 × 160`, avec les mêmes pistes paysage et portrait | `zones` |
+| `createItem(geometry, parentId?, zoneId?)` | Crée un item **`bloc`** sans contenu, avec son décor initial ; lui attache la zone indiquée si elle appartient au même parent | `items`, `decors` |
 | `assignType(itemId, type)` | Différencie un `bloc` vers un type concret (texte, image, capsule…) ; **seul cas de changement de type autorisé en v1** | `items` |
 | `assignContent(itemId, content)` | Renseigne le contenu d'un item déjà typé (texte saisi, source média, params capsule) | `contents` |
 | `attachItem(itemId, parentId, order?)` | Change le parent et/ou la clé d'ordre d'un item | `items` |
@@ -71,7 +71,7 @@ Chaque commande est une **mutation pure** `(EditorScene, args) → EditorScene`,
 | `deleteItem(itemId)` | Retire un item et ses descendants | `items`, `decors`, `contents` (nettoyage) |
 | `transaction(commands[])` | Groupe N commandes en un seul commit | — |
 
-Ce jeu couvre les commandes nécessaires au jalon « un item qui vit » (étape 3, point 1-3) et aux voies de création décrites en discussion. **Non exhaustif par construction** — le principe (axe 3, `notes/2026-07-12-ed2-axes-architecture.md`) est que les fonctionnalités futures se composent de ce jeu plutôt que d'ajouter des commandes dédiées ; une commande nouvelle n'est ajoutée que si aucune composition existante ne couvre le besoin.
+Ce jeu couvre les commandes nécessaires au jalon « un item qui vit » (étape 3, points 1-3) et au tracé des blocs décrit par la spécification liée ci-dessus. **Non exhaustif par construction** — le principe (axe 3, `notes/2026-07-12-ed2-axes-architecture.md`) est que les fonctionnalités futures se composent de ce jeu plutôt que d'ajouter des commandes dédiées ; une commande nouvelle n'est ajoutée que si aucune composition existante ne couvre le besoin.
 
 ### 4.2 Politique d'édition de décor sans kf sélectionné — point ouvert, résolu par une commande dédiée
 

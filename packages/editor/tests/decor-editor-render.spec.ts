@@ -9,7 +9,7 @@ import type { ResolvedDecor } from '../src/decor-editor/types'
 function paletteConfig(): PaletteConfig {
   return {
     panels: [{ id: 'shape', label: 'Forme', fields: [{ path: 'style.background-color', kind: 'color', label: 'Fond' }] }],
-    panelsByItemType: { text: ['shape'], image: ['shape'], media: ['shape'], video: ['shape'], capsule: ['shape'] },
+    panelsByItemType: { bloc: ['shape'], text: ['shape'], image: ['shape'], media: ['shape'], video: ['shape'], capsule: ['shape'] },
   }
 }
 

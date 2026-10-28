@@ -2,17 +2,20 @@
 
 **Statut : En cours — cadrage accepté pour implémentation le 28 octobre 2026 ;
 décisions 1 à 6 fixées.**
-**Constat au 28 octobre 2026 :** build réussi, typecheck en échec,
+**État retrouvé au début du chantier, le 28 octobre 2026 :** build réussi, typecheck en échec,
 452 tests réussis et 3 échecs sur 455. La
 [note d’analyse](./notes/2026-10-28-editor-recovery-remix-analysis.md)
 porte l’inventaire, les preuves et les raisons des propositions.
 
 **Avancement au 28 octobre 2026 :** le portage applicatif est implémenté.
 `remix@3.0.0`, le runtime `remix/component`, le routeur `remix/spa`, les vues
-Remix et les façades d’actions sont en place. Le basculement SQLite a commencé :
-schéma, dépôt, API locale et branchement applicatif sont écrits ; typecheck passé,
-build passé ; round-trip SQLite, suites et parcours navigateur restent à valider.
-Le signal historique de fin de lecture sans présentation reste ouvert.
+Remix et les façades d’actions sont en place. Le basculement SQLite est intégré :
+round-trip, Undo/Redo persistés, rechargement navigateur, typecheck et build sont
+validés. La suite complète donne 470 réussites et un échec de présentation en fin
+de lecture sur 471 tests ; le même échec est reproduit à HEAD propre. Il reste
+ouvert ci-dessous. Les preuves et limites du stockage sont dans
+le [plan SQLite](./2026-10-28-editor-sqlite-persistence-plan.md) et sa
+[spécification](./2026-10-28-editor-sqlite-persistence-spec.md).
 
 ## Résultat et limites
 
@@ -30,8 +33,8 @@ composants exige une tranche distincte acceptée.
 `packages/codplay`. Si un diagnostic identifie une intervention nécessaire
 dans CodPlay, consigner le défaut, la correction proposée et son acceptation
 attendue, puis obtenir l’approbation de l’utilisateur avant intervention.
-Isoler ensuite le correctif dans un commit distinct, ou dans une branche de
-fix dédiée. Seul le travail dépendant de ce correctif attend sa résolution ;
+Isoler le correctif dans un changement distinct, éventuellement sur une
+branche de fix. Seul le travail dépendant de ce correctif attend sa résolution ;
 aucun contournement éditeur ne doit masquer le défaut.
 
 **Persistance provisoire du modèle actuel :** elle a d’abord utilisé
@@ -117,13 +120,21 @@ builder Decor restent hors de ce portage.
   a rétabli le stockage d’origine. L’adaptateur écoute maintenant aussi
   `sceneCommitted` quand la référence du document change, sans écrire lors des
   seuls changements de sélection. Le geste physique natif reste à valider.
+- Le parcours SQLite réel vérifie chargement, sauvegarde après création, Undo,
+  Redo, retour à la scène initiale et restauration après rechargement. La
+  génération d’identifiants ne repart plus d’un compteur de processus ; son
+  test de régression couvre une scène contenant déjà des IDs restaurés.
 - L’erreur générique de sérialisation signalée n’a pas été reproduite après
   rechargement ; le stockage antérieur contenait un document JSON valide. Le
   garde indique désormais le chemin de la valeur refusée pour qualifier une
   prochaine occurrence. La cause initiale reste ouverte.
-- La suite et le parcours navigateur complet restent à valider. Garder cette
-  tranche `En cours` ; le défaut de présentation en fin de lecture reste sans
-  cause établie.
+- Le parcours SQLite navigateur est validé, mais le parcours global de
+  reconstruction et les gestes physiques restent à compléter. La suite complète
+  donne 470 réussites et un échec : `scene-player-bridge-v2.spec.ts`, test
+  « keeps the complete ghost chain after creating successive displaced
+  keyframes and playing to the end », ligne 420. La présentation attendue à
+  5000 ms est `undefined`. L’échec est identique sur le HEAD propre archivé pour
+  établir la baseline ; garder cette tranche `En cours`, la cause reste à établir.
 
 ## Actions ordonnées
 

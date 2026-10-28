@@ -1,8 +1,12 @@
 # Éditeur — persistance SQLite locale
 
-**Statut : En cours.** Cadrage accepté le 28 octobre 2026. Migration relationnelle,
-dépôt SQLite, routes locales et branchement de l’app sont écrits ; round-trip et
-validation d’intégration restent à faire.
+**Statut : En cours.** Cadrage accepté le 28 octobre 2026. Étapes 1 à 5
+réalisées. Round-trip automatisé, parcours navigateur SQLite, typecheck et
+build validés. L’étape 6 reste ouverte pour appliquer le comportement convenu
+cues/marqueurs. La suite complète garde un échec de présentation déjà suivi
+dans le plan Remix/historique. La
+[spécification vérifiée](./2026-10-28-editor-sqlite-persistence-spec.md)
+décrit le stockage actuellement livré.
 Ce chantier remplace le stockage provisoire `localStorage` après sauvegarde du
 modèle auteur courant. Il reste séparé de la reconstruction Remix et ne modifie
 aucun fichier de `packages/codplay`.
@@ -26,14 +30,6 @@ aucun fichier de `packages/codplay`.
   `rowSpan`/`colSpan`, donc les dimensions. `capsule_items` ne duplique pas ces
   valeurs. Le mode de grille et le placement suivent les entrées réelles de
   Capsule Automation.
-- La zone fantôme de Capsule Automation reste un placement de secours dérivé ;
-  elle n’est ni une zone persistée ni, par assimilation, le preset racine
-  « zone libre ».
-- Le modèle courant `CapsuleDef` ne nomme pas encore ce preset racine. Cette
-  tranche conserve les réglages racine effectivement portés par
-  `EditorScene.rootCapsule` ; l’identité et le comportement du preset « zone
-  libre » restent à raccorder au chantier Capsule, sans leur inventer un champ
-  dans le schéma SQLite.
 - Chaque décor est une valeur JSON complète indexée uniquement par son id. Pas
   de colonnes ou requêtes sur ses propriétés.
 - Les contenus et ressources média sont séparés. Les octets média résident
@@ -83,14 +79,14 @@ validée par le modèle Editeur au chargement et au commit.
 
 ## Actions ordonnées
 
-| Étape | Propriétaires | Résultat et porte d’acceptation |
-| --- | --- | --- |
-| 1. Aligner le modèle auteur | `app/commands/types.ts`, builder V2, dépôt SQLite | `Zone.capsuleId`, `EditorScene.rootCapsule` et `Content.mediaId` représentent les propriétaires et références décidés ; les valeurs de décor restent opaques. |
-| 2. Créer le stockage relationnel | migration SQLite Remix sous `src/server/projects/sqlite/migrations/` | Schéma relationnel et clés étrangères pour scènes, items, capsules, KFs, contenus et zones ; aucune table `markers` ou `audio_tracks`, aucune colonne de décor par propriété. |
-| 3. Ajouter le dépôt de documents | `sqlite-editor-scene-persistence.ts` | Chargement complet et sauvegarde transactionnelle ; la révision attendue empêche d’écraser une version plus récente. |
-| 4. Ajouter le serveur local | API, `editor-http-server.ts`, script Editor et proxy Vite | Routes catalogue/chargement/sauvegarde et démarrage local. Le stockage de fichiers et les routes d’import/lecture média suivent avec le chantier import, sur le circuit Elcé. |
-| 5. Remplacer le provisoire | `browser-entry.tsx`, routeur, layout/menu et façade de persistance | L’application charge et sauvegarde via SQLite et le cache XState ; l’adaptateur `localStorage` et sa clé sont retirés, sans migration. |
-| 6. Valider et documenter | tests existants, build/typecheck, specs Editor | Round-trip exact des scènes, capsule racine, capsules imbriquées, zones référencées par décor, médias, KFs et historique ; aucun changement CodPlay. Documenter seulement les comportements vérifiés. |
+| Étape | Propriétaires | Résultat et porte d’acceptation | État |
+| --- | --- | --- | --- |
+| 1. Aligner le modèle auteur | `app/commands/types.ts`, builder V2, dépôt SQLite | `Zone.capsuleId`, `EditorScene.rootCapsule` et `Content.mediaId` représentent les propriétaires et références décidés ; les valeurs de décor restent opaques. | Réalisée ; round-trip vérifié. |
+| 2. Créer le stockage relationnel | migration SQLite Remix sous `src/server/projects/sqlite/migrations/` | Schéma relationnel et clés étrangères pour scènes, items, capsules, KFs, contenus et zones ; aucune table `markers` ou `audio_tracks`, aucune colonne de décor par propriété. | Réalisée ; migration testée. |
+| 3. Ajouter le dépôt de documents | `sqlite-editor-scene-persistence.ts` | Chargement complet et sauvegarde transactionnelle ; la révision attendue empêche d’écraser une version plus récente. | Réalisée ; round-trip et conflit testés. |
+| 4. Ajouter le serveur local | API, `editor-http-server.ts`, script Editor et proxy Vite | Routes catalogue/chargement/sauvegarde et démarrage local. Le stockage de fichiers et les routes d’import/lecture média suivent avec le chantier import, sur le circuit Elcé. | Réalisée ; parcours local vérifié. |
+| 5. Remplacer le provisoire | `browser-entry.tsx`, routeur, layout/menu et façade de persistance | L’application charge et sauvegarde via SQLite et le cache XState ; l’adaptateur `localStorage` et sa clé sont retirés, sans migration. | Réalisée ; Undo/Redo et rechargement vérifiés. |
+| 6. Valider et documenter | tests existants, build/typecheck, specs Editor | Round-trip exact des scènes, capsules, zones référencées par décor, contenus, KFs et historique ; aucun changement CodPlay. Documenter seulement les comportements vérifiés. | Persistance vérifiée ; comportement cues/marqueurs convenu mais à appliquer dans le chantier auteur/timeline. La suite globale garde l’échec suivi au plan Remix. |
 
 ## Critères d’acceptation
 
@@ -106,9 +102,9 @@ validée par le modèle Editeur au chargement et au commit.
   chantier d’import suivant.
 - Undo/Redo sauvegarde uniquement les documents restaurés aux frontières déjà
   définies. Aucun historique n’est écrit dans SQLite.
-- Le démarrage, l’arrêt, les erreurs serveur et la fermeture SQLite sont gérés.
-  Les validations manuelles et automatisées nécessaires sont consignées avant
-  de déclarer le chantier terminé.
+- Le démarrage, l’arrêt et la fermeture SQLite sont vérifiés. Le parcours local
+  a été validé dans l’application réelle ; consigner les validations restantes
+  avant de déclarer le chantier terminé.
 - Aucun fichier de `packages/codplay` n’est modifié.
 
 ## Dépendances et écarts à résoudre
@@ -116,20 +112,16 @@ validée par le modèle Editeur au chargement et au commit.
 - L’alignement auteur ajoute `Zone.capsuleId` (`null` pour la racine),
   `EditorScene.rootCapsule` et `Content.mediaId`. L’assignation de zone reste
   portée par `Decor.zoneId`; les spans restent dans la zone. Le round-trip
-  modèle/SQLite reste à valider.
+  modèle/SQLite est couvert par `tests/app/persistence/sqlite-editor-scene-persistence.spec.ts`.
 - `MarkerTrack` et `Cue` restent sous leurs propriétaires actuels ; les
   timestamps des sources ne sont pas copiés dans une projection de marqueurs.
   La décision utilisateur les traite comme le même mécanisme de repérage et
   d’ancrage ; le dépôt conserve leurs payloads actuels sans créer de seconde
   représentation. Le document-modèle existant décrit encore des rôles distincts
   et devra être réconcilié quand le comportement commun sera implémenté.
-- `EditorScene.rootCapsule` permet de garder les réglages courants de la capsule
-  implicite, mais `CapsuleDef` n’identifie pas encore le preset « zone libre ».
-  Le JSON racine laisse évoluer cette valeur sans colonne spécialisée ; son
-  contrat reste au chantier Capsule.
 - Le catalogue média est partagé par la collection de scènes locale ; les
   octets FileStorage, l’API d’import/lecture et la résolution d’URL stable sont
   dans le chantier import suivant. Il n’existe pas encore de modèle `Project`.
 
-Le plan reste ouvert jusqu’au round-trip SQLite, aux validations du dépôt et à
-la mise à jour des spécifications propriétaires.
+Le plan reste `En cours` jusqu’à la réconciliation du contrat cues/marqueurs
+avec la spécification du modèle et la validation complète du chantier.

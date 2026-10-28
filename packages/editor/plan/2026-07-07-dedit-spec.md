@@ -459,6 +459,7 @@ possibles qu'un hôte peut fournir (§ 4 bis) :
 
 | Type d'item | Forme | Typo | Dimensions | Custom | Presets |
 |---|---|---|---|---|---|
+| bloc | ✓ | — | — | ✓ | ✓ |
 | texte | ✓ | ✓ | ✓ | ✓ | ✓ |
 | media (image, vidéo…) | ✓ | — | ✓ | ✓ | ✓ |
 | capsule | ✓ | — | ✓ | ✓ | ✓ |

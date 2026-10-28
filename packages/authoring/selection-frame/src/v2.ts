@@ -9,6 +9,8 @@ import type {
   SelectionFrameV2Modifier,
   SelectionFrameV2ModifierHandle,
   SelectionFrameV2Handle,
+  SelectionFrameV2CreationMode,
+  SelectionFrameV2CreationResult,
   SelectionFrameV2Options,
   SelectionFrameValue,
 } from './v2/types'
@@ -22,6 +24,9 @@ export type {
   SelectionFrameV2ModifierHandle,
   SelectionFrameV2Options,
   SelectionFrameV2Handle,
+  SelectionFrameV2CreationMode,
+  SelectionFrameV2CreationOptions,
+  SelectionFrameV2CreationResult,
   SelectionFrameValue,
 } from './v2/types'
 export { createRotationModifier } from './v2/rotation-modifier'
@@ -30,6 +35,16 @@ type Gesture = Readonly<{
   startX: number
   startY: number
   handle?: SelectionFrameHandleId
+}>
+
+type CreationGesture = Readonly<{ startX: number; startY: number }>
+
+type CreationTrace = Readonly<{
+  x: number
+  y: number
+  width: number
+  height: number
+  result: SelectionFrameV2CreationResult
 }>
 
 const HANDLE_IDS: readonly SelectionFrameHandleId[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
@@ -63,11 +78,105 @@ export function createSelectionFrameV2(options: SelectionFrameV2Options): Select
   }
   options.sceneRoot.appendChild(frame)
 
+  const creationSurface = options.creation === undefined ? null : doc.createElement('div')
+  const creationPreview = creationSurface === null ? null : doc.createElement('div')
+  if (creationSurface !== null && creationPreview !== null) {
+    creationSurface.dataset.selectionFrameCreation = 'v2'
+    creationSurface.setAttribute('data-selection-frame-creation', 'v2')
+    creationSurface.setAttribute('aria-hidden', 'true')
+    creationSurface.style.position = 'absolute'
+    creationSurface.style.inset = '0'
+    creationSurface.style.zIndex = '1200'
+    creationSurface.style.pointerEvents = 'none'
+    creationSurface.style.touchAction = 'none'
+    creationSurface.style.display = 'none'
+    creationPreview.dataset.selectionFrameCreationPreview = ''
+    creationPreview.style.position = 'absolute'
+    creationPreview.style.boxSizing = 'border-box'
+    creationPreview.style.border = '1px dashed #0284c7'
+    creationPreview.style.background = 'rgb(56 189 248 / 12%)'
+    creationPreview.style.pointerEvents = 'none'
+    creationPreview.style.display = 'none'
+    creationSurface.appendChild(creationPreview)
+    options.sceneRoot.appendChild(creationSurface)
+  }
+
   let value: SelectionFrameValue | null = null
   let suspended = false
+  let creationMode: SelectionFrameV2CreationMode | null = null
   const suppressedHandles = new Map<SelectionFrameHandleId, Set<symbol>>()
   const gestures: GestureSessionHandle[] = []
   const modifierHandles: SelectionFrameV2ModifierHandle[] = []
+
+  /** Clamps a pointer coordinate to the creation surface's local content dimensions. */
+  function localPoint(event: PointerEvent): Readonly<{ x: number; y: number }> | null {
+    if (creationSurface === null) return null
+    const width = options.sceneRoot.clientWidth
+    const height = options.sceneRoot.clientHeight
+    if (width <= 0 || height <= 0) return null
+    return {
+      x: Math.max(0, Math.min(width, event.offsetX)),
+      y: Math.max(0, Math.min(height, event.offsetY)),
+    }
+  }
+
+  /** Converts one local drag rectangle to the active free or track-based geometry. */
+  function traceFrom(gesture: CreationGesture, event: PointerEvent): CreationTrace | null {
+    const point = localPoint(event)
+    if (point === null || creationSurface === null) return null
+    const surfaceWidth = options.sceneRoot.clientWidth
+    const surfaceHeight = options.sceneRoot.clientHeight
+    const x = Math.min(gesture.startX, point.x)
+    const y = Math.min(gesture.startY, point.y)
+    const right = Math.max(gesture.startX, point.x)
+    const bottom = Math.max(gesture.startY, point.y)
+    if (creationMode?.kind !== 'grid') {
+      return {
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+        result: { kind: 'rect', rect: { x, y, width: right - x, height: bottom - y } },
+      }
+    }
+
+    const colStart = Math.max(0, Math.min(creationMode.cols - 1, Math.floor(x / surfaceWidth * creationMode.cols)))
+    const rowStart = Math.max(0, Math.min(creationMode.rows - 1, Math.floor(y / surfaceHeight * creationMode.rows)))
+    const colEnd = Math.max(colStart + 1, Math.min(creationMode.cols, Math.ceil(right / surfaceWidth * creationMode.cols)))
+    const rowEnd = Math.max(rowStart + 1, Math.min(creationMode.rows, Math.ceil(bottom / surfaceHeight * creationMode.rows)))
+    const area = { row: rowStart + 1, col: colStart + 1, rowSpan: rowEnd - rowStart, colSpan: colEnd - colStart }
+    return {
+      x: colStart / creationMode.cols * surfaceWidth,
+      y: rowStart / creationMode.rows * surfaceHeight,
+      width: area.colSpan / creationMode.cols * surfaceWidth,
+      height: area.rowSpan / creationMode.rows * surfaceHeight,
+      result: { kind: 'cell-area', area },
+    }
+  }
+
+  /** Renders the most recent free or grid-snapped creation rectangle. */
+  function renderCreationTrace(trace: CreationTrace | null): void {
+    if (creationPreview === null) return
+    if (trace === null) {
+      creationPreview.style.display = 'none'
+      return
+    }
+    creationPreview.style.display = ''
+    creationPreview.style.left = `${trace.x}px`
+    creationPreview.style.top = `${trace.y}px`
+    creationPreview.style.width = `${trace.width}px`
+    creationPreview.style.height = `${trace.height}px`
+  }
+
+  /** Shows the drawing surface only while a creation mode is active and the frame is unsuspended. */
+  function renderCreationMode(): void {
+    if (creationSurface === null) return
+    const active = creationMode !== null && !suspended
+    creationSurface.style.display = active ? '' : 'none'
+    creationSurface.style.pointerEvents = active ? 'auto' : 'none'
+    renderCreationTrace(null)
+    renderValue(value)
+  }
 
   /** Updates the visibility of base handles after a modifier reserves one point. */
   function refreshHandleVisibility(): void {
@@ -93,7 +202,7 @@ export function createSelectionFrameV2(options: SelectionFrameV2Options): Select
   function renderValue(next: SelectionFrameValue | null): void {
     value = next
     for (const modifier of modifierHandles) modifier.update(next)
-    if (next === null || suspended) {
+    if (next === null || suspended || creationMode !== null) {
       frame.style.display = 'none'
       return
     }
@@ -178,6 +287,34 @@ export function createSelectionFrameV2(options: SelectionFrameV2Options): Select
     gestures.push(gesture)
   }
 
+  const creationGesture = creationSurface === null || options.creation === undefined
+    ? null
+    : bindGestureSession<CreationGesture>(creationSurface, {
+        onStart: (event) => {
+          if (creationMode === null || suspended) return null
+          event.preventDefault()
+          const point = localPoint(event)
+          return point === null ? null : { startX: point.x, startY: point.y }
+        },
+        onMove: (event, gesture) => renderCreationTrace(traceFrom(gesture, event)),
+        onEnd: (gesture, apply, event) => {
+          if (!apply || event === null) {
+            renderCreationTrace(null)
+            options.creation?.onCancel?.()
+            return
+          }
+          const trace = traceFrom(gesture, event)
+          renderCreationTrace(null)
+          if (trace === null) return
+          if (trace.result.kind === 'rect') {
+            const minimum = Math.max(0, options.creation?.minTraceSizePx ?? 4)
+            if (trace.result.rect.width < minimum || trace.result.rect.height < minimum) return
+          }
+          options.creation?.onCreate(trace.result)
+        },
+      })
+  if (creationGesture !== null) gestures.push(creationGesture)
+
   return {
     element: frame,
     setValue(next): void {
@@ -186,14 +323,34 @@ export function createSelectionFrameV2(options: SelectionFrameV2Options): Select
       for (const modifier of modifierHandles) modifier.reset()
       renderValue(next)
     },
+    setCreationMode(next): void {
+      if (next !== null && creationSurface === null) {
+        throw new Error('Selection-frame V2 creation was not configured for this handle.')
+      }
+      if (next?.kind === 'grid' && (!Number.isInteger(next.rows) || !Number.isInteger(next.cols) || next.rows < 1 || next.cols < 1)) {
+        throw new RangeError('Selection-frame V2 creation grid rows and cols must be positive.')
+      }
+      if (
+        creationMode?.kind !== next?.kind
+        || (creationMode?.kind === 'grid' && next?.kind === 'grid' && (creationMode.rows !== next.rows || creationMode.cols !== next.cols))
+      ) {
+        creationGesture?.abort()
+      }
+      creationMode = next
+      if (next === null) creationGesture?.abort()
+      renderCreationMode()
+    },
     setSuspended(next): void {
       suspended = next
+      if (next) creationGesture?.abort()
+      renderCreationMode()
       renderValue(value)
     },
     isGestureActive: () => gestures.some((gesture) => gesture.isActive())
       || modifierHandles.some((modifier) => modifier.isGestureActive()),
     destroy(): void {
       for (const gesture of gestures) gesture.unbind()
+      creationSurface?.remove()
       for (const modifier of modifierHandles) modifier.destroy()
       frame.remove()
     },

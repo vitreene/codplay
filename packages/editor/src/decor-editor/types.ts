@@ -7,7 +7,7 @@ export type OrientationContext = 'horizontal' | 'vertical'
 
 // ─── Item ───────────────────────────────────────────────────────────────────
 
-export type ItemType = 'text' | 'image' | 'media' | 'video' | 'capsule'
+export type ItemType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
 
 // ─── Flex anchor (position d'appui — résolu par l'outil attache-flex) ──────
 

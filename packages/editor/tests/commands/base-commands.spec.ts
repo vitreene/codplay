@@ -41,6 +41,37 @@ describe('createItem', () => {
     expect(secondItem.parentId).toBe('capsule-1')
     expect(secondItem.order > firstItem.order).toBe(true)
   })
+
+  it('generates item, decor, content, and keyframe IDs that do not collide with restored document IDs', () => {
+    const restored: EditorScene = {
+      ...emptyScene(),
+      items: [{
+        id: 'item-1',
+        type: 'text',
+        parentId: null,
+        order: 'a0',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'decor-2',
+        keyframes: [{ id: 'kf-4', timeMs: 1000, decorId: 'decor-2' }],
+      }],
+      contents: { 'content-3': { id: 'content-3', type: 'text', text: 'Restauré' } },
+      decors: { 'decor-2': { id: 'decor-2' } },
+    }
+
+    const created = commands.createItem(restored, { geometry: {} })
+    const typed = commands.assignType(created.scene, { itemId: created.itemId, type: 'text' })
+    const withContent = commands.assignContent(typed, { itemId: created.itemId, content: { type: 'text', text: 'Nouveau' } })
+    const keyframe = commands.createKeyframe(withContent, { itemId: 'item-1', timeMs: 2000 })
+    const newItem = created.scene.items.find((item) => item.id === created.itemId)!
+    const contentId = withContent.items.find((item) => item.id === created.itemId)!.contentId!
+
+    expect(created.itemId).not.toBe('item-1')
+    expect(newItem.initialDecorId).not.toBe('decor-2')
+    expect(contentId).not.toBe('content-3')
+    expect(keyframe.keyframeId).not.toBe('kf-4')
+    expect(keyframe.decorId).not.toBe('decor-2')
+  })
 })
 
 describe('assignType', () => {

@@ -2,7 +2,7 @@
  * Contexte et événements du contrôleur central — `plan/app/2026-07-12-app-controller-definition.md`.
  */
 
-import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData } from '../commands/types'
+import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData, RootPlacementMode, ZoneRect } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
@@ -40,6 +40,8 @@ export interface ControllerContext {
   zonesVisible: boolean
   /** Le type en cours de création pendant l'état `creating` — `null` en dehors de ce mode. */
   creatingType: ItemType | null
+  /** Placement racine sélectionné pour le tracé courant — `null` en dehors de ce mode. */
+  creatingPlacementMode: RootPlacementMode | null
 }
 
 // ─── Commandes de la façade (§4.1 — vocabulaire fermé, jamais une mutation arbitraire) ─────────
@@ -57,7 +59,9 @@ export interface ControllerContext {
  * module sequence-editor plutôt que d'engorger ce vocabulaire central déjà documenté comme fermé.
  */
 export type Command =
-  | { name: 'createItem'; args: { geometry: OffsetData; parentId?: string | null } }
+  | { name: 'createItem'; args: { geometry: OffsetData; parentId?: string | null; zoneId?: string } }
+  | { name: 'setRootPlacementMode'; args: { mode: RootPlacementMode } }
+  | { name: 'createRootZone'; args: { zoneId: string; area: ZoneRect } }
   | { name: 'assignType'; args: { itemId: string; type: ItemType } }
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
   | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string } }
@@ -73,7 +77,7 @@ export type Command =
 // ─── Événements ─────────────────────────────────────────────────────────────
 
 export type ControllerEvent =
-  | { type: 'CREATE_MODE_ENTER'; itemType: ItemType }
+  | { type: 'CREATE_MODE_ENTER'; itemType: ItemType; placementMode: RootPlacementMode }
   | { type: 'CREATE_COMMIT' }
   | { type: 'CREATE_CANCEL' }
   | { type: 'SELECT_ITEM'; itemIds: string[]; keyframeId?: string }
@@ -167,3 +171,4 @@ export type ControllerEmitted =
    * Play/Seek.
    */
   | { type: 'playbackActiveChanged'; active: boolean }
+  | { type: 'creationModeChanged'; mode: { itemType: ItemType; placementMode: RootPlacementMode } | null }

@@ -5,6 +5,7 @@ import { onSelectChange } from '@remix-run/ui/select/primitives'
 import type { Actor } from 'xstate'
 import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
+import { rootPlacementModeForScene } from '../commands/root-placement-commands'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { DocumentHistoryState } from '../history/document-history'
 import { createEmptyEditorScene } from '../scenes/editor-scene'
@@ -92,6 +93,12 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
     const { scene, history } = handle.props
     const scenes = persistence.getScenes()
     const persistenceStatus = persistence.getStatus()
+    const controllerSnapshot = controller.getSnapshot()
+    const placementMode = scene === null ? null : rootPlacementModeForScene(scene)
+    const rootZonesExist = scene !== null && Object.values(scene.zones).some((zone) => zone.capsuleId === null)
+    const isCreatingBlock = controllerSnapshot.context.creatingType === 'bloc'
+    const isCreating = controllerSnapshot.value === 'creating'
+    const isPlaying = controllerSnapshot.value === 'playing'
 
     return <div id={handle.id} className="app-demo-content">
       <section id="editor-scene-menu" className="editor-menu-section">
@@ -156,7 +163,7 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
       </section>
 
       <section id="editor-scene-actions" className="editor-menu-section">
-        <h3 id="editor-scene-actions-title">Scènes de travail</h3>
+        <h3 id="editor-scene-actions-title">Scènes et éléments</h3>
         <button
           id="editor-create-scene"
           type="button"
@@ -164,6 +171,44 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
         >
           Créer une scène
         </button>
+        <div id="editor-root-placement-modes" className="editor-menu-actions" aria-label="Mode de placement racine">
+          <button
+            id="editor-root-placement-transform"
+            type="button"
+            aria-pressed={placementMode === 'transform'}
+            disabled={scene === null || isCreating || isPlaying || (rootZonesExist && placementMode !== 'transform')}
+            mix={[buttonStyle, on('click', () => actions.runCommand({ name: 'setRootPlacementMode', args: { mode: 'transform' } }))]}
+          >
+            Racine 1 × 1 · transforms
+          </button>
+          <button
+            id="editor-root-placement-grid"
+            type="button"
+            aria-pressed={placementMode === 'fine-grid'}
+            disabled={scene === null || isCreating || isPlaying}
+            mix={[buttonStyle, on('click', () => actions.runCommand({ name: 'setRootPlacementMode', args: { mode: 'fine-grid' } }))]}
+          >
+            Racine 160 × 90
+          </button>
+        </div>
+        <button
+          id="editor-create-block"
+          type="button"
+          disabled={scene === null || placementMode === null || isPlaying || isCreating}
+          mix={[buttonStyle, on('click', () => {
+            if (placementMode !== null) actions.beginBlockCreation(placementMode)
+          })]}
+        >
+          Tracer un bloc
+        </button>
+        {isCreatingBlock && <button
+          id="editor-cancel-block-creation"
+          type="button"
+          mix={[buttonStyle, on('click', () => actions.cancelCreation())]}
+        >
+          Annuler le tracé (Échap)
+        </button>}
+        <p id="editor-block-creation-hint">Choisir la grille racine, puis tracer le bloc sur la scène. Le bloc reste vide et peut recevoir un décor.</p>
         <button
           id="editor-create-item"
           type="button"

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { panelsForType, panelsForTypes, findPanel } from '../src/decor-editor/palette-panel'
+import { DEFAULT_PALETTE } from '../src/decor-editor/default-palette'
 import type { PaletteConfig } from '../src/decor-editor/palette-panel'
 
 function config(): PaletteConfig {
@@ -11,6 +12,7 @@ function config(): PaletteConfig {
       { id: 'custom', label: 'Custom', kind: 'custom-code' },
     ],
     panelsByItemType: {
+      bloc: ['shape', 'custom'],
       text: ['shape', 'typo', 'dimensions', 'custom'],
       image: ['shape', 'dimensions', 'custom'],
       media: ['shape', 'dimensions', 'custom'],
@@ -21,6 +23,10 @@ function config(): PaletteConfig {
 }
 
 describe('panelsForType', () => {
+  it('un bloc voit Forme, Custom et Presets, sans Typo ni Contenu', () => {
+    expect(panelsForType('bloc', DEFAULT_PALETTE)).toEqual(['shape', 'custom', 'presets'])
+  })
+
   it('un item texte voit le panneau typo', () => {
     expect(panelsForType('text', config())).toContain('typo')
   })
@@ -82,7 +88,7 @@ describe('findPanel', () => {
           { path: 'style.padding', kind: 'number', label: 'Padding' },
         ],
       }],
-      panelsByItemType: { text: ['shape'], image: [], media: [], video: [], capsule: [] },
+      panelsByItemType: { bloc: [], text: ['shape'], image: [], media: [], video: [], capsule: [] },
     }
     const shape = findPanel(cfg, 'shape')
     expect(shape?.kind).toBeUndefined()

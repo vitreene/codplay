@@ -85,8 +85,15 @@ export const controllerMachine = setup({
 
     enterCreateMode: assign({
       creatingType: ({ event }) => (event.type === 'CREATE_MODE_ENTER' ? event.itemType : null),
+      creatingPlacementMode: ({ event }) => (event.type === 'CREATE_MODE_ENTER' ? event.placementMode : null),
     }),
-    exitCreateMode: assign({ creatingType: () => null }),
+    exitCreateMode: assign({ creatingType: () => null, creatingPlacementMode: () => null }),
+    emitCreationModeChanged: emit(({ context }) => ({
+      type: 'creationModeChanged' as const,
+      mode: context.creatingType === null || context.creatingPlacementMode === null
+        ? null
+        : { itemType: context.creatingType, placementMode: context.creatingPlacementMode },
+    })),
 
     openPanel: assign({
       openPanels: ({ context, event }) => {
@@ -194,6 +201,7 @@ export const controllerMachine = setup({
     editGesture: null,
     zonesVisible: false,
     creatingType: null,
+    creatingPlacementMode: null,
 
   },
   on: {
@@ -231,13 +239,14 @@ export const controllerMachine = setup({
   states: {
     idle: {
       on: {
-        CREATE_MODE_ENTER: { target: 'creating', actions: 'enterCreateMode' },
+        CREATE_MODE_ENTER: { target: 'creating', actions: ['enterCreateMode', 'emitCreationModeChanged'] },
       },
     },
     creating: {
+      exit: ['exitCreateMode', 'emitCreationModeChanged'],
       on: {
-        CREATE_COMMIT: { target: 'idle', actions: 'exitCreateMode' },
-        CREATE_CANCEL: { target: 'idle', actions: 'exitCreateMode' },
+        CREATE_COMMIT: { target: 'idle' },
+        CREATE_CANCEL: { target: 'idle' },
       },
     },
     /**

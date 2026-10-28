@@ -7,6 +7,7 @@
  */
 
 import * as base from './base-commands'
+import * as rootPlacement from './root-placement-commands'
 import * as sequenceEditor from '../../sequence-editor/commands'
 import type { Command } from '../controller/types'
 import type { EditorScene } from './types'
@@ -26,6 +27,10 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
   switch (command.name) {
     case 'createItem':
       return base.createItem(scene, command.args)
+    case 'setRootPlacementMode':
+      return { scene: rootPlacement.setRootPlacementMode(scene, command.args) }
+    case 'createRootZone':
+      return { scene: rootPlacement.createRootZone(scene, command.args) }
     case 'assignType':
       return { scene: base.assignType(scene, command.args) }
     case 'assignContent':

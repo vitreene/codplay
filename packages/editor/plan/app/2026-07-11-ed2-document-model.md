@@ -66,6 +66,10 @@ Un **item** est l'entité que l'auteur crée. Deux natures de données à distin
 
 **Ce que l'item porte en propre** :
 - **id** — identité stable, de bout en bout (jusqu'au perso au build).
+- **Création après restauration** — les nouveaux ids d'item, décor, contenu et keyframe ne
+  doivent pas redémarrer un compteur limité au processus : après rechargement d'un document,
+  les commandes continuent à produire des ids distincts de ceux déjà enregistrés. La régression
+  est couverte par `tests/commands/base-commands.spec.ts` avec un document restauré.
 - **type** — texte / image / média / vidéo / capsule ; ouvre ses propriétés, détermine le perso.
 - **sa place** — une **clé d'ordre** (parmi ses frères) + une **ref à son parent**. L'arbre est *dérivé* de ces deux-là.
 - **ses keyframes** — le cœur de sa **représentation timeline** : chaque kf porte son **instant** (`timeMs`), son canal (`pose` ou `decor`), le **décor** qu'il vise, et ses **transitions** (intro/outro, durée, easing). C'est *quand* l'item change, et *vers quoi*.
@@ -185,6 +189,9 @@ EditorScene {
                                        //   fois, jamais keyframé — même nature que le décor initial
                                        //   d'un item, mais la racine n'étant pas un item, elle n'a
                                        //   pas d'initialDecorId propre : ce champ en tient lieu.
+  rootCapsule?: CapsuleDef             // réglages de la capsule racine implicite, notamment sa grille
+                                       // de placement ; absent dans les anciens documents tant que
+                                       // l'auteur n'a pas choisi un mode de placement racine.
   masterItemId?: string               // PROVISOIRE — → l'item média « master » (piste dédiée),
                                        //   facultatif. Ne survivra PAS au multipiste (voir note).
 }
@@ -230,15 +237,16 @@ Item {
   parentId: string | null             // null = enfant de la capsule racine
   order: string                       // clé textuelle fractionnaire ("a","b","ab"…)
   visible: boolean                    // affichage dans l'éditeur (pas de rendu)
-  contentId: string | null            // → contents ; null si capsule (enfants = contenu)
+  contentId: string | null            // → contents ; null si bloc vide ou capsule (enfants = contenu)
   initialDecorId: string              // → decors — décor de base OBLIGATOIRE (état « intro terminée »)
   keyframes: Keyframe[]               // canaux pose/decor et vie dans le temps
-  capsule?: CapsuleDef                // présent ssi type === 'capsule'
+  capsule?: CapsuleDef                // présent ssi type === 'capsule' ; la racine est dans rootCapsule
 }
 
-ItemType = 'text' | 'image' | 'media' | 'video' | 'capsule'
+ItemType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
            // + futurs types média distincts (story-média, lottie, rive, three3D),
            //   ajoutés à la disponibilité du composant Codplay — jamais fusionnés sous 'media'
+           // 'bloc' est un type distinct et vide, sans Content ; son Decor peut porter un style.
 
 KeyframeChannel = 'pose' | 'decor'
 
@@ -272,8 +280,8 @@ TransitionKey = '--'|'cut'|'fade'|'swipe-left'|'swipe-right'|'swipe-top'|'swipe-
 Easing = 'linear'|'ease-in'|'ease-out'|'ease-in-out'
        | { kind: 'cubic-bezier'; p1x; p1y; p2x; p2y }
 
-CapsuleDef {                          // ce qu'une capsule pousse sur ses enfants — défini UNE fois,
-                                      //   sur l'item (statique, jamais keyframé). SEUL lieu capsule.
+CapsuleDef {                          // réglages statiques de capsule ; sur l'item pour les capsules
+                                      //   explicites, sur EditorScene.rootCapsule pour la racine.
   kind: CapsuleKind                   // 'carousel'|'rangee'|'liste'|'grille'|'card'
   distribution: { mode: 'sequential'|'stagger'; staggerInMs?: number; staggerOutMs?: number }
   grid?: { rows: number; cols: number; gap?: { row: number; col: number } }
@@ -321,6 +329,7 @@ PositionData {                        // cqw / flex-anchor / transform — modul
 
 Zone {                                // emprise nommée sur la grille d'une capsule
   id: string                          // identité stable — l'attache se fait par id, jamais par nom
+  capsuleId: string | null            // capsule propriétaire ; null désigne la racine implicite
   name: string                        // libellé par ORDRE ("z-01"…), intermédiaire vers la classe CSS
   surfaces: Record<Orientation, ZoneRect>   // ≥ 1 ; mono-surface si l'auteur ne varie pas
   container?: ZoneContainer           // si la zone est subdivisée en grille interne

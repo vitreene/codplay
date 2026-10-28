@@ -9,12 +9,9 @@ import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetDat
 import { nextOrderKey } from './order-key'
 import { DEFAULT_DECOR_PRESET } from './default-decor-presets'
 
-let idCounter = 0
-
-/** Id fraîchement généré, unique dans le process — suffisant pour un document en mémoire (pas de collision réseau à couvrir ici). */
+/** Generates an author ID that stays distinct from IDs restored from persisted scenes. */
 function freshId(prefix: string): string {
-  idCounter += 1
-  return `${prefix}-${idCounter}`
+  return `${prefix}-${crypto.randomUUID()}`
 }
 
 /** Les items directement enfants de `parentId` (racine si `null`) — pour calculer la prochaine clé d'ordre. */
@@ -30,13 +27,24 @@ function childrenOf(scene: EditorScene, parentId: string | null): Item[] {
  */
 export function createItem(
   scene: EditorScene,
-  args: { geometry: OffsetData; parentId?: string | null },
+  args: { geometry: OffsetData; parentId?: string | null; zoneId?: string },
 ): { scene: EditorScene; itemId: string } {
   const parentId = args.parentId ?? null
+  const zone = args.zoneId === undefined ? undefined : scene.zones[args.zoneId]
+  if (args.zoneId !== undefined && zone === undefined) {
+    throw new Error(`createItem: no zone '${args.zoneId}' in scene`)
+  }
+  if (zone !== undefined && zone.capsuleId !== parentId) {
+    throw new Error(`createItem: zone '${args.zoneId}' does not belong to the item's parent capsule`)
+  }
   const itemId = freshId('item')
   const decorId = freshId('decor')
 
-  const decor: Decor = { id: decorId, offset: args.geometry }
+  const decor: Decor = {
+    id: decorId,
+    offset: args.geometry,
+    ...(args.zoneId === undefined ? {} : { zoneId: args.zoneId }),
+  }
   const order = nextOrderKey(childrenOf(scene, parentId).map((i) => i.order))
 
   const item: Item = {

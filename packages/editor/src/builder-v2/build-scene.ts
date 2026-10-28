@@ -8,6 +8,7 @@ import {
 import type {
   AutoCapsuleChildElementArtifact,
   AutoCapsuleChildInput,
+  AutoCapsuleChildPlacementInput,
   AutoCapsuleEventInput,
   AutoCapsuleType,
 } from '@codplay/capsule-automation'
@@ -74,6 +75,7 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
     sceneRoot: true,
     fallbackClipDurationMs: scene.meta.durationMs,
     grid: rootCapsule?.grid,
+    placements: resolveRootZonePlacements(scene, rootItems),
     distribution: rootCapsule?.distribution ?? { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
     transitionDefaults: rootTransitionDefaults,
   })
@@ -267,11 +269,22 @@ function validateItemInput(
     }
   }
   for (const decor of [...new Set(decorIds)].map((decorId) => scene.decors[decorId])) {
-    if (hasZoneAssignment(decor)) diagnostics.push({
+    if (decor?.zoneId == null) continue
+    const zone = scene.zones[decor.zoneId]
+    if (zone === undefined) {
+      diagnostics.push(error('EDITOR_V2_ZONE_NOT_FOUND', `Zone '${decor.zoneId}' is not present.`, { itemId: item.id, decorId: decor.id, zoneId: decor.zoneId }))
+      continue
+    }
+    if (zone.capsuleId !== item.parentId) {
+      diagnostics.push(error('EDITOR_V2_ZONE_PARENT_MISMATCH', `Zone '${zone.id}' does not belong to the capsule that contains item '${item.id}'.`, { itemId: item.id, zoneId: zone.id, parentId: item.parentId, zoneParentId: zone.capsuleId }))
+      continue
+    }
+    if (item.parentId === null && decor.id === item.initialDecorId) continue
+    diagnostics.push({
       level: 'warning',
       code: 'EDITOR_V2_ZONE_DEFERRED',
-      message: 'Decor.zoneId is preserved in the editor model but zone materialization is deferred to the post-V2 zones tranche.',
-      context: { itemId: item.id, decorId: decor?.id, zoneId: decor?.zoneId },
+      message: 'This zone assignment is not the root item’s initial decor; its temporal materialization remains deferred.',
+      context: { itemId: item.id, decorId: decor.id, zoneId: decor.zoneId },
     })
   }
   if (keyframes[0]?.transitionIn?.kind === 'interpolated') {
@@ -325,6 +338,21 @@ type CapsuleResolution = Readonly<{
   grid: Readonly<{ rows: number; cols: number }>
 }>
 
+/** Resolves initial root-item zones into Capsule Automation's existing row/column placement input. */
+function resolveRootZonePlacements(
+  scene: EditorScene,
+  items: readonly Item[],
+): ReadonlyMap<string, AutoCapsuleChildPlacementInput> {
+  return new Map(items.flatMap((item) => {
+    const decor = scene.decors[item.initialDecorId]
+    if (decor?.zoneId == null) return []
+    const zone = scene.zones[decor.zoneId]
+    if (zone === undefined || zone.capsuleId !== null) return []
+    const { row, col, rowSpan, colSpan } = zone.surfaces.landscape
+    return [[item.id, { row, col, rowSpan, colSpan } as const]]
+  }))
+}
+
 /** Builds the implicit scene-root list and keeps its authored decor separate from layout CSS. */
 function buildRootPerso(scene: EditorScene, generatedClassName: string): PersoDoc<'list'> {
   const rootClassName = resolveRootClassName(scene)
@@ -357,6 +385,7 @@ function resolveCapsule(
     grid?: CapsuleDef['grid']
     distribution?: CapsuleDef['distribution']
     transitionDefaults?: ReturnType<typeof resolveAutoCapsuleDefaults>
+    placements?: ReadonlyMap<string, AutoCapsuleChildPlacementInput>
   }>,
 ): CapsuleResolution | undefined {
   try {
@@ -366,10 +395,12 @@ function resolveCapsule(
     const children: AutoCapsuleChildInput[] = items.map((item, index) => {
       const timing = distribution.children.find((child) => child.trackId === item.id)
       if (timing === undefined) throw new Error(`No timing was produced for item '${item.id}'.`)
+      const placement = options?.placements?.get(item.id)
       return {
         id: item.id,
         order: index,
         timeRange: { startMs: timing.introMs, endMs: timing.outroMs },
+        ...(placement === undefined ? {} : { placement }),
         events: buildTransitionEvents(item),
       }
     })

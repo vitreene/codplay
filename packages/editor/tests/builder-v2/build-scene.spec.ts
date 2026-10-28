@@ -538,6 +538,51 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(bloc.initial).not.toHaveProperty('content')
   })
 
+  it('materializes an initial root item zone through Capsule Automation grid spans', () => {
+    const scene = fixtureScene()
+    scene.rootCapsule = {
+      kind: 'card',
+      distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+      grid: { rows: 90, cols: 160 },
+    }
+    scene.items[0] = {
+      ...scene.items[0]!,
+      id: 'grid-block',
+      type: 'bloc',
+      contentId: null,
+      keyframes: [],
+    }
+    scene.decors['text-decor-a'] = { id: 'text-decor-a', zoneId: 'zone-root-block' }
+    scene.zones['zone-root-block'] = {
+      id: 'zone-root-block',
+      capsuleId: null,
+      name: 'z1',
+      surfaces: {
+        landscape: { row: 12, col: 21, rowSpan: 8, colSpan: 14 },
+        portrait: { row: 12, col: 21, rowSpan: 8, colSpan: 14 },
+      },
+    }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.rootGrid).toEqual({ rows: 90, cols: 160 })
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'EDITOR_V2_ZONE_DEFERRED')).toBe(false)
+    expect(result.styleSheet).toContain('grid-row:12 / span 8;')
+    expect(result.styleSheet).toContain('grid-column:21 / span 14;')
+  })
+
+  it('rejects an initial decor that references a missing root zone', () => {
+    const scene = fixtureScene()
+    scene.decors['text-decor-a'] = { id: 'text-decor-a', zoneId: 'missing-zone' }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'EDITOR_V2_ZONE_NOT_FOUND' }))
+  })
+
   it('maps video/media to the V2 media component and exposes the source to CodPlay resources', () => {
     const scene = fixtureScene()
     scene.items[0] = {

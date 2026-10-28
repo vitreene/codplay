@@ -73,7 +73,13 @@ Chaque item ed2 (texte, image, média, capsule imbriquée…) devient un perso C
 | `video` | `media` |
 | `media` | `media` |
 | `capsule` | `list` |
-| `bloc` | `text`, contenu vide (pas une valeur `ItemType` distincte — cf `2026-07-08-item-model-spec.md` §5) |
+| `bloc` | `tag`, initialisé en `div` sans propriété `content` |
+
+Dans le modèle Éditeur, `bloc` est une valeur distincte d'`ItemType`, sans
+`Content` ; `tag` est uniquement son type de rendu V2. Le Builder ne le
+transforme pas en item `text`. Ce mapping et le placement sur grille racine
+sont vérifiés par `tests/builder-v2/build-scene.spec.ts` et décrits dans la
+[spécification de création des blocs](../2026-10-28-editor-block-creation-spec.md).
 
 **Placement d'un enfant dans une capsule `card`** : `placementPolicy: explicitOnly` (`2026-07-08-capsule-spec.md` §3) — le Builder pose donc toujours un `AutoCapsuleChildInput.placement` explicite, jamais déduit par capsule-automation. Si `DecorPatch.zone` référence une zone réelle, le Builder la traduit en `{row,col,rowSpan,colSpan}` ; si elle vaut `null`, le Builder résout vers la **zone fantôme** de la capsule (`{row:1, col:1, rowSpan: grid.rows, colSpan: grid.cols}`, `2026-07-08-capsule-spec.md` §3/§11) — le même mécanisme nom-de-zone → coordonnées, appliqué à une zone toujours présente plutôt qu'une valeur inventée au cas par cas.
 

@@ -2,7 +2,12 @@ import type { Actor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
 import type { MotionEasing } from '../../motion-editor/geometry'
 import { createRotationModifier, createSelectionFrameV2 } from '@codplay/selection-frame/v2'
-import type { SelectionFrameDelta, SelectionFrameHandleId, SelectionFrameV2Handle } from '@codplay/selection-frame/v2'
+import type {
+  SelectionFrameDelta,
+  SelectionFrameHandleId,
+  SelectionFrameV2CreationResult,
+  SelectionFrameV2Handle,
+} from '@codplay/selection-frame/v2'
 import { DecorEditorController } from '../../decor-editor/controller'
 import { mountDecorEditor } from '../../decor-editor/mount'
 import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-palette'
@@ -18,7 +23,8 @@ import {
 } from '../../decor-editor/modified-properties'
 import type { DecorModificationMap } from '../../decor-editor/modified-properties'
 import { resolveKeyframeChannel } from '../commands/types'
-import type { Content, Decor, EditorScene, Item, OffsetData } from '../commands/types'
+import type { Content, Decor, EditorScene, Item, ItemType, OffsetData, RootPlacementMode } from '../commands/types'
+import { ROOT_PLACEMENT_GRID, rootPlacementModeForScene } from '../commands/root-placement-commands'
 import type { Command, Selection } from '../controller/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
@@ -52,7 +58,7 @@ import {
  * aujourd'hui — `patch` porte donc, à lui seul, le décor résolu.
  */
 
-export type ItemVisualType = 'text' | 'image' | 'media' | 'video' | 'capsule'
+export type ItemVisualType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
 
 /** Style keys emitted by CodPlay for the structured pose channel rather than CSS declarations. */
 const SNAPSHOT_OFFSET_STYLE_PROPERTIES = new Set(['x', 'y', 'width', 'height', 'rotate', 'scaleX', 'scaleY', 'transform-origin'])
@@ -98,12 +104,12 @@ function sortPoseKeyframes(item: Item): Item['keyframes'] {
     .sort((left, right) => left.timeMs - right.timeMs)
 }
 
-/** `bloc` n'a pas encore de type visuel (§6 du plan) — rien à décorer tant qu'il n'est pas différencié. */
+/** Resolves the selected document item and its active decor target, including an undecorated block. */
 function resolveTarget(scene: EditorScene, selection: Selection, timelineMs: number): Target | null {
   const itemId = selection.itemIds[0]
   if (!itemId) return null
   const item = scene.items.find((i) => i.id === itemId)
-  if (!item || item.type === 'bloc') return null
+  if (!item) return null
 
   if (selection.keyframeId) {
     const decorId = item.keyframes.find((k) => k.id === selection.keyframeId)?.decorId
@@ -682,6 +688,8 @@ export function createDecorEditorBridge(
   let mountHandle: DecorEditorMountHandle | null = null
   let selectionFrame: SelectionFrameV2Handle | null = null
   let motionOverlay: MotionOverlayHandle | null = null
+  let activeCreationMode: { itemType: ItemType; placementMode: RootPlacementMode } | null = null
+  let playbackActive = false
   let sceneHost: HTMLElement | null = null
   let resizeObserver: ResizeObserver | null = null
   let frameTarget: Target | null = null
@@ -1852,6 +1860,7 @@ export function createDecorEditorBridge(
         frameGestureBasePx = null
         abortPhase()
       },
+      creation: { onCreate: commitBlockCreation },
     })
     selectionFrame.element.style.cursor = 'move'
     // Keep the movement surface visually and hit-test-wise below the CS layer. The frame body is
@@ -1896,10 +1905,62 @@ export function createDecorEditorBridge(
       onPathChange: commitMotionPath,
       onDrawCancel: () => undefined,
     })
+    if (activeCreationMode !== null) {
+      selectionFrame.setCreationMode(selectionModeFor(activeCreationMode.placementMode))
+      motionOverlay.setSuspended(playbackActive)
+    }
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => scheduleProjectionAfterResize())
       resizeObserver.observe(host)
     }
+  }
+
+  /** Converts one creation trace into the existing command/facade document path. */
+  function commitBlockCreation(result: SelectionFrameV2CreationResult): void {
+    const { scene, creatingType, creatingPlacementMode } = machine.getSnapshot().context
+    if (
+      scene === null
+      || creatingType !== 'bloc'
+      || creatingPlacementMode === null
+      || rootPlacementModeForScene(scene) !== creatingPlacementMode
+    ) return
+
+    const beforeItemIds = new Set(scene.items.map((item) => item.id))
+    const commands: Command[] = []
+    if (creatingPlacementMode === 'fine-grid') {
+      if (result.kind !== 'cell-area') return
+      const zoneId = `zone-${crypto.randomUUID()}`
+      commands.push(
+        { name: 'createRootZone', args: { zoneId, area: result.area } },
+        { name: 'createItem', args: { geometry: {}, zoneId } },
+      )
+    } else {
+      if (result.kind !== 'rect' || sceneHost === null) return
+      const rootWidth = sceneHost.clientWidth
+      if (rootWidth <= 0) return
+      const geometry: OffsetData = offsetValuesPxToPatch({
+        x: result.rect.x,
+        y: result.rect.y,
+        width: result.rect.width,
+        height: result.rect.height,
+      }, rootWidth)
+      commands.push({ name: 'createItem', args: { geometry } })
+    }
+
+    machine.send({ type: 'RUN_TRANSACTION', commands })
+    const createdItem = machine.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))
+    if (createdItem === undefined) return
+    machine.send({ type: 'SELECT_ITEM', itemIds: [createdItem.id] })
+    machine.send({ type: 'CREATE_COMMIT' })
+  }
+
+  /** Maps the persisted root placement mode to the selection-frame V2 drawing mode. */
+  function selectionModeFor(mode: RootPlacementMode) {
+    if (mode === 'fine-grid') {
+      const grid = ROOT_PLACEMENT_GRID['fine-grid']
+      return { kind: 'grid' as const, rows: grid.rows, cols: grid.cols }
+    }
+    return { kind: 'free' as const }
   }
 
   /** Removes the frame and root observer when the scene host is unavailable. */
@@ -2265,6 +2326,7 @@ export function createDecorEditorBridge(
    * une seule écriture, déjà à jour.
    */
   const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
+    playbackActive = active
     if (active) {
       mountHandle?.setPreviewSuspended(true)
       selectionFrame?.setSuspended(true)
@@ -2282,6 +2344,16 @@ export function createDecorEditorBridge(
     lastKnownTimelineMs = timelineMs
     const { scene, selection } = machine.getSnapshot().context
     if (scene) syncSelection(scene, selection)
+  })
+
+  const unsubscribeCreationMode = machine.on('creationModeChanged', ({ mode }) => {
+    activeCreationMode = mode
+    selectionFrame?.setCreationMode(mode === null ? null : selectionModeFor(mode.placementMode))
+    motionOverlay?.setSuspended(playbackActive || mode !== null)
+    if (mode === null) {
+      const { scene, selection } = machine.getSnapshot().context
+      if (scene) syncSelection(scene, selection)
+    }
   })
 
   const unsubscribeSceneHost = coordination.onSceneHostChange((host) => {
@@ -2308,6 +2380,7 @@ export function createDecorEditorBridge(
       unsubscribeSeekApplied.unsubscribe()
       unsubscribeFlushPending.unsubscribe()
       unsubscribePlaybackActive.unsubscribe()
+      unsubscribeCreationMode.unsubscribe()
       unsubscribePlaybackReconciled()
       pendingCommands = null
       pendingTemporaryDecorCommit = null

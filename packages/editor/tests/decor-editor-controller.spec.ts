@@ -11,6 +11,7 @@ function paletteConfig(): PaletteConfig {
       { id: 'typo', label: 'Typo', fields: [{ path: 'style.font-size', kind: 'number', label: 'Taille' }] },
     ],
     panelsByItemType: {
+      bloc: ['shape'],
       text: ['shape', 'typo'],
       image: ['shape'],
       media: ['shape'],

@@ -49,6 +49,9 @@ export type Transition =
  */
 export type ItemType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
 
+/** Root placement scheme represented by the implicit capsule's grid dimensions. */
+export type RootPlacementMode = 'transform' | 'fine-grid'
+
 /**
  * Réexporté depuis `@codplay/scene-factory` — source UNIQUE de vérité pour ce vocabulaire
  * (`2026-06-12-capsule-distribution-spec.md` §3.3). Une redéclaration séparée a déjà divergé une

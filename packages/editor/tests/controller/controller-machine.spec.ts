@@ -112,7 +112,7 @@ describe('controllerMachine — selection, two emitters converging on one truth 
     const actor = createActor(controllerMachine)
     actor.start()
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'] })
-    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text' })
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text', placementMode: 'transform' })
 
     expect(actor.getSnapshot().value).toBe('creating')
     expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'] })
@@ -123,32 +123,52 @@ describe('controllerMachine — create mode (§3)', () => {
   it('CREATE_MODE_ENTER moves to creating and records the target type', () => {
     const actor = createActor(controllerMachine)
     actor.start()
-    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'image' })
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'image', placementMode: 'fine-grid' })
 
     expect(actor.getSnapshot().value).toBe('creating')
     expect(actor.getSnapshot().context.creatingType).toBe('image')
+    expect(actor.getSnapshot().context.creatingPlacementMode).toBe('fine-grid')
   })
 
   it('CREATE_CANCEL returns to idle without mutating the document', () => {
     const actor = createActor(controllerMachine)
     actor.start()
     actor.send({ type: 'SCENE_LOADED', scene: sceneFixture() })
-    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text' })
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text', placementMode: 'transform' })
     actor.send({ type: 'CREATE_CANCEL' })
 
     expect(actor.getSnapshot().value).toBe('idle')
     expect(actor.getSnapshot().context.creatingType).toBeNull()
+    expect(actor.getSnapshot().context.creatingPlacementMode).toBeNull()
     expect(actor.getSnapshot().context.scene?.items).toHaveLength(0)
   })
 
   it('CREATE_COMMIT returns to idle and clears the recorded type', () => {
     const actor = createActor(controllerMachine)
     actor.start()
-    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text' })
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text', placementMode: 'transform' })
     actor.send({ type: 'CREATE_COMMIT' })
 
     expect(actor.getSnapshot().value).toBe('idle')
     expect(actor.getSnapshot().context.creatingType).toBeNull()
+    expect(actor.getSnapshot().context.creatingPlacementMode).toBeNull()
+  })
+
+  it('publishes creation mode changes and clears the mode when playback leaves creation', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    const changes: unknown[] = []
+    actor.on('creationModeChanged', (event) => changes.push(event.mode))
+
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'bloc', placementMode: 'fine-grid' })
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+
+    expect(changes).toEqual([
+      { itemType: 'bloc', placementMode: 'fine-grid' },
+      null,
+    ])
+    expect(actor.getSnapshot().context.creatingType).toBeNull()
+    expect(actor.getSnapshot().context.creatingPlacementMode).toBeNull()
   })
 })
 
@@ -248,7 +268,7 @@ describe('controllerMachine — playing state (2026-07-17-play-mode-decor-editor
   it('TELCO_ACTION_REQUEST moves from creating to playing too (root-level target, not nested under idle)', () => {
     const actor = createActor(controllerMachine)
     actor.start()
-    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text' })
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text', placementMode: 'transform' })
     actor.send({ type: 'TELCO_ACTION_REQUEST' })
 
     expect(actor.getSnapshot().value).toBe('playing')

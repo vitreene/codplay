@@ -18,6 +18,25 @@ export type SelectionFrameValue = Readonly<{
   rotationOrigin?: SelectionFrameRotationOrigin
 }>
 
+/** Geometry emitted when an author draws a new item before it has a player node. */
+export type SelectionFrameV2CreationResult = Readonly<
+  | { kind: 'rect'; rect: Readonly<{ x: number; y: number; width: number; height: number }> }
+  | { kind: 'cell-area'; area: Readonly<{ row: number; col: number; rowSpan: number; colSpan: number }> }
+>
+
+/** Active drawing mode; grid dimensions are expressed as track counts. */
+export type SelectionFrameV2CreationMode = Readonly<
+  | { kind: 'free' }
+  | { kind: 'grid'; rows: number; cols: number }
+>
+
+/** Callback and trace threshold for the optional V2 creation surface. */
+export type SelectionFrameV2CreationOptions = Readonly<{
+  onCreate: (result: SelectionFrameV2CreationResult) => void
+  onCancel?: () => void
+  minTraceSizePx?: number
+}>
+
 /** Gesture delta emitted by the frame. Move/resize use local pixels; rotation uses degrees. */
 export type SelectionFrameDelta = Readonly<
   | { kind: 'move'; dx: number; dy: number }
@@ -81,11 +100,15 @@ export type SelectionFrameV2Options = Readonly<{
   onCancel?: () => void
   /** Optional capability modules. The default is the built-in rotation modifier. */
   modifiers?: readonly SelectionFrameV2Modifier[]
+  /** Enables a hidden drawing surface that can be activated through the returned handle. */
+  creation?: SelectionFrameV2CreationOptions
 }>
 
 export type SelectionFrameV2Handle = Readonly<{
   element: HTMLElement
   setValue: (value: SelectionFrameValue | null) => void
+  /** Starts or stops authoring a new frame over the scene host. */
+  setCreationMode: (mode: SelectionFrameV2CreationMode | null) => void
   setSuspended: (suspended: boolean) => void
   isGestureActive: () => boolean
   destroy: () => void

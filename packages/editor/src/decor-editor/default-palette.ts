@@ -58,6 +58,7 @@ export const DEFAULT_PALETTE: PaletteConfig = {
     { id: 'presets', label: 'Presets', kind: 'preset-list' },
   ],
   panelsByItemType: {
+    bloc: ['shape', 'custom', 'presets'],
     text: ['shape', 'typo', 'content', 'custom', 'presets'],
     image: ['shape', 'custom', 'presets'],
     media: ['shape', 'custom', 'presets'],

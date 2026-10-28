@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   createSelectionFrameV2,
   type SelectionFrameDelta,
+  type SelectionFrameV2CreationResult,
   type SelectionFrameV2Modifier,
   type SelectionFrameValue,
 } from '../src/v2'
@@ -28,10 +29,12 @@ beforeAll(() => {
   }
 })
 
-function pointerEvent(type: string, clientX: number, clientY: number): Event {
+function pointerEvent(type: string, clientX: number, clientY: number, offsetX = clientX, offsetY = clientY): Event {
   const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
   Object.defineProperty(event, 'pointerId', { value: 1 })
   Object.defineProperty(event, 'buttons', { value: type === 'pointerup' ? 0 : 1 })
+  Object.defineProperty(event, 'offsetX', { value: offsetX })
+  Object.defineProperty(event, 'offsetY', { value: offsetY })
   return event
 }
 
@@ -248,6 +251,96 @@ describe('createSelectionFrameV2', () => {
 
     handle.setValue(null)
     expect(updates.at(-1)).toBeNull()
+    handle.destroy()
+  })
+
+  it('trace un rectangle libre local et ne l’émet qu’au relâché', () => {
+    root = document.createElement('div')
+    document.body.append(root)
+    Object.defineProperties(root, {
+      clientWidth: { configurable: true, value: 800 },
+      clientHeight: { configurable: true, value: 450 },
+    })
+    const created: SelectionFrameV2CreationResult[] = []
+    const handle = createSelectionFrameV2({
+      sceneRoot: root,
+      onPreview: () => baseValue(),
+      onCommit: () => {},
+      creation: { onCreate: (result) => created.push(result) },
+    })
+    handle.setValue(baseValue())
+    handle.setCreationMode({ kind: 'free' })
+
+    const surface = root.querySelector<HTMLElement>('[data-selection-frame-creation="v2"]')!
+    surface.dispatchEvent(pointerEvent('pointerdown', 100, 80, 20, 30))
+    surface.dispatchEvent(pointerEvent('pointermove', 200, 140, 120, 90))
+    expect(root.querySelector<HTMLElement>('[data-selection-frame-creation-preview]')!.style.width).toBe('100px')
+    expect(created).toEqual([])
+    surface.dispatchEvent(pointerEvent('pointerup', 200, 140, 120, 90))
+
+    expect(created).toEqual([{ kind: 'rect', rect: { x: 20, y: 30, width: 100, height: 60 } }])
+    expect(handle.element.style.display).toBe('none')
+    handle.setCreationMode(null)
+    expect(handle.element.style.display).toBe('')
+    handle.destroy()
+  })
+
+  it('accroche un tracé à la grille demandée et rejette un rectangle libre trop petit', () => {
+    root = document.createElement('div')
+    document.body.append(root)
+    Object.defineProperties(root, {
+      clientWidth: { configurable: true, value: 1600 },
+      clientHeight: { configurable: true, value: 900 },
+    })
+    const created: SelectionFrameV2CreationResult[] = []
+    const handle = createSelectionFrameV2({
+      sceneRoot: root,
+      onPreview: () => baseValue(),
+      onCommit: () => {},
+      creation: { onCreate: (result) => created.push(result), minTraceSizePx: 4 },
+    })
+    const surface = root.querySelector<HTMLElement>('[data-selection-frame-creation="v2"]')!
+    handle.setCreationMode({ kind: 'grid', rows: 90, cols: 160 })
+    surface.dispatchEvent(pointerEvent('pointerdown', 10, 20, 10, 20))
+    surface.dispatchEvent(pointerEvent('pointermove', 40, 50, 40, 50))
+    surface.dispatchEvent(pointerEvent('pointerup', 40, 50, 40, 50))
+    expect(created).toEqual([{ kind: 'cell-area', area: { row: 3, col: 2, rowSpan: 3, colSpan: 3 } }])
+
+    handle.setCreationMode({ kind: 'free' })
+    surface.dispatchEvent(pointerEvent('pointerdown', 10, 10, 10, 10))
+    surface.dispatchEvent(pointerEvent('pointermove', 12, 12, 12, 12))
+    surface.dispatchEvent(pointerEvent('pointerup', 12, 12, 12, 12))
+    expect(created).toHaveLength(1)
+    handle.destroy()
+  })
+
+  it('annule le tracé actif si le pointeur est interrompu', () => {
+    root = document.createElement('div')
+    document.body.append(root)
+    Object.defineProperties(root, {
+      clientWidth: { configurable: true, value: 800 },
+      clientHeight: { configurable: true, value: 450 },
+    })
+    const cancelled: boolean[] = []
+    const created: SelectionFrameV2CreationResult[] = []
+    const handle = createSelectionFrameV2({
+      sceneRoot: root,
+      onPreview: () => baseValue(),
+      onCommit: () => {},
+      creation: {
+        onCreate: (result) => created.push(result),
+        onCancel: () => cancelled.push(true),
+      },
+    })
+    handle.setCreationMode({ kind: 'free' })
+    const surface = root.querySelector<HTMLElement>('[data-selection-frame-creation="v2"]')!
+    surface.dispatchEvent(pointerEvent('pointerdown', 10, 10, 10, 10))
+    surface.dispatchEvent(pointerEvent('pointermove', 100, 100, 100, 100))
+    surface.dispatchEvent(pointerEvent('pointercancel', 100, 100, 100, 100))
+
+    expect(cancelled).toHaveLength(1)
+    expect(created).toEqual([])
+    expect(handle.isGestureActive()).toBe(false)
     handle.destroy()
   })
 })
