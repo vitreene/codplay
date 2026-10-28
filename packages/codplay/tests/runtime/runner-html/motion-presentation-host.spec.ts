@@ -119,6 +119,11 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     root.style.position = 'static'
     root.style.width = '982px'
     root.style.height = '541px'
+    Object.defineProperties(root, {
+      offsetParent: { value: document.body },
+      offsetLeft: { value: 285 },
+      offsetTop: { value: 137 },
+    })
     root.appendChild(source)
     document.body.appendChild(root)
 
@@ -161,6 +166,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     expect(layer?.parentElement).toBe(root)
     expect(layer?.style.transform).toBe('matrix(1, 0, 0, 1, 285, 137)')
     expect(ghost?.style.transform).toBe('matrix(1, 0, 0, 1, 33, 26)')
+    expect(rectSpy.mock.contexts.every((node) => node === root)).toBe(true)
 
     host.commit(createFrame([{
       ...createItem('item'),

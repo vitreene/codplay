@@ -28,11 +28,16 @@ class FakeStyle {
   }
 }
 
-/** Provides the computed-style subset needed to subtract an active FLIP transform. */
+/** Provides computed styles backed by the fixture's layout metrics. */
 class FakeDocument {
   readonly defaultView = {
-    getComputedStyle: (node: FakeElement): Readonly<{ transform: string }> => ({
+    getComputedStyle: (node: FakeElement) => ({
       transform: node.style.transform || 'none',
+      transformOrigin: '0px 0px',
+      position: node.style.position || 'static',
+      width: `${node.offsetWidth}px`,
+      height: `${node.offsetHeight}px`,
+      boxSizing: 'border-box',
     }),
   }
 
@@ -60,6 +65,42 @@ class FakeElement {
   readonly ownerDocument: FakeDocument
   readonly tagName: string
   private readonly listRect: Readonly<{ left: number; top: number; width: number; height: number }> | undefined
+  readonly clientLeft = 0
+  readonly clientTop = 0
+  readonly scrollLeft = 0
+  readonly scrollTop = 0
+
+  /** Resolves the layout containing block without including an authored transform. */
+  get offsetParent(): FakeElement | null {
+    return this.style.position === 'fixed' ? null : this.parentElement
+  }
+
+  /** Returns the untransformed horizontal slot in the containing block. */
+  get offsetLeft(): number {
+    if (this.listRect !== undefined) return this.listRect.left
+    if (this.style.position === 'fixed') return readPixels(this.style.left)
+    return this.parentElement === null ? 0 : 12
+  }
+
+  /** Returns the untransformed vertical slot in the fixture's column flow. */
+  get offsetTop(): number {
+    if (this.listRect !== undefined) return this.listRect.top
+    if (this.style.position === 'fixed') return readPixels(this.style.top)
+    const parent = this.parentElement
+    if (parent === null) return 0
+    const flow = parent.children.filter((child) => child.style.position !== 'fixed')
+    return 12 + Math.max(0, flow.indexOf(this)) * 50
+  }
+
+  /** Returns the fixture's CSS/layout width before transformations. */
+  get offsetWidth(): number {
+    return this.listRect?.width ?? readPixels(this.style.width, 120)
+  }
+
+  /** Returns the fixture's CSS/layout height before transformations. */
+  get offsetHeight(): number {
+    return this.listRect?.height ?? readPixels(this.style.height, 42)
+  }
 
   /** Creates one list or item node in the fake browser substrate. */
   constructor(
@@ -130,31 +171,11 @@ class FakeElement {
     this.listeners.get(type)?.delete(listener)
   }
 
-  /** Returns either the fixed dragged pose or the current flex-column flow pose. */
+  /** Supplies only capture-root world anchors; item geometry must use layout metrics. */
   getBoundingClientRect(): DOMRect {
     if (this.listRect !== undefined) return toDomRect(this.listRect)
-    const fixed = this.style.position === 'fixed'
-    if (fixed) {
-      const left = readPixels(this.style.left)
-      const top = readPixels(this.style.top)
-      return toDomRect({
-        left,
-        top,
-        width: readPixels(this.style.width, 120),
-        height: readPixels(this.style.height, 42),
-      })
-    }
-    const parent = this.parentElement
-    if (parent === null) return toDomRect({ left: 0, top: 0, width: 120, height: 42 })
-    const parentRect = parent.getBoundingClientRect()
-    const flowChildren = parent.children.filter((child) => child.style.position !== 'fixed')
-    const flowIndex = Math.max(0, flowChildren.indexOf(this))
-    return toDomRect({
-      left: parentRect.left + 12,
-      top: parentRect.top + 12 + flowIndex * 50,
-      width: 120,
-      height: 42,
-    })
+    if (this === this.ownerDocument.body) return toDomRect({ left: 0, top: 0, width: this.offsetWidth, height: this.offsetHeight })
+    throw new Error('item geometry must not read a DOM rectangle')
   }
 }
 

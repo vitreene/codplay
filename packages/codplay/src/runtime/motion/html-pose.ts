@@ -11,13 +11,6 @@ type HtmlWorldGeometry = Readonly<{
 
 type HtmlLocalBox = Readonly<{ width: number | null; height: number | null }>
 
-type HtmlMeasuredRect = Readonly<{
-  left: number
-  top: number
-  width: number
-  height: number
-}>
-
 /** Shared read context for one explicit HTML geometry transaction. */
 export type HtmlPoseCaptureContext = Readonly<{
   /** Stops world-geometry traversal at the local motion container. */
@@ -25,7 +18,6 @@ export type HtmlPoseCaptureContext = Readonly<{
   geometries: Map<Element, HtmlWorldGeometry>
   poses: Map<Element, HtmlPose>
   localBoxes: Map<Element, HtmlLocalBox>
-  measuredRects: Map<Element, HtmlMeasuredRect | undefined>
   computedStyles: Map<Element, CSSStyleDeclaration | undefined>
 }>
 
@@ -36,7 +28,6 @@ export function createHtmlPoseCaptureContext(boundaryRoot?: Element): HtmlPoseCa
     geometries: new Map(),
     poses: new Map(),
     localBoxes: new Map(),
-    measuredRects: new Map(),
     computedStyles: new Map(),
   }
 }
@@ -122,44 +113,22 @@ function measureLocalBox(node: Element, context: HtmlPoseCaptureContext): HtmlLo
   const width = Number.isFinite(computedWidth) && computedWidth > 0 ? computedWidth : null
   const height = Number.isFinite(computedHeight) && computedHeight > 0 ? computedHeight : null
 
-  const measuredRect = readMeasuredRect(node, context)
   const box = node instanceof HTMLElement
     ? {
       width: width
         ?? (node.offsetWidth > 0 ? node.offsetWidth : null)
-        ?? (node.clientWidth > 0 ? node.clientWidth : null)
-        ?? (measuredRect !== undefined && measuredRect.width > 0 ? measuredRect.width : null),
+        ?? (node.clientWidth > 0 ? node.clientWidth : null),
       height: height
         ?? (node.offsetHeight > 0 ? node.offsetHeight : null)
-        ?? (node.clientHeight > 0 ? node.clientHeight : null)
-        ?? (measuredRect !== undefined && measuredRect.height > 0 ? measuredRect.height : null),
+        ?? (node.clientHeight > 0 ? node.clientHeight : null),
     }
     : {
-      width: width ?? (measuredRect !== undefined && measuredRect.width > 0 ? measuredRect.width : null),
-      height: height ?? (measuredRect !== undefined && measuredRect.height > 0 ? measuredRect.height : null),
+      width,
+      height,
     }
 
   context.localBoxes.set(node, box)
   return box
-}
-
-/** Reads and caches one browser rectangle for this explicit pose transaction. */
-function readMeasuredRect(node: Element, context: HtmlPoseCaptureContext): HtmlMeasuredRect | undefined {
-  if (context.measuredRects.has(node)) return context.measuredRects.get(node)
-  const measurableNode = node as Element & { getBoundingClientRect?: () => DOMRect }
-  if (typeof measurableNode.getBoundingClientRect !== 'function') {
-    context.measuredRects.set(node, undefined)
-    return undefined
-  }
-  const rect = measurableNode.getBoundingClientRect()
-  const measured = Number.isFinite(rect.left)
-    && Number.isFinite(rect.top)
-    && Number.isFinite(rect.width)
-    && Number.isFinite(rect.height)
-    ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
-    : undefined
-  context.measuredRects.set(node, measured)
-  return measured
 }
 
 /** Reads one CSS length used by an individual transform property. */
@@ -171,21 +140,32 @@ function parseLengthPx(value: string | undefined, reference: number): number {
 }
 
 /** Reads the layout offset of one node in its immediate parent coordinate system. */
-function captureLayoutOffset(node: Element, parent: Element | null): { x: number; y: number } {
+function captureLayoutOffset(
+  node: Element,
+  parent: Element | null,
+  context: HtmlPoseCaptureContext,
+): { x: number; y: number } {
   if (!(node instanceof HTMLElement)) return { x: 0, y: 0 }
+  const scrollingParent = parent instanceof HTMLElement
+    && parent !== node.ownerDocument.scrollingElement
+    && readComputedStyle(node, context)?.position !== 'fixed'
+    ? parent
+    : null
+  const scrollX = scrollingParent?.scrollLeft ?? 0
+  const scrollY = scrollingParent?.scrollTop ?? 0
   const offsetParent = node.offsetParent instanceof HTMLElement ? node.offsetParent : null
   const nodePosition = captureOffsetToOffsetParent(node, offsetParent)
   if (!(parent instanceof HTMLElement) || offsetParent === parent) {
     return {
-      x: nodePosition.x + (offsetParent === parent && parent instanceof HTMLElement ? parent.clientLeft : 0),
-      y: nodePosition.y + (offsetParent === parent && parent instanceof HTMLElement ? parent.clientTop : 0),
+      x: nodePosition.x + (offsetParent === parent && parent instanceof HTMLElement ? parent.clientLeft : 0) - scrollX,
+      y: nodePosition.y + (offsetParent === parent && parent instanceof HTMLElement ? parent.clientTop : 0) - scrollY,
     }
   }
 
   const parentPosition = captureOffsetToOffsetParent(parent, offsetParent)
   return {
-    x: nodePosition.x - parentPosition.x + parent.clientLeft,
-    y: nodePosition.y - parentPosition.y + parent.clientTop,
+    x: nodePosition.x - parentPosition.x + parent.clientLeft - scrollX,
+    y: nodePosition.y - parentPosition.y + parent.clientTop - scrollY,
   }
 }
 
@@ -230,7 +210,7 @@ function captureOwnTransform(
   }
 }
 
-/** Computes one node's world affine geometry while retaining fractional DOM placement. */
+/** Composes layout offsets, authored pivots and ancestor matrices without measuring item AABBs. */
 function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): HtmlWorldGeometry {
   const existing = context.geometries.get(node)
   if (existing !== undefined) return existing
@@ -242,29 +222,31 @@ function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): H
   const localBox = measureLocalBox(node, context)
   const localWidth = localBox.width ?? 0
   const localHeight = localBox.height ?? 0
-  const fallbackLayoutOffset = captureLayoutOffset(node, parent)
+  const layoutOffset = captureLayoutOffset(node, parent, context)
   const ownTransform = captureOwnTransform(readComputedStyle(node, context), localWidth, localHeight)
   const matrix = multiplyMatrix(parentGeometry.matrix, ownTransform.matrix)
-  const fallbackLocalOrigin = {
-    x: fallbackLayoutOffset.x + ownTransform.displacement.x,
-    y: fallbackLayoutOffset.y + ownTransform.displacement.y,
+  const localOrigin = {
+    x: layoutOffset.x + ownTransform.displacement.x,
+    y: layoutOffset.y + ownTransform.displacement.y,
   }
-  const fallbackOrigin = {
-    x: parentGeometry.origin.x + parentGeometry.matrix.a * fallbackLocalOrigin.x + parentGeometry.matrix.c * fallbackLocalOrigin.y,
-    y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLocalOrigin.x + parentGeometry.matrix.d * fallbackLocalOrigin.y,
+  const affineOrigin = {
+    x: parentGeometry.origin.x + parentGeometry.matrix.a * localOrigin.x + parentGeometry.matrix.c * localOrigin.y,
+    y: parentGeometry.origin.y + parentGeometry.matrix.b * localOrigin.x + parentGeometry.matrix.d * localOrigin.y,
   }
   const layoutOrigin = {
-    x: parentGeometry.origin.x + parentGeometry.matrix.a * fallbackLayoutOffset.x + parentGeometry.matrix.c * fallbackLayoutOffset.y,
-    y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLayoutOffset.x + parentGeometry.matrix.d * fallbackLayoutOffset.y,
+    x: parentGeometry.origin.x + parentGeometry.matrix.a * layoutOffset.x + parentGeometry.matrix.c * layoutOffset.y,
+    y: parentGeometry.origin.y + parentGeometry.matrix.b * layoutOffset.x + parentGeometry.matrix.d * layoutOffset.y,
   }
-  const origin = resolveMeasuredWorldOrigin(node, matrix, localWidth, localHeight, fallbackOrigin, context)
+  const origin = parent === null
+    ? captureRootWorldOrigin(node, matrix, localWidth, localHeight, affineOrigin, context)
+    : affineOrigin
   const geometry: HtmlWorldGeometry = { origin, layoutOrigin, matrix }
   context.geometries.set(node, geometry)
   return geometry
 }
 
-/** Recovers fractional layout placement from the real DOM AABB without treating it as an affine origin. */
-function resolveMeasuredWorldOrigin(
+/** Anchors the capture root once in world space; descendant geometry stays entirely affine. */
+function captureRootWorldOrigin(
   node: Element,
   matrix: HtmlMatrix,
   localWidth: number,
@@ -272,15 +254,24 @@ function resolveMeasuredWorldOrigin(
   fallback: { x: number; y: number },
   context: HtmlPoseCaptureContext,
 ): { x: number; y: number } {
-  const rect = readMeasuredRect(node, context)
-  if (rect === undefined) return fallback
+  const rect = node.getBoundingClientRect()
   const hasUsableRect = Number.isFinite(rect.left)
     && Number.isFinite(rect.top)
     && !(localWidth > 0 && rect.width === 0)
     && !(localHeight > 0 && rect.height === 0)
   if (!hasUsableRect) return fallback
 
-  const bounds = transformedBounds(matrix, localWidth, localHeight)
+  const computed = readComputedStyle(node, context)
+  const contentBox = computed?.boxSizing !== 'border-box'
+  const widthInsets = contentBox && Number.parseFloat(computed?.width ?? '') > 0
+    ? ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'] as const
+    : []
+  const heightInsets = contentBox && Number.parseFloat(computed?.height ?? '') > 0
+    ? ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'] as const
+    : []
+  const width = widthInsets.reduce((size, property) => size + (Number.parseFloat(computed?.[property] ?? '') || 0), localWidth)
+  const height = heightInsets.reduce((size, property) => size + (Number.parseFloat(computed?.[property] ?? '') || 0), localHeight)
+  const bounds = transformedBounds(matrix, width, height)
   const scrollX = node.ownerDocument.defaultView?.scrollX ?? 0
   const scrollY = node.ownerDocument.defaultView?.scrollY ?? 0
   return {

@@ -291,6 +291,13 @@ une seule fois.
 
 ## Validation ciblée restante
 
+La correction de capture affine du 28 octobre 2026 est vérifiée dans la
+[spécification motion](../specs/motion-frame-v2-spec.md#capture-affine-des-items-html).
+La suite complète conserve les 7 échecs présents avant cette correction :
+facade (4), flip-stress (1), Sighty/localStorage (2). Après correction :
+805 réussites et 1 échec attendu ; typecheck et build player passent.
+Ces échecs préexistants maintiennent les gates globales ci-dessous ouvertes.
+
 Les validations restantes doivent établir que :
 
 - les événements compilés, live et reconstruits par Seek transmettent les

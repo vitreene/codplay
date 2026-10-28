@@ -55,6 +55,22 @@ Le test de frontière du runner sur la story 6 confirme ce raccord avec la scèn
 réelle : le mouvement de Qa garde Q comme parent au départ, utilise K et son
 cadre dans le contexte de destination, et ne crée pas de retarget parasite.
 
+## Capture affine des items HTML
+
+La pose d’un item est composée depuis ses offsets de layout, les styles
+calculés, son pivot et les matrices parentes. Le scroll du parent est déduit
+du slot local. Aucun rectangle DOM d’item ne fournit ses dimensions ni son
+origine. Les dimensions CSS restent celles appliquées par le présentateur.
+Seule la racine de capture lit une fois son ancrage monde dans la transaction ;
+les ancêtres au-dessus d’une racine explicite ne sont pas parcourus.
+
+Les tests `html-pose`, `layout-snapshot`, `motion-presentation-host` et
+`list-dnd-preview` vérifient ce circuit et interdisent la lecture de rectangles
+d’items. Le 28 octobre 2026, Safari MCP a rejoué la scène Editor persistée avec
+bordure et rotation de `41°` : l’écart entre les matrices avant/après la fin
+passe d’environ `24 px` à `0,0015 px`. Play après resize, Seek, Stop et
+restauration du document local ont également été exercés sans erreur console.
+
 ## Preuves
 
 - [motion-occurrences.ts](../src/runtime/player/runtime-player/motion-occurrences.ts)
@@ -80,6 +96,12 @@ cadre dans le contexte de destination, et ne crée pas de retarget parasite.
   vérifie les snapshots FIRST, après-start, keyframes et LAST.
 - [story-six-motion.spec.ts](../tests/facade/story-six-motion.spec.ts) vérifie
   la branche de destination tardive par le runner réel.
+- [html-pose.spec.ts](../tests/runtime/motion/html-pose.spec.ts),
+  [layout-snapshot.spec.ts](../tests/runtime/runner-html/layout-snapshot.spec.ts),
+  [motion-presentation-host.spec.ts](../tests/runtime/runner-html/motion-presentation-host.spec.ts)
+  et [list-dnd-preview.spec.ts](../tests/runtime/runner-html/list-dnd-preview.spec.ts)
+  couvrent bordures, padding, pivot, échelle, parent/enfant, scroll et ancrage
+  décalé sans mesure de rectangle des items.
 
 Le 2026-09-26, les suites ciblées ont passé cinq fichiers et 50 tests. Le même
 groupe de validation comprend les tests de dépendance à la target suivis dans

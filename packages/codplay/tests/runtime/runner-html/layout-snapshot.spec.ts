@@ -21,7 +21,14 @@ describe('HTML layout snapshot coordinates', () => {
     item.style.width = '20px'
     item.style.height = '20px'
     defineRect(storyRoot, { left: 100, top: 100, width: 200, height: 200 })
-    defineRect(item, { left: 120, top: 120, width: 20, height: 20 })
+    Object.defineProperties(item, {
+      offsetParent: { value: storyRoot },
+      offsetLeft: { value: 20 },
+      offsetTop: { value: 20 },
+      getBoundingClientRect: {
+        value: () => { throw new Error('item geometry must not read a DOM rectangle') },
+      },
+    })
     Object.defineProperty(outer, 'getBoundingClientRect', {
       configurable: true,
       value: () => { throw new Error('outside story root must not be measured') },
