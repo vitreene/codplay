@@ -2,11 +2,12 @@
 
 ## Statut
 
-**En cours — la fenêtre distincte, la navigation indépendante, la
-synchronisation manuelle et la composition Sighty/CodPlay sont vérifiées. Le
-lecteur est rendu par Remix sans dépendance React. Le sommaire présente encore
-un `aria-expanded` incohérent au passage de 800 à 801 px et un retour de focus
-tardif à la fermeture ; ces points restent suivis dans le plan de construction.**
+**En cours — le contrat de consultation, la fenêtre distincte, la navigation
+indépendante, la synchronisation manuelle, la composition Sighty/CodPlay et la
+progression sont vérifiés. Le lecteur est rendu par Remix sans dépendance
+React. Le sommaire présente encore un `aria-expanded` incohérent au passage de
+800 à 801 px et un retour de focus tardif à la fermeture ; ces points restent
+suivis dans le plan de construction.**
 
 ## Contrat
 
@@ -62,19 +63,24 @@ sélection restent dans la session lecteur, séparément des sources de scènes
 réutilisées. Ces sources ne capturent pas l’état de consultation et le cache
 des ressources est libéré à la fermeture de la fenêtre.
 
-Le lecteur peut charger l’état test initial depuis l’API du projet. Les
-changements de consultation restent propres à la preview et ne sont pas
-enregistrés sur le serveur. L’origine réseau de preview peut lire l’état test ;
-son prévol `PUT` est refusé. Le contrat du stockage serveur et de sa révision
-figure dans la [spécification Sommaire et profils](./summary-profile-spec.md).
+Le lecteur peut charger l’état test initial depuis l’API du projet. Tout l’état
+de consultation — navigation, réponses, progression, profil et évaluations —
+reste dans la session mémoire de la preview. Une preview ne l’enregistre jamais
+sur le serveur : le popup local comme la preview réseau n’envoient aucun
+`PUT /test-state`, et fermer le popup détruit cet état mémoire. La preview
+réseau peut lire l’état initial en `GET` ; sa politique refuse toute écriture.
+Le `PUT /test-state` du serveur reste destiné aux contextes auteur qui
+enregistrent explicitement l’état test, hors preview. Le contrat du stockage
+et de sa révision figure dans la
+[spécification Sommaire et profils](./summary-profile-spec.md).
 
 Dans la popup, une reconstruction provoquée par la remise à zéro de la
 progression reprend la page courante du lecteur depuis Sighty. Une demande
 explicite « Synchroniser » utilise la page sélectionnée dans l’éditeur. Le
-[test d’intégration popup](../src/app/player/popup-player-cache-integration.test.tsx)
+[test d’intégration popup](../src/mods/learning/integration/learning-preview-session.test.tsx)
 exerce ces deux actions avec la composition Sighty/CodPlay réelle et vérifie
 qu’une réponse de preview ne déclenche aucune écriture API. Les tests de
-[composition du player](../src/player/elce-player-composition.test.ts) vérifient
+[composition du player](../src/mods/learning/reading/learning-player.test.ts) vérifient
 la réutilisation des scènes Flux/Diapo, la restauration ou la suppression des
 réponses, et l’absence d’une nouvelle validation.
 
@@ -192,12 +198,12 @@ détruit les ressources du lecteur.
 
 ### Médias indépendants
 
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   exerce une vidéo Carte dans la composition Sighty/CodPlay réelle : fin de
   page par l’adaptateur d’observation, clic Suivant, `STOP` à zéro, clic
   Précédent et réutilisation du même nœud et de la même source à zéro.
-- Les tests [Flux](../src/builders/flux/flux-scene-builder.test.ts) et
-  [Diapo](../src/builders/diapo/diapo-scene-builder.test.ts) couvrent aussi le
+- Les tests [Flux](../src/mods/learning/integration/flux-scene-builder.test.ts) et
+  [Diapo](../src/mods/learning/integration/diapo-scene-builder.test.ts) couvrent aussi le
   mode indépendant des vidéos de Question et les commandes de viewport Flux
   conservées. Leurs 22 tests passent le 14 octobre 2026.
 - Safari MCP, le 14 octobre 2026, monte un document et un MP4 produits pour la
@@ -216,29 +222,29 @@ détruit les ressources du lecteur.
 
 ### Preuves antérieures de preview
 
-- [`ProjectApplication`](../src/app/remix/project-application.ts) ouvre le
+- [`ProjectApplication`](../src/core/authoring/layout/project-application.tsx) ouvre le
   popup depuis la page sélectionnée et détruit sa liaison à la fermeture de
   l’application auteur.
-- [`PopupPreviewHost`](../src/app/player/popup-preview-host.ts) transmet les
+- [`PopupPreviewHost`](../src/core/preview/popup-preview-host.ts) transmet les
   instantanés et les demandes au moyen du protocole de messages existant,
   attaché à l’acteur XState auteur.
-- [`PopupPlayer`](../src/app/player/popup-player.tsx) est rendu par le routeur
+- [`PopupPlayer`](../src/mods/learning/preview/learning-preview-view.tsx) est rendu par le routeur
   `remix/spa`. Il reçoit les instantanés, résout les médias confirmés par l’URL
   de l’API Elcé et crée temporairement des URLs objet pour les transferts en
   attente. Il remonte la composition réelle à chaque instantané.
-- [`popup-player.css`](../src/app/player/popup-player.css) conserve les
+- [`popup-player.css`](../src/core/preview/popup-player.css) conserve les
   libellés sur ordinateur et masque le texte au profit des icônes à 800 px et
   en dessous.
-- [`popup-preview-host.test.ts`](../src/app/player/popup-preview-host.test.ts)
+- [`popup-preview-host.test.ts`](../src/core/preview/popup-preview-host.test.ts)
   vérifie la page de départ, la synchronisation du document édité et la
   sélection de la page courante.
-- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) vérifie la
+- [`popup-player.test.tsx`](../src/mods/learning/preview/learning-preview-view.test.tsx) vérifie la
   synchronisation unique lorsqu’une page éditée vient d’être créée et la
   résolution d’un média confirmé dont le Blob n’est plus présent en local. Il
   vérifie aussi l’icône partagée du bouton « Test auteur », ainsi que les
   messages de reprise sans éditeur et sans réponse initiale, sans chargement
   d’un ancien document local.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie la réutilisation des sources de scènes inchangées après une
   réorganisation et la reconstruction de la scène d’une page éditée. Il
   vérifie aussi le départ direct à la Question D, son achèvement par réponse et
@@ -300,9 +306,21 @@ détruit les ressources du lecteur.
   lecture API a confirmé l’état serveur à la révision 0 avec
   `questionAnswers: {}`. Un prévol `PUT` présenté avec l’origine preview a
   répondu `403` et n’a autorisé que `GET`, `HEAD` et `OPTIONS`.
-- Pour cette correction, le typecheck et le build passent ; le build signale un
-  chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
-  passe 28/28. La suite complète compte 218 succès et un échec d’environnement :
-  le test de persistance SQLite n’a pas pu ouvrir son listener local (`listen
-  EPERM: operation not permitted 127.0.0.1`). La vérification browser du départ
-  direct dans Projet 1 reste suivie au plan de construction.
+- Safari MCP, le 28 octobre 2026, a exécuté le harnais browser du vrai
+  `LearningPlayer` dans un onglet isolé. Le harnais injecte un scheduler de
+  frames déterministe par l’option publique `frameScheduler`, car l’onglet MCP
+  reste en arrière-plan ; le player conserve son scheduler normal en
+  production. Sighty/CodPlay et l’`IntersectionObserver` natif sont réels. Le
+  harnais laisse d’abord Safari distribuer les observations natives, puis vide
+  les frames injectées ; cette attente ne change pas le runtime. Deux parcours
+  dans des onglets frais, sans instrumentation de l’observer, ont soumis le
+  profil, validé une réponse Question et amené le scrollport Flux au marqueur
+  bas. La progression et « Suivant » se sont déverrouillés ; Page A → Page B →
+  Page A a conservé le profil soumis, les deux pages terminées et la réponse.
+  L’image locale de Page B est chargée (`complete`, largeur intrinsèque 8).
+  Dans les deux parcours, la destruction vide le stage et l’inspecteur réseau
+  ne compte aucune requête `/test-state`.
+- Pour ce parcours, 114 tests ciblés sur 9 fichiers, le typecheck et le build
+  passent. Le build conserve son avertissement existant de chunk JavaScript
+  supérieur à 500 kB. La vérification browser du départ direct dans Projet 1
+  reste suivie au plan de construction.

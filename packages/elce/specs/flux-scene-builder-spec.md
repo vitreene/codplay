@@ -21,7 +21,7 @@ contrôles/broadcasts existants. Le temps CodPlay ne conduit pas leur lecture.
 Le `STOP` de sortie de page appartient à la composition du lecteur, décrit
 dans la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
 
-`buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
+`buildFluxScene(page, bdcs, options)` accepte une page Elcé de type `flux` et sa séquence
 ordonnée de BDC Section, Question, Résultat, Carte, Graphe ou
 Carousel, selon les contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;
 son rendu image ou vidéo vient du MIME de cette ressource. Les Cartes peuvent
@@ -30,6 +30,13 @@ Une Carte ancrée appartient à sa Section et n’est pas un BDC direct de page.
 Dans le Flux, les BDC de premier niveau sont séparés par un `gap` de `2.5rem`.
 Ce rythme extérieur ne change pas les espacements typographiques à l’intérieur
 des BDC.
+Les formats exposent `buildAdditionalBdc` comme contribution optionnelle : le
+builder Flux ne connaît pas le BDC Résultat Learning. La composition Learning
+fournit `createLearningAdditionalBdcBuilder`, qui résout le BDC complet dans son
+document, vérifie le chapitre lorsque nécessaire et retourne son markup, son
+slot et ses stories additionnelles. Le builder ajoute ces stories à la scène
+sans changer leur ordre ; un type inconnu sans contribution reçoit un refus
+explicite.
 Une source média optionnelle peut être fournie séparément par `mediaSources` ;
 le builder projette la Carte par son preset et monte son perso média dans la
 cible correspondante. Dans le markup de layout, les points d’insertion CodPlay
@@ -192,30 +199,30 @@ et le composant `layout` recalcule la position de ce slot. Le circuit de navigat
 inchangé.
 
 Les contrats de sortie sont isolés dans
-[`flux-scene-builder-types.ts`](../src/builders/flux/flux-scene-builder-types.ts) et
+[`flux-scene-builder-types.ts`](../src/resources/pages/flux/flux-scene-builder-types.ts) et
 [`scenario-builder-types.ts`](../src/builders/scenario/scenario-builder-types.ts) ; les
 builders ne déclarent que leur comportement d’exécution.
 
 ## Preuves
 
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie les stories, le scrollport, les commentaires d’insertion et la compilation avec les
   définitions réelles `scroll-container` de CodPlay, ainsi que le montage
   d’une Carte directe vers son perso image ou vidéo, ainsi que le montage d’une
   Carte enfant dans le slot projeté depuis une ancre exportée. Il vérifie aussi la
   priorité de ciblage du média ancré (`z-index: 1`), la projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
   leurs médias selon le layout et les plages automatiques finies.
-- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+- [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   vérifie les placements Graphe direct Flux et ancré en Section par les
   builders réels, le `z-index` de sa racine ancrée, ainsi que l’état initial
   `enter` du Graphe ancré.
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie la zone de révélation de la Carte et ses événements d’entrée/sortie ;
   il vérifie aussi la déclaration d’entrée de l’image.
 - [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
   vérifie l’héritage champ par champ du projet vers le parent Carousel et son
   entrée.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   exerce le chemin de composition existant entre l’événement du perso média,
   le strap et le déplacement. Ce test ne couvre pas la cible native choisie par
   le navigateur dans le slot ; le relevé Brave ci-dessous vérifie ce point.
@@ -229,10 +236,10 @@ builders ne déclarent que leur comportement d’exécution.
 La validation ciblée du correctif le 23 octobre 2026 passe les deux suites de
 builder (18 tests), la composition player (48 tests), le typecheck et le build
 Elcé.
-- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+- [`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts)
   vérifie les presets, les identifiants des éléments parents, les commentaires
   d’insertion, l’identité des zones et l’omission des textes facultatifs vides.
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie qu’une Section sans titre ne crée pas de `h2` et qu’un Résultat sans
   message ne crée pas de paragraphe vide ; les tests Flux et player couvrent les
   presets projetés dans ces parcours.
@@ -248,7 +255,7 @@ Elcé.
   vérifie les scènes persistantes, le graphe Sighty, les routes, l’ordre racine
   mélangé des entrées page/chapitre, le menu correspondant, et l’exclusion des
   pages du catalogue.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie le montage réel du cadre complet, du menu, du titre, de la
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de
   test, ainsi que

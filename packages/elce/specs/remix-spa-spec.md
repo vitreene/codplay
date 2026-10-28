@@ -9,20 +9,33 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 
 ## Composition
 
-- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) compose le
-  contrôleur XState, IndexedDB, la synchronisation de projet et une unique
-  `EditorActionsFacade` pour l’application auteur. Sur une URL de popup, il ne
-  crée pas de contrôleur ou de store auteur.
-- [`remix-spa-router.tsx`](../src/app/remix/remix-spa-router.tsx) place l’acteur
-  et la façade auteur dans `EditorContextProvider`, puis rend
-  `ProjectApplication`. Sur l’URL de popup, la même route rend directement
-  `PopupPlayer` dans Remix, sans import dynamique d’une entrée historique.
-- [`ProjectApplication`](../src/app/remix/project-application.ts) rend la
-  gestion des projets, le Scénario, les réglages de chapitre, le catalogue,
-  l’aperçu popup et la zone centrale. Une sélection de page monte
-  [`RemixPageEditor`](../src/app/remix/workspace/page-editor.ts). Leurs
-  commandes et leur persistance restent attachées au même acteur XState.
-- `RemixPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
+- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) choisit la
+  composition selon les paramètres de l’URL, démarre Remix et dispose le
+  runtime à `pagehide`. La composition auteur publique est
+  [`createLearningAuthoringComposition`](../src/mods/learning/composition/authoring-composition.tsx) :
+  elle construit le store, la session projet, un acteur XState, les façades et
+  les vues Learning, puis fournit `authoringRoot` et `dispose()`. Une URL de
+  preview construit seulement la composition Preview Learning ; elle ne crée
+  pas d’acteur auteur ni de store auteur.
+- [`remix-spa-router.tsx`](../src/app/remix/remix-spa-router.tsx) reçoit
+  `authoringRoot` et `previewRoot`. Il sélectionne une racine selon les
+  paramètres de preview et conserve la route `/` et sa réponse 404. Il ne
+  construit ni machine, ni façade, ni application projet, ni player.
+- [`LearningProjectApplication`](../src/mods/learning/authoring/learning-project-application.tsx)
+  assemble le workspace Learning avec
+  [`renderCoreProjectApplication`](../src/core/authoring/layout/project-application.tsx),
+  qui possède l’en-tête projet, l’accès, l’historique et le cadre commun.
+  [`LearningWorkspace`](../src/mods/learning/authoring/learning-workspace.tsx)
+  et [`ScenarioPanel`](../src/mods/learning/authoring/scenario-panel.tsx)
+  gardent le parcours et ses placements. Leurs intentions passent par la
+  façade Learning et le même acteur auteur.
+- [`LearningPageEditor`](../src/mods/learning/authoring/learning-page-editor.tsx)
+  assemble les éditeurs de ressources et les contributions propres au mod ;
+  [`renderPageEditorView`](../src/core/authoring/page/page-editor-view.tsx)
+  possède la présentation commune du titre, des lignes BDC et des séparateurs.
+  Les sessions Section/ancres gardent leurs callbacks de montage, d’actualisation
+  et de destruction.
+- `LearningPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
   déplacement, les titres éditables, les commandes de création et le nettoyage
   au changement de page. Il rend dans Remix Section, Question, Résultat, Carte
   directe et Carousel à chaque ligne BDC. Les marqueurs de type du chapitre,
@@ -51,6 +64,16 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+  Le mount `elceVendor` expose `packages/elce/node_modules` sous
+  `/assets/elceVendor/`, en complément du mount `vendor` à la racine du
+  monorepo. Le serveur d’assets peut ainsi résoudre le paquet `remix` installé
+  dans le workspace Elcé et suivre ses imports `remix/spa`.
+  Si le port API est déjà occupé en mode local, le serveur ne réutilise son
+  listener que si `GET /api/projects`, envoyé avec une origine locale, renvoie
+  le catalogue et les en-têtes `Access-Control-Allow-Origin` et `Vary: Origin`
+  attendus. Une ancienne API sans ce contrat fait échouer le démarrage avec un
+  diagnostic explicite du port ; l’éditeur ne démarre pas avec une API qui
+  ferait échouer ses lectures navigateur.
   En développement, elle n’émet pas les `modulepreload` de l’entrée Remix :
   les modules sont chargés à leur import et le navigateur n’affiche pas les
   avertissements de préchargements inutilisés. En production, les indications
@@ -77,11 +100,14 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 ## Invariants
 
 - Le contrôleur XState reste l’unique propriétaire du document et de l’accès
-  au projet. Le Context Remix ne possède qu’une référence vers cet acteur ; les
-  snapshots locaux servent au rendu.
-- Chaque vue auteur utilise `EditorActionsFacade` et les façades métier
-  établies. Aucun composant Remix ne conserve un second document, ne fabrique
-  un circuit de synchronisation ou ne contourne les services métier.
+  au projet. Le contexte Remix Learning expose une référence vers cet acteur
+  et les façades injectées ; les snapshots locaux servent au rendu.
+- `CoreEditorFacade` possède les gestes projet et l’historique communs.
+  `LearningEditorFacade` délègue à ces gestes, aux façades de ressources et
+  aux commandes Learning. Les vues communes reçoivent des actions typées et
+  n’importent pas les façades concrètes.
+- Aucune vue auteur ne conserve un second document, ne fabrique un circuit de
+  synchronisation ou ne contourne les services métier.
 - Les BDC directs gardent l’ordre de `page.bdcIds`. Les Cartes enfants gardent
   leurs relations Carousel et leur ordre propre ; elles ne deviennent pas des
   BDC directs de page.
@@ -98,29 +124,31 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 
 ## Preuves
 
-- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
-  monte l’éditeur de production. Il vérifie l’ordre et l’unicité des cinq BDC,
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
+  et [`learning-workspace.test.tsx`](../src/mods/learning/authoring/learning-workspace.test.tsx)
+  montent les vues de production. Ils vérifient l’ordre et l’unicité des BDC,
   leurs éditions, les Cartes Carousel et leur réordonnancement, le déplacement
   d’un BDC, le changement de page, la Carte directe Flux/Diapo et la
   restitution des sélections enregistrées. Un parcours importe aussi des
   médias Question, Carte et Carousel par le stockage et la file XState réels.
-- [`workspace/chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
+- [`chapter-settings.test.tsx`](../src/mods/learning/authoring/chapter-settings.test.tsx)
   vérifie le réglage enregistré d’un chapitre après remontage.
-- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
-  vérifie dans le même `RemixPageEditor` le contenu, le titre, les commandes
+- [`remix-section-production.test.tsx`](../src/mods/learning/integration/remix-section-production.test.tsx)
+  vérifie dans le même `LearningPageEditor` le contenu, le titre, les commandes
   Tiptap, le dépôt et la persistance d’une image, l’aperçu et le déplacement
   d’ancre, ainsi que la conservation de l’instance Editor et de son DOM. Il
   vérifie aussi que le bouton de retrait du média rend `lucide-trash-2`, tandis
   que le bouton de fermeture du panneau rend `lucide-x`.
-- [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
-  vérifie le montage de l’éditeur natif dans `ProjectApplication` et le
-  remplacement de la zone centrale après sélection d’un chapitre.
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
+  vérifie le montage de l’application Learning, l’historique et les raccourcis
+  clavier dans le projet auteur.
 - [`remix-spa-router.test.ts`](../src/app/remix/remix-spa-router.test.ts)
-  vérifie que l’URL de popup rend le lecteur sans monter l’application auteur.
+  vérifie que le routeur sélectionne la racine Preview sans monter la racine
+  auteur.
 - [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts)
   vérifie que la réponse de développement omet les `modulepreload`, tandis que
   la réponse de production les conserve.
-- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) exerce le
+- [`popup-player.test.tsx`](../src/mods/learning/integration/popup-player.test.tsx) exerce le
   protocole de messages et le chargement du média serveur sans Blob IndexedDB.
 - Brave DevTools, le 8 octobre 2026, a ouvert `npm run dev:elce` sur
   `http://localhost:5176` puisque `localhost:5175` était occupé. La route a
@@ -149,3 +177,32 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
   bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
   l’avertissement Vite au-dessus de `500 kB`.
+- Le 27 octobre 2026, Safari MCP ouvre l’éditeur « Démo 5 — comparaison Elcé »
+  sur `http://localhost:5175/`. Une requête sans cache à
+  `/assets/elce/app/remix/browser-entry.tsx` et une autre à
+  `/assets/elceVendor/@remix-run/spa/dist/lib/spa.js` répondent toutes deux
+  `200`; l’éditeur se rend sans réponse HTTP `5xx`. Le runtime Remix local est
+  donc résolu depuis le mount `elceVendor`.
+- [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts) lance
+  le serveur avec une API locale simulée : un listener sans CORS est refusé,
+  puis le même listener est réutilisé après ajout du contrat CORS. Ce parcours
+  vérifie aussi la compilation de l’entrée Remix et de ses imports montés.
+- Le 28 octobre 2026, Safari MCP sur `http://localhost:5175/` a créé une page
+  de test dans le projet temporaire « Mods L4 MCP 2026-10-28 », puis enregistré
+  son titre et son placement. Le réordonnancement a emprunté les handlers
+  `dragstart`/`dragover`/`drop` de `LearningWorkspace` avec un `DragEvent`
+  synthétique ; un `GET /api/projects/:id` confirme ensuite la nouvelle liste
+  `Page D MCP`, `Page A` dans le chapitre. Cela vérifie le circuit auteur et sa
+  persistance ; l’inventaire Safari MCP n’offre pas de geste physique de souris.
+  L’édition inline du titre a été suivie de `Cmd+Z` et `Cmd+Shift+Z` sur les
+  handlers clavier de l’application. Le viewport a conservé
+  `scrollWidth === clientWidth` à 800, 801, 1200 et 1201 px. La commande
+  « Prévisualiser » ouvre la racine Preview dans un onglet distinct ; celui-ci
+  rend `Page D MCP` et son panneau de lecture. Sa session n’a émis aucune
+  requête API pendant l’observation. Safari étant en arrière-plan, des signaux
+  focus/visibilité de test ont servi à réactiver le bail avant les gestes qui
+  écrivent ; aucune alerte n’était affichée.
+- L’acceptation L5 du 28 octobre 2026 passe sur neuf fichiers et 38 tests,
+  avec `npm run typecheck` et `npm run build`. Le bundle de production est de
+  `1 644,91 kB` minifiés (`458,29 kB` gzip) ; Vite conserve son avertissement
+  au-dessus de `500 kB`.

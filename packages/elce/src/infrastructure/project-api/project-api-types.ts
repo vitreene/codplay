@@ -1,5 +1,1 @@
-export interface ElceProjectSummary {
-  readonly id: string
-  readonly name: string
-  readonly revision: number
-}
+export type { ElceProjectSummary } from '../../core/persistence/project-api/project-api-types'

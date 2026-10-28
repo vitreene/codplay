@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createInitialDocument } from '../../domain/document/document-model'
-import { createElceApiRouter } from '../api-router'
-import type { ProjectPersistence } from '../projects/project-persistence'
+import { learningDocumentService } from '../../mods/learning/document/learning-document-service'
+import { createLearningApiRouter } from '../../mods/learning/composition/server/learning-api-router'
+import type { ProjectPersistence } from '../../core/server/projects/project-persistence'
+import type { LearningDocument } from '../../mods/learning/document/learning-document'
+import type { LearningTestStatePersistence } from '../../mods/learning/persistence/server/learning-test-state-persistence'
 import { SightyExportApiController } from './sighty-export-api-controller'
 
 describe('Sighty export API route', () => {
@@ -11,9 +13,9 @@ describe('Sighty export API route', () => {
     const persistence = {
       createProject: persistenceWrites,
       saveDocument: persistenceWrites,
-    } as unknown as ProjectPersistence
-    const router = createElceApiRouter(persistence, undefined, new SightyExportApiController(exporter))
-    const document = createInitialDocument()
+    } as unknown as ProjectPersistence<LearningDocument> & LearningTestStatePersistence
+    const router = createLearningApiRouter(persistence, undefined, new SightyExportApiController(exporter))
+    const document = learningDocumentService.createInitialDocument()
     const form = new FormData()
     form.set('document', JSON.stringify(document.toJSON()))
 
@@ -32,12 +34,12 @@ describe('Sighty export API route', () => {
 
   it('rejects a media payload with the wrong size before invoking the package exporter', async () => {
     const exporter = vi.fn(async () => new Uint8Array([80, 75]))
-    const router = createElceApiRouter(
-      {} as ProjectPersistence,
+    const router = createLearningApiRouter(
+      {} as ProjectPersistence<LearningDocument> & LearningTestStatePersistence,
       undefined,
       new SightyExportApiController(exporter),
     )
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     const data = {
       ...document.toJSON(),
       medias: [{ id: 'media-required', name: 'visuel.svg', mimeType: 'image/svg+xml', size: 1, caption: '' }],

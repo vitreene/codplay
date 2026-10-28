@@ -4,22 +4,19 @@ import { describe, expect, it, vi } from 'vitest'
 import { Sighty } from '@codplay/sighty'
 import type { SightyScenarioMutation } from '@codplay/sighty'
 import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
-import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
-import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import type { ElceSceneKey, ElceSlotName } from '../mods/learning/reading/learning-scenario-types'
+import { INITIAL_PROJECT_TEST_STATE } from '../mods/learning/reading/learning-test-state-types'
+import { BDC_TYPE, DEFAULT_PRESET_ID } from '../mods/learning/learning-definition'
+import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../mods/learning/reading/learning-reading-events'
+import { PAGE_LOCATION } from '../mods/learning/organization/learning-page-placement'
 import {
   BDC_LOCATION,
-  BDC_TYPE,
-  DEFAULT_PRESET_ID,
-  ELCE_EVENTS,
-  ELCE_SCENARIO,
-  ELCE_SCENARIO_HANDLERS,
-  PAGE_LOCATION,
-} from '../config/document-config'
+} from '../core/document/content-location'
 import type { PipwerksScormApi } from '@codplay/sighty-scorm'
 import type { ScormReaderState } from './scorm-types'
 import { applyDocumentCommand, createPageCommand } from '../domain/commands/document-commands'
-import { createInitialDocument } from '../domain/document/document-model'
-import { createElcePlayerScenario } from '../player/elce-player-composition'
+import { learningDocumentService } from '../mods/learning/document/learning-document-service'
+import { createElcePlayerScenario } from '../mods/learning/reading/learning-player'
 import { ELCE_ENGINE_CAPABILITIES } from '../player/elce-player-engine'
 import {
   ELCE_SCORM_CHAPTER_CONTEXT_KEY,
@@ -458,7 +455,7 @@ describe('SCORM package state restoration', () => {
     root.style.visibility = 'hidden'
     document.body.append(root)
 
-    let documentModel = createInitialDocument()
+    let documentModel = learningDocumentService.createInitialDocument()
     documentModel = applyDocumentCommand(documentModel, {
       type: 'page.move',
       pageId: 'page-a',

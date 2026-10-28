@@ -8,8 +8,8 @@ import type {
   AppearanceColor,
   AppearanceSettings,
 } from '../../config/appearance/appearance-types'
-import type { AppearanceProperty, AppearanceTarget } from '../commands/document-command-types'
-import type { ElceDocument } from '../document/document-model'
+import type { AppearanceProperty, AppearanceTarget } from './appearance-target-types'
+import type { ResourceDocumentData } from '../../resources/document/resource-document-types'
 
 export type AppearanceSource = AppearanceTarget | Readonly<{ kind: 'application' }>
 
@@ -43,7 +43,7 @@ interface AppearanceLayer {
 }
 
 /** Resolves sparse local appearance values through BDC, page, project and app scopes. */
-export function resolveAppearance(document: ElceDocument, target: AppearanceTarget): ResolvedAppearance {
+export function resolveAppearance(document: ResourceDocumentData, target: AppearanceTarget): ResolvedAppearance {
   const layers = [...appearanceLayers(document, target), {
     source: { kind: 'application' } as const,
     settings: APP_APPEARANCE_DEFAULTS,
@@ -101,13 +101,13 @@ export function appearanceBackgroundAppliesToSurface(
 }
 
 /** Finds the nearest opaque CSS background behind the target's text surface. */
-export function resolveAppearanceContrastBackground(document: ElceDocument, target: AppearanceTarget): string {
+export function resolveAppearanceContrastBackground(document: ResourceDocumentData, target: AppearanceTarget): string {
   return resolveAppearanceContrastContext(document, target).color
 }
 
 /** Resolves the nearest opaque background and keeps its semantic palette reference when available. */
 export function resolveAppearanceContrastContext(
-  document: ElceDocument,
+  document: ResourceDocumentData,
   target: AppearanceTarget,
 ): AppearanceContrastContext {
   let current: AppearanceTarget | null = target
@@ -125,10 +125,10 @@ export function resolveAppearanceContrastContext(
 }
 
 /** Builds the nearest-to-farthest document context for one appearance target. */
-function appearanceLayers(document: ElceDocument, target: AppearanceTarget): AppearanceLayer[] {
+function appearanceLayers(document: ResourceDocumentData, target: AppearanceTarget): AppearanceLayer[] {
   const layers: AppearanceLayer[] = []
   const addDocument = (): void => {
-    layers.push({ source: { kind: 'document' }, settings: document.data.appearance })
+    layers.push({ source: { kind: 'document' }, settings: document.appearance })
   }
   const addPage = (pageId: string): void => {
     const page = document.pages.find((candidate) => candidate.id === pageId)
@@ -164,7 +164,7 @@ function appearanceLayers(document: ElceDocument, target: AppearanceTarget): App
 }
 
 /** Returns the next semantic ancestor in the appearance inheritance chain. */
-function appearanceParentTarget(document: ElceDocument, target: AppearanceTarget): AppearanceTarget | null {
+function appearanceParentTarget(document: ResourceDocumentData, target: AppearanceTarget): AppearanceTarget | null {
   switch (target.kind) {
     case 'document':
       return null

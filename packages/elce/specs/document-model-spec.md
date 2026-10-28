@@ -13,7 +13,7 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 7 contient des tableaux de chapitres, pages, BDC et
+Un `LearningDocument` version 7 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
@@ -45,53 +45,117 @@ catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de l
 masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
 propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument` v7 conserve `data.summary`, `data.profile` et les réglages
+`LearningDocument` v7 conserve `data.summary`, `data.profile` et les réglages
 d’apparence facultatifs sur le document, chaque page et chaque BDC. Le preset
 général d’apparence est réservé au document ; le modèle v7 enregistre séparément
 les polices de titre et de corps. Les détails et la résolution par propriété
 figurent dans la [spécification d’apparence](./appearance-spec.md).
 `data.summary` et `data.profile` gardent leur structure et leurs invariants
 décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
-`ElceDocument.fromJSON()` accepte uniquement la version courante et rejette
+`LearningDocument.fromJSON()` accepte uniquement la version courante et rejette
 les documents d’une autre version. La migration SQLite v6 → v7 convertit
 uniquement Demo5, seul document conservé ; aucune compatibilité documentaire
 générale n’est ajoutée.
 
-Les valeurs de placement et les constantes de configuration sont déclarées
-dans [`document-config.ts`](../src/config/document-config.ts), leurs types
-dans [`document-config-types.ts`](../src/config/document-config-types.ts),
-les formes du document dans
-[`document-types.ts`](../src/domain/document/document-types.ts), et les commandes dans
-[`document-command-types.ts`](../src/domain/commands/document-command-types.ts).
-Les modules d’exécution ne redéclarent pas ces contrats et ne réintroduisent
-donc pas de chaînes de placement dans les commandes.
+Les placements de BDC sont déclarés dans
+[`content-location.ts`](../src/core/document/content-location.ts) :
+`BDC_LOCATION` distingue page, parent et catalogue ; `BDC_ORDER` porte le type
+MIME du réordonnancement par glisser-déposer ; `BdcPlacement` décrit les trois
+destinations à partir des identifiants communs.
+Les constantes média (`MEDIA_TYPE`, `MEDIA_MIME_PREFIX`, filtres de fichiers
+et `MediaType`) sont dans
+[`media-config.ts`](../src/core/media/media-config.ts).
+[`CATALOG_REFERENCE`](../src/core/catalog/catalog-config.ts) définit le MIME
+JSON et les discriminants `bdc`/`media` des références transférées ; les onglets
+communs BDC et média sont également déclarés dans cette configuration. Chaque
+ressource possède sa configuration dans `resources/` : ancrage, Carte,
+Carousel, Question, Section, Graphe, Révélation, Flux et Diapo. Learning compose
+ces identités dans
+[`learning-definition.ts`](../src/mods/learning/learning-definition.ts) et
+porte les types de chapitre, d’évaluation, d’organisation, de lecture et
+d’interface auteur dans `mods/learning/`. Les types de placement de page
+(`chapter`, `scenario`, `catalog`) appartiennent à
+[`learning-page-placement.ts`](../src/mods/learning/organization/learning-page-placement.ts).
+Les identifiants, métadonnées et vues de placement minimales partagées sont
+dans [`content-document-types.ts`](../src/core/document/content-document-types.ts).
+Les payloads BDC et leur vue de lecture commune sont dans
+[`resource-document-types.ts`](../src/resources/document/resource-document-types.ts).
+Le modèle v7 complet et ses types appartiennent à Learning dans
+[`learning-document.ts`](../src/mods/learning/document/learning-document.ts) et
+[`learning-document-types.ts`](../src/mods/learning/document/learning-document-types.ts).
+Le contenu
+éditable d’une Section (`RichTextDocument`, `SectionContent`) et sa valeur vide
+initiale sont possédés par la ressource Section dans
+[`resources/bdcs/section/`](../src/resources/bdcs/section/section-config.ts) ;
+les types de transitions Révélation sont possédés par
+[`revelation-types.ts`](../src/resources/revelation/revelation-types.ts). Ces
+transferts ne changent ni les clés JSON, ni le format v7. L’union de commandes
+Learning est dans
+[`learning-document-command-types.ts`](../src/mods/learning/commands/learning-document-command-types.ts) ;
+elle compose les sous-unions de Carte, Carousel, Question, Section, Graphe et
+ancrage déclarées dans leurs dossiers `resources/*/authoring/`. Les façades
+Carte, Question, Carousel et Graphe utilisent leurs unions de ressource. Les
+factories de création de BDC correspondantes appartiennent à ces ressources.
+Les factories de page par défaut, chapitre et Résultat sont des méthodes de
+`LearningDocumentService`. Aucune de ces extractions ne change les noms des
+commandes envoyées ni le format v7.
 
-Les commandes immuables sont définies dans `domain/commands/`. Les façades
-d’édition qui les envoient au contrôleur XState sont des adaptateurs
-applicatifs rangés dans `app/facades/` ; elles ne font pas partie du domaine.
-`EditorActionsFacade` compose ces façades et les commandes de document au point
-d’entrée de l’application, sans créer un autre acteur ni un autre circuit
-d’écriture. `selectEditorViewModel` dérive les données affichées depuis un
-snapshot XState sans modifier le document.
-Un nouveau document de POC contient un chapitre, une page Flux `Page A` et un
-BDC Section vide associé au preset `section-basic`. Les presets sont déclarés
-comme objets dans `src/config/presets.ts`. Chaque objet fixe le markup
-HTML, ses zones, leur catégorie de contenu et leur caractère requis.
-`ElceCardPresetBuilder` instancie ce markup avec un identifiant racine et des
-parts CodPlay propres à l’instance ; il ne crée ni BDC ni composant CodPlay.
+`LearningDocumentCommandService` est l’unique répartiteur des commandes
+documentaires Learning. Il délègue aux services de page, BDC, ancrage, média et
+Révélation, puis appelle les invariants avant de retourner le nouveau document.
+`LearningPageCommandService` possède la création, le renommage, le déplacement
+et la suppression des pages et chapitres, ainsi que les calculs d’index du
+parcours. `LearningDocumentService` porte les factories Learning de page,
+chapitre et Résultat. Les autres transformations Learning restent dans
+`mods/learning/commands/operations/` et sont appelées par leur service dédié.
+L’ancien point d’import `domain/commands/document-commands/` délègue au service
+Learning ; il ne constitue pas un second répartiteur.
+
+Les façades d’édition qui envoient ces commandes au contrôleur XState sont des
+adaptateurs applicatifs rangés dans `app/facades/` ; elles ne font pas partie
+du domaine. `EditorActionsFacade` compose ces façades et les commandes de
+document au point d’entrée de l’application, sans créer un autre acteur ni un
+autre circuit d’écriture. `selectEditorViewModel` dérive les données affichées
+depuis un snapshot XState sans modifier le document.
+Un nouveau document contient un chapitre, une page Flux `Page A` et un BDC
+Section vide associé au preset `section-basic`. Les registres sont déclarés
+par ressource sous `resources/bdcs/*/*-presets.ts` ; le preset de Résultat
+appartient à `mods/learning/evaluation/learning-presets.ts`.
+[`learning-presets.ts`](../src/mods/learning/learning-presets.ts) assemble les
+registres choisis par Learning. Chaque entrée fixe le markup HTML, ses zones,
+leur catégorie de contenu et leur caractère requis.
+`src/core/presets/` porte les types de preset et `ElceCardPresetBuilder`.
+Son constructeur reçoit obligatoirement un registre
+`Readonly<Record<string, CardPreset>>` ; il n’importe aucun registre applicatif.
+La composition de lecture Learning construit les builders avec ce registre.
+Le moteur instancie le markup avec un identifiant racine et des parts CodPlay
+propres à l’instance ; il ne crée ni BDC ni composant CodPlay.
 Le BDC Résultat utilise le preset `evaluation-result-basic` et porte deux
 branches, `success` et `failure`. Le BDC Carousel utilise `carousel-basic` ;
 il est créé atomiquement avec un BDC Carte enfant au layout initial
 `text-short-basic`. Les quatre layouts Carte partagent le même jeu de champs
 métier.
 
-`ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
+`LearningDocument.toJSON()` fournit la valeur structurée enregistrable en version
 7. Les octets des médias sont conservés à part par la frontière IndexedDB.
+
+Les types communs ne contiennent pas les payloads Learning : les services
+d’ancre, d’apparence et de réglages de lecture consultent `ResourceDocumentData`
+et les types de page/BDC partagés. L’adaptateur d’ancre Learning fournit
+séparément le libellé de son BDC Résultat. Les registres de presets appartiennent
+à leurs ressources ou à Learning, puis sont assemblés au point de composition.
+Les tests du document, des commandes, de l’apparence, de l’ancrage et des
+réglages, avec le typecheck et le build, vérifient ces frontières. Le 28 octobre
+2026, Safari MCP a modifié le titre d’une Section et le preset d’une Carte dans
+le projet temporaire ; les deux mises à jour ont été observées en
+`PUT /document` `200`, avec l’état « Synchronisé ».
 
 ## Commandes
 
-Les transformations sont pures : `applyDocumentCommand(document, command)`
-retourne une nouvelle valeur après vérification de ses invariants. Elles couvrent
+`LearningDocumentCommandService.applyCommand(document, command)` applique une
+transformation immuable, vérifie la chaîne d’invariants et retourne la nouvelle
+valeur. L’export historique `applyDocumentCommand` délègue à ce service. Les
+commandes couvrent
 la création, le renommage et le déplacement de chapitres et de pages, le
 déplacement et le retrait au catalogue des bdc, la suppression définitive
 d’une page ou d’un bdc disponible, la mise à jour d’une Section, d’une Question,
@@ -160,7 +224,17 @@ retrait d’un BDC ne crée pas de copie de la ressource au catalogue.
 `media.merge` reste disponible pour consolider explicitement d’anciennes ressources déjà
 dupliquées.
 
-`assertDocumentInvariants()` vérifie les affectations uniques, les références
+`LearningDocumentService.assertDocumentInvariants()` appelle le contrôle commun
+`assertContentPlacementInvariants()` avec les pages, BDC et emplacements de
+catalogue/scénario, puis le contrôle Learning. Le contrôle commun fonctionne
+avec des types de page et de BDC indépendants de Learning ; il vérifie les
+identifiants et emplacements uniques, les références directes page/BDC et
+catalogue/BDC, et expose les recherches génériques de page, BDC et chapitre.
+Les placements internes de Carousel et de Section, les règles des payloads et
+les relations du parcours restent vérifiés au niveau Learning avec les
+services métier des ressources.
+
+Le contrôle Learning vérifie les affectations uniques, les références
 page/BDC et parent/enfant, les données propres au type de BDC, et l’intégrité
 des ancres : une référence désigne une Carte ou un Graphe enfant de
 la même page, sans doublon dans une ou plusieurs Sections. Tout BDC racine peut être conservé au
@@ -193,10 +267,18 @@ choisissent entre la racine du scénario et un chapitre précis. La création ne
 déduit jamais un chapitre à partir de l’ordre des chapitres. Le contrôleur
 possède aussi l’onglet courant du catalogue (`catalogTab`), initialisé sur les
 BDC disponibles et modifié par `catalog.tab.select`.
-`CATALOG_TAB` et `CatalogTabType` sont déclarés dans les fichiers de
-configuration ; l’interface affiche séparément les BDC disponibles et les
-médias réutilisables. La vue auteur ne conserve pas de copie métier ni d’état
-d’onglet.
+`CATALOG_TAB` et `CatalogTabType` sont composés dans la configuration auteur
+Learning à partir des onglets communs du catalogue ; l’interface affiche
+séparément les BDC disponibles, les médias réutilisables et le profil. La vue
+auteur ne conserve pas de copie métier ni d’état d’onglet.
+
+Le 28 octobre 2026, Safari MCP a créé puis supprimé un chapitre vide dans le
+projet temporaire « MCP Mods pilote presets 2026-10-27 ». Les deux commandes
+ont été appliquées dans l’éditeur et enregistrées par `PUT /document` avec une
+réponse `200` ; le chapitre n’est plus présent et le projet est revenu en
+lecture seule sans alerte. Les commandes, le contrôleur, l’historique, les
+builders Flux/Diapo et le player passent 139 tests ciblés ; les 16 tests
+SQLite/API, le typecheck et le build passent aussi.
 
 Le panneau « Blocs disponibles » liste chaque BDC racine conservé au catalogue.
 Pour les BDC directement affectés à la page sélectionnée, son groupe « Blocs
@@ -252,7 +334,7 @@ serveur.
 - Le même fichier vérifie que les versions 1, 2 et 3 sont rejetées, le mélange et
   le déplacement d’entrées page/chapitre à la racine, le déplacement d’une
   page de chapitre vers la racine et les invariants de placement correspondants.
-- [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+- [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   vérifie l’ajout des colonnes d’apparence facultatives et la migration ciblée
   des anciens presets locaux de Demo5, avec restauration des presets canoniques
   au rollback. Les autres projets ne sont pas convertis.
@@ -265,6 +347,12 @@ serveur.
   compatible pour les six types de BDC racines, le refus d’un Résultat hors
   chapitre Évaluation, ainsi que la conservation des enfants d’un
   Carousel ou d’une Section catalogués.
+- Après le déplacement de `BDC_LOCATION` et `BDC_ORDER` vers
+  [`content-location.ts`](../src/core/document/content-location.ts),
+  [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
+  et [`page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+  vérifient encore les placements et le réordonnancement via le MIME existant.
+  Les trois suites ciblées passent avec 61 tests.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
   vérifie les six types racines au catalogue et la dépose d’une Carte ou d’un
   Graphe dans le texte.
@@ -279,13 +367,13 @@ serveur.
   actions icônes accessibles de création à la racine et dans un chapitre,
   l’emplacement produit, ainsi que l’édition centrale des noms de page et de
   chapitre via le contrôleur XState.
-- [`document-persistence.test.ts`](../src/app/controller/document-persistence.test.ts)
+- [`document-persistence.test.ts`](../src/mods/learning/integration/document-persistence.test.ts)
   vérifie que le remplacement d’un média utilisé et la suppression de son blob
   passent par une seule opération de persistance.
-- [`project-operations.test.ts`](../src/app/controller/project-operations.test.ts)
+- [`project-operations.test.ts`](../src/mods/learning/integration/project-operations.test.ts)
   vérifie qu’un changement de projet vide également une révision XState tout
   juste validée, avant d’attendre la confirmation distante.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie la possession du document par XState, une modification visible par
   commande, la sélection d’onglet du catalogue et `bdc.delete`, ainsi que la
   création de pages à la racine ou dans le chapitre explicitement indiqué, et
@@ -298,14 +386,31 @@ serveur.
   le second fichier réutilise le média et le blob déjà conservés tout en
   créant un nouveau BDC ancré ; une illustration réimportée dans une autre
   Question partage également la ressource existante.
-- [`media-resource-service.test.ts`](../src/domain/media/media-resource-service.test.ts)
+- [`media-resource-service.test.ts`](../src/core/media/media-resource-service.test.ts)
   vérifie que SHA-256 reconnaît les mêmes octets sous un nom différent ou un
   MIME différent, et garde séparés des octets différents de même taille. Le
   MIME stocké sur la ressource est la source de la catégorie de rendu.
+- Après le déplacement de la configuration média vers
+  [`media-config.ts`](../src/core/media/media-config.ts),
+  [`card-editor-rules.test.ts`](../src/app/editor/card/card-editor-rules.test.ts)
+  vérifie les types média admis par layout, et
+  [`summary-profile-settings.test.tsx`](../src/app/remix/workspace/summary-profile-settings.test.tsx)
+  vérifie le filtre de fichier image. Les tests Flux, Diapo et ancre couvrent
+  les projections concernées. Les six suites ciblées passent avec 58 tests.
+- [`catalog-config.ts`](../src/core/catalog/catalog-config.ts) porte désormais
+  `CATALOG_REFERENCE` ; `anchor-drop-service.test.ts` vérifie les références
+  BDC/média, et `page-editor.test.tsx` vérifie leur transfert JSON au dépôt.
+  Les suites catalogue, ancre, Carte et page éditeur passent avec 31 tests.
+- [`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts)
+  vérifie le moteur avec un preset fourni par sa fixture, sans registre
+  applicatif, ainsi que le markup, les classes, les identifiants de zone et
+  l’erreur d’un preset absent.
 - [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
-  vérifie tous les objets de preset, les catégories et zones requises du preset
-  Question, les `id` des éléments produits, la distinction entre deux
-  instances du même preset et l’insertion du texte Section dans sa zone.
+  vérifie tous les objets du registre Learning, les catégories et zones
+  requises du preset Question, les `id` des éléments produits, la distinction
+  entre deux instances du même preset et l’insertion du texte Section dans sa
+  zone. Les tests des builders Carte, Carousel, Question, Résultat, Flux et
+  Ancre vérifient leurs intégrations avec le registre injecté.
 - Dans Safari, supprimer l’ancre de test sur Page E a supprimé son BDC sans
   augmenter le catalogue des BDC disponibles. Le média est resté disponible ;
   un nouveau dépôt a créé un BDC à identifiant distinct qui référence ce même
@@ -320,3 +425,18 @@ serveur.
   au catalogue après retrait de son ancre. Le geste passe par le `dragend`
   Tiptap, `SectionEditor`, la façade, XState et `bdc.anchor.return` ; aucune
   copie du BDC n’est créée.
+- Dans la copie temporaire « MCP Mods pilote presets 2026-10-27 » sur Safari
+  MCP, une Carte nouvellement créée est rendue dans une Section avec le preset
+  `text-short-basic`. Le dépôt catalogue→Section conserve le même `bdcId` et
+  passe par le gestionnaire Tiptap, la façade et la commande XState. Un Graphe
+  est ensuite réordonné avant la Section avec le MIME
+  `application/x-elce-bdc-order+json`. Les événements de glisser-déposer ont été
+  émis par l’outil MCP `evaluate_javascript` ; les gestionnaires de l’interface
+  réelle ont été exécutés, mais le parcours ne vérifie pas un déplacement
+  physique à la souris.
+- Le même parcours dépose un PNG de test dans l’éditeur d’une Carte au preset
+  `photo-basic`. La requête média envoie `Content-Type: image/png`, l’API répond
+  `201` avec l’URL et l’identifiant de ressource, l’aperçu du même éditeur affiche
+  l’image en 1 × 1 et la sauvegarde du document répond `200`. Cela vérifie
+  l’import, la déduction du type et le rattachement au BDC par le circuit auteur
+  existant.

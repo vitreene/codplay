@@ -1,11 +1,12 @@
-import type { AppearanceTarget } from '../domain/commands/document-command-types'
+import type { AppearanceTarget } from '../mods/learning/commands/learning-document-command-types'
 import type { AppearanceDensity } from '../config/appearance/appearance-types'
-import type { Bdc, Page } from '../domain/document/document-types'
-import type { ElceDocument } from '../domain/document/document-model'
+import type { LearningBdc, LearningPage } from '../mods/learning/document/learning-document-types'
+import type { LearningDocument } from '../mods/learning/document/learning-document'
+import { BDC_TYPE } from '../mods/learning/learning-definition'
 import {
   appearanceScopeClassName,
   appearanceSurfaceRoleForTarget,
-} from '../builders/scene-style/appearance-class-names.ts'
+} from '../builders/scene-style/appearance-class-names'
 import {
   appearanceBackgroundAppliesToSurface,
   resolveAppearance,
@@ -17,12 +18,12 @@ import { appearanceBackgroundGradientCss } from '../config/appearance/appearance
 import {
   appearanceThemeCssAssetPaths,
   appearanceThemeCssImport,
-} from './appearance/appearance-theme-styles.ts'
+} from './appearance/appearance-theme-styles'
 
 /** Builds the shared stylesheet for fonts, density rules and generated color tokens. */
-export function createDocumentAppearanceStyleSheet(document: ElceDocument, fontSourcePrefix: '/' | './' = '/'): string {
+export function createDocumentAppearanceStyleSheet(document: LearningDocument, fontSourcePrefix: '/' | './' = '/'): string {
   const targets = appearanceTargetsForDocument(document)
-  const resolved = targets.map((target) => resolveAppearance(document, target))
+  const resolved = targets.map((target) => resolveAppearance(document.data, target))
   const fontIds = resolved.flatMap((appearance) => [
     appearance.headingFontId.value,
     appearance.bodyFontId.value,
@@ -40,13 +41,13 @@ export function createDocumentAppearanceStyleSheet(document: ElceDocument, fontS
 }
 
 /** Builds only one target's generated color rules for a scoped author preview. */
-export function createAppearanceTargetStyleSheet(document: ElceDocument, target: AppearanceTarget): string {
+export function createAppearanceTargetStyleSheet(document: LearningDocument, target: AppearanceTarget): string {
   return generatedAppearanceStyleSheet(document, [target], false)
 }
 
 /** Returns each used project, page and BDC theme stylesheet once. */
-export function appearanceThemeCssAssetPathsForDocument(document: ElceDocument): readonly string[] {
-  const resolved = appearanceTargetsForDocument(document).map((target) => resolveAppearance(document, target))
+export function appearanceThemeCssAssetPathsForDocument(document: LearningDocument): readonly string[] {
+  const resolved = appearanceTargetsForDocument(document).map((target) => resolveAppearance(document.data, target))
   const fontIds = resolved.flatMap((appearance) => [
     appearance.headingFontId.value,
     appearance.bodyFontId.value,
@@ -58,16 +59,16 @@ export function appearanceThemeCssAssetPathsForDocument(document: ElceDocument):
 }
 
 /** Returns the font files referenced by the common project stylesheet. */
-export function appearanceFontAssetsForDocument(document: ElceDocument) {
+export function appearanceFontAssetsForDocument(document: LearningDocument) {
   const fontIds = appearanceTargetsForDocument(document).flatMap((target) => {
-    const resolved = resolveAppearance(document, target)
+    const resolved = resolveAppearance(document.data, target)
     return [resolved.headingFontId.value, resolved.bodyFontId.value]
   })
   return appearanceFontAssetsForIds(fontIds)
 }
 
 /** Collects all project, scenario page and scene BDC appearance targets. */
-function appearanceTargetsForDocument(document: ElceDocument): readonly AppearanceTarget[] {
+function appearanceTargetsForDocument(document: LearningDocument): readonly AppearanceTarget[] {
   const targets: AppearanceTarget[] = [{ kind: 'document' }]
   for (const pageId of document.scenarioPageIds) {
     const page = document.pages.find((candidate) => candidate.id === pageId)
@@ -81,7 +82,7 @@ function appearanceTargetsForDocument(document: ElceDocument): readonly Appearan
 }
 
 /** Returns a page and its direct scene BDC targets. */
-function pageAppearanceTargets(page: Page, bdcs: readonly Bdc[]): readonly AppearanceTarget[] {
+function pageAppearanceTargets(page: LearningPage, bdcs: readonly LearningBdc[]): readonly AppearanceTarget[] {
   return [
     { kind: 'page', pageId: page.id },
     ...bdcs.flatMap((bdc) => bdc.pageId === page.id || bdc.parentBdcId !== null
@@ -92,16 +93,17 @@ function pageAppearanceTargets(page: Page, bdcs: readonly Bdc[]): readonly Appea
 
 /** Maps generated semantic colors to CSS variables and paints each effective background. */
 function generatedAppearanceStyleSheet(
-  document: ElceDocument,
+  document: LearningDocument,
   targets: readonly AppearanceTarget[],
   includeStage = true,
 ): string {
   const rules = targets.flatMap((target) => {
-    const resolved = resolveAppearance(document, target)
-    const role = appearanceSurfaceRoleForTarget(document, target)
-    const contrastBackground = resolveAppearanceContrastContext(document, target).color
+    const resolved = resolveAppearance(document.data, target)
+    const role = appearanceSurfaceRoleForTarget(document.data, target, (bdc) =>
+      bdc.type === BDC_TYPE.EVALUATION_RESULT ? 'evaluation-result' : undefined)
+    const contrastBackground = resolveAppearanceContrastContext(document.data, target).color
     const colors = generateAppearanceColors(resolved, contrastBackground)
-    const className = appearanceScopeClassName(document, target)
+    const className = appearanceScopeClassName(document.data, target)
     const variables = Object.entries({
       background: colors.background,
       text: colors.text,
@@ -150,10 +152,10 @@ function generatedAppearanceStyleSheet(
   })
   if (!includeStage) return rules.join('\n')
 
-  const project = resolveAppearance(document, { kind: 'document' })
+  const project = resolveAppearance(document.data, { kind: 'document' })
   const projectColors = generateAppearanceColors(
     project,
-    resolveAppearanceContrastContext(document, { kind: 'document' }).color,
+    resolveAppearanceContrastContext(document.data, { kind: 'document' }).color,
   )
   const stageBackground = project.density.value === 'none' ? 'transparent' : projectColors.background
   // CodPlay wraps this sheet in @scope rooted at .elce-player-stage.

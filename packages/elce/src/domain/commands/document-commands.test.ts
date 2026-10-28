@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CARD_LAYOUT_IDS, CHAPTER_TYPE, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, EVALUATION_RESULT_ACTION, EVALUATION_RETRY_SCOPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
-import { createInitialDocument, ElceDocument } from '../../domain/document/document-model'
-import type { BdcPlacement } from './document-command-types'
-import { ElceQuestionService } from '../../domain/question/question-service'
+import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../mods/learning/learning-definition'
+import { CARD_LAYOUT_IDS } from '../../resources/bdcs/card/card-config'
+import type { CardLayoutId } from '../../resources/bdcs/card/card-config'
+import { CHAPTER_TYPE } from '../../mods/learning/organization/learning-organization-config'
+import {
+  DEFAULT_EVALUATION_SETTINGS,
+  EVALUATION_RESULT_ACTION,
+  EVALUATION_RETRY_SCOPE,
+} from '../../mods/learning/evaluation/learning-evaluation-config'
+import { PAGE_LOCATION } from '../../mods/learning/organization/learning-page-placement'
+import { QUESTION_TYPE } from '../../resources/bdcs/question/question-config'
+import { BDC_LOCATION } from '../../core/document/content-location'
+import { learningDocumentService } from '../../mods/learning/document/learning-document-service'
+import { LearningDocument } from '../../mods/learning/document/learning-document'
+import type { BdcPlacement } from '../../core/document/content-location'
+import { ElceQuestionService } from '../../resources/bdcs/question/domain/question-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
@@ -20,7 +32,7 @@ import {
 
 describe('Elcé document commands', () => {
   it('attaches only an image as the Sommaire background', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     const image = { id: 'media-summary-image', name: 'fond.jpg', mimeType: 'image/jpeg', size: 10, caption: '' }
     const updated = applyDocumentCommand(document, { type: 'summary.background.media.attach', media: image })
 
@@ -33,7 +45,7 @@ describe('Elcé document commands', () => {
   })
 
   it('stores every top-level BDC type in the catalogue and restores it to a compatible page', () => {
-    let document = createInitialDocument()
+    let document = learningDocumentService.createInitialDocument()
     const fluxPage = document.pages[0]
     if (fluxPage === undefined) throw new Error('Le document de test ne contient pas de page Flux.')
     document = applyDocumentCommand(document, createStandaloneCardBdcCommand('bdc-catalog-card', fluxPage.id))
@@ -95,7 +107,7 @@ describe('Elcé document commands', () => {
   })
 
   it('keeps anchored Card children with a catalogued Section and deletes that composite together', () => {
-    let document = createInitialDocument()
+    let document = learningDocumentService.createInitialDocument()
     const content = {
       type: 'doc' as const,
       content: [{
@@ -141,7 +153,7 @@ describe('Elcé document commands', () => {
   })
 
   it('places a standalone Card in the ordered BDC sequence of a Flux page', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const page = initial.pages[0]
     if (page === undefined) throw new Error('Le document de test ne contient pas de page Flux.')
     expect(page.type).toBe(PAGE_TYPE.FLUX)
@@ -158,7 +170,7 @@ describe('Elcé document commands', () => {
   })
 
   it('creates a Diapo with a default Carousel and its first Card child', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const command = createDefaultPageCommand(
       initial,
       { kind: PAGE_LOCATION.SCENARIO },
@@ -185,7 +197,7 @@ describe('Elcé document commands', () => {
   })
 
   it('keeps one direct Diapo BDC and permits a standalone Card or Quiz after removing the default Carousel', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
     let document = applyDocumentCommand(initial, pageCommand)
     document = applyDocumentCommand(document, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
@@ -209,7 +221,7 @@ describe('Elcé document commands', () => {
   })
 
   it('renames a page and its chapter without changing document placement', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const renamedPage = applyDocumentCommand(initial, {
       type: 'page.rename',
       pageId: 'page-a',
@@ -237,7 +249,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects blank page and chapter names', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
 
     expect(() => applyDocumentCommand(initial, { type: 'page.rename', pageId: 'page-a', name: '   ' }))
       .toThrow('Le nom de la page ne peut pas être vide')
@@ -246,7 +258,7 @@ describe('Elcé document commands', () => {
   })
 
   it('stores Evaluation chapter options and keeps the 80 percent threshold fixed', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const evaluationChapter = applyDocumentCommand(initial, createChapterCommand(initial, undefined, CHAPTER_TYPE.EVALUATION))
     const updated = applyDocumentCommand(evaluationChapter, {
       type: 'chapter.evaluation.settings.update',
@@ -280,7 +292,7 @@ describe('Elcé document commands', () => {
   })
 
   it('creates, moves and removes pages without sharing an assignment', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const withPage = applyDocumentCommand(
       initial,
       createPageCommand({
@@ -303,7 +315,7 @@ describe('Elcé document commands', () => {
   })
 
   it('removes a page and its bdc while retaining catalogue media', () => {
-    const withMedia = applyDocumentCommand(createInitialDocument(), {
+    const withMedia = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: {
         id: 'media-1',
@@ -332,7 +344,7 @@ describe('Elcé document commands', () => {
       size: 389062,
       caption: '',
     })
-    const withPageE = applyDocumentCommand(createInitialDocument(), createPageCommand({
+    const withPageE = applyDocumentCommand(learningDocumentService.createInitialDocument(), createPageCommand({
       pageId: 'page-e',
       bdcId: 'bdc-section-e',
       placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
@@ -366,7 +378,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects merging media with different content metadata', () => {
-    const withCanonical = applyDocumentCommand(createInitialDocument(), {
+    const withCanonical = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-canonical',  name: 'sample-video.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
     })
@@ -383,7 +395,7 @@ describe('Elcé document commands', () => {
   })
 
   it('retains every Card field and media reference while layouts hide them', () => {
-    const withVideo = applyDocumentCommand(createInitialDocument(), {
+    const withVideo = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-video-carousel',  name: 'clip.mp4', mimeType: 'video/mp4', size: 100, caption: '' },
     })
@@ -436,7 +448,7 @@ describe('Elcé document commands', () => {
   })
 
   it('deletes one Card child while the Carousel retains its final child', () => {
-    let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand('bdc-carousel-delete-card', 'page-a', 1))
+    let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), createCarouselBdcCommand('bdc-carousel-delete-card', 'page-a', 1))
     document = applyDocumentCommand(document, createCardBdcCommand(
       'bdc-card-to-delete', 'bdc-carousel-delete-card', 1, DEFAULT_PRESET_ID.TEXT_SHORT,
     ))
@@ -454,7 +466,7 @@ describe('Elcé document commands', () => {
   })
 
   it('moves a Card BDC between Carousels without cloning its authored content', () => {
-    let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand(
+    let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), createCarouselBdcCommand(
       'bdc-carousel-source', 'page-a', 1, 'bdc-card-source-first',
     ))
     document = applyDocumentCommand(document, createCardBdcCommand(
@@ -508,7 +520,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects evaluation data on a Card BDC', () => {
-    let document = applyDocumentCommand(createInitialDocument(), createCarouselBdcCommand(
+    let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), createCarouselBdcCommand(
       'bdc-carousel-invariant', 'page-a', 1, 'bdc-card-invariant',
     ))
     const evaluationPage = createEvaluationPage(document)
@@ -516,7 +528,7 @@ describe('Elcé document commands', () => {
       'bdc-evaluation-result-invariant', evaluationPage.pageId, 1,
     ))
     const evaluationResult = document.bdcs.find((bdc) => bdc.id === 'bdc-evaluation-result-invariant')!.evaluationResult
-    const invalid = new ElceDocument({
+    const invalid = new LearningDocument({
       ...document.data,
       bdcs: document.bdcs.map((bdc) => bdc.id === 'bdc-card-invariant'
         ? { ...bdc, evaluationResult }
@@ -527,7 +539,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rebinds media references owned by Card BDCs during catalogue merges', () => {
-    let document = applyDocumentCommand(createInitialDocument(), {
+    let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-card-canonical',  name: 'photo.png', mimeType: 'image/png', size: 10, caption: '' },
     })
@@ -556,7 +568,7 @@ describe('Elcé document commands', () => {
   })
 
   it('removes Carousel children with their parent but keeps reusable media', () => {
-    const withMedia = applyDocumentCommand(createInitialDocument(), {
+    const withMedia = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-card-photo',  name: 'card.png', mimeType: 'image/png', size: 100, caption: '' },
     })
@@ -575,7 +587,7 @@ describe('Elcé document commands', () => {
   })
 
   it('permanently deletes only an unused catalog bdc and retains its media', () => {
-    const withMedia = applyDocumentCommand(createInitialDocument(), {
+    const withMedia = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
@@ -593,7 +605,7 @@ describe('Elcé document commands', () => {
   })
 
   it('keeps the requested order when a page is reordered in the same list', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const withPageB = applyDocumentCommand(initial, createPageCommand({
       pageId: 'page-b',
       bdcId: 'bdc-section-2',
@@ -616,7 +628,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects duplicate page identifiers and preserves a JSON round trip', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
 
     expect(() =>
       applyDocumentCommand(
@@ -629,25 +641,25 @@ describe('Elcé document commands', () => {
       ),
     ).toThrow('Page déjà présente')
 
-    const restored = ElceDocument.fromJSON(JSON.parse(JSON.stringify(document.toJSON())))
+    const restored = LearningDocument.fromJSON(JSON.parse(JSON.stringify(document.toJSON())))
     expect(restored.toJSON()).toEqual(document.toJSON())
   })
 
   it('rejects previously persisted document versions without migrating them', () => {
-    const withRootPage = applyDocumentCommand(createInitialDocument(), createPageCommand({
+    const withRootPage = applyDocumentCommand(learningDocumentService.createInitialDocument(), createPageCommand({
       pageId: 'page-root',
       bdcId: 'bdc-section-root',
       placement: { kind: PAGE_LOCATION.SCENARIO },
     }))
     const { scenarioEntries: _scenarioEntries, ...legacyFields } = withRootPage.toJSON()
     for (const version of [1, 2, 3]) {
-      expect(() => ElceDocument.fromJSON({ ...legacyFields, version } as never))
+      expect(() => LearningDocument.fromJSON({ ...legacyFields, version } as never))
         .toThrow(`Version de document Elcé non supportée : ${version}`)
     }
   })
 
   it('moves a standalone page before and after chapter entries in the root sequence', () => {
-    const withRootPage = applyDocumentCommand(createInitialDocument(), createPageCommand({
+    const withRootPage = applyDocumentCommand(learningDocumentService.createInitialDocument(), createPageCommand({
       pageId: 'page-root',
       bdcId: 'bdc-section-root',
       placement: { kind: PAGE_LOCATION.SCENARIO },
@@ -693,7 +705,7 @@ describe('Elcé document commands', () => {
   })
 
   it('stores the Section JSON source and its exported static markup', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     const content = {
       type: 'doc' as const,
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Bonjour' }] }],
@@ -711,7 +723,7 @@ describe('Elcé document commands', () => {
   })
 
   it('creates a media bdc and updates its anchor in one document command', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     const content = {
       type: 'doc' as const,
       content: [{
@@ -750,7 +762,7 @@ describe('Elcé document commands', () => {
   })
 
   it('attaches an unused catalog bdc without cloning its media', () => {
-    const withMedia = applyDocumentCommand(createInitialDocument(), {
+    const withMedia = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
@@ -791,7 +803,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects catalog anchor attachment to a non-Flux page', () => {
-    const withMedia = applyDocumentCommand(createInitialDocument(), {
+    const withMedia = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-image-1',  name: 'image.png', mimeType: 'image/png', size: 10, caption: '' },
     })
@@ -821,7 +833,7 @@ describe('Elcé document commands', () => {
   })
 
   it('moves an anchored bdc through the same Section command boundary', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     const anchored = applyDocumentCommand(document, {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
@@ -856,7 +868,7 @@ describe('Elcé document commands', () => {
   })
 
   it('deletes an anchored bdc without deleting its reusable media', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     const anchored = applyDocumentCommand(document, {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
@@ -887,7 +899,7 @@ describe('Elcé document commands', () => {
   })
 
   it('deletes a Section and its anchored bdcs while retaining their media', () => {
-    const anchored = applyDocumentCommand(createInitialDocument(), {
+    const anchored = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
@@ -915,7 +927,7 @@ describe('Elcé document commands', () => {
   })
 
   it('returns an anchored bdc to the catalog without recreating it or its media', () => {
-    const anchored = applyDocumentCommand(createInitialDocument(), {
+    const anchored = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
@@ -976,7 +988,7 @@ describe('Elcé document commands', () => {
   })
 
   it('deletes a media bdc when an ordinary text update erases its anchor', () => {
-    const anchored = applyDocumentCommand(createInitialDocument(), {
+    const anchored = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
@@ -1015,7 +1027,7 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects duplicate anchor references in ordinary Section updates', () => {
-    const anchored = applyDocumentCommand(createInitialDocument(), {
+    const anchored = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'bdc.anchor.create',
       sectionBdcId: 'bdc-section-1',
       pageId: 'page-a',
@@ -1046,7 +1058,7 @@ describe('Elcé document commands', () => {
   })
 
   it('only deletes an empty chapter', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const added = applyDocumentCommand(initial, createChapterCommand(initial, 'Annexe'))
 
     expect(added.chapters).toHaveLength(2)
@@ -1058,7 +1070,7 @@ describe('Elcé document commands', () => {
   })
 
   it('creates one unique Question at its requested Flux position and enforces its answer rules', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const questionDocument = applyDocumentCommand(initial, {
       type: 'bdc.create',
       bdcId: 'bdc-question-1',
@@ -1103,7 +1115,7 @@ describe('Elcé document commands', () => {
   })
 
   it('creates one unique Result BDC with editable success and failure branches', () => {
-    const evaluationPage = createEvaluationPage(createInitialDocument())
+    const evaluationPage = createEvaluationPage(learningDocumentService.createInitialDocument())
     const resultDocument = applyDocumentCommand(evaluationPage.document, createEvaluationResultBdcCommand(
       'bdc-result-1', evaluationPage.pageId, 1,
     ))
@@ -1148,13 +1160,13 @@ describe('Elcé document commands', () => {
   })
 
   it('rejects a Result BDC outside an Evaluation chapter', () => {
-    expect(() => applyDocumentCommand(createInitialDocument(), createEvaluationResultBdcCommand(
+    expect(() => applyDocumentCommand(learningDocumentService.createInitialDocument(), createEvaluationResultBdcCommand(
       'bdc-result-outside-evaluation', 'page-a', 0,
     ))).toThrow('Un BDC Résultat ne peut être créé que dans une page d’un chapitre Évaluation.')
   })
 
   it('reuses a catalogue media for a Question without adding a reusable Question BDC', () => {
-    const initial = applyDocumentCommand(createInitialDocument(), {
+    const initial = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'bdc.create',
       bdcId: 'bdc-question-1',
       bdcType: BDC_TYPE.QUESTION,
@@ -1180,12 +1192,12 @@ describe('Elcé document commands', () => {
 
 /** Creates a Card BDC and assigns its reusable resource through the Card command. */
 function createCardWithMedia(
-  document: ReturnType<typeof createInitialDocument>,
+  document: ReturnType<typeof learningDocumentService.createInitialDocument>,
   bdcId: string,
-  presetId: string,
+  presetId: CardLayoutId,
   placement: BdcPlacement,
   mediaId: string,
-): ReturnType<typeof createInitialDocument> {
+): ReturnType<typeof learningDocumentService.createInitialDocument> {
   const created = applyDocumentCommand(document, {
     type: 'bdc.create',
     bdcId,
@@ -1197,7 +1209,7 @@ function createCardWithMedia(
 }
 
 /** Creates a Flux page with its default Question inside a dedicated Evaluation chapter. */
-function createEvaluationPage(document: ReturnType<typeof createInitialDocument>) {
+function createEvaluationPage(document: ReturnType<typeof learningDocumentService.createInitialDocument>) {
   const withChapter = applyDocumentCommand(document, createChapterCommand(
     document,
     'Chapitre Évaluation de test',

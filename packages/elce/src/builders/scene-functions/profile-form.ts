@@ -1,7 +1,7 @@
 import type { StrapExecutionInput, StrapEvent, StrapRuntimeOutput } from 'codplay/runtime/player'
-import { ELCE_EVENTS } from '../../config/document-config'
-import type { ProfileProperty, ProfileValue } from '../../domain/summary-profile/summary-profile-types'
-import { resolveProfileValues, validateProfileValues } from '../../domain/summary-profile/profile-rules'
+import { ELCE_EVENTS } from '../../mods/learning/reading/learning-reading-events'
+import type { ProfileProperty, ProfileValue } from '../../mods/learning/profile/domain/learning-profile-types'
+import { learningProfileService } from '../../mods/learning/profile/domain/learning-profile-service'
 
 export const ELCE_PROFILE_FORM_RUNTIME_KEY = 'elceProfileFormRuntime'
 
@@ -99,7 +99,7 @@ function submitProfile(
   state: Readonly<Record<string, unknown>>,
 ): StrapRuntimeOutput | undefined {
   const values = readValues(state.values)
-  const errors = validateProfileValues(properties, fieldPropertyIds, values)
+  const errors = learningProfileService.validateProfileValues(properties, fieldPropertyIds, values)
   if (errors.length > 0) {
     return {
       events: [{
@@ -114,7 +114,7 @@ function submitProfile(
       { name: ELCE_EVENTS.PROFILE_ERROR, data: { content: '', attr: { hidden: true } }, visibility: 'story' },
       {
         name: ELCE_EVENTS.PROFILE_SUBMIT,
-        data: { profileValues: resolveProfileValues(properties, values) },
+        data: { profileValues: learningProfileService.resolveProfileValues(properties, values) },
         visibility: 'public',
       },
     ],

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_EVALUATION_SETTINGS, QUESTION_TYPE } from '../config/document-config'
-import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import { DEFAULT_EVALUATION_SETTINGS } from '../mods/learning/evaluation/learning-evaluation-config'
+import { QUESTION_TYPE } from '../resources/bdcs/question/question-config'
+import { INITIAL_PROJECT_TEST_STATE } from '../mods/learning/reading/learning-test-state-types'
 import type { PipwerksScormApi } from '@codplay/sighty-scorm'
 import { ElceScormAdapter } from './elce-scorm-adapter'
 

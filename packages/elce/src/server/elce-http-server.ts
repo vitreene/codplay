@@ -1,13 +1,9 @@
 import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
-import { mkdir, rm } from 'node:fs/promises'
 import { createRequestListener } from 'remix/node-fetch-server'
-import { createElceApiRouter } from './api-router'
-import { MediaApiController } from './media/media-api-controller'
-import { createMediaFileStorage, removeUnreferencedMediaFiles } from './media/media-file-storage'
-import { openProjectDatabase } from './projects/sqlite/project-database'
-import { SqliteProjectPersistence } from './projects/sqlite/sqlite-project-persistence'
-import { isNetworkPreviewApiRequestAllowed } from './network-preview-api-policy'
+import { isNetworkPreviewApiRequestAllowed } from '../core/server/http/network-preview-api-policy'
+import { createLearningServerComposition } from '../mods/learning/composition/server/server-composition'
+import { isLearningTestStateNetworkPreviewRequestAllowed } from '../mods/learning/persistence/server/learning-test-state-routes'
 
 /** Supplies the filesystem locations owned by one local Elcé server. */
 export interface ElceHttpServerOptions {
@@ -24,53 +20,35 @@ export interface ElceHttpServer {
 
 /** Creates one local HTTP server for the project API and media file routes. */
 export async function createElceHttpServer(options: ElceHttpServerOptions): Promise<ElceHttpServer> {
-  const database = await openProjectDatabase(options.databaseFile)
-
-  try {
-    const persistence = new SqliteProjectPersistence(database)
-    const fileStorage = createMediaFileStorage(options.mediaDirectory)
-    const temporaryDirectory = `${options.mediaDirectory}.incoming`
-    await rm(temporaryDirectory, { recursive: true, force: true })
-    await mkdir(temporaryDirectory, { recursive: true })
-    await removeUnreferencedMediaFiles(fileStorage, persistence)
-    const media = new MediaApiController(
-      persistence,
-      fileStorage,
-      temporaryDirectory,
-    )
-    const router = createElceApiRouter(persistence, media)
-    const requestListener = createRequestListener((request) => router.fetch(request))
-    const server = createServer((request, response) => {
-      const networkPreviewOrigin = options.networkPreviewOrigin
-      if (networkPreviewOrigin !== undefined && !isLoopbackAddress(request.socket.remoteAddress)
-        && !isNetworkPreviewApiRequestAllowed({
-          method: request.method ?? 'GET',
-          pathname: new URL(request.url ?? '/', 'http://localhost').pathname,
-          origin: request.headers.origin,
-          requestedMethod: request.headers['access-control-request-method'],
-        }, networkPreviewOrigin)) {
-        response.writeHead(403)
-        response.end()
-        return
-      }
-      if (answerLocalCors(request, response, networkPreviewOrigin)) return
-      requestListener(request, response)
-    })
-
-    return {
-      server,
-      async close() {
-        if (server.listening) {
-          await new Promise<void>((resolve, reject) => {
-            server.close((error) => error === undefined ? resolve() : reject(error))
-          })
-        }
-        await database.close()
-      },
+  const composition = await createLearningServerComposition(options)
+  const requestListener = createRequestListener((request) => composition.router.fetch(request))
+  const server = createServer((request, response) => {
+    const networkPreviewOrigin = options.networkPreviewOrigin
+    if (networkPreviewOrigin !== undefined && !isLoopbackAddress(request.socket.remoteAddress)
+      && !isNetworkPreviewApiRequestAllowed({
+        method: request.method ?? 'GET',
+        pathname: new URL(request.url ?? '/', 'http://localhost').pathname,
+        origin: request.headers.origin,
+        requestedMethod: request.headers['access-control-request-method'],
+      }, networkPreviewOrigin, [isLearningTestStateNetworkPreviewRequestAllowed])) {
+      response.writeHead(403)
+      response.end()
+      return
     }
-  } catch (error) {
-    await database.close()
-    throw error
+    if (answerLocalCors(request, response, networkPreviewOrigin)) return
+    requestListener(request, response)
+  })
+
+  return {
+    server,
+    async close() {
+      if (server.listening) {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => error === undefined ? resolve() : reject(error))
+        })
+      }
+      await composition.close()
+    },
   }
 }
 

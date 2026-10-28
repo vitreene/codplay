@@ -1,11 +1,11 @@
-import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../config/document-config'
+import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../mods/learning/reading/learning-reading-events'
 import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import type { SightyRuntimeApi, SightyScenarioMutation, SightyViewAction } from '@codplay/sighty'
 import type { CodPlayTelco } from 'codplay'
-import { scenarioContextFromTestState } from '../builders/scenario/scenario-context'
-import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
-import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
-import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import { learningTestStateService } from '../mods/learning/reading/learning-test-state-service'
+import type { ElceSceneKey, ElceSlotName } from '../mods/learning/reading/learning-scenario-types'
+import type { ProjectTestState } from '../mods/learning/reading/learning-test-state-types'
+import { INITIAL_PROJECT_TEST_STATE } from '../mods/learning/reading/learning-test-state-types'
 import {
   ELCE_SCORM_CHAPTER_CONTEXT_KEY,
   ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY,
@@ -143,7 +143,7 @@ export async function startElceScormPackageRuntime(
     }
 
     const runtimeContext = {
-      ...scenarioContextFromTestState(restored.projectTestState),
+      ...learningTestStateService.scenarioContextFromTestState(restored.projectTestState),
       ...(options.chapterScoIdentifiers === undefined ? {} : {
         [ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY]: options.chapterScoIdentifiers,
       }),

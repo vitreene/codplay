@@ -1,0 +1,336 @@
+import { ANCHOR, ANCHOR_MEDIA_PRESETS } from '../anchor-config'
+import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../bdcs/card/card-config'
+import { CAROUSEL_BDC_TYPE } from '../../bdcs/carousel/carousel-config'
+import { QUESTION_BDC_TYPE } from '../../bdcs/question/question-config'
+import { SECTION_BDC_TYPE } from '../../bdcs/section/section-config'
+import { STATISTICAL_GRAPH_BDC_TYPE } from '../../bdcs/statistical-graph/statistical-graph-config'
+import { FLUX_PAGE_TYPE } from '../../pages/flux/flux-config'
+import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
+import { MEDIA_TYPE } from '../../../core/media/media-config'
+import type { AnchorCommand } from '../authoring/anchor-command-types'
+import { createStableId } from '../../../core/document/stable-id'
+import { ElceMediaResourceService, mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
+import type {
+  ElceCatalogBdcEntry,
+  ElceCatalogContents,
+  ElceCatalogDropTarget,
+  ElceCatalogMediaEntry,
+  ElceCatalogReference,
+} from '../../../core/catalog/catalog-types'
+import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
+import type { ResourceBdc, ResourceDocumentData } from '../../document/resource-document-types'
+import type { MediaMetadata, PageId } from '../../../core/document/content-document-types'
+import { statisticalGraphAnchorPaddingBottom } from '../../../domain/anchor/anchor-position'
+
+const mediaResourceService = new ElceMediaResourceService()
+
+export interface ElceAnchorDropServiceOptions {
+  readonly resolveAdditionalCatalogBdcName?: (bdc: ResourceBdc) => string | undefined
+}
+
+/** Builds métier targets and commands for file and catalogue anchor drops. */
+export class ElceAnchorDropService {
+  private readonly resolveAdditionalCatalogBdcName: ElceAnchorDropServiceOptions['resolveAdditionalCatalogBdcName']
+
+  /** Creates the resource service with optional names for mod-owned BDC types. */
+  public constructor(options: ElceAnchorDropServiceOptions = {}) {
+    this.resolveAdditionalCatalogBdcName = options.resolveAdditionalCatalogBdcName
+  }
+
+  /** Lists every top-level BDC in the catalogue and its reusable media. */
+  public catalogContents(document: ResourceDocumentData): ElceCatalogContents {
+    const bdcs: ElceCatalogBdcEntry[] = []
+    const mediaEntries: ElceCatalogMediaEntry[] = []
+    for (const bdcId of document.catalogBdcIds) {
+      const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+      if (bdc === undefined || bdc.pageId !== null || bdc.parentBdcId !== null) continue
+      bdcs.push({
+        key: `${CATALOG_REFERENCE.BDC}:${bdc.id}`,
+        name: catalogBdcName(document, bdc, this.resolveAdditionalCatalogBdcName),
+        bdcType: bdc.type,
+        reference: { kind: CATALOG_REFERENCE.BDC, bdcId: bdc.id },
+      })
+    }
+    for (const media of document.medias) {
+      switch (mediaTypeFromMimeType(media.mimeType)) {
+        case MEDIA_TYPE.IMAGE:
+          mediaEntries.push({
+            key: `${CATALOG_REFERENCE.MEDIA}:${media.id}`,
+            name: media.name,
+            mediaType: MEDIA_TYPE.IMAGE,
+            reference: { kind: CATALOG_REFERENCE.MEDIA, mediaId: media.id },
+          })
+          break
+        case MEDIA_TYPE.VIDEO:
+          mediaEntries.push({
+            key: `${CATALOG_REFERENCE.MEDIA}:${media.id}`,
+            name: media.name,
+            mediaType: MEDIA_TYPE.VIDEO,
+            reference: { kind: CATALOG_REFERENCE.MEDIA, mediaId: media.id },
+          })
+          break
+        default:
+          break
+      }
+    }
+    return { bdcs, media: mediaEntries }
+  }
+
+  /** Creates a typed, stable target for one accepted file drop. */
+  public createFileDropTarget(file: File, pageId: PageId): ElceAnchorDropTarget | null {
+    const mediaImport = mediaResourceService.createImport(file)
+    switch (mediaImport) {
+      case null:
+        return null
+      default:
+        return createMediaDropTarget(mediaImport.media, pageId)
+    }
+  }
+
+  /** Resolves a catalogue reference only for the current Flux Section editor. */
+  public createCatalogDropTarget(
+    document: ResourceDocumentData,
+    reference: ElceCatalogReference,
+    pageId: PageId | null,
+    sectionBdcId: string,
+  ): ElceCatalogDropTarget | null {
+    switch (pageId) {
+      case null:
+        return null
+      default:
+        switch (isFluxSection(document, pageId, sectionBdcId)) {
+          case false:
+            return null
+          case true:
+            switch (reference.kind) {
+              case CATALOG_REFERENCE.BDC:
+                return createCatalogBdcDropTarget(document, reference, pageId)
+              case CATALOG_REFERENCE.MEDIA:
+                return createReusableMediaDropTarget(document, reference, pageId)
+            }
+        }
+    }
+  }
+
+  /** Builds the document command emitted after XState has accepted the change. */
+  public createDocumentCommand(sectionBdcId: string, change: ElceSectionChange): AnchorCommand {
+    switch (change.kind) {
+      case 'file-drop':
+        return {
+          type: 'bdc.anchor.create',
+          sectionBdcId,
+          pageId: change.target.pageId,
+          bdcId: change.target.bdcId,
+          presetId: change.target.presetId,
+          media: change.target.media,
+          partId: change.target.partId,
+          content: change.content,
+          markup: change.markup,
+        }
+      case 'catalog-drop':
+        switch (change.target.source) {
+          case CATALOG_REFERENCE.BDC:
+            return {
+              type: 'bdc.anchor.attach',
+              sectionBdcId,
+              pageId: change.target.pageId,
+              bdcId: change.target.bdcId,
+              content: change.content,
+              markup: change.markup,
+            }
+          case CATALOG_REFERENCE.MEDIA:
+            return {
+              type: 'bdc.anchor.create',
+              sectionBdcId,
+              pageId: change.target.pageId,
+              bdcId: change.target.bdcId,
+              presetId: change.target.presetId,
+              media: change.target.media,
+              partId: change.target.partId,
+              content: change.content,
+              markup: change.markup,
+            }
+        }
+      case 'anchor-move':
+        return {
+          type: 'bdc.anchor.move',
+          sectionBdcId,
+          anchorBdcId: change.anchorBdcId,
+          content: change.content,
+          markup: change.markup,
+        }
+      case 'anchor-remove':
+        return {
+          type: 'bdc.anchor.remove',
+          sectionBdcId,
+          anchorBdcId: change.anchorBdcId,
+          content: change.content,
+          markup: change.markup,
+        }
+      case 'anchor-return':
+        return {
+          type: 'bdc.anchor.return',
+          sectionBdcId,
+          anchorBdcId: change.anchorBdcId,
+          content: change.content,
+          markup: change.markup,
+        }
+      case 'content':
+      case 'anchor-ratio':
+        return {
+          type: 'bdc.section.update',
+          bdcId: sectionBdcId,
+          title: change.title,
+          content: change.content,
+          markup: change.markup,
+        }
+    }
+  }
+}
+
+/** Maps supported file MIME types to their configured media categories. */
+/** Checks that a catalogue reference still belongs to this Flux Section. */
+function isFluxSection(document: ResourceDocumentData, pageId: PageId, sectionBdcId: string): boolean {
+  const page = document.pages.find((candidate) => candidate.id === pageId)
+  switch (page?.type) {
+    case FLUX_PAGE_TYPE:
+      break
+    default:
+      return false
+  }
+  const section = document.bdcs.find((candidate) => candidate.id === sectionBdcId)
+  switch (section?.type) {
+    case SECTION_BDC_TYPE:
+      switch (section.pageId) {
+        case pageId:
+          return section.section !== null
+        default:
+          return false
+      }
+    default:
+      return false
+  }
+}
+
+/** Finds one available illustration BDC and derives its inline reservation. */
+function readCatalogIllustration(document: ResourceDocumentData, bdcId: string): Readonly<{ bdc: ResourceBdc; paddingBottom: string }> | null {
+  if (!document.catalogBdcIds.includes(bdcId)) return null
+  const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+  if (bdc === undefined || bdc.pageId !== null || bdc.parentBdcId !== null) return null
+  if (bdc.type === STATISTICAL_GRAPH_BDC_TYPE) {
+    return bdc.statisticalGraph == null
+      ? null
+      : { bdc, paddingBottom: statisticalGraphAnchorPaddingBottom(bdc.statisticalGraph.rendering) }
+  }
+  if (bdc.type !== CARD_BDC_TYPE || bdc.card == null) return null
+  if (bdc.presetId !== CARD_PRESET_ID.PHOTO) {
+    return { bdc, paddingBottom: ANCHOR.DEFAULT_PADDING_BOTTOM }
+  }
+  const media = bdc.card.mediaId === null
+    ? undefined
+    : document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+  const mediaType = media === undefined ? null : mediaTypeFromMimeType(media.mimeType)
+  if (mediaType !== MEDIA_TYPE.IMAGE && mediaType !== MEDIA_TYPE.VIDEO) return null
+  return { bdc, paddingBottom: ANCHOR_MEDIA_PRESETS[mediaType].blockSize }
+}
+
+/** Builds a target that moves one available bdc into this page's text. */
+function createCatalogBdcDropTarget(
+  document: ResourceDocumentData,
+  reference: Extract<ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.BDC }>,
+  pageId: PageId,
+): ElceCatalogDropTarget | null {
+  const item = readCatalogIllustration(document, reference.bdcId)
+  switch (item) {
+    case null:
+      return null
+    default:
+      return {
+        source: CATALOG_REFERENCE.BDC,
+        reference,
+        pageId,
+        bdcId: item.bdc.id,
+        presetId: item.bdc.presetId,
+        partId: `${pageId}:${item.bdc.id}:anchor`,
+        paddingBottom: item.paddingBottom,
+      }
+  }
+}
+
+/** Chooses a readable catalogue name from the BDC's authored content. */
+function catalogBdcName(
+  document: ResourceDocumentData,
+  bdc: ResourceBdc,
+  resolveAdditionalName: ElceAnchorDropServiceOptions['resolveAdditionalCatalogBdcName'],
+): string {
+  switch (bdc.type) {
+    case SECTION_BDC_TYPE:
+      return bdc.section?.title.trim() || 'Texte'
+    case CARD_BDC_TYPE: {
+      const cardText = [bdc.card?.title, bdc.card?.overline, bdc.card?.message, bdc.card?.description, bdc.card?.caption, bdc.card?.note]
+        .find((value) => value?.trim().length)
+      if (cardText !== undefined) return cardText.trim()
+      const media = bdc.card?.mediaId === null || bdc.card?.mediaId === undefined
+        ? undefined
+        : document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
+      return media?.name ?? 'Carte'
+    }
+    case QUESTION_BDC_TYPE:
+      return bdc.question?.title.trim() || 'Question'
+    case CAROUSEL_BDC_TYPE:
+      return 'Carousel'
+    case STATISTICAL_GRAPH_BDC_TYPE:
+      return bdc.statisticalGraph?.title.trim() || 'Graphe'
+    default: {
+      const additionalName = resolveAdditionalName?.(bdc)
+      if (additionalName !== undefined) return additionalName
+      throw new Error(`Type de BDC non pris en charge : ${bdc.type}`)
+    }
+  }
+}
+
+/** Builds a unique Card target while retaining the referenced media resource. */
+function createReusableMediaDropTarget(
+  document: ResourceDocumentData,
+  reference: Extract<ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.MEDIA }>,
+  pageId: PageId,
+): ElceCatalogDropTarget | null {
+  const media = document.medias.find((candidate) => candidate.id === reference.mediaId)
+  if (media === undefined) return null
+  const mediaType = mediaTypeFromMimeType(media.mimeType)
+  switch (mediaType) {
+    case MEDIA_TYPE.IMAGE:
+    case MEDIA_TYPE.VIDEO: {
+      const preset = ANCHOR_MEDIA_PRESETS[mediaType]
+      const bdcId = createStableId('bdc-card')
+      return {
+        source: CATALOG_REFERENCE.MEDIA,
+        reference,
+        pageId,
+        bdcId,
+        media,
+        presetId: preset.presetId,
+        partId: `${pageId}:${bdcId}:anchor`,
+        paddingBottom: preset.blockSize,
+      }
+    }
+    default:
+      return null
+  }
+}
+
+/** Builds the stable Card reference created by one accepted file drop. */
+function createMediaDropTarget(media: MediaMetadata, pageId: PageId): ElceAnchorDropTarget {
+  const mediaType = mediaTypeFromMimeType(media.mimeType)
+  if (mediaType === null) throw new Error(`Type média non pris en charge : ${media.mimeType}`)
+  const preset = ANCHOR_MEDIA_PRESETS[mediaType]
+  const bdcId = createStableId('bdc-card')
+  return {
+    pageId,
+    bdcId,
+    media,
+    presetId: preset.presetId,
+    partId: `${pageId}:${bdcId}:anchor`,
+    paddingBottom: preset.blockSize,
+  }
+}

@@ -3,6 +3,8 @@
 Ce dossier réunit les études et notes sur les mods d’Elcé. Le
 [plan unique](plan/2026-10-20-elce-mods-reconfiguration-plan.md) conserve
 les conclusions, les décisions retenues et celles qui restent à prendre.
+Le [guide de développement](../src/mods/docs/README.md) donne un exemple concret dans Learning.
+Le [skill partagé](../src/mods/docs/SKILL.md) pilote la réalisation d’un mod.
 
 ## Architecture
 

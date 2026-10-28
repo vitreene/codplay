@@ -1,0 +1,68 @@
+
+
+.elce-bdc-icon-button {
+  display: inline-flex;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: var(--elce-icon-padding);
+  color: #52645f;
+  background: #fffdf8;
+  border: 1px solid #d2d1c8;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.elce-bdc-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.elce-bdc-icon-button--danger {
+  color: #8d3b35;
+}
+
+.elce-bdc-icon-button.elce-page-bdc__drag {
+  color: #8a9088;
+  cursor: grab;
+}
+
+.elce-appearance-trigger {
+  display: inline-flex;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.25rem;
+  color: #263b3a;
+  background: #fffdf8;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+
+.elce-appearance-trigger:hover {
+  background: #e8e4db;
+}
+
+.elce-appearance-trigger:focus-visible {
+  outline: 3px solid #80b4a8;
+  outline-offset: 2px;
+}
+
+.elce-bdc-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.elce-bdc-style-trigger {
+  flex: 0 0 auto;
+}

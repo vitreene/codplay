@@ -41,13 +41,21 @@ de contrôle vide l'historique du navigateur piloté.
    de rechargement et de remplacement serveur. Borner l'historique à 100 gestes
    et libérer les médias des entrées évincées. Vérifier Undo/Redo de créations,
    déplacements, suppressions, titres, réglages, Sections et ancres.
-3. [ ] **Inclure les imports de fichiers.** Un import réussi est un seul geste
+3. [x] **Inclure les imports de fichiers.** Un import réussi est un seul geste
    annulable : Annuler retire sa nouvelle ressource du catalogue, Rétablir
    retrouve ses octets pendant cette session. Préserver les médias partagés et
    intégrer une éventuelle déduplication serveur au même résultat éditorial.
    Garder les octets nécessaires tant que Rétablir est possible, puis libérer
    cette rétention. Si le stockage refuse l'import, nettoyer sa copie
    provisoire, laisser le document intact et ne créer aucune entrée d'historique.
+   Sur une image d'un BDC ancré, remplacer le média du même BDC dans ce geste ;
+   Undo restaure l'ancien média et Redo le nouveau. Un dépôt de fichier hors de
+   l'éditeur ou sans position métier valide est consommé sans ouvrir le fichier
+   ni modifier document ou historique. Le 28 octobre, les tests ciblés (57
+   tests sur sept fichiers), le typecheck, le build et Safari MCP (`5175`)
+   valident le remplacement d’une Carte ancrée, un seul Undo/Redo et le rejet
+   hors cible sans navigation ni sauvegarde ; preuves dans les spécifications
+   Ancre, Section et Historique.
 4. [x] **Permettre l'arrêt d'un import en cours.** Un bouton explicite
    « Annuler l'import » interrompt immédiatement la préparation du fichier,
    nettoie ses données provisoires et ne déclenche pas l'Undo d'un geste
@@ -59,10 +67,26 @@ de contrôle vide l'historique du navigateur piloté.
    L'utilisateur a vérifié les boutons et les raccourcis clavier réels.
 6. [ ] **Terminer l'acceptation.** Vérifier dans l'interface les autres
    commandes structurelles et réglages, l'accès suspendu et les changements de
-   projet. Tester le transfert entre deux navigateurs, le cycle Undo/Redo d'un
-   média déjà envoyé au serveur, et le nettoyage quand plusieurs onglets
-   partagent IndexedDB. Mettre à jour les spécifications propriétaires après
-   vérification de ces derniers comportements.
+   projet. Tester le transfert entre deux navigateurs et le nettoyage quand
+   plusieurs onglets partagent IndexedDB. Le 28 octobre, Safari MCP a aussi
+   vérifié le cycle d’une image importée et téléversée (`PUT /document` `200`,
+   upload média `201`, Undo puis Redo sur la même Carte). Mettre à jour les
+   spécifications propriétaires après vérification des comportements restants.
+   **Contrôle du 28 octobre :** les tests dans `packages/elce` passent pour
+   370 tests sur 371, sur 46 fichiers ; l’unique échec est le serveur SQLite
+   de test bloqué par `listen EPERM: operation not permitted 127.0.0.1`. Trois
+   suites supplémentaires (verrou projet, client API, placement) passent
+   16 tests. Dans Safari MCP, sur `localhost:5175`, l’interface a vérifié le
+   Undo/Redo d’une édition de Section, de la création d’une page et d’un titre
+   de page encore saisi. Les commandes, réglages et frontières projet restent
+   à exercer dans l’interface ; le glisser-déposer est hors périmètre de ce
+   contrôle, conformément à la demande utilisateur. Le projet temporaire
+   `Projet 3` créé pour ce contrôle est toujours ouvert dans l’éditeur. Safari
+   MCP rapporte `Lecture seule`, `document.hasFocus=false` et un onglet inactif ;
+   la suppression par l’interface est donc refusée. Ce statut concerne l’accès
+   d’écriture, pas l’ouverture du projet. Reprendre sa suppression et les
+   parcours navigateur quand l’accès d’édition est disponible. Le transfert
+   entre navigateurs n’est pas couvert par l’inventaire MCP de cette session.
 
 ## Saisie non encore validée
 
@@ -86,9 +110,9 @@ de focus inchangé et le choix des blobs à purger. La
 comportements vérifiés.
 
 Restent à valider avant de clore : les autres commandes structurelles et champs
-de réglage dans l’interface, le transfert entre deux navigateurs, le cycle
-complet d’un média déjà transféré au serveur puis annulé et rétabli, et l'effet
-du nettoyage partagé entre plusieurs onglets. La suite Elcé présente sept
+de réglage dans l’interface, l’accès suspendu et les changements de projet,
+le transfert entre deux navigateurs et l'effet du nettoyage partagé entre
+plusieurs onglets. La suite Elcé présente sept
 échecs préexistants du player ; le test SQLite/API passe avec accès au port
 local, comme avant cette tranche.
 

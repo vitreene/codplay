@@ -1,13 +1,13 @@
 import { elceApiOrigin } from '../config/api-config'
-import type { ElceDocument } from '../domain/document/document-model'
-import type { MediaId } from '../domain/document/document-types'
+import type { LearningDocument } from '../mods/learning/document/learning-document'
+import type { MediaId } from '../core/document/content-document-types'
 import { scenarioExportMediaIds } from './scenario-export-media'
 
 const EXPORT_ENDPOINT = '/api/exports/sighty'
 
 /** Requests a Sighty ZIP from the Elcé API using the current document and media sources. */
 export async function requestElceSightyPackage(
-  documentModel: ElceDocument,
+  documentModel: LearningDocument,
   mediaSources: Readonly<Record<MediaId, string>>,
   request: typeof fetch = fetch,
 ): Promise<Blob> {

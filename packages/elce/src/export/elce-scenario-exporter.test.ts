@@ -3,15 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE, DEFAULT_PRESET_ID, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION } from '../config/document-config'
+import { BDC_TYPE, DEFAULT_PRESET_ID } from '../mods/learning/learning-definition'
+import { ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../mods/learning/reading/learning-reading-events'
+import { PAGE_LOCATION } from '../mods/learning/organization/learning-page-placement'
 import {
   applyDocumentCommand,
   createCarouselBdcCommand,
   createPageCommand,
   createQuestionBdcCommand,
 } from '../domain/commands/document-commands'
-import { createInitialDocument } from '../domain/document/document-model'
-import { createElcePlayerScenario } from '../player/elce-player-composition'
+import { learningDocumentService } from '../mods/learning/document/learning-document-service'
+import { createElcePlayerScenario } from '../mods/learning/reading/learning-player'
 import { exportElceSightyPackage } from './elce-scenario-exporter'
 
 describe('Elcé Sighty package export', () => {
@@ -19,7 +21,7 @@ describe('Elcé Sighty package export', () => {
     const imageBytes = new TextEncoder().encode(
       '<svg xmlns="http://www.w3.org/2000/svg"><title>Elce export fixture</title></svg>',
     )
-    let document = applyDocumentCommand(createInitialDocument(), {
+    let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: {
         id: 'media-export-fixture',
@@ -231,7 +233,7 @@ describe('Elcé Sighty package export', () => {
 
   it('requires bytes for a media source referenced by the Sighty scenes', async () => {
     const bytes = new TextEncoder().encode('<svg/>')
-    let document = applyDocumentCommand(createInitialDocument(), {
+    let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
       type: 'media.add',
       media: { id: 'media-required', name: 'required.svg', mimeType: 'image/svg+xml', size: bytes.byteLength, caption: '' },
     })

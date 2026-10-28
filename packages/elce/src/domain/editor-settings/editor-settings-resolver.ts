@@ -1,12 +1,10 @@
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
-import { BDC_TYPE } from '../../config/document-config'
-import type {
-  Bdc,
-  BdcId,
-  Page,
-  RevelationTransitionDefaults,
-  RevelationTransitionOverrides,
-} from '../document/document-types'
+import { CAROUSEL_BDC_TYPE } from '../../resources/bdcs/carousel/carousel-config'
+import { SECTION_BDC_TYPE } from '../../resources/bdcs/section/section-config'
+import type { ContentPage } from '../../core/document/content-document-types'
+import type { BdcId } from '../../core/document/content-document-types'
+import type { ResourceBdc } from '../../resources/document/resource-document-types'
+import type { RevelationTransitionDefaults, RevelationTransitionOverrides } from '../../resources/revelation/revelation-types'
 import type {
   ElceResolvedPageSettings,
   ElceResolvedPlayerSettings,
@@ -32,8 +30,8 @@ export class ElceEditorSettingsResolver {
 
   /** Resolves the effective settings for the BDC tree rendered by one page. */
   public resolvePage(
-    page: Page,
-    bdcs: readonly Bdc[],
+    page: ContentPage,
+    bdcs: readonly ResourceBdc[],
     projectDefaults: RevelationTransitionDefaults,
   ): ElceResolvedPageSettings {
     const bdcsById = new Map(bdcs.map((bdc) => [bdc.id, bdc]))
@@ -56,7 +54,7 @@ export class ElceEditorSettingsResolver {
         resolvedByBdcId,
         resolvingBdcIds,
       )
-      if (bdc.type !== BDC_TYPE.CAROUSEL || bdc.carousel == null) continue
+      if (bdc.type !== CAROUSEL_BDC_TYPE || bdc.carousel == null) continue
       const defaults = byBdcId[bdcId]
       const entries: Record<BdcId, RevelationTransitionDefaults> = {}
       for (const entry of bdc.carousel.cards) {
@@ -85,7 +83,7 @@ export class ElceEditorSettingsResolver {
   }
 
   /** Collects the page's direct BDCs and every descendant stored under them. */
-  private collectPageBdcIds(page: Page, bdcs: readonly Bdc[]): readonly BdcId[] {
+  private collectPageBdcIds(page: ContentPage, bdcs: readonly ResourceBdc[]): readonly BdcId[] {
     const relevantBdcIds = new Set(page.bdcIds)
     let addedChild = true
     while (addedChild) {
@@ -101,8 +99,8 @@ export class ElceEditorSettingsResolver {
 
   /** Resolves a BDC's local overrides over its resolved parent settings. */
   private resolveBdcRevelation(
-    bdc: Bdc,
-    bdcsById: ReadonlyMap<BdcId, Bdc>,
+    bdc: ResourceBdc,
+    bdcsById: ReadonlyMap<BdcId, ResourceBdc>,
     projectDefaults: RevelationTransitionDefaults,
     resolvedByBdcId: Map<BdcId, RevelationTransitionDefaults>,
     resolvingBdcIds: Set<BdcId>,
@@ -126,11 +124,11 @@ export class ElceEditorSettingsResolver {
   }
 
   /** Reads only the override owned by a BDC type that exposes revelation settings. */
-  private revelationOverrides(bdc: Bdc): RevelationTransitionOverrides | null {
+  private revelationOverrides(bdc: ResourceBdc): RevelationTransitionOverrides | null {
     switch (bdc.type) {
-      case BDC_TYPE.SECTION:
+      case SECTION_BDC_TYPE:
         return bdc.section?.revelation ?? null
-      case BDC_TYPE.CAROUSEL:
+      case CAROUSEL_BDC_TYPE:
         return bdc.carousel?.revelation ?? null
       default:
         return null

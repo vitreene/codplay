@@ -110,7 +110,7 @@ La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
 sa compilation CodPlay l’est dans
 [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
 et [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts).
-[`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+[`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
 vérifie par le parcours Sighty/CodPlay que l’issue lue par Sighty au changement
 de page monte une seule branche à `mountPartId` dans l’article Flux, pour la
 réussite comme pour l’échec.

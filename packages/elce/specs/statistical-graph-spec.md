@@ -133,21 +133,21 @@ modifié.
 
 ## Preuves
 
-- [`statistical-graph-service.test.ts`](../src/domain/statistical-graph/statistical-graph-service.test.ts)
+- [`statistical-graph-service.test.ts`](../src/resources/bdcs/statistical-graph/domain/statistical-graph-service.test.ts)
   couvre la grille, les nombres et le remplacement de matrice.
-- [`statistical-graph-scene-builder.test.ts`](../src/builders/statistical-graph/statistical-graph-scene-builder.test.ts)
+- [`statistical-graph-scene-builder.test.ts`](../src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.test.ts)
   couvre les quatre rendus, l’alternative accessible et le choix d’une taille
   commune selon le contenu le plus contraignant ; ses assertions vérifient les
   huit couleurs fixes pour chaque rendu SVG et sa légende.
-- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+- [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   compile les placements Flux, Diapo, Carousel et Section par les builders et
   le runtime CodPlay réels ; les placements Flux, Diapo et Carousel conservent
   aussi la feuille de couleurs du graphe.
-- [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+- [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   vérifie l’aller-retour JSON, la migration depuis les anciennes lignes
   relationnelles et son retour, la suppression des tables de détail et la
   conservation de Question/Réponses.
-- [`remix-statistical-graph-editor.test.tsx`](../src/app/editor/statistical-graph/remix-statistical-graph-editor.test.tsx)
+- [`remix-statistical-graph-editor.test.tsx`](../src/mods/learning/integration/remix-statistical-graph-editor.test.tsx)
   vérifie la saisie contrôlée, l’extension de grille par collage et le transfert
   de la feuille de style du builder dans l’aperçu auteur.
 - Le 27 octobre 2026, Brave montre les barres colorées dans l’aperçu du graphe

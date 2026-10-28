@@ -1,0 +1,284 @@
+import { MEDIA_TYPE } from '../media/media-config'
+import { PROJECT_SYNC_DEBOUNCE_MS } from '../persistence/project-api/project-api-config'
+import { mediaTypeFromMimeType } from '../media/media-resource-service'
+import type { DocumentSyncState, DocumentStore } from '../persistence/indexed-db/document-store-types'
+import type { ProjectApiClient } from '../persistence/project-api/project-api-client'
+import type { ElceProjectSummary } from '../persistence/project-api/project-api-types'
+import { ElceProjectApiError } from '../persistence/project-api/project-http-transport'
+import { retainedHistoryMediaIds } from '../history/document-history'
+import type { ProjectControllerPort } from '../controller/controller-types'
+import type { ProjectSessionOperation } from '../projects/project-session-types'
+import type { ProjectDocumentServices } from '../projects/project-document-services'
+
+/** Coalesces local saves into serialized project and media API requests. */
+export class ProjectSyncCoordinator<TDocument, TSerialized, TSelection> {
+  private readonly controller: ProjectControllerPort<TDocument, TSelection, ElceProjectSummary, ProjectSessionOperation>
+  private readonly store: DocumentStore<TDocument>
+  private readonly api: ProjectApiClient<TDocument, TSerialized>
+  private readonly documentServices: ProjectDocumentServices<TDocument>
+  private latestDocument: TDocument | null = null
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private running = false
+  private runningCompletion: Promise<void> | null = null
+  private queued = false
+  private suspended = false
+  private lastFailure: unknown = null
+
+  public constructor(
+    controller: ProjectControllerPort<TDocument, TSelection, ElceProjectSummary, ProjectSessionOperation>,
+    store: DocumentStore<TDocument>,
+    api: ProjectApiClient<TDocument, TSerialized>,
+    documentServices: ProjectDocumentServices<TDocument>,
+  ) {
+    this.controller = controller
+    this.store = store
+    this.api = api
+    this.documentServices = documentServices
+    if (typeof window !== 'undefined') window.addEventListener('online', this.retry)
+  }
+
+  /** Schedules synchronization after the matching document has been cached. */
+  public schedule(document: TDocument): void {
+    this.latestDocument = document
+    this.lastFailure = null
+    this.controller.send({ type: 'document.sync.status', status: 'pending' })
+    if (this.timer !== null) clearTimeout(this.timer)
+    if (this.suspended) return
+    this.timer = setTimeout(() => {
+      this.timer = null
+      void this.flush()
+    }, PROJECT_SYNC_DEBOUNCE_MS)
+  }
+
+  /** Waits for the queued document and every referenced media upload to be acknowledged. */
+  public async waitUntilCurrentDocumentSynced(flushLocal?: () => Promise<void>): Promise<void> {
+    if (this.suspended) throw new Error('La synchronisation Elcé est suspendue.')
+    for (;;) {
+      await flushLocal?.()
+      const document = this.controller.getSnapshot().context.document
+      if (this.latestDocument !== document) {
+        if (flushLocal === undefined) {
+          throw new Error('Le document courant doit être enregistré localement avant sa synchronisation.')
+        }
+        this.schedule(document)
+      }
+      if (this.timer !== null) clearTimeout(this.timer)
+      this.timer = null
+      this.lastFailure = null
+      await this.flush()
+
+      if (this.controller.getSnapshot().context.document !== document) {
+        if (flushLocal === undefined) throw new Error('Le document a changé pendant l’attente de sa synchronisation.')
+        continue
+      }
+
+      const syncState = await this.store.loadSyncState(this.documentServices.id(document))
+      switch (syncState.status) {
+        case 'synced':
+          if (syncState.remoteRevision !== null) return
+          break
+        case 'conflict':
+          throw new Error('Le document présente un conflit avec sa version serveur.')
+        case 'pending':
+          break
+      }
+
+      if (this.lastFailure !== null) throw this.lastFailure
+      throw new Error('La synchronisation du document ne s’est pas terminée.')
+    }
+  }
+
+  /** Flushes pending writes immediately or waits for an attempt already in progress. */
+  public async flushNow(): Promise<void> {
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    this.lastFailure = null
+    if (this.runningCompletion !== null) {
+      while (this.runningCompletion !== null) {
+        await this.runningCompletion
+        if (this.timer !== null) clearTimeout(this.timer)
+        this.timer = null
+      }
+      return
+    }
+    await this.flush()
+  }
+
+  /** Stops new network writes and waits for the current write to settle. */
+  public async suspend(): Promise<void> {
+    this.suspended = true
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    if (this.runningCompletion !== null) await this.runningCompletion
+  }
+
+  /** Resumes server synchronization from the latest locally restored document. */
+  public resume(document: TDocument): void {
+    this.suspended = false
+    this.schedule(document)
+  }
+
+  /** Releases pending timers and the browser network-recovery listener. */
+  public destroy(): void {
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    if (typeof window !== 'undefined') window.removeEventListener('online', this.retry)
+  }
+
+  /** Serializes server writes and repeats with the latest saved document. */
+  private async flush(): Promise<void> {
+    if (this.running) {
+      this.queued = true
+      await this.runningCompletion
+      return
+    }
+    if (this.suspended) return
+    this.running = true
+    let complete!: () => void
+    this.runningCompletion = new Promise<void>((resolve) => { complete = resolve })
+    try {
+      do {
+        if (this.suspended) break
+        this.queued = false
+        const document = this.latestDocument
+        if (document === null) return
+        await this.synchronize(document)
+        if (this.latestDocument !== document && !this.suspended) this.queued = true
+      } while (this.queued && !this.suspended)
+    } catch (error) {
+      this.lastFailure = error
+      this.controller.send({ type: 'document.sync.status', status: 'pending' })
+      console.error('La synchronisation locale Elcé a échoué.', error)
+    } finally {
+      this.running = false
+      this.runningCompletion = null
+      complete()
+      if (this.queued && !this.suspended) void this.flush()
+    }
+  }
+
+  /** Saves the current document revision before transferring its media. */
+  private async synchronize(document: TDocument): Promise<void> {
+    const documentId = this.documentServices.id(document)
+    const media = this.documentServices.media(document)
+    let syncState = await this.store.loadSyncState(documentId)
+    if (syncState.status === 'conflict') {
+      this.controller.send({ type: 'document.sync.status', status: 'conflict' })
+      return
+    }
+    if (syncState.status === 'synced' && syncState.remoteRevision !== null) {
+      this.controller.send({ type: 'document.sync.status', status: 'synced' })
+      return
+    }
+
+    let remoteRevision: number
+    switch (syncState.remoteRevision) {
+      case null:
+        remoteRevision = await this.createOrConfirmProject(document, syncState)
+        if (remoteRevision < 0) return
+        break
+      default:
+        remoteRevision = await this.saveOrConfirmDocument(document, syncState)
+        if (remoteRevision < 0) return
+        break
+    }
+
+    syncState = { ...syncState, remoteRevision, status: 'pending' }
+    await this.store.saveSyncState(syncState)
+
+    for (const mediaItem of media) {
+      if (syncState.uploadedMediaIds.includes(mediaItem.id)) continue
+      let blob = await this.store.loadMedia(mediaItem.id)
+      const sourceProjectId = syncState.mediaSourceProjectIds?.[mediaItem.id]
+      if (blob === null && sourceProjectId !== undefined) {
+        blob = await this.api.downloadMedia(sourceProjectId, mediaItem.id)
+        await this.store.saveMedia({ id: mediaItem.id, blob })
+      }
+      if (blob === null) throw new Error(`Le média local ${mediaItem.id} est absent avant son transfert.`)
+
+      let source: string
+      try {
+        source = await this.api.uploadMedia(documentId, mediaItem, blob)
+      } catch (error) {
+        if (this.mergeServerDuplicate(error, document, mediaItem.id)) return
+        throw error
+      }
+
+      syncState = {
+        ...syncState,
+        uploadedMediaIds: [...syncState.uploadedMediaIds, mediaItem.id],
+        status: 'pending',
+      }
+      await this.store.saveSyncState(syncState)
+      if (mediaTypeFromMimeType(mediaItem.mimeType) === MEDIA_TYPE.IMAGE
+        && !retainedHistoryMediaIds(
+          this.controller.getSnapshot().context.history,
+          (current) => this.documentServices.media(current).map((item) => item.id),
+        ).has(mediaItem.id)) {
+        await this.store.deleteMedia([mediaItem.id])
+        this.replaceMediaSource(mediaItem.id, source)
+      }
+    }
+
+    const status = this.latestDocument === document ? 'synced' : 'pending'
+    await this.store.saveSyncState({ ...syncState, status })
+    this.controller.send({ type: 'document.sync.status', status })
+  }
+
+  /** Creates a project or verifies an identical remote project after a lost checkpoint. */
+  private async createOrConfirmProject(document: TDocument, syncState: DocumentSyncState): Promise<number> {
+    try {
+      return await this.api.createProject(document)
+    } catch (error) {
+      if (!(error instanceof ElceProjectApiError) || error.code !== 'project_already_exists') throw error
+      return this.confirmRemoteDocument(document, syncState)
+    }
+  }
+
+  /** Updates a project with If-Match and marks a changed remote revision as conflict. */
+  private async saveOrConfirmDocument(document: TDocument, syncState: DocumentSyncState): Promise<number> {
+    try {
+      return await this.api.saveDocument(document, syncState.remoteRevision!)
+    } catch (error) {
+      if (!(error instanceof ElceProjectApiError) || error.code !== 'revision_mismatch') throw error
+      return this.confirmRemoteDocument(document, syncState)
+    }
+  }
+
+  /** Accepts a lost response only when the server document already matches locally. */
+  private async confirmRemoteDocument(document: TDocument, syncState: DocumentSyncState): Promise<number> {
+    const remote = await this.api.readProject(this.documentServices.id(document))
+    if (JSON.stringify(this.documentServices.serialize(remote.document)) === JSON.stringify(this.documentServices.serialize(document))) return remote.revision
+    await this.store.saveSyncState({ ...syncState, remoteRevision: remote.revision, status: 'conflict' })
+    this.controller.send({ type: 'document.sync.status', status: 'conflict' })
+    return -1
+  }
+
+  /** Merges content the server identifies as a duplicate through the document command. */
+  private mergeServerDuplicate(error: unknown, document: TDocument, duplicateMediaId: string): boolean {
+    if (!(error instanceof ElceProjectApiError) || error.code !== 'media_already_exists' || error.mediaId === null) return false
+    if (!this.documentServices.media(document).some((media) => media.id === error.mediaId)) return false
+    const documentId = this.documentServices.id(document)
+    if (this.controller.getSnapshot().context.activeProject?.id !== documentId) return false
+    this.controller.send({
+      type: 'document.sync.merge',
+      projectId: documentId,
+      canonicalMediaId: error.mediaId,
+      duplicateMediaId,
+    })
+    return true
+  }
+
+  /** Replaces the imported Blob URL with the confirmed server URL in XState. */
+  private replaceMediaSource(mediaId: string, source: string): void {
+    const previous = this.controller.getSnapshot().context.mediaSources[mediaId]
+    if (previous?.startsWith('blob:') === true && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(previous)
+    this.controller.send({ type: 'media.source.register', mediaId, source })
+  }
+
+  /** Schedules a retry after the browser reports network access again. */
+  private readonly retry = (): void => {
+    const document = this.latestDocument
+    if (document !== null) this.schedule(document)
+  }
+}

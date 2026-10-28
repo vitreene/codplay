@@ -1,4 +1,4 @@
-import { APPEARANCE_PALETTE_COLORS } from './appearance-palette-colors.generated.ts'
+import { APPEARANCE_PALETTE_COLORS } from './appearance-palette-colors.generated'
 import {
   APPEARANCE_COLOR_ROLES,
   APPEARANCE_BACKGROUND_GRADIENT_DEFINITIONS,
@@ -8,7 +8,7 @@ import {
   APPEARANCE_PRESETS,
   APPEARANCE_TYPOGRAPHY_PAIRS,
   APP_APPEARANCE_DEFAULTS,
-} from './appearance-definitions.ts'
+} from './appearance-definitions'
 import type {
   AppearanceDensity,
   AppearanceBackgroundGradientDefinition,

@@ -7,7 +7,7 @@ export {
   validateQuestionAnswerStrap,
   resetQuestionStrap,
   restoreQuestionStrap,
-} from './question'
+} from '../../resources/bdcs/question/reading/question-runtime'
 export { selectCarouselCardStrap } from './carousel'
 export {
   initializeViewportGestureCapture,

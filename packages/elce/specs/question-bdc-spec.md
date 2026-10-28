@@ -47,6 +47,8 @@ attendues (`expectedAnswerIds`), avec le résultat. L’état de test s’en ser
 pour réadmettre la réponse après réouverture ; le changement de libellé seul
 ne l’invalide pas, tandis qu’un changement d’identités ou de correction la
 retire.
+La forme partagée de ces quatre valeurs est `QuestionAnswerState`, définie par
+la ressource Question et utilisée par l’état de test Learning.
 
 La zone Illustration du preset accepte une ressource image ou vidéo du
 catalogue, ou un fichier local. Un fichier suit l’import média partagé et la
@@ -56,13 +58,13 @@ la ressource existante après vérification SHA-256, même si le nom diffère.
 
 ## Commandes et projection
 
-`EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) appelle la façade
-applicative `ElceQuestionFacade` (`app/facades/question/`) pour transformer les
-gestes auteur en commandes documentaires envoyées au contrôleur XState. La
-création est insérée dans la position
-ordonnée de la page ; l’édition des réponses, du texte et de la référence média
-modifie le document par la même façade et les mêmes commandes. La vue Remix
-affiche le modèle et ne porte pas une copie de son état métier.
+La vue auteur Learning passe ses intentions à `LearningEditorFacade`, qui
+délègue l’édition de Question à `ElceQuestionFacade` dans
+[`resources/bdcs/question/authoring/`](../src/resources/bdcs/question/authoring/)
+avant d’envoyer les commandes au contrôleur XState unique. La façade ressource
+construit les commandes à partir de `QuestionContent` ; la politique Learning
+garde une Question au plus par page et l’insère dans l’ordre demandé. La vue
+Remix affiche le modèle et ne porte pas une copie de son état métier.
 
 Le builder instancie le markup fixe du preset Question. Sa story autonome
 contient les persos CodPlay nécessaires : des `input` natifs, le bouton de
@@ -135,39 +137,39 @@ test initial.
 
 ## Preuves
 
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie en Flux et Diapo la réutilisation d’une source, la restitution de deux
   réponses, leur suppression, l’absence de nouvelle validation et le seek.
   Safari a aussi affiché une réponse enregistrée dans une preview réseau sur
   une base temporaire ; ce contrôle ne couvre pas la réutilisation du cache.
-- [`popup-player-cache-integration.test.tsx`](../src/app/player/popup-player-cache-integration.test.tsx)
+- [`popup-player-cache-integration.test.tsx`](../src/mods/learning/integration/learning-preview-session.test.tsx)
   vérifie la validation Question et l’absence d’écriture serveur depuis la
   preview. Safari MCP, le 27 octobre 2026, a confirmé l’affichage de la réponse,
   son absence après réouverture et un état test serveur inchangé.
 
-- [`question-service.test.ts`](../src/domain/question/question-service.test.ts) vérifie
+- [`question-service.test.ts`](../src/resources/bdcs/question/domain/question-service.test.ts) vérifie
   les réponses par défaut, l’unicité de la réponse juste en Choix, au moins une
   réponse juste et plusieurs choix justes en Choix multiple, ainsi que l’ordre
   et la suppression des réponses.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la création d’une Question unique dans l’ordre de la page, les
   invariants de réponse, et la référence d’illustration.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie que le réimport d’une illustration identique depuis un autre nom de
   fichier rattache une seconde Question au même média et ne sauvegarde pas un
   second blob.
-- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) exerce l’édition
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx) exerce l’édition
   auteur à travers le contrôleur XState, le changement de type, l’énoncé, les
   marques de correction, le réordonnancement et la présence de l’icône Quiz
   ListChecks.
-- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   vérifie l’édition Question dans la page Remix de production ainsi que
   l’import d’une illustration par la file média XState existante.
 - Le 4 octobre, Safari MCP confirme qu’une page créée dans un chapitre
   Évaluation est une page Flux avec un BDC Question, et que la preview réelle
   CodPlay affiche cette Question avec ses réponses Oui/Non. La page et le
   chapitre temporaires du test ont été supprimés ensuite.
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie le preset, les zones et les persos produits par le builder ;
   [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
   vérifie la progression de page et le garde d’évaluation.
@@ -181,11 +183,11 @@ test initial.
   style et laisse l’image visible. La photo a bien été chargée depuis le
   serveur. Cette vérification précédait le cadrage `contain` et ne le valide
   pas visuellement.
-- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+- [`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts)
   vérifie les cibles de zones par commentaires, la cible du prompt dans le
   `fieldset`, l’absence de conteneur de validation intermédiaire et l’omission
   des hôtes de titre/illustration facultatifs quand leur contenu est absent.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   valide les trois types dans CodPlay : aucune correction n’apparaît avant la
   validation, puis les états justes et faux se révèlent dans la liste.
 - Safari MCP vérifie dans le player réel une réponse Vrai/Faux fausse : avant

@@ -1,6 +1,6 @@
-import type { EvaluationMachineState } from '../domain/evaluation/evaluation-machine-types'
-import type { QuestionType } from '../domain/question/question-types'
-import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
+import type { EvaluationMachineState } from '../mods/learning/evaluation/domain/learning-evaluation-machine-types'
+import type { QuestionType } from '../resources/bdcs/question/domain/question-types'
+import type { ProjectTestState } from '../mods/learning/reading/learning-test-state-types'
 
 export type { ScormVersion } from '@codplay/sighty-scorm'
 
