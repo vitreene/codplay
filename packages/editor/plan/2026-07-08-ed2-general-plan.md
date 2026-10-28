@@ -4,7 +4,14 @@
 
 **Rôle de ce document** : organiser l'ordre d'implémentation entre les chantiers détaillés ci-dessous. Il ne contient pas le détail de chaque chantier — chacun a son propre document dans ce dossier.
 
-**Organisation du dossier `packages/editor/plan/`** :
+**Reprise au 28 octobre 2026 :** l’état retrouvé et ses divergences initiales
+sont dans la [note de reprise technique](./notes/2026-10-28-editor-recovery-remix-analysis.md).
+L’adaptation Remix/façades/historique est acceptée et en cours dans le
+[plan dédié](./2026-10-28-editor-remix-history-plan.md).
+Le cadre React/shadcn et l’organisation documentaire décrits plus bas sont
+historiques ; les plans V2 détaillés suivent les travaux encore ouverts.
+
+**Organisation historique du dossier `packages/editor/plan/`** :
 - Documents **normatifs** (décidés, déclaratifs) — à garder. Répartis en :
   - **racine** : ce qui chapeaute ou est transverse — ce plan général, et les specs du domaine (capsule, item) lues par l'app comme par les modules ;
   - **`app/`** : la construction de l'**app elle-même** — plan de construction, architecture, modèle de données, Builder, SceneDocEditor, moteur de validation ;
@@ -25,14 +32,15 @@
 | 6 | Spec modèle d'Item (ed2) | Spec | Écrit, fermée (tous les points tranchés) | `packages/editor/plan/2026-07-08-item-model-spec.md` |
 | 7 | Éditeur de zones (selection-frame) | Spécification + plan d'intégration | Modèle, gestes et rendu unitaire vérifiés dans la [spec zone-editor](../../authoring/selection-frame/specs/zone-editor-spec.md) ; raccords hôte, drop, attache par `id` et validations navigateur restent au [plan d'intégration](../../authoring/selection-frame/plan/zone-editor-plan.md) | `packages/authoring/selection-frame/` |
 | 8 | Migration `ZoneDef` dedit → forme grille | Plan | Écrit — parqué (le décor attend) | `packages/editor/plan/modules/2026-07-08-dedit-zonedef-migration-plan.md` |
-| 9 | Refonte interface dedit (shadcn) | Plan | Écrit (esquisse seulement — détails pilotés par l'utilisateur) — parqué (le décor attend) | `packages/editor/plan/modules/2026-07-08-dedit-shadcn-ui-plan.md` |
+| 9 | Refonte interface dedit (shadcn) | Plan | Esquisse historique parquée ; exclue de l’adaptation Remix proposée, qui préserve les composants spécifiques non React | `packages/editor/plan/modules/2026-07-08-dedit-shadcn-ui-plan.md` |
 | 10 | Construction de l'app (squelette, contrôleur général, composants, sauvegarde locale) | Plan | **Écrit (2026-07-10)** | `packages/editor/plan/app/2026-07-10-app-construction-plan.md` |
 | 11 | Variantes d'orientation des zones/grilles (capsule-automation) | Plan | **Écrit (2026-07-11)** — chantier autonome, exécutable en parallèle | `packages/editor/plan/modules/2026-07-11-zone-orientation-variants-plan.md` |
 | 12 | Modèle de données (EditorScene, item, capsule, content, décor…) | Spec / structure | **Écrit (2026-07-11)** — structure exhaustive ; arbitrages tranchés | `packages/editor/plan/app/2026-07-11-ed2-document-model.md` |
 | 13 | Représentation sequence-editor (pistes, mini-éditeur audio) | Plan | **Écrit (2026-07-11)** — multipiste audio non fait | `packages/editor/plan/modules/2026-07-11-sequence-editor-representation.md` |
 | 14 | Item avatar (typeDef, pistes, macros, tempérament) | Spec + Plan | **Écrit (2026-07-16)** — chantier futur, rien d'implémenté | `packages/editor/plan/2026-07-16-avatar-item-plan.md` |
 | 15 | Récupération sélection/commit de phase (régression chantiers 1-3) | Plan | **Terminé et vérifié (2026-07-17)** — vitest + Safari, zéro régression | `packages/editor/plan/app/2026-07-17-phase-commit-selection-recovery-plan.md` |
-| 16 | Reprise de l'éditeur avec CodPlay V2 | Plan de migration | **En cours (2026-08-30)** — tranche 2 (builder V2 minimal) autorisée ; `snapshot`, bridge et Decor restent à intégrer selon le rapport | `packages/editor/plan/2026-08-30-editor-codplay-v2-reprise-report.md` |
+| 16 | Reprise de l'éditeur avec CodPlay V2 | Plans de migration et d’acceptation | **En cours** — typecheck et build passent après projection média locale ; suites et parcours navigateur restent à valider, défaut de présentation finale ouvert | [Organisation V2](./2026-09-01-editor-v2-organization-plan.md), [mouvement](./2026-09-02-motion-editor-v2-plan.md) |
+| 17 | Adaptation au modèle technique Elcé : Remix, façades et historique | Plan | **En cours (2026-10-28)** — portage Remix 3, façades, Undo/Redo et persistance provisoire implémentés ; suites et navigateur restent à valider | [Plan d’adaptation](./2026-10-28-editor-remix-history-plan.md) |
 
 **Schémas de présentation** (pédagogiques, **non normatifs** → `notes/`, jetables) : architecture logique de l'app (`notes/2026-07-11-ed2-architecture.md`), présentation Codplay (`notes/2026-07-11-codplay-presentation.md`). Ils expliquent, ne prescrivent pas.
 

@@ -1,5 +1,6 @@
 /* ── Variables ──────────────────────────────────────────────────────────── */
 :root {
+  color-scheme: dark;
   --app-bg: #111827;
   --app-border: #1f2937;
   --app-text: #f9fafb;
@@ -72,7 +73,7 @@ body,
   grid-area: telco;
 }
 
-/* ── Contenu de démonstration (étape 2, temporaire) ────────────────────────── */
+/* ── Menu auteur et contrôles temporaires ─────────────────────────────────── */
 .app-demo-content {
   display: flex;
   flex-direction: column;
@@ -84,8 +85,41 @@ body,
   overflow-y: auto;
 }
 
-.app-demo-content > button {
+.editor-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.editor-menu-section h2,
+.editor-menu-section h3,
+.editor-menu-section p {
+  margin: 0;
+}
+
+.editor-menu-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.editor-menu-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.editor-menu-section > button,
+.editor-menu-actions > button {
   width: 100%;
+}
+
+.editor-persistence-status--warning {
+  color: #fbbf24;
+}
+
+.editor-persistence-status--error {
+  color: #fca5a5;
 }
 
 /* ── Contenu de région réelle (le pont possède tout, cf. SequenceEditorRegion) ── */

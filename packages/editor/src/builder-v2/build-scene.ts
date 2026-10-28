@@ -577,7 +577,7 @@ function buildLeafPerso(
   }
 
   if (item.type === 'video' || item.type === 'media') {
-    return { perso: { id: item.id, name: item.id, type: 'media', initial: { ...common, tag: item.type === 'video' ? 'video' : 'audio', src: content?.source as string, master: item.id === scene.masterItemId }, actions }, eventimes }
+    return { perso: { id: item.id, name: item.id, type: 'media', initial: { ...common, tag: item.type === 'video' ? 'video' : 'audio', src: content?.source as string, sync: item.id === scene.masterItemId ? 'master' : 'auto' }, actions }, eventimes }
   }
 
   return { perso: { id: item.id, name: item.id, type: 'tag', initial: { ...common, tag: 'div', ...(text === undefined ? {} : { content: text }) }, actions }, eventimes }

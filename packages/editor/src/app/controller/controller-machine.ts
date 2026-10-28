@@ -101,23 +101,48 @@ export const controllerMachine = setup({
     }),
 
     /** §4 — la seule action qui écrit le document : dispatch vers la façade, jamais une mutation directe. */
-    runCommand: assign({
-      scene: ({ context, event }) => {
-        if (event.type !== 'RUN_COMMAND' || !context.scene) return context.scene
-        return runCommand(context.scene, event.command)
-      },
+    runCommand: enqueueActions(({ context, event, enqueue }) => {
+      if (event.type !== 'RUN_COMMAND' || !context.scene) return
+      const beforeScene = context.scene
+      const afterScene = runCommand(beforeScene, event.command)
+      enqueue.assign({ scene: afterScene })
+      if (afterScene !== beforeScene) {
+        enqueue.emit({
+          type: 'documentCommitted',
+          beforeScene,
+          afterScene,
+          beforeSelection: context.selection,
+          afterSelection: context.selection,
+        })
+      }
     }),
-    runTransaction: assign({
-      scene: ({ context, event }) => {
-        if (event.type !== 'RUN_TRANSACTION' || !context.scene) return context.scene
-        return transaction(context.scene, event.commands)
-      },
+    runTransaction: enqueueActions(({ context, event, enqueue }) => {
+      if (event.type !== 'RUN_TRANSACTION' || !context.scene) return
+      const beforeScene = context.scene
+      const afterScene = transaction(beforeScene, event.commands)
+      enqueue.assign({ scene: afterScene })
+      if (afterScene !== beforeScene) {
+        enqueue.emit({
+          type: 'documentCommitted',
+          beforeScene,
+          afterScene,
+          beforeSelection: context.selection,
+          afterSelection: context.selection,
+        })
+      }
     }),
 
     /** §6 — chargement d'un document (une seule scène chargée à la fois à cette étape, cf. §6 du document contrôleur). */
     sceneLoaded: assign({
       scene: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene : null),
       currentSceneId: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene.id : null),
+      documents: ({ context, event }) => event.type === 'SCENE_LOADED'
+        ? { ...context.documents, [event.scene.id]: { id: event.scene.id, title: event.scene.meta.title } }
+        : context.documents,
+    }),
+    restoreDocument: assign({
+      scene: ({ event }) => (event.type === 'RESTORE_DOCUMENT' ? event.scene : null),
+      selection: ({ event }) => (event.type === 'RESTORE_DOCUMENT' ? event.selection : EMPTY_SELECTION),
     }),
 
     /**
@@ -143,6 +168,8 @@ export const controllerMachine = setup({
 
     /** Réponse à `TELCO_ACTION_REQUEST` — même flush que `'seek'`, déclenché AVANT tout appel `telco.*` (voir `types.ts`). */
     emitFlushPending: emit(() => ({ type: 'flushPending' as const })),
+    /** Notifies deferred editor captures that an Undo/Redo boundary is being applied. */
+    emitHistoryBoundary: emit(() => ({ type: 'historyBoundary' as const })),
 
     /** §Étape B.6 — pure broadcast, ne mute jamais `context.scene` (rien n'a été committé pour cette phase). */
     emitSceneReverted: enqueueActions(({ context, enqueue }) => {
@@ -184,8 +211,10 @@ export const controllerMachine = setup({
     CLOSE_PANEL: { actions: 'closePanel' },
     RUN_COMMAND: { actions: ['runCommand', 'emitSceneCommitted'] },
     RUN_TRANSACTION: { actions: ['runTransaction', 'emitSceneCommitted'] },
+    RESTORE_DOCUMENT: { actions: ['restoreDocument', 'emitSceneCommitted'] },
     LOAD_SCENE: {},
     SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
+    HISTORY_BOUNDARY: { actions: ['emitFlushPending', 'emitHistoryBoundary'] },
     SEEK: { actions: 'emitSeek' },
     SEEK_RELEASED: { actions: ['normalizeSelectionAtTimeline', 'emitSceneCommitted'] },
     SEEK_APPLIED: { actions: 'emitSeekApplied' },

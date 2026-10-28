@@ -84,6 +84,10 @@ export type ControllerEvent =
   | { type: 'CLOSE_PANEL'; panel: EditPanel }
   | { type: 'LOAD_SCENE'; sceneId: string }
   | { type: 'SCENE_LOADED'; scene: EditorScene }
+  /** Restores a history endpoint through the document owner's existing commit path. */
+  | { type: 'RESTORE_DOCUMENT'; scene: EditorScene; selection: Selection }
+  /** Flushes application modules' current phases before Undo or Redo is applied. */
+  | { type: 'HISTORY_BOUNDARY' }
   | { type: 'RUN_COMMAND'; command: Command }
   | { type: 'RUN_TRANSACTION'; commands: Command[] }
   /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
@@ -141,6 +145,14 @@ export type ControllerEvent =
 export type ControllerEmitted =
   | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
   | { type: 'sceneLoaded'; scene: EditorScene }
+  | {
+      type: 'documentCommitted'
+      beforeScene: EditorScene
+      afterScene: EditorScene
+      beforeSelection: Selection
+      afterSelection: Selection
+    }
+  | { type: 'historyBoundary' }
   | { type: 'seek'; timelineMs: number }
   /** Réponse à `SEEK_APPLIED` — `decor-editor-bridge.ts` s'y abonne pour re-résoudre la palette une fois le seek réellement appliqué au DOM (jamais au moment de la demande, cf. `SEEK_APPLIED`). */
   | { type: 'seekApplied' }

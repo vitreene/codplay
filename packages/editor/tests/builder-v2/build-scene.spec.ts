@@ -197,7 +197,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
 
     const story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
     const item = story.persos.find((perso) => perso.id === 'item-nested')!
-    expect(item.initial).toMatchObject({ style: { opacity: 0, x: 250 } })
+    expect(item.initial).toMatchObject({ style: { opacity: 0, x: -250 } })
     expect(result.preRollMs).toBe(300)
     expect(story.eventimes).toContainEqual({
       name: '__auto_capsule_editor-v2-capsule_child_item-nested_intro_1000',
@@ -554,7 +554,8 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     if (!result.ok) return
     const video = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-video')!
     expect(video.type).toBe('media')
-    expect(video.initial).toMatchObject({ tag: 'video', src: '/assets/clip.mp4', master: true })
+    expect(video.initial).toMatchObject({ tag: 'video', src: '/assets/clip.mp4', sync: 'master' })
+    expect(video.initial).not.toHaveProperty('master')
 
     const codplay = new CodPlay()
     const compiled = codplay.build({ scene: result.sceneDoc })

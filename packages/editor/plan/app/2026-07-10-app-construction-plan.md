@@ -143,23 +143,41 @@ Monter les deux îlots vanilla (player, sequence-editor) et brancher dedit, tous
 
 Ajouté dès que le pont « mutation → document → re-projection » de l'étape 3 tourne. L'undo/redo **consomme** ce pont ; l'implémenter ici le valide.
 
-- **Historien** = acteur hors machine, branché sur la façade : snapshot du document au commit, rétabli au undo/redo.
+**Reprise du 28 octobre 2026 :** le contrat d’historique est porté par le
+[plan d’adaptation Remix](../2026-10-28-editor-remix-history-plan.md). La
+construction est locale à Éditeur : `DocumentHistory` est possédé par
+`EditorActionsFacade`, branché sur l’événement documentaire distinct des
+échos de sélection.
+
+- **Historien** = service applicatif hors machine XState, branché sur la façade : snapshot avant/après au commit documentaire, restauré par `RESTORE_DOCUMENT` sur le contrôleur.
 - **Périmètre annulable** = mutations passant par la façade uniquement (l'éphémère — sélection, scroll, transport — n'y entre pas).
 - **Réconciliation** = un undo rétablit le document puis re-projette (rebuild player + recalage îlots) par le **même** chemin que la restauration.
-- **Granularité** = une entrée par action (garantie par le commit débouncé), un rebuild par undo.
+- **Granularité** = une entrée par transaction validée aux frontières déjà utilisées par chaque module ; pas de regroupement temporel ajouté. 100 entrées au maximum ; une nouvelle édition abandonne Rétablir.
+- Une frontière d’historique flush les commandes décor déjà en phase et invalide les captures de keyframe différées qui pourraient arriver après une restauration.
 
-**Validation** : annuler/refaire une édition restaure état et rendu ; un undo n'affecte pas l'éphémère ; tests de l'historien.
+**État au 28 octobre 2026** : code raccordé aux transactions, au chargement et à la re-projection. Typecheck et build passent ; Safari MCP a vérifié la rotation par `PointerEvent` synthétique, Undo et Redo. Les suites, le geste physique natif et le parcours complet restent à valider.
 
 ### Étape 5 — Sauvegarde locale
 
+**Reprise du 28 octobre 2026 :** le modèle `EditorScene` actuel est persisté
+provisoirement selon P0/P1 du
+[plan de reconstruction](../2026-10-28-editor-remix-history-plan.md). Le code
+actuel est un adaptateur `temp` sous `src/app/persistence/`, raccordé au
+chargement central, aux commits documentaires et aux remplacements de document
+émis par Undo/Redo. La sauvegarde pérenne et ses choix restent ouverts.
+
 Le travail survit au rechargement, sans backend.
 
-- **Persisté** : l'`EditorScene` sérialisé, clé versionnée, champ de version dans la charge (format ancien rejeté).
-- **Mécanique** : un **acteur de persistance** abonné aux commits écrit ; la restauration passe par l'événement de chargement au démarrage.
-- **Frontière** : seul cet acteur connaît localStorage.
-- **Plusieurs scènes de test** : localStorage doit tenir **plusieurs** `EditorScene` nommées (pas une seule clé), et l'app doit permettre d'en choisir une à charger — c'est le mécanisme provisoire qui remplace les démos éditeur supprimées (`demo.html`). **Sélecteur** : un simple `<select>` listant les scènes sauvegardées, patch provisoire — à retirer quand un vrai système de navigation entre scènes (backend, étape 6) existera. Détail (clé d'index) à concevoir à l'ouverture de cette étape.
+- **Persisté** : l’enveloppe `version: 1` contient les scènes `EditorScene` indexées par ID et l’ID actif, sous `codplay.editor.temp-scenes.v1`.
+- **Mécanique** : le contrôleur reste propriétaire ; `sceneLoaded`, `documentCommitted` et le changement de référence émis par `sceneCommitted` alimentent l’adaptateur, avec déduplication des commits ordinaires et sans écriture sur sélection seule. La composition restaure la dernière scène active avant le rendu Remix.
+- **Frontière** : seul l’adaptateur `temp` connaît `localStorage`. Les propriétés de modèle JSON sont conservées ; les cycles et valeurs non sérialisables sont refusés.
+- **Plusieurs scènes de test** : le sélecteur Remix charge les scènes enregistrées. Une source `blob:` reste une chaîne dans `Content.source`, mais son blob éphémère n’est pas stocké ; l’interface le signale. Ce circuit est provisoire et sera remplacé lors du chantier de sauvegarde pérenne.
 
-**Validation** : recharger restaure la scène ; tests de sérialisation/restauration, rejet d'une version ancienne.
+**État au 28 octobre 2026** : typecheck et build passent. Dans Safari MCP,
+rotation, Undo et Redo ont vérifié l’écriture des documents restaurés ; Undo
+rétablit le stockage de départ. Le geste était simulé par `PointerEvent` ; le
+geste physique natif, le rechargement après cette séquence, les relations/
+identifiants et les limites média restent à valider.
 
 ### Étape 6 — Backend
 

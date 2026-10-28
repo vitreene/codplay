@@ -40,6 +40,8 @@ export function createSequenceEditorBridge(
 
   const pendingSnapshotCaptures: PendingSnapshotCapture[] = []
   let requestedSnapshotTimeMs: number | null = null
+  let lastCommittedScene = machine.getSnapshot().context.scene
+  let committingDeferredCapture = false
 
   /** True when the player reports a ready logical frame at the author's insertion time. */
   function snapshotIsPresentedAt(timeMs: number): boolean {
@@ -59,6 +61,18 @@ export function createSequenceEditorBridge(
     if (requestedSnapshotTimeMs === timeMs) return
     requestedSnapshotTimeMs = timeMs
     coordination.requestSeek(timeMs)
+  }
+
+  /** Drops deferred keyframe commands and their preview candidates at a history/document boundary. */
+  function discardPendingSnapshotCaptures(): void {
+    for (const pending of pendingSnapshotCaptures) {
+      const command = pending.commands.find((entry) => entry.name === 'createNamedKeyframe')
+      if (command?.name === 'createNamedKeyframe') {
+        coordination.decorPreview.clear(command.args.itemId, command.args.timeMs)
+      }
+    }
+    pendingSnapshotCaptures.length = 0
+    requestedSnapshotTimeMs = null
   }
 
   /** Sends one command batch after enriching any keyframe insertion from the presented state. */
@@ -150,7 +164,12 @@ export function createSequenceEditorBridge(
     if (!pending || !snapshotIsPresentedAt(pending.timeMs)) return
     pendingSnapshotCaptures.shift()
     requestedSnapshotTimeMs = null
-    dispatchCommands(pending.commands)
+    committingDeferredCapture = true
+    try {
+      dispatchCommands(pending.commands)
+    } finally {
+      committingDeferredCapture = false
+    }
     const next = pendingSnapshotCaptures[0]
     if (next) requestSnapshotAt(next.timeMs)
   })
@@ -158,21 +177,28 @@ export function createSequenceEditorBridge(
   const unsubscribeSelection = controller.onSelectionRequest((itemIds, keyframeId) => {
     machine.send({ type: 'SELECT_ITEM', itemIds, keyframeId })
   })
+  const unsubscribeHistoryBoundary = machine.on('historyBoundary', () => discardPendingSnapshotCaptures())
   const unsubscribeCommitted = machine.on('sceneCommitted', ({ scene, selection }) => {
+    if (scene !== lastCommittedScene) {
+      lastCommittedScene = scene
+      if (!committingDeferredCapture) discardPendingSnapshotCaptures()
+    }
     controller.syncFromCenter(scene, { itemIds: selection.itemIds, keyframeId: selection.keyframeId })
   })
   const unsubscribeLoaded = machine.on('sceneLoaded', ({ scene }) => {
+    lastCommittedScene = scene
+    discardPendingSnapshotCaptures()
     controller.deserialize(scene)
   })
 
   return {
     destroy(): void {
+      unsubscribeHistoryBoundary.unsubscribe()
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
       unsubscribeCommand()
       unsubscribeSeekApplied()
-      pendingSnapshotCaptures.length = 0
-      requestedSnapshotTimeMs = null
+      discardPendingSnapshotCaptures()
       unsubscribeSelection()
       handle.destroy()
       controller.destroy()

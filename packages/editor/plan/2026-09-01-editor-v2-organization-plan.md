@@ -1532,6 +1532,31 @@ remote V1).
 
 ## Matrice de validation
 
+### État initial avant l'adaptation Remix — 28 octobre 2026
+
+Sans modification des sources, depuis `packages/editor`, la suite complète
+donne **452 succès et 3 échecs sur 455 tests**, dans 43 fichiers.
+Le typecheck conserve l’échec `initial.master` à `build-scene.ts:580` ;
+le build Vite passe. Les échecs sont : projection média refusée par le build
+CodPlay, entrée `swipe-right` à `-250` au lieu de `250`, présentation absente
+au temps final `5000` dans le bridge de scène.
+
+La [note d’analyse](./notes/2026-10-28-editor-recovery-remix-analysis.md#2-contrôles-actuels-et-divergences)
+identifie la divergence entre table capsule et catalogue partagé ainsi que
+la projection média obsolète ; la cause du défaut de fin de lecture reste
+ouverte. Aucun correctif ni nouveau parcours navigateur n’a été exécuté.
+À cet instant, le plan d'adaptation Remix/historique était `A relire` ; aucun
+correctif n'avait été appliqué.
+
+### État après portage applicatif — 28 octobre 2026
+
+Le [plan d'adaptation Remix/historique](./2026-10-28-editor-remix-history-plan.md)
+a ensuite été relu et accepté. La projection média est corrigée côté builder
+Éditeur par `initial.sync`, et l'attente du test de transition suit le
+catalogue partagé. Le typecheck et le build passent. Les suites automatisées
+et le parcours navigateur restent à valider ; le défaut de présentation au
+temps final demeure sans cause établie. Aucun fichier CodPlay n'a été modifié.
+
 ### Validation auteur ouverte — contrôle du 15 octobre 2026
 
 L'[audit de l'entrée de diffusion CodPlay](../../codplay/plan/2026-10-15-export-diffusion-plan.md#audit-de-compatibilité-avec-le-mode-auteur--2026-10-15)
