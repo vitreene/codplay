@@ -587,8 +587,9 @@ function buildLeafPerso(
  * Builds decor actions between every adjacent keyframe pair.
  *
  * A property present at the destination but absent from the resolved source has no authored
- * interpolation endpoint. It therefore becomes a direct style patch at the destination KF; no
- * CSS default is invented and no `{to: ...}` tween without a materialized `from` is emitted.
+ * interpolation endpoint. It therefore becomes a direct style patch at the destination KF, with
+ * one pose-only exception: numeric rotation uses its documented `0°` identity as an explicit start.
+ * No `{to: ...}` tween without a materialized `from` is emitted.
  */
 function buildInterpolationActions(
   scene: EditorScene,
@@ -712,7 +713,7 @@ function buildInterpolationActions(
         durationMs,
         direction: transition?.direction ?? 'after',
       }) + preRollMs
-    const style = buildStyleTransition(fromStyle, diff, durationMs, ease)
+    const style = buildStyleTransition(fromStyle, diff, durationMs, ease, true)
     const actionName = `${item.id}-kf-${destination.id}`
     if (Object.keys(style.interpolated).length > 0 || (hasMotionPath && intervalMs > 0)) {
       actions.push({
@@ -822,7 +823,7 @@ function buildUnifiedPoseActions(
         durationMs,
         direction: transition?.direction ?? 'after',
       }) + preRollMs
-    const style = buildStyleTransition(fromStyle, diff, durationMs, ease)
+    const style = buildStyleTransition(fromStyle, diff, durationMs, ease, true)
     const actionName = `${item.id}-kf-${destination.id}`
     if (Object.keys(style.interpolated).length > 0 || (hasMotionPath && intervalMs > 0)) {
       actions.push({
@@ -879,17 +880,20 @@ function classTokens(value: string | undefined): Set<string> {
   return new Set(value?.split(/\s+/).filter((token) => token !== '') ?? [])
 }
 
-/** Converts a resolved destination diff into interpolated and destination-only style channels. */
+/** Converts a destination diff into tween and discrete channels. */
 function buildStyleTransition(
   fromStyle: Record<string, unknown>,
   diff: Record<string, unknown>,
   durationMs: number,
   ease: string,
+  poseRotationIdentity = false,
 ): { interpolated: Record<string, unknown>; discrete: Record<string, unknown> } {
   const interpolated: Record<string, unknown> = {}
   const discrete: Record<string, unknown> = {}
   for (const [property, value] of Object.entries(diff)) {
+    // Missing numeric pose rotation uses the CSS identity angle without densifying source decor.
     const from = fromStyle[property]
+      ?? (poseRotationIdentity && property === 'rotate' && typeof value === 'number' ? 0 : undefined)
     // Structured x/y channels are qualified as logical lengths by CodPlay. A CSS `calc()` that
     // mixes cqw with px cannot be represented by that channel's tween resolver, even though it is
     // valid CSS. Keep the authored endpoint as a discrete value; this preserves the open Decor

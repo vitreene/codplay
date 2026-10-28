@@ -57,6 +57,9 @@ body,
   grid-area: scene;
   align-items: center;
   justify-content: center;
+  /* Projected paths and ghosts may extend past the aspect-ratio player. Keep that overflow from
+     creating a scrollbar that changes the player box when authoring overlays are restored. */
+  overflow: clip;
 }
 
 .app-region--panel {

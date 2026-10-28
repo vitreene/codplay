@@ -102,6 +102,10 @@ nouvelle écriture porte le canal explicitement.
   au même `timeMs`, mais il ne génère qu’un seul point visuel dans la timeline,
   dans la zone `pose`. Il n’existe pas de seconde pastille décor dupliquée pour
   ce KF.
+- Un `offset.rotate` numérique porté par un KF `pose` cible s'interpole depuis
+  `0°` lorsque la cascade source n'a pas de rotation explicite. Le builder émet
+  alors un `{ from: 0, to }` sans ajouter `rotate` au décor source ; cette
+  identité ne s'étend pas aux autres propriétés absentes.
 
 Les chaînes sont résolues séparément :
 
@@ -188,6 +192,9 @@ par un adaptateur pur de l'éditeur ; le core CodPlay et la carte ouverte de
   valeurs internes `arc-length` et `center`.
 - Le path, les ghosts et le CS sont des artefacts d’authoring hors scène ; ils
   ne sont ni des items ni des enfants de capsule.
+- Le débordement visuel de ces artefacts reste borné à la région de scène : il ne
+  crée pas de zone de défilement et leur suspension/réapparition ne redimensionne
+  pas le lecteur.
 - Le runtime CodPlay V2 reste l’unique résolveur de trajectoire. Le CS lit la
   pose affine numérique de `PresentationFrame` et ne reconstruit rien depuis le
   DOM, une AABB ou un lecteur de path parallèle.
@@ -337,10 +344,43 @@ Ordre d'exécution de la tranche P2-D :
 | P2-E — Deux canaux timeline pose/décor | En cours | Contrat implémenté dans le modèle, les commandes, le builder, le bridge, la machine et le rendu : lecture legacy sans `channel` comme `pose`, écritures nouvelles explicites, chaîne spatiale limitée aux KFs `pose`, chaîne décor alimentée par les KFs `decor` et les KFs `pose` qui portent du décor, promotion sans doublon et rendu d’une seule ligne avec séparation uniquement lorsque les deux canaux existent. Un KF de pose créé ou promu par mouvement capture la pose affine complète ; le patch décor reste sparse et ouvert aux propriétés futures. Tests ciblés et suite éditeur verts ; validation native Safari reste la porte de clôture. |
 | P3-A — Audit SE existant | Fixe | Audit statique terminé : capsule racine et capsules explicites, 0/1/2 KFs réels, bornes virtuelles, affichage, matérialisation et absence d’écriture lors de Play/Seek/resize sont distingués. |
 | P3-B — Contrat SE | Fixe | Contrat validé après l’audit statique : valeurs spéciales, KF réel d’apparition + sortie virtuelle, transition unique, point facultatif et plateau. |
-| P3-C — Implémentation SE | Fixe | Implémentation et tests terminés : capsule racine implicite, 0/1/2 KFs réels, matérialisation par double-clic ou glisser-déposer et non-écriture pendant Play/Seek/resize. La validation native reste P6. |
-| P4 — Builder/runtime | En cours | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Le builder émet `reparent` et ne sérialise ni `traversal` ni `pathAnchor` ; CodPlay applique les defaults internes `arc-length`/`center`. Aucun `{to}` sans `from`, aucun `Move` structurel. La validation native reste P6. |
+| P3-C — Implémentation SE | Fixe | Les champs optionnels absents sont omis lors de la création d’un KF et retirés lors de l’effacement du nom, d’une transition ou d’un marqueur. Les tests de commandes et le test `RUN_COMMAND → TempEditorScenePersistence` passent (25 tests ciblés) ; le contrôle strict des valeurs JSON reste inchangé. La validation native reste P6. |
+| P4 — Builder/runtime | En cours | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Une rotation numérique cible sans valeur source explicite interpole depuis l'identité `0°`, sans densifier le décor auteur ; le test d'intégration vérifie le snapshot et le rendu à mi-transition. Le builder émet `reparent` et ne sérialise ni `traversal` ni `pathAnchor` ; CodPlay applique les defaults internes `arc-length`/`center`. Aucun `{to}` sans `from`, aucun `Move` structurel. Safari à `3,1 s` confirme l'item et le CS à `28,07°`, puis `41°` au KF2 ; la validation native complète reste P6. |
 | P5 — Persistance | Fixe | Copy-on-write du décor cible, sérialisation, suppression/réordonnancement, capsules imbriquées et diagnostics de données invalides vérifiés. La validation native reste P6. |
-| P6 — Validation native | En cours | Matrice réelle rejouée dans Safari Technology Preview sur l’unique serveur `localhost:5174` : scène, seek, ghost-click, Play/pause, resize, console et réseau validés ; la preuve native du drag/double-clic reste ouverte car le relais MCP ne les expose pas. |
+| P6 — Validation native | En cours | Sur Safari MCP et `localhost:5174`, le rechargement restaure la dernière scène persistée sans erreur ; un seek à `5,0 s` puis Stop ramène tête, objet et CS à `0`. Le retour d’overlay faisait passer `scrollHeight` de la région de scène à `593 px` pour `577 px` visibles (`overflow:auto`) ; la région passe à `overflow:clip`. Après activation au premier plan (`document.hidden === false`), Play depuis `0` anime l’objet jusqu’à `5,0 s` puis restaure l’overlay, mais révèle un saut horizontal de `24,37 px` lors de la restauration de la pose CSS auteur. Stop depuis `5,0 s` ramène la tête à `0`, l’objet à sa translation initiale avec rotation nulle et le CS à la pose initiale. Le rectangle du lecteur reste `x=221`, `largeur=826`, `hauteur=464,625 px` ; la région ne défile pas et aucune erreur console n’apparaît. L’absence initiale d’effet venait de la page MCP cachée, dont l’horloge ne progressait pas. La preuve native du drag/double-clic reste ouverte car le relais MCP ne les expose pas. Le cas Stop avec playhead auteur déjà `0` reste à vérifier : le runtime doit présenter la frame `0` et le CS consommer la même pose de `PresentationFrame`, sans réalignement séparé. Sur la scène courante, les coins du content-box et du CS restent décalés de `0,46 px` dans ce viewport ; qualifier cette précision avant clôture. |
+
+**P4 — base typographique responsive (En cours).** Le décor initial des items
+texte reçoit `font-size: 3cqw`, valeur déjà employée par le preset « Étiquette ».
+Les scènes chargées dont cette valeur manque la matérialisent dans `initialDecor`
+avant le build, afin que les keyframes interpolent dans l’unité responsive du
+projet sans reprendre la taille héritée en pixels de l’hôte. La vérification du
+cas de la scène utilisateur reste à faire.
+
+**P6 — fin de lecture avec bordure (En cours).** Le défaut est reproduit dans
+Safari par capture/réapplication de la pose finale : la capture actuelle décale
+l’item de `-24,274170 px` ; reconstruire l’origine avec les bornes de bordure
+ramène l’écart à `0 px` sans changer sa taille. Voir
+[le diagnostic et la preuve](notes/2026-10-28-editor-play-path-end-diagnostic.md).
+Une fixture HTML neutre sans circuit Editor reproduit aussi `-12,855774 px`
+avec une bordure de `10 px` et une rotation de `40°` ; les fonctions réelles de
+capture et présentation CodPlay suffisent à provoquer l’écart.
+La compensation expérimentale des bornes établit la cause ; elle est retirée
+comme proposition de correction car elle conserverait une mesure des items
+par `getBoundingClientRect()`. Le correctif doit reprendre le circuit affine
+existant (layout, styles calculés et matrices), conformément au guide lié dans
+la note.
+
+| Ordre | Action / propriétaire | Statut | Porte |
+| --- | --- | --- | --- |
+| 1 | Autoriser une correction CodPlay séparée de la reconstruction Editor. | Fixe | Autorisation utilisateur du 28 octobre 2026 : correction dans un commit distinct. |
+| 2 | Dans CodPlay `html-pose.ts`, réutiliser le calcul affine existant et retirer les rectangles d’items. | Fixe | Commit `df51bda4` : dimensions CSS conservées ; seule la racine conserve son ancrage monde initial. Tests capture/layout/host et DnD passent. |
+| 3 | Vérifier la correction et ses non-régressions. | Fixe pour ce correctif | CodPlay : 805 réussites, 7 échecs déjà présents avant correction ; typecheck et build passent. La matrice globale motion reste ouverte dans son plan propriétaire. |
+| 4 | Rejouer la scène Editor par Safari MCP. | Fixe pour ce cas | À `5 s`, écart de raccord `0,0015 px` au viewport initial ; Play après resize, Seek, Stop et restauration locale vérifiés, console vide. Disparition du saut confirmée par l’utilisateur. |
+| 5 | Projeter l’inset du contenu dans la matrice runtime avant la conversion du CS. | Fixe | Tests géométrie et bridge : 23/23. Safari à `41°`, après Play/Seek/resize : écart de contenu inférieur à `0,65 px` dans les deux viewports ; la précision de bordure CSS reste la gate déjà ouverte en P6. |
+
+Suite Editor après correction : 459 réussites et un échec `scene-player-bridge`
+déjà reproduit avec le module CodPlay d’avant correction ; typecheck et build
+passent. Les gates globales de P6 restent ouvertes.
 
 ## 5. Critères d’acceptation
 

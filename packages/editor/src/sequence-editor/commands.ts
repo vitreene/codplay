@@ -38,6 +38,16 @@ function updateItemInScene(scene: EditorScene, itemId: string, updater: (item: I
   return { ...scene, items: scene.items.map((item) => (item.id === itemId ? updater(item) : item)) }
 }
 
+/** Removes one optional keyframe field so the author document remains JSON-compatible. */
+function omitKeyframeProperty(
+  keyframe: Keyframe,
+  property: 'name' | 'markerId' | 'transitionIn' | 'transitionOut',
+): Keyframe {
+  const nextKeyframe = { ...keyframe }
+  delete nextKeyframe[property]
+  return nextKeyframe
+}
+
 /** Tous les descendants de `itemId` par remontées successives de `parentId` — pas de champ `children` à parcourir. */
 function descendantIds(items: Item[], itemId: string): string[] {
   const ids: string[] = []
@@ -76,7 +86,7 @@ function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string
   return items.map((item) => ({
     ...item,
     keyframes: item.keyframes.map((k) =>
-      k.markerId !== undefined && markerIds.has(k.markerId) ? { ...k, markerId: undefined } : k,
+      k.markerId !== undefined && markerIds.has(k.markerId) ? omitKeyframeProperty(k, 'markerId') : k,
     ),
   }))
 }
@@ -104,7 +114,7 @@ export function createNamedKeyframe(
     timeMs: args.timeMs,
     decorId,
     channel: args.channel ?? 'pose',
-    name: args.name,
+    ...(args.name === undefined ? {} : { name: args.name }),
   }
   return updateItemInScene(nextScene, args.itemId, (item) => ({
     ...item,
@@ -148,10 +158,15 @@ export function moveKeyframe(scene: EditorScene, args: { itemId: string; keyfram
   }))
 }
 
+/** Adds or removes the optional name without leaving an undefined property in the document. */
 export function renameKeyframe(scene: EditorScene, args: { itemId: string; keyframeId: string; name: string | null }): EditorScene {
   return updateItemInScene(scene, args.itemId, (item) => ({
     ...item,
-    keyframes: item.keyframes.map((k) => (k.id === args.keyframeId ? { ...k, name: args.name ?? undefined } : k)),
+    keyframes: item.keyframes.map((keyframe) => {
+      if (keyframe.id !== args.keyframeId) return keyframe
+      if (args.name === null) return omitKeyframeProperty(keyframe, 'name')
+      return { ...keyframe, name: args.name }
+    }),
   }))
 }
 
@@ -168,7 +183,11 @@ export function setKeyframeTransitionIn(
 ): EditorScene {
   return updateItemInScene(scene, args.itemId, (item) => ({
     ...item,
-    keyframes: item.keyframes.map((k) => (k.id === args.keyframeId ? { ...k, transitionIn: args.transition ?? undefined } : k)),
+    keyframes: item.keyframes.map((keyframe) => {
+      if (keyframe.id !== args.keyframeId) return keyframe
+      if (args.transition === null) return omitKeyframeProperty(keyframe, 'transitionIn')
+      return { ...keyframe, transitionIn: args.transition }
+    }),
   }))
 }
 
@@ -178,7 +197,11 @@ export function setKeyframeTransitionOut(
 ): EditorScene {
   return updateItemInScene(scene, args.itemId, (item) => ({
     ...item,
-    keyframes: item.keyframes.map((k) => (k.id === args.keyframeId ? { ...k, transitionOut: args.transition ?? undefined } : k)),
+    keyframes: item.keyframes.map((keyframe) => {
+      if (keyframe.id !== args.keyframeId) return keyframe
+      if (args.transition === null) return omitKeyframeProperty(keyframe, 'transitionOut')
+      return { ...keyframe, transitionOut: args.transition }
+    }),
   }))
 }
 
@@ -192,7 +215,9 @@ export function attachMarkerToKeyframe(scene: EditorScene, args: { itemId: strin
 export function detachMarkerFromKeyframe(scene: EditorScene, args: { itemId: string; keyframeId: string }): EditorScene {
   return updateItemInScene(scene, args.itemId, (item) => ({
     ...item,
-    keyframes: item.keyframes.map((k) => (k.id === args.keyframeId ? { ...k, markerId: undefined } : k)),
+    keyframes: item.keyframes.map((keyframe) =>
+      keyframe.id === args.keyframeId ? omitKeyframeProperty(keyframe, 'markerId') : keyframe,
+    ),
   }))
 }
 

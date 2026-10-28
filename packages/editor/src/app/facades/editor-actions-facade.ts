@@ -1,5 +1,6 @@
 import type { Actor } from 'xstate'
 import { DocumentHistory, type DocumentHistoryState } from '../history/document-history'
+import { applyDefaultTextFontSize } from '../commands/default-decor-presets'
 import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
@@ -22,7 +23,7 @@ export class EditorActionsFacade {
 
   /** Loads a document through the central controller and its existing module bridges. */
   loadScene(scene: EditorScene): void {
-    this.controller.send({ type: 'SCENE_LOADED', scene })
+    this.controller.send({ type: 'SCENE_LOADED', scene: applyDefaultTextFontSize(scene) })
   }
 
   /** Sends one typed document command through the central facade. */

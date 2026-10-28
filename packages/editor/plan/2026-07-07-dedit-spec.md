@@ -569,6 +569,21 @@ ainsi la rotation et l’échelle de l’objet. Les tests de géométrie et du b
 V2 couvrent cette conversion ; Safari MCP vérifie le retour du CS après Play,
 Seek et resize sur la scène bordée tournée à `41°` (28 octobre 2026).
 
+### 6.0.3 Interpolation de rotation des keyframes pose
+
+Pour une transition entre keyframes `pose`, une valeur numérique `offset.rotate`
+au KF cible part de `0°` si la cascade source n'écrit pas de rotation. Le builder
+émet un tween explicite `{ from: 0, to }` sans ajouter `rotate` au décor source.
+Cette identité concerne uniquement la rotation numérique de pose ; les autres
+propriétés absentes de la source gardent leur résolution habituelle.
+
+Au `Seek`, le snapshot et l'item rendu portent la rotation interpolée. Le cadre
+projeté depuis cette valeur suit le même angle ; la conversion px et la projection
+content-box avec bordure restent celles du contrat § 6.
+Le test d'intégration [player interpolation](../tests/builder-v2/player-interpolation.spec.ts)
+couvre une rotation cible de `41°` sans valeur source, l'état de snapshot et le
+rendu à mi-transition.
+
 ### 6.1 Édition à un temps interpolé (contrat V2)
 
 Entre deux keyframes, `decor-editor-bridge` peut résoudre une cible avec

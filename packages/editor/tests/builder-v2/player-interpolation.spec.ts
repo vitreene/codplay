@@ -118,6 +118,43 @@ describe('editor V2 player interpolation', () => {
     expect(item?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
   })
 
+  it('interpolates a destination-only numeric rotation from the identity angle', async () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const scene = interpolationScene()
+    scene.decors.first!.offset = { translate: { x: 10, y: 5 }, width: 20, height: 12 }
+    scene.decors.second!.offset = { translate: { x: 30, y: 25 }, width: 40, height: 22, rotate: 41 }
+    const built = buildSceneDocV2(scene)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const itemDoc = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+    expect(itemDoc.actions['item-kf-second-kf']?.style?.rotate).toMatchObject({ from: 0, to: 41 })
+
+    const root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'editor-v2-player-destination-only-rotation',
+      compiledScene: compiled.compiledScene,
+      functions: compiled.functions,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+    })
+
+    await instance.telco.seek(500 + built.preRollMs)
+    const style = instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
+    expect(style?.rotate).toBeCloseTo(20.5)
+
+    const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    expect(item?.style.transform).toContain('rotate(20.5deg)')
+  })
+
   it('keeps the content-box anchor fixed while border-width itself interpolates', async () => {
     codplay = new CodPlay({ pauseOnDocumentHidden: false })
     const source = interpolationScene()

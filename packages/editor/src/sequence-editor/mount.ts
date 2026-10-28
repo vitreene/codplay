@@ -115,6 +115,7 @@ export function mountSequenceEditor(
   const transport = options.transport ?? null
   let transportState = transport?.getState() ?? null
   let playbackProgress = transport?.getProgress() ?? null
+  let lastPlayheadMs: number | null = null
   let unsubscribeTransportChange: (() => void) | null = null
   let unsubscribeTransportProgress: (() => void) | null = null
 
@@ -508,17 +509,18 @@ export function mountSequenceEditor(
   }
   btnPlay.addEventListener('click', onPlayClick)
 
+  /** Resets the author playhead and explicitly presents the player at frame zero. */
   function onStopClick(): void {
-    // Stop = `ctrl.seek(0)`, jamais `options.onPlayheadChange?.(0)` en direct — ce dernier est un
-    // canal SORTANT UNIQUEMENT (voir `render()` plus bas : il émet quand `ctx.playheadMs` a changé,
-    // jamais l'inverse). L'appeler directement pilote bien le player réel (le `SEEK` part, le seek
-    // réussit) mais ne met jamais à jour `ctx.playheadMs` local, donc le chrono/curseur affichés
-    // restent figés sur leur dernière valeur (bug constaté en direct : Stop après une lecture menée à
-    // son terme laissait le chrono affiché sur l'heure de fin, alors que la tête réelle était bien
-    // revenue à 0). `ctrl.seek(0)` met à jour l'état local puis laisse le diff de `render()` émettre
-    // `onPlayheadChange`/`SEEK` tout seul — même relais que le scrub, `scene-player-bridge.ts` inchangé.
+    // Set the author playhead first so the local head and time display reset immediately. Normally
+    // render() relays this changed value as a seek. If it was already 0, the render diff suppresses
+    // that relay even though the player may still present a later frame; Stop must seek 0 anyway.
+    const lastRelayedPlayheadMs = lastPlayheadMs
     ctrl.seek(0)
-    options.onPlayheadRelease?.(ctrl.getPlayheadMs())
+    if (lastPlayheadMs === lastRelayedPlayheadMs) {
+      lastPlayheadMs = 0
+      options.onPlayheadChange?.(0)
+    }
+    options.onPlayheadRelease?.(0)
   }
   btnStop.addEventListener('click', onStopClick)
 
@@ -552,7 +554,6 @@ export function mountSequenceEditor(
   // ── Render ────────────────────────────────────────────────────────────────────
 
   let scrollSyncing = false
-  let lastPlayheadMs: number | null = null
   /**
    * `renderTrackRows` fait `container.innerHTML = ''` puis reconstruit toutes les lignes — aucune
    * de leurs propriétés ne dépend de `playheadMs` (positions = `kf.timeMs`, jamais la tête de

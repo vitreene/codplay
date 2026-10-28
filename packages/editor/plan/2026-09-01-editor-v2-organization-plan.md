@@ -1587,7 +1587,7 @@ pas de filet de compatibilité.
 | Builder | `OffsetData` sort en nombres unitless ; aucune chaîne ou valeur `cqw` produite par ed2 |
 | Compilation | la configuration CodPlay qualifie une longueur structurée en `cqw` |
 | Snapshot | `get/set/clear`, patch partiel, remplacement atomique, cible/temps invalides |
-| Résolution | une action unique interpole simultanément couleur et position/taille ; `rotate`/`scale` inchangés |
+| Résolution | une action unique interpole couleur et position/taille ; une rotation cible sans valeur source part de `0°`, tandis que `scale` reste inchangé |
 | Projection | largeur de racine initiale puis resize ; même état logique, px projetés différents |
 | Autorité temporelle | édition : `sequence-editor.playheadMs` → `SEEK` → `SEEK_APPLIED` ; lecture : `telco` ; sortie : une seule adoption `getProgress() - preRollMs` |
 | Interfaces de pilotage | boutons Play/Pause/Stop de la télécommande intégrée à `sequence-editor` convergent sur le bridge de coordination ; commandes player exécutées par la façade player, seek centralisé, progress de lecture depuis `telco.onProgress` |

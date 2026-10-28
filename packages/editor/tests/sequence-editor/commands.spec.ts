@@ -39,6 +39,7 @@ describe('createNamedKeyframe', () => {
     expect(kf.timeMs).toBe(1000)
     expect(kf.decorId).toBeTruthy()
     expect(s.decors[kf.decorId]).toBeDefined()
+    expect(kf).not.toHaveProperty('name')
   })
 
   it('reuses an existing decorId when given', () => {
@@ -160,6 +161,7 @@ describe('renameKeyframe / assignKeyframeDecor / transitions / markers on a keyf
     expect(s.items[0]!.keyframes[0]!.name).toBe('intro')
     s = commands.renameKeyframe(s, { itemId: 't1', keyframeId: 'kf-1', name: null })
     expect(s.items[0]!.keyframes[0]!.name).toBeUndefined()
+    expect(s.items[0]!.keyframes[0]).not.toHaveProperty('name')
   })
 
   it('assignKeyframeDecor sets decorId', () => {
@@ -170,8 +172,12 @@ describe('renameKeyframe / assignKeyframeDecor / transitions / markers on a keyf
   it('setKeyframeTransitionIn/Out set or clear', () => {
     let s = commands.setKeyframeTransitionIn(base(), { itemId: 't1', keyframeId: 'kf-1', transition: { kind: 'named', name: 'fade', durationMs: 300 } })
     expect(s.items[0]!.keyframes[0]!.transitionIn).toEqual({ kind: 'named', name: 'fade', durationMs: 300 })
+    s = commands.setKeyframeTransitionOut(s, { itemId: 't1', keyframeId: 'kf-1', transition: { kind: 'named', name: 'fade', durationMs: 300 } })
+    s = commands.setKeyframeTransitionIn(s, { itemId: 't1', keyframeId: 'kf-1', transition: null })
+    expect(s.items[0]!.keyframes[0]!).not.toHaveProperty('transitionIn')
     s = commands.setKeyframeTransitionOut(s, { itemId: 't1', keyframeId: 'kf-1', transition: null })
     expect(s.items[0]!.keyframes[0]!.transitionOut).toBeUndefined()
+    expect(s.items[0]!.keyframes[0]!).not.toHaveProperty('transitionOut')
   })
 
   it('attachMarkerToKeyframe / detachMarkerFromKeyframe', () => {
@@ -179,6 +185,7 @@ describe('renameKeyframe / assignKeyframeDecor / transitions / markers on a keyf
     expect(s.items[0]!.keyframes[0]!.markerId).toBe('m1')
     s = commands.detachMarkerFromKeyframe(s, { itemId: 't1', keyframeId: 'kf-1' })
     expect(s.items[0]!.keyframes[0]!.markerId).toBeUndefined()
+    expect(s.items[0]!.keyframes[0]!).not.toHaveProperty('markerId')
   })
 })
 
@@ -219,6 +226,7 @@ describe('marker tracks / markers', () => {
     const s = commands.removeMarkerTrack(s0, { markerTrackId: 'mt1' })
     expect(s.markerTracks['mt1']).toBeUndefined()
     expect(s.items[0]!.keyframes[0]!.markerId).toBeUndefined()
+    expect(s.items[0]!.keyframes[0]!).not.toHaveProperty('markerId')
   })
 
   it('renameMarkerTrack / toggleMarkerTrackVisibility', () => {
@@ -241,6 +249,7 @@ describe('marker tracks / markers', () => {
     s = commands.removeMarker(s, { markerId: 'm1' })
     expect(s.markerTracks['mt1']!.markers).toHaveLength(0)
     expect(s.items[0]!.keyframes[0]!.markerId).toBeUndefined()
+    expect(s.items[0]!.keyframes[0]!).not.toHaveProperty('markerId')
     expect(s.items[0]!.keyframes[0]!.timeMs).toBe(500)
   })
 })
