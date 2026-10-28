@@ -18,6 +18,7 @@ packages/demos/public/sighty-player/
 packages/demos/public/sighty-engine/
 packages/elce/.elce-data/
 packages/elce/.elce-export/
+packages/editor/.editor-data/
 
 # Editor directories and files
 .vscode/*

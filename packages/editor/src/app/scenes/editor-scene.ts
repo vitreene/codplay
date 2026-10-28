@@ -16,5 +16,9 @@ export function createEmptyEditorScene(title = 'Nouvelle scène'): EditorScene {
     decors: {},
     zones: {},
     markerTracks: {},
+    rootCapsule: {
+      kind: 'card',
+      distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+    },
   }
 }

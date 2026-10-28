@@ -8,12 +8,12 @@ import type { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { DocumentHistoryState } from '../history/document-history'
 import { createEmptyEditorScene } from '../scenes/editor-scene'
-import { TempEditorScenePersistence } from '../persistence/temp-editor-scene-store'
+import type { EditorScenePersistence } from '../persistence/editor-scene-persistence'
 
 type EditorMenuRegionProps = Readonly<{
   controller: Actor<typeof controllerMachine>
   actions: EditorActionsFacade
-  persistence: TempEditorScenePersistence
+  persistence: EditorScenePersistence
   scene: EditorScene | null
   history: DocumentHistoryState
 }>
@@ -83,7 +83,7 @@ function createPositionColorTestScene(
   actions.clearSelection()
 }
 
-/** Renders scene selection, temporary persistence status, history controls, and editor fixtures. */
+/** Renders scene selection, SQLite status, history controls, and editor fixtures. */
 export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
   const { controller, actions, persistence } = handle.props
   const buttonStyle = button({ size: 'md', tone: 'neutral' })
@@ -107,18 +107,20 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
             mix={[
               buttonStyle,
               onSelectChange((event) => {
-                const selected = event.value === null ? null : persistence.getScene(event.value)
-                if (selected !== null) actions.loadScene(selected)
+                if (event.value === null) return
+                void persistence.loadScene(event.value).then((selected) => {
+                  if (selected !== null) actions.loadScene(selected)
+                })
               }),
             ]}
           >
             {scenes.map((savedScene) => <Option
               id={`editor-scene-option-${savedScene.id}`}
               key={savedScene.id}
-              label={savedScene.meta.title}
+              label={savedScene.title}
               value={savedScene.id}
             >
-              {savedScene.meta.title}
+              {savedScene.title}
             </Option>)}
           </Select>
         </label>

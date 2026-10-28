@@ -53,7 +53,12 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
 
   const rootItems = childrenOf(scene.items, null)
   const itemById = new Map(scene.items.map((item) => [item.id, item]))
-  const rootTransitionDefaults = resolveAutoCapsuleDefaults(CAPSULE_TYPE.card)
+  const rootCapsule = scene.rootCapsule
+  const rootCapsuleType = rootCapsule?.kind ?? CAPSULE_TYPE.card
+  const rootTransitionDefaults = resolveAutoCapsuleDefaults(rootCapsuleType, {
+    introTransitionRef: rootCapsule?.defaultTransitionIn,
+    outroTransitionRef: rootCapsule?.defaultTransitionOut,
+  })
   const preRollMs = TransitionTiming.computeScenePreRollMs(scene.items.map((item) => {
     const firstKeyframe = sortPoseKeyframes(item)[0]
     const parentTransitionDefaults = resolveParentTransitionDefaults(item, itemById, rootTransitionDefaults)
@@ -65,10 +70,11 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
     }
   }))
 
-  const rootResolution = resolveCapsule(rootItems, CAPSULE_TYPE.card, preRollMs, diagnostics, {
+  const rootResolution = resolveCapsule(rootItems, rootCapsuleType, preRollMs, diagnostics, {
     sceneRoot: true,
     fallbackClipDurationMs: scene.meta.durationMs,
-    distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+    grid: rootCapsule?.grid,
+    distribution: rootCapsule?.distribution ?? { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
     transitionDefaults: rootTransitionDefaults,
   })
   if (rootResolution === undefined || diagnostics.some((diagnostic) => diagnostic.level === 'error')) {

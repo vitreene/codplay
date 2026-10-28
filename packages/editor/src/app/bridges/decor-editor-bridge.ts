@@ -521,6 +521,7 @@ function patchToContentArgs(patch: DecorPatch, existing: Content | undefined, it
   return {
     type: itemType === 'capsule' ? 'text' : itemType,
     source: existing?.source,
+    mediaId: existing?.mediaId,
     text: patch.text ?? existing?.text,
     textAutoSize: patch.textAutoSize ?? existing?.textAutoSize,
     lang: existing?.lang,

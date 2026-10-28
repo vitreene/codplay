@@ -3,13 +3,13 @@ import { createActor } from 'xstate'
 import { createEmptyEditorScene } from './scenes/editor-scene'
 import { controllerMachine } from './controller/controller-machine'
 import { EditorActionsFacade } from './facades/editor-actions-facade'
-import { TempEditorScenePersistence } from './persistence/temp-editor-scene-store'
+import { EditorScenePersistence } from './persistence/editor-scene-persistence'
 import { createEditorSpaRouter } from './remix/editor-spa-router'
 
 /** Creates and disposes the single editor actor, persistence adapter, and Remix SPA runtime. */
 async function startEditor(): Promise<void> {
-  const persistence = new TempEditorScenePersistence(() => window.localStorage)
-  const persistedScene = persistence.open()
+  const persistence = new EditorScenePersistence()
+  const persistedScene = await persistence.open()
   const controller = createActor(controllerMachine)
   controller.start()
 
@@ -22,13 +22,14 @@ async function startEditor(): Promise<void> {
   })
   await runtime.ready()
 
-  const dispose = (): void => {
+  const dispose = async (): Promise<void> => {
+    await persistence.flush()
     runtime.dispose()
     persistence.destroy()
     actions.destroy()
     controller.stop()
   }
-  window.addEventListener('pagehide', dispose, { once: true })
+  window.addEventListener('pagehide', () => void dispose(), { once: true })
 }
 
 void startEditor().catch((error: unknown) => {

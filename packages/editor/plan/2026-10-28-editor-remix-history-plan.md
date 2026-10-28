@@ -9,10 +9,10 @@ porte l’inventaire, les preuves et les raisons des propositions.
 
 **Avancement au 28 octobre 2026 :** le portage applicatif est implémenté.
 `remix@3.0.0`, le runtime `remix/component`, le routeur `remix/spa`, les vues
-Remix, les façades d’actions et le stockage provisoire sont en place. Le typecheck
-et le build passent après correction de la projection média locale. Les suites
-automatisées et le parcours navigateur restent à exécuter ; le signal historique
-de fin de lecture sans présentation reste ouvert.
+Remix et les façades d’actions sont en place. Le basculement SQLite a commencé :
+schéma, dépôt, API locale et branchement applicatif sont écrits ; typecheck passé,
+build passé ; round-trip SQLite, suites et parcours navigateur restent à valider.
+Le signal historique de fin de lecture sans présentation reste ouvert.
 
 ## Résultat et limites
 
@@ -34,17 +34,12 @@ Isoler ensuite le correctif dans un commit distinct, ou dans une branche de
 fix dédiée. Seul le travail dépendant de ce correctif attend sa résolution ;
 aucun contournement éditeur ne doit masquer le défaut.
 
-**Persistance provisoire du modèle actuel : besoin confirmé.** Avant le chantier
-de sauvegarde pérenne, la reconstruction doit permettre de conserver puis de
-recharger l’`EditorScene` actuel. Examiner d’abord ce modèle et ses données
-effectivement présentes ; la persistance provisoire s’adapte à cette forme
-auteur, sans la remplacer par un modèle futur ou un artefact compilé CodPlay.
-
-**Sauvegarde pérenne : décision laissée ouverte, chantier distinct.** Le support,
-le format de long terme, les migrations, la gestion des ressources et la
-synchronisation restent à élaborer. La persistance provisoire est suivie ici
-et reliée à l’étape 5 du
-[plan de construction](./app/2026-07-10-app-construction-plan.md).
+**Persistance provisoire du modèle actuel :** elle a d’abord utilisé
+`localStorage` pour conserver l’`EditorScene` auteur. L’adaptateur a été retiré
+au début du basculement SQLite, sans migration des données, conformément au
+cadrage accepté. Le schéma, le serveur local, le remplacement et les critères
+de sortie sont maintenant suivis dans le
+[plan SQLite](./2026-10-28-editor-sqlite-persistence-plan.md).
 
 Backend, chutier, zones, nouvelles fonctions auteur et refonte structurelle du
 builder Decor restent hors de ce portage.
@@ -107,10 +102,9 @@ builder Decor restent hors de ce portage.
 
 ## Implémentation en cours de validation
 
-- Le stockage `temp` utilise la clé `codplay.editor.temp-scenes.v1`, une
-  enveloppe versionnée avec scènes par ID et scène active. Il conserve les
-  propriétés `EditorScene` JSON ; il refuse les valeurs non sérialisables et
-  signale les sources `blob:` dont les octets ne survivent pas au rechargement.
+- Le stockage provisoire `localStorage` a été retiré au profit du dépôt SQLite
+  local. Le sérialiseur JSON strict est réutilisé pour les colonnes auteur ;
+  l’API suit les révisions pour refuser un écrasement périmé.
 - L’historique local à l’application garde 100 transactions avant/après,
   vide Rétablir sur une nouvelle édition et se réinitialise au chargement d’un
   document. Les bridges du contrôleur distinguent commits documentaires,
@@ -141,7 +135,7 @@ d’Éditeur défini au point 3.
 | R0 — Baseline | Builder V2, tests builder/bridge et plans V2 côté Éditeur ; diagnostic CodPlay en lecture seule si nécessaire. | Les attentes de transition et la projection média locale sont alignées ; le défaut de présentation en fin de lecture reste à diagnostiquer. Tout correctif CodPlay attend l’approbation préalable et reste isolé dans un commit ou une branche de fix ; les autres composants exclus exigent une tranche distincte. |
 | P0 — Modèle à persister | Modèle documentaire, `src/app/commands/types.ts`, données et tests de sérialisation existants. | Inventorier les valeurs réellement portées par `EditorScene`, leurs références et leur sérialisabilité ; identifier les sources média éphémères. Réutiliser le modèle partagé et distinguer le round-trip existant d’un véritable stockage entre rechargements. |
 | R1 — Contrats applicatifs | Ce plan, étapes 4/5 du plan de construction et définition historique du contrôleur. | Reporter le cadrage fixé, conserver les frontières d’édition, retirer l’intention d’historien externe concurrent ; traiter le contrat provisoire en interne à partir de P0 en gardant la sauvegarde pérenne ouverte. |
-| P1 — Persistance provisoire | Adaptateur dédié sous `src/app/persistence/` à créer et nommer `temp`, contrôleur/chargement central et composition applicative. | Sauver puis restaurer le document courant par le circuit central ; rechargement réel avec état auteur et identifiants conservés. Documenter portée et limites média. Retirer/remplacer cet adaptateur lors de l’adoption de la sauvegarde pérenne, en décidant alors du devenir des documents provisoires. Aucun changement CodPlay ni des modules spécifiques. |
+| P1 — Persistance de transition | Adaptateur `temp` sous `src/app/persistence/`, contrôleur et composition applicative. | Réalisée pendant la reconstruction, puis retirée lors du basculement SQLite sans migration. Les preuves SQLite et ses limites sont suivies dans le plan dédié. Aucun changement CodPlay ni des modules spécifiques. |
 | M1 — Composition Remix | Remplacer `src/app/main.tsx`, créer composition/routeur sous `src/app/`, adapter scripts/config/manifest. | Un acteur, une façade player et une coordination hors du rendu ; SPA, démarrage/erreurs/destruction vérifiés sur `5174`. |
 | M2 — Vues et hôtes | Remplacer les cinq vues `src/app/layout/*.tsx` par des fichiers kebab-case et les primitives standards utiles. | Identifiants explicites, DOM spécialisé préservé, bridges montés/détruits une fois ; aucun remontage sur update. Modules spécifiques inchangés. |
 | F1 — Intentions | Façade applicative dédiée, contrôleur/types et adaptateurs appelants. | Vues vers intentions typées ; transformations pures et façade player conservées ; mutation documentaire distincte de l’écho de sélection pour l’historisation. |
@@ -171,11 +165,8 @@ d’Éditeur défini au point 3.
 - Lifecycle : updates Remix et changements de scène sans remontage des
   composants ; démontage/remontage propre, aucun callback résiduel ni mutation
   du DOM spécialisé par le rendu de son hôte.
-- Persistance provisoire : édition du modèle actuel → écriture → rechargement
-  navigateur → chargement central → reconstruction V2 et reprise de l’édition.
-  Vérifier les relations, tables, KFs, chemins et propriétés de décor conservés,
-  ainsi que l’écriture du document restauré par Undo/Redo. Exercer les refus de
-  lecture/écriture et documenter les limites de conservation des médias.
+- Persistance SQLite : le parcours et ses critères de round-trip sont suivis dans
+  le [plan dédié](./2026-10-28-editor-sqlite-persistence-plan.md).
 - Depuis les packages concernés : suites ciblées puis suites complètes,
   typecheck/build, parcours navigateur avec les outils MCP exposés. Compléter
   manuellement les gestes physiques non disponibles ; une simulation ne

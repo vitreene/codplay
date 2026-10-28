@@ -1,9 +1,15 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 
+const editorApiPort = Number(process.env.EDITOR_API_PORT ?? 5182)
+
 export default defineConfig({
   server: {
     port: 5174,
+    strictPort: true,
+    proxy: {
+      '/api': `http://127.0.0.1:${editorApiPort}`,
+    },
   },
   resolve: {
     alias: [

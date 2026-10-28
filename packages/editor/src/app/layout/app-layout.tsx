@@ -7,7 +7,7 @@ import { EDITOR_V2_STORY_ID } from '../../builder-v2/types'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { EditorPlayerCommandFacade } from '../commands/editor-player-command-facade'
 import { EditorCoordinationBridge } from '../bridges/editor-coordination-bridge'
-import type { TempEditorScenePersistence } from '../persistence/temp-editor-scene-store'
+import type { EditorScenePersistence } from '../persistence/editor-scene-persistence'
 import { EditorMenuRegion } from './editor-menu-region'
 import { SequenceEditorRegion } from './sequence-editor-region'
 import { ScenePlayerRegion } from './scene-player-region'
@@ -16,7 +16,7 @@ import { DecorEditorRegion } from './decor-editor-region'
 type AppLayoutProps = Readonly<{
   controller: Actor<typeof controllerMachine>
   actions: EditorActionsFacade
-  persistence: TempEditorScenePersistence
+  persistence: EditorScenePersistence
 }>
 
 /** Resolves a rendered player item to its stable document identity. */

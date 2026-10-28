@@ -250,6 +250,7 @@ describe('decor-editor bridge V2', () => {
     const scene = sceneWithDecors()
     scene.zones['zone-target'] = {
       id: 'zone-target',
+      capsuleId: null,
       name: 'target',
       surfaces: {
         landscape: { row: 1, col: 1, rowSpan: 1, colSpan: 1 },

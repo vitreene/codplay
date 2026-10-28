@@ -1,0 +1,12 @@
+DROP TABLE editor_state;
+DROP TABLE zones;
+DROP TABLE keyframes;
+DROP INDEX capsule_items_child_order;
+DROP INDEX capsule_items_root_order;
+DROP TABLE capsule_items;
+DROP TABLE capsules;
+DROP TABLE items;
+DROP TABLE decors;
+DROP TABLE contents;
+DROP TABLE media_resources;
+DROP TABLE editor_scenes;

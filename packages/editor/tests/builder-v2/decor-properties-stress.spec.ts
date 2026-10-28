@@ -111,10 +111,11 @@ function stressScene(): EditorScene {
     zones: {
       'stress-zone': {
         id: 'stress-zone',
+        capsuleId: null,
         name: 'Stress zone',
         surfaces: {
-          horizontal: { row: 0, col: 0, rowSpan: 1, colSpan: 1 },
-          vertical: { row: 0, col: 0, rowSpan: 1, colSpan: 1 },
+          landscape: { row: 1, col: 1, rowSpan: 1, colSpan: 1 },
+          portrait: { row: 1, col: 1, rowSpan: 1, colSpan: 1 },
         },
       },
     },

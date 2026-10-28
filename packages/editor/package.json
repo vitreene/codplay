@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-editor.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -21,6 +21,7 @@
     "xstate": "^5.32.2"
   },
   "devDependencies": {
+    "@types/node": "^26.0.1",
     "typescript": "~6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"

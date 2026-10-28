@@ -120,6 +120,8 @@ export interface Content {
   id: string
   type: ItemType
   source?: string
+  /** Stable local media resource id; presentation URLs are resolved by the local server. */
+  mediaId?: string
   text?: string
   textAutoSize?: { enabled: boolean }
   lang?: string
@@ -191,6 +193,8 @@ export interface ZoneContainer {
 
 export interface Zone {
   id: string
+  /** Parent capsule item id; null means the scene's implicit root capsule. */
+  capsuleId: string | null
   name: string
   surfaces: Record<Orientation, ZoneRect>
   container?: ZoneContainer
@@ -240,5 +244,7 @@ export interface EditorScene {
   markerTracks: Record<string, MarkerTrack>
   /** Décor de la capsule racine IMPLICITE (jamais un item) — posé une fois, jamais keyframé. */
   rootDecorId?: string
+  /** Settings for the implicit root capsule; absent in older authored documents. */
+  rootCapsule?: CapsuleDef
   masterItemId?: string
 }
