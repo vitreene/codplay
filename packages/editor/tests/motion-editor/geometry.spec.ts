@@ -46,6 +46,25 @@ describe('motion-editor geometry', () => {
     expect(frame.rotationOrigin).toEqual({ fx: 0, fy: 0 })
   })
 
+  it.each([
+    { pivot: { fx: 0, fy: 0 }, x: 95, y: 86 },
+    { pivot: { fx: 0.5, fy: 0.5 }, x: 65, y: 116 },
+  ])('projects the content inset through rotation and scale with pivot $pivot', ({ pivot, x, y }) => {
+    const frame = presentationPoseToSelectionFrame({
+      origin: { x: 100, y: 80 },
+      matrix: { a: 0, b: 2, c: -1, d: 0 },
+      localWidth: 40,
+      localHeight: 20,
+    }, pivot, { left: 3, top: 5, right: 7, bottom: 11 })
+
+    expect(frame.x).toBeCloseTo(x, 6)
+    expect(frame.y).toBeCloseTo(y, 6)
+    expect(frameVisualCenter(frame).x).toBeCloseTo(85, 6)
+    expect(frameVisualCenter(frame).y).toBeCloseTo(126, 6)
+    expect(frame.width).toBe(40)
+    expect(frame.height).toBe(20)
+  })
+
   it('keeps a straight segment implicit and creates a normalized SVG arc for a moved midpoint', () => {
     const source = { x: 10, y: 20 }
     const target = { x: 110, y: 20 }

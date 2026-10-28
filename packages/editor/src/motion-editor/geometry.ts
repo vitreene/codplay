@@ -3,6 +3,7 @@
 import { prepareSvgPath, resolvePath } from 'ace'
 import type { CodPlayPresentationPose } from 'codplay'
 import type { SelectionFrameValue } from '../decor-editor/types'
+import type { ContentBoxInsetsPx } from './content-box'
 
 export type MotionPoint = Readonly<{ x: number; y: number }>
 export type MotionEasing = string | Readonly<{
@@ -39,10 +40,11 @@ export function frameVisualCenter(frame: SelectionFrameValue): MotionPoint {
   }
 }
 
-/** Converts one runtime affine pose into the local frame vocabulary of SelectionFrameV2. */
+/** Projects a runtime box and its local content inset into the SelectionFrameV2 vocabulary. */
 export function presentationPoseToSelectionFrame(
   pose: CodPlayPresentationPose,
   rotationOrigin?: SelectionFrameValue['rotationOrigin'],
+  contentInsets?: ContentBoxInsetsPx,
 ): SelectionFrameValue {
   const width = finiteDimension(pose.localWidth)
   const height = finiteDimension(pose.localHeight)
@@ -69,8 +71,10 @@ export function presentationPoseToSelectionFrame(
   // scale but not an arbitrary shear from an ancestor, so preserve the exact
   // visual centre even when the decomposed frame is the closest representation.
   const presentedCenter = {
-    x: pose.origin.x + rawMatrix.a * centerX + rawMatrix.c * centerY,
-    y: pose.origin.y + rawMatrix.b * centerX + rawMatrix.d * centerY,
+    x: pose.origin.x + rawMatrix.a * (centerX + (contentInsets?.left ?? 0))
+      + rawMatrix.c * (centerY + (contentInsets?.top ?? 0)),
+    y: pose.origin.y + rawMatrix.b * (centerX + (contentInsets?.left ?? 0))
+      + rawMatrix.d * (centerY + (contentInsets?.top ?? 0)),
   }
   const frameCenterWithoutTranslation = {
     x: pivotX + linear.a * (centerX - pivotX) + linear.c * (centerY - pivotY),

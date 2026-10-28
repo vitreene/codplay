@@ -1270,8 +1270,8 @@ export function createDecorEditorBridge(
     })
   }
 
-  /** Reads the runtime's current pose for one item when it matches the author playhead. */
-  function presentedFrameForItem(
+  /** Projects the current runtime pose and its affine content inset into the visible CS. */
+  function presentedContentBoxFrameForItem(
     itemId: string,
     rotationOrigin: SelectionFrameValue['rotationOrigin'],
   ): SelectionFrameValue | null {
@@ -1279,7 +1279,9 @@ export function createDecorEditorBridge(
     if (presentation === null || Math.abs(presentation.timeMs - lastKnownTimelineMs) > 1) return null
     const runtimeItemId = `${EDITOR_V2_STORY_ID}:${itemId}`
     const item = presentation.items.find((candidate) => candidate.itemId === runtimeItemId)
-    return item === undefined ? null : presentationPoseToSelectionFrame(item.pose, rotationOrigin)
+    return item === undefined
+      ? null
+      : presentationPoseToSelectionFrame(item.pose, rotationOrigin, frameBorderInsetsPx)
   }
 
   /** Converts one local pixel frame to the unitless structured offset vocabulary. */
@@ -1699,16 +1701,10 @@ export function createDecorEditorBridge(
         ?? (hasCurrentSnapshotPreview
           ? naturalFrame
           : (() => {
-            // A current bordered logical frame is already the exact content-box geometry. For a
-            // borderless frame, retain the runtime presentation so ancestor transforms and an
-            // interpolated seek remain visible in the CS.
-            const useLogicalContentFrame = frameLogicalProjectionCurrent && hasVisibleBorder(frameBorderInsetsPx)
-            const presentedPose = useLogicalContentFrame
-              ? null
-              : presentedFrameForItem(target.itemId, naturalFrame.rotationOrigin)
-            return presentedPose === null
-              ? naturalFrame
-              : poseFrameToContentBoxFrame(presentedPose, frameBorderInsetsPx)
+            // The snapshot supplies logical Decor and border insets; the matching runtime pose is
+            // authoritative for the displayed numeric frame, including bordered interpolations.
+            return presentedContentBoxFrameForItem(target.itemId, naturalFrame.rotationOrigin)
+              ?? naturalFrame
           })())
       frameValuePx = displayedFrame
       selectionFrame?.setValue(displayedFrame)
@@ -2045,13 +2041,8 @@ export function createDecorEditorBridge(
       ? null
       : frameCommitCandidatePx
         ?? (() => {
-          const useLogicalContentFrame = frameLogicalProjectionCurrent && hasVisibleBorder(frameBorderInsetsPx)
-          const presentedPose = useLogicalContentFrame
-            ? null
-            : presentedFrameForItem(target.itemId, frameNaturalValuePx.rotationOrigin)
-          return presentedPose === null
-            ? frameNaturalValuePx
-            : poseFrameToContentBoxFrame(presentedPose, frameBorderInsetsPx)
+          return presentedContentBoxFrameForItem(target.itemId, frameNaturalValuePx.rotationOrigin)
+            ?? frameNaturalValuePx
         })()
     frameGestureBasePx = null
     selectionFrame?.setValue(frameValuePx)

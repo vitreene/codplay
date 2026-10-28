@@ -291,6 +291,57 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(frame.style.top).toBe('240px')
   })
 
+  it('garde le CS sur la pose présentée quand un KF bordé reste sélectionné', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: positionTestScene('2cqw', '2cqw') })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+
+    const pose = {
+      origin: { x: 520, y: 280 },
+      matrix: { a: 0.8, b: 0.6, c: -0.6, d: 0.8 },
+      localWidth: 160,
+      localHeight: 120,
+    }
+    const presentationPort = coordination.presentation as unknown as {
+      get: () => EditorPlayerPresentationFrame | null
+    }
+    presentationPort.get = () => ({
+      timeMs: 2_500,
+      playerTimeMs: 2_500,
+      items: [{ itemId: 'story-main:item', pose, representation: 'local', progress: 0.5 }],
+    })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    expect(Number.parseFloat(frame.style.left)).toBeCloseTo(471.2, 3)
+    expect(Number.parseFloat(frame.style.top)).toBeCloseTo(338.4, 3)
+    expect(Number.parseFloat(frame.style.width)).toBeCloseTo(160, 3)
+    expect(Number.parseFloat(frame.style.height)).toBeCloseTo(120, 3)
+  })
+
   it('ne reprojette pas la bordure du KF source sur le ghost du KF cible', async () => {
     originalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {

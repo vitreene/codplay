@@ -563,6 +563,12 @@ L'entrée V2 du cadre expose, pour chaque sélection, une aiguille de rotation e
 - une rotation ou un déplacement d'axe à un temps interpolé suit le même contrat d'édition
   temporaire (§ 6.1) : le candidat reste une preview jusqu'à la création volontaire d'un keyframe.
 
+La projection du CS depuis une pose affine applique l’inset du contenu dans
+la matrice runtime avant de résoudre le pivot du cadre. Les bordures suivent
+ainsi la rotation et l’échelle de l’objet. Les tests de géométrie et du bridge
+V2 couvrent cette conversion ; Safari MCP vérifie le retour du CS après Play,
+Seek et resize sur la scène bordée tournée à `41°` (28 octobre 2026).
+
 ### 6.1 Édition à un temps interpolé (contrat V2)
 
 Entre deux keyframes, `decor-editor-bridge` peut résoudre une cible avec
