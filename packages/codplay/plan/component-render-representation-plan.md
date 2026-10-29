@@ -13,6 +13,13 @@ mouvement ont leurs propres spécifications et plans.
 
 ## Décisions et preuves restantes
 
+La décision utilisateur du 2026-10-28 sur le contenu enrichi `text` est
+implémentée et vérifiée dans la [spécification replace-text](../specs/replace-text-v2-spec.md) :
+pas de restriction de principe du balisage, limites du procédé à vérifier par
+l'auteur et conservation prioritaire de `strong`/`em` en cas de limite.
+Cette décision porte sur ce contenu et ne clôt pas la question ci-dessous
+sur l'ensemble des templates `BaseHTMLComponent.render()`.
+
 - [ ] Confirmer par une preuve représentative que l'état résolu transmis à
       `update()` est la source de présentation et que la racine DOM reste une
       cible de matérialisation, pas une source de reconstruction. Le contrat

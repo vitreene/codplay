@@ -23,12 +23,15 @@ import {
   validatePolygonAction,
   validatePolygonInitial,
   TagComponent,
+  validateTagAction,
   validateTagInitial,
   sanitizeSlotInitial,
   validateSlotAction,
   validateSlotInitial,
   validateSlotPerso,
 } from '../components'
+import { TextComponent } from '../components/text/text-component'
+import { sanitizeTextInitial, validateTextAction, validateTextInitial } from '../components/text/text-validation'
 import { correctionIconPartId, selectionIconPartId } from '../components/input'
 import {
   RuntimeCapabilityCatalog,
@@ -37,7 +40,9 @@ import {
 import { createMarkupModuleServiceDefinition } from '../capabilities/markup'
 import { createListModuleServiceDefinition } from '../capabilities/list'
 import { createMediaSyncModuleServiceDefinition } from '../capabilities/media-sync'
-import { createReplaceModuleServiceDefinition } from '../capabilities/replace'
+import { createReplaceMediaModuleServiceDefinition } from '../capabilities/replace-media'
+import { createReplaceSlotModuleServiceDefinition } from '../capabilities/replace-slot'
+import { createReplaceTextModuleServiceDefinition } from '../capabilities/replace-text'
 import {
   HTML_ATTR_SERVICE,
   HTML_CLASS_NAME_SERVICE,
@@ -56,9 +61,12 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
   catalog.registerModule({ ...createMarkupModuleServiceDefinition(), origin: 'core' }, 'core')
   catalog.registerModule({ ...createListModuleServiceDefinition(), origin: 'core' }, 'core')
   catalog.registerModule({ ...createMediaSyncModuleServiceDefinition(), origin: 'core' }, 'core')
-  catalog.registerModule({ ...createReplaceModuleServiceDefinition(), origin: 'core' }, 'core')
+  catalog.registerModule({ ...createReplaceMediaModuleServiceDefinition(), origin: 'core' }, 'core')
+  catalog.registerModule({ ...createReplaceSlotModuleServiceDefinition(), origin: 'core' }, 'core')
+  catalog.registerModule({ ...createReplaceTextModuleServiceDefinition(), origin: 'core' }, 'core')
 
   catalog.registerComponent(coreTagDefinition, 'core')
+  catalog.registerComponent(coreTextDefinition, 'core')
   catalog.registerComponent(coreImageDefinition, 'core')
   catalog.registerComponent(coreInputDefinition, 'core')
   catalog.registerComponent(coreLayoutDefinition, 'core')
@@ -73,16 +81,27 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
 const coreTagDefinition: RuntimeComponentDefinition = {
   type: 'tag',
   component: TagComponent,
-  modules: [],
+  modules: ['replace-text'],
   validateInitial: validateTagInitial,
+  validateAction: validateTagAction,
   sanitizeInitial: sanitizeTagInitial,
+}
+
+/** Creates the V1-compatible rich HTML text component declaration. */
+const coreTextDefinition: RuntimeComponentDefinition = {
+  type: 'text',
+  component: TextComponent,
+  modules: ['replace-text'],
+  validateInitial: validateTextInitial,
+  validateAction: validateTextAction,
+  sanitizeInitial: sanitizeTextInitial,
 }
 
 /** Creates the core V2 image declaration under the V1-compatible `img` type. */
 const coreImageDefinition: RuntimeComponentDefinition = {
   type: 'img',
   component: ImageComponent,
-  modules: ['replace'],
+  modules: ['replace-media'],
   validateInitial: validateImageInitial,
   validateAction: validateImageAction,
 }
@@ -123,7 +142,7 @@ const coreLayoutDefinition: RuntimeComponentDefinition = {
 const coreMediaDefinition: RuntimeComponentDefinition = {
   type: 'media',
   component: MediaComponent,
-  modules: ['media-sync'],
+  modules: ['media-sync', 'replace-media'],
   validateInitial: validateMediaInitial,
   validateAction: validateMediaAction,
   surfaces: (component) => component instanceof MediaComponent ? { media: component } : {},
@@ -153,7 +172,7 @@ const corePolygonDefinition: RuntimeComponentDefinition = {
 const coreSlotDefinition: RuntimeComponentDefinition = {
   type: 'slot',
   component: ForeignContentComponent,
-  modules: ['replace'],
+  modules: ['replace-slot'],
   validateInitial: validateSlotInitial,
   validateAction: validateSlotAction,
   validatePerso: validateSlotPerso,

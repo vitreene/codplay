@@ -1,6 +1,7 @@
 import type { CompiledScene } from '../compiled'
 import type { SceneDoc } from '../types'
 import type { SlotReplace } from '../../runtime/components/slot'
+import { parseSlotReplaceProfile } from '../../runtime/capabilities/replace-slot'
 
 /** One declared slot host discovered in an authoring scene. */
 export type SlotManifestEntry = Readonly<{
@@ -132,17 +133,7 @@ function formatNames(names: readonly string[]): string {
 
 /** Reads the validated slot replacement declaration without interpreting foreign content. */
 function readSlotReplace(initial: Readonly<Record<string, unknown>> | undefined): SlotReplace | undefined {
-  const value = initial?.replace
-  if (value === 'fade' || value === 'fade-in') return value
-  if (!isRecord(value) || (value.transition !== 'fade' && value.transition !== 'fade-in')) return undefined
-  if (value.duration === undefined) return { transition: value.transition }
-  if (typeof value.duration !== 'number' || !Number.isFinite(value.duration) || value.duration < 0) return undefined
-  return { transition: value.transition, duration: value.duration }
-}
-
-/** Narrows a slot profile value to a plain record before reading its transition. */
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return parseSlotReplaceProfile(initial?.replace)
 }
 
 /** Common story shape needed by manifest discovery on author and compiled data. */

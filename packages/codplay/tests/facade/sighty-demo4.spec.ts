@@ -133,7 +133,7 @@ describe('Sighty graph navigation demo', () => {
     await sceneB.telco.pause()
     await sceneB.telco.seek(1_200)
     expect(sceneB.telco.getProgress().timelineMs).toBeGreaterThan(1_000)
-    const transitionSnapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-transient]'))
+    const transitionSnapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-replace-view]'))
     expect(transitionSnapshots).toHaveLength(2)
     expect(transitionSnapshots[0]?.textContent).toContain('Scène A')
     expect(transitionSnapshots[1]?.textContent).toContain('SCÈNE B')
@@ -272,7 +272,7 @@ describe('Sighty graph navigation demo', () => {
     await flushDemo4Relay()
 
     expect(composition.runtime.getMountedSceneKey('slot-scene')).toBe('scene-b')
-    const snapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-transient]'))
+    const snapshots = Array.from(stage.querySelectorAll<HTMLElement>('[data-codplay-replace-view]'))
     expect(snapshots).toHaveLength(2)
     expect(snapshots[0]?.textContent).toContain('Scène A')
     expect(snapshots[1]?.textContent).toContain('SCÈNE B')

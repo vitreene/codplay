@@ -17,7 +17,9 @@ Les contrats vérifiés sont séparés par composant :
 - [ ] Exécuter les suites V2 complètes et les typechecks CodPlay/démos avant la
       clôture de cette tranche.
 - [ ] Image : vérifier le nombre d'affectations de `src` sur un nœud déjà mis
-      en cache, puis valider le chemin `replace` image par le runner.
+      en cache pour l'acceptation générale du composant. Le chemin `replace`
+      image est vérifié dans les spécifications [média](../specs/replace-media-v2-spec.md)
+      et [présentation](../specs/replace-presentation-v2-spec.md).
 - [ ] Input : valider dans un parcours quiz réel les états natifs, la sélection
       et la désactivation des réponses, la révélation de correction et les
       classes de résultat. Compléter la preuve du parcours quiz intégré.

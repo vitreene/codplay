@@ -1,6 +1,7 @@
 import { isPlainRecord } from '../../../shared'
 import type { ValidationFunction } from '../../../services'
 import { isComponentRecord, reportInvalidComponentValue } from '../component-validation'
+import { validateReplaceMedia } from '../replace-media-validation'
 
 /** Validates one image initial payload, including the deliberate fitMode removal. */
 export const validateImageInitial: ValidationFunction = (value, context) => {
@@ -41,36 +42,5 @@ function validateImageFields(
   if (value.img !== undefined && !isPlainRecord(value.img)) {
     reportInvalidComponentValue(context, 'AUTHOR_IMAGE_PART_INVALID', 'img.img must be a plain object.', 'img')
   }
-  validateImageReplace(value.replace, context)
-}
-
-/** Validates the simple replacement declaration without adding split semantics to img. */
-function validateImageReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
-  if (value === undefined || value === 'fade' || value === 'fade-in') return
-  if (!isPlainRecord(value)) {
-    reportInvalidComponentValue(
-      context,
-      'AUTHOR_IMAGE_REPLACE_INVALID',
-      'img.replace must be "fade", "fade-in", or an object with a supported transition.',
-      'replace',
-    )
-    return
-  }
-  if (value.transition !== 'fade' && value.transition !== 'fade-in') {
-    reportInvalidComponentValue(
-      context,
-      'AUTHOR_IMAGE_REPLACE_TRANSITION_INVALID',
-      'img.replace.transition must be "fade" or "fade-in".',
-      'replace.transition',
-    )
-  }
-  if (value.duration !== undefined
-    && (typeof value.duration !== 'number' || !Number.isFinite(value.duration) || value.duration < 0)) {
-    reportInvalidComponentValue(
-      context,
-      'AUTHOR_IMAGE_REPLACE_DURATION_INVALID',
-      'img.replace.duration must be a finite non-negative number.',
-      'replace.duration',
-    )
-  }
+  validateReplaceMedia(value.replace, context, 'replace')
 }

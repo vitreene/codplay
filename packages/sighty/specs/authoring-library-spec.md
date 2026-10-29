@@ -273,6 +273,7 @@ type GraphView<SceneKey, SlotName> = {
     views?: ViewGraph<SceneKey, SlotName>
     slots?: Partial<Record<SlotName, ViewGraph<SceneKey, SlotName>>>
   }
+  replace?: CodPlayInstanceMountReplace
   actions?: Record<string, ViewAction>
   coupling?: CouplingDescriptor<SlotName>
   accessBy?: SightyCondition
@@ -319,6 +320,17 @@ Une `ViewList` utilise l’ordre déclaré pour `next` et `previous`, mais chaqu
 entrée possède un `id` stable. Une `ViewMap` utilise ses clés et son `start`.
 Les graphes de `views` et de `slots` peuvent être imbriqués sans devenir une
 liste plate de placements.
+
+`replace` est porté par la vue entrante. Sur une entrée de liste, l'auteur le
+déclare à côté de `id` et `view` pour choisir l'effet de son passage :
+
+```ts
+{
+  id: 'page-b',
+  replace: { transition: 'mask-reveal', shape: 'star', duration: 850 },
+  view: { scene: 'scene-b' },
+}
+```
 
 Une liste de vues utilise des `id` stables sur toutes ses entrées, y compris
 celles de ses slots. Aucun format de placement antérieur n’est normalisé.
@@ -751,6 +763,22 @@ physique ; elle est retirée de la composition logique et sa liaison est fermée
 mais ses racines restent disponibles pour le layout. Le détachement effectif
 intervient donc lors d’un conflit de host, d’un remplacement, d’une
 reconstruction physique ou de la destruction du runtime.
+
+Pour la présentation d'un enfant dans son slot, `SightyGraphView.replace` de la
+sélection entrante a priorité sur le profil `replace` du slot déclaré dans le
+manifeste de la scène hôte. Si la vue entrante n'en déclare pas, ce profil hôte
+sert de valeur de repli. Sighty ne transmet ce réglage à `owner.instances.mount`
+que lorsque la relation sortante active du même host sort dans la transition
+courante ; sans cette relation, le montage entrant se fait sans remplacement
+visuel. La sélection du profil ne modifie ni la route, ni l'admission, ni le
+`showMode`. La page garde donc son profil d'entrée quand l'auteur la réadmet,
+y compris en revenant dans la liste.
+
+Le choix entrant et le repli vers le profil hôte sont couverts par
+[`replace-presentation.spec.ts`](../tests/replace-presentation.spec.ts). La
+suite de démonstration exerce les profils via les boutons CodPlay et la
+navigation Sighty dans
+[`replace-slot`](../../demos/src/sighty/replace-slot/scenario.ts).
 
 Cette conservation physique n’expose aucun état `active`/`inactive` et ne
 change pas les méthodes d’observation publiques : `getMountedSceneKey`,

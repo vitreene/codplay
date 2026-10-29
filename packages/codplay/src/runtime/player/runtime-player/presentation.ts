@@ -76,6 +76,11 @@ export class RuntimePlayerPresentation {
     )
   }
 
+  /** Advances operation-clocked component transitions from the shared ticker delta. */
+  advanceOperationAnimations(deltaMs: number): void {
+    this.context.componentRuntime?.advanceOperationAnimations(deltaMs)
+  }
+
   /** Presents one scene for geometry capture without playback side effects. */
   presentForGeometryCapture(scene: SolvedScene): void {
     this.context.componentRuntime?.sync(scene, false, { phase: 'geometry-capture' })

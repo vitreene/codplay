@@ -118,6 +118,8 @@ export class RuntimePlayerLifecycleController {
         context.compiledScene.requirements.modules,
         {
           componentSurfaces: context.componentRuntime?.getComponentSurfaces(),
+          emitEvent: (moduleId, event) => context.eventController.emitModuleEvent(moduleId, event),
+          getEvents: (moduleId, name) => context.eventController.getModuleEvents(moduleId, name),
         },
       )
       context.moduleServiceInstances.clear()

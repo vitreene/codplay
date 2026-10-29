@@ -46,6 +46,22 @@ Le CSS auteur des scènes de diffusion est intégré ; plusieurs décisions runt
   cycle normal de lecture et de présentation. Les tests runtime couvrent
   l’absence de seek automatique et l’effet des événements `entry` après la
   lecture normale.
+- `SightyGraphView.replace` choisit le profil du passage vers la sélection
+  entrante. S'il est absent, Sighty reprend celui du slot hôte ; il ne le
+  transmet à `instances.mount` que si une relation active du même host sort
+  dans cette transition. Le test ciblé vérifie l'override `mask-reveal` puis le
+  repli `wipe`. La démo `replace-slot` reprend la hiérarchie chapitre de Demo 4 :
+  `view-main` mène à `view-chapter`, qui porte le `coupling`, le slot ordonné
+  des sept pages et le slot de télécommande. Elle réutilise la scène
+  `telcoScene`, les intentions de navigation et de lecture, ainsi que le
+  contrôleur telco de Demo 4 ; chaque page entrante déclare son profil
+  `replace`. Brave a vérifié la navigation avant/arrière, les sept entrées et
+  le bouclage aux deux bornes, ainsi que lecture/pause, seek et retour au début.
+  Les typechecks CodPlay, Sighty et démos, le build démos et les deux fixtures
+  ciblées passent. La suite complète Sighty passe (52 tests). Deux fixtures qui
+  utilisaient `null` pour représenter des actions de tag sans effet ont été
+  alignées sur le contrat `TagAction` courant avec `{}` ; aucun changement
+  runtime n'était requis.
 - La correction et la revalidation de la démo 5 sont terminées :
   `COURSE_PAGES` est l'unique source des entrées de page, le graphe des
   chapitres, les routes du menu et les scènes de page en sont dérivés dans
@@ -126,8 +142,62 @@ et décrites dans la [spécification Sighty](../specs/authoring-library-spec.md#
 - Définir comment l’application reçoit le résultat de preload lorsque Sighty
   lance lui-même `preload.load()` ; ne pas réintroduire un callback Sighty.
 
-## Acceptation réalisée
+## Dernière validation de la tranche `replace-slot`
 
-- `npm run typecheck --workspace=@codplay/sighty`
-- `npm run typecheck --workspace=@codplay/demos`
-- `npm run test --workspace=@codplay/sighty`
+- `npm run typecheck --workspace=codplay` — réussi.
+- `npm run typecheck --workspace=@codplay/sighty` — réussi.
+- `npm run typecheck --workspace=@codplay/demos` — réussi.
+- `npm run build --workspace=@codplay/demos` — réussi ; l'outil de build
+  signale aussi un chunk existant supérieur à 500 kB.
+- `npx vitest run tests/replace-presentation.spec.ts` dans `packages/sighty` —
+  1 test réussi.
+- `npx vitest run tests/scene/authoring/slot-manifest.spec.ts` dans
+  `packages/codplay` — 3 tests réussis.
+- Le parcours MCP Brave précédent a vérifié la navigation avant/arrière, les
+  sept pages, le bouclage `G → A → G`, pause/lecture, seek, rewind et projection
+  de progression avec la télécommande Demo 4. La page F remplace
+  `slide-over` (« Superposition ») par `mask-reveal` cercle en grille. Le profil
+  arrive dans `replace-slot` avec `cellSize: 8`, direction centrée et stagger.
+  Dans la même session Brave, la navigation réelle E→F a montré une seule vue
+  sortante, un masque SVG de 65 cellules circulaires dont le scale est animé,
+  sans canvas ; à la fin, la vue et le masque sont retirés et F persiste. Le seul
+  message console reste le 404 favicon connu. Les tests d'intégration Sighty et
+  CodPlay ciblés ainsi que les typechecks touchés passent.
+- `npm run test --workspace=@codplay/sighty` — 52 tests réussis ; les deux
+  fixtures de tag héritées qui déclaraient une action sans effet avec `null`
+  utilisent désormais `{}` conformément au contrat.
+- Le 2026-10-29, le même défaut a été corrigé dans la scène A partagée par
+  Demo 1 et Demo 4 : `scene-a:set-content` et `scene-a:set-color` utilisent
+  `{}` pour leurs actions sans effet, comme l'exige `TagAction`. Le parcours MCP
+  Brave affiche le menu Demo 4 puis la scène A, son image chargée et ses quatre
+  commandes ; aucune erreur de console. Le typecheck démos et `git diff --check`
+  passent. Aucun changement runtime n'a été nécessaire.
+- Le 2026-10-29, la démo `replace-slot` a été réalignée sur la structure de
+  chapitre Demo 4 après constat que la navigation ne quittait pas la première
+  page. Le graphe expose `view-main → view-chapter → slot-scene / slot-telco`,
+  utilise les routes explicites par page et reprend la scène de télécommande
+  existante ; le contrôleur ne relance plus l'entrante en parallèle de la
+  transition Sighty. Une première lecture a aussi révélé que le défaut
+  d'inactivité à 30 s terminait la séquence pendant que la telco projetait son
+  état ; `idle: false`, comme dans Demo 4, supprime ce signal parasite. Brave
+  vérifie maintenant `A → B → C → D → E → F → G → A` puis `A → G`, ainsi que
+  pause/lecture, seek à 4000, rewind à 0 et les commandes globales. Après 32 s,
+  aucune erreur Sighty/CodPlay n'apparaît ; le seul 404 console concerne
+  `/favicon.ico`. Le modificateur CSS des fonds utilise la clé de scène
+  (`page-a`…`page-g`), distincte de l'id Sighty (`view-page-a`…). Brave confirme
+  les dégradés des pages A et B et l'absence du seek dans cette démo. La règle
+  masque uniquement `.demo4-telco__seek` et conserve les quatre commandes.
+  `npm run typecheck --workspace=@codplay/demos` et `git diff --check` passent.
+- Le 2026-10-29, la page C de `replace-slot` présente aussi le split média SVG
+  dans le parcours Sighty–CodPlay. Le profil d'entrée étoile reste porté par la
+  vue Sighty ; la timeline de la scène CodPlay remplace une image avec des
+  cellules étoile et une vidéo avec un chemin SVG auteur. Dans le navigateur
+  Brave déjà ouvert, les deux remplacements ont parcouru le vrai player : 28
+  cellules par grille image, 24 par grille vidéo, aucun canvas, clone vidéo
+  sortant figé et vidéo cible en lecture. Le typecheck et le build des démos
+  passent. La démonstration V2 `replace-carousel` garde le cercle par défaut et
+  un chemin auteur. La revue visuelle utilisateur relève cependant que les
+  étoiles se recouvrent sur l'image très large de la scène C ; la démonstration
+  intégrée a été acceptée après adaptation du dimensionnement des formes à la
+  surface média ; le contrat partagé est décrit dans la [spécification replace
+  CodPlay](../../codplay/specs/replace-media-v2-spec.md).

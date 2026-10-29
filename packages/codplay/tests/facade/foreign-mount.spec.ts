@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   CodPlay,
@@ -14,6 +14,32 @@ function createManualScheduler(): CodPlayFrameScheduler {
   return {
     request: () => 1,
     cancel: () => undefined,
+  }
+}
+
+/** Queues real CodPlay ticker callbacks so the integration test controls each frame. */
+function createQueuedScheduler(): Readonly<{
+  scheduler: CodPlayFrameScheduler
+  flushNext: () => void
+}> {
+  const callbacks = new Map<number, () => void>()
+  let nextId = 1
+  return {
+    scheduler: {
+      request: (callback) => {
+        const requestId = nextId
+        nextId += 1
+        callbacks.set(requestId, callback)
+        return requestId
+      },
+      cancel: (requestId) => callbacks.delete(requestId),
+    },
+    flushNext: () => {
+      const entry = callbacks.entries().next().value as [number, () => void] | undefined
+      if (entry === undefined) throw new Error('CodPlay ticker has no queued frame.')
+      callbacks.delete(entry[0])
+      entry[1]()
+    },
   }
 }
 
@@ -176,6 +202,7 @@ describe('CodPlay instance foreign mount', () => {
   let codplay: CodPlay | undefined
 
   afterEach(() => {
+    vi.useRealTimers()
     codplay?.destroy()
     codplay = undefined
     document.body.replaceChildren()
@@ -425,14 +452,19 @@ describe('CodPlay instance foreign mount', () => {
     expect(codplay.instances.get('child-1')).toBe(child)
   })
 
-  it('replaces the mounted child through the shared replace presentation', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
-    const { layout, layoutRoot } = createForeignInstances(codplay)
+  it('advances slot replacement on shared engine frames independently of host seek and reset', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const frameQueue = createQueuedScheduler()
+    codplay = new CodPlay({
+      frameScheduler: frameQueue.scheduler,
+      pauseOnDocumentHidden: false,
+    })
+    const { layout, child, layoutRoot } = createForeignInstances(codplay)
     const childB = createChildInstance(codplay, 'child-2', 'child-b')
     const hostRoot = layoutRoot.firstElementChild
     if (!(hostRoot instanceof HTMLElement)) throw new Error('Foreign host root is missing.')
 
-    codplay.engine.advance(0)
     const firstMount = codplay.instances.mount({
       host: {
         instanceId: 'layout-1',
@@ -442,7 +474,8 @@ describe('CodPlay instance foreign mount', () => {
       childInstanceId: 'child-1',
     })
     await layout.telco.play()
-    codplay.engine.advance(0)
+    await child.telco.play()
+    await layout.telco.pause()
 
     const replacementMount = codplay.instances.mount({
       host: {
@@ -451,28 +484,88 @@ describe('CodPlay instance foreign mount', () => {
         persoId: 'body-host',
       },
       childInstanceId: childB.instanceId,
-      replace: { transition: 'fade', duration: 100 },
+      replace: { transition: 'mask-reveal', duration: 100, shape: 'star' },
     })
 
-    const snapshots = (): HTMLElement[] => Array.from(layoutRoot.children)
-      .filter((child): child is HTMLElement => child.getAttribute('data-codplay-transient') !== null)
+    const snapshots = (): HTMLElement[] => Array.from(layoutRoot.querySelectorAll<HTMLElement>('[data-codplay-replace-view]'))
     expect(snapshots()).toHaveLength(2)
     expect(snapshots()[0]?.textContent).toBe('child')
     expect(snapshots()[1]?.textContent).toBe('child-b')
+    expect(snapshots()[1]?.style.getPropertyValue('mask-image')).toContain('data:image/svg+xml')
     expect(hostRoot.querySelector('article')?.textContent).toBe('child-b')
     expect(hostRoot.style.visibility).toBe('hidden')
 
-    codplay.engine.advance(50)
-    expect(snapshots()[0]?.style.opacity).toBe('0.5')
-    expect(snapshots()[1]?.style.opacity).toBe('0.5')
+    const incoming = snapshots()[1]
+    expect(incoming?.style.getPropertyValue('mask-size')).toBe('0% auto')
+
+    await vi.advanceTimersByTimeAsync(40)
+    expect(snapshots()).toHaveLength(2)
+    expect(incoming?.style.getPropertyValue('mask-size')).toBe('0% auto')
+
+    frameQueue.flushNext()
+    const firstFrameMaskSize = Number.parseFloat(incoming?.style.getPropertyValue('mask-size') ?? '0')
+    expect(firstFrameMaskSize).toBeGreaterThan(0)
+
+    await layout.telco.seek(0)
+    expect(snapshots()).toHaveLength(2)
+    expect(hostRoot.style.visibility).toBe('hidden')
+    expect(incoming?.style.getPropertyValue('mask-size')).toBe(`${firstFrameMaskSize}% auto`)
+
+    await layout.telco.reset()
+    await layout.telco.play()
+    expect(snapshots()).toHaveLength(2)
+    expect(hostRoot.style.visibility).toBe('hidden')
+    expect(incoming?.style.getPropertyValue('mask-size')).toBe(`${firstFrameMaskSize}% auto`)
+    await layout.telco.pause()
+
+    layoutRoot.style.width = '640px'
+    window.dispatchEvent(new Event('resize'))
+    expect(snapshots()).toHaveLength(2)
     expect(hostRoot.style.visibility).toBe('hidden')
 
-    codplay.engine.advance(100)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(incoming?.style.getPropertyValue('mask-size')).toBe(`${firstFrameMaskSize}% auto`)
+    frameQueue.flushNext()
+    const secondFrameMaskSize = Number.parseFloat(incoming?.style.getPropertyValue('mask-size') ?? '0')
+    expect(secondFrameMaskSize).toBeGreaterThan(firstFrameMaskSize)
+    await vi.advanceTimersByTimeAsync(40)
+    frameQueue.flushNext()
     expect(snapshots()).toHaveLength(0)
     expect(hostRoot.style.opacity).toBe('')
     expect(hostRoot.querySelector('article')?.textContent).toBe('child-b')
 
     firstMount.detach()
     replacementMount.detach()
+  })
+
+  it('cleans an in-flight slot presentation when its mounted child is destroyed', () => {
+    vi.useFakeTimers()
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const { layoutRoot } = createForeignInstances(codplay)
+    const childB = createChildInstance(codplay, 'child-2', 'child-b')
+    const hostRoot = layoutRoot.firstElementChild
+    if (!(hostRoot instanceof HTMLElement)) throw new Error('Foreign host root is missing.')
+
+    codplay.instances.mount({
+      host: { instanceId: 'layout-1', storyId: 'main', persoId: 'body-host' },
+      childInstanceId: 'child-1',
+    })
+    codplay.instances.mount({
+      host: { instanceId: 'layout-1', storyId: 'main', persoId: 'body-host' },
+      childInstanceId: childB.instanceId,
+      replace: { transition: 'stack', duration: 1000 },
+    })
+
+    expect(layoutRoot.querySelectorAll('[data-codplay-replace-view]')).toHaveLength(2)
+    expect(hostRoot.style.visibility).toBe('hidden')
+
+    codplay.instances.destroy(childB.instanceId)
+
+    expect(layoutRoot.querySelectorAll('[data-codplay-transient]')).toHaveLength(0)
+    expect(hostRoot.style.visibility).toBe('')
+    expect(hostRoot.children).toHaveLength(0)
   })
 })

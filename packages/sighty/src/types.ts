@@ -1,4 +1,9 @@
-import type { CodPlayEventime, CodPlayEventimeTarget, CodPlayPublicEvent } from 'codplay'
+import type {
+  CodPlayEventime,
+  CodPlayEventimeTarget,
+  CodPlayInstanceMountReplace,
+  CodPlayPublicEvent,
+} from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 
 /** Identifies a scene resource in an authored Sighty scenario. */
@@ -169,6 +174,8 @@ export type SightyGraphView<
   /** Events passed to this view's scene whenever the view is admitted. */
   entry?: CodPlayEventime | readonly CodPlayEventime[]
   view: SightyViewContent<SceneKey, SlotName>
+  /** Overrides the host slot profile when this view replaces its active child. */
+  replace?: CodPlayInstanceMountReplace
   /** Mediates public controller events to the telco of another declared slot. */
   coupling?: SightyCouplingDescriptor<SlotName>
   /** Keeps a declaration in the scenario while excluding it from navigation. */

@@ -16,7 +16,7 @@ export type HtmlElementNode = {
   namespaceURI?: string | null
   style: Record<string, string> & { setProperty: (property: string, value: string) => void }
   textContent: string | null
-  childNodes?: { length: number }
+  childNodes?: ArrayLike<ChildNode>
   firstChild?: { nodeType?: number } | null
   setAttribute: (name: string, value: string) => void
   removeAttribute: (name: string) => void

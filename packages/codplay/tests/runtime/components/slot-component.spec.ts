@@ -114,10 +114,10 @@ describe('V2 slot component', () => {
     expect(foreignB.parentNode).toBeNull()
   })
 
-  it('accepts and ignores split replacement declarations', () => {
+  it('accepts the shared SVG grid settings on slot replacements', () => {
     const catalog = createCoreRuntimeCatalog()
     const result = new SceneBuilder(catalog.validationSnapshot()).build({
-      id: 'slot-replace-split-ignored',
+      id: 'slot-replace-mask-grid',
       stories: {
         main: {
           id: 'main',
@@ -129,7 +129,14 @@ describe('V2 slot component', () => {
             actions: {
               swap: {
                 content: { source: 'second' },
-                replace: { transition: 'fade', split: 'cells' },
+                replace: {
+                  transition: 'mask-reveal',
+                  split: 'cells',
+                  shape: 'circle',
+                  cellSize: 25,
+                  staggerPattern: 'row-wave',
+                  stagger: 80,
+                },
               },
             },
           }],
@@ -138,7 +145,126 @@ describe('V2 slot component', () => {
     })
 
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.compiledScene.requirements.modules).toContain('replace')
+    if (result.ok) expect(result.compiledScene.requirements.modules).toContain('replace-slot')
+  })
+
+  it('accepts a custom mask path for slot replacement and rejects unsupported shapes', () => {
+    const catalog = createCoreRuntimeCatalog()
+    const valid = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'slot-mask-reveal',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'host',
+            name: 'body',
+            type: 'slot',
+            initial: { content: { source: 'first' } },
+            actions: {
+              swap: {
+                content: { source: 'second' },
+                replace: {
+                  transition: 'mask-reveal',
+                  shape: { path: 'M50 0 L100 100 L0 100 Z', viewBox: '0 0 100 100' },
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+    const invalid = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'slot-mask-invalid-shape',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'host',
+            name: 'body',
+            type: 'slot',
+            initial: { content: { source: 'first' } },
+            actions: {
+              swap: {
+                content: { source: 'second' },
+                replace: { transition: 'mask-reveal', shape: 'triangle' },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(valid.ok).toBe(true)
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      expect(invalid.diagnostics.errors.map((diagnostic) => diagnostic.code))
+        .toContain('AUTHOR_SLOT_REPLACE_SHAPE_INVALID')
+    }
+  })
+
+  it('rejects invalid grid settings on slot replacements', () => {
+    const catalog = createCoreRuntimeCatalog()
+    const invalid = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'slot-mask-invalid-grid',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'host',
+            name: 'body',
+            type: 'slot',
+            initial: { content: { source: 'first' } },
+            actions: {
+              swap: {
+                content: { source: 'second' },
+                replace: { transition: 'wipe', split: 'cells', cellSize: 0 },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      expect(invalid.diagnostics.errors.map((diagnostic) => diagnostic.code))
+        .toContain('AUTHOR_SLOT_REPLACE_GRID_INVALID')
+    }
+  })
+
+  it('rejects combining a wave pattern with a Manhattan direction', () => {
+    const catalog = createCoreRuntimeCatalog()
+    const invalid = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'slot-mask-conflicting-stagger-order',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'host',
+            name: 'body',
+            type: 'slot',
+            initial: { content: { source: 'first' } },
+            actions: {
+              swap: {
+                content: { source: 'second' },
+                replace: {
+                  transition: 'wipe',
+                  split: 'cells',
+                  direction: 'center',
+                  staggerPattern: 'row-wave',
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      expect(invalid.diagnostics.errors.map((diagnostic) => diagnostic.code))
+        .toContain('AUTHOR_SLOT_REPLACE_GRID_INVALID')
+    }
   })
 
   it('rejects attempts to move the root name into state or an action', () => {

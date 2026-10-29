@@ -118,6 +118,15 @@ rechargement dans le navigateur restent au
 [plan d'acceptation Elcé](../plan/2026-10-01-elce-construction-plan.md), l'accès
 MCP Brave ayant échoué pendant ce contrôle.
 
+Après intégration de `elce-remix` et `codplay-replace` le 29 octobre 2026,
+Brave charge l'entrée auteur réelle, ouvre le document Nutrition & Santé et
+affiche son état « Synchronisé ». Le même serveur compile les imports JSON
+du catalogue replace ; la prévisualisation réelle affiche les paragraphes
+de la page d'introduction et son image décodée à 1680 px de largeur native.
+Les 16 tests JSON, le typecheck et le build Elcé passent dans cet état intégré.
+Le suivi de l'intégration et de l'acceptation globale reste dans le
+[plan d'intégration](../../../docs/plans/2026-10-29-develop-integration-plan.md).
+
 ## Invariants
 
 - Le contrôleur XState reste l’unique propriétaire du document et de l’accès

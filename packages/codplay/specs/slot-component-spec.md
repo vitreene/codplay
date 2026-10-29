@@ -3,8 +3,8 @@
 ## Périmètre vérifié
 
 Cette spécification décrit la tranche vérifiée du profil `slot` : manifeste,
-surface HTML, remplacements `fade`/`fade-in`, première surface publique de
-montage et fixture Sighty A/B. Le suivi des décisions d'extension est dans le
+surface HTML, profils `replace-slot`, première surface publique de montage et
+fixture Sighty A/B. Le suivi des décisions d'extension est dans le
 [plan foreign](../plan/foreign-scene-component-plan.md).
 
 ## Rôle
@@ -65,11 +65,18 @@ ni nœud DOM, ni player, ni fonction.
 
 `slotManifest(scene, { storyId? })` parcourt un `SceneDoc` ou un `CompiledScene`
 et retourne, dans l'ordre des déclarations, le nom, la story, le `perso.id` et
-le chemin `stories.<story>.persos[<index>].name`. Il ne démarre pas de player et
-ne lit pas le DOM.
+le chemin `stories.<story>.persos[<index>].name`. Si le slot possède un profil
+`initial.replace` valide, l'entrée conserve aussi sa transition, sa durée, sa
+forme de masque, `split` et les réglages de grille. Sighty s'en sert comme profil
+de repli lorsqu'une vue entrante ne déclare pas `replace`. La découverte ne
+démarre pas de player et ne lit pas le DOM.
 
-`resolveSlotManifestEntry(manifest, slot, { sceneId?, storyId?, referencePath? })` exige une
-correspondance exacte. Il retourne une entrée unique ou un diagnostic
+La découverte du manifeste et la normalisation runtime partagent le même
+parseur de profil explicite. Le manifeste conserve uniquement les champs
+déclarés ; le runtime ajoute ensuite les valeurs par défaut de transition.
+
+`resolveSlotManifestEntry(manifest, slot, { sceneId?, storyId?, referencePath? })`
+exige une correspondance exacte. Il retourne une entrée unique ou un diagnostic
 `AUTHOR_SLOT_NAME_UNKNOWN` / `AUTHOR_SLOT_NAME_AMBIGUOUS` avec les noms et les
 déclarations candidates. L'application auteur peut afficher ce diagnostic
 comme warning ou erreur selon son parcours ; aucune sélection par approximation
@@ -163,15 +170,18 @@ des scènes ni un substitut au materializer.
 
 ## Limites actuelles
 
-- Le module partagé `replace` est raccordé aux hooks V2 pour le profil `slot` et
-  fournit les transitions `fade` et `fade-in`. La présence de `replace.split` est acceptée
-  pour compatibilité de déclaration puis ignorée ; elle n'active aucune
-  stratégie de split.
+- Le module `replace-slot` gère les vues du `slot`. Les capacités distinctes
+  `replace-text` et `replace-media` et leurs limites vérifiées sont décrites
+  dans les spécifications de [texte](./replace-text-v2-spec.md) et de
+  [média](./replace-media-v2-spec.md), tandis que le circuit partagé est décrit
+  dans la [spécification de présentation replace](./replace-presentation-v2-spec.md).
+- Les valeurs historiques `replace.split: 'letter' | 'word' | 'line'` restent
+  acceptées puis ignorées ; `replace.split: 'cells'` active la grille SVG de
+  masque décrite dans la section replace.
 - La surface est disponible dans le runtime HTML interne et la façade
   `codplay.instances.mount` l'exerce pour les racines matérialisées directes
-  d'un enfant, sans enveloppe visible supplémentaire. Le composant ne pilote
-  pas le cycle de vie des scènes ; ce pilotage appartient au propriétaire des
-  instances.
+  d'un enfant, sans enveloppe de montage. Le composant ne pilote pas le cycle
+  de vie des scènes ; ce pilotage appartient au propriétaire des instances.
 - Le code qui possède la représentation foreign conserve ses racines, ses
   ressources et son chargement. Dans la V2 actuelle, ce code n'est pas une
   classe core d'adaptation : c'est le propriétaire ou fournisseur de la
@@ -180,78 +190,137 @@ des scènes ni un substitut au materializer.
   Pour une scène CodPlay, Sighty possède la décision de créer, piloter,
   démonter ou détruire l'occurrence ; le player CodPlay en exécute les
   opérations.
-- Les clones utilisés par `replace` sont des instantanés DOM de présentation,
-  possédés temporairement par la surface de présentation HTML et détruits à la
-  fin ou à l'annulation de la transition. Ils ne chargent, ne pilotent et ne
-  détruisent aucun contenu foreign et ne prolongent pas la propriété de ses
-  racines.
+- Les vues clonées par `replace-slot` sont des instantanés DOM temporaires,
+  possédés par la surface HTML et détruits à la fin ou à l'annulation de la
+  transition. Un calque transitoire les clippe au rectangle courant du `slot` ;
+  il ne modifie ni les racines montées ni la préparation de scène. Ces copies
+  ne chargent, ne pilotent et ne détruisent aucun contenu foreign.
 - Cet instantané est une présentation DOM temporaire ; il ne définit pas la
   représentation ni le cycle de vie du contenu foreign.
 
-## Raccord V2 de `replace`
+## Raccord V2 de `replace-slot`
 
-Le catalogue core déclare `replace` comme module player-scoped requis par le
-type `slot`. Le runtime composant appelle ses hooks génériques
-`beforeComponentUpdate` et `afterComponentUpdate` autour de `component.update()`.
-Le module résout une surface de présentation par `componentId`, capture
-`hostRoot` avant la mise à jour et enregistre une animation `fade` ou `fade-in`
-dans le même cycle d'horloge que les animations de composant.
+Le catalogue core déclare `replace-slot` comme module requis par le type `slot`.
+Le runtime composant appelle les hooks `beforeComponentUpdate` et
+`afterComponentUpdate` autour de `component.update()`. Le module capture la vue
+sortante, laisse le composant appliquer son nouvel état, capture la vue entrante
+et enregistre les transitions d'actions dans la timeline du player.
 
-La surface de présentation HTML est distincte de `foreignContent`. Elle crée
-un instantané DOM sortant avant la mise à jour, puis un instantané DOM entrant
-après la mise à jour ; les deux sont marqués transitoires, leurs identifiants
-et handlers inline sont supprimés, puis ils sont retirés à la fin ou à
-l'annulation. Elle ne reçoit aucune opération de chargement, de pilotage ou de
-destruction d'une ressource foreign.
-Une mise à jour `seek` rejoue les frontières de présentation depuis l'état
-initial afin de reconstruire la transition si l'instant demandé se trouve dans
-sa fenêtre. Cette relecture ne redispatche pas les events ni les callbacks
-historiques. Une capture géométrique annule la présentation car elle ne
-constitue pas une présentation utilisateur.
+Pour `codplay.instances.mount({ replace })`, le demandeur choisit la relation,
+le profil et le moment du montage. La façade CodPlay exécute cette relation ;
+le module `replace-slot` ne décide pas du cycle de vie de l'instance. Il crée
+les vues sortante et entrante autour du rattachement explicite, puis échantillonne
+la présentation avec le temps d'opération cumulé à partir des frames du
+`TimeTicker` partagé. Ce n'est pas une horloge locale : sans frame la transition
+reste figée. Elle peut progresser si le player hôte est en pause et qu'un autre
+player maintient le ticker actif. Un `seek`, un reset ou un replay du player
+hôte ne recale ni n'annule cette progression. Un nouveau remplacement, une mise
+à jour normale qui change le contenu du slot, un détachement ou la destruction
+d'une instance nettoie la présentation active. Un refresh géométrique conserve
+la session et recale le calque sur le nouveau rectangle. Les transitions
+d'actions du slot restent, elles, reconstruites par seek à partir de la timeline.
+Les propriétaires des présentations et leurs deux horloges sont détaillés dans
+la [spécification de présentation replace](./replace-presentation-v2-spec.md).
 
-Les deux profils ont des effets distincts :
+La surface ne modifie pas `foreignContent`. Les vues temporaires sont des
+instantanés du DOM ; leurs identifiants et handlers inline sont supprimés.
+Elles sont placées dans un calque transitoire, limité au rectangle mesuré du
+`slot` et repositionné à chaque échantillon pour suivre son redimensionnement.
+Le calque et les vues sont retirés à la fin ou à l'annulation ; la racine
+persistante redevient visible avec l'état logique courant. Les ressources
+foreign non clonables gardent leur limite connue.
 
-- `fade` fait varier simultanément l'instantané sortant de `1` à `0` et
-  l'instantané entrant de `0` à `1` ;
-- `fade-in` laisse l'instantané sortant opaque pendant toute la durée, fait
-  varier uniquement l'instantané entrant de `0` à `1`, puis retire les deux
-  instantanés.
+Les profils et leurs valeurs par défaut sont :
 
-La racine persistante reste masquée pendant la transition. Elle redevient
-visible lorsque les deux instantanés sont retirés et porte alors l'état logique
-mis à jour.
+| Profil | Effet dans le rectangle du slot | Durée par défaut |
+|---|---|---:|
+| `fade` | Les vues sortante et entrante passent simultanément de visible à masquée et inversement. | 300 ms |
+| `fade-in` | La vue sortante reste visible ; l'entrante apparaît progressivement. | 300 ms |
+| `mask-reveal` | Révèle l'entrante avec un masque centré. Formes `circle` (défaut), `star`, `diamond`, ou chemin SVG `{ path, viewBox }`. Avec `split: 'cells'`, le masque se répète sur une grille. | 900 ms |
+| `curtain` | La sortante glisse vers le haut ; l'entrante remonte depuis le bas. | 1000 ms |
+| `wipe` | L'entrante fixe est révélée du bord droit vers la gauche ; la sortante se décale légèrement vers la gauche. | 900 ms |
+| `slide-over` | L'entrante remonte par-dessus la sortante, qui recule et s'assombrit. | 1100 ms |
+| `stack` | La sortante recule et s'assombrit ; l'entrante remonte comme un panneau, puis s'efface pour exposer la racine persistante. | 2000 ms |
+
+Une durée auteur remplace la valeur par défaut via `duration`, en
+millisecondes. Sans grille, `shape` s'emploie avec `mask-reveal`. Avec
+`split: 'cells'`, il décrit la forme répétée par le masque SVG pour les profils
+slot. La déclaration personnalisée `path` est intégrée dans un masque alpha
+SVG ; `viewBox` fournit les quatre valeurs numériques de son repère.
+
+```ts
+replace: {
+  transition: 'mask-reveal',
+  shape: { path: 'M50 0 L100 100 L0 100 Z', viewBox: '0 0 100 100' },
+  duration: 900,
+}
+```
+
+`replace.split: 'cells'` anime une seule grille SVG sur la vue sortante clonée,
+au-dessus de la scène entrante persistante et non masquée. Les cellules
+gardent leur position ; seule la forme est transformée. Ce circuit réutilise
+la même session, le même échantillonnage et les mêmes règles source-cible que
+`replace-media.split: 'cells'`, sans clone média ni canvas par cellule.
+`mask-reveal` utilise le cercle si aucune forme n'est fournie ; les autres
+profils utilisent des rectangles si aucune forme n'est fournie.
+
+`cellSize` est un pourcentage responsive de la largeur mesurée du slot et prime
+sur `cellX`/`cellY`. Sans `cellSize`, deux axes fixent les comptes exacts ; si
+un seul axe est donné, l'autre est déduit du ratio du slot ; sans dimensions,
+la grille vaut 4 × 3. `staggerPattern` choisit `manhattan`, `row-wave` ou
+`column-wave`. Omettre le pattern revient à `manhattan`, où `direction` choisit
+l'origine spatiale et `stagger` l'enveloppe des départs. `row-wave` lance
+individuellement les cellules de gauche à droite rangée après rangée ;
+`column-wave` les lance de haut en bas colonne après colonne. Ces vagues excluent
+`direction`. La durée effective inclut l'enveloppe complète. Un resize recalcule
+les cellules en gardant la progression courante.
+Les anciennes valeurs `letter`, `word` et `line` restent des champs inertes
+pour `replace-slot`.
+
+Les profils `curtain`, `wipe`, `slide-over` et `stack` reprennent les durées
+Interlude retenues pour ces effets. Leur usage de `split: 'cells'` ne découpe
+pas le contenu opaque : il répète le masque sur la grille.
 
 Dans ce contrat, une « session » est l'état runtime temporaire qui relie les
-instantanés sortant et entrant, leur animation et leur nettoyage. Ce n'est ni
-un perso, ni une story, ni une donnée d'auteur.
+vues d'une transition, son horloge et son nettoyage. Ce n'est ni un perso, ni
+une story, ni une donnée d'auteur.
 
-Une seule session de présentation `replace` peut être active pour un hôte à un
-instant donné. Si un nouveau remplacement intervient avant la fin du
+Une seule session de présentation `replace-slot` peut être active pour un hôte
+à un instant donné. Si un nouveau remplacement intervient avant la fin du
 précédent, le runtime annule et nettoie d'abord cette session, puis capture la
-présentation courante comme état sortant du nouveau remplacement. Les deux
-sessions ne se superposent donc pas et la logique de remplacement ne crée pas
-de concurrence visuelle entre plusieurs instantanés.
+présentation courante comme vue sortante du nouveau remplacement. Les sessions
+ne se superposent donc pas.
 
-Pour `slot`, `replace` est limité à `fade` et `fade-in`, et `replace.split` est un champ de
-compatibilité sans effet. Il est conservé dans la déclaration compilée, ne
-produit aucun diagnostic et n'active jamais un split de la représentation
-opaque. Les profils split de composants spécialisés restent hors de ce
-contrat.
+Pour `slot`, `replace.split: 'cells'` active la grille de masque décrite ci-dessus.
+Les valeurs historiques `letter`, `word` et `line` restent acceptées sans
+diagnostic, conservées dans la déclaration compilée et sans effet sur le contenu
+opaque.
 
 ## Validation effectuée
 
 Le test `tests/runtime/components/slot-component.spec.ts` couvre le nom racine,
 le défaut `div`, l'absence de service textuel, l'attachement/détachement de
-plusieurs racines et l'acceptation de `replace.split` sans diagnostic. Le test
+plusieurs racines, l'acceptation des réglages de grille et le rejet d'une taille
+invalide. Le test
 `tests/scene/authoring/slot-manifest.spec.ts` couvre la découverte, l'absence et
-la collision de noms. Le typecheck CodPlay, le typecheck des démos V2 et la
-suite CodPlay existante passent pour cette tranche.
+la collision de noms, ainsi que la conservation des sept profils, d'une forme de
+masque personnalisée et les réglages `cellSize`/`direction`/`stagger`/
+`staggerPattern`. Le test
+`tests/runtime/capabilities/replace-module.spec.ts` traverse le player pour le
+masque source unique, la grille responsive, le reflow pendant la transition et
+le retrait du clone et du masque. La fixture Sighty
+`packages/sighty/tests/replace-presentation.spec.ts` couvre aussi le profil de
+page entrante à travers `instances.mount({ replace })`. Les validations ciblées
+des modules, de la surface HTML, du montage public et du consommateur Sighty
+passent avec le typecheck CodPlay et celui des démos V2.
 
 Le test `tests/runtime/capabilities/replace-module.spec.ts` exerce le chemin
 réel `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer` :
-les instantanés sortant et entrant sont animés par `fade`, le nouveau contenu
-reste porté par la surface `foreignContent`, puis les deux instantanés et leurs
-styles transitoires sont supprimés.
+les vues restent séparées du contenu `foreignContent`, sont échantillonnées par
+la timeline et nettoyées à la fin ou au seek. Le test
+`tests/runtime/runner-html/replace-presentation-surface.spec.ts` couvre les
+cinq profils visuels, le masque personnalisé et le calque qui borne les vues au
+slot.
 
 Le test `tests/facade/foreign-mount.spec.ts` exerce la première surface publique
 avec deux instances CodPlay réelles : adressage du `slot`, insertion directe de
@@ -262,9 +331,22 @@ compilées et live, que l'overlay est retiré au détachement et que le montage
 peut être répété. Une instance créée avec un `root` explicite retrouve cette
 racine après détachement et remontage. `tests/runtime/runner-html/motion-container.spec.ts`
 vérifie le rebinding des identités de conteneur capturées.
+Le test de montage vérifie également `mask-reveal` et `stack` avec un
+remplacement externe dont l'horloge continue pendant le seek et le reset de
+l'hôte.
 
-Le test `tests/facade/sighty-demo.spec.ts` exerce la fixture Sighty A/B avec un
+Le test `tests/facade/sighty-demo4.spec.ts` exerce la fixture Sighty A/B avec un
 layout et deux instances enfants réelles : résolution des noms `A` et `B` par le
 manifeste, montage des deux racines et démontage/remontage indépendant de A.
 Cette fixture est une preuve consommateur séparée du contrat générique `slot` ;
 elle ne fixe ni politique de fin de scène ni support foreign multi-racines.
+
+Une validation navigateur Brave a exercé la surface publique `instances.mount`
+avec `curtain` et rendu simultanément les cinq profils dans des slots dont les
+parents laissaient déborder leur contenu. Le calque clippe les glissements au
+slot et son rectangle suit le redimensionnement.
+
+La suite CodPlay complète reste à accepter : cinq assertions FLIP échouent dans
+`tests/facade/facade.spec.ts` et `tests/facade/flip-stress-motion.spec.ts`. Les
+mêmes assertions échouent sur l'état de référence, avant cette tranche ; elles
+restent suivies dans le plan sans être attribuées à `replace-slot`.

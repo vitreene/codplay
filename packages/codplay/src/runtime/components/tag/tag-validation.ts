@@ -1,5 +1,6 @@
 import type { ValidationFunction } from '../../../services'
 import { isComponentRecord, isComponentTagName, reportInvalidComponentValue } from '../component-validation'
+import { validateTagReplace } from '../text/text-validation'
 
 /** Validates the tag-specific initial contract without inspecting a materialized node. */
 export const validateTagInitial: ValidationFunction = (value, context) => {
@@ -11,6 +12,15 @@ export const validateTagInitial: ValidationFunction = (value, context) => {
   if (value.tag !== undefined && !isComponentTagName(value.tag)) {
     reportInvalidComponentValue(context, 'AUTHOR_TAG_NAME_INVALID', 'tag must be a valid HTML tag name.', 'tag')
   }
+}
+
+/** Validates one plain tag action and its replace-text command. */
+export const validateTagAction: ValidationFunction = (value, context) => {
+  if (!isComponentRecord(value)) return
+  if (value.tag !== undefined && !isComponentTagName(value.tag)) {
+    reportInvalidComponentValue(context, 'AUTHOR_TAG_NAME_INVALID', 'tag must be a valid HTML tag name.', 'tag')
+  }
+  validateTagReplace(value.replace, context)
 }
 
 /** Makes the documented div default explicit before the component is created. */

@@ -4,10 +4,11 @@ import { demo3 } from './demo3/main'
 import { demo4 } from './demo4/main'
 import { demo5 } from './demo5/main'
 import { quizHunt } from './quiz-hunt/main'
+import { replaceSlotDemo } from './replace-slot/main'
 import type { SightyDemoDefinition } from './layout/types'
 
 /** Lists the Sighty scenarios available from the single shared demo page. */
-export const SIGHTY_DEMO_REGISTRY: readonly SightyDemoDefinition[] = [demo1, demo2, demo3, demo4, demo5, quizHunt]
+export const SIGHTY_DEMO_REGISTRY: readonly SightyDemoDefinition[] = [demo1, demo2, demo3, demo4, demo5, quizHunt, replaceSlotDemo]
 
 /** Resolves a selector value and falls back to demo 1 for an unknown value. */
 export function resolveSightyDemo(id: string | null): SightyDemoDefinition {

@@ -41,7 +41,7 @@ import type {
   RuntimePreloadStrategy,
 } from '../runtime/preload'
 import type { PlayerLifecycleState } from '../runtime/config/player-lifecycle'
-import type { ReplaceTransition } from '../runtime/components'
+import type { SlotReplace } from '../runtime/components'
 import type { HtmlSourceAdapterFactory } from '../runtime/runner-html'
 
 /** One group of capability declarations composed while creating an engine. */
@@ -338,10 +338,7 @@ export type CodPlayInstanceHostTarget = Readonly<{
 }>
 
 /** Presentation transition requested when an instance replaces another mount. */
-export type CodPlayInstanceMountReplace = ReplaceTransition | Readonly<{
-  transition: ReplaceTransition
-  duration?: number
-}>
+export type CodPlayInstanceMountReplace = SlotReplace
 
 /** Request to expose one child's materialized roots inside a host slot component. */
 export type CodPlayInstanceMountRequest = Readonly<{
