@@ -2,7 +2,7 @@
 
 ## Statut et autorisation
 
-En cours — intégration prête ; acceptation globale CodPlay ouverte sur cinq
+En cours — fusions intégrées à `develop` ; acceptation globale CodPlay ouverte sur cinq
 échecs FLIP préexistants. L'utilisateur autorise les fusions dans l'ordre proposé :
 `elce-remix`, puis `codplay-replace`, puis intégration du résultat dans
 `develop`. Le correctif JSON du dossier temporaire est déjà dans `develop`.
@@ -43,7 +43,7 @@ de correction opportuniste du cœur.
 5. Fait pour les parcours ciblés — examiner la configuration MCP et l'inventaire exposé avant le
    contrôle navigateur réel (éditeur/popup Elcé et démos replace). Garder les
    validations indisponibles ou en échec explicitement ouvertes.
-6. À faire — vérifier le document choisi et l'ascendance des trois commits,
+6. Fait — vérifier le document choisi et l'ascendance des trois commits,
    intégrer le résultat dans `develop`, mettre à jour les preuves dans les
    spécifications propriétaires et le présent suivi sans déclarer une
    acceptation fonctionnelle plus large que les contrôles réalisés.
@@ -128,3 +128,11 @@ souci, en laissant le choix interne à l'implémentation. Statut : En cours.
   timeout ni test n'a été modifié pour les masquer. Les avertissements
   d'espacement de six fichiers importés proviennent de `codplay-replace` et
   ne sont pas corrigés hors périmètre.
+
+Résultat Git : `elce-remix` fusionnée par `eada06ad`, puis
+`codplay-replace` par `c40191e4`. `develop` rejoint ensuite ce résultat par
+avance rapide. Le correctif JSON `f87de99b` et les deux têtes sources restent
+dans son ascendance. Le point de retour et la branche d'intégration sont
+conservés. Les preuves des comportements corrigés sont dans les spécifications
+de matérialisation, replace-text et Remix ; seules l'acceptation globale et
+les cinq anomalies FLIP préexistantes restent ouvertes ici.
