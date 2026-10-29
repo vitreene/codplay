@@ -1,6 +1,7 @@
 import { isPlainRecord } from '../../../shared'
 import type { ValidationFunction } from '../../../services'
 import { reportInvalidServiceValue } from '../../../services/service-validation-report'
+import { validateReplaceMedia } from '../replace-media-validation'
 
 /** Validates the source and template options declared by one media perso. */
 export const validateMediaInitial: ValidationFunction = (value, context) => {
@@ -28,6 +29,7 @@ export const validateMediaAction: ValidationFunction = (value, context) => {
   }
   validateMediaPart(value.video, context, 'video')
   validateBroadcast(value.broadcast, context)
+  validateReplaceMedia(value.replace, context, 'media.replace')
 }
 
 /** Validates one optional patch targeted at the native media part. */

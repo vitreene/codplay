@@ -7,6 +7,10 @@ export function createHtmlContentService(): ServiceRuntimeInstance {
   return {
     apply: (node, value) => {
       if (!isHtmlElementNode(node)) return
+      if (value === null) {
+        node.textContent = ''
+        return
+      }
       if (typeof value === 'string' || typeof value === 'number') {
         const nextText = String(value)
         // Safari can lose hit-testing on a button when its direct text node is

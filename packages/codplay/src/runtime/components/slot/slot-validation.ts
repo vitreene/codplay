@@ -1,5 +1,16 @@
 import type { ValidationFunction } from '../../../services'
 import type { PersoValidationFunction } from '../../../scene/validation'
+import {
+  isReplaceMaskShape,
+  isReplaceSlotTransition,
+  isReplaceStaggerPattern,
+} from '../../capabilities/replace-presets'
+import {
+  isFiniteNonNegativeNumber,
+  isFinitePositiveNumber,
+  isPositiveInteger,
+  isReplaceDirection,
+} from '../../capabilities/replace-presets/replace-value-validation'
 import { isComponentRecord, isComponentTagName, reportInvalidComponentValue } from '../component-validation'
 import type { ForeignContentValue } from './slot-types'
 
@@ -90,24 +101,24 @@ function isForeignContentValue(value: unknown): value is ForeignContentValue {
   return Object.values(value).every(isForeignContentValue)
 }
 
-/** Validates the slot replacement profile while deliberately ignoring split. */
+/** Validates one slot replacement profile and its optional SVG cell grid. */
 function validateReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
   if (value === undefined) return
-  if (value === 'fade' || value === 'fade-in') return
+  if (isReplaceSlotTransition(value)) return
   if (!isComponentRecord(value)) {
     reportInvalidComponentValue(
       context,
       'AUTHOR_SLOT_REPLACE_INVALID',
-      'slot.replace must be "fade", "fade-in", or an object with a supported transition.',
+      'slot.replace must name a supported transition or be an object with a supported transition.',
       'replace',
     )
     return
   }
-  if (value.transition !== 'fade' && value.transition !== 'fade-in') {
+  if (!isReplaceSlotTransition(value.transition)) {
     reportInvalidComponentValue(
       context,
       'AUTHOR_SLOT_REPLACE_TRANSITION_INVALID',
-      'slot.replace.transition must be "fade" or "fade-in".',
+      'slot.replace.transition must be fade, fade-in, mask-reveal, curtain, wipe, slide-over, or stack.',
       'replace.transition',
     )
   }
@@ -118,6 +129,110 @@ function validateReplace(value: unknown, context: Parameters<ValidationFunction>
       'AUTHOR_SLOT_REPLACE_DURATION_INVALID',
       'slot.replace.duration must be a finite non-negative number.',
       'replace.duration',
+    )
+  }
+  const split = value.split
+  if (split !== undefined && split !== 'letter' && split !== 'word' && split !== 'line' && split !== 'cells') {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_SPLIT_INVALID',
+      'slot.replace.split must be cells; legacy text split values remain inert.',
+      'replace.split',
+    )
+  }
+  validateCellGrid(value, split, context)
+  if (value.shape !== undefined) {
+    if (value.transition !== 'mask-reveal' && split !== 'cells') {
+      reportInvalidComponentValue(
+        context,
+        'AUTHOR_SLOT_REPLACE_SHAPE_UNSUPPORTED',
+        'slot.replace.shape requires mask-reveal or split: cells.',
+        'replace.shape',
+      )
+    }
+    if (!isReplaceMaskShape(value.shape)) {
+      reportInvalidComponentValue(
+        context,
+        'AUTHOR_SLOT_REPLACE_SHAPE_INVALID',
+        'slot.replace.shape must be circle, star, diamond, or an SVG path with a viewBox.',
+        'replace.shape',
+      )
+    }
+  }
+}
+
+/** Validates the shared responsive grid settings used by slot and media masks. */
+function validateCellGrid(
+  value: Readonly<Record<string, unknown>>,
+  split: unknown,
+  context: Parameters<ValidationFunction>[1],
+): void {
+  const fields = ['stagger', 'staggerPattern', 'direction', 'cellSize', 'cellX', 'cellY'] as const
+  const hasGridSettings = fields.some((field) => value[field] !== undefined)
+  if (split !== 'cells') {
+    if (!hasGridSettings) return
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_GRID_INVALID',
+      'slot.replace grid settings require split: cells.',
+      'replace.split',
+    )
+    return
+  }
+
+  const stagger = value.stagger
+  if (stagger !== undefined && !isFiniteNonNegativeNumber(stagger)) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_GRID_INVALID',
+      'slot.replace.stagger must be a finite non-negative number.',
+      'replace.stagger',
+    )
+  }
+  const direction = value.direction
+  if (direction !== undefined && !isReplaceDirection(direction)) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_DIRECTION_INVALID',
+      'slot.replace.direction must name a supported propagation origin.',
+      'replace.direction',
+    )
+  }
+  const staggerPattern = value.staggerPattern
+  if (staggerPattern !== undefined && !isReplaceStaggerPattern(staggerPattern)) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_GRID_INVALID',
+      'slot.replace.staggerPattern must be manhattan, row-wave, or column-wave.',
+      'replace.staggerPattern',
+    )
+  }
+  if (staggerPattern !== undefined && staggerPattern !== 'manhattan' && direction !== undefined) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_GRID_INVALID',
+      'slot.replace.direction is only valid with the manhattan stagger pattern.',
+      'replace.direction',
+    )
+  }
+  for (const dimensionName of ['cellX', 'cellY'] as const) {
+    const dimension = value[dimensionName]
+    if (dimension !== undefined && !isPositiveInteger(dimension)) {
+      reportInvalidComponentValue(
+        context,
+        'AUTHOR_SLOT_REPLACE_GRID_INVALID',
+        `slot.replace.${dimensionName} must be a positive integer.`,
+        `replace.${dimensionName}`,
+      )
+    }
+  }
+  const cellSize = value.cellSize
+  if (cellSize !== undefined && !isFinitePositiveNumber(cellSize)) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_GRID_INVALID',
+      'slot.replace.cellSize must be a positive finite percentage of slot width.',
+      'replace.cellSize',
     )
   }
 }

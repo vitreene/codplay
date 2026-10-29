@@ -194,6 +194,18 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
     return !isMediaElementLike(node) || node.paused !== false
   }
 
+  /** Reports the native kind selected by this component's persistent source owner. */
+  getMediaTag(): MediaTag | undefined {
+    const node = this.activeMediaNode()
+    if (typeof node !== 'object' || node === null || !('tagName' in node)) return undefined
+    const tagName = (node as { tagName?: unknown }).tagName
+    return typeof tagName === 'string' && tagName.toLowerCase() === 'video'
+      ? 'video'
+      : typeof tagName === 'string' && tagName.toLowerCase() === 'audio'
+        ? 'audio'
+        : undefined
+  }
+
   /** Returns the currently attached persistent media node. */
   private activeMediaNode(): unknown {
     return this.activeSrc === null ? undefined : this.mediaBySrc.get(this.activeSrc)
@@ -231,11 +243,16 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
 
 /** Creates one internal native media node for the component's private media part. */
 function createMediaNode(tag: MediaTag): unknown {
-  if (typeof globalThis.document !== 'undefined') return globalThis.document.createElement(tag)
+  if (typeof globalThis.document !== 'undefined') {
+    const node = globalThis.document.createElement(tag)
+    if (tag === 'video') (node as HTMLVideoElement).preload = 'auto'
+    return node
+  }
   const node: {
     tagName: string
     parentNode: unknown
     src: string
+    preload?: string
     currentTime: number
     duration: number
     paused: boolean
@@ -257,6 +274,7 @@ function createMediaNode(tag: MediaTag): unknown {
     play: () => undefined,
     pause: () => undefined,
   }
+  if (tag === 'video') node.preload = 'auto'
   node.play = () => { node.paused = false }
   node.pause = () => { node.paused = true }
   return node

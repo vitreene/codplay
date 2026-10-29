@@ -1,5 +1,7 @@
 import type { BaseComponentVisualData } from '../base-component'
 import type { MediaTransition } from '../component-surface-types'
+import type { ReplacePresetName, ReplaceMediaOptions } from '../../capabilities/replace-presets'
+import type { SlotReplaceTransition } from '../component-surface-types'
 
 /** Native media element kinds supported by the unified media component. */
 export type MediaTag = 'audio' | 'video'
@@ -23,6 +25,10 @@ export type MediaState = BaseComponentVisualData & Readonly<{
 }>
 
 /** Action patch accepted by one media perso. */
-export type MediaAction = Partial<Pick<MediaInitial, 'src' | 'className' | 'style' | 'attr' | 'video'>>
+export type MediaReplace = ReplacePresetName | SlotReplaceTransition | ReplaceMediaOptions
+
+export type MediaAction = Partial<Pick<MediaInitial, 'src' | 'className' | 'style' | 'attr' | 'video'>> & Readonly<{
+  replace?: MediaReplace
+}>
 
 export type { MediaTransition }

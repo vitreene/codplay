@@ -7,6 +7,8 @@ export {
   type RuntimeEngineOptions,
 } from './runtime-engine'
 export type {
+  RuntimeModuleServiceEvent,
+  RuntimeModuleServiceEventInput,
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
   RuntimeModuleServiceSeekHandle,

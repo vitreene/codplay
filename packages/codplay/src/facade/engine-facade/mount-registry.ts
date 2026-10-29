@@ -95,6 +95,7 @@ export class InstanceMountRegistry {
         hostRoot,
         childInstance,
         surface,
+        presentation: replacement,
       })
       replacement?.start()
       return mount
@@ -112,6 +113,7 @@ export class InstanceMountRegistry {
             hostRoot,
             childInstance: existingMount.child,
             surface: existingMount.surface,
+            presentation: existingMount.presentation,
           })
         } catch {
           // Preserve the original replacement error; teardown remains owner-controlled.
@@ -145,6 +147,7 @@ export class InstanceMountRegistry {
     hostRoot: HTMLElement
     childInstance: ManagedInstance
     surface: ForeignContentSurface
+    presentation?: ManagedInstanceMount['presentation']
   }>): CodPlayInstanceMountHandle {
     try {
       const childRoots = options.childInstance.setMountContainer(options.hostRoot) ?? []
@@ -165,6 +168,7 @@ export class InstanceMountRegistry {
       childInstanceId: options.request.childInstanceId,
       child: options.childInstance,
       surface: options.surface,
+      presentation: options.presentation,
     }
     this.mounts.set(mountId, mount)
     this.mountIdByHost.set(options.hostKey, mountId)
@@ -194,6 +198,7 @@ export class InstanceMountRegistry {
   private detach(mountId: number): void {
     const mount = this.mounts.get(mountId)
     if (mount === undefined) return
+    mount.presentation?.cancel()
     try {
       mount.surface.detach()
     } finally {

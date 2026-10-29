@@ -2,6 +2,7 @@
 
 ## Code style and structure
 
+- Never address the user with the formula “Tu as raison :”.
 - Write code that is easy to read and extend later.
 - Apply KISS and DRY: prefer the simplest implementation that satisfies the established contract, reuse existing logic, and avoid speculative abstractions, wrappers, and duplicated circuits.
 - Use English for function names and variable names.

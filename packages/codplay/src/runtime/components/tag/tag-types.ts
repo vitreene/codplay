@@ -1,4 +1,5 @@
 import type { BaseComponentData } from '../base-component'
+import type { TextReplace } from '../text/text-types'
 
 /** Initial and resolved data profile accepted by one tag perso. */
 export type TagState = BaseComponentData & Readonly<{
@@ -11,4 +12,6 @@ export type TagState = BaseComponentData & Readonly<{
 export type TagInitial = TagState
 
 /** Action patch accepted by one tag perso. */
-export type TagAction = Partial<TagInitial>
+export type TagAction = Partial<TagInitial> & Readonly<{
+  replace?: TextReplace
+}>

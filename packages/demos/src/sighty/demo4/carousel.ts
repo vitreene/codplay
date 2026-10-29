@@ -1,6 +1,6 @@
 import { AutoCapsule, CAPSULE_TYPE, type AutoCapsuleResult } from '@codplay/capsule-automation'
 import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
-import type { PersoDoc } from 'codplay'
+import type { BaseComponentData, PersoDoc } from 'codplay'
 
 /** Identifies the two layout items displayed by the Demo 4 carousel. */
 export const DEMO4_LAYOUT_ITEM_IDS = {
@@ -103,7 +103,7 @@ export const DEMO4_LAYOUT_CAROUSEL_EVENTS = {
 } as const
 
 /** Creates one layout perso with direction-aware carousel actions. */
-export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: string): PersoDoc {
+export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: string): PersoDoc<'layout'> {
   const item = getCarouselItem(itemId)
   const initialOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '0%' : '100%'
   const initialState = itemId === DEMO4_LAYOUT_ITEM_IDS.menu
@@ -124,7 +124,9 @@ export function createLayoutCarouselItem(itemId: Demo4LayoutItemId, markup: stri
 }
 
 /** Creates the shared enter and leave actions for one carousel item. */
-function createCarouselItemActions(itemId: Demo4LayoutItemId): NonNullable<PersoDoc['actions']> {
+function createCarouselItemActions(
+  itemId: Demo4LayoutItemId,
+): Readonly<Record<string, Pick<BaseComponentData, 'className' | 'style'>>> {
   const events = DEMO4_LAYOUT_CAROUSEL_EVENTS[itemId]
   const initialOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '0%' : '100%'
   const leaveOffset = itemId === DEMO4_LAYOUT_ITEM_IDS.menu ? '-100%' : '100%'
@@ -185,7 +187,7 @@ function createCarouselItemActions(itemId: Demo4LayoutItemId): NonNullable<Perso
 }
 
 /** Creates the menu slot as the menu's own carousel container. */
-export function createMenuCarouselSlot(): PersoDoc {
+export function createMenuCarouselSlot(): PersoDoc<'slot'> {
   const item = getCarouselItem(DEMO4_LAYOUT_ITEM_IDS.menu)
 
   return {

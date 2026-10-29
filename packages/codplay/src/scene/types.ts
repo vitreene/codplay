@@ -8,6 +8,7 @@ import type { MediaAction, MediaInitial } from '../runtime/components/media'
 import type { PolygonAction, PolygonInitial } from '../runtime/components/polygon'
 import type { TagAction, TagInitial } from '../runtime/components/tag'
 import type { SlotAction, SlotInitial } from '../runtime/components/slot'
+import type { TextAction, TextInitial } from '../runtime/components/text'
 import type { MoveOrderMode } from '../runtime/config/move'
 import type { Rel } from './rel'
 
@@ -28,6 +29,7 @@ export type AuthorRecord = Record<string, unknown>
 /** Component profiles exposed to the V2 SceneDoc authoring boundary. */
 export interface PersoTypeRegistry {
   tag: { initial: TagInitial; action: TagAction }
+  text: { initial: TextInitial; action: TextAction }
   img: { initial: ImageInitial; action: ImageAction }
   input: { initial: InputInitial; action: InputAction }
   layout: { initial: LayoutInitial; action: LayoutAction }

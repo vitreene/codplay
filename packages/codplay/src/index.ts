@@ -1,7 +1,19 @@
 export { CodPlay } from './facade'
 export { BaseComponent, BaseHTMLComponent } from './runtime/components'
+export type { BaseComponentData } from './runtime/components'
+export {
+  REPLACE_PRESET_CHOICES,
+  resolveReplacePresetChoice,
+} from './runtime/capabilities/replace-presets'
 export type { ValidationContext, ValidationFunction } from './services'
 export type {
+  ImageAction,
+  ImageInitial,
+  ImageState,
+  MediaAction,
+  MediaInitial,
+  MediaReplace,
+  MediaState,
   ComponentActionOccurrence,
   ComponentAnimation,
   ComponentAnimationFrame,
@@ -11,7 +23,21 @@ export type {
   ComponentServices,
   ComponentUpdateInput,
   MaterializedPart,
+  TextAction,
+  TextInitial,
+  TextReplace,
+  TextState,
+  ReplaceMotionProfile,
+  ReplaceMediaPresentationProfile,
 } from './runtime/components'
+export type {
+  ReplacePresetChoice,
+  ReplacePresetDefinition,
+  ReplacePresetName,
+  ReplacePresetOrientation,
+  ReplacePresetType,
+} from './runtime/capabilities/replace-presets'
+export type { ReplaceMediaOptions, ReplaceDirection, ReplaceMediaSplit } from './runtime/capabilities/replace-presets'
 export type {
   CodPlayApi,
   CodPlayCapabilityGroup,
@@ -148,9 +174,14 @@ export type {
   InputComponentSurface,
   ImageReplace,
   ForeignContentSurface,
+  ReplaceCellGridSettings,
   ReplaceComponentSurface,
   ReplacePresentationSession,
+  ReplaceStaggerPattern,
   ReplaceTransition,
+  SlotReplaceProfile,
+  SlotReplaceShape,
+  SlotReplaceTransition,
   RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,

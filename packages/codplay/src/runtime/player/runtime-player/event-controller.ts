@@ -1,8 +1,15 @@
 import type { DiagnosticOutput } from '../../../diagnostics'
 import { DiagnosticCollector } from '../../../diagnostics'
 import type { CompiledFunctionCollection, CompiledScene } from '../../../scene/compiled'
-import type { EngineFrame, RuntimeModuleServiceInstance } from '../../engine'
+import type {
+  EngineFrame,
+  RuntimeModuleServiceEvent,
+  RuntimeModuleServiceEventInput,
+  RuntimeModuleServiceInstance,
+} from '../../engine'
 import {
+  PLAYER_LIFECYCLE_PAUSED,
+  PLAYER_LIFECYCLE_READY,
   PLAYER_LIFECYCLE_PLAYING,
   type PlayerLifecycleState,
 } from '../../config/player-lifecycle'
@@ -50,6 +57,8 @@ import type { RuntimePlayerPresentation } from './presentation'
 import type { RuntimePlayerSceneState } from './scene-state'
 import type { RuntimePlayerState } from './player-state'
 
+const RUNTIME_MODULE_EVENT_NAME = '__codplay_module_event__'
+
 /** Dependencies used by the player event and frame boundary. */
 export type RuntimePlayerEventControllerContext = Readonly<{
   state: RuntimePlayerState
@@ -65,6 +74,7 @@ export type RuntimePlayerEventControllerContext = Readonly<{
     pause(): void
   }
   moduleServiceInstances: Map<string, RuntimeModuleServiceInstance>
+  requestPresentation: () => void
   captureController: RuntimePlayerCaptureController
   idleMonitor: RuntimeIdleMonitor
   diagnosticOutput: DiagnosticOutput | undefined
@@ -105,6 +115,58 @@ export class RuntimePlayerEventController {
   /** Routes one public live event through the player journal. */
   async emit(input: RuntimePlayerEmitInput): Promise<RuntimeEventDispatchResult> {
     return this.emitEvent(input)
+  }
+
+  /** Journals one private module event, then replays it through presentation hooks. */
+  emitModuleEvent(
+    moduleId: string,
+    input: RuntimeModuleServiceEventInput,
+  ): RuntimeModuleServiceEvent | undefined {
+    const { state, trackJournal } = this.context
+    if (state.lifecycle !== PLAYER_LIFECYCLE_READY
+      && state.lifecycle !== PLAYER_LIFECYCLE_PAUSED
+      && state.lifecycle !== PLAYER_LIFECYCLE_PLAYING) return undefined
+    if (state.sequenceEnded || state.sequenceEndPending) return undefined
+    if (moduleId.trim().length === 0 || input.name.trim().length === 0) return undefined
+    const applyAtMs = input.applyAtMs ?? state.currentTimeMs
+    if (!Number.isFinite(applyAtMs) || applyAtMs < 0) return undefined
+
+    const appended = trackJournal.appendLiveEvent({
+      eventId: this.createRuntimeEventId(),
+      trackId: TRACK_GLOBAL_ID,
+      name: RUNTIME_MODULE_EVENT_NAME,
+      applyAtMs,
+      ...(input.data === undefined ? {} : { data: input.data }),
+      context: { moduleId, moduleEventName: input.name },
+      mode: EVENT_INSERT_MODE_PERSIST_ONLY,
+    })
+    if (!appended.ok) return undefined
+
+    this.context.requestPresentation()
+    return {
+      moduleId,
+      eventId: appended.data.eventId,
+      eventSeq: appended.data.eventSeq,
+      name: input.name,
+      applyAtMs: appended.data.applyAtMs,
+      ...(appended.data.data === undefined ? {} : { data: appended.data.data }),
+    }
+  }
+
+  /** Returns only private events emitted by one module, in journal order. */
+  getModuleEvents(moduleId: string, name?: string): readonly RuntimeModuleServiceEvent[] {
+    return this.context.trackJournal.getAllEvents()
+      .filter((event) => event.name === RUNTIME_MODULE_EVENT_NAME
+        && event.context?.moduleId === moduleId
+        && (name === undefined || event.context?.moduleEventName === name))
+      .map((event) => ({
+        moduleId,
+        eventId: event.eventId,
+        eventSeq: event.eventSeq,
+        name: String(event.context?.moduleEventName ?? ''),
+        applyAtMs: event.applyAtMs,
+        ...(event.data === undefined ? {} : { data: event.data }),
+      }))
   }
 
   /** Integrates one external relative eventime into the player journal. */
@@ -286,8 +348,17 @@ export class RuntimePlayerEventController {
     }
   }
 
-  /** Applies one engine frame to the logical clock while playing. */
+  /** Applies one engine frame to player time and operation-clocked presentations. */
   onEngineFrame(frame: EngineFrame): void {
+    try {
+      this.advancePlayerTimeline(frame)
+    } finally {
+      this.context.presentation.advanceOperationAnimations(frame.deltaMs)
+    }
+  }
+
+  /** Advances the player timeline while leaving operation presentations to the ticker delta. */
+  private advancePlayerTimeline(frame: EngineFrame): void {
     const { state } = this.context
     if (state.lifecycle !== PLAYER_LIFECYCLE_PLAYING
       || state.sequenceEnded

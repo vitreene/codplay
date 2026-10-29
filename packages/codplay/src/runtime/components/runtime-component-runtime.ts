@@ -62,6 +62,7 @@ export type RuntimeComponentSyncOptions = Readonly<{
 type MountedComponent = Readonly<{
   identity: RuntimeComponentIdentity
   persoId: string
+  initialState: Readonly<Record<string, unknown>>
   relation?: CompiledRel
   component: BaseComponent<Record<string, unknown>>
   handle?: RuntimeComponentHandle
@@ -78,9 +79,16 @@ type ActiveComponentAnimation = {
   lastTimeMs: number | undefined
 }
 
-type ActiveExternalComponentAnimation = ActiveComponentAnimation & Readonly<{
-  presentation: RuntimeExternalPresentation
-}>
+type ActiveExternalComponentAnimation =
+  | (ActiveComponentAnimation & Readonly<{
+      clock: 'player'
+      presentation: Extract<RuntimeExternalPresentation, { clock: 'player' }>
+    }>)
+  | (ActiveComponentAnimation & {
+      clock: 'operation'
+      operationTimeMs: number
+      presentation: Extract<RuntimeExternalPresentation, { clock: 'operation' }>
+    })
 
 type ActivePresentationEntry = Readonly<{
   componentId: string
@@ -131,21 +139,41 @@ export class RuntimeComponentRuntime {
     for (const service of this.moduleServices.values()) {
       const presentation = service.prepareExternalPresentation?.(request)
       if (presentation === undefined) continue
-      this.externalAnimations.set(request.componentId, {
-        animation: presentation.animation,
-        hasValue: false,
-        lastValue: undefined,
-        lastTimeMs: undefined,
-        presentation,
-      })
+      const active = presentation.clock === 'player'
+        ? {
+            clock: presentation.clock,
+            animation: presentation.animation,
+            hasValue: false,
+            lastValue: undefined,
+            lastTimeMs: undefined,
+            presentation,
+          } satisfies ActiveExternalComponentAnimation
+        : {
+            clock: presentation.clock,
+            animation: presentation.animation,
+            hasValue: false,
+            lastValue: undefined,
+            lastTimeMs: undefined,
+            operationTimeMs: 0,
+            presentation,
+          } satisfies ActiveExternalComponentAnimation
+      this.externalAnimations.set(request.componentId, active)
       let started = false
       return {
         start: () => {
           if (started) return
           started = true
           try {
-            presentation.start()
-            this.presentExternalAnimations(request.componentId, request.timeMs)
+            if (presentation.clock === 'player') {
+              presentation.start()
+              this.presentExternalAnimations(request.componentId, request.timeMs)
+              return
+            }
+            presentation.start(() => {
+              if (this.externalAnimations.get(request.componentId) === active) {
+                this.externalAnimations.delete(request.componentId)
+              }
+            })
           } catch (error) {
             this.cancelExternalPresentation(request.componentId, presentation)
             throw error
@@ -170,7 +198,7 @@ export class RuntimeComponentRuntime {
    */
   sync(scene: SolvedScene, force = false, options: RuntimeComponentSyncOptions = {}): void {
     const phase = options.phase ?? 'normal'
-    if (phase !== 'normal') this.cancelAllExternalPresentations()
+    if (phase !== 'normal') this.cancelExternalPresentations('player')
     const persos = Object.values(scene.persos)
     for (const perso of persos) {
       if (!this.mounted.has(perso.key)) this.mountComponent(scene, perso.key)
@@ -217,6 +245,7 @@ export class RuntimeComponentRuntime {
       }
     }
     for (const [componentId, active] of this.externalAnimations) {
+      if (active.clock !== 'player') continue
       entries.push({ componentId, active, external: true, registrationOrder })
       registrationOrder += 1
     }
@@ -233,11 +262,29 @@ export class RuntimeComponentRuntime {
       this.presentAnimationEntries([entry.active], timeMs)
       if (entry.external) {
         const current = this.externalAnimations.get(entry.componentId)
-        if (current === entry.active
+        if (current?.clock === 'player'
+          && current === entry.active
           && current.lastTimeMs !== undefined
           && current.lastTimeMs >= current.animation.endAt) {
           this.externalAnimations.delete(entry.componentId)
         }
+      }
+    }
+  }
+
+  /** Advances operation-clocked component presentations by one ticker delta. */
+  advanceOperationAnimations(deltaMs: number): void {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+      throw new Error('Operation animation delta must be finite and non-negative.')
+    }
+    for (const [componentId, active] of this.externalAnimations) {
+      if (active.clock !== 'operation') continue
+      active.operationTimeMs += deltaMs
+      this.presentAnimationEntries([active], active.operationTimeMs)
+      if (this.externalAnimations.get(componentId) === active
+        && active.lastTimeMs !== undefined
+        && active.lastTimeMs >= active.animation.endAt) {
+        this.externalAnimations.delete(componentId)
       }
     }
   }
@@ -261,7 +308,7 @@ export class RuntimeComponentRuntime {
 
   /** Destroys all materialized component instances. */
   destroy(): void {
-    this.cancelAllExternalPresentations()
+    this.cancelExternalPresentations()
     for (const mounted of this.mounted.values()) {
       mounted.targetRegistration?.release()
       mounted.component.destroy()
@@ -308,6 +355,7 @@ export class RuntimeComponentRuntime {
     const context: RuntimeComponentUpdateContext = {
       ...mounted.identity,
       persoId: mounted.persoId,
+      initialState: mounted.initialState,
       state: input.state,
       timeMs: input.timeMs,
       activeActions: input.activeActions ?? [],
@@ -351,7 +399,7 @@ export class RuntimeComponentRuntime {
   /** Applies and retires one externally prepared presentation stream. */
   private presentExternalAnimations(componentId: string, timeMs: number): void {
     const active = this.externalAnimations.get(componentId)
-    if (active === undefined) return
+    if (active === undefined || active.clock !== 'player') return
     this.presentAnimationEntries([active], timeMs)
     if (active.lastTimeMs !== undefined && active.lastTimeMs >= active.animation.endAt) {
       this.externalAnimations.delete(componentId)
@@ -397,9 +445,10 @@ export class RuntimeComponentRuntime {
     active.presentation.cancel()
   }
 
-  /** Cancels every externally prepared presentation before a seek or teardown. */
-  private cancelAllExternalPresentations(): void {
+  /** Cancels selected external presentations before a seek or owner teardown. */
+  private cancelExternalPresentations(clock?: 'player' | 'operation'): void {
     for (const [componentId, active] of this.externalAnimations) {
+      if (clock !== undefined && active.clock !== clock) continue
       this.externalAnimations.delete(componentId)
       active.presentation.cancel()
     }
@@ -512,6 +561,7 @@ export class RuntimeComponentRuntime {
     const mounted: MountedComponent = {
       identity,
       persoId: perso.persoId,
+      initialState: compiledPerso.initial,
       relation: compiledPerso.rel,
       component,
       surfaces,

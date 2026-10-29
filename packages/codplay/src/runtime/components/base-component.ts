@@ -4,7 +4,7 @@ import type { RuntimeCaptureSourcePort } from '../capture'
 
 /** Common serializable data accepted by every substrate-neutral component profile. */
 export type BaseComponentData = Readonly<{
-  content?: string | number
+  content?: string | number | null
   className?: ClassNameValue
   style?: StyleValue
   attr?: AttrValue

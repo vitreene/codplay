@@ -95,7 +95,7 @@ function createFeatureScene(
             move: '@root',
           },
           actions: sceneKey === 'open' ? {
-            'feature:data-received': null,
+            'feature:data-received': {},
             'feature:entry:first': { content: 'Action du premier événement' },
             'feature:entry:second': {
               content: 'Action du second événement',

@@ -18,17 +18,7 @@ class NoServiceComponent extends BaseComponent<Record<string, unknown>> {
 }
 
 function createCatalogForFixtures(): RuntimeCapabilityCatalog {
-  const catalog = createCoreRuntimeCatalog()
-  for (const type of ['text']) {
-    catalog.registerComponent({
-      type,
-      component: TagComponent,
-      modules: [],
-      validateInitial: () => undefined,
-      validateAction: () => undefined,
-    })
-  }
-  return catalog
+  return createCoreRuntimeCatalog()
 }
 
 describe('SceneBuilder', () => {

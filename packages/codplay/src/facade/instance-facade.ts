@@ -129,7 +129,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     return this.runner.getComponentSurface(`${target.storyId}:${target.persoId}`, 'foreignContent')
   }
 
-  /** Prepares the shared replace presentation for a foreign mount replacement. */
+  /** Prepares the slot-specific presentation for a foreign mount replacement. */
   prepareForeignMountReplacement(
     target: CodPlayInstanceHostTarget,
     replace: CodPlayInstanceMountReplace,
@@ -137,7 +137,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     if (this.destroyed) return undefined
     return this.runner.prepareExternalPresentation(
       `${target.storyId}:${target.persoId}`,
-      'replace',
+      'replace-slot',
       replace,
     )
   }

@@ -52,6 +52,40 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
     },
   },
   {
+    id: "replace-carousel",
+    path: "?demo=replace-carousel",
+    title: "Replace · texte et médias",
+    description:
+      "Scène du player V2 réunissant le remplacement texte entier et découpé, les images et les vidéos à frames fixes.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/replace-carousel/main"),
+        import("./demos/replace-carousel/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
+  {
+    id: "replace-mask-star",
+    path: "?demo=replace-mask-star",
+    title: "Replace · masque étoile",
+    description:
+      "Une seule image passe par le split média en étoiles SVG, dans le player CodPlay et sa télécommande habituelle.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/replace-mask-star/main"),
+        import("./demos/replace-mask-star/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
+  {
     id: "polygon",
     path: "?demo=polygon",
     title: "Polygone interactif",

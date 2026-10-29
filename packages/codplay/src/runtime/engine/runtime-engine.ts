@@ -9,10 +9,23 @@ import {
   type RuntimeIdleOptions,
 } from '../idle'
 import type {
+  RuntimeModuleServiceEvent,
+  RuntimeModuleServiceEventInput,
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from './module-service-types'
 import type { ComponentRuntimeContext } from '../components/component-types'
+
+type RuntimeModuleServiceFactoryContext = Pick<RuntimeModuleServiceContext, 'componentSurfaces'> & Readonly<{
+  emitEvent?: (
+    moduleId: string,
+    event: RuntimeModuleServiceEventInput,
+  ) => RuntimeModuleServiceEvent | undefined
+  getEvents?: (
+    moduleId: string,
+    name?: string,
+  ) => readonly RuntimeModuleServiceEvent[]
+}>
 
 /** Optional engine resources supplied beside the unified capability catalog. */
 export type RuntimeEngineOptions = Readonly<{
@@ -137,13 +150,23 @@ export class RuntimeEngine {
     playerId: string,
     compiledScene: CompiledScene,
     moduleIds: readonly string[],
-    context: Pick<RuntimeModuleServiceContext, 'componentSurfaces'> = {},
+    context: RuntimeModuleServiceFactoryContext = {},
   ): ReadonlyMap<string, RuntimeModuleServiceInstance> {
     const instances = new Map<string, RuntimeModuleServiceInstance>()
     for (const id of moduleIds) {
       const definition = this.catalog.getModule(id)
       if (definition === undefined) throw new Error(`Runtime module service capability is unavailable: ${id}`)
-      instances.set(id, definition.create({ playerId, compiledScene, ...context }))
+      instances.set(id, definition.create({
+        playerId,
+        compiledScene,
+        ...(context.componentSurfaces === undefined ? {} : { componentSurfaces: context.componentSurfaces }),
+        ...(context.emitEvent === undefined
+          ? {}
+          : { emitEvent: (event) => context.emitEvent?.(id, event) }),
+        ...(context.getEvents === undefined
+          ? {}
+          : { getEvents: (name) => context.getEvents?.(id, name) ?? [] }),
+      }))
     }
     return instances
   }

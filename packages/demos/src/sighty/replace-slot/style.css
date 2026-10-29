@@ -1,0 +1,236 @@
+@import '../demo4/style.css';
+
+.replace-slot-layout {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.4vw, 1rem);
+  padding: clamp(0.8rem, 2vw, 1.4rem);
+  color: #172033;
+  background: linear-gradient(145deg, #12243d, #174d59);
+}
+
+.replace-slot-layout__heading {
+  flex: 0 0 auto;
+}
+
+.replace-slot-layout__eyebrow,
+.replace-slot-page__eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.replace-slot-layout__eyebrow {
+  color: #b9dfd8;
+}
+
+.replace-slot-layout__title {
+  margin: 0.35rem 0 0;
+  color: #f8fafc;
+  font-size: clamp(1.4rem, 3vw, 2.25rem);
+  line-height: 1.05;
+}
+
+.replace-slot-layout__instructions {
+  margin: 0.45rem 0 0;
+  color: #d3e1eb;
+  font-size: clamp(0.76rem, 1.1vw, 0.9rem);
+}
+
+.replace-slot-layout__scene {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.replace-slot-layout__telco {
+  display: flex;
+  min-width: 0;
+  min-height: 7.5rem;
+  flex: 0 0 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.replace-slot-layout .demo4-telco__seek {
+  display: none;
+}
+
+.replace-slot-page-root {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: clamp(1.2rem, 4vw, 3rem);
+  overflow: hidden;
+  color: #fff;
+}
+
+.replace-slot-page-root--page-a {
+  background: linear-gradient(140deg, #164e63, #2b8a89);
+}
+
+.replace-slot-page-root--page-b {
+  background: linear-gradient(140deg, #3b3c7a, #7562a7);
+}
+
+.replace-slot-page-root--page-c {
+  background: linear-gradient(140deg, #6b2a64, #c0548a);
+}
+
+.replace-slot-page-root--page-d {
+  background: linear-gradient(140deg, #713d1e, #c58132);
+}
+
+.replace-slot-page-root--page-e {
+  background: linear-gradient(140deg, #12604c, #55a878);
+}
+
+.replace-slot-page-root--page-f {
+  background: linear-gradient(140deg, #12385f, #487bab);
+}
+
+.replace-slot-page-root--page-g {
+  background: linear-gradient(140deg, #5b2525, #a64f42);
+}
+
+.replace-slot-page {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.replace-slot-page__eyebrow {
+  color: rgb(255 255 255 / 72%);
+}
+
+.replace-slot-page__copy {
+  width: min(100%, 48rem);
+  margin-block: auto;
+}
+
+.replace-slot-page__title {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 5rem);
+  line-height: 0.98;
+}
+
+.replace-slot-page__description {
+  max-width: 38rem;
+  margin: 1rem 0 0;
+  color: rgb(255 255 255 / 82%);
+  font-size: clamp(0.95rem, 2vw, 1.3rem);
+  line-height: 1.45;
+}
+
+.replace-slot-page--media-demo {
+  gap: clamp(0.8rem, 2vw, 1.5rem);
+}
+
+.replace-slot-page__copy--media-demo {
+  width: 100%;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.replace-slot-page__media-stage {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: clamp(0.6rem, 1.5vw, 1rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.replace-slot-media-card {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: clamp(0.5rem, 1.1vw, 0.8rem);
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 0.7rem;
+  background: rgb(16 24 39 / 56%);
+}
+
+.replace-slot-media-card__label {
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 88%);
+  font-size: clamp(0.65rem, 1.1vw, 0.82rem);
+  font-weight: 700;
+}
+
+.replace-slot-media-card__outlet {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0%;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 0.4rem;
+  background: #101827;
+}
+
+.replace-slot-media-image,
+.replace-slot-media-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.replace-slot-media-image > img,
+.replace-slot-media-video > video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 640px) {
+  .replace-slot-layout {
+    padding: 0.8rem;
+  }
+
+  .replace-slot-layout__telco {
+    min-height: 10rem;
+  }
+
+  .replace-slot-page-root {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 540px) {
+  .replace-slot-page--media-demo {
+    overflow-y: auto;
+  }
+
+  .replace-slot-page__media-stage {
+    min-height: 18rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(8rem, 1fr));
+  }
+}

@@ -28,7 +28,7 @@ export {
   validatePolygonAction,
   validatePolygonInitial,
 } from './polygon'
-export { TagComponent, sanitizeTagInitial, validateTagInitial } from './tag'
+export { TagComponent, sanitizeTagInitial, validateTagAction, validateTagInitial } from './tag'
 export {
   ForeignContentComponent,
   SlotComponent,
@@ -50,7 +50,7 @@ export type {
   InputState,
   ResolvedInputState,
 } from './input'
-export type { MediaAction, MediaInitial, MediaPartState, MediaState, MediaTag, MediaTransition } from './media'
+export type { MediaAction, MediaInitial, MediaPartState, MediaReplace, MediaState, MediaTag, MediaTransition } from './media'
 export type {
   PolygonAction,
   PolygonCompiledMorphOptions,
@@ -69,9 +69,17 @@ export type {
   ForeignContentSurface,
   InputComponentSurface,
   MediaComponentSurface,
+  ReplaceCellGridSettings,
   ReplaceComponentSurface,
+  ReplaceMotionProfile,
+  ReplaceMotionProperties,
+  ReplaceMediaPresentationProfile,
   ReplacePresentationSession,
+  ReplaceStaggerPattern,
   ReplaceTransition,
+  SlotReplaceProfile,
+  SlotReplaceShape,
+  SlotReplaceTransition,
   RuntimeComponentSurfaceKey,
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,
@@ -86,6 +94,8 @@ export type {
   SlotState,
 } from './slot'
 export type { TagAction, TagInitial, TagState } from './tag'
+export { TextComponent, sanitizeTextInitial, validateTextAction, validateTextInitial } from './text'
+export type { TextAction, TextInitial, TextReplace, TextState } from './text'
 export {
   clampProgress,
   createPolygonVertices,

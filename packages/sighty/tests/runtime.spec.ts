@@ -88,7 +88,7 @@ function createGatewayMenuScene(): SceneDoc<string> {
             attr: { id: 'gateway-menu-root' },
             move: '@root',
           },
-          actions: { 'runtime:set-content': null },
+          actions: { 'runtime:set-content': {} },
         }],
       },
     },

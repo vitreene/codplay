@@ -54,6 +54,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     sourceAdapterFactories: options.sourceAdapterFactories,
   })
   let stopResizeObservation = (): void => undefined
+
   try {
     const init = runner.init()
     if (init.ok) {

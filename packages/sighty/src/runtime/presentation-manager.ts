@@ -27,7 +27,7 @@ export class RuntimePresentationManager<SceneKey extends string, SlotName extend
     this.state = state
   }
 
-  /** Resolves one logical selection into a CodPlay mount request. */
+  /** Resolves one logical selection, preferring its profile over the host default. */
   resolveMount(selection: ActiveSelection<SceneKey, SlotName>): ResolvedMount {
     const slot = this.state.viewIndex.slotsByAddress.get(selection.slotAddress)
     if (slot === undefined) throw new Error(`Le slot Sighty ${selection.slotName} est absent de l’index.`)
@@ -49,6 +49,7 @@ export class RuntimePresentationManager<SceneKey extends string, SlotName extend
 
     const child = this.state.instances.get(occurrenceKeyForSelection(selection))
     if (child === undefined) throw new Error(`L’instance enfant ${selection.sceneKey} est absente.`)
+    const replace = selection.entry.view.replace ?? resolution.entry.replace
     return {
       host: {
         instanceId: layoutInstance.instanceId,
@@ -56,7 +57,7 @@ export class RuntimePresentationManager<SceneKey extends string, SlotName extend
         persoId: resolution.entry.persoId,
       },
       childInstanceId: child.instanceId,
-      ...(resolution.entry.replace === undefined ? {} : { replace: resolution.entry.replace }),
+      ...(replace === undefined ? {} : { replace }),
     }
   }
 

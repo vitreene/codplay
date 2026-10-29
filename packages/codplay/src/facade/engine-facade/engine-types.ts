@@ -1,4 +1,5 @@
 import type { ForeignContentSurface } from '../../runtime/components'
+import type { RuntimeExternalPresentationHandle } from '../../runtime/engine'
 import type { Ticker } from '../../runtime/time'
 import type {
   CodPlayComponents,
@@ -36,6 +37,7 @@ export type ManagedInstanceMount = Readonly<{
   childInstanceId: string
   child: ManagedInstance
   surface: ForeignContentSurface
+  presentation?: RuntimeExternalPresentationHandle
 }>
 
 /** Identifies one supported catalog family and its public operation. */
