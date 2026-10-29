@@ -966,6 +966,56 @@ Projet 1 reste ouvert et l’état revient à « Synchronisé ». Les modificati
 temporaires sont retirées. L’interface reste sur 5175, l’API sur 5181 et aucun
 serveur n’est ouvert sur 5173.
 
+## Imports JSON des assets — décision acceptée le 29 octobre 2026
+
+**Statut : En cours — implémentation et vérifications compilateur/HTTP/SSE
+effectuées ; acceptation navigateur en attente.** L'utilisateur demande de
+corriger Elcé pour accepter les imports JSON, puis précise que ce correctif
+doit être appliqué sur `develop`. Les données importées restent dans leur
+fichier JSON canonique ; le cœur CodPlay n'est pas modifié.
+
+Cause : `@remix-run/assets` 0.8.0 refuse les dépendances `.json` avec
+`IMPORT_NOT_SUPPORTED`. Ce défaut a été révélé par le nouvel import de
+`replace-preset-config.ts` dans une branche CodPlay distincte ; l'acceptation
+sur `develop` utilise des fixtures JSON autonomes.
+
+- Étendre `scripts.loaders` dans le serveur d'assets existant : analyser les
+  imports locaux JSON, valider leurs données et les convertir en modules ESM
+  embarqués. Préserver l'identité d'un fichier entre ses consommateurs.
+- Appliquer aux JSON les mêmes règles `allowFiles` et `denyFiles` que celles
+  des sources navigateur, y compris après résolution des liens symboliques.
+- Raccorder les dépendances JSON au canal HMR existant : changement,
+  suppression ou recréation invalident les consommateurs et rechargent
+  l'onglet. Libérer le suivi avec le canal, sans second watcher ni horloge.
+- Préserver les circuits auteur, API, données et runtime CodPlay. Les parcours
+  Play/Seek/resize ne changent pas ; l'acceptation porte sur la compilation,
+  l'évaluation et l'actualisation des modules importés.
+- Acceptation : fixtures autonomes pour les valeurs JSON, l'identité des
+  modules, les imports/reexports, les erreurs et accès interdits ; véritable
+  serveur d'assets avec invalidation HMR ; démarrage Elcé, chargement auteur
+  et popup, typecheck, tests et build.
+
+Configuration MCP relue et inventaire de session inspecté : Brave est activé
+et exposé ; Firefox est désactivé. L'accès Brave a rencontré un profil occupé,
+une reconnexion avec disparition de la page isolée, puis des timeouts de
+`new_page`, même sur `about:blank`. Aucun navigateur de l'autre agent n'a été
+arrêté. Le rendu auteur/popup et le rechargement dans l'onglet restent à vérifier
+lorsque cet accès sera utilisable.
+
+Preuves sur `develop`, le 29 octobre 2026 : serveur réel sur 5195, API sur 5196
+et données de validation dans un répertoire temporaire indépendant. Un JSON
+temporaire importé par l'entrée navigateur avant démarrage passe de la révision
+1 à 2 dans le module HTTP compilé ; le canal SSE réel émet
+`{"type":"browser:reload"}`. La fixture et son import sont retirés après le
+contrôle. Les 16 tests ciblés JSON passent, dont le cas production sans HMR.
+Le comportement vérifié est décrit dans la
+[spécification Remix](../specs/remix-spa-spec.md#imports-json-locaux).
+Typecheck et build passent, avec l'avertissement de bundle supérieur
+à 500 kB. La suite complète compte 254 succès sur 261 tests et sept échecs
+dans `elce-player-composition.test.ts` (titres/navigation), dont les modules
+ne passent pas par le serveur d'assets modifié. Aucun contournement du lecteur
+n'est ajouté ; ces résultats ne certifient pas son intégration complète.
+
 ## Évaluation initiale — BDC insérables dans le flux d’une Section
 
 Le stockage au catalogue et l’insertion dans le texte sont deux capacités

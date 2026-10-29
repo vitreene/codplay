@@ -8,6 +8,7 @@ import { createRouter } from 'remix/router'
 import { createRequestListener } from 'remix/node-fetch-server'
 import { DEFAULT_ELCE_API_ORIGIN, ELCE_API_PORT } from '../config/api-config'
 import { createElceHttpServer } from './elce-http-server'
+import { createJsonModuleLoader } from './json-assets/json-module-loader'
 
 const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const MONOREPO_ROOT = resolve(ELCE_PACKAGE_ROOT, '../..')
@@ -57,6 +58,16 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
 
   const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development'
   const enableHmr = isDevelopment && process.env.REMIX_NODE_HMR === '1'
+  const allowFiles = [
+    'packages/elce/src/**',
+    'packages/codplay/src/**',
+    'packages/sighty/src/**',
+    'packages/authoring/component-v2/src/**',
+    'packages/authoring/scene-factory/src/**',
+    'packages/authoring/capsule-automation/src/**',
+  ]
+  const denyFiles = ['packages/elce/src/**/*.test.*', 'packages/elce/src/server/**']
+  const jsonModules = createJsonModuleLoader({ rootDirectory: MONOREPO_ROOT, allowFiles, denyFiles })
   const assets = createAssetServer({
     rootDir: MONOREPO_ROOT,
     basePath: ASSET_BASE_PATH,
@@ -69,23 +80,16 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       capsuleAutomation: 'packages/authoring/capsule-automation/src',
       vendor: 'node_modules',
     },
-    allowFiles: [
-      'packages/elce/src/**',
-      'packages/codplay/src/**',
-      'packages/sighty/src/**',
-      'packages/authoring/component-v2/src/**',
-      'packages/authoring/scene-factory/src/**',
-      'packages/authoring/capsule-automation/src/**',
-    ],
-    denyFiles: ['packages/elce/src/**/*.test.*', 'packages/elce/src/server/**'],
+    allowFiles,
+    denyFiles,
     allowPackages: BROWSER_PACKAGES,
     hmr: enableHmr
       ? {
-          channel: createReloadingBrowserHmrChannel,
+          channel: () => createReloadingBrowserHmrChannel(jsonModules),
           moduleImporter: 'remix/multiple-import-maps-polyfill',
         }
       : undefined,
-    scripts: { loaders: enableHmr ? [uiHmr()] : undefined },
+    scripts: { loaders: [jsonModules.load, ...(enableHmr ? [uiHmr()] : [])] },
     sourceMaps: isDevelopment ? 'external' : undefined,
     minify: !isDevelopment,
     watch: enableHmr ? { poll: true, pollInterval: 250 } : false,
@@ -155,9 +159,9 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
 }
 
 /** Routes Remix asset changes through the existing channel as browser reloads. */
-async function createReloadingBrowserHmrChannel() {
+async function createReloadingBrowserHmrChannel(jsonModules: ReturnType<typeof createJsonModuleLoader>) {
   const { createBrowserHmrChannel } = await import('remix/node-hmr/runtime')
-  const channel = await createBrowserHmrChannel()
+  const channel = jsonModules.wrapHmrChannel(await createBrowserHmrChannel())
   return {
     url: channel.url,
     close: () => channel.close(),
