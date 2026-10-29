@@ -1,5 +1,5 @@
 import type { Actor } from 'xstate'
-import { BDC_LOCATION, CHAPTER_TYPE, PAGE_TYPE } from '../../config/document-config'
+import { BDC_LOCATION, CHAPTER_TYPE, MEDIA_TYPE, PAGE_TYPE } from '../../config/document-config'
 import type { CatalogTabType, EvaluationRetryScope, PageType } from '../../config/document-config-types'
 import {
   createChapterCommand,
@@ -13,7 +13,13 @@ import {
   createStatisticalGraphBdcCommand,
   createStatisticalGraphCarouselBdcCommand,
 } from '../../domain/commands/document-commands'
-import type { DocumentCommand, PagePlacement } from '../../domain/commands/document-command-types'
+import type {
+  AppearanceProperty,
+  AppearanceTarget,
+  AppearanceTargetForProperty,
+  DocumentCommand,
+  PagePlacement,
+} from '../../domain/commands/document-command-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import { createStableId, type ElceDocument } from '../../domain/document/document-model'
 import type { Bdc, BdcId, ChapterId, PageId, RevelationTransitionDefaults } from '../../domain/document/document-types'
@@ -21,10 +27,14 @@ import type { ElceSectionChange, ElceAnchorDropTarget } from '../../domain/ancho
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { QuestionContent } from '../../domain/question/question-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
+import type { ProfileDefinition, SummarySettings } from '../../domain/summary-profile/summary-profile-types'
+import type { AppearanceSettings } from '../../config/appearance/appearance-types'
 import type { ElceMediaImport } from '../../domain/media/media-resource-types'
+import { ElceMediaResourceService, mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ProjectSessionOperation } from '../projects/project-session-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { ElceAnchorDropFacade } from './anchor/anchor-drop-facade'
+import type { SectionChangeSelection } from './anchor/anchor-drop-facade'
 import { ElceCardFacade } from './card/card-facade'
 import type { ElceCardEditorActions } from './card/card-facade-types'
 import { ElceCarouselFacade, createCarouselBdcId } from './carousel/carousel-facade'
@@ -42,18 +52,24 @@ export class EditorActionsFacade {
   private readonly carouselFacade: ElceCarouselFacade
   private readonly questionFacade: ElceQuestionFacade
   private readonly statisticalGraphFacade: StatisticalGraphFacade
+  private readonly mediaResourceService = new ElceMediaResourceService()
 
   public constructor(controller: Actor<typeof controllerMachine>) {
     this.controller = controller
     const dispatch = (command: DocumentCommand): void => {
-      this.controller.send({ type: 'document.apply', command })
+      this.apply(command)
     }
     const importCardMedia = (bdcId: BdcId, mediaImport: ElceMediaImport): void => {
       this.controller.send({ type: 'card.media.file.import', bdcId, file: mediaImport.file, media: mediaImport.media })
     }
 
     this.anchorFacade = new ElceAnchorDropFacade({
-      dispatch: (sectionBdcId, change) => this.controller.send({ type: 'section.change', sectionBdcId, change }),
+      dispatch: (sectionBdcId, change, selection) => this.controller.send({
+        type: 'section.change', sectionBdcId, change,
+        historyGroupKey: change.kind === 'content' ? focusedTextFieldKey(`section:${sectionBdcId}`) ?? undefined : undefined,
+        selectionBefore: selection?.before,
+        selectionAfter: selection?.after,
+      }),
     })
     this.cardFacade = new ElceCardFacade({ dispatch, importMedia: importCardMedia })
     this.carouselFacade = new ElceCarouselFacade({
@@ -78,6 +94,21 @@ export class EditorActionsFacade {
     this.controller.send({ type: 'project.operation', operation })
   }
 
+  /** Undoes the most recent accepted document gesture in the controller. */
+  public undo(): void {
+    this.controller.send({ type: 'history.undo' })
+  }
+
+  /** Replays the next gesture from the controller's Redo branch. */
+  public redo(): void {
+    this.controller.send({ type: 'history.redo' })
+  }
+
+  /** Cancels only the active file preparation, leaving document history intact. */
+  public cancelImport(): void {
+    this.controller.send({ type: 'import.cancel' })
+  }
+
   /** Starts the server-owned project list and restores this tab's selection. */
   public bootstrapProjects(rememberedProjectId: string | null): void {
     this.manageProjects({ kind: 'bootstrap', rememberedProjectId })
@@ -91,6 +122,26 @@ export class EditorActionsFacade {
   /** Creates a new project and opens it after server creation succeeds. */
   public createProject(): void {
     this.manageProjects({ kind: 'create' })
+  }
+
+  /** Starts an independent project from the confirmed document on screen. */
+  public saveAs(name: string): void {
+    this.manageProjects({ kind: 'save-as', name })
+  }
+
+  /** Preserves an unpublished local revision as a distinct project. */
+  public saveLocalAs(name: string): void {
+    this.manageProjects({ kind: 'save-local-as', name })
+  }
+
+  /** Rechecks a waiting project's server revision and editing right. */
+  public retryProjectAccess(): void {
+    this.controller.send({ type: 'project.access.retry' })
+  }
+
+  /** Takes the temporary emergency path to replace another page's edit grant. */
+  public forceProjectAccess(): void {
+    this.controller.send({ type: 'project.access.force' })
   }
 
   /** Opens a selected project after the current project is confirmed saved. */
@@ -229,6 +280,49 @@ export class EditorActionsFacade {
     this.apply({ type: 'chapter.evaluation.settings.update', chapterId, attemptLimit, retryScope })
   }
 
+  /** Saves the unique reader-facing summary settings through document history. */
+  public updateSummarySettings(summary: SummarySettings): void {
+    this.apply({ type: 'summary.settings.update', summary })
+  }
+
+  /** Imports an image through the shared persisted-media change pipeline for the Sommaire background. */
+  public importSummaryBackgroundFile(file: File): void {
+    const mediaImport = this.mediaResourceService.createImport(file)
+    if (mediaImport === null || mediaTypeFromMimeType(mediaImport.media.mimeType) !== MEDIA_TYPE.IMAGE) return
+    this.controller.send({ type: 'summary.media.file.import', file: mediaImport.file, media: mediaImport.media })
+  }
+
+  /** Saves profile fields and constraints through document history. */
+  public updateProfileDefinition(profile: ProfileDefinition): void {
+    this.apply({ type: 'profile.definition.update', profile })
+  }
+
+  /** Sets one explicit appearance value through the document history. */
+  public setAppearanceProperty<Property extends AppearanceProperty>(
+    target: AppearanceTargetForProperty<Property>,
+    property: Property,
+    value: NonNullable<AppearanceSettings[Property]>,
+  ): void {
+    if (property === 'background') {
+      this.apply({ type: 'appearance.background.set', target, value: value as NonNullable<AppearanceSettings['background']> })
+      return
+    }
+    this.apply({ type: 'appearance.property.set', target, property, value } as DocumentCommand)
+  }
+
+  /** Applies a suggested heading/body font combination as one document command. */
+  public setAppearanceTypography(target: AppearanceTarget, headingFontId: string, bodyFontId: string): void {
+    this.apply({ type: 'appearance.typography.set', target, headingFontId, bodyFontId })
+  }
+
+  /** Removes one explicit appearance value so it inherits from its context. */
+  public resetAppearanceProperty<Property extends AppearanceProperty>(
+    target: AppearanceTargetForProperty<Property>,
+    property: Property,
+  ): void {
+    this.apply({ type: 'appearance.property.reset', target, property } as DocumentCommand)
+  }
+
   /** Saves both outcomes of a Result BDC. */
   public updateEvaluationResult(bdcId: BdcId, evaluationResult: EvaluationResultContent): void {
     this.apply({ type: 'bdc.evaluation-result.update', bdcId, evaluationResult })
@@ -285,8 +379,8 @@ export class EditorActionsFacade {
   }
 
   /** Sends a Section transaction through the existing XState anchor event. */
-  public submitSectionChange(sectionBdcId: BdcId, change: ElceSectionChange): void {
-    this.anchorFacade.submitSectionChange(sectionBdcId, change)
+  public submitSectionChange(sectionBdcId: BdcId, change: ElceSectionChange, selection?: SectionChangeSelection): void {
+    this.anchorFacade.submitSectionChange(sectionBdcId, change, selection)
   }
 
   /** Creates Question editor callbacks for one current BDC. */
@@ -330,6 +424,15 @@ export class EditorActionsFacade {
 
   /** Applies one existing document command through the controller actor. */
   private apply(command: DocumentCommand): void {
-    this.controller.send({ type: 'document.apply', command })
+    this.controller.send({ type: 'document.apply', command, historyGroupKey: focusedTextFieldKey(`command:${command.type}`) ?? undefined })
   }
+}
+
+/** Identifies a native text field or Tiptap surface for short typing groups. */
+function focusedTextFieldKey(prefix: string): string | null {
+  if (typeof document === 'undefined') return null
+  const active = document.activeElement
+  if (!(active instanceof HTMLElement) || active.id === '') return null
+  if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active.isContentEditable)) return null
+  return `${prefix}:${active.id}`
 }

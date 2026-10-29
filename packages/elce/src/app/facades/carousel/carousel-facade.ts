@@ -1,4 +1,4 @@
-import { CAROUSEL_CONFIG, CARD_LAYOUT_IDS, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../../config/document-config'
+import { CAROUSEL_CONFIG, CARD_LAYOUT_IDS, DEFAULT_PRESET_ID } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
 import { createCardBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
 import type { ElceCarouselEditorActions, ElceCarouselFacadeOptions } from './carousel-facade-types'
@@ -30,7 +30,7 @@ export class ElceCarouselFacade {
     bdcId: BdcId,
     content: CarouselContent,
     cards: readonly Bdc[],
-    revelationDefaults: RevelationTransitionDefaults = DEFAULT_PROJECT_REVELATION,
+    revelationDefaults: RevelationTransitionDefaults,
   ): ElceCarouselEditorActions {
     const updateCarousel = (carousel: CarouselContent): void => this.dispatch({ type: 'bdc.carousel.update', bdcId, carousel })
     const updateCarouselFrom = (transform: (current: CarouselContent) => CarouselContent): void => updateCarousel(transform(content))

@@ -16,9 +16,13 @@ un registre de ressources et un registre d'instances. Les options `engine`
 composent les définitions initiales des familles `components`, `services`,
 `modules` et `libraries`. Les registres publics `codplay.components`,
 `codplay.services`, `codplay.modules` et `codplay.libraries` partagent ce même
-catalogue ; `register` et `override` sont disponibles jusqu'au premier `build`
-ou `instances.create`. Ensuite, la composition est verrouillée. Une opération
-de registre refusée renvoie son résultat structuré et publie un diagnostic.
+catalogue ; `register` et `override` sont disponibles jusqu'au premier `build`,
+`instances.create` ou `load()`. `load()` verrouille les registres publics dès
+l'appel, avant son travail asynchrone. Ensuite, la composition auteur est
+verrouillée. Une opération de registre refusée renvoie son résultat structuré
+et publie un diagnostic. Un paquet de scène ne modifie pas le catalogue ; les
+composants et bibliothèques tiers nécessaires doivent déjà être configurés dans
+l'engine partagé avant `load()`.
 Les options `htmlHost` relient les sources propres au navigateur sans les
 inscrire dans le catalogue de modules.
 
@@ -58,6 +62,76 @@ Le
 Le [test de façade](../tests/facade/facade.spec.ts) et le
 [test de transfert média](../tests/facade/media-preload-handoff.spec.ts) les
 exercent.
+
+### Chargement d'un paquet de scène
+
+`await player.prepare(scenePath, { root, cssSlot? })` valide un paquet et rend
+son compilé, ses fonctions, ses ressources et son CSS disponibles sans créer
+d'occurrence. Il utilise le même owner, moteur, preload et registre de ressources
+que `load()`. Le résultat fournit les données nécessaires à
+`instances.create()` ; si l'intégration choisit un `cssSlot`, elle en garde la
+libération. Cette préparation permet à un runtime intégrateur de contrôler
+séparément le moment de création de ses occurrences.
+
+`await player.load(scenePath, { root })` charge une occurrence d'un paquet
+média, CSS, fontes locales et fonctions auteur, avec feuille et module de
+fonctions optionnels. `load()` réutilise `prepare()` puis crée et retourne son
+`CodPlayInstance` après préparation.
+`root` est un sélecteur CSS ou un
+`HTMLElement`. `load()` réutilise le moteur, le service de preload,
+l'enregistrement des ressources et le registre d'instances de ce même
+propriétaire. Le CSS passe par le canal `preload.css.set()` existant : il est
+installé dans le `head`, scoped au `root` et retiré quand l'occurrence est
+détruite. Avant la création, `load()` vérifie les `@font-face` du manifeste et
+attend leur chargement effectif ; une face absente ou en échec rejette l'appel.
+Les stratégies de preload tierces sont fournies par l'intégration configurée
+sur le même owner, comme les définitions correspondantes ; le paquet scène ne
+les ajoute pas.
+`load()` ne démarre pas la lecture ; l'appelant utilise ensuite
+`await instance.telco.play()`. Plusieurs chargements retournent des instances
+distinctes. Elles partagent l'engine du propriétaire : une avance de son
+horloge fait avancer les occurrences actives ; `pause`, `seek` et la destruction
+d'une occurrence ne stoppent ni ne déplacent les autres. Le test du chargeur et
+le test d'acceptance du paquet vérifient ce parcours. La démo de diffusion
+conservée vérifie une occurrence qui combine Rive et Three.js. Les familles et
+les critères de disponibilité certifiés sont délimités par la
+[spécification du paquet de scène](./scene-package-export-v1-spec.md).
+
+### Identité des hosts HTML tiers
+
+Une intégration qui fournit un host HTML doit employer l'unique
+`BaseHTMLComponent` exporté par le même module `codplay` que celui qui construit
+l'owner. `HtmlComponentMaterializer` reconnaît cette frontière par
+`instanceof BaseHTMLComponent` ; si le bundle d'intégration embarque une seconde
+copie de CodPlay, son host n'est pas matérialisable. Le bundle du site doit donc
+laisser `codplay` externe et résoudre son import vers le fichier du player déjà
+chargé. Les hosts spécialisés Rive et Three restent des classes distinctes,
+mais héritent de cette même classe de base. Une intégration qui étend
+`TagComponent` importe cette classe depuis l'entrée racine publique `codplay`,
+comme `BaseHTMLComponent`, afin que sa chaîne d'héritage utilise la classe que
+le player reconnaît. `TagComponent`, `sanitizeTagInitial` et
+`validateTagInitial` sont exportés par cette entrée ; un import de
+`codplay/runtime/components` peut sinon être embarqué dans le bundle d'engine
+comme une seconde copie. La recette Safari de diffusion Sighty Demo 5 confirme
+la matérialisation du scrollport dans ce montage séparé. L'acceptance navigateur R9 du
+[plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r9--composants-fournis-par-lengine)
+vérifie leur matérialisation et une seule URL player.
+
+Si le manifeste déclare `scene/functions.mjs`, `load()` l'importe et crée le
+contexte de fonctions/straps vérifié avant `instances.create()`. Un même
+propriétaire et une même URL canonique de paquet partagent ce contexte entre
+leurs occurrences ; les propriétaires différents ont des closures isolées.
+Le contexte est libéré par `codplay.destroy()`. Le navigateur vérifie
+l'exécution de `scene.onStart` après `instance.telco.play()` ainsi qu'un clic
+DOM traversant un transform de story, un strap externe de story, un événement
+transformé vers la portée scène et un strap externe de scène. Les deux sorties
+publiques arrivent dans `instance.events.onEvent`. La preuve couvre cette
+verticale ; les autres callbacks, capture, Seek et replay restent au
+[plan d'export R8](../plan/2026-10-15-export-diffusion-plan.md#r8--fonctions-codplay-et-imports).
+Les suites
+[`scene-package-loader.spec.ts`](../tests/facade/scene-package-loader.spec.ts)
+et [`cli.spec.mjs`](../tools/scene-export/tests/cli.spec.mjs) vérifient le
+transport, les références et les portées de ces contextes.
 
 `codplay.instances.get`, `destroy` et `mount` sont les opérations publiques du
 registre. `mount` adresse un perso hôte `slot` dans une instance et y attache

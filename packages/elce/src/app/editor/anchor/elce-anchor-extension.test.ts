@@ -37,8 +37,8 @@ describe('Elcé anchor extension', () => {
     expect(html).toContain('data-elce-anchor="true"')
     expect(html).toContain('data-bdc-id="bdc-image-1"')
     expect(html).toContain('data-part="page-a:bdc-image-1:anchor"')
-    expect(html).toContain('--elce-anchor-padding: 12rem')
-    expect(html).toContain('padding-bottom: calc(1lh + 1rem + 1rem + 12rem)')
+    expect(html).toContain('--elce-anchor-padding: 75%')
+    expect(html).toContain('padding-bottom: calc(75% + (1lh + 2rem + 2rem))')
     expect(html).toContain('vertical-align: top')
     expect(html).not.toContain('margin-inline-end')
     expect(html).not.toContain('data-media-id')
@@ -80,13 +80,13 @@ describe('Elcé anchor extension', () => {
     expect(anchor?.classList.contains('elce-anchor-placeholder')).toBe(true)
     expect(anchor?.getAttribute('style')).toContain('width: 0px')
     expect(anchor?.querySelector('.elce-anchor-bdc')).not.toBeNull()
-    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 12rem')
-    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(1lh + 1rem + 1rem + 12rem)')
+    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 75%')
+    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(75% + (1lh + 2rem + 2rem))')
     expect(anchor?.getAttribute('style')).toContain('vertical-align: top')
     expect(anchor?.getAttribute('style')).not.toContain('margin-inline-end')
     expect(anchor?.getAttribute('style')).toContain('anchor-name: --anchor-page-a-bdc-image-1-anchor')
     expect(anchor?.querySelector('.elce-anchor-bdc')?.getAttribute('style')).toContain('position-anchor: --anchor-page-a-bdc-image-1-anchor')
-    expect(anchor?.querySelector('.elce-anchor-bdc')?.getAttribute('style')).toContain('inset-block-start: calc((1lh + 1rem) + anchor(top))')
+    expect(anchor?.querySelector('.elce-anchor-bdc')?.getAttribute('style')).toContain('inset-block-start: calc((1lh + 2rem) + anchor(top))')
     expect(anchor?.querySelector('.elce-anchor-handle')?.getAttribute('draggable')).toBe('true')
     expect(anchor?.querySelector('.elce-anchor-handle')?.parentElement).toBe(anchor)
     expect(anchor?.querySelector('.elce-anchor-bdc')?.querySelector('.elce-anchor-handle')).toBeNull()
@@ -116,6 +116,40 @@ describe('Elcé anchor extension', () => {
     expect(placeholder?.querySelector('.elce-anchor-bdc img.elce-anchor-media-preview')?.getAttribute('src')).toBe('blob:image-1')
   })
 
+  it('replaces a legacy video reservation with the configured 16:9 block ratio', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: { mediaId: 'media-video-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        layoutId: DEFAULT_PRESET_ID.PHOTO,
+        media: { source: 'blob:video-1', type: 'video' },
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'elceAnchor',
+            attrs: { bdcId: 'bdc-video-1', partId: 'page-a:bdc-video-1:anchor', paddingBottom: '12rem' },
+          }],
+        }],
+      },
+    })
+    editor.mount(host)
+
+    await vi.waitFor(() => expect(editor?.getJSON()).toMatchObject({
+      content: [{ content: [{ attrs: { paddingBottom: '56.25%' } }] }],
+    }))
+
+    const anchor = host.querySelector('.elce-anchor')
+    const preview = host.querySelector('.elce-anchor-bdc')
+    expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 56.25%')
+    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(56.25% + (1lh + 2rem + 2rem))')
+    expect(preview?.getAttribute('style')).toContain('aspect-ratio: 16 / 9')
+    expect(preview?.querySelector('video.elce-anchor-media-preview')?.getAttribute('src')).toBe('blob:video-1')
+  })
+
   it('gives an anchored Graph table natural height and reserves its text width', () => {
     const host = document.createElement('div')
     document.body.append(host)
@@ -139,7 +173,7 @@ describe('Elcé anchor extension', () => {
     const anchor = host.querySelector('.elce-anchor-placeholder')
     const graphPreview = anchor?.querySelector('.elce-anchor-bdc')
     expect(anchor?.getAttribute('style')).toContain('--elce-anchor-padding: 100%')
-    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(100% + (1lh + 1rem + 1rem))')
+    expect(anchor?.getAttribute('style')).toContain('padding-bottom: calc(100% + (1lh + 2rem + 2rem))')
     expect(graphPreview?.getAttribute('style')).not.toContain('aspect-ratio: 16 / 9')
     expect(graphPreview?.querySelector('.elce-statistical-graph--table table')).not.toBeNull()
   })
@@ -171,10 +205,10 @@ describe('Elcé anchor extension', () => {
     editor.mount(host)
 
     const preview = host.querySelector('.elce-anchor-bdc article.elce-card--text-short')
-    expect(preview?.querySelector('.elce-card-text-short__overline')?.textContent).toBe('Citation')
-    expect(preview?.querySelector('.elce-card-text-short__title')?.textContent).toBe('Un titre')
-    expect(preview?.querySelector('.elce-card-text-short__message')?.textContent).toBe('Texte cité')
-    expect(preview?.querySelector('.elce-card-text-short__note')?.textContent).toBe('Source')
+    expect(preview?.querySelector('.elce-card__overline')?.textContent).toBe('Citation')
+    expect(preview?.querySelector('.elce-card__title')?.textContent).toBe('Un titre')
+    expect(preview?.querySelector('.elce-card__message')?.textContent).toBe('Texte cité')
+    expect(preview?.querySelector('#bdc-text-1-anchor-preview-note')?.textContent).toBe('Source')
   })
 
   it('renders the existing Text with image layout, its content, and its compatible media', () => {
@@ -205,8 +239,8 @@ describe('Elcé anchor extension', () => {
 
     const preview = host.querySelector('.elce-anchor-bdc article.elce-card--text-image')
     expect(preview?.classList.contains('elce-carousel-view--image-right')).toBe(true)
-    expect(preview?.querySelector('.elce-card-text-image__title')?.textContent).toBe('Titre')
-    expect(preview?.querySelector('.elce-card-text-image__message')?.textContent).toBe('Message')
+    expect(preview?.querySelector('.elce-card__title')?.textContent).toBe('Titre')
+    expect(preview?.querySelector('.elce-card__message')?.textContent).toBe('Message')
     const image = preview?.querySelector('.elce-carousel-text-image__image img')
     expect(image?.getAttribute('src')).toBe('blob:image-1')
     expect(image?.classList.contains('elce-anchor-card-media-preview--contain')).toBe(true)
@@ -239,8 +273,44 @@ describe('Elcé anchor extension', () => {
     editor.mount(host)
 
     const preview = host.querySelector('.elce-anchor-bdc article.elce-card--image-caption')
-    expect(preview?.querySelector('.elce-card-image-caption__caption')?.textContent).toBe('Légende')
+    expect(preview?.querySelector('.elce-card__caption')?.textContent).toBe('Légende')
     expect(preview?.querySelector('.elce-card-image-caption__image img')?.getAttribute('src')).toBe('blob:image-2')
+  })
+
+  it('renders the image-title card with its inherited appearance scope', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    editor = new Editor({
+      extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
+        content: {
+          mediaId: 'media-cover',
+          overline: '',
+          title: 'Titre centré',
+          description: '',
+          message: '',
+          note: '',
+          caption: '',
+          imagePosition: CAROUSEL_IMAGE_POSITION.CENTER,
+          imageFit: CARD_IMAGE_FIT.COVER,
+        },
+        layoutId: DEFAULT_PRESET_ID.IMAGE_TITLE,
+        media: { source: 'blob:cover-image', type: 'image' },
+        appearanceClassName: 'bdc card-image-title appearance-cover has-background density-normal',
+        appearanceStyleSheet: '.appearance-cover.card-image-title.has-background { background-image: linear-gradient(135deg, #234, #567); }',
+      }) })],
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'bdc-image-title', partId: 'page-a:bdc-image-title:anchor' } }] }],
+      },
+    })
+    editor.mount(host)
+
+    const preview = host.querySelector('.elce-anchor-bdc article.elce-card--image-title')
+    expect(preview?.classList.contains('appearance-cover')).toBe(true)
+    expect(preview?.querySelector('.elce-card__title')?.textContent).toBe('Titre centré')
+    expect(preview?.querySelector('.elce-card__image img')?.getAttribute('src')).toBe('blob:cover-image')
+    expect(preview?.querySelector('#bdc-image-title-anchor-preview-appearance-style')?.textContent)
+      .toContain('linear-gradient(135deg, #234, #567)')
   })
 
   it('creates an image anchor from one external file drop', () => {

@@ -35,6 +35,7 @@ export type ScrollObservationEmission = Readonly<{
   persoId: string
   storyId: string
   phase: ScrollObservationPhase
+  initial: boolean
   event: CompiledScrollObservationEvent
 }>
 

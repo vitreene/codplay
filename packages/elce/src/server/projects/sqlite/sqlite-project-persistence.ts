@@ -1,6 +1,8 @@
 import { rawSql } from 'remix/data-table'
+import { randomUUID } from 'node:crypto'
 import type { Database, DataManipulationResult } from 'remix/data-table'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
+import { PROJECT_EDIT_LEASE_MS } from '../../../config/api-config'
 import {
   BDC_TYPE,
   CHAPTER_TYPE,
@@ -18,11 +20,14 @@ import type {
   RichTextDocument,
 } from '../../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
+import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../../../domain/summary-profile/test-state-types'
+import type { AppearanceSettings } from '../../../config/appearance/appearance-types'
 import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/commands/document-commands'
 import { ElceDocument } from '../../../domain/document/document-model'
-import type { ProjectPersistence, ProjectSummary, StoredProject } from '../project-persistence'
+import type { AcquireProjectEditResult, DeleteProjectResult, EditProjectResult, ProjectEditGrant, ProjectPersistence, ProjectSummary, StoredProject } from '../project-persistence'
 import type {
   CreateProjectResult,
+  SaveProjectTestStateResult,
   SaveProjectDocumentResult,
 } from '../project-persistence'
 import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from '../../media/media-persistence'
@@ -49,6 +54,65 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   /** Creates the repository around an already migrated Remix SQLite database. */
   public constructor(database: SqliteDatabase) {
     this.database = database
+  }
+
+  /** Reserves one project atomically and reuses a live grant for the same page. */
+  public async acquireEditAccess(projectId: string, pageId: string, force = false): Promise<AcquireProjectEditResult> {
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction,
+        'SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ?', [projectId])
+      const row = rows[0]
+      if (row === undefined) return { kind: 'not-found' }
+      const owner = nullableText(row, 'edit_page_id')
+      const currentGrant = nullableText(row, 'edit_grant_id')
+      const expiresAt = nullableNumber(row, 'edit_lease_expires_at')
+      const now = Date.now()
+      const live = owner !== null && currentGrant !== null && expiresAt !== null && expiresAt > now
+      if (!force && live && owner === pageId) {
+        await queryRows(transaction,
+          'UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ?', [now + PROJECT_EDIT_LEASE_MS, projectId])
+        return { kind: 'granted', grantId: currentGrant, recovered: false }
+      }
+      if (!force && live) return { kind: 'occupied' }
+      const grantId = randomUUID()
+      await queryRows(transaction,
+        'UPDATE projects SET edit_page_id = ?, edit_grant_id = ?, edit_lease_expires_at = ? WHERE project_id = ?',
+        [pageId, grantId, now + PROJECT_EDIT_LEASE_MS, projectId])
+      return { kind: 'granted', grantId, recovered: force || owner !== null }
+    })
+  }
+
+  /** Reports whether the exact page grant still owns a project. */
+  public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    const rows = await queryRows(this.database,
+      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND edit_lease_expires_at > ?',
+      [projectId, grant.pageId, grant.grantId, Date.now()])
+    return rows.length > 0
+  }
+
+  /** Renews a still-live grant atomically and refuses renewal after expiration. */
+  public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    const now = Date.now()
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction, `
+        UPDATE projects SET edit_lease_expires_at = ?
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND edit_lease_expires_at > ?
+        RETURNING project_id
+      `, [now + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId, now])
+      return rows.length > 0
+    })
+  }
+
+  /** Releases only the exact current grant, preserving a later owner's right. */
+  public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    return this.database.transaction(async (transaction) => {
+      const rows = await queryRows(transaction, `
+        UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL, edit_lease_expires_at = NULL
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
+        RETURNING project_id
+      `, [projectId, grant.pageId, grant.grantId])
+      return rows.length > 0
+    })
   }
 
   /** Lists project summaries without loading their content tables. */
@@ -100,8 +164,10 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     expectedSize: number,
     storageKey: string,
     contentSha256: string,
+    grant: ProjectEditGrant,
   ): Promise<StoreMediaFileResult> {
     return this.database.transaction(async (transaction) => {
+      if (await editGrantState(transaction, projectId, grant) !== 'held') return { kind: 'edit-access-lost' }
       const rows = await queryRows(transaction, `
         SELECT size_bytes, storage_key, content_sha256
         FROM media_resources
@@ -138,15 +204,16 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     })
   }
 
-  /** Creates a project from its browser-owned v4 document unless its id already exists. */
+  /** Creates a project from its browser-owned v7 document unless its id already exists. */
   public async createProject(document: ElceDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
       const inserted = await queryRows(transaction, `
         INSERT INTO projects (
           project_id, name, format_version, revision, created_at, updated_at,
-          default_intro_transition_ref, default_outro_transition_ref
-        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+          default_intro_transition_ref, default_outro_transition_ref,
+          summary_json, profile_json, appearance_json
+        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(project_id) DO NOTHING
         RETURNING project_id
       `, [
@@ -157,6 +224,9 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         now,
         document.data.revelationDefaults.intro,
         document.data.revelationDefaults.outro,
+        JSON.stringify(document.data.summary),
+        JSON.stringify(document.data.profile),
+        serializeOptionalJson(document.data.appearance),
       ])
 
       switch (inserted.length) {
@@ -173,10 +243,13 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   }
 
   /** Renames a document through its existing domain command and increments its revision. */
-  public async renameProject(projectId: string, name: string): Promise<ProjectSummary | null> {
+  public async renameProject(projectId: string, name: string, grant: ProjectEditGrant): Promise<EditProjectResult> {
     return this.database.transaction(async (transaction) => {
+      const access = await editGrantState(transaction, projectId, grant)
+      if (access === 'not-found') return { kind: 'not-found' }
+      if (access === 'lost') return { kind: 'edit-access-lost' }
       const stored = await readStoredProject(transaction, projectId)
-      if (stored === null) return null
+      if (stored === null) return { kind: 'not-found' }
 
       const document = applyDocumentCommand(stored.document, { type: 'document.rename', name })
       const updated = await queryRows(transaction, `
@@ -186,21 +259,21 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         RETURNING project_id, name, revision
       `, [document.data.name, new Date().toISOString(), projectId])
 
-      return projectSummaryFromRow(requireRow(updated[0], 'Project update did not return a row'))
+      return { kind: 'updated', project: projectSummaryFromRow(requireRow(updated[0], 'Project update did not return a row')) }
     })
   }
 
   /** Deletes one project and its relational document rows. */
-  public async deleteProject(projectId: string): Promise<boolean> {
+  public async deleteProject(projectId: string, grant: ProjectEditGrant): Promise<DeleteProjectResult> {
     return this.database.transaction(async (transaction) => {
-      const existing = await queryRows(transaction,
-        'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
-      if (existing.length === 0) return false
+      const access = await editGrantState(transaction, projectId, grant)
+      if (access === 'not-found') return 'not-found'
+      if (access === 'lost') return 'edit-access-lost'
 
       await clearDocumentRows(transaction, projectId)
       await queryRows(transaction, 'DELETE FROM media_resources WHERE project_id = ?', [projectId])
       await queryRows(transaction, 'DELETE FROM projects WHERE project_id = ?', [projectId])
-      return true
+      return 'deleted'
     })
   }
 
@@ -209,13 +282,18 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
     projectId: string,
     expectedRevision: number,
     document: ElceDocument,
+    grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult> {
     return this.database.transaction(async (transaction) => {
+      const access = await editGrantState(transaction, projectId, grant)
+      if (access === 'not-found') return { kind: 'not-found' }
+      if (access === 'lost') return { kind: 'edit-access-lost' }
       const now = new Date().toISOString()
       const updated = await queryRows(transaction, `
         UPDATE projects
         SET name = ?, format_version = ?, revision = revision + 1, updated_at = ?,
-            default_intro_transition_ref = ?, default_outro_transition_ref = ?
+            default_intro_transition_ref = ?, default_outro_transition_ref = ?,
+            summary_json = ?, profile_json = ?, appearance_json = ?
         WHERE project_id = ? AND revision = ?
         RETURNING project_id, name, revision
       `, [
@@ -224,6 +302,9 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
         now,
         document.data.revelationDefaults.intro,
         document.data.revelationDefaults.outro,
+        JSON.stringify(document.data.summary),
+        JSON.stringify(document.data.profile),
+        serializeOptionalJson(document.data.appearance),
         projectId,
         expectedRevision,
       ])
@@ -241,19 +322,65 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
       }
     })
   }
+
+  /** Reads the separate author-preview state with its own revision. */
+  public async readTestState(projectId: string): Promise<VersionedProjectTestState | null> {
+    const projects = await queryRows(this.database, 'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+    if (projects.length === 0) return null
+    const rows = await queryRows(this.database,
+      'SELECT revision, state_json FROM project_test_states WHERE project_id = ?', [projectId])
+    const row = rows[0]
+    if (row === undefined) return { state: INITIAL_PROJECT_TEST_STATE, revision: 0 }
+    return {
+      state: parseJsonColumn<ProjectTestState>(row, 'state_json'),
+      revision: numberValue(row, 'revision'),
+    }
+  }
+
+  /** Saves author-preview state with an atomic compare-and-swap revision check. */
+  public async saveTestState(
+    projectId: string,
+    expectedRevision: number,
+    state: ProjectTestState,
+  ): Promise<SaveProjectTestStateResult> {
+    return this.database.transaction(async (transaction) => {
+      const projects = await queryRows(transaction, 'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+      if (projects.length === 0) return { kind: 'not-found' }
+      const rows = await queryRows(transaction,
+        'SELECT revision FROM project_test_states WHERE project_id = ?', [projectId])
+      const currentRevision = rows[0] === undefined ? 0 : numberValue(rows[0], 'revision')
+      if (currentRevision !== expectedRevision) return { kind: 'revision-mismatch' }
+
+      const revision = currentRevision + 1
+      const updatedAt = new Date().toISOString()
+      if (rows[0] === undefined) {
+        await queryRows(transaction, `
+          INSERT INTO project_test_states (project_id, revision, state_json, updated_at)
+          VALUES (?, ?, ?, ?)
+        `, [projectId, revision, JSON.stringify(state), updatedAt])
+      } else {
+        await queryRows(transaction, `
+          UPDATE project_test_states SET revision = ?, state_json = ?, updated_at = ?
+          WHERE project_id = ? AND revision = ?
+        `, [revision, JSON.stringify(state), updatedAt, projectId, expectedRevision])
+      }
+      return { kind: 'saved', value: { state, revision } }
+    })
+  }
 }
 
-/** Reconstructs the project summary and the v4 document from normalized rows. */
+/** Reconstructs the project summary and the v7 document from normalized rows. */
 async function readStoredProject(database: ProjectDatabase, projectId: string): Promise<StoredProject | null> {
   const projectRows = await queryRows(database, `
     SELECT project_id, name, format_version, revision,
-           default_intro_transition_ref, default_outro_transition_ref
+           default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json,
+           appearance_json
     FROM projects WHERE project_id = ?
   `, [projectId])
   if (projectRows.length === 0) return null
 
   const projectRow = projectRows[0]!
-  if (numberValue(projectRow, 'format_version') !== 4) {
+  if (numberValue(projectRow, 'format_version') !== 7) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -263,12 +390,12 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   }
 }
 
-/** Reads the relational records and assembles their ElceDocument v4 value. */
+/** Reads the relational records and assembles their ElceDocument v7 value. */
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<ElceDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
     sectionRows, questionRows, answerRows, resultRows, carouselRows, cardRows,
-    statisticalGraphRows, graphCategoryRows, graphSeriesRows, graphValueRows] = await Promise.all([
+    statisticalGraphRows] = await Promise.all([
     queryRows(database, 'SELECT * FROM chapters WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM pages WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM scenario_entries WHERE project_id = ?', [projectId]),
@@ -283,9 +410,6 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     queryRows(database, 'SELECT * FROM carousels WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM cards WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM statistical_graphs WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM graph_categories WHERE project_id = ? ORDER BY position', [projectId]),
-    queryRows(database, 'SELECT * FROM graph_series WHERE project_id = ? ORDER BY position', [projectId]),
-    queryRows(database, 'SELECT * FROM graph_values WHERE project_id = ?', [projectId]),
   ])
 
   const placementsByBlock = new Map(placementRows.map((row) => [stringValue(row, 'content_block_id'), row]))
@@ -307,19 +431,19 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     carouselsByBlock,
     cardsByBlock,
     statisticalGraphsByBlock,
-    graphCategoryRows,
-    graphSeriesRows,
-    graphValueRows,
     placementRows,
   ))
   const data: ElceDocumentData = {
     id: projectId,
-    version: 4,
+    version: 7,
     name: stringValue(projectRow, 'name'),
+    ...optionalAppearance(projectRow),
     revelationDefaults: {
       intro: stringValue(projectRow, 'default_intro_transition_ref') as ElceDocumentData['revelationDefaults']['intro'],
       outro: stringValue(projectRow, 'default_outro_transition_ref') as ElceDocumentData['revelationDefaults']['outro'],
     },
+    summary: parseJsonColumn(projectRow, 'summary_json'),
+    profile: parseJsonColumn(projectRow, 'profile_json'),
     chapters,
     pages,
     scenarioEntries: scenarioRows
@@ -382,6 +506,7 @@ function pageFromRow(row: SqlRow, scenarioRows: readonly SqlRow[], placementRows
       .filter((placement) => placement.page_id === pageId)
       .sort(byPosition)
       .map((placement) => stringValue(placement, 'content_block_id')),
+    ...optionalAppearance(row),
   }
 }
 
@@ -396,9 +521,6 @@ function bdcFromRows(
   carouselsByBlock: ReadonlyMap<string, SqlRow>,
   cardsByBlock: ReadonlyMap<string, SqlRow>,
   statisticalGraphsByBlock: ReadonlyMap<string, SqlRow>,
-  graphCategoryRows: readonly SqlRow[],
-  graphSeriesRows: readonly SqlRow[],
-  graphValueRows: readonly SqlRow[],
   allPlacementRows: readonly SqlRow[],
 ): Bdc {
   const id = stringValue(row, 'content_block_id')
@@ -409,13 +531,7 @@ function bdcFromRows(
   const carousel = carouselsByBlock.get(id)
   const card = cardsByBlock.get(id)
   const statisticalGraph = statisticalGraphsByBlock.get(id)
-  const statisticalGraphContent = statisticalGraphContentFromRows(
-    id,
-    statisticalGraph,
-    graphCategoryRows,
-    graphSeriesRows,
-    graphValueRows,
-  )
+  const statisticalGraphContent = statisticalGraphContentFromRow(statisticalGraph)
 
   return {
     id,
@@ -423,6 +539,7 @@ function bdcFromRows(
     presetId: stringValue(row, 'preset_id'),
     pageId: nullableText(placement, 'page_id'),
     parentBdcId: nullableText(placement, 'parent_content_block_id'),
+    ...optionalAppearance(row),
     section: section === undefined ? null : {
       title: nullableText(section, 'title') ?? '',
       markup: stringValue(section, 'markup_html'),
@@ -485,39 +602,10 @@ function bdcFromRows(
   }
 }
 
-/** Recreates one Graph from its normalized detail, label, and sparse value rows. */
-function statisticalGraphContentFromRows(
-  bdcId: string,
-  graph: SqlRow | undefined,
-  categoryRows: readonly SqlRow[],
-  seriesRows: readonly SqlRow[],
-  valueRows: readonly SqlRow[],
-): StatisticalGraphContent | null {
+/** Parses the opaque JSON payload stored for one Graph BDC. */
+function statisticalGraphContentFromRow(graph: SqlRow | undefined): StatisticalGraphContent | null {
   if (graph === undefined) return null
-  return {
-    rendering: stringValue(graph, 'rendering') as StatisticalGraphContent['rendering'],
-    overline: nullableText(graph, 'overline') ?? '',
-    title: nullableText(graph, 'title') ?? '',
-    categoryAxisLabel: nullableText(graph, 'category_axis_label') ?? '',
-    seriesAxisLabel: nullableText(graph, 'series_axis_label') ?? '',
-    editorialText: nullableText(graph, 'editorial_text') ?? '',
-    pieSeriesId: nullableText(graph, 'pie_series_id'),
-    categories: categoryRows
-      .filter((row) => row.graph_content_block_id === bdcId)
-      .sort(byPosition)
-      .map((row) => ({ id: stringValue(row, 'category_id'), label: nullableText(row, 'label') ?? '' })),
-    series: seriesRows
-      .filter((row) => row.graph_content_block_id === bdcId)
-      .sort(byPosition)
-      .map((row) => ({ id: stringValue(row, 'series_id'), label: nullableText(row, 'label') ?? '' })),
-    values: valueRows
-      .filter((row) => row.graph_content_block_id === bdcId)
-      .map((row) => ({
-        categoryId: stringValue(row, 'category_id'),
-        seriesId: stringValue(row, 'series_id'),
-        value: numberValue(row, 'value'),
-      })),
-  }
+  return JSON.parse(stringValue(graph, 'content_json')) as StatisticalGraphContent
 }
 
 /** Reconstructs both result branches when a result BDC has persisted rows. */
@@ -560,8 +648,8 @@ async function writeDocumentRows(database: ProjectDatabase, document: ElceDocume
   await insertCatalogPages(database, document)
   for (const bdc of document.bdcs) {
     await queryRows(database,
-      'INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id) VALUES (?, ?, ?, ?)',
-      [document.id, bdc.id, bdc.type, bdc.presetId])
+      'INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id, appearance_json) VALUES (?, ?, ?, ?, ?)',
+      [document.id, bdc.id, bdc.type, bdc.presetId, serializeOptionalJson(bdc.appearance)])
   }
   for (const bdc of document.bdcs) await insertBdcPlacement(database, document, bdc)
   for (const bdc of document.bdcs) await insertBdcDetail(database, document.id, bdc)
@@ -589,8 +677,8 @@ async function insertChapter(database: ProjectDatabase, projectId: string, chapt
 /** Inserts a page identity; its scenario and BDC order are stored separately. */
 async function insertPage(database: ProjectDatabase, projectId: string, page: Page): Promise<void> {
   await queryRows(database,
-    'INSERT INTO pages (project_id, page_id, name, page_type) VALUES (?, ?, ?, ?)',
-    [projectId, page.id, page.name, page.type])
+    'INSERT INTO pages (project_id, page_id, name, page_type, appearance_json) VALUES (?, ?, ?, ?, ?)',
+    [projectId, page.id, page.name, page.type, serializeOptionalJson(page.appearance)])
 }
 
 /** Persists root scenario order and each chapter’s page order in one relation. */
@@ -834,36 +922,12 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
       return
     }
     case BDC_TYPE.STATISTICAL_GRAPH: {
-      const graph = requireValue(bdc.statisticalGraph, `Graphe statistique manquant : ${bdc.id}`)
+      const graph = requireValue(bdc.statisticalGraph, `Graphe manquant : ${bdc.id}`)
       await queryRows(database, `
         INSERT INTO statistical_graphs (
-          project_id, content_block_id, rendering, overline, title,
-          category_axis_label, series_axis_label, editorial_text, pie_series_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, graph.rendering, nullableTextValue(graph.overline), nullableTextValue(graph.title),
-        nullableTextValue(graph.categoryAxisLabel), nullableTextValue(graph.seriesAxisLabel),
-        nullableTextValue(graph.editorialText), graph.pieSeriesId])
-      for (const [position, category] of graph.categories.entries()) {
-        await queryRows(database, `
-          INSERT INTO graph_categories (
-            project_id, graph_content_block_id, category_id, position, label
-          ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, category.id, position, nullableTextValue(category.label)])
-      }
-      for (const [position, series] of graph.series.entries()) {
-        await queryRows(database, `
-          INSERT INTO graph_series (
-            project_id, graph_content_block_id, series_id, position, label
-          ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, series.id, position, nullableTextValue(series.label)])
-      }
-      for (const value of graph.values) {
-        await queryRows(database, `
-          INSERT INTO graph_values (
-            project_id, graph_content_block_id, category_id, series_id, value
-          ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, value.categoryId, value.seriesId, value.value])
-      }
+          project_id, content_block_id, content_json
+        ) VALUES (?, ?, ?)
+      `, [projectId, bdc.id, JSON.stringify(graph)])
       return
     }
   }
@@ -877,6 +941,23 @@ async function clearDocumentRows(database: ProjectDatabase, projectId: string): 
   await queryRows(database, 'DELETE FROM catalog_pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM chapters WHERE project_id = ?', [projectId])
+}
+
+/** Reads the exact editing grant inside the transaction that will mutate data. */
+async function editGrantState(
+  database: ProjectDatabase,
+  projectId: string,
+  grant: ProjectEditGrant,
+): Promise<'held' | 'lost' | 'not-found'> {
+  const rows = await queryRows(database,
+    'SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ?', [projectId])
+  const row = rows[0]
+  if (row === undefined) return 'not-found'
+  const expiresAt = nullableNumber(row, 'edit_lease_expires_at')
+  return nullableText(row, 'edit_page_id') === grant.pageId
+    && nullableText(row, 'edit_grant_id') === grant.grantId
+    && expiresAt !== null && expiresAt > Date.now()
+    ? 'held' : 'lost'
 }
 
 /** Returns all rows from a parameterized Remix SQL statement. */
@@ -915,12 +996,41 @@ function stringValue(row: SqlRow, key: string): string {
   return value
 }
 
+/** Parses one JSON document column from SQLite. */
+function parseJsonColumn<Value>(row: SqlRow, key: string): Value {
+  const value = stringValue(row, key)
+  try {
+    return JSON.parse(value) as Value
+  } catch {
+    throw new Error(`Valeur JSON invalide en base : ${key}`)
+  }
+}
+
 /** Reads an optional string field and normalizes SQL NULL. */
 function nullableText(row: SqlRow, key: string): string | null {
   const value = row[key]
   if (value === null || value === undefined) return null
   if (typeof value !== 'string') throw new Error(`Valeur texte invalide en base : ${key}`)
   return value
+}
+
+/** Serializes optional appearance settings as SQL NULL when a scope inherits all values. */
+function serializeOptionalJson(value: AppearanceSettings | undefined): string | null {
+  if (value === undefined) return null
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) throw new Error('Réglages d’apparence non sérialisables.')
+  return serialized
+}
+
+/** Restores sparse appearance settings from one nullable relational column. */
+function optionalAppearance(row: SqlRow): Readonly<{ appearance?: AppearanceSettings }> {
+  const value = nullableText(row, 'appearance_json')
+  if (value === null) return {}
+  try {
+    return { appearance: JSON.parse(value) as AppearanceSettings }
+  } catch {
+    throw new Error('Réglages d’apparence JSON invalides en base.')
+  }
 }
 
 /** Converts an empty model string to SQL NULL for optional text columns. */

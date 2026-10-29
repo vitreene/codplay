@@ -1,4 +1,5 @@
 import type {
+  CodPlay,
   CodPlayCompileSuccess,
   CodPlayInstance,
   CodPlayInstanceHostTarget,
@@ -80,10 +81,19 @@ export type SightyRuntimeOptions<
   SlotName extends string,
 > = SightyRuntimeConfiguration<SceneKey> & Readonly<{
   scenario: SightyScenarioApi<SceneKey, SlotName>
+  owner?: CodPlay
+  preparedBuilds?: ReadonlyMap<SceneKey, SightyRuntimeBuild>
+  packagedSceneKeys?: ReadonlySet<SceneKey>
+  packagedSceneResetHandlers?: ReadonlyMap<SceneKey, import('../types').SightySceneResetHandler>
 }>
 
 /** Groups compiled scenes by their stable author scene key. */
-export type SightyRuntimeBuilds<SceneKey extends string> = ReadonlyMap<SceneKey, CodPlayCompileSuccess>
+export type SightyRuntimeBuild = CodPlayCompileSuccess & Readonly<{
+  strapCollections?: import('codplay').StrapCollections
+}>
+
+/** Groups compiled scenes by their stable author scene key. */
+export type SightyRuntimeBuilds<SceneKey extends string> = ReadonlyMap<SceneKey, SightyRuntimeBuild>
 
 /** Identifies one active scene-to-Sighty event binding. */
 export type RuntimeBinding<SceneKey extends string> = Readonly<{
@@ -126,7 +136,7 @@ export type RuntimeMutationSnapshot<
   context: Readonly<Record<string, unknown>>
   layoutGeneration: number
   generationCounters: ReadonlyMap<string, number>
-  compiledBuilds: ReadonlyMap<SceneKey, CodPlayCompileSuccess>
+  compiledBuilds: ReadonlyMap<SceneKey, SightyRuntimeBuild>
   sceneDocuments: ReadonlyMap<SceneKey, SceneDoc<string>>
   sceneStyleSheets: ReadonlyMap<SceneKey, string>
   resourceUrlsByScene: ReadonlyMap<SceneKey, readonly string[]>

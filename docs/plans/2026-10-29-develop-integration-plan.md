@@ -27,12 +27,12 @@ de correction opportuniste du cœur.
 
 ## Étapes et acceptation
 
-1. En cours — sauvegarder les données et le pointeur `develop` ; travailler
+1. Fait — sauvegarder les données et le pointeur `develop` ; travailler
    sur `integration/develop-2026-10-29`.
-2. À faire — fusionner `elce-remix`, réunir les dépendances et les circuits
+2. Fait — fusionner `elce-remix`, réunir les dépendances et les circuits
    JSON/assets existants ; conserver les deux suivis documentaires. Vérifier
    JSON, typecheck, tests et build Elcé.
-3. À faire — fusionner `codplay-replace`, conserver la base choisie et réunir
+3. En cours — fusionner `codplay-replace`, conserver la base choisie et réunir
    les exports publics sans modifier les contrats. Vérifier les conflits de
    spécification et les tests runtime, montage parent/enfant, reparent,
    Play/Seek/replay/resize/persistance/lifecycle des suites concernées.
@@ -52,3 +52,13 @@ de correction opportuniste du cœur.
 Les simulations initiales annoncent quatre conflits pour la première fusion.
 L'autre ordre réunirait neuf fichiers en conflit dans la seconde fusion.
 L'ordre retenu sert à isoler les sujets, sans promettre moins de conflits.
+
+Première fusion : les quatre conflits sont des ajouts complémentaires.
+Les dépendances JSON et SCORM sont réunies, la liste d'accès partagée inclut
+`exclusive-sync` et le serveur conserve le loader JSON ainsi que les fontes.
+Typecheck et build Elcé passent. Suite Elcé : 517 succès et un échec `EPERM`
+sur l'écoute HTTP en environnement restreint ; les 16 tests SQLite et les
+16 tests JSON passent ensuite avec accès aux ports locaux (32/32).
+Sauvegarde des données et copie SQLite cohérente :
+`/var/folders/zn/1p16lqb960q77_y8cn3m851r0000gn/T/codplay-before-develop-merges-pn1ni5k_`.
+Point de retour : `backup/develop-before-integration-2026-10-29`.

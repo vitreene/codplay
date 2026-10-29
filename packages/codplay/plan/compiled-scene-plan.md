@@ -25,64 +25,111 @@ note n'est pas normative ; les spécifications et les gates ci-dessous font foi.
 
 ## Décisions et preuves
 
-### CSS inclus dans une scène de diffusion
+### Catalogue des actions — suppression décidée le 2026-10-19
 
-Décision appliquée dans Sighty : une ressource de scène peut porter
-`{ sceneDoc, styleSheet }`, comme le résultat du builder de l’éditeur.
-`styleSheet` est du texte CSS associé à la scène, pas un champ de `SceneDoc`.
-Sighty le transmet à `preload.css.set()` sur son conteneur ; le service existant
-applique `@scope` et retire les feuilles à la destruction de CodPlay. Aucun
-résolveur ni champ `SceneDoc` parallèle n’est ajouté. Le chargement CSS par URL
-reste au [plan preload](./media-preload-plan.md).
+> Direction : **Fixe**. Application future : **non commencée**.
 
-Preuve de référence : [`build-scene.ts`](../../editor/src/builder-v2/build-scene.ts)
-produit les deux valeurs côte à côte et
+L'utilisateur a confirmé la suppression de `actionTargetIndex` et de ses
+références, avec maintien du principe existant de découverte des actions.
+Le [plan de découverte des actions](./action-discovery-plan.md) possède
+l'application : inventaire, invariants, décisions de format et de motion,
+tranches, acceptation et mise à jour des spécifications après vérification.
+Il remplace la proposition antérieure portant sur ce catalogue. Aucun code
+runtime n'a été modifié par le travail de planification.
+
+Ce plan couvre aussi la copie globale construite par le contrôleur live et
+interdit de reconstituer le catalogue sous un autre nom. La relation `1 -> n`
+reste ouverte, y compris zéro destinataire. Les specs actuelles décrivent
+encore l'implémentation avec index ; elles seront actualisées à l'acceptation.
+La sémantique actuelle des valeurs d'actions live est conservée pour cette
+suppression ; sa révision éventuelle constitue une décision distincte.
+
+### Index d'activation des stories — proposition distincte
+
+> Proposition : **A relire** ; aucune application engagée.
+
+`storyActivationIndex` dérive des positions de `story.listen` où
+`active === true`. Le dispatcher possède déjà les règles par nom et construit
+aussi une map d'activation, complétée par un parcours des déclarations.
+La [spécification d'isolation](../specs/story-isolation-spec.md) et le
+[codec](../specs/compiled-codec-v2-spec.md) décrivent encore cet index.
+
+La proposition consiste à consulter les règles story déjà sélectionnées pour
+l'événement avant le filtre d'éligibilité, puis à retirer cet index et sa map
+distincte. Préserver le refus des doublons, le réveil ciblé, la priorité des
+règles story/scène et la transition atomique activation/reset. Décider le
+format, puis vérifier journal, activation/désactivation, isolation, Play/Seek,
+replay et lifecycle avec les gates du
+[plan d'isolation](./story-isolation-plan.md). La décision sur le catalogue
+des actions ne vaut pas validation de cette proposition d'activation.
+
+### CSS associé à une scène
+
+Contrat éditeur vérifié : une ressource peut porter `{ sceneDoc, styleSheet }`.
+`styleSheet` est du texte CSS associé, pas un champ de `SceneDoc`. Le bridge
+éditeur le transmet à `preload.css.set()` ; le service applique `@scope` et
+retire le slot à la destruction. Aucun champ `SceneDoc` parallèle n'est
+nécessaire. Le contrat éditeur reste décrit par
+[`build-scene.ts`](../../editor/src/builder-v2/build-scene.ts),
 [`scene-player-bridge.ts`](../../editor/src/app/bridges/scene-player-bridge.ts)
-transmet le texte par le canal CSS existant. Les sources directes et différées,
-le scope et le nettoyage du raccord Sighty sont couverts dans
-[`runtime-features.spec.ts`](../../sighty/tests/runtime-features.spec.ts) et
-suivis au [plan Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
+et les suites de Sighty.
 
-### Découverte du manifeste de ressources
+### Fermeture CSS de l'export
 
-Le builder examine actuellement `src` sur les objets `initial` et les objets
-d'action de premier niveau. Le commentaire de `collectResource()` annonce un
-parcours récursif, mais son implémentation ne parcourt pas les objets imbriqués.
-Le test confirme une source déclarée directement et l'ignorance d'une extension
-inconnue ; il ne décide pas le traitement d'un `src` imbriqué dans une séquence
-d'action.
+**Paquetage CSS associé et importé : vérifié.** Le CLI capture l'export nommé
+`styleSheet` et les imports `.css`, développe les imports locaux et les
+`url()` dans les fichiers CSS, expose les classNames trouvés et remet les
+dépendances au paquetage. Les noms, sélecteurs, règles et valeurs de scène ne
+sont pas renommés. La copie exportée ne change que les URL nécessaires à la
+relocalisation. `CodPlay.load()` remet les dépendances au preload existant,
+installe le CSS dans le `head` sous le scope de `root` et retire le slot avec
+l'instance. Les preuves sont dans la
+[spécification du paquet de diffusion](../specs/scene-package-export-v1-spec.md).
 
-#### Correctif à prévoir — `src` d'un perso `tag`
+Les `url()` image des valeurs `style` de la scène sont des références de build
+export : le builder fournit leurs chemins d'occurrence et le paquetage réécrit
+seulement la copie compilée. Les valeurs source restent disponibles au moteur
+CodPlay.
 
-Statut : besoin accepté comme correctif futur ; la portée exacte de la
-découverte reste à cadrer et aucune modification n'est implémentée.
+**Export diffusion V1 :** les valeurs `style` restent dans le `CompiledScene`
+pour le moteur ; elles ne sont pas converties en classes CSS. Le paquetage
+relocalise uniquement les URL locales remontées par le builder dans la copie
+de diffusion. Cette règle préserve la cascade inline et les `className`
+temporels. Le détail d'exécution est suivi au
+[plan d'export](./2026-10-15-export-diffusion-plan.md#r5--css-associé-importé-et-incorporé).
 
-Quiz Hunt a besoin d'une vidéo HTML native : son perso `tag` porte
-`initial.attr.src`, avec `controls` et `autoplay`, afin que le navigateur garde
-la lecture et ses contrôles. Cette source imbriquée n'entre pas dans
-`CompiledScene.resources` avec la découverte actuelle. Sighty ne peut donc pas
-la demander au service preload avant la matérialisation de la question ; le
-chargement natif commence alors à l'ouverture.
+### Références média du paquet de diffusion
 
-Le correctif à prévoir est d'étendre le circuit existant de découverte du
-manifeste afin qu'il puisse reconnaître au minimum `initial.attr.src` d'un
-perso `tag` et l'exposer comme ressource compilée, pour que le préchargement
-Sighty existant puisse la traiter avant l'entrée dans la question. Cette note
-ne certifie ni la profondeur générale de parcours ni le handoff de la ressource
-préchargée au `<video>` natif. Il faudra valider dans le navigateur qu'on gagne
-bien la disponibilité avant ouverture sans lancer deux chargements. Aucun
-circuit de preload parallèle ni contournement local à la démo ne doit être
-ajouté.
+Pour l'export, la compilation possède la fermeture des références présentes
+dans les données de scène. `CodPlay.build(input, { export: true })` prolonge
+le dérivateur des ressources et retourne leurs chemins compilés dans
+`resourceReferences`, hors JSON `CompiledScene`. Le paquetage consomme ces
+chemins ; il ne parcourt pas la scène pour en découvrir d'autres. Le mode auteur
+`build(input)` garde sa dérivation ordinaire.
 
-Avant le code, cadrer dans ce plan les formes auteur couvertes et leur
-classification, puis fixer une preuve : tests du builder et du codec pour la
-source incluse dans le manifeste, test d'intégration Sighty du préchargement
-avant matérialisation, et validation navigateur cache froid de la première
-image et de l'absence de chargement redondant. La spécification auteur ne
-décrit pas encore la profondeur de découverte ; ne pas présenter le comportement
-observé du helper comme contrat complet. Toute modification du cœur reste
-soumise à un plan accepté et à l'autorisation explicite requise par les règles
-du dépôt.
+#### Tranche média — sources de `img`, `media`, `tag` et styles inline
+
+**Statut : implémentée et vérifiée pour les images/audio/vidéo et les images CSS des styles inline.** Le build
+export reconnaît `img.src`, `img.img.attr.src`, `media.src` et les sources
+`tag.attr.src` des balises natives `img`, `audio`, `video` et `source`, dans
+l'état initial, les actions directes et leurs étapes statiques. Les types
+incompatibles, extensions ou adresses hors périmètre, sources `poster`/`srcset`,
+références de ressources dans `layout.markup` et ressources natives non prises
+en charge donnent des diagnostics contextualisés bloquants.
+
+Les références et leur ordre proviennent du même compilé que le runtime. Elles
+ne modifient ni la scène auteur ni le schéma JSON. Le paquetage copie les
+fichiers locaux et relocalise uniquement ces chemins sur une copie du compilé.
+Le chargeur réutilise les circuits CodPlay existants de préparation et preload.
+Les preuves ciblées sont dans la
+[spécification de paquet média](../specs/scene-package-export-v1-spec.md) et
+ses suites `scene-builder`, `scene-package-loader`, `resource-packager` et
+`cli`.
+
+La compilation des feuilles CSS et de leurs dépendances locales est traitée par
+la fermeture de paquet décrite ci-dessus. Pour l'export V1, les styles de scène
+ne sont pas convertis en classes ; la disponibilité effective des fontes est
+suivie au plan d'export.
 
 ### Sémantique de `SceneDoc.defaults`
 
@@ -136,6 +183,8 @@ placement résolu au temps demandé.
   les placements initiaux et temporels.
 - Le montage page-level, son ordre et ses transitions Play/Seek ont une preuve
   d'intégration réelle.
+- La suppression du catalogue des actions a passé les gates de son plan ;
+  la proposition distincte sur l’index d’activation a été décidée et traitée.
 - Les specs décrivent uniquement les comportements certifiés et le présent
   plan ne garde ensuite aucun travail ; retirer le plan à ce moment-là.
 

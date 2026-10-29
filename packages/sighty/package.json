@@ -3,9 +3,12 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tools/scenario-export/cli.mjs": "./tools/scenario-export/cli.mjs"
   },
   "scripts": {
+    "build": "node tools/library-build/cli.mjs",
+    "export": "node tools/scenario-export/cli.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -14,6 +17,7 @@
   },
   "devDependencies": {
     "typescript": "~6.0.3",
+    "vite": "^8.1.0",
     "vitest": "^4.1.9"
   }
 }

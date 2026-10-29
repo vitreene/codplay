@@ -27,20 +27,77 @@ Les contrats détaillés et vérifiés sont dans les
 [spécifications Elcé](../specs/). Ce plan fixe leur ordre d’application et les
 preuves qui permettent de fermer chaque tranche.
 
+## Étude distincte — articulation des mods
+
+Le [sujet Mods](../mods/index.md) regroupe les études d’une application
+auteur unique et du réemploi des contenus. Le
+[plan de reconfiguration](../mods/plan/2026-10-20-elce-mods-reconfiguration-plan.md)
+réunit les conclusions et décisions de cette étude ; les choix techniques
+non arrêtés y restent **A relire**. L’[étude technique Learning](../mods/notes/2026-10-20-learning-extraction-study.md)
+détaille les découpages et raccords envisagés. Les contrats et acceptations du
+présent plan restent propriétaires du mod actuel, désormais nommé Learning.
+
+## Étude distincte de l’onglet Style
+
+L’[analyse de l’onglet Style](../notes/2026-10-22-style-tab-analysis.md) et son
+[plan dédié](./2026-10-22-elce-style-tab-plan.md) suivent les presets, les
+réglages par projet/page/bloc et leur héritage. Le premier état est **En cours** ;
+les comportements vérifiés sont décrits dans la
+[spécification d’apparence](../specs/appearance-spec.md). Le plan dédié
+regroupe les décisions et acceptations restantes ; la méthode de construction
+et d’application des classes est **A relire**. Ses détails sont conservés
+dans les notes Style.
+
+## Export standard réimportable — plan à relire
+
+Le [plan export/import coordonnés](./2026-10-26-elce-standard-export-import-plan.md)
+prépare le prochain paquet standard à partir de l’export Sighty existant et sa
+reprise en projet éditable. Le socle est le document actuel ; les propositions
+de format, de périmètre et de publication restent **A relire**. Aucun changement
+de code ou de contrat SCORM n’est réalisé par cette préparation.
+
 ## Ordre et critères de sortie
 
 | Ordre | Tranche | État | Critère de sortie |
 | --- | --- | --- | --- |
 | 0 | Application et workspace | En cours | Lancement à froid, preview, typecheck, tests et build fonctionnent depuis le workspace Elcé ; le navigateur restaure le document et ses médias. |
-| 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 font 14 px. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le catalogue « Contenus disponibles » occupe la colonne droite. Une page déplacée ne reconstruit pas les scènes. |
-| 2 | Première lecture Flux dans Sighty/CodPlay | En cours | Une scène Flux réelle se lit via le scénario Sighty et son slot racine. Menu, lecture à la page courante, repère de fin, pages courtes et longues suivent les contrats de la démo 5. Un aller-retour A → B → A conserve chaque scène. |
-| 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
+| 1 | Modèle, commandes et organisation | En cours | Les commandes XState créent, nomment, déplacent et retirent pages/chapitres. Une page créée dans un chapitre standard reçoit un BDC Texte ; une page créée dans un chapitre d’évaluation reçoit un BDC Question. Les deux restent des pages Flux. Un chapitre d’évaluation reçoit le nom « Évaluation » sans libellé répété ; FilePlus et Trash2 suivent la hauteur de capitale via `1.4cap`. L’icône de chapitre et son titre éditable restent sur la même ligne. L’ordre racine mixte, les pages de chapitre et les titres survivent au rechargement. Cliquer un chapitre ouvre ses réglages dans la zone centrale ; pour un chapitre Évaluation, le formulaire affiche le seuil POC fixe de 80 %, les tentatives illimitées et la reprise de toutes les questions par défaut, et permet de régler la limite d’essais ainsi que la reprise de toutes les questions ou des seules erreurs. Le panneau « Contenus » occupe la colonne droite et expose les variables de profil dans le contexte d’édition pertinent. Une page déplacée ne reconstruit pas les scènes. |
+| 2 | Première lecture Flux dans Sighty/CodPlay | En cours | Une scène Flux réelle se lit via le scénario Sighty et son slot racine. Le scroll s’aligne par proximité sur le début de chaque BDC direct. Menu, lecture à la page courante, repère de fin, pages courtes et longues suivent les contrats de la démo 5. Un aller-retour A → B → A conserve chaque scène. |
+| 3 | Éditeur Flux, médias et ancres | En cours | Tiptap exporte le HTML statique. La barre d’ajout présente les icônes de création des BDC. Le BDC Texte initial peut être supprimé par commande ; ses BDC média ancrés sont également supprimés, tandis que les ressources restent au catalogue. Dépôt depuis fichier ou catalogue passe par les commandes existantes ; un dépôt crée un BDC unique et conserve le média réutilisable. Un import identique (même type et mêmes octets, vérifiés par SHA-256) réutilise une seule ressource média, même si le nom du fichier diffère ; un fichier différent reste une ressource distincte. Une image chargée réserve son ratio intrinsèque, une vidéo conserve le cadre configuré `16 / 9`, et le panneau d’édition s’affiche sur le cadre du média sélectionné. L’ancre reste visible à son point d’insertion, réserve l’espace du BDC sans casser le flux, et résiste à l’édition, au resize et au rechargement Safari. Les deux gestes de suppression — supprimer le BDC ou le rendre disponible — gardent leurs effets distincts. La preuve Safari reste à compléter pour le glisser-déposer physique, la réouverture et le déplacement d’un BDC, ainsi que le rendu persistant après l’effacement d’une ancre. La spécification note que l’éditeur utilise `contain` et le player `cover` ; réconcilier ce cadrage avec le comportement `cover` demandé avant de fermer la tranche. |
 | 4 | Quiz simple | En cours | L’icône Quiz utilise un symbole de liste de réponses, pas un point d’interrogation. Une page créée dans un chapitre Évaluation propose une Question par défaut ; chaque page Flux n’en contient qu’une et celle-ci peut être supprimée. En mode éditeur, l’illustration et la zone question-réponses sont côte à côte au rapport 25/75. Vrai/Faux, Choix et Choix multiple sont éditables et validés dans le player réel. Aucune correction avant validation ; la correction apparaît après validation comme dans la démo 5. La navigation de page attend les conditions configurées, sans exiger une réponse juste par défaut. |
 | 5 | Évaluation de chapitre | En cours — résultat calculé par Sighty et montage de la branche Réussite/Échec dans CodPlay couverts par les tests de composition ; les actions Recommencer/Relire, la visibilité des réponses et le parcours Brave restent à valider. | Les pages restent des pages Flux ordinaires : une page créée dans un chapitre Évaluation reçoit une Question par défaut, supprimable comme les autres BDC. La barre de page offre une icône pour ajouter un BDC Résultat qui regroupe les issues Succès et Échec et rejoint Texte et Quiz. Il est relié à `EvaluationMachine` et au contexte Sighty existant. Le seuil POC reste 80 % ; les tentatives sont illimitées par défaut et la reprise porte toutes les Questions par défaut, avec l’option « erreurs seulement ». L’échec ne révèle pas les réponses. Si l’action Succès choisie est la relecture, elle ouvre toutes les Questions avec réponses données et attendues. Safari vérifie réussite 4/5, échec 3/5, reprise totale, reprise des seules erreurs et relecture après succès. |
-| 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Vérifié antérieurement :** le bouton « Prévisualiser » occupe sa propre ligne au-dessus des titres et ouvrait la modale (Safari, 4 octobre 2026 ; détail dans la [spécification de preview](../specs/player-preview-spec.md)). Pour le POC en cours, la popup est maintenant le parcours actif et l’accès à la modale intégrée est désactivé (tranche 9). |
+| 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Disposition actuelle :** « Prévisualiser » se trouve dans la barre de commandes au-dessus de la zone centrale, reste visible à toutes les largeurs et ouvre la popup active du POC ; le test du workspace vérifie son emplacement et son action. L’accès à la modale intégrée reste désactivé (tranche 9 ; comportement de la popup dans la [spécification de preview](../specs/player-preview-spec.md)). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le bandeau des réglages a reçu une correction CSS le 9 octobre : libellés au-dessus des champs, valeurs non compressées, chevrons reculés et défilement horizontal si nécessaire ; la durée par vue porte le libellé « Durée (sec.) ». Le contrôle visuel Brave reste en attente. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
-| 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, mobile à 390 px, typecheck, 130 tests et build vérifiés avec Brave. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
+| 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, typecheck, tests et build vérifiés avec Brave. Correction de la preview orpheline vérifiée le 26 octobre : elle ne charge plus le document local par défaut, termine l’état de chargement et demande de rouvrir depuis l’éditeur ; une nouvelle preview rend le document v7. Le même jour, Brave a vérifié la récupération après une session restée sans instantané malgré un éditeur ouvert : recliquer sur « Prévisualiser » réutilise la popup et charge la page active avec une nouvelle session. Le 26 octobre, le libellé « Test auteur » a aussi été réintégré à l’adaptation responsive : masqué sur mobile, visible sur ordinateur, sans débordement. La suite Elcé passe 483 tests sur 484 ; le test SQLite restant est bloqué par `listen EPERM`. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
+
+**Éditeur central de page — appliqué et vérifié le 22 octobre 2026.** La
+rangée d’actions de création précède maintenant les titres ; le titre de page
+est plus affirmé et distinct du titre de chapitre. `workspace/page-editor.test.tsx`
+vérifie l’ordre de la structure, et Brave confirme l’affichage dans l’éditeur.
+
+**Mise à jour du 22 octobre 2026 — tranche 3.** Les dix ancres média de Demo5
+ne conservent plus `12rem` : ses neuf images utilisent leur ratio intrinsèque
+(`65.88888889%`, `65%` ou `65.78125%`) et sa vidéo suit le cadre Elcé existant
+`16 / 9` (`56.25%`). Ces valeurs ont été produites puis synchronisées par les
+transactions de l’éditeur jusqu’à la révision 12. Le défaut général d’ancre
+image est maintenant `75%` ; une ancienne ancre vidéo est normalisée à
+`56.25%` au montage de son NodeView par le même circuit Tiptap/XState.
+
+Le panneau Remix d’édition d’une Carte ancrée se positionne sur le cadre média
+réel via CSS Anchor Positioning ; il n’est plus rendu visuellement à la fin de
+la Section. Le clic existant défile jusqu’à cette zone. Brave vérifie dans
+l’éditeur la superposition exacte (`643.6 × 424.1 px`) et la preview fraîche
+vérifie les deux images de la première page (`918 × 604.86 px` et
+`918 × 596.70 px`) avec les ratios enregistrés. Les tests ciblés (15), le
+typecheck et le build Elcé passent. La suite complète compte 426 tests réussis
+sur 427 ; le seul échec restant est le test serveur SQLite, qui échoue ici sur
+`listen EPERM: operation not permitted 127.0.0.1`.
+
+Le bouton qui retire le média d’une Carte affiche une corbeille `Trash2` ; la
+croix ferme le panneau d’édition. Le test de production
+`remix-section-production.test.tsx` distingue les deux icônes ; son test ciblé
+et le typecheck Elcé passent.
 
 ### Hiérarchie des titres dans l’éditeur Tiptap
 
@@ -100,6 +157,95 @@ l’éditeur regroupe les deux zones dans la même grille au rapport 25/75 et qu
 les actions d’édition de la question et des réponses restent raccordées aux
 façades existantes. La validation de cette disposition reste à effectuer avant
 d’actualiser la spécification Question.
+
+### Décision acceptée — illustration d’une Question Flux
+
+Dans le player, la photo d’une Question utilise `contain`, en Flux comme en
+Diapo. En Flux, elle reste dans son cadre `4:3` ; en Diapo, son cadre flexible
+est réservé par le layout et l’image le remplit en largeur et en hauteur. Les
+styles du sélecteur de média restent propres à l’éditeur ; ni l’éditeur ni le
+player n’imposent de hauteur maximale fixe à cette image. Son effet
+d’apparition se déclenche une seule fois, y compris lorsque la photo est déjà
+visible au démarrage ; quitter le cadre ne relance pas l’effet et ne fait pas
+disparaître la photo. Réutiliser l’observation `emit.observe` existante et son
+option `once`, sans modifier CodPlay ni le comportement des autres médias.
+
+**État : effet appliqué et vérifié le 13 octobre 2026 ; cadrage Flux `contain`
+mis à jour et vérifié par les builders, rendu visuel encore à confirmer.** Le
+test ciblé Flux, le typecheck et le build Elcé passent. Brave sur le port 5175
+avait confirmé pour la Question réelle de « Document Elcé », page « Titre »,
+que cadre, wrapper et image font tous 512 × 384 px ; l’entrée se joue une fois
+et une sortie puis un retour dans le viewport ne la rejouent pas. Cette
+observation précédait `contain` et ne vérifie que l’effet et la géométrie.
+
+### Revue en cours — occupation des images selon leur contexte
+
+Le cadre Flux de l’illustration Question est en `4:3` avec `contain`.
+Cette règle ne décrit pas les autres surfaces : l’éditeur Question conserve
+actuellement le ratio intrinsèque de l’image dans sa colonne 25 %. Pour la
+Question Diapo, décision acceptée le 13 octobre : garder `contain`, réserver
+la zone de l’illustration dans le layout plein écran avec Flex, et faire
+remplir cette zone par l’image à `100 %` en largeur et en hauteur. Le plafond
+`28vh` du builder doit disparaître ; l’illustration et le formulaire se
+partagent l’espace disponible après le titre.
+
+Les Cartes Carousel disposent déjà du réglage `imageFit` (`cover` ou
+`contain`) dans leurs cadres de layout ; l’aperçu média de l’éditeur non
+proportionnel a un plafond de `18rem`, tandis que les layouts proportionnels
+remplissent leur cadre. L’acceptation visuelle des trois autres layouts reste
+à effectuer dans le parcours navigateur indiqué plus bas. Les Cartes Photo
+ancrées suivent déjà le ratio intrinsèque réservé par l’ancre et le rendu
+`cover` ; la parité de cadrage vidéo est suivie séparément dans la
+spécification Ancre.
+
+Brave, le 13 octobre, mesure dans « Document Elcé » une illustration Question
+éditeur de `189 × 246 px` avec sa photo intrinsèque à `187 × 244 px`, puis le
+cadre et l’image Question Flux à `512 × 384 px`. Cette mesure Flux précédait
+le cadrage `contain` et n’en valide pas l’apparence. La Carte Photo sélectionnée
+en `contain` a un cadre proportionnel de `791 × 445 px` dans l’éditeur et
+`916 × 515 px` dans le player ; l’image remplit ces boîtes et garde le cadrage
+`contain` dans les deux surfaces. Ces mesures ne couvrent ni la Question Diapo
+ni les autres layouts Carte.
+
+**État : application en cours.** Les builders Flux et Diapo appliquent
+`contain` ; les deux tests ciblés passent (20 tests), ainsi que le typecheck et
+le build Elcé. La validation Brave reste à faire sur un viewport large et
+étroit. Le 13 octobre,
+le parcours n’a pas pu être constitué : la Diapo temporaire créée dans Brave
+contenait encore son Carousel par défaut, et l’auto-review de l’outil a refusé
+le clic sur son bouton de suppression, y compris après un nouveau snapshot.
+Le projet temporaire a ensuite été supprimé ; l’API ne liste plus que
+« Document Elcé ». Aucune mesure du rendu Question Diapo n’a donc été prise,
+et l’ancienne mesure Flux a été prise avec `cover`. La spécification Question
+décrit maintenant le cadrage Flux `contain` et ses tests de builder ; compléter
+les preuves visuelles Flux/Diapo après leur validation. La revue contextuelle
+des autres layouts Carte reste ouverte selon les acceptations déjà listées
+dans ce plan.
+
+### Médias indépendants — tranche réalisée le 14 octobre 2026
+
+Les builders emploient `media.sync: 'independent'`. La sortie de page utilise
+le circuit existant Sighty/CodPlay pour envoyer `STOP`, arrêt et remise à zéro
+ensemble ; aucune réinitialisation supplémentaire au retour. Le contrat et
+les preuves sont transférés à la [spécification preview](../specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page)
+et à la [spécification CodPlay](../../codplay/specs/media-sync-v2-spec.md).
+Les typechecks et le build passent ; le cycle A → B → A est vérifié par test et
+Safari. Neuf échecs de la suite générale sont reproduits avant modification
+et restent distincts de cette tranche. L’agrandissement et les intégrations
+tierces restent différés.
+
+### Agrandissement des contenus dans le viewport — A relire
+
+Le [plan de réalisation](./2026-10-14-elce-viewport-expansion-plan.md) porte
+les décisions ouvertes, les étapes, les gates et le chemin d’acceptation de
+l’agrandissement interpolé dans le lecteur Elcé : images d’abord, vidéos
+ensuite, puis Graphes. Les [notes d’enquête](../notes/2026-10-14-elce-viewport-expansion-enquete.md)
+conservent le contexte technique et le raisonnement ; elles ne font pas office
+de plan ni de spécification. La cible reste dans la même scène que la source ;
+sa projection `position: fixed` occupe le viewport. La fermeture du Carousel
+conserve sa sélection. Les vidéos restent indépendantes
+de la timeline ; le replay du parcours Elcé est hors périmètre. Aucune
+implémentation d’agrandissement n’est engagée.
 
 ### Décision acceptée — montage du BDC Résultat dans CodPlay
 
@@ -190,13 +336,70 @@ inaccessible. Dans le parcours accessible, valider la Question de F après les
 pages précédentes, vérifier l’accès à G, puis cliquer « Suivant » et constater
 Page G.
 
+**Correction acceptée, 25 octobre — révélation :** défaut projet `swipe-right`
+à l’entrée et à la sortie ; conserver les remplacements existants. Pour une
+Carte média Flux, garder l’observation sur la racine fixe et porter l’animation
+par le média enfant.
+
+**Décision acceptée — simplifier « Suivant/Précédent », 25 octobre :** la garde
+de sortie répond uniquement aux conditions pour quitter la page ; le calcul des
+boutons décide séparément si leur destination existe et est accessible. Pour
+« Précédent », seule la destination compte. Pour « Suivant », `canExit` vérifie
+la page courante et `canAccess` vérifie la page cible, ou l’identifiant stable
+du SCO cible à une frontière. Retirer de `pageExitGuard` ses vérifications de
+présence d’un chapitre adjacent. À la frontière, l’action SCORM sans `go`
+revalide la complétion et l’identifiant avant l’appel LMS, car Sighty ne peut
+pas appliquer les gardes d’une route qu’elle n’effectue pas. Ne pas changer
+Sighty/CodPlay. Vérifier les boutons, les gardes de page, le clic inter-SCO et
+le refus d’une action directe si la page n’est pas terminée.
+
+**État, 25 octobre :** le défaut est appliqué au code et au projet Demo5 par la
+commande `document.revelation.update` (révision 32) ; aucun remplacement local
+de BDC n’a été modifié ; le défaut des transitions entre cartes reste « Fondu ».
+Le bouton « Précédent » ne vérifie plus de garde de sortie, et « Suivant » sépare
+la sortie courante de l’accès à sa destination ; à la frontière SCO, le handler
+revalide la page et l’identifiant cible. Le test de scénario couvre les deux
+boutons et refuse une action inter-SCO directe si la page est incomplète ou si
+l’identifiant manque. Les 468 tests passants, le typecheck, le build et
+`git diff --check` sont confirmés. Le seul échec de la suite complète reste
+l’écouteur SQLite refusé par l’environnement (`listen EPERM`). La preview
+n’avait pas d’onglet dédié ; l’unique onglet Safari étant l’éditeur, il a été
+laissé intact. La validation visuelle native reste donc à faire.
+
+### Snap des BDC Flux — retrait demandé le 15 octobre 2026
+
+**Statut : appliqué et vérifié dans Brave le 26 octobre 2026.** Lors de ses
+vérifications, l’auteur a reproduit un recul du scroll quand un BDC dépasse la
+hauteur du viewport, ce qui empêche de lire le document. Cette observation
+invalide la précédente acceptation visuelle. La règle
+`scroll-snap-type: y proximity` laisse le navigateur décider quand déclencher
+l’alignement ; CSS n’expose pas de seuil réglable par l’auteur
+([CSS Scroll Snap, §4.1.2](https://www.w3.org/TR/css-scroll-snap-1/#scroll-snap-type)).
+
+- Décision appliquée : retirer le snap du scrollport Flux et les alignements
+  des BDC directs. Le défilement natif reste libre ; aucun snap JavaScript ni
+  nouveau paramètre n’est ajouté.
+- Le style Flux ne déclare plus `scroll-snap-type` ni `scroll-snap-align`. Les
+  41 tests de composition, le typecheck et le build passent.
+- La régression distincte reproduite dans Brave le 26 octobre venait du
+  chaînage natif : une commande PageDown au bas du `.elce-flux-scrollport`
+  défilait le document de la fenêtre. La décision utilisateur complète le
+  contrat : atteindre la limite du scrollport ne déclenche pas le défilement de
+  la preview parente. `overscroll-behavior-y: contain` est appliqué au
+  scrollport Flux existant ; son défilement natif intérieur est préservé, sans
+  snap ni gestionnaire JavaScript.
+- Brave a vérifié PageDown dans un contenu long, l’arrêt du document parent à la
+  limite, le maintien du cadre de preview et l’activation de « Suivant » par le
+  repère de fin. Le test de composition ciblé (47 tests), le typecheck et le
+  build passent.
+
 Chaque tranche dépend des précédentes uniquement lorsqu’elle en utilise le
 contrat. Un échec de preuve garde la tranche « En cours » et bloque son
 intégration dépendante ; les travaux indépendants continuent.
 
 ### Catalogue responsive de l’éditeur — implémenté et vérifié
 
-- À 1200 px et moins, Contenus disponibles est masqué au départ ; sa commande
+- À 1200 px et moins, Contenus est masqué au départ ; sa commande
   iconique sans fond ni contour se trouve au bord droit de la zone centrale.
   À 800 px et moins, les deux panneaux latéraux sont masqués au départ et leurs
   commandes encadrent la zone centrale. `responsivePanel` reste l’état exclusif
@@ -210,12 +413,19 @@ intégration dépendante ; les travaux indépendants continuent.
   les trois colonnes restent visibles. À 800 px et moins, le panneau ouvert et
   la zone centrale occupent chacun une colonne ; fermés, les deux panneaux
   laissent toute la largeur à la zone centrale. À plus de 1200 px, les trois
-  colonnes restent visibles et les commandes responsive disparaissent. Le
-  bandeau ne montre que « Elcé ». Le comportement appartient au layout Remix,
-  hors scène CodPlay.
+  colonnes restent visibles et les commandes responsives des panneaux
+  disparaissent. Le bandeau ne montre que « Elcé ». Le comportement appartient
+  au layout Remix, hors scène CodPlay.
+- La commande « Prévisualiser » reste toujours visible dans la barre au-dessus
+  de la zone centrale. Aux largeurs où les accès de panneaux s’affichent, ils
+  partagent cette barre : Scénario à gauche, preview au milieu et Contenus
+  disponibles à droite jusqu’à 800 px ; preview puis accès Contenus
+  à droite entre 801 et 1200 px. Le test de
+  [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
+  vérifie le placement, l’action et la présence dans la vue de chapitre.
 - Brave confirme à 390 × 844 px la zone centrale seule quand les panneaux sont
   fermés, puis l’ouverture exclusive de Scénario (137 px / 205 px) et de
-  Contenus disponibles (205 px / 137 px), sans débordement horizontal. Échap
+  Contenus (205 px / 137 px), sans débordement horizontal. Échap
   ferme le panneau et rend le focus à sa commande. À 1024 px, la vue fermée garde
   Scénario à 288 px et le centre à 688 px ; la vue ouverte mesurée précédemment
   garde les trois colonnes à 288/384/288 px. Le test visuel ouvert à 1024 px a
@@ -227,11 +437,49 @@ intégration dépendante ; les travaux indépendants continuent.
   fermé restait donc dans la grille et repoussait la zone centrale. Le sélecteur
   de masquage est maintenant limité au panneau latéral fermé dans l’espace auteur.
 
+### Placement du bouton d’export Sighty — décision acceptée
+
+Le bouton « Exporter le scénario » rejoint le côté droit de la barre de titre
+du projet. « Prévisualiser » reste dans la barre de commandes au-dessus de la
+zone centrale. Le même gestionnaire d’export, l’état occupé et les annonces
+d’erreur ou de téléchargement sont conservés.
+
+- [x] Déplacer le bouton dans la barre de titre, à droite, et le retirer de la
+  barre responsive du workspace.
+- [x] Vérifier l’emplacement, l’action et l’état occupé, puis mettre à jour les
+  spécifications, les tests, le typecheck et le build. Les tests
+  `project-application.test.tsx` et `editor-workspace.test.tsx` couvrent le
+  nouvel emplacement et l’action ; typecheck, build et `git diff --check`
+  passent.
+
+### Minification de `elce-engine.js` — décision acceptée
+
+Le bundle d’intégration Elcé n’a besoin que du prédicat `isPlainRecord` pour
+valider la capacité `scroll-container`. Le validateur local de
+`component-v2` copie ce petit prédicat au lieu d’importer la barre
+`codplay/shared`. Il importe également le garde DOM depuis son fichier précis,
+pas depuis la barre complète `codplay/runtime/runner-html`. Ces deux barres
+peuvent tirer des services sans rapport avec la capacité, dont la table de
+couleurs ACE. La configuration engine Elcé importe ses définitions de
+composant et de module depuis leurs modules précis ; elle ne charge pas la
+barre qui réexporte également l’adaptateur HTML utilisé par le player Elcé.
+Le moteur et son builder CodPlay restent inchangés.
+
+- [x] Copier le prédicat dans le validateur `scroll-container` de
+  `component-v2`, retirer l’import de la barre partagée et cibler le fichier du
+  garde DOM directement ; cibler aussi les deux définitions requises depuis
+  les modules précis dans la configuration engine Elcé.
+- [x] Vérifier les tests de la capacité, puis reconstruire l’engine Elcé et
+  confirmer que la table de couleurs ACE n’est plus embarquée ; mettre à jour
+  la spécification d’export et le présent suivi. Le bundle passe de 23 073 à
+  8 672 octets (−62,4 %) ; les tests `component-v2` et d’export, le typecheck
+  Elcé et `git diff --check` passent.
+
 ### Défilement indépendant des colonnes — décision acceptée, implémentation en cours
 
 Quand l’éditeur est ouvert, son bandeau supérieur reste fixe dans la fenêtre et
 la grille occupe la hauteur disponible. Au-delà de cette hauteur, la colonne
-centrale défile seule ; le Scénario et les Contenus disponibles gardent chacun
+centrale défile seule ; le Scénario et les Contenus gardent chacun
 leur propre défilement. Dans le Scénario, le titre et les commandes restent
 fixes pendant le défilement de l’arborescence et du catalogue de pages. Les
 panneaux des colonnes responsives gardent leur défilement indépendant.
@@ -290,9 +538,7 @@ façon autorisée.
 
 Le titre central de chaque page affiche l’icône de son type avant le nom, sans
 retirer l’édition inline. Réutiliser les icônes déjà associées aux types dans
-les commandes du Scénario : FilePlus pour Flux et Presentation pour Diapo. Le
-marqueur de la page sélectionnée garde la même taille de 14 × 14 px que le
-marqueur du chapitre courant.
+les commandes du Scénario : FilePlus pour Flux et Presentation pour Diapo. Le marqueur de la page sélectionnée suit la hauteur de capitale (`1.4cap`) comme le marqueur du chapitre courant.
 Implémenté le 9 octobre 2026 dans le titre de page Remix et dans la commande
 d’icône partagée avec le Scénario. Le 9 octobre, l’ajout de ce helper avait
 laissé deux imports sans extension ; le serveur a répondu 404 sur
@@ -301,34 +547,38 @@ de l’interface. Les imports pointent maintenant explicitement vers le module
 `.ts`. Après rechargement dans Brave sur 5175, Projet 1 s’affiche avec le
 statut « Synchronisé », l’icône Presentation précède le titre Page B et la
 console ne signale plus d’erreur. Le typecheck et `git diff --check` passent.
-Brave confirme maintenant que le SVG du marqueur de chapitre et celui de la
-page mesurent chacun 14 × 14 px ; la console reste sans erreur. L’affichage du
-titre Flux reste à contrôler dans Brave.
+Safari MCP, le 25 octobre 2026, avait confirmé que les SVG du marqueur de chapitre et de page n’ont pas d’attribut de taille fixe et utilisaient `block-size: 1cap`. La règle est passée à `1.4cap` et doit être revalidée visuellement ; l’affichage du titre Flux reste à contrôler dans Brave.
 
-### Régularité des icônes et de leurs commandes — décision acceptée, vérifiée
+### Taille des icônes d’interface — règle appliquée
 
-L’interface Elcé utilise la taille Lucide la plus fréquente déjà présente :
-14 × 14 px. Les commandes conservent les dimensions définies par leur rôle ; aucune
-taille de bouton commune ne remplace ces gabarits. Le padding autour des icônes
-est harmonisé à 2 px, et l’écart entre icône et libellé ou voisin à 4 px.
-Les SVG qui portent le contenu d’un graphe ou d’une illustration ne sont pas
-des icônes d’interface et gardent leur contrat de rendu.
+Les SVG Lucide de l’interface utilisent `.elce-ui-icon` avec `block-size: 1.4cap` et une largeur automatique. Le renderer retire les attributs SVG `width`/`height` ; l’icône d’ancre réutilise la même classe. La flèche de sélection CSS suit aussi `1cap`. Les dimensions des boutons restent propres à leur rôle, avec le padding de 2 px et l’écart de 4 px déjà définis. Les SVG de graphe et d’illustration gardent leur contrat de rendu.
 
-**Vérification le 9 octobre 2026 :** Brave sur 5175 affiche à 1024 px le
-Scénario, le catalogue, les commandes de page, et sur Page A les éditeurs
-Section/Quiz/Graphe ; Page B couvre le Carousel. À 390 px, l’éditeur montre le
-Carousel et le lecteur popup a été contrôlé. Toutes les icônes d’interface
-mesurées font 14 × 14 px ; le padding interne est de 2 px et les écarts entre
-éléments avec icône de 4 px. Les dimensions de boutons restent propres à chaque
-action. Dans le lecteur popup, les icônes du menu gardent aussi 14 × 14 px et
-les cibles tactiles restent de 40 px et 44 px. Les libellés et noms accessibles
-restent présents. Cette preuve porte sur la taille des icônes, pas sur
-l’adaptation responsive de l’éditeur Carousel ; le débordement observé reste
-ouvert dans la section [Décisions ouvertes](#décisions-ouvertes). Typecheck et
-`git diff --check` passent.
-
+Safari MCP, le 25 octobre 2026, avait vérifié la prise en charge de `1cap` et l’absence de taille fixe sur les 78 icônes d’éditeur présentes. La règle `1.4cap` reste à vérifier visuellement ; les feuilles du popup utilisent la même règle.
 ### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
 
+- **Régression confirmée le 26 octobre 2026 — En cours ; décision utilisateur
+  appliquée dans la scène, acceptation navigateur restante.** Brave MCP, popup
+  locale de « Démo 5 — comparaison Elcé », à
+  1034 × 892 : le sommaire est visible, mais son unique
+  `.elce-player-menu-drawer` conserve `aria-hidden="true"`, `inert` et
+  `data-open="false"`. Les boutons « Distinguer les plans » et « Suivre le
+  regard » ne sont pas désactivés ; `elementFromPoint()` à leur centre cible
+  leur ancêtre, pas le bouton. La console ne signale aucune erreur. Le défaut
+  constaté concerne donc l'interaction sur ordinateur, au-delà de
+  l'incohérence ARIA 800/801 déjà suivie.
+  `elce-player-style.ts` force l'affichage au-dessus de 800 px ;
+  `summary-scene-builder.ts` déclarait aussi `inert` dans son HTML et ses actions
+  d'ouverture/fermeture. Sur instruction utilisateur, ces déclarations ont été
+  retirées ; le gestionnaire responsive conserve `inert` seulement pour le
+  tiroir mobile fermé. Le moment exact où il a été réappliqué dans la popup
+  observée reste à établir.
+  Les tests de composition consultés appellent directement `.click()` et ne
+  couvrent pas l'atteignabilité réelle des boutons dans le navigateur.
+  Acceptation restante :
+  clic réel sur une page autorisée dès le démarrage sur ordinateur, après
+  navigation et synchronisation ; parcours mobile ouvert/fermé, transitions
+  800/801 dans les deux sens, clavier et focus ; puis tests ciblés, typecheck,
+  suite Elcé, build et mise à jour de la spécification après vérification.
 - Décision validée le 5 octobre 2026 : à 800 px et en dessous, une icône ouvre
   un tiroir latéral gauche superposé au contenu ; au-dessus, le sommaire reste
   dans la colonne latérale. Le tiroir se ferme par son icône de fermeture, un
@@ -382,12 +632,13 @@ ouvert dans la section [Décisions ouvertes](#décisions-ouvertes). Typecheck et
   HTML comme canvas. L’incohérence ARIA constatée au passage de 800 à 801 px
   reste consignée comme travail différé et ne bloque pas la tranche actuelle.
   Ne pas ajouter de capacité de breakpoint au travail de focus.
-- Point à résoudre avant l’intégration : `bindMenuDrawer()` retire actuellement
-  `aria-hidden` et `inert` au menu visible sur ordinateur. Sans lui, les valeurs
-  initiales du perso `layout` laissent ce menu visible mais inerte. La scène ne
-  peut pas distinguer les breakpoints avec les capacités courantes. Définir
-  l’état accessible de cette navigation dans la version présente, ou différer
-  son intégration ; ne pas réintroduire un adaptateur DOM.
+- Précision utilisateur du 26 octobre 2026, appliquée : la scène ne déclare plus
+  `inert` dans son HTML ni dans ses actions d’ouverture et de fermeture. Le
+  gestionnaire existant l’ajoute seulement au tiroir mobile fermé et le retire
+  sur ordinateur. La popup observée gardait malgré tout `inert` sur ordinateur ;
+  le parcours navigateur doit confirmer qu’elle reste désormais interactive
+  au démarrage, après navigation et après synchronisation. La coordination
+  générale du focus responsive reste à accepter avant de la modifier.
 - Après correction, rejouer le typecheck, la suite Elcé, le build et le
   parcours Brave sur les tailles concernées par le transfert de focus.
   Confirmer l’animation, Échap, le clic extérieur, la sélection d’une page et
@@ -605,6 +856,19 @@ ouvert dans la section [Décisions ouvertes](#décisions-ouvertes). Typecheck et
   changement du core CodPlay n’est requis.
   Vérifier visuellement le confinement des contenus dans les trois autres
   layouts avant de clore cette acceptation.
+- **Responsive vidéo plein cadre — accepté le 23 octobre 2026, En cours :**
+  une vidéo Carte doit remplir son logement responsive comme le média image du
+  même preset. Le builder Carte applique la classe de dimensionnement au
+  conteneur CodPlay ; la feuille centrale du player contraint la vidéo native à
+  100 % du cadre avec `object-fit: cover`, le cadrage déjà prévu.
+  La règle s’applique par le builder Carte partagé aux Cartes directes, ancrées,
+  Carousel Flux et Carousel Diapo.
+  - [x] Vérifier le perso, son montage dans le player CodPlay, les règles de la
+    feuille centrale et leur présence dans le package exporté ; la suite Elcé
+    passe avec 462 tests, le typecheck et le build.
+  - [ ] Vérifier dans la preview le logement vidéo à grande et petite largeur.
+    L’appel Brave DevTools `list_pages` n’a pas répondu le 23 octobre 2026 ; ce
+    contrôle visuel reste en attente.
 - Étendre le modèle documentaire et ses invariants de placement unique aux
   relations parent/enfant, puis aligner les commandes, la sélection d’édition,
   l’éditeur Carousel, le traitement des médias et la composition de scène sur
@@ -1015,6 +1279,18 @@ Typecheck et build passent, avec l'avertissement de bundle supérieur
 dans `elce-player-composition.test.ts` (titres/navigation), dont les modules
 ne passent pas par le serveur d'assets modifié. Aucun contournement du lecteur
 n'est ajouté ; ces résultats ne certifient pas son intégration complète.
+### Indications de préchargement en développement — décision acceptée
+
+Le navigateur avertit que des dizaines de modules annoncés par
+`entry.preloads` ne sont pas utilisés dans les secondes après le chargement.
+La réponse HTML de développement n’émettra pas ces `modulepreload` : le client
+chargera les modules à leur import. Le build de production conservera les
+préchargements. Le log de connexion HMR reste disponible ; aucune interception
+globale de la console n’est ajoutée.
+
+- [x] Omettre `entry.preloads` du HTML en développement et les conserver en
+  production.
+- [x] Vérifier les deux rendus par test, puis typecheck et build Elcé.
 
 ## Évaluation initiale — BDC insérables dans le flux d’une Section
 
@@ -1048,7 +1324,7 @@ l’éditeur et le builder Carousel existants. Son contrat vérifié figure dans
 [spécification Carousel](../specs/carousel-bdc-spec.md). Le placement Graphe
 dans une Section est également implémenté et vérifié ; ses contrats et preuves
 figurent dans les spécifications du
-[Graphe statistique](../specs/statistical-graph-spec.md) et des
+[Graphe](../specs/statistical-graph-spec.md) et des
 [ancres](../specs/anchor-spec.md).
 
 Le chantier actif rend tous les layouts Carte existants disponibles comme
@@ -1056,39 +1332,12 @@ ancres. Pour rédiger une citation ou une exergue, le layout Texte court est le
 cas de référence. L’aperçu Tiptap affiche les champs et le média compatibles
 avec le layout choisi ; le builder Flux et le player gardent leur projection
 Carte existante. Le futur projet « Graphe de données » pourra préciser des
-types ou usages supplémentaires ; le BDC Graphe statistique actuel est défini
+types ou usages supplémentaires ; le BDC Graphe actuel est défini
 dans sa [spécification dédiée](../specs/statistical-graph-spec.md).
 
 Le réglage permettant de décaler la Carte par rapport au flux grâce à des
 marges adaptées est reporté à une évolution ultérieure. Son comportement
 n’est pas formalisé et ne fait pas partie de la première extension d’ancre.
-
-## Correctif accepté — grille de saisie du Graphe statistique
-
-À la création, l’éditeur montre une grille de 5 lignes sur 3 colonnes, en-têtes
-compris : quatre catégories et deux séries. Les champs de libellés et de valeurs
-restent directement éditables. Les cellules d’en-tête sont légèrement grisées.
-L’interface montre la grille sans texte d’aide visible, avec un « + » fixe à
-droite pour ajouter une colonne en fin de grille, un « + » fixe dessous pour
-ajouter une ligne en fin de grille et un « − » à la fin de chaque en-tête pour
-supprimer sa ligne ou sa colonne. La grille défile dans sa propre zone ; ses
-en-têtes restent visibles et les deux boutons « + » ne défilent pas avec elle.
-Le collage remplace toute la matrice et prend exactement les dimensions du
-tableau collé, sans tenir compte de la grille avant collage, sous la limite de
-41 lignes et colonnes en-têtes compris. Un dépassement laisse le document intact.
-Le réglage « Disposition » configure le layout du BDC Graphe dans son ensemble ;
-il apparaît au niveau du BDC, avant les champs de contenu et séparément des
-réglages de représentation. Son libellé visible et accessible est exactement
-« Disposition ».
-
-**État : interface implémentée, validation visuelle restante.** Le service crée
-quatre catégories et deux séries ; le formulaire garde la grille 5 × 3, en-têtes
-compris, et « Disposition » reste séparée des réglages de représentation. Le
-9 octobre 2026, Brave a refusé l’ajout du Graphe temporaire nécessaire au contrôle
-visuel : il jugeait l’UID du bouton non identifiable dans le snapshot et le clic
-potentiellement modificateur ou destructif. Ne pas contourner le refus. Il reste
-à vérifier le placement fixe des « + », le défilement indépendant, les « − »,
-et à reporter le contrat rendu dans la spécification après validation.
 
 ## Fonctionnalité à faire — copier, couper et coller un BDC
 
@@ -1097,6 +1346,10 @@ Cette fonctionnalité devra définir l’identité créée par la copie, le trai
 des ressources média partagées et celui des BDC composites avant son
 implémentation. Elle reste dans la liste des fonctionnalités à faire et ne fait
 pas partie du changement de catalogue en cours.
+
+Le réemploi de contenus entre projets et mods doit être coordonné avec ce
+contrat de copie, selon D5 du
+[plan de reconfiguration](../mods/plan/2026-10-20-elce-mods-reconfiguration-plan.md).
 
 À coordonner avec Undo/Redo : Copier seul change le presse-papiers, pas le
 document ; Couper et Coller entraînent des mutations documentaires. La tranche
@@ -1260,6 +1513,38 @@ une révision serveur effectivement installée et un changement de projet ne
 rejouent pas un ancien historique. La durée de conservation après rechargement,
 les frontières serveur, le statut Undo des imports réussis, le caret et la
 rétention des blobs doivent être décidés avant de fermer la tranche.
+
+## Extension Sommaire profils et contraintes
+
+**Statut : En cours — intégration Elcé terminée ; 345 tests, typecheck et build
+passent. Le parcours navigateur réseau et sa validation mobile restent à faire.**
+
+- [Plan Sommaire et profils](2026-10-14-elce-sommaire-profils-plan.md) : étapes,
+  acceptation et points restant à vérifier.
+- [Spécification Sommaire et profils](../specs/summary-profile-spec.md) :
+  comportements intégrés et vérifiés.
+- [Notes d’enquête](../notes/2026-10-14-sommaire-profils-contraintes.md) et
+  [étude des raccords](../notes/2026-10-14-sommaire-profils-etude-raccords.md) :
+  exploration et raisons des choix.
+
+Qualifications dynamiques, variantes grammaticales, ACL et lot d’utilisateurs
+restent différés. Les formats internes intégrés sont disponibles pour relecture
+auteur ultérieure.
+
+## Export SCORM
+
+**Statut : En cours — réalisation du dossier SCORM autorisée ; intégration et
+validation du package à poursuivre selon le plan dédié.**
+
+- [Spécification session SCORM](../specs/scorm-session-spec.md) : reprise,
+  écritures CMI et raccords vérifiés dans le player.
+- [Plan d’export SCORM](2026-10-21-elce-scorm-export-plan.md) : versions,
+  reprise de consultation, classe métier, appels depuis les actions de page
+  Sighty, commande et dossier de package SCORM distincts, réutilisation de
+  l’export existant sans reconfiguration, codec, session et raccords au player
+  réalisés ; l’export autonome Sighty est disponible et spécifié ; assembleur,
+  commande SCORM, lanceur de lecture du paquet et validation LMS restent à
+  finaliser.
 
 ## Décisions ouvertes
 

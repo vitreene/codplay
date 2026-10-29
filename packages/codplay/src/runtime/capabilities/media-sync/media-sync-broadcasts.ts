@@ -3,7 +3,7 @@ import type { CompiledRecord } from '../../../scene/compiled'
 import { buildTrackRegistry } from '../../player/pipeline'
 import type { SolvedScene } from '../../player/pipeline'
 import type { MediaTransition } from '../../components/component-surface-types'
-import { readInitialMaster } from './media-sync-state'
+import { readInitialSync } from './media-sync-state'
 import type {
   BroadcastAction,
   BroadcastOccurrence,
@@ -37,7 +37,7 @@ export function createSceneSignature(
 ): string {
   const mediaFlags = Object.values(scene.persos)
     .filter((perso) => perso.type === 'media')
-    .map((perso) => `${perso.key}:${readInitialMaster(scene.scene, perso) ? '1' : '0'}`)
+    .map((perso) => `${perso.key}:${readInitialSync(scene.scene, perso)}`)
     .sort()
   return JSON.stringify([
     mediaFlags,

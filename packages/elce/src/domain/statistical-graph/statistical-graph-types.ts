@@ -19,12 +19,16 @@ export interface StatisticalGraphValue {
 
 export interface StatisticalGraphContent {
   readonly rendering: StatisticalGraphRendering
+  readonly transposeEnabled?: boolean
+  readonly columnLabelsEnabled?: boolean
+  readonly rowLabelsEnabled?: boolean
   readonly overline: string
   readonly title: string
   readonly categoryAxisLabel: string
   readonly seriesAxisLabel: string
   readonly editorialText: string
   readonly pieSeriesId: string | null
+  readonly pieCategoryId?: string | null
   readonly categories: readonly StatisticalGraphCategory[]
   readonly series: readonly StatisticalGraphSeries[]
   readonly values: readonly StatisticalGraphValue[]

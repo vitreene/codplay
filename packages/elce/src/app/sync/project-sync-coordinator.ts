@@ -6,6 +6,7 @@ import type { DocumentSyncState, ElceDocumentStore } from '../../infrastructure/
 import { ElceProjectApiClient, ElceProjectApiError } from '../../infrastructure/project-api/project-api-client'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Actor } from 'xstate'
+import { retainedHistoryMediaIds } from '../history/document-history'
 
 /** Coalesces local saves into serialized project and media API requests. */
 export class ProjectSyncCoordinator {
@@ -45,36 +46,41 @@ export class ProjectSyncCoordinator {
   }
 
   /** Waits for the queued document and every referenced media upload to be acknowledged. */
-  public async waitUntilCurrentDocumentSynced(): Promise<void> {
+  public async waitUntilCurrentDocumentSynced(flushLocal?: () => Promise<void>): Promise<void> {
     if (this.suspended) throw new Error('La synchronisation Elcé est suspendue.')
+    for (;;) {
+      await flushLocal?.()
+      const document = this.controller.getSnapshot().context.document
+      if (this.latestDocument !== document) {
+        if (flushLocal === undefined) {
+          throw new Error('Le document courant doit être enregistré localement avant sa synchronisation.')
+        }
+        this.schedule(document)
+      }
+      if (this.timer !== null) clearTimeout(this.timer)
+      this.timer = null
+      this.lastFailure = null
+      await this.flush()
 
-    const document = this.controller.getSnapshot().context.document
-    if (this.latestDocument !== document) {
-      throw new Error('Le document courant doit être enregistré localement avant sa synchronisation.')
+      if (this.controller.getSnapshot().context.document !== document) {
+        if (flushLocal === undefined) throw new Error('Le document a changé pendant l’attente de sa synchronisation.')
+        continue
+      }
+
+      const syncState = await this.store.loadSyncState(document.id)
+      switch (syncState.status) {
+        case 'synced':
+          if (syncState.remoteRevision !== null) return
+          break
+        case 'conflict':
+          throw new Error('Le document présente un conflit avec sa version serveur.')
+        case 'pending':
+          break
+      }
+
+      if (this.lastFailure !== null) throw this.lastFailure
+      throw new Error('La synchronisation du document ne s’est pas terminée.')
     }
-
-    if (this.timer !== null) clearTimeout(this.timer)
-    this.timer = null
-    this.lastFailure = null
-    await this.flush()
-
-    if (this.controller.getSnapshot().context.document !== document) {
-      throw new Error('Le document a changé pendant l’attente de sa synchronisation.')
-    }
-
-    const syncState = await this.store.loadSyncState(document.id)
-    switch (syncState.status) {
-      case 'synced':
-        if (syncState.remoteRevision !== null) return
-        break
-      case 'conflict':
-        throw new Error('Le document présente un conflit avec sa version serveur.')
-      case 'pending':
-        break
-    }
-
-    if (this.lastFailure !== null) throw this.lastFailure
-    throw new Error('La synchronisation du document ne s’est pas terminée.')
   }
 
   /** Flushes pending writes immediately or waits for an attempt already in progress. */
@@ -175,7 +181,12 @@ export class ProjectSyncCoordinator {
 
     for (const media of document.medias) {
       if (syncState.uploadedMediaIds.includes(media.id)) continue
-      const blob = await this.store.loadMedia(media.id)
+      let blob = await this.store.loadMedia(media.id)
+      const sourceProjectId = syncState.mediaSourceProjectIds?.[media.id]
+      if (blob === null && sourceProjectId !== undefined) {
+        blob = await this.api.downloadMedia(sourceProjectId, media.id)
+        await this.store.saveMedia({ id: media.id, blob })
+      }
       if (blob === null) throw new Error(`Le média local ${media.id} est absent avant son transfert.`)
 
       let source: string
@@ -192,7 +203,8 @@ export class ProjectSyncCoordinator {
         status: 'pending',
       }
       await this.store.saveSyncState(syncState)
-      if (mediaTypeFromMimeType(media.mimeType) === MEDIA_TYPE.IMAGE) {
+      if (mediaTypeFromMimeType(media.mimeType) === MEDIA_TYPE.IMAGE
+        && !retainedHistoryMediaIds(this.controller.getSnapshot().context.history).has(media.id)) {
         await this.store.deleteMedia([media.id])
         this.replaceMediaSource(media.id, source)
       }
@@ -236,10 +248,12 @@ export class ProjectSyncCoordinator {
   private mergeServerDuplicate(error: unknown, document: ElceDocument, duplicateMediaId: string): boolean {
     if (!(error instanceof ElceProjectApiError) || error.code !== 'media_already_exists' || error.mediaId === null) return false
     if (!document.medias.some((media) => media.id === error.mediaId)) return false
-    if (this.controller.getSnapshot().context.editAccess !== 'active') return false
+    if (this.controller.getSnapshot().context.activeProject?.id !== document.id) return false
     this.controller.send({
-      type: 'document.apply',
-      command: { type: 'media.merge', canonicalMediaId: error.mediaId, duplicateMediaIds: [duplicateMediaId] },
+      type: 'document.sync.merge',
+      projectId: document.id,
+      canonicalMediaId: error.mediaId,
+      duplicateMediaId,
     })
     return true
   }

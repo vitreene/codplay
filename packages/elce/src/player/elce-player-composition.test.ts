@@ -1,14 +1,20 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
-import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand } from '../domain/commands/document-commands'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
 import { ElceQuestionService } from '../domain/question/question-service'
+import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import type { ProfileDefinition } from '../domain/summary-profile/summary-profile-types'
+import type { ProjectTestState } from '../domain/summary-profile/test-state-types'
 import { ElcePlayerComposition, createPageSceneCatalog } from './elce-player-composition'
+import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
+import { createPlayerPreviewComposition } from '../app/player/player-preview'
 import type { ElcePageSceneCache } from './player-composition-types'
 
 type IntersectionEntry = Pick<IntersectionObserverEntry, 'target' | 'intersectionRatio' | 'isIntersecting'>
+type PointerMovement = Readonly<{ movementX?: number; movementY?: number }>
 
 /** Delivers deterministic native-shaped intersection callbacks to the real adapter. */
 class ControlledIntersectionObserver {
@@ -44,6 +50,24 @@ function flushPendingFrames(pendingFrames: FrameRequestCallback[], timestamp = 0
   for (const callback of callbacks) callback(timestamp)
 }
 
+/** Dispatches one pointer sample through the real browser capture source. */
+function dispatchPointerEvent(target: EventTarget, type: string, movement: PointerMovement = {}): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    pointerId: { value: 1 },
+    clientX: { value: 0 },
+    clientY: { value: 0 },
+    movementX: { value: movement.movementX ?? 0 },
+    movementY: { value: movement.movementY ?? 0 },
+  })
+  target.dispatchEvent(event)
+}
+
+/** Waits for the player event queue to apply a native interaction. */
+async function waitForPlayerActions(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 35))
+}
+
 describe('Elcé player composition', () => {
   let composition: ElcePlayerComposition | undefined
 
@@ -54,6 +78,11 @@ describe('Elcé player composition', () => {
     document.body.replaceChildren()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('contains vertical scroll chaining at the Flux scrollport boundary', () => {
+    expect(ELCE_PLAYER_STYLE_SHEET)
+      .toMatch(/\.elce-flux-scrollport\s*\{[^}]*overscroll-behavior-y:\s*contain;/s)
   })
 
   it('reuses unchanged page scenes across organization changes and rebuilds only an edited page scene', () => {
@@ -106,6 +135,282 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-flux-article')).not.toBeNull()
   })
 
+  it('validates the profile form and routes a valid submission to the root summary', async () => {
+    const initial = createInitialDocument()
+    const profile: ProfileDefinition = {
+      properties: [{
+        id: 'profile-display-name',
+        name: 'display_name',
+        label: 'Nom',
+        type: 'text',
+        required: true,
+        choices: [],
+      }, {
+        id: 'profile-age',
+        name: 'age',
+        label: 'Âge',
+        type: 'number',
+        required: false,
+        choices: [],
+      }, {
+        id: 'profile-role',
+        name: 'role',
+        label: 'Rôle',
+        type: 'choice-one',
+        required: true,
+        choices: [
+          { id: 'role-author', label: 'Auteur' },
+          { id: 'role-reader', label: 'Lecteur' },
+        ],
+      }, {
+        id: 'profile-topics',
+        name: 'topics',
+        label: 'Sujets',
+        type: 'choice-many',
+        required: false,
+        choices: [
+          { id: 'topic-code', label: 'Code' },
+          { id: 'topic-art', label: 'Art' },
+        ],
+      }],
+      fieldPropertyIds: ['profile-display-name', 'profile-age', 'profile-role', 'profile-topics'],
+      constraints: [],
+      readingConstraints: [],
+    }
+    let documentModel = applyDocumentCommand(initial, { type: 'profile.definition.update', profile })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'summary.settings.update',
+      summary: { ...documentModel.data.summary, showAtRoot: true },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const testStates: ProjectTestState[] = []
+    const profileComposition = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: null,
+      mediaSources: {},
+      testState: INITIAL_PROJECT_TEST_STATE,
+      onTestStateChange: (state) => { testStates.push(state) },
+    })
+    if (profileComposition === null) throw new Error('La composition de prévisualisation du profil est absente.')
+    composition = profileComposition
+
+    await profileComposition.initialize()
+
+    expect(stage.querySelector('.elce-profile-form')).not.toBeNull()
+    const submit = stage.querySelector<HTMLButtonElement>('.elce-profile-form__submit')
+    submit?.click()
+    await waitForPlayerActions()
+    expect(stage.querySelector('.elce-profile-form__field')?.textContent).toContain('Nom')
+    expect(stage.querySelector('[role="status"]')?.textContent).toContain('Nom est obligatoire.')
+    expect(stage.querySelector('.elce-summary--root')).toBeNull()
+
+    const input = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="text"]')
+    expect(input).not.toBeNull()
+    if (input === null || submit === null) throw new Error('Le formulaire Profil ne s’est pas monté.')
+    input.value = 'Ada'
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    const ageInput = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="number"]')
+    const roleInput = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="radio"][value="role-author"]')
+    const topicInputs = stage.querySelectorAll<HTMLInputElement>('.elce-profile-form input[type="checkbox"]')
+    expect(ageInput).not.toBeNull()
+    expect(roleInput).not.toBeNull()
+    expect(topicInputs).toHaveLength(2)
+    if (ageInput === null || roleInput === null) throw new Error('Les champs Profil typés ne se sont pas montés.')
+    ageInput.value = '35'
+    ageInput.dispatchEvent(new Event('change', { bubbles: true }))
+    roleInput.checked = true
+    roleInput.dispatchEvent(new Event('change', { bubbles: true }))
+    const topicCode = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="checkbox"][value="topic-code"]')
+    const topicArt = stage.querySelector<HTMLInputElement>('.elce-profile-form input[type="checkbox"][value="topic-art"]')
+    expect(topicCode).not.toBeNull()
+    expect(topicArt).not.toBeNull()
+    if (topicCode === null || topicArt === null) throw new Error('Les choix multiples du profil sont absents.')
+    topicCode.checked = true
+    topicCode.dispatchEvent(new Event('change', { bubbles: true }))
+    topicArt.checked = true
+    topicArt.dispatchEvent(new Event('change', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(testStates.at(-1)).toMatchObject({
+      profileValues: {
+        'profile-display-name': 'Ada',
+        'profile-age': 35,
+        'profile-role': 'role-author',
+        'profile-topics': ['topic-code', 'topic-art'],
+      },
+    })
+    submit.click()
+    await waitForPlayerActions()
+
+    expect(stage.querySelector('.elce-player-profile-complete')).not.toBeNull()
+    const submittedState = testStates.at(-1)
+    expect(submittedState).toMatchObject({
+      profileSubmitted: true,
+      profileValues: {
+        'profile-display-name': 'Ada',
+        'profile-age': 35,
+        'profile-role': 'role-author',
+        'profile-topics': ['topic-code', 'topic-art'],
+      },
+    })
+    if (submittedState === undefined) throw new Error('La validation du profil n’a pas publié son état test.')
+
+    profileComposition.destroy()
+    const submittedComposition = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: null,
+      mediaSources: {},
+      testState: submittedState,
+    })
+    if (submittedComposition === null) throw new Error('La composition de prévisualisation après profil est absente.')
+    composition = submittedComposition
+    await submittedComposition.initialize()
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+  })
+
+  it('routes the active page to the root summary from its menu link', async () => {
+    const initial = createInitialDocument()
+    const documentModel = applyDocumentCommand(initial, {
+      type: 'summary.settings.update',
+      summary: { ...initial.data.summary, showAtRoot: true, showInMenu: true, permanentAccess: true },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const playerComposition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: documentModel.pages[0]?.id,
+    })
+    composition = playerComposition
+
+    await playerComposition.initialize()
+
+    expect(stage.querySelector('.elce-summary--root')).toBeNull()
+    const summaryLink = stage.querySelector<HTMLButtonElement>('.elce-player-menu__chapter-button')
+    expect(summaryLink).not.toBeNull()
+    expect(summaryLink?.textContent).toContain('Sommaire')
+    summaryLink?.click()
+    await waitForPlayerActions()
+
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+  })
+
+  it('keeps a profile-locked page in the summary and blocks its menu entry', async () => {
+    const initial = createInitialDocument()
+    const withPage = applyDocumentCommand(initial, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-b',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const documentModel = applyDocumentCommand(withPage, {
+      type: 'profile.definition.update',
+      profile: {
+        ...withPage.data.profile,
+        properties: [{
+          id: 'profile-region', name: 'region', label: 'Région', type: 'text', required: false, choices: [],
+        }],
+        constraints: [{
+          id: 'locked-page',
+          target: { kind: 'page', id: 'page-b' },
+          conditions: [{
+            propertyId: 'profile-region',
+            condition: { kind: 'text', operator: 'equals', value: 'teacher' },
+            joinWithNext: null,
+          }],
+          unmetBehavior: 'lock',
+        }],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const testState: ProjectTestState = {
+      ...INITIAL_PROJECT_TEST_STATE,
+      profileEnabled: true,
+      profileSubmitted: true,
+      profileValues: { 'profile-region': 'student' },
+    }
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: 'page-b',
+      mediaSources: {},
+      testState,
+    })
+    if (preview === null) throw new Error('La composition de prévisualisation est absente.')
+    composition = preview
+
+    await preview.initialize()
+
+    const pageEntry = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-b"]')
+    expect(pageEntry).not.toBeNull()
+    expect(pageEntry?.getAttribute('data-locked')).toBe('true')
+    expect(pageEntry?.getAttribute('aria-label')).toBe('Page B, verrouillé')
+    expect(pageEntry?.disabled).toBe(true)
+    pageEntry?.click()
+    await waitForPlayerActions()
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A')
+  })
+
+  it('shows a locked chapter entry when its chapter visibility condition fails', async () => {
+    const initial = createInitialDocument()
+    const withChapter = applyDocumentCommand(initial, {
+      type: 'chapter.create', chapterId: 'chapter-2', name: 'Chapitre 2',
+    })
+    const withPage = applyDocumentCommand(withChapter, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-b',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-2' },
+    }))
+    const withSummary = applyDocumentCommand(withPage, {
+      type: 'summary.settings.update',
+      summary: { ...withPage.data.summary, displayMode: 'chapters', showAtRoot: true },
+    })
+    const documentModel = applyDocumentCommand(withSummary, {
+      type: 'profile.definition.update',
+      profile: {
+        ...withSummary.data.profile,
+        properties: [{
+          id: 'profile-region', name: 'region', label: 'Région', type: 'text', required: false, choices: [],
+        }],
+        constraints: [{
+          id: 'locked-chapter',
+          target: { kind: 'chapter', id: 'chapter-2' },
+          conditions: [{
+            propertyId: 'profile-region',
+            condition: { kind: 'text', operator: 'equals', value: 'teacher' },
+            joinWithNext: null,
+          }],
+          unmetBehavior: 'lock',
+        }],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: 'page-b',
+      mediaSources: {},
+      testState: {
+        ...INITIAL_PROJECT_TEST_STATE,
+        profileEnabled: true,
+        profileSubmitted: true,
+        profileValues: { 'profile-region': 'student' },
+      },
+    })
+    if (preview === null) throw new Error('La composition de prévisualisation est absente.')
+    composition = preview
+
+    await preview.initialize()
+
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+    const chapterEntry = stage.querySelector<HTMLButtonElement>('.elce-summary__entry-button[data-page-id="page-b"]')
+    expect(chapterEntry?.textContent).toBe('Chapitre 2')
+    expect(chapterEntry?.getAttribute('data-locked')).toBe('true')
+    expect(chapterEntry?.getAttribute('aria-label')).toBe('Chapitre 2, verrouillé')
+    expect(chapterEntry?.disabled).toBe(true)
+  })
+
   it('plays the default Question BDC of a page created in an Evaluation chapter', async () => {
     const initialDocument = createInitialDocument()
     const withEvaluation = applyDocumentCommand(initialDocument, createChapterCommand(
@@ -143,7 +448,10 @@ describe('Elcé player composition', () => {
     expect(carousel.playbackMode).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     const stage = document.createElement('div')
     document.body.append(stage)
-    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+    })
 
     await composition.initialize()
 
@@ -153,7 +461,7 @@ describe('Elcé player composition', () => {
     expect(viewElements).toHaveLength(2)
     expect(viewElements[0]?.classList.contains('elce-carousel-view--visible')).toBe(true)
     expect(viewElements[1]?.classList.contains('elce-carousel-view--hidden')).toBe(true)
-    expect(viewElements[0]?.querySelector(':scope > h2.elce-card-text-short__title')).toBeNull()
+    expect(viewElements[0]?.querySelector(':scope > h2.elce-card__title')).toBeNull()
     expect(viewElements[0]?.querySelector('h2 h2, p p, footer footer')).toBeNull()
 
     navigationDots[1]?.click()
@@ -163,6 +471,110 @@ describe('Elcé player composition', () => {
     expect(viewElements[1]?.classList.contains('elce-carousel-view--visible')).toBe(true)
     expect(navigationDots[1]?.getAttribute('aria-current')).toBe('true')
     expect(navigationDots[1]?.getAttribute('aria-label')).toBe('Aller à la vue 2')
+  })
+
+  it('plays a bold image-title Card with its derived gradient through Carousel navigation', async () => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'image-title-media', name: 'cover.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    let documentModel = applyDocumentCommand(withMedia, createCarouselBdcCommand('image-title-carousel', 'page-a', 1))
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === 'image-title-carousel')
+    const firstCardId = carousel?.carousel?.cards[0]?.bdcId
+    if (firstCardId === undefined) throw new Error('The image-title Carousel has no first Card.')
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'image-title-next-card',
+      'image-title-carousel',
+      1,
+      DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.layout.set',
+      bdcId: firstCardId,
+      layoutId: DEFAULT_PRESET_ID.IMAGE_TITLE,
+    })
+    const firstCard = documentModel.bdcs.find((bdc) => bdc.id === firstCardId)?.card
+    if (firstCard === undefined || firstCard === null) throw new Error('The first Carousel Card has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.update',
+      bdcId: firstCardId,
+      card: { ...firstCard, title: 'Titre centré et gras' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set',
+      bdcId: firstCardId,
+      mediaId: 'image-title-media',
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'appearance.background.set',
+      target: { kind: 'bdc', bdcId: firstCardId },
+      value: { kind: 'gradient', id: 'background-accent-secondary' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const image = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22%3E%3C/svg%3E'
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { 'image-title-media': image },
+    })
+
+    await composition.initialize()
+
+    const imageTitleCard = stage.querySelector<HTMLElement>('.elce-card--image-title')
+    const firstView = imageTitleCard?.closest<HTMLElement>('.elce-carousel-view')
+    const title = imageTitleCard?.querySelector<HTMLElement>('.elce-card__title')
+    const imageElement = imageTitleCard?.querySelector<HTMLImageElement>('.elce-card__image img')
+    expect(title?.textContent).toBe('Titre centré et gras')
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(imageElement?.getAttribute('src')).toBe(image)
+    expect(getComputedStyle(title!).fontWeight).toMatch(/^(700|bold)$/)
+
+    const dots = stage.querySelectorAll<HTMLButtonElement>('.elce-carousel-dot')
+    dots[1]?.click()
+    await new Promise<void>((resolve) => setTimeout(resolve, 40))
+    expect(stage.querySelector('.elce-carousel-view--visible .elce-card--image-title')).toBeNull()
+  })
+
+  it('renders an image-title Card as a direct Diapo block', async () => {
+    const initialDocument = createInitialDocument()
+    const diapoCommand = createDefaultPageCommand(
+      initialDocument,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Titre sur image',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(initialDocument, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createStandaloneCardBdcCommand(
+      'bdc-diapo-image-title',
+      diapoCommand.pageId,
+      DEFAULT_PRESET_ID.IMAGE_TITLE,
+    ))
+    const card = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-diapo-image-title')?.card
+    if (card === undefined || card === null) throw new Error('The image-title Diapo Card has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.update',
+      bdcId: 'bdc-diapo-image-title',
+      card: { ...card, title: 'Titre Diapo centré' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'appearance.background.set',
+      target: { kind: 'bdc', bdcId: 'bdc-diapo-image-title' },
+      value: { kind: 'gradient', id: 'background-surface' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: diapoCommand.pageId })
+
+    await composition.initialize()
+
+    const imageTitleCard = stage.querySelector<HTMLElement>('.elce-card--image-title')
+    const title = imageTitleCard?.querySelector<HTMLElement>('.elce-card__title')
+    expect(imageTitleCard).not.toBeNull()
+    expect(title?.textContent).toBe('Titre Diapo centré')
+    expect(getComputedStyle(title!).fontWeight).toMatch(/^(700|bold)$/)
+    expect(stage.querySelector('.elce-diapo-host')).not.toBeNull()
   })
 
   it('emits a standalone Diapo Card completion and unlocks the next page from the selected preview start', async () => {
@@ -231,7 +643,7 @@ describe('Elcé player composition', () => {
     expect(traceEvents).toContain(ELCE_EVENTS.PAGE_FINISHED)
     expect(instanceEvents).toContain(ELCE_EVENTS.PAGE_FINISHED)
     expect(stage.querySelector('.elce-card--text-short')).not.toBeNull()
-    expect((stage.querySelector('.elce-diapo-host') as HTMLElement | null)?.style.overflowY).toBe('hidden')
+    expect((stage.querySelector('.elce-diapo-host') as HTMLElement | null)?.getAttribute('style')).toBeNull()
     expect(stage.querySelector('.elce-flux-scrollport')).toBeNull()
     expect(publicEvents).toContainEqual(expect.objectContaining({
       name: ELCE_EVENTS.PAGE_FINISHED,
@@ -239,7 +651,7 @@ describe('Elcé player composition', () => {
       data: { pageId: diapoCommand.pageId },
     }))
     expect(nextButton?.disabled).toBe(false)
-    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-card')?.getAttribute('data-locked'))
+    expect(stage.querySelector('.elce-player-menu__page-button[data-page-id="page-after-diapo-card"]')?.getAttribute('data-locked'))
       .toBe('false')
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
@@ -321,7 +733,7 @@ describe('Elcé player composition', () => {
     }))
     expect(publicEvents.some((event) => event.name === ELCE_EVENTS.SCENE_END)).toBe(false)
     expect(nextButton?.disabled).toBe(false)
-    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-carousel')?.getAttribute('data-locked'))
+    expect(stage.querySelector('.elce-player-menu__page-button[data-page-id="page-after-diapo-carousel"]')?.getAttribute('data-locked'))
       .toBe('false')
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
@@ -384,7 +796,7 @@ describe('Elcé player composition', () => {
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-question-feedback')?.textContent).toMatch(/Bonne réponse|Réponse incorrecte/)
     expect(nextButton?.disabled).toBe(false)
-    expect(stage.querySelector('.elce-player-menu__page-button--page-after-diapo-question')?.getAttribute('data-locked'))
+    expect(stage.querySelector('.elce-player-menu__page-button[data-page-id="page-after-diapo-question"]')?.getAttribute('data-locked'))
       .toBe('false')
     expect(stage.querySelector('.elce-card--question')).not.toBeNull()
     expect(publicEvents).toContainEqual(expect.objectContaining({
@@ -464,6 +876,7 @@ describe('Elcé player composition', () => {
       startPageId: diapoCommand.pageId,
       mediaSources: { 'media-diapo-carousel-card': source },
     })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
 
     await composition.initialize()
 
@@ -472,6 +885,7 @@ describe('Elcé player composition', () => {
     const photoView = image?.closest('.elce-carousel-view')
     const carouselRoot = stage.querySelector('.elce-diapo-carousel-root')
     const contentSlot = stage.querySelector('.elce-player-layout__content-slot')
+    const pageRoot = stage.querySelector('.elce-diapo-content')
     const imagePath: Element[] = []
     for (let element: Element | null = image ?? null; element !== null; element = element.parentElement) {
       imagePath.push(element)
@@ -481,10 +895,28 @@ describe('Elcé player composition', () => {
     expect(contentSlot?.tagName).toBe('SECTION')
     expect(contentSlot?.classList.contains('elce-player-layout__content')).toBe(true)
     expect(stage.querySelector('.elce-diapo-host')).toBeNull()
+    expect(pageRoot?.parentElement).toBe(contentSlot)
     expect(photoView?.parentElement).toBe(carouselRoot)
-    expect(carouselRoot?.parentElement).toBe(contentSlot)
+    expect(carouselRoot?.parentElement).toBe(pageRoot)
     expect(imagePath.at(-1)).toBe(contentSlot)
-    expect(imagePath.length).toBeLessThanOrEqual(6)
+    expect(imagePath.length).toBeLessThanOrEqual(7)
+
+    const imageRoot = photoView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(imageRoot?.parentElement).toBe(viewportHost)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(document.activeElement).toBe(imageRoot)
   })
 
   it('keeps a Diapo Carousel composition unchanged after navigating away and back', async () => {
@@ -550,7 +982,7 @@ describe('Elcé player composition', () => {
     const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
     const pageBButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
       .find((button) => button.textContent === 'Diapo Carousel')
-    const pageCButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-after-diapo-replay')
+    const pageCButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-after-diapo-replay"]')
     const pageAMarker = stage.querySelector('#page-a-bottom-marker')
     const pageAObserver = ControlledIntersectionObserver.instances.find((observer) => observer.targets.has(pageAMarker as Element))
     expect(pageBButton?.getAttribute('data-locked')).toBe('true')
@@ -632,7 +1064,10 @@ describe('Elcé player composition', () => {
     })
     const stage = document.createElement('div')
     document.body.append(stage)
-    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+    })
 
     await composition.initialize()
     await new Promise<void>((resolve) => setTimeout(resolve, 450))
@@ -796,9 +1231,8 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    const chapterHeading = stage.querySelector('#elce-menu-chapter-heading-chapter-1')
-    expect(chapterHeading?.querySelectorAll('.elce-player-menu__chapter-button')).toHaveLength(1)
-    expect(chapterHeading?.textContent?.trim()).toBe('Chapitre 1')
+    expect(stage.querySelectorAll('.elce-player-menu__group-title')).toHaveLength(1)
+    expect(stage.querySelector('.elce-player-menu__group-title')?.textContent?.trim()).toBe('Chapitre 1')
   })
 
   it('routes the initial visible bottom marker through CodPlay for a short Flux page', async () => {
@@ -822,14 +1256,13 @@ describe('Elcé player composition', () => {
     composition = new ElcePlayerComposition({ stage, document: documentModel })
 
     await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
 
     const marker = stage.querySelector('#page-a-bottom-marker')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
     expect(observer).toBeDefined()
     observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
-    flushPendingFrames(pendingFrames)
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    await flushCompositionFrames(pendingFrames)
 
     expect(stage.querySelector('.elce-player-navigation__button--next')?.hasAttribute('disabled')).toBe(false)
   })
@@ -855,6 +1288,7 @@ describe('Elcé player composition', () => {
     composition = new ElcePlayerComposition({ stage, document: documentModel })
 
     await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
 
     const marker = stage.querySelector('#page-a-bottom-marker')
     const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
@@ -862,14 +1296,12 @@ describe('Elcé player composition', () => {
     expect(observer).toBeDefined()
     observer?.deliver({ target: marker as Element, intersectionRatio: 0, isIntersecting: false })
     observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
-    flushPendingFrames(pendingFrames)
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    await flushCompositionFrames(pendingFrames)
 
     expect(stage.querySelector('.elce-player-navigation__button--next')?.hasAttribute('disabled')).toBe(false)
   })
 
-  it('records scroll-end when an anchored Card outro shares its observer batch with the bottom marker', async () => {
+  it('records scroll-end when the anchored Card outro and bottom marker use separate observer groups', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrames.push(callback)
@@ -919,6 +1351,7 @@ describe('Elcé player composition', () => {
       mediaSources: { 'media-scroll-card': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
     })
     await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
 
     const marker = stage.querySelector('#page-a-bottom-marker')
     const card = stage.querySelector('.elce-flux-card-root')
@@ -926,7 +1359,7 @@ describe('Elcé player composition', () => {
       candidate.targets.has(marker as Element) && candidate.targets.has(card as Element)
     ))
     const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
-    const pageBButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button--page-b')
+    const pageBButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-b"]')
 
     expect(observer).toBeDefined()
     expect(nextButton?.disabled).toBe(true)
@@ -940,12 +1373,14 @@ describe('Elcé player composition', () => {
       { target: card as Element, intersectionRatio: 0, isIntersecting: false },
       { target: marker as Element, intersectionRatio: 1, isIntersecting: true },
     ])
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
-    flushPendingFrames(pendingFrames)
-    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    await flushCompositionFrames(pendingFrames)
 
     expect(nextButton?.disabled).toBe(false)
     expect(pageBButton?.getAttribute('data-locked')).toBe('false')
+    pageBButton?.click()
+    await flushCompositionFrames(pendingFrames)
+
+    expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
   })
 
   it('starts the selected page in the Sighty content slot', async () => {
@@ -968,6 +1403,30 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('#page-a-scrollport')).toBeNull()
   })
 
+  it('routes a page-button click in the table of contents through Sighty', async () => {
+    const initialDocument = createInitialDocument()
+    const documentModel = applyDocumentCommand(initialDocument, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-2',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: 'page-b' })
+
+    await composition.initialize()
+
+    const pageAButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-a"]')
+    expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
+    expect(pageAButton).not.toBeNull()
+    pageAButton?.click()
+    await waitForPlayerActions()
+
+    expect(stage.querySelector('#page-a-scrollport')).not.toBeNull()
+    expect(stage.querySelector('#page-b-scrollport')).toBeNull()
+  })
+
   it('continues from a directly previewed Evaluation question to the next question after its Sighty gates', async () => {
     const pendingFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -981,8 +1440,14 @@ describe('Elcé player composition', () => {
     if (precedingQuestionPageId === undefined) throw new Error('The fixture has no preceding Evaluation question.')
 
     const stage = document.createElement('div')
+    const testStates: ProjectTestState[] = []
     document.body.append(stage)
-    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: precedingQuestionPageId })
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: precedingQuestionPageId,
+      onTestStateChange: (state) => testStates.push(state),
+    })
 
     await composition.initialize()
     await flushCompositionFrames(pendingFrames)
@@ -1009,6 +1474,18 @@ describe('Elcé player composition', () => {
     await flushCompositionFrames(pendingFrames)
     validateButton?.click()
     await flushCompositionFrames(pendingFrames)
+    const answeredPage = documentModel.pages.find((page) => page.id === precedingQuestionPageId)
+    const answeredQuestion = documentModel.bdcs.find((bdc) => answeredPage?.bdcIds.includes(bdc.id) && bdc.question !== null)?.question
+    const evaluationChapterId = answeredPage?.chapterId
+    const answeredState = evaluationChapterId === null || evaluationChapterId === undefined
+      ? undefined
+      : testStates.at(-1)?.evaluationStates[evaluationChapterId]?.context.answers[precedingQuestionPageId]
+    expect(answeredState).toMatchObject({
+      description: [answeredQuestion?.title, answeredQuestion?.prompt].filter((text) => text?.trim()).join(' '),
+    })
+    expect(answeredState?.latencyMs).toEqual(expect.any(Number))
+    expect(answeredState?.latencyMs).toBeGreaterThan(0)
+    expect(answeredState?.timestampMs).toEqual(expect.any(Number))
     pageDObserver?.deliver({ target: pageDMarker as Element, intersectionRatio: 1, isIntersecting: true })
     await flushCompositionFrames(pendingFrames)
 
@@ -1066,6 +1543,42 @@ describe('Elcé player composition', () => {
     nextButton?.click()
     await flushCompositionFrames(pendingFrames)
     expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+  })
+
+  it('keeps an Evaluation Result inaccessible in free page continuation mode', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const fixture = createEvaluationQuestionPages()
+    const documentModel = applyDocumentCommand(fixture.documentModel, {
+      type: 'summary.settings.update',
+      summary: { ...fixture.documentModel.data.summary, pageContinuationMode: 'free' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: fixture.pageFId })
+
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')
+    const pageGButton = Array.from(stage.querySelectorAll<HTMLButtonElement>('.elce-player-menu__page-button'))
+      .find((button) => button.textContent === 'Page G')
+
+    expect(nextButton?.disabled).toBe(true)
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
+    nextButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    pageGButton?.click()
+    await flushCompositionFrames(pendingFrames)
+
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    expect(stage.querySelector('.elce-card--evaluation-result')).toBeNull()
+    expect(pageGButton?.getAttribute('data-locked')).toBe('true')
   })
 
   it('navigates from a completed Evaluation question to its accessible next page', async () => {
@@ -1355,7 +1868,7 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('#page-c-article .elce-question-feedback')?.textContent).toBe('Bonne réponse.')
     expectQuestionCorrection(stage.querySelector('#page-c-article')!, { correct: 2, incorrect: 0, missedCorrect: 0 })
 
-    const chapterMenuButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__chapter-button')
+    const chapterMenuButton = stage.querySelector<HTMLButtonElement>('.elce-player-menu__page-button[data-page-id="page-a"]')
     expect(chapterMenuButton).not.toBeNull()
     chapterMenuButton?.click()
     for (let pass = 0; pass < 4; pass += 1) {
@@ -1425,10 +1938,625 @@ describe('Elcé player composition', () => {
       document: documentModel,
       mediaSources: { 'media-image-1': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
     })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
 
     await composition.initialize()
 
     expect(stage.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
+  })
+
+  it('keeps an initially visible Card stable and replays its reveal in both scroll directions', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    let frameTime = performance.now()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const { documentModel: initialDocument } = createAnchoredImagePreviewDocument('bdc-preview-scroll-reveal', 'media-preview-scroll-reveal')
+    const documentModel = applyDocumentCommand(initialDocument, {
+      type: 'document.revelation.update',
+      revelationDefaults: {
+        intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+        outro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: 'page-a',
+      mediaSources: { 'media-preview-scroll-reveal': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+    if (preview === null) throw new Error('La composition de preview est absente.')
+    composition = preview
+    const runtime = (preview as unknown as {
+      readonly sighty: { readonly runtime: { getInstance(sceneKey: string): {
+        readonly snapshot: { get(): { readonly states: readonly { target: { persoId: string }; state: { style?: Readonly<Record<string, unknown>> } }[] } | null }
+      } | undefined } }
+    }).sighty.runtime
+
+    await preview.initialize()
+    const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const cardMedia = cardRoot?.querySelector<HTMLElement>('.elce-carousel-media')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
+    expect(cardRoot).not.toBeNull()
+    expect(cardMedia).not.toBeNull()
+    expect(observer).toBeDefined()
+    const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
+      .find((state) => state.target.persoId.includes('card-bdc-preview-scroll-reveal-media'))
+      ?.state.style
+    const cardX = () => {
+      const x = cardState()?.x
+      if (typeof x === 'number') return x
+      return typeof x === 'object' && x !== null && 'value' in x && typeof x.value === 'number' ? x.value : NaN
+    }
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
+    expect(cardMedia?.style.opacity).toBe('1')
+
+    // A first measurement inside leaves an already-visible Card stable.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
+
+    // Leaving and re-entering replays the configured Card actions.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
+    await waitForPlayerActions()
+
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardX()).toBeLessThan(0)
+    })
+
+    for (let frame = 1; frame <= 8; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(cardState()).toMatchObject({ opacity: 0 })
+    expect(cardX()).toBe(-250)
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(cardState()?.opacity).toBeGreaterThan(0)
+      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardX()).toBeGreaterThan(-250)
+      expect(cardX()).toBeLessThan(0)
+    })
+
+    for (let frame = 1; frame <= 8; frame += 1) {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
+    expect(cardMedia?.style.opacity).toBe('1')
+  })
+
+  it('reveals a Card on its first entry after the initial outside measurement', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    let frameTime = performance.now()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    const mediaId = 'media-first-card-entry'
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: mediaId, name: 'first-entry.png', mimeType: 'image/png', size: 10, caption: '' },
+    })
+    const withCard = createCardWithMedia(withMedia, 'bdc-first-card-entry', mediaId)
+    const documentModel = applyDocumentCommand(withCard, {
+      type: 'document.revelation.update',
+      revelationDefaults: {
+        intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+        outro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: { [mediaId]: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' },
+    })
+
+    await composition.initialize()
+    const cardRoot = stage.querySelector<HTMLElement>('.elce-flux-card-root')
+    const cardMedia = cardRoot?.querySelector<HTMLElement>('.elce-carousel-media')
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(cardRoot as Element))
+    const runtime = (composition as unknown as {
+      readonly sighty: { readonly runtime: { getInstance(sceneKey: string): {
+        readonly snapshot: { get(): { readonly states: readonly { target: { persoId: string }; state: { style?: Readonly<Record<string, unknown>> } }[] } | null }
+      } | undefined } }
+    }).sighty.runtime
+    const cardState = () => runtime.getInstance('scene-page-a')?.snapshot.get()?.states
+      .find((state) => state.target.persoId.includes('card-bdc-first-card-entry-media'))
+      ?.state.style
+    const cardX = () => {
+      const x = cardState()?.x
+      if (typeof x === 'number') return x
+      return typeof x === 'object' && x !== null && 'value' in x && typeof x.value === 'number' ? x.value : NaN
+    }
+
+    expect(cardRoot).not.toBeNull()
+    expect(cardMedia).not.toBeNull()
+    expect(observer).toBeDefined()
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
+
+    // The first outside measurement only seeds the phase; crossing inside then plays the Card action.
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 0, isIntersecting: false })
+    await waitForPlayerActions()
+    expect(cardState()).toMatchObject({ opacity: 1 })
+    expect(cardX()).toBe(0)
+    expect(cardRoot?.style.length).toBe(0)
+
+    observer?.deliver({ target: cardRoot as Element, intersectionRatio: 1, isIntersecting: true })
+    await waitForPlayerActions()
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(cardState()?.opacity).toBeGreaterThan(0)
+      expect(cardState()?.opacity).toBeLessThan(1)
+      expect(cardX()).toBeGreaterThan(-250)
+      expect(cardX()).toBeLessThan(0)
+    })
+  })
+
+  it('opens a direct image in the viewport and closes it with Escape through the real player', async () => {
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-expanded-image', name: 'expanded.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const documentModel = createCardWithMedia(withMedia, 'bdc-expanded-image', 'media-expanded-image')
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-expanded-image': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const imageRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const scrollport = stage.querySelector<HTMLElement>('.elce-flux-scrollport')
+    expect(imageRoot).not.toBeNull()
+    const focusImage = vi.spyOn(imageRoot!, 'focus')
+    expect(viewportHost).not.toBeNull()
+    expect(viewportHost?.id).toMatch(/-frame$/)
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host')).toBe(true)
+    expect(viewportHost?.style.opacity).toBe('1')
+    expect(viewportHost?.style.position).toBe('')
+    expect(scrollport).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(viewportHost?.style.opacity).toBe('1')
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    expect(viewportHost?.getAttribute('aria-hidden')).toBe('false')
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closing')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    dispatchPointerEvent(viewportHost!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(viewportHost?.style.opacity).toBe('1')
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(false)
+    expect(focusImage).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(imageRoot)
+  })
+
+  it('moves only a direct Graph visualization and leaves its title and commentary in place', async () => {
+    let documentModel = applyDocumentCommand(
+      createInitialDocument(),
+      createStatisticalGraphBdcCommand('bdc-expanded-graph', 'page-a', 0),
+    )
+    const graph = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-expanded-graph')
+    if (graph?.statisticalGraph == null) throw new Error('The fixture Graph has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: graph.id,
+      statisticalGraph: {
+        ...graph.statisticalGraph,
+        title: 'Ventes par région',
+        editorialText: 'Les ventes progressent au nord.',
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const graphRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="graph"]')
+    const figure = stage.querySelector<HTMLElement>('.elce-statistical-graph')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const scrollport = stage.querySelector<HTMLElement>('.elce-flux-scrollport')
+    expect(graphRoot).not.toBeNull()
+    expect(graphRoot?.parentElement).toBe(figure?.querySelector('.elce-statistical-graph__visual'))
+    expect(figure?.textContent).toContain('Ventes par région')
+    expect(figure?.textContent).toContain('Les ventes progressent au nord.')
+
+    dispatchPointerEvent(graphRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+    expect(graphRoot?.parentElement?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(graphRoot?.querySelector('svg')).not.toBeNull()
+    expect(graphRoot?.querySelector('.elce-statistical-graph__table--visually-hidden')).not.toBeNull()
+    expect(figure?.textContent).toContain('Ventes par région')
+    expect(figure?.textContent).toContain('Les ventes progressent au nord.')
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(false)
+    expect(graphRoot?.parentElement).toBe(figure?.querySelector('.elce-statistical-graph__visual'))
+    expect(document.activeElement).toBe(graphRoot)
+  })
+
+  it('expands a Graph view inside a Carousel and keeps its text with the selected view', async () => {
+    let documentModel = applyDocumentCommand(
+      createInitialDocument(),
+      createCarouselBdcCommand('bdc-graph-carousel', 'page-a', 1),
+    )
+    documentModel = applyDocumentCommand(documentModel, createStatisticalGraphCarouselBdcCommand(
+      'bdc-carousel-graph', 'bdc-graph-carousel', 0,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-carousel-image', 'bdc-graph-carousel', 2, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'media.add',
+      media: { id: 'media-carousel-graph-image', name: 'graph-carousel.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: 'bdc-carousel-image', mediaId: 'media-carousel-graph-image',
+    })
+    const graph = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-carousel-graph')
+    if (graph?.statisticalGraph == null) throw new Error('The fixture Carousel Graph has no content.')
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: graph.id,
+      statisticalGraph: {
+        ...graph.statisticalGraph,
+        title: 'Ventes par région',
+        editorialText: 'Les ventes progressent au nord.',
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-carousel-graph-image': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const graphRoot = stage.querySelector<HTMLElement>('.elce-carousel-view--visible [data-elce-viewport-content="graph"]')
+    const graphView = graphRoot?.closest<HTMLElement>('.elce-carousel-view')
+    const figure = graphRoot?.closest<HTMLElement>('.elce-statistical-graph')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const previousButton = stage.querySelector<HTMLButtonElement>('.elce-viewport-expansion__arrow--previous')
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-viewport-expansion__arrow--next')
+    expect(graphRoot).not.toBeNull()
+    expect(graphView?.id).toContain('bdc-carousel-graph')
+    expect(previousButton).not.toBeNull()
+    expect(nextButton).not.toBeNull()
+
+    dispatchPointerEvent(graphRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    expect(graphRoot?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(graphRoot?.querySelector('svg')).not.toBeNull()
+    expect(figure?.textContent).toContain('Ventes par région')
+    expect(figure?.textContent).toContain('Les ventes progressent au nord.')
+
+    dispatchPointerEvent(nextButton!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain('bdc-carousel-image')
+    expect(viewportHost?.querySelector('[data-elce-viewport-content="image"]')).not.toBeNull()
+    expect(graphView?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+
+    dispatchPointerEvent(previousButton!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain('bdc-carousel-graph')
+    expect(graphRoot?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(graphView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(graphView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(graphRoot?.closest('.elce-carousel-view')).toBe(graphView)
+    expect(document.activeElement).toBe(graphRoot)
+  })
+
+  it('expands only the visualization of a Graph anchored in a Flux Section', async () => {
+    let documentModel = applyDocumentCommand(
+      createInitialDocument(),
+      createStatisticalGraphBdcCommand('bdc-anchor-graph', 'page-a', 1),
+    )
+    const graph = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-anchor-graph')
+    if (graph?.statisticalGraph == null) throw new Error('The fixture anchored Graph has no content.')
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.move', bdcId: graph.id, placement: { kind: BDC_LOCATION.CATALOG } })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.statistical-graph.update',
+      bdcId: graph.id,
+      statisticalGraph: {
+        ...graph.statisticalGraph,
+        title: 'Ventes ancrées',
+        editorialText: 'Commentaire ancré.',
+      },
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.anchor.attach',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId: graph.id,
+      markup: '<p id="section-anchor-graph-text">Avant <span id="page-a:bdc-anchor-graph:anchor" data-elce-anchor="true" data-bdc-id="bdc-anchor-graph" data-part="page-a:bdc-anchor-graph:anchor" style="display:inline-block;position:relative;padding-bottom:12rem;"></span> après</p>',
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId: graph.id, partId: 'page-a:bdc-anchor-graph:anchor' } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const flowSlot = stage.querySelector<HTMLElement>('.elce-flow-slot')
+    const graphRoot = flowSlot?.querySelector<HTMLElement>('[data-elce-viewport-content="graph"]')
+    const figure = graphRoot?.closest<HTMLElement>('.elce-statistical-graph')
+    const sectionText = stage.querySelector<HTMLElement>('#section-anchor-graph-text')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(graphRoot).not.toBeNull()
+    expect(sectionText?.textContent).toContain('Avant')
+    expect(sectionText?.textContent).toContain('après')
+
+    dispatchPointerEvent(graphRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+
+    expect(graphRoot?.closest('.elce-viewport-expansion-host')).toBe(viewportHost)
+    expect(figure?.textContent).toContain('Ventes ancrées')
+    expect(figure?.textContent).toContain('Commentaire ancré.')
+    expect(sectionText?.textContent).toContain('Avant')
+    expect(sectionText?.textContent).toContain('après')
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+
+    expect(graphRoot?.closest('.elce-flow-slot')).toBe(flowSlot)
+    expect(document.activeElement).toBe(graphRoot)
+  })
+
+  it('navigates only image views by arrow and swipe in an expanded Carousel', async () => {
+    const initialDocument = createInitialDocument()
+    let documentModel = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-carousel-expansion', name: 'carousel.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, createCarouselBdcCommand('bdc-expansion-carousel', 'page-a', 1))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-expansion-text', 'bdc-expansion-carousel', 1, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-expansion-last-image', 'bdc-expansion-carousel', 2, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    const firstImageBdcId = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-expansion-carousel')!.carousel!.cards[0]!.bdcId
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.layout.set', bdcId: firstImageBdcId, layoutId: DEFAULT_PRESET_ID.PHOTO,
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: firstImageBdcId, mediaId: 'media-carousel-expansion',
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: 'bdc-expansion-last-image', mediaId: 'media-carousel-expansion',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-carousel-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const firstImageRoot = stage.querySelector<HTMLElement>('.elce-carousel-view--visible [data-elce-viewport-content="image"]')
+    const nextButton = stage.querySelector<HTMLButtonElement>('.elce-viewport-expansion__arrow--next')
+    const scrollport = stage.querySelector<HTMLElement>('.elce-flux-scrollport')
+    expect(firstImageRoot).not.toBeNull()
+    expect(nextButton).not.toBeNull()
+    expect(scrollport).not.toBeNull()
+    dispatchPointerEvent(firstImageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(nextButton?.disabled).toBe(false)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(true)
+
+    dispatchPointerEvent(nextButton!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain('bdc-expansion-last-image')
+    const lastImageRoot = viewportHost?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    expect(lastImageRoot).not.toBeNull()
+    expect(firstImageRoot?.getAttribute('aria-pressed')).toBe('false')
+    expect(lastImageRoot?.getAttribute('aria-pressed')).toBe('true')
+    expect(nextButton?.disabled).toBe(true)
+
+    dispatchPointerEvent(viewportHost!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointermove', { movementX: 64 })
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain(firstImageBdcId)
+    expect(firstImageRoot?.getAttribute('aria-pressed')).toBe('true')
+    expect(lastImageRoot?.getAttribute('aria-pressed')).toBe('false')
+    expect(nextButton?.disabled).toBe(false)
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(scrollport?.classList.contains('elce-viewport-scroll-locked')).toBe(false)
+    expect(stage.querySelector('.elce-carousel-view--visible')?.id).toContain(firstImageBdcId)
+    expect(document.activeElement).toBe(stage.querySelector('.elce-carousel-view--visible [data-elce-viewport-content="image"]'))
+  })
+
+  it('pauses an automatic Carousel while expanded and resumes it on close without a manual selection', async () => {
+    const initialDocument = createInitialDocument()
+    let documentModel = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-auto-expansion', name: 'auto-expansion.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    documentModel = applyDocumentCommand(documentModel, createCarouselBdcCommand('bdc-auto-expansion', 'page-a', 1))
+    documentModel = applyDocumentCommand(documentModel, createCardBdcCommand(
+      'bdc-auto-expansion-last', 'bdc-auto-expansion', 1, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    const carousel = documentModel.bdcs.find((bdc) => bdc.id === 'bdc-auto-expansion')!
+    const firstImageBdcId = carousel.carousel!.cards[0]!.bdcId
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.carousel.update',
+      bdcId: 'bdc-auto-expansion',
+      carousel: { ...carousel.carousel!, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, defaultViewDurationMs: 180, repeatCount: 0 },
+    })
+    for (const bdcId of [firstImageBdcId, 'bdc-auto-expansion-last']) {
+      documentModel = applyDocumentCommand(documentModel, { type: 'bdc.card.layout.set', bdcId, layoutId: DEFAULT_PRESET_ID.PHOTO })
+      documentModel = applyDocumentCommand(documentModel, { type: 'bdc.card.media.set', bdcId, mediaId: 'media-auto-expansion' })
+    }
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      mediaSources: {
+        'media-auto-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const views = Array.from(stage.querySelectorAll<HTMLElement>('.elce-carousel-view'))
+    const firstView = views.find((view) => view.id.includes(firstImageBdcId))
+    const firstImage = firstView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const secondView = views.find((view) => view.id.includes('bdc-auto-expansion-last'))
+    expect(firstImage).not.toBeNull()
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    dispatchPointerEvent(firstImage!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 240))
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+    expect(secondView?.classList.contains('elce-carousel-view--hidden')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 260))
+
+    expect(secondView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    const secondImage = secondView?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    expect(secondImage).not.toBeNull()
+    dispatchPointerEvent(secondImage!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    dispatchPointerEvent(viewportHost!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointermove', { movementX: 64 })
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    await new Promise<void>((resolve) => setTimeout(resolve, 260))
+
+    expect(firstView?.classList.contains('elce-carousel-view--visible')).toBe(true)
   })
 
   it('mounts an image bdc inside its exported text anchor', async () => {
@@ -1474,9 +2602,130 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('[data-bdc-id="bdc-image-1"]')).toBeNull()
     expect(flowSlot?.querySelector('.elce-carousel-photo__media img')).not.toBeNull()
     const anchoredCard = flowSlot?.querySelector<HTMLElement>('.elce-flux-card-root')
+    const anchoredMedia = anchoredCard?.querySelector<HTMLElement>('.elce-carousel-media')
     expect(anchoredCard?.parentElement).toBe(flowSlot)
-    expect(anchoredCard?.style.height).toBe('auto')
-    expect(anchoredCard?.style.aspectRatio).toBe('4 / 3')
+    expect(anchoredCard?.style.length).toBe(0)
+    expect(anchoredMedia?.style.getPropertyValue('opacity')).toBe('1')
+    expect(Array.from(anchoredCard?.classList ?? []).some((className) => className.startsWith('elce-flux-anchor-illustration-'))).toBe(true)
+
+    const imageRoot = flowSlot?.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    const flowReservation = flowSlot?.getAttribute('style')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    expect(flowSlot?.getAttribute('style')).toBe(flowReservation)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(imageRoot?.closest('.elce-flux-card-root')).not.toBeNull()
+    expect(document.activeElement).toBe(imageRoot)
+  })
+
+  it('opens and closes a direct Diapo image through the shared viewport move', async () => {
+    const initialDocument = createInitialDocument()
+    const withMedia = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-diapo-direct-expansion', name: 'diapo-direct.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const diapoCommand = createDefaultPageCommand(
+      withMedia,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo image directe',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(withMedia, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createStandaloneCardBdcCommand(
+      'bdc-diapo-direct-expansion', diapoCommand.pageId, DEFAULT_PRESET_ID.PHOTO,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.card.media.set', bdcId: 'bdc-diapo-direct-expansion', mediaId: 'media-diapo-direct-expansion',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: diapoCommand.pageId,
+      mediaSources: {
+        'media-diapo-direct-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const imageRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(document.activeElement).toBe(imageRoot)
+  })
+
+  it('opens and closes a Diapo Question illustration in its owning story', async () => {
+    const initialDocument = createInitialDocument()
+    const withMedia = applyDocumentCommand(initialDocument, {
+      type: 'media.add',
+      media: { id: 'media-diapo-question-expansion', name: 'question.svg', mimeType: 'image/svg+xml', size: 100, caption: '' },
+    })
+    const diapoCommand = createDefaultPageCommand(
+      withMedia,
+      { kind: PAGE_LOCATION.SCENARIO },
+      'Diapo Question image',
+      PAGE_TYPE.DIAPO,
+    )
+    let documentModel = applyDocumentCommand(withMedia, diapoCommand)
+    documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: diapoCommand.bdcId })
+    documentModel = applyDocumentCommand(documentModel, createQuestionBdcCommand(
+      'bdc-diapo-question-expansion', diapoCommand.pageId, 0,
+    ))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'bdc.question.media.set', bdcId: 'bdc-diapo-question-expansion', mediaId: 'media-diapo-question-expansion',
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({
+      stage,
+      document: documentModel,
+      startPageId: diapoCommand.pageId,
+      mediaSources: {
+        'media-diapo-question-expansion': 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 3%22%3E%3C/svg%3E',
+      },
+    })
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+
+    await composition.initialize()
+
+    const imageRoot = stage.querySelector<HTMLElement>('[data-elce-viewport-content="image"]')
+    const viewportHost = stage.querySelector<HTMLElement>('.elce-viewport-expansion-host')
+    expect(imageRoot).not.toBeNull()
+    dispatchPointerEvent(imageRoot!, 'pointerdown')
+    dispatchPointerEvent(window, 'pointerup')
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--open')).toBe(true)
+
+    viewportHost?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Escape', key: 'Escape' }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 360))
+    viewportHost?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    await waitForPlayerActions()
+    expect(viewportHost?.classList.contains('elce-viewport-expansion-host--closed')).toBe(true)
+    expect(document.activeElement).toBe(imageRoot)
   })
 
   it('mounts a simple video bdc through the real CodPlay media component', async () => {
@@ -1493,7 +2742,87 @@ describe('Elcé player composition', () => {
 
     await composition.initialize()
 
-    expect(stage.querySelector('.elce-carousel-photo__media video')).not.toBeNull()
+    const video = stage.querySelector<HTMLVideoElement>('.elce-carousel-photo__media video')
+    expect(video).not.toBeNull()
+    expect(video?.parentElement?.classList.contains('elce-carousel-media')).toBe(true)
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-carousel-media > img,\s*\.elce-carousel-media > video\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover;/)
+  })
+
+  it('stops an independent video on page exit and reuses it at zero on return', async () => {
+    let frameTime = performance.now()
+    const paused = new WeakMap<HTMLMediaElement, boolean>()
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      paused.set(this, false)
+      return Promise.resolve()
+    })
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
+      paused.set(this, true)
+    })
+    vi.spyOn(HTMLMediaElement.prototype, 'paused', 'get').mockImplementation(function (this: HTMLMediaElement) {
+      return paused.get(this) ?? true
+    })
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    let documentModel = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'owned-video', name: 'owned.mp4', mimeType: 'video/mp4', size: 10, caption: '' },
+    })
+    documentModel = createCardWithMedia(documentModel, 'owned-card', 'owned-video')
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-b', bdcId: 'owned-section-b', name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-1' },
+    }))
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const errors: string[] = []
+    composition = new ElcePlayerComposition({
+      stage, document: documentModel, mediaSources: { 'owned-video': 'blob:owned-video' },
+      onLog: (message, level) => { if (level === 'error') errors.push(message) },
+    })
+    await composition.initialize()
+    const video = stage.querySelector('video')!
+    const source = video.src
+    await video.play()
+    video.currentTime = 3.8
+    const marker = stage.querySelector('#page-a-bottom-marker')!
+    const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker))!
+    observer.deliver({ target: marker, intersectionRatio: 1, isIntersecting: true })
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')?.disabled).toBe(false)
+    })
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    flushPendingFrames(pendingFrames, frameTime += 50)
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(stage.querySelector('#page-b-scrollport')).not.toBeNull()
+      expect(video.paused).toBe(true)
+      expect(video.currentTime).toBe(0)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    flushPendingFrames(pendingFrames, frameTime += 50)
+    const previous = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')!
+    expect(previous.disabled).toBe(false)
+    previous.click()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await vi.waitFor(() => {
+      frameTime += 50
+      flushPendingFrames(pendingFrames, frameTime)
+      expect(stage.querySelector('#page-a-scrollport')).not.toBeNull()
+    })
+    expect(stage.querySelector('video')).toBe(video)
+    expect(video.src).toBe(source)
+    expect(video.currentTime).toBe(0)
+    expect(video.paused).toBe(true)
+    expect(errors).toEqual([])
   })
 })
 
@@ -1507,6 +2836,32 @@ function createCardWithMedia(document: ReturnType<typeof createInitialDocument>,
     placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
   })
   return applyDocumentCommand(created, { type: 'bdc.card.media.set', bdcId, mediaId })
+}
+
+/** Creates a Photo Card anchored inside the default Flux Section for preview tests. */
+function createAnchoredImagePreviewDocument(bdcId: string, mediaId: string) {
+  const media = { id: mediaId, name: `${mediaId}.png`, mimeType: 'image/png', size: 10, caption: '' }
+  const withMedia = applyDocumentCommand(createInitialDocument(), { type: 'media.add', media })
+  return {
+    documentModel: applyDocumentCommand(withMedia, {
+      type: 'bdc.anchor.create',
+      sectionBdcId: 'bdc-section-1',
+      pageId: 'page-a',
+      bdcId,
+      presetId: DEFAULT_PRESET_ID.PHOTO,
+      media,
+      partId: `page-a:${bdcId}:anchor`,
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'elceAnchor', attrs: { bdcId, partId: `page-a:${bdcId}:anchor` } },
+          { type: 'text', text: ' après' },
+        ] }],
+      },
+      markup: `<p id="${bdcId}-text">Avant <span id="page-a:${bdcId}:anchor" data-elce-anchor="true" data-bdc-id="${bdcId}" data-part="page-a:${bdcId}:anchor" style="display:inline-block;position:relative;padding-bottom:75%;"></span> après</p>`,
+    }),
+  }
 }
 
 /** Creates an Evaluation chapter with Page F and G, optionally preceded by another Question. */

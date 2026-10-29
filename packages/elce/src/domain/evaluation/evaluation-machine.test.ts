@@ -5,9 +5,32 @@ import type {
   EvaluationMachineState,
   EvaluationSettings,
 } from './evaluation-machine-types'
-import { EvaluationMachine } from './evaluation-machine'
+import { applyEvaluationThreshold, EvaluationMachine } from './evaluation-machine'
 
 describe('EvaluationMachine', () => {
+  it('recomputes a persisted result when the LMS supplies a different mastery threshold', () => {
+    const machine = new EvaluationMachine({
+      questionIds: ['q1', 'q2', 'q3', 'q4', 'q5'],
+      settings: settings({ threshold: 0.8 }),
+    })
+    let state = machine.transition(machine.initialState(), { type: 'START' })
+    state = answer(machine, state, 'q1', ['a'], ['a'])
+    state = answer(machine, state, 'q2', ['b'], ['b'])
+    state = answer(machine, state, 'q3', ['c'], ['c'])
+    state = answer(machine, state, 'q4', ['x'], ['d'])
+    state = answer(machine, state, 'q5', ['y'], ['e'])
+    state = machine.transition(state, { type: 'COMPLETE' })
+
+    const restored = applyEvaluationThreshold(state, 0.6)
+
+    expect(state.context.result?.passed).toBe(false)
+    expect(restored.value).toBe('success')
+    expect(restored.context.settings.threshold).toBe(0.6)
+    expect(restored.context.result).toEqual({ questionCount: 5, correctCount: 3, score: 0.6, passed: true })
+    expect(restored.context.answers).toEqual(state.context.answers)
+    expect(restored.context.attempt).toBe(state.context.attempt)
+  })
+
   it('retries only incorrect Questions after failure without revealing answers', () => {
     const machine = new EvaluationMachine({
       questionIds: ['q1', 'q2', 'q3'],
@@ -29,7 +52,7 @@ describe('EvaluationMachine', () => {
     expect(retry.context.activeQuestionIds).toEqual(['q2', 'q3'])
     expect(retry.context.attempt).toBe(2)
     expect(retry.context.answers).toEqual({
-      q1: { questionId: 'q1', selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
+      q1: { questionId: 'q1', answerIds: ['a'], selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
     })
     expect(retry.context.result).toBeNull()
     expect(machine.shouldRevealAnswers(retry)).toBe(false)
@@ -77,8 +100,8 @@ describe('EvaluationMachine', () => {
     expect(state.value).toBe('reviewing')
     expect(state.context.activeQuestionIds).toEqual(['q1', 'q2'])
     expect(state.context.answers).toEqual({
-      q1: { questionId: 'q1', selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
-      q2: { questionId: 'q2', selectedAnswerIds: ['b'], expectedAnswerIds: ['b'] },
+      q1: { questionId: 'q1', answerIds: ['a'], selectedAnswerIds: ['a'], expectedAnswerIds: ['a'] },
+      q2: { questionId: 'q2', answerIds: ['b'], selectedAnswerIds: ['b'], expectedAnswerIds: ['b'] },
     })
     expect(machine.shouldRevealAnswers(state)).toBe(true)
 
@@ -152,6 +175,7 @@ function answer(
   selectedAnswerIds: readonly string[],
   expectedAnswerIds: readonly string[],
 ) {
-  const value: EvaluationAnswer = { questionId, selectedAnswerIds, expectedAnswerIds }
+  const answerIds = [...new Set([...selectedAnswerIds, ...expectedAnswerIds])]
+  const value: EvaluationAnswer = { questionId, answerIds, selectedAnswerIds, expectedAnswerIds }
   return machine.transition(state, { type: 'QUESTION.ANSWERED', answer: value })
 }

@@ -5,15 +5,24 @@ import { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
 import { ElceProjectApiClient } from '../../infrastructure/project-api/project-api-client'
-import { POPUP_PREVIEW_SESSION_PARAM } from '../player/popup-preview-messages'
+import { POPUP_PREVIEW_PROJECT_PARAM, POPUP_PREVIEW_SESSION_PARAM } from '../player/popup-preview-messages'
 import { createElceSpaRouter } from './remix-spa-router'
 import { ProjectSessionCoordinator } from '../projects/project-session-coordinator'
 
 /** Composes one authoring actor, store, persistence attachment, and Remix router. */
 async function startRemixEditor(): Promise<void> {
-  const isPopupPlayer = new URLSearchParams(window.location.search).has(POPUP_PREVIEW_SESSION_PARAM)
-  const documentStore = isPopupPlayer ? null : new IndexedDbDocumentStore()
-  const projectApi = isPopupPlayer ? null : new ElceProjectApiClient()
+  const searchParams = new URLSearchParams(window.location.search)
+  const isPreviewReader = searchParams.has(POPUP_PREVIEW_SESSION_PARAM)
+    || searchParams.has(POPUP_PREVIEW_PROJECT_PARAM)
+  const documentStore = isPreviewReader ? null : new IndexedDbDocumentStore()
+  if (documentStore !== null) {
+    try {
+      await documentStore.deleteOrphanedMedia()
+    } catch (error) {
+      console.error('Le nettoyage des médias locaux Elcé a échoué.', error)
+    }
+  }
+  const projectApi = isPreviewReader ? null : new ElceProjectApiClient()
   const projectSession = documentStore === null || projectApi === null
     ? null
     : new ProjectSessionCoordinator(documentStore, projectApi)

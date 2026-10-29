@@ -1,10 +1,11 @@
 import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
 import { on, ref, type RemixNode } from 'remix/ui'
 
-import { BDC_TYPE, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
+import { ANCHOR, BDC_TYPE, DEFAULT_PRESET_ID, SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
 import type { CardLayoutId } from '../../../config/document-config-types'
-import type { Bdc, Page } from '../../../domain/document/document-types'
+import type { Bdc, Page, RichTextNode } from '../../../domain/document/document-types'
 import type { ElceAnchorCardPreview } from '../../../domain/anchor/anchor-types'
+import type { AppearanceTarget } from '../../../domain/commands/document-command-types'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
@@ -15,6 +16,10 @@ import { SectionTiptapAdapter } from './section-editor-tiptap-adapter'
 import { EMPTY_SECTION_TOOLBAR_STATE } from './section-editor-tiptap'
 import type { SectionToolbarState } from './section-editor-tiptap'
 import { renderRemixStatisticalGraphEditor } from '../statistical-graph/remix-statistical-graph-editor'
+import { anchorNameFor } from '../../anchor/anchor-position'
+import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+import { appearanceClassNameForTarget } from '../../../builders/scene-style/appearance-class-names.ts'
+import { createAppearanceTargetStyleSheet } from '../../../player/appearance-scene-style-sheet.ts'
 
 export interface RemixSectionEditorBindings {
   readonly adapters: Map<string, SectionTiptapAdapter>
@@ -22,6 +27,7 @@ export interface RemixSectionEditorBindings {
   readonly selectedAnchorBdcId: string | null
   readonly onEditAnchorBdc: (bdcId: string) => void
   readonly onCloseAnchorBdc: () => void
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly handle: RemixRenderHandle
   readonly current: { view: EditorViewModel }
 }
@@ -39,6 +45,9 @@ export function renderRemixSectionEditor(
   const anchorIllustrations = view.documentModel.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id
     && (candidate.type === BDC_TYPE.CARD || candidate.type === BDC_TYPE.STATISTICAL_GRAPH))
   const editingAnchorBdc = anchorIllustrations.find((illustration) => illustration.id === state.selectedAnchorBdcId)
+  const editingAnchorPartId = editingAnchorBdc === undefined
+    ? null
+    : findAnchorPartId(section.content.content, editingAnchorBdc.id)
   const cardActions = actions.createCardEditorActions(view.documentModel.bdcs)
   const toolbarState = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
   const handle = state.handle
@@ -59,18 +68,31 @@ export function renderRemixSectionEditor(
         aria-label="Titre de section"
         placeholder="Titre"
         value={section.title}
+        data-elce-profile-token-target="true"
         mix={on<HTMLInputElement, 'input'>('input', (event) => state.adapters.get(bdc.id)?.updateTitle(event.currentTarget.value))}
       />
-      <button
-        id={`elce-section-delete-${bdc.id}`}
-        className="elce-bdc-icon-button elce-bdc-icon-button--danger"
-        type="button"
-        aria-label="Supprimer le bloc texte"
-        title="Supprimer le bloc texte"
-        mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
+      <div
+        id={`elce-section-header-actions-${bdc.id}`}
+        className="elce-bdc-header-actions"
       >
-        {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`, 14)}
-      </button>
+        {renderAppearanceTrigger({
+          id: `elce-section-style-${bdc.id}`,
+          target: { kind: 'bdc', bdcId: bdc.id },
+          label: `Ouvrir le style de la section ${section.title.trim() || ''}`,
+          onOpen: state.onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-bdc-style-trigger',
+        })}
+        <button
+          id={`elce-section-delete-${bdc.id}`}
+          className="elce-bdc-icon-button elce-bdc-icon-button--danger"
+          type="button"
+          aria-label="Supprimer le bloc texte"
+          title="Supprimer le bloc texte"
+          mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
+        >
+          {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`)}
+        </button>
+      </div>
     </div>
     {renderToolbar(bdc.id, toolbarState, state.adapters, handle)}
     <div
@@ -82,6 +104,7 @@ export function renderRemixSectionEditor(
         const adapter = new SectionTiptapAdapter(host as HTMLElement, {
           bdcId: bdc.id,
           section,
+          profileProperties: current.view.documentModel.data.profile.properties,
           anchorOptions: {
             createFileDropTarget: (file) => actions.createSectionFileDropTarget(file, current.view.selectedPage?.id ?? page.id),
             createCatalogDropTarget: (reference) => actions.createSectionCatalogDropTarget(
@@ -93,7 +116,7 @@ export function renderRemixSectionEditor(
             resolveCard: (anchorBdcId) => resolveAnchorCard(current.view, anchorBdcId),
             onEditCard: state.onEditAnchorBdc,
           },
-          onChange: (change) => actions.submitSectionChange(bdc.id, change),
+          onChange: (change, selection) => actions.submitSectionChange(bdc.id, change, selection),
           onToolbarState: (next) => {
             const previous = state.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
             if (sameToolbarState(previous, next)) return
@@ -102,6 +125,9 @@ export function renderRemixSectionEditor(
           },
         })
         state.adapters.set(bdc.id, adapter)
+        if (current.view.historyRestore?.selection?.sectionBdcId === bdc.id) {
+          adapter.restoreSelection(current.view.historyRestore.selection)
+        }
         signal.addEventListener('abort', () => {
           if (state.adapters.get(bdc.id) === adapter) state.adapters.delete(bdc.id)
           state.toolbarStates.delete(bdc.id)
@@ -111,7 +137,15 @@ export function renderRemixSectionEditor(
     />
     {editingAnchorBdc === undefined
       ? null
-      : renderAnchorCardEditor(editingAnchorBdc, view, cardActions, state.onCloseAnchorBdc, actions)}
+      : renderAnchorCardEditor(
+        editingAnchorBdc,
+        view,
+        cardActions,
+        state.onCloseAnchorBdc,
+        actions,
+        editingAnchorPartId,
+        state.onOpenAppearanceTarget,
+      )}
   </section>
 }
 
@@ -165,7 +199,7 @@ function renderToolbar(
         if (!handle.signal.aborted) void handle.update()
       })}
     >
-      {renderLucideIcon(icon, `elce-section-${suffix}-icon-${bdcId}`, 14)}
+      {renderLucideIcon(icon, `elce-section-${suffix}-icon-${bdcId}`)}
     </button>)}
   </div>
 }
@@ -177,12 +211,24 @@ function renderAnchorCardEditor(
   actions: ReturnType<EditorActionsFacade['createCardEditorActions']>,
   close: () => void,
   editorActions: EditorActionsFacade,
+  anchorPartId: string | null,
+  onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void,
 ): RemixNode {
+  const positionStyle = anchorPartId === null ? undefined : {
+    position: 'absolute' as const,
+    positionAnchor: anchorNameFor(`${anchorPartId}-editor-frame`),
+    insetInlineStart: 'anchor(left)',
+    insetBlockStart: 'anchor(top)',
+    marginBlockStart: 0,
+    zIndex: 4,
+  }
   if (card.type === BDC_TYPE.STATISTICAL_GRAPH && card.statisticalGraph != null) {
     return <section
       id={`elce-anchor-card-editor-${card.id}`}
       className="elce-anchor-card-editor"
-      aria-label="Modifier le graphe statistique ancré"
+      data-anchor-part-id={anchorPartId ?? undefined}
+      style={positionStyle}
+      aria-label="Modifier le graphe ancré"
     >
       <header
         id={`elce-anchor-card-editor-header-${card.id}`}
@@ -191,8 +237,15 @@ function renderAnchorCardEditor(
         <h3
           id={`elce-anchor-card-editor-title-${card.id}`}
         >
-          Graphe statistique
+          Graphe
         </h3>
+        {renderAppearanceTrigger({
+          id: `elce-anchor-graph-style-${card.id}`,
+          target: { kind: 'bdc', bdcId: card.id },
+          label: 'Ouvrir le style du graphe',
+          onOpen: onOpenAppearanceTarget,
+          className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
+        })}
         <button
           id={`elce-anchor-card-editor-close-${card.id}`}
           className="elce-bdc-icon-button"
@@ -201,7 +254,7 @@ function renderAnchorCardEditor(
           title="Fermer"
           mix={on<HTMLButtonElement, 'click'>('click', close)}
         >
-          {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`, 14)}
+          {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`)}
         </button>
       </header>
       {renderRemixStatisticalGraphEditor(
@@ -213,6 +266,8 @@ function renderAnchorCardEditor(
   return <section
     id={`elce-anchor-card-editor-${card.id}`}
     className="elce-anchor-card-editor"
+    data-anchor-part-id={anchorPartId ?? undefined}
+    style={positionStyle}
     aria-label="Modifier la carte ancrée"
   >
     <header
@@ -224,6 +279,13 @@ function renderAnchorCardEditor(
       >
         Carte
       </h3>
+      {renderAppearanceTrigger({
+        id: `elce-anchor-card-style-${card.id}`,
+        target: { kind: 'bdc', bdcId: card.id },
+        label: `Ouvrir le style de la carte ${card.card?.title.trim() || ''}`,
+        onOpen: onOpenAppearanceTarget,
+        className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
+      })}
       <button
         id={`elce-anchor-card-editor-close-${card.id}`}
         className="elce-bdc-icon-button"
@@ -232,7 +294,7 @@ function renderAnchorCardEditor(
         title="Fermer"
         mix={on<HTMLButtonElement, 'click'>('click', close)}
       >
-        {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`, 14)}
+        {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`)}
       </button>
     </header>
     <RemixCardEditorFields
@@ -243,6 +305,18 @@ function renderAnchorCardEditor(
       imageAspectRatio={null}
     />
   </section>
+}
+
+/** Finds the selected BDC's saved insertion point in the Section rich-text tree. */
+function findAnchorPartId(nodes: readonly RichTextNode[], bdcId: string): string | null {
+  for (const node of nodes) {
+    if (node.type === ANCHOR.NODE_NAME && node.attrs?.bdcId === bdcId && typeof node.attrs.partId === 'string') {
+      return node.attrs.partId
+    }
+    const nestedPartId = node.content === undefined ? null : findAnchorPartId(node.content, bdcId)
+    if (nestedPartId !== null) return nestedPartId
+  }
+  return null
 }
 
 /** Resolves the Card layout, text and available media from the current actor snapshot. */
@@ -261,12 +335,18 @@ function resolveAnchorCard(view: EditorViewModel, bdcId: string): ElceAnchorCard
     : view.documentModel.medias.find((candidate) => candidate.id === card.card?.mediaId)
   const source = card.card.mediaId === null ? undefined : view.mediaSources[card.card.mediaId]
   const mediaType = mediaMetadata === undefined ? null : mediaTypeFromMimeType(mediaMetadata.mimeType)
+  const appearanceTarget = { kind: 'bdc', bdcId: card.id } as const
+  const usesImageTitle = card.presetId === DEFAULT_PRESET_ID.IMAGE_TITLE
   return {
     content: card.card,
     layoutId: card.presetId as CardLayoutId,
     media: mediaMetadata === undefined || source === undefined || mediaType === null
       ? null
       : { source, type: mediaType },
+    ...(usesImageTitle ? {
+      appearanceClassName: appearanceClassNameForTarget(view.documentModel, appearanceTarget),
+      appearanceStyleSheet: createAppearanceTargetStyleSheet(view.documentModel, appearanceTarget),
+    } : {}),
   }
 }
 

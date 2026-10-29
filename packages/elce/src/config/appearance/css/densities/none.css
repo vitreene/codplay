@@ -1,0 +1,12 @@
+@scope (.elce-player-layout) {
+  .density-none:is(.project-layout, .page-flux, .page-diapo, .section, .card-text-short, .card-photo, .carousel, .question, .evaluation-result, .graph) { background-color: transparent; }
+  .density-none.card-text-image > .elce-carousel-text-image__content,
+  .density-none.card-image-caption > .elce-card__caption { background-color: transparent; }
+  .density-none.page-flux,
+  .density-none.page-diapo,
+  .density-none.section,
+  .density-none.card-text-short,
+  .density-none.evaluation-result { padding: 0; }
+  .density-none.card-text-image > .elce-carousel-text-image__content,
+  .density-none.card-image-caption > .elce-card__caption { padding: 0; }
+}

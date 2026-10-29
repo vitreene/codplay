@@ -18,6 +18,7 @@ import type {
   SightyViewReference,
   SightyView,
   SightyViewGraph,
+  SightySceneResetHandler,
 } from './types'
 
 /** Result retained internally so a runtime can restore a failed mutation. */
@@ -39,6 +40,12 @@ export type SightyMutableScenarioApi<
   restoreMutation: (result: SightyScenarioMutationResult<SceneKey, SlotName>) => void
 }>
 
+/** Describes packaged scene keys and reset handlers without exposing SceneDocs. */
+export type SightyPackagedSceneMetadata<SceneKey extends string> = Readonly<{
+  sceneKeys: ReadonlySet<SceneKey>
+  sceneResetHandlers: ReadonlyMap<SceneKey, SightySceneResetHandler>
+}>
+
 /** Owns and exposes the authored scenario grouped by the Sighty facade. */
 export class SightyScenarioImpl<
   SceneKey extends string = string,
@@ -47,10 +54,15 @@ export class SightyScenarioImpl<
   private currentScenario: SightyScenarioDefinition<SceneKey, SlotName>
   private readonly resolvedScenes = new Map<SceneKey, SightySceneCatalog<SceneKey>[SceneKey]>()
   private readonly resolvingScenes = new Map<SceneKey, Promise<SightySceneCatalog<SceneKey>[SceneKey] | undefined>>()
+  private readonly packagedSceneKeys: ReadonlySet<SceneKey>
 
   /** Creates one scenario surface without rendering or running its scenes. */
-  constructor(scenario: SightyScenarioDefinition<SceneKey, SlotName>) {
+  constructor(
+    scenario: SightyScenarioDefinition<SceneKey, SlotName>,
+    packagedScenes?: Pick<SightyPackagedSceneMetadata<SceneKey>, 'sceneKeys'>,
+  ) {
     this.currentScenario = scenario
+    this.packagedSceneKeys = packagedScenes?.sceneKeys ?? new Set()
   }
 
   /** Returns the authored identity of the current scenario. */
@@ -98,6 +110,7 @@ export class SightyScenarioImpl<
     const keys = new Set<string>([
       ...Object.keys(this.scenes),
       ...Object.keys(this.currentScenario.sceneSources ?? {}),
+      ...this.packagedSceneKeys,
     ])
     return [...keys] as SceneKey[]
   }
@@ -152,7 +165,7 @@ export class SightyScenarioImpl<
 
   /** Validates scenario references without compiling, rendering or running scenes. */
   validate(): readonly SightyAuthoringDiagnostic[] {
-    return validateAuthoringResources(this.currentScenario)
+    return validateAuthoringResources(this.currentScenario, this.packagedSceneKeys)
   }
 
   /** Applies one integration mutation only after validating its complete result. */
@@ -166,7 +179,7 @@ export class SightyScenarioImpl<
       version: (previousScenario.version ?? 1) + 1,
       views: nextViewGraph,
     }
-    const diagnostics = validateAuthoringResources(nextScenario)
+    const diagnostics = validateAuthoringResources(nextScenario, this.packagedSceneKeys)
     if (diagnostics.length > 0) {
       throw new Error(`La mutation Sighty est invalide. ${diagnostics.map((diagnostic) => diagnostic.message).join(' ')}`)
     }

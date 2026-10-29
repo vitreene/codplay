@@ -3,6 +3,10 @@
 ## Code style and structure
 
 - Write code that is easy to read and extend later.
+- Keep authored models, configuration, and CSS readable and easy to enrich.
+  Compilation owns compaction and optimization of generated output; preserve
+  source semantics and references instead of making developers maintain the
+  compact representation by hand.
 - Apply KISS and DRY: prefer the simplest implementation that satisfies the established contract, reuse existing logic, and avoid speculative abstractions, wrappers, and duplicated circuits.
 - Use English for function names and variable names.
 - Use kebab-case for file names.
@@ -58,6 +62,14 @@
 
 ## Documentation and implementation tracking
 
+- Plans must be short, operational, and useful for decision-making. Keep only
+  concise decisions to make, their status, ordered actions, and acceptance
+  criteria. Name the files or owners to change, what is replaced, and the
+  expected result. Keep small concrete examples needed to evaluate the proposal;
+  brevity must not turn the plan into an abstract summary. General intentions
+  are not decisions. Keep extended discussions, decisions, rationale, research,
+  and examples in notes, linked from the plan. Do not write plans as
+  conversations or duplicate commentary across documents.
 - Documentation roles are exclusive and must not be mixed:
   - `notes/` records project elaboration, exploration, and rationale; open decisions for an active feature stay in its plan;
   - `plan/` records actions to perform, their order, gates, status, acceptance path, and decisions that are open or agreed but unapplied;
@@ -86,3 +98,59 @@
 ## Current workspace note
 
 - The root `src/` currently contains the default Vite demo and may be removed.
+
+# Style Guide
+
+## General Principles
+
+- Keep things in one function unless composable or reusable
+- Validate unknown values once at the boundary that owns them. Pass typed values inward instead of repeating typeof value === "object" and property-existence checks. Do not defensively revalidate values already guaranteed by a schema, constructor, or internal type.
+- Do not extract single-use helpers preemptively. Inline the logic at the call site unless the helper is reused, hides a genuinely complex boundary, or has a clear independent name that improves the caller.
+- Before adding complexity for a speculative or vanishingly unlikely race or security edge case, explain the concrete failure mode, likelihood, and complexity cost to the user and get their buy-in. Do not silently expand scope for theoretical robustness.
+- Avoid try/catch where possible
+- Avoid using the any type
+- Rely on type inference when possible; avoid explicit type annotations or interfaces unless necessary for exports or clarity
+- Prefer functional array methods (flatMap, filter, map) over for loops; use type guards on filter to maintain type inference downstream
+- In Effect generators, bind services to named variables before calling methods. Do not use nested service yields such as yield* (yield* Foo.Service).bar().
+
+## Imports
+
+- Prefer dynamic imports for heavy modules that are only needed in selected code paths, especially in startup-sensitive entrypoints. Destructure dynamic import bindings near the top of the narrowest scope that needs them so they read like normal imports. Avoid inline chains such as await import("./module").then((mod) => mod.value()) or (await import("./module")).value(). Keep branch-specific imports inside the branch that needs them to preserve lazy loading.
+
+## Variables
+
+Prefer const over let. Use ternaries or early returns instead of reassignment.
+
+```js
+// Good
+const foo = condition ? 1 : 2;
+
+// Bad
+let foo;
+if (condition) foo = 1;
+else foo = 2;
+```
+
+## Control Flow
+
+Avoid else statements. Prefer early returns.
+
+```js
+// Good
+function foo() {
+	if (condition) return 1;
+	return 2;
+}
+
+// Bad
+function foo() {
+	if (condition) return 1;
+	else return 2;
+}
+```
+
+## Testing
+
+- Avoid mocks as much as possible, you shouldn't be using globalThis.\* at all unless it's the only option.
+- Test actual implementation, do not duplicate logic into tests
+- Tests cannot run from repo root (guard: do-not-run-tests-from-root); run from package directories such as packages/core.

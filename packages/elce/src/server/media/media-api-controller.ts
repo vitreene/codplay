@@ -8,6 +8,7 @@ import { createFileResponse } from 'remix/response/file'
 import { mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import { removeUnreferencedMediaFiles } from './media-file-storage'
 import type { MediaPersistence, StoredMediaResource } from './media-persistence'
+import { lostProjectEditGrant, missingProjectEditGrant, projectEditGrantFrom } from '../projects/project-edit-grant'
 
 /** Handles raw media uploads and streamed file responses. */
 export class MediaApiController {
@@ -29,6 +30,9 @@ export class MediaApiController {
 
   /** Streams one raw PUT body to disk, then publishes its completed file reference. */
   public async upload(request: Request, projectId: string, mediaId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    if (!await this.persistence.hasEditAccess(projectId, grant)) return lostProjectEditGrant()
     const media = await this.persistence.findMediaFile(projectId, mediaId)
     if (media === null) return mediaError('media_not_found', 404)
     if (mediaTypeFromMimeType(media.mimeType) === null) return mediaError('unsupported_media_type', 415)
@@ -60,6 +64,7 @@ export class MediaApiController {
 
       const sha256 = contentHash.digest('hex')
       if (media.storageKey !== null) {
+        if (!await this.persistence.hasEditAccess(projectId, grant)) return lostProjectEditGrant()
         return media.contentSha256 === sha256
           ? new Response(null, { status: 204 })
           : mediaError('media_already_has_file', 409)
@@ -79,6 +84,7 @@ export class MediaApiController {
         media.size,
         storageKey,
         sha256,
+        grant,
       )
 
       switch (result.kind) {
@@ -108,6 +114,10 @@ export class MediaApiController {
             error: 'media_already_exists',
             mediaId: result.existingMediaId,
           }, { status: 409 })
+        case 'edit-access-lost':
+          await this.storage.remove(storageKey)
+          unpublishedStorageKey = null
+          return lostProjectEditGrant()
         default:
           return unhandledMediaUploadResult(result)
       }

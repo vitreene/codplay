@@ -1,0 +1,7 @@
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-classic-background { background-color: #fffdf8; }
+.bg-classic-surface { background-color: #ffffff; }
+.bg-classic-text { background-color: #1d2d35; }
+.bg-classic-muted { background-color: #52666b; }
+.bg-classic-accent { background-color: #263b3a; }
+.bg-classic-border { background-color: #d9d4c9; }

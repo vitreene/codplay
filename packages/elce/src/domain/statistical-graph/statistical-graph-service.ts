@@ -1,20 +1,22 @@
 import { STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { StatisticalGraphContent } from './statistical-graph-types'
 
-const MAX_GRAPH_DIMENSION = 40
-
 /** Creates the initial 5-by-3 grid, counting its header row and column. */
 export function createDefaultStatisticalGraphContent(): StatisticalGraphContent {
   const categories = Array.from({ length: 4 }, () => ({ id: createGraphId('graph-category'), label: '' }))
   const series = Array.from({ length: 2 }, () => ({ id: createGraphId('graph-series'), label: '' }))
   return {
     rendering: STATISTICAL_GRAPH_RENDERING.BAR,
+    transposeEnabled: true,
+    columnLabelsEnabled: true,
+    rowLabelsEnabled: true,
     overline: '',
     title: '',
     categoryAxisLabel: '',
     seriesAxisLabel: '',
     editorialText: '',
     pieSeriesId: series[0]!.id,
+    pieCategoryId: categories[0]!.id,
     categories,
     series,
     values: [],
@@ -60,25 +62,27 @@ export function setStatisticalGraphSeriesLabel(
   }
 }
 
-/** Adds one category up to the configured 40 data rows. */
+/** Adds one category to the end of the current data rows. */
 export function addStatisticalGraphCategory(content: StatisticalGraphContent): StatisticalGraphContent {
-  if (content.categories.length >= MAX_GRAPH_DIMENSION) return content
   return { ...content, categories: [...content.categories, { id: createGraphId('graph-category'), label: '' }] }
 }
 
 /** Removes a category and its values while preserving one editable row. */
 export function removeStatisticalGraphCategory(content: StatisticalGraphContent, categoryId: string): StatisticalGraphContent {
   if (content.categories.length <= 1) return content
+  const categories = content.categories.filter((category) => category.id !== categoryId)
   return {
     ...content,
-    categories: content.categories.filter((category) => category.id !== categoryId),
+    categories,
     values: content.values.filter((entry) => entry.categoryId !== categoryId),
+    pieCategoryId: categories.some((category) => category.id === content.pieCategoryId)
+      ? content.pieCategoryId
+      : categories[0]?.id ?? null,
   }
 }
 
-/** Adds one series up to the configured 40 data columns. */
+/** Adds one series to the end of the current data columns. */
 export function addStatisticalGraphSeries(content: StatisticalGraphContent): StatisticalGraphContent {
-  if (content.series.length >= MAX_GRAPH_DIMENSION) return content
   return { ...content, series: [...content.series, { id: createGraphId('graph-series'), label: '' }] }
 }
 
@@ -103,6 +107,23 @@ export function setStatisticalGraphRendering(
     ...content,
     rendering,
     pieSeriesId: content.pieSeriesId ?? content.series[0]?.id ?? null,
+    pieCategoryId: content.categories.some((category) => category.id === content.pieCategoryId)
+      ? content.pieCategoryId
+      : content.categories[0]?.id ?? null,
+  }
+}
+
+/** Stores whether graph renderings should swap their category and series dimensions. */
+export function setStatisticalGraphTranspose(
+  content: StatisticalGraphContent,
+  transposeEnabled: boolean,
+): StatisticalGraphContent {
+  return {
+    ...content,
+    transposeEnabled,
+    pieCategoryId: content.categories.some((category) => category.id === content.pieCategoryId)
+      ? content.pieCategoryId
+      : content.categories[0]?.id ?? null,
   }
 }
 
@@ -114,25 +135,79 @@ export function setStatisticalGraphPieSeries(
   return content.series.some((series) => series.id === pieSeriesId) ? { ...content, pieSeriesId } : content
 }
 
-/** Replaces the grid using only the pasted dimensions and basic delimited text. */
+/** Selects the one category used by a transposed Pie chart. */
+export function setStatisticalGraphPieCategory(
+  content: StatisticalGraphContent,
+  pieCategoryId: string,
+): StatisticalGraphContent {
+  return content.categories.some((category) => category.id === pieCategoryId) ? { ...content, pieCategoryId } : content
+}
+
+/** Replaces one grid cell and extends its data row or column when needed. */
+export function setStatisticalGraphGridCell(
+  content: StatisticalGraphContent,
+  rowIndex: number,
+  columnIndex: number,
+  rawValue: string,
+  headings?: Partial<Pick<StatisticalGraphContent, 'columnLabelsEnabled' | 'rowLabelsEnabled'>>,
+): StatisticalGraphContent {
+  const next = setStatisticalGraphGridCellValue(content, rowIndex, columnIndex, rawValue)
+  return headings === undefined ? next : { ...next, ...headings }
+}
+
+/** Maps one visible grid position to its heading or sparse numeric value. */
+function setStatisticalGraphGridCellValue(
+  content: StatisticalGraphContent,
+  rowIndex: number,
+  columnIndex: number,
+  rawValue: string,
+): StatisticalGraphContent {
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || !Number.isInteger(columnIndex) || columnIndex < 0) return content
+  const hasColumnLabels = content.columnLabelsEnabled ?? true
+  const hasRowLabels = content.rowLabelsEnabled ?? true
+  const categoryIndex = rowIndex - Number(hasColumnLabels)
+  const seriesIndex = columnIndex - Number(hasRowLabels)
+  if (hasColumnLabels && rowIndex === 0) {
+    if (hasRowLabels && columnIndex === 0) return content
+    return setSeriesLabelAtIndex(content, columnIndex - Number(hasRowLabels), rawValue)
+  }
+  if (hasRowLabels && columnIndex === 0) {
+    return setCategoryLabelAtIndex(content, rowIndex - Number(hasColumnLabels), rawValue)
+  }
+  if (categoryIndex < 0 || seriesIndex < 0) return content
+  if ((categoryIndex >= content.categories.length || seriesIndex >= content.series.length)
+    && (rawValue.trim().length === 0 || parseStatisticalGraphNumber(rawValue) === null)) return content
+
+  const expanded = ensureGraphDimensions(content, categoryIndex + 1, seriesIndex + 1)
+  const category = expanded.categories[categoryIndex]
+  const series = expanded.series[seriesIndex]
+  return category === undefined || series === undefined
+    ? content
+    : setStatisticalGraphCell(expanded, category.id, series.id, rawValue)
+}
+
+/** Replaces the grid using enabled labels and the pasted data dimensions. */
 export function replaceStatisticalGraphTable(
   content: StatisticalGraphContent,
   clipboardText: string,
 ): StatisticalGraphContent {
   const rows = parseTabularText(clipboardText)
-  const width = Math.max(2, ...rows.map((row) => row.length))
-  const height = Math.max(2, rows.length)
-  if (width > MAX_GRAPH_DIMENSION + 1 || height > MAX_GRAPH_DIMENSION + 1) {
-    throw new Error(`Le tableau dépasse la limite de ${MAX_GRAPH_DIMENSION + 1} lignes ou colonnes, en-têtes compris.`)
-  }
-  const matrix = Array.from({ length: height }, (_, rowIndex) => Array.from(
-    { length: width },
-    (_unused, columnIndex) => rows[rowIndex]?.[columnIndex] ?? '',
-  ))
-  const categories = matrix.slice(1).map((row) => ({ id: createGraphId('graph-category'), label: row[0] ?? '' }))
-  const series = matrix[0]!.slice(1).map((label) => ({ id: createGraphId('graph-series'), label }))
+  const hasColumnLabels = content.columnLabelsEnabled ?? true
+  const hasRowLabels = content.rowLabelsEnabled ?? true
+  const headerRowOffset = Number(hasColumnLabels)
+  const headerColumnOffset = Number(hasRowLabels)
+  const height = Math.max(1, rows.length - headerRowOffset)
+  const width = Math.max(1, ...rows.map((row) => row.length - headerColumnOffset))
+  const categories = Array.from({ length: height }, (_unused, index) => ({
+    id: createGraphId('graph-category'),
+    label: hasRowLabels ? rows[index + headerRowOffset]?.[0] ?? '' : '',
+  }))
+  const series = Array.from({ length: width }, (_unused, index) => ({
+    id: createGraphId('graph-series'),
+    label: hasColumnLabels ? rows[0]?.[index + headerColumnOffset] ?? '' : '',
+  }))
   const values = categories.flatMap((category, rowIndex) => series.flatMap((entry, columnIndex) => {
-    const value = parseStatisticalGraphNumber(matrix[rowIndex + 1]?.[columnIndex + 1] ?? '')
+    const value = parseStatisticalGraphNumber(rows[rowIndex + headerRowOffset]?.[columnIndex + headerColumnOffset] ?? '')
     return value === null ? [] : [{ categoryId: category.id, seriesId: entry.id, value }]
   }))
   return {
@@ -143,6 +218,9 @@ export function replaceStatisticalGraphTable(
     pieSeriesId: series.some((entry) => entry.id === content.pieSeriesId)
       ? content.pieSeriesId
       : series[0]?.id ?? null,
+    pieCategoryId: categories.some((entry) => entry.id === content.pieCategoryId)
+      ? content.pieCategoryId
+      : categories[0]?.id ?? null,
   }
 }
 
@@ -151,9 +229,13 @@ export function assertStatisticalGraphContent(content: StatisticalGraphContent):
   if (!Object.values(STATISTICAL_GRAPH_RENDERING).includes(content.rendering)) {
     throw new Error(`Rendu de graphe inconnu : ${String(content.rendering)}`)
   }
-  if (content.categories.length < 1 || content.categories.length > MAX_GRAPH_DIMENSION
-    || content.series.length < 1 || content.series.length > MAX_GRAPH_DIMENSION) {
-    throw new Error(`Un graphe accepte de 1 à ${MAX_GRAPH_DIMENSION} lignes et séries de données.`)
+  if (content.categories.length < 1 || content.series.length < 1) {
+    throw new Error('Un graphe accepte au moins une ligne et une série de données.')
+  }
+  if ((content.transposeEnabled !== undefined && typeof content.transposeEnabled !== 'boolean')
+    || (content.columnLabelsEnabled !== undefined && typeof content.columnLabelsEnabled !== 'boolean')
+    || (content.rowLabelsEnabled !== undefined && typeof content.rowLabelsEnabled !== 'boolean')) {
+    throw new Error('Les options du graphe doivent être booléennes.')
   }
   assertUniqueIds(content.categories.map((category) => category.id), 'catégorie')
   assertUniqueIds(content.series.map((series) => series.id), 'série')
@@ -172,8 +254,16 @@ export function assertStatisticalGraphContent(content: StatisticalGraphContent):
   if (content.pieSeriesId !== null && !seriesIds.has(content.pieSeriesId)) {
     throw new Error('La série choisie pour les secteurs doit appartenir au graphe.')
   }
+  if (content.pieCategoryId != null && !categoryIds.has(content.pieCategoryId)) {
+    throw new Error('La catégorie choisie pour les secteurs transposés doit appartenir au graphe.')
+  }
   if (content.rendering === STATISTICAL_GRAPH_RENDERING.PIE && content.pieSeriesId === null) {
     throw new Error('Un graphe en secteurs doit choisir une série.')
+  }
+  if (content.rendering === STATISTICAL_GRAPH_RENDERING.PIE
+    && content.transposeEnabled === true
+    && content.pieCategoryId == null) {
+    throw new Error('Un graphe en secteurs transposé doit choisir une catégorie.')
   }
   for (const text of [content.overline, content.title, content.categoryAxisLabel, content.seriesAxisLabel, content.editorialText]) {
     if (typeof text !== 'string') throw new Error('Les textes du graphe doivent être des chaînes.')
@@ -193,6 +283,42 @@ export function parseStatisticalGraphNumber(value: string): number | null {
 /** Creates stable-shaped identifiers for graph rows and columns. */
 function createGraphId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`
+}
+
+/** Sets a series heading by its grid index and creates that series if needed. */
+function setSeriesLabelAtIndex(content: StatisticalGraphContent, index: number, label: string): StatisticalGraphContent {
+  if (index < 0 || (index >= content.series.length && label.trim().length === 0)) return content
+  const expanded = ensureGraphDimensions(content, content.categories.length, index + 1)
+  const series = expanded.series[index]
+  return series === undefined ? content : setStatisticalGraphSeriesLabel(expanded, series.id, label)
+}
+
+/** Sets a category heading by its grid index and creates that category if needed. */
+function setCategoryLabelAtIndex(content: StatisticalGraphContent, index: number, label: string): StatisticalGraphContent {
+  if (index < 0 || (index >= content.categories.length && label.trim().length === 0)) return content
+  const expanded = ensureGraphDimensions(content, index + 1, content.series.length)
+  const category = expanded.categories[index]
+  return category === undefined ? content : setStatisticalGraphCategoryLabel(expanded, category.id, label)
+}
+
+/** Adds only the category and series rows required by an entered grid cell. */
+function ensureGraphDimensions(
+  content: StatisticalGraphContent,
+  categoryCount: number,
+  seriesCount: number,
+): StatisticalGraphContent {
+  const categories = [...content.categories]
+  while (categories.length < categoryCount) categories.push({ id: createGraphId('graph-category'), label: '' })
+  const series = [...content.series]
+  while (series.length < seriesCount) series.push({ id: createGraphId('graph-series'), label: '' })
+  if (categories.length === content.categories.length && series.length === content.series.length) return content
+  return {
+    ...content,
+    categories,
+    series,
+    pieSeriesId: content.pieSeriesId ?? series[0]?.id ?? null,
+    pieCategoryId: content.pieCategoryId ?? categories[0]?.id ?? null,
+  }
 }
 
 /** Extracts a rectangular matrix from tab, semicolon, or comma-delimited text. */

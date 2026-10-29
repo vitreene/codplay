@@ -18,7 +18,6 @@ import { createRuntimeState, getLayoutSceneKey, type SightyRuntimeState } from '
 import type {
   DispatchRequest,
   SightyRuntimeApi,
-  SightyRuntimeConfiguration,
   SightyRuntimeOptions,
   SightyRuntimeSlotChangeListener,
 } from './types'
@@ -347,7 +346,7 @@ class SightyRuntimeController<SceneKey extends string, SlotName extends string>
 /** Creates the runtime sub-surface owned by one Sighty facade. */
 export function createSightyRuntime<SceneKey extends string = string, SlotName extends string = string>(
   scenario: SightyScenarioApi<SceneKey, SlotName>,
-  options: SightyRuntimeConfiguration<SceneKey>,
+  options: SightyRuntimeOptions<SceneKey, SlotName>,
 ): SightyRuntimeApi<SceneKey, SlotName> {
-  return new SightyRuntimeController({ scenario, ...options })
+  return new SightyRuntimeController({ ...options, scenario })
 }

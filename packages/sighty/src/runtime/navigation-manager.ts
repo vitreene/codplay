@@ -348,6 +348,7 @@ export class RuntimeNavigationManager<SceneKey extends string, SlotName extends 
       event: {
         name: event.name,
         ...(event.sourceSceneKey === undefined ? {} : { sourceSceneKey: event.sourceSceneKey }),
+        ...(event.timeMs === undefined ? {} : { timeMs: event.timeMs }),
         ...(event.data === undefined ? {} : { data: event.data }),
       },
       sceneKey: selection.sceneKey,

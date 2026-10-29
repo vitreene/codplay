@@ -1,15 +1,23 @@
 import { assign, fromPromise, setup } from 'xstate'
 import { applyDocumentCommand, createDefaultPageCommand } from '../../domain/commands/document-commands'
 import type { DocumentCommand } from '../../domain/commands/document-command-types'
-import { BDC_TYPE, CATALOG_TAB } from '../../config/document-config'
+import { BDC_TYPE, CATALOG_TAB, MEDIA_TYPE } from '../../config/document-config'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
-import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
+import { ElceMediaResourceService, mediaTypeFromMimeType } from '../../domain/media/media-resource-service'
 import type { ElceDocumentChange } from './document-change-types'
 import type { ChapterId, MediaMetadata, PageId } from '../../domain/document/document-types'
 import type { ElceAppContext, ElceControllerEvent, ElceControllerInput } from './controller-types'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 import type { ProjectSessionOperation, ProjectSessionResult } from '../projects/project-session-types'
+import {
+  EMPTY_DOCUMENT_HISTORY,
+  recordDocumentHistory,
+  rebaseMediaMergeHistory,
+  redoDocumentHistory,
+  undoDocumentHistory,
+} from '../history/document-history'
+import type { DocumentHistoryPosition, SectionSelection } from '../history/document-history'
 
 const initialDocument = createInitialDocument()
 const anchorDropService = new ElceAnchorDropService()
@@ -49,9 +57,14 @@ const performProjectOperation = fromPromise<ProjectSessionResult, ProjectOperati
 })
 
 /** Persists imported files and resolves canonical media before command commit. */
-const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentChangeWorkerInput>(async ({ input }) => {
+const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentChangeWorkerInput>(async ({ input, signal }) => {
   const operation = input.operation
   switch (operation.kind) {
+    case 'command':
+    case 'page-create':
+    case 'history-undo':
+    case 'history-redo':
+      return { operation, source: null, mediaCreated: false }
     case 'anchor':
       switch (operation.operation.change.kind) {
         case 'file-drop': {
@@ -61,6 +74,7 @@ const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentCh
             operation.operation.change.target.media,
             input.document,
             input.store,
+            signal,
           )
           return {
             operation: withAnchorMedia(operation, media),
@@ -75,26 +89,31 @@ const persistDocumentChange = fromPromise<DocumentChangeWorkerOutput, DocumentCh
         case 'anchor-return':
           return { operation, source: null, mediaCreated: false }
       }
-    case 'question-media-import': {
-      if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
-      const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store)
-      return {
-        operation: { ...operation, media },
-        source: created ? createObjectUrl(operation.file) : null,
-        mediaCreated: created,
-      }
-    }
-    case 'card-media-import': {
-      if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
-      const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store)
-      return {
-        operation: { ...operation, media },
-        source: created ? createObjectUrl(operation.file) : null,
-        mediaCreated: created,
-      }
-    }
+    case 'question-media-import':
+    case 'card-media-import':
+    case 'summary-media-import':
+      return persistMediaImport(operation, input, signal)
   }
 })
+
+/** Persists one accepted image or video through the shared media import path. */
+async function persistMediaImport(
+  operation: Extract<ElceDocumentChange, { kind: 'question-media-import' | 'card-media-import' | 'summary-media-import' }>,
+  input: DocumentChangeWorkerInput,
+  signal: AbortSignal,
+): Promise<DocumentChangeWorkerOutput> {
+  if (operation.kind === 'summary-media-import'
+    && mediaTypeFromMimeType(operation.media.mimeType) !== MEDIA_TYPE.IMAGE) {
+    throw new Error('Seules les images peuvent servir de fond au Sommaire.')
+  }
+  if (input.store === null) throw new Error('Le stockage Elcé n’est pas configuré pour un dépôt de fichier.')
+  const { media, created } = await resolveImportedMedia(operation.file, operation.media, input.document, input.store, signal)
+  return {
+    operation: { ...operation, media },
+    source: created ? createObjectUrl(operation.file) : null,
+    mediaCreated: created,
+  }
+}
 
 /** Reuses an exact media resource or persists the imported bytes once. */
 async function resolveImportedMedia(
@@ -102,15 +121,27 @@ async function resolveImportedMedia(
   media: MediaMetadata,
   document: ElceAppContext['document'],
   store: ElceDocumentStore,
+  signal: AbortSignal,
 ): Promise<Readonly<{ media: MediaMetadata; created: boolean }>> {
   const duplicate = await mediaResourceService.findDuplicate(
     file,
     document.medias,
     (mediaId) => store.loadMedia(mediaId),
   )
+  if (signal.aborted) throw new Error('Import annulé.')
   switch (duplicate) {
     case null:
-      await store.saveMedia({ id: media.id, blob: file })
+      try {
+        await store.saveMedia({ id: media.id, blob: file })
+        if (signal.aborted) throw new Error('Import annulé.')
+      } catch (error) {
+        try {
+          await store.deleteMedia([media.id])
+        } catch {
+          // Preserve the storage error that rejected the import.
+        }
+        throw error
+      }
       return { media, created: true }
     default:
       return { media: duplicate, created: false }
@@ -151,8 +182,16 @@ function createObjectUrl(file: File): string | null {
 }
 
 /** Maps each persisted document change to one immutable document command. */
-function commandForChange(operation: ElceDocumentChange, mediaCreated: boolean) {
+function commandForChange(
+  operation: Exclude<ElceDocumentChange, { kind: 'history-undo' | 'history-redo' }>,
+  mediaCreated: boolean,
+  document: ElceAppContext['document'],
+): DocumentCommand {
   switch (operation.kind) {
+    case 'command':
+      return operation.command
+    case 'page-create':
+      return createDefaultPageCommand(document, operation.placement, operation.name, operation.pageType)
     case 'anchor':
       return anchorDropService.createDocumentCommand(operation.operation.sectionBdcId, operation.operation.change)
     case 'question-media-import':
@@ -185,6 +224,16 @@ function commandForChange(operation: ElceDocumentChange, mediaCreated: boolean) 
             mediaId: operation.media.id,
           }
       }
+    case 'summary-media-import':
+      switch (mediaCreated) {
+        case true:
+          return { type: 'summary.background.media.attach' as const, media: operation.media }
+        case false:
+          return {
+            type: 'summary.settings.update' as const,
+            summary: { ...document.data.summary, backgroundMediaId: operation.media.id },
+          }
+      }
   }
 }
 
@@ -192,11 +241,28 @@ function commandForChange(operation: ElceDocumentChange, mediaCreated: boolean) 
 function documentChangeForEvent(event: ElceControllerEvent): ElceDocumentChange | null {
   switch (event.type) {
     case 'section.change':
-      return { kind: 'anchor', operation: { sectionBdcId: event.sectionBdcId, change: event.change } }
+      return {
+        kind: 'anchor',
+        operation: { sectionBdcId: event.sectionBdcId, change: event.change },
+        historyGroupKey: event.historyGroupKey,
+        recordedAt: Date.now(),
+        selectionBefore: event.selectionBefore,
+        selectionAfter: event.selectionAfter,
+      }
     case 'question.media.file.import':
       return { kind: 'question-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
     case 'card.media.file.import':
       return { kind: 'card-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
+    case 'summary.media.file.import':
+      return { kind: 'summary-media-import', file: event.file, media: event.media }
+    case 'document.apply':
+      return { kind: 'command', command: event.command, historyGroupKey: event.historyGroupKey, recordHistory: event.recordHistory, recordedAt: Date.now() }
+    case 'page.create':
+      return { kind: 'page-create', placement: event.placement, pageType: event.pageType, name: event.name }
+    case 'history.undo':
+      return { kind: 'history-undo' }
+    case 'history.redo':
+      return { kind: 'history-redo' }
     default:
       return null
   }
@@ -216,12 +282,22 @@ export const controllerMachine = setup({
     }),
     commitDocumentChange: assign(({ context, event }) => {
       const output = (event as unknown as { output: DocumentChangeWorkerOutput }).output
-      const document = applyDocumentCommand(context.document, commandForChange(output.operation, output.mediaCreated))
+      const operation = output.operation
+      if (operation.kind === 'history-undo' || operation.kind === 'history-redo') {
+        return {
+          ...applyHistoryMovement(context, operation.kind),
+          documentChanges: context.documentChanges.slice(1),
+        }
+      }
+      const command = commandForChange(operation, output.mediaCreated, context.document)
       return {
-        document,
-        selectedPageId: keepSelectedPage(document, context.selectedPageId),
-        selectedChapterId: keepSelectedChapter(document, context.selectedChapterId),
-        mediaSources: updateMediaSources(context.mediaSources, output.operation, output.source),
+        ...commitCommand(context, command, operation.kind === 'command' ? operation.historyGroupKey ?? null
+          : operation.kind === 'anchor' ? operation.historyGroupKey ?? null : null,
+        operation.kind === 'page-create', operation.kind !== 'command' || operation.recordHistory !== false,
+        operation.kind === 'command' || operation.kind === 'anchor' ? operation.recordedAt : Date.now(),
+        operation.kind === 'anchor' ? operation.selectionBefore : undefined,
+        operation.kind === 'anchor' ? operation.selectionAfter : undefined),
+        mediaSources: updateMediaSources(context.mediaSources, operation, output.source),
         documentChanges: context.documentChanges.slice(1),
       }
     }),
@@ -233,6 +309,7 @@ export const controllerMachine = setup({
         projectOperationHadAccess: context.editAccess === 'active',
         projectStatus: event.operation.kind === 'bootstrap' ? 'loading' : 'busy',
         projectError: null,
+        accessRecoveryAvailable: false,
         editAccess: 'waiting',
       }
     }),
@@ -242,6 +319,9 @@ export const controllerMachine = setup({
       const replaced = output.document !== null
       return {
         document,
+        history: replaced ? EMPTY_DOCUMENT_HISTORY : context.history,
+        sectionSelection: replaced ? null : context.sectionSelection,
+        historyRestore: null,
         selectedPageId: replaced ? document.pages[0]?.id ?? null : context.selectedPageId,
         selectedChapterId: replaced ? null : context.selectedChapterId,
         selectedCarouselCardBdcId: replaced ? null : context.selectedCarouselCardBdcId,
@@ -249,7 +329,9 @@ export const controllerMachine = setup({
         projects: output.projects,
         activeProject: output.activeProject,
         projectStatus: output.status,
-        projectError: null,
+        projectError: output.projectError ?? null,
+        accessRecoveryAvailable: false,
+        recoverableLocalCopy: output.activeProject?.id === context.activeProject?.id ? context.recoverableLocalCopy : false,
         pendingProjectOperation: null,
         projectOperationHadAccess: false,
         editAccess: context.projectOperationHadAccess ? output.editAccess : 'waiting',
@@ -270,12 +352,20 @@ export const controllerMachine = setup({
     markProjectAccessError: assign(({ event }) => ({
       projectStatus: 'error' as const,
       projectError: event.type === 'project.access.error' ? event.message : null,
+      accessRecoveryAvailable: false,
+      editAccess: 'waiting' as const,
+    })),
+    markProjectAccessRecovery: assign(({ event }) => ({
+      projectStatus: 'error' as const,
+      projectError: event.type === 'project.access.recovery' ? event.message : null,
+      accessRecoveryAvailable: true,
       editAccess: 'waiting' as const,
     })),
   },
   guards: {
     hasPendingDocumentChanges: ({ context }) => context.documentChanges.length > 0,
     hasEditAccess: ({ context }) => context.editAccess === 'active',
+    hasActiveImport: ({ context }) => isImportChange(context.documentChanges[0]),
   },
   actors: { persistDocumentChange, performProjectOperation },
 }).createMachine({
@@ -291,41 +381,27 @@ export const controllerMachine = setup({
     editAccess: 'waiting',
     documentStore: input?.documentStore ?? null,
     documentChanges: [],
+    history: EMPTY_DOCUMENT_HISTORY,
+    sectionSelection: null,
+    historyRestore: null,
     projectSession: input?.projectSession ?? null,
     projects: [],
     activeProject: null,
     projectStatus: 'loading',
     projectError: null,
+    accessRecoveryAvailable: false,
+    recoverableLocalCopy: false,
     pendingProjectOperation: null,
     projectOperationHadAccess: false,
   }),
   initial: 'suspended',
   on: {
-    'document.apply': {
-      guard: 'hasEditAccess',
-      actions: assign(({ context, event }) => {
-        const document = applyDocumentCommand(context.document, event.command)
-        return {
-          document,
-          selectedPageId: keepSelectedPage(document, context.selectedPageId),
-          selectedChapterId: keepSelectedChapter(document, context.selectedChapterId),
-          selectedCarouselCardBdcId: selectedCarouselCardAfterCommand(document, event.command, context.selectedCarouselCardBdcId),
-        }
-      }),
-    },
-    'page.create': {
-      guard: 'hasEditAccess',
-      actions: assign(({ context, event }) => {
-        const command = createDefaultPageCommand(context.document, event.placement, event.name, event.pageType)
-        const document = applyDocumentCommand(context.document, command)
-        return { document, selectedPageId: command.pageId, selectedChapterId: null, selectedCarouselCardBdcId: null }
-      }),
-    },
     'page.select': {
       actions: assign(({ context, event }) => ({
         selectedPageId: keepSelectedPage(context.document, event.pageId),
         selectedChapterId: null,
         selectedCarouselCardBdcId: null,
+        historyRestore: null,
       })),
     },
     'carousel.card.select': {
@@ -337,6 +413,7 @@ export const controllerMachine = setup({
       actions: assign(({ context, event }) => ({
         selectedChapterId: keepSelectedChapter(context.document, event.chapterId),
         selectedCarouselCardBdcId: null,
+        historyRestore: null,
       })),
     },
     'catalog.tab.select': {
@@ -354,11 +431,23 @@ export const controllerMachine = setup({
         selectedChapterId: keepSelectedChapter(event.document, context.selectedChapterId),
         selectedCarouselCardBdcId: keepSelectedCarouselCard(event.document, context.selectedCarouselCardBdcId),
         mediaSources: {},
+        history: EMPTY_DOCUMENT_HISTORY,
+        sectionSelection: null,
+        historyRestore: null,
         syncStatus: 'pending',
       })),
     },
     'document.sync.status': {
       actions: assign(({ event }) => ({ syncStatus: event.status })),
+    },
+    'document.sync.merge': {
+      guard: ({ context, event }) => context.activeProject?.id === event.projectId
+        && context.document.id === event.projectId,
+      actions: assign(({ context, event }) => commitCommand(context, {
+        type: 'media.merge',
+        canonicalMediaId: event.canonicalMediaId,
+        duplicateMediaIds: [event.duplicateMediaId],
+      }, null, false, false)),
     },
     'project.summary.refresh': {
       actions: assign(({ context, event }) => ({
@@ -368,7 +457,21 @@ export const controllerMachine = setup({
           : [...context.projects, event.project],
       })),
     },
+    'project.reader.ready': {
+      actions: assign(({ context }) => ({
+        projectStatus: context.activeProject !== null && context.projectStatus === 'opening' ? 'active' as const : context.projectStatus,
+      })),
+    },
     'project.access.error': { actions: 'markProjectAccessError' },
+    'project.access.recovery': { actions: 'markProjectAccessRecovery' },
+    'project.sync.warning': { actions: assign(({ event }) => ({ projectError: event.message })) },
+    'project.local-copy.availability': {
+      actions: assign(({ context, event }) => ({
+        recoverableLocalCopy: context.activeProject?.id === event.projectId ? event.available : context.recoverableLocalCopy,
+      })),
+    },
+    'project.access.retry': { actions: ({ context }) => context.projectSession?.retryAccess?.() },
+    'project.access.force': { actions: ({ context }) => context.projectSession?.forceAccess?.() },
   },
   states: {
     suspended: {
@@ -379,6 +482,7 @@ export const controllerMachine = setup({
             editAccess: 'active',
             projectStatus: context.activeProject === null ? context.projectStatus : 'active',
             projectError: null,
+            accessRecoveryAvailable: false,
           })),
           target: 'ready',
         },
@@ -391,9 +495,27 @@ export const controllerMachine = setup({
           actions: assign({ editAccess: 'waiting' }),
           target: 'suspended',
         },
+        'document.apply': {
+          guard: 'hasEditAccess',
+          actions: assign(({ context, event }) => commitCommand(
+            context, event.command, event.historyGroupKey ?? null, false, event.recordHistory !== false,
+          )),
+        },
+        'page.create': {
+          guard: 'hasEditAccess',
+          actions: assign(({ context, event }) => commitCommand(
+            context,
+            createDefaultPageCommand(context.document, event.placement, event.name, event.pageType),
+            null,
+            true,
+          )),
+        },
+        'history.undo': { guard: 'hasEditAccess', actions: assign(({ context }) => applyHistoryMovement(context, 'history-undo')) },
+        'history.redo': { guard: 'hasEditAccess', actions: assign(({ context }) => applyHistoryMovement(context, 'history-redo')) },
         'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
         'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
         'card.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
+        'summary.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange', target: 'processingDocumentChange' },
       },
     },
     processingDocumentChange: {
@@ -414,11 +536,17 @@ export const controllerMachine = setup({
         },
       },
       on: {
+        'import.cancel': { guard: 'hasActiveImport', actions: 'discardDocumentChange', target: 'nextDocumentChange' },
         'project.operation': { actions: 'beginProjectOperation' },
         'editor.access.suspend': { actions: assign({ editAccess: 'waiting' }) },
+        'document.apply': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'page.create': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'history.undo': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'history.redo': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
         'section.change': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
         'question.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
         'card.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
+        'summary.media.file.import': { guard: 'hasEditAccess', actions: 'enqueueDocumentChange' },
       },
     },
     nextDocumentChange: {
@@ -463,6 +591,89 @@ export const controllerMachine = setup({
     },
   },
 })
+
+/** Distinguishes the cancellable file-preparation stage from other queued work. */
+export function isImportChange(change: ElceDocumentChange | undefined): boolean {
+  return change?.kind === 'card-media-import'
+    || change?.kind === 'question-media-import'
+    || change?.kind === 'summary-media-import'
+    || (change?.kind === 'anchor' && change.operation.change.kind === 'file-drop')
+}
+
+/** Captures the actor state restored together with one document revision. */
+function historyPosition(context: ElceAppContext): DocumentHistoryPosition {
+  return {
+    document: context.document,
+    selectedPageId: context.selectedPageId,
+    selectedChapterId: context.selectedChapterId,
+    selectedCarouselCardBdcId: context.selectedCarouselCardBdcId,
+    sectionSelection: context.sectionSelection,
+  }
+}
+
+/** Commits one existing document command and records its author gesture. */
+function commitCommand(
+  context: ElceAppContext,
+  command: DocumentCommand,
+  groupKey: string | null,
+  selectCreatedPage = false,
+  recordHistory = true,
+  recordedAt = Date.now(),
+  selectionBefore?: SectionSelection,
+  selectionAfter?: SectionSelection,
+): Partial<ElceAppContext> {
+  if (!recordHistory && command.type === 'media.merge') {
+    const mediaIds = new Set(context.document.medias.map((media) => media.id))
+    if (!mediaIds.has(command.canonicalMediaId)
+      || command.duplicateMediaIds.some((mediaId) => !mediaIds.has(mediaId))) return {}
+  }
+  const document = applyDocumentCommand(context.document, command)
+  const createdPageId = selectCreatedPage && command.type === 'page.create' ? command.pageId : null
+  const after: DocumentHistoryPosition = {
+    document,
+    selectedPageId: createdPageId ?? keepSelectedPage(document, context.selectedPageId),
+    selectedChapterId: createdPageId === null ? keepSelectedChapter(document, context.selectedChapterId) : null,
+    selectedCarouselCardBdcId: createdPageId === null
+      ? selectedCarouselCardAfterCommand(document, command, context.selectedCarouselCardBdcId)
+      : null,
+    sectionSelection: createdPageId !== null ? null
+      : selectionAfter ?? keepSectionSelection(document, context.sectionSelection),
+  }
+  const before: DocumentHistoryPosition = {
+    ...historyPosition(context),
+    sectionSelection: selectionBefore ?? context.sectionSelection,
+  }
+  return {
+    ...after,
+    historyRestore: null,
+    history: recordHistory
+      ? recordDocumentHistory(context.history, before, after, groupKey, recordedAt)
+      : command.type === 'media.merge'
+        ? rebaseMediaMergeHistory(context.history, command.canonicalMediaId, command.duplicateMediaIds)
+        : context.history,
+  }
+}
+
+/** Restores the document and selection owned by the next history entry. */
+function applyHistoryMovement(
+  context: ElceAppContext,
+  kind: 'history-undo' | 'history-redo',
+): Partial<ElceAppContext> {
+  const movement = kind === 'history-undo'
+    ? undoDocumentHistory(context.history)
+    : redoDocumentHistory(context.history)
+  return movement === null ? {} : {
+    ...movement.position,
+    history: movement.history,
+    historyRestore: { selection: movement.position.sectionSelection },
+  }
+}
+
+/** Keeps a saved caret only while its Section still belongs to the document. */
+function keepSectionSelection(document: ElceAppContext['document'], selection: SectionSelection | null): SectionSelection | null {
+  return selection !== null && document.bdcs.some((bdc) => bdc.id === selection.sectionBdcId)
+    ? selection : null
+}
 
 /** Keeps the selected page when it survives a document replacement. */
 function keepSelectedPage(document: ElceAppContext['document'], selectedPageId: PageId | null): PageId | null {
@@ -528,9 +739,14 @@ function updateMediaSources(
           return mediaSources
       }
     case 'question-media-import':
-      return mediaSourceAddition(mediaSources, operation.media.id, source)
     case 'card-media-import':
+    case 'summary-media-import':
       return mediaSourceAddition(mediaSources, operation.media.id, source)
+    case 'command':
+    case 'page-create':
+    case 'history-undo':
+    case 'history-redo':
+      return mediaSources
   }
 }
 

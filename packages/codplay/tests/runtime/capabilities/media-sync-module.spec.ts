@@ -8,8 +8,69 @@ import type { CompiledRecord, CompiledScene } from '../../../src/scene/compiled'
 import type { SolvedScene } from '../../../src/runtime/player/pipeline'
 import type {
   MediaComponentSurface,
+  MediaSync,
   RuntimeComponentSurfaceResolver,
 } from '../../../src/runtime/components'
+
+/** Selects one initial clock mode without changing the shared command fixture. */
+function sceneWithSync(sync?: MediaSync): CompiledScene {
+  return {
+    ...compiledScene,
+    scene: {
+      ...compiledScene.scene,
+      stories: {
+        main: {
+          ...compiledScene.scene.stories.main!,
+          persos: compiledScene.scene.stories.main!.persos.map((perso) => ({
+            ...perso,
+            initial: { src: '/audio.mp3', ...(sync === undefined ? {} : { sync }) },
+          })),
+        },
+      },
+    },
+  }
+}
+
+/** Creates a native playback probe whose clock can advance without CodPlay. */
+function mediaProbe() {
+  const state = { currentMs: 0, paused: true, rate: 1, lowerBound: 0 }
+  const calls: string[] = []
+  const surface: MediaComponentSurface = {
+    seekTo: (value) => { calls.push(`seek:${value}`); state.currentMs = Math.max(state.lowerBound, value) },
+    play: () => { calls.push('play'); state.paused = false },
+    pause: () => { calls.push('pause'); state.paused = true },
+    stopAt: (value) => { calls.push(`stop:${value}`); state.currentMs = Math.max(state.lowerBound, value); state.paused = true },
+    getCurrentTimeMs: () => state.currentMs,
+    getDurationMs: () => null,
+    isPaused: () => state.paused,
+    setRate: (value) => { calls.push(`rate:${value}`); state.rate = value },
+    setPlaybackWindow: (startMs) => { state.lowerBound = startMs },
+  }
+  return { state, calls, surface }
+}
+
+/** Appends a distinct command occurrence to the solved fixture at its current time. */
+function withCommand(scene: SolvedScene, type: 'START' | 'PAUSE' | 'STOP', startAt?: number): SolvedScene {
+  const perso = scene.persos['main:audio']!
+  return {
+    ...scene,
+    persos: {
+      ...scene.persos,
+      'main:audio': {
+        ...perso,
+        actions: [...perso.actions ?? [], {
+          name: `${type}-${scene.timeMs}`,
+          startAt: scene.timeMs,
+          elapsedMs: 0,
+          trackId: 'main',
+          trackOrder: 0,
+          declarationPath: [1],
+          action: { broadcast: { type, ...(startAt === undefined ? {} : { startAt }) } },
+        }],
+      },
+    },
+  }
+}
 
 const compiledScene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
@@ -22,7 +83,7 @@ const compiledScene: CompiledScene = {
         persos: [{
           id: 'audio',
           type: 'media',
-          initial: { src: '/audio.mp3', master: true },
+          initial: { src: '/audio.mp3', sync: 'master' },
           actions: { audio: null, start: { broadcast: { type: 'START' } } },
         }],
         listen: [],
@@ -47,7 +108,7 @@ const nonMasterCompiledScene: CompiledScene = {
         ...compiledScene.scene.stories.main,
         persos: compiledScene.scene.stories.main.persos.map((perso) => ({
           ...perso,
-          initial: { ...perso.initial, master: false },
+          initial: { ...perso.initial, sync: 'auto' },
         })),
       },
     },
@@ -67,7 +128,7 @@ const dualMasterCompiledScene: CompiledScene = {
           {
             id: 'video',
             type: 'media',
-            initial: { src: '/video.mp4', master: true },
+            initial: { src: '/video.mp4', sync: 'master' },
             actions: {
               video: null,
               'video-start': { broadcast: { type: 'START' } },
@@ -80,7 +141,7 @@ const dualMasterCompiledScene: CompiledScene = {
 }
 
 function solved(timeMs: number, scene: CompiledScene = compiledScene): SolvedScene {
-  const master = scene.scene.stories.main.persos[0]?.initial.master === true
+  const sync = scene.scene.stories.main.persos[0]?.initial.sync ?? 'auto'
   return {
     scene,
     timeMs,
@@ -92,7 +153,7 @@ function solved(timeMs: number, scene: CompiledScene = compiledScene): SolvedSce
         storyId: 'main',
         persoId: 'audio',
         type: 'media',
-        state: { src: '/audio.mp3', master },
+        state: { src: '/audio.mp3', sync },
         actions: [{
           name: 'start',
           startAt: 0,
@@ -117,9 +178,7 @@ function solvedWithVideo(
   transition?: CompiledRecord,
 ): SolvedScene {
   const base = solved(timeMs, scene)
-  const videoMaster = scene.scene.stories.main?.persos.some(
-    (perso) => perso.id === 'video' && perso.initial.master === true,
-  ) === true
+  const videoSync = scene.scene.stories.main?.persos.find((perso) => perso.id === 'video')?.initial.sync ?? 'auto'
   return {
     ...base,
     persos: {
@@ -129,7 +188,7 @@ function solvedWithVideo(
         storyId: 'main',
         persoId: 'video',
         type: 'media',
-        state: { src: '/video.mp4', master: videoMaster },
+        state: { src: '/video.mp4', sync: videoSync },
         actions: timeMs < 1000
           ? []
           : [{
@@ -164,6 +223,88 @@ function componentSurfaces(
 }
 
 describe('V2 media-sync module service', () => {
+  it('defaults to auto and keeps native playback under the scene transport', () => {
+    const scene = sceneWithSync()
+    const probe = mediaProbe()
+    const service = createMediaSyncModuleService({ playerId: 'default-mode', compiledScene: scene, componentSurfaces: componentSurfaces(() => probe.surface) })
+    service.onScenePresented?.(solved(0, scene), 'playing')
+    probe.state.currentMs = 730
+    service.onPlaybackStateChange?.('paused', 500)
+    expect(probe.state).toMatchObject({ currentMs: 500, paused: true })
+    expect(service.resolveTimelineMs?.(800)).toBe(800)
+  })
+
+  it('keeps independent native controls and clock unchanged across scene transport and reconstruction', () => {
+    const scene = sceneWithSync('independent')
+    const probe = mediaProbe()
+    const service = createMediaSyncModuleService({ playerId: 'independent-mode', compiledScene: scene, componentSurfaces: componentSurfaces(() => probe.surface) })
+    service.onScenePresented?.(solved(0, scene), 'playing')
+    expect(probe.calls).toEqual(['seek:0', 'play'])
+    probe.calls.length = 0
+    probe.state.currentMs = 730
+    probe.state.paused = true
+    service.onScenePresented?.(solved(100, scene), 'playing')
+    service.onPlaybackStateChange?.('paused', 100)
+    service.onRateChange?.(2)
+    expect(service.resolveTimelineMs?.(150)).toBe(150)
+    service.beforeSeek?.(100)
+    service.prepareSeek?.(solved(900, scene)).commit()
+    service.onScenePresented?.(solved(900, scene), 'playing')
+    service.onScenePresented?.(solved(0, scene), 'paused')
+    expect(probe.calls).toEqual([])
+    expect(probe.state).toMatchObject({ currentMs: 730, paused: true, rate: 1 })
+    service.destroy?.()
+    expect(probe.state.paused).toBe(true)
+  })
+
+  it('pauses independent media at native time once and allows native resume afterward', () => {
+    const scene = sceneWithSync('independent')
+    const probe = mediaProbe()
+    const service = createMediaSyncModuleService({ playerId: 'independent-pause', compiledScene: scene, componentSurfaces: componentSurfaces(() => probe.surface) })
+    service.onScenePresented?.(solved(0, scene), 'playing')
+    probe.state.currentMs = 4_200
+    probe.calls.length = 0
+    const paused = withCommand(solved(100, scene), 'PAUSE')
+    service.onScenePresented?.(paused, 'playing')
+    expect(probe.calls).toEqual(['pause'])
+    expect(probe.state).toMatchObject({ currentMs: 4_200, paused: true })
+    probe.state.paused = false
+    service.onScenePresented?.({ ...paused, timeMs: 200 }, 'playing')
+    expect(probe.calls).toEqual(['pause'])
+    expect(probe.state.paused).toBe(false)
+  })
+
+  it.each(['auto', 'master', 'independent'] as const)('STOP stops and resets %s media after a nonzero segment start', (sync) => {
+    const scene = sceneWithSync(sync)
+    const probe = mediaProbe()
+    const service = createMediaSyncModuleService({ playerId: `stop-${sync}`, compiledScene: scene, componentSurfaces: componentSurfaces(() => probe.surface) })
+    service.onScenePresented?.(withCommand(solved(0, scene), 'START', 1_000), 'playing')
+    probe.state.currentMs = 2_800
+    probe.calls.length = 0
+    const stopped = withCommand(solved(200, scene), 'STOP')
+    service.onScenePresented?.(stopped, 'playing')
+    expect(probe.state).toMatchObject({ currentMs: 0, paused: true, lowerBound: 0 })
+    expect(probe.calls).toContain('stop:0')
+    const callsAfterStop = [...probe.calls]
+    service.onScenePresented?.({ ...stopped, timeMs: 300 }, 'playing')
+    expect(probe.calls).toEqual(callsAfterStop)
+  })
+
+  it('isolates independent playback between players', () => {
+    const scene = sceneWithSync('independent')
+    const first = mediaProbe()
+    const second = mediaProbe()
+    const services = [first, second].map((probe, index) => createMediaSyncModuleService({
+      playerId: `independent-${index}`, compiledScene: scene, componentSurfaces: componentSurfaces(() => probe.surface),
+    }))
+    for (const service of services) service.onScenePresented?.(solved(0, scene), 'playing')
+    services[0]?.onScenePresented?.(withCommand(solved(100, scene), 'STOP'), 'playing')
+    expect(first.state.paused).toBe(true)
+    expect(second.state.paused).toBe(false)
+    services[1]?.destroy?.()
+    expect(second.state.paused).toBe(true)
+  })
+
   it('pauses active native media before seek reconstruction', () => {
     let paused = false
     let currentMs = 480

@@ -4,7 +4,7 @@ import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { dropPoint } from '@tiptap/pm/transform'
 import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { ANCHOR, ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID, STATISTICAL_GRAPH_RENDERING } from '../../../config/document-config'
+import { ANCHOR, ANCHOR_RETURN, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, CATALOG_REFERENCE, DEFAULT_PRESET_ID, MEDIA_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../../config/document-config'
 import { CARD_PRESETS } from '../../../config/presets'
 import { ElceCardPresetBuilder } from '../../../builders/card/card-preset-builder'
 import type { BdcId } from '../../../domain/document/document-types'
@@ -16,7 +16,7 @@ import type {
   ElceAnchorExtensionOptions,
   ElceAnchorTransaction,
 } from './anchor-types'
-import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../../anchor/anchor-position'
+import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../../domain/anchor/anchor-ratio-service'
 import { ElceStatisticalGraphSceneBuilder } from '../../../builders/statistical-graph/statistical-graph-scene-builder'
 
@@ -84,8 +84,22 @@ function renderAnchorCardPreview(
   const root = container.firstElementChild
   if (!(root instanceof HTMLElement)) return
   root.classList.add('elce-anchor-card-preview')
-  if (preview.content.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT) root.classList.add('elce-carousel-view--image-right')
+  if (preview.appearanceClassName !== undefined) {
+    root.classList.add(...preview.appearanceClassName.split(' ').filter(Boolean))
+  }
+  if (preview.layoutId === DEFAULT_PRESET_ID.TEXT_IMAGE) {
+    root.classList.add(`elce-card--image-position-${preview.content.imagePosition}`)
+    if (preview.content.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT) {
+      root.classList.add('elce-carousel-view--image-right')
+    }
+  }
   root.dataset.elceCardPreview = 'true'
+  if (preview.appearanceStyleSheet !== undefined) {
+    const style = document.createElement('style')
+    style.id = `${rootId}-appearance-style`
+    style.textContent = preview.appearanceStyleSheet
+    root.append(style)
+  }
   if (preview.layoutId === DEFAULT_PRESET_ID.PHOTO) {
     const image = root.querySelector('.elce-anchor-media-preview')
     if (image instanceof HTMLImageElement) onPhotoImage(image)
@@ -212,7 +226,9 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
         const mediaType = card === null || card.kind === 'statistical-graph' ? null : card.media?.type ?? null
         const reservationPadding = card?.kind === 'statistical-graph'
           ? statisticalGraphAnchorPaddingBottom(card.content.rendering)
-          : configuredPadding
+          : mediaType === MEDIA_TYPE.VIDEO && layoutId === DEFAULT_PRESET_ID.PHOTO
+            ? ANCHOR.VIDEO_BLOCK_SIZE
+            : configuredPadding
         const signature = JSON.stringify([configuredPadding, card])
         dom.id = String(currentNode.attrs.partId ?? '')
         dom.dataset.bdcId = currentBdcId
@@ -223,6 +239,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
         bdc.id = `${currentBdcId}-editor-bdc`
         bdc.dataset.bdcId = currentBdcId
         bdc.dataset.cardLayout = layoutId
+        bdc.style.setProperty('anchor-name', anchorNameFor(`${String(currentNode.attrs.partId ?? '')}-editor-frame`))
         if (mediaType === null) delete bdc.dataset.mediaType
         else bdc.dataset.mediaType = mediaType
         bdc.setAttribute('aria-label', 'Aperçu du bloc illustratif ancré')
@@ -239,6 +256,17 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
           bdc.style.height = ANCHOR.TEXT_CARD_BLOCK_SIZE
           bdc.style.removeProperty('aspect-ratio')
         }
+        if (mediaType === MEDIA_TYPE.VIDEO && layoutId === DEFAULT_PRESET_ID.PHOTO && configuredPadding !== ANCHOR.VIDEO_BLOCK_SIZE) {
+          queueMicrotask(() => updateAnchorPadding(
+            ANCHOR.VIDEO_BLOCK_SIZE,
+            '16 / 9',
+            dom,
+            bdc,
+            view,
+            getPos,
+            layoutId,
+          ))
+        }
         if (signature === renderedCard) return
         renderedCard = signature
         bdc.replaceChildren()
@@ -251,7 +279,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionOptions>({
             }
           }, { once: true })
           if (image.complete && image.naturalWidth > 0 && layoutId === DEFAULT_PRESET_ID.PHOTO) {
-            updateAnchorImageRatio(image, dom, bdc, view, getPos, layoutId)
+            queueMicrotask(() => updateAnchorImageRatio(image, dom, bdc, view, getPos, layoutId))
           }
         })
       }
@@ -400,8 +428,9 @@ function createAnchorEditIcon(id: string): SVGSVGElement {
   if (root.localName !== 'svg') throw new Error('Lucide asset is not an SVG element.')
   const icon = document.importNode(root, true) as unknown as SVGSVGElement
   icon.id = id
-  icon.setAttribute('width', '14')
-  icon.setAttribute('height', '14')
+  icon.removeAttribute('width')
+  icon.removeAttribute('height')
+  icon.classList.add('elce-ui-icon')
   icon.setAttribute('aria-hidden', 'true')
   return icon
 }
@@ -423,6 +452,28 @@ function updateAnchorImageRatio(
   getPos: () => number | undefined,
   layoutId: string,
 ): void {
+  const paddingBottom = anchorRatioService.imagePaddingBottom(image.naturalWidth, image.naturalHeight)
+  updateAnchorPadding(
+    paddingBottom,
+    anchorRatioService.imageAspectRatio(paddingBottom),
+    anchor,
+    bdc,
+    view,
+    getPos,
+    layoutId,
+  )
+}
+
+/** Stores a configured media frame ratio on its anchor through a Tiptap transaction. */
+function updateAnchorPadding(
+  paddingBottom: string,
+  aspectRatio: string,
+  anchor: HTMLSpanElement,
+  bdc: HTMLSpanElement,
+  view: EditorView,
+  getPos: () => number | undefined,
+  layoutId: string,
+): void {
   let position: number | undefined
   try {
     position = getPos()
@@ -434,10 +485,9 @@ function updateAnchorImageRatio(
   const currentNode = view.state.doc.nodeAt(position)
   if (currentNode === null || currentNode.type.name !== ANCHOR.NODE_NAME) return
   if (layoutId !== DEFAULT_PRESET_ID.PHOTO) return
-  const paddingBottom = anchorRatioService.imagePaddingBottom(image.naturalWidth, image.naturalHeight)
   anchor.style.setProperty(ANCHOR.PADDING_VARIABLE, paddingBottom)
   anchor.style.paddingBottom = anchorEditorReservationFor(paddingBottom, layoutId)
-  bdc.style.aspectRatio = anchorRatioService.imageAspectRatio(paddingBottom)
+  bdc.style.aspectRatio = aspectRatio
   if (currentNode.attrs.paddingBottom === paddingBottom) return
 
   view.dispatch(view.state.tr.setNodeMarkup(position, undefined, { ...currentNode.attrs, paddingBottom }))

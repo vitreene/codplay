@@ -193,6 +193,20 @@ describe('Elcé project operations in the application actor', () => {
     actor.send({ type: 'editor.access.activate' })
     expect(actor.getSnapshot().context.projectStatus).toBe('active')
     expect(actor.getSnapshot().value).toBe('ready')
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Édition du projet B' } })
+    expect(actor.getSnapshot().context.history.past).toHaveLength(1)
+
+    const nextProject = { id: 'project-c', name: 'Projet C', revision: 0 } satisfies ElceProjectSummary
+    session.result = {
+      projects: [project, nextProject],
+      activeProject: nextProject,
+      document: renamedDocument(nextProject.id, nextProject.name),
+      status: 'opening',
+      editAccess: 'waiting',
+    }
+    actor.send({ type: 'project.operation', operation: { kind: 'open', projectId: nextProject.id } })
+    await flushActor()
+    expect(actor.getSnapshot().context.history.past).toHaveLength(0)
     actor.stop()
   })
 
@@ -268,7 +282,13 @@ describe('Elcé project operations in the application actor', () => {
     actor.send({ type: 'project.operation', operation: { kind: 'open', projectId: currentProject.id } })
     await flushActor()
 
-    const sync = new ProjectSyncCoordinator(actor, store, new ElceProjectApiClient('http://elce.test', request))
+    const grantRequest = vi.fn<typeof fetch>((input, init) => {
+      if (new URL(input.toString()).pathname.endsWith('/edit-access')) return Promise.resolve(Response.json({ grantId: 'test-grant' }))
+      return request(input, init)
+    })
+    const api = new ElceProjectApiClient('http://elce.test', grantRequest)
+    await api.acquireEditAccess(currentProject.id, 'test-page')
+    const sync = new ProjectSyncCoordinator(actor, store, api)
     let persistence: AttachedDocumentPersistence | null = null
     persistence = await attachDocumentPersistence(actor, store, {
       onLocalSave: (document) => sync.schedule(document),

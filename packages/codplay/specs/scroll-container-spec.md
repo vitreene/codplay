@@ -229,7 +229,12 @@ batch sont traitées dans l’ordre des déclarations compilées.
 
 Au premier callback, la phase est synchronisée. Une action `liveAction` reçoit
 quand même le ratio de cette première mesure ; une déclaration `initial`
-compatible peut en plus produire l’event de phase correspondant.
+compatible peut en plus produire l’event de phase correspondant. Si cette
+première mesure correspond à `initial` pendant l’état `ready`, l’adaptateur
+diffère cette seule émission jusqu’au passage à `playing`, par le callback de
+cycle de vie existant et le port player existant. Il l’annule si la phase de la
+cible change avant la lecture. Les transitions ordinaires observées en `ready`
+ne sont pas rejouées.
 
 Après la première matérialisation, l’adaptateur résout une fois le parentage
 logique courant. Sans `root`, il prend le premier scroll-container en remontant
@@ -266,14 +271,17 @@ ordinaires.
 - La progression continue pendant une pause temporelle et n’avance pas le
   temps CodPlay. Les phases d’intersection restent synchronisées pendant une
   pause, mais aucun event n’est émis hors de `playing` ou pendant un seek. Une
-  action `liveAction` suit les ratios reçus pendant la pause.
+  action `liveAction` suit les ratios reçus pendant la pause. La reprise ne
+  rejoue pas les transitions observées pendant la pause ; les émissions
+  initiales en attente ne concernent que l’état `ready`.
 - Pendant un seek, le composant suspend sa source et annule sa session ; après
   la reconstruction il reprend la progression. Les callbacks IO ne produisent
   aucun event ; les événements
   déjà présents dans le journal ne sont pas réémis par l’observation. Le seek
-  annule la session scroll ouverte avant la reconstruction. Il ne recherche pas
-  de nouveau les ancêtres et ne réinitialise pas les règles `once`. Les actions
-  live ne sont pas appliquées pendant la présentation reconstruite par le seek.
+  annule la session scroll ouverte et les émissions initiales différées avant
+  la reconstruction. Il ne recherche pas de nouveau les ancêtres et ne
+  réinitialise pas les règles `once`. Les actions live ne sont pas appliquées
+  pendant la présentation reconstruite par le seek.
 - La reprise ne rejoue pas les transitions d’intersection observées pendant la
   pause. Un seek ou replay ne relit jamais la géométrie du viewport pour
   reconstruire le journal.

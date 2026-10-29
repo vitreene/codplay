@@ -1,0 +1,25 @@
+{
+  "name": "@codplay/sighty-scorm",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli/scorm-cli-arguments.ts",
+    "./limits": "./src/scorm-data-limits.ts",
+    "./options": "./src/scorm-export-options.ts",
+    "./packaging": "./src/packaging/scorm-package-assembler.ts",
+    "./session": "./src/scorm-session.ts",
+    "./types": "./src/scorm-types.ts"
+  },
+  "dependencies": {
+    "fflate": "~0.8.2"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

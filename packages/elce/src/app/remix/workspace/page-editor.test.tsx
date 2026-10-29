@@ -7,17 +7,20 @@ import { BDC_LOCATION, BDC_ORDER, BDC_TYPE, CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSIT
 import { controllerMachine } from '../../controller/controller-machine'
 import { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
+import { ProjectEditorLock } from '../../sync/project-editor-lock'
 import { EditorContextProvider } from '../editor-context'
 import { RemixPageEditor } from './page-editor'
 import { selectEditorViewModel } from '../../selectors/editor-view-model'
 import { renderEditorWorkspace } from './editor-workspace'
 
 describe('Remix production page editor', () => {
-  let cleanup: (() => void) | undefined
+  let cleanup: (() => void | Promise<void>) | undefined
 
-  afterEach(() => {
-    cleanup?.()
+  afterEach(async () => {
+    await cleanup?.()
     cleanup = undefined
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     document.body.replaceChildren()
   })
 
@@ -63,10 +66,7 @@ describe('Remix production page editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor
-        onPreview={() => undefined}
-        previewError={null}
-      />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
@@ -74,6 +74,9 @@ describe('Remix production page editor', () => {
     }
 
     await actOnRemix(rendered, () => Promise.resolve())
+    const titleRow = rendered.$('#elce-work-area-title-row')
+    expect(titleRow?.children[0]?.id).toBe('elce-work-area-actions')
+    expect(titleRow?.children[1]?.id).toBe('elce-work-area-titles')
     expect(pageBdcOrder(rendered)).toEqual(initialBdcOrder)
     await actOnRemix(rendered, () => rendered.$('#elce-card-create')?.click())
     documentModel = controller.getSnapshot().context.document
@@ -266,7 +269,7 @@ describe('Remix production page editor', () => {
     expect((rendered.$(`#elce-card-image-fit-${directCardId}`) as HTMLSelectElement).value).toBe(CARD_IMAGE_FIT.COVER)
     expect((rendered.$(`#elce-card-image-position-${directCardId}`) as HTMLSelectElement).value).toBe(CAROUSEL_IMAGE_POSITION.RIGHT)
     expect((rendered.$(`#elce-carousel-playback-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
-    expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_TRANSITION.FADE)
+    expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_TRANSITION.SWIPE_RIGHT)
     const subscription = subscribeSpy.mock.results[0]?.value
     if (subscription === undefined) throw new Error('The Remix page editor did not subscribe to the actor.')
     const unsubscribeSpy = vi.spyOn(subscription, 'unsubscribe')
@@ -304,10 +307,7 @@ describe('Remix production page editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor
-        onPreview={() => undefined}
-        previewError={null}
-      />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
@@ -316,12 +316,21 @@ describe('Remix production page editor', () => {
     await rendered.act(() => Promise.resolve())
 
     const questionImage = new File(['question image'], 'question.png', { type: 'image/png' })
+    const questionFileInput = rendered.$(`#elce-question-illustration-file-${questionId}`) as HTMLInputElement
+    const questionPickerClick = vi.fn()
+    questionFileInput.addEventListener('click', questionPickerClick)
+    await rendered.act(() => rendered.$(`#elce-question-illustration-${questionId}`)?.click())
+    expect(questionPickerClick).toHaveBeenCalledOnce()
+    await rendered.act(() => selectFiles(questionFileInput, [questionImage]))
+    await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).not.toBeNull())
+
+    const droppedQuestionImage = new File(['dropped question image'], 'question-drop.png', { type: 'image/png' })
     await rendered.act(() => dispatchDrag(
       rendered.$(`#elce-question-illustration-${questionId}`)!,
       'drop',
-      createDataTransfer([questionImage]),
+      createDataTransfer([droppedQuestionImage]),
     ))
-    await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).not.toBeNull())
+    await vi.waitFor(() => expect(controller.getSnapshot().context.document.medias).toHaveLength(2))
 
     const standaloneImage = new File(['standalone image'], 'standalone.png', { type: 'image/png' })
     await rendered.act(() => {
@@ -329,11 +338,12 @@ describe('Remix production page editor', () => {
       layout.value = DEFAULT_PRESET_ID.PHOTO
       layout.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    await rendered.act(() => dispatchDrag(
-      rendered.$(`#elce-card-media-drop-${standaloneCardId}`)!,
-      'drop',
-      createDataTransfer([standaloneImage]),
-    ))
+    const standaloneFileInput = rendered.$(`#elce-card-media-file-${standaloneCardId}`) as HTMLInputElement
+    const standalonePickerClick = vi.fn()
+    standaloneFileInput.addEventListener('click', standalonePickerClick)
+    await rendered.act(() => rendered.$(`#elce-card-media-select-${standaloneCardId}`)?.click())
+    expect(standalonePickerClick).toHaveBeenCalledOnce()
+    await rendered.act(() => selectFiles(standaloneFileInput, [standaloneImage]))
     await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === standaloneCardId)?.card?.mediaId).not.toBeNull())
 
     const carouselImages = [
@@ -345,26 +355,101 @@ describe('Remix production page editor', () => {
       layout.value = DEFAULT_PRESET_ID.PHOTO
       layout.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    await rendered.act(() => dispatchDrag(
-      rendered.$(`#elce-carousel-media-drop-${carouselCardId}`)!,
-      'drop',
-      createDataTransfer(carouselImages),
-    ))
+    const carouselFileInput = rendered.$(`#elce-carousel-media-file-${carouselCardId}`) as HTMLInputElement
+    const carouselPickerClick = vi.fn()
+    carouselFileInput.addEventListener('click', carouselPickerClick)
+    await rendered.act(() => rendered.$(`#elce-carousel-media-select-${carouselCardId}`)?.click())
+    expect(carouselPickerClick).toHaveBeenCalledOnce()
+    await rendered.act(() => selectFiles(carouselFileInput, carouselImages))
     await vi.waitFor(() => {
       const currentDocument = controller.getSnapshot().context.document
       const currentCarousel = currentDocument.bdcs.find((bdc) => bdc.id === carousel.id)?.carousel
       expect(currentCarousel?.cards).toHaveLength(2)
-      expect(currentDocument.medias).toHaveLength(4)
+      expect(currentDocument.medias).toHaveLength(5)
     })
 
     const finalDocument = controller.getSnapshot().context.document
-    expect(store.media.size).toBe(4)
+    expect(store.media.size).toBe(5)
     expect(finalDocument.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).toBeTruthy()
     expect(finalDocument.bdcs.find((bdc) => bdc.id === standaloneCardId)?.card?.mediaId).toBeTruthy()
     const finalCarousel = finalDocument.bdcs.find((bdc) => bdc.id === carousel.id)?.carousel
     expect(finalCarousel?.cards.map(({ bdcId }) => finalDocument.bdcs.find((bdc) => bdc.id === bdcId)?.card?.mediaId)).toEqual(
-      expect.arrayContaining(finalDocument.medias.slice(2).map(({ id }) => id)),
+      expect.arrayContaining(finalDocument.medias.slice(-2).map(({ id }) => id)),
     )
+  })
+
+  it('imports a selected JPG after the native file picker temporarily blurs the editor', async () => {
+    let focused = true
+    vi.spyOn(document, 'hasFocus').mockImplementation(() => focused)
+    const request = vi.fn((_name: string, _options: unknown, callback: (lock: unknown) => Promise<void>) => new Promise<void>((resolve, reject) => {
+      void callback({ name: 'test-image-picker-lock' }).then(resolve, reject)
+    }))
+    /** Supplies the channel primitive used by the project lock during this test. */
+    class TestBroadcastChannel extends EventTarget {
+      /** Accepts lock messages without coordinating another test window. */
+      public postMessage(_message: unknown): void {}
+
+      /** Releases the test channel when the project lock stops. */
+      public close(): void {}
+    }
+    vi.stubGlobal('navigator', { locks: { request } })
+    vi.stubGlobal('BroadcastChannel', TestBroadcastChannel)
+
+    const store = new ImmediateMediaStore()
+    const controller = createActor(controllerMachine, { input: { documentStore: store } })
+    controller.start()
+    const onAccessSuspending = vi.fn(async () => {
+      controller.send({ type: 'editor.access.suspend' })
+    })
+    const editorLock = new ProjectEditorLock('image-picker-project', {
+      onAccessWaiting: () => controller.send({ type: 'editor.access.suspend' }),
+      onAccessGranted: async () => {
+        controller.send({ type: 'editor.access.activate' })
+        return true
+      },
+      onAccessSuspending,
+      onAccessError: vi.fn(),
+    })
+    editorLock.start()
+    await vi.waitFor(() => expect(controller.getSnapshot().context.editAccess).toBe('active'))
+
+    const actions = new EditorActionsFacade(controller)
+    const page = controller.getSnapshot().context.document.pages[0]
+    if (page === undefined) throw new Error('The file-picker fixture has no page.')
+    actions.createQuestion(controller.getSnapshot().context.document, page.id, page.bdcIds.length)
+    const questionId = controller.getSnapshot().context.document.pages[0]?.bdcIds.at(-1)
+    if (questionId === undefined) throw new Error('The file-picker fixture has no Question.')
+
+    const rendered = render(<EditorContextProvider controller={controller} actions={actions}>
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
+    </EditorContextProvider>)
+    cleanup = async () => {
+      rendered.cleanup()
+      await editorLock.stop()
+      controller.stop()
+    }
+
+    const fileInput = rendered.$(`#elce-question-illustration-file-${questionId}`) as HTMLInputElement
+    await rendered.act(() => rendered.$(`#elce-question-illustration-${questionId}`)?.click())
+    focused = false
+    await rendered.act(() => window.dispatchEvent(new Event('blur')))
+    expect(controller.getSnapshot().context.editAccess).toBe('active')
+
+    const jpg = new File(['selected jpg bytes'], 'selected.jpg', { type: 'image/jpeg' })
+    await rendered.act(() => selectFiles(fileInput, [jpg]))
+
+    await vi.waitFor(() => {
+      const question = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question
+      expect(question?.mediaId).toBeTruthy()
+    })
+    expect(controller.getSnapshot().context.editAccess).toBe('active')
+    expect(onAccessSuspending).not.toHaveBeenCalled()
+
+    focused = true
+    await rendered.act(() => window.dispatchEvent(new Event('focus')))
+    await vi.waitFor(() => expect(controller.getSnapshot().value).toBe('ready'))
+    expect(controller.getSnapshot().context.document.medias).toHaveLength(1)
+    expect(onAccessSuspending).not.toHaveBeenCalled()
   })
 
   it('keeps saved Carousel selections when its editor remounts after page navigation', async () => {
@@ -390,10 +475,7 @@ describe('Remix production page editor', () => {
       controller={controller}
       actions={actions}
     >
-      <RemixPageEditor
-        onPreview={() => undefined}
-        previewError={null}
-      />
+      <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
     </EditorContextProvider>)
     cleanup = () => {
       rendered.cleanup()
@@ -404,7 +486,7 @@ describe('Remix production page editor', () => {
     const playback = rendered.$(`#elce-carousel-playback-${carouselId}`) as HTMLSelectElement
     const transition = rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement
     expect(playback.value).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
-    expect(transition.value).toBe(CAROUSEL_TRANSITION.FADE)
+    expect(transition.value).toBe(CAROUSEL_TRANSITION.SWIPE_RIGHT)
 
     await actOnRemix(rendered, () => {
       playback.value = CAROUSEL_PLAYBACK_MODE.AUTOMATIC
@@ -463,16 +545,28 @@ describe('Remix production page editor', () => {
       {renderEditorWorkspace({
         view: selectEditorViewModel(controller.getSnapshot()),
         actions,
-        pageEditorHost: <RemixPageEditor onPreview={() => undefined} previewError={null} />,
+        pageEditorHost: <RemixPageEditor onOpenAppearanceTarget={() => undefined} />,
         responsivePanel: null,
+        sidePanelTab: 'contents',
+        appearanceTarget: { kind: 'document' },
+        summarySettingsOpen: false,
+        profileTokenTargetId: null,
+        authoringError: null,
         dropTarget: null,
         visible: true,
         onSetResponsivePanel: () => undefined,
+        onSetSidePanelTab: () => undefined,
+        onOpenAppearanceTarget: () => undefined,
+        onSetSummarySettingsOpen: () => undefined,
+        onSetAuthoringError: () => undefined,
         onSetDropTarget: () => undefined,
         onSetDraggedEntry: () => undefined,
         getDraggedEntry: () => null,
         onPreview: () => undefined,
         previewError: null,
+        exportBusy: false,
+        exportError: null,
+        exportNotice: null,
         onMovePage: (pageId, placement) => actions.movePage(pageId, placement),
         onMoveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
       })}
@@ -558,6 +652,12 @@ function dispatchDrag(target: Element, type: string, dataTransfer: ReturnType<ty
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
   target.dispatchEvent(event)
+}
+
+/** Supplies selected files to the production input change handler in the DOM test. */
+function selectFiles(input: HTMLInputElement, files: readonly File[]): void {
+  Object.defineProperty(input, 'files', { configurable: true, value: files })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 /** Stores imported files in memory so production editor events use the real XState media path. */

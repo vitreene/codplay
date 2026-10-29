@@ -16,6 +16,8 @@
       "@codplay/editor": ["../editor/src/index.ts"],
       "@codplay/editor/*": ["../editor/src/*"],
       "@codplay/sighty": ["../sighty/src/index.ts"],
+      "@codplay/component-v2": ["../authoring/component-v2/src/index.ts"],
+      "@codplay/component-v2/*": ["../authoring/component-v2/src/*"],
       // Keep the same priority order as build/resolve-codplay-authoring.ts.
       "@codplay/*": [
         "../authoring/components/*/src/index.ts",

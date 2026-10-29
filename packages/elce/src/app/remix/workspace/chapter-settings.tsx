@@ -9,7 +9,7 @@ import { renderLucideIcon } from '../lucide-static-icon'
 import type { RemixChapterSettingsProps } from './chapter-settings-types'
 
 /** Renders the selected chapter title and its author settings in Remix. */
-export function renderChapterSettings({ chapter, actions, onPreview, previewError }: RemixChapterSettingsProps): RemixNode {
+export function renderChapterSettings({ chapter, actions }: RemixChapterSettingsProps): RemixNode {
   const title = <div
     id={`elce-remix-chapter-title-${chapter.id}`}
     className="elce-work-area-chapter-title elce-work-area-chapter-title--active"
@@ -22,6 +22,7 @@ export function renderChapterSettings({ chapter, actions, onPreview, previewErro
       aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
       title={CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel}
       defaultValue={chapter.name}
+      data-elce-profile-token-target="true"
       key={`${chapter.id}:${chapter.name}`}
       mix={[
         on<HTMLInputElement, 'blur'>('blur', (event) => commitChapterName(event.currentTarget, chapter, actions)),
@@ -39,7 +40,6 @@ export function renderChapterSettings({ chapter, actions, onPreview, previewErro
         className="elce-panel elce-work-area"
         aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
       >
-        {renderPreviewControls(onPreview, previewError)}
         {title}
       </section>
     case CHAPTER_TYPE.EVALUATION:
@@ -48,35 +48,12 @@ export function renderChapterSettings({ chapter, actions, onPreview, previewErro
         className="elce-panel elce-work-area"
         aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
       >
-        {renderPreviewControls(onPreview, previewError)}
         {title}
         {renderEvaluationSettings(chapter, actions)}
       </section>
     default:
       return assertNever(chapter.type)
   }
-}
-
-/** Renders the page preview command above the selected chapter title. */
-function renderPreviewControls(onPreview: () => void, previewError: string | null): RemixNode {
-  return <div
-    id="elce-remix-work-area-preview-row"
-    className="elce-work-area-preview-row"
-  >
-    <button
-      id="elce-remix-preview-open"
-      type="button"
-      mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
-    >
-      Prévisualiser
-    </button>
-    {previewError === null ? null : <p
-      id="elce-remix-preview-open-error"
-      role="alert"
-    >
-      {previewError}
-    </p>}
-  </div>
 }
 
 /** Renders the fixed threshold and the two editable Evaluation settings. */
@@ -183,9 +160,9 @@ function renderEvaluationSettings(chapter: Chapter, actions: EditorActionsFacade
 function renderChapterTypeIcon(chapter: Chapter): RemixNode {
   switch (chapter.type) {
     case CHAPTER_TYPE.STANDARD:
-      return renderLucideIcon(Folder, `elce-remix-chapter-icon-${chapter.id}`, 14)
+      return renderLucideIcon(Folder, `elce-remix-chapter-icon-${chapter.id}`)
     case CHAPTER_TYPE.EVALUATION:
-      return renderLucideIcon(ClipboardCheck, `elce-remix-chapter-icon-${chapter.id}`, 14)
+      return renderLucideIcon(ClipboardCheck, `elce-remix-chapter-icon-${chapter.id}`)
     default:
       return assertNever(chapter.type)
   }

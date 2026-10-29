@@ -1,0 +1,98 @@
+#sighty-export-document,
+#sighty-export-body {
+  min-height: 100%;
+}
+
+#sighty-export-body {
+  margin: 0;
+  background: #101b24;
+  color: #f4f2ec;
+  font: 16px/1.5 system-ui, sans-serif;
+}
+
+#sighty-export-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  width: min(1200px, 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+#sighty-export-header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+#sighty-export-title,
+#sighty-export-status,
+#sighty-export-log {
+  margin: 0;
+}
+
+#sighty-export-status[data-state='ready'] {
+  color: #9be4c5;
+}
+
+#sighty-export-status[data-state='error'],
+#sighty-export-log[data-level='error'] {
+  color: #ff9a9a;
+}
+
+#sighty-export-viewport {
+  min-height: 36rem;
+  overflow: hidden;
+  border: 1px solid #527181;
+  border-radius: 0.75rem;
+  background: #172833;
+}
+
+#sighty-export-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 36rem;
+}
+
+#sighty-export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+#sighty-export-initialize {
+  padding: 0.7rem 1.2rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: #edbb54;
+  color: #172833;
+  font: inherit;
+  cursor: pointer;
+}
+
+#sighty-export-initialize:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+#sighty-export-remote-panel {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+@media (max-width: 720px) {
+  #sighty-export-main {
+    padding: 0.5rem;
+  }
+
+  #sighty-export-viewport,
+  #sighty-export-root {
+    min-height: 28rem;
+  }
+}

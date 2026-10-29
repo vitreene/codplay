@@ -5,34 +5,62 @@ import {
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
 import { BDC_LOCATION, BDC_TYPE, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { applyDocumentCommand, createDefaultPageCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import type { RichTextDocument } from '../../domain/document/document-types'
-import { buildDiapoScene } from '../diapo/diapo-scene-builder'
-import { buildFluxScene } from '../flux/flux-scene-builder'
+import { ElceEditorSettingsResolver } from '../../domain/editor-settings/editor-settings-resolver'
+import { buildDiapoScene as projectDiapoScene } from '../diapo/diapo-scene-builder'
+import { buildFluxScene as projectFluxScene } from '../flux/flux-scene-builder'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
+
+/** Resolves test-owned settings before projecting a Diapo fixture. */
+function buildDiapoSceneForTest(page: Parameters<typeof projectDiapoScene>[0], bdcs: Parameters<typeof projectDiapoScene>[1], options: Omit<Parameters<typeof projectDiapoScene>[2], 'editorSettings'> = {}) {
+  const editorSettings = editorSettingsResolver.resolvePage(page, bdcs, ELCE_EDITOR_SETTINGS.revelation.projectDefaults)
+  return projectDiapoScene(page, bdcs, { ...options, editorSettings })
+}
+
+/** Resolves test-owned settings before projecting a Flux fixture. */
+function buildFluxSceneForTest(page: Parameters<typeof projectFluxScene>[0], bdcs: Parameters<typeof projectFluxScene>[1], options: Omit<Parameters<typeof projectFluxScene>[2], 'editorSettings'> = {}) {
+  const editorSettings = editorSettingsResolver.resolvePage(page, bdcs, ELCE_EDITOR_SETTINGS.revelation.projectDefaults)
+  return projectFluxScene(page, bdcs, { ...options, editorSettings })
+}
 
 describe('Statistical Graph placement through Elcé scene builders', () => {
   it('builds direct Flux and Diapo graphs through the real CodPlay scene boundary', () => {
     const initial = createInitialDocument()
     const flux = applyDocumentCommand(initial, createStatisticalGraphBdcCommand('graph-flux', 'page-a', 1))
-    const fluxBuild = buildFluxScene(flux.pages.find((page) => page.id === 'page-a')!, flux.bdcs)
-    const article = fluxBuild.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-article')
+    const fluxBuild = buildFluxSceneForTest(flux.pages.find((page) => page.id === 'page-a')!, flux.bdcs)
+    const fluxStory = fluxBuild.sceneDoc.stories['page-a-page']
+    const article = fluxStory?.persos.find((perso) => perso.id === 'page-a-article')
+    const fluxVisual = fluxStory?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const fluxMarkup = article?.initial !== undefined && 'markup' in article.initial ? String(article.initial.markup) : ''
+    const fluxVisualMarkup = fluxVisual?.initial !== undefined && 'markup' in fluxVisual.initial ? String(fluxVisual.initial.markup) : ''
 
     expect(fluxMarkup).toContain('id="page-a-graph-flux-graph"')
-    expect(fluxMarkup).toContain('<svg')
+    expect(fluxMarkup).toContain('data-part="page-a:graph-flux:statistical-graph:visual"')
+    expect(fluxMarkup).not.toContain('<svg')
+    expect(fluxVisualMarkup).toContain('<svg')
+    expect(fluxBuild.styleSheets.join('\n')).toContain('elce-statistical-graph__legend-mark--0 { background-color: #326c64; }')
     expect(compileScene(fluxBuild.sceneDoc).ok).toBe(true)
 
     const diapoPage = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, 'Graphe', PAGE_TYPE.DIAPO)
     let diapo = applyDocumentCommand(initial, diapoPage)
     diapo = applyDocumentCommand(diapo, { type: 'bdc.carousel.delete', bdcId: diapoPage.bdcId })
     diapo = applyDocumentCommand(diapo, createStatisticalGraphBdcCommand('graph-diapo', diapoPage.pageId, 0))
-    const diapoBuild = buildDiapoScene(diapo.pages.find((page) => page.id === diapoPage.pageId)!, diapo.bdcs)
-    const diapoHost = diapoBuild.sceneDoc.stories[`${diapoPage.pageId}-diapo-page`]?.persos.find((perso) => perso.id === `${diapoPage.pageId}-diapo-content`)
+    const diapoBuild = buildDiapoSceneForTest(diapo.pages.find((page) => page.id === diapoPage.pageId)!, diapo.bdcs)
+    const diapoStory = diapoBuild.sceneDoc.stories[`${diapoPage.pageId}-diapo-page`]
+    const diapoHost = diapoStory?.persos.find((perso) => perso.id === `${diapoPage.pageId}-diapo-content`)
+    const diapoVisual = diapoStory?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const diapoMarkup = diapoHost?.initial !== undefined && 'markup' in diapoHost.initial ? String(diapoHost.initial.markup) : ''
+    const diapoVisualMarkup = diapoVisual?.initial !== undefined && 'markup' in diapoVisual.initial ? String(diapoVisual.initial.markup) : ''
 
     expect(diapoMarkup).toContain(`id="${diapoPage.pageId}-graph-diapo-graph"`)
-    expect(diapoMarkup).toContain('<svg')
+    expect(diapoMarkup).toContain(`data-part="${diapoPage.pageId}:graph-diapo:statistical-graph:visual"`)
+    expect(diapoMarkup).not.toContain('<svg')
+    expect(diapoVisualMarkup).toContain('<svg')
+    expect(diapoBuild.styleSheets.join('\n')).toContain('elce-statistical-graph__legend-mark--0 { background-color: #326c64; }')
     expect(compileScene(diapoBuild.sceneDoc).ok).toBe(true)
   })
 
@@ -44,17 +72,26 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
     if (firstCardId === undefined) throw new Error('La Diapo de test doit commencer par une vue Carte.')
     document = applyDocumentCommand(document, createStatisticalGraphCarouselBdcCommand('graph-slide', pageCommand.bdcId, 1))
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      appearanceClassNamesByTarget: { 'bdc:graph-slide': 'graph bdc appearance-test density-normal' },
+    })
     const story = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const graphView = story?.persos.find((perso) => perso.id === `${page.id}:${pageCommand.bdcId}-card-graph-slide`)
+    const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
     const graphMarkup = graphView?.initial !== undefined && 'markup' in graphView.initial ? String(graphView.initial.markup) : ''
+    const graphViewClassName = graphView?.initial !== undefined && 'className' in graphView.initial ? String(graphView.initial.className) : ''
+    const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
     const completion = story?.persos.find((perso) => perso.id.endsWith('-completion-marker'))
 
     expect(document.bdcs.find((bdc) => bdc.id === pageCommand.bdcId)?.carousel?.cards.map((entry) => entry.bdcId)).toEqual([
       firstCardId,
       'graph-slide',
     ])
-    expect(graphMarkup).toContain('<svg')
+    expect(graphMarkup).toContain(`data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:visual"`)
+    expect(graphMarkup).not.toContain('<svg')
+    expect(graphViewClassName).toContain('appearance-test')
+    expect(graphVisualMarkup).toContain('<svg')
+    expect(build.styleSheets.join('\n')).toContain('elce-statistical-graph__legend-mark--0 { background-color: #326c64; }')
     expect(graphMarkup).toContain(`<!-- data-part="${page.id}:${pageCommand.bdcId}:card:graph-slide:root" -->`)
     expect(completion?.emit?.observe).toMatchObject({ root: `${page.id}-${pageCommand.bdcId}-diapo-end-scrollport` })
     expect(compileScene(build.sceneDoc).ok).toBe(true)
@@ -90,27 +127,37 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
       markup,
       content,
     })
-    const build = buildFluxScene(document.pages[0]!, document.bdcs)
+    const build = buildFluxSceneForTest(document.pages[0]!, document.bdcs, {
+      appearanceClassNamesByTarget: { 'bdc:graph-anchor': 'graph bdc appearance-test density-normal' },
+    })
     const story = build.sceneDoc.stories['page-a-page']
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const articleMarkup = article?.initial !== undefined && 'markup' in article.initial ? String(article.initial.markup) : ''
     const graphRoot = story?.persos.find((perso) => perso.id === 'page-a-graph-anchor-graph')
+    const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
+    const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
+    const graphStyle = graphRoot?.initial !== undefined && 'style' in graphRoot.initial ? graphRoot.initial.style : undefined
+    const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial ? String(graphRoot.initial.className) : ''
+    const graphRules = build.styleSheets.join('\n')
 
     expect(document.bdcs.find((bdc) => bdc.id === 'graph-anchor')?.parentBdcId).toBe('bdc-section-1')
-    expect(articleMarkup).toContain('class="elce-flow-slot"')
+    expect(articleMarkup).toContain('class="elce-flow-slot elce-flow-slot-')
     expect(article?.initial).toMatchObject({
-      flowReservations: [{ partId, blockSize: 'calc(56.25% + 1rem + 1rem)' }],
+      flowReservations: [{ partId, blockSize: 'calc(56.25% + 2rem + 2rem)' }],
     })
     expect(graphRoot?.initial).toMatchObject({
       move: { target: partId },
-      style: { aspectRatio: '16 / 9' },
-      markup: expect.stringContaining('<svg'),
+      markup: expect.stringContaining(`data-part="${partId}:visual"`),
     })
-    const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial
-      ? String(graphRoot.initial.className)
-      : ''
+    expect(graphStyle).not.toHaveProperty('aspectRatio')
+    expect(graphClassName).toContain('elce-flux-anchor-illustration-')
+    expect(graphRules).toContain('aspect-ratio: 16 / 9;')
+    expect(graphRoot?.emit?.observe).toMatchObject({ root: 'page-a-scrollport', initial: 'enter' })
+    expect(graphVisual?.initial).toMatchObject({ move: { target: `${partId}:visual` } })
+    expect(graphVisualMarkup).toContain('<svg')
     expect(graphClassName).toContain('elce-statistical-graph--bar')
     expect(graphClassName).toContain('elce-flux-graph-root')
+    expect(graphClassName).toContain('appearance-test')
     expect(compileScene(build.sceneDoc).ok).toBe(true)
   })
 
@@ -141,21 +188,28 @@ describe('Statistical Graph placement through Elcé scene builders', () => {
       content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'elceAnchor', attrs: { bdcId: 'graph-table-anchor', partId } }] }] },
     })
 
-    const build = buildFluxScene(document.pages[0]!, document.bdcs)
+    const build = buildFluxSceneForTest(document.pages[0]!, document.bdcs)
     const story = build.sceneDoc.stories['page-a-page']
     const article = story?.persos.find((perso) => perso.id === 'page-a-article')
     const graphRoot = story?.persos.find((perso) => perso.id === 'page-a-graph-table-anchor-graph')
+    const graphVisual = story?.persos.find((perso) => perso.id.endsWith('-viewport-visual'))
+    const graphVisualMarkup = graphVisual?.initial !== undefined && 'markup' in graphVisual.initial ? String(graphVisual.initial.markup) : ''
     const graphStyle = graphRoot?.initial !== undefined && 'style' in graphRoot.initial ? graphRoot.initial.style : undefined
+    const graphClassName = graphRoot?.initial !== undefined && 'className' in graphRoot.initial ? String(graphRoot.initial.className) : ''
+    const graphRules = build.styleSheets.join('\n')
 
     expect(article?.initial).toMatchObject({
-      flowReservations: [{ partId, blockSize: 'calc(100% + 1rem + 1rem)' }],
+      flowReservations: [{ partId, blockSize: 'calc(100% + 2rem + 2rem)' }],
     })
-    expect(graphStyle).toMatchObject({ height: 'auto' })
+    expect(graphStyle).not.toHaveProperty('height')
+    expect(build.styleSheets.join('\n')).toContain('z-index: 1;')
     expect(graphStyle).not.toHaveProperty('aspectRatio')
-    expect(graphRoot?.initial).toMatchObject({
-      className: expect.stringContaining('elce-statistical-graph--table'),
-    })
-    expect(graphRoot?.initial).toMatchObject({ markup: expect.stringContaining('<table') })
+    expect(graphClassName).toContain('elce-statistical-graph--table')
+    expect(graphClassName).toContain('elce-flux-anchor-illustration-')
+    expect(graphRules).toContain('height: auto;')
+    expect(graphRules).toContain('position-anchor: --')
+    expect(graphRoot?.initial).toMatchObject({ markup: expect.stringContaining(`data-part="${partId}:visual"`) })
+    expect(graphVisualMarkup).toContain('<table')
     expect(compileScene(build.sceneDoc).ok).toBe(true)
   })
 })

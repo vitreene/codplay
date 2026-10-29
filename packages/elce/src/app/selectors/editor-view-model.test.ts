@@ -56,6 +56,13 @@ describe('editor view model selector', () => {
     expect(view.catalogTab).toBe(CATALOG_TAB.MEDIA)
     expect(editorViewModelEqual(view, selectEditorViewModel(updatedSnapshot))).toBe(true)
 
+    actor.send({ type: 'media.source.register', mediaId: 'media-photo', source: 'https://media.test/photo.png' })
+    const registeredView = selectEditorViewModel(actor.getSnapshot())
+    actor.send({ type: 'media.source.register', mediaId: 'media-photo', source: 'https://media.test/photo.png' })
+    const repeatedSourceView = selectEditorViewModel(actor.getSnapshot())
+    expect(repeatedSourceView.mediaSources).not.toBe(registeredView.mediaSources)
+    expect(editorViewModelEqual(registeredView, repeatedSourceView)).toBe(true)
+
     actor.stop()
   })
 })

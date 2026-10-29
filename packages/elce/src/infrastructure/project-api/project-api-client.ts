@@ -1,5 +1,6 @@
 import { ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentData, MediaId, MediaMetadata } from '../../domain/document/document-types'
+import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
 import { elceApiOrigin } from '../../config/api-config'
 import type { ElceProjectSummary } from './project-api-types'
 
@@ -22,6 +23,21 @@ interface MediaResponse {
 interface ApiErrorResponse {
   readonly error: string
   readonly mediaId?: MediaId
+  readonly diagnosticId?: string
+  readonly diagnosticReason?: string
+}
+
+interface EditAccessResponse {
+  readonly grantId: string
+  readonly recovered?: boolean
+}
+
+interface EditAccessStateResponse {
+  readonly held: boolean
+}
+
+interface TestStateResponse {
+  readonly state: ProjectTestState
 }
 
 /** Carries the HTTP status and API code to the local synchronization adapter. */
@@ -29,13 +45,26 @@ export class ElceProjectApiError extends Error {
   public readonly status: number
   public readonly code: string
   public readonly mediaId: MediaId | null
+  public readonly diagnosticId: string | null
+  public readonly diagnosticReason: string | null
 
-  public constructor(status: number, code: string, mediaId: MediaId | null = null) {
-    super(`API Elcé : ${code} (${status})`)
+  public constructor(
+    status: number,
+    code: string,
+    mediaId: MediaId | null = null,
+    diagnosticId: string | null = null,
+    diagnosticReason: string | null = null,
+  ) {
+    const diagnostic = diagnosticId === null
+      ? ''
+      : ` [diagnostic ${diagnosticId}${diagnosticReason === null ? '' : `: ${diagnosticReason}`}]`
+    super(`API Elcé : ${code} (${status})${diagnostic}`)
     this.name = 'ElceProjectApiError'
     this.status = status
     this.code = code
     this.mediaId = mediaId
+    this.diagnosticId = diagnosticId
+    this.diagnosticReason = diagnosticReason
   }
 }
 
@@ -43,10 +72,71 @@ export class ElceProjectApiError extends Error {
 export class ElceProjectApiClient {
   private readonly origin: string
   private readonly request: typeof fetch
+  private readonly grants = new Map<string, Readonly<{ pageId: string; grantId: string }>>()
 
   public constructor(origin: string = elceApiOrigin(), request: typeof fetch = fetch) {
     this.origin = origin
     this.request = request.bind(globalThis)
+  }
+
+  /** Reserves editing for one page and remembers the returned server grant. */
+  public async acquireEditAccess(
+    projectId: string,
+    pageId: string,
+    force = false,
+  ): Promise<Readonly<{ grantId: string; recovered: boolean }> | null> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/edit-access`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageId, ...(force ? { force: true } : {}) }),
+    })
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null) as Partial<ApiErrorResponse> | null
+      if (body?.error === 'edit_access_occupied') return null
+      throw new ElceProjectApiError(response.status, body?.error ?? 'request_failed')
+    }
+    const { grantId, recovered = false } = await readResponseJson<EditAccessResponse>(response)
+    this.grants.set(projectId, { pageId, grantId })
+    return { grantId, recovered }
+  }
+
+  /** Renews the current grant and reports when another page already replaced it. */
+  public async renewEditAccess(projectId: string): Promise<boolean> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/edit-access`), {
+      method: 'PUT',
+      headers: this.editHeaders(projectId),
+    })
+    if (response.status === 204) return true
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null) as Partial<ApiErrorResponse> | null
+      if (body?.error === 'edit_access_lost') return false
+      throw new ElceProjectApiError(response.status, body?.error ?? 'request_failed')
+    }
+    await readResponseJson<never>(response)
+    return false
+  }
+
+  /** Checks ownership after an ambiguous release response. */
+  public async stillHasEditAccess(projectId: string): Promise<boolean> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/edit-access`), {
+      headers: this.editHeaders(projectId),
+    })
+    return (await readResponseJson<EditAccessStateResponse>(response)).held
+  }
+
+  /** Releases the grant held by this API client. */
+  public async releaseEditAccess(projectId: string): Promise<void> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/edit-access`), {
+      method: 'DELETE',
+      headers: this.editHeaders(projectId),
+    })
+    if (response.status !== 204) await readResponseJson<never>(response)
+    this.grants.delete(projectId)
+  }
+
+  /** Discards a grant that the server reports as no longer held. */
+  public forgetEditAccess(projectId: string): void {
+    this.grants.delete(projectId)
   }
 
   /** Creates the remote project from the active document and returns its revision. */
@@ -70,7 +160,7 @@ export class ElceProjectApiClient {
   public async renameProject(projectId: string, name: string): Promise<ElceProjectSummary> {
     const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}`), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.editHeaders(projectId) },
       body: JSON.stringify({ name }),
     })
     return (await readResponseJson<ProjectResponse>(response)).project
@@ -80,6 +170,7 @@ export class ElceProjectApiClient {
   public async deleteProject(projectId: string): Promise<void> {
     const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}`), {
       method: 'DELETE',
+      headers: this.editHeaders(projectId),
     })
     if (response.status === 204) return
     await readResponseJson<never>(response)
@@ -88,7 +179,7 @@ export class ElceProjectApiClient {
 
   /** Reads one server document and its current revision. */
   public async readProject(documentId: string): Promise<Readonly<{ document: ElceDocument; revision: number }>> {
-    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(documentId)}`))
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(documentId)}`), { cache: 'no-store' })
     const body = await readResponseJson<ProjectDocumentResponse>(response)
     return { document: ElceDocument.fromJSON(body.document), revision: revisionFrom(response) }
   }
@@ -100,6 +191,7 @@ export class ElceProjectApiClient {
       headers: {
         'Content-Type': 'application/json',
         'If-Match': `"${revision}"`,
+        ...this.editHeaders(document.id),
       },
       body: JSON.stringify(document.toJSON()),
     })
@@ -107,11 +199,31 @@ export class ElceProjectApiClient {
     return revisionFrom(response)
   }
 
+  /** Reads the author preview state with its independent server revision. */
+  public async readTestState(projectId: string): Promise<Readonly<{ state: ProjectTestState; revision: number }>> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/test-state`), {
+      cache: 'no-store',
+    })
+    const body = await readResponseJson<TestStateResponse>(response)
+    return { state: body.state, revision: revisionFrom(response) }
+  }
+
+  /** Writes preview-only state against the revision previously returned by readTestState. */
+  public async saveTestState(projectId: string, state: ProjectTestState, revision: number): Promise<number> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(projectId)}/test-state`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-Match': `"${revision}"` },
+      body: JSON.stringify({ state }),
+    })
+    await readResponseJson<TestStateResponse>(response)
+    return revisionFrom(response)
+  }
+
   /** Transfers one local Blob and returns its absolute server URL. */
   public async uploadMedia(documentId: string, media: MediaMetadata, blob: Blob): Promise<string> {
     const response = await this.request(this.url(`/api/projects/${encodeURIComponent(documentId)}/media/${encodeURIComponent(media.id)}`), {
       method: 'PUT',
-      headers: { 'Content-Type': media.mimeType },
+      headers: { 'Content-Type': media.mimeType, ...this.editHeaders(documentId) },
       body: blob,
     })
     switch (response.status) {
@@ -130,6 +242,20 @@ export class ElceProjectApiClient {
   /** Builds the stable URL for one server-owned media resource. */
   public mediaUrl(documentId: string, mediaId: MediaId): string {
     return this.url(`/api/projects/${encodeURIComponent(documentId)}/media/${encodeURIComponent(mediaId)}`).toString()
+  }
+
+  /** Retrieves confirmed source bytes for a new independent project copy. */
+  public async downloadMedia(documentId: string, mediaId: MediaId): Promise<Blob> {
+    const response = await this.request(this.url(`/api/projects/${encodeURIComponent(documentId)}/media/${encodeURIComponent(mediaId)}`))
+    if (!response.ok) throw new ElceProjectApiError(response.status, 'source_media_unavailable', mediaId)
+    return response.blob()
+  }
+
+  /** Supplies the right required by each existing project mutation. */
+  private editHeaders(projectId: string): Record<string, string> {
+    const grant = this.grants.get(projectId)
+    if (grant === undefined) throw new Error(`Aucun droit d'édition serveur pour ${projectId}.`)
+    return { 'X-Elce-Page-Id': grant.pageId, 'X-Elce-Edit-Grant': grant.grantId }
   }
 
   /** Resolves one relative API path against the configured local server origin. */
@@ -153,6 +279,8 @@ async function readResponseJson<T>(response: Response): Promise<T> {
       response.status,
       typeof error.error === 'string' ? error.error : 'request_failed',
       typeof error.mediaId === 'string' ? error.mediaId : null,
+      typeof error.diagnosticId === 'string' ? error.diagnosticId : null,
+      typeof error.diagnosticReason === 'string' ? error.diagnosticReason : null,
     )
   }
   return body as T

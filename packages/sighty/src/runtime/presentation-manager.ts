@@ -34,14 +34,16 @@ export class RuntimePresentationManager<SceneKey extends string, SlotName extend
     const layoutOccurrenceKey = this.state.layoutEntry?.path ?? 'layout'
     const layoutInstance = this.state.instances.get(layoutOccurrenceKey)
     if (layoutInstance === undefined) throw new Error('L’instance layout Sighty est absente.')
-    const layoutScene = this.state.sceneDocuments.get(getLayoutSceneKey(this.state))
+    const layoutSceneKey = getLayoutSceneKey(this.state)
+    const layoutScene = this.state.compiledBuilds.get(layoutSceneKey)?.compiledScene
+      ?? this.state.sceneDocuments.get(layoutSceneKey)
     if (layoutScene === undefined) throw new Error('La ressource layout Sighty est absente.')
 
     const resolution = resolveSlotManifestEntry(
       slotManifest(layoutScene),
       slot.slotName,
       {
-        sceneId: layoutScene.id,
+        sceneId: 'scene' in layoutScene ? layoutScene.scene.id : layoutScene.id,
         referencePath: `views.${slot.ownerPath}.view.slots.${slot.slotName}`,
       },
     )

@@ -1,4 +1,4 @@
-import { ImagePlus, X } from 'lucide-static'
+import { ImagePlus, Trash2 } from 'lucide-static'
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import {
@@ -144,6 +144,7 @@ function renderCardPresentationSettings(
       switch (presetId) {
         case DEFAULT_PRESET_ID.PHOTO:
         case DEFAULT_PRESET_ID.IMAGE_CAPTION:
+        case DEFAULT_PRESET_ID.IMAGE_TITLE:
           return [renderImageFitSetting(bdcId, card, actions, idPrefix)]
         case DEFAULT_PRESET_ID.TEXT_IMAGE:
           return [
@@ -240,7 +241,23 @@ function renderCardContent(
           placeholder="Légende facultative"
           aria-label="Légende"
           value={card.caption}
+          data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCaption(bdcId, event.currentTarget.value))}
+        />
+      </div>
+    case DEFAULT_PRESET_ID.IMAGE_TITLE:
+      return <div
+        id={`${idPrefix}-image-title-fields-${bdcId}`}
+        className="elce-carousel-text-fields"
+      >
+        {renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)}
+        <input
+          id={`${idPrefix}-title-${bdcId}`}
+          placeholder="Titre"
+          aria-label="Titre"
+          value={card.title}
+          data-elce-profile-token-target="true"
+          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCardText(bdcId, 'title', event.currentTarget.value))}
         />
       </div>
     case DEFAULT_PRESET_ID.TEXT_IMAGE:
@@ -278,6 +295,7 @@ function renderShortTextFields(bdcId: BdcId, card: CardContent, actions: ElceCar
           aria-label={label}
           maxLength={CAROUSEL_CONFIG.textShortMessageMaxLength}
           value={card[field]}
+          data-elce-profile-token-target="true"
           mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setCardText(bdcId, field, event.currentTarget.value))}
         />
         : <input
@@ -286,6 +304,7 @@ function renderShortTextFields(bdcId: BdcId, card: CardContent, actions: ElceCar
           placeholder={label}
           aria-label={label}
           value={card[field]}
+          data-elce-profile-token-target="true"
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCardText(bdcId, field, event.currentTarget.value))}
         />),
       <small
@@ -457,7 +476,7 @@ function renderCardMediaEditor(
           title="Retirer le média"
           mix={on<HTMLButtonElement, 'click'>('click', () => actions.clearMedia(bdcId))}
         >
-          {renderLucideIcon(X, `${idPrefix}-media-clear-icon-${bdcId}`, 14)}
+          {renderLucideIcon(Trash2, `${idPrefix}-media-clear-icon-${bdcId}`)}
         </button>}
     </div>
   </div>
@@ -506,7 +525,7 @@ function renderMediaAddPrompt(bdcId: BdcId, idPrefix: string, hint: string): Rem
     id={`${idPrefix}-media-add-prompt-${bdcId}`}
     className="elce-media-add-prompt"
   >
-    {renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`, 14)}
+    {renderLucideIcon(ImagePlus, `${idPrefix}-media-add-icon-${bdcId}`)}
     <span
       id={`${idPrefix}-media-add-label-${bdcId}`}
       className="elce-media-add-prompt__label"

@@ -1,0 +1,29 @@
+<!doctype html>
+<html id="scene-export-document" lang="fr">
+  <head id="scene-export-head">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>CodPlay — diffusion Rive + Three.js</title>
+    <script id="scene-export-import-map" type="importmap">
+      { "imports": { "codplay": "/codplay-player/codplay.js" } }
+    </script>
+  </head>
+  <body id="scene-export-body">
+    <main id="scene-export-main">
+      <h1 id="scene-export-title">Scène CodPlay exportée : Rive + Three.js</h1>
+      <p id="scene-export-status" role="status">Chargement du paquet scène…</p>
+      <p id="scene-export-instance-status" role="status">Préparation…</p>
+      <div id="scene-export-viewport" aria-label="Scène Rive et Three.js simultanée">
+        <div id="scene-export-root"></div>
+      </div>
+      <div id="scene-export-controls" aria-label="Commandes de diffusion">
+        <button id="scene-export-play" type="button" disabled>Lancer</button>
+        <button id="scene-export-seek" type="button" disabled>Seek à 9 000 ms</button>
+        <button id="scene-export-pause" type="button" disabled>Pause</button>
+        <button id="scene-export-destroy" type="button" disabled>Détruire l’instance</button>
+      </div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

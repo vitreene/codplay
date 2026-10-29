@@ -28,6 +28,18 @@ n'autorise aucune modification de `packages/codplay`. Un besoin runtime non
 couvert doit être traité dans le plan de son propriétaire avant le code qui en
 dépend.
 
+## Signal documentaire — étude de transposition ELcé du 15 octobre 2026
+
+L’[étude d’adaptation Quiz Hunt](../../elce/mods/notes/2026-10-15-quiz-hunt-adaptation-study.md)
+relève une divergence à réconcilier : la section Nostromo de la spécification
+Quiz Hunt décrit encore le composant `media` et son handoff vérifié, alors que
+G5 et `scenes/question-scene.ts` utilisent maintenant un `tag` vidéo natif.
+Les preuves du premier chemin ne certifient pas le second. Conserver les
+acceptations G5 ouvertes, puis actualiser la spécification selon le comportement
+réellement vérifié ; ne pas utiliser cette divergence pour ajouter un fallback
+ou présenter le préchargement natif avant entrée comme acquis. L’étude ELcé
+n’engage aucune modification de la démo ni du cœur.
+
 ## 0. Décisions arrêtées avec l'utilisateur
 
 | Décision | Conséquence pour la reconstruction | Statut |

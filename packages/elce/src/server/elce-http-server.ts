@@ -7,11 +7,13 @@ import { MediaApiController } from './media/media-api-controller'
 import { createMediaFileStorage, removeUnreferencedMediaFiles } from './media/media-file-storage'
 import { openProjectDatabase } from './projects/sqlite/project-database'
 import { SqliteProjectPersistence } from './projects/sqlite/sqlite-project-persistence'
+import { isNetworkPreviewApiRequestAllowed } from './network-preview-api-policy'
 
 /** Supplies the filesystem locations owned by one local Elcé server. */
 export interface ElceHttpServerOptions {
   readonly databaseFile: string
   readonly mediaDirectory: string
+  readonly networkPreviewOrigin?: string
 }
 
 /** Exposes the Node listener and its asynchronous resource cleanup. */
@@ -39,7 +41,19 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
     const router = createElceApiRouter(persistence, media)
     const requestListener = createRequestListener((request) => router.fetch(request))
     const server = createServer((request, response) => {
-      if (answerLocalCors(request, response)) return
+      const networkPreviewOrigin = options.networkPreviewOrigin
+      if (networkPreviewOrigin !== undefined && !isLoopbackAddress(request.socket.remoteAddress)
+        && !isNetworkPreviewApiRequestAllowed({
+          method: request.method ?? 'GET',
+          pathname: new URL(request.url ?? '/', 'http://localhost').pathname,
+          origin: request.headers.origin,
+          requestedMethod: request.headers['access-control-request-method'],
+        }, networkPreviewOrigin)) {
+        response.writeHead(403)
+        response.end()
+        return
+      }
+      if (answerLocalCors(request, response, networkPreviewOrigin)) return
       requestListener(request, response)
     })
 
@@ -60,22 +74,42 @@ export async function createElceHttpServer(options: ElceHttpServerOptions): Prom
   }
 }
 
-/** Handles local-browser CORS for the editor's direct API requests. */
-function answerLocalCors(request: IncomingMessage, response: ServerResponse): boolean {
+/** Handles CORS for local editor requests and the opt-in preview origin. */
+function answerLocalCors(
+  request: IncomingMessage,
+  response: ServerResponse,
+  networkPreviewOrigin?: string,
+): boolean {
   const origin = request.headers.origin
-  const isLocalOrigin = origin !== undefined && isLoopbackOrigin(origin)
-  if (isLocalOrigin) {
+  const isLoopback = origin !== undefined && isLoopbackOrigin(origin)
+  const isNetworkPreview = origin !== undefined && origin === networkPreviewOrigin
+  const isAllowedOrigin = isLoopback || isNetworkPreview
+  if (isAllowedOrigin && origin !== undefined) {
     response.setHeader('Access-Control-Allow-Origin', origin)
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match')
-    response.setHeader('Access-Control-Expose-Headers', 'ETag')
+    response.setHeader('Access-Control-Allow-Methods', isNetworkPreview
+      ? 'GET, HEAD, PUT, OPTIONS'
+      : 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match, X-Elce-Page-Id, X-Elce-Edit-Grant')
+    response.setHeader('Access-Control-Expose-Headers', 'ETag, Content-Disposition, X-Elce-Scorm-Filename')
     response.setHeader('Access-Control-Max-Age', '600')
     response.setHeader('Vary', 'Origin')
   }
   if (request.method !== 'OPTIONS') return false
-  response.writeHead(isLocalOrigin ? 204 : 403)
+  const requestedMethod = request.headers['access-control-request-method']
+  const testStatePath = /^\/api\/projects\/[^/]+\/test-state$/.test(new URL(request.url ?? '/', 'http://localhost').pathname)
+  const allowedNetworkPreflight = isNetworkPreview
+    && (requestedMethod === 'GET' || requestedMethod === 'HEAD'
+      || requestedMethod === 'PUT' && testStatePath)
+  response.writeHead(isLoopback || allowedNetworkPreflight ? 204 : 403)
   response.end()
   return true
+}
+
+/** Treats IPv4 and IPv6 loopback connections as local editor requests. */
+function isLoopbackAddress(address: string | undefined): boolean {
+  return address === '127.0.0.1'
+    || address === '::1'
+    || address?.startsWith('::ffff:127.') === true
 }
 
 /** Accepts browser origins on loopback only, keeping this local API private. */

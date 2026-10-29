@@ -1,8 +1,11 @@
-# Façade CodPlay V2 — décision d'extension restante
+# Façade CodPlay V2 — extensions restantes
 
-> Statut : En cours uniquement pour la décision d'observation de `snapshot`.
-> Le contrat public actuellement implémenté et vérifié est dans la
-> [spécification façade](../specs/facade-v2-spec.md).
+> Statut : En cours pour l'observation de `snapshot` et la fermeture complète
+> des familles du paquet de diffusion. Le chargement média/CSS/fontes est
+> vérifié ; le transport des fonctions auteur est en cours en R8. Son contrat
+> vérifié est dans la
+> [spécification façade](../specs/facade-v2-spec.md) et la
+> [spécification du paquet](../specs/scene-package-export-v1-spec.md).
 
 ## Autorité et périmètre
 
@@ -23,6 +26,32 @@ spécifications et plans dédiés :
 
 Les contrôles navigateur sont suivis par les plans des comportements concernés.
 Aucune gate navigateur propre à la façade n'est définie au-delà de ces parcours.
+
+## Chargement d'un paquet de scène
+
+`CodPlay.load(scenePath, { root })` charge un paquet média sur un propriétaire
+`CodPlay` existant et retourne l'instance prête de cette scène. La lecture
+continue par `instance.telco.play()`. `root` accepte un sélecteur CSS ou un
+`HTMLElement`. Le chargement utilise le même engine, preload, registre de
+ressources et registre d'instances que le mode auteur ; il ne crée pas un
+player parallèle.
+
+Cette tranche est implémentée et vérifiée pour les médias image/audio/vidéo,
+CSS et fontes décrits par la
+[spécification du paquet de scène](../specs/scene-package-export-v1-spec.md).
+Le premier appel à `load()` verrouille immédiatement les registres publics.
+Les composants et bibliothèques sont fournis par l'engine partagé, configuré
+avant le chargement ; toutes les scènes d'un même owner utilisent les mêmes
+définitions. La voie d'ajout de capacités par paquet et ses factories sont
+retirées par la décision du 2026-10-20. Le retrait du code et la reprise des
+preuves d'intégration sont suivis en R9–R12 du plan d'export.
+Le module de fonctions auteur est chargé et passé à l'instance selon D4 ;
+`onStart` est vérifié dans le navigateur, mais l'exécution des straps externes
+par `listen` reste ouverte au [plan d'export](./2026-10-15-export-diffusion-plan.md).
+Le constructeur
+`new CodPlay(options)`, `build()` et la création manuelle d'instances restent
+inchangés ; le test de chargement garde une instance auteur vivante pendant
+l'ajout d'une occurrence de diffusion.
 
 ## Décision non prise : observation des changements de snapshot
 

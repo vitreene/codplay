@@ -1,7 +1,8 @@
 import { createActor } from 'xstate'
 import type { Actor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { assertDocumentInvariants } from '../../domain/commands/document-commands'
+import { applyDocumentCommand, assertDocumentInvariants } from '../../domain/commands/document-commands'
+import { createInitialDocument } from '../../domain/document/document-model'
 import { BDC_LOCATION, BDC_TYPE, CATALOG_REFERENCE, CATALOG_TAB, DEFAULT_PRESET_ID, PAGE_LOCATION } from '../../config/document-config'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceAnchorDropService } from '../../domain/anchor/anchor-drop-service'
@@ -29,8 +30,8 @@ class PendingMediaStore implements ElceDocumentStore {
     return undefined
   }
 
-  public async deleteMedia(): Promise<void> {
-    return undefined
+  public async deleteMedia(mediaIds: readonly string[]): Promise<void> {
+    for (const mediaId of mediaIds) this.media.delete(mediaId)
   }
 
   public async loadSyncState(documentId: string) {
@@ -57,6 +58,152 @@ class PendingMediaStore implements ElceDocumentStore {
 }
 
 describe('Elcé controller', () => {
+  it('cancels an in-progress import without consuming an earlier Undo gesture', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const service = new ElceAnchorDropService()
+    const file = new File(['pending image'], 'pending.png', { type: 'image/png' })
+    const target = service.createFileDropTarget(file, 'page-a')
+    if (target === null) throw new Error('Le fichier de test doit être accepté.')
+    startActiveActor(actor)
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(file, target, '') })
+    await flush()
+    expect(actor.getSnapshot().value).toBe('processingDocumentChange')
+
+    actor.send({ type: 'import.cancel' })
+    expect(actor.getSnapshot().value).toBe('ready')
+    store.pending[0]?.resolve()
+    await flush()
+
+    expect(actor.getSnapshot().context.document.medias).toHaveLength(0)
+    expect(store.media.size).toBe(0)
+    actor.send({ type: 'history.undo' })
+    expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
+    actor.stop()
+  })
+
+  it('removes a provisional file when local storage rejects it', async () => {
+    class QuotaMediaStore extends PendingMediaStore {
+      public override async saveMedia(media: MediaBlob): Promise<void> {
+        this.media.set(media.id, media.blob)
+        throw new DOMException('Quota exceeded', 'QuotaExceededError')
+      }
+    }
+    const store = new QuotaMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const file = new File(['quota image'], 'quota.png', { type: 'image/png' })
+    const target = new ElceAnchorDropService().createFileDropTarget(file, 'page-a')
+    if (target === null) throw new Error('Le fichier de test doit être accepté.')
+    startActiveActor(actor)
+
+    actor.send({ type: 'section.change', sectionBdcId: 'bdc-section-1', change: fileDrop(file, target, '') })
+    await flush()
+
+    expect(actor.getSnapshot().context.document.medias).toHaveLength(0)
+    expect(actor.getSnapshot().context.history.past).toHaveLength(0)
+    expect(store.media.size).toBe(0)
+    actor.stop()
+  })
+
+  it('folds a server duplicate merge into the imported gesture instead of replaying its duplicate id', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const file = new File(['same bytes'], 'duplicate.png', { type: 'image/png' })
+    const imported = new ElceMediaResourceService().createImport(file)
+    if (imported === null) throw new Error('Le fichier de test doit être accepté.')
+    startActiveActor(actor)
+    actor.send({ type: 'document.apply', command: {
+      type: 'media.add',
+      media: { id: 'media-canonical', name: 'canonical.png', mimeType: 'image/png', size: file.size, caption: '' },
+    } })
+    actor.send({ type: 'document.apply', command: {
+      type: 'bdc.create', bdcId: 'bdc-question-merge', bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    } })
+    actor.send({ type: 'question.media.file.import', bdcId: 'bdc-question-merge', ...imported })
+    await flush()
+    store.pending[0]?.resolve()
+    await flush()
+    actor.send({ type: 'document.apply', command: {
+      type: 'media.merge', canonicalMediaId: 'media-canonical', duplicateMediaIds: [imported.media.id],
+    }, recordHistory: false })
+
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-question-merge')?.question?.mediaId).toBe('media-canonical')
+    actor.send({ type: 'history.undo' })
+    actor.send({ type: 'history.redo' })
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-canonical'])
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-question-merge')?.question?.mediaId).toBe('media-canonical')
+    assertDocumentInvariants(actor.getSnapshot().context.document)
+    actor.stop()
+  })
+
+  it('finishes an upload duplicate merge while author commands are suspended', async () => {
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'media.add', media: { id: 'media-canonical', name: 'one.png', mimeType: 'image/png', size: 3, caption: '' },
+    })
+    document = applyDocumentCommand(document, {
+      type: 'media.add', media: { id: 'media-duplicate', name: 'two.png', mimeType: 'image/png', size: 3, caption: '' },
+    })
+    const project = { id: document.id, name: document.data.name, revision: 0 }
+    const actor = createActor(controllerMachine, { input: { projectSession: {
+      rememberedProjectId: () => null,
+      perform: async () => ({ projects: [project], activeProject: project, document, status: 'opening' as const, editAccess: 'waiting' as const }),
+      startLock: () => {},
+      dispose: async () => {},
+    } } })
+    actor.start()
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await flush()
+    actor.send({ type: 'editor.access.activate' })
+    actor.send({ type: 'editor.access.suspend' })
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Refusé' } })
+    actor.send({ type: 'document.sync.merge', projectId: document.id, canonicalMediaId: 'media-canonical', duplicateMediaId: 'media-duplicate' })
+
+    expect(actor.getSnapshot().context.document.data.name).toBe(document.data.name)
+    expect(actor.getSnapshot().context.document.medias.map((media) => media.id)).toEqual(['media-canonical'])
+    expect(actor.getSnapshot().context.history.past).toHaveLength(0)
+    actor.stop()
+  })
+
+  it('undoes text, page creation, and text in author order across the asynchronous Section queue', async () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    startActiveActor(actor)
+
+    actor.send({
+      type: 'section.change', sectionBdcId: 'bdc-section-1',
+      change: { kind: 'content', title: '', markup: '<p>Premier</p>', content: {
+        type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Premier' }] }],
+      } },
+    })
+    actor.send({ type: 'page.create', placement: { kind: PAGE_LOCATION.SCENARIO } })
+    actor.send({
+      type: 'section.change', sectionBdcId: 'bdc-section-1',
+      change: { kind: 'content', title: '', markup: '<p>Second</p>', content: {
+        type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second' }] }],
+      } },
+    })
+    actor.send({ type: 'history.undo' })
+    await flush()
+
+    expect(actor.getSnapshot().context.document.pages).toHaveLength(2)
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.markup).toBe('<p>Premier</p>')
+    actor.send({ type: 'history.undo' })
+    expect(actor.getSnapshot().context.document.pages).toHaveLength(1)
+    expect(actor.getSnapshot().context.selectedPageId).toBe('page-a')
+    actor.send({ type: 'history.undo' })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.markup).not.toContain('Premier')
+
+    actor.send({ type: 'history.redo' })
+    actor.send({ type: 'history.redo' })
+    actor.send({ type: 'history.redo' })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section?.markup).toBe('<p>Second</p>')
+    assertDocumentInvariants(actor.getSnapshot().context.document)
+    actor.stop()
+  })
+
   it('keeps document commands suspended until a project lock activates them', () => {
     const actor = createActor(controllerMachine, { input: {} })
 
@@ -415,6 +562,45 @@ describe('Elcé controller', () => {
       .toEqual([mediaImport.media.id, mediaImport.media.id])
     assertDocumentInvariants(document)
     assertDocumentInvariants(afterDuplicateImport)
+    actor.stop()
+  })
+
+  it('imports a Sommaire background through the shared persisted-media pipeline', async () => {
+    const store = new PendingMediaStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    const service = new ElceMediaResourceService()
+    const mediaImport = service.createImport(new File(['background image'], 'background.png', { type: 'image/png' }))
+    if (mediaImport === null) throw new Error('Le service média doit accepter le fichier image de test.')
+    startActiveActor(actor)
+
+    actor.send({
+      type: 'summary.media.file.import',
+      file: mediaImport.file,
+      media: mediaImport.media,
+    })
+    await flush()
+    expect(store.pending.map(({ media }) => media.id)).toEqual([mediaImport.media.id])
+    expect(actor.getSnapshot().context.document.medias).toHaveLength(0)
+    store.pending[0]?.resolve()
+    await flush()
+
+    const document = actor.getSnapshot().context.document
+    expect(document.medias).toEqual([mediaImport.media])
+    expect(document.data.summary.backgroundMediaId).toBe(mediaImport.media.id)
+    expect(actor.getSnapshot().context.mediaSources[mediaImport.media.id]).toMatch(/^blob:/)
+    assertDocumentInvariants(document)
+
+    const duplicateImport = service.createImport(new File(['background image'], 'autre-nom.png', { type: 'image/png' }))
+    if (duplicateImport === null) throw new Error('Le fichier image identique doit être accepté.')
+    actor.send({
+      type: 'summary.media.file.import',
+      file: duplicateImport.file,
+      media: duplicateImport.media,
+    })
+    await flush()
+    expect(store.pending).toHaveLength(1)
+    expect(actor.getSnapshot().context.document.medias).toEqual([mediaImport.media])
+    expect(actor.getSnapshot().context.document.data.summary.backgroundMediaId).toBe(mediaImport.media.id)
     actor.stop()
   })
 

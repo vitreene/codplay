@@ -5,6 +5,7 @@ export const COURSE_EVENTS = {
   restart: 'course:navigation:restart',
   pageBottom: 'course:page:bottom',
   quizAnswered: 'course:quiz:answered',
+  quizReset: 'course-quiz:reset',
   menuPrefix: 'course:menu:select:',
   refreshPresentation: 'course:presentation:refresh',
 } as const

@@ -14,8 +14,11 @@ export const validateMediaInitial: ValidationFunction = (value, context) => {
   if (value.controls !== undefined && typeof value.controls !== 'boolean') {
     reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_CONTROLS_INVALID', 'media.controls must be a boolean.', context)
   }
-  if (value.master !== undefined && typeof value.master !== 'boolean') {
-    reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_MASTER_INVALID', 'media.master must be a boolean.', context)
+  if ('master' in value) {
+    reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_MASTER_REMOVED', 'media.master has been replaced by media.sync.', context)
+  }
+  if (value.sync !== undefined && value.sync !== 'auto' && value.sync !== 'master' && value.sync !== 'independent') {
+    reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_SYNC_INVALID', 'media.sync only accepts "auto", "master" or "independent".', context)
   }
   validateMediaPart(value.video, context, 'video')
 }
@@ -23,6 +26,9 @@ export const validateMediaInitial: ValidationFunction = (value, context) => {
 /** Validates a source replacement carried by one media action. */
 export const validateMediaAction: ValidationFunction = (value, context) => {
   if (!isPlainRecord(value)) return
+  if ('sync' in value || 'master' in value) {
+    reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_SYNC_INITIAL_ONLY', 'media.sync is an initial configuration and cannot be changed by an action.', context)
+  }
   if (value.src !== undefined && (typeof value.src !== 'string' || value.src.length === 0)) {
     reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_SRC_INVALID', 'media action src must be a non-empty string.', context)
   }

@@ -7,6 +7,8 @@ import type {
   CodPlayEngine,
   CodPlayEvents,
   CodPlayInstances,
+  CodPlayLoadMethod,
+  CodPlayPrepareMethod,
   CodPlayModules,
   CodPlayLibraries,
   CodPlayOptions,
@@ -15,11 +17,18 @@ import type {
 } from './facade-types'
 import type { RuntimePreloadApi } from '../runtime/preload'
 import { EngineFacadeImpl } from './engine-facade'
+import { loadScenePackage, prepareScenePackage, releaseScenePackageContexts } from './scene-package-loader'
 
 /** Public CodPlay owner that hides engine and ticker construction details. */
 export class CodPlay implements CodPlayApi {
   #engineOwner: EngineFacadeImpl
+  #loadQueue: Promise<void> = Promise.resolve()
+  #loadCounter = 0
+  #prepareCounter = 0
+  #scenePackageCssSlots = new Map<string, string>()
   readonly build: CodPlayBuildMethod
+  readonly load: CodPlayLoadMethod
+  readonly prepare: CodPlayPrepareMethod
   readonly components: CodPlayComponents
   readonly services: CodPlayServices
   readonly modules: CodPlayModules
@@ -58,15 +67,55 @@ export class CodPlay implements CodPlayApi {
       stop: () => engine.stop(),
       advance: (nowMs, marginMs) => engine.advance(nowMs, marginMs),
     }
-    this.instances = engine.createInstanceRegistry()
+    const instanceRegistry = engine.createInstanceRegistry()
+    this.instances = {
+      ...instanceRegistry,
+      destroy: (instanceId) => {
+        instanceRegistry.destroy(instanceId)
+        const cssSlot = this.#scenePackageCssSlots.get(instanceId)
+        if (cssSlot === undefined) return
+        this.preload.css.clear(cssSlot)
+        this.#scenePackageCssSlots.delete(instanceId)
+      },
+    }
     this.preload = createRuntimePreload(options.preload ?? {})
+    this.prepare = (scenePath, prepareOptions) => {
+      this.#engineOwner.lockCapabilityRegistries()
+      const cssSlot = prepareOptions.cssSlot ?? `scene-package:prepared-${++this.#prepareCounter}`
+      const result = this.#loadQueue.then(() => prepareScenePackage(
+        this,
+        scenePath,
+        prepareOptions.root,
+        cssSlot,
+      ))
+      this.#loadQueue = result.then(() => undefined, () => undefined)
+      return result
+    }
+    this.load = (scenePath, loadOptions) => {
+      this.#engineOwner.lockCapabilityRegistries()
+      const instanceId = `codplay-load-${++this.#loadCounter}`
+      const result = this.#loadQueue.then(async () => {
+        const loaded = await loadScenePackage(
+          this,
+          scenePath,
+          loadOptions.root,
+          instanceId,
+        )
+        if (loaded.cssSlot !== undefined) this.#scenePackageCssSlots.set(instanceId, loaded.cssSlot)
+        return loaded.instance
+      })
+      this.#loadQueue = result.then(() => undefined, () => undefined)
+      return result
+    }
   }
 
   /** Destroys the engine and cancels any preload operation owned by CodPlay. */
   destroy(): void {
     // Keep the internal teardown primitive behind the public engine view.
     this.#engineOwner.destroy()
+    releaseScenePackageContexts(this)
     this.preload.cancel()
     this.preload.css.clear()
+    this.#scenePackageCssSlots.clear()
   }
 }

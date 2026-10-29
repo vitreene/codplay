@@ -58,18 +58,21 @@ qui s’aligne à gauche et occupe l’espace disponible ; les actions restent �
 droite. Un chapitre standard utilise l’icône dossier seule. Un chapitre
 d’évaluation utilise l’icône presse-papiers, sans libellé répété ; son nom
 automatique est « Évaluation » au lieu de « Chapitre N ». Le nom reste
-modifiable. L’action d’ajout de page utilise l’icône Lucide FilePlus de 14 px
-dans un bouton carré de 1,35 rem, à peine plus grand que le bouton de
-suppression de 1,25 rem. L’icône Lucide Trash2 du bouton de suppression a la
-même taille de 14 px. Ces dimensions restent adaptées à chaque action ; les
-icônes gardent 2 px de padding interne et 4 px d’écart avec leur élément voisin.
+modifiable. L’action d’ajout de page utilise l’icône Lucide FilePlus dans un
+bouton carré de 1,35 rem, à peine plus grand que le bouton de suppression de
+1,25 rem. FilePlus, Trash2 et les autres icônes d’interface suivent la hauteur
+de capitale avec `block-size: 1cap` et une largeur automatique. Ces tailles
+restent adaptées à chaque action ; les icônes gardent 2 px de padding interne
+et 4 px d’écart avec leur élément voisin.
 L’écart vertical entre les lignes de l’arborescence est de 0,1 rem.
 
-Dans la zone centrale, le titre de la page sélectionnée est éditable. Si cette
-page appartient à un chapitre, le titre de ce chapitre apparaît au-dessus et
-est éditable lui aussi. L’icône de type de chapitre et son nom éditable partagent
-la même ligne. Une page à la racine du scénario ou dans le catalogue n’affiche
-pas de titre de chapitre.
+Dans la zone centrale, la rangée d’actions de création se trouve au-dessus des
+titres et reste alignée à droite. Le titre de la page sélectionnée est éditable,
+avec une taille et une graisse visuellement plus fortes que le titre de
+chapitre. Si la page appartient à un chapitre, son titre éditable apparaît
+au-dessus du titre de page, avec un espacement net entre les deux. L’icône de
+type de chapitre et son nom éditable partagent la même ligne. Une page à la
+racine du scénario ou dans le catalogue n’affiche pas de titre de chapitre.
 
 Cliquer le nom ou l’icône d’un chapitre sélectionne ce chapitre dans l’état
 XState et remplace le contenu central par sa vue de réglages. Pour un chapitre
@@ -80,7 +83,7 @@ par `document.apply` et sont conservés dans le document. La sélection d’une 
 referme cette vue et rouvre l’éditeur de la page.
 
 La colonne droite précédemment intitulée « Propriétés » accueille la section
-« Contenus disponibles », avec les onglets « Blocs disponibles » et « Médias ».
+« Contenus », avec les onglets « Blocs disponibles » et « Médias ».
 L’onglet « Blocs disponibles » liste tous les BDC racines du catalogue, un seul
 élément par conteneur ; il ne détache pas ses Cartes enfants. Pour rendre
 disponible un BDC racine posé sur la page, l’auteur le fait glisser depuis sa
@@ -89,24 +92,41 @@ de retour par BDC n’est affiché dans la colonne. Les médias réutilisables
 restent dans leur onglet distinct. Le retour d’une Carte ancrée continue
 d’utiliser le circuit d’ancre.
 
-À 1200 px et moins, la colonne « Contenus disponibles » est masquée et son
-bouton iconique sans fond ni contour apparaît au bord droit de la zone centrale.
+L’onglet « Profil » apparaît quand un champ textuel compatible a le focus et que
+le document contient des propriétés de profil. Il contient l’unique contrôle
+d’insertion ; la sélection d’un autre contexte le retire. Les champs simples et
+la Section Tiptap insèrent la référence stable de la propriété dans leur format
+respectif. Le bouton « Sommaire » du Scénario ouvre les réglages du Sommaire et
+du profil et utilise la même icône que « Test auteur » dans la popup de preview.
+
+À 1200 px et moins, la colonne « Contenus » est masquée et son bouton iconique
+sans fond ni contour apparaît au bord droit de la zone centrale.
 L’ouverture ajoute la colonne de contenus à droite et réduit la zone centrale,
 qui reste visible. À 800 px et moins, les deux panneaux latéraux sont masqués
 au départ ; leurs commandes iconiques sans fond ni contour encadrent la zone
-centrale. Ouvrir Scénario ajoute sa colonne à gauche ; ouvrir Contenus disponibles
-ajoute sa colonne à droite. Un seul panneau latéral peut être ouvert à la fois.
+centrale. Ouvrir Scénario ajoute sa colonne à gauche ; ouvrir Contenus ajoute sa
+colonne à droite. Un seul panneau latéral peut être ouvert à la fois.
 Les commandes restent de vrais boutons accessibles, avec un nom décrivant
 l’action, `aria-expanded` et `aria-controls` ; Échap ferme le panneau et rend le
 focus à sa commande. Les panneaux occupent la grille et ne recouvrent pas la page
 centrale. Aucune surcouche ne masque la page ni ne piège le focus.
 
 Entre 801 et 1200 px, Scénario reste dans la colonne gauche ; lorsque le panneau
-Contenus disponibles est ouvert, les trois colonnes restent côte à côte. À 800 px
+Contenus est ouvert, les trois colonnes restent côte à côte. À 800 px
 et moins, le panneau ouvert et la zone centrale occupent chacun une colonne ;
 quand les deux panneaux sont fermés, la zone centrale occupe toute la largeur.
 Au-delà de 1200 px, les trois colonnes restent visibles et les commandes
 responsive disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
+
+La barre de commandes située au-dessus de la zone centrale garde « Prévisualiser »
+à toutes les largeurs. Les commandes des panneaux partagent cette barre quand
+elles sont affichées : à 800 px et moins, la commande Scénario est à gauche,
+Prévisualiser au milieu et Contenus à droite ; entre 801 et
+1200 px, Prévisualiser précède la commande Contenus à droite.
+Au-delà de 1200 px, seul
+« Prévisualiser » reste dans cette barre, les deux panneaux étant visibles.
+L’erreur d’ouverture de la fenêtre de lecture y reste annoncée avec `role="alert"`.
+Le bouton continue d’appeler la même action de preview du workspace.
 
 La barre d’ajout de page affiche les libellés « Texte », « Quiz »,
 « Carousel », « Carte » et « Graphe » sous leurs icônes. Le nom accessible et
@@ -161,7 +181,11 @@ séparées.
 - [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
   vérifie les créations Flux et Diapo à la racine et dans un chapitre, l’ordre
   mixte des entrées racine, les déplacements par séparateurs, les onglets du
-  catalogue et l’ouverture des réglages centraux d’un chapitre.
+  catalogue (dont l’onglet Profil contextuel), l’insertion d’une variable dans
+  un champ actif, le titre « Contenus » et l’icône « Sommaire » partagée.
+  Il confirme aussi que l’unique bouton « Prévisualiser » reste dans la barre
+  de commandes en vue page et chapitre, appelle l’action du workspace et garde
+  son alerte d’ouverture à cet emplacement.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie que la sélection d’un chapitre par la surface Remix native met à
   jour la zone centrale depuis le même acteur XState et que la zone page active
@@ -173,15 +197,16 @@ séparées.
   parcours intégré du catalogue et de l’éditeur de page vérifie aussi le
   déplacement d’une Carte disponible vers une page puis son retour au catalogue
   en la faisant glisser depuis sa poignée de placement vers l’onglet « Blocs
-  disponibles ».
+  disponibles ». Le test vérifie aussi que la rangée d’actions précède le groupe
+  des titres dans l’éditeur de page.
 - Le 9 octobre 2026, Brave confirme dans l’éditeur que la colonne ne contient
   plus le groupe « Blocs dans la page » : le retour au catalogue se fait depuis
   la poignée de placement du BDC.
 - Le 9 octobre 2026, Brave vérifie le layout responsive sur 5175 : à 1024 px,
-  l’ouverture de Contenus disponibles garde les trois colonnes visibles ; à
+  l’ouverture de Contenus garde les trois colonnes visibles ; à
   390 px, les deux panneaux fermés laissent la zone centrale seule, et chaque
   panneau ouvert prend sa propre colonne (137/205 px pour Scénario,
-  205/137 px pour Contenus disponibles). Échap ferme le panneau et rend le
+  205/137 px pour Contenus). Échap ferme le panneau et rend le
   focus au bouton. Le document ne déborde pas horizontalement.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie l’édition Section et les parcours d’ancre/média dans le page editor
@@ -201,6 +226,10 @@ séparées.
   corbeilles compactes à droite des lignes, ainsi que les champs centraux des
   titres de page et de chapitre. Le 4 octobre 2026, Safari vérifie que l’icône
   et le champ de titre du chapitre occupent la même ligne centrale.
+- Brave DevTools, le 22 octobre 2026, vérifie dans l’éditeur de Demo5 la rangée
+  d’actions au-dessus des titres, le titre de page en 1,5 rem / graisse 750 et
+  son espacement distinct du titre de chapitre en 0,82 rem / graisse 500. Le
+  document reste « Synchronisé » pendant cette vérification visuelle.
 - Le 4 octobre, Safari MCP confirme qu’une page racine créée apparaît comme
   sœur du chapitre, qu’elle peut être déplacée avant et après celui-ci par les
   gestionnaires de glisser-déposer de l’application, puis que sa suppression
@@ -217,10 +246,11 @@ séparées.
   utilisé pour le test. Le type, le seuil et les réglages persistés sont
   vérifiés dans [`chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
   contre le document détenu par XState.
-- Le 9 octobre, Brave sur 5175 confirme dans l’arborescence le rendu uniforme
-  des icônes FilePlus et Trash2 en 14 × 14 px, avec leurs gabarits distincts
-  conservés. Les icônes de type de chapitre et de page dans la zone centrale
-  mesurent également 14 × 14 px.
+- Safari MCP, le 25 octobre, vérifie que les SVG Lucide de l’éditeur n’ont plus
+  d’attributs de taille fixes, que leur classe applique `block-size: 1cap` et
+  que Safari prend en charge cette unité. Les 78 icônes présentes suivent
+  ainsi la police de leur commande ; les dimensions de bouton restent propres
+  à chaque action.
 - Le 4 octobre, Safari MCP crée une page temporaire dans un chapitre standard,
   supprime son BDC Texte initial, confirme que la page reste éditable et ajoute
   une Question avec l’icône ListChecks. La page temporaire est ensuite supprimée.

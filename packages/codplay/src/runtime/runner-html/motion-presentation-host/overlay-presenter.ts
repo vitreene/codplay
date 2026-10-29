@@ -1,4 +1,4 @@
-import { invertMatrix } from 'ace'
+import { invertMatrix, multiplyMatrix } from 'ace'
 import { isMeasurableHtmlElement } from '../element-guards'
 import {
   composeMotionPose,
@@ -29,6 +29,11 @@ import type {
   MotionRootState,
   MotionRootToken,
 } from './host-types'
+import {
+  captureHtmlPose,
+  createHtmlPoseCaptureContext,
+  worldDeltaToLocalDelta,
+} from '../../motion/html-pose'
 
 /** Owns reparent ghosts, local-root layers and their exclusive visibility. */
 export class OverlayMotionPresenter {
@@ -192,13 +197,14 @@ export class OverlayMotionPresenter {
   ): void {
     const source = this.resolveHandle(itemId)
     if (source === undefined) return
+    const overlayLayer = this.getOverlayLayer(rootState)
     const previous = this.resources.get(itemId)
     if (previous !== undefined && previous.source === source) {
       const unchanged = revision === undefined || previous.revision === revision
       this.ensureSourceHidden(previous)
       if (previous.motionRoot !== rootState.root || previous.motionRootKey !== rootState.key) {
         this.ensurePresentationHidden(previous)
-        this.getOverlayLayer(rootState).appendChild(previous.ghost)
+        overlayLayer.appendChild(previous.ghost)
         previous.motionRoot = rootState.root
         previous.motionRootKey = rootState.key
         previous.lastMatrix = undefined
@@ -230,7 +236,6 @@ export class OverlayMotionPresenter {
       this.release(previous)
     }
 
-    const overlayLayer = this.getOverlayLayer(rootState)
     // Hide the source before inserting its projection. This keeps the two
     // representations mutually exclusive even at the insertion boundary.
     this.transientStyles.applyHidden(source)
@@ -258,18 +263,38 @@ export class OverlayMotionPresenter {
 
   /** Returns the overlay layer owned by one local motion root. */
   private getOverlayLayer(rootState: MotionRootState): HTMLElement {
-    if (rootState.overlayLayer !== undefined) return rootState.overlayLayer
-    const layer = rootState.root.ownerDocument.createElement('div')
-    layer.style.position = 'absolute'
-    layer.style.left = '0'
-    layer.style.top = '0'
-    layer.style.width = '100%'
-    layer.style.height = '100%'
-    layer.style.pointerEvents = 'none'
-    layer.style.zIndex = '20'
-    rootState.root.appendChild(layer)
-    rootState.overlayLayer = layer
-    return rootState.overlayLayer
+    const layer = rootState.overlayLayer ?? rootState.root.ownerDocument.createElement('div')
+    if (rootState.overlayLayer === undefined) {
+      layer.style.position = 'fixed'
+      layer.style.left = '0'
+      layer.style.top = '0'
+      layer.style.width = '100vw'
+      layer.style.height = '100vh'
+      layer.style.pointerEvents = 'none'
+      layer.style.zIndex = '20'
+      layer.style.transformOrigin = '0 0'
+      rootState.root.appendChild(layer)
+      rootState.overlayLayer = layer
+    }
+    this.alignOverlayLayer(rootState.root, layer)
+    return layer
+  }
+
+  /** Maps root-local poses into the fixed layer's actual CSS coordinate space. */
+  private alignOverlayLayer(root: Element, layer: HTMLElement): void {
+    layer.style.transform = 'none'
+    const context = createHtmlPoseCaptureContext(root)
+    const rootPose = captureHtmlPose(root, context)
+    const layerPose = captureHtmlPose(layer, context)
+    const layerInverse = invertMatrix({ ...layerPose.matrix, e: 0, f: 0 })
+    if (layerInverse === null) throw new Error('Motion overlay layer matrix is singular.')
+    const linear = multiplyMatrix(layerInverse, { ...rootPose.matrix, e: 0, f: 0 })
+    const origin = worldDeltaToLocalDelta(
+      layerPose.matrix,
+      rootPose.origin.x - layerPose.origin.x,
+      rootPose.origin.y - layerPose.origin.y,
+    )
+    layer.style.transform = `matrix(${linear.a}, ${linear.b}, ${linear.c}, ${linear.d}, ${origin.x}, ${origin.y})`
   }
 
   /** Reconciles one local root's overlay order without mixing other roots. */

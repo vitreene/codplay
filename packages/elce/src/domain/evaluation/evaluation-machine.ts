@@ -128,6 +128,29 @@ export class EvaluationMachine {
   }
 }
 
+/** Reapplies a session-specific mastery threshold to a persisted Evaluation result. */
+export function applyEvaluationThreshold(
+  state: EvaluationMachineState,
+  threshold: number | undefined,
+): EvaluationMachineState {
+  if (threshold === undefined || state.context.settings.threshold === threshold) return state
+  const result = state.context.result
+  const nextResult = result?.score === null || result?.score === undefined
+    ? result
+    : { ...result, passed: result.score >= threshold }
+  const value = state.value === 'success' || state.value === 'failure'
+    ? nextResult?.passed === true ? 'success' : 'failure'
+    : state.value
+  return {
+    value,
+    context: {
+      ...state.context,
+      settings: { ...state.context.settings, threshold },
+      result: nextResult,
+    },
+  }
+}
+
 /** Converts an XState snapshot to the serializable state kept by a host runtime. */
 function serializableState(value: unknown, context: EvaluationMachineContext): EvaluationMachineState {
   return { value: value as EvaluationMachineValue, context }

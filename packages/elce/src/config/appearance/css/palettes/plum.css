@@ -1,0 +1,7 @@
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-plum-background { background-color: #241e2b; }
+.bg-plum-surface { background-color: #352b40; }
+.bg-plum-text { background-color: #f8f1fc; }
+.bg-plum-muted { background-color: #c4b5ce; }
+.bg-plum-accent { background-color: #d6a5ed; }
+.bg-plum-border { background-color: #5f4c6e; }

@@ -1,0 +1,7 @@
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-ocean-background { background-color: #f3f8fc; }
+.bg-ocean-surface { background-color: #ffffff; }
+.bg-ocean-text { background-color: #18354a; }
+.bg-ocean-muted { background-color: #506c80; }
+.bg-ocean-accent { background-color: #176b9b; }
+.bg-ocean-border { background-color: #c8dce9; }

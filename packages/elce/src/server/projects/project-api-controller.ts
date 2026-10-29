@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { assertDocumentInvariants } from '../../domain/commands/document-commands'
 import { ELCE_DOCUMENT_VERSION, ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentData } from '../../domain/document/document-types'
 import type { ProjectPersistence, ProjectSummary } from './project-persistence'
+import { lostProjectEditGrant, missingProjectEditGrant, projectEditGrantFrom } from './project-edit-grant'
 
 const API_ERROR = {
   INVALID_REQUEST: 'invalid_request',
@@ -12,7 +14,10 @@ const API_ERROR = {
 } as const
 
 type JsonBody = Readonly<{ kind: 'valid'; value: unknown }> | Readonly<{ kind: 'invalid' }>
-type ParsedDocument = Readonly<{ kind: 'valid'; document: ElceDocument }> | Readonly<{ kind: 'invalid' }>
+type ParsedDocument = Readonly<{ kind: 'valid'; document: ElceDocument }>
+  | Readonly<{ kind: 'invalid'; reason: 'invalid_document_shape' }>
+  | Readonly<{ kind: 'invalid'; reason: 'document_rehydration_rejected'; frames: readonly string[] }>
+  | Readonly<{ kind: 'invalid'; reason: 'document_invariants_rejected'; frames: readonly string[] }>
 type ParsedRevision = Readonly<{ kind: 'valid'; revision: number }> | Readonly<{ kind: 'missing' }> | Readonly<{ kind: 'invalid' }>
 
 /** Handles the HTTP operations for the local project catalog. */
@@ -23,13 +28,52 @@ export class ProjectApiController {
     this.persistence = persistence
   }
 
+  /** Reserves editing for one page, or reports the current owner's exclusion. */
+  public async acquireEditAccess(request: Request, projectId: string): Promise<Response> {
+    const body = await readJsonBody(request)
+    if (body.kind === 'invalid' || !isRecord(body.value)
+      || typeof body.value.pageId !== 'string' || body.value.pageId.length === 0
+      || body.value.force !== undefined && typeof body.value.force !== 'boolean') {
+      return apiError(API_ERROR.INVALID_REQUEST, 400)
+    }
+    const result = await this.persistence.acquireEditAccess(projectId, body.value.pageId, body.value.force === true)
+    switch (result.kind) {
+      case 'granted': return Response.json({ grantId: result.grantId, recovered: result.recovered })
+      case 'occupied': return apiError('edit_access_occupied', 409)
+      case 'not-found': return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
+    }
+  }
+
+  /** Renews the caller's live grant without extending an expired right. */
+  public async renewEditAccess(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    return await this.persistence.renewEditAccess(projectId, grant)
+      ? new Response(null, { status: 204 }) : lostProjectEditGrant()
+  }
+
+  /** Checks a grant after a lost release response without acquiring anew. */
+  public async hasEditAccess(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    return Response.json({ held: await this.persistence.hasEditAccess(projectId, grant) })
+  }
+
+  /** Releases only the current page grant. */
+  public async releaseEditAccess(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    return await this.persistence.releaseEditAccess(projectId, grant)
+      ? new Response(null, { status: 204 }) : lostProjectEditGrant()
+  }
+
   /** Returns project summaries without loading their document bodies. */
   public async listProjects(): Promise<Response> {
     const projects = await this.persistence.listProjects()
     return Response.json({ projects })
   }
 
-  /** Creates a project from the v4 document authored by the browser. */
+  /** Creates a project from the v7 document authored by the browser. */
   public async createProject(request: Request): Promise<Response> {
     const body = await readJsonBody(request)
     if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
@@ -62,54 +106,67 @@ export class ProjectApiController {
 
   /** Renames a project and returns the revision produced by persistence. */
   public async renameProject(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
     const body = await readJsonBody(request)
     if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
 
     const name = projectNameFrom(body.value)
     if (name.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
 
-    const project = await this.persistence.renameProject(projectId, name.value)
-    switch (project) {
-      case null:
+    const result = await this.persistence.renameProject(projectId, name.value, grant)
+    switch (result.kind) {
+      case 'not-found':
         return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
-      default:
-        return projectResponse(project)
+      case 'edit-access-lost':
+        return lostProjectEditGrant()
+      case 'updated':
+        return projectResponse(result.project)
     }
   }
 
   /** Deletes a project and reports whether the identifier existed. */
-  public async deleteProject(projectId: string): Promise<Response> {
-    const deleted = await this.persistence.deleteProject(projectId)
+  public async deleteProject(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
+    const deleted = await this.persistence.deleteProject(projectId, grant)
     switch (deleted) {
-      case false:
+      case 'not-found':
         return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
-      case true:
+      case 'edit-access-lost':
+        return lostProjectEditGrant()
+      case 'deleted':
         return new Response(null, { status: 204 })
     }
   }
 
   /** Replaces a project document only when its current revision matches If-Match. */
   public async saveDocument(request: Request, projectId: string): Promise<Response> {
+    const grant = projectEditGrantFrom(request)
+    if (grant === null) return missingProjectEditGrant()
     const revision = revisionFrom(request.headers.get('If-Match'))
     switch (revision.kind) {
       case 'missing':
         return apiError(API_ERROR.IF_MATCH_REQUIRED, 428)
       case 'invalid':
-        return apiError(API_ERROR.INVALID_REQUEST, 400)
+        return this.invalidDocumentRequest(projectId, 'invalid_if_match')
       case 'valid':
         break
     }
 
     const body = await readJsonBody(request)
-    if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)
+    if (body.kind === 'invalid') return this.invalidDocumentRequest(projectId, 'invalid_json')
 
     const parsed = parseDocument(body.value)
-    if (parsed.kind === 'invalid' || parsed.document.id !== projectId) {
-      return apiError(API_ERROR.INVALID_REQUEST, 400)
+    if (parsed.kind === 'invalid') {
+      return this.invalidDocumentRequest(projectId, parsed.reason, 'frames' in parsed ? parsed.frames : undefined)
     }
+    if (parsed.document.id !== projectId) return this.invalidDocumentRequest(projectId, 'document_id_mismatch')
 
-    const result = await this.persistence.saveDocument(projectId, revision.revision, parsed.document)
+    const result = await this.persistence.saveDocument(projectId, revision.revision, parsed.document, grant)
     switch (result.kind) {
+      case 'edit-access-lost':
+        return lostProjectEditGrant()
       case 'not-found':
         return apiError(API_ERROR.PROJECT_NOT_FOUND, 404)
       case 'revision-mismatch':
@@ -118,7 +175,33 @@ export class ProjectApiController {
         return projectResponse(result.project)
     }
   }
+
+  /** Logs a safe rejection trace and returns its correlation details to the editor. */
+  private invalidDocumentRequest(
+    projectId: string,
+    diagnosticReason: SaveDocumentDiagnosticReason,
+    validationFrames?: readonly string[],
+  ): Response {
+    const diagnosticId = randomUUID()
+    console.error('Elcé API rejected project document.', {
+      diagnosticId,
+      projectId,
+      method: 'PUT',
+      route: '/api/projects/:projectId/document',
+      diagnosticReason,
+      ...(validationFrames === undefined ? {} : { validationFrames }),
+    })
+    return Response.json({ error: API_ERROR.INVALID_REQUEST, diagnosticId, diagnosticReason }, { status: 400 })
+  }
 }
+
+type SaveDocumentDiagnosticReason =
+  | 'invalid_if_match'
+  | 'invalid_json'
+  | 'invalid_document_shape'
+  | 'document_rehydration_rejected'
+  | 'document_invariants_rejected'
+  | 'document_id_mismatch'
 
 /** Reads a JSON request body without leaking parse errors through the router. */
 async function readJsonBody(request: Request): Promise<JsonBody> {
@@ -129,17 +212,29 @@ async function readJsonBody(request: Request): Promise<JsonBody> {
   }
 }
 
-/** Rehydrates and validates a v4 document using the existing domain invariants. */
+/** Rehydrates and validates a v7 document using the existing domain invariants. */
 function parseDocument(value: unknown): ParsedDocument {
-  if (!isDocumentData(value)) return { kind: 'invalid' }
+  if (!isDocumentData(value)) return { kind: 'invalid', reason: 'invalid_document_shape' }
+
+  let document: ElceDocument
+  try {
+    document = ElceDocument.fromJSON(value)
+  } catch (error) {
+    return { kind: 'invalid', reason: 'document_rehydration_rejected', frames: errorFrames(error) }
+  }
 
   try {
-    const document = ElceDocument.fromJSON(value)
     assertDocumentInvariants(document)
     return { kind: 'valid', document }
-  } catch {
-    return { kind: 'invalid' }
+  } catch (error) {
+    return { kind: 'invalid', reason: 'document_invariants_rejected', frames: errorFrames(error) }
   }
+}
+
+/** Keeps stack locations while omitting the dynamic error message from logs. */
+function errorFrames(error: unknown): readonly string[] {
+  if (!(error instanceof Error) || error.stack === undefined) return []
+  return error.stack.split('\n').slice(1).filter((line) => /^\s+at\s/.test(line)).slice(0, 8)
 }
 
 /** Narrows untrusted JSON to the required top-level document fields. */

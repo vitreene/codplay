@@ -16,12 +16,20 @@ Le montage d’un Carousel dans la séquence Flux est décrit dans la
 
 ## Contrat
 
+Les vidéos sont projetées comme `media` avec `sync: 'independent'` et leurs
+contrôles/broadcasts existants. Le temps CodPlay ne conduit pas leur lecture.
+Le `STOP` de sortie de page appartient à la composition du lecteur, décrit
+dans la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+
 `buildFluxScene(page, bdcs)` accepte une page Elcé de type `flux` et sa séquence
-ordonnée de BDC Section, Question, Résultat, Carte, Graphe statistique ou
+ordonnée de BDC Section, Question, Résultat, Carte, Graphe ou
 Carousel, selon les contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;
 son rendu image ou vidéo vient du MIME de cette ressource. Les Cartes peuvent
 être des BDC directs de la page ou des enfants d’une Section ou d’un Carousel.
 Une Carte ancrée appartient à sa Section et n’est pas un BDC direct de page.
+Dans le Flux, les BDC de premier niveau sont séparés par un `gap` de `2.5rem`.
+Ce rythme extérieur ne change pas les espacements typographiques à l’intérieur
+des BDC.
 Une source média optionnelle peut être fournie séparément par `mediaSources` ;
 le builder projette la Carte par son preset et monte son perso média dans la
 cible correspondante. Dans le markup de layout, les points d’insertion CodPlay
@@ -44,9 +52,50 @@ padding donne le ratio du cadre et de la réserve ; le perso image utilise
 `object-fit:cover`. Il produit un
 `SceneDoc` avec :
 
-Un Graphe statistique ancré utilise ce même slot et cette réservation Flux. Le
+Les racines absolues des Cartes et Graphes ancrés ont `z-index: 1`. Le média
+reste ainsi la cible du pointeur dans son cadre, même si la boîte du bloc de
+texte suivant recouvre géométriquement la réserve du slot. La Section conserve
+le placement et le flux du texte ; aucun écouteur DOM local n’est ajouté.
+
+Un Graphe ancré utilise ce même slot et cette réservation Flux. Le
 mode Tableau garde sa hauteur naturelle et réserve `100%` de la largeur du
 slot ; les rendus SVG réservent `56.25%`. Aucun hôte parallèle n’est ajouté.
+
+Une Carte Photo plein cadre partage le même builder média en placement direct,
+ancré ou enfant de Carousel. Pour une vidéo, le perso CodPlay porte la classe
+`elce-carousel-media` sur son conteneur ; la feuille player dimensionne la
+vidéo native à `100%` de largeur et de hauteur avec `object-fit:cover`. Elle
+remplit ainsi le logement responsive de la Carte au lieu de conserver sa taille
+intrinsèque. La règle CSS est incluse dans le package exporté via la feuille du
+layout Sighty.
+
+Avant la projection d’une page, `ElceEditorSettingsResolver` résout les valeurs
+effectives à partir des défauts enregistrés au projet et des réglages portés par
+les BDC parents et les placements Carousel. Une valeur `null` hérite du parent,
+indépendamment pour l’entrée et la sortie. La même résolution est utilisée par
+la preview et l’export de scénario. Les valeurs système non exposées et les
+valeurs initiales de projet sont regroupées dans
+[`editor-settings.ts`](../src/config/editor-settings.ts) ; la résolution est
+regroupée dans
+[`editor-settings-resolver.ts`](../src/domain/editor-settings/editor-settings-resolver.ts).
+Les builders reçoivent `ElceResolvedPageSettings` et ne choisissent pas de
+défaut ni de priorité. Les autres réglages cachés du player suivent le même
+contrat décrit dans la [spécification de résolution](./editor-settings-spec.md).
+
+Les racines de Carte observent le scrollport dans la zone résolue
+`threshold: 0`, comme la révélation d’image de
+la démo scroll-container. La première mesure synchronise la phase sans lancer
+d’animation ; une Carte déjà visible au chargement reste donc dans son état
+stable. Pour une Carte avec média, la racine observée garde une géométrie fixe ;
+le perso image ou vidéo enfant porte le style de repos et les actions Capsule
+d’entrée/sortie. L’observer ne mesure donc pas un élément que sa propre
+translation déplacerait. Chaque passage ultérieur vers l’intérieur ou
+l’extérieur rejoue l’action correspondante, y compris après un aller-retour ;
+aucun événement `once` n’est déclaré. Une Carte sans média conserve ses actions
+sur sa racine. Le défaut des nouveaux projets est la paire Capsule `swipe-right` ; les
+remplacements enregistrés sur le parent ou le placement restent prioritaires.
+Les racines de Graphe ancré gardent
+`initial: 'enter'` pour signaler un graphe déjà visible.
 
 - un perso `scroll-container` racine, placé sur `@root` ;
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
@@ -60,6 +109,12 @@ slot ; les rendus SVG réservent `56.25%`. Aucun hôte parallèle n’est ajout�
   paragraphe ;
 - l’article occupe au minimum toute la zone de contenu et sa hauteur augmente
   avec le texte, tandis que le scrollport porte le défilement ;
+- le scrollport n’impose pas de snap CSS. Le défilement des BDC reste natif et
+  libre, notamment lorsqu’un BDC dépasse la hauteur du viewport. Aucun
+  `scroll-snap-type`, `scroll-snap-align` ou gestionnaire de snap JavaScript
+  n’est ajouté au Flux. Le scrollport contient aussi le chaînage vertical aux
+  limites avec `overscroll-behavior-y: contain` : atteindre le début ou le bas
+  du contenu ne fait pas défiler le document qui héberge le player ;
 - un perso marqueur observant le scrollport et émettant l’événement public
   `elce:page:finished` avec l’identifiant de page ; la déclaration demande aussi
   `initial: 'enter'` pour qu’un repère déjà visible signale immédiatement la
@@ -148,11 +203,32 @@ builders ne déclarent que leur comportement d’exécution.
   définitions réelles `scroll-container` de CodPlay, ainsi que le montage
   d’une Carte directe vers son perso image ou vidéo, ainsi que le montage d’une
   Carte enfant dans le slot projeté depuis une ancre exportée. Il vérifie aussi la
-  projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
+  priorité de ciblage du média ancré (`z-index: 1`), la projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
   leurs médias selon le layout et les plages automatiques finies.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   vérifie les placements Graphe direct Flux et ancré en Section par les
-  builders réels.
+  builders réels, le `z-index` de sa racine ancrée, ainsi que l’état initial
+  `enter` du Graphe ancré.
+- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+  vérifie la zone de révélation de la Carte et ses événements d’entrée/sortie ;
+  il vérifie aussi la déclaration d’entrée de l’image.
+- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
+  vérifie l’héritage champ par champ du projet vers le parent Carousel et son
+  entrée.
+- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  exerce le chemin de composition existant entre l’événement du perso média,
+  le strap et le déplacement. Ce test ne couvre pas la cible native choisie par
+  le navigateur dans le slot ; le relevé Brave ci-dessous vérifie ce point.
+- Brave DevTools, le 23 octobre 2026, vérifie dans la preview Elcé qu’avant le
+  `z-index`, le centre du média ancré était ciblé par le `h2` suivant, dont la
+  boîte recouvrait la réserve visuelle. Après correction, `elementFromPoint`
+  cible l’image ; un clic réel ouvre le host et déplace l’image dans le
+  viewport. Le clic de fermeture puis Échap ramènent le host à l’état fermé.
+  Cette preuve porte sur une image ancrée dans une page Flux.
+
+La validation ciblée du correctif le 23 octobre 2026 passe les deux suites de
+builder (18 tests), la composition player (48 tests), le typecheck et le build
+Elcé.
 - [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
   vérifie les presets, les identifiants des éléments parents, les commentaires
   d’insertion, l’identité des zones et l’omission des textes facultatifs vides.
@@ -177,4 +253,23 @@ builders ne déclarent que leur comportement d’exécution.
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de
   test, ainsi que
   le montage de Cartes avec les composants `img` et `media`, d’une Carte dans
-  une ancre de texte et d’un média selon le layout de Carte.
+  une ancre de texte et d’un média selon le layout de Carte. Les tests de
+  révélation pilotent l’observateur réel et vérifient que la racine reste fixe
+  tandis que le média enfant reçoit l’opacité et la translation Capsule.
+- Le 15 octobre 2026, le style Flux a été dépouillé des déclarations de snap.
+  Les 41 tests de composition, le typecheck et le build passent. La vérification
+  navigateur d’un BDC plus haut que le viewport restait ouverte dans le
+  [plan de construction](../plan/2026-10-01-elce-construction-plan.md).
+- Brave DevTools, le 26 octobre 2026, a reproduit puis corrigé le chaînage de
+  fin de page dans la preview : PageDown fait défiler un long scrollport Flux ;
+  une fois en bas, un autre PageDown ne déplace ni le scrollport ni le document
+  parent, et le cadre de lecture reste en place. Le repère de fin active
+  « Suivant ». `elce-player-composition.test.ts` vérifie la règle du scrollport ;
+  ses 47 tests, le typecheck et le build passent.
+
+Le 26 octobre 2026, après résolution de fusion, les 481 tests Elcé dans
+73 fichiers passent, ainsi que le typecheck et le build. Les tests Flux et
+Graphe vérifient aussi la priorité `z-index: 1` dans les classes de géométrie ;
+les tests player exercent les transitions Capsule sur le média avec une
+racine observée fixe. La validation navigateur après fusion reste dans le
+[plan Style](../plan/2026-10-22-elce-style-tab-plan.md).

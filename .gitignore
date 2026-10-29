@@ -11,7 +11,13 @@ node_modules
 dist
 dist-ssr
 *.local
+packages/demos/public/exports/scene-export/
+packages/demos/public/exports/sighty-demo5/
+packages/demos/public/codplay-player/
+packages/demos/public/sighty-player/
+packages/demos/public/sighty-engine/
 packages/elce/.elce-data/
+packages/elce/.elce-export/
 
 # Editor directories and files
 .vscode/*

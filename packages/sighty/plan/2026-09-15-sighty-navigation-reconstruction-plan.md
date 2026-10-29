@@ -107,6 +107,16 @@ parcours navigateur complet reste à valider.
 
 ## Travail restant
 
+### Export de scénario — V1 réalisée
+
+La V1 transporte le module scénario et un paquet CodPlay autonome par scène
+directe. Le propriétaire Sighty charge le paquet ; son runtime initialise les
+occurrences séparément. L’implémentation, les preuves et la suite lazy sont
+suivies dans le [plan de diffusion Sighty](./2026-10-20-sighty-export-diffusion-plan.md)
+et décrites dans la [spécification Sighty](../specs/authoring-library-spec.md#paquet-de-diffusion).
+
+### Autres décisions runtime
+
 - Valider l’action de portée héritée : une action de vue complète les actions
   événementielles descendantes qui n’en déclarent pas ; une action locale reste
   prioritaire. L’utiliser pour les routes de Demo 5. Acceptation : tests de

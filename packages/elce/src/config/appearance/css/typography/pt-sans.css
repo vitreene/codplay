@@ -1,0 +1,10 @@
+@scope (.elce-player-layout) {
+  @scope (.headings-pt-sans) {
+    :scope :is(h1, h2, h3, h4, h5, h6) { font-family: 'PT Sans', sans-serif; }
+  }
+
+  .body-pt-sans {
+    font-family: 'PT Sans', sans-serif;
+    line-height: 1.45;
+  }
+}

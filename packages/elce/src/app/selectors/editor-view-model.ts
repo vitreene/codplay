@@ -17,6 +17,7 @@ export interface EditorViewModel {
   readonly selectedPageId: ElceAppContext['selectedPageId']
   readonly selectedChapterId: ElceAppContext['selectedChapterId']
   readonly selectedCarouselCardBdcId: ElceAppContext['selectedCarouselCardBdcId']
+  readonly historyRestore: ElceAppContext['historyRestore']
   readonly catalogTab: CatalogTabType
   readonly mediaSources: ElceAppContext['mediaSources']
   readonly mediaSourceKey: string
@@ -75,6 +76,7 @@ export function selectEditorViewModel(snapshot: EditorSnapshot): EditorViewModel
     selectedPageId: context.selectedPageId,
     selectedChapterId: context.selectedChapterId,
     selectedCarouselCardBdcId: context.selectedCarouselCardBdcId,
+    historyRestore: context.historyRestore,
     catalogTab: context.catalogTab,
     mediaSources: context.mediaSources,
     mediaSourceKey: Object.keys(context.mediaSources).sort().join('|'),
@@ -96,6 +98,18 @@ export function editorViewModelEqual(left: EditorViewModel, right: EditorViewMod
     && left.selectedPageId === right.selectedPageId
     && left.selectedChapterId === right.selectedChapterId
     && left.selectedCarouselCardBdcId === right.selectedCarouselCardBdcId
+    && left.historyRestore === right.historyRestore
     && left.catalogTab === right.catalogTab
-    && left.mediaSources === right.mediaSources
+    && sameMediaSources(left.mediaSources, right.mediaSources)
+}
+
+/** Compares source URLs by value so duplicate registration does not refresh the editor. */
+function sameMediaSources(
+  left: ElceAppContext['mediaSources'],
+  right: ElceAppContext['mediaSources'],
+): boolean {
+  const leftMediaIds = Object.keys(left)
+  const rightMediaIds = Object.keys(right)
+  return leftMediaIds.length === rightMediaIds.length
+    && leftMediaIds.every((mediaId) => left[mediaId] === right[mediaId])
 }

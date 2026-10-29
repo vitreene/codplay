@@ -1,0 +1,10 @@
+@scope (.elce-player-layout) {
+  @scope (.headings-crimson-text) {
+    :scope :is(h1, h2, h3, h4, h5, h6) { font-family: 'Crimson Text', serif; }
+  }
+
+  .body-crimson-text {
+    font-family: 'Crimson Text', serif;
+    line-height: 1.45;
+  }
+}

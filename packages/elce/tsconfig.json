@@ -10,9 +10,13 @@
       "ace/*": ["../codplay/src/ace/*"],
       "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
+      "@codplay/exclusive-sync": ["../authoring/exclusive-sync/src/index.ts"],
       "@codplay/scene-factory/capsule-distribution": ["../authoring/scene-factory/src/capsule-distribution.ts"],
       "@codplay/scene-factory/capsule-preset": ["../authoring/scene-factory/src/capsule-preset.ts"],
       "@codplay/sighty": ["../sighty/src/index.ts"],
+      "@codplay/sighty-scorm": ["../sighty-scorm/src/index.ts"],
+      "@codplay/sighty-scorm/session": ["../sighty-scorm/src/scorm-session.ts"],
+      "@codplay/sighty-scorm/limits": ["../sighty-scorm/src/scorm-data-limits.ts"],
       "@codplay/component-v2": ["../authoring/component-v2/src/index.ts"],
       "@codplay/component-v2/*": ["../authoring/component-v2/src/*"]
     }

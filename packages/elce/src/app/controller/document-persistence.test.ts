@@ -7,6 +7,7 @@ import type { ElceDocument } from '../../domain/document/document-model'
 import type { ElceDocumentStore, MediaBlob } from '../../infrastructure/indexed-db/document-store-types'
 import { controllerMachine } from './controller-machine'
 import { attachDocumentPersistence } from './document-persistence'
+import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
 
 class MemoryDocumentStore implements ElceDocumentStore {
   public document: ElceDocument | null = null
@@ -65,6 +66,112 @@ class MemoryDocumentStore implements ElceDocumentStore {
 }
 
 describe('Elcé document persistence boundary', () => {
+  it('keeps Undo on an unchanged focus restore and clears it for a newer installed server document', async () => {
+    const store = new MemoryDocumentStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    const persistence = await attachDocumentPersistence(actor, store)
+    actor.send({ type: 'editor.access.activate' })
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Édition locale' } })
+    await persistence.flushLocalChanges()
+    expect(actor.getSnapshot().context.history.past).toHaveLength(1)
+
+    await persistence.restoreCurrentDocument()
+    expect(actor.getSnapshot().context.history.past).toHaveLength(1)
+    actor.send({ type: 'editor.access.suspend' })
+    const remote = applyDocumentCommand(actor.getSnapshot().context.document, { type: 'document.rename', name: 'Révision distante' })
+    await persistence.installServerDocument(remote, [])
+    expect(actor.getSnapshot().context.history.past).toHaveLength(0)
+    persistence.detach()
+    actor.stop()
+  })
+
+  it('retains imported bytes through Undo and Redo, then releases them when Redo is abandoned', async () => {
+    const store = new MemoryDocumentStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    const persistence = await attachDocumentPersistence(actor, store)
+    actor.send({ type: 'editor.access.activate' })
+    actor.send({ type: 'document.apply', command: {
+      type: 'bdc.create', bdcId: 'bdc-question-undo', bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    } })
+    const imported = new ElceMediaResourceService().createImport(new File(['image bytes'], 'undo.png', { type: 'image/png' }))
+    if (imported === null) throw new Error('Le fichier de test doit être accepté.')
+    actor.send({ type: 'question.media.file.import', bdcId: 'bdc-question-undo', ...imported })
+    await flushActor()
+    await persistence.flushLocalChanges()
+    expect(store.media.has(imported.media.id)).toBe(true)
+
+    actor.send({ type: 'history.undo' })
+    await persistence.flushLocalChanges()
+    expect(store.document?.medias).toHaveLength(0)
+    expect(store.media.has(imported.media.id)).toBe(true)
+
+    actor.send({ type: 'history.redo' })
+    await persistence.flushLocalChanges()
+    expect(store.document?.medias.map((media) => media.id)).toEqual([imported.media.id])
+    expect(store.media.has(imported.media.id)).toBe(true)
+
+    actor.send({ type: 'history.undo' })
+    actor.send({ type: 'document.apply', command: { type: 'document.rename', name: 'Nouvelle branche' } })
+    await persistence.flushLocalChanges()
+    expect(store.media.has(imported.media.id)).toBe(false)
+    expect(actor.getSnapshot().context.history.future).toHaveLength(0)
+
+    const abandoned = new ElceMediaResourceService().createImport(new File(['other bytes'], 'abandoned.png', { type: 'image/png' }))
+    if (abandoned === null) throw new Error('Le second fichier de test doit être accepté.')
+    actor.send({ type: 'question.media.file.import', bdcId: 'bdc-question-undo', ...abandoned })
+    await flushActor()
+    actor.send({ type: 'history.undo' })
+    await persistence.flushLocalChanges()
+    expect(store.media.has(abandoned.media.id)).toBe(true)
+    persistence.detach()
+    await Promise.resolve()
+    expect(store.media.has(abandoned.media.id)).toBe(false)
+    actor.stop()
+  })
+
+  it('releases an uploaded image cache when its import falls out of the bounded history', async () => {
+    const store = new MemoryDocumentStore()
+    const actor = createActor(controllerMachine, { input: { documentStore: store } })
+    actor.start()
+    const persistence = await attachDocumentPersistence(actor, store, {
+      mediaSourceUrl: (documentId, mediaId) => `https://elce.test/api/projects/${documentId}/media/${mediaId}`,
+    })
+    actor.send({ type: 'editor.access.activate' })
+    actor.send({ type: 'document.apply', command: {
+      type: 'bdc.create', bdcId: 'bdc-question-eviction', bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    } })
+    const imported = new ElceMediaResourceService().createImport(new File(['image bytes'], 'eviction.png', { type: 'image/png' }))
+    if (imported === null) throw new Error('Le fichier de test doit être accepté.')
+    actor.send({ type: 'question.media.file.import', bdcId: 'bdc-question-eviction', ...imported })
+    await flushActor()
+    await persistence.flushLocalChanges()
+    await store.saveSyncState({
+      documentId: actor.getSnapshot().context.document.id,
+      remoteRevision: 1,
+      uploadedMediaIds: [imported.media.id],
+      status: 'synced',
+    })
+
+    for (let index = 0; index < 100; index += 1) {
+      actor.send({ type: 'document.apply', command: { type: 'document.rename', name: `Édition ${index}` } })
+    }
+    await persistence.flushLocalChanges()
+
+    expect(store.media.has(imported.media.id)).toBe(false)
+    expect(actor.getSnapshot().context.mediaSources[imported.media.id]).toBe(
+      `https://elce.test/api/projects/${actor.getSnapshot().context.document.id}/media/${imported.media.id}`,
+    )
+    expect(actor.getSnapshot().context.history.past).toHaveLength(100)
+    persistence.detach()
+    actor.stop()
+  })
+
   it('installs a confirmed server document without marking it as a local edit', async () => {
     const local = createInitialDocument()
     const media = { id: 'media-server', name: 'remote.webp', mimeType: 'image/webp', size: 3, caption: '' }
@@ -198,3 +305,8 @@ describe('Elcé document persistence boundary', () => {
     secondActor.stop()
   })
 })
+
+/** Lets the asynchronous media worker and actor finish without relying on media timings. */
+async function flushActor(): Promise<void> {
+  for (let turn = 0; turn < 5; turn += 1) await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}

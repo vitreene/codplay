@@ -12,6 +12,8 @@ export interface DocumentSyncState {
   readonly remoteRevision: number | null
   readonly uploadedMediaIds: readonly MediaId[]
   readonly status: 'pending' | 'synced' | 'conflict'
+  readonly independentCopyOf?: string
+  readonly mediaSourceProjectIds?: Readonly<Record<MediaId, string>>
 }
 
 export interface ElceDocumentStore {

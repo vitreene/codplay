@@ -1,14 +1,8 @@
 import { Sighty } from '@codplay/sighty'
-import type { CodPlayEngineOptions } from 'codplay'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  createScrollContainerSourceAdapter,
-} from '@codplay/component-v2'
-import { createInitialCourseSignet } from './course-data'
+import { createInitialCourseSignet, getCoursePage } from './course-data'
+import { engineCapabilities, sceneRootStyleSheet, sourceAdapterFactories } from './engine-config'
 import { COURSE_EVENTS } from './messages'
 import { createCourseScenario, type CourseSceneKey, type CourseSlotName } from './scenario'
-import { SIGHTY_SCENE_ROOT_STYLE_SHEET } from '../scene-root-capsule'
 
 type CourseCompositionOptions = Readonly<{
   stage: HTMLElement
@@ -17,22 +11,17 @@ type CourseCompositionOptions = Readonly<{
 
 type CourseSighty = Sighty<CourseSceneKey, CourseSlotName>
 
-/** Registers the optional scroll-container component and module with CodPlay. */
-const COURSE_ENGINE_CAPABILITIES: Pick<CodPlayEngineOptions, 'components' | 'modules'> = {
-  components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
-  modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
-}
-
 /** Owns the real Sighty runtime and all active scene occurrences for Demo 5. */
 export class CourseComposition {
   private readonly sighty: CourseSighty
   private readonly options: CourseCompositionOptions
+  private unsubscribeRuntimeEvents: (() => void) | null = null
   readonly runtime: CourseSighty['runtime']
 
   /** Creates the Sighty facade with the real scroll component and HTML adapter. */
   constructor(options: CourseCompositionOptions) {
     this.options = options
-    const scenario = createCourseScenario(options.onLog)
+    const scenario = createCourseScenario()
     const instanceIds = Object.fromEntries(Object.keys(scenario.scenes ?? {}).map((sceneKey) => [
       sceneKey,
       `demo5-${sceneKey}-instance`,
@@ -46,21 +35,28 @@ export class CourseComposition {
         context: {
           signet,
         },
-        styles: [{ slot: 'sighty-demo5-scene-root', cssText: SIGHTY_SCENE_ROOT_STYLE_SHEET }],
+        styles: [{ slot: 'sighty-demo5-scene-root', cssText: sceneRootStyleSheet }],
         codplay: {
           engine: {
-            ...COURSE_ENGINE_CAPABILITIES,
+            ...engineCapabilities,
             idle: false,
             diagnosticOutput: (diagnostic) => {
               options.onLog(diagnostic.message, diagnostic.severity === 'warning' ? 'warn' : 'error')
             },
           },
-          htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
+          htmlHost: { sourceAdapterFactories },
           pauseOnDocumentHidden: false,
         },
       },
     })
     this.runtime = this.sighty.runtime
+    /** Logs public quiz results at the host boundary. */
+    this.unsubscribeRuntimeEvents = this.runtime.events.onEvent((event) => {
+      if (event.name !== COURSE_EVENTS.quizAnswered || typeof event.data?.pageId !== 'string') return
+      const page = getCoursePage(event.data.pageId)
+      if (page?.kind !== 'quiz' || typeof event.data.isCorrect !== 'boolean') return
+      this.options.onLog(`${page.title} : ${event.data.isCorrect ? 'réponse juste' : 'réponse fausse'}`)
+    })
   }
 
   /** Initializes Sighty and starts the visible layout, controls, and page. */
@@ -74,6 +70,8 @@ export class CourseComposition {
 
   /** Destroys the Sighty runtime and its active scene occurrences. */
   destroy(): void {
+    this.unsubscribeRuntimeEvents?.()
+    this.unsubscribeRuntimeEvents = null
     this.runtime.destroy()
   }
 }

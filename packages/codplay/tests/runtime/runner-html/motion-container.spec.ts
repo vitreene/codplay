@@ -58,6 +58,30 @@ describe('HtmlMotionContainerResolver', () => {
 
     expect(result.element).toBe(root)
   })
+
+  it('rebinds captured root identities when a mounted scene changes its effective root', () => {
+    const originalRoot = element('original-root')
+    const slotRoot = element('slot-root')
+    const resolver = new HtmlMotionContainerResolver(originalRoot, new Map())
+    const input = {
+      root: originalRoot,
+      scenes: [solvedScene('main', ['root-a', 'root-b'])],
+      itemIds: ['main:item'],
+      storyIds: ['main'],
+    } as const
+
+    const original = resolver.resolve(input)
+    resolver.setRoot(slotRoot)
+    const mounted = resolver.resolve({ ...input, root: slotRoot })
+
+    expect(original.element).toBe(originalRoot)
+    expect(resolver.resolveByKey(original.key)).toBe(slotRoot)
+    expect(mounted.element).toBe(slotRoot)
+    expect(resolver.resolveByKey(mounted.key)).toBe(slotRoot)
+
+    resolver.setRoot(originalRoot)
+    expect(resolver.resolve({ ...input, root: originalRoot }).element).toBe(originalRoot)
+  })
 })
 
 /** Creates a minimal solved scene sufficient for logical container resolution. */

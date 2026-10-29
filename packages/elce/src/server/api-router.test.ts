@@ -1,14 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyDocumentCommand } from '../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../domain/document/document-model'
+import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../domain/summary-profile/test-state-types'
 import type {
   CreateProjectResult,
+  ProjectEditGrant,
   ProjectPersistence,
   ProjectSummary,
   SaveProjectDocumentResult,
+  SaveProjectTestStateResult,
   StoredProject,
 } from './projects/project-persistence'
 import { createElceApiRouter } from './api-router'
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('Elcé project API Fetch router', () => {
   it('returns 404 for an unregistered endpoint', async () => {
@@ -67,8 +72,9 @@ describe('Elcé project API Fetch router', () => {
     const persistence = new MemoryProjectPersistence()
     const router = createElceApiRouter(persistence)
     await persistence.createProject(documentWithId('project-rename'))
+    const grant = await reserve(router, 'project-rename')
 
-    const response = await router.fetch(jsonRequest('PATCH', '/api/projects/project-rename', { name: 'Nouveau nom' }))
+    const response = await router.fetch(jsonRequest('PATCH', '/api/projects/project-rename', { name: 'Nouveau nom' }, grant))
 
     expect(response.status).toBe(200)
     expect(response.headers.get('ETag')).toBe('"1"')
@@ -84,10 +90,12 @@ describe('Elcé project API Fetch router', () => {
     const router = createElceApiRouter(persistence)
     const document = documentWithId('project-save')
     await persistence.createProject(document)
+    const grant = await reserve(router, 'project-save')
     const renamed = applyDocumentCommand(document, { type: 'document.rename', name: 'Enregistré' })
 
     const saved = await router.fetch(jsonRequest('PUT', '/api/projects/project-save/document', renamed.toJSON(), {
       'If-Match': '"0"',
+      ...grant,
     }))
     expect(saved.status).toBe(200)
     expect(saved.headers.get('ETag')).toBe('"1"')
@@ -97,6 +105,7 @@ describe('Elcé project API Fetch router', () => {
 
     const stale = await router.fetch(jsonRequest('PUT', '/api/projects/project-save/document', document.toJSON(), {
       'If-Match': '"0"',
+      ...grant,
     }))
     expect(stale.status).toBe(412)
     expect(await stale.json()).toEqual({ error: 'revision_mismatch' })
@@ -107,48 +116,148 @@ describe('Elcé project API Fetch router', () => {
   it('rejects a missing or malformed revision and a document id that differs from the route', async () => {
     const router = createElceApiRouter(new MemoryProjectPersistence())
     const document = documentWithId('project-path-mismatch')
+    const grant = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': 'test-grant' }
 
-    const missingRevision = await router.fetch(jsonRequest('PUT', '/api/projects/project-path-mismatch/document', document.toJSON()))
+    const missingRevision = await router.fetch(jsonRequest('PUT', '/api/projects/project-path-mismatch/document', document.toJSON(), grant))
     const malformedRevision = await router.fetch(jsonRequest('PUT', '/api/projects/project-path-mismatch/document', document.toJSON(), {
       'If-Match': '0',
+      ...grant,
     }))
     const mismatchedId = await router.fetch(jsonRequest('PUT', '/api/projects/other-project/document', document.toJSON(), {
       'If-Match': '"0"',
+      ...grant,
     }))
 
     expect(missingRevision.status).toBe(428)
     expect(malformedRevision.status).toBe(400)
     expect(mismatchedId.status).toBe(400)
+    const malformedRevisionBody = await malformedRevision.json() as Record<string, unknown>
+    const mismatchedIdBody = await mismatchedId.json() as Record<string, unknown>
+    expect(malformedRevisionBody).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'invalid_if_match',
+    })
+    expect(mismatchedIdBody).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'document_id_mismatch',
+    })
+    expect(malformedRevisionBody.diagnosticId).not.toBe(mismatchedIdBody.diagnosticId)
   })
 
-  it('rejects unreadable JSON and unsupported document versions', async () => {
+  it('classifies unreadable JSON and invalid document shapes', async () => {
     const router = createElceApiRouter(new MemoryProjectPersistence())
     const invalidJson = await router.fetch(new Request('http://elce.test/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{',
     }))
-    const oldDocument = documentWithId('project-old-version').toJSON()
-    const unsupportedVersion = await router.fetch(jsonRequest('POST', '/api/projects', { ...oldDocument, version: 3 }))
+    const grant = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': 'test-grant' }
+    const invalidDocumentJson = await router.fetch(new Request('http://elce.test/api/projects/project-invalid/document', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-Match': '"0"', ...grant },
+      body: '{',
+    }))
+    const document = documentWithId('project-invalid-shape').toJSON()
+    const invalidShape = await router.fetch(jsonRequest('PUT', '/api/projects/project-invalid-shape/document', {
+      ...document,
+      version: 3,
+    }, { 'If-Match': '"0"', ...grant }))
 
     expect(invalidJson.status).toBe(400)
-    expect(unsupportedVersion.status).toBe(400)
+    expect(invalidDocumentJson.status).toBe(400)
+    expect(await invalidDocumentJson.json()).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'invalid_json',
+    })
+    expect(await invalidShape.json()).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'invalid_document_shape',
+    })
+  })
+
+  it('correlates invariant rejection without logging document content', async () => {
+    const router = createElceApiRouter(new MemoryProjectPersistence())
+    const document = documentWithId('project-invalid-invariant').toJSON()
+    const privateSentinel = 'DOCUMENT_TEXT_MUST_NOT_BE_LOGGED'
+    const invalidDocument = {
+      ...document,
+      appearance: { privateNote: privateSentinel },
+    }
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const response = await router.fetch(jsonRequest(
+      'PUT',
+      '/api/projects/project-invalid-invariant/document',
+      invalidDocument,
+      {
+        'If-Match': '"0"',
+        'X-Elce-Page-Id': 'test-page',
+        'X-Elce-Edit-Grant': 'test-grant',
+      },
+    ))
+    const diagnostic = await response.json() as Record<string, unknown>
+
+    expect(response.status).toBe(400)
+    expect(diagnostic).toMatchObject({
+      error: 'invalid_request',
+      diagnosticId: expect.any(String),
+      diagnosticReason: 'document_invariants_rejected',
+    })
+    expect(report).toHaveBeenCalledWith('Elcé API rejected project document.', expect.objectContaining({
+      diagnosticId: diagnostic.diagnosticId,
+      projectId: 'project-invalid-invariant',
+      diagnosticReason: 'document_invariants_rejected',
+      validationFrames: expect.any(Array),
+    }))
+    expect(JSON.stringify(report.mock.calls)).not.toContain(privateSentinel)
+  })
+
+  it('reads and saves test state on its independent revision and rejects stale writes', async () => {
+    const persistence = new MemoryProjectPersistence()
+    const router = createElceApiRouter(persistence)
+    await persistence.createProject(documentWithId('project-test-state'))
+
+    const initial = await router.fetch(new Request('http://elce.test/api/projects/project-test-state/test-state'))
+    expect(initial.headers.get('ETag')).toBe('"0"')
+    expect(await initial.json()).toEqual({ state: INITIAL_PROJECT_TEST_STATE })
+
+    const nextState: ProjectTestState = {
+      ...INITIAL_PROJECT_TEST_STATE,
+      profileValues: { name: 'Ada' },
+    }
+    const saved = await router.fetch(jsonRequest('PUT', '/api/projects/project-test-state/test-state', { state: nextState }, {
+      'If-Match': '"0"',
+    }))
+    expect(saved.status).toBe(200)
+    expect(saved.headers.get('ETag')).toBe('"1"')
+
+    const stale = await router.fetch(jsonRequest('PUT', '/api/projects/project-test-state/test-state', { state: INITIAL_PROJECT_TEST_STATE }, {
+      'If-Match': '"0"',
+    }))
+    expect(stale.status).toBe(412)
+    const current = await router.fetch(new Request('http://elce.test/api/projects/project-test-state/test-state'))
+    expect(current.headers.get('ETag')).toBe('"1"')
+    expect(await current.json()).toEqual({ state: nextState })
   })
 
   it('deletes a project and reports when it is already absent', async () => {
     const persistence = new MemoryProjectPersistence()
     const router = createElceApiRouter(persistence)
     await persistence.createProject(documentWithId('project-delete'))
+    const grant = await reserve(router, 'project-delete')
 
-    const deleted = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE' }))
-    const missing = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE' }))
+    const deleted = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE', headers: grant }))
+    const missing = await router.fetch(new Request('http://elce.test/api/projects/project-delete', { method: 'DELETE', headers: grant }))
 
     expect(deleted.status).toBe(204)
     expect(missing.status).toBe(404)
   })
 })
 
-/** Creates an isolated v4 document fixture for API tests. */
+/** Creates an isolated v6 document fixture for API tests. */
 function documentWithId(id: string): ElceDocument {
   return new ElceDocument({ ...createInitialDocument().toJSON(), id })
 }
@@ -162,9 +271,46 @@ function jsonRequest(method: string, path: string, body: unknown, headers: Heade
   })
 }
 
+/** Reserves a fixture project and returns its authenticated mutation headers. */
+async function reserve(router: ReturnType<typeof createElceApiRouter>, projectId: string): Promise<Record<string, string>> {
+  const response = await router.fetch(jsonRequest('POST', `/api/projects/${projectId}/edit-access`, { pageId: 'test-page' }))
+  const body = await response.json() as { grantId: string }
+  return { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': body.grantId }
+}
+
 /** Provides isolated route-level behavior without claiming SQLite coverage. */
 class MemoryProjectPersistence implements ProjectPersistence {
   private readonly projects = new Map<string, StoredProject>()
+  private readonly grants = new Map<string, ProjectEditGrant>()
+  private readonly testStates = new Map<string, VersionedProjectTestState>()
+
+  /** Reserves a fixture project for one page. */
+  public async acquireEditAccess(projectId: string, pageId: string, force = false) {
+    if (!this.projects.has(projectId)) return { kind: 'not-found' as const }
+    const current = this.grants.get(projectId)
+    if (!force && current !== undefined && current.pageId !== pageId) return { kind: 'occupied' as const }
+    const grantId = !force && current?.pageId === pageId ? current.grantId : 'test-grant'
+    this.grants.set(projectId, { pageId, grantId })
+    return { kind: 'granted' as const, grantId, recovered: force || current !== undefined }
+  }
+
+  /** Renews a fixture grant while it remains the current owner. */
+  public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    return this.hasEditAccess(projectId, grant)
+  }
+
+  /** Checks the exact fixture grant. */
+  public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    const current = this.grants.get(projectId)
+    return current?.pageId === grant.pageId && current.grantId === grant.grantId
+  }
+
+  /** Releases the exact fixture grant. */
+  public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
+    if (!await this.hasEditAccess(projectId, grant)) return false
+    this.grants.delete(projectId)
+    return true
+  }
 
   /** Lists summaries from the fixture-owned projects. */
   public async listProjects(): Promise<readonly ProjectSummary[]> {
@@ -190,23 +336,27 @@ class MemoryProjectPersistence implements ProjectPersistence {
   }
 
   /** Renames the fixture document through the established domain command. */
-  public async renameProject(projectId: string, name: string): Promise<ProjectSummary | null> {
+  public async renameProject(projectId: string, name: string, grant: ProjectEditGrant) {
     const stored = this.projects.get(projectId)
+    if (stored === undefined) return { kind: 'not-found' as const }
+    if (!await this.hasEditAccess(projectId, grant)) return { kind: 'edit-access-lost' as const }
     switch (stored) {
-      case undefined:
-        return null
       default: {
         const document = applyDocumentCommand(stored.document, { type: 'document.rename', name })
         const project = { ...stored.project, name, revision: stored.project.revision + 1 }
         this.projects.set(projectId, { project, document })
-        return project
+        return { kind: 'updated' as const, project }
       }
     }
   }
 
   /** Removes a fixture project and reports whether it existed. */
-  public async deleteProject(projectId: string): Promise<boolean> {
-    return this.projects.delete(projectId)
+  public async deleteProject(projectId: string, grant: ProjectEditGrant) {
+    if (!this.projects.has(projectId)) return 'not-found' as const
+    if (!await this.hasEditAccess(projectId, grant)) return 'edit-access-lost' as const
+    this.projects.delete(projectId)
+    this.testStates.delete(projectId)
+    return 'deleted' as const
   }
 
   /** Replaces a fixture document only when the expected revision is current. */
@@ -214,12 +364,14 @@ class MemoryProjectPersistence implements ProjectPersistence {
     projectId: string,
     expectedRevision: number,
     document: ElceDocument,
+    grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult> {
     const stored = this.projects.get(projectId)
     switch (stored) {
       case undefined:
         return { kind: 'not-found' }
       default:
+        if (!await this.hasEditAccess(projectId, grant)) return { kind: 'edit-access-lost' }
         switch (stored.project.revision === expectedRevision) {
           case false:
             return { kind: 'revision-mismatch' }
@@ -230,5 +382,25 @@ class MemoryProjectPersistence implements ProjectPersistence {
           }
         }
     }
+  }
+
+  /** Reads preview state independently from the project document revision. */
+  public async readTestState(projectId: string): Promise<VersionedProjectTestState | null> {
+    if (!this.projects.has(projectId)) return null
+    return this.testStates.get(projectId) ?? { state: INITIAL_PROJECT_TEST_STATE, revision: 0 }
+  }
+
+  /** Stores preview state only when its independent revision matches. */
+  public async saveTestState(
+    projectId: string,
+    expectedRevision: number,
+    state: ProjectTestState,
+  ): Promise<SaveProjectTestStateResult> {
+    if (!this.projects.has(projectId)) return { kind: 'not-found' }
+    const current = this.testStates.get(projectId) ?? { state: INITIAL_PROJECT_TEST_STATE, revision: 0 }
+    if (current.revision !== expectedRevision) return { kind: 'revision-mismatch' }
+    const value = { state, revision: current.revision + 1 }
+    this.testStates.set(projectId, value)
+    return { kind: 'saved', value }
   }
 }

@@ -59,13 +59,16 @@ export function createMediaSyncModuleService(
       const occurrences = collectBroadcastOccurrences(scene)
       const nextSignature = createSceneSignature(scene, occurrences)
       const nextOccurrenceKeys = new Set(occurrences.map(createBroadcastOccurrenceKey))
+      const newOccurrences = occurrences.filter((occurrence) => !broadcastOccurrenceKeys.has(createBroadcastOccurrenceKey(occurrence)))
+      const synchronizedOccurrences = occurrences.filter((occurrence) => mediaById.get(occurrence.persoKey)?.sync !== 'independent')
       if (lastPresentedTimeMs !== undefined && scene.timeMs < lastPresentedTimeMs) {
         replayBroadcastsOnNextPresentation = true
       }
       const fullReplayRequested = sceneSignature === undefined || replayBroadcastsOnNextPresentation
+      const reconstructing = replayBroadcastsOnNextPresentation
       if (fullReplayRequested) {
         nextActivationOrder = 1
-        replayBroadcastOccurrences(occurrences, mediaById, getMediaComponent, () => nextActivationOrder++)
+        replayBroadcastOccurrences(synchronizedOccurrences, mediaById, getMediaComponent, () => nextActivationOrder++)
         replayBroadcastsOnNextPresentation = false
         forceResync = true
       } else if (nextSignature !== sceneSignature && isBroadcastAdditionOnly(
@@ -73,21 +76,31 @@ export function createMediaSyncModuleService(
         nextOccurrenceKeys,
       )) {
         applyBroadcastOccurrences(
-          occurrences.filter((occurrence) => !broadcastOccurrenceKeys.has(createBroadcastOccurrenceKey(occurrence))),
+          newOccurrences.filter((occurrence) => mediaById.get(occurrence.persoKey)?.sync !== 'independent'),
           mediaById,
           getMediaComponent,
           () => nextActivationOrder++,
         )
       } else if (nextSignature !== sceneSignature) {
         nextActivationOrder = 1
-        replayBroadcastOccurrences(occurrences, mediaById, getMediaComponent, () => nextActivationOrder++)
+        replayBroadcastOccurrences(synchronizedOccurrences, mediaById, getMediaComponent, () => nextActivationOrder++)
         forceResync = true
+      }
+      if (!reconstructing) {
+        applyBroadcastOccurrences(
+          newOccurrences.filter((occurrence) => mediaById.get(occurrence.persoKey)?.sync === 'independent'),
+          mediaById,
+          getMediaComponent,
+          () => nextActivationOrder++,
+        )
       }
       sceneSignature = nextSignature
       broadcastOccurrenceKeys = nextOccurrenceKeys
       lastPresentedTimeMs = scene.timeMs
       if (forceResync) {
-        for (const state of mediaById.values()) state.needsResync = true
+        for (const state of mediaById.values()) {
+          if (state.sync !== 'independent') state.needsResync = true
+        }
         forceResync = false
       }
       syncTimeline(scene.timeMs, playbackState, mediaById, getMediaComponent)
@@ -97,7 +110,7 @@ export function createMediaSyncModuleService(
     },
     onRateChange: (rate) => {
       for (const state of mediaById.values()) {
-        getMediaComponent(state.runtimeItemId)?.setRate?.(rate)
+        if (state.sync !== 'independent') getMediaComponent(state.runtimeItemId)?.setRate?.(rate)
       }
     },
     resolveTimelineMs: (fallbackTimeMs) => resolveTimelineFromMaster(

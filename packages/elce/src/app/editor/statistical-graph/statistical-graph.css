@@ -8,7 +8,6 @@
   min-width: 0;
   min-height: 0;
   margin: 0;
-  color: #263b3a;
 }
 
 .elce-statistical-graph__overline,
@@ -17,7 +16,6 @@
 }
 
 .elce-statistical-graph__overline {
-  color: #58716c;
   font-size: 0.85rem;
   font-weight: 650;
 }
@@ -82,13 +80,13 @@
 
 .elce-statistical-graph__tick-label,
 .elce-statistical-graph__empty {
-  fill: #394a47;
-  font-size: clamp(14px, calc(140px / 1cqw * 1px), 40px);
+  fill: currentColor;
+  font-size: clamp(0.875rem, calc(8.75rem / 1cqw * 0.0625rem), 2.5rem);
 }
 
 .elce-statistical-graph__axis-label {
-  fill: #394a47;
-  font-size: clamp(17px, calc(170px / 1cqw * 1px), 48px);
+  fill: currentColor;
+  font-size: clamp(1.0625rem, calc(10.625rem / 1cqw * 0.0625rem), 3rem);
 }
 
 .elce-statistical-graph__line {
@@ -256,10 +254,10 @@
 .elce-statistical-graph__table--visually-hidden,
 .elce-statistical-graph__table-caption.elce-statistical-graph__visually-hidden {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
+  width: 0.0625rem !important;
+  height: 0.0625rem !important;
   padding: 0 !important;
-  margin: -1px !important;
+  margin: -0.0625rem !important;
   overflow: hidden !important;
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
@@ -268,10 +266,10 @@
 
 .elce-statistical-graph__visually-hidden {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
+  width: 0.0625rem !important;
+  height: 0.0625rem !important;
   padding: 0 !important;
-  margin: -1px !important;
+  margin: -0.0625rem !important;
   overflow: hidden !important;
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
@@ -299,6 +297,27 @@
 .elce-statistical-graph-editor__header h3 {
   min-width: 0;
   margin: 0;
+}
+
+.elce-statistical-graph-editor__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.elce-statistical-graph-editor__preview-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.1rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #aab5af;
+  border-radius: 0.2rem;
+  color: #455852;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
 }
 
 .elce-statistical-graph-editor__panel {
@@ -348,6 +367,23 @@
   font-weight: 600;
 }
 
+.elce-statistical-graph-editor__transpose-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.2rem;
+  color: #344743;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.elce-statistical-graph-editor__transpose-toggle input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: #397b70;
+}
+
 .elce-statistical-graph-editor__layout {
   max-width: 24rem;
 }
@@ -355,6 +391,7 @@
 .elce-statistical-graph-editor__field input,
 .elce-statistical-graph-editor__field select,
 .elce-statistical-graph-editor__field textarea,
+.elce-statistical-graph-editor__selected-cell-field input,
 .elce-statistical-graph-editor__grid input {
   box-sizing: border-box;
   min-width: 0;
@@ -373,17 +410,36 @@
 }
 
 .elce-statistical-graph-editor__grid-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  align-items: start;
-  gap: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
   min-width: 0;
 }
 
+.elce-statistical-graph-editor__grid-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.elce-statistical-graph-editor__selected-cell-field {
+  display: flex;
+  align-items: center;
+  flex: 1 1 14rem;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 28rem;
+  font-size: 0.82rem;
+}
+
+.elce-statistical-graph-editor__selected-cell-field .elce-ui-icon {
+  flex: none;
+  color: #526963;
+}
+
 .elce-statistical-graph-editor__grid-wrap {
-  grid-column: 1;
-  grid-row: 1;
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -398,12 +454,13 @@
   min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
+  border-spacing: 0;
 }
 
 .elce-statistical-graph-editor__grid th,
 .elce-statistical-graph-editor__grid td {
-  min-width: 7rem;
-  padding: 0.25rem;
+  min-width: 3.5rem;
+  padding: 0;
   border: 1px solid #d7d5cc;
 }
 
@@ -418,71 +475,93 @@
   z-index: 2;
 }
 
-.elce-statistical-graph-editor__grid thead th:first-child {
+.elce-statistical-graph-editor__grid .elce-statistical-graph-editor__grid-corner {
   left: 0;
   z-index: 4;
 }
 
-.elce-statistical-graph-editor__grid tbody th:first-child {
+.elce-statistical-graph-editor__grid tbody .elce-statistical-graph-editor__grid-row-heading {
   position: sticky;
   left: 0;
   z-index: 1;
 }
 
-.elce-statistical-graph-editor__grid th:first-child,
-.elce-statistical-graph-editor__grid td:first-child {
-  min-width: 9rem;
-}
-
 .elce-statistical-graph-editor__grid input {
-  min-height: 2.25rem;
+  display: block;
+  min-height: 1.575rem;
+  padding: 0.15rem 0.25rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: 0.82rem;
 }
 
-.elce-statistical-graph-editor__grid-heading-control {
-  display: flex;
-  align-items: center;
-  gap: var(--elce-icon-gap);
-  min-width: 0;
-}
-
-.elce-statistical-graph-editor__grid-heading-control input {
-  flex: 1 1 auto;
-}
-
-.elce-statistical-graph-editor__axis-actions {
-  display: flex;
-  align-items: flex-start;
-}
-
-.elce-statistical-graph-editor__axis-actions--series {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.elce-statistical-graph-editor__axis-actions--categories {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.elce-statistical-graph-editor__add-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  min-height: 2rem;
-  padding: 0.25rem;
-  border: 1px solid #9bada5;
-  border-radius: 0.2rem;
-  color: #315d56;
-  background: #fff;
-  cursor: pointer;
+.elce-statistical-graph-editor__grid-cell--selected {
+  box-shadow: inset 0 0 0 2px #4278ad;
 }
 
 .elce-statistical-graph-editor__error {
   margin: 0;
   color: #8d3434;
+}
+
+.elce-statistical-graph-preview-dialog:not([open]) {
+  display: none;
+}
+
+.elce-statistical-graph-preview-dialog[open] {
+  display: flex;
+  width: min(64rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100vh - 2rem);
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.55rem;
+  color: #263b3a;
+  background: #fffdf8;
+  box-shadow: 0 1.5rem 4rem rgb(20 29 28 / 30%);
+}
+
+.elce-statistical-graph-preview-dialog::backdrop {
+  background: rgb(20 29 28 / 62%);
+}
+
+.elce-statistical-graph-preview-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.2rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid #d9d4c9;
+}
+
+.elce-statistical-graph-preview-dialog__header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.elce-statistical-graph-preview-dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.25rem;
+  border: 1px solid #c9c4b9;
+  border-radius: 0.25rem;
+  color: #263b3a;
+  background: #f7f4ed;
+  cursor: pointer;
+}
+
+.elce-statistical-graph-preview-dialog__content {
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem;
+  overflow: auto;
 }
 
 @media (max-width: 640px) {

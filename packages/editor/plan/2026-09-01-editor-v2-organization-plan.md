@@ -1532,6 +1532,25 @@ remote V1).
 
 ## Matrice de validation
 
+### Validation auteur ouverte — contrôle du 15 octobre 2026
+
+L'[audit de l'entrée de diffusion CodPlay](../../codplay/plan/2026-10-15-export-diffusion-plan.md#audit-de-compatibilité-avec-le-mode-auteur--2026-10-15)
+a relancé les contrôles auteur sans modifier les sources. Le typecheck éditeur
+échoue à `src/builder-v2/build-scene.ts:580` : le builder produit encore le
+champ `master`, alors que la [spec media-sync](../../codplay/specs/media-sync-v2-spec.md)
+et les types actuels exigent `sync`. Cet écart de projection reste à traiter
+par une tranche acceptée ; aucune adaptation ou compatibilité implicite n'est
+ajoutée pendant l'étude d'export.
+
+Les suites `scene-player-bridge-v2.spec.ts` et
+`editor-player-command-facade-v2.spec.ts` donnent 11 succès et un échec sur 12.
+À `scene-player-bridge-v2.spec.ts:420`, la présentation finale est absente
+au lieu du temps attendu `5000` après des keyframes déplacées. La cause et
+l'acceptation de ce cas restent ouvertes ; ne pas présenter la connexion
+auteur comme entièrement validée sur la base de cette exécution.
+
+### Parcours à maintenir
+
 Cette matrice ne compte que des tests et parcours qui franchissent les
 interfaces V2 réellement ciblées. Les suites dépendant de `codplay-v1`, de
 `AuthorApi`, de `subscribeToNode` ou d'un node player sont hors périmètre et

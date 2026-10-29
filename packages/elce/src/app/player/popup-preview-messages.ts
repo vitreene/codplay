@@ -1,6 +1,7 @@
 import type { ElceDocumentData, PageId } from '../../domain/document/document-types'
 
 export const POPUP_PREVIEW_SESSION_PARAM = 'elce-preview-session'
+export const POPUP_PREVIEW_PROJECT_PARAM = 'elce-preview-project'
 export const POPUP_PREVIEW_PAGE_PARAM = 'elce-preview-page'
 
 export type PopupPreviewRequest = Readonly<{

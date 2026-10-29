@@ -6,6 +6,36 @@ import type { EvaluationResultContent } from '../../domain/evaluation/evaluation
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
 import type { CardContent, CardPresentationOptions } from '../../domain/card/card-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
+import type { ProfileDefinition, SummarySettings } from '../../domain/summary-profile/summary-profile-types'
+import type { AppearanceSettings } from '../../config/appearance/appearance-types'
+
+export type AppearanceTarget =
+  | Readonly<{ kind: 'document' }>
+  | Readonly<{ kind: 'page'; pageId: PageId }>
+  | Readonly<{ kind: 'bdc'; bdcId: BdcId }>
+
+export type AppearanceProperty = keyof AppearanceSettings
+
+export type AppearanceTargetForProperty<Property extends AppearanceProperty> = Property extends 'presetId'
+  ? Extract<AppearanceTarget, Readonly<{ kind: 'document' }>>
+  : AppearanceTarget
+
+type AppearancePropertySetCommand = {
+  [Property in Exclude<AppearanceProperty, 'background'>]: Readonly<{
+    type: 'appearance.property.set'
+    target: AppearanceTargetForProperty<Property>
+    property: Property
+    value: NonNullable<AppearanceSettings[Property]>
+  }>
+}[Exclude<AppearanceProperty, 'background'>]
+
+type AppearancePropertyResetCommand = {
+  [Property in AppearanceProperty]: Readonly<{
+    type: 'appearance.property.reset'
+    target: AppearanceTargetForProperty<Property>
+    property: Property
+  }>
+}[AppearanceProperty]
 
 export type PagePlacement =
   | Readonly<{ kind: typeof PAGE_LOCATION.CHAPTER; chapterId: ChapterId; index?: number }>
@@ -80,6 +110,7 @@ export type DocumentCommand =
   | Readonly<{ type: 'bdc.card.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
+  | Readonly<{ type: 'summary.background.media.attach'; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.section.delete'; bdcId: BdcId }>
   | Readonly<{ type: 'bdc.section.revelation.update'; bdcId: BdcId; revelation: RevelationTransitionOverrides }>
@@ -128,4 +159,19 @@ export type DocumentCommand =
   | Readonly<{ type: 'media.add'; media: MediaMetadata }>
   | Readonly<{ type: 'media.merge'; canonicalMediaId: MediaId; duplicateMediaIds: readonly MediaId[] }>
   | Readonly<{ type: 'document.revelation.update'; revelationDefaults: RevelationTransitionDefaults }>
+  | Readonly<{ type: 'summary.settings.update'; summary: SummarySettings }>
+  | Readonly<{ type: 'profile.definition.update'; profile: ProfileDefinition }>
+  | Readonly<{
+      type: 'appearance.background.set'
+      target: AppearanceTarget
+      value: NonNullable<AppearanceSettings['background']>
+    }>
+  | Readonly<{
+      type: 'appearance.typography.set'
+      target: AppearanceTarget
+      headingFontId: string
+      bodyFontId: string
+    }>
+  | AppearancePropertySetCommand
+  | AppearancePropertyResetCommand
   | Readonly<{ type: 'document.rename'; name: string }>

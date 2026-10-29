@@ -1,0 +1,10 @@
+@scope (.elce-player-layout) {
+  @scope (.headings-krub) {
+    :scope :is(h1, h2, h3, h4, h5, h6) { font-family: 'Krub', sans-serif; }
+  }
+
+  .body-krub {
+    font-family: 'Krub', sans-serif;
+    line-height: 1.45;
+  }
+}

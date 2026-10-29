@@ -6,6 +6,7 @@ import {
   createDefaultStatisticalGraphContent,
   replaceStatisticalGraphTable,
   setStatisticalGraphCell,
+  setStatisticalGraphGridCell,
 } from './statistical-graph-service'
 
 describe('Statistical Graph domain service', () => {
@@ -34,26 +35,57 @@ describe('Statistical Graph domain service', () => {
     expect(replaced.values.map((entry) => entry.value)).toEqual([2.75])
   })
 
-  it('accepts 40 data rows and columns, then refuses additions beyond the boundary', () => {
+  it('extends the table beyond 40 data rows and columns', () => {
     let content = createDefaultStatisticalGraphContent()
-    for (let index = 1; index < 40; index += 1) {
+    for (let index = 1; index < 42; index += 1) {
       content = addStatisticalGraphCategory(content)
       content = addStatisticalGraphSeries(content)
     }
 
-    expect(content.categories).toHaveLength(40)
-    expect(content.series).toHaveLength(40)
-    expect(addStatisticalGraphCategory(content)).toBe(content)
-    expect(addStatisticalGraphSeries(content)).toBe(content)
+    expect(content.categories).toHaveLength(45)
+    expect(content.series).toHaveLength(43)
+    const extended = setStatisticalGraphGridCell(content, 45, 46, '12')
+    expect(extended.categories).toHaveLength(45)
+    expect(extended.series).toHaveLength(46)
+    expect(extended.values).toHaveLength(1)
   })
 
-  it('rejects a whole-table replacement beyond 41 rows or columns without mutating its source', () => {
+  it('uses only enabled headings when replacing the table and accepts dimensions beyond 41', () => {
     const content = createDefaultStatisticalGraphContent()
-    const tooManyRows = ['Catégorie\tSérie', ...Array.from({ length: 41 }, (_unused, index) => `Ligne ${index + 1}\t${index}`)].join('\n')
-    const tooManyColumns = `Catégorie\t${Array.from({ length: 41 }, (_unused, index) => `Série ${index + 1}`).join('\t')}`
+    const values = '1\t2\n3\t4'
+    const bothHeadings = replaceStatisticalGraphTable(content, values)
+    const columnHeadings = replaceStatisticalGraphTable({ ...content, rowLabelsEnabled: false }, values)
+    const rowHeadings = replaceStatisticalGraphTable({ ...content, columnLabelsEnabled: false }, values)
+    const noHeadings = replaceStatisticalGraphTable({
+      ...content,
+      columnLabelsEnabled: false,
+      rowLabelsEnabled: false,
+    }, values)
+    const manyRowText = ['Titre\tSérie', ...Array.from(
+      { length: 42 },
+      (_unused, index) => `Ligne ${index + 1}\t${index}`,
+    )].join('\n')
+    const manyColumnText = `Titre\t${Array.from(
+      { length: 42 },
+      (_unused, index) => `Série ${index + 1}`,
+    ).join('\t')}`
+    const manyRows = replaceStatisticalGraphTable(content, manyRowText)
+    const manyColumns = replaceStatisticalGraphTable(content, manyColumnText)
 
-    expect(() => replaceStatisticalGraphTable(content, tooManyRows)).toThrow('41 lignes ou colonnes')
-    expect(() => replaceStatisticalGraphTable(content, tooManyColumns)).toThrow('41 lignes ou colonnes')
+    expect(bothHeadings.categories.map((category) => category.label)).toEqual(['3'])
+    expect(bothHeadings.series.map((series) => series.label)).toEqual(['2'])
+    expect(bothHeadings.values.map((entry) => entry.value)).toEqual([4])
+    expect(columnHeadings.categories).toHaveLength(1)
+    expect(columnHeadings.series).toHaveLength(2)
+    expect(columnHeadings.values.map((entry) => entry.value)).toEqual([3, 4])
+    expect(rowHeadings.categories.map((category) => category.label)).toEqual(['1', '3'])
+    expect(rowHeadings.series).toHaveLength(1)
+    expect(rowHeadings.values.map((entry) => entry.value)).toEqual([2, 4])
+    expect(noHeadings.categories).toHaveLength(2)
+    expect(noHeadings.series).toHaveLength(2)
+    expect(noHeadings.values.map((entry) => entry.value)).toEqual([1, 2, 3, 4])
+    expect(manyRows.categories).toHaveLength(42)
+    expect(manyColumns.series).toHaveLength(42)
     expect(content.categories).toHaveLength(4)
     expect(content.series).toHaveLength(2)
   })

@@ -1,0 +1,7 @@
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-forest-background { background-color: #f5f7ef; }
+.bg-forest-surface { background-color: #ffffff; }
+.bg-forest-text { background-color: #263c2c; }
+.bg-forest-muted { background-color: #5b6e58; }
+.bg-forest-accent { background-color: #3b704b; }
+.bg-forest-border { background-color: #d0dbc8; }

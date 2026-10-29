@@ -34,6 +34,7 @@ export type HtmlPlayerMotionSeekState = Readonly<{
 /** Owns occurrence-driven HTML geometry capture and motion presentation. */
 export class HtmlPlayerMotionController {
   private readonly context: HtmlPlayerMotionContext
+  private root: HTMLElement
   private readonly motionStoryByItemId: ReadonlyMap<string, string>
   private motionSystem: HtmlMotionSystem | undefined
   private replayMotionBoundaries: readonly MotionBoundary[] = []
@@ -51,7 +52,20 @@ export class HtmlPlayerMotionController {
   /** Creates the motion boundary for one visible HTML player. */
   constructor(context: HtmlPlayerMotionContext) {
     this.context = context
+    this.root = context.root
     this.motionStoryByItemId = createMotionStoryIndex(context.compiledScene)
+  }
+
+  /** Rebinds motion geometry and presentation to the scene's effective root. */
+  setRoot(root: HTMLElement): void {
+    if (this.root === root) return
+    this.motionSystem?.destroy()
+    this.motionSystem = undefined
+    this.clearLiveCaptureState()
+    this.replayMotionBoundaries = []
+    this.presentationMotionBoundaries = []
+    this.root = root
+    this.context.motionContainerResolver.setRoot(root)
   }
 
   /** Presents the current numeric frame after player initialization. */
@@ -154,7 +168,7 @@ export class HtmlPlayerMotionController {
     const presentationFrame = this.motionSystem?.getFrame()
     const storyId = before.persos[persoKey]?.storyId
     const motionContainer = this.context.motionContainerResolver.resolve({
-      root: this.context.root,
+      root: this.root,
       scenes: [before],
       itemIds: [persoKey],
       ...(storyId === undefined ? {} : { storyIds: [storyId] }),
@@ -211,7 +225,7 @@ export class HtmlPlayerMotionController {
     if (currentScene !== undefined && liveIntents.length > 0) {
       const liveStoryId = currentScene.persos[liveIntents[0]!.itemId]?.storyId
       const liveContainer = this.context.motionContainerResolver.resolve({
-        root: this.context.root,
+        root: this.root,
         scenes: [first.before, currentScene],
         itemIds: [...new Set(liveIntents.map((intent) => intent.itemId))],
         storyIds: [...new Set(liveIntents.flatMap((intent) => intent.storyIds ?? []))],
@@ -236,7 +250,7 @@ export class HtmlPlayerMotionController {
       ? []
       : captureHtmlMotionBoundaries({
           player,
-          root: this.context.root,
+          root: this.root,
           nodes: this.context.nodes.persoNodes,
           intents: replayCaptureIntents,
           includePersistOnly: true,
@@ -249,7 +263,7 @@ export class HtmlPlayerMotionController {
       }
       const liveBoundaries = captureHtmlLiveMotionBoundary({
         player,
-        root: this.context.root,
+        root: this.root,
         nodes: this.context.nodes.persoNodes,
         first: firstSnapshot,
         intents: liveIntents,
@@ -340,7 +354,7 @@ export class HtmlPlayerMotionController {
           ...occurrence.afterStoryIds,
         ])]
         const motionContainer = this.context.motionContainerResolver.resolve({
-          root: this.context.root,
+          root: this.root,
           scenes: [beforeScene, scene],
           itemIds: [occurrence.itemId],
           ...(storyIds.length === 0 ? {} : { storyIds }),
@@ -415,7 +429,7 @@ export class HtmlPlayerMotionController {
         includePersistOnly: boolean,
       ): readonly MotionBoundary[] => captureHtmlMotionBoundaries({
         player: this.context.getPlayer(),
-        root: this.context.root,
+        root: this.root,
         nodes: this.context.nodes.persoNodes,
         intents,
         includePersistOnly,
@@ -433,7 +447,7 @@ export class HtmlPlayerMotionController {
       const presentationBoundaries = presentationNeedsCapture
         ? (sharedBoundaries ?? captureHtmlMotionBoundaries({
             player: this.context.getPlayer(),
-            root: this.context.root,
+            root: this.root,
             nodes: this.context.nodes.persoNodes,
             intents: presentationCaptureIntents,
             includePersistOnly: this.context.getPersistOnlyMode(),
@@ -608,7 +622,7 @@ export class HtmlPlayerMotionController {
   /** Creates the HTML motion presenter for this visible root. */
   private createMotionSystem(): HtmlMotionSystem {
     const motionHost = new HtmlMotionPresentationHost(
-      this.context.root,
+      this.root,
       (itemId) => this.context.nodes.persoNodes.get(itemId) as HTMLElement | undefined,
       (rootKey) => this.context.motionContainerResolver.resolveByKey(rootKey),
     )

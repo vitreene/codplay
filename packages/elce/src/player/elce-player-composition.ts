@@ -1,30 +1,35 @@
 import { Sighty, type SightyScenarioDefinition } from '@codplay/sighty'
-import type { CodPlayEngineOptions } from 'codplay'
 import type { SightySceneSourceValue } from '@codplay/sighty'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  createScrollContainerSourceAdapter,
-} from '@codplay/component-v2/scroll-container'
+import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import { BDC_TYPE, CHAPTER_TYPE, ELCE_EVENTS, ELCE_SCENARIO, PAGE_TYPE } from '../config/document-config'
 import type { ChapterType } from '../config/document-config-types'
 import { buildFluxScene } from '../builders/flux/flux-scene-builder'
 import type { FluxSceneBuildOptions } from '../builders/flux/flux-scene-builder-types'
 import { buildDiapoScene } from '../builders/diapo/diapo-scene-builder'
-import { buildScenario } from '../builders/scenario/scenario-builder'
+import { buildScenario, resetQuestionScene, scenarioContextFromTestState } from '../builders/scenario/scenario-builder'
 import { validateHtmlElementMethodActions } from '../builders/markup-validation/html-element-method-validation'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
+import { createViewportExpansionStyleSheet } from '../builders/viewport-expansion/viewport-expansion-style.ts'
+import {
+  appearanceThemeCssAssetPathsForDocument,
+  createDocumentAppearanceStyleSheet,
+} from './appearance-scene-style-sheet'
+import { loadAppearanceThemeCssLinks } from './appearance/appearance-theme-css-links.ts'
+import type { AppearanceThemeCssLinks } from './appearance/appearance-theme-css-links.ts'
+import { pageAppearanceClassNames } from '../builders/scene-style/appearance-class-names.ts'
 import { mediaTypeFromMimeType } from '../domain/media/media-resource-service'
 import type { ElcePageSceneCache, ElcePlayerCompositionOptions } from './player-composition-types'
+import { bindPageMediaPlayback, withPageMediaStop } from './media-playback/page-media-playback'
+import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import type { TestAnswerState } from '../domain/summary-profile/test-state-types'
+import { ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../scorm/scorm-types'
+import { ELCE_ENGINE_CAPABILITIES } from './elce-player-engine'
+import { ElceEditorSettingsResolver } from '../domain/editor-settings/editor-settings-resolver'
 
 type ElceSighty = Sighty<ElceSceneKey, ElceSlotName>
-
-const ELCE_ENGINE_CAPABILITIES: Pick<CodPlayEngineOptions, 'components' | 'modules'> = {
-  components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
-  modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
-}
+const editorSettingsResolver = new ElceEditorSettingsResolver()
 
 /** Owns the real Sighty/CodPlay player used to preview the current document. */
 export class ElcePlayerComposition {
@@ -32,12 +37,21 @@ export class ElcePlayerComposition {
   private readonly options: ElcePlayerCompositionOptions
   private destroyed = false
   private removeMenuDrawerListeners: (() => void) | undefined
+  private removePageMediaPlayback: (() => void) | undefined
+  private readonly appearanceThemeCssLinks: AppearanceThemeCssLinks
 
   /** Builds one player composition from the current métier document. */
   public constructor(options: ElcePlayerCompositionOptions) {
     this.options = options
-    const pageSceneCatalog = createPageSceneCatalog(options.document, options.mediaSources, options.sceneCache)
-    const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId)
+    this.appearanceThemeCssLinks = loadAppearanceThemeCssLinks(
+      options.stage.ownerDocument,
+      appearanceThemeCssAssetPathsForDocument(options.document),
+    )
+    void this.appearanceThemeCssLinks.loaded.catch((error: unknown) => {
+      options.onLog?.(`Feuilles CSS d’apparence indisponibles : ${String(error)}`, 'error')
+    })
+    const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
+    const scenario = createElcePlayerScenario({ ...options, testState })
     for (const warning of validateHtmlElementMethodActions(scenario.scenes ?? {})) {
       options.onLog?.(warning, 'warn')
     }
@@ -46,6 +60,12 @@ export class ElcePlayerComposition {
       scenario,
       runtime: {
         root: options.stage,
+        context: {
+          ...scenarioContextFromTestState(testState),
+          ...(options.scormSession === undefined
+            ? {}
+            : { [ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY]: options.scormSession }),
+        },
         instanceIds,
         codplay: {
           engine: {
@@ -58,7 +78,6 @@ export class ElcePlayerComposition {
           htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
           pauseOnDocumentHidden: false,
         },
-        styles: [{ slot: 'elce-player-layout', cssText: [ELCE_PLAYER_STYLE_SHEET, ...pageSceneCatalog.styleSheets].join('\n') }],
       },
     })
   }
@@ -66,6 +85,9 @@ export class ElcePlayerComposition {
   /** Initializes Sighty and starts the persistent layout and current page. */
   public async initialize(): Promise<void> {
     await this.sighty.runtime.initialize()
+    this.removePageMediaPlayback = bindPageMediaPlayback(this.sighty.runtime, (error) => {
+      this.options.onLog?.(`Arrêt des médias de la page impossible : ${String(error)}`, 'error')
+    })
     await this.sighty.runtime.play(ELCE_SCENARIO.LAYOUT_SCENE)
     this.bindMenuDrawer()
     const refreshed = await this.sighty.runtime.dispatch({ name: ELCE_EVENTS.PRESENTATION_REFRESH })
@@ -79,7 +101,10 @@ export class ElcePlayerComposition {
     this.destroyed = true
     this.removeMenuDrawerListeners?.()
     this.removeMenuDrawerListeners = undefined
+    this.removePageMediaPlayback?.()
+    this.removePageMediaPlayback = undefined
     this.sighty.runtime.destroy()
+    this.appearanceThemeCssLinks.remove()
   }
 
   /** Connects accessible focus behavior to the CodPlay-driven menu drawer. */
@@ -187,13 +212,55 @@ export class ElcePlayerComposition {
   }
 }
 
+export type ElcePlayerScenarioOptions = Omit<ElcePlayerCompositionOptions, 'stage' | 'onLog'>
+
+/** Builds the shared, DOM-free Sighty definition used by preview and export. */
+export function createElcePlayerScenario(
+  options: ElcePlayerScenarioOptions,
+  fontSourcePrefix: '/' | './' = '/',
+): SightyScenarioDefinition<ElceSceneKey, ElceSlotName> {
+  const testState = options.testState ?? INITIAL_PROJECT_TEST_STATE
+  const pageSceneCatalog = createPageSceneCatalog(
+    options.document,
+    options.mediaSources,
+    options.sceneCache,
+    testState.questionAnswers,
+  )
+  const scenario = buildScenario(options.document, pageSceneCatalog.scenes, options.startPageId, {
+    testState,
+    mediaSources: options.mediaSources,
+    onTestStateChange: options.onTestStateChange,
+  })
+  const layoutSource = scenario.scenes?.[ELCE_SCENARIO.LAYOUT_SCENE]
+  if (layoutSource === undefined || typeof layoutSource === 'function') {
+    throw new Error('La scène layout Elcé est absente du scénario construit.')
+  }
+  const layoutSceneDoc = 'sceneDoc' in layoutSource ? layoutSource.sceneDoc : layoutSource
+  const playerSettings = editorSettingsResolver.resolvePlayer()
+  const layoutStyleSheet = [
+    createDocumentAppearanceStyleSheet(options.document, fontSourcePrefix),
+    ELCE_PLAYER_STYLE_SHEET,
+    createViewportExpansionStyleSheet(playerSettings.interactions.viewportExpansion),
+  ].join('\n')
+  return {
+    ...scenario,
+    scenes: {
+      ...scenario.scenes,
+      [ELCE_SCENARIO.LAYOUT_SCENE]: {
+        sceneDoc: layoutSceneDoc,
+        styleSheet: layoutStyleSheet,
+      },
+    },
+  }
+}
+
 /** Builds the scene catalogue for pages that belong to the player scenario. */
 export function createPageSceneCatalog(
   document: ElceDocument,
   mediaSources: ElcePlayerCompositionOptions['mediaSources'],
   cache?: ElcePageSceneCache,
-): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>>; styleSheets: readonly string[] }> {
-  const pageStyleSheets: string[] = []
+  questionAnswers: Readonly<Record<string, TestAnswerState>> = {},
+): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>> }> {
   const pageIds = scenarioPageIds(document)
   const activePageIds = new Set(pageIds)
   for (const cachedPageId of cache?.keys() ?? []) {
@@ -230,35 +297,39 @@ export function createPageSceneCatalog(
       const type = mediaTypeFromMimeType(media.mimeType)
       return type === null ? [] : [[mediaId, type]]
     }))
+    const editorSettings = editorSettingsResolver.resolvePage(page, document.bdcs, document.data.revelationDefaults)
     const scenePage = {
       id: page.id,
       type: page.type,
       bdcIds: page.bdcIds,
+      appearance: page.appearance,
       chapterType: sceneChapterType,
     }
-    const signature = JSON.stringify([scenePage, sceneBdcs, pageMediaSources, pageMediaTypes, document.data.revelationDefaults])
+    const signature = JSON.stringify([scenePage, sceneBdcs, document.data.appearance, pageMediaSources, pageMediaTypes, editorSettings])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
-      pageStyleSheets.push(...cached.styleSheets)
       return [`scene-${page.id}`, cached.source]
     }
     const scene = buildPageScene(page, document.bdcs, {
       mediaSources: pageMediaSources,
       mediaTypes: pageMediaTypes,
-      revelationDefaults: document.data.revelationDefaults,
+      questionAnswers,
+      editorSettings,
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, sceneBdcs),
     }, sceneChapterType)
-    pageStyleSheets.push(...scene.styleSheets)
     const questionReset = scene.questionReset
-    const source: SightySceneSourceValue = questionReset === undefined ? scene.sceneDoc : {
-      sceneDoc: scene.sceneDoc,
-      onReset: (keys: readonly string[]) => keys.includes('all') || keys.includes('quiz')
-        ? { name: questionReset.eventName, data: { keys: [...keys] } }
-        : undefined,
+    const sceneDoc = withPageMediaStop(scene.sceneDoc)
+    const styleSheets = [...scene.styleSheets]
+    const styleSheet = styleSheets.join('\n')
+    const source: SightySceneSourceValue = questionReset === undefined && styleSheet.length === 0 ? sceneDoc : {
+      sceneDoc,
+      ...(styleSheet.length === 0 ? {} : { styleSheet }),
+      ...(questionReset === undefined ? {} : { onReset: resetQuestionScene }),
     }
-    cache?.set(pageId, { signature, source, styleSheets: scene.styleSheets })
+    cache?.set(pageId, { signature, source, styleSheets })
     return [`scene-${page.id}`, source]
   }))
-  return { scenes, styleSheets: [...new Set(pageStyleSheets)] }
+  return { scenes }
 }
 
 /** Dispatches each page type to the scene builder that owns its presentation. */

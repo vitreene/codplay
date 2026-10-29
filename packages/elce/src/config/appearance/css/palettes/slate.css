@@ -1,0 +1,7 @@
+/* Picker color metadata source; these rules do not paint the reader. */
+.bg-slate-background { background-color: #17232e; }
+.bg-slate-surface { background-color: #243544; }
+.bg-slate-text { background-color: #f0f6fa; }
+.bg-slate-muted { background-color: #b1c3d0; }
+.bg-slate-accent { background-color: #83cce4; }
+.bg-slate-border { background-color: #496171; }

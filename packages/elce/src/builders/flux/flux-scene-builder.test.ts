@@ -4,19 +4,41 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
-import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
-import { anchorNameFor } from '../../anchor/anchor-position'
+import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../../config/document-config'
+import { anchorNameFor } from '../../app/anchor/anchor-position'
 import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createCarouselBdcCommand, createDefaultPageCommand, createEvaluationResultBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceQuestionService } from '../../domain/question/question-service'
 import { ElceCarouselService } from '../../domain/carousel/carousel-service'
-import { buildFluxScene } from './flux-scene-builder'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
+import { ElceEditorSettingsResolver } from '../../domain/editor-settings/editor-settings-resolver'
+import type { RevelationTransitionDefaults } from '../../domain/document/document-types'
+import type { FluxSceneBuildOptions } from './flux-scene-builder-types'
+import { buildFluxScene as projectFluxScene } from './flux-scene-builder'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
+
+/** Adds test-owned editor settings before exercising the real scene projection. */
+function buildFluxSceneForTest(
+  page: Parameters<typeof projectFluxScene>[0],
+  bdcs: Parameters<typeof projectFluxScene>[1],
+  options: Omit<FluxSceneBuildOptions, 'editorSettings'> & { readonly revelationDefaults?: RevelationTransitionDefaults } = {},
+) {
+  const { revelationDefaults, ...sceneOptions } = options
+  const editorSettings = editorSettingsResolver.resolvePage(
+    page,
+    bdcs,
+    revelationDefaults ?? ELCE_EDITOR_SETTINGS.revelation.projectDefaults,
+  )
+  return projectFluxScene(page, bdcs, { ...sceneOptions, editorSettings })
+}
+
 
 describe('Elcé Flux scene builder', () => {
   it('creates one scrollport, one article and one story per Section', () => {
     const document = createInitialDocument()
     const page = document.pages[0]!
-    const build = buildFluxScene(page, document.bdcs)
+    const build = buildFluxSceneForTest(page, document.bdcs)
 
     expect(build.sceneDoc.stories['page-a-page']?.persos.map((perso) => perso.id)).toEqual([
       'page-a-scrollport',
@@ -43,7 +65,7 @@ describe('Elcé Flux scene builder', () => {
       content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Texte' }] }] },
       markup: '<p id="section-text-1">Texte</p>',
     })
-    const build = buildFluxScene(withTitle.pages[0]!, withTitle.bdcs)
+    const build = buildFluxSceneForTest(withTitle.pages[0]!, withTitle.bdcs)
     const articleInitial = build.sceneDoc.stories['page-a-page']?.persos[1]?.initial
     const articleMarkup = articleInitial !== undefined && 'markup' in articleInitial ? String(articleInitial.markup) : ''
 
@@ -58,7 +80,7 @@ describe('Elcé Flux scene builder', () => {
 
   it('compiles through the CodPlay scene boundary with the optional scroll capability', () => {
     const document = createInitialDocument()
-    const build = buildFluxScene(document.pages[0]!, document.bdcs)
+    const build = buildFluxSceneForTest(document.pages[0]!, document.bdcs)
     const codplay = new CodPlay({
       pauseOnDocumentHidden: false,
       engine: {
@@ -77,7 +99,7 @@ describe('Elcé Flux scene builder', () => {
   it('resolves the configured non-Flux page case explicitly', () => {
     const document = createInitialDocument()
 
-    expect(() => buildFluxScene({ ...document.pages[0]!, type: PAGE_TYPE.DIAPO }, document.bdcs))
+    expect(() => buildFluxSceneForTest({ ...document.pages[0]!, type: PAGE_TYPE.DIAPO }, document.bdcs))
       .toThrow('page Diapo')
   })
 
@@ -95,24 +117,47 @@ describe('Elcé Flux scene builder', () => {
       placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
     })
     const withImage = applyDocumentCommand(createdCard, { type: 'bdc.card.media.set', bdcId: 'bdc-image-1', mediaId: 'media-image-1' })
-    const build = buildFluxScene(withImage.pages[0]!, withImage.bdcs, {
+    const build = buildFluxSceneForTest(withImage.pages[0]!, withImage.bdcs, {
       mediaSources: { 'media-image-1': 'blob:image-1' },
       mediaTypes: { 'media-image-1': MEDIA_TYPE.IMAGE },
     })
 
     const pagePersos = build.sceneDoc.stories['page-a-page']?.persos ?? []
-    expect(pagePersos).toHaveLength(5)
+    expect(pagePersos).toHaveLength(6)
     expect(pagePersos[3]).toMatchObject({
       type: 'layout',
       initial: {
         markup: expect.stringContaining('<!-- data-part="page-a:bdc-image-1:card:bdc-image-1:media" -->'),
         move: { target: 'page-a:bdc-image-1:card:mount' },
       },
+      emit: { observe: {
+        root: 'page-a-scrollport',
+        zone: { threshold: 0 },
+        enter: [{ name: 'page-a-bdc-image-1-card:enter' }],
+        leave: [{ name: 'page-a-bdc-image-1-card:leave' }],
+      } },
     })
+    expect(pagePersos[3]?.initial).not.toHaveProperty('style')
+    expect(pagePersos[3]?.actions).toBeUndefined()
     expect(pagePersos[4]).toMatchObject({
       type: 'img',
-      initial: { src: 'blob:image-1', move: { target: 'page-a:bdc-image-1:card:bdc-image-1:media' } },
+      initial: {
+        src: 'blob:image-1',
+        style: { opacity: 1, x: 0 },
+        move: { target: 'page-a:bdc-image-1:card:bdc-image-1:media' },
+      },
+      actions: {
+        'page-a-bdc-image-1-card:enter': { style: {
+          opacity: { from: 0, to: 1, duration: 300 },
+          x: { from: -250, to: 0, duration: 300 },
+        } },
+        'page-a-bdc-image-1-card:leave': { style: {
+          opacity: { to: 0, duration: 300 },
+          x: { to: 250, duration: 300 },
+        } },
+      },
     })
+    expect(pagePersos[5]).toMatchObject({ type: 'layout', id: 'page-a-page-viewport-expansion-host' })
   })
 
   it('mounts an image bdc at the exported anchor inside the text flow', () => {
@@ -139,43 +184,83 @@ describe('Elcé Flux scene builder', () => {
         ] }],
       },
     })
-    const build = buildFluxScene(anchored.pages[0]!, anchored.bdcs, {
+    const build = buildFluxSceneForTest(anchored.pages[0]!, anchored.bdcs, {
       mediaSources: { 'media-image-1': 'blob:image-1' },
       mediaTypes: { 'media-image-1': MEDIA_TYPE.IMAGE },
+      appearanceClassNamesByTarget: { 'bdc:bdc-image-1': 'bdc appearance-test density-normal' },
+      revelationDefaults: {
+        intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
+        outro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      },
     })
     const pageStory = build.sceneDoc.stories['page-a-page']
     const articleInitial = pageStory?.persos[1]?.initial
     const articleMarkup = articleInitial !== undefined && 'markup' in articleInitial ? String(articleInitial.markup) : ''
 
-    expect(articleMarkup).toContain('class="elce-flow-slot"')
+    expect(articleMarkup).toContain('class="elce-flow-slot elce-flow-slot-')
     expect(articleMarkup).not.toContain('data-elce-anchor="true"')
     expect(articleMarkup).not.toContain('page-a-bdc-image-1-media-host')
     expect(articleInitial).toMatchObject({
       flowReservations: [{
         partId: 'page-a:bdc-image-1:anchor',
-        blockSize: 'calc(12rem + 1rem + 1rem)',
+        blockSize: 'calc(12rem + 2rem + 2rem)',
       }],
     })
     expect(pageStory?.persos[3]).toMatchObject({
       type: 'layout',
       initial: {
         className: expect.stringContaining('elce-flux-card-root'),
-        style: expect.objectContaining({
-          opacity: 1,
-          position: 'absolute',
-          'position-anchor': anchorNameFor('page-a:bdc-image-1:anchor'),
-          width: '100%',
-          aspectRatio: '4 / 3',
-          height: 'auto',
-        }),
         move: { target: 'page-a:bdc-image-1:anchor' },
       },
+      emit: { observe: {
+        root: 'page-a-scrollport',
+        zone: { threshold: 0 },
+        enter: [{ name: 'page-a-bdc-image-1-card:enter' }],
+        leave: [{ name: 'page-a-bdc-image-1-card:leave' }],
+      } },
     })
+    expect(pageStory?.persos[3]?.initial).toMatchObject({
+      className: expect.stringContaining('appearance-test'),
+    })
+    expect(pageStory?.persos[3]?.initial).not.toHaveProperty('style')
+    expect(pageStory?.persos[3]?.actions).toBeUndefined()
+    expect(build.styleSheets.join('\n')).toContain(`position-anchor: ${anchorNameFor('page-a:bdc-image-1:anchor')}`)
+    expect(build.styleSheets.join('\n')).toContain('z-index: 1;')
     expect(pageStory?.persos[4]).toMatchObject({
       type: 'img',
       initial: {
         src: 'blob:image-1',
+        style: { opacity: 1, x: 0 },
         move: { target: 'page-a:bdc-section-1:card:bdc-image-1:media' },
+      },
+      actions: {
+        'page-a-bdc-image-1-card:enter': { style: {
+          opacity: { from: 0, to: 1, duration: 300 },
+          x: { from: -250, to: 0, duration: 300 },
+        } },
+        'page-a-bdc-image-1-card:leave': { style: {
+          opacity: { to: 0, duration: 300 },
+          x: { to: -250, duration: 300 },
+        } },
+      },
+    })
+  })
+
+  it('keeps the reveal on the root for a Card without media', () => {
+    const initial = createInitialDocument()
+    const createdCard = applyDocumentCommand(initial, {
+      type: 'bdc.create',
+      bdcId: 'bdc-text-card',
+      bdcType: BDC_TYPE.CARD,
+      presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
+    })
+    const persos = buildFluxSceneForTest(createdCard.pages[0]!, createdCard.bdcs).sceneDoc.stories['page-a-page']?.persos ?? []
+
+    expect(persos.find((perso) => perso.id === 'page-a-bdc-text-card-card')).toMatchObject({
+      initial: { style: { opacity: 1, x: 0 } },
+      actions: {
+        'page-a-bdc-text-card-card:enter': { style: { x: { from: -250, to: 0, duration: 300 } } },
       },
     })
   })
@@ -194,7 +279,7 @@ describe('Elcé Flux scene builder', () => {
       placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a' },
     })
     const withVideo = applyDocumentCommand(createdCard, { type: 'bdc.card.media.set', bdcId: 'bdc-video-1', mediaId: 'media-video-1' })
-    const build = buildFluxScene(withVideo.pages[0]!, withVideo.bdcs, {
+    const build = buildFluxSceneForTest(withVideo.pages[0]!, withVideo.bdcs, {
       mediaSources: { 'media-video-1': 'blob:video-1' },
       mediaTypes: { 'media-video-1': MEDIA_TYPE.VIDEO },
     })
@@ -202,7 +287,17 @@ describe('Elcé Flux scene builder', () => {
 
     expect(videoPerso).toMatchObject({
       type: 'media',
-      initial: { tag: 'video', src: 'blob:video-1', controls: true, move: { target: 'page-a:bdc-video-1:card:bdc-video-1:media' } },
+      initial: {
+        tag: 'video', src: 'blob:video-1', controls: true, sync: 'independent',
+        style: { opacity: 1, x: 0 },
+        move: { target: 'page-a:bdc-video-1:card:bdc-video-1:media' },
+      },
+      actions: {
+        'page-a-bdc-video-1-card:enter': { style: {
+          opacity: { from: 0, to: 1, duration: 300 },
+          x: { from: -250, to: 0, duration: 300 },
+        } },
+      },
     })
   })
 
@@ -225,7 +320,7 @@ describe('Elcé Flux scene builder', () => {
       bdcId: 'bdc-question-1',
       question: multipleChoice,
     })
-    const build = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs)
+    const build = buildFluxSceneForTest(documentModel.pages[0]!, documentModel.bdcs)
     const questionStory = build.sceneDoc.stories['page-a-bdc-question-1']
     const answerInputs = questionStory?.persos.filter((perso) => perso.type === 'input')
     const codplay = new CodPlay({
@@ -252,11 +347,62 @@ describe('Elcé Flux scene builder', () => {
     ]))
     expect(questionStory?.listen).toEqual(expect.arrayContaining([
       expect.objectContaining({ on: 'page-a:bdc-question-1:validate' }),
-      expect.objectContaining({ on: 'page-a:bdc-question-1:reset' }),
+      expect.objectContaining({ on: ELCE_EVENTS.QUESTION_RESET }),
     ]))
     const result = codplay.build({ scene: build.sceneDoc })
     expect(result.ok).toBe(true)
     codplay.destroy()
+  })
+
+  it.each([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO])('projects the Question %s illustration with its existing viewport commands', (mediaType) => {
+    const withMedia = applyDocumentCommand(createInitialDocument(), {
+      type: 'media.add',
+      media: { id: 'media-question-image', name: 'question', mimeType: mediaType === MEDIA_TYPE.IMAGE ? 'image/png' : 'video/mp4', size: 10, caption: '' },
+    })
+    const withQuestion = applyDocumentCommand(withMedia, {
+      type: 'bdc.create',
+      bdcId: 'bdc-question-image',
+      bdcType: BDC_TYPE.QUESTION,
+      presetId: DEFAULT_PRESET_ID.QUESTION,
+      placement: { kind: BDC_LOCATION.PAGE, pageId: 'page-a', index: 0 },
+    })
+    const question = withQuestion.bdcs.find((bdc) => bdc.id === 'bdc-question-image')!.question!
+    const withIllustration = applyDocumentCommand(withQuestion, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-question-image',
+      question: { ...question, mediaId: 'media-question-image' },
+    })
+    const build = buildFluxSceneForTest(withIllustration.pages[0]!, withIllustration.bdcs, {
+      mediaSources: { 'media-question-image': 'blob:question-image' },
+      mediaTypes: { 'media-question-image': mediaType },
+    })
+    const image = build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.type === (mediaType === MEDIA_TYPE.IMAGE ? 'img' : 'media'))
+
+    expect(image).toMatchObject({
+      type: mediaType === MEDIA_TYPE.IMAGE ? 'img' : 'media',
+      initial: {
+        src: 'blob:question-image',
+        ...(mediaType === MEDIA_TYPE.IMAGE
+          ? { img: { className: 'elce-flux-image__native' } }
+          : { sync: 'independent', controls: true }),
+      },
+      emit: mediaType === MEDIA_TYPE.IMAGE ? { observe: {
+        root: 'page-a-scrollport',
+        initial: 'enter',
+        enter: [{ name: `${image?.id}:enter`, once: true }],
+      } } : { observe: {
+        root: 'page-a-scrollport',
+        enter: [{ name: `${image?.id}:fully-visible` }],
+        leave: [{ name: `${image?.id}:half-hidden` }],
+      } },
+      actions: mediaType === MEDIA_TYPE.IMAGE ? {
+        [`${image?.id}:enter`]: expect.objectContaining({ style: expect.any(Object) }),
+      } : {
+        [`${image?.id}:fully-visible`]: { broadcast: { type: 'START' } },
+        [`${image?.id}:half-hidden`]: { broadcast: { type: 'PAUSE' } },
+      },
+    })
+    if (mediaType === MEDIA_TYPE.IMAGE) expect(image?.emit).not.toHaveProperty('observe.leave')
   })
 
   it('projects identified Card BDCs through AutoCapsule, CodPlay stories, and reusable media persos', () => {
@@ -305,9 +451,13 @@ describe('Elcé Flux scene builder', () => {
       bdcId: 'bdc-carousel-1',
       carousel: timedCarousel,
     })
-    const build = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs, {
+    const build = buildFluxSceneForTest(documentModel.pages[0]!, documentModel.bdcs, {
       mediaSources: { 'media-carousel-image': 'blob:carousel-image' },
       mediaTypes: { 'media-carousel-image': MEDIA_TYPE.IMAGE },
+      appearanceClassNamesByTarget: {
+        [`bdc:${firstCardBdcId}`]: 'card-text-image bdc appearance-card-first density-normal',
+        'bdc:bdc-card-2': 'card-image-caption bdc appearance-card-second density-normal',
+      },
     })
     const carouselStory = build.sceneDoc.stories['page-a-bdc-carousel-1']
     const articleInitial = build.sceneDoc.stories['page-a-page']?.persos[1]?.initial
@@ -329,19 +479,26 @@ describe('Elcé Flux scene builder', () => {
       { name: `page-a:bdc-carousel-1:card:${firstCardBdcId}:outro`, startAt: 1000 },
       { name: 'page-a:bdc-carousel-1:card:bdc-card-2:intro', startAt: 1000 },
     ])
+    expect(carouselStory?.persos.find((perso) => perso.id.endsWith(`-card-${firstCardBdcId}`))?.initial).toMatchObject({
+      className: expect.stringContaining('appearance-card-first'),
+    })
+    expect(carouselStory?.persos.find((perso) => perso.id.endsWith('-card-bdc-card-2'))?.initial).toMatchObject({
+      className: expect.stringContaining('appearance-card-second'),
+    })
     expect(carouselStory?.persos).toEqual(expect.arrayContaining([
       expect.objectContaining({ initial: expect.objectContaining({ content: 'Première carte', move: { target: `page-a:bdc-carousel-1:card:${firstCardBdcId}:title` } }) }),
       expect.objectContaining({ initial: expect.objectContaining({ content: 'Légende de l’image', move: { target: 'page-a:bdc-carousel-1:card:bdc-card-2:caption' } }) }),
       expect.objectContaining({ initial: expect.objectContaining({ move: { target: `page-a:bdc-carousel-1:carousel:capsule` }, className: expect.stringContaining('elce-carousel-view--image-right') }) }),
     ]))
-    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'card-bdc-card-2-media-media-carousel-image')).toMatchObject({
+    expect(carouselStory?.persos.find((perso) => perso.id === 'card-bdc-card-2-media-media-carousel-image')).toMatchObject({
       type: 'img',
       initial: { src: 'blob:carousel-image', move: { target: 'page-a:bdc-carousel-1:card:bdc-card-2:image' } },
     })
-    expect(build.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === `card-${firstCardBdcId}-media-media-carousel-image`)).toMatchObject({
+    expect(carouselStory?.persos.find((perso) => perso.id === `card-${firstCardBdcId}-media-media-carousel-image`)).toMatchObject({
       type: 'img',
       initial: { src: 'blob:carousel-image', move: { target: `page-a:bdc-carousel-1:card:${firstCardBdcId}:image` } },
     })
+    expect(carouselStory?.persos.some((perso) => perso.id === 'page-a-bdc-carousel-1-viewport-expansion-host')).toBe(true)
     expect(build.styleSheets[0]).toContain('ac-grid-carousel')
     expect(codplay.build({ scene: build.sceneDoc }).ok).toBe(true)
     codplay.destroy()
@@ -365,7 +522,7 @@ describe('Elcé Flux scene builder', () => {
       card: { ...card, title: 'Titre gardé', message: 'Message gardé', caption: 'Légende gardée' },
     })
     textOnlyDocument = applyDocumentCommand(textOnlyDocument, { type: 'bdc.card.layout.set', bdcId: cardBdcId, layoutId: DEFAULT_PRESET_ID.TEXT_SHORT })
-    const hiddenBuild = buildFluxScene(textOnlyDocument.pages[0]!, textOnlyDocument.bdcs, {
+    const hiddenBuild = buildFluxSceneForTest(textOnlyDocument.pages[0]!, textOnlyDocument.bdcs, {
       mediaSources: { 'media-hidden-image': 'blob:hidden-image' },
       mediaTypes: { 'media-hidden-image': MEDIA_TYPE.IMAGE },
     })
@@ -378,7 +535,7 @@ describe('Elcé Flux scene builder', () => {
     expect(hiddenBuild.sceneDoc.stories['page-a-page']?.persos.some((perso) => perso.id.includes('media-hidden-image'))).toBe(false)
 
     const textImageDocument = applyDocumentCommand(textOnlyDocument, { type: 'bdc.card.layout.set', bdcId: cardBdcId, layoutId: DEFAULT_PRESET_ID.TEXT_IMAGE })
-    const restoredBuild = buildFluxScene(textImageDocument.pages[0]!, textImageDocument.bdcs, {
+    const restoredBuild = buildFluxSceneForTest(textImageDocument.pages[0]!, textImageDocument.bdcs, {
       mediaSources: { 'media-hidden-image': 'blob:hidden-image' },
       mediaTypes: { 'media-hidden-image': MEDIA_TYPE.IMAGE },
     })
@@ -386,7 +543,7 @@ describe('Elcé Flux scene builder', () => {
     expect(restoredStory?.persos).toEqual(expect.arrayContaining([
       expect.objectContaining({ initial: expect.objectContaining({ content: 'Titre gardé' }) }),
     ]))
-    expect(restoredBuild.sceneDoc.stories['page-a-page']?.persos).toEqual(expect.arrayContaining([
+    expect(restoredStory?.persos).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: `card-${cardBdcId}-media-media-hidden-image`, type: 'img' }),
     ]))
 
@@ -422,7 +579,7 @@ describe('Elcé Flux scene builder', () => {
       bdcId: 'bdc-repeat-10',
       carousel: automaticCarousel,
     })
-    const scene = buildFluxScene(documentModel.pages[0]!, documentModel.bdcs).sceneDoc
+    const scene = buildFluxSceneForTest(documentModel.pages[0]!, documentModel.bdcs).sceneDoc
     const eventimes = scene.stories['page-a-bdc-repeat-10']?.eventimes ?? []
     const firstCardIntro = `page-a:bdc-repeat-10:card:${firstCardBdcId}:intro`
 
@@ -451,7 +608,7 @@ describe('Elcé Flux scene builder', () => {
       'bdc-result-1', pageCommand.pageId, 1,
     ))
     const emptyPage = withResult.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const emptyBuild = buildFluxScene(emptyPage, withResult.bdcs)
+    const emptyBuild = buildFluxSceneForTest(emptyPage, withResult.bdcs)
     const emptySuccessStory = emptyBuild.sceneDoc.stories[`${pageCommand.pageId}-bdc-result-1-success`]
     const emptyFailureStory = emptyBuild.sceneDoc.stories[`${pageCommand.pageId}-bdc-result-1-failure`]
     expect(emptySuccessStory?.persos.some((perso) => perso.id.endsWith('-message'))).toBe(false)
@@ -465,7 +622,7 @@ describe('Elcé Flux scene builder', () => {
       },
     })
     const page = configured.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildFluxScene(page, configured.bdcs)
+    const build = buildFluxSceneForTest(page, configured.bdcs)
     const successStory = build.sceneDoc.stories[`${page.id}-bdc-result-1-success`]
     const failureStory = build.sceneDoc.stories[`${page.id}-bdc-result-1-failure`]
     const pageStory = build.sceneDoc.stories[`${page.id}-page`]

@@ -13,7 +13,11 @@ export type EvaluationResultBdcSceneBuild = Readonly<{
 const cardPresetBuilder = new ElceCardPresetBuilder()
 
 /** Builds one CodPlay story per outcome for a Result BDC. */
-export function buildEvaluationResultBdcScene(page: Page, bdc: Bdc): EvaluationResultBdcSceneBuild {
+export function buildEvaluationResultBdcScene(
+  page: Page,
+  bdc: Bdc,
+  appearanceClassName?: string,
+): EvaluationResultBdcSceneBuild {
   if (bdc.evaluationResult == null) throw new Error(`Le bdc Résultat ${bdc.id} n’a pas de contenu.`)
   const prefix = `${page.id}:${bdc.id}`
   const partId = `${prefix}:evaluation-result`
@@ -23,8 +27,8 @@ export function buildEvaluationResultBdcScene(page: Page, bdc: Bdc): EvaluationR
     mountPartId: partId,
     mountMarkup: `<!-- data-part="${partId}" -->`,
     stories: [
-      createEvaluationResultBranchStory(page, bdc, partId, EVALUATION_RESULT_BRANCH.SUCCESS, result.success, prefix),
-      createEvaluationResultBranchStory(page, bdc, partId, EVALUATION_RESULT_BRANCH.FAILURE, result.failure, prefix),
+      createEvaluationResultBranchStory(page, bdc, partId, EVALUATION_RESULT_BRANCH.SUCCESS, result.success, prefix, appearanceClassName),
+      createEvaluationResultBranchStory(page, bdc, partId, EVALUATION_RESULT_BRANCH.FAILURE, result.failure, prefix, appearanceClassName),
     ],
   }
 }
@@ -37,6 +41,7 @@ function createEvaluationResultBranchStory(
   branch: EvaluationResultBranch,
   content: NonNullable<Bdc['evaluationResult']>['success'],
   prefix: string,
+  appearanceClassName?: string,
 ): StoryDoc<string> {
   const branchPrefix = `${prefix}:${branch}`
   const rootId = `${page.id}-${bdc.id}-${branch}`
@@ -55,7 +60,7 @@ function createEvaluationResultBranchStory(
         type: 'layout',
         initial: {
           move: '@off',
-          className: 'elce-card--evaluation-result',
+          className: `elce-card--evaluation-result ${appearanceClassName ?? 'evaluation-result bdc'}`,
           markup: card.markup,
         },
         actions: {

@@ -1,10 +1,13 @@
 export const ELCE_API_PORT = 5181
 export const DEFAULT_ELCE_API_ORIGIN = `http://127.0.0.1:${ELCE_API_PORT}`
 export const PROJECT_SYNC_DEBOUNCE_MS = 500
+export const PROJECT_EDIT_HEARTBEAT_MS = 3_000
+export const PROJECT_EDIT_LEASE_MS = 12_000
 
 declare global {
   interface Window {
     __ELCE_API_ORIGIN__?: string
+    __ELCE_PREVIEW_ORIGIN__?: string | null
   }
 }
 

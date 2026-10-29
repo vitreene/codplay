@@ -1,6 +1,5 @@
 import {
   CodPlay,
-  type CodPlayCompileSuccess,
   type CodPlayInstance,
   type RuntimePreloadMode,
 } from 'codplay'
@@ -10,7 +9,12 @@ import type { ActiveComposition, IndexedEntry, ViewIndex } from '../navigation/t
 import { createSightyPublicEventChannel, type SightyPublicEvent, type SightyPublicEvents } from '../public-events'
 import type { SightyMutableScenarioApi } from '../scenario'
 import type { SightySceneResetHandler } from '../types'
-import type { SightyRuntimeOptions, SightyRuntimeSlotChangeListener, SightyRuntimeStyle } from './types'
+import type {
+  SightyRuntimeBuild,
+  SightyRuntimeOptions,
+  SightyRuntimeSlotChangeListener,
+  SightyRuntimeStyle,
+} from './types'
 import { collectSceneKeys } from './helpers'
 
 /** Keeps the mutable execution state shared by the focused runtime services. */
@@ -23,6 +27,8 @@ export type SightyRuntimeState<SceneKey extends string, SlotName extends string>
   readonly styles: readonly SightyRuntimeStyle[]
   readonly onTrace: SightyRuntimeOptions<SceneKey, SlotName>['onTrace']
   readonly owner: CodPlay
+  readonly preparedBuilds: ReadonlyMap<SceneKey, SightyRuntimeBuild>
+  readonly packagedSceneKeys: ReadonlySet<SceneKey>
   readonly publicEventChannel: RuntimeEventChannel<SceneKey>
   /** Keeps one CodPlay occurrence per logical slot/scene pair. */
   readonly instances: Map<string, CodPlayInstance>
@@ -33,7 +39,7 @@ export type SightyRuntimeState<SceneKey extends string, SlotName extends string>
   readonly slotChangeListeners: Map<SlotName, Set<SightyRuntimeSlotChangeListener<SceneKey>>>
   readonly cleanups: Array<() => void>
   readonly generationCounters: Map<string, number>
-  readonly compiledBuilds: Map<SceneKey, CodPlayCompileSuccess>
+  readonly compiledBuilds: Map<SceneKey, SightyRuntimeBuild>
   readonly sceneDocuments: Map<SceneKey, SceneDoc<string>>
   readonly sceneStyleSheets: Map<SceneKey, string>
   /** Keeps callbacks only for scene sources resolved by the runtime. */
@@ -74,7 +80,9 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     preloadMode: options.preloadMode ?? 'author',
     styles: options.styles ?? [],
     onTrace: options.onTrace,
-    owner: new CodPlay(options.codplay),
+    owner: options.owner ?? new CodPlay(options.codplay),
+    preparedBuilds: options.preparedBuilds ?? new Map(),
+    packagedSceneKeys: options.packagedSceneKeys ?? new Set(),
     publicEventChannel,
     instances: new Map(),
     instanceSceneKeys: new Map(),
@@ -83,10 +91,10 @@ export function createRuntimeState<SceneKey extends string, SlotName extends str
     slotChangeListeners: new Map(),
     cleanups: [],
     generationCounters: new Map(),
-    compiledBuilds: new Map(),
+    compiledBuilds: new Map(options.preparedBuilds ?? []),
     sceneDocuments: new Map(),
     sceneStyleSheets: new Map(),
-    sceneResetHandlers: new Map(),
+    sceneResetHandlers: new Map(options.packagedSceneResetHandlers ?? []),
     resourceUrlsByScene: new Map(),
     viewIndex,
     authoredSceneKeys: collectSceneKeys(viewIndex),

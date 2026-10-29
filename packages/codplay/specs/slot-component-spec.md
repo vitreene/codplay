@@ -129,12 +129,19 @@ Les racines rendues restent possédées par l'enfant ; `mount` ne crée pas
 d'enveloppe supplémentaire, ne démarre, ne met en pause, ne seek ni ne détruit
 aucune instance.
 
+Pendant le montage, `hostRoot` devient la racine effective de la scène enfant :
+CodPlay y résout ses cibles `@root` et y rattache le fallback du présentateur
+motion lorsqu'une scène multi-racines n'a pas de conteneur story unique. Au
+détachement, CodPlay restaure la racine fournie à `instances.create`, ou son
+conteneur détaché interne si aucune racine n'avait été fournie. Le slot reste
+ainsi la cible de projection dans la même scène, sans créer de seconde cible ni
+modifier la scène auteur.
+
 Le handle `detach` est idempotent. Une relation active est limitée à une
 adresse d'hôte et à une instance enfant ; une seconde relation concurrente est
 rejetée par diagnostic. La destruction de l'une des deux instances détache la
 relation avant son teardown, sans détruire l'autre instance. Les règles de
-remontage automatique, de composition multi-racines et d'intégration Sighty
-restent hors de cette tentative.
+remontage automatique et d'intégration Sighty restent hors de cette tentative.
 
 ## Interdiction de fabrication HTML par Sighty
 
@@ -249,7 +256,12 @@ styles transitoires sont supprimés.
 Le test `tests/facade/foreign-mount.spec.ts` exerce la première surface publique
 avec deux instances CodPlay réelles : adressage du `slot`, insertion directe de
 la racine matérialisée enfant, seek indépendant, détachement idempotent et
-nettoyage lors de la destruction de l'enfant.
+nettoyage lors de la destruction de l'enfant. Il vérifie aussi qu'une scène
+multi-racines créée sans `root` utilise le `hostRoot` pour ses captures motion
+compilées et live, que l'overlay est retiré au détachement et que le montage
+peut être répété. Une instance créée avec un `root` explicite retrouve cette
+racine après détachement et remontage. `tests/runtime/runner-html/motion-container.spec.ts`
+vérifie le rebinding des identités de conteneur capturées.
 
 Le test `tests/facade/sighty-demo.spec.ts` exerce la fixture Sighty A/B avec un
 layout et deux instances enfants réelles : résolution des noms `A` et `B` par le

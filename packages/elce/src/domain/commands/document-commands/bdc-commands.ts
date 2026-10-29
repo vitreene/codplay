@@ -245,7 +245,7 @@ export function updateStatisticalGraph(
 ): ElceDocument {
   const bdc = findBdc(document, bdcId)
   if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
-    fail(`Le bdc ${bdcId} n’est pas un Graphe statistique complet.`)
+    fail(`Le bdc ${bdcId} n’est pas un Graphe complet.`)
   }
   assertStatisticalGraphContent(statisticalGraph)
   return withBdc(document, { ...bdc, statisticalGraph })
@@ -259,7 +259,7 @@ export function setStatisticalGraphLayout(
 ): ElceDocument {
   const bdc = findBdc(document, bdcId)
   if (bdc.type !== BDC_TYPE.STATISTICAL_GRAPH || bdc.statisticalGraph == null) {
-    fail(`Le bdc ${bdcId} n’est pas un Graphe statistique complet.`)
+    fail(`Le bdc ${bdcId} n’est pas un Graphe complet.`)
   }
   if (!STATISTICAL_GRAPH_LAYOUT_IDS.includes(layoutId)) fail(`Layout de graphe inconnu : ${layoutId}`)
   return withBdc(document, { ...bdc, presetId: layoutId })

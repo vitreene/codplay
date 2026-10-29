@@ -5,6 +5,8 @@ export type ProjectSessionOperation =
   | Readonly<{ kind: 'bootstrap'; rememberedProjectId: string | null }>
   | Readonly<{ kind: 'refresh' }>
   | Readonly<{ kind: 'create' }>
+  | Readonly<{ kind: 'save-as'; name: string }>
+  | Readonly<{ kind: 'save-local-as'; name: string }>
   | Readonly<{ kind: 'open'; projectId: string }>
   | Readonly<{ kind: 'close' }>
   | Readonly<{ kind: 'delete'; projectId: string }>
@@ -17,6 +19,7 @@ export interface ProjectSessionResult {
   readonly document: ElceDocument | null
   readonly status: ProjectSessionStatus
   readonly editAccess: 'waiting' | 'active'
+  readonly projectError?: string | null
 }
 
 export interface ProjectSessionPort {
@@ -29,5 +32,7 @@ export interface ProjectSessionPort {
     hadEditAccess: boolean,
   ): Promise<ProjectSessionResult>
   startLock(projectId: string): void
+  retryAccess?(): void
+  forceAccess?(): void
   dispose(): Promise<void>
 }

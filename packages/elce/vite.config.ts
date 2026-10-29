@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  publicDir: resolve(__dirname, 'src/assets'),
   server: {
     port: 5175,
   },
@@ -12,9 +13,13 @@ export default defineConfig({
       { find: /^ace\/(.*)/, replacement: resolve(__dirname, '../codplay/src/ace/$1') },
       { find: 'ace', replacement: resolve(__dirname, '../codplay/src/ace/index.ts') },
       { find: '@codplay/capsule-automation', replacement: resolve(__dirname, '../authoring/capsule-automation/src/index.ts') },
+      { find: '@codplay/exclusive-sync', replacement: resolve(__dirname, '../authoring/exclusive-sync/src/index.ts') },
       { find: '@codplay/scene-factory/capsule-distribution', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-distribution.ts') },
       { find: '@codplay/scene-factory/capsule-preset', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-preset.ts') },
       { find: '@codplay/sighty', replacement: resolve(__dirname, '../sighty/src/index.ts') },
+      { find: /^@codplay\/sighty-scorm$/, replacement: resolve(__dirname, '../sighty-scorm/src/index.ts') },
+      { find: '@codplay/sighty-scorm/session', replacement: resolve(__dirname, '../sighty-scorm/src/scorm-session.ts') },
+      { find: '@codplay/sighty-scorm/limits', replacement: resolve(__dirname, '../sighty-scorm/src/scorm-data-limits.ts') },
       { find: /^@codplay\/component-v2\/(.*)/, replacement: resolve(__dirname, '../authoring/component-v2/src/$1') },
       { find: '@codplay/component-v2', replacement: resolve(__dirname, '../authoring/component-v2/src/index.ts') },
     ],

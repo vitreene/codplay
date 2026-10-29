@@ -16,10 +16,25 @@ autonome ni stockage : le runtime hôte conserve l’état et lui transmet les
 Les paramètres sont le seuil, le nombre maximal de tentatives (première
 tentative incluse, `null` sans limite) et la portée de reprise : toutes les
 Questions ou seulement celles dont la réponse était fausse ou absente. Une
-réponse validée contient les identifiants sélectionnés et attendus. Une
-Question sans réponse compte comme fausse dans le score global. La machine
+réponse validée contient les identifiants sélectionnés et attendus, ainsi que
+les identifiants des choix présents dans la Question. Ces derniers servent à
+réconcilier l’état test avec le document modifié et ne changent pas le calcul
+du score. Une Question sans réponse compte comme fausse dans le score global. La machine
 réutilise `ElceChapterEvaluation` pour calculer ce score et ne duplique pas sa
 règle.
+
+Une réponse peut aussi conserver `description`, `latencyMs` et `timestampMs`
+reçus au moment de la validation. `latencyMs` reprend le `timeMs` logique de
+l’événement public CodPlay de la scène Question ; `timestampMs` est l’horodatage
+epoch de sa validation. Ces métadonnées ne changent ni le score ni les
+transitions. `questionType` et les `answerLabels` ordonnés restent également
+avec la réponse afin que l’adaptateur puisse produire le type et les valeurs
+CMI attendus. Elles suivent la réponse qui la remplace lors d’une nouvelle
+tentative. L’état métier sérialisé les conserve pour SCORM 2004, afin de
+transmettre les interactions différées après reprise. L’adaptateur SCORM 1.2
+les retire de `suspend_data`, qui ne transporte pas d’interactions CMI, tout en
+gardant réponses et tentatives. Elles sont facultatives afin de relire les
+états suspendus antérieurs à leur ajout.
 
 Après `COMPLETE`, la machine passe à `success` ou `failure` selon le seuil.
 Depuis `failure`, seul `RETRY` peut relancer l’Évaluation, si la limite
@@ -49,3 +64,7 @@ la relecture.
 vérifie la reprise globale, la reprise des seules Questions incorrectes, la
 visibilité des réponses selon l’issue, le retour après relecture, la limite
 d’essais et la restauration depuis un état JSON-sérialisé.
+Le transfert des métadonnées depuis l’événement Sighty et une Question jouée
+par le player réel est vérifié dans
+[`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
+et [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts).

@@ -1,9 +1,9 @@
 # Elcé — plan de stockage local et synchronisation
 
-**Statut : En cours — synchronisation automatique entre navigateurs implémentée ;
-la validation avec deux navigateurs distincts est en réserve depuis le 9 octobre
-2026, en attente d’une mise à jour de Firefox qui corrige l’erreur empêchant son
-fonctionnement via MCP.** Les écritures concurrentes ne font pas partie du
+**Statut : En cours — le circuit local, le droit exclusif et le suivi des
+révisions sont implémentés ; leur validation réelle entre deux navigateurs reste
+à faire selon le plan ciblé de la tranche 7.** La validation avec deux
+navigateurs distincts reste à faire. Les écritures concurrentes ne font pas partie du
 parcours retenu. Le
 périmètre local et le transfert des médias sont établis.
 Le modèle persistant v4 est assez défini pour commencer SQLite. L’acceptation
@@ -136,7 +136,7 @@ BDC et une Carte ancrée est enfant de sa Section. Le schéma relationnel garde
 `media_type` ni référence média générique dans `content_blocks`. Les tests de
 commande vérifient les versions v1, v2 et v3 refusées sans conversion.
 
-**Décision de révélation acceptée le 7 octobre 2026, non implémentée :**
+**Décision de révélation acceptée le 7 octobre 2026 — réalisation en cours :**
 ajouter une image ou une vidéo crée une BDC Carte au layout « Photo ou vidéo
 plein cadre ». Une icône dans un coin de l’image ouvre l’édition du layout et
 de ses paramètres. La durée ne concerne pas une Carte placée seule ; dans un
@@ -167,12 +167,54 @@ le trajet complet : le preset qui fait entrer depuis la gauche fait sortir vers
 la droite. Cette correspondance est extensible sans changer le modèle de
 données.
 
-Le contrat `AutoCapsuleChildInput.events` accepte déjà des événements
-`intro`/`outro` propres à un enfant ; le builder Elcé actuel passe la transition
-commune du Carousel à tous les enfants. La démo 5 observe l’entrée et la sortie
-de visibilité du média dans le scroll. L’implémentation devra résoudre les
-références depuis le registre Capsule Automation et déclarer leurs actions sur
-le perso média, sans ajouter de minuteur ou d’animation parallèle.
+Dans un Carousel, `AutoCapsuleChildInput.events` reçoit les transitions
+`intro`/`outro` résolues pour chaque entrée. Dans un Flux, la racine Carte est
+l’unique propriétaire de l’observation et des événements de visibilité ;
+l’image reçoit son mouvement par ces événements, sans observer le scroll elle-
+même. La Section reste responsable du placement et de la réserve d’ancre.
+
+**Révélation Flux — comportement distant retenu le 26 octobre 2026 :** la
+racine Carte observe `threshold: 0` et conserve sa géométrie. Pour une Carte
+avec média, les actions Capsule résolues et leur état de repos sont appliqués
+au média ; sans média, ils restent sur la racine. La première mesure reste
+stable, puis les transitions se rejouent à chaque entrée/sortie. Le défaut des
+nouveaux projets est `swipe-right`/`swipe-right`. Les références enregistrées
+au projet et les exceptions Section/Carousel restent prioritaires. Cette
+résolution remplace les tweens image supplémentaires et l’opacité fixe `0.92`
+de la branche locale. Les tests Flux et player exercent le comportement retenu ;
+son contrôle visuel après fusion reste dans le
+[plan Style](./2026-10-22-elce-style-tab-plan.md).
+
+**Centralisation des réglages de révélation — décision acceptée le 23 octobre
+2026 :** les réglages et leur héritage sont résolus dans une couche Elcé
+centrale, réutilisée par la lecture et l’export. Une configuration regroupée
+contient les valeurs système non exposées et les valeurs initiales du projet ;
+les valeurs enregistrées dans le document (projet, Section, Carousel et entrée
+Carousel) restent leur source persistée. Un résolveur de réglages d’éditeur
+calcule une fois les valeurs effectives selon l’héritage accepté, puis les
+transmet aux builders. Les builders projettent ces valeurs dans la scène Sighty
+et ne choisissent ni défaut, ni priorité, ni zone d’observation. Les réglages
+peuvent rester cachés dans l’interface ; toute future commande visible doit
+modifier la même source de configuration/document. Cette tranche conserve les
+valeurs et le comportement existants ; elle ne choisit pas une nouvelle zone
+d’observation.
+
+**Portée de la résolution des réglages — décision acceptée le 23 octobre 2026 :**
+les réglages de comportement et de présentation utilisés pour construire le
+player Elcé sont regroupés dans `ELCE_EDITOR_SETTINGS`, puis remis aux builders
+par le résolveur. Cela inclut aussi les observations de lecture vidéo et de fin
+de page, ainsi que les durées/easings du tiroir de sommaire ; ces valeurs ne
+doivent pas être réintroduites dans les fonctions de construction. La durée et
+les easings CSS/CodPlay de l’agrandissement média suivent ce même passage de
+configuration vers les builders et la feuille de style player. Les constantes
+de modèle, identifiants et contraintes de domaine restent dans leurs registres
+métier dédiés.
+
+**Acceptation automatisée du 26 octobre 2026 :** la centralisation, l’héritage,
+les builders Flux/Diapo, le player réel, la persistance SQLite et les exports
+passent dans la suite complète Elcé : 481 tests sur 73 fichiers. Le typecheck
+et le build réussissent ; le build garde l’avertissement de taille du bundle.
+Le parcours navigateur après fusion reste à réaliser, faute d’outil exposé.
 
 Le modèle documentaire v4 distingue les types de BDC métier sans créer de BDC
 `image` ou `video`. La whitelist de types et de layouts selon le contexte
@@ -431,7 +473,7 @@ supprimés après vérification.
 Le menu et son raccord au coordinateur de synchronisation sont implémentés ;
 les preuves restantes sont suivies dans le [plan de transposition Remix](./2026-10-06-plan-transposition-remix-3.md).
 
-### 7. Synchronisation automatique entre navigateurs — implémentée, validation en réserve
+### 7. Synchronisation automatique entre navigateurs — implémentée, validation en cours
 
 Le même projet doit pouvoir rester ouvert dans plusieurs navigateurs et les
 modifications enregistrées dans l’un doivent parvenir automatiquement aux
@@ -442,6 +484,7 @@ demandée. Le flux doit réutiliser l’API projet, la révision serveur et l’
 XState de chaque éditeur ; il ne crée pas un deuxième document, un cache
 partagé entre navigateurs ou un circuit de commandes éditoriales parallèle.
 
+**Circuit de publication conservé et complété par le droit exclusif.**
 Le délai local existant reste de 500 ms. Quand la page perd le focus, elle
 suspend les nouvelles commandes, termine et sauvegarde les commandes déjà
 acceptées, puis tente immédiatement de confirmer le document et ses médias sur
@@ -484,6 +527,94 @@ avec des événements OS réels. Conserver en non-régression le refus `If-Match
 et la copie locale en cas d’écriture inattendue sur une révision dépassée.
 Ne pas lancer Firefox avant la mise à jour. Cette vérification ne bloque pas le
 portage Remix, terminé dans son plan dédié.
+
+**Règle impérative confirmée :** un seul éditeur peut détenir l’édition active
+d’un document à la fois, même entre deux navigateurs. Les autres pages peuvent
+afficher le document en lecture seule et doivent suivre les versions confirmées
+par le serveur pendant que l’édition active reste ouverte ; elles ne peuvent
+pas éditer leur cache local. Au `blur` comme à la fermeture de l’édition active,
+son état courant est enregistré avant le transfert. La page en lecture seule
+qui reçoit ensuite le focus recharge cette version du serveur avant de devenir
+éditable. L’accès initial ou repris synchronise également le document avant
+d’activer l’édition. Undo reste local et n’est jamais transféré.
+
+**Raccord implémenté, validation inter-navigateurs réelle en cours :** le droit
+SQLite exclut une deuxième page et chaque mutation le vérifie. Au `blur`, A
+suspend ses commandes, attend la sauvegarde locale et la confirmation serveur
+du document et de ses médias, puis libère son droit. Une erreur garde A
+propriétaire et B lectrice. B affiche la révision confirmée, la relit au focus
+et peut créer une copie indépendante. Les contrats vérifiés se trouvent dans
+les [spécifications d’accès](../specs/editor-window-access-spec.md),
+[d’API](../specs/project-api-spec.md) et de
+[session](../specs/project-session-spec.md). Les vérifications encore requises
+sont dans le [plan ciblé](./2026-10-11-elce-acces-exclusif-inter-navigateurs-plan.md).
+
+**Décisions acceptées et appliquées :** à chaque accès ou reprise d’un
+document, terminer une synchronisation avec le serveur avant de réactiver
+l’édition ; l’historique Undo reste local et ne fait pas partie de la
+synchronisation. Si les tentatives échouent à plusieurs reprises, expliquer la
+cause connue et proposer des actions. Pour un conflit de révision, expliquer
+qu’une version plus récente est présente sur le serveur, demander de fermer les
+autres éditions avant de réessayer et proposer « Enregistrer sous… » pour
+préserver la copie locale dans un projet distinct. Ne jamais écraser
+silencieusement l’une des versions. L’éditeur doit effectuer cette
+synchronisation avant de rendre le document éditable.
+
+**Décision confirmée :** « Enregistrer sous… » crée un projet indépendant à
+partir de la révision confirmée affichée par B, avec un nouvel identifiant et
+ses médias récupérés depuis leur projet source ; la
+version serveur du projet source reste intacte. En mode de secours hors
+connexion, cette copie devient immédiatement éditable localement même si
+certains médias ne sont plus dans le cache. Ces médias sont signalés comme
+indisponibles et récupérés au retour du réseau ; la copie n'est confirmée sur
+le serveur qu'après publication du document et des médias nécessaires.
+
+**Décision confirmée pour récupérer un conflit :** fermer l’édition qui détient
+l’état courant doit d’abord enregistrer cet état. La fenêtre qui reste ouverte
+recharge ensuite le document enregistré depuis le serveur avant de reprendre
+l’édition. La reprise ne renvoie donc pas une ancienne copie locale par-dessus
+la révision serveur. Si cet enregistrement échoue, conserver la copie locale et
+proposer « Enregistrer sous… » pour la préserver dans un projet indépendant.
+
+**Protocole de synchronisation en validation :** le
+[plan ciblé d’accès exclusif entre navigateurs](./2026-10-11-elce-acces-exclusif-inter-navigateurs-plan.md)
+décrit le droit serveur, la frontière réutilisable, le transfert, les
+frontières à corriger, l'ordre de travail et les validations requises.
+
+**Règle corrigée le 12 octobre 2026 — récupération après perte de connexion :**
+un droit détenu ne peut pas rendre le projet inaccessible indéfiniment. Si le
+serveur ne détecte plus la page détentrice, son droit doit devenir récupérable ;
+une autre page peut acquérir un droit neuf après avoir relu la dernière révision
+confirmée. L’ancien droit est clôturé et ses écritures sont refusées. La reprise
+explicite ou après expiration donne priorité à la version serveur et ne crée pas
+de copie automatique des changements non confirmés ; ce choix temporaire est
+détaillé dans le [plan ciblé d’accès exclusif](./2026-10-11-elce-acces-exclusif-inter-navigateurs-plan.md).
+Après trois tentatives automatiques d’erreurs réseau récupérables, expliquer la
+cause et proposer la voie de reprise. Une révision périmée (`412`) ne se résout
+pas en répétant la même écriture.
+
+**Convention retenue par équivalence fonctionnelle :** Elcé reprend le principe
+du verrou exclusif documenté par SharePoint, Dropbox et Git LFS — un détenteur,
+des lecteurs, une copie indépendante possible — sans reprendre leur architecture
+ni leur échelle ([SharePoint](https://support.microsoft.com/en-us/sharepoint/documents-and-library/check-out-check-in-or-discard-changes-to-files-in-a-sharepoint-library),
+[Dropbox](https://help.dropbox.com/organize/file-locking),
+[Git LFS](https://github.com/git-lfs/git-lfs/blob/main/docs/api/locking.md)).
+Le droit appartient à une session de page, pas au navigateur : après fermeture
+de A, un nouvel onglet, même dans le même navigateur, doit obtenir le droit
+avant d’éditer. La reprise après disparition inattendue du détenteur suit
+maintenant le principe accepté ci-dessus ; son mécanisme, les critères de
+forçage et la récupération des écritures non confirmées sont détaillés dans le
+plan ciblé d’accès exclusif.
+
+**Acceptation visée :** dans deux navigateurs, A détient l’édition et B affiche
+le document en lecture seule ; les révisions enregistrées par A apparaissent
+chez B sans lui accorder l’édition. Au `blur` de A, vérifier que sa sauvegarde
+est confirmée avant que B, une fois au premier plan, recharge la version
+serveur et devienne éditable. Refaire le parcours à la fermeture de A. Vérifier
+aussi une perte réseau, la disparition inattendue de A, la conservation locale
+après échec d’enregistrement et « Enregistrer sous… » avec ses médias. Les
+parcours réels à deux navigateurs et les cas de reprise extrêmes restent à
+vérifier ; leur protocole est fixé dans le plan ciblé.
 
 ## Suites après le POC
 

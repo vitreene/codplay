@@ -87,9 +87,49 @@ Une instance reçoit l'artefact et les fonctions issus de ce même build. Le
 [codec](./compiled-codec-v2-spec.md) revalide la forme sérialisée à sa
 frontière. Les [tests du builder](../tests/scene/compiled/scene-builder.spec.ts)
 et du [codec](../tests/scene/compiled/codec.spec.ts) vérifient ce partage.
-Cette description ne fixe pas quelles propriétés `src` contribuent au manifeste
-de ressources ; la profondeur de découverte reste à décider au
-[plan CompiledScene](../plan/compiled-scene-plan.md).
+Le mode d'export média et ses propriétés `src` reconnues sont décrits ci-dessous.
+
+### Références média d'export
+
+`build(input, { export: true })` applique la fermeture média vérifiée dans la
+[spécification du paquet de scène](./scene-package-export-v1-spec.md). Le
+résultat expose `resourceReferences` à côté du `CompiledScene` : chaque entrée
+porte le type et le chemin compilé exact de chaque occurrence prise en charge.
+Cette fermeture inclut les `url()` locaux d'image dans les valeurs `style` de
+la scène. L'exporteur ne les redécouvre pas : il consomme les chemins remontés
+par le builder et ne relocalise que la copie de diffusion. Le texte auteur et
+le `CompiledScene` source restent inchangés.
+Les formes non prises en charge énumérées dans cette spécification produisent
+un diagnostic bloquant contextualisé dans ce mode. Ces métadonnées ne font pas partie du JSON
+`CompiledScene`. Le chemin `build(input)` sans option `export` conserve sa
+dérivation de ressources et ses diagnostics auteur actuels.
+
+Les feuilles CSS importées et `styleSheet` sont compilés séparément par l'outil
+d'export, car leurs chemins d'origine appartiennent aux fichiers CSS et ne sont
+pas des champs de `SceneDoc`. Les règles vérifiées de capture, résolution et
+relocalisation appartiennent à la
+[spécification du paquet](./scene-package-export-v1-spec.md). La conversion
+d'un style de perso en classe est hors du contrat d'export V1 : les valeurs
+restent celles consommées par le moteur, à l'exception de la relocalisation de
+leurs URL locales dans la copie de diffusion. La décision de portée est suivie
+dans le [plan CompiledScene](../plan/compiled-scene-plan.md).
+
+### Références de fonctions exportables
+
+Avec `{ export: true }`, le résultat du build expose aussi
+`functionReferences`, une entrée `{ ref, path }` pour chaque fonction extraite.
+`path` est le chemin structuré exact depuis le `SceneDoc` d'entrée jusqu'à
+l'objet fonction d'origine ; ces métadonnées restent hors du JSON
+`CompiledScene`. Le builder vérifie que chaque chemin pointe encore vers
+l'objet associé à `ref`. Une référence absente ou divergente bloque le build
+export avec `CODPLAY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED`. Sans l'option
+`export`, la forme du résultat et le parcours auteur restent inchangés.
+
+Les tests du builder vérifient les chemins des fonctions de scène, des
+transforms, des actions et de capture. Le paquet et son chargement sont décrits
+dans la [spécification du paquet](./scene-package-export-v1-spec.md) ; les
+limites de lecture encore ouvertes restent au
+[plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r8--fonctions-codplay-et-imports).
 
 ## Frontières à préserver
 

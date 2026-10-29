@@ -2,9 +2,10 @@
 
 ## Statut
 
-**En cours — insertion des Cartes et du Graphe statistique par le circuit
-d’ancre partagé. La réserve Tableau/SVG du Graphe est vérifiée dans Brave ; les
-parcours média et layouts Carte restent en cours de validation.**
+**En cours — insertion des Cartes et du Graphe par le circuit
+d’ancre partagé. La réserve Tableau/SVG du Graphe et la superposition du panneau
+d’édition sur le média sont vérifiées dans Brave ; les autres parcours média,
+layouts Carte et gestes d’édition restent en cours de validation.**
 
 Le 3 octobre 2026, le déplacement de l’ancre après « For » puis le resize de
 l’éditeur conservent « For the » sur une même ligne naturelle avant l’image.
@@ -22,7 +23,7 @@ des persos CodPlay est décrit dans la
 atomique et déplaçable. Ses attributs métier sont `bdcId`, `partId` et
 `paddingBottom`. L’extension ne stocke ni `mediaId` ni type de média :
 l’éditeur résout le BDC par `bdcId`. Une Carte utilise son preset et ses médias ;
-un Graphe statistique utilise son builder de scène.
+un Graphe utilise son builder de scène.
 L’aperçu utilise le même `ElceCardPresetBuilder` et le même `CARD_PRESETS` que
 la projection Flux ; il affiche les champs de texte déclarés par le layout et
 les médias compatibles avec ce layout, en conservant ses réglages de position
@@ -32,17 +33,25 @@ Texte avec image et Image avec légende gardent leur gabarit Carte ; Photo reste
 le seul layout qui accepte une vidéo. L’éditeur affiche une prise déplaçable ;
 l’export statique produit un seul `span` avec `id`, `data-part`, `data-bdc-id`
 et `data-elce-anchor`. À la première insertion Photo, le `padding-bottom` a un
-ratio provisoire défini dans la configuration. Après chargement de l’image, le
-NodeView calcule
+ratio provisoire défini dans la configuration : `75%` pour une image et
+`56.25%` pour une vidéo dont le cadre reste au format `16 / 9`. Après chargement
+de l’image, le NodeView calcule
 `hauteur intrinsèque / largeur intrinsèque × 100 %` et inscrit le résultat dans
-l’attribut de l’ancre par une transaction Tiptap. Les autres layouts utilisent
-la réservation par défaut configurée. Le `padding-bottom` réservé comprend la
-ligne d’insertion et les marges ; le player ajoute la marge supérieure
+l’attribut de l’ancre par une transaction Tiptap. Si l’image est déjà chargée
+quand le NodeView est créé, la mesure est différée à la microtâche suivante :
+le nœud est alors monté dans le document ProseMirror et sa transaction passe
+par l’événement `update` normal de `SectionTiptapAdapter`, jusqu’à la commande
+XState existante. Un média vidéo déjà présent dans un document importé est
+normalisé à `56.25%` par une transaction du même NodeView, conformément au cadre
+vidéo Elcé. Les autres layouts utilisent la réservation par défaut configurée.
+Le `padding-bottom` réservé comprend la ligne d’insertion et les
+marges ; le player ajoute la marge supérieure
 `ANCHOR.DEFAULT_BDC_MARGIN_TOP`, également définie dans la configuration et non
-éditable dans le POC.
+éditable dans le POC. Les marges haute et basse des BDC ancrés valent chacune
+`2rem` ; la réservation du player inclut les deux marges.
 
 Le nœud ne crée aucun élément CodPlay et ne contient pas de HTML saisi par
-l’auteur. Une Carte ou un Graphe statistique ancré est un BDC enfant de la
+l’auteur. Une Carte ou un Graphe ancré est un BDC enfant de la
 Section qui l’emploie : son
 `parentBdcId` désigne la Section, `pageId` vaut `null` et son identifiant
 n’apparaît pas dans `page.bdcIds`. Le builder Flux relit les ancres exportées
@@ -131,7 +140,7 @@ toutes ses ancres : les Cartes et Graphes statistiques enfants sont supprimés
 avec la Section,
 leurs ressources média restent disponibles.
 `applyDocumentCommand` vérifie les invariants avant de rendre chaque nouveau
-document : une ancre référence un seul BDC Carte ou Graphe statistique enfant
+document : une ancre référence un seul BDC Carte ou Graphe enfant
 de sa Section, qui ne peut pas être déplacé vers le catalogue ou une autre page
 sans retirer son ancre. ProseMirror applique
 `transformPasted` aux collages et aussi à la tranche d’un glisser-déposer avant
@@ -161,11 +170,14 @@ de la Section, l’image ou la vidéo apparaît dans le même DOM ProseMirror, s
 remonter l’éditeur.
 
 Dans l’éditeur Remix, l’action « Modifier le bloc illustratif ancré » ouvre
-l’éditeur partagé du même BDC. Un conteneur de positionnement couvre la largeur de la
-ligne et laisse passer les pointeurs ; seul le bouton de `1.75rem` est
+l’éditeur partagé du même BDC. Un conteneur de positionnement couvre la largeur
+de la ligne et laisse passer les pointeurs ; seul le bouton de `2.5rem` est
 interactif. Le SVG décoratif ne capte pas lui-même le pointeur, qui arrive donc
-sur le bouton. Cette cible étroite permet d’utiliser l’icône sans recouvrir le
-texte ou le média placé dessous.
+sur le bouton. Le panneau est ancré au cadre média par CSS Anchor Positioning et
+`anchor-size(width/height)` : il occupe exactement le rectangle réservé à
+l’image ou à la vidéo, au même emplacement que le BDC sélectionné, au lieu de
+s’ajouter après tout le texte de la Section. Le clic fait défiler ce cadre dans
+la zone visible avec `scrollIntoView({ block: 'nearest' })`.
 
 ## Preuve
 
@@ -182,17 +194,38 @@ texte ou le média placé dessous.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie dans la page Remix de production le rafraîchissement du média après
   persistance XState sans remplacer l’instance `Editor` ni son DOM ProseMirror.
-  Il déclenche aussi le clic sur le vrai bouton d’édition de la Carte ancrée,
-  et vérifie que son conteneur est distinct.
-- Le 8 octobre, Brave DevTools dépose un PNG synthétique dans la Section de la
-  page Remix intégrée. XState crée une seule Carte ancrée ; son image est
-  chargée dans la prise de l’ancre depuis l’URL média serveur après le transfert
-  et le Blob absent d’IndexedDB. Après rechargement, le centre du bouton de
-  `28 × 28 px` cible ce bouton dans `elementFromPoint()` ; le clic Brave ouvre
-  l’éditeur partagé du même BDC. La ligne de positionnement mesure `529 px`,
-  laisse passer le pointeur, et son point central atteint le contenu dessous.
-  Le sélecteur restitue `photo-basic` et le contrôle d’image `cover`. La console
-  Brave ne rapporte ni erreur ni avertissement.
+  Avec une image déjà complète au montage, il vérifie que le ratio calculé passe
+  par XState jusqu’à `flowReservations` du builder Flux. Il déclenche aussi le
+  clic sur le vrai bouton d’édition, puis vérifie que le panneau partagé cible le
+  cadre du même BDC, avec sa position CSS et son défilement.
+- [`section-editor-tiptap-adapter.test.ts`](../src/app/editor/section/section-editor-tiptap-adapter.test.ts)
+  couvre explicitement l’image chargée avant le montage du NodeView et la
+  soumission du ratio calculé par le callback de modification de Section.
+- Le 22 octobre, le vrai bouton `40 × 40 px` ouvre l’éditeur partagé du même
+  BDC. Brave DevTools confirme que le panneau recouvre exactement le cadre
+  média ciblé (`643.6 × 424.1 px`) au point d’ancrage, et que les champs Carte
+  restent visibles dans ce cadre.
+- Le projet Demo5 enregistré utilise maintenant les ratios mesurés pour ses
+  neuf images : `900 × 593` → `65.88888889%`, `640 × 416` → `65%` et
+  `640 × 421` → `65.78125%`. Son unique vidéo reprend le cadre Elcé existant
+  `16 / 9` → `56.25%`. L’éditeur a enregistré ces valeurs par ses transactions
+  normales et le projet indique « Synchronisé » à la révision 12 ; aucune
+  écriture SQL directe n’a été faite.
+- **Mesure antérieure au doublement des marges du 26 octobre 2026 :** une
+  preview fraîche ouverte depuis l’éditeur affiche les deux images de la
+  première page, décodées en `900 × 593` et `640 × 416`. À `918 px` de largeur,
+  leurs cadres mesurent respectivement `918 × 604.86 px` et `918 × 596.70 px` ;
+  les deux slots gardent leurs `16 px` de marge supérieure et inférieure. La
+  preview de la page vidéo réserve `56.25%`. Les consoles de l’éditeur et de
+  cette preview sont sans erreur.
+- **Contrôle Brave après doublement, le 26 octobre 2026 :** sur la preview Demo5,
+  les deux BDC ancrés commencent à `2rem` du haut de leur slot et laissent
+  `2rem` en bas. Ces espacements suivent la largeur mobile et ordinateur sans
+  débordement horizontal. [`anchor-position.test.ts`](../src/app/anchor/anchor-position.test.ts),
+  [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts),
+  [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+  et [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  couvrent les réservations et les deux marges ; typecheck et build passent.
 - Le 8 octobre 2026, Brave DevTools reproduit le défaut dans la preview réelle
   de Page A du Projet 1, sans modifier le document : le slot réservait
   `918 × 1462,75 px`, tandis que la racine Photo et son image ne faisaient que
@@ -219,7 +252,7 @@ texte ou le média placé dessous.
   Sighty/CodPlay.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
   vérifie les cibles et commandes métier pour l’insertion d’une Carte ou d’un
-  Graphe statistique.
+  Graphe.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   vérifie le slot de Section, la réserve Tableau/SVG et le montage de la story
 du Graphe par le builder Flux réel.

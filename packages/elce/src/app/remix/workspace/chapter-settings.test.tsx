@@ -23,7 +23,7 @@ describe('Remix chapter settings', () => {
     const mountSettings = () => render(<main
       id="elce-remix-chapter-settings-test-root"
     >
-      {renderChapterSettings({ chapter, actions, onPreview: () => { }, previewError: null })}
+      {renderChapterSettings({ chapter, actions })}
     </main>)
     let rendered = mountSettings()
 

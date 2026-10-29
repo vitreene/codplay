@@ -105,6 +105,11 @@ export class EngineFacadeImpl implements CodPlayEngine {
     return this.capabilities.createRegistries()
   }
 
+  /** Locks public capability registries when the first scene-package load is requested. */
+  lockCapabilityRegistries(): void {
+    this.capabilities.lock()
+  }
+
   /** Creates the direct resource transfer surface. */
   createResourceRegistry(): CodPlayResources {
     return this.resources.createPublicRegistry()

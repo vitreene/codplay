@@ -1,6 +1,6 @@
 import type {
   SightyActionContext,
-  SightyActionHandler,
+  SightyConditionContext,
   SightyGraphView,
   SightySceneSourceValue,
   SightyScenarioDefinition,
@@ -48,9 +48,7 @@ export type CourseSlotName =
   | 'slot-navigation'
 
 /** Declares the course views, guards, actions and scene catalog in one scenario. */
-export function createCourseScenario(
-  onLog: (message: string, level?: 'info' | 'warn' | 'error') => void,
-): SightyScenarioDefinition<CourseSceneKey, CourseSlotName> {
+export function createCourseScenario(): SightyScenarioDefinition<CourseSceneKey, CourseSlotName> {
   const pageScenes = Object.fromEntries(COURSE_PAGES.map((page) => {
     const scene = page.kind === 'content'
       ? createContentPageScene(page)
@@ -61,9 +59,7 @@ export function createCourseScenario(
 
     return [getCourseSceneKey(page.id), {
       sceneDoc: scene,
-      onReset: (keys) => keys.includes('all') || keys.includes('quiz') || keys.includes('solutions')
-        ? { name: `course-quiz:${page.id}:reset`, data: { keys: [...keys] } }
-        : undefined,
+      onReset: createCourseQuizResetEvent,
     }]
   })) as Record<`scene-${string}`, SightySceneSourceValue>
   const coursePageActions = createCoursePageActions()
@@ -142,21 +138,22 @@ export function createCourseScenario(
       ...pageScenes,
     },
     actions: {
-      'action:course:mark-page-finished': markCurrentPageFinished(onLog),
-      'action:course:record-quiz-answer': recordCurrentQuizAnswer(onLog),
-      'action:course:refresh-presentation': refreshCoursePresentation(onLog),
+      'action:course:mark-page-finished': markCurrentPageFinished,
+      'action:course:record-quiz-answer': recordCurrentQuizAnswer,
+      'action:course:refresh-presentation': refreshCoursePresentation,
     },
     guards: {
-      'guard:course:page-access': ({ sceneKey, context }) => {
-        const page = getCoursePageBySceneKey(sceneKey)
-        return page !== undefined && canAccessCoursePage(page.id, readCourseSignet(context.signet))
-      },
-      'guard:course:page-exit': ({ sceneKey, event, context }) => {
-        const page = getCoursePageBySceneKey(sceneKey)
-        return page !== undefined && canExitCoursePage(page.id, event?.name, readCourseSignet(context.signet))
-      },
+      'guard:course:page-access': canAccessScenarioPage,
+      'guard:course:page-exit': canExitScenarioPage,
     },
   }
+}
+
+/** Returns one generic reset event for supported keys on every quiz scene. */
+export function createCourseQuizResetEvent(keys: readonly string[]) {
+  return keys.includes('all') || keys.includes('quiz') || keys.includes('solutions')
+    ? { name: COURSE_EVENTS.quizReset, data: { keys: [...keys] } }
+    : undefined
 }
 
 /** Builds every chapter graph from the single course page catalogue. */
@@ -211,69 +208,58 @@ function getMenuPagesForCourse() {
 }
 
 /** Records the active scene's bottom-marker event in context.signet. */
-function markCurrentPageFinished(
-  onLog: (message: string, level?: 'info' | 'warn' | 'error') => void,
-): SightyActionHandler<CourseSceneKey> {
-  return async function markPage(context): Promise<void> {
-    const page = getCoursePageBySceneKey(context.event.sourceSceneKey)
-    if (page === undefined) {
-      onLog('Repère de fin reçu depuis une scène sans page de cours.', 'warn')
-      return
-    }
+export async function markCurrentPageFinished(context: SightyActionContext<CourseSceneKey>): Promise<void> {
+  const page = getCoursePageBySceneKey(context.event.sourceSceneKey)
+  if (page === undefined) return
 
-    const currentSignet = readCourseSignet(context.context.signet)
-    if (currentSignet.finishedPages[page.id] === true) return
+  const currentSignet = readCourseSignet(context.context.signet)
+  if (currentSignet.finishedPages[page.id] === true) return
 
-    const signet = markCoursePageFinished(currentSignet, page.id)
-    await updateCourseProgress(context, signet, onLog)
-  }
+  const signet = markCoursePageFinished(currentSignet, page.id)
+  await updateCourseProgress(context, signet)
 }
 
 /** Records one public question result in the appropriate signet field. */
-function recordCurrentQuizAnswer(
-  onLog: (message: string, level?: 'info' | 'warn' | 'error') => void,
-): SightyActionHandler<CourseSceneKey> {
-  return async function recordAnswer(context): Promise<void> {
-    const page = getCoursePageBySceneKey(context.event.sourceSceneKey)
-    const isCorrect = context.event.data?.isCorrect
-    if (page === undefined || page.kind !== 'quiz' || typeof isCorrect !== 'boolean') {
-      onLog(`Résultat de quiz invalide reçu depuis ${context.event.sourceSceneKey ?? 'une source inconnue'}.`, 'warn')
-      return
-    }
+export async function recordCurrentQuizAnswer(context: SightyActionContext<CourseSceneKey>): Promise<void> {
+  const page = getCoursePageBySceneKey(context.event.sourceSceneKey)
+  const isCorrect = context.event.data?.isCorrect
+  if (page === undefined || page.kind !== 'quiz' || typeof isCorrect !== 'boolean') return
 
-    const signet = recordCourseQuizAnswer(readCourseSignet(context.context.signet), page, isCorrect)
-    await updateCourseProgress(context, signet, onLog)
-    onLog(`${page.title} : ${isCorrect ? 'réponse juste' : 'réponse fausse'}`)
-  }
+  const signet = recordCourseQuizAnswer(readCourseSignet(context.context.signet), page, isCorrect)
+  await updateCourseProgress(context, signet)
 }
 
 /** Updates durable progress before projecting the runtime's guard answers. */
 async function updateCourseProgress(
   context: SightyActionContext<CourseSceneKey>,
   signet: CourseSignet,
-  onLog: (message: string, level?: 'info' | 'warn' | 'error') => void,
 ): Promise<void> {
   await context.updateContext({ signet })
-  if (getCoursePageBySceneKey(context.scenarioState.active?.sceneKey) === undefined) {
-    onLog('La présentation du cours ne trouve aucune vue active de contenu.', 'error')
-    return
-  }
+  if (getCoursePageBySceneKey(context.scenarioState.active?.sceneKey) === undefined) return
   await sendCoursePresentation(context)
 }
 
 /** Refreshes persistent course controls through one declared Sighty action. */
-function refreshCoursePresentation(
-  onLog: (message: string, level?: 'info' | 'warn' | 'error') => void,
-): SightyActionHandler<CourseSceneKey> {
-  return async function refreshPresentation(context): Promise<void> {
-    const page = getCoursePageBySceneKey(context.scenarioState.active?.sceneKey)
-    if (page === undefined) {
-      onLog('La présentation du cours ne trouve aucune page active.', 'warn')
-      return
-    }
+export async function refreshCoursePresentation(context: SightyActionContext<CourseSceneKey>): Promise<void> {
+  const page = getCoursePageBySceneKey(context.scenarioState.active?.sceneKey)
+  if (page === undefined) return
+  await sendCoursePresentation(context)
+}
 
-    await sendCoursePresentation(context)
-  }
+/** Checks whether the current course context permits entry to one scene. */
+export function canAccessScenarioPage(
+  { sceneKey, context }: SightyConditionContext<CourseSceneKey>,
+): boolean {
+  const page = getCoursePageBySceneKey(sceneKey)
+  return page !== undefined && canAccessCoursePage(page.id, readCourseSignet(context.signet))
+}
+
+/** Checks whether the current course context permits leaving one scene. */
+export function canExitScenarioPage(
+  { sceneKey, event, context }: SightyConditionContext<CourseSceneKey>,
+): boolean {
+  const page = getCoursePageBySceneKey(sceneKey)
+  return page !== undefined && canExitCoursePage(page.id, event?.name, readCourseSignet(context.signet))
 }
 
 /** Sends authored presentation events to their persistent scene instances. */

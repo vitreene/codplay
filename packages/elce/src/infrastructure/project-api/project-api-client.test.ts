@@ -3,6 +3,7 @@ import { createInitialDocument } from '../../domain/document/document-model'
 import type { MediaMetadata } from '../../domain/document/document-types'
 import { ElceProjectApiClient } from './project-api-client'
 import type { ElceProjectSummary } from './project-api-types'
+import { INITIAL_PROJECT_TEST_STATE } from '../../domain/summary-profile/test-state-types'
 
 const apiOrigin = 'http://127.0.0.1:5181'
 
@@ -19,25 +20,46 @@ describe('Elcé project API client', () => {
     expect(request).toHaveBeenCalledWith(new URL('/api/projects', apiOrigin))
   })
 
+  it('renews its grant and can request the temporary force path', async () => {
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ grantId: 'test-grant', recovered: true }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    const api = new ElceProjectApiClient(apiOrigin, request)
+
+    await expect(api.acquireEditAccess('project-a', 'page-a', true)).resolves.toEqual({
+      grantId: 'test-grant', recovered: true,
+    })
+    await expect(api.renewEditAccess('project-a')).resolves.toBe(true)
+
+    expect(request.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ pageId: 'page-a', force: true }),
+    })
+    expect(request.mock.calls[1]).toEqual([
+      new URL('/api/projects/project-a/edit-access', apiOrigin),
+      { method: 'PUT', headers: { 'X-Elce-Page-Id': 'page-a', 'X-Elce-Edit-Grant': 'test-grant' } },
+    ])
+  })
+
   it('renames a project through its server route', async () => {
     const project: ElceProjectSummary = { id: 'project/a', name: 'Nouveau nom', revision: 4 }
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ project }, { headers: { ETag: '"4"' } }))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, project.id)
 
     await expect(api.renameProject(project.id, project.name)).resolves.toEqual(project)
     expect(request).toHaveBeenCalledWith(new URL('/api/projects/project%2Fa', apiOrigin), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...grantHeaders },
       body: JSON.stringify({ name: project.name }),
     })
   })
 
   it('deletes a project after a no-content server response', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, 'project/a')
 
     await expect(api.deleteProject('project/a')).resolves.toBeUndefined()
-    expect(request).toHaveBeenCalledWith(new URL('/api/projects/project%2Fa', apiOrigin), { method: 'DELETE' })
+    expect(request).toHaveBeenCalledWith(new URL('/api/projects/project%2Fa', apiOrigin), { method: 'DELETE', headers: grantHeaders })
   })
 
   it('reads a structured server document and its revision', async () => {
@@ -49,7 +71,26 @@ describe('Elcé project API client', () => {
     const api = new ElceProjectApiClient(apiOrigin, request)
 
     await expect(api.readProject(document.id)).resolves.toEqual({ document, revision: 7 })
-    expect(request).toHaveBeenCalledWith(new URL(`/api/projects/${document.id}`, apiOrigin))
+    expect(request).toHaveBeenCalledWith(new URL(`/api/projects/${document.id}`, apiOrigin), { cache: 'no-store' })
+  })
+
+  it('reads and writes test state using its separate server revision', async () => {
+    const state = { ...INITIAL_PROJECT_TEST_STATE, profileSubmitted: true }
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ state }, { headers: { ETag: '"3"' } }))
+      .mockResolvedValueOnce(Response.json({ state }, { headers: { ETag: '"4"' } }))
+    const api = new ElceProjectApiClient(apiOrigin, request)
+
+    await expect(api.readTestState('project-a')).resolves.toEqual({ state, revision: 3 })
+    await expect(api.saveTestState('project-a', state, 3)).resolves.toBe(4)
+    expect(request.mock.calls).toEqual([
+      [new URL('/api/projects/project-a/test-state', apiOrigin), { cache: 'no-store' }],
+      [new URL('/api/projects/project-a/test-state', apiOrigin), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'If-Match': '"3"' },
+        body: JSON.stringify({ state }),
+      }],
+    ])
   })
 
   it('calls the browser fetch function with its global receiver', async () => {
@@ -92,12 +133,30 @@ describe('Elcé project API client', () => {
       { project: { id: document.id, name: document.data.name, revision: 5 } },
       { headers: { ETag: '"5"' } },
     ))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, document.id)
 
     await expect(api.saveDocument(document, 4)).resolves.toBe(5)
     expect(request.mock.calls[0]?.[1]).toMatchObject({
       method: 'PUT',
-      headers: { 'If-Match': '"4"', 'Content-Type': 'application/json' },
+      headers: { 'If-Match': '"4"', 'Content-Type': 'application/json', ...grantHeaders },
+    })
+  })
+
+  it('preserves the API diagnostic id and rejection category for a failed save', async () => {
+    const document = createInitialDocument()
+    const diagnosticId = 'bfe3a03d-b7d5-42be-9b72-76f30e0a4be4'
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      error: 'invalid_request',
+      diagnosticId,
+      diagnosticReason: 'document_invariants_rejected',
+    }, { status: 400 }))
+    const api = await grantedApi(request, document.id)
+
+    await expect(api.saveDocument(document, 4)).rejects.toMatchObject({
+      code: 'invalid_request',
+      diagnosticId,
+      diagnosticReason: 'document_invariants_rejected',
+      message: `API Elcé : invalid_request (400) [diagnostic ${diagnosticId}: document_invariants_rejected]`,
     })
   })
 
@@ -107,13 +166,13 @@ describe('Elcé project API client', () => {
       { media: { id: media.id, url: `/api/projects/elce-document/media/${media.id}` } },
       { status: 201 },
     ))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, 'elce-document')
     const blob = new Blob(['img'], { type: media.mimeType })
 
     await expect(api.uploadMedia('elce-document', media, blob)).resolves.toBe(
       `${apiOrigin}/api/projects/elce-document/media/media-image`,
     )
-    expect(request.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', headers: { 'Content-Type': 'image/webp' }, body: blob })
+    expect(request.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', headers: { 'Content-Type': 'image/webp', ...grantHeaders }, body: blob })
   })
 
   it('preserves a canonical duplicate media identifier from the API error', async () => {
@@ -122,9 +181,22 @@ describe('Elcé project API client', () => {
       { error: 'media_already_exists', mediaId: 'media-canonical' },
       { status: 409 },
     ))
-    const api = new ElceProjectApiClient(apiOrigin, request)
+    const api = await grantedApi(request, 'elce-document')
 
     await expect(api.uploadMedia('elce-document', media, new Blob(['img'])))
       .rejects.toMatchObject({ code: 'media_already_exists', mediaId: 'media-canonical' })
   })
 })
+
+const grantHeaders = { 'X-Elce-Page-Id': 'test-page', 'X-Elce-Edit-Grant': 'test-grant' }
+
+/** Gives an isolated client a server grant before testing a mutation. */
+async function grantedApi(request: ReturnType<typeof vi.fn<typeof fetch>>, projectId: string): Promise<ElceProjectApiClient> {
+  const routed = vi.fn<typeof fetch>((input, init) => {
+    if (new URL(input.toString()).pathname.endsWith('/edit-access')) return Promise.resolve(Response.json({ grantId: 'test-grant' }))
+    return request(input, init)
+  })
+  const api = new ElceProjectApiClient(apiOrigin, routed)
+  await api.acquireEditAccess(projectId, 'test-page')
+  return api
+}

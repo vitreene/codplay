@@ -37,12 +37,17 @@ function isReadableRegistryKey(value: string, namespace: 'action' | 'guard'): bo
 export function validateAuthoringResources<
   SceneKey extends string = string,
   SlotName extends string = string,
->(scenario: SightyScenarioDefinition<SceneKey, SlotName>): readonly SightyAuthoringDiagnostic[] {
+>(
+  scenario: SightyScenarioDefinition<SceneKey, SlotName>,
+  packagedSceneKeys: Iterable<string> = [],
+): readonly SightyAuthoringDiagnostic[] {
   const diagnostics: SightyAuthoringDiagnostic[] = []
+  const packagedScenes = new Set(packagedSceneKeys)
   /** Checks whether a scene is declared and available in the authoring catalog. */
   const hasAvailableScene = (sceneKey: string): boolean =>
     scenario.scenes?.[sceneKey as SceneKey] !== undefined
     || scenario.sceneSources?.[sceneKey as SceneKey] !== undefined
+    || packagedScenes.has(sceneKey)
 
   const viewGraph = scenario.views
   const graphEntries = getGraphEntries(viewGraph)

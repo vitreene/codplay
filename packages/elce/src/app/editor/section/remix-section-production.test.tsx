@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
 import type { Editor } from '@tiptap/core'
 import { createActor } from 'xstate'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/ui/test'
-import { BDC_TYPE } from '../../../config/document-config'
+import { BDC_TYPE, MEDIA_TYPE } from '../../../config/document-config'
+import { ElceEditorSettingsResolver } from '../../../domain/editor-settings/editor-settings-resolver'
 import { EditorContextProvider } from '../../remix/editor-context'
 import { controllerMachine } from '../../controller/controller-machine'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
 import { EditorActionsFacade } from '../../facades/editor-actions-facade'
+import type { ProfileProperty } from '../../../domain/summary-profile/summary-profile-types'
+import { renderProfileTokenInsertion } from '../profile/profile-token-insertion'
 import { RemixPageEditor } from '../../remix/workspace/page-editor'
+import { buildFluxScene } from '../../../builders/flux/flux-scene-builder'
+import { anchorNameFor } from '../../anchor/anchor-position'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
 
 class PendingMediaStore implements ElceDocumentStore {
   public readonly pending: Array<{ media: MediaBlob; resolve: () => void }> = []
@@ -49,26 +56,52 @@ class PendingMediaStore implements ElceDocumentStore {
 }
 
 describe('Remix production Section editor', () => {
+  let originalScrollIntoView: PropertyDescriptor | undefined
+
+  afterEach(() => {
+    if (originalScrollIntoView === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+    else Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView)
+    originalScrollIntoView = undefined
+    vi.restoreAllMocks()
+  })
+
   it('keeps Tiptap mounted while Remix commands edit the Section and import an anchored image through XState', async () => {
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(900)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(593)
+
     const store = new PendingMediaStore()
     const controller = createActor(controllerMachine, { input: { documentStore: store } })
     controller.start()
     controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
+    const profileProperty: ProfileProperty = {
+      id: 'profile-audience',
+      name: 'audience',
+      label: 'Public',
+      type: 'text',
+      required: false,
+      choices: [],
+    }
+    actions.updateProfileDefinition({
+      ...controller.getSnapshot().context.document.data.profile,
+      properties: [profileProperty],
+    })
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
-    const rendered = render(<EditorContextProvider
-      controller={controller}
-      actions={actions}
-    >
-      <RemixPageEditor
-        onPreview={() => undefined}
-        previewError={null}
-      />
-    </EditorContextProvider>)
+    const rendered = render(<div id="elce-section-test-host">
+      {renderProfileTokenInsertion('elce-profile-test-tools', [profileProperty], 'elce-editor-content-bdc-section-1')}
+      <EditorContextProvider
+        controller={controller}
+        actions={actions}
+      >
+        <RemixPageEditor onOpenAppearanceTarget={() => undefined} />
+      </EditorContextProvider>
+    </div>)
 
     const editor = getEditor(rendered.$('.ProseMirror'))
     const editorDom = editor.view.dom
     expect(rendered.$('#elce-section-toolbar-bdc-section-1')).not.toBeNull()
+    expect(rendered.$('#elce-section-profile-label-bdc-section-1-profile-audience')).toBeNull()
 
     await rendered.act(() => {
       editor.commands.insertContent('<h3><em>Texte édité</em></h3>')
@@ -97,6 +130,18 @@ describe('Remix production Section editor', () => {
     const editedTextMarks = controller.getSnapshot().context.document.bdcs[0]?.section?.content.content?.[0]?.content?.[0]?.marks?.map(({ type }) => type)
     expect(editedTextMarks).toEqual(expect.arrayContaining(['italic', 'bold']))
 
+    await rendered.act(() => {
+      const end = editor.state.doc.content.size - 1
+      editor.commands.focus()
+      editor.commands.setTextSelection(end)
+      const insert = rendered.$('#elce-profile-test-tools-profile-audience')
+      insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const sectionAfterProfileLabel = controller.getSnapshot().context.document.bdcs[0]?.section
+    expect(JSON.stringify(sectionAfterProfileLabel?.content)).toContain('"profilePropertyId":"profile-audience"')
+    expect(sectionAfterProfileLabel?.markup).toContain('data-elce-profile-property="profile-audience"')
+
     const posAtCoords = vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
     const file = new File(['image bytes'], 'photo.png', { type: 'image/png' })
     const fileDrop = {
@@ -124,16 +169,31 @@ describe('Remix production Section editor', () => {
     await flush()
 
     const document = controller.getSnapshot().context.document
+    const anchorCard = document.bdcs.find((bdc) => bdc.type === BDC_TYPE.CARD && bdc.card?.mediaId === pendingMedia.media.id)
+    if (anchorCard === undefined) throw new Error('Le média importé doit être associé à sa Carte unique.')
     expect(editor.getJSON()).toEqual(document.bdcs[0]?.section?.content)
     expect(document.bdcs.some((bdc) => bdc.type === BDC_TYPE.CARD && bdc.card?.mediaId === pendingMedia.media.id)).toBe(true)
     expect(document.medias.map((media) => media.id)).toContain(pendingMedia.media.id)
     expect(document.bdcs[0]?.section?.markup).toContain('data-elce-anchor="true"')
+    expect(document.bdcs[0]?.section?.content.content?.[0]?.content?.find((node) => node.type === 'elceAnchor')?.attrs?.paddingBottom)
+      .toBe('65.88888889%')
+    expect(document.bdcs[0]?.section?.markup).toContain('--elce-anchor-padding: 65.88888889%')
+    const scene = buildFluxScene(document.pages[0]!, document.bdcs, {
+      mediaSources: { [pendingMedia.media.id]: 'blob:image-1' },
+      mediaTypes: { [pendingMedia.media.id]: MEDIA_TYPE.IMAGE },
+      editorSettings: editorSettingsResolver.resolvePage(
+        document.pages[0]!,
+        document.bdcs,
+        document.data.revelationDefaults,
+      ),
+    })
+    expect(scene.sceneDoc.stories['page-a-page']?.persos.find((perso) => perso.id === 'page-a-article')?.initial).toMatchObject({
+      flowReservations: [{ partId: `page-a:${anchorCard.id}:anchor`, blockSize: 'calc(65.88888889% + 2rem + 2rem)' }],
+    })
     expect(editor.view.dom.querySelector('.elce-anchor-media-preview')?.getAttribute('src')).toMatch(/^blob:/)
     expect(getEditor(rendered.$('.ProseMirror'))).toBe(editor)
     expect(editor.view.dom).toBe(editorDom)
     expect(setContent).not.toHaveBeenCalled()
-    const anchorCard = document.bdcs.find((bdc) => bdc.type === BDC_TYPE.CARD && bdc.card?.mediaId === pendingMedia.media.id)
-    if (anchorCard === undefined) throw new Error('Le média importé doit être associé à sa Carte unique.')
 
     const anchorHandle = editor.view.dom.querySelector('.elce-anchor-handle')
     if (anchorHandle === null) throw new Error('Le dépôt doit produire une prise d’ancre déplaçable.')
@@ -151,10 +211,24 @@ describe('Remix production Section editor', () => {
     const editButton = editor.view.dom.querySelector<HTMLButtonElement>(`#${anchorCard.id}-anchor-edit`)
     if (editButton === null) throw new Error('The anchor must expose its existing Card edit button.')
     expect(editButton.parentElement?.id).toBe(`${anchorCard.id}-anchor-edit-position`)
+    const scrollIntoView = vi.fn()
+    originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
     await rendered.act(() => editButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })))
-    expect(rendered.$(`#elce-anchor-card-editor-${anchorCard.id}`)).not.toBeNull()
+    await flush()
+    const anchorEditor = rendered.$(`#elce-anchor-card-editor-${anchorCard.id}`)
+    expect(anchorEditor).not.toBeNull()
+    expect(anchorEditor?.getAttribute('data-anchor-part-id')).toBe(`page-a:${anchorCard.id}:anchor`)
+    expect((anchorEditor as HTMLElement).style.position).toBe('absolute')
+    expect((anchorEditor as HTMLElement).style.positionAnchor).toBe(anchorNameFor(`page-a:${anchorCard.id}:anchor-editor-frame`))
+    expect((anchorEditor as HTMLElement).style.insetInlineStart).toBe('anchor(left)')
+    expect((anchorEditor as HTMLElement).style.insetBlockStart).toBe('anchor(top)')
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    expect((scrollIntoView.mock.contexts[0] as HTMLElement).id).toBe(`elce-anchor-card-editor-${anchorCard.id}`)
     expect((rendered.$(`#elce-anchor-card-card-layout-${anchorCard.id}`) as HTMLSelectElement).value).toBe('photo-basic')
     expect((rendered.$(`#elce-anchor-card-image-fit-${anchorCard.id}`) as HTMLSelectElement).value).toBe('cover')
+    expect(rendered.$(`#elce-anchor-card-editor-close-icon-${anchorCard.id}`)?.classList.contains('lucide-x')).toBe(true)
+    expect(rendered.$(`#elce-anchor-card-media-clear-icon-${anchorCard.id}`)?.classList.contains('lucide-trash-2')).toBe(true)
 
     const subscription = subscribeSpy.mock.results[0]?.value
     expect(subscription).toBeDefined()

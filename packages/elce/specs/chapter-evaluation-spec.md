@@ -17,6 +17,14 @@ Le score est le nombre de réponses justes divisé par le nombre de Questions.
 Le seuil par défaut est `DEFAULT_EVALUATION_THRESHOLD` (`0.8`), et la réussite
 inclut l’égalité au seuil.
 
+Dans la preview auteur, le seuil du chapitre s’applique toujours. En lecture
+SCORM, un seuil LMS non nul remplace le seuil auteur pour le résultat et le
+garde de sortie du chapitre : `cmi.scaled_passing_score` en 2004 et
+`cmi.student_data.mastery_score` en 1.2. Une valeur LMS absente, nulle ou non
+numérique laisse le seuil auteur en vigueur. Si un état suspendu contient déjà
+un résultat, Elcé le recalcule selon le seuil LMS de la nouvelle session sans
+modifier les réponses ni le compteur de tentatives.
+
 Sans Question, le service rend un résultat `score: null` et `passed: null` ;
 il n’attribue pas un pourcentage fictif. La prévisualisation auteur et le
 passage du chapitre vide restent lisibles et franchissables dans le player.
@@ -39,8 +47,9 @@ facultatif dans les options configurées. L’icône d’ajout
 est une règle de l’interface auteur ; elle ne crée aucun type de page et
 n’ajoute pas de restriction au modèle métier.
 
-Cliquer le chapitre ouvre ses réglages dans la zone centrale. Le seuil de 80 %
-est affiché et reste fixe pour ce POC. L’auteur peut enregistrer une limite
+Cliquer le chapitre ouvre ses réglages dans la zone centrale. Le seuil auteur
+de 80 % est affiché et reste fixe pour ce POC ; un LMS peut lui fournir un
+seuil de lecture SCORM prioritaire. L’auteur peut enregistrer une limite
 d’essais positive ou laisser le champ vide pour des essais illimités. Il peut
 choisir de reprendre toutes les Questions ou seulement celles dont la réponse
 est fausse ou absente. Ces valeurs sont conservées dans le document par la
@@ -91,6 +100,10 @@ confirme l’affichage des défauts sur un chapitre déjà présent dans le docu
 Le passage refusé/réussi par le score cumulé dans le vrai player reste à valider
 au plan. La machine métier est vérifiée par
 [`evaluation-machine.test.ts`](../src/domain/evaluation/evaluation-machine.test.ts).
+Le seuil fourni par le LMS et le recalcul d’un résultat suspendu sont vérifiés
+par [`elce-scorm-adapter.test.ts`](../src/scorm/elce-scorm-adapter.test.ts) ;
+son effet sur le garde de navigation SCORM est vérifié dans
+[`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts).
 La création, l’édition et le retrait du BDC Résultat sont vérifiés dans
 [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) et
 [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts) ;

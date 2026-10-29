@@ -25,6 +25,7 @@ export class RuntimeBindingManager<SceneKey extends string, SlotName extends str
     const publicEvent: SightyPublicEvent<SceneKey> = {
       name: event.name,
       sourceSceneKey: binding.sceneKey,
+      timeMs: event.timeMs,
       data: event.data,
     }
     const task = this.enqueue({ event: publicEvent, binding })

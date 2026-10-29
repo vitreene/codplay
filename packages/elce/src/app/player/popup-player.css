@@ -6,6 +6,12 @@
   flex-direction: column;
 }
 
+.elce-popup-reader--network-preview {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
 .elce-popup-reader__header {
   display: flex;
   align-items: center;
@@ -47,17 +53,56 @@
   opacity: 0.6;
 }
 
+.elce-popup-reader__test-panel {
+  position: absolute;
+  z-index: 10;
+  top: 4.25rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.65rem;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border: 1px solid #c5d7d2;
+  border-radius: 0.5rem;
+  color: #263b3a;
+  background: #f8f5ef;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 20%);
+}
+
+.elce-popup-reader__test-panel button {
+  min-height: 2.5rem;
+  border: 1px solid #687f7d;
+  border-radius: 0.35rem;
+  color: #263b3a;
+  background: white;
+}
+
 .elce-popup-reader .elce-player-menu-toggle svg,
 .elce-popup-reader .elce-player-menu-close svg {
-  width: var(--elce-icon-size);
-  height: var(--elce-icon-size);
+  block-size: 1cap;
+  inline-size: auto;
 }
 
 .elce-popup-reader__main {
   display: flex;
   flex: 1;
   min-height: 0;
-  padding: 0.75rem;
+  padding: 0;
+}
+
+.elce-popup-reader__main--network-preview {
+  padding: 0;
+}
+
+.elce-popup-reader--network-preview .elce-player-stage {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.elce-popup-reader--network-preview .elce-player-layout {
+  height: 100%;
+  min-height: 0;
 }
 
 .elce-popup-reader__main .elce-player-stage {

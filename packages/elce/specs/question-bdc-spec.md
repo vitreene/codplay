@@ -41,6 +41,13 @@ garde le titre et l’énoncé. Les invariants sont contrôlés par
 `ElceQuestionService` et lors des commandes documentaires, pas par le composant
 de rendu.
 
+Après validation, l’événement `elce:question:answered` publie les identifiants
+des réponses présentes (`answerIds`), sélectionnées (`selectedAnswerIds`) et
+attendues (`expectedAnswerIds`), avec le résultat. L’état de test s’en sert
+pour réadmettre la réponse après réouverture ; le changement de libellé seul
+ne l’invalide pas, tandis qu’un changement d’identités ou de correction la
+retire.
+
 La zone Illustration du preset accepte une ressource image ou vidéo du
 catalogue, ou un fichier local. Un fichier suit l’import média partagé et la
 Question conserve la référence réutilisable ; l’opération n’ajoute pas un BDC
@@ -68,6 +75,24 @@ contrôles sont insérés directement dans leur conteneur sémantique ; la zone 
 validation est un commentaire après le `fieldset`, sans `div` intermédiaire.
 Les conteneurs de l’illustration et des réponses restent parce qu’ils portent
 leur cadrage et leur mise en page.
+
+Dans le player, l’image de la Question utilise `object-fit: contain`, en Flux
+comme en Diapo. Le cadre Flux garde son rapport `4:3` ; en Diapo, le layout
+réserve une zone flexible que l’image remplit en largeur et en hauteur. Le
+bloc Question en Flux conserve le padding Normal quand son fond est transparent,
+car sa bordure reste visible. En Diapo, la bordure est retirée et cette règle
+de retrait ne s’applique pas ; le padding existant d’une surface opaque suit
+toujours sa densité. Le style du sélecteur d’illustration de Remix est limité
+au composant `.elce-question-editor` et n’impose aucune hauteur maximale à
+la photo. Son
+effet d’apparition utilise l’observation du scrollport existante :
+`initial: 'enter'` couvre une image déjà visible au premier relevé, et l’event
+`enter` est déclaré `once: true`. L’action fait entrer l’image depuis la gauche
+en une seconde. Il n’y a pas d’event de sortie : quitter puis retrouver
+l’illustration ne rejoue pas l’effet et ne masque pas la photo. La règle
+`once` suit la durée de vie du player, y compris à travers un seek, selon le
+[contrat CodPlay du scroll-container](../../codplay/specs/scroll-container-spec.md).
+
 Le builder ne crée le `header` de titre que si le titre existe, et la zone
 illustration que si une référence média existe. Le paragraphe vide de retour
 est l’exception fonctionnelle : il reste caché avec `aria-live` afin que
@@ -125,6 +150,16 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   vérifie le preset, les zones et les persos produits par le builder ;
   [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
   vérifie la progression de page et le garde d’évaluation.
+- Le test `fills the Question illustration frame and runs its entrance event
+  once` dans `flux-scene-builder.test.ts` vérifie le cadrage `contain`,
+  l’observation initiale, l’event `once` et l’absence d’event de sortie.
+- Le 13 octobre 2026, Brave vérifie la preview réelle de « Document Elcé »,
+  page « Titre » : le cadre, le wrapper et l’image font tous 512 × 384 px.
+  L’entrée s’anime une fois au premier défilement dans le viewport ; un
+  défilement hors champ puis un retour ne produit aucun nouveau changement de
+  style et laisse l’image visible. La photo a bien été chargée depuis le
+  serveur. Cette vérification précédait le cadrage `contain` et ne le valide
+  pas visuellement.
 - [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
   vérifie les cibles de zones par commentaires, la cible du prompt dans le
   `fieldset`, l’absence de conteneur de validation intermédiaire et l’omission

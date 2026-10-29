@@ -2,9 +2,9 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v4 ; les détails Carte, Question et Graphe
-statistique, les placements page/catalogue/parent, le catalogue générique, les
-commandes et invariants sont vérifiés le 9 octobre 2026.**
+**Fixe — modèle documentaire v7 ; les structures générales, les commandes et
+invariants de placement sont vérifiés. Sommaire et profils sont décrits dans
+la [spécification dédiée](./summary-profile-spec.md).**
 
 Cette spécification couvre le document métier manipulé par l’application et
 la voie de modification utilisée par l’interface. La projection des cartes
@@ -13,14 +13,15 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 4 contient des tableaux de chapitres, pages, BDC et
+Un `ElceDocument` version 7 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
 Chaque chapitre conserve son propre ordre de pages. La séquence racine et les
 ordres internes des chapitres déterminent ensemble l’ordre de lecture. Les
 pages du catalogue restent hors scénario. Une page possède un type (`flux` ou
-`diapo`), un nom, une affectation de chapitre éventuelle et un ordre de BDC.
+`diapo`), un nom, une affectation de chapitre éventuelle, un ordre de BDC et
+des réglages d’apparence facultatifs.
 
 Chaque BDC a un emplacement unique : dans une page, dans le catalogue, ou
 comme enfant d’un BDC conteneur. Une page Flux peut contenir plusieurs BDC ; une
@@ -35,7 +36,7 @@ page d’un chapitre Évaluation. Une Carte peut occuper directement une page,
 être conservée au catalogue, ou être enfant d’un Carousel ou inline d’une
 Section ; le JSON Tiptap porte alors sa position exacte. Une Carte
 porte son layout dans `presetId`, ses valeurs et sa référence média facultative
-dans `card.mediaId`. Un Graphe statistique peut occuper directement une page,
+dans `card.mediaId`. Un Graphe peut occuper directement une page,
 être conservé au catalogue, ou être enfant d’un Carousel ou inline d’une
 Section. Une Question porte son illustration facultative dans
 `question.mediaId`. Les ressources média sont indépendantes et peuvent être
@@ -44,9 +45,17 @@ catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de l
 masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
 propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument.fromJSON()` accepte uniquement la version 4 et rejette les
-versions 1, 2 et 3 sans conversion. Le POC ne conserve pas de migration depuis
-le format précédent.
+`ElceDocument` v7 conserve `data.summary`, `data.profile` et les réglages
+d’apparence facultatifs sur le document, chaque page et chaque BDC. Le preset
+général d’apparence est réservé au document ; le modèle v7 enregistre séparément
+les polices de titre et de corps. Les détails et la résolution par propriété
+figurent dans la [spécification d’apparence](./appearance-spec.md).
+`data.summary` et `data.profile` gardent leur structure et leurs invariants
+décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
+`ElceDocument.fromJSON()` accepte uniquement la version courante et rejette
+les documents d’une autre version. La migration SQLite v6 → v7 convertit
+uniquement Demo5, seul document conservé ; aucune compatibilité documentaire
+générale n’est ajoutée.
 
 Les valeurs de placement et les constantes de configuration sont déclarées
 dans [`document-config.ts`](../src/config/document-config.ts), leurs types
@@ -77,7 +86,7 @@ il est créé atomiquement avec un BDC Carte enfant au layout initial
 métier.
 
 `ElceDocument.toJSON()` fournit la valeur structurée enregistrable en version
-4. Les octets des médias sont conservés à part par la frontière IndexedDB.
+7. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 ## Commandes
 
@@ -86,7 +95,7 @@ retourne une nouvelle valeur après vérification de ses invariants. Elles couvr
 la création, le renommage et le déplacement de chapitres et de pages, le
 déplacement et le retrait au catalogue des bdc, la suppression définitive
 d’une page ou d’un bdc disponible, la mise à jour d’une Section, d’une Question,
-d’un Résultat, d’un Carousel ou d’un Graphe statistique, l’ajout de métadonnées
+d’un Résultat, d’un Carousel ou d’un Graphe, l’ajout de métadonnées
 média et le renommage du document.
 La suppression définitive d’une page supprime ses bdc, mais conserve les médias
 du catalogue. `bdc.delete` ne peut supprimer qu’un BDC inutilisé et présent dans
@@ -98,18 +107,18 @@ pas des entrées de catalogue autonomes. La suppression définitive d’un
 conteneur du catalogue supprime aussi ses BDC enfants, mais conserve les
 ressources média.
 `bdc.section.delete` supprime un BDC Section affecté à une page et ses BDC
-Carte ou Graphe statistique enfants référencés par des ancres ; les ressources média restent dans le
+Carte ou Graphe enfants référencés par des ancres ; les ressources média restent dans le
 catalogue. `bdc.question.delete` supprime le BDC Question de sa page et
 conserve son illustration média. `bdc.evaluation-result.delete` retire de la
 page le BDC Résultat affecté ; il ne le remet pas au catalogue. La commande
 `bdc.evaluation-result.update` édite ensemble ses branches Réussite et Échec ;
 le service métier vérifie qu’une action choisie est permise pour sa branche.
 `bdc.carousel.update` remplace les réglages et l’ordre des entrées, sans
-modifier l’ensemble des BDC Carte et Graphe statistique enfants. `bdc.card.update`,
+modifier l’ensemble des BDC Carte et Graphe enfants. `bdc.card.update`,
 `bdc.card.layout.set`, `bdc.card.media.set` et `bdc.card.media.attach` modifient
 une carte identifiée sans dupliquer une ressource existante.
 `bdc.carousel.card.delete` retire un BDC Carte enfant, mais refuse de vider le
-Carousel. `bdc.carousel.delete` retire le parent et ses BDC Carte et Graphe statistique enfants en
+Carousel. `bdc.carousel.delete` retire le parent et ses BDC Carte et Graphe enfants en
 conservant les médias référencés. `bdc.move` peut déplacer une carte vers un
 autre Carousel ; l’opération enlève son ancienne relation parent/enfant et en
 crée une nouvelle tout en gardant le BDC Carte lui-même.
@@ -153,11 +162,11 @@ dupliquées.
 
 `assertDocumentInvariants()` vérifie les affectations uniques, les références
 page/BDC et parent/enfant, les données propres au type de BDC, et l’intégrité
-des ancres : une référence désigne une Carte ou un Graphe statistique enfant de
+des ancres : une référence désigne une Carte ou un Graphe enfant de
 la même page, sans doublon dans une ou plusieurs Sections. Tout BDC racine peut être conservé au
 catalogue ; les règles d’affectation par page et de chapitre restent appliquées
 par les mêmes invariants. Une Carte a exactement un emplacement : une page, le
-catalogue, un parent Carousel ou une Section. Un Graphe statistique suit les
+catalogue, un parent Carousel ou une Section. Un Graphe suit les
 mêmes emplacements racines, Carousel ou Section. La Carte porte son layout,
 ses champs et, si nécessaire, `card.mediaId`. Une Question porte son illustration dans
 `question.mediaId`. Une Diapo contient au plus un BDC direct parmi les types
@@ -206,10 +215,11 @@ sont admis. Après le dépôt, le service ne propose plus ce BDC comme disponibl
 
 `attachDocumentPersistence` sérialise les écritures du document. Lorsqu’une
 commande retire des métadonnées média, le raccord de persistance appelle
-`ElceDocumentStore.saveDocumentAndDeleteMedia`. `IndexedDbDocumentStore`
-enregistre le document et supprime les blobs correspondants dans une seule
-transaction `readwrite` couvrant les deux magasins IndexedDB. L’opération de
-fusion reste déclenchée par `document.apply` dans la machine XState ; le
+`ElceDocumentStore.saveDocumentAndDeleteMedia` pour les blobs dont
+l’[historique documentaire](./document-history-spec.md) n’a plus besoin.
+`IndexedDbDocumentStore` enregistre le document et supprime ces blobs dans une
+seule transaction `readwrite` couvrant les deux magasins IndexedDB. L’opération
+de fusion reste déclenchée par `document.apply` dans la machine XState ; le
 raccord ne choisit pas quels médias fusionner.
 
 `flushLocalChanges()` relit le document courant de l’acteur XState avant
@@ -242,6 +252,10 @@ serveur.
 - Le même fichier vérifie que les versions 1, 2 et 3 sont rejetées, le mélange et
   le déplacement d’entrées page/chapitre à la racine, le déplacement d’une
   page de chapitre vers la racine et les invariants de placement correspondants.
+- [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+  vérifie l’ajout des colonnes d’apparence facultatives et la migration ciblée
+  des anciens presets locaux de Demo5, avec restauration des presets canoniques
+  au rollback. Les autres projets ne sont pas convertis.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
   layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
   la Carte autonome dans la séquence Flux et comme unique BDC direct d’une
@@ -253,14 +267,14 @@ serveur.
   Carousel ou d’une Section catalogués.
 - [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
   vérifie les six types racines au catalogue et la dépose d’une Carte ou d’un
-  Graphe statistique dans le texte.
+  Graphe dans le texte.
 - [`page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
   vérifie dans le workspace Remix le glisser d’une Carte disponible vers une
   page compatible et son retour par l’action « Renvoyer au catalogue ».
 - [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
   vérifie Carousel, Carte et Question en Diapo ;
   [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
-  vérifie le Graphe statistique direct en Diapo.
+  vérifie le Graphe direct en Diapo.
 - [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie les
   actions icônes accessibles de création à la racine et dans un chapitre,
   l’emplacement produit, ainsi que l’édition centrale des noms de page et de

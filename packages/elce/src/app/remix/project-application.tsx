@@ -1,17 +1,24 @@
 import { on, type Handle, type RemixNode } from 'remix/ui'
+import { X } from 'lucide-static'
 
 import type { SnapshotFrom } from 'xstate'
 import type { DocumentSyncState } from '../../infrastructure/indexed-db/document-store-types'
-import type { controllerMachine } from '../controller/controller-machine'
+import { isImportChange, type controllerMachine } from '../controller/controller-machine'
 import { EditorContextProvider } from './editor-context'
 import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { ProjectSessionStatus } from '../projects/project-session-types'
-import { selectEditorViewModel } from '../selectors/editor-view-model'
+import { editorViewModelEqual, selectEditorViewModel } from '../selectors/editor-view-model'
+import { CATALOG_TAB } from '../../config/document-config'
 import { PopupPreviewHost } from '../player/popup-preview-host'
+import { renderLucideIcon } from './lucide-static-icon'
+import { downloadElceSightyPackage, requestElceSightyPackage } from '../../export/elce-sighty-export-client'
+import { downloadElceScormPackage, requestElceScormPackage } from '../../export/elce-scorm-export-client.ts'
+import type { ScormVersion } from '../../scorm/scorm-types'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
-import type { DraggedScenarioEntry, ResponsivePanel } from './workspace/editor-workspace-types'
+import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab } from './workspace/editor-workspace-types'
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './project-application-types'
+import type { AppearanceTarget } from '../../domain/commands/document-command-types'
 
 /** Renders project management and the native Remix authoring workspace. */
 export function ProjectApplication(handle: Handle) {
@@ -24,9 +31,19 @@ export function ProjectApplication(handle: Handle) {
 
   let view = selectProjectView(controller.getSnapshot())
   let responsivePanel: ResponsivePanel = null
+  let sidePanelTab: SidePanelTab = 'contents'
+  let appearanceTarget: AppearanceTarget = { kind: 'document' }
+  let appearanceProjectId = view.activeProject?.id ?? null
+  let summarySettingsOpen = false
+  let profileTokenTargetId: string | null = null
+  let authoringError: string | null = null
   let dropTarget: string | null = null
   let draggedEntry: DraggedScenarioEntry = null
   let previewError: string | null = null
+  let exportBusy = false
+  let exportKind: 'sighty' | 'scorm' | null = null
+  let exportError: string | null = null
+  let exportNotice: string | null = null
   let returnFocusId: string | null = null
   let popupPreviewHost: PopupPreviewHost | null = null
 
@@ -39,9 +56,37 @@ export function ProjectApplication(handle: Handle) {
       if (panel === null && focusId !== null) document.getElementById(focusId)?.focus()
     })
   }
+  const setSidePanelTab = (tab: SidePanelTab): void => {
+    if (sidePanelTab === tab) return
+    sidePanelTab = tab
+    void handle.update()
+  }
+  const openAppearanceTarget = (target: AppearanceTarget, triggerId: string): void => {
+    appearanceTarget = target
+    sidePanelTab = 'style'
+    setResponsivePanel('properties', triggerId)
+  }
   const setDropTarget = (targetId: string | null): void => {
     if (dropTarget === targetId) return
     dropTarget = targetId
+    void handle.update()
+  }
+  const setSummarySettingsOpen = (open: boolean): void => {
+    summarySettingsOpen = open
+    authoringError = null
+    void handle.update()
+  }
+  /** Keeps profile-variable insertion available only for the active text target. */
+  const setProfileTokenTarget = (targetId: string | null): void => {
+    if (profileTokenTargetId === targetId) return
+    profileTokenTargetId = targetId
+    if (targetId === null && view.editor.catalogTab === CATALOG_TAB.PROFILE) {
+      actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)
+    }
+    void handle.update()
+  }
+  const setAuthoringError = (error: string | null): void => {
+    authoringError = error
     void handle.update()
   }
   const setDraggedEntry = (entry: DraggedScenarioEntry): void => {
@@ -53,14 +98,125 @@ export function ProjectApplication(handle: Handle) {
     if (!popupPreviewHost.open()) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
     void handle.update()
   }
+  /** Opens the export choices from the project title bar. */
+  const openExportDialog = (): void => {
+    const dialog = document.getElementById('elce-export-dialog') as HTMLDialogElement | null
+    if (dialog !== null && !dialog.open) dialog.showModal()
+  }
+  /** Closes the shared export choices dialog. */
+  const closeExportDialog = (): void => {
+    const dialog = document.getElementById('elce-export-dialog') as HTMLDialogElement | null
+    if (dialog?.open === true) dialog.close()
+  }
+  /** Packages the current actor snapshot and downloads it without saving or initializing it. */
+  const exportScenario = (): void => {
+    closeExportDialog()
+    const context = controller.getSnapshot().context
+    if (exportBusy || context.activeProject === null || context.projectStatus !== 'active' || context.editAccess !== 'active') return
+    const documentSnapshot = context.document
+    const mediaSources = context.mediaSources
+    exportBusy = true
+    exportKind = 'sighty'
+    exportError = null
+    exportNotice = null
+    void handle.update()
+    void (async () => {
+      try {
+        const packageBlob = await requestElceSightyPackage(documentSnapshot, mediaSources)
+        const filename = downloadElceSightyPackage(packageBlob, documentSnapshot.data.name)
+        exportNotice = `Téléchargement de « ${filename} » démarré.`
+      } catch (error) {
+        exportError = error instanceof Error ? error.message : 'L’export du scénario Elcé a échoué.'
+      } finally {
+        exportBusy = false
+        exportKind = null
+        void handle.update()
+      }
+    })()
+  }
+  /** Builds the existing Sighty archive, then lets the dedicated SCORM CLI package it. */
+  const exportScorm = (version: ScormVersion, monoSco: boolean): void => {
+    closeExportDialog()
+    const context = controller.getSnapshot().context
+    if (exportBusy || context.activeProject === null || context.projectStatus !== 'active' || context.editAccess !== 'active') return
+    const documentSnapshot = context.document
+    const mediaSources = context.mediaSources
+    exportBusy = true
+    exportKind = 'scorm'
+    exportError = null
+    exportNotice = null
+    void handle.update()
+    void (async () => {
+      try {
+        const sightyPackage = await requestElceSightyPackage(documentSnapshot, mediaSources)
+        const scormPackage = await requestElceScormPackage(sightyPackage, documentSnapshot.data.name, version, monoSco)
+        const filename = downloadElceScormPackage(scormPackage.archive, scormPackage.filename)
+        exportNotice = monoSco
+          ? `Téléchargement de « ${filename} » démarré. Extrayez cette archive pour importer séparément les packages SCORM qu’elle contient.`
+          : `Téléchargement de « ${filename} » démarré.`
+      } catch (error) {
+        exportError = error instanceof Error ? error.message : 'L’export SCORM du scénario Elcé a échoué.'
+      } finally {
+        exportBusy = false
+        exportKind = null
+        void handle.update()
+      }
+    })()
+  }
+  /** Routes either button or shortcut through the same controller gesture. */
+  const runHistoryAction = (kind: 'undo' | 'redo'): void => {
+    if (view.activeProject === null || view.projectStatus !== 'active' || view.editAccess !== 'active') return
+    if (kind === 'undo') commitFocusedInlineTitle()
+    if (kind === 'undo') actions.undo()
+    else actions.redo()
+  }
   handle.queueTask(() => {
     const subscription = controller.subscribe((snapshot) => {
-      view = selectProjectView(snapshot)
+      const nextView = selectProjectView(snapshot)
+      if (projectApplicationViewEqual(view, nextView)) return
+      const nextProjectId = nextView.activeProject?.id ?? null
+      if (appearanceProjectId !== nextProjectId) {
+        appearanceProjectId = nextProjectId
+        appearanceTarget = { kind: 'document' }
+      }
+      view = nextView
       void handle.update()
     })
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && responsivePanel !== null) setResponsivePanel(null)
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return
+      if (view.activeProject === null || view.projectStatus !== 'active' || view.editAccess !== 'active') return
+      event.preventDefault()
+      event.stopPropagation()
+      runHistoryAction(event.shiftKey ? 'redo' : 'undo')
     }
+    /** Refreshes button availability while an inline title is still dirty. */
+    const handleInput = (event: Event): void => {
+      if (event.target instanceof HTMLInputElement && isInlineTitle(event.target)) void handle.update()
+    }
+    /** Tracks the text or rich-text field whose profile variable can be inserted. */
+    const handleProfileTokenFocusIn = (event: FocusEvent): void => {
+      if (event.target instanceof Element) {
+        const target = event.target.closest<HTMLElement>('[data-elce-profile-token-target="true"]')
+        if (target !== null && target.id.length > 0) {
+          setProfileTokenTarget(target.id)
+          return
+        }
+        if (event.target.closest('#elce-properties, #elce-properties-toggle') !== null) return
+      }
+      setProfileTokenTarget(null)
+    }
+    /** Clears the insertion context when the author clicks outside its field and panel. */
+    const handleProfileTokenPointerDown = (event: PointerEvent): void => {
+      if (!(event.target instanceof Element)) {
+        setProfileTokenTarget(null)
+        return
+      }
+      if (event.target.closest('[data-elce-profile-token-target="true"]') !== null
+        || event.target.closest('#elce-properties, #elce-properties-toggle') !== null) return
+      setProfileTokenTarget(null)
+    }
+    document.addEventListener('click', closeProjectMenuOnOutsideClick, true)
     const handleResize = (): void => {
       switch (responsivePanel) {
         case 'outline':
@@ -73,11 +229,18 @@ export function ProjectApplication(handle: Handle) {
           return
       }
     }
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('input', handleInput)
+    document.addEventListener('focusin', handleProfileTokenFocusIn, true)
+    document.addEventListener('pointerdown', handleProfileTokenPointerDown, true)
     window.addEventListener('resize', handleResize)
     const dispose = (): void => {
       subscription.unsubscribe()
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('input', handleInput)
+      document.removeEventListener('focusin', handleProfileTokenFocusIn, true)
+      document.removeEventListener('pointerdown', handleProfileTokenPointerDown, true)
+      document.removeEventListener('click', closeProjectMenuOnOutsideClick, true)
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
     }
@@ -86,17 +249,60 @@ export function ProjectApplication(handle: Handle) {
 
   return () => renderApplication(view, actions, {
     responsivePanel,
+    sidePanelTab,
+    appearanceTarget,
+    summarySettingsOpen,
+    profileTokenTargetId,
+    authoringError,
     dropTarget,
     visible: view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active',
     setResponsivePanel,
+    setSidePanelTab,
+    openAppearanceTarget,
+    setSummarySettingsOpen,
+    setAuthoringError,
     setDropTarget,
     setDraggedEntry,
     getDraggedEntry: () => draggedEntry,
     onPreview: openPreview,
     previewError,
+    onExport: openExportDialog,
+    onCloseExportDialog: closeExportDialog,
+    onExportSighty: exportScenario,
+    onExportScorm: exportScorm,
+    exportBusy,
+    exportKind,
+    exportError,
+    exportNotice,
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
     moveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
-  })
+  }, runHistoryAction)
+}
+
+/** Closes the native project disclosure when a click lands outside it. */
+function closeProjectMenuOnOutsideClick(event: MouseEvent): void {
+  const menu = document.getElementById('elce-project-menu')
+  if (!(menu instanceof HTMLDetailsElement) || !menu.open) return
+  if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false
+}
+
+/** Detects the two inline titles that commit their edits on blur. */
+function isInlineTitle(input: HTMLInputElement): boolean {
+  return input.id.startsWith('elce-page-title-') || input.id.startsWith('elce-chapter-title-')
+}
+
+/** Commits the active dirty title before Undo enters the global history. */
+function commitFocusedInlineTitle(): void {
+  const active = document.activeElement
+  if (active instanceof HTMLInputElement && isInlineTitle(active)) active.blur()
+}
+
+/** Reports a local title edit that has not yet reached the controller. */
+function hasDirtyInlineTitle(): boolean {
+  if (typeof document === 'undefined') return false
+  const active = document.activeElement
+  return active instanceof HTMLInputElement && isInlineTitle(active)
+    && active.value.trim() !== active.defaultValue.trim()
 }
 
 /** Selects only project-management data from the XState-owned application snapshot. */
@@ -106,11 +312,49 @@ function selectProjectView(snapshot: SnapshotFrom<typeof controllerMachine>): Pr
     activeProject: snapshot.context.activeProject,
     projectStatus: snapshot.context.projectStatus,
     projectError: snapshot.context.projectError,
+    accessRecoveryAvailable: snapshot.context.accessRecoveryAvailable,
+    recoverableLocalCopy: snapshot.context.recoverableLocalCopy,
     editAccess: snapshot.context.editAccess,
     document: snapshot.context.document,
+    history: snapshot.context.history,
+    importPending: snapshot.matches('processingDocumentChange') && isImportChange(snapshot.context.documentChanges[0]),
     syncStatus: snapshot.context.syncStatus,
     editor: selectEditorViewModel(snapshot),
   }
+}
+
+/** Skips parent renders when an actor snapshot leaves every projected value unchanged. */
+function projectApplicationViewEqual(left: ProjectApplicationView, right: ProjectApplicationView): boolean {
+  return sameProjectSummaries(left.projects, right.projects)
+    && sameProjectSummary(left.activeProject, right.activeProject)
+    && left.projectStatus === right.projectStatus
+    && left.projectError === right.projectError
+    && left.accessRecoveryAvailable === right.accessRecoveryAvailable
+    && left.recoverableLocalCopy === right.recoverableLocalCopy
+    && left.editAccess === right.editAccess
+    && left.document === right.document
+    && left.history === right.history
+    && left.importPending === right.importPending
+    && left.syncStatus === right.syncStatus
+    && editorViewModelEqual(left.editor, right.editor)
+}
+
+/** Compares the visible project catalogue by its stable row fields. */
+function sameProjectSummaries(
+  left: ProjectApplicationView['projects'],
+  right: ProjectApplicationView['projects'],
+): boolean {
+  return left.length === right.length
+    && left.every((project, index) => sameProjectSummary(project, right[index] ?? null))
+}
+
+/** Compares a displayed project row by its identifier, name, and revision. */
+function sameProjectSummary(
+  left: ProjectApplicationView['activeProject'],
+  right: ProjectApplicationView['activeProject'],
+): boolean {
+  if (left === null || right === null) return left === right
+  return left.id === right.id && left.name === right.name && left.revision === right.revision
 }
 
 /** Renders the project switcher, project list, and Remix work area. */
@@ -118,8 +362,10 @@ function renderApplication(
   view: ProjectApplicationView,
   actions: EditorActionsFacade,
   workspace: ProjectApplicationWorkspaceState,
+  runHistoryAction: (kind: 'undo' | 'redo') => void,
 ): RemixNode {
   const editorVisible = view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active'
+  const projectVisible = view.activeProject !== null && view.projectStatus !== 'loading' && view.projectStatus !== 'busy'
   const currentName = view.activeProject === null ? null : view.document.data.name
   return <div
     id="elce-remix-project-app"
@@ -169,6 +415,28 @@ function renderApplication(
             Actualiser
           </button>
           {view.activeProject === null ? null : <button
+            id="elce-project-save-as"
+            type="button"
+            disabled={view.projectStatus === 'busy'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => {
+              const name = window.prompt('Nom de la copie', `${currentName ?? 'Projet'} (copie)`)
+              if (name?.trim()) actions.saveAs(name.trim())
+            })}
+          >
+            Enregistrer sous…
+          </button>}
+          {view.activeProject === null || !view.recoverableLocalCopy ? null : <button
+            id="elce-project-save-local-as"
+            type="button"
+            disabled={view.projectStatus === 'busy'}
+            mix={on<HTMLButtonElement, 'click'>('click', () => {
+              const name = window.prompt('Nom de la copie locale', `${currentName ?? 'Projet'} (copie locale)`)
+              if (name?.trim()) actions.saveLocalAs(name.trim())
+            })}
+          >
+            Enregistrer la copie locale sous…
+          </button>}
+          {view.activeProject === null ? null : <button
             id="elce-project-close"
             type="button"
             disabled={view.projectStatus === 'busy'}
@@ -176,7 +444,7 @@ function renderApplication(
           >
             Fermer le projet
           </button>}
-          {view.activeProject === null ? null : <form
+          {view.activeProject === null || !editorVisible ? null : <form
             id="elce-project-rename-form"
             className="elce-project-rename-form"
             mix={on<HTMLFormElement, 'submit'>('submit', (event) => {
@@ -214,38 +482,200 @@ function renderApplication(
           </ul>
         </div>
       </details>
+      {editorVisible ? <div
+        id="elce-history-actions"
+        className="elce-history-actions"
+      >
+        <button
+          id="elce-history-undo"
+          type="button"
+          disabled={view.history.past.length === 0 && !hasDirtyInlineTitle()}
+          mix={on<HTMLButtonElement, 'click'>('click', () => runHistoryAction('undo'))}
+        >
+          Annuler
+        </button>
+        <button
+          id="elce-history-redo"
+          type="button"
+          disabled={view.history.future.length === 0}
+          mix={on<HTMLButtonElement, 'click'>('click', () => runHistoryAction('redo'))}
+        >
+          Rétablir
+        </button>
+      </div> : null}
+      {editorVisible && view.importPending ? <button
+        id="elce-import-cancel"
+        className="elce-import-cancel"
+        type="button"
+        mix={on<HTMLButtonElement, 'click'>('click', () => actions.cancelImport())}
+      >
+        Annuler l’import
+      </button> : null}
       <span
         id="elce-project-sync-status"
         className="elce-project-sync-status"
         role="status"
         aria-live="polite"
       >
-        {editorVisible ? syncStatusLabel(view.syncStatus) : projectStatusLabel(view.projectStatus)}
+        {editorVisible ? syncStatusLabel(view.syncStatus) : projectVisible ? 'Lecture seule' : projectStatusLabel(view.projectStatus)}
       </span>
+      {editorVisible ? renderExportButton(workspace.onExport, workspace.exportBusy) : null}
     </header>
-    {editorVisible ? null : renderProjectSelection(view, actions)}
+    {editorVisible ? renderExportDialog(workspace) : null}
+    {view.activeProject === null ? renderProjectSelection(view, actions) : null}
+    {projectVisible && !editorVisible && view.projectError !== null ? <p id="elce-project-reader-status" role="status">
+      {view.projectError}
+    </p> : null}
+    {projectVisible && !editorVisible && view.accessRecoveryAvailable ? <button
+      id="elce-project-access-retry"
+      type="button"
+      mix={on<HTMLButtonElement, 'click'>('click', () => actions.retryProjectAccess())}
+    >
+      Réessayer l’accès
+    </button> : null}
+    {projectVisible && !editorVisible && view.accessRecoveryAvailable ? <button
+      id="elce-project-access-force"
+      type="button"
+      mix={on<HTMLButtonElement, 'click'>('click', () => actions.forceProjectAccess())}
+    >
+      Forcer l’accès
+    </button> : null}
+    {editorVisible && view.projectError !== null ? <p id="elce-project-copy-warning" role="alert">{view.projectError}</p> : null}
     {renderEditorWorkspace({
       view: view.editor,
       actions,
-      pageEditorHost: editorVisible && view.editor.selectedChapter === undefined
-        ? <RemixPageEditor
-          onPreview={workspace.onPreview}
-          previewError={workspace.previewError}
-        />
+      pageEditorHost: projectVisible && view.editor.selectedChapter === undefined
+        ? <RemixPageEditor onOpenAppearanceTarget={workspace.openAppearanceTarget} />
         : null,
       responsivePanel: workspace.responsivePanel,
+      sidePanelTab: workspace.sidePanelTab,
+      appearanceTarget: workspace.appearanceTarget,
+      summarySettingsOpen: workspace.summarySettingsOpen,
+      profileTokenTargetId: workspace.profileTokenTargetId,
+      authoringError: workspace.authoringError,
       dropTarget: workspace.dropTarget,
-      visible: editorVisible,
+      visible: projectVisible,
+      editable: editorVisible,
       onSetResponsivePanel: workspace.setResponsivePanel,
+      onSetSidePanelTab: workspace.setSidePanelTab,
+      onOpenAppearanceTarget: workspace.openAppearanceTarget,
+      onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
+      onSetAuthoringError: workspace.setAuthoringError,
       onSetDropTarget: workspace.setDropTarget,
       onSetDraggedEntry: workspace.setDraggedEntry,
       getDraggedEntry: workspace.getDraggedEntry,
       onPreview: workspace.onPreview,
       previewError: workspace.previewError,
+      exportBusy: workspace.exportBusy,
+      exportKind: workspace.exportKind,
+      exportError: workspace.exportError,
+      exportNotice: workspace.exportNotice,
       onMovePage: workspace.movePage,
       onMoveChapter: workspace.moveChapter,
     })}
   </div>
+}
+
+/** Renders the export action at the right edge of the project title bar. */
+function renderExportButton(onExport: () => void, busy: boolean): RemixNode {
+  return <button
+    id="elce-export-open"
+    className="elce-project-export-button"
+    type="button"
+    aria-haspopup="dialog"
+    aria-controls="elce-export-dialog"
+    disabled={busy}
+    aria-busy={busy}
+    mix={on<HTMLButtonElement, 'click'>('click', onExport)}
+  >
+    {busy ? 'Préparation…' : 'Exporter'}
+  </button>
+}
+
+/** Presents the existing scenario download and the separate SCORM packaging options. */
+function renderExportDialog(workspace: ProjectApplicationWorkspaceState): RemixNode {
+  return <dialog
+    id="elce-export-dialog"
+    className="elce-export-dialog"
+    aria-labelledby="elce-export-dialog-title"
+    aria-describedby="elce-export-dialog-description"
+  >
+    <div id="elce-export-dialog-content" className="elce-export-dialog__content">
+      <header id="elce-export-dialog-header" className="elce-export-dialog__header">
+        <h2 id="elce-export-dialog-title">Exporter</h2>
+        <button
+          id="elce-export-dialog-close"
+          className="elce-export-dialog__close"
+          type="button"
+          aria-label="Fermer la fenêtre d’export"
+          title="Fermer la fenêtre d’export"
+          mix={on<HTMLButtonElement, 'click'>('click', workspace.onCloseExportDialog)}
+        >
+          {renderLucideIcon(X, 'elce-export-dialog-close-icon')}
+        </button>
+      </header>
+      <p id="elce-export-dialog-description">
+        Choisissez le format de diffusion. L’export SCORM reprend le même scénario et les mêmes médias.
+      </p>
+      <button
+        id="elce-sighty-export-action"
+        className="elce-export-dialog__action"
+        type="button"
+        disabled={workspace.exportBusy}
+        mix={on<HTMLButtonElement, 'click'>('click', workspace.onExportSighty)}
+      >
+        Exporter le scénario
+      </button>
+      <section id="elce-scorm-export-section" className="elce-export-dialog__scorm">
+        <h3 id="elce-scorm-export-title">Exporter en SCORM</h3>
+        <p id="elce-scorm-export-description">
+          Cochez monoSCO pour obtenir un package SCORM distinct par chapitre.
+        </p>
+        <form id="elce-scorm-export-form">
+          <fieldset id="elce-scorm-version-options" className="elce-export-dialog__fieldset">
+            <legend id="elce-scorm-version-legend">Version SCORM</legend>
+            <label id="elce-scorm-version-label-12" className="elce-export-dialog__choice">
+              <input id="elce-scorm-version-12" name="version" type="radio" value="1.2" />
+              SCORM 1.2
+            </label>
+            <label id="elce-scorm-version-label-2004" className="elce-export-dialog__choice">
+              <input id="elce-scorm-version-2004" name="version" type="radio" value="2004v4" checked />
+              SCORM 2004 (4e édition)
+            </label>
+          </fieldset>
+          <label id="elce-scorm-mono-sco-label" className="elce-export-dialog__choice">
+            <input id="elce-scorm-mono-sco" name="monoSco" type="checkbox" value="true" />
+            monoSCO
+          </label>
+        </form>
+        <button
+          id="elce-scorm-export-action"
+          className="elce-export-dialog__action"
+          type="button"
+          disabled={workspace.exportBusy}
+          mix={on<HTMLButtonElement, 'click'>('click', () => submitScormExport(workspace.onExportScorm))}
+        >
+          Exporter en SCORM
+        </button>
+      </section>
+    </div>
+  </dialog>
+}
+
+/** Reads the selected edition and mono-SCO checkbox from the export form. */
+function submitScormExport(onExportScorm: (version: ScormVersion, monoSco: boolean) => void): void {
+  const form = document.getElementById('elce-scorm-export-form') as HTMLFormElement | null
+  if (form === null) return
+  const formData = new FormData(form)
+  const version = formData.get('version')
+  const monoSco = formData.get('monoSco') === 'true'
+  if (!isScormVersion(version)) return
+  onExportScorm(version, monoSco)
+}
+
+/** Accepts only the SCORM editions available in the package CLI. */
+function isScormVersion(value: FormDataEntryValue | null): value is ScormVersion {
+  return value === '1.2' || value === '2004v3' || value === '2004v4'
 }
 
 /** Renders the selection surface when no project is actively being edited. */

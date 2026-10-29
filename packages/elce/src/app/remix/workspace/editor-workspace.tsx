@@ -10,6 +10,7 @@ import { renderScenarioPanel } from './scenario-panel'
 import { renderLucideIcon } from '../lucide-static-icon'
 import type { EditorWorkspaceViewProps } from './editor-workspace-types'
 import type { ScenarioPanelProps } from './scenario-panel-types'
+import { renderSummaryProfileSettings } from './summary-profile-settings'
 
 /** Composes the native Remix scenario, chapter-settings and catalog surfaces. */
 export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNode {
@@ -24,7 +25,18 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
     onDropPage: (event, placement) => dropPageEntry(event, placement, props),
     onDragLeave: (event) => dragLeaveSeparator(event, props.onSetDropTarget),
   }
-  const center = props.view.selectedChapter === undefined
+  const center = props.summarySettingsOpen
+    ? <div id="elce-summary-profile-settings-host" className="elce-remix-center-column">
+      {renderSummaryProfileSettings({
+        document: props.view.documentModel,
+        mediaSources: props.view.mediaSources,
+        actions: props.actions,
+        error: props.authoringError,
+        onClose: () => props.onSetSummarySettingsOpen(false),
+        onError: props.onSetAuthoringError,
+      })}
+    </div>
+    : props.view.selectedChapter === undefined
     ? <div
       id="elce-remix-page-editor-host-container"
       className="elce-remix-page-editor-host elce-remix-center-column"
@@ -38,8 +50,6 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       {renderChapterSettings({
         chapter: props.view.selectedChapter,
         actions: props.actions,
-        onPreview: props.onPreview,
-        previewError: props.previewError,
       })}
     </div>
 
@@ -54,6 +64,7 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       id="elce-main"
       className={`elce-main${panelStateClass}`}
       hidden={!props.visible}
+      inert={props.editable === false}
     >
       {renderScenarioPanel(scenarioProps)}
       <div
@@ -67,6 +78,11 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
         view: props.view,
         actions: props.actions,
         responsivePanel: props.responsivePanel,
+        sidePanelTab: props.sidePanelTab,
+        appearanceTarget: props.appearanceTarget,
+        onSetSidePanelTab: props.onSetSidePanelTab,
+        onOpenAppearanceTarget: props.onOpenAppearanceTarget,
+        profileTokenTargetId: props.profileTokenTargetId,
         dropTarget: props.dropTarget,
         onSetDropTarget: props.onSetDropTarget,
       })}
@@ -76,16 +92,60 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
 
 /** Renders the icon-only controls on the outer edges of the center column. */
 function renderWorkspaceAccess(
-  props: Pick<EditorWorkspaceViewProps, 'responsivePanel' | 'onSetResponsivePanel'>,
+  props: Pick<EditorWorkspaceViewProps,
+    | 'responsivePanel'
+    | 'onSetResponsivePanel'
+    | 'onPreview'
+    | 'previewError'
+    | 'exportBusy'
+    | 'exportKind'
+    | 'exportError'
+    | 'exportNotice'
+  >,
 ): RemixNode {
-  return <nav
-    id="elce-responsive-panel-access"
-    className="elce-responsive-panel-access"
-    aria-label="Panneaux de l’éditeur"
+  return <div
+    id="elce-workspace-access-area"
+    className="elce-workspace-access-area"
   >
-    {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
-    {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
-  </nav>
+    <nav
+      id="elce-responsive-panel-access"
+      className="elce-responsive-panel-access"
+      aria-label="Commandes de l’éditeur"
+    >
+      {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
+      {renderPreviewButton(props.onPreview)}
+      {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
+    </nav>
+    {props.previewError === null ? null : <p
+      id="elce-preview-open-error"
+      className="elce-workspace-access-error"
+      role="alert"
+    >
+      {props.previewError}
+    </p>}
+    {props.exportBusy || props.exportError !== null || props.exportNotice !== null ? <p
+      id="elce-sighty-export-status"
+      className={props.exportError === null ? 'elce-workspace-access-status' : 'elce-workspace-access-error'}
+      role={props.exportError === null ? 'status' : 'alert'}
+      aria-live="polite"
+    >
+      {props.exportBusy
+        ? props.exportKind === 'scorm' ? 'Préparation du package SCORM…' : 'Préparation de l’export du scénario…'
+        : props.exportError ?? props.exportNotice}
+    </p> : null}
+  </div>
+}
+
+/** Renders the preview action alongside the editor's panel controls. */
+function renderPreviewButton(onPreview: () => void): RemixNode {
+  return <button
+    id="elce-preview-open"
+    className="elce-preview-open-button"
+    type="button"
+    mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
+  >
+    Prévisualiser
+  </button>
 }
 
 /** Renders one unframed panel toggle while preserving its button semantics. */
@@ -95,7 +155,7 @@ function renderPanelToggle(
   setResponsivePanel: EditorWorkspaceViewProps['onSetResponsivePanel'],
 ): RemixNode {
   const isOpen = responsivePanel === panel
-  const panelLabel = panel === 'outline' ? 'le scénario' : 'les contenus disponibles'
+  const panelLabel = panel === 'outline' ? 'le scénario' : 'le panneau latéral'
   const label = `${isOpen ? 'Fermer' : 'Ouvrir'} ${panelLabel}`
   const id = panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
   const targetId = panel === 'outline' ? 'elce-outline' : 'elce-properties'
@@ -113,7 +173,7 @@ function renderPanelToggle(
     aria-controls={targetId}
     mix={on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(isOpen ? null : panel, id))}
   >
-    {renderLucideIcon(icon, `${id}-icon`, 14)}
+    {renderLucideIcon(icon, `${id}-icon`)}
   </button>
 }
 

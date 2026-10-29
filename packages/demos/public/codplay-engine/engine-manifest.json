@@ -1,0 +1,20 @@
+{
+  "format": "codplay.site-engine.v1",
+  "entry": "engine.js",
+  "libraries": [
+    {
+      "id": "rive",
+      "module": "@rive-app/canvas",
+      "delivery": {
+        "mode": "package"
+      }
+    },
+    {
+      "id": "three",
+      "module": "three",
+      "delivery": {
+        "mode": "package"
+      }
+    }
+  ]
+}

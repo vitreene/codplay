@@ -1,9 +1,9 @@
-# Elcé — BDC Carousel, Carte et Graphe statistique
+# Elcé — BDC Carousel, Carte et Graphe
 
 ## Statut
 
-**Fixe — Carousel v4 avec vues enfant Carte et Graphe statistique.** La vue
-Graphe a été ajoutée et vérifiée dans Brave le 9 octobre 2026. L’insertion du
+**Fixe — Carousel v4 avec vues enfant Carte et Graphe ; cinq layouts Carte.**
+La vue Graphe a été ajoutée et vérifiée dans Brave le 9 octobre 2026. L’insertion du
 Carousel dans un BDC Texte reste hors de cette tranche. Son emploi comme BDC
 par défaut d’une Diapo est décrit dans la
 [spécification du builder Diapo](./diapo-scene-builder-spec.md).
@@ -13,7 +13,7 @@ par défaut d’une Diapo est décrit dans la
 Dans une page Flux, le BDC Carousel occupe une place dans la séquence ordonnée
 des BDC. Dans une page Diapo, il peut occuper l’unique emplacement BDC direct.
 Dans les deux cas, il porte les réglages de présentation et référence une
-séquence ordonnée de vues enfant Carte ou Graphe statistique. Chaque vue enfant
+séquence ordonnée de vues enfant Carte ou Graphe. Chaque vue enfant
 a le Carousel comme parent ; elle ne figure donc pas dans `page.bdcIds` ni dans
 le catalogue. Le
 modèle BDC Carte peut aussi être placé directement dans la séquence d’une page
@@ -22,29 +22,33 @@ parent Carousel et figurent alors dans `page.bdcIds`. La Diapo créée par défa
 avec un Carousel doit d’abord en retirer ce BDC avant d’accepter un BDC direct.
 Le BDC Graphe peut aussi être direct en Flux ou Diapo, ou ancré dans une
 Section ; ses données et ses rendus sont décrits dans la
-[spécification du Graphe statistique](./statistical-graph-spec.md). Aucun BDC
+[spécification du Graphe](./statistical-graph-spec.md). Aucun BDC
 Carte n’est placé au catalogue. Les changements de layout ne créent pas un
 nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
 nombre fini de répétitions, le ratio, la transition et la liste ordonnée
 `cards` d’entrées `{ bdcId, durationMs }`. Chaque entrée référence un BDC Carte
-ou Graphe statistique enfant. La durée particulière appartient à l’entrée du
+ou Graphe enfant. La durée particulière appartient à l’entrée du
 Carousel ; `null` signifie que la durée commune s’applique. Un Carousel doit
 contenir au moins une vue.
 
 Chaque BDC Carte porte dans `card` tous les champs : surtitre (`overline`),
 titre, description, message (250 caractères maximum), note, légende et
 position de l’image. Son `presetId` sélectionne l’un des layouts configurés :
-Texte court, Texte avec image, Photo ou vidéo plein cadre, ou Image avec
-légende. Les champs et `mediaId` restent conservés lorsqu’un layout ne les
-projette pas. Photo ou vidéo plein cadre accepte une image ou une vidéo ; Texte
-avec image et Image avec légende acceptent une image ; Texte court ne projette
-aucun média. Une image ou vidéo référencée est une ressource du catalogue,
-indépendante et réutilisable ; les règles d’import et de projection dépendent
-du layout actif.
+Texte court, Texte avec image, Photo ou vidéo plein cadre, Image avec légende
+ou Titre sur image. Les champs et `mediaId` restent conservés
+lorsqu’un layout ne les projette pas. Photo ou vidéo plein cadre accepte une
+image ou une vidéo ; Texte avec image, Image avec légende et Titre sur image
+acceptent une image ; Texte court ne projette aucun média. Une image ou vidéo
+référencée est une ressource du catalogue, indépendante et réutilisable ; les
+règles d’import et de projection dépendent du layout actif.
 
-Ces quatre layouts sont les seuls layouts Carte enregistrés dans
+Titre sur image projette uniquement le titre et une image facultative. Sans
+image, l’auteur choisit un fond uni ou l’un des dégradés de la palette Style.
+Les autres champs et le média restent conservés au changement de layout.
+
+Ces cinq layouts sont les seuls layouts Carte enregistrés dans
 `CARD_PRESETS`. Un ancien preset statique « Message » n’était proposé ni par
 l’éditeur ni par le builder Carte et a été retiré ; les champs de texte court
 restent dans le preset Texte court prévu à cet effet.
@@ -82,7 +86,7 @@ Carousel et délègue les champs des Cartes à `ElceCardFacade`
 Flux ou Diapo et aux Cartes enfants du Carousel.
 
 L’auteur peut ajouter, supprimer et réordonner les vues Carte et Graphe
-statistique dans la même séquence. Les quatre layouts et leurs champs restent
+statistique dans la même séquence. Les cinq layouts et leurs champs restent
 propres aux BDC Carte ; le Graphe conserve son éditeur, ses données et son
 layout. Chaque entrée conserve sa durée propre. Les valeurs masquées des Cartes
 restent éditables après retour à un layout qui les affiche. Les médias arrivent
@@ -106,10 +110,20 @@ Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
 Les valeurs affichées suivent le document courant. Une création utilise les
 défauts configurés ; après édition, le mode et la transition enregistrés restent
 sélectionnés après un changement de page et un rechargement. La transition
-effective combine les remplacements du Carousel avec les défauts de révélation
-du projet.
+effective est résolue par `ElceEditorSettingsResolver` avant l’appel au builder :
+les valeurs du Carousel remplacent champ par champ celles du parent/projet, puis
+chaque entrée peut remplacer ses propres champs. Une valeur `null` hérite. Le
+builder Carousel ne recalcule pas ces priorités ; il reçoit les références
+effectives avec les réglages de projection centralisés dans
+[`editor-settings.ts`](../src/config/editor-settings.ts).
 
 ## Projection et lecture
+
+Une vidéo Carte utilise `media` en `sync: 'independent'`, avec ses contrôles
+natifs. Le `STOP` de sortie de page est porté par la composition du lecteur,
+selon la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+Cette règle de sortie de page n’ajoute pas de transport à la sélection d’une
+vue Carousel.
 
 `ElceFluxSceneBuilder` conserve la place du Carousel dans la page Flux et lui
 transmet les BDC du document. `ElceCarouselSceneBuilder` résout les IDs des
@@ -123,6 +137,32 @@ parent comme `h2`, paragraphe ou `footer`, avec leur classe de style issue du
 preset ; aucun élément texte vide ne les enveloppe. Les conteneurs de cadre,
 de média et de groupe restent lorsque le CSS ou la sémantique en a besoin, et
 portent le commentaire à l’intérieur.
+
+Dans « Texte avec image », `card.imagePosition` règle la projection partagée.
+Gauche et Droite gardent le média dans une colonne latérale et les textes dans
+la colonne opposée. En position Centrée, tous les textes sont centrés ; le
+média reste dans le flux entre description et message et occupe l’espace qui
+reste après les textes. `card.imageFit` continue de régler son cadrage sans
+déformer l’image. Cette projection est commune au builder Carte ; le rendu
+player vérifié dans Brave le 27 octobre couvre actuellement la Carte directe
+en Flux sur écran large et mobile. Diapo, Carousel et aperçu d’ancre restent
+à valider dans le plan actif.
+
+Dans « Titre sur image », la Carte conserve le ratio 16:9 et place le titre au
+centre des deux axes. Le titre est gras (`700`) et ses lignes utilisent
+`text-wrap: balance`. Il repose sur un cadre ajusté à sa largeur, avec un
+padding de `0.5em` et une largeur maximale de `calc(100% - 2em)` pour garder une
+marge aux bords de la Carte. Le cadre utilise la Surface du projet à 82 %
+d’opacité, le rôle Premier plan de Surface pour le texte et un
+`backdrop-filter: blur(0.5rem)` ; l’image reste visible sous le cadre et ses
+détails persistent davantage. Si `color-mix()` n’est pas pris en charge, le
+fond opaque Surface sert de repli. Ce traitement fixe prime sur Couleur Texte
+et Contraste auto pour ce layout et s’applique au player comme à l’aperçu
+d’ancre. Il remplace `mix-blend-mode: difference`, écarté après vérification
+visuelle car le titre y devenait difficile à lire. Il ne requiert ni analyse
+des pixels ni réglage auteur. Les fonds
+dégradés locaux de Carte sont décrits dans la
+[spécification d’apparence](./appearance-spec.md).
 
 En Flux, la racine Carousel `section` contient directement la Capsule et la
 navigation `nav`. Le point de montage `frame` est un commentaire avant la
@@ -142,9 +182,14 @@ Photo garde les ancres commentaire CodPlay de racine et de média. Elle est
 conservée comme emplacement futur pour un rendu `<picture>` et une légende ;
 le conteneur vidéo reste disponible pour de futurs éléments `<track>`.
 
-Les zones de média et l’image native sont dimensionnées à 100 % de leur
-conteneur ; `object-fit` règle le cadrage `cover` ou `contain` sur l’image.
-L’image ne conserve donc pas ses dimensions intrinsèques au-delà du cadre.
+Les zones média et les éléments natifs image/vidéo sont dimensionnés à 100 % de
+leur conteneur ; `object-fit` règle le cadrage `cover` ou `contain` de l’image.
+L’image ne conserve donc pas ses dimensions intrinsèques au-delà du cadre. La
+vidéo plein cadre utilise la même part média responsive et remplit son logement
+avec le cadrage `cover`. Le perso `media` porte la classe de dimensionnement sur
+son conteneur CodPlay, tandis que la feuille de style player règle l’élément
+`video` natif. Cette règle s’applique aux Cartes Photo directes et aux Cartes
+enfant de Carousel en Flux comme en Diapo.
 Pour une Diapo, le marqueur de fin cible un commentaire dans la carte finale ;
 la racine Carousel plein cadre utilise elle aussi son commentaire d’insertion.
 Ces marqueurs n’ajoutent pas de boîtes DOM. Dans le chemin vérifié Safari d’une
@@ -169,7 +214,7 @@ n’est ajouté dans React ou dans Elcé.
 ## Preuves
 
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
-  vérifie la conservation des champs et médias à travers les quatre layouts,
+  vérifie la conservation des champs et médias à travers les cinq layouts,
   le retrait d’une carte avec maintien de la dernière, le refus de supprimer
   cette dernière, le déplacement d’un BDC Carte vers un autre Carousel sans
   clonage, la suppression en cascade du Carousel avec conservation des médias,
@@ -178,6 +223,9 @@ n’est ajouté dans React ou dans Elcé.
 - [`carousel-service.test.ts`](../src/domain/carousel/carousel-service.test.ts) vérifie
   l’ajout, le retrait, le réordonnancement des IDs et la conservation de la
   durée de chaque entrée lors du réordonnancement.
+- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
+  vérifie l’héritage project → parent → Carousel → entrée avec des valeurs
+  distinctes d’entrée et de sortie.
 - [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
   compile une vue Graphe enfant via le builder Carousel réel et vérifie sa place
   dans la séquence et son rôle de vue finale.
@@ -192,6 +240,35 @@ n’est ajouté dans React ou dans Elcé.
   vérifie la projection des BDC Carte, des champs visibles, des médias selon
   le layout, les commentaires d’insertion et les plages Capsule, ainsi que dix
   passages automatiques supplémentaires finis ; CodPlay compile la scène.
+- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+  vérifie les cinq layouts, la part image facultative de Titre sur image et que
+  la vidéo Carte cible la part responsive `elce-carousel-media` ;
+  [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  vérifie son montage dans le vrai composant CodPlay et la règle CSS qui adapte
+  l’élément vidéo au logement. Le test d’export vérifie aussi la présence de
+  cette règle dans la feuille de style du package. La composition réelle monte
+  Titre sur image avec image, dégradé et navigation en Carousel, puis en BDC
+  direct de Diapo ;
+  l’export vérifie l’image, le dégradé et les styles du layout dans le package.
+- [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
+  vérifie que l’aperçu d’ancre reçoit la classe d’apparence et sa feuille
+  générée pour le layout Titre sur image.
+- [`appearance-scene-style-sheet.test.ts`](../src/player/appearance-scene-style-sheet.test.ts)
+  vérifie les rôles Surface, le padding et le flou dans le player et l’aperçu
+  d’ancre, ainsi que leur absence de `mix-blend-mode: difference`.
+- Brave DevTools vérifie la feuille de style de l’aperçu auteur sur une Carte
+  témoin avec image locale, à grand viewport et à 500 unités CSS de largeur :
+  le panneau épouse le titre, garde son padding proportionnel, conserve une
+  marge aux bords et ne déborde pas de la Carte.
+- Les 499 tests du package passent. Le typecheck et le build passent également.
+- Brave DevTools, le 27 octobre 2026, vérifie le player réel d’une Carte directe
+  Flux en position Centrée sur écran large et mobile : les textes sont centrés,
+  l’ordre surtitre/titre/description/image/message/note est conservé, l’image
+  réutilisée charge sans déformation et la page ne déborde pas horizontalement.
+  Gauche et Droite conservent leurs colonnes latérales. La Carte témoin est
+  supprimée après vérification ; la preview resynchronisée et l’éditeur ne
+  contiennent plus ses textes, et le catalogue conserve ses quatre médias.
+  Diapo, Carousel et aperçu d’ancre restent à valider.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   exécute le player réel en DOM de test : sélection manuelle, passage en lecture
   manuelle après un clic pendant l’automatique, absence de double Carte/point

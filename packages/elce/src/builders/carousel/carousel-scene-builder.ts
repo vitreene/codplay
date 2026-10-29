@@ -2,8 +2,8 @@ import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automa
 import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { TRACK_EVENT_DEACTIVATE, type StrapFunction } from 'codplay/runtime/player'
-import { BDC_TYPE, CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID, DEFAULT_PROJECT_REVELATION } from '../../config/document-config'
+import { TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
+import { BDC_TYPE, CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE, DEFAULT_PRESET_ID } from '../../config/document-config'
 import type { CarouselContent, CarouselBdcEntry } from '../../domain/carousel/carousel-types'
 import type { Bdc } from '../../domain/document/document-types'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
@@ -12,6 +12,14 @@ import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistic
 import { createPageBottomMarkerPerso } from '../flux/page-bottom-marker'
 import { createResolvedRevelationAction } from '../revelation/revelation-action'
 import type { CarouselSceneBuild, CarouselSceneBuildInput } from './carousel-scene-builder-types'
+import {
+  addViewportExpansionToStory,
+  isViewportExpansionPerso,
+  type ViewportExpansionCarouselView,
+} from '../viewport-expansion/viewport-expansion-builder.ts'
+import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../scene-functions/carousel'
+import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
+import { appearanceClassNameForBdc } from '../scene-style/appearance-class-names.ts'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 const cardBdcSceneBuilder = new ElceCardBdcSceneBuilder()
@@ -22,6 +30,7 @@ type CarouselViewBuild = Readonly<{
   readonly rootClassName: string
   readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
+  readonly styleSheet: string
 }>
 
 type ScheduledView = Readonly<{
@@ -43,48 +52,57 @@ export class ElceCarouselSceneBuilder {
     const navigationPartId = `${prefix}:carousel:navigation`
     const diapoRootId = displayMode === 'scene' ? input.completionEventRootId ?? rootId : undefined
     const schedule = resolveCardSchedule(input)
-    const projectRevelation = input.revelationDefaults ?? DEFAULT_PROJECT_REVELATION
-    const parentIntroRef = content.revelation.intro ?? projectRevelation.intro
-    const parentOutroRef = content.revelation.outro ?? projectRevelation.outro
+    const parentIntroRef = input.revelationSettings.defaults.intro
+    const parentOutroRef = input.revelationSettings.defaults.outro
     const capsule = new AutoCapsule({
       capsule: {
         id: `${rootId}-capsule`,
         type: CAPSULE_TYPE.carousel,
         className: displayMode === 'scene' ? 'elce-carousel-capsule elce-carousel-capsule--scene' : 'elce-carousel-capsule',
         grid: { className: 'elce-carousel-capsule__grid' },
-        style: displayMode === 'scene'
-          ? { height: '100%' }
-          : { aspectRatio: `${content.aspectRatio.width} / ${content.aspectRatio.height}` },
         defaults: {
           introTransitionRef: parentIntroRef,
           outroTransitionRef: parentOutroRef,
-          generateDefaultOutro: true,
+          generateDefaultOutro: input.revelationSettings.generateDefaultOutro,
         },
       },
-      children: schedule.map((entry, index) => ({
-        id: entry.bdc.id,
-        order: index,
-        timeRange: { startMs: entry.startMs, endMs: entry.endMs },
-        className: 'elce-carousel-view',
-        events: {
-          intro: {
-            name: `${prefix}:card:${entry.bdc.id}:intro`,
-            action: EVENT_ACTION.intro,
-            ref: entry.entry.introTransitionRef ?? parentIntroRef,
+      children: schedule.map((entry, index) => {
+        const revelation = input.revelationSettings.entries[entry.bdc.id]
+        if (revelation === undefined) throw new Error(`Les réglages résolus de révélation de ${entry.bdc.id} sont absents.`)
+        return {
+          id: entry.bdc.id,
+          order: index,
+          timeRange: { startMs: entry.startMs, endMs: entry.endMs },
+          className: 'elce-carousel-view',
+          events: {
+            intro: {
+              name: `${prefix}:card:${entry.bdc.id}:intro`,
+              action: EVENT_ACTION.intro,
+              ref: revelation.intro,
+            },
+            outro: {
+              name: `${prefix}:card:${entry.bdc.id}:outro`,
+              action: EVENT_ACTION.outro,
+              ref: revelation.outro,
+            },
           },
-          outro: {
-            name: `${prefix}:card:${entry.bdc.id}:outro`,
-            action: EVENT_ACTION.outro,
-            ref: entry.entry.outroTransitionRef ?? parentOutroRef,
-          },
-        },
-      })),
+        }
+      }),
     })
     const capsuleResult = capsule.resolve()
+    const capsulePresentationClass = sceneStyleClassName('carousel-capsule', rootId)
+    const capsuleClassName = `${capsuleResult.capsule.className} ${capsulePresentationClass}`
     const firstCardBdcId = content.cards[0]?.bdcId ?? null
     const viewBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildView(input, entry.bdc, displayMode === 'scene')]))
     const lastCardBdcId = capsuleResult.children.at(-1)?.id
     const cardMountTarget = diapoRootId ?? capsulePartId
+    const mediaPersos = [...viewBuilds.values()].flatMap((build) => build.mediaPersos)
+    const expandableViews: readonly ViewportExpansionCarouselView[] = schedule.flatMap((entry) => {
+      const viewBuild = viewBuilds.get(entry.bdc.id)
+      return viewBuild?.mediaPersos
+        .filter(isViewportExpansionPerso)
+        .map((perso) => ({ bdcId: entry.bdc.id, persoId: perso.id })) ?? []
+    })
     const cardPersos = capsuleResult.children.flatMap((child) => {
       const entry = schedule.find((candidate) => candidate.bdc.id === child.id)
       const viewBuild = viewBuilds.get(child.id)
@@ -92,7 +110,13 @@ export class ElceCarouselSceneBuilder {
       return [
         ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, viewBuild, firstCardBdcId, displayMode === 'scene'),
         ...(diapoRootId !== undefined && child.id === lastCardBdcId
-          ? [createCarouselCompletionMarker(input.pageId, input.bdcId, child.id, diapoRootId)]
+          ? [createCarouselCompletionMarker(
+            input.pageId,
+            input.bdcId,
+            child.id,
+            diapoRootId,
+            input.playerSettings.progression.pageCompletionObservation,
+          )]
           : []),
       ]
     })
@@ -111,36 +135,70 @@ export class ElceCarouselSceneBuilder {
         rootId,
         `${pageId}:${bdcId}:carousel`,
         {
-          frame: createCapsuleMarkup(rootId, capsulePartId, capsuleResult, parentIntroRef, parentOutroRef),
+          frame: createCapsuleMarkup(rootId, capsulePartId, capsuleClassName, parentIntroRef, parentOutroRef),
           navigation: '',
         },
       )
+    const markup = card === undefined
+      ? ''
+      : appendClassToMarkupElement(
+        card.markup,
+        rootId,
+        appearanceClassNameForBdc(bdcId, input.appearanceClassNamesByTarget),
+      )
     const story: StoryDoc<string> = {
       id: storyId,
-      state: { activeCardBdcId: firstCardBdcId },
+      state: {
+        activeCardBdcId: firstCardBdcId,
+        manualCarouselSelection: false,
+        [ELCE_CAROUSEL_RUNTIME_KEY]: {
+          prefix,
+          storyId,
+          cardIds: content.cards.map((entry) => entry.bdcId),
+          selectionEvent,
+          automatic: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+          trackId: storyId,
+          trackDeactivateEvent: TRACK_EVENT_DEACTIVATE,
+          views: expandableViews,
+        },
+      },
       persos: [
         ...(diapoRootId === undefined ? [] : [createDiapoCarouselRoot(
           diapoRootId,
-          capsuleResult.capsule.className,
-          capsuleResult.capsule.inlineStyle,
+          capsuleClassName,
           parentIntroRef,
           parentOutroRef,
+          appearanceClassNameForBdc(bdcId, input.appearanceClassNamesByTarget),
         )]),
         ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
+        ...mediaPersos,
         ...navigationPersos,
       ],
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
         ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
         : [],
-      straps: { [selectionEvent]: createSelectionStrap(prefix, content, storyId) },
+      straps: { [selectionEvent]: selectCarouselCardStrap },
       listen: [{ on: selectionEvent, straps: [selectionEvent] }],
     }
+    const expandedStory = addViewportExpansionToStory(story, input.playerSettings.interactions.viewportExpansion, {
+      selectionEvent,
+      views: expandableViews,
+      automatic: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC,
+      trackId: storyId,
+    })
     return {
-      markup: card?.markup ?? '',
-      story,
-      mediaPersos: [...viewBuilds.values()].flatMap((build) => build.mediaPersos),
-      styleSheet: capsuleResult.styleSheet,
+      markup,
+      story: expandedStory,
+      styleSheet: [
+        capsuleResult.styleSheet,
+        sceneClassRule(capsulePresentationClass, displayMode === 'scene'
+          ? { height: '100%' }
+          : { aspectRatio: `${content.aspectRatio.width} / ${content.aspectRatio.height}` }),
+        ...Array.from(viewBuilds.values(), (view) => view.styleSheet),
+      ]
+        .filter((styleSheet) => styleSheet.length > 0)
+        .join('\n'),
     }
   }
 }
@@ -187,12 +245,14 @@ function buildView(input: CarouselSceneBuildInput, bdc: Bdc, photoMediaRoot: boo
         mediaSources: input.mediaSources,
         mediaTypes: input.mediaTypes,
         photoMediaRoot,
+        appearanceClassNamesByTarget: input.appearanceClassNamesByTarget,
       })
     case BDC_TYPE.STATISTICAL_GRAPH:
       return statisticalGraphSceneBuilder.build(
         bdc,
         `${input.pageId}-${input.bdcId}-graph-${bdc.id}`,
         `${input.pageId}:${input.bdcId}:card:${bdc.id}`,
+        appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget),
       )
     default:
       throw new Error(`Le BDC ${bdc.id} n’est pas une illustration prise en charge par Carousel.`)
@@ -205,14 +265,15 @@ function createCarouselCompletionMarker(
   carouselBdcId: string,
   cardBdcId: string,
   rootId: string,
+  settings: CarouselSceneBuildInput['playerSettings']['progression']['pageCompletionObservation'],
 ): PersoDoc<string> {
   return createPageBottomMarkerPerso({
     pageId,
     markerId: `${pageId}:${carouselBdcId}-completion-marker`,
     rootId,
     targetPartId: `${pageId}:${carouselBdcId}:card:${cardBdcId}:root`,
+    settings,
     className: 'elce-page-bottom-marker elce-carousel-completion-marker',
-    style: { position: 'absolute', insetInlineEnd: 0, insetBlockEnd: 0, width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' },
   })
 }
 
@@ -220,9 +281,9 @@ function createCarouselCompletionMarker(
 function createDiapoCarouselRoot(
   rootId: string,
   capsuleClassName: string,
-  capsuleStyle: Readonly<Record<string, string | number>>,
   introTransitionRef: string,
   outroTransitionRef: string,
+  appearanceClassName: string,
 ): PersoDoc<string> {
   return {
     id: rootId,
@@ -239,20 +300,9 @@ function createDiapoCarouselRoot(
         'elce-card--carousel',
         'elce-diapo-content',
         'elce-diapo-carousel-root',
+        appearanceClassName,
         ...capsuleClassName.split(/\s+/),
       ].join(' '),
-      style: {
-        ...capsuleStyle,
-        gridTemplateColumns: 'minmax(0, 1fr)',
-        gridTemplateRows: 'minmax(0, 1fr) auto',
-        width: '100%',
-        height: '100%',
-        minWidth: 0,
-        minHeight: 0,
-        position: 'relative',
-        overflow: 'hidden',
-        containerType: 'inline-size',
-      },
       move: '@root',
     },
   }
@@ -266,7 +316,6 @@ function createDiapoNavigationHost(containerRootId: string, navigationId: string
     initial: {
       move: { target: containerRootId },
       className: 'elce-carousel__navigation',
-      style: { gridRow: '2', gridColumn: '1' },
       markup: `<nav id="${navigationId}-navigation" aria-label="Vues du carousel"><!-- data-part="${navigationPartId}" --></nav>`,
     },
   }
@@ -292,30 +341,15 @@ function createAutomaticEventimes(
   ).flat()
 }
 
-/** Creates the fixed AutoCapsule host and its resolved inline layout. */
+/** Creates the fixed AutoCapsule host with its generated layout classes. */
 function createCapsuleMarkup(
   rootId: string,
   capsulePartId: string,
-  result: ReturnType<AutoCapsule['resolve']>,
+  capsuleClassName: string,
   introTransitionRef: string,
   outroTransitionRef: string,
 ): string {
-  const style = serializeStyle(result.capsule.inlineStyle)
-  return `<div id="${rootId}-capsule" class="${result.capsule.className}" data-intro-transition="${introTransitionRef}" data-outro-transition="${outroTransitionRef}"${style}><!-- data-part="${capsulePartId}" --></div>`
-}
-
-/** Serializes builder-owned inline style values for static scene markup. */
-function serializeStyle(value: unknown): string {
-  if (value === null || typeof value !== 'object') return ''
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, propertyValue]) => typeof propertyValue === 'string' || typeof propertyValue === 'number')
-    .map(([property, propertyValue]) => `${toKebabCase(property)}:${String(propertyValue)}`)
-  return entries.length === 0 ? '' : ` style="${entries.join(';')}"`
-}
-
-/** Converts one authored JavaScript style property to its CSS property spelling. */
-function toKebabCase(property: string): string {
-  return property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+  return `<div id="${rootId}-capsule" class="${capsuleClassName}" data-intro-transition="${introTransitionRef}" data-outro-transition="${outroTransitionRef}"><!-- data-part="${capsulePartId}" --></div>`
 }
 
 /** Creates a Card layout root with its Capsule transition actions. */
@@ -364,16 +398,13 @@ function createCarouselCardPersos(
         throw new Error(`Action de transition Carousel non prise en charge : ${event.action}`)
     }
   }
-  const imagePosition = bdc.card?.imagePosition
   const className = [
     child.className,
     cardBuild.rootClassName,
     photoMediaRoot && bdc.presetId === DEFAULT_PRESET_ID.PHOTO ? 'elce-carousel-photo__media' : null,
     firstCardBdcId === bdc.id ? 'elce-carousel-view--visible' : 'elce-carousel-view--hidden',
-    bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
-      ? imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT
-        ? 'elce-carousel-view--image-right'
-        : 'elce-carousel-view--image-left'
+    bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE && bdc.card?.imagePosition === CAROUSEL_IMAGE_POSITION.RIGHT
+      ? 'elce-carousel-view--image-right'
       : null,
   ].filter(Boolean).join(' ')
   const cardRoot: PersoDoc<string> = {
@@ -384,7 +415,6 @@ function createCarouselCardPersos(
       className,
       attr: { 'aria-hidden': firstCardBdcId !== bdc.id, inert: firstCardBdcId !== bdc.id },
       style: {
-        ...child.inlineStyle,
         opacity: firstCardBdcId === bdc.id ? 1 : 0,
         x: 0,
         y: 0,
@@ -440,30 +470,5 @@ function createCarouselNavigationPerso(
     },
     emit: { click: { event: { name: selectionEvent, data: { cardBdcId: bdc.id }, visibility: 'story' } } },
     actions,
-  }
-}
-
-/** Builds the strap that selects a Card and interrupts scheduled playback after a manual choice. */
-function createSelectionStrap(prefix: string, content: CarouselContent, storyId: string): StrapFunction {
-  return ({ event }) => {
-    const selectedBdcId = event.data?.cardBdcId
-    if (typeof selectedBdcId !== 'string') return undefined
-    const selectedEntry = content.cards.find((entry) => entry.bdcId === selectedBdcId)
-    if (selectedEntry === undefined) return undefined
-    return {
-      update: { activeCardBdcId: selectedEntry.bdcId },
-      events: [
-        ...content.cards.map((entry) => ({
-          name: `${prefix}:card:${entry.bdcId}:${entry.bdcId === selectedEntry.bdcId ? 'selected' : 'unselected'}`,
-        })),
-        ...(content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
-          ? [{
-            name: TRACK_EVENT_DEACTIVATE,
-            data: { trackIds: [storyId] },
-            visibility: 'scene' as const,
-          }]
-          : []),
-      ],
-    }
   }
 }

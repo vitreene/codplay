@@ -4,11 +4,16 @@ import type { CompiledFunctionReference, CompiledRecord, CompiledValue } from '.
 
 /** Functions extracted from one compiled scene and kept outside its serializable payload. */
 export type CompiledFunctionCollection = Readonly<Record<string, AuthorFunction>>
+export type CompiledFunctionSourceReference = Readonly<{
+  ref: string
+  path: readonly (string | number)[]
+}>
 
 type MutableFunctionCollection = Record<string, AuthorFunction>
 
 type ExtractionState = {
   functions: MutableFunctionCollection
+  functionReferences: CompiledFunctionSourceReference[]
   nextId: number
 }
 
@@ -17,13 +22,14 @@ export function extractCompiledValue(
   value: unknown,
   scope: string,
   state: ExtractionState = createExtractionState(),
+  sourcePath: readonly (string | number)[] = [],
 ): CompiledValue {
   if (value === undefined) {
     return null
   }
 
   if (typeof value === 'function') {
-    return extractFunction(value as AuthorFunction, scope, state)
+    return extractFunction(value as AuthorFunction, scope, state, sourcePath)
   }
 
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -31,7 +37,7 @@ export function extractCompiledValue(
   }
 
   if (Array.isArray(value)) {
-    return value.map((item, index) => extractCompiledValue(item, `${scope}[${index}]`, state))
+    return value.map((item, index) => extractCompiledValue(item, `${scope}[${index}]`, state, [...sourcePath, index]))
   }
 
   if (isPlainRecord(value)) {
@@ -40,7 +46,7 @@ export function extractCompiledValue(
       if (item === undefined) {
         continue
       }
-      record[key] = extractCompiledValue(item, `${scope}.${key}`, state)
+      record[key] = extractCompiledValue(item, `${scope}.${key}`, state, [...sourcePath, key])
     }
     return record
   }
@@ -53,16 +59,18 @@ export function extractFunction(
   fn: AuthorFunction,
   scope: string,
   state: ExtractionState,
+  sourcePath: readonly (string | number)[] = [],
 ): CompiledFunctionReference {
   const ref = `fn:${state.nextId}:${sanitizeScope(scope)}`
   state.nextId += 1
   state.functions[ref] = fn
+  state.functionReferences.push({ ref, path: [...sourcePath] })
   return { ref }
 }
 
 /** Creates one mutable extraction state for a compilation pass. */
 export function createExtractionState(): ExtractionState {
-  return { functions: {}, nextId: 0 }
+  return { functions: {}, functionReferences: [], nextId: 0 }
 }
 
 /** Converts the mutable extraction boundary to a detached immutable collection. */
@@ -70,16 +78,25 @@ export function finalizeFunctionCollection(state: ExtractionState): CompiledFunc
   return Object.freeze({ ...state.functions })
 }
 
+/** Detaches the exact source paths recorded alongside extracted function references. */
+export function finalizeFunctionSourceReferences(state: ExtractionState): readonly CompiledFunctionSourceReference[] {
+  return Object.freeze(state.functionReferences.map((reference) => Object.freeze({
+    ref: reference.ref,
+    path: Object.freeze([...reference.path]),
+  })))
+}
+
 /** Compiles one record while preserving the record boundary used by scene contracts. */
 export function extractCompiledRecord(
   value: Record<string, unknown> | undefined,
   scope: string,
   state: ExtractionState,
+  sourcePath: readonly (string | number)[] = [],
 ): CompiledRecord | undefined {
   if (value === undefined) {
     return undefined
   }
-  return extractCompiledValue(value, scope, state) as CompiledRecord
+  return extractCompiledValue(value, scope, state, sourcePath) as CompiledRecord
 }
 
 /** Makes function reference names stable and safe to use as collection keys. */

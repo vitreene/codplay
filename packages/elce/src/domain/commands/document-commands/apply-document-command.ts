@@ -6,9 +6,15 @@ import { createBdc, deleteCatalogBdc, updateQuestion, updateEvaluationResult, up
 import { moveBdc, createAnchoredBdc, attachCatalogBdc, moveAnchoredBdc, removeAnchoredBdc, returnAnchoredBdc } from './anchor-commands'
 import { findBdc, fail } from './command-helpers'
 import { updateSectionContent, deleteSection, updateSectionRevelation } from './section-commands'
-import { setCardMedia, attachCardMedia, setQuestionMedia, attachQuestionMedia, mergeMedia } from './media-commands'
+import { setCardMedia, attachCardMedia, setQuestionMedia, attachQuestionMedia, attachSummaryBackgroundMedia, mergeMedia } from './media-commands'
 import { updateDocumentRevelation } from './revelation-commands'
 import { assertDocumentInvariants } from './document-invariants'
+import {
+  resetAppearanceProperty,
+  setAppearanceBackground,
+  setAppearanceProperty,
+  setAppearanceTypography,
+} from './appearance-commands'
 
 /** Applies one document command and returns a new immutable model value. */
 function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDocument {
@@ -76,6 +82,8 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return setQuestionMedia(document, command.bdcId, command.mediaId)
     case 'bdc.question.media.attach':
       return attachQuestionMedia(document, command.bdcId, command.media)
+    case 'summary.background.media.attach':
+      return attachSummaryBackgroundMedia(document, command.media)
     case 'bdc.question.delete':
       return deleteQuestion(document, command.bdcId)
     case 'bdc.section.delete':
@@ -103,6 +111,18 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return mergeMedia(document, command.canonicalMediaId, command.duplicateMediaIds)
     case 'document.revelation.update':
       return updateDocumentRevelation(document, command.revelationDefaults)
+    case 'summary.settings.update':
+      return new ElceDocument({ ...document.data, summary: command.summary })
+    case 'profile.definition.update':
+      return new ElceDocument({ ...document.data, profile: command.profile })
+    case 'appearance.background.set':
+      return setAppearanceBackground(document, command.target, command.value)
+    case 'appearance.typography.set':
+      return setAppearanceTypography(document, command.target, command.headingFontId, command.bodyFontId)
+    case 'appearance.property.set':
+      return setAppearanceProperty(document, command.target, command.property, command.value)
+    case 'appearance.property.reset':
+      return resetAppearanceProperty(document, command.target, command.property)
     case 'document.rename':
       return new ElceDocument({ ...document.data, name: command.name })
   }

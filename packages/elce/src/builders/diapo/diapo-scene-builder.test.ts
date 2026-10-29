@@ -4,10 +4,32 @@ import {
   SCROLL_CONTAINER_COMPONENT_DEFINITION,
   SCROLL_CONTAINER_MODULE_DEFINITION,
 } from '@codplay/component-v2'
-import { BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
+import { BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, EVALUATION_RESULT_ACTION, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from '../../config/document-config'
+import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
+import { ElceEditorSettingsResolver } from '../../domain/editor-settings/editor-settings-resolver'
 import { applyDocumentCommand, createCardBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createQuestionBdcCommand, createStandaloneCardBdcCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
-import { buildDiapoScene } from './diapo-scene-builder'
+import type { RevelationTransitionDefaults } from '../../domain/document/document-types'
+import type { DiapoSceneBuildOptions } from './diapo-scene-builder-types'
+import { buildDiapoScene as projectDiapoScene } from './diapo-scene-builder'
+import { appearanceScopeClassName, pageAppearanceClassNames } from '../scene-style/appearance-class-names.ts'
+
+const editorSettingsResolver = new ElceEditorSettingsResolver()
+
+/** Adds test-owned editor settings before exercising the real scene projection. */
+function buildDiapoSceneForTest(
+  page: Parameters<typeof projectDiapoScene>[0],
+  bdcs: Parameters<typeof projectDiapoScene>[1],
+  options: Omit<DiapoSceneBuildOptions, 'editorSettings'> & { readonly projectDefaults?: RevelationTransitionDefaults } = {},
+) {
+  const { projectDefaults, ...sceneOptions } = options
+  const editorSettings = editorSettingsResolver.resolvePage(
+    page,
+    bdcs,
+    projectDefaults ?? ELCE_EDITOR_SETTINGS.revelation.projectDefaults,
+  )
+  return projectDiapoScene(page, bdcs, { ...sceneOptions, editorSettings })
+}
 
 describe('Elcé Diapo scene builder', () => {
   it('builds a no-scroll stage and signals the visible single Carousel card', () => {
@@ -15,7 +37,9 @@ describe('Elcé Diapo scene builder', () => {
     const command = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
     const document = applyDocumentCommand(initial, command)
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, document.bdcs),
+    })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const carousel = document.bdcs.find((bdc) => bdc.id === command.bdcId)!
     const carouselStory = pageStory
@@ -35,8 +59,7 @@ describe('Elcé Diapo scene builder', () => {
       initial: {
         tag: 'section',
         className: expect.stringContaining('elce-diapo-carousel-root'),
-        move: '@root',
-        style: { width: '100%', height: '100%', gridTemplateRows: 'minmax(0, 1fr) auto' },
+        move: { target: `${page.id}:diapo:carousel` },
       },
     })
     expect(carouselRoot?.initial).toMatchObject({
@@ -45,18 +68,21 @@ describe('Elcé Diapo scene builder', () => {
     })
     expect(navigationHost?.initial).toMatchObject({
       className: 'elce-carousel__navigation',
-      style: { gridRow: '2', gridColumn: '1' },
       markup: expect.stringContaining(`<nav id="${page.id}-${carousel.id}-navigation"`),
     })
     expect(firstCardMarkup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${firstCardId}:root" -->`)
     expect(carouselRoot?.initial).not.toHaveProperty('style.aspectRatio')
-    expect(carouselStory?.persos.some((perso) => perso.id === `${page.id}-diapo-content`)).toBe(false)
+    expect(carouselStory?.persos.find((perso) => perso.id === `${page.id}-diapo-content`)).toMatchObject({
+      type: 'layout',
+      initial: { move: '@root', markup: expect.stringContaining(`id="${page.id}-diapo-content"`) },
+    })
     expect(carouselStory?.persos.some((perso) => perso.id === `${page.id}-diapo-scrollport`)).toBe(false)
     expect(build.sceneDoc.stories).toHaveProperty(`${page.id}-diapo-page`)
     expect(Object.keys(build.sceneDoc.stories)).toHaveLength(1)
     expect(completionMarker?.emit?.observe).toMatchObject({
       root: `${page.id}-${carousel.id}-diapo-end-scrollport`,
       initial: 'enter',
+      zone: ELCE_EDITOR_SETTINGS.player.progression.pageCompletionObservation.zone,
       enter: [{ name: ELCE_EVENTS.PAGE_FINISHED, data: { pageId: page.id }, visibility: 'public' }],
     })
     expect(carouselStory?.eventimes?.some((eventime) => eventime.name === ELCE_EVENTS.PAGE_FINISHED)).toBe(false)
@@ -80,7 +106,7 @@ describe('Elcé Diapo scene builder', () => {
       carousel: automaticContent,
     })
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs)
     const carouselStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const finalCardId = automaticContent.cards.at(-1)?.bdcId
     const finalCardIntro = carouselStory?.eventimes?.filter((eventime) => eventime.name === `${page.id}:${command.bdcId}:card:${finalCardId}:intro`) ?? []
@@ -105,7 +131,9 @@ describe('Elcé Diapo scene builder', () => {
       layoutId: DEFAULT_PRESET_ID.PHOTO,
     })
     const page = document.pages.find((candidate) => candidate.id === command.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      appearanceClassNamesByTarget: pageAppearanceClassNames(document, page, document.bdcs),
+    })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const cardView = pageStory?.persos.find((perso) => perso.id === `${page.id}:${carousel.id}-card-${cardBdcId}`)
     const markup = cardView?.initial !== undefined && 'markup' in cardView.initial ? String(cardView.initial.markup) : ''
@@ -114,7 +142,8 @@ describe('Elcé Diapo scene builder', () => {
       className: expect.stringContaining('elce-carousel-photo__media'),
       move: { target: `${page.id}-${carousel.id}-diapo-end-scrollport` },
     })
-    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media">`)
+    const cardAppearanceClass = appearanceScopeClassName(document, { kind: 'bdc', bdcId: cardBdcId })
+    expect(markup).toContain(`<div id="${page.id}-${carousel.id}-card-${cardBdcId}" class="elce-carousel-photo__media card-photo ${cardAppearanceClass} bdc headings-crimson-text body-dm-sans density-normal`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:root" -->`)
     expect(markup).toContain(`<!-- data-part="${page.id}:${carousel.id}:card:${cardBdcId}:media" -->`)
     expect(markup).not.toContain('<article')
@@ -132,7 +161,7 @@ describe('Elcé Diapo scene builder', () => {
     ))
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
     const card = document.bdcs.find((bdc) => bdc.id === 'bdc-diapo-card')!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs)
     const story = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const host = story?.persos[1]?.initial
     const markup = host !== undefined && 'markup' in host ? String(host.markup) : ''
@@ -145,6 +174,7 @@ describe('Elcé Diapo scene builder', () => {
     expect(completionMarker?.emit?.observe).toMatchObject({
       root: `${page.id}-diapo-scrollport`,
       initial: 'enter',
+      zone: ELCE_EDITOR_SETTINGS.player.progression.pageCompletionObservation.zone,
       enter: [{ name: ELCE_EVENTS.PAGE_FINISHED, data: { pageId: page.id }, visibility: 'public' }],
     })
     expect(story?.eventimes).toBeUndefined()
@@ -158,7 +188,7 @@ describe('Elcé Diapo scene builder', () => {
     document = applyDocumentCommand(document, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
     document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question', pageCommand.pageId, 0))
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildDiapoScene(page, document.bdcs)
+    const build = buildDiapoSceneForTest(page, document.bdcs)
     const story = build.sceneDoc.stories[`${page.id}-bdc-diapo-question`]
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const pageHost = pageStory?.persos[1]?.initial
@@ -169,10 +199,46 @@ describe('Elcé Diapo scene builder', () => {
     expect(story?.persos.filter((perso) => perso.type === 'input')).toHaveLength(2)
     expect(story?.persos.find((perso) => perso.id.endsWith(':prompt'))?.initial).toMatchObject({ tag: 'legend' })
     expect(story?.listen).toContainEqual({
-      on: `${page.id}:bdc-diapo-question:reset`,
+      on: ELCE_EVENTS.QUESTION_RESET,
       straps: [`${page.id}:bdc-diapo-question:reset-question`],
     })
-    expect(build.questionReset).toEqual({ eventName: `${page.id}:bdc-diapo-question:reset` })
+    expect(build.questionReset).toEqual({ eventName: ELCE_EVENTS.QUESTION_RESET })
+  })
+
+  it.each([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO])('projects the flexible Diapo Question %s illustration', (mediaType) => {
+    const initial = createInitialDocument()
+    const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
+    let document = applyDocumentCommand(initial, pageCommand)
+    document = applyDocumentCommand(document, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
+    document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question-image', pageCommand.pageId, 0))
+    document = applyDocumentCommand(document, {
+      type: 'media.add',
+      media: { id: 'media-diapo-question-image', name: 'question', mimeType: mediaType === MEDIA_TYPE.IMAGE ? 'image/png' : 'video/mp4', size: 10, caption: '' },
+    })
+    const question = document.bdcs.find((bdc) => bdc.id === 'bdc-diapo-question-image')!.question!
+    document = applyDocumentCommand(document, {
+      type: 'bdc.question.update',
+      bdcId: 'bdc-diapo-question-image',
+      question: { ...question, mediaId: 'media-diapo-question-image' },
+    })
+    const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      mediaSources: { 'media-diapo-question-image': 'https://example.test/question.png' },
+      mediaTypes: { 'media-diapo-question-image': mediaType },
+    })
+    const story = build.sceneDoc.stories[`${page.id}-bdc-diapo-question-image`]
+    const image = story?.persos.find((perso) => perso.id === 'bdc-diapo-question-image-diapo-illustration-media-diapo-question-image')
+
+    expect(image).toMatchObject({
+      type: mediaType === MEDIA_TYPE.IMAGE ? 'img' : 'media',
+      initial: {
+        src: 'https://example.test/question.png',
+        ...(mediaType === MEDIA_TYPE.IMAGE
+          ? { img: { className: 'elce-diapo-question-media__native' } }
+          : { sync: 'independent', controls: true, className: 'elce-diapo-question-media' }),
+      },
+    })
+    expect(image?.initial).not.toHaveProperty('img.style.maxHeight')
   })
 
   it('projects one Result BDC as the only direct Diapo content in an Evaluation chapter', () => {
@@ -203,7 +269,7 @@ describe('Elcé Diapo scene builder', () => {
       },
     })
     const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildDiapoScene(page, document.bdcs, { chapterType: CHAPTER_TYPE.EVALUATION })
+    const build = buildDiapoSceneForTest(page, document.bdcs, { chapterType: CHAPTER_TYPE.EVALUATION })
     const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
     const successStory = build.sceneDoc.stories[`${page.id}-bdc-diapo-result-success`]
     const failureStory = build.sceneDoc.stories[`${page.id}-bdc-diapo-result-failure`]
@@ -248,6 +314,6 @@ describe('Elcé Diapo scene builder', () => {
     })
     expect(codplay.build({ scene: build.sceneDoc }).ok).toBe(true)
     codplay.destroy()
-    expect(() => buildDiapoScene(page, document.bdcs)).toThrow('ne peut être projeté que dans une Diapo d’Évaluation')
+    expect(() => buildDiapoSceneForTest(page, document.bdcs)).toThrow('ne peut être projeté que dans une Diapo d’Évaluation')
   })
 })

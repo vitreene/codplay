@@ -27,10 +27,19 @@ La grille `three-instanced-grid` est une déclaration spécialisée séparée. E
 peut être ajoutée explicitement à la liste `engine.components.register` de
 l'application qui l'emploie, sans faire partie du core Three.js.
 
-Les composants sont des classes directement référencées par leurs définitions.
-L'engine prépare Three.js et injecte sa valeur opaque dans leur contexte de
-construction ; aucune factory ne fabrique une classe de composant et aucun
-handle natif n'entre dans `CompiledScene`.
+Dans le parcours auteur, les définitions existantes référencent directement
+les classes de composants de l'intégration. L'engine prépare Three.js et
+injecte sa valeur opaque dans leur contexte de construction ; aucun handle
+natif n'entre dans `CompiledScene`.
+
+Les définitions restent les classes directes de l'intégration configurée dans
+l'engine du site, au même titre qu'en mode auteur. Le paquet de scène ne crée
+pas de classes de composants ni ne transporte le runtime Three.js. La démo de
+diffusion combinée avec Rive vérifie le host, la caméra, les lumières, la grille
+et le canvas WebGL2 à travers ce même engine. La grille ne vérifie pas le
+parcours runtime Avatar. Le transport des vrais GLB/FBX déclarés par Avatar dans
+un paquet scène est couvert par la
+[spécification d'export](./scene-package-export-v1-spec.md#ressources-déclarées-par-une-intégration).
 
 ## Cible et responsabilités
 

@@ -99,15 +99,18 @@ bas de la boîte de paragraphe.
 
 Dans l’éditeur, le NodeView lit les dimensions intrinsèques de l’image chargée,
 calcule `hauteur / largeur × 100 %`, puis met à jour l’attribut `paddingBottom`
-par une transaction Tiptap. `SectionEditor` transmet cette modification au
-circuit de commandes XState déjà utilisé pour les changements de texte. Le
-même padding dimensionne le bdc en `cover` et la réserve du builder player.
+par une transaction Tiptap. Si le média est déjà chargé lors de la création du
+NodeView, la transaction est différée à la microtâche suivante, après son
+montage dans ProseMirror. `SectionEditor` transmet alors cette modification au
+circuit de commandes XState déjà utilisé pour les changements de texte, via
+l’événement `update` de son adaptateur. Le même padding dimensionne le bdc en
+`cover` et la réserve du builder player.
 Pour une Carte ancrée au layout Photo, le builder donne aussi une hauteur
 automatique à sa racine : la règle `height:100%` du preset sert aux Cartes de
 Carousel et se résoudrait ici sur la ligne de texte, pas sur la réserve du
 slot. L’aspect ratio issu du padding fixe alors la hauteur du cadre image.
 
-Un Graphe statistique utilise le même slot inline. Le mode Tableau réserve la
+Un Graphe utilise le même slot inline. Le mode Tableau réserve la
 largeur de la ligne et garde sa hauteur naturelle ; un rendu SVG réserve une
 hauteur de `56.25%` de cette largeur. Le builder fournit ces valeurs à la
 réservation Flux existante, sans modifier le cœur CodPlay.
@@ -145,6 +148,11 @@ internes à CodPlay, conformément aux spécifications `layout`, `move` et
   texte et leur ordre stable après un second calcul.
 - `elce-anchor-extension.test.ts` vérifie le NodeView sans largeur d’ancre,
   son `anchor-name`, le `position-anchor` du bdc et la poignée.
+- `section-editor-tiptap-adapter.test.ts` vérifie qu’une image déjà complète
+  lors du montage met à jour l’attribut d’ancre et est soumise par le callback
+  normal de Section. `remix-section-production.test.tsx` vérifie le ratio
+  résultant dans le document XState et dans la déclaration `flowReservations`
+  du builder Flux.
 - Safari confirme que l’image réelle de `1200 × 981 px` met à jour le
   `padding-bottom` de l’ancre à `81.75%` et le cadre à `1.22324159 / 1`, avec
   `object-fit:cover`. Après rechargement, ces valeurs restent dans le document

@@ -5,6 +5,8 @@ import type { EvaluationResultContent } from '../evaluation/evaluation-result-ty
 import type { CarouselContent } from '../carousel/carousel-types'
 import type { CardContent } from '../card/card-types'
 import type { StatisticalGraphContent } from '../statistical-graph/statistical-graph-types'
+import type { ProfileDefinition, SummarySettings } from '../summary-profile/summary-profile-types'
+import type { AppearanceSettings } from '../../config/appearance/appearance-types'
 
 export type ChapterId = string
 export type PageId = string
@@ -64,6 +66,7 @@ export interface Page {
   readonly type: PageType
   readonly chapterId: ChapterId | null
   readonly bdcIds: readonly BdcId[]
+  readonly appearance?: AppearanceSettings
 }
 
 export interface Bdc {
@@ -72,6 +75,7 @@ export interface Bdc {
   readonly presetId: string
   readonly pageId: PageId | null
   readonly parentBdcId: BdcId | null
+  readonly appearance?: AppearanceSettings
   readonly section: SectionContent | null
   readonly question: QuestionContent | null
   readonly evaluationResult?: EvaluationResultContent | null
@@ -90,9 +94,12 @@ export interface MediaMetadata {
 
 export interface ElceDocumentData {
   readonly id: string
-  readonly version: 4
+  readonly version: 7
   readonly name: string
+  readonly appearance?: AppearanceSettings
   readonly revelationDefaults: RevelationTransitionDefaults
+  readonly summary: SummarySettings
+  readonly profile: ProfileDefinition
   readonly chapters: readonly Chapter[]
   readonly pages: readonly Page[]
   readonly scenarioEntries: readonly ScenarioEntry[]

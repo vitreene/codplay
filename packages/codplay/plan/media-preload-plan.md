@@ -12,18 +12,35 @@ Ce plan garde les décisions acceptées mais non appliquées, les points à
 trancher et leurs critères d'acceptation. Il ne recopie pas les contrats déjà
 vérifiés.
 
-## Décision acquise, implémentation ouverte
+## Diffusion d'un paquet — tranche média implémentée, gates restantes ouvertes
 
-Une future façade `run()` de diffusion autonome enchaîne le chargement explicite
-des ressources, l'initialisation synchrone du player, puis `play()` :
+Le contrat public `CodPlay.load(scenePath, { root })` et le démarrage par
+`instance.telco.play()` sont décrits par la
+[spécification du paquet média](../specs/scene-package-export-v1-spec.md).
+`load()` utilise `engine.prepareScene()`, le service `RuntimePreload` en mode
+strict `author`, `resources.register()` et le registre d'instances existants.
+Il attend les images matérialisées décodées et les médias natifs à
+`readyState >= 3`, puis retourne une occurrence prête sans lancer la lecture.
+Il n'ajoute pas un circuit de preload parallèle.
 
-```text
-preload.load(manifest) -> player.init() -> player.play()
-```
-
-Elle ne rend pas le preload implicite dans `init()` et ne modifie pas la
-surface du service `RuntimePreload`. La façade `run()` n'est pas encore exposée
-par `CodPlay`.
+Le parcours a été vérifié sur sortie statique de production/cache froid dans
+Brave/Chromium pour les images initiales et tardives, l'audio, la vidéo et les
+tags natifs. Audio et vidéo atteignaient `readyState=4` avant le retour de
+`load()` ; les changements tardifs ont utilisé les ressources du paquet. La
+console était vide et les ressources scène venaient du dossier exporté.
+Un second passage a coupé le réseau après que `load()` a résolu, puis lancé la
+scène et ses changements tardifs d'image, d'audio et de vidéo : les nœuds
+préparés ont joué les ressources empaquetées sans erreur média. Cela ne valide
+pas encore le cycle Seek/replay, la destruction, deux occurrences ou Safari.
+L'inspection du même parcours a aussi révélé qu'un nœud vidéo préchargé pour
+une action future reste visible dans `document.body`, hors du `root` d'instance,
+jusqu'à son activation. Deux chargements sur le même owner reproduisent ce
+placement. Cette divergence de propriété est suivie au
+[plan d'export, R3](./2026-10-15-export-diffusion-plan.md#r3--audio-et-vidéo)
+et bloque la clôture média.
+Safari, les cycles Seek/replay/destruction et la fermeture des autres familles
+restent à vérifier au
+[plan d'export](./2026-10-15-export-diffusion-plan.md).
 
 ## Décision acceptée, application non planifiée — source média en direct
 
@@ -40,6 +57,50 @@ ces choix puis valider le média, son hôte et le module de synchronisation sur
 Seek, rate, pause/reprise, reset, teardown et navigateur réel. Le comportement
 actuel de média enregistré reste celui de la
 [spécification media-sync](../specs/media-sync-v2-spec.md).
+
+## Tranche `media.sync` — réalisée le 14 octobre 2026
+
+L’utilisateur a autorisé l’évolution du cœur puis son application Elcé,
+avec les composants tiers différés. Le contrat implémenté et ses preuves sont
+transférés à la [spécification media-sync](../specs/media-sync-v2-spec.md).
+Le raccord Elcé et le `STOP` de sortie de page sont décrits par la
+[spécification preview](../../elce/specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+Cette tranche est close ; elle ne ferme pas les autres gates de ce plan.
+
+**Analyse causale conservée.** L’ancien module lisait `initial.master`,
+calculait la pause et le STOP depuis le temps de scène, puis rejouait les
+broadcasts aux reconstructions. Cela empêchait le temps natif indépendant et
+ne remettait pas à zéro après STOP. L’extension utilise le profil et le module
+existants, sans journal, horloge ou player parallèle. Elcé réutilise
+l’observation publique du slot Sighty et les événements story CodPlay pour
+commander l’occurrence sortante, même suspendue. Le graphe de placement, le
+reparent et motion ne sont pas modifiés ; leur sémantique d’agrandissement
+reste à examiner dans son plan propre.
+
+**Acceptation.** Les cinq suites média/runner passent (49 tests), ainsi que
+les typechecks CodPlay, Elcé, démos V2 et Sighty et le build Elcé. Safari
+vérifie les commandes natives indépendantes et le cycle de page A → B → A.
+Les preuves et leurs limites sont dans les spécifications liées. Les sept
+échecs globaux CodPlay et les neuf échecs globaux Elcé ont tous été reproduits
+sur `HEAD` avant changement ; ils ne sont pas corrigés dans cette tranche.
+Le nouveau test de navigation utilise des timestamps de frames croissants,
+car des timestamps remis à zéro rendent l’observation des commandes instable.
+
+### Décisions toujours différées
+
+- Rive, Three.js et Lottie : prévoir `sync: 'auto' | 'independent'`, `auto`
+  par défaut conservant le comportement actuel, sans mode `master`. Les
+  frontières et commandes de chaque bibliothèque restent au
+  [plan tiers](./2026-09-18-third-party-components-v2-plan.md#extension-différée--relation-dhorloges-sync).
+- L’[agrandissement Elcé](../../elce/plan/2026-10-14-elce-viewport-expansion-plan.md)
+  reste `A relire`. Il doit encore prouver la continuité du média pendant les
+  captures géométriques et les déplacements interpolés. Une vidéo liée à la
+  timeline pourrait relever plus tard d’un BDC spécifique, sans décision de
+  construction dans cette tranche.
+- La fermeture des médias de scène `tag.attr.src` fait maintenant partie de la
+  tranche d'export CodPlay et est suivie au
+  [plan CompiledScene](./compiled-scene-plan.md#références-média-du-paquet-de-diffusion).
+  Elle ne change pas le comportement du mode indépendant `media`.
 
 ## Commandes vidéo par broadcasts dédiés — A relire
 
@@ -82,7 +143,7 @@ redondant.
   générale et ne contrôlent pas la scène panier/minuteur.
 - L'entrée en question continue d'émettre `START` à `startAt: 0`. La question
   conserve les 5 s d'indice, son formulaire et son feedback.
-- La vidéo reste `master: false`. L'identité du nœud préchargé est conservée ;
+- La vidéo reste en `sync: 'auto'` (ancien `master: false`). L'identité du nœud préchargé est conservée ;
   les boutons ne provoquent ni nouveau `load()` ni réassignation de `src`.
 - Le `STOP` à la fin du feedback est conservé jusqu'à validation du cycle de
   sortie d'une scène question masquée.
@@ -204,7 +265,9 @@ certifiée.
 
 Ce plan reste `En cours` jusqu'à fermeture des preuves de service, validation
 Safari du handoff média, revue puis acceptation ou abandon des commandes vidéo
-par broadcasts dédiés après `START`, et décision de livrer ou d'abandonner la
-façade `run()`.
+par broadcasts dédiés après `START`, et acceptation de l'entrée publique
+de diffusion suivie au plan d'export.
+La tranche média indépendante Elcé est réalisée ; l’agrandissement reste
+au plan Elcé dédié.
 Les suites liées aux spécifications couvrent seulement leur périmètre certifié ;
 elles ne ferment pas les gates listées ici.

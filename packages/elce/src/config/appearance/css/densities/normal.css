@@ -1,0 +1,31 @@
+@scope (.elce-player-layout) {
+  .density-normal.page-flux.has-background { padding: 2rem; }
+  .density-normal.page-flux:not(.has-background) { padding: 0; }
+  .density-normal.page-diapo { padding: 0; }
+  .density-normal.section.has-background { box-sizing: border-box; padding: clamp(1rem, 3vw, 2rem); }
+  .density-normal.card-text-short.has-background { padding: clamp(1rem, 4cqw, 3rem); }
+  .density-normal.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(0.75rem, 3cqw, 2rem); }
+  .density-normal.card-image-caption.has-background > .elce-card__caption { padding: 0.45rem 0.75rem; }
+  .density-normal:is(.question, .evaluation-result).has-background { padding: clamp(1rem, 3vw, 1.6rem); }
+  :scope.project-layout.has-frame { padding: clamp(1rem, 3vw, 2rem); }
+  :is(.density-none, .density-compact, .density-normal, .density-large).page-flux.has-frame { padding: 2rem; }
+  :is(.density-none, .density-compact, .density-normal, .density-large).page-diapo.has-frame { padding: clamp(1rem, 3vw, 2rem); }
+  :is(.density-none, .density-compact, .density-normal, .density-large).bdc.section.has-frame { box-sizing: border-box; padding: clamp(1rem, 3vw, 2rem); }
+  :is(.density-none, .density-compact, .density-normal, .density-large).bdc.card-text-short.has-frame { padding: clamp(1rem, 4cqw, 3rem); }
+  :is(.density-none, .density-compact, .density-normal, .density-large).bdc.card-text-image.has-frame > .elce-carousel-text-image__content { padding: clamp(0.75rem, 3cqw, 2rem); }
+  :is(.density-none, .density-compact, .density-normal, .density-large).bdc.card-image-caption.has-frame > .elce-card__caption { padding: 0.45rem 0.75rem; }
+  :is(.density-none, .density-compact, .density-normal, .density-large).bdc.card-image-title.has-frame { box-sizing: border-box; padding: clamp(1rem, 3cqw, 2rem); }
+  :is(.density-none, .density-compact, .density-normal, .density-large).bdc:is(.card-photo, .carousel, .question, .evaluation-result, .graph).has-frame { padding: clamp(1rem, 3vw, 1.6rem); }
+  .density-normal:is(
+    .card-text-short,
+    .card-text-image,
+    .card-image-caption,
+    .question,
+    .evaluation-result
+  ) :is(p, li, blockquote) {
+    margin-block: 0 0.75em;
+  }
+  @scope (.density-normal.section) to (.density-normal.section .bdc) {
+    :scope p { margin-block: 0 0.75em; }
+  }
+}

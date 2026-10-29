@@ -5,6 +5,10 @@ export type ElceSceneKey =
   | typeof ELCE_SCENARIO.MENU_SCENE
   | typeof ELCE_SCENARIO.TITLE_SCENE
   | typeof ELCE_SCENARIO.NAVIGATION_SCENE
+  | typeof ELCE_SCENARIO.SUMMARY_SCENE
+  | typeof ELCE_SCENARIO.SUMMARY_MENU_SCENE
+  | typeof ELCE_SCENARIO.PROFILE_FORM_SCENE
+  | typeof ELCE_SCENARIO.PROFILE_COMPLETE_SCENE
   | `scene-${string}`
 
 export type ElceSlotName =
@@ -12,3 +16,4 @@ export type ElceSlotName =
   | typeof ELCE_SCENARIO.TITLE_SLOT
   | typeof ELCE_SCENARIO.CONTENT_SLOT
   | typeof ELCE_SCENARIO.NAVIGATION_SLOT
+  | typeof ELCE_SCENARIO.SUMMARY_MENU_SLOT
