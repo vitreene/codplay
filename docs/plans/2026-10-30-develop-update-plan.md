@@ -2,7 +2,8 @@
 
 ## Statut et décision
 
-En cours. L’utilisateur demande de reprendre `develop` dans le dépôt principal
+Reprise Git effectuée ; acceptation fonctionnelle globale En cours pour les
+limites ci-dessous. L’utilisateur demande de reprendre `develop` dans le dépôt principal
 et accepte de réunir `origin/develop` (`ee72afc1`) avec les huit commits de
 `fix/codplay-seek-restoration` (`a782319b`). Cette intégration conserve les
 contrats existants ; elle n’autorise aucune fonctionnalité ni correction
@@ -33,7 +34,7 @@ opportuniste du cœur. Les modifications ELCE non commitées du dossier
    avant attribution ; conserver les validations manquantes explicitement.
 4. Partiel, limites ci-dessous — inspecter configuration et outils MCP avant le parcours
    navigateur réel disponible ; vérifier éditeur/SQLite/Seek/Play et Elcé/replace.
-5. À faire — conserver le dossier temporaire sur une branche `temp/`,
+5. Fait — conserver le dossier temporaire sur une branche `temp/`,
    libérer `develop`, puis avancer cette branche vers le résultat et
    la sélectionner dans `/Users/Rve/Projets/2JP/codplay`.
    Mettre à jour les preuves et le suivi sans élargir les contrats.
@@ -71,3 +72,10 @@ opportuniste du cœur. Les modifications ELCE non commitées du dossier
   La validation des images et de la popup du document Nutrition reste ouverte.
 - Les six avertissements d’espacement de `git diff --check` sont déjà
   présents dans origin/develop ; aucun fichier importé n’est réformaté.
+
+Résultat : fusion `41f7ba12`, contenant les deux têtes sources ; `develop`
+est sélectionnée dans le dépôt principal et avance de neuf commits sur
+`origin/develop` avant le présent enregistrement documentaire. Aucun push.
+Le dossier temporaire reste sur `temp/develop-preview-2026-10-30` ; son diff
+et son statut sont identiques aux sauvegardes. La branche source de correctifs,
+la branche d’intégration et la référence de retour sont conservées.
