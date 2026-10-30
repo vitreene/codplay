@@ -113,6 +113,14 @@ La projection accepte aussi les méthodes focalisées d’une action via
 `aria-hidden="true"` et `inert` sont validées après le focus de retour dans le
 même passage synchrone du materializer HTML.
 
+Le contexte de scène distingue `phase`, qui marque une capture géométrique
+explicite, de `componentPhase`, qui relaie la phase de mise à jour du composant
+à la projection. À la présentation finale d’un Seek, `componentPhase` vaut
+`'seek'` tandis que `phase` n’est pas transformée en `geometry-capture` : le
+chemin motion reçoit ainsi ses occurrences, et chaque projection peut filtrer
+localement ses propres effets. Les étapes de reconstruction intermédiaires
+restent des captures géométriques explicites.
+
 [`HtmlComponentMaterializer`](../src/runtime/runner-html/component-materializer.ts)
 projette le placement et l’ordre résolus sur les nœuds réels. Les tests
 couvrent le montage, le réordonnancement et le détachement vers des cibles de
@@ -145,6 +153,9 @@ ensemble.
   vérifie les marqueurs, les ancres et les racines multiples.
 - [`component-materializer.spec.ts`](../tests/runtime/runner-html/component-materializer.spec.ts)
   vérifie l’application et la réconciliation des services HTML.
+- [`html-element-method.spec.ts`](../tests/runtime/runner-html/html-element-method.spec.ts)
+  vérifie que les méthodes HTML restent inhibées pendant Seek même si cette
+  phase est transmise séparément du contexte motion.
 - [`html-component-materializer-scene.spec.ts`](../tests/runtime/player/html-component-materializer-scene.spec.ts)
   vérifie la projection de l’ordre, du parentage, des ancres et des fragments.
 - [`mount-targets.spec.ts`](../tests/runtime/player/mount-targets.spec.ts)

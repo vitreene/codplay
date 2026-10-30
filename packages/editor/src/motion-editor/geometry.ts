@@ -1,19 +1,21 @@
 /** Pure geometry used by the editor motion overlay and its document adapter. */
 
-import { prepareSvgPath, resolvePath } from 'ace'
+import { prepareSvgPath, resolvePath, resolvePathFrame } from 'ace'
 import type { CodPlayPresentationPose } from 'codplay'
 import type { SelectionFrameValue } from '../decor-editor/types'
-import type { ContentBoxInsetsPx } from './content-box'
+import { contentBoxFrameToPoseFrame, ZERO_CONTENT_BOX_INSETS_PX, type ContentBoxInsetsPx } from './content-box'
 
 export type MotionPoint = Readonly<{ x: number; y: number }>
-export type MotionEasing = string | Readonly<{
-  kind: 'cubic-bezier'
-  p1x: number
-  p1y: number
-  p2x: number
-  p2y: number
+export type MotionGeometryPose = Readonly<{
+  /** Content-box frame shared with the Selection Frame and authoring commands. */
+  frame: SelectionFrameValue
+  /** Outer border-box frame shared with visible ghosts and the movement hit surface. */
+  borderFrame: SelectionFrameValue
+  /** Transformed centre of the outer border box, shared with the trajectory. */
+  pathAnchor: MotionPoint
+  /** Border insets used to derive both frames and the path anchor. */
+  insets: ContentBoxInsetsPx
 }>
-
 /** Returns the midpoint of two scene-local points. */
 export function midpoint(from: MotionPoint, to: MotionPoint): MotionPoint {
   return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
@@ -40,6 +42,110 @@ export function frameVisualCenter(frame: SelectionFrameValue): MotionPoint {
   }
 }
 
+/** Changes a frame heading without moving its affine visual centre. */
+export function frameWithRotationAtVisualCenter(
+  frame: SelectionFrameValue,
+  rotate: number,
+): SelectionFrameValue {
+  const center = frameVisualCenter(frame)
+  const rotated = { ...frame, rotate }
+  const rotatedCenter = frameVisualCenter({ ...rotated, x: 0, y: 0 })
+  return {
+    ...rotated,
+    x: center.x - rotatedCenter.x,
+    y: center.y - rotatedCenter.y,
+  }
+}
+
+/** Resolves the transformed centre of the visible border box from its content frame. */
+export function motionPathAnchorForFrame(
+  frame: SelectionFrameValue,
+  insets: ContentBoxInsetsPx = ZERO_CONTENT_BOX_INSETS_PX,
+): MotionPoint {
+  return resolveMotionGeometryPose(frame, insets).pathAnchor
+}
+
+/** Resolves the content frame, visible border frame and path centre as one affine projection. */
+export function resolveMotionGeometryPose(
+  frame: SelectionFrameValue,
+  insets: ContentBoxInsetsPx = ZERO_CONTENT_BOX_INSETS_PX,
+): MotionGeometryPose {
+  const center = frameVisualCenter(frame)
+  const angle = (frame.rotate ?? 0) * Math.PI / 180
+  const cosine = Math.cos(angle)
+  const sine = Math.sin(angle)
+  const borderCenterX = (insets.right - insets.left) / 2
+  const borderCenterY = (insets.bottom - insets.top) / 2
+  const borderFrame = contentBoxFrameToPoseFrame(frame, insets)
+  return {
+    frame,
+    borderFrame: {
+      ...borderFrame,
+      width: frame.width + insets.left + insets.right,
+      height: frame.height + insets.top + insets.bottom,
+    },
+    pathAnchor: {
+      x: center.x + cosine * finiteScale(frame.scaleX) * borderCenterX
+        - sine * finiteScale(frame.scaleY) * borderCenterY,
+      y: center.y + sine * finiteScale(frame.scaleX) * borderCenterX
+        + cosine * finiteScale(frame.scaleY) * borderCenterY,
+    },
+    insets,
+  }
+}
+
+/** Rotates an authored frame while keeping the runtime path anchor fixed in scene space. */
+export function frameWithRotationAtPathAnchor(
+  frame: SelectionFrameValue,
+  rotate: number,
+  pathAnchor: MotionPoint,
+  insets: ContentBoxInsetsPx = ZERO_CONTENT_BOX_INSETS_PX,
+): SelectionFrameValue {
+  const rotated = frameWithRotationAtVisualCenter(frame, rotate)
+  const rotatedAnchor = motionPathAnchorForFrame(rotated, insets)
+  return {
+    ...rotated,
+    x: rotated.x + pathAnchor.x - rotatedAnchor.x,
+    y: rotated.y + pathAnchor.y - rotatedAnchor.y,
+  }
+}
+
+/** Projects a tangent-oriented content frame around its runtime path anchor. */
+export function frameWithTangentAtPathAnchor(
+  frame: SelectionFrameValue,
+  pathAnchor: MotionPoint,
+  tangentAngle: number,
+  insets: ContentBoxInsetsPx = ZERO_CONTENT_BOX_INSETS_PX,
+): SelectionFrameValue {
+  return frameWithRotationAtPathAnchor(
+    frame,
+    normalizeAngleDegrees(tangentAngle + (frame.rotate ?? 0)),
+    pathAnchor,
+    insets,
+  )
+}
+
+/** Normalizes one rotation to the range exposed by an affine `atan2` frame. */
+export function normalizeAngleDegrees(degrees: number): number {
+  return ((degrees + 180) % 360 + 360) % 360 - 180
+}
+
+/** Compares two affine frame poses across harmless CSS unit and angle wrap rounding. */
+export function sameFramePose(left: SelectionFrameValue, right: SelectionFrameValue): boolean {
+  const pixelEpsilon = 0.5
+  const angleEpsilon = 0.1
+  const unitEpsilon = 0.001
+  return Math.abs(left.x - right.x) < pixelEpsilon
+    && Math.abs(left.y - right.y) < pixelEpsilon
+    && Math.abs(left.width - right.width) < pixelEpsilon
+    && Math.abs(left.height - right.height) < pixelEpsilon
+    && Math.abs(normalizeAngleDegrees((left.rotate ?? 0) - (right.rotate ?? 0))) < angleEpsilon
+    && Math.abs((left.scaleX ?? 1) - (right.scaleX ?? 1)) < unitEpsilon
+    && Math.abs((left.scaleY ?? 1) - (right.scaleY ?? 1)) < unitEpsilon
+    && Math.abs((left.rotationOrigin?.fx ?? 0.5) - (right.rotationOrigin?.fx ?? 0.5)) < unitEpsilon
+    && Math.abs((left.rotationOrigin?.fy ?? 0.5) - (right.rotationOrigin?.fy ?? 0.5)) < unitEpsilon
+}
+
 /** Projects a runtime box and its local content inset into the SelectionFrameV2 vocabulary. */
 export function presentationPoseToSelectionFrame(
   pose: CodPlayPresentationPose,
@@ -48,6 +154,40 @@ export function presentationPoseToSelectionFrame(
 ): SelectionFrameValue {
   const width = finiteDimension(pose.localWidth)
   const height = finiteDimension(pose.localHeight)
+  return selectionFrameFromPresentedPose(
+    pose,
+    width,
+    height,
+    rotationOrigin,
+    {
+      x: width / 2 + (contentInsets?.left ?? 0),
+      y: height / 2 + (contentInsets?.top ?? 0),
+    },
+  )
+}
+
+/** Projects a motion-host border-box pose back to the Editor's content-box frame. */
+export function presentationBorderBoxPoseToContentFrame(
+  pose: CodPlayPresentationPose,
+  rotationOrigin: SelectionFrameValue['rotationOrigin'],
+  insets: ContentBoxInsetsPx,
+): SelectionFrameValue {
+  const width = Math.max(0, finiteDimension(pose.localWidth) - insets.left - insets.right)
+  const height = Math.max(0, finiteDimension(pose.localHeight) - insets.top - insets.bottom)
+  return selectionFrameFromPresentedPose(pose, width, height, rotationOrigin, {
+    x: insets.left + width / 2,
+    y: insets.top + height / 2,
+  })
+}
+
+/** Builds an affine Selection Frame while preserving the chosen local box centre. */
+function selectionFrameFromPresentedPose(
+  pose: CodPlayPresentationPose,
+  width: number,
+  height: number,
+  rotationOrigin: SelectionFrameValue['rotationOrigin'],
+  localCenter: MotionPoint,
+): SelectionFrameValue {
   const rawMatrix = pose.matrix
   const scaleX = finiteScale(Math.hypot(rawMatrix.a, rawMatrix.b))
   const scaleY = finiteScale(Math.hypot(rawMatrix.c, rawMatrix.d))
@@ -65,20 +205,16 @@ export function presentationPoseToSelectionFrame(
   }
   const pivotX = origin.fx * width
   const pivotY = origin.fy * height
-  const centerX = width / 2
-  const centerY = height / 2
   // The runtime pose is affine. SelectionFrameV2 can represent rotation and
   // scale but not an arbitrary shear from an ancestor, so preserve the exact
   // visual centre even when the decomposed frame is the closest representation.
   const presentedCenter = {
-    x: pose.origin.x + rawMatrix.a * (centerX + (contentInsets?.left ?? 0))
-      + rawMatrix.c * (centerY + (contentInsets?.top ?? 0)),
-    y: pose.origin.y + rawMatrix.b * (centerX + (contentInsets?.left ?? 0))
-      + rawMatrix.d * (centerY + (contentInsets?.top ?? 0)),
+    x: pose.origin.x + rawMatrix.a * localCenter.x + rawMatrix.c * localCenter.y,
+    y: pose.origin.y + rawMatrix.b * localCenter.x + rawMatrix.d * localCenter.y,
   }
   const frameCenterWithoutTranslation = {
-    x: pivotX + linear.a * (centerX - pivotX) + linear.c * (centerY - pivotY),
-    y: pivotY + linear.b * (centerX - pivotX) + linear.d * (centerY - pivotY),
+    x: pivotX + linear.a * (width / 2 - pivotX) + linear.c * (height / 2 - pivotY),
+    y: pivotY + linear.b * (width / 2 - pivotX) + linear.d * (height / 2 - pivotY),
   }
   return {
     x: presentedCenter.x - frameCenterWithoutTranslation.x,
@@ -161,6 +297,184 @@ export function motionPathPointAtProgress(
   }
   const [x, y] = resolvePath(prepared, [source.x, source.y], [target.x, target.y], clamped)
   return { x, y }
+}
+
+/** Returns the shared ACE path heading used to orient one authored endpoint ghost. */
+export function motionPathTangentAngle(
+  path: string,
+  source: MotionPoint,
+  target: MotionPoint,
+  progress: number,
+): number | undefined {
+  const prepared = prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
+  const clamped = Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0
+  const tangent = resolvePathFrame(
+    prepared,
+    [source.x, source.y],
+    [target.x, target.y],
+    clamped,
+  ).tangent
+  if (tangent === null) return undefined
+  const degrees = Math.atan2(tangent[1], tangent[0]) * 180 / Math.PI
+  return normalizeAngleDegrees(degrees)
+}
+
+/** Splits the authored arc into two arcs sharing its forward tangent at the new waypoint. */
+export function splitMotionPath(
+  path: string,
+  source: MotionPoint,
+  waypoint: MotionPoint,
+  target: MotionPoint,
+  progress: number,
+) {
+  const prepared = prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
+  const sourceTuple: [number, number] = [source.x, source.y]
+  const targetTuple: [number, number] = [target.x, target.y]
+  const splitFrame = resolvePathFrame(prepared, sourceTuple, targetTuple, progress)
+  const projectedWaypoint = { x: splitFrame.point[0], y: splitFrame.point[1] }
+  const preservedSplit = resolveQuantizedArcSplit(
+    path, prepared, source, target, waypoint, progress, projectedWaypoint,
+  )
+  const splitWaypoint = preservedSplit?.waypoint ?? waypoint
+  const tangent = splitFrame.tangent
+  const beforeControl = tangent === null
+    ? midpoint(source, splitWaypoint)
+    : arcControlAtTangent(source, splitWaypoint, { x: tangent[0], y: tangent[1] }, false)
+  const afterControl = tangent === null
+    ? midpoint(splitWaypoint, target)
+    : arcControlAtTangent(splitWaypoint, target, { x: tangent[0], y: tangent[1] }, true)
+  const before = preservedSplit?.before ?? createMotionArcPath(source, beforeControl, splitWaypoint)
+  const rawAfter = preservedSplit?.after ?? createMotionArcPath(splitWaypoint, afterControl, target)
+  const beforePrepared = before === undefined
+    ? undefined
+    : prepareSvgPath(before, { traversal: 'arc-length', precision: 2 })
+  const beforeSegment = beforePrepared?.kind === 'segments' ? beforePrepared.segments?.[0] : undefined
+  const after = preservedSplit !== null && preservedSplit !== undefined
+    ? rawAfter
+    : beforeSegment?.kind !== 'arc' || rawAfter === undefined
+      ? rawAfter
+      : rawAfter.replace(/(\bA\s+)[\d.]+\s+[\d.]+(?=\s)/i, (_match, prefix: string) => {
+        const sharedRadius = Math.round(
+          beforeSegment.radius[0] * distance(source, splitWaypoint) / distance(splitWaypoint, target) * 100,
+        ) / 100
+        return `${prefix}${formatNumber(sharedRadius)} ${formatNumber(sharedRadius)}`
+      })
+  return {
+    before,
+    after,
+    beforeControl,
+    afterControl,
+    waypoint: splitWaypoint,
+  }
+}
+
+/** Preserves a canonical circular route across ACE's 2-decimal normalized-radius quantization. */
+function resolveQuantizedArcSplit(
+  path: string,
+  prepared: ReturnType<typeof prepareSvgPath>,
+  source: MotionPoint,
+  target: MotionPoint,
+  requestedWaypoint: MotionPoint,
+  progress: number,
+  projectedWaypoint: MotionPoint,
+): Readonly<{ before: string; after: string; waypoint: MotionPoint }> | undefined {
+  const match = path.trim().match(/^M\s*0\s+0\s+A\s+([\d.]+)\s+\1\s+0\s+0\s+([01])\s+1\s+0$/i)
+  const segment = prepared.kind === 'segments' ? prepared.segments?.[0] : undefined
+  if (match === null || segment?.kind !== 'arc'
+    || !Number.isFinite(progress) || progress <= 0 || progress >= 1
+    || distance(projectedWaypoint, requestedWaypoint) > 1.25) return undefined
+
+  const waypoint = projectedWaypoint
+  const sourceLength = distance(source, waypoint)
+  const targetLength = distance(waypoint, target)
+  const physicalRadius = segment.radius[0] * distance(source, target)
+  const sweep = Number(match[2])
+  if (sourceLength <= 1e-8 || targetLength <= 1e-8) return undefined
+
+  const sourceAngle = tangentAngle(resolvePathFrame(prepared, [source.x, source.y], [target.x, target.y], 0).tangent)
+  const targetAngle = tangentAngle(resolvePathFrame(prepared, [source.x, source.y], [target.x, target.y], 1).tangent)
+  if (sourceAngle === undefined || targetAngle === undefined) return undefined
+
+  const radiiNear = (ideal: number) => Array.from({ length: 11 }, (_value, index) => Math.round(ideal * 100) + index - 5)
+    .map((hundredths) => hundredths / 100)
+    .filter((radius) => radius >= 0.5)
+  const beforeCandidates = radiiNear(physicalRadius / sourceLength).flatMap((radius) => {
+    const candidate = encodeNormalizedArc(radius, sweep)
+    if (candidate === undefined) return []
+    const candidatePrepared = prepareSvgPath(candidate, { traversal: 'arc-length', precision: 2 })
+    return [{
+      path: candidate,
+      start: tangentAngle(resolvePathFrame(candidatePrepared, [source.x, source.y], [waypoint.x, waypoint.y], 0).tangent),
+      end: tangentAngle(resolvePathFrame(candidatePrepared, [source.x, source.y], [waypoint.x, waypoint.y], 1).tangent),
+      radius,
+    }]
+  })
+  const afterCandidates = radiiNear(physicalRadius / targetLength).flatMap((radius) => {
+    const candidate = encodeNormalizedArc(radius, sweep)
+    if (candidate === undefined) return []
+    const candidatePrepared = prepareSvgPath(candidate, { traversal: 'arc-length', precision: 2 })
+    return [{
+      path: candidate,
+      start: tangentAngle(resolvePathFrame(candidatePrepared, [waypoint.x, waypoint.y], [target.x, target.y], 0).tangent),
+      end: tangentAngle(resolvePathFrame(candidatePrepared, [waypoint.x, waypoint.y], [target.x, target.y], 1).tangent),
+      radius,
+    }]
+  })
+
+  const best = beforeCandidates.flatMap((before) => afterCandidates.map((after) => ({
+    before,
+    after,
+    score: angleDifference(before.start, sourceAngle) ** 2
+      + angleDifference(before.end, after.start) ** 2 * 4
+      + angleDifference(after.end, targetAngle) ** 2
+      + (before.radius * sourceLength - physicalRadius) ** 2 * 0.001
+      + (after.radius * targetLength - physicalRadius) ** 2 * 0.001,
+  }))).sort((left, right) => left.score - right.score)[0]
+
+  return best === undefined ? undefined : {
+    before: best.before.path,
+    after: best.after.path,
+    waypoint,
+  }
+}
+
+/** Encodes a canonical normalized circular arc. */
+function encodeNormalizedArc(radius: number, sweep: number): string | undefined {
+  if (!Number.isFinite(radius) || radius < 0.5 || (sweep !== 0 && sweep !== 1)) return undefined
+  const formattedRadius = formatNumber(radius)
+  return `M 0 0 A ${formattedRadius} ${formattedRadius} 0 0 ${sweep} 1 0`
+}
+
+/** Converts one ACE tangent vector to its scene-space heading in degrees. */
+function tangentAngle(tangent: readonly [number, number] | null): number | undefined {
+  if (tangent === null) return undefined
+  return normalizeAngleDegrees(Math.atan2(tangent[1], tangent[0]) * 180 / Math.PI)
+}
+
+/** Returns the shortest signed difference between two optional path headings. */
+function angleDifference(left: number | undefined, right: number | undefined): number {
+  if (left === undefined || right === undefined) return Number.POSITIVE_INFINITY
+  return normalizeAngleDegrees(left - right)
+}
+
+/** Fits one circular arc to two endpoints and the prescribed forward tangent at their joint. */
+function arcControlAtTangent(source: MotionPoint, target: MotionPoint, tangent: MotionPoint, atSource: boolean): MotionPoint {
+  const joint = atSource ? source : target
+  const other = atSource ? target : source
+  const normal = { x: -tangent.y, y: tangent.x }
+  const dx = other.x - joint.x
+  const dy = other.y - joint.y
+  const denominator = 2 * (dx * normal.x + dy * normal.y)
+  if (Math.abs(denominator) <= 1e-8) return midpoint(source, target)
+  const signedRadius = (dx * dx + dy * dy) / denominator
+  const center = { x: joint.x + normal.x * signedRadius, y: joint.y + normal.y * signedRadius }
+  const startAngle = Math.atan2(source.y - center.y, source.x - center.x)
+  const endAngle = Math.atan2(target.y - center.y, target.x - center.x)
+  const delta = signedRadius > 0 ? positiveAngle(endAngle - startAngle) : -positiveAngle(startAngle - endAngle)
+  return {
+    x: center.x + Math.abs(signedRadius) * Math.cos(startAngle + delta / 2),
+    y: center.y + Math.abs(signedRadius) * Math.sin(startAngle + delta / 2),
+  }
 }
 
 /** Returns the normalized control point of a scene-space motion path. */

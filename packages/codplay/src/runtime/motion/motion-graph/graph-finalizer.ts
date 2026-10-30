@@ -134,6 +134,8 @@ function createGraphRevision(
       keyframes: segment.keyframes,
       materializerOwned: segment.materializerOwned,
       path: segment.path,
+      orientToPath: segment.orientToPath,
+      rotateOffset: segment.rotateOffset,
     })),
   ]), resets: [...resetTimesByItem] })
 }

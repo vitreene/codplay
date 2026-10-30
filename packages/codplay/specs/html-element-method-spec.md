@@ -30,11 +30,14 @@ présentée, sans répétition aux frames suivantes. Le materializer compare la
 scène courante à la précédente pour reconnaître cette activation. Une action
 déjà présente avant un refresh ne réexécute pas sa méthode.
 
-Les phases génériques `geometry-capture`, Seek et reconstruction n’exécutent
-aucune méthode. Le player transmet la phase de capture au materializer durant
-Seek ; cette règle ne dépend pas du type de projection. Si le perso n’est pas
-monté, la méthode est ignorée. Un élément présent mais non focalisable laisse
-le navigateur appliquer le comportement de sa méthode native.
+Les méthodes ne sont pas exécutées pendant `geometry-capture`, la reconstruction
+ou la présentation finale de Seek. Dans cette dernière, le player transmet
+`componentPhase: 'seek'` sans transformer le contexte générique de matérialisation
+en capture géométrique ; le materializer HTML filtre localement les méthodes.
+Cette séparation laisse passer les occurrences motion vers leur préparateur.
+Si le perso n’est pas monté, la méthode est ignorée. Un élément présent mais
+non focalisable laisse le navigateur appliquer le comportement de sa méthode
+native.
 
 ## Ordre synchrone des attributs et du focus
 

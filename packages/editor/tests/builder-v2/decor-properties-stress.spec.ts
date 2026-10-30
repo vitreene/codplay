@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
+import { motionVisualPersoId } from '../../src/builder-v2/motion-visual-id'
 import { resolveCurrentPatch } from '../../src/app/bridges/decor-editor-bridge'
 import type { Content, Decor, EditorScene } from '../../src/app/commands/types'
 
@@ -124,10 +125,29 @@ function stressScene(): EditorScene {
 }
 
 /** Returns the logical state of one compiled runtime item. */
-function itemState(instance: { snapshot: { get: () => { states: readonly { target: { persoId: string }; state: Readonly<Record<string, unknown>> }[] } | null } }): Readonly<Record<string, unknown>> {
-  const state = instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'stress-item')?.state
-  if (state === undefined) throw new Error('The stress item is absent from the CodPlay snapshot.')
-  return state
+function itemState(
+  instance: { snapshot: { get: () => { states: readonly { target: { persoId: string }; state: Readonly<Record<string, unknown>> }[] } | null } },
+  visualPersoId: string,
+): Readonly<Record<string, unknown>> {
+  const states = instance.snapshot.get()?.states
+  const item = states?.find((entry) => entry.target.persoId === 'stress-item')?.state
+  const visual = states?.find((entry) => entry.target.persoId === visualPersoId)?.state
+  if (item === undefined || visual === undefined) throw new Error('The stress item is absent from the CodPlay snapshot.')
+  const itemStyle = item.style
+  const visualStyle = visual.style
+  return {
+    ...visual,
+    ...item,
+    style: {
+      ...(itemStyle !== null && typeof itemStyle === 'object' && !Array.isArray(itemStyle)
+        ? itemStyle as Record<string, unknown>
+        : {}),
+      ...(visualStyle !== null && typeof visualStyle === 'object' && !Array.isArray(visualStyle)
+        ? visualStyle as Record<string, unknown>
+        : {}),
+    },
+    className: visual.className,
+  }
 }
 
 describe('editor V2 Decor property stress path', () => {
@@ -148,9 +168,14 @@ describe('editor V2 Decor property stress path', () => {
       expect.objectContaining({ code: 'EDITOR_V2_ZONE_DEFERRED' }),
     ]))
 
-    const perso = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((candidate) => candidate.id === 'stress-item')!
+    const persos = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos
+    const perso = persos.find((candidate) => candidate.id === 'stress-item')!
+    const visualPersoId = motionVisualPersoId('stress-item', new Set([
+      'stress-item', 'stress-root', `${EDITOR_V2_STORY_ID}__root`,
+    ]))
+    const visualPerso = persos.find((candidate) => candidate.id === visualPersoId)!
     const actionStyleProperties = new Set(
-      Object.values(perso.actions ?? {}).flatMap((action) => (
+      [...Object.values(perso.actions ?? {}), ...Object.values(visualPerso.actions ?? {})].flatMap((action) => (
         action && typeof action === 'object' && 'style' in action && action.style && typeof action.style === 'object'
           ? Object.keys(action.style)
           : []
@@ -177,7 +202,7 @@ describe('editor V2 Decor property stress path', () => {
     })
 
     await instance.telco.seek(500 + built.preRollMs)
-    const midpointStyle = itemState(instance).style as Record<string, unknown>
+    const midpointStyle = itemState(instance, visualPersoId).style as Record<string, unknown>
     expect(midpointStyle).toHaveProperty('border')
     expect(midpointStyle).toHaveProperty('border-color')
     expect(midpointStyle).toHaveProperty('font-family')
@@ -185,7 +210,7 @@ describe('editor V2 Decor property stress path', () => {
     expect(midpointStyle).toHaveProperty('filter')
 
     await instance.telco.seek(1_000 + built.preRollMs)
-    const destinationState = itemState(instance)
+    const destinationState = itemState(instance, visualPersoId)
     const destinationStyle = destinationState.style as Record<string, unknown>
     for (const property of [...STRESS_STYLE_PROPERTIES, '--future-decor-token', 'filter', '--custom-source']) {
       expect(destinationStyle, `missing CodPlay style property ${property}`).toHaveProperty(property)
@@ -208,7 +233,7 @@ describe('editor V2 Decor property stress path', () => {
     // boundary visible instead of treating the absence as a successful projection.
     expect(perso.initial).not.toHaveProperty('zone')
 
-    expect(perso.actions['stress-item-kf-stress-target-kf-classes']).toEqual({
+    expect(visualPerso.actions['stress-item-decor-kf-stress-target-kf-classes']).toEqual({
       className: { add: 'stress-target', remove: 'stress-source' },
     })
     expect(destinationState.className).toContain('stress-target')

@@ -65,6 +65,8 @@ export type MotionIntent = Readonly<{
   presentationMode: MotionPresentationMode
   resize?: MotionResizePolicy
   path?: Path
+  orientToPath?: boolean
+  rotateOffset?: Readonly<{ from: number; to: number }>
   /** Whether this intent changes the target layout and may reflow its siblings. */
   targetReflow?: boolean
 }>
@@ -129,6 +131,8 @@ export type MotionSegment = Readonly<{
   presentationMode: MotionPresentationMode
   resize?: MotionResizePolicy
   path?: Path
+  orientToPath?: boolean
+  rotateOffset?: Readonly<{ from: number; to: number }>
   /** The segment owns a structural destination and must use its LAST pose. */
   targetReflow: boolean
   direct: boolean

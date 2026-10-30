@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { preparePath, resolvePath, createRotateMatrix } from '../../../src/ace'
+import { preparePath, resolvePath, resolvePathFrame, createRotateMatrix } from '../../../src/ace'
 import { deriveRelativeMotionPose, interpolateMotionPose } from '../../../src/runtime/motion'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 
@@ -78,6 +78,51 @@ describe('motion pose path anchors', () => {
 
     expect(actualCenter[0]).toBeCloseTo(expectedCenter[0], 6)
     expect(actualCenter[1]).toBeCloseTo(expectedCenter[1], 6)
+  })
+
+  it('aligns the local forward axis to the path tangent and adds the interpolated rotate offset', () => {
+    const from = pose({
+      origin: { x: 0, y: 0 },
+      matrix: IDENTITY,
+      localWidth: 20,
+      localHeight: 10,
+      rect: { left: 0, top: 0, width: 20, height: 10 },
+    })
+    const to = pose({
+      origin: { x: 100, y: 100 },
+      matrix: IDENTITY,
+      localWidth: 20,
+      localHeight: 10,
+      rect: { left: 100, top: 100, width: 20, height: 10 },
+    })
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+    const frame = interpolateMotionPose(from, to, 0.5, path, { rotateOffset: { from: 10, to: 20 } })
+    const pathFrame = resolvePathFrame(path, visualCenter(from), visualCenter(to), 0.5)
+
+    expect(Math.atan2(frame.matrix.b, frame.matrix.a) * 180 / Math.PI).toBeCloseTo(60)
+    expect(visualCenter(frame)[0]).toBeCloseTo(pathFrame.point[0])
+    expect(visualCenter(frame)[1]).toBeCloseTo(pathFrame.point[1])
+  })
+
+  it('keeps the authored endpoint rotation without path orientation', () => {
+    const from = pose({
+      origin: { x: 0, y: 0 },
+      matrix: IDENTITY,
+      localWidth: 20,
+      localHeight: 10,
+      rect: { left: 0, top: 0, width: 20, height: 10 },
+    })
+    const toMatrix = createRotateMatrix(Math.PI / 4)
+    const to = pose({
+      origin: { x: 100, y: 100 },
+      matrix: toMatrix,
+      localWidth: 20,
+      localHeight: 10,
+      rect: { left: 100, top: 100, width: 20, height: 10 },
+    })
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+
+    expect(interpolateMotionPose(from, to, 1, path).matrix).toEqual(to.matrix)
   })
 })
 

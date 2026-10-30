@@ -277,6 +277,8 @@ export function toMotionIntent(intent: ScheduledMotionIntent): MotionIntent {
     ...(intent.resize === undefined ? {} : { resize: intent.resize }),
     targetReflow: intent.targetReflow,
     ...(intent.path === undefined ? {} : { path: intent.path }),
+    ...(intent.orientToPath === undefined ? {} : { orientToPath: intent.orientToPath }),
+    ...(intent.rotateOffset === undefined ? {} : { rotateOffset: intent.rotateOffset }),
   })
 }
 

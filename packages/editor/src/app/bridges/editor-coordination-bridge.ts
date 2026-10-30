@@ -199,15 +199,32 @@ export class EditorCoordinationBridge {
     void this.execute({ type: 'pause' }).then((result) => {
       if (!result.ok) return
       const timelineMs = this.clampPauseTimeline(result.progress.timelineMs)
-      if (timelineMs === result.progress.timelineMs) {
+      const scene = this.machine.getSnapshot().context.scene
+      const sceneDurationMs = scene?.meta.durationMs
+      const hasAuthoredPath = scene !== null && Object.values(scene.decors).some((decor) =>
+        typeof decor.path === 'string' && decor.path.trim() !== '')
+      const mustRePresentTerminalFrame = hasAuthoredPath
+        && sceneDurationMs !== undefined
+        && sceneDurationMs > 0
+        && timelineMs >= sceneDurationMs
+      if (timelineMs === result.progress.timelineMs && !mustRePresentTerminalFrame) {
         this.finishPause(timelineMs)
         return
       }
 
-      // CodPlay may expose a capsule's virtual outro beyond the editor scene duration. Re-present
-      // the authored boundary before restoring the CS; otherwise the runtime pose is already gone
-      // while the editor overlays are asked to recover from an out-of-scene time.
-      void this.execute({ type: 'seek', timelineMs }).then((seekResult) => {
+      // A natural pause can leave the last live path pose materialized. Seeking the same terminal
+      // time is a no-op for that DOM presentation, so cross a distinct nearby author time before
+      // presenting the exact boundary. A virtual capsule outro is clamped and needs only one seek.
+      const preTerminalTimeMs = mustRePresentTerminalFrame
+        ? Math.max(0, timelineMs - Math.min(2, sceneDurationMs))
+        : timelineMs
+      void this.execute({ type: 'seek', timelineMs: preTerminalTimeMs }).then((seekResult) => {
+        if (mustRePresentTerminalFrame) {
+          void this.execute({ type: 'seek', timelineMs }).then((terminalResult) => {
+            this.finishPause(terminalResult.ok ? terminalResult.progress.timelineMs : timelineMs)
+          })
+          return
+        }
         this.finishPause(seekResult.ok ? seekResult.progress.timelineMs : timelineMs)
       })
     })

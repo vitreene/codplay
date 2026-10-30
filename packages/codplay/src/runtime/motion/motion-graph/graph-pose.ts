@@ -51,6 +51,7 @@ export function resolvePresentationFrame(
     const track = graph.tracksByItem.get(itemId)
     const resetAt = latestResetAt(graph.resetTimesByItem, itemId, timeMs)
     const segment = findActiveSegment(track, timeMs, resetAt)
+    const endpoint = segment === undefined ? findMotionEndpoint(track, timeMs, resetAt) : undefined
     const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
     const overlayStacking = resolveOverlayStackingContext(base, segment)
     const motionRoot = resolvePresentationMotionRoot(base, track, segment, timeMs, resetAt)
@@ -67,10 +68,12 @@ export function resolvePresentationFrame(
       ...(segment?.direct !== true ? {} : { direct: true }),
       pose,
       representation: segment === undefined
-        ? 'source'
+        ? endpoint?.segment.orientToPath === true && !endpoint.segment.materializerOwned
+          ? endpoint.segment.presentationMode
+          : 'source'
         : segment.materializerOwned
           ? 'source'
-          : (progress < 1 ? segment.presentationMode : 'source'),
+          : (progress < 1 || segment.orientToPath === true ? segment.presentationMode : 'source'),
       ...(segment === undefined ? {} : { activeSegmentId: segment.id }),
       progress,
     })
@@ -231,10 +234,12 @@ export function resolveMotionItem(
     ...(segment?.direct !== true ? {} : { direct: true }),
     pose,
     representation: segment === undefined
-      ? 'source'
+      ? endpoint?.segment.orientToPath === true && !endpoint.segment.materializerOwned
+        ? endpoint.segment.presentationMode
+        : 'source'
       : segment.materializerOwned
         ? 'source'
-        : (progress < 1 ? segment.presentationMode : 'source'),
+        : (progress < 1 || segment.orientToPath === true ? segment.presentationMode : 'source'),
     ...(segment === undefined ? {} : { activeSegmentId: segment.id }),
     progress,
   }
@@ -263,6 +268,23 @@ function resolveMotionPose(
       const attachment = endpoint.side === 'from'
         ? endpoint.segment.from
         : resolveSegmentRetarget(endpoint.segment, timeMs)?.to ?? endpoint.segment.to
+      if (endpoint.segment.orientToPath === true && endpoint.segment.path !== undefined) {
+        const from = resolveAttachment(endpoint.segment.from, layout, itemId, resolveParent, false)
+        const to = resolveAttachment(
+          resolveSegmentRetarget(endpoint.segment, timeMs)?.to ?? endpoint.segment.to,
+          layout,
+          itemId,
+          resolveParent,
+          endpoint.side === 'to' && !endpoint.segment.materializerOwned,
+        )
+        return interpolateMotionPose(
+          from,
+          to,
+          endpoint.side === 'from' ? 0 : 1,
+          endpoint.segment.path,
+          { rotateOffset: endpoint.segment.rotateOffset },
+        )
+      }
       return resolveAttachment(attachment, layout, itemId, resolveParent, endpoint.side === 'to' && !endpoint.segment.materializerOwned)
     }
     if (base === undefined) return undefined
@@ -290,7 +312,13 @@ function resolveMotionPose(
       false,
     )
     return applyMotionResize(
-      interpolateMotionPose(from, to, keyframeInterval.progress, segment.path),
+      interpolateMotionPose(
+        from,
+        to,
+        keyframeInterval.progress,
+        segment.path,
+        segment.orientToPath === true ? { rotateOffset: segment.rotateOffset } : undefined,
+      ),
       segment.resize,
       keyframeInterval.to,
       resolveParent,
@@ -306,7 +334,13 @@ function resolveMotionPose(
     !segment.materializerOwned && !segment.targetReflow,
   )
   return applyMotionResize(
-    interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path),
+    interpolateMotionPose(
+      from,
+      to,
+      resolveSegmentProgress(segment, timeMs),
+      segment.path,
+      segment.orientToPath === true ? { rotateOffset: segment.rotateOffset } : undefined,
+    ),
     segment.resize,
     retarget?.to ?? segment.to,
     resolveParent,

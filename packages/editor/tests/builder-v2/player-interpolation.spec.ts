@@ -172,8 +172,10 @@ describe('editor V2 player interpolation', () => {
       style: {
         x: { from: 19.4, to: 15 },
         y: { from: 14.4, to: 10 },
-        'border-width': { from: '0.6cqw', to: '5cqw' },
       },
+    })
+    expect(itemDoc.actions['item-decor-kf-second-kf']).toMatchObject({
+      style: { 'border-width': { from: '0.6cqw', to: '5cqw' } },
     })
 
     const root = document.createElement('div')

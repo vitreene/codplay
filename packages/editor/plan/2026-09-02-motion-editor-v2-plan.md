@@ -1,6 +1,6 @@
 # Plan V2 — éditeur de mouvement
 
-**Statut : En cours — P0, P1, P3-C, P4 et P5 implémentés ; P4 doit encore être réaligné sur la forme auteur `move` relue ; P2 mouvement/ghosts avancé, P2-D et P2-E en cours, P6 en validation partielle**
+**Statut : En cours — P0, P1, P3-C, P4 et P5 implémentés ; P4 doit encore être réaligné sur la forme auteur `move` relue ; P2 mouvement/ghosts avancé, correction des ghosts P2-F ouverte, P2-D et P2-E en cours, P6 en validation partielle**
 **Cible :** `ed2` avec la façade CodPlay V2
 **Périmètre :** déplacement d’un item à l’intérieur de sa capsule parente, sans
 reparentage ; cette tranche ouvre aussi la mise en cohérence ciblée du
@@ -209,11 +209,14 @@ par un adaptateur pur de l'éditeur ; le core CodPlay et la carte ouverte de
   pâlie/désaturée, pointer-transparents et sans point médian.
 - Pendant le geste de création d’un KF au milieu d’un segment `A → B`, l’aperçu
   remplace immédiatement ce trajet par les deux parties qui seront commitée :
-  `A → C` puis `C → B`, où `C` est la pose déplacée. La première partie reste
-  droite par défaut ; le path déjà porté par le KF `B` ne s’applique qu’à la
-  seconde partie. Le tracé affiché avant le lâcher doit donc être identique au
+  `A → C` puis `C → B`, où `C` est la pose déplacée. **Décision du 30 octobre :**
+  découper une courbe en deux arcs conservant sa tangente au point de coupure ;
+  l’insertion sur la courbe conserve son tracé, au lieu de créer une première
+  partie droite. Un KF `decor` ne découpe jamais la trajectoire. Le tracé affiché avant le lâcher doit donc être identique au
   tracé projeté après la création de `C`, sans mutation documentaire pendant le
   geste.
+  La transaction conserve aussi la pose résolue de `B` avant l’insertion : les
+  valeurs capturées sur `C` ne doivent pas modifier `B` par un nouvel héritage.
 - Tous les KFs réels `pose` de l’item sont projetés comme ghosts géométriques
   hors scène. Le ghost qui coïncide avec l’item présenté est masqué ; tous les
   autres restent visibles et cliquables pour rejoindre leur KF. Les KFs
@@ -224,6 +227,86 @@ par un adaptateur pur de l'éditeur ; le core CodPlay et la carte ouverte de
   même règle et reste translucide lorsqu’il est inactif.
 - L’overlay conserve l’outline pointillé et le fond transparent. Le double-clic
   du point géométrique du path restaure la droite implicite.
+
+**État des ghosts — correction ouverte (P2-F).** L’utilisateur constate que les
+ghosts visibles sont faux. La projection actuelle n’est donc pas considérée
+validée ; ne pas prendre un ghost pour référence de la pose réelle.
+
+### 2.4.1 Correction de la projection des ghosts (P2-F — En cours)
+
+1. Reproduire le défaut sur la scène persistée dans Safari MCP. Aux temps des
+   KFs réels, relever la pose auteur présentée, le CS et le ghost associé ; au
+   milieu des segments, vérifier que les ghosts restent aux poses de leurs KFs.
+2. Tracer le circuit existant de `DecorEditorBridge` vers
+   `MotionEditorOverlay` (`setGhosts` / `renderFrame`) pour localiser l’écart de
+   position, dimensions ou transformation. Ne pas déduire la pose correcte du
+   ghost ni créer une seconde projection.
+3. Corriger ce circuit Editor et ajouter des assertions de géométrie et de
+   ciblage aux tests d’intégration et d’overlay existants.
+4. Revalider par rechargement à froid, Seek sur chaque KF et entre KFs, Play,
+   Stop et resize. Aucun de ces parcours ne doit modifier le document.
+
+**Porte d’acceptation :** pour chaque KF `pose`, son ghost reprend la pose
+projetée du même KF ; au temps de ce KF, l’item et le CS coïncident avec lui.
+Entre les KFs, les ghosts restent ancrés à leurs poses auteur, les clics
+atteignent le KF associé et le chemin actif rejoint les centres visuels de ses
+deux poses adjacentes. Les résultats restent stables après reload, Seek, Play,
+Stop et resize.
+
+### 2.4.2 Rotation auteur et pose tangentielle pendant les gestes (En cours)
+
+**Reprise du 30 octobre — acceptée :** corriger ensemble les écarts ghost/bordure,
+la perte de tangente pendant une édition de palette et la désynchronisation à
+l’aiguille. La projection des overlays ne doit plus réécrire le CS. Le raccord
+snapshot commun doit recevoir une pose affichée complète, distincte de la pose
+auteur persistée, avec une conversion affine réversible tenant compte des
+insets. Conserver la preview pendant le remplacement de l’instance au commit.
+Le builder conserve aussi la rotation auteur dans les poses capturées des
+endpoints ; `move` applique ensuite la tangente à ces poses. Retirer le filtrage
+de `style.rotate` qui fausse les ancrages avec bordure ou pivot décentré.
+Les propriétés de pose discrètes nécessaires à LAST appartiennent à l’action
+move elle-même ; leur émission séparée au temps cible ne doit pas laisser la
+capture de géométrie utiliser l’ancien pivot ou l’ancienne échelle.
+
+**Projection géométrique commune — appliquée et vérifiée le 30 octobre :** le
+bridge résout une géométrie bordée par endpoint, puis publie la sélection, les
+segments et les ghosts dans le store partagé. Le CS, les chemins, les ghosts et
+la surface de déplacement consomment cette même projection : l’ancre du chemin
+est le centre transformé du border-box, les ghosts et la surface utilisent le
+cadre bordé, et le CS conserve le cadre de contenu. La géométrie du KF présenté
+reste l’ancre du chemin pendant un Seek intérieur au segment. La cache éphémère
+est invalidée au changement de scène ou de largeur de référence. La spécification
+d’orientation décrit le contrat et ses preuves Safari. Aucun changement CodPlay
+ni de forme du document n’est nécessaire.
+
+**KF tourné inséré sur un arc — corrigé et vérifié le 30 octobre :** le bridge
+utilise le même point projeté sur le chemin pour l’aperçu, le découpage et le KF
+commité. Le découpage conserve l’arc initial et choisit les rayons compatibles
+avec la précision ACE afin de limiter le défaut de tangente au raccord. Le test
+Safari par geste réel à `3 s` mesure `0,114°` entre `2,999 s` et le KF, avec
+`0,52 px` d’écart item/CS. Les tests géométriques vérifient également la
+trajectoire échantillonnée. Cette correction reste Editor ; P2 reste `En cours`
+pour les autres travaux de gestes et de ghosts.
+
+1. Séparer l’angle absolu de `PresentationFrame` de `offset.rotate`, qui reste
+   le décalage auteur par rapport à la tangente du segment actif.
+2. Router rotation, déplacement, redimensionnement, pivot et déplacement de
+   trajectoire par la même conversion. Une manipulation sans rotation conserve
+   le décalage auteur ; une rotation lui ajoute le delta du geste. Une capture
+   complète de KF intermédiaire ou promu conserve ce même repère.
+3. Dans la projection existante des ghosts, appliquer l’orientation tangentielle
+   aux seuls ghosts dont le segment propriétaire l’active, à partir du `Path`
+   partagé par ACE. Au temps exact d’un KF, préférer la `PresentationFrame`
+   courante. Les ghosts ne deviennent jamais une source pour le CS ou l’item.
+4. Vérifier les KFs source/cible, un KF intermédiaire, les gestes affines, le
+   double Stop, Play, Seek, rechargement et resize ; le document ne gagne aucun
+   KF doublon et garde les offsets auteur attendus.
+
+**Porte d’acceptation :** après chaque geste, la pose de l’item et du CS
+coïncide ; la rotation persistée est l’offset attendu, sans réaddition de la
+tangente. Un ghost d’endpoint orienté présente la même rotation que cet endpoint
+runtime, et un ghost courant coïncide avec l’item et se masque. Aucun parcours ne
+change les KFs autres que celui visé.
 
 ### 2.5 Cohérence du décor interpolé et édition au playhead (P2-D — En cours)
 
@@ -339,15 +422,63 @@ Ordre d'exécution de la tranche P2-D :
 | --- | --- | --- |
 | P0 — Contrat | Fixe | Contrat validé pour cette tranche : vie capsule, KF au playhead, mise à jour du décor et transition unique. La validation native reste une porte distincte. |
 | P1 — Domaine pur | Fixe | Résolveurs purs et testables de vie réelle/virtuelle, alignement exact/entre KFs et fenêtre bornée ajoutés et utilisés par la projection des bornes de timeline ; le branchement de la fenêtre sur la projection/runtime reste réservé à P4. Aucun DOM, player ou document mutable. |
-| P2 — Adaptateur CS | En cours | Un geste exact met à jour le décor du KF au même temps ; un geste entre KFs matérialise au playhead, puis réédite ce KF sans doublon. Pendant ce geste intermédiaire, l’overlay prévisualise déjà la coupure `A → C → B` qui sera commitée. Toute propriété du décor reste capturable ; overlay et ghosts restent hors document. La projection de tous les ghosts de l’item, leur activation et leur hiérarchie visuelle (couleur/opacité réduites hors segment actif) sont implémentées. La validation native et les cas encore hors tranche maintiennent P2 ouvert. |
+| P2 — Adaptateur CS | En cours | Un geste exact met à jour le décor du KF au même temps ; un geste entre KFs matérialise au playhead, puis réédite ce KF sans doublon. Pendant ce geste intermédiaire, l’overlay prévisualise déjà la coupure `A → C → B` qui sera commitée. Toute propriété du décor reste capturable ; overlay et ghosts restent hors document. Le rendu des ghosts et leur interactivité existent, mais l’utilisateur constate que leurs poses projetées sont fausses : cette projection n’est pas acceptée comme terminée. Voir P2-F. La validation native et les cas encore hors tranche maintiennent P2 ouvert. |
+| P2-F — Correction des ghosts | En cours | Reproduire aux KFs auteur, diagnostiquer l’écart dans le circuit existant `DecorEditorBridge` → `MotionEditorOverlay`, corriger ce circuit et vérifier pose, ciblage et stabilité par tests d’intégration et Safari MCP. Porte : chaque ghost correspond à son KF auteur ; au KF, objet et CS coïncident avec lui ; les ghosts restent ancrés pendant l’interpolation et leurs clics atteignent le bon KF. Aucun changement documentaire lors de Play/Seek/Stop/resize. |
 | P2-D — Interface décor au temps interpolé | En cours | Implémentation et tests réalisés : snapshot réellement présenté après `seekApplied`, projection ouverte vers `DecorPatch`, base complète séparée du registre générique, outline immédiat et matérialisation d’un KF sparse. L’action de retrait reste une évolution d’interface non imposée dans cette tranche. Porte restante : validation native complète des gestes et clôture P2 ; aucun changement core implicite. |
 | P2-E — Deux canaux timeline pose/décor | En cours | Contrat implémenté dans le modèle, les commandes, le builder, le bridge, la machine et le rendu : lecture legacy sans `channel` comme `pose`, écritures nouvelles explicites, chaîne spatiale limitée aux KFs `pose`, chaîne décor alimentée par les KFs `decor` et les KFs `pose` qui portent du décor, promotion sans doublon et rendu d’une seule ligne avec séparation uniquement lorsque les deux canaux existent. Un KF de pose créé ou promu par mouvement capture la pose affine complète ; le patch décor reste sparse et ouvert aux propriétés futures. Tests ciblés et suite éditeur verts ; validation native Safari reste la porte de clôture. |
 | P3-A — Audit SE existant | Fixe | Audit statique terminé : capsule racine et capsules explicites, 0/1/2 KFs réels, bornes virtuelles, affichage, matérialisation et absence d’écriture lors de Play/Seek/resize sont distingués. |
 | P3-B — Contrat SE | Fixe | Contrat validé après l’audit statique : valeurs spéciales, KF réel d’apparition + sortie virtuelle, transition unique, point facultatif et plateau. |
 | P3-C — Implémentation SE | Fixe | Les champs optionnels absents sont omis lors de la création d’un KF et retirés lors de l’effacement du nom, d’une transition ou d’un marqueur. Les tests de commandes et le test `RUN_COMMAND → TempEditorScenePersistence` passent (25 tests ciblés) ; le contrôle strict des valeurs JSON reste inchangé. La validation native reste P6. |
-| P4 — Builder/runtime | En cours | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Une rotation numérique cible sans valeur source explicite interpole depuis l'identité `0°`, sans densifier le décor auteur ; le test d'intégration vérifie le snapshot et le rendu à mi-transition. Le builder émet `reparent` et ne sérialise ni `traversal` ni `pathAnchor` ; CodPlay applique les defaults internes `arc-length`/`center`. Aucun `{to}` sans `from`, aucun `Move` structurel. Safari à `3,1 s` confirme l'item et le CS à `28,07°`, puis `41°` au KF2 ; la validation native complète reste P6. |
+| P4 — Builder/runtime | En cours | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Une rotation numérique cible sans valeur source explicite interpole depuis l'identité `0°`, sans densifier le décor auteur ; le test d'intégration vérifie le snapshot et le rendu à mi-transition. Le builder émet `reparent` et ne sérialise ni `traversal` ni `pathAnchor` ; CodPlay applique les defaults internes `arc-length`/`center`. Aucun `{to}` sans `from`, aucun `Move` structurel. Safari à `3,1 s` confirme l'item et le CS à `28,07°`, puis `41°` au KF2. **Point à reprendre avant clôture :** la scène persistée révèle une concurrence entre la compensation `x/y` de bordure et `move.path`. La suppression conditionnelle ajoutée au Builder reste une piste, pas un contrat : établir son raccord à la projection géométrique partagée et valider la transaction ainsi que son replay Undo/Redo. |
 | P5 — Persistance | Fixe | Copy-on-write du décor cible, sérialisation, suppression/réordonnancement, capsules imbriquées et diagnostics de données invalides vérifiés. La validation native reste P6. |
-| P6 — Validation native | En cours | Sur Safari MCP et `localhost:5174`, le rechargement restaure la dernière scène persistée sans erreur ; un seek à `5,0 s` puis Stop ramène tête, objet et CS à `0`. Le retour d’overlay faisait passer `scrollHeight` de la région de scène à `593 px` pour `577 px` visibles (`overflow:auto`) ; la région passe à `overflow:clip`. Après activation au premier plan (`document.hidden === false`), Play depuis `0` anime l’objet jusqu’à `5,0 s` puis restaure l’overlay, mais révèle un saut horizontal de `24,37 px` lors de la restauration de la pose CSS auteur. Stop depuis `5,0 s` ramène la tête à `0`, l’objet à sa translation initiale avec rotation nulle et le CS à la pose initiale. Le rectangle du lecteur reste `x=221`, `largeur=826`, `hauteur=464,625 px` ; la région ne défile pas et aucune erreur console n’apparaît. L’absence initiale d’effet venait de la page MCP cachée, dont l’horloge ne progressait pas. La preuve native du drag/double-clic reste ouverte car le relais MCP ne les expose pas. Le cas Stop avec playhead auteur déjà `0` reste à vérifier : le runtime doit présenter la frame `0` et le CS consommer la même pose de `PresentationFrame`, sans réalignement séparé. Sur la scène courante, les coins du content-box et du CS restent décalés de `0,46 px` dans ce viewport ; qualifier cette précision avant clôture. |
+| P6 — Validation native | En cours | Sur Safari MCP, après rechargement de `localhost:5174`, la scène SQLite est restaurée à la révision `16` et l’éditeur est visible (`document.hidden === false`). Play avance la tête et l’objet après chargement à froid. Au Seek à `2,2 s`, l’objet suit la courbe : sa pose `(225,93 ; 115,76)` diffère de la corde `(237,50 ; 117,78)` ; le détour `2,2 → 4,2 → 2,2 s` restitue la même matrice. Stop après lecture ramène l’UI à `0` et l’objet à sa pose initiale, sans changer la révision SQLite. Un fixture temporaire à trois KFs, avec les ponts Scene et Decor réels, place objet et CS à `(480, 480)` avec rotation `90°` au dernier KF. Le saut de `24,37 px` signalé précédemment a été corrigé avant ces vérifications et ne réapparaît pas. La validation native du drag/double-clic reste ouverte car le relais MCP ne les expose pas ; le décalage de `0,46 px` entre les coins du content-box et du CS reste à qualifier. |
+
+**P4/P6 — trajectoire en lecture (Vérifié le 29 octobre).** La présentation
+finale de Seek est rétablie sans classer toute la frame en capture géométrique ;
+les méthodes HTML restent filtrées localement par `componentPhase`. Les suites
+CodPlay ciblées passent, Play et Seek suivent la courbe dans Safari, y compris
+une chaîne temporaire à trois KFs où le CS rejoint le dernier KF à `480px`.
+La vérification utilisateur en début de semaine n'est pas reconstituée. Le
+comportement runtime est décrit dans la
+[spécification motion CodPlay](../../codplay/specs/motion-frame-v2-spec.md) ;
+les [preuves et limites](notes/2026-10-29-editor-path-playback-analysis.md)
+distinguent l'échec préexistant du test `scene-player-bridge-v2`. `blur` reste
+hors de ce correctif et limité aux inputs dans un travail futur.
+
+L’extension « rotation selon la tangente » est implémentée et vérifiée dans la
+[spécification dédiée](../specs/path-tangent-orientation-spec.md).
+
+**UI/CS tangente (En cours).** Le contrôle au milieu du path est une icône seule
+avec nom accessible. Le double Stop Safari MCP de 5 à 0 a reproduit un nouvel
+écart : le premier clic présente la frame initiale (`81,041586°`) ; le second
+laissait l’item à `rotate(0deg)` tandis que le CS restait à `81,041586°`. Le
+repli de `sequence-editor/mount.ts::onStopClick()` renvoyait un seek quand la
+tête et le transport étaient déjà à 0. Il vérifie maintenant l’état et le temps
+du transport avant de forcer le seek. Le test d’intégration confirme que deux
+Stops n’envoient qu’un seek à 0 et conservent l’item et le CS ; un Stop pendant
+Play force toujours le reset. Safari MCP a confirmé les deux cas, les deux KF
+SQLite restent à 0 et 5 s, et aucune erreur ni avertissement n’apparaît en
+console. Ce changement ne touche qu’à la coordination Editor.
+
+Au retest Safari MCP du 29 octobre, Play de 0 à 5 s laissait
+l’item à sa dernière pose live (`translate(461,157)`, `46°`) alors que le CS
+affichait la pose terminale (`-15,483°`). Un re-seek identique à 5 s ne
+corrigeait pas le rendu. Dans une scène portant un path, le handoff Editor
+présente maintenant `durée − 2 ms`, puis la durée exacte, avant de restaurer le
+CS et de réconcilier la tête. Le
+test ciblé vérifie pause → seek `4 998 ms` → seek `5 000 ms`, le changement de
+l’item depuis sa dernière pose live, et l’accord des rotations item/CS avec la
+pose terminale de `PresentationFrame`. Safari MCP confirme l’accord item/CS
+après Play naturel à 5 s, Seek de 4,2 à 5 s et Stop de 5 à 0. Le rechargement
+confirme que les KF restent à 0 et 5 s ; aucun changement n’est écrit au
+document pendant ces actions. Le full test file passe 11 tests sur 12 ; son
+échec restant (`PresentationFrame` absent au terme d’un scénario sans path)
+est préexistant. TypeScript et le build Editor passent. L’utilisateur signale
+que les ghosts sont faux ; leur correction est suivie séparément en P2-F et
+ils ne servent pas d’oracle pour l’accord item/CS. Le changement ne modifie ni
+la projection géométrique des ghosts, ni l’arborescence, ni la persistance.
+Voir la [spécification dédiée](../specs/path-tangent-orientation-spec.md) et
+les [preuves](notes/2026-10-29-editor-path-playback-analysis.md).
 
 **P4 — base typographique responsive (En cours).** Le décor initial des items
 texte reçoit `font-size: 3cqw`, valeur déjà employée par le preset « Étiquette ».

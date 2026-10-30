@@ -10,8 +10,6 @@ import { collectMoveOccurrences } from './motion-occurrences'
 /** Adds player-local controls to one materializer presentation. */
 export type RuntimePlayerMaterializationContext = RuntimeMaterializerSceneContext & Readonly<{
   forceMotionOccurrences?: boolean
-  /** Controls whether component module presentation hooks may start effects. */
-  componentPhase?: 'normal' | 'seek' | 'geometry-capture'
 }>
 
 /** Dependencies used to present solved scenes without owning player state. */
@@ -50,10 +48,7 @@ export class RuntimePlayerPresentation {
     )
     if (componentPhase === 'normal') this.context.applyLiveActions(scene)
     componentRuntime?.presentAt?.(scene.timeMs)
-    const materializerContext = componentPhase === 'seek'
-      ? { ...materialization, phase: 'geometry-capture' as const }
-      : materialization
-    const motionOccurrences = materializerContext.phase === 'geometry-capture'
+    const motionOccurrences = materialization.phase === 'geometry-capture'
       ? []
       : collectMoveOccurrences(
         materialization.previousScene,
@@ -71,8 +66,8 @@ export class RuntimePlayerPresentation {
     materializer?.materializeScene(
       scene,
       motionOccurrences.length === 0
-        ? materializerContext
-        : { ...materializerContext, motionOccurrences },
+        ? materialization
+        : { ...materialization, motionOccurrences },
     )
   }
 

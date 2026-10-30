@@ -29,6 +29,8 @@ type Move = string | Readonly<{
     delay?: number
     ease?: string
     path?: string
+    orientToPath?: boolean
+    rotateOffset?: Readonly<{ from: number; to: number }>
   }>
 }>
 ```
@@ -71,6 +73,14 @@ droits et arcs elliptiques. Le compilateur refuse une commande cubique `C` ;
 la déclaration `path` ne certifie donc pas la prise en charge de l'ensemble du
 format SVG.
 
+Quand `orientToPath` vaut `true`, `path` est obligatoire et le runtime oriente
+l’axe local `+X` de l’item sur la tangente avant du chemin. `rotateOffset.from`
+et `.to` sont des décalages en degrés aux deux extrémités ; ils sont interpolés
+avec la progression eased du segment et ajoutés à la tangente. Une valeur
+absente équivaut à `0°`. Sans `orientToPath`, la rotation garde sa sémantique
+historique. La pose orientée reste la pose présentée au KF cible et après la
+fin du segment.
+
 ## Invariants vérifiés
 
 - La destination et l’ordre sont des données de placement ; la transition est
@@ -84,6 +94,8 @@ format SVG.
   période active puis retire cette réservation. La largeur et les combinaisons
   d'axes ne sont pas encore certifiées.
 - Le chemin SVG déclaré est transformé en `Path` préparé avant l’exécution.
+- `orientToPath` et ses décalages sont transportés avec le chemin jusqu’au
+  graphe motion ; un segment sans chemin ne peut pas activer l’orientation.
 
 ## Code et acceptation
 
@@ -102,6 +114,13 @@ format SVG.
   [`motion-graph.spec.ts`](../tests/runtime/motion/motion-graph.spec.ts),
   [`motion-pose.spec.ts`](../tests/runtime/motion/motion-pose.spec.ts) et
   [`motion-presentation-host.spec.ts`](../tests/runtime/runner-html/motion-presentation-host.spec.ts).
+
+Le transport et la pose tangentielle sont également vérifiés par
+[`motion-capture.spec.ts`](../tests/runtime/runner-html/motion-capture.spec.ts),
+[`motion-pose.spec.ts`](../tests/runtime/motion/motion-pose.spec.ts),
+[`motion-graph.spec.ts`](../tests/runtime/motion/motion-graph.spec.ts) et le
+test d’intégration éditeur
+[`motion-path.spec.ts`](../../editor/tests/builder-v2/motion-path.spec.ts).
 
 Le 2026-09-25, l’exécution ciblée de ces frontières et des tests de placement
 et runner a passé **9 fichiers et 139 tests**.

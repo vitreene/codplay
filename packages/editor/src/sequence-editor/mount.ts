@@ -509,14 +509,23 @@ export function mountSequenceEditor(
   }
   btnPlay.addEventListener('click', onPlayClick)
 
-  /** Resets the author playhead and explicitly presents the player at frame zero. */
+  /** Resets the author playhead and presents frame zero only when the player is not already there. */
   function onStopClick(): void {
     // Set the author playhead first so the local head and time display reset immediately. Normally
     // render() relays this changed value as a seek. If it was already 0, the render diff suppresses
     // that relay even though the player may still present a later frame; Stop must seek 0 anyway.
+    // Once the player is idle at author time 0, another Stop is a no-op: a duplicate same-time
+    // seek can restore the source's raw CSS pose over a path-resolved frame and desynchronize item/CS.
     const lastRelayedPlayheadMs = lastPlayheadMs
+    const transportState = transport?.getState() ?? null
+    const transportProgress = transport?.getProgress() ?? null
+    const alreadyStoppedAtInitialFrame = lastPlayheadMs === 0
+      && transportState !== null
+      && transportState.status !== 'playing'
+      && transportProgress !== null
+      && Math.abs(transportProgress.timelineMs) <= 1
     ctrl.seek(0)
-    if (lastPlayheadMs === lastRelayedPlayheadMs) {
+    if (lastPlayheadMs === lastRelayedPlayheadMs && !alreadyStoppedAtInitialFrame) {
       lastPlayheadMs = 0
       options.onPlayheadChange?.(0)
     }

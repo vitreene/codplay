@@ -170,6 +170,8 @@ export interface Decor {
   custom?: string
   /** Optional CodPlay V2 SVG path for the incoming segment; absent means straight and never cascades. */
   path?: string
+  /** Keeps the item's local +X axis aligned to the incoming path; stored on this KF's Decor. */
+  orientToPath?: boolean
   /**
    * Open extension surface for Decor capabilities that are specified later. The editor bridge
    * preserves these own properties structurally; a future builder tranche must define how each

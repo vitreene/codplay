@@ -235,6 +235,15 @@ réouvre ni ne reformule le contrat déjà certifié.
 
 ## Travail restant
 
+La rupture de présentation après Seek introduite par `333b5327` est corrigée :
+le raccord runtime est restauré et les tests facade/flip-stress associés
+passent. Le comportement vérifié est décrit dans la
+[spécification motion](../specs/motion-frame-v2-spec.md) et la cause historique
+est consignée dans la
+[note d’analyse éditeur](../../editor/plan/notes/2026-10-29-editor-path-playback-analysis.md).
+Le reste de ce plan conserve les gates distinctes de composition, partition,
+resize, persistance et lifecycle.
+
 Le transport des occurrences et les comportements de temps absolu et de capture
 vérifiés sont décrits dans la [spécification motion](../specs/motion-frame-v2-spec.md).
 Le plan ne garde que les gates d’application encore ouvertes :
@@ -268,14 +277,12 @@ Le plan ne garde que les gates d’application encore ouvertes :
 - [ ] Valider les non-régressions parent/enfant et reparent, puis le resize.
       La mesure Safari couvre le déplacement dans le slot Elcé, pas encore ces
       cas de composition ni la recapture géométrique après resize.
-- [ ] Achever la comparaison Play/Seek et déterminer pourquoi les parcours
-      Seek sans montage ne préparent pas toujours leur overlay. Les échecs
-      actuels touchent `facade.spec.ts` (quatre assertions dépendant de Seek)
-      et `flip-stress-motion.spec.ts` (`seek(1500)`) ; ils sont distincts du
-      changement de racine, dont les chemins Play compilé/live passent. La
-      preview Elcé reste le parcours navigateur d’acceptation pour vérifier
-      l’interpolation après montage. Voir la
-      [note d’enquête Elcé](../../elce/notes/2026-10-14-elce-viewport-expansion-enquete.md).
+- [x] Rétablir la préparation motion des présentations finales Seek sans
+      assimiler Seek à `geometry-capture`. Les tests facade et flip-stress
+      couvrent les seeks sans montage ; Play après Seek initial et l'arc sont
+      aussi vérifiés dans Editor au navigateur. Les compositions parent/enfant,
+      resize, reset, persistance et lifecycle restent les gates ci-dessous et
+      au [plan runner HTML](./runner-flip-integration-study.md).
 - [ ] Achever et valider la partition des groupes par toutes les stories
       touchées : un reset retire entièrement les groupes concernés et leurs
       ressources ; un Seek antérieur ne les reconstruit que si la frame le
@@ -293,15 +300,17 @@ une seule fois.
 
 La correction de capture affine du 28 octobre 2026 est vérifiée dans la
 [spécification motion](../specs/motion-frame-v2-spec.md#capture-affine-des-items-html).
-La suite complète conserve les 7 échecs présents avant cette correction :
-facade (4), flip-stress (1), Sighty/localStorage (2). Après correction :
-805 réussites et 1 échec attendu ; typecheck et build player passent.
-Ces échecs préexistants maintiennent les gates globales ci-dessous ouvertes.
+Pour le raccord Seek restauré le 29 octobre, les suites ciblées facade,
+flip-stress, runner, méthodes HTML et géométrie passent : 12 fichiers, 142
+tests. La validation complète a deux erreurs `localStorage` de teardown dans
+Sighty et un cas éditeur préexistant ; ils ne sont pas attribués à cette
+restauration.
 
 Les validations restantes doivent établir que :
 
 - les événements compilés, live et reconstruits par Seek transmettent les
-  occurrences au même chemin de préparation ;
+  occurrences au même chemin de préparation ; le témoin Seek initial → Play
+  passe depuis la restauration du 29 octobre ;
 - le reset retire les groupes touchés sans capture, et le resize invalide les
   poses pour une recapture paresseuse.
 

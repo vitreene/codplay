@@ -84,6 +84,8 @@ export interface DecorPatch {
   custom?: string // mini-éditeur de code : CSS libre, responsabilité auteur
   /** Optional CodPlay V2 SVG path for the incoming segment; absent means straight and never cascades. */
   path?: string
+  /** Aligns the item to the incoming explicit path; absent and false both mean disabled. */
+  orientToPath?: boolean
   /**
    * Open extension surface for Decor modules not yet described by this editor version. The bridge
    * transports unknown properties by path instead of silently dropping them at the type boundary.

@@ -1,4 +1,7 @@
-import type { RuntimeModuleServiceInstance } from '../engine/module-service-types'
+import type {
+  RuntimeComponentUpdatePhase,
+  RuntimeModuleServiceInstance,
+} from '../engine/module-service-types'
 import type { BaseComponent } from '../components/base-component'
 import type { RuntimeComponentHandle } from '../components/runtime-component-runtime'
 import type {
@@ -34,6 +37,8 @@ export type RuntimeMaterializerSceneContext = Readonly<{
    * persistent author materialization without triggering playback side effects.
    */
   phase?: 'normal' | 'geometry-capture'
+  /** Component update phase forwarded for projection-local side-effect filtering. */
+  componentPhase?: RuntimeComponentUpdatePhase
   /** Stories whose event projection just crossed a reset boundary. */
   resetStoryIds?: readonly string[]
   /** Stories whose isolation period just closed and whose motion groups are stale. */

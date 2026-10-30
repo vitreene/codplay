@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { preparePath, resolvePath } from '../../src/ace/path'
+import { preparePath, prepareSegmentPath, resolvePath, resolvePathFrame } from '../../src/ace/path'
 import { prepareTween, resolveTween } from '../../src/ace/tween'
 
 const expectPointCloseTo = (actual: readonly number[], expected: readonly number[]) => {
@@ -53,5 +53,54 @@ describe('normalized quadratic paths', () => {
       duration: 100,
       path: preparePath({ control }),
     })).toThrow(/deux points numeriques/)
+  })
+})
+
+describe('resolved path frames', () => {
+  it('returns the same point as resolvePath and a forward quadratic tangent', () => {
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+    const frame = resolvePathFrame(path, [10, 20], [110, 20], 0.5)
+
+    expect(frame.point).toEqual(resolvePath(path, [10, 20], [110, 20], 0.5))
+    expect(frame.tangent?.[0]).toBeCloseTo(1)
+    expect(frame.tangent?.[1]).toBeCloseTo(0)
+    expect(resolvePathFrame(path, [10, 20], [110, 20], 0).tangent?.[1]).toBeGreaterThan(0)
+    expect(resolvePathFrame(path, [10, 20], [110, 20], 1).tangent?.[1]).toBeLessThan(0)
+  })
+
+  it('uses a one-sided direction when a quadratic endpoint derivative is zero', () => {
+    const path = preparePath({ control: [0, 0] }, { traversal: 'parameter' })
+
+    expect(resolvePathFrame(path, [0, 0], [100, 0], 0).tangent).toEqual([1, 0])
+  })
+
+  it('uses the same prepared arc and subsegment selection as point resolution', () => {
+    const path = prepareSegmentPath({
+      segments: [{ kind: 'arc', to: [1, 0], radius: [0.7, 0.7], rotation: 0, largeArc: false, sweep: true }],
+    })
+    const progress = 0.37
+    const epsilon = 1e-5
+    const frame = resolvePathFrame(path, [0, 0], [200, 30], progress)
+    const before = resolvePath(path, [0, 0], [200, 30], progress - epsilon)
+    const after = resolvePath(path, [0, 0], [200, 30], progress + epsilon)
+    const length = Math.hypot(after[0] - before[0], after[1] - before[1])
+
+    expect(frame.point).toEqual(resolvePath(path, [0, 0], [200, 30], progress))
+    expect(frame.tangent?.[0]).toBeCloseTo((after[0] - before[0]) / length, 3)
+    expect(frame.tangent?.[1]).toBeCloseTo((after[1] - before[1]) / length, 3)
+  })
+
+  it('chooses the next line at an exact parameter-traversed corner', () => {
+    const path = prepareSegmentPath({
+      segments: [
+        { kind: 'line', to: [0.5, 0] },
+        { kind: 'line', to: [0.5, 0.5] },
+      ],
+    }, { traversal: 'parameter' })
+
+    expect(resolvePathFrame(path, [0, 0], [100, 0], 0.5)).toMatchObject({
+      point: [50, 0],
+      tangent: [0, 1],
+    })
   })
 })

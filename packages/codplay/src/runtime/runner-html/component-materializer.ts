@@ -127,7 +127,10 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
       if (this.structureDirty || this.lastStructuralRevision !== scene.graph.revision) {
         this.materializeStructure(scene)
       }
-      if (context.phase !== 'geometry-capture') {
+      if (
+        context.phase !== 'geometry-capture'
+        && (context.componentPhase === undefined || context.componentPhase === 'normal')
+      ) {
         applyActivatedHtmlElementMethods(scene, context.previousScene, this.nodes.persoNodes)
       }
     } finally {

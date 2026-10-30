@@ -1,4 +1,4 @@
-import { invertMatrix, multiplyMatrix, resolvePath, type Point } from 'ace'
+import { invertMatrix, multiplyMatrix, resolvePath, resolvePathFrame, type Point } from 'ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
 import type { RelativeMotionPose } from './types'
 
@@ -49,6 +49,7 @@ export function interpolateMotionPose(
   to: HtmlPose,
   progress: number,
   path?: Parameters<typeof resolvePath>[0],
+  orientation?: Readonly<{ rotateOffset?: Readonly<{ from: number; to: number }> }>,
 ): HtmlPose {
   const matrix: HtmlMatrix = {
     a: lerp(from.matrix.a, to.matrix.a, progress),
@@ -62,13 +63,21 @@ export function interpolateMotionPose(
   const height = lerp(from.localHeight, to.localHeight, progress)
   const fromAnchor = visualCenter(from)
   const toAnchor = visualCenter(to)
+  const pathFrame = path === undefined || orientation === undefined
+    ? undefined
+    : resolvePathFrame(path, fromAnchor, toAnchor, progress)
   const pathPoint = path === undefined
     ? undefined
-    : resolvePath(path, fromAnchor, toAnchor, progress)
+    : pathFrame?.point ?? resolvePath(path, fromAnchor, toAnchor, progress)
   const origin: Point = pathPoint === undefined
     ? [lerp(from.origin.x, to.origin.x, progress), lerp(from.origin.y, to.origin.y, progress)]
     : originFromVisualCenter(pathPoint, matrix, width, height)
-  return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, to.parentMatrix, width, height)
+  const pose = poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, to.parentMatrix, width, height)
+  if (pathFrame?.tangent === null || pathFrame?.tangent === undefined) return pose
+
+  const rotateOffset = orientation?.rotateOffset
+  const offset = lerp(rotateOffset?.from ?? 0, rotateOffset?.to ?? 0, progress) * Math.PI / 180
+  return alignMotionPoseToTangent(pose, pathFrame.tangent, offset)
 }
 
 /** Rebuilds one pose around its visual center after an explicit size policy. */
@@ -194,6 +203,26 @@ function originFromVisualCenter(center: Point, matrix: HtmlMatrix, width: number
     center[0] - matrix.a * width / 2 - matrix.c * height / 2,
     center[1] - matrix.b * width / 2 - matrix.d * height / 2,
   ]
+}
+
+/** Rotates the world-space linear transform to the path heading while preserving its center. */
+function alignMotionPoseToTangent(pose: HtmlPose, tangent: Point, offsetRadians: number): HtmlPose {
+  const currentAngle = Math.atan2(pose.matrix.b, pose.matrix.a)
+  const targetAngle = Math.atan2(tangent[1], tangent[0]) + offsetRadians
+  const rotation = targetAngle - currentAngle
+  const cosine = Math.cos(rotation)
+  const sine = Math.sin(rotation)
+  const matrix: HtmlMatrix = {
+    a: cosine * pose.matrix.a - sine * pose.matrix.b,
+    b: sine * pose.matrix.a + cosine * pose.matrix.b,
+    c: cosine * pose.matrix.c - sine * pose.matrix.d,
+    d: sine * pose.matrix.c + cosine * pose.matrix.d,
+    e: 0,
+    f: 0,
+  }
+  const center = visualCenter(pose)
+  const origin = originFromVisualCenter(center, matrix, pose.localWidth, pose.localHeight)
+  return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, pose.parentMatrix, pose.localWidth, pose.localHeight)
 }
 
 /** Solves the virtual source AABB required to preserve a curved path phase. */

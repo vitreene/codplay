@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createRotateMatrix, preparePath } from '../../../src/ace'
+import { createRotateMatrix, preparePath, resolvePathFrame } from '../../../src/ace'
 import {
   buildMotionGraph,
   buildNaturalLayoutTimeline,
@@ -42,6 +42,77 @@ describe('motion graph', () => {
     const presentation = resolvePresentationFrame(graph, after, 50).items.get('item')
     expect(presentation?.resize).toEqual({ height: 'preserve' })
     expect(presentation?.pose.localHeight).toBeCloseTo(30)
+  })
+
+  it('keeps a path-aligned pose at the target KF and after the segment endpoint', () => {
+    const before = snapshot(0, [{ ...item('item', 'root', 0), y: 0, width: 20, height: 10 }])
+    const after = snapshot(1_000, [{ ...item('item', 'root', 100), y: 100, width: 20, height: 10 }])
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+    const graph = buildMotionGraph([
+      boundary('aligned', 0, before, after, [{
+        ...intent('item', 0, 1_000),
+        path,
+        orientToPath: true,
+        rotateOffset: { from: 10, to: 20 },
+      }]),
+    ])
+    const atEnd = resolvePresentationFrame(graph, after, 1_000).items.get('item')
+    const afterEnd = resolvePresentationFrame(graph, after, 1_001).items.get('item')
+
+    expect(resolvePresentationFrame(graph, after, 500).items.get('item')?.representation).toBe('local')
+    expect(atEnd?.representation).toBe('local')
+    expect(afterEnd?.representation).toBe('local')
+    expect(afterEnd?.activeSegmentId).toBeUndefined()
+    expect(afterEnd?.pose.matrix).toEqual(atEnd?.pose.matrix)
+    expect(afterEnd?.pose.origin).toEqual(atEnd?.pose.origin)
+  })
+
+  it('aligns a reparented child to the world path tangent beneath transformed parents', () => {
+    const before = snapshot(0, [
+      rotatedItem('source', 'root', 10, 30),
+      rotatedItem('destination', 'root', 150, -15),
+      itemWithSize('child', 'source:content', 10, 20, 10, 'source'),
+    ])
+    const after = snapshot(0, [
+      rotatedItem('source', 'root', 10, 30),
+      rotatedItem('destination', 'root', 150, -15),
+      itemWithSize('child', 'destination:content', 10, 20, 10, 'destination'),
+    ])
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+    const graph = buildMotionGraph([
+      boundary('reparented-path', 0, before, after, [{
+        ...intent('child', 0, 1_000),
+        presentationMode: 'reparent',
+        path,
+        orientToPath: true,
+        rotateOffset: { from: 0, to: 25 },
+      }]),
+    ])
+    const source = before.items.get('child')!.rootPose
+    const target = after.items.get('child')!.rootPose
+    const sourceCenter = [
+      source.origin.x + source.matrix.a * source.localWidth / 2 + source.matrix.c * source.localHeight / 2,
+      source.origin.y + source.matrix.b * source.localWidth / 2 + source.matrix.d * source.localHeight / 2,
+    ] as const
+    const targetCenter = [
+      target.origin.x + target.matrix.a * target.localWidth / 2 + target.matrix.c * target.localHeight / 2,
+      target.origin.y + target.matrix.b * target.localWidth / 2 + target.matrix.d * target.localHeight / 2,
+    ] as const
+    const pathFrame = resolvePathFrame(path, sourceCenter, targetCenter, 0.5)
+    const tangent = pathFrame.tangent
+    if (tangent === null) throw new Error('The prepared path has no tangent at its midpoint.')
+    const frame = resolvePresentationFrame(graph, after, 500).items.get('child')
+    if (frame === undefined) throw new Error('The child motion frame is missing.')
+    const actualCenter = [
+      frame.pose.origin.x + frame.pose.matrix.a * frame.pose.localWidth / 2 + frame.pose.matrix.c * frame.pose.localHeight / 2,
+      frame.pose.origin.y + frame.pose.matrix.b * frame.pose.localWidth / 2 + frame.pose.matrix.d * frame.pose.localHeight / 2,
+    ]
+
+    expect(frame.representation).toBe('reparent')
+    expect(Math.atan2(frame.pose.matrix.b, frame.pose.matrix.a) * 180 / Math.PI)
+      .toBeCloseTo(Math.atan2(tangent[1], tangent[0]) * 180 / Math.PI + 12.5, 5)
+    expect(actualCenter[0]).toBeCloseTo(pathFrame.point[0], 5)
+    expect(actualCenter[1]).toBeCloseTo(pathFrame.point[1], 5)
   })
 
   it('keeps pre-reset motion available before the boundary and drops it after reset', () => {

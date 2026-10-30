@@ -3,6 +3,9 @@ import type { OffsetPatch, SelectionFrameValue } from './types'
 /** Partial local-pixel value used when projecting an existing structured offset to the frame. */
 export type OffsetValuesPx = Partial<SelectionFrameValue>
 
+/** Style aliases owned by the existing structured frame/offset adapter. */
+export const OFFSET_STYLE_PROPERTIES = new Set(['x', 'y', 'width', 'height', 'rotate', 'scaleX', 'scaleY', 'transform-origin'])
+
 /** cqw = 1% de la largeur du conteneur de référence, en px. */
 export function pxToCqw(px: number, containerWidthPx: number): number {
   return (px / containerWidthPx) * 100

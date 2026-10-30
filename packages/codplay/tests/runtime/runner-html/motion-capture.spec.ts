@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { preparePath } from '../../../src/ace'
 
 import {
   captureHtmlMotionBoundaries,
@@ -81,6 +82,33 @@ describe('HTML motion boundary capture', () => {
     expect(boundaries[0]?.keyframes?.map((snapshot) => snapshot.timeMs)).toEqual([1_600])
     expect(presentSceneForGeometryCapture.mock.calls.map(([scene]) => (scene as SolvedScene).timeMs))
       .toEqual([1_200, 1_200, 1_600, 2_200, 1_200])
+  })
+
+  it('carries path orientation and rotation offsets into the captured motion intent', () => {
+    const path = preparePath({ control: [0.5, 0.8] }, { traversal: 'parameter' })
+    const boundaries = captureHtmlMotionBoundaries({
+      player: {
+        getSolvedScene: () => createSolvedScene(1_200, false),
+        resolveSceneBeforeBoundary: (timeMs: number) => createSolvedScene(timeMs, timeMs > 1_200),
+        resolveSceneAt: (timeMs: number) => createSolvedScene(timeMs, true),
+        presentSceneForGeometryCapture: vi.fn(),
+      } as unknown as RuntimePlayer,
+      root: {} as Element,
+      nodes: new Map(),
+      intents: [{
+        ...createIntent(),
+        path,
+        orientToPath: true,
+        rotateOffset: { from: 12, to: 28 },
+      }],
+      includePersistOnly: false,
+    })
+
+    expect(boundaries[0]?.intents[0]).toMatchObject({
+      path,
+      orientToPath: true,
+      rotateOffset: { from: 12, to: 28 },
+    })
   })
 
   it('uses the active segment endpoint when a direct move replaces it', () => {

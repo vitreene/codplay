@@ -1,6 +1,7 @@
 import type { Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
 import { resolveKeyframeChannel } from '../app/commands/types'
-import { parseColor } from 'ace'
+import { parseColor, prepareTween, resolveTween, type InterpolationValue } from 'ace'
+import { resolveKeyframeTransition } from './keyframe-transition'
 import { contentBoxLayoutDisplacement } from '../motion-editor/content-box'
 import { resolveBorderInsetLengths, type BorderLength } from '../motion-editor/border-insets'
 
@@ -118,6 +119,40 @@ export function resolveKeyframeDecorStyle(
     )
 }
 
+/** Returns decoration events independently of pose waypoints and their segment-local options. */
+export function sortDecorationKeyframes(scene: EditorScene, item: Item): Keyframe[] {
+  return [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs).filter((keyframe, index) => {
+    if (index === 0 || resolveKeyframeChannel(keyframe) === 'decor') return true
+    const decor = scene.decors[keyframe.decorId]
+    return decor !== undefined && (Object.keys(resolveDecorChannelStyle(decor)).length > 0
+      || Object.keys(decor).some((property) => !['id', 'offset', 'path', 'orientToPath'].includes(property)))
+  })
+}
+
+/** Uses the same decoration chain, transition window and ACE tweens as the built scene. */
+export function resolveDecorationStyleAtTime(scene: EditorScene, item: Item, timeMs: number): Record<string, unknown> {
+  const keyframes = sortDecorationKeyframes(scene, item)
+  const targetIndex = keyframes.findIndex((keyframe) => keyframe.timeMs > timeMs)
+  if (targetIndex === 0) return resolveDecorChannelStyle(scene.decors[item.initialDecorId])
+  const source = targetIndex < 0 ? keyframes.at(-1) : keyframes[targetIndex - 1]
+  if (source === undefined) return resolveDecorChannelStyle(scene.decors[item.initialDecorId])
+  const fromStyle = resolveKeyframeDecorStyle(scene, item, source)
+  const target = keyframes[targetIndex]
+  if (target === undefined) return fromStyle
+  const toStyle = resolveKeyframeDecorStyle(scene, item, target)
+  const { durationMs, startAtMs, ease } = resolveKeyframeTransition(source, target)
+  return Object.entries(computeStyleDiff(fromStyle, toStyle)).reduce((resolved, [property, value]) => {
+    if (durationMs <= 0 || !isInterpolableStylePair(fromStyle[property], value)) return resolved
+    const tween = prepareTween({
+      from: fromStyle[property] as InterpolationValue,
+      to: value as InterpolationValue,
+      duration: durationMs,
+      ease,
+    })
+    return { ...resolved, [property]: resolveTween(tween, timeMs - startAtMs) }
+  }, fromStyle)
+}
+
 /** Resolves pose values through pose-channel keyframes while ignoring decoration-only points. */
 export function resolveKeyframePoseStyle(
   scene: EditorScene,
@@ -132,7 +167,7 @@ export function resolveKeyframePoseStyle(
     )
   return resolveContentAnchoredPoseStyle(
     poseStyle,
-    resolveKeyframeDecorStyle(scene, item, keyframe),
+    resolveDecorationStyleAtTime(scene, item, keyframe.timeMs),
   )
 }
 

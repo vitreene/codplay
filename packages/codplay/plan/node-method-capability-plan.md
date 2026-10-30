@@ -6,6 +6,24 @@
 > la projection HTML.
 > Version CodPlay : V2 foundation
 
+## Raccord Seek restauré — 29 octobre 2026
+
+Le classement de la présentation finale de Seek en `geometry-capture` coupait
+aussi motion. La restauration est vérifiée : le player garde le contexte
+ordinaire pour le materializer et transmet `componentPhase: 'seek'`; le
+materializer HTML filtre localement les méthodes ponctuelles avec cette phase.
+Les captures géométriques explicites restent inhibées. Les tests facade,
+`flip-stress`, méthodes HTML et trajectoire initial-seek → Play passent. Le
+comportement est défini par la
+[spécification motion](../specs/motion-frame-v2-spec.md) ; la cause historique
+et les détails du test navigateur sont dans la
+[note d’analyse éditeur](../../editor/plan/notes/2026-10-29-editor-path-playback-analysis.md).
+
+Un éventuel fix `blur` ultérieur est limité aux inputs, dans un changement
+séparé. Son défaut concret et le contrôle natif visé restent à définir ; il ne
+conditionne pas la restauration de Seek. Conserver les usages existants de
+`focus` sur les boutons et conteneurs, y compris ceux d'Elcé.
+
 ## Décision et besoin
 
 Le 5 octobre 2026, l’utilisateur a précisé que CodPlay n’a pas pour objectif
@@ -115,9 +133,10 @@ déclaration compilable et sérialisable ; les fonctions auteur restent hors du
   occurrences qui viennent de s’activer ; le nœud est celui du perso courant
   dans le registre du materializer. Aucun service, handle de nœud ou champ
   HTML n’est ajouté au solveur ni au core.
-- Le player transmet le mode générique `geometry-capture` à la projection lors
-  d’un Seek/reconstruction. Le materializer HTML ne déclenche alors aucune
-  méthode. Cette adaptation reste indépendante des règles HTML.
+- Le player conserve `componentPhase: 'seek'` sur la présentation finale de Seek
+  sans convertir le contexte motion en `geometry-capture`. Le materializer HTML
+  n'exécute pas les méthodes pour `componentPhase: 'seek'` ou
+  `phase: 'geometry-capture'` ; motion reçoit toujours les occurrences de Seek.
 - Le service HTML `attr` diffère uniquement l’écriture de fermeture de
   `aria-hidden` et `inert` jusqu’au passage synchrone du materializer. Celui-ci
   exécute les méthodes d’action puis applique ces attributs. Les suppressions

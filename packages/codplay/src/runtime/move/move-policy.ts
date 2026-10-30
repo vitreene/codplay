@@ -163,6 +163,9 @@ function readMoveTransition(value: CompiledValue | undefined): MoveTransition | 
   }
   if (record.ease !== undefined && typeof record.ease !== 'string') return INVALID_TRANSITION
   if (record.path !== undefined && !isPreparedPath(record.path)) return INVALID_TRANSITION
+  if (record.orientToPath !== undefined && typeof record.orientToPath !== 'boolean') return INVALID_TRANSITION
+  if (record.orientToPath === true && record.path === undefined) return INVALID_TRANSITION
+  if (record.rotateOffset !== undefined && !isRotateOffset(record.rotateOffset)) return INVALID_TRANSITION
   if (Object.prototype.hasOwnProperty.call(record, 'traversal')) return INVALID_TRANSITION
   if (Object.prototype.hasOwnProperty.call(record, 'pathAnchor')) return INVALID_TRANSITION
   return {
@@ -170,7 +173,18 @@ function readMoveTransition(value: CompiledValue | undefined): MoveTransition | 
     delay: record.delay as number | undefined,
     ease: record.ease,
     path: record.path,
+    orientToPath: record.orientToPath,
+    rotateOffset: record.rotateOffset as MoveTransition['rotateOffset'],
   }
+}
+
+/** Validates the interpolated authored rotation offset carried with path orientation. */
+function isRotateOffset(value: unknown): value is NonNullable<MoveTransition['rotateOffset']> {
+  return isPlainRecord(value)
+    && typeof value.from === 'number'
+    && Number.isFinite(value.from)
+    && typeof value.to === 'number'
+    && Number.isFinite(value.to)
 }
 
 /** Accepts the finite ordering modes defined by the CodPlay move contract. */

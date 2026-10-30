@@ -63,6 +63,12 @@ conservées et la transformation vers le segment réel applique la même échell
 aux deux axes. Les entrées auteur de chemins SVG et leur compilation avant le
 runtime sont définies par la spécification `move`.
 
+`resolvePathFrame` retourne le même point que `resolvePath` et la tangente avant
+normalisée au même instant et sur le même sous-segment préparé. Si la dérivée
+est nulle à une extrémité, la résolution utilise la direction unilatérale ; à
+un coin exactement partagé par deux segments, elle suit le sous-segment choisi
+par la résolution du point.
+
 `preparePolarTween` prépare ensemble un angle et une distance, puis
 `resolvePolarTween` produit une paire ordonnée de coordonnées. Les angles CSS
 testés sont convertis en radians ; l'origine conserve l'unité de la distance,
@@ -90,7 +96,7 @@ pondérée entre actions, ni l'emploi de `spring`, `polar` ou de keyframes par u
   [`spring.spec.ts`](../tests/ace/spring.spec.ts) et
   [`spring-parity.spec.ts`](../tests/ace/spring-parity.spec.ts).
 - Keyframes : [`keyframes.spec.ts`](../tests/ace/keyframes.spec.ts).
-- Chemins : [`path.spec.ts`](../tests/ace/path.spec.ts) et
+- Chemins et tangentes : [`path.spec.ts`](../tests/ace/path.spec.ts) et
   [`svg-path.spec.ts`](../tests/ace/svg-path.spec.ts).
 - Coordonnées polaires : [`polar.spec.ts`](../tests/ace/polar.spec.ts).
 - Matrices 2D : [`matrix-2d.spec.ts`](../tests/ace/matrix-2d.spec.ts).

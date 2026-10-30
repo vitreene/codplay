@@ -22,6 +22,8 @@ export type ScheduledMotionIntent = Readonly<{
   presentationMode: MotionPresentationMode
   resize?: MotionResizePolicy
   path?: Path
+  orientToPath?: boolean
+  rotateOffset?: Readonly<{ from: number; to: number }>
   /** Whether this movement may create target-sibling reflow segments. */
   targetReflow: boolean
   /** Absolute times at which the resolved pose must be captured. */
@@ -36,6 +38,8 @@ export type MotionScheduleTransition = Readonly<{
   reparent?: boolean
   resize?: MotionResizePolicy
   path?: Path
+  orientToPath?: boolean
+  rotateOffset?: Readonly<{ from: number; to: number }>
   /** Move transitions reflow their source/target lists; pose transitions do not by default. */
   targetReflow?: boolean
   /** Relative endpoints of all property transitions contributing to this action. */
@@ -178,6 +182,8 @@ function createMotionIntent(input: Readonly<{
     reparent?: boolean
     resize?: MotionResizePolicy
     path?: Path
+    orientToPath?: boolean
+    rotateOffset?: Readonly<{ from: number; to: number }>
     targetReflow?: boolean
     captureOffsetsMs?: readonly number[]
   }>
@@ -202,6 +208,8 @@ function createMotionIntent(input: Readonly<{
     ease: input.transition.ease ?? 'out(2)',
     presentationMode: resolvePresentationMode(input.transition.reparent),
     ...(input.transition.resize === undefined ? {} : { resize: input.transition.resize }),
+    ...(input.transition.orientToPath === undefined ? {} : { orientToPath: input.transition.orientToPath }),
+    ...(input.transition.rotateOffset === undefined ? {} : { rotateOffset: input.transition.rotateOffset }),
     targetReflow: input.transition.targetReflow ?? false,
     ...(captureOffsetsMs.length === 0 ? {} : {
       keyTimes: Object.freeze(captureOffsetsMs.map((offset) => input.startAt + offset)),
@@ -229,6 +237,8 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   reparent?: boolean
   resize?: MotionResizePolicy
   path?: Path
+  orientToPath?: boolean
+  rotateOffset?: Readonly<{ from: number; to: number }>
   targetReflow: boolean
   captureOffsetsMs: readonly number[]
 }> | undefined {
@@ -245,6 +255,10 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   if (transition.path !== undefined && !isPreparedPath(transition.path)) {
     throw new Error('Move transition path must be prepared by the scene compiler.')
   }
+  if (transition.orientToPath !== undefined && typeof transition.orientToPath !== 'boolean') return undefined
+  if (transition.orientToPath === true && transition.path === undefined) return undefined
+  const rotateOffset = readRotateOffset(transition.rotateOffset)
+  if (transition.rotateOffset !== undefined && rotateOffset === undefined) return undefined
   if (Object.prototype.hasOwnProperty.call(transition, 'traversal')) return undefined
   if (Object.prototype.hasOwnProperty.call(transition, 'pathAnchor')) return undefined
   const resize = readMoveResize(move.resize)
@@ -254,12 +268,23 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
     ease: (transition.ease as string | undefined) ?? 'out(2)',
     ...(move.reparent === undefined ? {} : { reparent: move.reparent }),
     ...(resize === undefined ? {} : { resize }),
+    ...(transition.orientToPath === undefined ? {} : { orientToPath: transition.orientToPath as boolean }),
+    ...(rotateOffset === undefined ? {} : { rotateOffset }),
     targetReflow: true,
     captureOffsetsMs: Object.freeze([
       transition.duration + (transition.delay === undefined ? 0 : transition.delay as number),
     ]),
     ...(transition.path === undefined ? {} : { path: transition.path as Path }),
   })
+}
+
+/** Reads the finite start and end angles transported by an aligned move. */
+function readRotateOffset(value: CompiledValue | undefined): Readonly<{ from: number; to: number }> | undefined {
+  if (value === undefined || !isPlainRecord(value)) return undefined
+  const record = value as CompiledRecord
+  if (typeof record.from !== 'number' || !Number.isFinite(record.from)) return undefined
+  if (typeof record.to !== 'number' || !Number.isFinite(record.to)) return undefined
+  return Object.freeze({ from: record.from, to: record.to })
 }
 
 /** Reads one compiler-validated per-axis sizing policy. */

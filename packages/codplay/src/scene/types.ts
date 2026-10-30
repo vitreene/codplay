@@ -46,6 +46,10 @@ export type MoveTransition = Readonly<{
   delay?: number
   ease?: string
   path?: string
+  /** Aligns the item's local +X axis to the path's forward tangent. */
+  orientToPath?: boolean
+  /** Authored rotation offsets, in degrees, interpolated on top of the tangent. */
+  rotateOffset?: Readonly<{ from: number; to: number }>
 }>
 
 /** Per-axis item sizing policy applied while a move is presented. */

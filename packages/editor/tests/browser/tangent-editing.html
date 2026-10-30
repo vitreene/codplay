@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr" id="tangent-test-document">
+  <head id="tangent-test-head">
+    <meta charset="UTF-8" />
+    <title>Tangent editing integration</title>
+    <style>
+      #tangent-test-layout { display:grid;grid-template-columns:minmax(0,1fr) 280px;width:100%;max-width:1160px; }
+      #tangent-test-scene { width:100%;aspect-ratio:16/9;overflow:hidden; }
+      #tangent-test-palette { min-width:0;overflow:auto; }
+      #tangent-test-palette .dedit-palette { position:static;width:auto;margin:8px; }
+      #tangent-test-timeline { grid-column:1 / -1;height:240px;min-width:0;overflow:hidden; }
+    </style>
+  </head>
+  <body id="tangent-test-body" style="margin:0;background:#111827;color:white">
+    <main id="tangent-test-layout">
+      <div id="tangent-test-scene"></div>
+      <div id="tangent-test-palette"></div>
+      <div id="tangent-test-timeline"></div>
+    </main>
+    <script type="module">
+      import * as fixture from './tangent-editing-fixture.ts'
+      document.getElementById('tangent-test-layout').testApi = fixture
+      await fixture.mountFixture()
+    </script>
+  </body>
+</html>

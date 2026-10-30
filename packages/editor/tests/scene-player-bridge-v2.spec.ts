@@ -8,6 +8,7 @@ import { createScenePlayerBridge } from '../src/app/bridges/scene-player-bridge'
 import { createSequenceEditorBridge } from '../src/app/bridges/sequence-editor-bridge'
 import { createDecorEditorBridge } from '../src/app/bridges/decor-editor-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
+import type { EditorPlayerCommand } from '../src/app/commands/editor-player-command-facade'
 
 /** Creates the V2 position scene used by the real bridge integration. */
 function scene() {
@@ -44,6 +45,23 @@ function motionChainScene() {
       keyframes,
     }],
     decors,
+  }
+}
+
+/** Two-keyframe path scene used to verify the exact terminal pose after natural playback. */
+function pathPlaybackScene() {
+  const base = scene()
+  return {
+    ...base,
+    id: 'path-playback-end',
+    decors: {
+      ...base.decors,
+      second: {
+        ...base.decors.second!,
+        path: 'M 0 0 A 0.65 0.65 0 0 1 1 0',
+        orientToPath: true,
+      },
+    },
   }
 }
 
@@ -267,6 +285,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({ type: 'SCENE_LOADED', scene: motionChainScene() })
       coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
       const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
       Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
         configurable: true,
         value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
@@ -340,6 +359,119 @@ describe('V2 editor position seek integration', () => {
     }
   })
 
+  it('re-presents the terminal frame after natural playback before restoring the CS', async () => {
+    const originalNow = Date.now
+    const originalRaf = globalThis.requestAnimationFrame
+    const originalCancelRaf = globalThis.cancelAnimationFrame
+    const originalResizeObserver = globalThis.ResizeObserver
+    const player = new EditorPlayerCommandFacade()
+    const execute = player.execute.bind(player)
+    const commands: EditorPlayerCommand[] = []
+    player.execute = async (command) => {
+      commands.push(command)
+      return execute(command)
+    }
+    now = 0
+    Date.now = () => now
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      const id = nextFrameId++
+      frames.set(id, () => callback(now))
+      return id
+    }
+    globalThis.cancelAnimationFrame = (id: number) => { frames.delete(id) }
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+    try {
+      actor = createActor(controllerMachine)
+      actor.start()
+      actor.send({ type: 'SCENE_LOADED', scene: pathPlaybackScene() })
+      coordination = new EditorCoordinationBridge(actor, player)
+      const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
+      Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      })
+      const timelineRoot = document.createElement('div')
+      const panelRoot = document.createElement('div')
+      document.body.append(sceneRoot, timelineRoot, panelRoot)
+      sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+      sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      await waitTurns(32)
+
+      actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'b' })
+      coordination.requestAuthorSeek(0)
+      await waitTurns(32)
+      timelineRoot.querySelector<HTMLButtonElement>('button[title="Play / Pause"]')?.click()
+      await waitTurns(32)
+      now = 100
+      ;[...frames.values()][0]?.()
+      await waitTurns(32)
+      now = 5_099
+      ;[...frames.values()][0]?.()
+      await waitTurns(32)
+      const itemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+      const lastLiveTransform = itemNode.style.transform
+      now = 5_100
+      ;[...frames.values()][0]?.()
+      await waitTurns(96)
+
+      expect(actor.getSnapshot().value).toBe('idle')
+      expect(coordination.transport.getProgress()?.timelineMs).toBe(5_000)
+      const pauseIndex = commands.map((command) => command.type).lastIndexOf('pause')
+      expect(pauseIndex).toBeGreaterThanOrEqual(0)
+      expect(commands[pauseIndex + 1]).toEqual({ type: 'seek', timelineMs: 4_998 })
+      expect(commands[pauseIndex + 2]).toEqual({ type: 'seek', timelineMs: 5_000 })
+      expect(coordination.presentation.get()?.timeMs).toBe(5_000)
+      const terminalItemTransform = itemNode.style.transform
+      expect(terminalItemTransform).not.toBe(lastLiveTransform)
+      const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+      expect(selectionFrame.style.display).not.toBe('none')
+      const terminalPose = coordination.presentation.get()?.items.find(({ itemId }) => itemId === 'story-main:item')?.pose
+      expect(terminalPose).toBeDefined()
+      const terminalRotation = Math.atan2(terminalPose!.matrix.b, terminalPose!.matrix.a) * 180 / Math.PI
+      const itemMatrix = terminalItemTransform.match(/matrix\(([^)]+)\)/)?.[1]?.split(',').map(Number)
+      const itemRotation = itemMatrix === undefined
+        ? Number(terminalItemTransform.match(/rotate\(([-+\d.eE]+)deg\)/)?.[1] ?? 0)
+        : Math.atan2(itemMatrix[1]!, itemMatrix[0]!) * 180 / Math.PI
+      const selectionRotation = Number(selectionFrame.style.transform.match(/rotate\(([-+\d.eE]+)deg\)/)?.[1])
+      expect(itemRotation).toBeCloseTo(terminalRotation, 3)
+      expect(selectionRotation).toBeCloseTo(terminalRotation, 3)
+
+      expect((await coordination.execute({ type: 'seek', timelineMs: 4_200 })).ok).toBe(true)
+      expect((await coordination.execute({ type: 'seek', timelineMs: 5_000 })).ok).toBe(true)
+      expect(itemNode.style.transform).toBe(terminalItemTransform)
+
+      const stopButton = timelineRoot.querySelector<HTMLButtonElement>('button[title="Stop"]')!
+      const initialTimeSeekCount = commands.filter(
+        (command) => command.type === 'seek' && command.timelineMs === 0,
+      ).length
+      stopButton.click()
+      await waitTurns(96)
+      expect(coordination.transport.getProgress()?.timelineMs).toBe(0)
+      const firstStopItemTransform = itemNode.style.transform
+      const firstStopSelectionTransform = selectionFrame.style.transform
+      expect(coordination.presentation.get()?.timeMs).toBe(0)
+
+      stopButton.click()
+      await waitTurns(96)
+      expect(
+        commands.filter((command) => command.type === 'seek' && command.timelineMs === 0),
+      ).toHaveLength(initialTimeSeekCount + 1)
+      expect(itemNode.style.transform).toBe(firstStopItemTransform)
+      expect(selectionFrame.style.transform).toBe(firstStopSelectionTransform)
+    } finally {
+      player.destroy()
+      Date.now = originalNow
+      globalThis.requestAnimationFrame = originalRaf
+      globalThis.cancelAnimationFrame = originalCancelRaf
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
   it('keeps the complete ghost chain after creating successive displaced keyframes and playing to the end', async () => {
     const originalNow = Date.now
     const originalRaf = globalThis.requestAnimationFrame
@@ -363,6 +495,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({ type: 'SCENE_LOADED', scene: scene() })
       coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
       const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
       Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
         configurable: true,
         value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
@@ -417,7 +550,9 @@ describe('V2 editor position seek integration', () => {
       expect(actor.getSnapshot().value).toBe('idle')
       expect(sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')?.style.display).not.toBe('none')
       expect(coordination.transport.getProgress()?.timelineMs).toBe(5_000)
-      expect(coordination.presentation.get()?.timeMs).toBe(5_000)
+      // Without an authored move the motion presentation may be absent; the logical snapshot
+      // still has to acknowledge the same final player time as the transport.
+      expect(coordination.snapshot.get()?.timeMs).toBe(coordination.transport.getProgress()?.playerTimeMs)
       expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item'], keyframeId: 'b' })
       expect(readGhostPositions()).toEqual(ghostPositionsBeforePlay)
     } finally {
@@ -585,6 +720,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({ type: 'SCENE_LOADED', scene: scene() })
       coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
       const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
       Object.defineProperty(sceneRoot, 'getBoundingClientRect', { value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }) })
       document.body.append(sceneRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
@@ -663,6 +799,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({ type: 'SCENE_LOADED', scene: emptyDemoScene() })
       coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
       const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
       Object.defineProperty(sceneRoot, 'getBoundingClientRect', { value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }) })
       const timelineRoot = document.createElement('div')
       const panelRoot = document.createElement('div')
@@ -746,6 +883,7 @@ describe('V2 editor position seek integration', () => {
     coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
 
     const sceneRoot = document.createElement('div')
+    sceneRoot.style.width = '800px'
     Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
@@ -817,6 +955,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({ type: 'SCENE_LOADED', scene: positionColorScene() })
       coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
       const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
       Object.defineProperty(sceneRoot, 'getBoundingClientRect', { value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }) })
       const timelineRoot = document.createElement('div')
       const panelRoot = document.createElement('div')
@@ -887,6 +1026,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({ type: 'SCENE_LOADED', scene: positionColorScene() })
       coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
       const sceneRoot = document.createElement('div')
+      sceneRoot.style.width = '800px'
       Object.defineProperty(sceneRoot, 'getBoundingClientRect', { value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }) })
       const timelineRoot = document.createElement('div')
       const panelRoot = document.createElement('div')

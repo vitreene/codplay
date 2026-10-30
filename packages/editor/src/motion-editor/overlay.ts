@@ -5,13 +5,15 @@ import { bindGestureSession, type GestureSessionHandle } from '@codplay/selectio
 import {
   createDisplayArcPath,
   createMotionArcPath,
-  frameVisualCenter,
   midpoint,
-  motionControlFromPath,
   motionPathPointAtProgress,
+  sameFramePose,
+  splitMotionPath,
   translateFrame,
+  type MotionGeometryPose,
   type MotionPoint,
 } from './geometry'
+import type { MotionGeometryStore, MotionGeometryProjection } from './geometry-store'
 
 export type MotionOverlayRole = 'source' | 'target'
 
@@ -22,16 +24,23 @@ export type MotionOverlaySegment = Readonly<{
   sourceKeyframeId?: string
   /** Document keyframe owning the target endpoint, when the bridge has document context. */
   targetKeyframeId?: string
-  sourceFrame: SelectionFrameValue
-  targetFrame: SelectionFrameValue
+  sourceGeometry: MotionGeometryPose
+  targetGeometry: MotionGeometryPose
+  /** Current interpolated geometry, used while previewing a temporary waypoint. */
+  selectionGeometry?: MotionGeometryPose
   control: MotionPoint
   path?: string
+  orientToPath?: boolean
   /** Only the active segment exposes its role and path-control affordance. */
   role?: MotionOverlayRole
   /** Marks the one segment whose pose and path can currently be edited. */
   active?: boolean
   /** Marks an interpolated pose with no document KF; its movement preview splits the route in two. */
   isTemporary?: boolean
+  /** Eased progress of a potential waypoint in its original segment. */
+  splitProgress?: number
+  /** Projects the future split while a CS pose gesture is still a snapshot preview. */
+  posePreview?: boolean
 }>
 
 export type MotionOverlayGhost = Readonly<{
@@ -39,7 +48,7 @@ export type MotionOverlayGhost = Readonly<{
   id: string
   /** Real document keyframe represented by this ghost. */
   keyframeId: string
-  frame: SelectionFrameValue
+  geometry: MotionGeometryPose
   /** Temporal distance from the current author pose in the ordered keyframe chain. */
   chainDistance: number
   /** Gives the first keyframe the existing route-level ghost semantics. */
@@ -69,21 +78,13 @@ export interface MotionOverlayCallbacks {
   onPathActivate: () => void
   /** Called after the midpoint has been moved or reset. */
   onPathChange: (change: MotionPathChange) => void
+  /** Called when the selected incoming path's orientation option changes. */
+  onPathOrientationChange?: (enabled: boolean) => void
   /** Called when Escape cancels an unreleased movement-surface trace. */
   onDrawCancel?: () => void
 }
 
 export interface MotionOverlayHandle {
-  /** Updates the current CS pose and the single movement-surface availability. */
-  setSelection: (frame: SelectionFrameValue | null, enabled: boolean) => void
-  /** Replaces the complete path projection, with at most one active segment. */
-  setSegments: (segments: readonly MotionOverlaySegment[]) => void
-  /** Replaces the complete ghost projection for the selected item. */
-  setGhosts: (ghosts: readonly MotionOverlayGhost[]) => void
-  /** Sets or clears the first-pose ghost shared by the complete route projection. */
-  setInitialGhost: (frame: SelectionFrameValue | null) => void
-  /** Sets or clears the persisted source/target projection. */
-  setSegment: (segment: MotionOverlaySegment | null) => void
   /** Suspends all artefacts during playback or host teardown. */
   setSuspended: (suspended: boolean) => void
   /** Removes all listeners and artefacts from the scene host. */
@@ -96,12 +97,18 @@ type DragState = Readonly<{
   startClientX: number
   startClientY: number
   baseFrame?: SelectionFrameValue
+  baseGeometry?: MotionGeometryPose
 }>
 
 /** Mounts one reusable, document-agnostic motion overlay into a scene host. */
-export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayCallbacks): MotionOverlayHandle {
+export function createMotionOverlay(
+  host: HTMLElement,
+  callbacks: MotionOverlayCallbacks,
+  geometry: MotionGeometryStore,
+): MotionOverlayHandle {
   const doc = host.ownerDocument
   const root = doc.createElement('div')
+  root.id = 'editor-motion-overlay'
   root.dataset.editorOverlay = 'motion'
   root.setAttribute('aria-hidden', 'true')
   root.style.position = 'absolute'
@@ -164,9 +171,48 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   control.style.zIndex = '4'
   root.appendChild(control)
 
-  host.appendChild(root)
+  const orientationButton = doc.createElement('button')
+  orientationButton.id = 'editor-motion-path-orientation'
+  orientationButton.type = 'button'
+  orientationButton.dataset.editorOverlay = 'motion-orientation'
+  orientationButton.setAttribute('aria-label', 'Aligner sur la tangente')
+  orientationButton.setAttribute('aria-pressed', 'false')
+  orientationButton.style.position = 'absolute'
+  orientationButton.style.display = 'none'
+  orientationButton.style.zIndex = '1051'
+  orientationButton.style.transform = 'translate(-50%, 0)'
+  orientationButton.style.boxSizing = 'border-box'
+  orientationButton.style.width = '28px'
+  orientationButton.style.height = '28px'
+  orientationButton.style.padding = '4px'
+  orientationButton.style.border = '1px solid rgba(245, 158, 11, 0.9)'
+  orientationButton.style.borderRadius = '4px'
+  orientationButton.style.background = 'rgba(17, 24, 39, 0.94)'
+  orientationButton.style.color = '#e5e7eb'
+  orientationButton.style.pointerEvents = 'auto'
+  orientationButton.style.touchAction = 'manipulation'
+  const tangentIcon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  tangentIcon.id = 'editor-motion-path-tangent-icon'
+  tangentIcon.setAttribute('viewBox', '0 0 24 24')
+  tangentIcon.setAttribute('width', '18')
+  tangentIcon.setAttribute('height', '18')
+  tangentIcon.setAttribute('fill', 'none')
+  tangentIcon.setAttribute('stroke', 'currentColor')
+  tangentIcon.setAttribute('stroke-width', '1.8')
+  tangentIcon.setAttribute('stroke-linecap', 'round')
+  tangentIcon.setAttribute('stroke-linejoin', 'round')
+  tangentIcon.setAttribute('aria-hidden', 'true')
+  tangentIcon.setAttribute('focusable', 'false')
+  const tangentCurve = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+  tangentCurve.setAttribute('d', 'M 3 3 C 3 11 6 18.5 12 18.5 C 18 18.5 21 11 21 3')
+  const tangentLine = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+  tangentLine.setAttribute('d', 'M 2.5 18.5 H 21.5 M 18.5 15.5 L 21.5 18.5 L 18.5 21.5')
+  tangentIcon.append(tangentCurve, tangentLine)
+  orientationButton.appendChild(tangentIcon)
 
-  let selectionFrame: SelectionFrameValue | null = null
+  host.append(root, orientationButton)
+
+  let selectionGeometry: MotionGeometryPose | null = null
   let selectionEnabled = false
   let segment: MotionOverlaySegment | null = null
   let segments: MotionOverlaySegment[] = []
@@ -182,6 +228,24 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   let draftTargetFrame: SelectionFrameValue | null = null
   let draftControl: MotionPoint | null = null
 
+  /** Keeps the orientation button from activating path selection or scene gestures. */
+  function stopOrientationEvent(event: Event): void {
+    event.stopPropagation()
+  }
+
+  /** Toggles tangent alignment for the active incoming path. */
+  function toggleOrientation(): void {
+    const enabled = orientationButton.getAttribute('aria-pressed') !== 'true'
+    orientationButton.setAttribute('aria-pressed', String(enabled))
+    callbacks.onPathOrientationChange?.(enabled)
+  }
+
+  /** Stops scene gestures before applying the accessible orientation toggle. */
+  function onOrientationClick(event: Event): void {
+    stopOrientationEvent(event)
+    toggleOrientation()
+  }
+
   /** Converts a client pointer coordinate into scene-host local coordinates. */
   function localPoint(event: PointerEvent): MotionPoint {
     const bounds = host.getBoundingClientRect()
@@ -194,18 +258,39 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     // movement drag the source is the pose captured by this gesture, not necessarily the segment's
     // original source. Keeping that distinction here makes repeated intra-capsule moves compose
     // without silently drawing from the first keyframe again.
-    if (drawing) return drag?.baseFrame ?? selectionFrame ?? segment?.sourceFrame ?? null
-    // A temporary segment represents the interpolated pose at the current playhead, not its source
-    // endpoint. The movement surface must follow that visible pose; otherwise the native hit-test
-    // lands on SelectionFrameV2 and performs a normal reposition instead of materializing a KF.
-    if (segment?.isTemporary === true) return selectionFrame ?? segment.targetFrame
-    if (segment?.role === 'source') return segment.sourceFrame
-    // A terminal KF owns the incoming transition. Its movement surface must start from the
-    // trajectory endpoint, not from a presentation frame that may still describe the item
-    // before the transition handoff. The bridge keeps this endpoint in the active segment and
-    // refreshes the Selection Frame separately for display.
-    if (segment?.role === 'target') return segment.targetFrame
-    return selectionFrame
+    if (drawing) return drag?.baseFrame ?? selectionGeometry?.frame ?? segment?.sourceGeometry.frame ?? null
+    // The bridge owns the displayed item/CS pose. Every gesture starts from that same frame,
+    // including at a real endpoint; authored segment geometry is only a missing-selection fallback.
+    if (selectionGeometry !== null) return selectionGeometry.frame
+    if (segment?.role === 'source') return segment.sourceGeometry.frame
+    if (segment?.role === 'target') return segment.targetGeometry.frame
+    return null
+  }
+
+  /** Resolves the runtime anchor center for one segment endpoint. */
+  function sourcePathAnchorFor(segment: MotionOverlaySegment): MotionPoint {
+    return segment.sourceGeometry.pathAnchor
+  }
+
+  /** Resolves the runtime anchor center for one segment endpoint. */
+  function targetPathAnchorFor(segment: MotionOverlaySegment): MotionPoint {
+    return segment.targetGeometry.pathAnchor
+  }
+
+  /** Translates the shared content and border geometry alongside a movement preview. */
+  function draftGeometryFor(frame: SelectionFrameValue): MotionGeometryPose | null {
+    const baseFrame = drag?.baseFrame
+    const baseGeometry = drag?.baseGeometry ?? selectionGeometry
+    if (baseGeometry === null || baseGeometry === undefined) return null
+    if (baseFrame === undefined) return baseGeometry
+    const dx = frame.x - baseFrame.x
+    const dy = frame.y - baseFrame.y
+    return {
+      ...baseGeometry,
+      frame,
+      borderFrame: { ...baseGeometry.borderFrame, x: baseGeometry.borderFrame.x + dx, y: baseGeometry.borderFrame.y + dy },
+      pathAnchor: { x: baseGeometry.pathAnchor.x + dx, y: baseGeometry.pathAnchor.y + dy },
+    }
   }
 
   /** Applies one frame pose to an overlay element without inspecting a player DOM node. */
@@ -220,11 +305,15 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
 
   /** Renders the one full-frame movement surface over the active pose. */
   function renderMoveZone(): void {
-    const frame = activeFrame()
-    if (frame === null || !selectionEnabled || suspended) {
+    const activeGeometry = drawing
+      ? drag?.baseGeometry ?? selectionGeometry
+      : selectionGeometry
+        ?? (segment?.role === 'source' ? segment.sourceGeometry : segment?.targetGeometry)
+    if (activeGeometry === null || activeGeometry === undefined || !selectionEnabled || suspended) {
       moveZone.style.display = 'none'
       return
     }
+    const frame = activeGeometry.borderFrame
     moveZone.style.display = ''
     moveZone.style.left = `${frame.x}px`
     moveZone.style.top = `${frame.y}px`
@@ -242,22 +331,29 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
 
   /** Returns the route that will exist after a temporary middle-of-segment drop is committed. */
   function renderSegments(): MotionOverlaySegment[] {
-    if (!drawing || draftTargetFrame === null || segment?.isTemporary !== true) return segments
+    const waypointFrame = drawing ? draftTargetFrame : segment?.posePreview ? selectionGeometry?.frame ?? null : null
+    if (waypointFrame === null || segment?.isTemporary !== true) return segments
     const activeIndex = segments.findIndex((candidate) => candidate.active !== false)
     if (activeIndex < 0) return segments
 
-    const sourceCenter = frameVisualCenter(segment.sourceFrame)
-    const draftCenter = frameVisualCenter(draftTargetFrame)
-    const targetCenter = frameVisualCenter(segment.targetFrame)
-    const targetControl = segment.path === undefined
-      ? midpoint(draftCenter, targetCenter)
-      : motionControlFromPath(segment.path, draftCenter, targetCenter) ?? midpoint(draftCenter, targetCenter)
+    const sourceCenter = sourcePathAnchorFor(segment)
+    const draftGeometry = drawing
+      ? draftGeometryFor(waypointFrame)
+      : segment.selectionGeometry ?? selectionGeometry
+    if (draftGeometry === null || draftGeometry === undefined) return segments
+    const draftCenter = draftGeometry.pathAnchor
+    const targetCenter = targetPathAnchorFor(segment)
+    const split = segment.path === undefined ? null : splitMotionPath(
+      segment.path, sourceCenter, draftCenter, targetCenter, segment.splitProgress ?? 0.5,
+    )
     const previewBefore: MotionOverlaySegment = {
       id: `${segment.id ?? 'motion-segment'}:preview-before`,
       ...(segment.sourceKeyframeId === undefined ? {} : { sourceKeyframeId: segment.sourceKeyframeId }),
-      sourceFrame: segment.sourceFrame,
-      targetFrame: draftTargetFrame,
-      control: midpoint(sourceCenter, draftCenter),
+      sourceGeometry: segment.sourceGeometry,
+      targetGeometry: draftGeometry,
+      control: split?.beforeControl ?? midpoint(sourceCenter, draftCenter),
+      ...(split?.before === undefined ? {} : { path: split.before }),
+      ...(segment.orientToPath === true ? { orientToPath: true } : {}),
       role: 'target',
       active: true,
       isTemporary: true,
@@ -265,10 +361,11 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     const previewAfter: MotionOverlaySegment = {
       id: `${segment.id ?? 'motion-segment'}:preview-after`,
       ...(segment.targetKeyframeId === undefined ? {} : { targetKeyframeId: segment.targetKeyframeId }),
-      sourceFrame: draftTargetFrame,
-      targetFrame: segment.targetFrame,
-      control: targetControl,
-      ...(segment.path === undefined ? {} : { path: segment.path }),
+      sourceGeometry: draftGeometry,
+      targetGeometry: segment.targetGeometry,
+      control: split?.afterControl ?? midpoint(draftCenter, targetCenter),
+      ...(split?.after === undefined ? {} : { path: split.after }),
+      ...(segment.orientToPath === true ? { orientToPath: true } : {}),
       active: false,
     }
     return [
@@ -335,8 +432,8 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   function renderGhosts(): void {
     const activeSourceId = segment?.sourceKeyframeId
     const activeTargetId = segment?.targetKeyframeId
-    const activeSourceFrame = segment?.sourceFrame ?? null
-    const activeTargetFrame = segment?.targetFrame ?? null
+    const activeSourceFrame = segment?.sourceGeometry.frame ?? null
+    const activeTargetFrame = segment?.targetGeometry.frame ?? null
     const usedElements = new Set<HTMLElement>()
     const usedDynamicKeys = new Set<string>()
     let hasInitialDescriptor = false
@@ -361,15 +458,15 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       }
 
       usedElements.add(element)
-      renderFrame(element, ghost.frame)
+      renderFrame(element, ghost.geometry.borderFrame)
       element.dataset.motionKeyframeId = ghost.keyframeId
       element.dataset.motionGhostDistance = String(Math.max(0, Math.round(ghost.chainDistance)))
       const isActiveGhost = kind === 'source' || kind === 'target'
-      const isCurrentPose = selectionFrame !== null && sameFramePose(selectionFrame, ghost.frame)
+      const isCurrentPose = selectionGeometry !== null && sameFramePose(selectionGeometry.frame, ghost.geometry.frame)
       const overlapsActive = kind === 'initial'
         && activeSourceFrame !== null
         && activeTargetFrame !== null
-        && (sameFramePose(ghost.frame, activeSourceFrame) || sameFramePose(ghost.frame, activeTargetFrame))
+        && (sameFramePose(ghost.geometry.frame, activeSourceFrame) || sameFramePose(ghost.geometry.frame, activeTargetFrame))
       const isInactiveGhost = kind === 'keyframe' || (kind === 'initial' && !overlapsActive)
       element.style.borderColor = motionGhostColor(ghost.chainDistance, isActiveGhost)
       element.style.zIndex = kind === 'target' ? '3' : '2'
@@ -390,12 +487,12 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       && activeTargetId !== undefined
       && ghosts.some((ghost) => ghost.keyframeId === activeSourceId || ghost.keyframeId === activeTargetId)
     if (segment !== null && !hasStructuredEndpoints) {
-      const sourceFrame = segment.sourceFrame
-      const targetFrame = segment.targetFrame
-      const sourceIsCurrentPose = selectionFrame !== null && sameFramePose(selectionFrame, sourceFrame)
-      const targetIsCurrentPose = selectionFrame !== null && sameFramePose(selectionFrame, targetFrame)
-      renderFrame(sourceGhost, sourceFrame)
-      renderFrame(targetGhost, targetFrame)
+      const sourceGeometry = segment.sourceGeometry
+      const targetGeometry = segment.targetGeometry
+      const sourceIsCurrentPose = selectionGeometry !== null && sameFramePose(selectionGeometry.frame, sourceGeometry.frame)
+      const targetIsCurrentPose = selectionGeometry !== null && sameFramePose(selectionGeometry.frame, targetGeometry.frame)
+      renderFrame(sourceGhost, sourceGeometry.borderFrame)
+      renderFrame(targetGhost, targetGeometry.borderFrame)
       if (segment.sourceKeyframeId === undefined) delete sourceGhost.dataset.motionKeyframeId
       else sourceGhost.dataset.motionKeyframeId = segment.sourceKeyframeId
       if (segment.targetKeyframeId === undefined) delete targetGhost.dataset.motionKeyframeId
@@ -419,7 +516,7 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       const initialOverlapsActive = activeSourceFrame !== null
         && activeTargetFrame !== null
         && (sameFramePose(initialFrame, activeSourceFrame) || sameFramePose(initialFrame, activeTargetFrame))
-      const initialIsCurrentPose = selectionFrame !== null && sameFramePose(selectionFrame, initialFrame)
+      const initialIsCurrentPose = selectionGeometry !== null && sameFramePose(selectionGeometry.frame, initialFrame)
       initialGhost.style.borderColor = motionGhostColor(1)
       initialGhost.style.zIndex = '2'
       initialGhost.style.opacity = initialOverlapsActive ? '1' : motionGhostOpacity(1, true)
@@ -444,18 +541,19 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   function render(): void {
     const renderedSegments = renderSegments()
     root.style.display = suspended ? 'none' : ''
+    orientationButton.style.display = 'none'
     renderInactivePaths(renderedSegments)
 
     const activeRenderedSegment = renderedSegments.find((candidate) => candidate.active !== false)
-    const splitPreview = drawing && segment?.isTemporary === true && activeRenderedSegment !== undefined
+    const splitPreview = (drawing || segment?.posePreview === true) && segment?.isTemporary === true && activeRenderedSegment !== undefined
     const sourceFrame = splitPreview
-      ? activeRenderedSegment.sourceFrame
+      ? activeRenderedSegment.sourceGeometry.frame
       : drawing
-        ? drag?.baseFrame ?? selectionFrame ?? segment?.sourceFrame ?? null
-        : segment?.sourceFrame ?? selectionFrame
+        ? drag?.baseFrame ?? selectionGeometry?.frame ?? segment?.sourceGeometry.frame ?? null
+        : segment?.sourceGeometry.frame ?? selectionGeometry?.frame
     const targetFrame = splitPreview
-      ? activeRenderedSegment.targetFrame
-      : drawing ? draftTargetFrame : segment?.targetFrame
+      ? activeRenderedSegment.targetGeometry.frame
+      : drawing ? draftTargetFrame : segment?.targetGeometry.frame
     renderGhosts()
     if (sourceFrame === null || targetFrame === null || targetFrame === undefined) {
       path.style.display = 'none'
@@ -464,8 +562,36 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       return
     }
 
-    const source = frameVisualCenter(sourceFrame)
-    const target = frameVisualCenter(targetFrame)
+    if (segment === null && !drawing) {
+      path.style.display = 'none'
+      control.style.display = 'none'
+      renderMoveZone()
+      return
+    }
+    const draftGeometry = drawing ? draftGeometryFor(targetFrame) : selectionGeometry
+    const draftAnchor = draftGeometry?.pathAnchor ?? null
+    const source = splitPreview && activeRenderedSegment !== undefined
+      ? sourcePathAnchorFor(activeRenderedSegment)
+      : drawing && segment !== null && segment.role === 'source'
+        ? draftAnchor
+        : segment === null
+          ? selectionGeometry?.pathAnchor ?? null
+          : sourcePathAnchorFor(segment)
+    const target = splitPreview && activeRenderedSegment !== undefined
+      ? targetPathAnchorFor(activeRenderedSegment)
+      : drawing && segment !== null && segment.role === 'source'
+        ? targetPathAnchorFor(segment)
+        : drawing
+          ? draftAnchor
+          : segment === null
+            ? draftAnchor
+            : targetPathAnchorFor(segment)
+    if (source === null || target === null) {
+      path.style.display = 'none'
+      control.style.display = 'none'
+      renderMoveZone()
+      return
+    }
     const authoredControlPoint = splitPreview
       ? activeRenderedSegment.control
       : drawing
@@ -487,6 +613,16 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     // not itself the arc midpoint.
     control.style.left = `${displayControlPoint.x - 6}px`
     control.style.top = `${displayControlPoint.y - 6}px`
+    if (!suspended && !drawing && segment?.path !== undefined) {
+      const aligned = segment.orientToPath === true
+      orientationButton.setAttribute('aria-pressed', String(aligned))
+      orientationButton.style.color = aligned ? '#fbbf24' : '#e5e7eb'
+      orientationButton.style.display = 'flex'
+      orientationButton.style.alignItems = 'center'
+      orientationButton.style.justifyContent = 'center'
+      orientationButton.style.left = `${displayControlPoint.x}px`
+      orientationButton.style.top = `${displayControlPoint.y + 13}px`
+    }
     moveZone.style.display = drawing || selectionEnabled ? '' : 'none'
     renderMoveZone()
   }
@@ -499,10 +635,32 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       if (!selectionEnabled || frame === null) return null
       event.preventDefault()
       event.stopPropagation()
+      const geometry = segment === null
+        ? selectionGeometry
+        : segment.role === 'source'
+          ? segment.sourceGeometry
+          : segment.role === 'target'
+            ? segment.targetGeometry
+            : selectionGeometry
+      if (geometry === null || geometry === undefined) return null
       drawing = true
       draftTargetFrame = frame
-      draftControl = midpoint(frameVisualCenter(frame), frameVisualCenter(frame))
-      const next = { kind, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY, baseFrame: frame }
+      draftControl = midpoint(geometry.pathAnchor, geometry.pathAnchor)
+      const baseGeometry = segment?.isTemporary === true
+        ? segment.selectionGeometry ?? selectionGeometry
+        : segment?.role === 'source'
+          ? segment.sourceGeometry
+          : segment?.role === 'target'
+            ? segment.targetGeometry
+            : selectionGeometry ?? undefined
+      const next = {
+        kind,
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        baseFrame: frame,
+        ...(baseGeometry === undefined || baseGeometry === null ? {} : { baseGeometry }),
+      }
       drag = next
       render()
       return next
@@ -524,7 +682,12 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       const dx = event.clientX - drag.startClientX
       const dy = event.clientY - drag.startClientY
       draftTargetFrame = translateFrame(base, dx, dy)
-      draftControl = midpoint(frameVisualCenter(base), frameVisualCenter(draftTargetFrame))
+      const movingGeometry = draftGeometryFor(draftTargetFrame)
+      if (movingGeometry === null) return
+      const stationaryAnchor = segment?.role === 'source'
+        ? segment.targetGeometry.pathAnchor
+        : segment?.sourceGeometry.pathAnchor
+      if (stationaryAnchor !== undefined) draftControl = midpoint(stationaryAnchor, movingGeometry.pathAnchor)
       render()
       return
     }
@@ -539,8 +702,8 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     drag = null
     if (current.kind === 'control') {
       if (apply && segment !== null && draftControl !== null) {
-        const source = frameVisualCenter(segment.sourceFrame)
-        const target = frameVisualCenter(segment.targetFrame)
+        const source = sourcePathAnchorFor(segment)
+        const target = targetPathAnchorFor(segment)
         const pathValue = createMotionArcPath(source, draftControl, target)
         callbacks.onPathChange({ control: draftControl, ...(pathValue === undefined ? {} : { path: pathValue }) })
       }
@@ -569,7 +732,6 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     const activeSegment = { ...created, active: true }
     segment = activeSegment
     segments = [activeSegment, ...segments.filter((candidate) => candidate.active === false)]
-    selectionFrame = created.role === 'target' ? created.targetFrame : created.sourceFrame
     render()
   }
 
@@ -578,8 +740,8 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     if (segment === null) return
     event.preventDefault()
     event.stopPropagation()
-    const source = frameVisualCenter(segment.sourceFrame)
-    const target = frameVisualCenter(segment.targetFrame)
+    const source = sourcePathAnchorFor(segment)
+    const target = targetPathAnchorFor(segment)
     const controlPoint = midpoint(source, target)
     const nextSegment = { ...segment, active: true, control: controlPoint, path: undefined }
     segment = nextSegment
@@ -646,62 +808,41 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     onEnd: endDrag,
   })
   control.addEventListener('dblclick', onDoubleClick)
+  orientationButton.addEventListener('click', onOrientationClick)
+  orientationButton.addEventListener('pointerdown', stopOrientationEvent)
   path.addEventListener('click', onPathClick)
   sourceGhost.addEventListener('click', onSourceClick)
   targetGhost.addEventListener('click', onTargetClick)
   initialGhost.addEventListener('click', onInitialClick)
   doc.addEventListener('keydown', onKeyDown, { capture: true })
-  // The controls are created before the first scene/selection arrives. Render once so the
-  // empty overlay starts fully hidden instead of exposing its default button display.
-  render()
+  const unsubscribeGeometry = geometry.subscribe((projection: MotionGeometryProjection) => {
+    selectionGeometry = projection.selection?.geometry ?? null
+    selectionEnabled = projection.selection?.enabled ?? false
+    ghosts = [...projection.ghosts]
+    initialFrame = projection.initialGhost
+    const activeIndex = projection.segments.findIndex((candidate) => candidate.active !== false)
+    segments = projection.segments.map((candidate, index) => index === activeIndex
+      ? { ...candidate, active: true }
+      : { ...candidate, active: false })
+    segment = activeIndex < 0 ? null : segments[activeIndex]!
+    if (segment === null) delete root.dataset.motionPathActive
+    render()
+  })
 
   return {
-    setSelection(frame, enabled): void {
-      selectionFrame = frame
-      selectionEnabled = enabled
-      render()
-    },
-    setSegments(next): void {
-      const projected = [...next]
-      const activeIndex = projected.findIndex((candidate) => candidate.active !== false)
-      segments = projected.map((candidate, index) => index === activeIndex
-        ? { ...candidate, active: true }
-        : { ...candidate, active: false })
-      segment = activeIndex < 0 ? null : segments[activeIndex]!
-      if (segment === null) delete root.dataset.motionPathActive
-      render()
-    },
-    setGhosts(next): void {
-      ghosts = [...next]
-      render()
-    },
-    setInitialGhost(frame): void {
-      initialFrame = frame
-      render()
-    },
-    setSegment(next): void {
-      if (next === null) {
-        segment = null
-        segments = []
-        ghosts = []
-        initialFrame = null
-        delete root.dataset.motionPathActive
-      } else {
-        segment = { ...next, active: true }
-        segments = [segment]
-      }
-      render()
-    },
     setSuspended(next): void {
       suspended = next
       render()
     },
     destroy(): void {
+      unsubscribeGeometry()
       moveGesture?.unbind()
       controlGesture?.unbind()
       moveGesture = null
       controlGesture = null
       control.removeEventListener('dblclick', onDoubleClick)
+      orientationButton.removeEventListener('click', onOrientationClick)
+      orientationButton.removeEventListener('pointerdown', stopOrientationEvent)
       path.removeEventListener('click', onPathClick)
       sourceGhost.removeEventListener('click', onSourceClick)
       targetGhost.removeEventListener('click', onTargetClick)
@@ -709,6 +850,7 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       doc.removeEventListener('keydown', onKeyDown, { capture: true })
       clearInactivePaths()
       root.remove()
+      orientationButton.remove()
     },
   }
 }
@@ -730,8 +872,8 @@ function createPathElement(doc: Document, kind: 'active' | 'inactive'): SVGPathE
 
 /** Projects one persisted segment into an SVG path without creating a control point. */
 function renderPathElement(path: SVGPathElement, segment: MotionOverlaySegment, active: boolean, opacity = active ? 1 : 0.18): void {
-  const source = frameVisualCenter(segment.sourceFrame)
-  const target = frameVisualCenter(segment.targetFrame)
+  const source = segment.sourceGeometry.pathAnchor
+  const target = segment.targetGeometry.pathAnchor
   const displayPath = createDisplayArcPath(source, segment.control, target)
     ?? `M ${formatCoordinate(source.x)} ${formatCoordinate(source.y)} L ${formatCoordinate(target.x)} ${formatCoordinate(target.y)}`
   path.setAttribute('d', displayPath)
@@ -774,26 +916,6 @@ function createGhost(doc: Document, role: MotionOverlayRole | 'initial' | 'keyfr
   ghost.style.touchAction = 'none'
   ghost.style.display = 'none'
   return ghost
-}
-
-/** Compares two local-pixel poses without relying on a DOM bounding box. */
-function sameFramePose(left: SelectionFrameValue, right: SelectionFrameValue): boolean {
-  // The runtime presentation and the document projection can differ by a few hundredths of a
-  // pixel (cqw conversion versus the browser's layout rounding) while describing the same visible
-  // pose. A sub-pixel tolerance prevents a ghost that is visually underneath the item from
-  // stealing the CS hit-test; larger differences still leave the ghost navigable.
-  const pixelEpsilon = 0.5
-  const angleEpsilon = 0.1
-  const unitEpsilon = 0.001
-  return Math.abs(left.x - right.x) < pixelEpsilon
-    && Math.abs(left.y - right.y) < pixelEpsilon
-    && Math.abs(left.width - right.width) < pixelEpsilon
-    && Math.abs(left.height - right.height) < pixelEpsilon
-    && Math.abs((left.rotate ?? 0) - (right.rotate ?? 0)) < angleEpsilon
-    && Math.abs((left.scaleX ?? 1) - (right.scaleX ?? 1)) < unitEpsilon
-    && Math.abs((left.scaleY ?? 1) - (right.scaleY ?? 1)) < unitEpsilon
-    && Math.abs((left.rotationOrigin?.fx ?? 0.5) - (right.rotationOrigin?.fx ?? 0.5)) < unitEpsilon
-    && Math.abs((left.rotationOrigin?.fy ?? 0.5) - (right.rotationOrigin?.fy ?? 0.5)) < unitEpsilon
 }
 
 /** Formats one display coordinate independently of locale and browser CSS. */

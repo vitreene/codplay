@@ -335,6 +335,8 @@ function buildMotionGraphStructure(
         ...(directIntent?.resize === undefined ? {} : { resize: directIntent.resize }),
         materializerOwned: directIntent?.targetReflow === false,
         ...(directIntent?.path === undefined ? {} : { path: directIntent.path }),
+        ...(directIntent?.orientToPath === undefined ? {} : { orientToPath: directIntent.orientToPath }),
+        ...(directIntent?.rotateOffset === undefined ? {} : { rotateOffset: directIntent.rotateOffset }),
         targetReflow: directIntent?.targetReflow === true || scope.targetContainerItemIds.has(itemId),
         direct: directIntent !== undefined,
         from,

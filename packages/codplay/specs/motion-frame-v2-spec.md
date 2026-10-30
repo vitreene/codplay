@@ -36,12 +36,42 @@ frontière rétablit les deux ; un Seek sur la frontière les retire à nouveau.
 Cette preuve couvre une story et un segment actif, pas le retrait des groupes
 inter-story ni l’ordre avec une préparation concurrente.
 
+La présentation finale d’un Seek conserve aussi les occurrences `move` actives :
+le player transmet la scène précédente et `componentPhase: 'seek'` sans reclasser
+la matérialisation entière en `geometry-capture`. Les étapes intermédiaires de
+reconstruction restent des captures géométriques explicites et ne collectent
+pas d’occurrences. Cette séparation rétablit la préparation du chemin avant un
+Play lancé après Seek, tout en laissant aux projections le filtrage de leurs
+effets propres. Le test de facade vérifie l’overlay après Seek ; le test éditeur
+vérifie le segment et sa progression après Seek puis Play. Dans Safari, le Seek
+à 2,2 s donne une pose différente de la corde linéaire, le détour `2,2 → 4,2 →
+2,2 s` restitue la même matrice et Stop retourne à 0. Les détails de la cause
+historique et les limites sont consignés dans la
+[note d’analyse éditeur](../../editor/plan/notes/2026-10-29-editor-path-playback-analysis.md).
+
 ## Frame au temps absolu
 
 Le graphe motion produit la même frame pour un même temps absolu, quel que soit
 l’ordre des évaluations précédentes. Le test compare un seek direct à 820 ms à
 une évaluation après des demandes à 100 ms et 700 ms ; les résultats sont
 identiques.
+
+## Orientation sur la tangente
+
+Pour un `move` avec chemin préparé et `orientToPath: true`, la frame motion
+résout le point et la tangente du même chemin avec la même progression eased.
+L’axe local `+X` suit la tangente avant ; les décalages de rotation auteur des
+poses source et cible sont interpolés en degrés sur cette progression. Le
+runtime réoriente la matrice affine dans l’espace de présentation et recalcule
+l’origine autour du même centre visuel, sans mesure DOM d’item. Cette frame
+reste cohérente au KF cible et après la fin du segment. Sans l’option, la pose
+conserve son interpolation précédente.
+
+Les tests couvrent la pose au point cible, le transport de l’option à travers
+la capture HTML et le cas d’un enfant réparenté entre parents transformés.
+L’éditeur vérifie en Safari Play du début à la fin, Seek à mi-parcours, Stop,
+rechargement depuis SQLite et resize ; au même temps Seek et Play diffèrent de
+moins d’un degré dans la scène testée.
 
 ## Snapshots d'une frontière
 
@@ -91,7 +121,11 @@ restauration du document local ont également été exercés sans erreur console
   de capture géométrique et ne construit pas le graphe motion.
 - [facade.spec.ts](../tests/facade/facade.spec.ts) vérifie au reset d’une story
   le retrait de l’overlay et du segment actif, puis leur restauration et leur
-  retrait en repassant la frontière avec Seek.
+  retrait en repassant la frontière avec Seek ; un autre cas vérifie que Seek
+  prépare l’overlay motion par le chemin public `instance.telco.seek`.
+- [motion-path.spec.ts](../../editor/tests/builder-v2/motion-path.spec.ts)
+  vérifie le segment présenté au Seek, sa stabilité après un détour et sa
+  progression lorsque Play démarre depuis la frontière initiale.
 - [motion-capture.spec.ts](../tests/runtime/runner-html/motion-capture.spec.ts)
   vérifie les snapshots FIRST, après-start, keyframes et LAST.
 - [story-six-motion.spec.ts](../tests/facade/story-six-motion.spec.ts) vérifie

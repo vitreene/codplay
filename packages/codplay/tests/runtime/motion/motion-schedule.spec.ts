@@ -102,6 +102,48 @@ describe('compileMotionSchedule', () => {
     expect(schedule.every((intent) => intent.presentationMode === 'reparent')).toBe(true)
   })
 
+  it('transports path orientation and its authored endpoint rotation offsets', () => {
+    const base = compiledScene()
+    const story = base.scene.stories.main!
+    const schedule = compileMotionSchedule({
+      ...base,
+      scene: {
+        ...base.scene,
+        stories: {
+          main: {
+            ...story,
+            persos: [{
+              ...story.persos[0]!,
+              actions: {
+                move: {
+                  move: {
+                    target: 'target',
+                    transition: {
+                      duration: 100,
+                      path: {
+                        kind: 'quadratic',
+                        control: [0.5, 0.5],
+                        traversal: 'parameter',
+                        lengths: null,
+                      },
+                      orientToPath: true,
+                      rotateOffset: { from: 12, to: 28 },
+                    },
+                  },
+                },
+              },
+            }],
+          },
+        },
+      },
+    })
+
+    expect(schedule[0]).toMatchObject({
+      orientToPath: true,
+      rotateOffset: { from: 12, to: 28 },
+    })
+  })
+
   it('propagates the optional per-axis resize policy to the schedule', () => {
     const base = compiledScene()
     const story = base.scene.stories.main!

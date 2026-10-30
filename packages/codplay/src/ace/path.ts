@@ -3,6 +3,9 @@ import { isFiniteNumber } from '../shared'
 /** A two-dimensional point used by ACE's geometry primitives. */
 export type Point = readonly [number, number]
 
+/** Resolved world-space position and normalized forward direction on one path. */
+export type PathFrame = Readonly<{ point: Point; tangent: Point | null }>
+
 /** The two traversal modes that must remain visually comparable. */
 const PATH_TRAVERSAL_PARAMETER = 'parameter' as const
 const PATH_TRAVERSAL_ARC_LENGTH = 'arc-length' as const
@@ -165,6 +168,40 @@ export const resolvePath = (path: Path, from: Point, to: Point, progress: number
   return mapNormalizedPoint(resolveSegmentPath(path, progress), from, to)
 }
 
+/** Resolves one path point and its forward tangent in the same endpoint frame. */
+export function resolvePathFrame(path: Path, from: Point, to: Point, progress: number): PathFrame {
+  if (path.kind === 'quadratic') {
+    const parameter = path.lengths ? resolveArcParameter(path.lengths, progress) : progress
+    const point = resolveNormalizedPoint(path.control!, parameter)
+    const derivative: Point = [
+      2 * (1 - parameter) * path.control![0] + 2 * parameter * (1 - path.control![0]),
+      2 * (1 - parameter) * path.control![1] - 2 * parameter * path.control![1],
+    ]
+    const tangent = nonZeroDirection(
+      derivative,
+      (sampleProgress) => resolveNormalizedPoint(path.control!, sampleProgress),
+      parameter,
+    )
+    return {
+      point: mapNormalizedPoint(point, from, to),
+      tangent: tangent === null ? null : normalizeDirection(mapNormalizedVector(tangent, from, to)),
+    }
+  }
+
+  const position = resolveSegmentPosition(path, progress)
+  const point = resolveSegmentPoint(position.segment, position.from, position.progress)
+  const derivative = resolveSegmentTangent(position.segment, position.from, position.progress)
+  const tangent = nonZeroDirection(
+    derivative,
+    (sampleProgress) => resolveSegmentPoint(position.segment, position.from, sampleProgress),
+    position.progress,
+  )
+  return {
+    point: mapNormalizedPoint(point, from, to),
+    tangent: tangent === null ? null : normalizeDirection(mapNormalizedVector(tangent, from, to)),
+  }
+}
+
 /** Validates one prepared path received from a compiled scene. */
 export function isPreparedPath(value: unknown): value is Path {
   if (!isRecord(value) || (value.kind !== 'quadratic' && value.kind !== 'segments')) return false
@@ -176,9 +213,25 @@ export function isPreparedPath(value: unknown): value is Path {
 
 /** Resolves one segment path in its canonical normalized coordinate space. */
 function resolveSegmentPath(path: Path, progress: number): Point {
+  const position = resolveSegmentPosition(path, progress)
+  return resolveSegmentPoint(position.segment, position.from, position.progress)
+}
+
+/** Selects the exact prepared subsegment and local progress used by point resolution. */
+function resolveSegmentPosition(path: Path, progress: number): Readonly<{
+  segment: PathSegment
+  from: Point
+  progress: number
+}> {
   const segments = path.segments!
-  if (progress <= 0) return [0, 0]
-  if (progress >= 1) return segments[segments.length - 1]!.to
+  if (progress <= 0) return { segment: segments[0]!, from: [0, 0], progress: 0 }
+  if (progress >= 1) {
+    return {
+      segment: segments[segments.length - 1]!,
+      from: segments.length === 1 ? [0, 0] : segments[segments.length - 2]!.to,
+      progress: 1,
+    }
+  }
 
   let index: number
   let localProgress: number
@@ -195,9 +248,11 @@ function resolveSegmentPath(path: Path, progress: number): Point {
     localProgress = scaled - index
   }
 
-  const segment = segments[index]!
-  const from = index === 0 ? [0, 0] as Point : segments[index - 1]!.to
-  return resolveSegmentPoint(segment, from, localProgress)
+  return {
+    segment: segments[index]!,
+    from: index === 0 ? [0, 0] : segments[index - 1]!.to,
+    progress: localProgress,
+  }
 }
 
 /** Resolves one prepared line or arc segment at a local progress. */
@@ -226,6 +281,60 @@ function resolveArcPoint(segment: Extract<ResolvablePathSegment, { kind: 'arc' }
     segment.center[0] + cosine * localX - sine * localY,
     segment.center[1] + sine * localX + cosine * localY,
   ]
+}
+
+/** Resolves the forward derivative of one prepared line or endpoint-corrected arc. */
+function resolveSegmentTangent(segment: PathSegment, from: Point, progress: number): Point {
+  if (segment.kind === 'line') return [segment.to[0] - from[0], segment.to[1] - from[1]]
+
+  const angle = segment.startAngle + segment.deltaAngle * progress
+  const rotation = segment.rotation * Math.PI / 180
+  const cosine = Math.cos(rotation)
+  const sine = Math.sin(rotation)
+  const derivativeX = segment.deltaAngle * -segment.radius[0] * Math.sin(angle)
+  const derivativeY = segment.deltaAngle * segment.radius[1] * Math.cos(angle)
+  const rawStart = resolveArcPoint(segment, 0)
+  const rawEnd = resolveArcPoint(segment, 1)
+  return [
+    cosine * derivativeX - sine * derivativeY + rawStart[0] - from[0] + segment.to[0] - rawEnd[0],
+    sine * derivativeX + cosine * derivativeY + rawStart[1] - from[1] + segment.to[1] - rawEnd[1],
+  ]
+}
+
+/** Uses the one-sided path direction when a derivative vanishes at an endpoint. */
+function nonZeroDirection(
+  direction: Point,
+  resolvePoint: (progress: number) => Point,
+  progress: number,
+): Point | null {
+  if (Math.hypot(direction[0], direction[1]) > 1e-12) return direction
+  const sample = 1e-5
+  const start = Math.max(0, progress - sample)
+  const end = Math.min(1, progress + sample)
+  const point = resolvePoint(progress)
+  const forward = resolvePoint(end)
+  const backward = resolvePoint(start)
+  const candidate = progress >= 1 ? [point[0] - backward[0], point[1] - backward[1]] as Point
+    : [forward[0] - point[0], forward[1] - point[1]] as Point
+  if (Math.hypot(candidate[0], candidate[1]) > 1e-12) return candidate
+  const reverse = [point[0] - backward[0], point[1] - backward[1]] as Point
+  return Math.hypot(reverse[0], reverse[1]) > 1e-12 ? reverse : null
+}
+
+/** Maps a normalized direction into the endpoint-aligned world frame. */
+function mapNormalizedVector(vector: Point, from: Point, to: Point): Point {
+  const deltaX = to[0] - from[0]
+  const deltaY = to[1] - from[1]
+  return [
+    vector[0] * deltaX - vector[1] * deltaY,
+    vector[0] * deltaY + vector[1] * deltaX,
+  ]
+}
+
+/** Normalizes one non-zero direction. */
+function normalizeDirection(direction: Point): Point | null {
+  const length = Math.hypot(direction[0], direction[1])
+  return length <= 1e-12 ? null : [direction[0] / length, direction[1] / length]
 }
 
 /** Converts one canonical normalized point into the actual A-to-B frame. */

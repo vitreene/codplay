@@ -33,6 +33,8 @@ export type MoveTransition = Readonly<{
   delay?: number
   ease?: CompiledValue
   path?: CompiledValue
+  orientToPath?: boolean
+  rotateOffset?: Readonly<{ from: number; to: number }>
 }>
 
 export type MovePolicyIssue = Readonly<{
