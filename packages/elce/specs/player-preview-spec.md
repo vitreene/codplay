@@ -3,7 +3,7 @@
 ## Statut
 
 **En cours — la fenêtre distincte, la navigation indépendante, la
-synchronisation manuelle et la composition Sighty/CodPlay sont vérifiées. Le
+synchronisation automatique débrayable et la composition Sighty/CodPlay sont vérifiées. Le
 lecteur est rendu par Remix sans dépendance React. Le sommaire présente encore
 un `aria-expanded` incohérent au passage de 800 à 801 px et un retour de focus
 tardif à la fermeture ; ces points restent suivis dans le plan de construction.**
@@ -25,17 +25,37 @@ par un document local par défaut, qui pourrait appartenir à une autre session
 ou à une version antérieure.
 
 Le lecteur monte la composition Sighty/CodPlay réelle dans son propre contexte
-de navigateur. Sa navigation est indépendante de celle de l’éditeur. Les
-modifications de l’éditeur ne changent pas le rendu ouvert tant qu’une
-synchronisation n’est pas demandée.
+de navigateur. La synchronisation automatique est activée à chaque ouverture
+de session : les corrections et les changements de page de l’éditeur se
+retrouvent dans la preview. Naviguer vers une autre page dans la preview
+arrête volontairement ce suivi et rend sa navigation indépendante.
 
 La barre du lecteur propose deux commandes :
 
-- « Réafficher la page éditée » sélectionne la page active dans l’éditeur. Si
-  cette page n’existe pas encore dans l’instantané du lecteur, la commande
-  demande une synchronisation une seule fois avant de l’afficher.
-- « Synchroniser » transmet le document courant de l’éditeur et sa page
-  sélectionnée. Le lecteur affiche cette page dans le nouvel instantané.
+- « Revenir sur la page éditée » réactive le suivi et demande en une seule
+  synchronisation le dernier document et la page active dans l’éditeur,
+  y compris si cette page vient d’être créée.
+- La bascule « Synchro active » / « Synchro arrêtée » active ou arrête les
+  actualisations automatiques. Son état est exposé par `aria-pressed` ; son
+  nom accessible indique l'action disponible. La reprise utilise le même
+  circuit que le retour à la page éditée et suit de nouveau l’éditeur.
+
+L'acteur XState auteur signale les commits du document et les changements de
+page sélectionnée par `editor-changed` via le protocole `postMessage` existant.
+Une sélection inchangée ne déclenche pas de synchronisation.
+Pendant le chargement d'un instantané, les nouvelles
+notifications sont réunies en une demande suivante, qui récupère le dernier
+document et la page courante de l’éditeur. Une réponse automatique arrêtée
+avant son application n'est pas
+présentée. La fermeture de la liaison libère l'abonnement auteur.
+
+Quand le suivi est arrêté, les modifications de l’éditeur n’actualisent pas
+la preview : la page lue, ses nœuds DOM, son défilement et sa lecture native
+restent intacts. L’observation Sighty existante `onSlotChange` signale les
+changements réels d’identité de page dans la preview et coupe alors le suivi.
+Le montage initial d’un instantané ne constitue pas une navigation autonome.
+Aucun rendu différé ni nouveau circuit de navigation Sighty/CodPlay n’est
+introduit.
 
 Chaque commande associe une icône à son libellé. À 800 px et en dessous, le
 libellé visible est masqué et l’icône reste seule. Le texte reste disponible
@@ -53,8 +73,9 @@ La popup auteur propose « Test auteur » pour ouvrir les réglages du profil et
 de la progression. Son icône Lucide List est la même que celle du bouton
 « Sommaire » dans l’éditeur.
 
-Chaque instantané reçu monte une nouvelle composition du lecteur. La
-navigation et l’historique restent propres à cette session. L’état du test —
+Chaque instantané appliqué monte une nouvelle composition sur la page
+transmise par l’éditeur. La navigation et l’historique restent
+propres à cette session. L’état du test —
 profil, progression et réponses — est chargé et enregistré séparément du
 document ; la popup auteur et la preview réseau utilisent le même état serveur.
 La popup locale peut fonctionner sans persistance lorsque le serveur est
@@ -197,7 +218,34 @@ détruit les ressources du lecteur.
   et un listener SQLite refusé par l’environnement (`listen EPERM`). Les
   suites globales restent donc à corriger séparément.
 
-### Preuves antérieures de preview
+### Synchronisation automatique — vérification du 30 octobre 2026
+
+- [`popup-preview-host.test.ts`](../src/app/player/popup-preview-host.test.ts)
+  exerce l'acteur XState et les messages : commit du document, changement de
+  sélection, sélection inchangée ignorée et désabonnement à la destruction.
+- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) couvre
+  l'arrêt d'une réponse automatique en vol, la reprise, la synchronisation
+  unique d'une page nouvelle et les reprises de session existantes.
+- [`popup-player-auto-sync.test.tsx`](../src/app/player/popup-player-auto-sync.test.tsx)
+  utilise des documents autonomes et la véritable composition Sighty/CodPlay :
+  activation initiale, commits consécutifs, arrêt/reprise, suivi des changements
+  de page de l’éditeur, arrêt par navigation de la preview, identité du DOM et
+  du scrollport pendant cet arrêt, puis retour au dernier contenu et reprise
+  du suivi des corrections et des changements de page.
+- Brave vérifie deux fenêtres réelles sur un projet de validation isolé :
+  sélectionner B dans l’éditeur affiche B dans la preview avec le suivi actif.
+  Revenir à A depuis la preview coupe ce suivi. Une correction de Section sur
+  B laisse alors A affichée, garde le même élément vidéo en lecture
+  (`paused: false`, zéro événement `pause` ou `emptied`) et le même scrollport
+  à 91 px. « Revenir sur la page éditée » ouvre ensuite B corrigée et réactive
+  la synchronisation ; sélectionner A dans l’éditeur est de nouveau suivi.
+  La vérification responsive précédente à 390 px conserve un libellé visuel
+  masqué, un nom accessible disponible et une cible de 40 px.
+  Aucun avertissement ou erreur n'est relevé dans la console de la popup.
+- Suite Elcé : 523 tests réussis ; typecheck, build et `git diff --check`
+  réussis. L'avertissement de taille du bundle Vite reste présent.
+
+### Preuves des étapes précédentes
 
 - [`ProjectApplication`](../src/app/remix/project-application.ts) ouvre le
   popup depuis la page sélectionnée et détruit sa liaison à la fermeture de

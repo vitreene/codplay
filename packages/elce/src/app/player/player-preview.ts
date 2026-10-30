@@ -14,6 +14,7 @@ export interface PlayerPreviewProps {
   readonly sceneCache?: ElcePageSceneCache
   readonly testState?: ProjectTestState
   readonly onTestStateChange?: (state: ProjectTestState) => void
+  readonly onPageChange?: (pageId: PageId | null) => void
 }
 
 /** Returns whether the selected page belongs to the author-only content catalog. */
@@ -44,6 +45,7 @@ export function createPlayerPreviewComposition(
     startPageId: selectedPageId ?? undefined,
     testState,
     onTestStateChange: props.onTestStateChange,
+    onPageChange: props.onPageChange,
     mediaSources: props.mediaSources,
     sceneCache: props.sceneCache,
     onLog: (message, level) => {

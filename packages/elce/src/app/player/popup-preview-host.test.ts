@@ -13,7 +13,7 @@ describe('popup preview editor connection', () => {
     vi.restoreAllMocks()
   })
 
-  it('starts from the clicked page and returns the latest editor document on manual synchronization', () => {
+  it('starts from the clicked page and returns the latest editor document and selection on synchronization', () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
     controller.send({ type: 'editor.access.activate' })
@@ -31,7 +31,7 @@ describe('popup preview editor connection', () => {
 
       const openedUrl = new URL(open.mock.calls[0]![0]!)
       const sessionId = openedUrl.searchParams.get(POPUP_PREVIEW_SESSION_PARAM)!
-      const sendRequest = (type: 'ready' | 'synchronize' | 'show-edited-page', requestId: number) => {
+      const sendRequest = (type: 'ready' | 'synchronize', requestId: number) => {
         window.dispatchEvent(new MessageEvent('message', {
           data: { type, sessionId, requestId },
           origin: window.location.origin,
@@ -49,19 +49,44 @@ describe('popup preview editor connection', () => {
       const pageCommand = createDefaultPageCommand(controller.getSnapshot().context.document, { kind: PAGE_LOCATION.SCENARIO })
       controller.send({ type: 'document.apply', command: pageCommand })
       controller.send({ type: 'page.select', pageId: pageCommand.pageId })
-      sendRequest('show-edited-page', 1)
-      expect(postMessage.mock.calls[1]?.[0]).toMatchObject({
-        type: 'edited-page',
-        selectedPageId: pageCommand.pageId,
-      })
       sendRequest('synchronize', 2)
-      expect(postMessage.mock.calls[2]?.[0]).toMatchObject({
+      expect(postMessage.mock.calls.at(-1)?.[0]).toMatchObject({
         type: 'snapshot',
         selectedPageId: pageCommand.pageId,
         document: { pages: [{ id: 'page-a' }, { id: pageShownAtOpen.pageId }, { id: pageCommand.pageId }] },
       })
       sendRequest('ready', 3)
-      expect(postMessage.mock.calls[3]?.[0].selectedPageId).toBe(pageShownAtOpen.pageId)
+      const snapshots = postMessage.mock.calls.map(([message]) => message).filter((message) => message.type === 'snapshot')
+      expect(snapshots.at(-1)?.selectedPageId).toBe(pageShownAtOpen.pageId)
+    } finally {
+      host.destroy()
+      controller.stop()
+    }
+  })
+
+  it('signals document commits and selection changes and releases the subscription', () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const secondPage = createDefaultPageCommand(controller.getSnapshot().context.document, { kind: PAGE_LOCATION.SCENARIO })
+    controller.send({ type: 'document.apply', command: secondPage })
+    const postMessage = vi.fn()
+    const popup = { closed: false, postMessage, focus: vi.fn() } as unknown as Window
+    vi.spyOn(window, 'open').mockReturnValue(popup)
+    const host = new PopupPreviewHost(controller)
+    try {
+      expect(host.open()).toBe(true)
+      controller.send({ type: 'page.select', pageId: 'page-a' })
+      expect(postMessage).not.toHaveBeenCalled()
+      controller.send({ type: 'document.apply', command: { type: 'page.rename', pageId: 'page-a', name: 'Updated page' } })
+      expect(postMessage).toHaveBeenCalledTimes(1)
+      expect(postMessage.mock.calls[0]?.[0]).toMatchObject({ type: 'editor-changed' })
+      controller.send({ type: 'page.select', pageId: secondPage.pageId })
+      expect(postMessage).toHaveBeenCalledTimes(2)
+      expect(postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'editor-changed' })
+      host.destroy()
+      controller.send({ type: 'document.apply', command: { type: 'page.rename', pageId: 'page-a', name: 'After disconnect' } })
+      expect(postMessage).toHaveBeenCalledTimes(2)
     } finally {
       host.destroy()
       controller.stop()
