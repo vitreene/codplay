@@ -74,6 +74,59 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   sur 5175 et l’API sur 5181 ; le flux HMR utilise son canal local interne,
   sans serveur Vite navigateur supplémentaire.
 
+## Imports JSON locaux
+
+Le serveur d'assets Elcé accepte les imports de fichiers `.json` locaux dans
+les sources navigateur autorisées, grâce à
+[`json-module-loader.ts`](../src/server/json-assets/json-module-loader.ts).
+Le chargeur complète `scripts.loaders` de Remix ; il ne modifie pas les
+sources des paquets consommateurs.
+
+- Les imports statiques, les imports dynamiques à chemin littéral et les
+  réexports sont analysés avec `es-module-lexer`. Les chaînes et commentaires
+  qui ressemblent à des imports ne sont pas transformés.
+- Le fichier est validé comme JSON côté serveur, puis représenté par un module
+  ESM embarqué exportant sa valeur par défaut. Ce module utilise `JSON.parse`
+  pour préserver exactement les clés JSON, dont `__proto__`. Aucun catalogue
+  ou fichier JavaScript généré n'est maintenu à côté de la source JSON.
+- Deux consommateurs d'un même fichier canonique partagent la même instance
+  de module, y compris via un lien symbolique autorisé. Deux fichiers distincts
+  de même contenu conservent des identités distinctes.
+- Les règles `allowFiles` et `denyFiles` des sources sont partagées avec le
+  chargeur et contrôlées avant lecture et après résolution du lien symbolique.
+  Un fichier absent, invalide ou interdit produit une erreur de compilation.
+  Les imports JSON par nom de paquet ne font pas partie de ce raccord.
+- Les changements, suppressions et recréations JSON sont transmis aux modules
+  consommateurs par le canal HMR existant. Le compilateur invalide ces modules
+  et le canal émet le rechargement habituel. Le suivi des anciennes dépendances
+  est retiré lorsqu'un import change et libéré à la fermeture du canal ; aucun
+  watcher supplémentaire n'est créé.
+- Les source maps sont composées avec celles de la compilation TypeScript.
+  La transformation fonctionne aussi avec minification et HMR désactivé.
+
+Preuves : les 16 cas de
+[`json-module-loader.test.ts`](../src/server/json-assets/json-module-loader.test.ts)
+compilent et évaluent les valeurs avec le véritable serveur d'assets Remix.
+Ils couvrent identités, imports/réexports, données invalides ou absentes,
+accès interdits et liens symboliques, invalidation des consommateurs,
+récupération après erreur, retrait des dépendances, fermeture et production.
+Le 29 octobre 2026, sur `develop`, une fixture temporaire importée par l'entrée
+réelle avant démarrage a été modifiée de la révision 1 à 2 : le module HTTP
+compilé restitue la nouvelle valeur et le canal SSE réel publie
+`{"type":"browser:reload"}`. La fixture est ensuite retirée. Le rendu et le
+rechargement dans le navigateur restent au
+[plan d'acceptation Elcé](../plan/2026-10-01-elce-construction-plan.md), l'accès
+MCP Brave ayant échoué pendant ce contrôle.
+
+Après intégration de `elce-remix` et `codplay-replace` le 29 octobre 2026,
+Brave charge l'entrée auteur réelle, ouvre le document Nutrition & Santé et
+affiche son état « Synchronisé ». Le même serveur compile les imports JSON
+du catalogue replace ; la prévisualisation réelle affiche les paragraphes
+de la page d'introduction et son image décodée à 1680 px de largeur native.
+Les 16 tests JSON, le typecheck et le build Elcé passent dans cet état intégré.
+Le suivi de l'intégration et de l'acceptation globale reste dans le
+[plan d'intégration](../../../docs/plans/2026-10-29-develop-integration-plan.md).
+
 ## Invariants
 
 - Le contrôleur XState reste l’unique propriétaire du document et de l’accès

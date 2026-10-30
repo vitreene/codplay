@@ -10,6 +10,7 @@ import { buildScenario, resetQuestionScene, scenarioContextFromTestState } from 
 import { validateHtmlElementMethodActions } from '../builders/markup-validation/html-element-method-validation'
 import type { ElceSceneKey, ElceSlotName } from '../builders/scenario/scenario-builder-types'
 import type { ElceDocument } from '../domain/document/document-model'
+import type { PageId } from '../domain/document/document-types'
 import { ELCE_PLAYER_STYLE_SHEET } from './elce-player-style'
 import { createViewportExpansionStyleSheet } from '../builders/viewport-expansion/viewport-expansion-style.ts'
 import {
@@ -38,6 +39,7 @@ export class ElcePlayerComposition {
   private destroyed = false
   private removeMenuDrawerListeners: (() => void) | undefined
   private removePageMediaPlayback: (() => void) | undefined
+  private removePageChangeListener: (() => void) | undefined
   private readonly appearanceThemeCssLinks: AppearanceThemeCssLinks
 
   /** Builds one player composition from the current métier document. */
@@ -85,6 +87,13 @@ export class ElcePlayerComposition {
   /** Initializes Sighty and starts the persistent layout and current page. */
   public async initialize(): Promise<void> {
     await this.sighty.runtime.initialize()
+    let previousPageId = this.getCurrentPageId()
+    this.removePageChangeListener = this.sighty.runtime.onSlotChange(ELCE_SCENARIO.CONTENT_SLOT, () => {
+      const pageId = this.getCurrentPageId()
+      if (pageId === previousPageId) return
+      previousPageId = pageId
+      this.options.onPageChange?.(pageId)
+    })
     this.removePageMediaPlayback = bindPageMediaPlayback(this.sighty.runtime, (error) => {
       this.options.onLog?.(`Arrêt des médias de la page impossible : ${String(error)}`, 'error')
     })
@@ -95,6 +104,12 @@ export class ElcePlayerComposition {
     this.options.onLog?.('Prévisualisation Elcé initialisée.', 'info')
   }
 
+  /** Reads the page actually mounted by Sighty rather than the editor selection. */
+  private getCurrentPageId(): PageId | null {
+    const sceneKey = this.sighty.runtime.getMountedSceneKey(ELCE_SCENARIO.CONTENT_SLOT)
+    return this.options.document.pages.find((page) => sceneKey === `scene-${page.id}`)?.id ?? null
+  }
+
   /** Destroys all player resources owned by this composition. */
   public destroy(): void {
     if (this.destroyed) return
@@ -103,6 +118,8 @@ export class ElcePlayerComposition {
     this.removeMenuDrawerListeners = undefined
     this.removePageMediaPlayback?.()
     this.removePageMediaPlayback = undefined
+    this.removePageChangeListener?.()
+    this.removePageChangeListener = undefined
     this.sighty.runtime.destroy()
     this.appearanceThemeCssLinks.remove()
   }

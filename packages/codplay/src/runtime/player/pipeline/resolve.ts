@@ -75,7 +75,7 @@ function resolvePlacement(perso: MaterializedPerso): Pick<ResolvedPerso, 'placem
 function resolvePerso(perso: MaterializedPerso, functions: CompiledFunctionCollection): CompiledRecord {
   const state = cloneRecord(perso.initial)
   for (const activeAction of perso.actions) {
-    applyAction(state, activeAction.action, activeAction.elapsedMs, functions)
+    applyAction(state, activeAction.action, activeAction.elapsedMs, functions, perso.type)
   }
   return state
 }
@@ -86,14 +86,15 @@ function applyAction(
   action: CompiledRecord,
   elapsedMs: number,
   functions: CompiledFunctionCollection,
+  componentType?: string,
 ): void {
   if (isTweenAction(action)) {
     const payload = resolveTweenAction(action, elapsedMs, functions)
     if (payload === undefined) return
-    applyActionPayload(state, payload, elapsedMs)
+    applyActionPayload(state, payload, elapsedMs, componentType)
     return
   }
-  applyActionPayload(state, action, elapsedMs)
+  applyActionPayload(state, action, elapsedMs, componentType)
 }
 
 /** Applies one ordinary action payload after any continuous function evaluation. */
@@ -101,6 +102,7 @@ function applyActionPayload(
   state: Record<string, CompiledValue>,
   action: CompiledRecord,
   elapsedMs: number,
+  componentType?: string,
 ): void {
   // Source is reconstructible logical state; media components own side-effectful node caches.
   // Component-specific fields are copied as well so core components do not need a parallel
@@ -120,14 +122,21 @@ function applyActionPayload(
   if (isPlainRecord(action.className)) {
     state.className = applyClassNamePatch(state.className, action.className)
   }
-  if (!isPlainRecord(action.style)) return
-  const currentStyle: Record<string, CompiledValue> = isPlainRecord(state.style)
-    ? { ...(state.style as CompiledRecord) }
-    : {}
-  for (const [property, value] of Object.entries(action.style)) {
-    currentStyle[property] = resolveStyleValue(property, currentStyle[property], value, elapsedMs)
+  if (isPlainRecord(action.style)) {
+    const currentStyle: Record<string, CompiledValue> = isPlainRecord(state.style)
+      ? { ...(state.style as CompiledRecord) }
+      : {}
+    for (const [property, value] of Object.entries(action.style)) {
+      currentStyle[property] = resolveStyleValue(property, currentStyle[property], value, elapsedMs)
+    }
+    state.style = currentStyle
   }
-  state.style = currentStyle
+
+  if ((componentType === 'tag' || componentType === 'text')
+    && Object.prototype.hasOwnProperty.call(action, 'replace')
+    && (action.content === undefined || action.content === null || action.content === '')) {
+    state.content = null
+  }
 }
 
 /** Evaluates one compiled TweenAction into an ordinary action payload. */

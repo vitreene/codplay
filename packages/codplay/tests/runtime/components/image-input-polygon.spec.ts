@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DiagnosticCollector } from '../../../src/diagnostics'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import { createMarkupModuleServiceDefinition, type MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
-import { createReplaceModuleServiceDefinition } from '../../../src/runtime/capabilities/replace'
+import { createReplaceMediaModuleServiceDefinition } from '../../../src/runtime/capabilities/replace-media'
 import { HtmlComponentMaterializer } from '../../../src/runtime/runner-html'
 import { correctionIconPartId, selectionIconPartId } from '../../../src/runtime/components/input'
 import {
@@ -57,8 +57,8 @@ describe('V2 core image, input and polygon components', () => {
       identity,
       materializer,
       new Map([[
-        'replace',
-        createReplaceModuleServiceDefinition().create({
+        'replace-media',
+        createReplaceMediaModuleServiceDefinition().create({
           playerId: 'component-test-player',
           compiledScene: {} as CompiledScene,
         }),

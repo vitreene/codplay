@@ -79,6 +79,12 @@ reste réutilisable lors d'un seek ; changer de source sélectionne la node de
 cette source sans recréer les autres. La destruction finale du runner retire le
 perso matérialisé et ses nodes.
 
+Chaque node vidéo créée par le composant fixe `preload='auto'` avant sa première
+affectation de `src`. Cela inclut la node propre à un composant qui partage une
+URL avec un autre composant ayant déjà adopté l'unique node remise par le
+handle de preload. Les deux composants gardent ainsi leurs propres nœuds
+persistants et préparent chacun leurs sources statiques avant un changement.
+
 ## Preuves
 
 - [`media-sync.spec.ts`](../tests/scene/compiled/media-sync.spec.ts) vérifie le
@@ -96,10 +102,17 @@ perso matérialisé et ses nodes.
   `STOP` des trois modes après un départ non nul, l’isolation et le teardown.
 - [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts)
   couvre la persistance des nodes par source, le détachement, le seek, la
-  destruction, le type audio et la transmission du rate.
+  destruction, le type audio, la transmission du rate et deux composants qui
+  partagent une URL vidéo et gardent chacun une node `preload='auto'`.
 - [`preload-media-demo.spec.ts`](../tests/runtime/components/preload-media-demo.spec.ts)
   couvre la lecture de la scène média par le runtime V2 et l'absence d'écriture
   native redondante pendant sa présentation.
+
+Après la correction de préparation des sources vidéo, les sept suites runner,
+preload média, media-sync, replace-module, surface de présentation, handoff
+vidéo et handoff façade passent : **53 tests**. Les typechecks CodPlay et démos
+V2 passent également ; le build Vite des démos passe avec son avertissement de
+chunks supérieurs à 500 kB.
 
 Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
 

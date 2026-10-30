@@ -2,6 +2,7 @@
 
 ## Code style and structure
 
+- Never address the user with the formula “Tu as raison :”.
 - Write code that is easy to read and extend later.
 - Keep authored models, configuration, and CSS readable and easy to enrich.
   Compilation owns compaction and optimization of generated output; preserve

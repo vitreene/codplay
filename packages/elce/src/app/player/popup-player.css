@@ -53,6 +53,12 @@
   opacity: 0.6;
 }
 
+.elce-popup-reader__actions button[aria-pressed='true'] {
+  border-color: #f8f5ef;
+  color: #f8f5ef;
+  background: #263b3a;
+}
+
 .elce-popup-reader__test-panel {
   position: absolute;
   z-index: 10;

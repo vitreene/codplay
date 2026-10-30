@@ -32,7 +32,8 @@ libération retire l'entrée.
 
 La stratégie vidéo testée attend `canplaythrough` et conserve le nœud prêt. Elle
 expose une lease permettant de récupérer ce même nœud ; libérer une lease non
-adoptée retire le nœud préchargé. Le test de façade vérifie ensuite que
+adoptée retire le nœud préchargé. Un handle ne transfère son nœud natif qu'une
+fois ; un second `take()` ne fournit pas de lease. Le test de façade vérifie ensuite que
 `resources.register()` permet au composant `media` d'adopter la node transférée.
 Le cycle complet de nettoyage et de seek après adoption reste au plan.
 
@@ -60,6 +61,9 @@ chargement d'une ressource CSS par URL.
   identifiant vide.
 - [`media-preload-handoff.spec.ts`](../tests/facade/media-preload-handoff.spec.ts)
   couvre le transfert de la node retenue vers un composant média par la façade.
+- [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts)
+  couvre deux composants partageant une URL : une seule adopte la node du
+  handle, l'autre conserve sa propre node vidéo persistante.
 
 Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
 

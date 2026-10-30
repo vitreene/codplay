@@ -35,6 +35,7 @@ vi.mock('./player-preview', async (importOriginal) => {
     ...original,
     /** Exposes the active player page while the synchronization boundary is tested. */
     createPlayerPreviewComposition: vi.fn((stage: HTMLElement, props: {
+      documentModel: ReturnType<typeof createInitialDocument>
       selectedPageId: string | null
       mediaSources: Readonly<Record<string, string>>
     }) => ({
@@ -43,6 +44,7 @@ vi.mock('./player-preview', async (importOriginal) => {
         preview.id = 'test-reader-page'
         preview.dataset.pageId = props.selectedPageId ?? ''
         preview.dataset.mediaSource = Object.values(props.mediaSources)[0] ?? ''
+        preview.dataset.documentName = props.documentModel.data.name
         stage.replaceChildren(preview)
       },
       destroy() {
@@ -67,7 +69,38 @@ describe('Remix popup reader synchronization controls', () => {
     vi.restoreAllMocks()
   })
 
-  it('synchronizes automatically when the edited page was created after the last snapshot', async () => {
+  it('discards an automatic response stopped in flight and catches up when enabled again', async () => {
+    const requests: unknown[] = []
+    const opener = { closed: false, postMessage: (message: unknown) => requests.push(message) } as unknown as Window
+    setOpener(opener)
+    const rendered = render(<PopupPlayer sessionId="reader-session" startPageId="page-a" />)
+    cleanup = rendered.cleanup
+    const documentModel = createInitialDocument()
+    await rendered.act(() => dispatchResponse(opener, {
+      type: 'snapshot', sessionId: 'reader-session', requestId: 0,
+      document: documentModel.toJSON(), selectedPageId: 'page-a',
+    }))
+    await vi.waitFor(() => expect(rendered.$('#test-reader-page')).not.toBeNull())
+    await rendered.act(() => dispatchResponse(opener, { type: 'editor-changed', sessionId: 'reader-session' }))
+    expect(requests.at(-1)).toMatchObject({ type: 'synchronize', requestId: 1 })
+    await rendered.act(() => (rendered.$('#elce-popup-reader-sync') as HTMLButtonElement).click())
+    const updatedDocument = { ...documentModel.toJSON(), name: 'Updated while stopped' }
+    await rendered.act(() => dispatchResponse(opener, {
+      type: 'snapshot', sessionId: 'reader-session', requestId: 1,
+      document: updatedDocument, selectedPageId: 'page-a',
+    }))
+    await vi.waitFor(() => expect((rendered.$('#elce-popup-reader-edited-page') as HTMLButtonElement).disabled).toBe(false))
+    expect(rendered.$('#test-reader-page')?.getAttribute('data-document-name')).toBe(documentModel.data.name)
+    await rendered.act(() => (rendered.$('#elce-popup-reader-sync') as HTMLButtonElement).click())
+    expect(requests.at(-1)).toMatchObject({ type: 'synchronize', requestId: 2 })
+    await rendered.act(() => dispatchResponse(opener, {
+      type: 'snapshot', sessionId: 'reader-session', requestId: 2,
+      document: updatedDocument, selectedPageId: 'page-a',
+    }))
+    await vi.waitFor(() => expect(rendered.$('#test-reader-page')?.getAttribute('data-document-name')).toBe(updatedDocument.name))
+  })
+
+  it('returns to a newly created editor page using one fresh snapshot and resumes synchronization', async () => {
     const requests: unknown[] = []
     const opener = { closed: false, postMessage: (message: unknown) => requests.push(message) } as unknown as Window
     setOpener(opener)
@@ -95,24 +128,17 @@ describe('Remix popup reader synchronization controls', () => {
     const newPageCommand = createDefaultPageCommand(originalDocument, { kind: PAGE_LOCATION.SCENARIO })
     const editedDocument = applyDocumentCommand(originalDocument, newPageCommand)
     await rendered.act(() => (rendered.$('#elce-popup-reader-edited-page') as HTMLButtonElement | null)?.click())
-    expect(requests.at(-1)).toMatchObject({ type: 'show-edited-page', requestId: 1 })
-
-    await rendered.act(() => dispatchResponse(opener, {
-      type: 'edited-page',
-      sessionId: 'reader-session',
-      requestId: 1,
-      selectedPageId: newPageCommand.pageId,
-    }))
-    expect(requests.at(-1)).toMatchObject({ type: 'synchronize', requestId: 2 })
+    expect(requests.at(-1)).toMatchObject({ type: 'synchronize', requestId: 1 })
 
     await rendered.act(() => dispatchResponse(opener, {
       type: 'snapshot',
       sessionId: 'reader-session',
-      requestId: 2,
+      requestId: 1,
       document: editedDocument.toJSON(),
       selectedPageId: newPageCommand.pageId,
     }))
     await vi.waitFor(() => expect(rendered.$('#test-reader-page')?.getAttribute('data-page-id')).toBe(newPageCommand.pageId))
+    expect(rendered.$('#elce-popup-reader-sync')?.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('loads uploaded media from its stable server URL after its local Blob is removed', async () => {

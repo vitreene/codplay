@@ -108,6 +108,17 @@ disparaissent du nouvel état et gardent leur état géré isolé par nœud. Pou
 `content`, une chaîne inchangée conserve son nœud texte ; un enfant élément est
 remplacé par un nœud texte même si son texte visible est identique.
 
+Le service `content` conserve, par nœud hôte, les références des nœuds qu'il a
+produits ou explicitement reçus comme contenu. Une valeur `null` retire
+uniquement ces nœuds lorsqu'ils appartiennent encore à cet hôte. Un hôte qui
+n'a jamais reçu de contenu géré conserve donc ses enfants montés par le
+materializer ; un nœud déplacé vers un autre parent n'est pas retiré par le
+nettoyage de son ancien hôte. Une chaîne gérée inchangée garde son nœud texte
+et les enfants montés indépendamment à côté de lui. Un remplacement explicite
+par un autre texte ou élément garde la sémantique de remplacement du contenu.
+L'état géré reste local au service et ne crée ni donnée auteur ni circuit de
+placement supplémentaire.
+
 La projection accepte aussi les méthodes focalisées d’une action via
 [`htmlElementMethod`](./html-element-method-spec.md). Les valeurs de fermeture
 `aria-hidden="true"` et `inert` sont validées après le focus de retour dans le
@@ -152,7 +163,15 @@ ensemble.
 - [`template-materializer.spec.ts`](../tests/runtime/runner-html/template-materializer.spec.ts)
   vérifie les marqueurs, les ancres et les racines multiples.
 - [`component-materializer.spec.ts`](../tests/runtime/runner-html/component-materializer.spec.ts)
-  vérifie l’application et la réconciliation des services HTML.
+  vérifie l’application et la réconciliation des services HTML, le nettoyage
+  du seul contenu possédé, la conservation des enfants et le reparent d'un
+  élément anciennement reçu comme contenu.
+- [`tag-content-ownership.spec.ts`](../tests/runtime/runner-html/tag-content-ownership.spec.ts)
+  traverse `SceneBuilder`, le player et le runner HTML avec une fixture
+  autonome : identité des enfants après update du parent, reparent, Seek,
+  resize, reset/replay et destruction. Ces cas passent le 29 octobre 2026.
+  La suite de composition Elcé passe également ses 49 scénarios après
+  intégration des branches, dont agrandissement des images/graphes et focus.
 - [`html-element-method.spec.ts`](../tests/runtime/runner-html/html-element-method.spec.ts)
   vérifie que les méthodes HTML restent inhibées pendant Seek même si cette
   phase est transmise séparément du contexte motion.
@@ -192,6 +211,11 @@ Validation complémentaire exécutée le 2026-09-25 depuis `packages/codplay` :
 `tests/runtime/capabilities/markup-capability.spec.ts` et
 `tests/runtime/components/image-input-polygon.spec.ts` — 2 fichiers, 11 tests
 réussis.
+
+Validation d’intégration du 30 octobre 2026 : les contrats de propriété du
+contenu et de phase Seek sont conservés ensemble ; la suite CodPlay passe
+1 032 tests (un échec attendu). Les limites navigateur restent dans le
+[suivi d’intégration](../../../docs/plans/2026-10-30-develop-update-plan.md).
 
 ## Limites
 

@@ -2,7 +2,7 @@ import type { ServiceValidationDefinition, ValidationFunction } from '../service
 import { reportInvalidServiceValue } from '../service-validation-report'
 
 /** Runtime content accepted by the default content service. */
-export type ContentValue = string | number | HTMLElement
+export type ContentValue = string | number | HTMLElement | null | undefined
 
 /** Reports whether a value is an HTMLElement available in the current runtime. */
 export function isContentElement(value: unknown): value is HTMLElement {
@@ -11,7 +11,7 @@ export function isContentElement(value: unknown): value is HTMLElement {
 
 /** Validates the serializable content values accepted by CompiledScene. */
 export const validateContent: ValidationFunction = (value, context) => {
-  if (typeof value === 'string' || typeof value === 'number') return
+  if (value === null || value === undefined || typeof value === 'string' || typeof value === 'number') return
   reportInvalidServiceValue(
     context.diagnostics,
     'AUTHOR_CONTENT_INVALID',

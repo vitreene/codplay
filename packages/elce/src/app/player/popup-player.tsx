@@ -32,6 +32,7 @@ type ReaderSnapshot = Readonly<{
 type PendingRequest = Readonly<{
   id: number
   type: PopupPreviewRequest['type']
+  automatic?: boolean
 }>
 
 /** Uses server URLs after upload and local Blob URLs only while upload is pending. */
@@ -82,6 +83,8 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   let readerSnapshot: ReaderSnapshot | null = null
   let error: string | null = null
   let pending = false
+  let automaticSync = true
+  let synchronizeAgain = false
   let testStateNotice: string | null = null
   let testControlsOpen = false
   let testStateSession: ProjectTestStateSession | null = null
@@ -165,20 +168,55 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
   }
 
   /** Requests a fresh editor snapshot or its selected page through the opener. */
-  const requestEditor = (type: PopupPreviewRequest['type']): void => {
+  const requestEditor = (type: PopupPreviewRequest['type'], automatic = false): void => {
     if (sessionId === null) return
-    if (pendingRequest !== null && pendingRequest.type !== 'ready') return
+    if (pendingRequest !== null) {
+      if (automatic) {
+        synchronizeAgain = true
+        return
+      }
+      if (pendingRequest.type !== 'ready') return
+    }
     if (window.opener === null || window.opener.closed) {
       error = 'La fenêtre de l’éditeur est fermée. Rouvre la lecture depuis l’éditeur.'
       update()
       return
     }
     const id = ++requestId
-    pendingRequest = { id, type }
+    pendingRequest = { id, type, automatic }
     pending = true
     error = null
     update()
     window.opener.postMessage({ type, sessionId, requestId: id }, window.location.origin)
+  }
+
+  /** Resumes following the editor with its latest document and selected page. */
+  const returnToEditedPage = (): void => {
+    automaticSync = true
+    synchronizeAgain = false
+    update()
+    requestEditor('synchronize', true)
+  }
+
+  /** Stops following the editor or restores that link through the same return command. */
+  const toggleAutomaticSync = (): void => {
+    if (!automaticSync) {
+      returnToEditedPage()
+      return
+    }
+    automaticSync = false
+    synchronizeAgain = false
+    update()
+  }
+
+  /** Completes a request and coalesces commits received while its snapshot was loading. */
+  const finishRequest = (): void => {
+    pendingRequest = null
+    pending = false
+    update()
+    if (!automaticSync || !synchronizeAgain) return
+    synchronizeAgain = false
+    requestEditor('synchronize', true)
   }
 
   /** Renders a received snapshot and remounts the same player composition circuit. */
@@ -214,16 +252,19 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       mediaSources: nextSnapshot.mediaSources,
       testState: nextSnapshot.testState,
       onTestStateChange: (state) => { void saveTestState(state) },
+      onPageChange: (selectedPageId) => {
+        if (readerSnapshot === null) return
+        readerSnapshot = { ...readerSnapshot, selectedPageId }
+        if (isNetworkPreview) return
+        automaticSync = false
+        synchronizeAgain = false
+        update()
+      },
       sceneCache,
     })
     if (composition !== null) {
       const currentComposition = composition
-      void currentComposition.initialize().catch((cause: unknown) => {
-        if (!handle.signal.aborted && composition === currentComposition) {
-          error = cause instanceof Error ? cause.message : 'La prévisualisation n’a pas pu démarrer.'
-          update()
-        }
-      })
+      await currentComposition.initialize()
     }
   }
 
@@ -240,13 +281,20 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       documentModel: ElceDocument,
       selectedPageId: PageId | null,
       fromServer: boolean,
+      automatic = false,
     ): Promise<void> => {
       try {
         const mediaSources = fromServer
           ? loadServerMediaSources(documentModel, api)
           : await loadMediaSources(documentModel, store, api, sourceUrls)
         if (disposed || handle.signal.aborted) return
-        testStateSession = await ProjectTestStateSession.open(api, documentModel.id, { allowOffline: !isNetworkPreview })
+        if (automatic && !automaticSync) {
+          finishRequest()
+          return
+        }
+        if (readerSnapshot?.documentModel.id !== documentModel.id || testStateSession === null) {
+          testStateSession = await ProjectTestStateSession.open(api, documentModel.id, { allowOffline: !isNetworkPreview })
+        }
         conflictPresented = false
         const storedTestState = testStateSession.state
         let testState = reconcileProjectTestState(documentModel, storedTestState)
@@ -272,17 +320,17 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
           mediaSources,
           testState,
         }
+        if (automatic && !automaticSync) {
+          finishRequest()
+          return
+        }
         await presentSnapshot(nextSnapshot)
         if (disposed || handle.signal.aborted) return
-        pendingRequest = null
-        pending = false
-        update()
+        finishRequest()
       } catch (cause: unknown) {
         if (!disposed && !handle.signal.aborted) {
           error = cause instanceof Error ? cause.message : 'La lecture du document a échoué.'
-          pendingRequest = null
-          pending = false
-          update()
+          finishRequest()
         }
       }
     }
@@ -292,11 +340,16 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
       if (sessionId === null) return
       if (event.origin !== window.location.origin || event.source !== window.opener) return
       if (!isPopupPreviewResponse(event.data) || event.data.sessionId !== sessionId) return
+      if (event.data.type === 'editor-changed') {
+        if (automaticSync) requestEditor('synchronize', true)
+        return
+      }
       if (event.data.requestId !== pendingRequest?.id) return
       if (event.data.type === 'snapshot') {
         if (event.data.requestId === 0) receivedEditorSnapshot = true
         try {
-          void presentDocument(ElceDocument.fromJSON(event.data.document), event.data.selectedPageId, false)
+          const automatic = pendingRequest.automatic === true
+          void presentDocument(ElceDocument.fromJSON(event.data.document), event.data.selectedPageId, false, automatic)
         } catch (cause: unknown) {
           pendingRequest = null
           pending = false
@@ -304,30 +357,6 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
           update()
         }
         return
-      }
-      if (event.data.type === 'edited-page') {
-        const previous = readerSnapshot
-        if (previous === null) return
-        const selectedPageId = event.data.selectedPageId
-        const pageExists = selectedPageId === null || previous.documentModel.pages.some((page) => page.id === selectedPageId)
-        pendingRequest = null
-        if (!pageExists) {
-          requestEditor('synchronize')
-          return
-        }
-        const nextSnapshot = { ...previous, selectedPageId }
-        pendingRequest = null
-        void presentSnapshot(nextSnapshot)
-          .then(() => {
-            pending = false
-            error = null
-            update()
-          })
-          .catch((cause: unknown) => {
-            pending = false
-            error = cause instanceof Error ? cause.message : 'La page éditée n’a pas pu être affichée.'
-            update()
-          })
       }
     }
 
@@ -380,7 +409,9 @@ export function PopupPlayer(handle: Handle<PopupPlayerProps>) {
     snapshot: readerSnapshot,
     error,
     pending,
-    requestEditor,
+    onReturnToEditedPage: returnToEditedPage,
+    automaticSync,
+    onToggleAutomaticSync: toggleAutomaticSync,
     isNetworkPreview,
     testStateNotice,
     testControlsOpen,
@@ -395,7 +426,9 @@ interface PopupReaderState {
   readonly snapshot: ReaderSnapshot | null
   readonly error: string | null
   readonly pending: boolean
-  readonly requestEditor: (type: PopupPreviewRequest['type']) => void
+  readonly onReturnToEditedPage: () => void
+  readonly automaticSync: boolean
+  readonly onToggleAutomaticSync: () => void
   readonly isNetworkPreview: boolean
   readonly testStateNotice: string | null
   readonly testControlsOpen: boolean
@@ -407,7 +440,7 @@ interface PopupReaderState {
 
 /** Renders the popup toolbar, messages, and host for the real player composition. */
 function renderPopupReader(state: PopupReaderState): RemixNode {
-  const { snapshot, error, pending, requestEditor, isNetworkPreview } = state
+  const { snapshot, error, pending, isNetworkPreview } = state
   return <div
     id="elce-popup-reader"
     className={isNetworkPreview ? 'elce-popup-reader elce-popup-reader--network-preview' : 'elce-popup-reader'}
@@ -441,33 +474,34 @@ function renderPopupReader(state: PopupReaderState): RemixNode {
         <button
           id="elce-popup-reader-edited-page"
           type="button"
-          title="Réafficher la page éditée"
-          aria-label="Réafficher la page éditée"
+          title="Revenir sur la page éditée et reprendre la synchronisation"
+          aria-label="Revenir sur la page éditée et reprendre la synchronisation"
           disabled={snapshot === null || pending}
-          mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('show-edited-page'))}
+          mix={on<HTMLButtonElement, 'click'>('click', state.onReturnToEditedPage)}
         >
           {renderLucideIcon(FileText, 'elce-popup-reader-edited-page-icon')}
           <span
             id="elce-popup-reader-edited-page-label"
             className="elce-popup-reader__action-label"
           >
-            Réafficher la page éditée
+            Revenir sur la page éditée
           </span>
         </button>
         <button
           id="elce-popup-reader-sync"
           type="button"
-          title={pending ? 'Synchronisation…' : 'Synchroniser'}
-          aria-label={pending ? 'Synchronisation…' : 'Synchroniser'}
-          disabled={snapshot === null || pending}
-          mix={on<HTMLButtonElement, 'click'>('click', () => requestEditor('synchronize'))}
+          title={state.automaticSync ? 'Arrêter la synchronisation automatique' : 'Activer la synchronisation automatique'}
+          aria-label={state.automaticSync ? 'Arrêter la synchronisation automatique' : 'Activer la synchronisation automatique'}
+          aria-pressed={state.automaticSync}
+          disabled={snapshot === null}
+          mix={on<HTMLButtonElement, 'click'>('click', state.onToggleAutomaticSync)}
         >
           {renderLucideIcon(RefreshCw, 'elce-popup-reader-sync-icon')}
           <span
             id="elce-popup-reader-sync-label"
             className="elce-popup-reader__action-label"
           >
-            {pending ? 'Synchronisation…' : 'Synchroniser'}
+            {state.automaticSync ? 'Synchro active' : 'Synchro arrêtée'}
           </span>
         </button>
       </div>

@@ -212,6 +212,7 @@ export class RuntimePlayer {
       presentation: this.presentation,
       renderSync: this.renderSync,
       moduleServiceInstances: this.moduleServiceInstances,
+      requestPresentation: () => this.presentationController.refresh(),
       captureController: this.captureController,
       idleMonitor: this.idleMonitor,
       diagnosticOutput,

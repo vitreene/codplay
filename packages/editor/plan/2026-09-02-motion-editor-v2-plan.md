@@ -795,3 +795,9 @@ passent. Les gates globales de P6 restent ouvertes.
 - Après chaque étape, mettre à jour la spécification concernée, le statut de ce
   plan et les preuves d’acceptation. Ne pas marquer `Fini` sur un simple smoke
   test ou une simulation jsdom.
+
+- Reprise develop du 30 octobre 2026 : 494 tests éditeur et typecheck/build
+  passent. La fixture navigateur tangent échoue avant et après fusion avec
+  le même écart preview/commit de 1,2538 px à 1100 × 780 ; la porte navigateur
+  reste ouverte. Comparaison et autres limites dans le
+  [suivi de reprise](../../../docs/plans/2026-10-30-develop-update-plan.md).

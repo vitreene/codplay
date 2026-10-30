@@ -1,4 +1,4 @@
-import type { CompiledScene } from '../../scene/compiled'
+import type { CompiledRecord, CompiledScene } from '../../scene/compiled'
 import type { MoveStateDelta } from '../move'
 import type { SolvedScene } from '../player/pipeline/types'
 import type { MountTargetDeclaration } from '../player/pipeline/mount-targets'
@@ -8,12 +8,33 @@ import type {
   ComponentAnimation,
 } from '../components/component-types'
 
+/** Event input emitted by a player-scoped module for asynchronous reconstruction. */
+export type RuntimeModuleServiceEventInput = Readonly<{
+  name: string
+  applyAtMs?: number
+  data?: CompiledRecord
+}>
+
+/** Journaled event exposed only to the module service that emitted it. */
+export type RuntimeModuleServiceEvent = Readonly<{
+  moduleId: string
+  eventId: string
+  eventSeq: number
+  name: string
+  applyAtMs: number
+  data?: CompiledRecord
+}>
+
 /** Context supplied when one module instance is created for a player. */
 export type RuntimeModuleServiceContext = Readonly<{
   playerId: string
   compiledScene: CompiledScene
   /** Resolves typed operations published by player-local mounted components. */
   componentSurfaces?: RuntimeComponentSurfaceResolver
+  /** Journals one module-private asynchronous event and refreshes the presentation. */
+  emitEvent?: (event: RuntimeModuleServiceEventInput) => RuntimeModuleServiceEvent | undefined
+  /** Reads this module's journaled events when reconstructing a presented scene. */
+  getEvents?: (name?: string) => readonly RuntimeModuleServiceEvent[]
 }>
 
 /** Runtime handle for one staged module seek. */
@@ -31,6 +52,8 @@ export type RuntimeComponentUpdateContext = Readonly<{
   storyId: string
   persoId: string
   componentType: string
+  /** Compiled initial component data used to reconstruct replace origins on Seek. */
+  initialState?: Readonly<Record<string, unknown>>
   state: Readonly<Record<string, unknown>>
   timeMs: number
   activeActions: readonly ComponentActionOccurrence[]
@@ -47,12 +70,20 @@ export type RuntimeExternalPresentationRequest = Readonly<{
   timeMs: number
 }>
 
-/** Presentation prepared by a module before an external runtime operation. */
-export type RuntimeExternalPresentation = Readonly<{
-  start: () => void
-  animation: ComponentAnimation
-  cancel: () => void
-}>
+/** Presentation prepared before an external operation, on either player or operation time. */
+export type RuntimeExternalPresentation =
+  | Readonly<{
+      clock: 'player'
+      start: () => void
+      animation: ComponentAnimation
+      cancel: () => void
+    }>
+  | Readonly<{
+      clock: 'operation'
+      start: (onComplete: () => void) => void
+      animation: ComponentAnimation
+      cancel: () => void
+    }>
 
 /** Handle retained by a caller while one external presentation is being applied. */
 export type RuntimeExternalPresentationHandle = Readonly<{

@@ -64,8 +64,8 @@ export const sceneA: SceneDoc<string> = {
             move: { target: 'scene-a:title' },
           },
           actions: {
-            [SCENE_A_EVENTS.setContent]: null,
-            [SCENE_A_EVENTS.setColor]: null,
+            [SCENE_A_EVENTS.setContent]: {},
+            [SCENE_A_EVENTS.setColor]: {},
             'scene-a:show-title': {
               style: {
                 opacity: { from: 0, to: 1, duration: 650, ease: 'outCubic' },

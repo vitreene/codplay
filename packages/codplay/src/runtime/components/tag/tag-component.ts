@@ -29,7 +29,7 @@ export class TagComponent extends BaseHTMLComponent<TagInitial> {
       className: input.state.className,
       style: input.state.style,
       attr: input.state.attr,
-      content,
+      content: content ?? null,
     })
   }
 }

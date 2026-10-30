@@ -69,7 +69,7 @@ de code ou de contrat SCORM n’est réalisé par cette préparation.
 | 6 | Acceptation de la première démonstration | En cours | Un auteur réalise le parcours complet sur ordinateur ; le player fonctionne sur mobile. Vérifier la persistance, la lecture courante, l’organisation, les ancres, les Questions, les transitions et les scénarios dans Safari. **Disposition actuelle :** « Prévisualiser » se trouve dans la barre de commandes au-dessus de la zone centrale, reste visible à toutes les largeurs et ouvre la popup active du POC ; le test du workspace vérifie son emplacement et son action. L’accès à la modale intégrée reste désactivé (tranche 9 ; comportement de la popup dans la [spécification de preview](../specs/player-preview-spec.md)). |
 | 7 | Refonte du BDC Carousel vers les BDC Carte | En cours — modèle v3, commandes, éditeur, builders, tests, player et nouveau document vérifiés le 6 octobre 2026. Le bandeau des réglages a reçu une correction CSS le 9 octobre : libellés au-dessus des champs, valeurs non compressées, chevrons reculés et défilement horizontal si nécessaire ; la durée par vue porte le libellé « Durée (sec.) ». Le contrôle visuel Brave reste en attente. Le POC v1/v2 est abandonné sans migration ; l’option de cadrage image et le multi-import restent à accepter dans le player réel. | Avant la Diapo, remplacer les vues embarquées par des BDC Carte identifiés, enfants ordonnés du BDC Carousel. Les quatre présentations actuelles deviennent des layouts d’un même BDC Carte. Le BDC conserve tous ses champs quand un layout les masque ; le changement de layout ne réinitialise aucune valeur. Le Carousel garde ses paramètres de lecture et la durée propre à chaque entrée de sa séquence. Sa liste d’enfants n’autorise que les BDC Carte dans cette tranche. Réorganiser le modèle, les commandes, l’éditeur et le builder sur ces propriétaires métier ; conserver le circuit CodPlay existant et ne pas ajouter de compatibilité locale pour l’ancien modèle de vues. Vérifier ajout, édition, suppression et réordonnancement des cartes, conservation de tous les champs lors des quatre changements de layout, import groupé depuis la zone image avec ordre et layout conservés, références média, modes manuel et automatique et rendu dans le player réel. Voir « Refonte Carousel vers BDC Carte » ci-dessous. |
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
-| 9 | Acceptation finale du POC | En cours — fenêtre distincte, parcours de synchronisation manuelle, média après réouverture, typecheck, tests et build vérifiés avec Brave. Correction de la preview orpheline vérifiée le 26 octobre : elle ne charge plus le document local par défaut, termine l’état de chargement et demande de rouvrir depuis l’éditeur ; une nouvelle preview rend le document v7. Le même jour, Brave a vérifié la récupération après une session restée sans instantané malgré un éditeur ouvert : recliquer sur « Prévisualiser » réutilise la popup et charge la page active avec une nouvelle session. Le 26 octobre, le libellé « Test auteur » a aussi été réintégré à l’adaptation responsive : masqué sur mobile, visible sur ordinateur, sans débordement. La suite Elcé passe 483 tests sur 484 ; le test SQLite restant est bloqué par `listen EPERM`. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. Vérifier la synchronisation manuelle ; le signal de changement et le mode automatique restent des étapes ultérieures acceptées, non appliquées. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
+| 9 | Acceptation finale du POC | En cours — fenêtre distincte, suivi automatique de l’éditeur, arrêt par navigation dans la preview et reprise par retour à la page éditée vérifiés dans Brave le 30 octobre ; médias, typecheck, 523 tests et build passent. Correction de la preview orpheline vérifiée le 26 octobre : elle ne charge plus le document local par défaut, termine l’état de chargement et demande de rouvrir depuis l’éditeur ; une nouvelle preview rend le document v7. Le même jour, Brave a vérifié la récupération après une session restée sans instantané malgré un éditeur ouvert : recliquer sur « Prévisualiser » réutilise la popup et charge la page active avec une nouvelle session. Le 26 octobre, le libellé « Test auteur » a aussi été réintégré à l’adaptation responsive : masqué sur mobile, visible sur ordinateur, sans débordement. La suite Elcé passe 483 tests sur 484 ; le test SQLite restant est bloqué par `listen EPERM`. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. La synchronisation automatique débrayable est appliquée et décrite dans la spécification preview ; conserver les autres acceptations de la tranche ouvertes. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
 **Éditeur central de page — appliqué et vérifié le 22 octobre 2026.** La
 rangée d’actions de création précède maintenant les titres ; le titre de page
@@ -648,50 +648,29 @@ Safari MCP, le 25 octobre 2026, avait vérifié la prise en charge de `1cap` et 
 
 ### Lecture dans une fenêtre distincte — tranche 9 en cours
 
-- Décision du 5 octobre 2026 : la popup devient le parcours de
-  preview actif. Le code de la modale intégrée reste disponible mais son accès
-  est désactivé pour comparer les choix pendant le POC. Le mode de diffusion
-  qui projette le projet derrière l’éditeur viendra après la popup.
-- À l’ouverture, la popup présente la page affichée dans l’éditeur. Sa
-  navigation Sighty/CodPlay reste ensuite indépendante. Une commande distincte
-  permet de réafficher la page éditée. Une synchronisation affiche également
-  cette page. Si cette page a été créée depuis la dernière synchronisation,
-  cette commande synchronise automatiquement une fois pour pouvoir l’afficher.
-- Première étape : une commande de synchronisation manuelle au-dessus du rendu
-  transmet le document courant de l’éditeur et reconstruit le projet selon la
-  règle déjà retenue : une édition ne reconstruit que la scène de sa page ; un
-  changement d’organisation reconstruit le scénario entier en réutilisant les
-  scènes inchangées. La popup monte sa propre composition Sighty/CodPlay et
-  possède son cycle de vie. La lecture repart de la page éditée avec temps,
-  réponses et historique remis à zéro ; le POC ne persiste pas ces éléments.
-- Étapes suivantes, non appliquées : signaler visuellement sur la commande
-  qu’une mise à jour est demandée, puis proposer un mode automatique
-  débrayable qui calcule le nouvel état du projet. Ne pas confondre ce mode
-  avec la lecture automatique d’un BDC Carousel.
-- Le document XState de l’éditeur reste la source unique. Les deux contextes
-  navigateur imposent un transport entre eux ; aucune voie équivalente
-  n’existe actuellement dans Elcé. Ce transport ne possède ni document, ni
-  navigation, ni catalogue parallèles. Les médias continuent de passer par le
-  stockage IndexedDB existant et sont chargés dans le contexte de la popup.
-- Brave DevTools, le 5 octobre 2026, vérifie l’ouverture d’une popup depuis la
-  page éditée, la navigation indépendante A → B, l’attente d’une synchronisation
-  après correction, le retour à la page éditée et la synchronisation unique
-  lorsqu’elle a été créée depuis le dernier instantané. Après réorganisation,
-  le nouveau scénario commence sur la page éditée en première position ; le
-  test de composition vérifie l’identité des sources de scènes inchangées.
-  Brave vérifie aussi les icônes et les noms accessibles des commandes : les
-  libellés sont masqués avec `title` à 390 px et 800 px, puis visibles à 801 px.
-- Un fichier image de test chargé par l’événement `change` de l’input produit
-  une image décodée dans la popup après synchronisation, puis après fermeture
-  et réouverture depuis IndexedDB. Le MCP a refusé le chemin local pour son
-  action `upload_file` ; la boîte de dialogue système n’est donc pas couverte
-  par cette preuve.
-- Typecheck réussi, suite Elcé réussie (130/130) et build réussi le
-  5 octobre 2026. Le build signale un chunk supérieur à 500 kB.
-- Avant de clore cette tranche, corriger l’écart `aria-expanded` et l’ordre de
-  transfert du focus du sommaire décrits ci-dessus, puis rejouer l’acceptation
-  responsive. Le signal visuel de synchronisation et le mode automatique
-  restent des étapes ultérieures non appliquées.
+La popup reste le parcours actif ; l'accès à la modale intégrée reste
+désactivé. Le mode de diffusion derrière l'éditeur reste une étape distincte.
+
+La synchronisation automatique débrayable demandée le 30 octobre est appliquée
+et vérifiée selon la précision finale de l’utilisateur. Elle démarre active et
+suit les corrections comme les changements de page dans l’éditeur. Naviguer
+dans la preview arrête le suivi ; les corrections suivantes conservent alors
+la page, le DOM, le défilement et la vidéo en cours. « Revenir sur la page
+éditée » charge le dernier document sur la page de l’éditeur et réactive le
+suivi. La reprise par la bascule utilise ce même circuit.
+Le transport et l'acteur auteur existants restent les propriétaires. Les
+contrats et preuves sont dans la [spécification preview](../specs/player-preview-spec.md#synchronisation-automatique--vérification-du-30-octobre-2026).
+
+Acceptation réalisée : acteur et protocole, arrêt en vol, commits consécutifs,
+reprise immédiate, suivi de la sélection dans l’éditeur, arrêt par navigation
+réelle dans la preview, deux fenêtres Brave avec vidéo en lecture et scroll
+conservés pendant l’arrêt, retour et suivi réactivé. L’acceptation responsive
+précédente reste acquise. Typecheck, 523 tests, build et contrôle d'espacement
+passent.
+
+Avant de clore la tranche 9 : traiter l'écart `aria-expanded` et l'ordre du
+transfert de focus du sommaire décrits ci-dessus, puis rejouer leur acceptation
+responsive. Ces points restent indépendants de la synchronisation appliquée.
 
 ## BDC Carousel — périmètre en cours
 
@@ -1230,6 +1209,55 @@ Projet 1 reste ouvert et l’état revient à « Synchronisé ». Les modificati
 temporaires sont retirées. L’interface reste sur 5175, l’API sur 5181 et aucun
 serveur n’est ouvert sur 5173.
 
+## Imports JSON des assets — décision acceptée le 29 octobre 2026
+
+**Statut : En cours — implémentation et vérifications compilateur/HTTP/SSE
+effectuées ; acceptation navigateur en attente.** L'utilisateur demande de
+corriger Elcé pour accepter les imports JSON, puis précise que ce correctif
+doit être appliqué sur `develop`. Les données importées restent dans leur
+fichier JSON canonique ; le cœur CodPlay n'est pas modifié.
+
+Cause : `@remix-run/assets` 0.8.0 refuse les dépendances `.json` avec
+`IMPORT_NOT_SUPPORTED`. Ce défaut a été révélé par le nouvel import de
+`replace-preset-config.ts` dans une branche CodPlay distincte ; l'acceptation
+sur `develop` utilise des fixtures JSON autonomes.
+
+- Étendre `scripts.loaders` dans le serveur d'assets existant : analyser les
+  imports locaux JSON, valider leurs données et les convertir en modules ESM
+  embarqués. Préserver l'identité d'un fichier entre ses consommateurs.
+- Appliquer aux JSON les mêmes règles `allowFiles` et `denyFiles` que celles
+  des sources navigateur, y compris après résolution des liens symboliques.
+- Raccorder les dépendances JSON au canal HMR existant : changement,
+  suppression ou recréation invalident les consommateurs et rechargent
+  l'onglet. Libérer le suivi avec le canal, sans second watcher ni horloge.
+- Préserver les circuits auteur, API, données et runtime CodPlay. Les parcours
+  Play/Seek/resize ne changent pas ; l'acceptation porte sur la compilation,
+  l'évaluation et l'actualisation des modules importés.
+- Acceptation : fixtures autonomes pour les valeurs JSON, l'identité des
+  modules, les imports/reexports, les erreurs et accès interdits ; véritable
+  serveur d'assets avec invalidation HMR ; démarrage Elcé, chargement auteur
+  et popup, typecheck, tests et build.
+
+Configuration MCP relue et inventaire de session inspecté : Brave est activé
+et exposé ; Firefox est désactivé. L'accès Brave a rencontré un profil occupé,
+une reconnexion avec disparition de la page isolée, puis des timeouts de
+`new_page`, même sur `about:blank`. Aucun navigateur de l'autre agent n'a été
+arrêté. Le rendu auteur/popup et le rechargement dans l'onglet restent à vérifier
+lorsque cet accès sera utilisable.
+
+Preuves sur `develop`, le 29 octobre 2026 : serveur réel sur 5195, API sur 5196
+et données de validation dans un répertoire temporaire indépendant. Un JSON
+temporaire importé par l'entrée navigateur avant démarrage passe de la révision
+1 à 2 dans le module HTTP compilé ; le canal SSE réel émet
+`{"type":"browser:reload"}`. La fixture et son import sont retirés après le
+contrôle. Les 16 tests ciblés JSON passent, dont le cas production sans HMR.
+Le comportement vérifié est décrit dans la
+[spécification Remix](../specs/remix-spa-spec.md#imports-json-locaux).
+Typecheck et build passent, avec l'avertissement de bundle supérieur
+à 500 kB. La suite complète compte 254 succès sur 261 tests et sept échecs
+dans `elce-player-composition.test.ts` (titres/navigation), dont les modules
+ne passent pas par le serveur d'assets modifié. Aucun contournement du lecteur
+n'est ajouté ; ces résultats ne certifient pas son intégration complète.
 ### Indications de préchargement en développement — décision acceptée
 
 Le navigateur avertit que des dizaines de modules annoncés par

@@ -10,7 +10,7 @@ import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import { RuntimeEngine, type Ticker } from '../../../src/runtime/engine'
 import { TagComponent } from '../../../src/runtime/components'
-import type { RuntimePreloadApi } from '../../../src/runtime/preload'
+import { createRuntimePreloadMediaHandle, type RuntimePreloadApi } from '../../../src/runtime/preload'
 import { createDragCaptureScene, s6Straps } from '../../fixtures/drag-scene'
 
 class FakeNode {
@@ -51,6 +51,7 @@ class FakeElement extends FakeNode {
   className = ''
   currentTime = 0
   duration = Number.NaN
+  preload = 'metadata'
   paused = true
   playbackRate = 1
   volume = 1
@@ -477,6 +478,35 @@ function mediaSourceSwapCompiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Declares two video components that consume the same preloaded replacement source. */
+function sharedVideoSourceSceneDoc(): SceneDoc {
+  const sourceA = '/assets/shared-video-a.mp4'
+  const sourceB = '/assets/shared-video-b.mp4'
+  return {
+    id: 'html-runner-shared-video-source',
+    stories: {
+      main: {
+        id: 'main',
+        persos: ['first-video', 'second-video'].map((id) => ({
+          id,
+          type: 'media' as const,
+          initial: { tag: 'video' as const, src: sourceA, move: '@root' },
+          actions: { swap: { src: sourceB } },
+        })),
+        listen: [],
+        eventimes: [{ name: 'swap', startAt: 100 }],
+      },
+    },
+  }
+}
+
+/** Builds the shared-source media fixture through the SceneDoc compiler boundary. */
+function sharedVideoSourceCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(sharedVideoSourceSceneDoc())
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
 /** Declares one audio perso whose native tag and duration come from preload metadata. */
 function audioMediaSceneDoc(): SceneDoc {
   return {
@@ -815,6 +845,44 @@ describe('HtmlPlayerRunner', () => {
     expect(mediaRoot.childNodes[0]).toBe(sourceA)
     expect(sourceA.sourceAssignments).toBe(1)
     expect(sourceB.sourceAssignments).toBe(1)
+    runner.destroy()
+  })
+
+  it('eagerly prepares each component video node when a shared preload handle can be adopted once', () => {
+    installFakeDom()
+    const root = new FakeElement('main')
+    const sourceB = '/assets/shared-video-b.mp4'
+    const preloadedVideo = new FakeElement('video')
+    preloadedVideo.preload = 'auto'
+    preloadedVideo.src = sourceB
+    const runner = new HtmlPlayerRunner({
+      id: 'shared-video-source-runner',
+      compiledScene: sharedVideoSourceCompiledScene(),
+      root: root as unknown as HTMLElement,
+      catalog: runtimeCatalog(),
+      resources: ['/assets/shared-video-a.mp4', sourceB],
+      resourceMedia: {
+        [sourceB]: createRuntimePreloadMediaHandle(
+          preloadedVideo as unknown as HTMLVideoElement,
+          'video',
+        ),
+      },
+    })
+
+    expect(runner.init().ok).toBe(true)
+    expect(runner.seek(150).ok).toBe(true)
+
+    const firstRoot = runner.getPersoNode('main:first-video') as FakeElement
+    const secondRoot = runner.getPersoNode('main:second-video') as FakeElement
+    const firstVideo = firstRoot.childNodes[0] as FakeElement
+    const secondVideo = secondRoot.childNodes[0] as FakeElement
+    expect(firstVideo).toBe(preloadedVideo)
+    expect(secondVideo).not.toBe(firstVideo)
+    expect(firstVideo.src).toBe(sourceB)
+    expect(secondVideo.src).toBe(sourceB)
+    expect(firstVideo.preload).toBe('auto')
+    expect(secondVideo.preload).toBe('auto')
+
     runner.destroy()
   })
 

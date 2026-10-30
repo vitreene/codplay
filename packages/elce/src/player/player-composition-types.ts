@@ -19,5 +19,6 @@ export type ElcePlayerCompositionOptions = Readonly<{
   readonly testState?: ProjectTestState
   readonly scormSession?: ElceScormProgressSink
   readonly onTestStateChange?: (state: ProjectTestState) => void
+  readonly onPageChange?: (pageId: PageId | null) => void
   readonly onLog?: (message: string, level?: 'info' | 'warn' | 'error') => void
 }>

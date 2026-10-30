@@ -110,6 +110,54 @@ describe('HTML component materializer services', () => {
     expect(node.textContent).toBe('Suivant')
   })
 
+  it('preserves materialized children when no content has been managed', () => {
+    const content = createHtmlContentService()
+    const host = document.createElement('section')
+    const child = document.createElement('article')
+    child.textContent = 'Scene content'
+    host.append(child)
+
+    content.apply(host, null)
+    content.apply(host, null)
+
+    expect(host.firstChild).toBe(child)
+    expect(child.textContent).toBe('Scene content')
+  })
+
+  it('clears only its own text and keeps independently mounted children', () => {
+    const content = createHtmlContentService()
+    const host = document.createElement('section')
+    const child = document.createElement('article')
+    child.textContent = 'Child content'
+    content.apply(host, 'Owned text')
+    const text = host.firstChild
+    host.append(child)
+
+    content.apply(host, 'Owned text')
+    expect(host.firstChild).toBe(text)
+    expect(child.parentNode).toBe(host)
+    content.apply(host, null)
+    content.apply(host, null)
+
+    expect(text?.parentNode).toBeNull()
+    expect(host.firstChild).toBe(child)
+    expect(host.textContent).toBe('Child content')
+  })
+
+  it('keeps content moved to another parent outside the former owner cleanup', () => {
+    const content = createHtmlContentService()
+    const first = document.createElement('section')
+    const second = document.createElement('section')
+    const child = document.createElement('span')
+    content.apply(first, child)
+    second.append(child)
+
+    content.apply(first, null)
+    content.apply(second, null)
+
+    expect(child.parentNode).toBe(second)
+  })
+
   it('replaces an element child even when its text matches the next value', () => {
     const content = createHtmlContentService()
     const node = document.createElement('button')
